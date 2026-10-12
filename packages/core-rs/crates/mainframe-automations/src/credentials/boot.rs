@@ -1,10 +1,9 @@
-//! Boot-time credential-store selection (2026-08-19 provider-connections
-//! plan, Deliverable 1): prefer the OS keychain, fall back to the legacy
-//! plaintext file when the keychain is unusable (headless Linux, no
+//! Boot-time credential-store selection: prefer the OS keychain, fall back to
+//! the legacy plaintext file when the keychain is unusable (headless Linux, no
 //! secret-service running), and migrate an existing plaintext file into the
-//! keychain the first time it becomes available — a one-shot move rather
-//! than a permanent read-through, so a working keychain never leaves a live
-//! copy of a secret sitting on disk after boot.
+//! keychain the first time it becomes available — a one-shot move rather than a
+//! permanent read-through, so a working keychain never leaves a live copy of a
+//! secret sitting on disk after boot.
 //!
 //! Migrating at boot (not lazily on a per-label miss) means the plaintext
 //! file is gone as soon as possible rather than lingering for the life of
@@ -37,13 +36,13 @@ pub(super) async fn build_with_backend<B: KeyringBackend + 'static>(
             let store =
                 KeyringCredentialStore::load(backend, data_dir.join(LABELS_INDEX_FILE)).await;
             migrate_legacy_file(&store, &legacy_path).await;
-            tracing::info!("automation credentials: OS keychain backend active");
+            tracing::info!("OS keychain backend active");
             Arc::new(store)
         }
         Err(err) => {
             tracing::warn!(
                 error = %err,
-                "automation credentials: OS keychain unavailable, falling back to the \
+                "OS keychain unavailable, falling back to the \
                  0600 plaintext file store"
             );
             Arc::new(FileCredentialStore::load(legacy_path).await)
@@ -54,7 +53,7 @@ pub(super) async fn build_with_backend<B: KeyringBackend + 'static>(
 /// A cheap round trip on a throwaway label — the only reliable way to learn
 /// whether the keychain backend actually works on this machine before
 /// committing to it for the whole process lifetime.
-fn probe<B: KeyringBackend>(backend: &B) -> Result<(), String> {
+fn probe<B: KeyringBackend>(backend: &B) -> Result<(), keyring::Error> {
     backend.set(PROBE_LABEL, "probe")?;
     backend.delete(PROBE_LABEL)
 }
@@ -101,11 +100,3 @@ async fn migrate_legacy_file<B: KeyringBackend + 'static>(
         ),
     }
 }
-
-// PORT STATUS: greenfield (2026-08-19 automations-provider-connections plan, Deliverable 1)
-// confidence: high
-// todos: 0
-// notes: build_with_backend is the generic seam boot_tests.rs drives with a
-//        fake backend, so no test in this crate ever touches the real OS
-//        keychain (see keyring_store_tests.rs for why the crate's own mock
-//        can't do this instead).

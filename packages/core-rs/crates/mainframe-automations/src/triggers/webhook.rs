@@ -1,12 +1,10 @@
-//! Webhook trigger primitives (T8.3, Node triggers/webhook.ts): HMAC-SHA256
-//! signature verification in GitHub's fixed `sha256=<lowercase-hex>` form,
-//! preset match predicates, replay-dedup delivery ids, and the A7 staleness
-//! window. Pure — the ingest pipeline (webhook_ingest.rs) sequences these
-//! and the route (T9.3) maps its decisions onto HTTP statuses.
+//! Webhook trigger primitives: HMAC-SHA256 signature verification in GitHub's
+//! fixed `sha256=<lowercase-hex>` form, preset match predicates, replay-dedup
+//! delivery ids, and the A7 staleness window. Pure — the ingest pipeline
+//! (webhook_ingest.rs) sequences these and the route maps its decisions onto
+//! HTTP statuses.
 
-use hmac::{Hmac, Mac};
 use serde_json::Value;
-use sha2::Sha256;
 
 use crate::credentials::{CredentialError, CredentialKind, CredentialStore, Credentials};
 use crate::domain::WebhookPreset;
@@ -21,7 +19,7 @@ const STALE_WINDOW_MS: i64 = 10 * 60 * 1000;
 /// compares the string forms, so uppercase hex must not verify here either);
 /// the caller passes whichever of `X-Signature`/`X-Hub-Signature-256` it
 /// found — this is header-name agnostic.
-pub fn verify_signature(secret: &str, raw_body: &[u8], header: Option<&str>) -> bool {
+pub(crate) fn verify_signature(secret: &str, raw_body: &[u8], header: Option<&str>) -> bool {
     let Some(header) = header else {
         return false;
     };
@@ -34,12 +32,7 @@ pub fn verify_signature(secret: &str, raw_body: &[u8], header: Option<&str>) -> 
     let Ok(given) = hex::decode(hex_part) else {
         return false;
     };
-    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else {
-        return false;
-    };
-    mac.update(raw_body);
-    // verify_slice is constant-time (subtle under the hood).
-    mac.verify_slice(&given).is_ok()
+    mainframe_runtime::auth::hmac::verify_sha256(secret.as_bytes(), raw_body, &given)
 }
 
 /// A preset's server-side match predicate (contract §4), evaluated after
@@ -51,7 +44,7 @@ pub struct WebhookPresetPredicate {
     pub merged: Option<bool>,
 }
 
-pub fn preset_predicate(preset: WebhookPreset) -> WebhookPresetPredicate {
+pub(crate) fn preset_predicate(preset: WebhookPreset) -> WebhookPresetPredicate {
     match preset {
         WebhookPreset::GithubPrOpened => WebhookPresetPredicate {
             event: "pull_request",
@@ -69,7 +62,7 @@ pub fn preset_predicate(preset: WebhookPreset) -> WebhookPresetPredicate {
 /// The delivery body as an object, with `X-GitHub-Event` merged in under
 /// `event` so preset predicates can match on it — GitHub sends the event name
 /// in a header, not the body. `None` = not a JSON object (route → 400).
-pub fn parse_payload(raw_body: &[u8], github_event: Option<&str>) -> Option<Value> {
+pub(crate) fn parse_payload(raw_body: &[u8], github_event: Option<&str>) -> Option<Value> {
     let mut payload = serde_json::from_slice::<Value>(raw_body).ok()?;
     let body = payload.as_object_mut()?;
     if let Some(event) = github_event {
@@ -80,7 +73,7 @@ pub fn parse_payload(raw_body: &[u8], github_event: Option<&str>) -> Option<Valu
 
 /// `merged` checks the nested `pull_request.merged` field GitHub actually
 /// sends on `closed`.
-pub fn match_preset(predicate: &WebhookPresetPredicate, payload: &Value) -> bool {
+pub(crate) fn match_preset(predicate: &WebhookPresetPredicate, payload: &Value) -> bool {
     let Some(body) = payload.as_object() else {
         return false;
     };
@@ -126,7 +119,7 @@ pub fn delivery_id(payload: &Value, github_delivery: Option<&str>) -> Option<Str
 /// GitHub's `X-GitHub-Delivery` is an id, not a clock). Accepts an
 /// `X-Timestamp` header or a top-level `timestamp` payload field as unix
 /// seconds, unix milliseconds, or an ISO-8601 string.
-pub fn delivery_timestamp_ms(payload: &Value, x_timestamp: Option<&str>) -> Option<i64> {
+pub(crate) fn delivery_timestamp_ms(payload: &Value, x_timestamp: Option<&str>) -> Option<i64> {
     if let Some(from_header) = x_timestamp.and_then(parse_timestamp) {
         return Some(from_header);
     }
@@ -164,20 +157,19 @@ fn normalize_epoch(value: f64) -> i64 {
 }
 
 /// A7's 10-minute bounded staleness window.
-pub fn is_stale_delivery(timestamp_ms: i64, now_ms: i64) -> bool {
+pub(crate) fn is_stale_delivery(timestamp_ms: i64, now_ms: i64) -> bool {
     now_ms - timestamp_ms > STALE_WINDOW_MS
 }
 
-/// Generates and persists the `webhook:<hookId>` signing secret once
-/// (Node ensureWebhookSecret) — the service calls this when arming a
-/// webhook trigger; an existing secret is left alone so rotating requires
-/// an explicit delete.
+/// Generates and persists the `webhook:<hookId>` signing secret once — the
+/// service calls this when arming a webhook trigger; an existing secret is left
+/// alone so rotating requires an explicit delete.
 ///
 /// Returns the secret because arming is the only path that may hand it to
 /// the user: `webhook:<hookId>` is unreachable through the credential API
 /// (that route's label rule forbids the colon), so a secret nobody returns
 /// is a secret nobody can sign with.
-pub async fn ensure_webhook_secret(
+pub(crate) async fn ensure_webhook_secret(
     credentials: &dyn CredentialStore,
     hook_id: &str,
 ) -> Result<String, CredentialError> {
@@ -202,9 +194,3 @@ pub async fn ensure_webhook_secret(
         .await?;
     Ok(token)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node triggers/webhook.ts; sample capture is in-memory in
-//        webhook_ingest.rs (R3) instead of Node's trigger_state column.

@@ -1,50 +1,17 @@
-//! The per-read derivations every `Chat` leaving the manager carries, in one
-//! place: the facade's reads and every sub-manager's `chat.updated` /
-//! `chat.created` emit go through the same [`Enricher`].
 use super::*;
-use crate::orchestration_hooks::OrchestrationSlot;
+use mainframe_types::sync::LockExt as _;
 
-#[derive(Clone)]
-pub(super) struct Enricher {
-    deps: Arc<dyn ChatManagerDeps>,
-    permissions: Arc<Mutex<PermissionManager>>,
-    orchestration: OrchestrationSlot,
-}
-
-impl Enricher {
-    pub(super) fn new(
-        deps: Arc<dyn ChatManagerDeps>,
-        permissions: Arc<Mutex<PermissionManager>>,
-        orchestration: OrchestrationSlot,
-    ) -> Self {
-        Self {
-            deps,
-            permissions,
-            orchestration,
-        }
-    }
-
-    pub(super) fn permissions(&self) -> &Arc<Mutex<PermissionManager>> {
-        &self.permissions
-    }
-
-    pub(super) fn orchestration(&self) -> &OrchestrationSlot {
-        &self.orchestration
-    }
-
+impl ChatShared {
     fn has_pending(&self, chat_id: &str) -> bool {
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .has_pending(chat_id)
+        self.permissions.lock_recover().has_pending(chat_id)
     }
 
     /// Sets every derived field: display status, background activity, the
     /// directory signals, the side chat's and delegated children's waiting
     /// state, and the agent outbox.
-    pub(super) fn enrich(&self, chat: &mut Chat) {
+    pub(crate) fn enrich(&self, chat: &mut Chat) {
         let has_pending = self.has_pending(&chat.id);
-        // Rule 9 (todo #344): the side chat's gate shows on its parent.
+        // The side chat's gate shows on its parent.
         let side_chat_waiting = chat.side_chat_id.as_deref().map(|id| self.has_pending(id));
         let live = self.deps.tracker_list_live(&chat.id);
         let project_path = self.deps.projects_get_path(&chat.project_id);
@@ -76,7 +43,7 @@ impl Enricher {
 
     /// Enrich `chat.updated` / `chat.created`, then emit through the raw
     /// `onEvent`.
-    pub(super) fn emit(&self, mut event: DaemonEvent) {
+    pub(crate) fn emit(&self, mut event: DaemonEvent) {
         match &mut event {
             DaemonEvent::ChatUpdated { chat, .. } | DaemonEvent::ChatCreated { chat, .. } => {
                 self.enrich(chat);

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/turn-config.ts`.
-
 use mainframe_types::chat::ResolvedTuning;
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +34,7 @@ pub struct CodexTurnConfig {
 /// deliberately does NOT re-gate on model capabilities (see the TS note): `fast`
 /// is already clamped by resolveTuning and `codex.personality` is already gated by
 /// the settings UI.
-pub fn build_turn_config(
+pub(crate) fn build_turn_config(
     tuning: &ResolvedTuning,
     codex: &CodexProviderTuning,
     model: &str,
@@ -68,152 +66,5 @@ pub fn build_turn_config(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use mainframe_types::adapter::EffortLevel;
-
-    fn tuning(effort: Option<EffortLevel>, fast: bool) -> ResolvedTuning {
-        ResolvedTuning {
-            effort,
-            fast,
-            ultracode: false,
-            adaptive_thinking: false,
-        }
-    }
-
-    // --- turn-config.test.ts ---
-
-    #[test]
-    fn puts_effort_in_settings_fast_as_service_tier_codex_extras_top_level() {
-        let cfg = build_turn_config(
-            &tuning(Some(EffortLevel::High), true),
-            &CodexProviderTuning {
-                personality: Some("pragmatic".to_string()),
-                reasoning_summary: Some("concise".to_string()),
-            },
-            "gpt-5.5",
-            "default",
-        );
-        assert_eq!(cfg.collaboration_mode.settings.model, "gpt-5.5");
-        assert_eq!(
-            cfg.collaboration_mode.settings.reasoning_effort,
-            Some(EffortLevel::High)
-        );
-        assert_eq!(cfg.service_tier.as_deref(), Some("fast"));
-        assert_eq!(cfg.personality.as_deref(), Some("pragmatic"));
-        assert_eq!(cfg.summary.as_deref(), Some("concise"));
-    }
-
-    #[test]
-    fn service_tier_fast_when_tuning_fast_true_and_undefined_when_false() {
-        assert_eq!(
-            build_turn_config(
-                &tuning(Some(EffortLevel::High), false),
-                &CodexProviderTuning::default(),
-                "m",
-                "default"
-            )
-            .service_tier,
-            None
-        );
-        assert_eq!(
-            build_turn_config(
-                &tuning(Some(EffortLevel::High), true),
-                &CodexProviderTuning::default(),
-                "m",
-                "default"
-            )
-            .service_tier
-            .as_deref(),
-            Some("fast")
-        );
-    }
-
-    #[test]
-    fn omits_personality_summary_when_not_provided() {
-        let cfg = build_turn_config(
-            &tuning(None, false),
-            &CodexProviderTuning::default(),
-            "m",
-            "default",
-        );
-        assert_eq!(cfg.personality, None);
-        assert_eq!(cfg.summary, None);
-    }
-
-    #[test]
-    fn serializes_the_model_key_for_every_turn() {
-        let cfg = build_turn_config(
-            &tuning(None, false),
-            &CodexProviderTuning::default(),
-            "gpt-5.5",
-            "default",
-        );
-        let settings = serde_json::to_value(&cfg.collaboration_mode).unwrap()["settings"].clone();
-        assert_eq!(settings["model"], "gpt-5.5");
-        assert_eq!(settings["reasoning_effort"], serde_json::Value::Null);
-        assert_eq!(settings["developer_instructions"], serde_json::Value::Null);
-    }
-
-    // --- collaboration-mode.test.ts ---
-
-    #[test]
-    fn sets_mode_plan_when_plan() {
-        let cfg = build_turn_config(
-            &tuning(None, false),
-            &CodexProviderTuning::default(),
-            "codex-mini-latest",
-            "plan",
-        );
-        assert_eq!(cfg.collaboration_mode.mode, "plan");
-    }
-
-    #[test]
-    fn sets_mode_default_when_default() {
-        let cfg = build_turn_config(
-            &tuning(None, false),
-            &CodexProviderTuning::default(),
-            "codex-mini-latest",
-            "default",
-        );
-        assert_eq!(cfg.collaboration_mode.mode, "default");
-    }
-
-    #[test]
-    fn threads_resolved_effort_into_settings_reasoning_effort() {
-        let cfg = build_turn_config(
-            &tuning(Some(EffortLevel::High), false),
-            &CodexProviderTuning::default(),
-            "codex-mini-latest",
-            "default",
-        );
-        assert_eq!(
-            cfg.collaboration_mode.settings.reasoning_effort,
-            Some(EffortLevel::High)
-        );
-    }
-
-    #[test]
-    fn uses_null_reasoning_effort_when_effort_null() {
-        let cfg = build_turn_config(
-            &tuning(None, false),
-            &CodexProviderTuning::default(),
-            "codex-mini-latest",
-            "default",
-        );
-        assert_eq!(cfg.collaboration_mode.settings.reasoning_effort, None);
-    }
-}
-
-// PORT STATUS: src/plugins/builtin/codex/turn-config.ts (50 lines)
-// confidence: high
-// todos: 0
-// notes: #303 — model is now a resolved, non-optional &str; the caller (turn_model.rs's
-// notes: resolve_turn_model, via session.rs) decides which tier supplies it, so this
-// notes: function no longer treats an absent or empty id as "omit the key". The
-// notes: collaboration-mode `model` key is always present, matching the app-server's
-// notes: required, non-nullable Settings.model. reasoning_effort stays
-// notes: Option<EffortLevel> (serializes to the Codex effort string, or explicit null).
-// notes: Ports turn-config.test.ts + collaboration-mode.test.ts assertion-for-assertion,
-// notes: replacing the obsolete omit-model case with serializes_the_model_key_for_every_turn.
-// notes: `mode` is a &str ('plan'|'default').
+#[path = "turn_config_tests.rs"]
+mod tests;

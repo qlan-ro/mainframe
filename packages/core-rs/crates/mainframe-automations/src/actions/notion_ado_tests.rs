@@ -1,8 +1,8 @@
-//! T7.2 — notion.add_row + ado.create_item over wiremock. Notion maps
-//! explicit key/value params to rich_text properties (no column-picker
-//! endpoint yet — contract §9); a date param arrives pre-rendered (the
-//! ⟨Today⟩ chip is substituted before the action runs). ADO creates a work
-//! item via a JSON-patch body and PAT basic auth.
+//! notion.add_row + ado.create_item over wiremock. Notion maps explicit
+//! key/value params to rich_text properties (no column-picker endpoint yet —
+//! contract §9); a date param arrives pre-rendered (the ⟨Today⟩ chip is
+//! substituted before the action runs). ADO creates a work item via a
+//! JSON-patch body and PAT basic auth.
 
 use serde_json::json;
 use wiremock::matchers::{basic_auth, body_json, header, method, path};

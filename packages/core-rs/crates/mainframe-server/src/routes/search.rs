@@ -1,5 +1,3 @@
-//! Ported from `src/server/routes/search.ts`.
-//!
 //! One endpoint: project content search — ripgrep (in-process) for
 //! directories, a direct read for a single-file scope. Every path is
 //! realpath'd and confirmed inside the (realpath'd) project base before it is
@@ -12,16 +10,18 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::{Path as AxPath, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use mainframe_types::search::SearchContentResult;
 
 use crate::ctx::AppCtx;
 use crate::fs_utils::{has_binary_extension, relative};
-use crate::path_utils::is_within_base;
+use crate::input_error::InputError;
+use crate::respond::fail_with;
 use crate::respond::{fail, ok};
 use crate::ripgrep::{RipgrepOptions, search_with_ripgrep};
 use crate::routes::files::resolve_base;
+use mainframe_runtime::fs::is_within_base;
 
 const MAX_RESULTS: usize = 200;
 const MAX_FILE_SIZE: u64 = 1024 * 1024; // 1MB
@@ -107,19 +107,19 @@ async fn content_search(
 ) -> Response {
     let (query, scope_path) = match validate_query(&q) {
         Ok(v) => v,
-        Err(msg) => return fail(StatusCode::BAD_REQUEST, msg),
+        Err(err) => return fail_with(&err),
     };
     let include_ignored = qget(&q, "includeIgnored") == Some("true");
 
     let raw_base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let base = match tokio::fs::canonicalize(&raw_base).await {
         Ok(p) => p.to_string_lossy().into_owned(),
         Err(err) => {
             tracing::warn!(error = %err, raw_base, "Project base path not resolvable");
-            return fail(StatusCode::NOT_FOUND, "Project not found");
+            return crate::respond::ApiError::project_not_found().into_response();
         }
     };
 
@@ -145,10 +145,10 @@ async fn content_search(
 }
 
 /// `ContentSearchQuery`: `q` min 2 (custom msg), `path` min 1 (custom msg).
-fn validate_query(q: &HashMap<String, String>) -> Result<(&str, &str), String> {
+fn validate_query(q: &HashMap<String, String>) -> Result<(&str, &str), InputError> {
     let query = qget(q, "q");
     let path = qget(q, "path");
-    let mut issues: Vec<&str> = Vec::new();
+    let mut issues: Vec<&'static str> = Vec::new();
     match query {
         None => issues.push("Required"),
         Some(s) if s.chars().count() < 2 => issues.push("Query must be at least 2 characters"),
@@ -160,7 +160,7 @@ fn validate_query(q: &HashMap<String, String>) -> Result<(&str, &str), String> {
         _ => {}
     }
     if !issues.is_empty() {
-        return Err(issues.join(", "));
+        return Err(InputError::Issues(issues));
     }
     Ok((query.unwrap_or_default(), path.unwrap_or_default()))
 }
@@ -268,17 +268,3 @@ mod tests {
         assert_eq!(char_index_of(&hay, &ndl, 4), None);
     }
 }
-
-// PORT STATUS: src/server/routes/search.ts (handleContentSearch + searchFile)
-// confidence: high
-// todos: 0
-// notes: getEffectivePath → files::resolve_base (raw base), then a separate
-// realpath (404 "Project not found" on failure), matching the TS two-step. As
-// of the pure-Rust search rewrite (PR 1 of the Rust-daemon cutover),
-// `search_with_ripgrep` always runs (it's in-process, not a shelled-out
-// binary), so the old "ripgrep unavailable, fall back to a JS walk" branch and
-// its per-file `resolveWithinBase` containment recheck are gone — deleted
-// along with `search-symlink-fallback.test.ts`'s Rust counterpart. Zod custom
-// messages ("Query must be at least 2 characters", "path is required")
-// reproduced exactly; a missing param yields "Required". Line/column indices
-// are char-based (TS was UTF-16 code units); unobservable for ASCII sources.

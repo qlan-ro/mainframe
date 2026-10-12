@@ -1,9 +1,8 @@
-//! Per-chat revision log (todo #377): a pure, in-memory record of which
-//! [`EncodedItem`]s a chat's `RevisionCursor` boundary has already covered,
-//! so `session/resume` can send exactly what changed since a reconnecting
-//! client's last cursor instead of replaying item cursors (which only ever
-//! resume strictly after the named item and so miss a later edit to an
-//! earlier one — the bug this todo exists to fix).
+//! Per-chat revision log: a pure, in-memory record of which [`EncodedItem`]s a
+//! chat's `RevisionCursor` boundary has already covered, so `session/resume`
+//! can send exactly what changed since a reconnecting client's last cursor
+//! instead of replaying item cursors (which only ever resume strictly after the
+//! named item and so miss a later edit to an earlier one).
 //!
 //! `mainframe-server`'s hub owns one log per chat (an `Arc<Mutex<Self>>` in a
 //! bounded registry) and calls [`RevisionLog::record`] on every display
@@ -73,12 +72,12 @@ pub struct RevisionLog {
     /// this floor cannot be served incrementally — its retained tombstone
     /// range is gone.
     floor: u64,
-    /// Per-ordinal item ids (todo #376 G2 task 4) — the same container
-    /// index `session_state/containers.rs` keeps, so `record_delta` can
-    /// find an affected or removed ordinal's old ids without scanning
-    /// every item. Maintained only by `record_delta`/`seed_containers`;
-    /// `record`/`seed` (the flat path) leave it alone.
-    containers: Vec<Vec<String>>,
+    /// Per-ordinal item ids — the same container index
+    /// `session_state/containers.rs` keeps, so `record_delta` can find an
+    /// affected or removed ordinal's old ids without scanning every item.
+    /// Maintained only by `record_delta`/`seed_containers`; `record`/`seed`
+    /// (the flat path) leave it alone.
+    containers: crate::container_index::ContainerIndex,
     /// Cumulative count of items `record`/`record_delta` has compared
     /// against their previous value — the deterministic gate an
     /// incremental `record_delta` must not grow past the affected
@@ -95,7 +94,7 @@ impl RevisionLog {
             items: HashMap::new(),
             tombstones: VecDeque::new(),
             floor: 0,
-            containers: Vec::new(),
+            containers: crate::container_index::ContainerIndex::default(),
             items_compared: 0,
         }
     }
@@ -234,4 +233,5 @@ impl RevisionLog {
 mod delta;
 
 #[cfg(test)]
+#[path = "revision_log_tests.rs"]
 mod tests;

@@ -1,9 +1,13 @@
-//! `initialize` is mandatory before any session method (spec decision 32),
-//! and the refusal must leave no trace: a peer that never negotiated — or
-//! negotiated an unsupported version — must not end up attached to the
-//! session it named, or it would keep receiving that chat's `session/update`
-//! fan-out for the rest of the connection (todo #350, PR #688 review).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! `initialize` is mandatory before any session method, and the refusal must
+//! leave no trace: a peer that never negotiated — or negotiated an unsupported
+//! version — must not end up attached to the session it named, or it would
+//! keep receiving that chat's `session/update` fan-out for the rest of the
+//! connection.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -19,6 +23,7 @@ async fn server_with_mock_adapter() -> TestServer {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     server
@@ -29,6 +34,7 @@ async fn server_with_mock_adapter() -> TestServer {
 async fn assert_not_attached(server: &TestServer, ws: &mut WsClient) {
     server
         .ctx
+        .chat
         .facade_hub
         .on_chat_surface_event(revision_event("chat-1", "hello"));
     let frame = tokio::time::timeout(Duration::from_millis(200), ws.read_event()).await;

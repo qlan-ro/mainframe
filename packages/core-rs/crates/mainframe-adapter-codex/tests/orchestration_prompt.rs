@@ -2,7 +2,11 @@
 //! on the `turn/start` `additionalContext` the orchestration prompt rides in
 //! on, present only when the spawn carries `orchestration_mcp`.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

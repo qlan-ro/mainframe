@@ -1,8 +1,8 @@
-//! Replay result previews on the diff state (spec Decision 41): a previewed
-//! id is trimmed on every path that stores an item — seed, `diff`, and the
-//! incremental container `apply` — so a later full re-encode of a settled
-//! container emits nothing, while a real change still reaches the client in
-//! its trimmed form and un-previewed items are untouched.
+//! Replay result previews on the diff state: a previewed id is trimmed on every
+//! path that stores an item — seed, `diff`, and the incremental container
+//! `apply` — so a later full re-encode of a settled container emits nothing,
+//! while a real change still reaches the client in its trimmed form and
+//! un-previewed items are untouched.
 
 use std::collections::HashSet;
 

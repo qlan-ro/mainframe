@@ -1,20 +1,19 @@
-//! ask_agent verb + durable agent wait (T4.3, Node verbs/ask-agent.ts +
-//! verbs/agent-waits.ts). The verb starts a chat, parks the step `waiting`
-//! with its chatId stamped on the checkpoint entry, and spawns a watch task;
-//! the settle path (agent_settle.rs) writes the outcome and re-advances.
-//! Unlike Node there is no agent_waits table: the checkpoint entry IS the
-//! durable record, and `resume_run_watches` re-attaches after a restart.
+//! ask_agent verb + durable agent wait. The verb starts a chat, parks the
+//! step `waiting` with its chatId stamped on the checkpoint entry, and
+//! spawns a watch task; the settle path (agent_settle.rs) writes the outcome
+//! and re-advances. There is no agent_waits table: the checkpoint entry IS
+//! the durable record, and `resume_run_watches` re-attaches after a restart.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex, MutexGuard, OnceLock};
 
 use crate::domain::AskAgentStep;
-use crate::ports::{AgentPort, AgentRequest, EventSink, WorktreeRequest};
-use crate::store::{RunRecord, RunStore, StepStatus, epoch_ms_now};
+use crate::ports::{AgentPort, AgentRequest, WorktreeRequest};
+use crate::store::{RunRecord, RunStore, StepKind, StepStatus, epoch_ms_now};
 use crate::tokens::render;
 
 use super::advance::AgentWaitRegistry;
-use super::checkpoint::{recompute_wake_at, set_step};
 use super::expects::build_output_contract;
 use super::{RunAdvancer, StepOutcome, VerbContext};
 
@@ -25,19 +24,21 @@ pub(crate) struct WaitKey {
 }
 
 pub struct AgentVerb {
+    #[cfg(feature = "testkit")]
+    watchers: StdMutex<HashMap<String, tokio::task::JoinHandle<()>>>,
     pub(crate) port: Arc<dyn AgentPort>,
     pub(crate) store: RunStore,
-    pub(crate) events: Arc<dyn EventSink>,
     pub(crate) waits: StdMutex<HashMap<String, WaitKey>>,
     pub(crate) advancer: OnceLock<Arc<dyn RunAdvancer>>,
 }
 
 impl AgentVerb {
-    pub fn new(port: Arc<dyn AgentPort>, store: RunStore, events: Arc<dyn EventSink>) -> Arc<Self> {
+    pub fn new(port: Arc<dyn AgentPort>, store: RunStore) -> Arc<Self> {
         Arc::new(Self {
+            #[cfg(feature = "testkit")]
+            watchers: StdMutex::new(HashMap::new()),
             port,
             store,
-            events,
             waits: StdMutex::new(HashMap::new()),
             advancer: OnceLock::new(),
         })
@@ -45,7 +46,7 @@ impl AgentVerb {
 
     /// Two-phase init: the Interpreter owns the VerbPorts that contain this
     /// verb, so the advancer is bound after construction.
-    pub fn bind_advancer(&self, advancer: Arc<dyn RunAdvancer>) {
+    pub(crate) fn bind_advancer(&self, advancer: Arc<dyn RunAdvancer>) {
         if self.advancer.set(advancer).is_err() {
             tracing::warn!("agent verb advancer already bound; ignoring rebind");
         }
@@ -56,8 +57,8 @@ impl AgentVerb {
         step: &AskAgentStep,
         ctx: VerbContext<'_>,
     ) -> StepOutcome {
-        // Re-entry while a wait is already registered (Node findByRunStep
-        // guard): keep waiting, never start a second chat.
+        // Re-entry while a wait is already registered: keep waiting, never
+        // start a second chat.
         if self.find_chat(ctx.run_id, ctx.step_ref).is_some() {
             return StepOutcome::Wait { wake_at: None };
         }
@@ -78,21 +79,23 @@ impl AgentVerb {
 
         // Park + stamp chatId BEFORE the watch task exists, so a completion
         // can never race a still-`running` entry; the walk's own wait commit
-        // afterwards is a guarded no-op re-park (checkpoint::park_step).
+        // afterwards is a guarded no-op re-park
+        // (`AutomationCheckpoint::park_step`).
         let (step_ref, step_id) = (ctx.step_ref.to_string(), step.id.clone());
         let chat_id = handle.chat_id.clone();
         let parked = self
             .store
             .patch_checkpoint(ctx.run_id, move |cp| {
-                set_step(
-                    cp,
+                cp.set_step(
                     &step_ref,
                     &step_id,
-                    "ask_agent",
-                    StepStatus::Waiting,
-                    None,
-                    None,
-                    wake_at,
+                    StepKind::AskAgent,
+                    crate::store::StepTransition {
+                        status: StepStatus::Waiting,
+                        outputs: None,
+                        error: None,
+                        wake_at,
+                    },
                 );
                 if let Some(entry) = cp.steps.get_mut(&step_ref) {
                     entry.chat_id = Some(chat_id);
@@ -100,7 +103,7 @@ impl AgentVerb {
                 // A sibling branch may still be waiting on an earlier
                 // deadline — recompute the run-level min instead of
                 // overwriting it with this entry's own.
-                recompute_wake_at(cp);
+                cp.recompute_wake_at();
             })
             .await;
         if let Err(err) = parked {
@@ -118,12 +121,12 @@ impl AgentVerb {
 
     /// Boot/restart path: re-attach a watch for every `waiting` ask_agent
     /// entry (its chatId is on the checkpoint — the wait is durable).
-    pub fn resume_run_watches(self: &Arc<Self>, run: &RunRecord) {
+    pub(crate) fn resume_run_watches(self: &Arc<Self>, run: &RunRecord) {
         if run.status.is_terminal() {
             return;
         }
         for (step_ref, entry) in &run.checkpoint.steps {
-            if entry.status != StepStatus::Waiting || entry.kind != "ask_agent" {
+            if entry.status != StepStatus::Waiting || entry.kind != StepKind::AskAgent {
                 continue;
             }
             let Some(chat_id) = &entry.chat_id else {
@@ -146,10 +149,16 @@ impl AgentVerb {
 
     fn spawn_watch(self: &Arc<Self>, chat_id: String) {
         let verb = self.clone();
-        tokio::spawn(async move {
+        #[cfg(feature = "testkit")]
+        let key = chat_id.clone();
+        let handle = tokio::spawn(async move {
             let outcome = verb.port.watch(&chat_id).await;
             verb.settle(&chat_id, outcome).await;
         });
+        #[cfg(feature = "testkit")]
+        self.watchers.lock_recover().insert(key, handle);
+        #[cfg(not(feature = "testkit"))]
+        drop(handle);
     }
 
     fn spawn_chat_cancel(&self, chat_id: String) {
@@ -188,9 +197,7 @@ impl AgentVerb {
 
     /// Poisoned-map recovery matches advance.rs's lock_map rationale.
     fn lock_waits(&self) -> MutexGuard<'_, HashMap<String, WaitKey>> {
-        self.waits
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.waits.lock_recover()
     }
 }
 
@@ -221,7 +228,7 @@ fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
     let expects = step.expects.clone().unwrap_or_default();
     let mut prompt = render(&step.prompt, ctx.scope, ctx.names);
     if !expects.is_empty() {
-        // A2: the output contract rides the first prompt (Node ask-agent.ts).
+        // A2: the output contract rides the first prompt.
         prompt.push_str(&build_output_contract(&expects));
     }
     AgentRequest {
@@ -245,9 +252,14 @@ fn build_request(step: &AskAgentStep, ctx: &VerbContext<'_>) -> AgentRequest {
     }
 }
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: no agent_waits table (contract §3: engine-internal caches are not
-//        contract) — the checkpoint entry's chatId is the durable record;
-//        settle/judge live in agent_settle.rs (300-line file cap).
+#[cfg(feature = "testkit")]
+impl AgentVerb {
+    pub async fn wait_for_watcher(&self, chat_id: &str) -> Result<(), &'static str> {
+        let handle = self.watchers.lock_recover().remove(chat_id);
+        if let Some(handle) = handle {
+            handle.await.map_err(|_| "agent watcher failed")
+        } else {
+            Err("missing agent watcher")
+        }
+    }
+}

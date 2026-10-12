@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 #[path = "support/model_session.rs"]
 mod model_session;
@@ -90,7 +94,7 @@ async fn rejected_switch_preserves_saved_and_running_models() {
 async fn unresolved_inheritance_cannot_silently_resume_the_transcript_model() {
     let fixture = ModelSession::new().await;
     fixture.stop().await;
-    std::fs::remove_file(fixture.0.server.ctx.data_dir.join("configured-model")).unwrap();
+    std::fs::remove_file(fixture.0.server.ctx.core.data_dir.join("configured-model")).unwrap();
 
     fixture.manager().start_chat(&fixture.0.chat_id).await;
 
@@ -104,7 +108,7 @@ async fn unresolved_inheritance_cannot_silently_resume_the_transcript_model() {
 async fn failed_inheritance_switch_keeps_the_explicit_selection() {
     let fixture = ModelSession::new().await;
     fixture.select("opus").await.unwrap();
-    std::fs::remove_file(fixture.0.server.ctx.data_dir.join("configured-model")).unwrap();
+    std::fs::remove_file(fixture.0.server.ctx.core.data_dir.join("configured-model")).unwrap();
 
     assert!(fixture.select("default").await.is_err());
 

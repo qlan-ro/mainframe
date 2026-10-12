@@ -71,7 +71,7 @@ pub struct Rule {
     pub category: RecommendationCategory,
     pub title: &'static str,
     pub why: &'static str,
-    /// INVARIANT (spec decision 20): a rule constant. `&'static str` makes a
+    /// INVARIANT: a rule constant. `&'static str` makes a
     /// fingerprint-derived command a compile error, not a review catch.
     pub command: &'static str,
     pub target_path: Option<&'static str>,

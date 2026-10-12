@@ -1,3 +1,4 @@
+use crate::recorded_method::RecordedMethod;
 use mainframe_types::chat::{ChatMessage, MessageContent, MessageContentNode};
 
 use crate::fixture::{EventDirection, RecordedEvent};
@@ -5,7 +6,7 @@ use crate::fixture::{EventDirection, RecordedEvent};
 pub(crate) fn recorded_session_id(events: &[RecordedEvent]) -> Option<String> {
     events
         .iter()
-        .find(|event| event.dir == EventDirection::Out && event.method == "onInit")
+        .find(|event| event.dir == EventDirection::Out && event.method == RecordedMethod::OnInit)
         .and_then(|event| event.args.first())
         .and_then(serde_json::Value::as_str)
         .map(str::to_string)

@@ -2,7 +2,11 @@
 //! and MCP (`function_call` w/ `namespace: "mcp__*"`) records on reload (B5),
 //! plus the existing message/reasoning/exec_command paths staying correct when
 //! interleaved with the new record types in the same rollout file.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 
@@ -303,7 +307,7 @@ fn session_meta_line(id: &str, session_id: &str, forked_from_id: Option<&str>) -
     json!({ "type": "session_meta", "payload": payload }).to_string()
 }
 
-/// Todo #247 QA defect: `fork_turns: "all"` seeds a spawned child's rollout
+/// Regression: `fork_turns: "all"` seeds a spawned child's rollout
 /// with a copy of the parent's own history, so before the fix the parent's
 /// commentary ("I'm delegating...") rides along into the nested sub-agent
 /// card. Fixture derived from a real captured child rollout (see

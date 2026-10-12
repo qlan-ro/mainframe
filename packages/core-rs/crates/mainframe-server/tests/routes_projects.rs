@@ -1,7 +1,11 @@
-//! Integration tests for `routes/projects.rs`. No TS supertest file exists for
-//! projects.ts; these cover the DB-backed endpoints (list/get/create/409) and
-//! pin the Phase-4/5 DELETE seam.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Integration tests for `routes/projects.rs`: the DB-backed endpoints
+//! (list/get/create/409) and the DELETE failure response when no ChatManager is
+//! wired.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -71,7 +75,7 @@ async fn create_missing_path_returns_400() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    // Byte-identical to Zod v4's `validate()` message (no field prefix).
+    // The Zod v4 wording, with no field prefix.
     let body: serde_json::Value = resp.json().await.unwrap();
     assert_eq!(
         body["error"],
@@ -124,10 +128,8 @@ async fn create_duplicate_path_returns_409_with_existing() {
     assert_eq!(body["data"]["id"], existing_id);
 }
 
-// Phase-4/5 seam: DELETE relies on ChatManager.removeProject (session + worktree
-// teardown), which is not on AppCtx yet. Pins the seam's failure response.
 #[tokio::test]
-async fn delete_is_phase4_seam_returns_500() {
+async fn delete_removes_the_registered_project() {
     let server = spawn_test_server(None).await;
     let created: serde_json::Value = reqwest::Client::new()
         .post(server.http_url("/api/projects"))
@@ -144,10 +146,14 @@ async fn delete_is_phase4_seam_returns_500() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(resp.status(), StatusCode::OK);
+    let response = reqwest::get(server.http_url(&format!("/api/projects/{id}")))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
-// ── availability (todo #295) ────────────────────────────────────────────────
+// ── availability ────────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn list_marks_a_project_whose_directory_is_gone_unavailable() {

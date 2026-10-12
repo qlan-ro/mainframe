@@ -1,13 +1,8 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/skill-path.ts`.
-//!
 //! Resolves a skill name to its `SKILL.md` by probing the locations the Claude
-//! CLI supports (project → user → plugin). Kept **synchronous** (std::fs), like
-//! the TS source: it uses `readdirSync`/`readFileSync`/`accessSync` deliberately
-//! (no logger dep — the TS comment notes this avoids a module-init cycle that
-//! would fire `homedir()` during logger bootstrap). Probes are bounded + cached,
-//! and callers (history) invoke it inside their async loop exactly as the TS
-//! does. Reviewer: a spawn_blocking wrap is a possible Phase-B change; the sync
-//! form preserves the TS control flow and the `cache: &mut HashMap` signature.
+//! CLI supports (project → user → plugin). Kept **synchronous** (std::fs) and
+//! logger-free. Probes are bounded + cached, and callers (history) invoke it
+//! inside their async loop. A spawn_blocking wrap is a possible later change;
+//! the sync form keeps the `cache: &mut HashMap` signature.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,11 +17,9 @@ fn is_valid_skill_name(name: &str) -> bool {
     if parts.is_empty() || parts.len() > 2 {
         return false;
     }
-    parts.iter().all(|p| {
-        !p.is_empty()
-            && p.chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-    })
+    parts
+        .iter()
+        .all(|p| mainframe_types::ids::is_safe_identifier(p))
 }
 
 fn home() -> PathBuf {
@@ -42,7 +35,10 @@ fn is_dir_entry(entry: &std::fs::DirEntry) -> bool {
 }
 
 /// Like `resolveSkillPath` but returns `None` when no SKILL.md is found on disk.
-pub fn resolve_existing_skill_path(project_path: Option<&str>, skill_name: &str) -> Option<String> {
+pub(crate) fn resolve_existing_skill_path(
+    project_path: Option<&str>,
+    skill_name: &str,
+) -> Option<String> {
     if !is_valid_skill_name(skill_name) {
         return None;
     }
@@ -54,79 +50,9 @@ pub fn resolve_existing_skill_path(project_path: Option<&str>, skill_name: &str)
 
     let mut candidates: Vec<PathBuf> = Vec::new();
 
-    // Plain (unqualified) skills: project → user home → every plugin dir.
-    if plugin_prefix.is_none() {
-        if let Some(pp) = project_path {
-            candidates.push(
-                PathBuf::from(pp)
-                    .join(".claude")
-                    .join("skills")
-                    .join(leaf_name)
-                    .join("SKILL.md"),
-            );
-        }
-        candidates.push(
-            home()
-                .join(".claude")
-                .join("skills")
-                .join(leaf_name)
-                .join("SKILL.md"),
-        );
+    add_plain_candidates(project_path, plugin_prefix, leaf_name, &mut candidates);
 
-        let plugins_dir = home().join(".claude").join("plugins");
-        if let Ok(entries) = std::fs::read_dir(&plugins_dir) {
-            for entry in entries.flatten() {
-                if is_dir_entry(&entry) {
-                    candidates.push(
-                        plugins_dir
-                            .join(entry.file_name())
-                            .join("skills")
-                            .join(leaf_name)
-                            .join("SKILL.md"),
-                    );
-                }
-            }
-        }
-    }
-
-    // Plugin cache layout:
-    // ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/SKILL.md
-    let cache_dir = home().join(".claude").join("plugins").join("cache");
-    if let Ok(marketplaces) = std::fs::read_dir(&cache_dir) {
-        for marketplace in marketplaces.flatten() {
-            if !is_dir_entry(&marketplace) {
-                continue;
-            }
-            let market_dir = cache_dir.join(marketplace.file_name());
-            if let Ok(plugins) = std::fs::read_dir(&market_dir) {
-                for plugin in plugins.flatten() {
-                    if !is_dir_entry(&plugin) {
-                        continue;
-                    }
-                    if let Some(pp) = plugin_prefix
-                        && plugin.file_name().to_string_lossy() != pp
-                    {
-                        continue;
-                    }
-                    let plugin_dir = market_dir.join(plugin.file_name());
-                    if let Ok(versions) = std::fs::read_dir(&plugin_dir) {
-                        for version in versions.flatten() {
-                            if !is_dir_entry(&version) {
-                                continue;
-                            }
-                            candidates.push(
-                                plugin_dir
-                                    .join(version.file_name())
-                                    .join("skills")
-                                    .join(leaf_name)
-                                    .join("SKILL.md"),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
+    add_cached_candidates(plugin_prefix, leaf_name, &mut candidates);
 
     // Non-cache plugin dirs for plugin-qualified skills.
     if let Some(pp) = plugin_prefix {
@@ -160,7 +86,7 @@ pub fn resolve_existing_skill_path(project_path: Option<&str>, skill_name: &str)
 
 /// Read SKILL.md content synchronously, stripping a leading YAML frontmatter
 /// block. Returns `None` if unreadable.
-pub fn read_skill_content(skill_path: &str) -> Option<String> {
+pub(crate) fn read_skill_content(skill_path: &str) -> Option<String> {
     let raw = std::fs::read_to_string(skill_path).ok()?;
     Some(strip_leading_frontmatter(&raw))
 }
@@ -205,7 +131,7 @@ fn strip_leading_frontmatter(raw: &str) -> String {
 
 /// Resolve a skill name to its SKILL.md, probing project → user → plugin, with a
 /// per-session cache so this is one probe per unique skill.
-pub fn resolve_skill_path(
+pub(crate) fn resolve_skill_path(
     project_path: Option<&str>,
     skill_name: &str,
     cache: Option<&mut HashMap<String, String>>,
@@ -241,6 +167,93 @@ pub fn resolve_skill_path(
         c.insert(skill_name.to_string(), fallback.clone());
     }
     fallback
+}
+
+fn add_plain_candidates(
+    project_path: Option<&str>,
+    plugin_prefix: Option<&str>,
+    leaf_name: &str,
+    candidates: &mut Vec<PathBuf>,
+) {
+    // Plain (unqualified) skills: project → user home → every plugin dir.
+    if plugin_prefix.is_none() {
+        if let Some(pp) = project_path {
+            candidates.push(
+                PathBuf::from(pp)
+                    .join(".claude")
+                    .join("skills")
+                    .join(leaf_name)
+                    .join("SKILL.md"),
+            );
+        }
+        candidates.push(
+            home()
+                .join(".claude")
+                .join("skills")
+                .join(leaf_name)
+                .join("SKILL.md"),
+        );
+
+        let plugins_dir = home().join(".claude").join("plugins");
+        if let Ok(entries) = std::fs::read_dir(&plugins_dir) {
+            for entry in entries.flatten() {
+                if is_dir_entry(&entry) {
+                    candidates.push(
+                        plugins_dir
+                            .join(entry.file_name())
+                            .join("skills")
+                            .join(leaf_name)
+                            .join("SKILL.md"),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn add_cached_candidates(
+    plugin_prefix: Option<&str>,
+    leaf_name: &str,
+    candidates: &mut Vec<PathBuf>,
+) {
+    // Plugin cache layout:
+    // ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/skills/<name>/SKILL.md
+    let cache_dir = home().join(".claude").join("plugins").join("cache");
+    if let Ok(marketplaces) = std::fs::read_dir(&cache_dir) {
+        for marketplace in marketplaces.flatten() {
+            if !is_dir_entry(&marketplace) {
+                continue;
+            }
+            let market_dir = cache_dir.join(marketplace.file_name());
+            if let Ok(plugins) = std::fs::read_dir(&market_dir) {
+                for plugin in plugins.flatten() {
+                    if !is_dir_entry(&plugin) {
+                        continue;
+                    }
+                    if let Some(pp) = plugin_prefix
+                        && plugin.file_name().to_string_lossy() != pp
+                    {
+                        continue;
+                    }
+                    let plugin_dir = market_dir.join(plugin.file_name());
+                    if let Ok(versions) = std::fs::read_dir(&plugin_dir) {
+                        for version in versions.flatten() {
+                            if !is_dir_entry(&version) {
+                                continue;
+                            }
+                            candidates.push(
+                                plugin_dir
+                                    .join(version.file_name())
+                                    .join("skills")
+                                    .join(leaf_name)
+                                    .join("SKILL.md"),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -293,13 +306,3 @@ mod tests {
         assert_eq!(cache.get("definitely-not-a-real-skill-xyz"), Some(&out));
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/skill-path.ts (149 lines)
-// confidence: high
-// todos: 0
-// notes: kept synchronous (std::fs) to match the deliberately-sync TS (no-logger,
-// no init cycle) — see module doc; flagged for a possible spawn_blocking Phase-B
-// change. VALID_SKILL_NAME_RE hand-rolled as split(':') ≤2 non-empty [A-Za-z0-9_-]
-// segments. readSkillContent's `^---…---` frontmatter strip hand-rolled
-// (anchored, first closing fence). homedir() → dirs::home_dir(); accessSync →
-// std::fs::metadata. No TS __tests__ file — sanity tests added.

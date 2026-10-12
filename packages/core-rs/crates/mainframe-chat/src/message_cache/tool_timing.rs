@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use mainframe_types::chat::MessageContentNode;
 use mainframe_types::tool_call_timing::MAX_EPOCH_MS;
@@ -9,10 +8,7 @@ use super::*;
 impl Default for MessageCache {
     fn default() -> Self {
         Self::with_clock(Arc::new(|| {
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|duration| duration.as_millis().min(u128::from(MAX_EPOCH_MS)) as u64)
-                .unwrap_or_default()
+            mainframe_types::time::now_ms().clamp(0, MAX_EPOCH_MS as i64) as u64
         }))
     }
 }

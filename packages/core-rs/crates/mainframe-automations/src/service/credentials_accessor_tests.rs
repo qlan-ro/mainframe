@@ -1,4 +1,4 @@
-//! Task 5a — `AutomationsEngine::credentials()` must hand out the *same*
+//! `AutomationsEngine::credentials()` must hand out the *same*
 //! store instance the engine writes through (the link dialog's
 //! `set_credential` flow), not a fresh read of the file. A boot-time
 //! snapshot would answer `get("github")` with `None` forever on a fresh

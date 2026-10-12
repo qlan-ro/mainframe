@@ -1,29 +1,10 @@
-//! Ported from `packages/types/src/chat.ts`.
-
+mod unpersisted;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::adapter::{ControlRequest, DetectedPr, EffortLevel};
-use crate::background_task::BackgroundActivity;
+use crate::adapter::{ControlRequest, EffortLevel};
 use crate::content::{LeafContent, ToolResultImage};
-use crate::context::SessionMention;
-use crate::orchestration::ChatOrchestration;
-use crate::settings::ExecutionMode;
-
-/// Deserialize a `field?: X | null` into the absent/null/value tri-state.
-///
-/// serde only invokes this when the key is present, so absent → `default`
-/// (`None`); present-null → `Some(None)`; present-value → `Some(Some(v))`. The
-/// plain `Option<Option<T>>` deserializer instead collapses null to the outer
-/// `None`, losing the explicit-null case.
-fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: serde::Deserialize<'de>,
-{
-    serde::Deserialize::deserialize(de).map(Some)
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -41,9 +22,6 @@ pub struct TodoItem {
     pub active_form: String,
 }
 
-/// Back-compat alias for existing imports.
-pub type ChatEffort = EffortLevel;
-
 /// Id of the hidden scratch project row that owns every non-project chat's
 /// `project_id`. Excluded from every `ProjectsRepository` read; removal is
 /// refused at every layer that would otherwise cascade-delete non-project
@@ -53,7 +31,7 @@ pub const NO_PROJECT_ID: &str = "mainframe-no-project";
 /// Fields for a new chat, threaded from the create route through the lifecycle
 /// manager down to `ChatsRepository::create`. Owned strings (rather than
 /// borrows) because the request crosses several trait-object boundaries
-/// (`dyn LifecycleManagerDeps`, `dyn ChatManagerDeps`, ...).
+/// (`dyn ChatManagerDeps`).
 #[derive(Debug, Clone, Default)]
 pub struct NewChat {
     pub project_id: String,
@@ -78,25 +56,25 @@ pub struct NewChat {
 pub struct SessionTuning {
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub effort: Option<Option<EffortLevel>>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub fast: Option<Option<bool>>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub ultracode: Option<Option<bool>>,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub adaptive_thinking: Option<Option<bool>>,
@@ -113,9 +91,10 @@ pub struct ResolvedTuning {
     pub adaptive_thinking: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChatStatus {
+    #[default]
     Active,
     Paused,
     Ended,
@@ -137,161 +116,8 @@ pub enum DisplayStatus {
     Waiting,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Chat {
-    pub id: String,
-    pub adapter_id: String,
-    pub project_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub claude_session_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_file_path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub permission_mode: Option<ExecutionMode>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub plan_mode: Option<bool>,
-    pub status: ChatStatus,
-    pub created_at: String,
-    pub updated_at: String,
-    pub total_cost: f64,
-    pub total_tokens_input: i64,
-    pub total_tokens_output: i64,
-    pub last_context_tokens_input: i64,
-    /// Last CLI-reported context usage (`get_context_usage`): tokens in window /
-    /// usable window size. Authoritative pair for the meter when no live report
-    /// is in memory.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_context_total_tokens: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_context_max_tokens: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_files: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mentions: Option<Vec<SessionMention>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub modified_files: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub worktree_path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub branch_name: Option<String>,
-    #[serde(
-        default,
-        deserialize_with = "double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub process_state: Option<Option<ProcessState>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_status: Option<DisplayStatus>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_running: Option<bool>,
-    /// Live background work (agents/bash/workflows) — derived per response, never
-    /// persisted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub background_activity: Option<BackgroundActivity>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub worktree_missing: Option<bool>,
-    /// Derived per response over the chat's effective working directory
-    /// (`worktree_path` when set, otherwise the owning project's path); generalizes
-    /// `worktree_missing`, never persisted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub directory_missing: Option<bool>,
-    /// The absent directory. Set only when `directory_missing` is true.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub missing_directory_path: Option<String>,
-    /// True when the CLI's transcript file for this session was deleted from disk
-    /// (persisted flag).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transcript_missing: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub todos: Option<Vec<TodoItem>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pinned: Option<bool>,
-    #[serde(
-        default,
-        deserialize_with = "double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub effort: Option<Option<EffortLevel>>,
-    #[serde(
-        default,
-        deserialize_with = "double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub fast: Option<Option<bool>>,
-    #[serde(
-        default,
-        deserialize_with = "double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub ultracode: Option<Option<bool>>,
-    #[serde(
-        default,
-        deserialize_with = "double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub adaptive_thinking: Option<Option<bool>>,
-    /// PRs detected in the session's tool_results.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub detected_prs: Option<Vec<DetectedPr>>,
-    /// User-source tags applied to this chat (synthetic chips excluded).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tags: Option<Vec<String>>,
-    /// Set when an automation run's `ask_agent` step created this chat; hides it from the default sessions list.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub automation_run_id: Option<String>,
-    /// Fixed at creation. A temporary chat is left out of default listings,
-    /// refuses pin/tag/archive/unarchive, and is removed only by an explicit
-    /// discard or by removing its project.
-    #[serde(default)]
-    pub temporary: bool,
-    /// Derived on read as `project_id == NO_PROJECT_ID`; never a stored column.
-    #[serde(default)]
-    pub no_project: bool,
-    /// ISO time of the chat's latest vendor-context loss (its stored provider
-    /// session was started with no persistence and can no longer be resumed).
-    /// Drives the "earlier context was not preserved" notice.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub context_lost_at: Option<String>,
-    /// Whether the stored provider session (`claude_session_id`) was started
-    /// with the adapter's no-persistence mechanism, so it is never a resume
-    /// target. Daemon-internal — deliberately absent from the wire `Chat`.
-    #[serde(skip)]
-    pub vendor_session_ephemeral: bool,
-    /// Non-project cwd `<data_dir>/scratch/<chatId>`, stored at create so every
-    /// cwd consumer can read it off the `Chat`. Daemon-internal — deliberately
-    /// absent from the wire `Chat`.
-    #[serde(skip)]
-    pub scratch_path: Option<String>,
-    /// The chat this one was forked from, or `null` for a chat with no parent
-    /// (todo #343). Deliberately generic — never fork-specific in name or
-    /// semantics, since side chats (#344) reuse it as "temporary and has a
-    /// parent". Survives archive/unarchive; never cascades from the parent.
-    #[serde(
-        default,
-        deserialize_with = "double_option",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub parent_chat_id: Option<Option<String>>,
-    /// Id of this chat's side chat (todo #344), derived on every read by a
-    /// correlated subquery — never a stored column. `None` when this chat has
-    /// no side chat, or when this chat is itself a side chat (side chats never
-    /// have side chats).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub side_chat_id: Option<String>,
-    /// Whether this chat's side chat has a pending permission or question.
-    /// Derived alongside `side_chat_id`; set only when `side_chat_id` is
-    /// `Some`. Never a stored column.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub side_chat_waiting: Option<bool>,
-    /// Agent provenance and delegated-task state (orchestration MCP server).
-    #[serde(flatten)]
-    pub orchestration: ChatOrchestration,
-}
+pub use wire::Chat;
+mod wire;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -303,7 +129,7 @@ pub struct Project {
     pub last_opened_at: String,
     #[serde(
         default,
-        deserialize_with = "double_option",
+        deserialize_with = "crate::serde_util::double_option",
         skip_serializing_if = "Option::is_none"
     )]
     pub parent_project_id: Option<Option<String>>,
@@ -394,7 +220,7 @@ pub enum MessageContentNode {
         original_file: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         modified_file: Option<String>,
-        /// Base64 image blocks carried on the `tool_result` (todo #363), source
+        /// Base64 image blocks carried on the `tool_result`, in source
         /// order. Never serialized as text; omitted when empty.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         images: Vec<ToolResultImage>,
@@ -438,228 +264,5 @@ pub struct QueuedMessageRef {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::{Value, json};
-
-    fn roundtrip<T>(v: Value)
-    where
-        T: serde::de::DeserializeOwned + serde::Serialize,
-    {
-        let parsed: T = serde_json::from_value(v.clone()).unwrap();
-        let back = serde_json::to_value(&parsed).unwrap();
-        assert_eq!(v, back);
-    }
-
-    #[test]
-    fn todo_status_snake_case() {
-        roundtrip::<TodoItem>(json!({
-            "content": "Ship the fix",
-            "status": "in_progress",
-            "activeForm": "Shipping the fix"
-        }));
-    }
-
-    #[test]
-    fn session_tuning_tristate() {
-        // absent → None → omitted on the way back out
-        let s = serde_json::to_string(&SessionTuning::default()).unwrap();
-        assert_eq!(s, "{}");
-        // present null → Some(None) → serializes null
-        let v = json!({ "effort": null, "fast": true });
-        roundtrip::<SessionTuning>(v.clone());
-        let t: SessionTuning = serde_json::from_value(v).unwrap();
-        assert_eq!(t.effort, Some(None));
-        assert_eq!(t.fast, Some(Some(true)));
-        // present value → Some(Some(v))
-        roundtrip::<SessionTuning>(json!({ "effort": "high" }));
-    }
-
-    #[test]
-    fn chat_effort_null_roundtrips() {
-        // effort present-null must survive as null on the wire.
-        let v = json!({
-            "id": "chat_1",
-            "adapterId": "claude",
-            "projectId": "proj_1",
-            "status": "active",
-            "createdAt": "t",
-            "updatedAt": "t",
-            "totalCost": 0.0,
-            "totalTokensInput": 0,
-            "totalTokensOutput": 0,
-            "lastContextTokensInput": 0,
-            "effort": null,
-            "temporary": false,
-            "noProject": false
-        });
-        roundtrip::<Chat>(v);
-    }
-
-    #[test]
-    fn chat_parent_chat_id_present_as_null_and_as_value() {
-        // A fork's parent is absent (skipped) on an unrelated (non-fork) chat, present
-        // as null when explicitly cleared/known-absent, and present as a value on a fork.
-        let base = json!({
-            "id": "chat_1",
-            "adapterId": "claude",
-            "projectId": "proj_1",
-            "status": "active",
-            "createdAt": "t",
-            "updatedAt": "t",
-            "totalCost": 0.0,
-            "totalTokensInput": 0,
-            "totalTokensOutput": 0,
-            "lastContextTokensInput": 0,
-            "temporary": false,
-            "noProject": false
-        });
-        let no_parent: Chat = serde_json::from_value(base.clone()).unwrap();
-        assert_eq!(no_parent.parent_chat_id, None);
-        assert!(
-            !serde_json::to_string(&no_parent)
-                .unwrap()
-                .contains("parentChatId")
-        );
-
-        let mut with_null = base.clone();
-        with_null["parentChatId"] = Value::Null;
-        roundtrip::<Chat>(with_null);
-
-        let mut with_value = base;
-        with_value["parentChatId"] = Value::String("chat_parent".to_string());
-        roundtrip::<Chat>(with_value);
-    }
-
-    #[test]
-    fn chat_side_chat_id_and_waiting_are_absent_by_default_and_present_when_set() {
-        let base = json!({
-            "id": "chat_1",
-            "adapterId": "claude",
-            "projectId": "proj_1",
-            "status": "active",
-            "createdAt": "t",
-            "updatedAt": "t",
-            "totalCost": 0.0,
-            "totalTokensInput": 0,
-            "totalTokensOutput": 0,
-            "lastContextTokensInput": 0,
-            "temporary": false,
-            "noProject": false
-        });
-        let no_side_chat: Chat = serde_json::from_value(base.clone()).unwrap();
-        assert_eq!(no_side_chat.side_chat_id, None);
-        assert_eq!(no_side_chat.side_chat_waiting, None);
-        let serialized = serde_json::to_string(&no_side_chat).unwrap();
-        assert!(!serialized.contains("sideChatId"));
-        assert!(!serialized.contains("sideChatWaiting"));
-
-        let mut with_side_chat = base;
-        with_side_chat["sideChatId"] = Value::String("chat_side".to_string());
-        with_side_chat["sideChatWaiting"] = Value::Bool(true);
-        roundtrip::<Chat>(with_side_chat);
-    }
-
-    #[test]
-    fn project_null_parent_present() {
-        // parentProjectId present as null (fixture route.projects-list) must
-        // round-trip as null, not be omitted.
-        roundtrip::<Project>(json!({
-            "id": "proj_a1b2c3",
-            "name": "mainframe",
-            "path": "/Users/doru/Projects/mainframe",
-            "createdAt": "2026-07-08T10:15:30.000Z",
-            "lastOpenedAt": "2026-07-08T10:16:12.500Z",
-            "parentProjectId": null
-        }));
-    }
-
-    #[test]
-    fn message_content_leaf_and_node() {
-        // Leaf arm
-        roundtrip::<MessageContent>(json!({ "type": "text", "text": "hi" }));
-        // Node arm: tool_result with structuredPatch
-        roundtrip::<MessageContent>(json!({
-            "type": "tool_result",
-            "toolUseId": "toolu_01A",
-            "content": "4\n",
-            "isError": false,
-            "structuredPatch": [
-                { "oldStart": 1, "oldLines": 1, "newStart": 1, "newLines": 1, "lines": [" 4"] }
-            ],
-            "originalFile": "a.txt",
-            "modifiedFile": "a.txt"
-        }));
-        // Node arm: tool_use
-        roundtrip::<MessageContent>(json!({
-            "type": "tool_use",
-            "id": "toolu_01A",
-            "name": "Bash",
-            "input": { "command": "echo 4" }
-        }));
-        // Node arm: tool_result with images (todo #363) — omitted when empty,
-        // present in source order when populated.
-        roundtrip::<MessageContent>(json!({
-            "type": "tool_result",
-            "toolUseId": "toolu_02B",
-            "content": "",
-            "isError": false,
-            "images": [{ "mediaType": "image/png", "data": "AAAA" }]
-        }));
-        let no_images: MessageContent = serde_json::from_value(json!({
-            "type": "tool_result",
-            "toolUseId": "toolu_03C",
-            "content": "ok",
-            "isError": false
-        }))
-        .unwrap();
-        assert!(
-            !serde_json::to_string(&no_images)
-                .unwrap()
-                .contains("images")
-        );
-    }
-
-    #[test]
-    fn queued_message_ref_minimal_and_full() {
-        roundtrip::<QueuedMessageRef>(json!({
-            "messageId": "dmsg_0003",
-            "chatId": "chat_9f2a3b1c",
-            "uuid": "a1b2c3d4",
-            "content": "Continue with the fix",
-            "timestamp": "2026-07-08T10:15:30.000Z"
-        }));
-        roundtrip::<QueuedMessageRef>(json!({
-            "messageId": "dmsg_0003",
-            "chatId": "chat_9f2a3b1c",
-            "uuid": "a1b2c3d4",
-            "content": "Continue with the fix",
-            "timestamp": "2026-07-08T10:15:30.000Z",
-            "attachmentIds": ["att_001", "att_002"]
-        }));
-    }
-}
-
-// PORT STATUS: packages/types/src/chat.ts (153 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#423/#424/#425): Chat gains lastContextTotalTokens/
-// lastContextMaxTokens (Option<u64>, persisted), backgroundActivity
-// (Option<BackgroundActivity> from background_task.rs — derived per response,
-// NEVER persisted), transcriptMissing (Option<bool>, persisted). All skip-when-
-// none; serde auto-defaults Option on absent so old payloads still parse.
-// notes(orig): `?: X | null` fields (Chat.processState/effort/fast/ultracode/
-// adaptiveThinking, Project.parentProjectId, SessionTuning.*) use
-// Option<Option<T>> + #[serde(default, skip_serializing_if=Option::is_none)] to
-// preserve the absent/null/value tri-state faithfully (route.projects-list
-// fixture shows parentProjectId present as null); deserialize_with="double_option"
-// is required because plain Option<Option<T>> collapses null to the outer None.
-// WIRE NOTE (Phase B): Chat.totalCost is f64 (0.0842 in fixtures); serde_json
-// renders a whole-valued f64 as `0.0` whereas Node's JSON.stringify emits `0`.
-// Semantically identical (JS coerces) but byte-differs — verify against the live
-// Node output in the differential harness. ChatEffort is a type alias to
-// adapter::EffortLevel. MessageContent is an untagged wrapper over shared
-// LeafContent (content.rs) + transcript-only MessageContentNode (internally
-// tagged, disjoint tags). ToolResultMessageContent (TS Extract alias) has no
-// standalone Rust type — consumers match MessageContentNode::ToolResult.
-// References crate::{content,adapter,context,settings}.
+#[path = "chat_tests.rs"]
+mod tests;

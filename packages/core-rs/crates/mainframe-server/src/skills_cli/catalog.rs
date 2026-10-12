@@ -24,10 +24,26 @@ const CACHE_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 /// buffering an unbounded body into the daemon.
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 
+/// Why a registry call failed. Only logged: the routes answer with a fixed
+/// "unavailable" body.
+#[derive(Debug, thiserror::Error)]
+pub enum RegistryError {
+    #[error(transparent)]
+    Http(#[from] reqwest::Error),
+    #[error("registry responded {0}")]
+    Status(reqwest::StatusCode),
+    #[error("registry response exceeded the size cap")]
+    TooLarge,
+    #[error(transparent)]
+    Url(<reqwest::Url as std::str::FromStr>::Err),
+    #[error("registry search response: {0}")]
+    Decode(#[source] serde_json::Error),
+}
+
 /// The seam the registry calls go through: production wiring passes
 /// [`HttpFetcher`], tests pass a double. Mirrors [`super::SkillsCliRunner`].
 pub trait RegistryFetcher: Send + Sync {
-    fn get(&self, url: String) -> BoxFuture<'_, Result<String, String>>;
+    fn get(&self, url: String) -> BoxFuture<'_, Result<String, RegistryError>>;
 }
 
 /// `reqwest` with a bounded timeout, redirect-follow (the apex 308-redirects
@@ -35,19 +51,18 @@ pub trait RegistryFetcher: Send + Sync {
 pub struct HttpFetcher;
 
 impl RegistryFetcher for HttpFetcher {
-    fn get(&self, url: String) -> BoxFuture<'_, Result<String, String>> {
+    fn get(&self, url: String) -> BoxFuture<'_, Result<String, RegistryError>> {
         Box::pin(async move {
-            let client = reqwest::Client::builder()
+            let client = mainframe_runtime::http::builder()
                 .timeout(REQUEST_TIMEOUT)
-                .build()
-                .map_err(|e| e.to_string())?;
-            let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
+                .build()?;
+            let response = client.get(&url).send().await?;
             if !response.status().is_success() {
-                return Err(format!("registry responded {}", response.status()));
+                return Err(RegistryError::Status(response.status()));
             }
-            let body = response.text().await.map_err(|e| e.to_string())?;
+            let body = response.text().await?;
             if body.len() > MAX_BODY_BYTES {
-                return Err("registry response exceeded the size cap".to_string());
+                return Err(RegistryError::TooLarge);
             }
             Ok(body)
         })
@@ -76,7 +91,7 @@ pub async fn load(fetcher: &dyn RegistryFetcher) -> CatalogOutcome {
     let html = match fetcher.get(HOME_URL.to_string()).await {
         Ok(html) => html,
         Err(reason) => {
-            tracing::warn!(reason, "skills registry homepage fetch failed");
+            tracing::warn!(%reason, "skills registry homepage fetch failed");
             return CatalogOutcome::Unavailable;
         }
     };
@@ -108,20 +123,18 @@ struct RawSearchEntry {
     is_official: Option<bool>,
 }
 
-/// Proxies the registry's search API. `Err` carries a reason for the log and
-/// the failure body; the caller has already rejected queries that are too
-/// short.
+/// Proxies the registry's search API. `Err` carries a reason for the log;
+/// the caller has already rejected queries that are too short.
 pub async fn search(
     fetcher: &dyn RegistryFetcher,
     query: &str,
-) -> Result<Vec<SearchEntry>, String> {
-    let mut url = reqwest::Url::parse(SEARCH_URL).map_err(|e| e.to_string())?;
+) -> Result<Vec<SearchEntry>, RegistryError> {
+    let mut url = reqwest::Url::parse(SEARCH_URL).map_err(RegistryError::Url)?;
     url.query_pairs_mut()
         .append_pair("q", query)
         .append_pair("limit", &SEARCH_LIMIT.to_string());
     let body = fetcher.get(url.to_string()).await?;
-    let parsed: RawSearchResponse =
-        serde_json::from_str(&body).map_err(|e| format!("registry search response: {e}"))?;
+    let parsed: RawSearchResponse = serde_json::from_str(&body).map_err(RegistryError::Decode)?;
     Ok(parsed
         .skills
         .into_iter()

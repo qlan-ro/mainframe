@@ -1,14 +1,23 @@
-//! The ACP v2 chat-facade server (todo #350): JSON-RPC framing, the
+//! The ACP v2 chat-facade server: JSON-RPC framing, the
 //! `initialize` handshake, and the `_mainframe.dev` extension namespace,
 //! built over the vendored types in `mainframe_types::acp`. Pure logic only —
 //! `mainframe-server` owns the axum socket shell (`/acp/{profile}`) this
 //! crate is dispatched from, so it stays free of axum/tokio dependencies and
 //! unit-testable without a socket.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 
 pub mod capabilities;
 pub mod connection;
+mod container_index;
 pub mod encoder;
 pub mod gate_registry;
 pub mod gates;

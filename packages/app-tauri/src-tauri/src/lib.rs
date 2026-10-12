@@ -31,7 +31,7 @@ use preview::{
 
 /// The daemon handle lives for the entire app lifetime.
 /// OnceLock ensures single-init; Drop isn't guaranteed on all platforms,
-/// so we also kill on the `app::exit` event.
+/// so we also stop it on the `app::exit` event.
 static DAEMON: OnceLock<sidecar::DaemonHandle> = OnceLock::new();
 
 /// Daemon HTTP/WS port for this session. Configurable via the `DAEMON_PORT` env
@@ -263,9 +263,10 @@ pub fn run() {
                     tracing::warn!(err = %e, "quit-path idle presence report failed");
                 }
 
-                // Kill the daemon when the last window closes.
+                // Stop the daemon when the last window closes: SIGTERM so it can
+                // stop its tunnels, then SIGKILL after a short grace period.
                 if let Some(h) = DAEMON.get() {
-                    h.kill();
+                    h.stop();
                 }
                 // Kill all PTY sessions — go through app_handle() because
                 // try_state lives on Manager/AppHandle, not on &Window (M5).
@@ -286,11 +287,11 @@ pub fn run() {
             // Cmd+Q / updater relaunch can end the run loop WITHOUT destroying
             // windows, skipping the Destroyed handler above — the daemon then
             // outlives the app (the rc.2→rc.4 stale-daemon incident). RunEvent::Exit
-            // is the last event before process exit; kill() is idempotent, so a
+            // is the last event before process exit; stop() is idempotent, so a
             // graceful window close having already run it is fine.
             if let tauri::RunEvent::Exit = event {
                 if let Some(h) = DAEMON.get() {
-                    h.kill();
+                    h.stop();
                 }
                 if let Some(mgr) = app_handle.try_state::<TerminalManager>() {
                     mgr.kill_all();

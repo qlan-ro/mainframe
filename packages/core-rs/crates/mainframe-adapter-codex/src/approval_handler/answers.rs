@@ -6,26 +6,27 @@ use mainframe_types::adapter::{ControlBehavior, PermissionScope};
 use serde_json::{Value, json};
 
 use super::PendingApproval;
+use crate::jsonrpc::JsonRpcError;
 
 /// Answer a `requestUserInput`, which expects
 /// `{ answers: { [questionId]: { answers: string[] } } }`.
-pub(super) fn answer_user_input(entry: PendingApproval, response: &ControlResponse) {
+pub(super) fn answer_user_input(
+    entry: PendingApproval,
+    response: &ControlResponse,
+) -> Result<(), JsonRpcError> {
     let Some(answer_string) = choose_request_user_input_answer(&entry, response) else {
         tracing::info!(
-            module = "codex:approvals",
             request_id = %response.request_id,
             tool_name = %entry.tool_name,
             "codex user input declined"
         );
-        (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }));
-        return;
+        return (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }));
     };
     let mut answers = serde_json::Map::new();
     for qid in collect_question_ids(&entry, response) {
         answers.insert(qid, json!({ "answers": [answer_string.clone()] }));
     }
     tracing::info!(
-        module = "codex:approvals",
         request_id = %response.request_id,
         behavior = ?response.behavior,
         tool_name = %entry.tool_name,
@@ -35,20 +36,23 @@ pub(super) fn answer_user_input(entry: PendingApproval, response: &ControlRespon
     (entry.respond)(
         entry.json_rpc_id,
         json!({ "answers": Value::Object(answers) }),
-    );
+    )
 }
 
 /// Answer an approval with the decision string Codex names.
-pub(super) fn answer_approval(entry: PendingApproval, response: &ControlResponse) {
-    // T19, R3.2: session-scoped allow reaches Codex's own "stop asking
+pub(super) fn answer_approval(
+    entry: PendingApproval,
+    response: &ControlResponse,
+) -> Result<(), JsonRpcError> {
+    // Session-scoped allow reaches Codex's own "stop asking
     // this session" decision, distinct from a one-off accept.
     let decision = match (response.behavior, response.scope) {
         (ControlBehavior::Allow, Some(PermissionScope::Session)) => "acceptForSession",
         (ControlBehavior::Allow, _) => "accept",
         (ControlBehavior::Deny, _) => "decline",
     };
-    tracing::info!(module = "codex:approvals", request_id = %response.request_id, decision, "codex approval resolved");
-    (entry.respond)(entry.json_rpc_id, json!({ "decision": decision }));
+    tracing::info!(request_id = %response.request_id, decision, "codex approval resolved");
+    (entry.respond)(entry.json_rpc_id, json!({ "decision": decision }))
 }
 
 /// Gather the question IDs that need an `answers` entry. Prefer the ids captured
@@ -103,7 +107,7 @@ fn flat_labels(entry: &PendingApproval) -> Vec<String> {
 }
 
 /// The single answer string to deliver for a requestUserInput, or `None` when
-/// the response carries nothing this gate could say — a decline (T19, R3.5).
+/// the response carries nothing this gate could say — a decline.
 fn choose_request_user_input_answer(
     entry: &PendingApproval,
     response: &ControlResponse,
@@ -154,10 +158,9 @@ fn exit_plan_mode_answer(entry: &PendingApproval, response: &ControlResponse) ->
         && !msg.is_empty()
     {
         tracing::warn!(
-            module = "codex:approvals",
             request_id = %response.request_id,
             tool_name = %entry.tool_name,
-            "codex: plan-exit revise free-text not supported by requestUserInput; answering with the no label, or the message when that label is blank"
+            "plan-exit revise free-text not supported by requestUserInput; answering with the no label, or the message when that label is blank"
         );
     }
 
@@ -167,11 +170,10 @@ fn exit_plan_mode_answer(entry: &PendingApproval, response: &ControlResponse) ->
     };
     if answer.is_none() {
         tracing::warn!(
-            module = "codex:approvals",
             request_id = %response.request_id,
             tool_name = %entry.tool_name,
             direction,
-            "codex: plan exit has no label for this direction; declining rather than answering blank"
+            "plan exit has no label for this direction; declining rather than answering blank"
         );
     }
     answer

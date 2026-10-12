@@ -1,11 +1,13 @@
-//! T4.4 (A2) — output contract text, correction message, and the
-//! parse/validate/coerce path over the agent's final message.
+//! A2 — output contract text, correction message, and the parse/validate/coerce
+//! path over the agent's final message.
 
 use serde_json::json;
 
 use crate::domain::{ExpectedOutput, ExpectedOutputType};
 
-use super::expects::{build_correction_message, build_output_contract, parse_expected};
+use super::expects::{
+    ExpectedOutputError, build_correction_message, build_output_contract, parse_expected,
+};
 
 fn expect(
     key: &str,
@@ -44,7 +46,8 @@ fn correction_message_carries_the_reason_and_the_contract() {
         ExpectedOutputType::Choice,
         Some(vec!["xs"]),
     )];
-    let message = build_correction_message("missing key 'scope'", &expects);
+    let message =
+        build_correction_message(&ExpectedOutputError::MissingKey("scope".into()), &expects);
     assert!(
         message
             .starts_with("That response didn't include the expected JSON (missing key 'scope').")
@@ -72,7 +75,9 @@ fn braces_inside_strings_do_not_break_extraction() {
 fn no_json_object_is_a_clear_reason() {
     let expects = vec![expect("scope", ExpectedOutputType::Text, None)];
     assert_eq!(
-        parse_expected("no json here", &expects).unwrap_err(),
+        parse_expected("no json here", &expects)
+            .unwrap_err()
+            .to_string(),
         "no JSON object found in the response"
     );
 }
@@ -81,7 +86,9 @@ fn no_json_object_is_a_clear_reason() {
 fn missing_key_names_the_key() {
     let expects = vec![expect("scope", ExpectedOutputType::Text, None)];
     assert_eq!(
-        parse_expected("{\"other\": 1}", &expects).unwrap_err(),
+        parse_expected("{\"other\": 1}", &expects)
+            .unwrap_err()
+            .to_string(),
         "missing key 'scope'"
     );
 }
@@ -98,7 +105,9 @@ fn coerces_numbers_from_numeric_strings_and_rejects_garbage() {
         json!(7.0)
     );
     assert_eq!(
-        parse_expected("{\"count\": \"many\"}", &expects).unwrap_err(),
+        parse_expected("{\"count\": \"many\"}", &expects)
+            .unwrap_err()
+            .to_string(),
         "'count' must be a number"
     );
 }
@@ -107,7 +116,9 @@ fn coerces_numbers_from_numeric_strings_and_rejects_garbage() {
 fn text_must_be_a_string_and_list_must_be_an_array() {
     let text_expects = vec![expect("summary", ExpectedOutputType::Text, None)];
     assert_eq!(
-        parse_expected("{\"summary\": 3}", &text_expects).unwrap_err(),
+        parse_expected("{\"summary\": 3}", &text_expects)
+            .unwrap_err()
+            .to_string(),
         "'summary' must be a string"
     );
     let list_expects = vec![expect("items", ExpectedOutputType::List, None)];
@@ -116,7 +127,9 @@ fn text_must_be_a_string_and_list_must_be_an_array() {
         json!([1, 2])
     );
     assert_eq!(
-        parse_expected("{\"items\": \"one\"}", &list_expects).unwrap_err(),
+        parse_expected("{\"items\": \"one\"}", &list_expects)
+            .unwrap_err()
+            .to_string(),
         "'items' must be a list"
     );
 }
@@ -133,7 +146,9 @@ fn choice_validates_against_options_and_stringifies() {
         json!("s")
     );
     assert_eq!(
-        parse_expected("{\"scope\": \"xl\"}", &expects).unwrap_err(),
+        parse_expected("{\"scope\": \"xl\"}", &expects)
+            .unwrap_err()
+            .to_string(),
         "'scope' must be one of [\"xs\",\"s\",\"m\"]"
     );
 }

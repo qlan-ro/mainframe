@@ -2,6 +2,7 @@
 //! `requestUserInput` routes to, what `input` it carries, and which option
 //! list the gate offers. The answer path back out lives in `answers.rs`.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 
 use mainframe_adapter_api::ControlRequest;
@@ -14,6 +15,10 @@ use super::approval_options::{approval_triad, ask_user_question_options, exit_pl
 use super::{ApprovalHandler, PendingApproval, RespondFn};
 
 impl ApprovalHandler {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "approval protocol method dispatch and response shape table"
+    )]
     pub fn handle_request(
         &self,
         method: &str,
@@ -73,7 +78,7 @@ impl ApprovalHandler {
                 .map(|groups| groups.iter().flatten().cloned().collect())
                 .unwrap_or_default();
 
-            let plan_ctx = self.plan_context.lock().unwrap_or_else(|e| e.into_inner());
+            let plan_ctx = self.plan_context.lock_recover();
             let is_plan_exit = plan_ctx.plan_mode
                 && plan_ctx.current_turn_plan.is_some()
                 && raw_options.as_ref().map(|o| o.len() == 2).unwrap_or(false);
@@ -123,18 +128,15 @@ impl ApprovalHandler {
                 ));
             }
         } else if method == "mcpServer/elicitation/request" {
-            respond(
+            let result = respond(
                 json_rpc_id,
                 crate::orchestration_args::elicitation_response(params),
             );
+            self.report_unanswered(result);
             return;
         } else {
-            tracing::warn!(
-                module = "codex:approvals",
-                method,
-                "codex: unknown server request method"
-            );
-            respond(json_rpc_id, json!({ "decision": "decline" }));
+            tracing::warn!(method, "unknown server request method");
+            self.report_unanswered(respond(json_rpc_id, json!({ "decision": "decline" })));
             return;
         }
 
@@ -148,23 +150,19 @@ impl ApprovalHandler {
             options,
         };
 
-        self.pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(
-                mainframe_request_id.clone(),
-                PendingApproval {
-                    json_rpc_id: json_rpc_id.clone(),
-                    respond,
-                    method: method.to_string(),
-                    tool_name: tool_name.clone(),
-                    option_labels,
-                    questions,
-                },
-            );
+        self.pending.lock_recover().insert(
+            mainframe_request_id.clone(),
+            PendingApproval {
+                json_rpc_id: json_rpc_id.clone(),
+                respond,
+                method: method.to_string(),
+                tool_name: tool_name.clone(),
+                option_labels,
+                questions,
+            },
+        );
 
         tracing::info!(
-            module = "codex:approvals",
             mainframe_request_id,
             ?json_rpc_id,
             tool_name,
@@ -184,5 +182,16 @@ fn insert_if_present(input: &mut HashMap<String, Value>, key: &str, val: Option<
         && !v.is_null()
     {
         input.insert(key.to_string(), v.clone());
+    }
+}
+
+impl ApprovalHandler {
+    /// An automatic answer has no caller to return its error to, so it goes
+    /// to the session: the turn would otherwise wait on it silently.
+    fn report_unanswered(&self, result: Result<(), crate::jsonrpc::JsonRpcError>) {
+        if let Err(error) = result {
+            tracing::warn!(%error, "server request not answered");
+            self.sink.on_error(error.into());
+        }
     }
 }

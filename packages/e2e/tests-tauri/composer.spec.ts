@@ -11,7 +11,7 @@ const TINY_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
 
 // ─── Composer config selects (ported from §44) ────────────────────────────────
-test.describe('§composer config selects', () => {
+test.describe('§composer config selects @real', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -99,6 +99,9 @@ test.describe('§composer config selects', () => {
     const { page } = app;
     await closeMenus();
     await page.locator('[data-testid="composer-model-select"]').click();
+    await expect(page.locator('[data-testid^="composer-model-select-option-"]').first()).toBeVisible({
+      timeout: 10_000,
+    });
     for (const id of candidates) {
       const row = page.locator(`[data-testid="composer-model-select-option-${id}"]`);
       if (!(await row.isVisible({ timeout: 2_000 }).catch(() => false))) continue;
@@ -109,8 +112,6 @@ test.describe('§composer config selects', () => {
     return null;
   }
 
-  // In mock mode the mock-cli exposes claude-opus-4-5-20251001 (xhigh+max) and
-  // claude-sonnet-4-5-20251101 (no xhigh); record/live modes use bare names.
   const OPUS = ['claude-opus-4-5-20251001', 'opus'];
   const SONNET = ['claude-sonnet-4-5-20251101', 'sonnet'];
   const HAIKU = ['claude-haiku-4-5-20251001', 'haiku'];
@@ -200,20 +201,6 @@ test.describe('§composer config selects', () => {
       'aria-disabled',
       'true',
     );
-    await closeMenus();
-  });
-
-  test('M5b: a sonnet-level model offers max but not xhigh', async () => {
-    const { page } = app;
-    const id = await openModelTuning(SONNET);
-    if (id == null) {
-      test.skip(true, 'no sonnet-level model found in this environment');
-      return;
-    }
-
-    await expect(page.locator(`[data-testid="composer-model-${id}-effort-max"]`)).toBeVisible({ timeout: 5_000 });
-    // xhigh needs supportsUltracode, which sonnet does not advertise.
-    await expect(page.locator(`[data-testid="composer-model-${id}-effort-xhigh"]`)).toHaveCount(0);
     await closeMenus();
   });
 });

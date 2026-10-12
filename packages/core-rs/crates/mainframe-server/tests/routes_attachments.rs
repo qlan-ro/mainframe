@@ -1,11 +1,13 @@
-//! Route tests for `attachments.rs` — translated assertion-for-assertion from
-//! `src/server/routes/__tests__/attachments.test.ts`, against a real spawned app
-//! with a real `AttachmentStore` (no mocks).
+//! Route tests for `attachments.rs`, against a real spawned app with a real
+//! `AttachmentStore` (no mocks).
 //!
-//! The two TS "attachment store not configured" 500 cases are omitted: the Rust
-//! `AppCtx` always carries an `Arc<AttachmentStore>`, so that branch is
-//! structurally unreachable.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! There is no "attachment store not configured" case: `AppCtx` always carries
+//! an `Arc<AttachmentStore>`, so that branch is structurally unreachable.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -13,7 +15,7 @@ use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::spawn_test_server;
 
-/// base64("hello") — the TS `smallImage.data`.
+/// base64("hello").
 const SMALL_IMAGE_DATA: &str = "aGVsbG8=";
 
 fn small_image() -> Value {
@@ -170,4 +172,19 @@ async fn get_returns_the_stored_attachment_in_the_envelope() {
     assert_eq!(body["success"], true);
     assert_eq!(body["data"]["name"], "a.png");
     assert_eq!(body["data"]["mediaType"], "image/png");
+}
+
+/// Intentional change: a chat id that is not a safe path segment used to fall
+/// through to the opaque 500; it is the request that is wrong, so it is a 400
+/// naming the id.
+#[tokio::test]
+async fn returns_400_when_the_chat_id_is_not_a_safe_path_segment() {
+    let server = spawn_test_server(None).await;
+    let resp = post_attachments(&server, "bad.id", json!({ "attachments": [small_image()] })).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(
+        body,
+        json!({ "success": false, "error": "Invalid chatId path segment: \"bad.id\"" })
+    );
 }

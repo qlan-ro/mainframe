@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/rollout-reader.ts`.
-//!
 //! Parses a Codex rollout JSONL file into `ThreadItem`s. The rollout is the raw
 //! per-thread session log Codex writes to
 //! `~/.codex/sessions/YYYY/MM/DD/rollout-*-<threadId>.jsonl` — it contains every
@@ -114,7 +112,7 @@ pub async fn read_rollout_items(
     let raw = match tokio::fs::read_to_string(&resolved).await {
         Ok(s) => s,
         Err(err) => {
-            tracing::warn!(module = "codex:rollout", err = %err, rollout_path, "codex: failed to read rollout file");
+            tracing::warn!(error = %err, rollout_path, "failed to read rollout file");
             return Vec::new();
         }
     };
@@ -132,7 +130,7 @@ async fn resolve_rollout_path(
     let resolved = match tokio::fs::canonicalize(rollout_path).await {
         Ok(p) => p,
         Err(err) => {
-            tracing::warn!(module = "codex:rollout", err = %err, rollout_path, "codex: rollout file not found");
+            tracing::warn!(error = %err, rollout_path, "rollout file not found");
             return None;
         }
     };
@@ -146,10 +144,9 @@ async fn resolve_rollout_path(
     let root = tokio::fs::canonicalize(&root).await.unwrap_or(root);
     if !resolved.starts_with(&root) {
         tracing::warn!(
-            module = "codex:rollout",
             rollout_path,
             resolved = %resolved.display(),
-            "codex: rollout path outside ~/.codex/sessions, refusing to read"
+            "rollout path outside ~/.codex/sessions, refusing to read"
         );
         return None;
     }
@@ -157,10 +154,9 @@ async fn resolve_rollout_path(
         && !resolved.to_string_lossy().contains(expected)
     {
         tracing::warn!(
-            module = "codex:rollout",
             rollout_path,
             expected_thread_id = expected,
-            "codex: rollout filename does not match thread id, refusing to read"
+            "rollout filename does not match thread id, refusing to read"
         );
         return None;
     }
@@ -174,7 +170,7 @@ async fn resolve_rollout_path(
 /// steal or corrupt another kind's pending entry.
 ///
 /// A `spawn_agent(fork_turns: "all")` child rollout opens with a copy of the
-/// parent's own history (todo #247 QA defect) — `forked_child_start_line`
+/// parent's own history — `forked_child_start_line`
 /// skips that prefix so it doesn't leak into the child's nested card.
 pub(crate) fn parse_rollout_lines(raw: &str) -> Vec<ThreadItem> {
     let mut items: Vec<ThreadItem> = Vec::new();
@@ -287,14 +283,3 @@ fn next_id(counter: &mut usize) -> String {
     *counter += 1;
     id
 }
-
-// PORT STATUS: src/plugins/builtin/codex/rollout-reader.ts (167 lines)
-// confidence: high
-// todos: 0
-// notes: async tokio fs (canonicalize/read_to_string) mirrors the TS realpath +
-// notes: readFile. SESSIONS_ROOT containment check uses PathBuf::starts_with on
-// notes: the canonicalized path. B5 (2026-07-24) added apply_patch
-// notes: (custom_tool_call/custom_tool_call_output) and MCP (function_call with
-// notes: an mcp__* namespace) reconstruction; parse_rollout_output and its 3
-// notes: unit tests moved to rollout_reconstruct.rs alongside the new pure
-// notes: parsing helpers to keep this file under the 300-line ceiling.

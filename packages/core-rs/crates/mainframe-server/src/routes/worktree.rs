@@ -1,44 +1,30 @@
-//! Ported from `src/server/routes/worktree.ts` — worktree enable/disable/fork/
-//! attach, list, and delete.
-//!
-//! `GET /api/projects/:id/git/worktrees` ports fully (db project lookup +
-//! `mainframe_services::workspace::get_worktrees`). The five mutating endpoints go
-//! through real ChatManager facade methods (enable/attach/disable on the config
-//! manager, forkToWorktree = lifecycle + config, delete via the ported
-//! `validateAndDeleteWorktree` + notifyWorktreeDeleted). When the ChatManager is
-//! unwired (Phase-3 harness) they fall back to the failure-path envelope after
-//! validating inputs 1:1.
-
 use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::Deserialize;
 
-use mainframe_adapter_api::{AdapterSession, BoxFuture};
-use mainframe_background_tasks::kill::{
-    KillTasksForChatArgs, SessionLike, StopResult, kill_tasks_for_chat,
-};
-use mainframe_chat::config_manager::ConfigError;
+use mainframe_background_tasks::kill::{KillTasksForChatArgs, SessionLike, kill_tasks_for_chat};
 use mainframe_services::workspace::{get_worktrees, remove_worktree, short_branch};
 
 use crate::ctx::AppCtx;
+use crate::input_error::InputError;
 use crate::orchestration_deps::branch_name_ok;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
-// The `Err` carries a built axum `Response` (intentionally large); boxing it
-// would only add an allocation for a value we return by move once.
-#[allow(clippy::result_large_err)]
-async fn project_path(ctx: &Arc<AppCtx>, project_id: &str) -> Result<Option<String>, Response> {
+async fn project_path(
+    ctx: &Arc<AppCtx>,
+    project_id: &str,
+) -> Result<Option<String>, crate::respond::ApiError> {
     let pid = project_id.to_string();
-    match ctx.db.call(move |db| db.projects.get(&pid)).await {
+    match ctx.core.db.call(move |db| db.projects.get(&pid)).await {
         Ok(project) => Ok(project.map(|p| p.path)),
-        Err(err) => Err(crate::async_err::internal_error("get project", &err)),
+        Err(err) => Err(crate::respond::ApiError::internal("get project", &err)),
     }
 }
 
@@ -51,28 +37,30 @@ struct WorktreeBody {
 }
 
 // Parse + validate the enable/fork body, returning the (baseBranch, branchName)
-// pair. Mirrors `EnableWorktreeBody`/`ForkWorktreeBody` (first failing issue wins).
-#[allow(clippy::result_large_err)]
-fn validate_enable_fork(body: &Bytes) -> Result<(String, String), Response> {
+// pair. The first failing check wins.
+fn validate_enable_fork(body: &Bytes) -> Result<(String, String), crate::respond::ApiError> {
     let Some(b) = parse_body::<WorktreeBody>(body) else {
-        return Err(fail(StatusCode::BAD_REQUEST, "Invalid input"));
+        return Err(crate::respond::ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Invalid input",
+        ));
     };
     let Some(base) = b.base_branch.filter(|s| !s.is_empty()) else {
-        return Err(fail(StatusCode::BAD_REQUEST, "Base branch is required"));
+        return Err(crate::respond::ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Base branch is required",
+        ));
     };
     match b.branch_name.as_deref() {
         Some(name) if branch_name_ok(name) => Ok((base, name.to_string())),
-        Some("") | None => Err(fail(StatusCode::BAD_REQUEST, "Branch name is required")),
-        _ => Err(fail(StatusCode::BAD_REQUEST, "Invalid branch name")),
-    }
-}
-
-/// A rebind refused mid-turn is a conflict, not bad input — the same request
-/// succeeds once the response finishes.
-fn config_error_status(err: &ConfigError) -> StatusCode {
-    match err {
-        ConfigError::ChatBusy => StatusCode::CONFLICT,
-        _ => StatusCode::BAD_REQUEST,
+        Some("") | None => Err(crate::respond::ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Branch name is required",
+        )),
+        _ => Err(crate::respond::ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Invalid branch name",
+        )),
     }
 }
 
@@ -83,32 +71,20 @@ async fn enable_worktree(
 ) -> Response {
     let (base, branch) = match validate_enable_fork(&body) {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "enable-worktree needs ChatManager (unwired)");
-        return fail(StatusCode::BAD_REQUEST, "Failed to enable worktree");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.enable_worktree(&id, &base, &branch).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::warn!(chat_id = %id, %err, "enable-worktree failed");
-            fail(config_error_status(&err), err.to_string())
-        }
+        Err(err) => crate::respond::fail_domain(format!("enable-worktree failed id={id}"), &err),
     }
 }
 
 async fn disable_worktree(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "disable-worktree needs ChatManager (unwired)");
-        return fail(StatusCode::BAD_REQUEST, "Failed to disable worktree");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.disable_worktree(&id).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::warn!(chat_id = %id, %err, "disable-worktree failed");
-            fail(config_error_status(&err), err.to_string())
-        }
+        Err(err) => crate::respond::fail_domain(format!("disable-worktree failed id={id}"), &err),
     }
 }
 
@@ -119,31 +95,20 @@ async fn fork_worktree(
 ) -> Response {
     let (base, branch) = match validate_enable_fork(&body) {
         Ok(v) => v,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "fork-worktree needs ChatManager (unwired)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to fork to worktree",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.fork_to_worktree(&id, &base, &branch).await {
         Ok(new_chat_id) => ok(serde_json::json!({ "chatId": new_chat_id })),
-        Err(err) => {
-            let status = StatusCode::from_u16(err.status_code())
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-            tracing::warn!(chat_id = %id, %err, "fork-worktree failed");
-            fail(status, err.to_string())
-        }
+        Err(err) => crate::respond::fail_domain(format!("fork-worktree failed id={id}"), &err),
     }
 }
 
 async fn list_worktrees(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     let path = match project_path(&ctx, &id).await {
         Ok(Some(path)) => path,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
-        Err(resp) => return resp,
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
+        Err(resp) => return resp.into_response(),
     };
     let worktrees = get_worktrees(&path).await;
     let filtered: Vec<_> = worktrees.into_iter().filter(|wt| wt.path != path).collect();
@@ -163,8 +128,8 @@ async fn attach_worktree(
     Path(id): Path<String>,
     body: Bytes,
 ) -> Response {
-    // `AttachWorktreeBody`: worktreePath.min(1) then branchName.min(1) — first
-    // failing issue wins.
+    // Attach body: non-empty worktreePath, then non-empty branchName — the first
+    // failing check wins.
     let b = parse_body::<AttachBody>(&body).unwrap_or(AttachBody {
         worktree_path: None,
         branch_name: None,
@@ -175,19 +140,13 @@ async fn attach_worktree(
     let Some(branch_name) = b.branch_name.filter(|s| !s.is_empty()) else {
         return fail(StatusCode::BAD_REQUEST, "Branch name is required");
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "attach-worktree needs ChatManager (unwired)");
-        return fail(StatusCode::BAD_REQUEST, "Failed to attach worktree");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm
         .attach_worktree(&id, &worktree_path, Some(&branch_name))
         .await
     {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::warn!(chat_id = %id, %err, "attach-worktree failed");
-            fail(config_error_status(&err), err.to_string())
-        }
+        Err(err) => crate::respond::fail_domain(format!("attach-worktree failed id={id}"), &err),
     }
 }
 
@@ -206,8 +165,8 @@ async fn delete_worktree(
 ) -> Response {
     let project_path = match project_path(&ctx, &id).await {
         Ok(Some(path)) => path,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
-        Err(resp) => return resp,
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
+        Err(resp) => return resp.into_response(),
     };
     let parsed = parse_body::<DeleteWorktreeBody>(&body).unwrap_or(DeleteWorktreeBody {
         worktree_path: None,
@@ -221,24 +180,21 @@ async fn delete_worktree(
         .await
     {
         Ok(()) => ok_empty(),
-        Err(message) => {
-            tracing::warn!(project_id = %id, worktree_path = %worktree_path, %message, "delete-worktree failed");
-            fail(StatusCode::BAD_REQUEST, message)
-        }
+        Err(err) => err.into_response(),
     }
 }
 
-/// Port of `validateAndDeleteWorktree`: canonicalize + registry-validate the
-/// worktree, kill each affected chat's background tasks, remove the worktree, then
-/// re-broadcast `chat.updated` for chats that pointed at it. `Err` carries the exact
-/// TS `throw new Error(...)` message the route surfaces as a 400.
+/// Canonicalize + registry-validate the worktree, kill each affected chat's
+/// background tasks, remove the worktree, then re-broadcast `chat.updated` for
+/// chats that pointed at it. `Err` carries the message the route surfaces as a
+/// 400.
 async fn validate_and_delete_worktree(
     ctx: &Arc<AppCtx>,
     project_id: &str,
     project_path: &str,
     worktree_path: &str,
     branch_name: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), crate::respond::ApiError> {
     let real_project_path = tokio::fs::canonicalize(project_path)
         .await
         .map(|p| p.to_string_lossy().into_owned())
@@ -246,9 +202,9 @@ async fn validate_and_delete_worktree(
     let real_worktree_path = tokio::fs::canonicalize(worktree_path)
         .await
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|_| "Worktree path does not exist".to_string())?;
+        .map_err(|_| InputError::Rejected("Worktree path does not exist"))?;
     if real_worktree_path == real_project_path {
-        return Err("Cannot delete the main worktree".to_string());
+        return Err(InputError::Rejected("Cannot delete the main worktree").into());
     }
 
     let worktrees = get_worktrees(project_path).await;
@@ -256,81 +212,32 @@ async fn validate_and_delete_worktree(
         .into_iter()
         .find(|wt| wt.path == real_worktree_path || wt.path == worktree_path);
     let Some(matched) = matched else {
-        return Err("Worktree path is not a registered worktree of this project".to_string());
+        return Err(InputError::Rejected(
+            "Worktree path is not a registered worktree of this project",
+        )
+        .into());
     };
     let resolved_branch =
         branch_name.or_else(|| matched.branch.as_ref().map(|b| short_branch(b).to_string()));
     let Some(resolved_branch) = resolved_branch else {
-        return Err("Cannot determine branch name for worktree".to_string());
+        return Err(InputError::Rejected("Cannot determine branch name for worktree").into());
     };
 
-    // Kill background tasks for every chat whose worktree resolves to this one.
-    let pid = project_id.to_string();
-    let chats = ctx
-        .db
-        .call(move |db| db.chats.list(&pid))
-        .await
-        .unwrap_or_default();
-    for chat in chats {
-        let Some(chat_wt) = chat.worktree_path.clone() else {
-            continue;
-        };
-        // Match by realpath equality, falling back to raw-string equality (so a
-        // request path like '/wt/x/', a symlinked alias, or a worktree already gone
-        // from disk still sweeps the chat's tracker entries).
-        let canonical_match = matches!(
-            tokio::fs::canonicalize(&chat_wt).await,
-            Ok(real) if real.to_string_lossy() == real_worktree_path.as_str()
-        );
-        if !(canonical_match || chat_wt == worktree_path) {
-            continue;
-        }
-        let session = ctx
-            .chat_manager
-            .as_ref()
-            .and_then(|cm| cm.get_session_for_chat(&chat.id))
-            .map(SessionKillBridge);
-        let session_ref = session.as_ref().map(|s| s as &dyn SessionLike);
-        kill_tasks_for_chat(KillTasksForChatArgs {
-            chat_id: &chat.id,
-            // canonical path so the sweep targets the right spool prefix.
-            worktree_path: Some(&real_worktree_path),
-            session: session_ref,
-            tracker: &ctx.background_tasks,
-            spool_root: None,
-        })
-        .await;
-    }
+    kill_worktree_tasks(ctx, project_id, worktree_path, &real_worktree_path).await?;
 
-    remove_worktree(project_path, worktree_path, &resolved_branch).await;
-    if let Some(cm) = ctx.chat_manager.as_ref() {
-        cm.notify_worktree_deleted(worktree_path);
+    let cm = &ctx.chat.chat_manager;
+    let affected = cm
+        .stop_worktree_services_with_aliases(
+            project_id,
+            &real_worktree_path,
+            &[worktree_path, &matched.path],
+        )
+        .await?;
+    remove_worktree(project_path, &real_worktree_path, &resolved_branch).await;
+    for chat_id in affected {
+        cm.emit_chat_updated(&chat_id);
     }
     Ok(())
-}
-
-/// Bridges the live `AdapterSession` to the `SessionLike` the kill sweep expects
-/// (identical to `chat_deps::SessionKillAdapter`; a per-request local so the route
-/// stays self-contained).
-struct SessionKillBridge(Arc<dyn AdapterSession>);
-
-impl SessionLike for SessionKillBridge {
-    fn stop_background_task<'a>(&'a self, task_id: &'a str) -> BoxFuture<'a, StopResult> {
-        let session = Arc::clone(&self.0);
-        let task_id = task_id.to_string();
-        Box::pin(async move {
-            match session.stop_background_task(task_id).await {
-                Ok(r) => StopResult {
-                    ok: r.ok,
-                    error: r.error,
-                },
-                Err(err) => StopResult {
-                    ok: false,
-                    error: Some(err.to_string()),
-                },
-            }
-        })
-    }
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -347,73 +254,48 @@ pub fn router() -> Router<Arc<AppCtx>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::body::to_bytes;
+#[path = "worktree_tests.rs"]
+mod tests;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        (
-            status,
-            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
-        )
-    }
-
-    #[tokio::test]
-    async fn list_worktrees_missing_project_404() {
-        let ctx = AppCtx::test_ctx();
-        let (status, body) =
-            read(list_worktrees(State(ctx.clone()), Path("nope".into())).await).await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
-        assert_eq!(body["error"], "Project not found");
-    }
-
-    #[tokio::test]
-    async fn enable_rejects_missing_base_branch_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = enable_worktree(
-            State(ctx.clone()),
-            Path("c".into()),
-            axum::body::Bytes::from(r#"{"branchName":"feat"}"#),
-        )
+async fn kill_worktree_tasks(
+    ctx: &Arc<AppCtx>,
+    project_id: &str,
+    worktree_path: &str,
+    real_worktree_path: &str,
+) -> Result<(), crate::respond::ApiError> {
+    // Kill background tasks for every chat whose worktree resolves to this one.
+    let pid = project_id.to_string();
+    let chats = ctx.core.db.call(move |db| db.chats.list(&pid)).await?;
+    for chat in chats {
+        let Some(chat_wt) = chat.worktree_path.clone() else {
+            continue;
+        };
+        // Match by realpath equality, falling back to raw-string equality (so a
+        // request path like '/wt/x/', a symlinked alias, or a worktree already gone
+        // from disk still sweeps the chat's tracker entries).
+        let canonical_match = matches!(
+            tokio::fs::canonicalize(&chat_wt).await,
+            Ok(real) if real.to_string_lossy() == real_worktree_path
+        );
+        if !(canonical_match || chat_wt == worktree_path) {
+            continue;
+        }
+        let session = ctx
+            .chat
+            .chat_manager
+            .get_session_for_chat(&chat.id)
+            .map(crate::session_kill_bridge::SessionKillBridge);
+        let session_ref = session.as_ref().map(|s| s as &dyn SessionLike);
+        kill_tasks_for_chat(KillTasksForChatArgs {
+            chat_id: &chat.id,
+            // canonical path so the sweep targets the right spool prefix.
+            worktree_path: Some(real_worktree_path),
+            session: session_ref,
+            tracker: &ctx.core.background_tasks,
+            spool_root: None,
+        })
         .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "Base branch is required");
     }
 
-    #[tokio::test]
-    async fn enable_rejects_bad_branch_name_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = enable_worktree(
-            State(ctx.clone()),
-            Path("c".into()),
-            axum::body::Bytes::from(r#"{"baseBranch":"main","branchName":"../evil"}"#),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "Invalid branch name");
-    }
-
-    #[test]
-    fn branch_name_validation() {
-        assert!(branch_name_ok("feature/x-1.2_y"));
-        assert!(!branch_name_ok("../escape"));
-        assert!(!branch_name_ok("-leading"));
-        assert!(!branch_name_ok(""));
-    }
+    Ok(())
 }
-
-// PORT STATUS: src/server/routes/worktree.ts (6 endpoints, 224 lines)
-// confidence: medium
-// todos: 0
-// notes: GET /api/projects/:id/git/worktrees ports fully over db.projects +
-// mainframe_services::workspace::get_worktrees (filtering the main worktree).
-// enable/disable/attach/fork call the real ChatManager facade (config manager +
-// lifecycle+config for fork; fork maps DirtyWorkingTree → 409 via ForkError::status_code).
-// delete-worktree ports `validateAndDeleteWorktree` whole: canonicalize + registry
-// validation, per-affected-chat killTasksForChat (SessionKillBridge → SessionLike),
-// removeWorktree, then cm.notifyWorktreeDeleted. Unwired (Phase-3 harness) → the TS
-// failure-path envelope after input validation.

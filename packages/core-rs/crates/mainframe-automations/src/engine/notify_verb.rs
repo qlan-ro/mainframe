@@ -1,8 +1,8 @@
-//! notify verb (T5.2, Node verbs/notify.ts): render the message, hand a
-//! Notification (title = automation name, links = runId + the checkpoint's
-//! agent chatIds) to the Notifier port, best-effort — a delivery failure
-//! logs and the step still completes. The production Notifier (T9.2) emits
-//! the WS `automation.notification` event and pushes to mobile.
+//! notify verb: render the message, hand a Notification (title = automation
+//! name, links = runId + the checkpoint's agent chatIds) to the Notifier port,
+//! best-effort — a delivery failure logs and the step still completes. The
+//! production Notifier emits the WS `automation.notification` event and pushes
+//! to mobile.
 
 use std::sync::Arc;
 
@@ -45,7 +45,7 @@ impl NotifyVerb {
             }
         };
 
-        // Node getAutomationName: fall back to the id when the row is gone.
+        // Fall back to the id when the automation row is gone.
         let title = match self.automations.get(&run.automation_id).await {
             Ok(Some(automation)) => automation.name,
             _ => run.automation_id.clone(),
@@ -69,9 +69,3 @@ impl NotifyVerb {
         }
     }
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/notify.ts (108 lines)
-// confidence: high
-// todos: 0
-// notes: Node emits the WS event inline and treats only push as the side
-//        channel; Rust hands both to the Notifier port (T9.2 wires WS+push).

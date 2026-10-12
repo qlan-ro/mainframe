@@ -188,7 +188,7 @@ impl ProviderSwitchMarker {
 }
 
 /// "3 items" / "1 item, 2 omitted" — the omitted part is dropped at zero.
-pub fn handoff_counts(items: u32, omitted: u32) -> String {
+pub(crate) fn handoff_counts(items: u32, omitted: u32) -> String {
     let noun = if items == 1 { "item" } else { "items" };
     if omitted == 0 {
         format!("{items} {noun}")

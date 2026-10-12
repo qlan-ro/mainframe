@@ -1,5 +1,9 @@
 //! Migration 32 and the agent-provenance queries.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::rc::Rc;
 

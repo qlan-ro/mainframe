@@ -1,17 +1,15 @@
-//! Per-action manifest (T6.2): id, catalog metadata, named outputs typed by
-//! the exact contract §5 enum `text|number|list|record` (no `none` — a
-//! no-output action carries an empty outputs list), the engine-internal
-//! `idempotent` flag feeding the Decision-12 restart policy, and the editor's
-//! field schema (`fields`/`has_output_as` — Part 0 of the 2026-08-18
-//! automations-provider-connections plan). `fields` is a sibling to
-//! `params_schema`, not a translation of it: JSON Schema can't express "this
-//! is a code editor" or "this is a token-accepting chip field", so the
-//! daemon authors the control types by hand, same as `params_schema` itself.
-//! Both `idempotent` and `fields`/`has_output_as` now cross the wire in the
-//! `ActionCatalogEntry` projection (T7.3/T9.3).
+//! Per-action manifest: id, catalog metadata, named outputs typed by the exact
+//! contract §5 enum `text|number|list|record` (no `none` — a no-output action
+//! carries an empty outputs list), the `idempotent` flag feeding the
+//! restart-mid-action policy, and the editor's field schema
+//! (`fields`/`has_output_as`). The manifest is the single source for an
+//! action: the validator's output table, the `outputAs` lookup and the wire
+//! `ActionCatalogEntry` all read it. Each `ActionParam` supplies a JSON
+//! property and optionally an editor control, so the params schema, the field
+//! list and `has_output_as` are generated together and cannot drift.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -53,9 +51,10 @@ pub enum ActionAuth {
     Token,
 }
 
-/// Mirrors the UI's `ActionFieldControl` (`steps/action-fields.ts`) exactly —
-/// that file is the consumer, so any new control value needs a matching case
-/// added there before it means anything.
+/// Wire contract: the UI matches these values in `ActionFieldControl`
+/// (`packages/ui/src/features/automations/steps/action-fields.ts`), so any
+/// new control value needs a matching case added there before it means
+/// anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ActionFieldControl {
@@ -76,9 +75,9 @@ pub struct ActionFieldShowWhen {
 }
 
 /// One control in the editor's auto-generated params form. Field `key`s must
-/// match the keys the action's own `parse_input` deserializes — the drift
-/// guard in `registry_tests.rs` asserts every field key is a property of
-/// `params_schema`.
+/// match the keys the action's own `parse_input` deserializes;
+/// `ActionManifest::new` builds the field list and `params_schema` from the
+/// same params, so every field key is a schema property.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionField {
@@ -119,7 +118,7 @@ impl ActionField {
         Self::new(key, label, ActionFieldControl::Chip)
     }
 
-    pub fn chiparea(key: &str, label: &str) -> Self {
+    pub(crate) fn chiparea(key: &str, label: &str) -> Self {
         Self::new(key, label, ActionFieldControl::Chiparea)
     }
 
@@ -151,27 +150,109 @@ pub struct ActionManifest {
     pub auth: ActionAuth,
     /// Suggested credential label shown by the editor (e.g. `github`).
     pub credential_label_hint: Option<&'static str>,
-    /// JSON Schema for the action's params form (Node emits zod's
-    /// `toJSONSchema`; Rust authors the equivalent schema by hand). Validated
-    /// server-side by each action's `parse_input`.
+    /// JSON Schema for the action's params form, derived from `ActionParam`s.
     pub params_schema: Value,
-    /// The editor's auto-form field list — a sibling of `params_schema`, not
-    /// derived from it (see module doc).
+    /// The editor's auto-form field list, derived from the same `ActionParam`s.
     pub fields: Vec<ActionField>,
-    /// Whether the step-level `outputAs` (text/lines) applies to this action.
-    /// True for exactly `run_command` and `files.read` — the two whose
-    /// `parse_input` accepts an `outputAs` param
-    /// (`engine/run_action_verb.rs`'s `ACTIONS_WITH_OUTPUT_AS`).
+    /// Whether the step-level `outputAs` (text/lines) applies to this action:
+    /// true when its params declare `outputAs`.
     pub has_output_as: bool,
     pub outputs: Vec<ActionOutput>,
-    /// Decision 12: non-idempotent actions get a persisted `running` marker
-    /// before executing and are never silently re-run on restart.
+    /// Non-idempotent actions get a persisted `running` marker before executing
+    /// and are never silently re-run on restart.
     pub idempotent: bool,
 }
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/types.ts ActionDef metadata; params_schema
-//        byte-parity with zod's toJSONSchema is a route-diff concern (T9.3),
-//        not asserted here.
+/// The authored half of a manifest; `ActionManifest::new` derives the rest
+/// (`params_schema`, `fields`, `has_output_as`) from the action's params.
+pub(crate) struct ActionMeta {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub group: ActionGroup,
+    pub auth: ActionAuth,
+    pub credential_label_hint: Option<&'static str>,
+    pub outputs: Vec<ActionOutput>,
+    pub idempotent: bool,
+}
+
+/// One input property: its JSON Schema and, unless the input is hidden from
+/// the editor's auto-form (`outputAs`, `headers`, …), the control that edits
+/// it.
+pub(crate) struct ActionParam {
+    key: String,
+    schema: Value,
+    field: Option<ActionField>,
+    required: bool,
+}
+
+impl ActionParam {
+    pub(crate) fn field(field: ActionField, schema: Value) -> Self {
+        Self {
+            key: field.key.clone(),
+            schema,
+            field: Some(field),
+            required: false,
+        }
+    }
+
+    pub(crate) fn hidden(key: &str, schema: Value) -> Self {
+        Self {
+            key: key.to_string(),
+            schema,
+            field: None,
+            required: false,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn required(mut self) -> Self {
+        self.required = true;
+        self
+    }
+}
+
+/// The step-level text/lines switch; an action takes it by declaring a param
+/// with this key.
+const OUTPUT_AS_KEY: &str = "outputAs";
+
+impl ActionManifest {
+    /// Builds the manifest, generating the params JSON Schema (properties in
+    /// param order, `required` when any param is, `additionalProperties` as
+    /// given) and the editor field list from the same `params`.
+    pub(crate) fn new(
+        meta: ActionMeta,
+        params: Vec<ActionParam>,
+        additional_properties: Value,
+    ) -> Self {
+        let has_output_as = params.iter().any(|param| param.key == OUTPUT_AS_KEY);
+        let mut properties = Map::new();
+        let mut required = Vec::new();
+        let mut fields = Vec::new();
+        for param in params {
+            if param.required {
+                required.push(Value::String(param.key.clone()));
+            }
+            fields.extend(param.field);
+            properties.insert(param.key, param.schema);
+        }
+        let mut schema = Map::new();
+        schema.insert("type".into(), Value::String("object".into()));
+        schema.insert("properties".into(), Value::Object(properties));
+        if !required.is_empty() {
+            schema.insert("required".into(), Value::Array(required));
+        }
+        schema.insert("additionalProperties".into(), additional_properties);
+        Self {
+            id: meta.id,
+            title: meta.title,
+            group: meta.group,
+            auth: meta.auth,
+            credential_label_hint: meta.credential_label_hint,
+            params_schema: Value::Object(schema),
+            fields,
+            has_output_as,
+            outputs: meta.outputs,
+            idempotent: meta.idempotent,
+        }
+    }
+}

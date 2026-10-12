@@ -46,23 +46,27 @@ async fn load_natives(
     layout: &SegmentLayout,
 ) -> HashMap<String, Vec<ChatMessage>> {
     let mut loaded = HashMap::new();
-    let Some(project_path) = deps.projects_get_path(&chat.project_id) else {
-        return loaded;
-    };
-    let cwd = crate::chat_cwd::chat_cwd(
-        chat.worktree_path.as_deref(),
-        chat.scratch_path.as_deref(),
-        Some(project_path),
-    );
-    let Some(cwd) = cwd else {
+    let Some(cwd) = native_cwd(deps, chat) else {
         return loaded;
     };
     let active_native = layout.active().map(|s| s.native_session_ref.clone());
     for native in natives_in_use(layout) {
         let is_active = active_native.as_deref() == Some(native.id.as_str());
-        let fork_source = is_active
-            .then(|| deps.get_pending_fork(&chat.id).map(|p| p.fork_source))
-            .flatten();
+        let fork_source = if is_active {
+            match deps.get_pending_fork(&chat.id) {
+                Ok(pending) => pending.map(|p| p.fork_source),
+                Err(error) => {
+                    tracing::error!(%error, chat_id = %chat.id, "pending fork read failed");
+                    deps.emit_event(mainframe_types::events::DaemonEvent::Error {
+                        chat_id: Some(chat.id.clone()),
+                        error: error.to_string(),
+                    });
+                    return loaded;
+                }
+            }
+        } else {
+            None
+        };
         if native.native_session_id.is_none() && fork_source.is_none() {
             continue;
         }
@@ -82,7 +86,7 @@ async fn load_natives(
                 loaded.insert(native.id.clone(), remapped);
             }
             Err(err) => {
-                tracing::warn!(?err, chat_id = %chat.id, native = %native.id, "segment history load failed")
+                tracing::warn!(error = ?err, chat_id = %chat.id, native = %native.id, "segment history load failed")
             }
         }
     }
@@ -130,4 +134,13 @@ pub fn assemble(
             .extend(slices.remove(&segment.id).unwrap_or_default());
     }
     out
+}
+
+fn native_cwd(deps: &dyn ChatManagerDeps, chat: &Chat) -> Option<String> {
+    let project_path = deps.projects_get_path(&chat.project_id)?;
+    crate::chat_cwd::chat_cwd(
+        chat.worktree_path.as_deref(),
+        chat.scratch_path.as_deref(),
+        Some(project_path),
+    )
 }

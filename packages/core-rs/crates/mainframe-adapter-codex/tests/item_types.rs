@@ -2,7 +2,11 @@
 //! `dynamicToolCall`, `enteredReviewMode`, `exitedReviewMode`, `imageView`,
 //! `sleep`, `hookPrompt`. Field shapes come from the codex 0.144.3 ts-rs schema
 //! (`ThreadItem.ts` at tag `rust-v0.144.3`), not hand-guessed.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_adapter_codex::item_types::ThreadItem;
 use mainframe_adapter_codex::types::ThreadReadResult;
@@ -265,7 +269,7 @@ fn thread_read_turn_drops_an_unknown_typed_item_interleaved_with_known_ones() {
     assert!(matches!(&items[1], ThreadItem::Sleep(s) if s.duration_ms == 10));
 }
 
-// --- webSearch.action (todo #356) ---
+// webSearch.action
 
 use mainframe_adapter_codex::item_types::WebSearchAction;
 

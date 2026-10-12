@@ -4,104 +4,38 @@
 //! `on_transcript_moved` fires when one of Claude's worktree tools moved the
 //! session (and with it the transcript) to another directory.
 
+use super::tests::Harness;
 use super::*;
-use crate::test_support::test_chat;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use crate::test_support::{FakeDeps, test_chat};
 
-struct TriggerDeps {
-    cell: Arc<Mutex<ActiveChat>>,
-    trigger_count: AtomicUsize,
-    triggered_chat_ids: Mutex<Vec<String>>,
-    moved_count: AtomicUsize,
-}
-
-impl TriggerDeps {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            cell: cell(),
-            trigger_count: AtomicUsize::new(0),
-            triggered_chat_ids: Mutex::new(Vec::new()),
-            moved_count: AtomicUsize::new(0),
-        })
-    }
-}
-
-impl EventHandlerDeps for TriggerDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(self.cell.clone())
-    }
-    fn emit_event(&self, _event: DaemonEvent) {}
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        Vec::new()
-    }
-    fn display_projector(&self) -> Box<dyn DisplayProjector> {
-        Box::new(FullRebuildProjector::new(|_raw, _overlay, _categories| {
-            Vec::new()
-        }))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        true
-    }
-    fn on_worktree_trigger(&self, chat_id: &str) {
-        self.trigger_count.fetch_add(1, Ordering::SeqCst);
-        self.triggered_chat_ids
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(chat_id.to_string());
-    }
-    fn on_transcript_moved(&self, _chat_id: &str) {
-        self.moved_count.fetch_add(1, Ordering::SeqCst);
-    }
-    /// Empty on purpose: this suite exercises worktree triggers, not on_exit.
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    /// Empty on purpose: chat_deps.rs's workflow_runs_stop_all_delegates_... test covers the wiring.
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-}
-
-fn cell() -> Arc<Mutex<ActiveChat>> {
+/// A sink over a working "chat-wt" whose stored row carries a CLI session,
+/// so a transcript move has something to look up. The fake lists no
+/// worktrees, so a rescan only registers in `list_calls`.
+fn sink() -> (Arc<dyn SessionSink>, Arc<FakeDeps>) {
     let mut chat = test_chat("chat-wt");
     chat.process_state = Some(Some(ProcessState::Working));
-    Arc::new(Mutex::new(ActiveChat::new(chat, None)))
+    chat.vendor_session_id = Some("sess-wt".to_string());
+    let deps = FakeDeps::arc();
+    *deps.adapters.transcript_present.lock().unwrap() = Some(true);
+    let h = Harness::with_deps(deps, Arc::new(Mutex::new(ActiveChat::new(chat, None))));
+    (h.sink("chat-wt"), h.deps)
 }
 
-fn sink(deps: Arc<TriggerDeps>) -> Arc<dyn SessionSink> {
-    let handler = EventHandler::new(
-        Arc::new(Mutex::new(MessageCache::new())),
-        Arc::new(Mutex::new(PermissionManager::new())),
-        deps,
-    );
-    handler.build_sink("chat-wt", None)
+/// Runs the tasks the sink spawned (a rescan, a transcript refresh) to completion.
+async fn settle() {
+    for _ in 0..4 {
+        tokio::task::yield_now().await;
+    }
+}
+
+/// How many worktree rescans ran.
+fn rescans(deps: &FakeDeps) -> usize {
+    deps.list_calls()
+}
+
+/// How many transcript refreshes looked the session up.
+fn transcript_lookups(deps: &FakeDeps) -> usize {
+    deps.adapters.locate_calls.lock().unwrap().len()
 }
 
 fn tool_use(id: &str, name: &str, command: Option<&str>) -> MessageContent {
@@ -135,10 +69,9 @@ fn tool_result(tool_use_id: &str, is_error: bool) -> MessageContent {
     })
 }
 
-#[test]
-fn a_bash_worktree_add_command_triggers_one_rescan_after_a_successful_result() {
-    let deps = TriggerDeps::new();
-    let sink = sink(deps.clone());
+#[tokio::test]
+async fn a_bash_worktree_add_command_triggers_one_rescan_after_a_successful_result() {
+    let (sink, deps) = sink();
 
     sink.on_message(
         vec![tool_use(
@@ -150,17 +83,13 @@ fn a_bash_worktree_add_command_triggers_one_rescan_after_a_successful_result() {
     );
     sink.on_tool_result(vec![tool_result("tu-1", false)], None);
 
-    assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
-    assert_eq!(
-        deps.triggered_chat_ids.lock().unwrap().as_slice(),
-        ["chat-wt"]
-    );
+    settle().await;
+    assert_eq!(rescans(&deps), 1);
 }
 
-#[test]
-fn a_read_only_worktree_command_never_triggers_a_rescan() {
-    let deps = TriggerDeps::new();
-    let sink = sink(deps.clone());
+#[tokio::test]
+async fn a_read_only_worktree_command_never_triggers_a_rescan() {
+    let (sink, deps) = sink();
 
     // Read-only worktree commands must not rescan: that would offer this chat
     // the worktrees other sessions created since its last scan.
@@ -170,13 +99,13 @@ fn a_read_only_worktree_command_never_triggers_a_rescan() {
     );
     sink.on_tool_result(vec![tool_result("tu-1", false)], None);
 
-    assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 0);
+    settle().await;
+    assert_eq!(rescans(&deps), 0);
 }
 
-#[test]
-fn a_failed_worktree_command_result_does_not_trigger_a_rescan() {
-    let deps = TriggerDeps::new();
-    let sink = sink(deps.clone());
+#[tokio::test]
+async fn a_failed_worktree_command_result_does_not_trigger_a_rescan() {
+    let (sink, deps) = sink();
 
     sink.on_message(
         vec![tool_use("tu-1", "Bash", Some("git worktree add ../wt"))],
@@ -184,24 +113,24 @@ fn a_failed_worktree_command_result_does_not_trigger_a_rescan() {
     );
     sink.on_tool_result(vec![tool_result("tu-1", true)], None);
 
-    assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 0);
+    settle().await;
+    assert_eq!(rescans(&deps), 0);
 }
 
-#[test]
-fn an_enter_worktree_tool_use_triggers_one_rescan_after_a_successful_result() {
-    let deps = TriggerDeps::new();
-    let sink = sink(deps.clone());
+#[tokio::test]
+async fn an_enter_worktree_tool_use_triggers_one_rescan_after_a_successful_result() {
+    let (sink, deps) = sink();
 
     sink.on_message(vec![tool_use("tu-1", "EnterWorktree", None)], None);
     sink.on_tool_result(vec![tool_result("tu-1", false)], None);
 
-    assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
+    settle().await;
+    assert_eq!(rescans(&deps), 1);
 }
 
-#[test]
-fn two_worktree_tool_uses_resolved_in_one_batch_trigger_only_one_rescan() {
-    let deps = TriggerDeps::new();
-    let sink = sink(deps.clone());
+#[tokio::test]
+async fn two_worktree_tool_uses_resolved_in_one_batch_trigger_only_one_rescan() {
+    let (sink, deps) = sink();
 
     sink.on_message(
         vec![
@@ -215,26 +144,26 @@ fn two_worktree_tool_uses_resolved_in_one_batch_trigger_only_one_rescan() {
         None,
     );
 
-    assert_eq!(deps.trigger_count.load(Ordering::SeqCst), 1);
+    settle().await;
+    assert_eq!(rescans(&deps), 1);
 }
 
-#[test]
-fn entering_and_leaving_a_worktree_each_report_a_transcript_move() {
-    let deps = TriggerDeps::new();
-    let sink = sink(deps.clone());
+#[tokio::test]
+async fn entering_and_leaving_a_worktree_each_report_a_transcript_move() {
+    let (sink, deps) = sink();
 
     sink.on_message(vec![tool_use("tu-1", "EnterWorktree", None)], None);
     sink.on_tool_result(vec![tool_result("tu-1", false)], None);
     sink.on_message(vec![tool_use("tu-2", "ExitWorktree", None)], None);
     sink.on_tool_result(vec![tool_result("tu-2", false)], None);
 
-    assert_eq!(deps.moved_count.load(Ordering::SeqCst), 2);
+    settle().await;
+    assert_eq!(transcript_lookups(&deps), 2);
 }
 
-#[test]
-fn a_git_worktree_shell_command_or_a_failed_worktree_tool_moves_nothing() {
-    let deps = TriggerDeps::new();
-    let sink = sink(deps.clone());
+#[tokio::test]
+async fn a_git_worktree_shell_command_or_a_failed_worktree_tool_moves_nothing() {
+    let (sink, deps) = sink();
 
     sink.on_message(
         vec![
@@ -248,5 +177,6 @@ fn a_git_worktree_shell_command_or_a_failed_worktree_tool_moves_nothing() {
         None,
     );
 
-    assert_eq!(deps.moved_count.load(Ordering::SeqCst), 0);
+    settle().await;
+    assert_eq!(transcript_lookups(&deps), 0);
 }

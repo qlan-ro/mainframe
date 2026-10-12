@@ -1,4 +1,4 @@
-//! T1.1 — serde round-trips per variant with EXACT contract §1 wire names,
+//! Serde round-trips per variant with EXACT contract §1 wire names,
 //! deny_unknown_fields, defaults, and the A9 `attachments` literal.
 
 use serde_json::{Value, json};
@@ -223,7 +223,7 @@ fn set_variable_round_trips_and_answers_the_three_exhaustive_methods() {
         "value": ["Release ", {"token": {"stepId": "collect", "output": "version"}}]
     }));
     assert_eq!(step.id(), "set-headline");
-    assert_eq!(step.kind_name(), "set_variable");
+    assert_eq!(step.kind().as_str(), "set_variable");
     assert!(!step.keep_going());
     let Step::SetVariable(set) = step else {
         panic!("expected set_variable")
@@ -254,8 +254,3 @@ fn steps_reject_unknown_fields_but_accept_the_kind_tag() {
         "unknown step kinds must be rejected"
     );
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: trigger/condition/definition round-trips live in serde_trigger_tests.rs.

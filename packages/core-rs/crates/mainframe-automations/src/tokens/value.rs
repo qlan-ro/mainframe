@@ -1,4 +1,4 @@
-//! The typed value a token resolves to (plan T3.1):
+//! The typed value a token resolves to:
 //! `TokenValue = Text | Number(f64) | List | Record`.
 
 use std::collections::BTreeMap;
@@ -17,7 +17,7 @@ impl TokenValue {
     /// JSON → token value. `Null` is "unset" (`None`); booleans stringify
     /// the way JS renders them; null list items become empty text so list
     /// lengths survive the conversion.
-    pub fn from_json(value: &Value) -> Option<TokenValue> {
+    pub(crate) fn from_json(value: &Value) -> Option<TokenValue> {
         match value {
             Value::Null => None,
             Value::Bool(b) => Some(TokenValue::Text(b.to_string())),
@@ -58,9 +58,9 @@ impl TokenValue {
         }
     }
 
-    /// Literal substitution (contract Decision 9): text verbatim, numbers
+    /// Literal substitution: text verbatim, numbers
     /// without a spurious `.0`, lists newline-joined, records as JSON.
-    pub fn coerce_to_string(&self) -> String {
+    pub(crate) fn coerce_to_string(&self) -> String {
         match self {
             TokenValue::Text(s) => s.clone(),
             TokenValue::Number(n) => js_number_string(*n),
@@ -74,9 +74,23 @@ impl TokenValue {
     }
 }
 
-/// Mirrors JS `String(number)` for the values automations produce: integral
+/// JS `String(value)` for the scalar shapes a choice can arrive as.
+pub(crate) fn js_string(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n
+            .as_f64()
+            .map(js_number_string)
+            .unwrap_or_else(|| n.to_string()),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => "null".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// Renders like JS `String(number)` for the values automations produce: integral
 /// floats print without a decimal point (`String(5)` → `"5"`, never `"5.0"`).
-pub fn js_number_string(n: f64) -> String {
+pub(crate) fn js_number_string(n: f64) -> String {
     if n.is_nan() {
         return "NaN".to_string();
     }
@@ -91,9 +105,3 @@ pub fn js_number_string(n: f64) -> String {
     }
     format!("{n}")
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: coercion mirrors Node tokens/substitute.ts coerceToString (unset →
-//        '' is the resolver's job — see substitute.rs).

@@ -88,8 +88,8 @@ pub struct ItemMeta {
     /// its `title` is the task description, not a tool name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subagent: Option<bool>,
-    /// True only on the item the partial-message overlay currently backs
-    /// (spec Decision 39). Drops through the same diff as the committing
+    /// True only on the item the partial-message overlay currently backs.
+    /// Drops through the same diff as the committing
     /// text, or the item is cleared on abort; clients drive per-part
     /// streaming status from this, never from position.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -132,8 +132,8 @@ pub struct PromptSendMeta {
     pub command: Option<MessageSendCommand>,
 }
 
-/// `api_retry` modeled as a content-replacing patch plus this marker (spec
-/// decision 10), riding a message/tool-call upsert's `_meta["_mainframe.dev"]`
+/// `api_retry` modeled as a content-replacing patch plus this marker,
+/// riding a message/tool-call upsert's `_meta["_mainframe.dev"]`
 /// alongside the replaced `content` — never a distinct lifecycle frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -143,7 +143,7 @@ pub struct RetryMarker {
     pub reason: Option<String>,
 }
 
-/// Queued-prompt state (spec decision 11): an ordinary accepted prompt's
+/// Queued-prompt state: an ordinary accepted prompt's
 /// `PromptResponse._meta["_mainframe.dev"]` carries this while the prompt
 /// waits for its turn. No `queue.*` frame family exists on the facade.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -152,7 +152,7 @@ pub struct QueuedPromptState {
     pub position: i64,
 }
 
-/// The rich permission answer (spec decision 12): today's `ControlResponse`
+/// The rich permission answer: today's `ControlResponse`
 /// semantics (input mutation, suggestion rules, execution mode, clear
 /// context), reused verbatim per the single-canonical-type rule rather than
 /// redefined for the facade. Rides `RequestPermissionResponse._meta
@@ -164,7 +164,7 @@ pub struct RichPermissionAnswer {
 }
 
 /// The fidelity payload a `diff` tool-call content entry carries in its own
-/// `_meta["_mainframe.dev"]` (spec Decision 15): the legacy display
+/// `_meta["_mainframe.dev"]`: the legacy display
 /// pipeline's structured hunks plus the full before/after file text —
 /// neither survives a round trip through git-patch text (the full files
 /// aren't in it at all), and the desktop Edit/Write cards consume exactly
@@ -180,8 +180,7 @@ pub struct StructuredDiff {
     pub modified_file: Option<String>,
 }
 
-/// Params for the daemon's custom `_mainframe.dev/heartbeat` notification
-/// (spec decision 13: "heartbeat plus resume-replay is the documented rule").
+/// Params for the daemon's custom `_mainframe.dev/heartbeat` notification.
 /// `sequence` lets a client detect a gap (a jump larger than one) and resume
 /// instead of heuristically refetching.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -204,8 +203,7 @@ pub struct CompactionParams {
 /// `_mainframe.dev/queue_state`'s params: the FULL queued-prompt snapshot
 /// for a session, pushed on every queue change and after each resume. A
 /// snapshot (never a delta) so a reconnecting client cannot hold stale
-/// queued turns — the facade successor to the `message.queued.*` family
-/// (spec decision 11's cross-client visibility half).
+/// queued turns — the facade successor to the `message.queued.*` family.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueueStateParams {
@@ -234,12 +232,12 @@ pub struct SessionDetachParams {
 }
 
 /// `_mainframe.dev/resync`'s params: the chat's cache was rebuilt from the
-/// transcript under ids an attached session may not hold (spec Decision 34,
-/// rewritten). Raised when `do_load_chat` repopulates the cache and the
+/// transcript under ids an attached session may not hold. Raised when
+/// `do_load_chat` repopulates the cache and the
 /// result differs from what was there, or when a resume delivery fails after
 /// its reply (`fail_resume`, at most once per failure streak). Cache
-/// retention alone never raises it — there is no per-chat cap (spec Decision
-/// 36). Distinct from `transcript_cleared`: reusing that notification would
+/// retention alone never raises it — there is no per-chat cap. Distinct from
+/// `transcript_cleared`: reusing that notification would
 /// blank the thread before the replay lands, where `resync` re-resumes with
 /// no reducer wipe.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -249,7 +247,7 @@ pub struct ResyncParams {
 }
 
 /// `_mainframe.dev/replay_complete`'s params: closes exactly one
-/// `session/resume` replay (spec Decision 38). Sent after `queue_state` and
+/// `session/resume` replay. Sent after `queue_state` and
 /// before the buffered catch-up, in every arm that sent a successful reply.
 /// `aborted` is present and `true` only when a resume delivery failed after
 /// its reply went out; a normal close carries no `aborted` key at all, so a
@@ -267,7 +265,7 @@ pub struct ReplayCompleteParams {
 /// standard base64 of a zlib-deflated JSON array of `SessionUpdate`s.
 pub const REPLAY_BATCH_ENCODING: &str = "deflate+base64";
 
-/// `_mainframe.dev/replay_batch`'s params (spec Decision 42): one slice of a
+/// `_mainframe.dev/replay_batch`'s params: one slice of a
 /// `session/resume` replay for a connection that opted in with
 /// [`COMPRESSED_REPLAY_OPT_IN_KEY`]. `count` is the number of `session/update`
 /// payloads inside `data`, in replay order; batches for one reply arrive in
@@ -284,7 +282,7 @@ pub struct ReplayBatchParams {
 }
 
 /// The `_meta["_mainframe.dev"]` key `create_update` stamps on an item's
-/// complete first frame, live or replayed (spec Decision 37) — nothing else
+/// complete first frame, live or replayed — nothing else
 /// carries it, so its presence exactly means "this frame is the item's
 /// complete first state".
 pub const ITEM_CREATED_META_KEY: &str = "created";
@@ -297,8 +295,8 @@ pub enum CompactionWirePhase {
     Done,
 }
 
-/// Params for the daemon's custom `_mainframe.dev/gate_resolved` notification
-/// (spec decision 19): pushed to every attached connection still holding the
+/// Params for the daemon's custom `_mainframe.dev/gate_resolved` notification:
+/// pushed to every attached connection still holding the
 /// gate when it resolves elsewhere — another facade client's answer, a
 /// legacy-surface answer, or the CLI cancelling it — so a pending gate clears
 /// immediately instead of on the next resume. `requestId` is the JSON-RPC id
@@ -311,7 +309,7 @@ pub struct GateResolvedParams {
 }
 
 /// The marker a truncated tool-result text block carries in its own
-/// `_meta["_mainframe.dev"]` (spec decision 20): the legacy display
+/// `_meta["_mainframe.dev"]`: the legacy display
 /// pipeline's `truncated`/`fullBytes` pair (`truncate_tool_content`), which
 /// the joined content text cannot express — clients use it to offer the
 /// on-demand full-output fetch (`GET /api/chats/{id}/tool-result/{toolUseId}`),

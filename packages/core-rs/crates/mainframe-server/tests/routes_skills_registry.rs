@@ -1,21 +1,21 @@
-//! Route-level tests for `/api/skills-cli/search` (todo #243 addendum). Only
-//! the rejection paths run here: everything past validation reaches
-//! skills.sh, and a test suite that depends on a third-party registry being up
-//! is a flaky test suite. The outcome mapping is covered by
-//! `routes::skills_registry`'s unit tests and `skills_cli_catalog.rs`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Route-level tests for `/api/skills-cli/search`. Only the rejection paths run
+//! here: everything past validation reaches skills.sh, and a test suite that
+//! depends on a third-party registry being up is a flaky test suite. The
+//! outcome mapping is covered by `routes::skills_registry`'s unit tests and
+//! `skills_cli_catalog.rs`.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
 use reqwest::StatusCode;
-use serde_json::{Value, json};
-use support::{TestServer, spawn_test_server};
+use serde_json::json;
+use support::spawn_test_server;
 
-async fn get_json(server: &TestServer, path: &str) -> (StatusCode, Value) {
-    let res = reqwest::get(server.http_url(path)).await.unwrap();
-    let status = res.status();
-    (status, res.json().await.unwrap())
-}
+use support::helpers::get_json;
 
 /// The registry rejects a one-character query itself, so spending the round
 /// trip to be told so is pure latency. Rejecting here also means the debounced

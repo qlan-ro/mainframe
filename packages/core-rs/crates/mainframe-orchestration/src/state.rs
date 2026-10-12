@@ -1,7 +1,6 @@
 //! Adapter-neutral chat state and the agent-message markers.
 
-use mainframe_types::chat::{ChatMessage, ChatMessageType, ChatStatus, MessageContent};
-use mainframe_types::content::LeafContent;
+use mainframe_types::chat::ChatStatus;
 use serde::Serialize;
 
 use crate::ports::ChatView;
@@ -32,7 +31,7 @@ impl ChatState {
 /// First match wins: archived, ended, a pending gate, any work in flight
 /// (a live turn, CLI-queued prompts, or Mainframe-held outbox entries), idle.
 #[must_use]
-pub fn derive_state(chat: &ChatView, outbox_pending: bool) -> ChatState {
+pub(crate) fn derive_state(chat: &ChatView, outbox_pending: bool) -> ChatState {
     match chat.status {
         ChatStatus::Archived => ChatState::Archived,
         ChatStatus::Ended => ChatState::Ended,
@@ -72,7 +71,7 @@ pub const AGENT_MESSAGE_CLOSE: &str = "</mainframe-agent-message>";
 pub const TASK_RESULT_OPEN: &str = "<mainframe-task-result ";
 
 #[must_use]
-pub fn wrap_agent_message(from_chat_id: &str, kind: AgentMessageKind, body: &str) -> String {
+pub(crate) fn wrap_agent_message(from_chat_id: &str, kind: AgentMessageKind, body: &str) -> String {
     format!(
         "{AGENT_MESSAGE_OPEN}from=\"{from_chat_id}\" kind=\"{}\">\n{body}\n{AGENT_MESSAGE_CLOSE}",
         kind.as_str()
@@ -81,7 +80,7 @@ pub fn wrap_agent_message(from_chat_id: &str, kind: AgentMessageKind, body: &str
 
 /// True for a user message an agent (not the human) sent.
 #[must_use]
-pub fn is_agent_message(text: &str) -> bool {
+pub(crate) fn is_agent_message(text: &str) -> bool {
     let trimmed = text.trim_start();
     trimmed.starts_with(AGENT_MESSAGE_OPEN) || trimmed.starts_with(TASK_RESULT_OPEN)
 }
@@ -89,23 +88,7 @@ pub fn is_agent_message(text: &str) -> bool {
 /// The last non-empty assistant text block, or `""` when there is none. Task
 /// summaries, `chat_wait`, and the automations engine's step output all read
 /// a chat's answer this way.
-#[must_use]
-pub fn last_assistant_text(messages: &[ChatMessage]) -> String {
-    for message in messages.iter().rev() {
-        if message.r#type != ChatMessageType::Assistant {
-            continue;
-        }
-        for block in message.content.iter().rev() {
-            if let MessageContent::Leaf(LeafContent::Text { text, .. }) = block {
-                let text = text.trim();
-                if !text.is_empty() {
-                    return text.to_string();
-                }
-            }
-        }
-    }
-    String::new()
-}
+pub use mainframe_types::chat_text::last_assistant_text;
 
 #[cfg(test)]
 mod tests {

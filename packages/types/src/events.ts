@@ -1,4 +1,4 @@
-import type { Chat } from './chat.js';
+import type { Chat, VendorSessionId } from './chat.js';
 import type { AdapterProcess } from './adapter.js';
 import type { UIZone } from './plugin.js';
 import type { LaunchProcessStatus } from './launch.js';
@@ -21,7 +21,7 @@ export type DaemonEvent =
   // chatId, so every client sees it without subscribing to the child chat.
   | { type: 'delegated_task.updated'; task: DelegatedTask }
   | { type: 'process.started'; chatId: string; process: AdapterProcess }
-  | { type: 'process.ready'; processId: string; claudeSessionId: string }
+  | { type: 'process.ready'; processId: string; claudeSessionId: VendorSessionId }
   | { type: 'process.stopped'; processId: string }
   | { type: 'context.updated'; chatId: string; filePaths?: string[] }
   | { type: 'error'; chatId?: string; error: string }

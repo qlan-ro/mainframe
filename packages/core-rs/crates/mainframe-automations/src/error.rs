@@ -1,6 +1,6 @@
 //! Typed store errors (thiserror — no anyhow in library crates). Display
-//! strings that mirror the Node engine are load-bearing: they cross the wire
-//! through run/step `error` fields.
+//! strings are load-bearing: they cross the wire through run/step `error`
+//! fields.
 
 use crate::store::RunStatus;
 
@@ -53,13 +53,24 @@ pub enum StoreError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
-    /// A `spawn_blocking` worker was cancelled or panicked.
+    /// The `spawn_blocking` open task was cancelled or panicked.
     #[error("store task failed: {0}")]
-    Task(String),
-}
+    Task(#[from] tokio::task::JoinError),
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.1-T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: TerminalRun/OutputsTooLarge display text mirrors Node's
-//        store/types.ts + run-store.ts error strings.
+    /// A store operation panicked on the worker; the connection survives.
+    #[error("store task failed: database operation panicked")]
+    Panicked,
+
+    /// The worker thread that owns the automation store could not take or
+    /// answer the request.
+    #[error("store task failed: database worker {0}")]
+    Worker(&'static str),
+
+    /// A daemon-store failure with no automation-specific shape.
+    #[error("store task failed: {0}")]
+    Db(mainframe_db::DbError),
+
+    /// The built-in action registry refused a manifest at boot.
+    #[error("store task failed: action registry: {0}")]
+    ActionRegistry(#[source] crate::actions::ActionError),
+}

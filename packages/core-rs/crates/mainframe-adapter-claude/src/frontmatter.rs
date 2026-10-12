@@ -1,22 +1,19 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/frontmatter.ts`, then
-//! rebuilt for todo #317 into a single-pass, line-anchored reader.
-//!
-//! Minimal SKILL.md / command YAML-frontmatter reader/writer. Not a full YAML
-//! parser. Supported: inline `key: value` scalars split at the first colon;
-//! `|`/`>` block scalars with `-`/`+` chomping (clip, YAML's unmarked
-//! default, is treated as strip — see `block_scalar`'s module doc); CRLF line
-//! endings. Not supported: explicit indentation indicators (`|2`), quoting,
-//! nested maps, and lists — none of these appear in agent or skill files
-//! (todo #317 Decision D8). The closing fence is a line that is exactly
-//! `---`, so a `---` inside the body or an indented block-scalar line never
-//! truncates the frontmatter early.
+//! Minimal SKILL.md / command YAML-frontmatter reader/writer: a single-pass,
+//! line-anchored reader. Not a full YAML parser. Supported: inline `key: value`
+//! scalars split at the first colon; `|`/`>` block scalars with `-`/`+`
+//! chomping (clip, YAML's unmarked default, is treated as strip — see
+//! `block_scalar`'s module doc); CRLF line endings. Not supported: explicit
+//! indentation indicators (`|2`), quoting, nested maps, and lists — none of
+//! these appear in agent or skill files. The closing fence is a line that is
+//! exactly `---`, so a `---` inside the body or an indented block-scalar line
+//! never truncates the frontmatter early.
 
 use std::collections::HashMap;
 
 mod block_scalar;
 
 /// Parsed frontmatter: a flat `key: value` attribute map plus the body below the
-/// closing fence. `attributes` mirrors the TS `Record<string, string>`.
+/// closing fence.
 pub struct Frontmatter {
     pub attributes: HashMap<String, String>,
     pub body: String,
@@ -83,10 +80,9 @@ fn parse_attribute_line(
 
 /// Serialize ordered `key: value` attributes with the body below the fence.
 ///
-/// The TS signature is `buildFrontmatter(attrs: Record<string, string>, body)`
-/// and iterates `Object.entries(attrs)` in insertion order. A Rust `HashMap`
-/// has no insertion order, so the port takes an ordered slice; the sole caller
-/// (`createSkill`) passes `[("name", …), ("description", …)]`.
+/// Attributes are written in the given order, so this takes an ordered slice
+/// rather than a `HashMap`; the sole caller (`create_skill`) passes
+/// `[("name", …), ("description", …)]`.
 pub fn build_frontmatter(attrs: &[(&str, &str)], body: &str) -> String {
     let lines: Vec<String> = attrs
         .iter()
@@ -156,11 +152,3 @@ mod tests {
         assert_eq!(out, "---\nname: PDF\ndescription: d\n---\n\n# Body");
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/frontmatter.ts (30 lines)
-// confidence: high
-// todos: 0
-// notes: parseFrontmatter returns a Frontmatter struct (attributes map + body).
-// buildFrontmatter takes an ordered &[(&str,&str)] instead of a Record so the
-// emitted key order (name, description) matches the TS Object.entries order —
-// HashMap has no insertion order. Sole caller is skills::create_skill.

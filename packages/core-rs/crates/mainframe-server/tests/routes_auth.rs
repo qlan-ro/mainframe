@@ -1,9 +1,12 @@
-//! Integration tests for `routes/auth.rs` — translated assertion-for-assertion
-//! from `src/server/routes/__tests__/auth.test.ts` against a real spawned app
-//! (reqwest + in-memory DB + real PushService). Rate-limit-recording cases use a
-//! distinct `X-Forwarded-For` so the process-global rate-limit bucket never
-//! collides across the parallel tests.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Integration tests for `routes/auth.rs` against a real spawned app (reqwest +
+//! in-memory DB + real PushService). Rate-limit-recording cases use a distinct
+//! `X-Forwarded-For` so the process-global rate-limit bucket never collides
+//! across the parallel tests.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -121,8 +124,8 @@ async fn confirm_accepts_device_name_from_mobile() {
 
 #[tokio::test]
 async fn confirm_rejects_empty_device_name() {
-    // confirmBodySchema.deviceName is `.min(1).optional()` — an empty-but-present
-    // deviceName is a Zod parse failure (400), it must NOT pair the device (200).
+    // deviceName is optional but non-empty — an empty-but-present deviceName is
+    // a body validation failure (400), it must NOT pair the device (200).
     let server = spawn_test_server(Some(SECRET.to_string())).await;
     let code = pair(&server).await;
     let resp = client()
@@ -133,14 +136,20 @@ async fn confirm_rejects_empty_device_name() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    let devices = server.ctx.db.call(|db| db.devices.get_all()).await.unwrap();
+    let devices = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.devices.get_all())
+        .await
+        .unwrap();
     assert!(devices.is_empty());
 }
 
 #[tokio::test]
 async fn confirm_rejects_empty_pairing_code() {
-    // confirmBodySchema.pairingCode is `.min(1)` — an empty code is a Zod parse
-    // failure (400), NOT the "invalid or expired" 401 an absent code produces.
+    // pairingCode must be non-empty — an empty code is a body validation failure
+    // (400), NOT the "invalid or expired" 401 an absent code produces.
     let server = spawn_test_server(Some(SECRET.to_string())).await;
     let resp = client()
         .post(server.http_url("/api/auth/confirm"))
@@ -162,7 +171,13 @@ async fn confirm_persists_device_with_name_from_mobile() {
         .send()
         .await
         .unwrap();
-    let devices = server.ctx.db.call(|db| db.devices.get_all()).await.unwrap();
+    let devices = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.devices.get_all())
+        .await
+        .unwrap();
     assert_eq!(devices.len(), 1);
     assert_eq!(devices[0].device_name, "My iPhone");
 }
@@ -174,7 +189,13 @@ async fn confirm_same_uuid_twice_returns_same_id_and_one_row() {
     assert_eq!(c1["data"]["deviceId"], format!("mobile-{UUID}"));
     let c2 = confirm_ok(&server, "iPhone Renamed").await;
     assert_eq!(c2["data"]["deviceId"], format!("mobile-{UUID}"));
-    let devices = server.ctx.db.call(|db| db.devices.get_all()).await.unwrap();
+    let devices = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.devices.get_all())
+        .await
+        .unwrap();
     assert_eq!(devices.len(), 1);
 }
 
@@ -303,6 +324,7 @@ async fn status_invalid_for_stale_epoch() {
     let token = server.register_device_token(SECRET, "mobile-stale").await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.devices.increment_auth_epoch("mobile-stale"))
         .await
@@ -352,6 +374,7 @@ async fn devices_lists_paired_devices() {
     let server = spawn_test_server(Some(SECRET.to_string())).await;
     server
         .ctx
+        .core
         .db
         .call(|db| {
             db.devices.add("mobile-l1", "iPhone")?;
@@ -375,6 +398,7 @@ async fn delete_device_removes_it() {
     let server = spawn_test_server(Some(SECRET.to_string())).await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.devices.add("mobile-del", "iPhone"))
         .await
@@ -385,7 +409,13 @@ async fn delete_device_removes_it() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
-    let remaining = server.ctx.db.call(|db| db.devices.get_all()).await.unwrap();
+    let remaining = server
+        .ctx
+        .core
+        .db
+        .call(|db| db.devices.get_all())
+        .await
+        .unwrap();
     assert_eq!(remaining.len(), 0);
 }
 

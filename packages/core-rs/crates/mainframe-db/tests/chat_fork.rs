@@ -1,13 +1,17 @@
 //! `ChatsRepository::create_fork` and the `parent_chat_id` / `pending_fork`
-//! storage seams (todo #343, Group 1 — fork-contract).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! storage seams.
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
+use mainframe_types::chat_patch::ChatPatch;
 use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
-use mainframe_db::{
-    ChatListFilters, ChatUpdate, ChatsRepository, ForkInsert, PendingFork, ProjectsRepository,
-};
+use mainframe_db::{ChatListFilters, ChatsRepository, ForkInsert, PendingFork, ProjectsRepository};
 use mainframe_types::adapter::{EffortLevel, ForkSource};
 use mainframe_types::chat::{ChatStatus, NewChat};
 use mainframe_types::settings::ExecutionMode;
@@ -79,18 +83,18 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
     assert_eq!(fork.model.as_deref(), Some("claude-opus"));
     assert_eq!(fork.permission_mode, Some(ExecutionMode::Default));
     assert_eq!(fork.plan_mode, Some(true));
-    assert_eq!(fork.effort, Some(Some(EffortLevel::High)));
-    assert_eq!(fork.fast, Some(Some(true)));
-    assert_eq!(fork.ultracode, Some(Some(false)));
-    assert_eq!(fork.adaptive_thinking, Some(Some(true)));
+    assert_eq!(fork.tuning.effort, Some(Some(EffortLevel::High)));
+    assert_eq!(fork.tuning.fast, Some(Some(true)));
+    assert_eq!(fork.tuning.ultracode, Some(Some(false)));
+    assert_eq!(fork.tuning.adaptive_thinking, Some(Some(true)));
     assert_eq!(fork.worktree_path.as_deref(), Some("/tmp/worktree"));
     assert_eq!(fork.branch_name.as_deref(), Some("feature/fork"));
     assert_eq!(fork.title.as_deref(), Some("Parent title (fork)"));
-    assert_eq!(fork.claude_session_id, None);
+    assert_eq!(fork.vendor_session_id, None);
     assert_eq!(fork.total_cost, 0.0);
     assert_eq!(fork.total_tokens_input, 0);
     assert_eq!(fork.total_tokens_output, 0);
-    assert_eq!(fork.pinned, None);
+    assert_eq!(fork.pinned, Some(false));
     assert_eq!(fork.tags, None);
     assert_eq!(fork.automation_run_id, None);
 
@@ -98,7 +102,7 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
     let fetched = chats.get(&fork.id).unwrap().unwrap();
     assert_eq!(fetched.parent_chat_id, Some(Some(parent.id)));
     assert_eq!(fetched.model.as_deref(), Some("claude-opus"));
-    assert_eq!(fetched.effort, Some(Some(EffortLevel::High)));
+    assert_eq!(fetched.tuning.effort, Some(Some(EffortLevel::High)));
 }
 
 #[test]
@@ -129,7 +133,7 @@ fn parent_chat_id_survives_archive_and_unarchive() {
     chats
         .update(
             &fork.id,
-            &ChatUpdate {
+            &ChatPatch {
                 status: Some(ChatStatus::Archived),
                 ..Default::default()
             },
@@ -142,7 +146,7 @@ fn parent_chat_id_survives_archive_and_unarchive() {
     chats
         .update(
             &fork.id,
-            &ChatUpdate {
+            &ChatPatch {
                 status: Some(ChatStatus::Active),
                 ..Default::default()
             },

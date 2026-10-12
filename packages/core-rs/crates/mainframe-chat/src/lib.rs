@@ -1,25 +1,42 @@
 //! `mainframe-chat` — the `ChatManager` state machine and session orchestration.
 //!
-//! Ported from `packages/core/src/chat/*` (one `.rs` per `.ts`, crate map §2.10;
-//! `index.ts` re-exports collapse into this `lib.rs`). Port order is leaves first,
-//! `chat_manager` last. The five chatId-keyed maps fold into ONE `ChatState`
-//! behind one per-chat `Arc<Mutex<ChatState>>` (registry is a `SHARED_MAP`); the
-//! permission queue stays FIFO per chat and the chat lock is never held across an
-//! `.await` that emits events or does session I/O (CONCURRENCY.tsv rules 1-4).
-//!
-//! Task 4.1 pre-created these module files so parallel port agents never touch a
-//! shared `lib.rs`. Modules land their per-file port independently as agents pick
-//! them up — check each module's own PORT STATUS footer, not this one, for its
-//! current state (`plan_mode_actions`/`plan_mode_handler`, for example, are fully
-//! ported, not skeletons).
+//! Active chats live in a shared `DashMap` registry of per-chat
+//! `Arc<Mutex<ActiveChat>>` cells (`Registry`); the permission queue
+//! stays FIFO per chat, and a chat lock is never held across an `.await` that
+//! emits events or does session I/O.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
+
+macro_rules! storage_event {
+    ($shared:expr, $result:expr $(, $fallback:expr)?) => {
+        storage_event!($shared, None; $result $(, $fallback)?)
+    };
+    ($shared:expr, $chat_id:expr; $result:expr $(, $fallback:expr)?) => {
+        match $result {
+            Ok(value) => value,
+            Err(error) => {
+                $shared.report_storage_error($chat_id, &error);
+                return $($fallback)?;
+            }
+        }
+    };
+}
 
 pub mod attachment_processor;
 pub mod attention_request;
 pub mod chat_cwd;
 pub mod chat_manager;
 pub mod chat_surface;
+
+mod chat_teardown;
 pub mod config_manager;
 pub mod config_respawn_guard;
 pub mod config_transcripts;
@@ -52,16 +69,12 @@ pub mod worktree_offer_scan;
 
 mod history_cache;
 
-#[cfg(test)]
-mod test_support;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
+#[expect(dead_code, reason = "Shared test helpers")]
+pub mod test_support;
+#[cfg(any(test, feature = "test-support"))]
 mod test_support_chat;
 
-// PORT STATUS: src/chat/* — module files pre-created by Task 4.1, ported
-// incrementally since; see each module's own footer for its state.
-// confidence: low
-// todos: 0
-// notes: this file only wires `pub mod` declarations. Consumes the
-// notes: mainframe-adapter-api traits (sessions are Arc<dyn AdapterSession>).
-
 mod tool_call_timing;
+
+mod chat_store;

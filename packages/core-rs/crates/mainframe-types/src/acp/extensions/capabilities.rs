@@ -16,13 +16,13 @@ pub struct MainframeCapabilities {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub heartbeat_interval_ms: Option<i64>,
     /// Whether `create_update` stamps [`super::ITEM_CREATED_META_KEY`] on an item's
-    /// complete first frame (spec Decision 37) — a client gates its strict
+    /// complete first frame — a client gates its strict
     /// accumulator mode on this rather than assuming it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub item_creation_markers: Option<bool>,
     /// Whether every successful `session/resume` reply is followed by
-    /// exactly one `_mainframe.dev/replay_complete` for that session (spec
-    /// Decision 38) — a client stages a full replay off-screen only when
+    /// exactly one `_mainframe.dev/replay_complete` for that session — a
+    /// client stages a full replay off-screen only when
     /// this is advertised.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replay_complete: Option<bool>,
@@ -33,41 +33,40 @@ pub struct MainframeCapabilities {
     pub revision_cursors: Option<bool>,
     /// Whether a full `session/resume` replay sends tool results older than
     /// the newest containers as previews carrying the truncation marker, for
-    /// a connection that opted in with [`REPLAY_RESULT_PREVIEWS_OPT_IN_KEY`]
-    /// (spec Decision 41).
+    /// a connection that opted in with [`REPLAY_RESULT_PREVIEWS_OPT_IN_KEY`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replay_result_previews: Option<bool>,
     /// Whether a `session/resume` replay can travel as
     /// `_mainframe.dev/replay_batch` notifications (zlib-deflated JSON in
     /// base64) for a connection that opted in with
-    /// [`COMPRESSED_REPLAY_OPT_IN_KEY`] (spec Decision 42).
+    /// [`COMPRESSED_REPLAY_OPT_IN_KEY`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compressed_replay: Option<bool>,
 }
 
 /// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
-/// `true` to opt into revision-versioned resume cursors (todo #377). Absent
-/// or `false` keeps the connection on item cursors only, byte-identical to
-/// today, even when [`MainframeCapabilities::revision_cursors`] advertises
+/// `true` to opt into revision-versioned resume cursors. Absent
+/// or `false` keeps the connection on item cursors only, even when
+/// [`MainframeCapabilities::revision_cursors`] advertises
 /// server support.
 pub const REVISION_CURSORS_OPT_IN_KEY: &str = "revisionCursors";
 
 /// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
-/// `true` to receive replay result previews (spec Decision 41). Absent or
-/// `false` keeps every replayed tool result full, byte-identical to today,
+/// `true` to receive replay result previews. Absent or
+/// `false` keeps every replayed tool result full,
 /// even when [`MainframeCapabilities::replay_result_previews`] advertises
 /// server support.
 pub const REPLAY_RESULT_PREVIEWS_OPT_IN_KEY: &str = "replayResultPreviews";
 
 /// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
-/// `true` to receive resume replays as compressed batches (spec Decision 42).
-/// Absent or `false` keeps the per-update replay, byte-identical to today,
+/// `true` to receive resume replays as compressed batches.
+/// Absent or `false` keeps the per-update replay,
 /// even when [`MainframeCapabilities::compressed_replay`] advertises server
 /// support.
 pub const COMPRESSED_REPLAY_OPT_IN_KEY: &str = "compressedReplay";
 
 /// The replay boundary a revision-cursor `session/resume` reply returns and
-/// the `_mainframe.dev/cursor` notification advances (todo #377). `epoch`
+/// the `_mainframe.dev/cursor` notification advances. `epoch`
 /// identifies the log generation — `TranscriptCleared`, `Resync`,
 /// compaction, and a tool-call vanish each rotate it, which invalidates
 /// every cursor from the prior epoch. `revision` is the daemon's monotonic
@@ -80,7 +79,7 @@ pub struct RevisionCursor {
     pub revision: u64,
 }
 
-/// `_mainframe.dev/cursor`'s params (todo #377): the replay boundary a
+/// `_mainframe.dev/cursor`'s params: the replay boundary a
 /// reconnecting client now holds every change through. Rides the
 /// per-session throttle FIFO after the frames of the display revision it
 /// describes, so receiving it means the client holds every change up to

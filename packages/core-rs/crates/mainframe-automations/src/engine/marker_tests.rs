@@ -1,5 +1,5 @@
-//! T4.1 — Decision-12 pre-effect `running` marker + per-run advance
-//! serialization (Node parity: engine-linear.test.ts marker/serialize cases).
+//! Pre-effect `running` marker (restart-mid-action policy) + per-run advance
+//! serialization.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -153,7 +153,7 @@ impl VerbPorts for SleepyPorts {
         Box::pin(async move {
             let now = self.concurrent.fetch_add(1, Ordering::SeqCst) + 1;
             self.max_seen.fetch_max(now, Ordering::SeqCst);
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+            tokio::task::yield_now().await;
             self.concurrent.fetch_sub(1, Ordering::SeqCst);
             StepOutcome::Completed {
                 outputs: empty_outputs(),

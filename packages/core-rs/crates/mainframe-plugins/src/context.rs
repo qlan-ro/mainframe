@@ -1,34 +1,29 @@
-//! Ported from `packages/core/src/plugins/context.ts`.
-//!
 //! Assembles a plugin's capability surface. Each gated subsystem (db,
 //! attachments, events, ui, adapters) is present only when its capability is
 //! declared; otherwise a guard stands in whose use surfaces
-//! `PluginError::CapabilityRequired` (the TS throwing Proxy). This module also
-//! owns the behavioral trait interfaces that `packages/types/src/plugin.ts`
-//! deferred to the plugins crate (they carry method signatures / futures, not
-//! serde data).
+//! `PluginError::CapabilityRequired`. This module also owns the behavioral
+//! trait interfaces that `packages/types/src/plugin.ts` deferred to the plugins
+//! crate (they carry method signatures / futures, not serde data).
 
+use mainframe_types::sync::LockExt as _;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::BoxFuture;
-use mainframe_types::chat::{Chat, Project};
+use mainframe_types::chat::Chat;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::{
-    ChatEvent, ChatSummary, PluginAttachmentMeta, PluginCapability, PluginManifest, ProjectSummary,
-    PublicDaemonEvent, UiZone,
+    ChatSummary, PluginAttachmentMeta, PluginCapability, PluginManifest, UiZone,
 };
+use mainframe_types::settings_kv::SettingsKv;
 use rusqlite::types::Value as SqlValue;
 use serde::Serialize;
-use serde_json::{Map, Value};
 
 use crate::PluginError;
 use crate::attachment_context::FsAttachmentContext;
-use crate::config_context::create_plugin_config;
 use crate::db_context::{PluginDatabaseContext, Row};
-use crate::event_bus::{PublicDaemonBus, create_plugin_event_bus};
 use crate::github_port::GitHubIssues;
-use crate::services::{build_chat_service, build_project_service};
+use crate::services::build_chat_service;
 use crate::ui_context::create_plugin_ui_context;
 
 /// Event fan-out sink handed to every context (`emitEvent`).
@@ -80,6 +75,14 @@ pub struct CreateChatResult {
 
 /// `PluginDatabaseContext` — per-plugin SQLite (`storage`).
 pub trait PluginDatabase: Send + Sync {
+    /// The raw `SqliteActor` behind this plugin's `data.db`, for builtin
+    /// plugins compiled into the daemon (the typed `todos` repository and its
+    /// migrations) only; everything else goes through the JSON methods below.
+    /// A plugin whose manifest does not declare `storage` gets the capability
+    /// guard instead, which rejects this call with
+    /// `CapabilityRequired("storage")` before any database file is opened
+    /// (pinned by `todos::tests_sessions::activate_without_storage_is_rejected_by_the_guard`).
+    fn actor(&self) -> Result<&crate::db_context::PluginSqlite, PluginError>;
     fn run_migration(&self, sql: String) -> BoxFuture<'_, Result<(), PluginError>>;
     fn execute(&self, sql: String, params: Vec<SqlValue>)
     -> BoxFuture<'_, Result<(), PluginError>>;
@@ -120,32 +123,7 @@ pub trait PluginUi: Send + Sync {
     fn remove_panel(&self, id: Option<&str>);
     fn add_action(&self, id: &str, label: &str, shortcut: &str, icon: Option<&str>);
     fn remove_action(&self, id: &str);
-    fn notify(&self, options: NotifyOptions);
-}
-
-/// `PluginConfig` — namespaced settings.
-pub trait PluginConfig: Send + Sync {
-    fn get(&self, key: &str) -> Option<Value>;
-    fn set(&self, key: &str, value: Value);
-    fn get_all(&self) -> Map<String, Value>;
-}
-
-/// `PluginEventBus` — plugin-scoped + sanitized public events
-/// (`daemon:public-events`).
-pub trait PluginEventBus: Send + Sync {
-    fn emit(&self, event: &str, payload: Value) -> Result<(), PluginError>;
-    fn on(&self, event: &str, handler: Arc<dyn Fn(Value) + Send + Sync>)
-    -> Result<(), PluginError>;
-    fn on_daemon_event(
-        &self,
-        event: &str,
-        handler: Arc<dyn Fn(PublicDaemonEvent) + Send + Sync>,
-    ) -> Result<(), PluginError>;
-    fn on_chat_event(
-        &self,
-        event: &str,
-        handler: Arc<dyn Fn(ChatEvent) + Send + Sync>,
-    ) -> Result<(), PluginError>;
+    fn notify(&self, options: NotifyOptions) -> BoxFuture<'_, ()>;
 }
 
 /// `ChatServiceAPI` exposed to plugins.
@@ -163,38 +141,21 @@ pub trait ChatService: Send + Sync {
     ) -> BoxFuture<'_, Result<CreateChatResult, PluginError>>;
 }
 
-/// `ProjectServiceAPI` exposed to plugins.
-pub trait ProjectService: Send + Sync {
-    fn list_projects(&self) -> BoxFuture<'_, Result<Vec<ProjectSummary>, PluginError>>;
-    fn get_project_by_id(
-        &self,
-        id: &str,
-    ) -> BoxFuture<'_, Result<Option<ProjectSummary>, PluginError>>;
-}
-
-/// `AdapterRegistrationAPI` — `adapters` capability. No builtin uses it in v1
-/// (claude/codex are native crates); kept for the manifest/capability model.
-pub trait AdapterRegistrar: Send + Sync {
-    fn register(&self, adapter: Value);
-}
-
 /// The host database surface the context reads (the `DatabaseManager` slice the
-/// TS `buildPluginContext` depends on). Synchronous, matching better-sqlite3;
-/// the server implements it over its `Db` actor's `call_blocking` bridge.
+/// TS `buildPluginContext` depends on). The chat accessors are synchronous; the
+/// daemon implements them over its `Db` actor's `call_blocking` bridge.
 pub trait PluginHostDb: Send + Sync {
-    fn chats_list(&self, project_id: &str) -> Vec<Chat>;
-    fn chats_get(&self, id: &str) -> Option<Chat>;
+    fn chats_list(&self, project_id: &str) -> Result<Vec<Chat>, PluginError>;
+    fn chats_get(&self, id: &str) -> Result<Option<Chat>, PluginError>;
     fn chats_create(
         &self,
         project_id: &str,
         adapter_id: &str,
         model: Option<&str>,
         permission_mode: Option<&str>,
-    ) -> Chat;
-    fn settings_get(&self, category: &str, key: &str) -> Option<String>;
-    fn settings_set(&self, category: &str, key: &str, value: &str);
-    fn projects_list(&self) -> Vec<Project>;
-    fn projects_get(&self, id: &str) -> Option<Project>;
+    ) -> Result<Chat, PluginError>;
+    /// The host settings store (provider defaults for `chat:create`).
+    fn settings(&self) -> &dyn SettingsKv;
 }
 
 type UnloadFn = Box<dyn FnOnce() + Send>;
@@ -204,31 +165,22 @@ pub struct PluginContext {
     pub manifest: PluginManifest,
     pub db: Arc<dyn PluginDatabase>,
     pub attachments: Arc<dyn PluginAttachments>,
-    pub events: Arc<dyn PluginEventBus>,
     pub ui: Arc<dyn PluginUi>,
-    pub config: Arc<dyn PluginConfig>,
     pub chats: Arc<dyn ChatService>,
-    pub projects: Arc<dyn ProjectService>,
-    pub adapters: Option<Arc<dyn AdapterRegistrar>>,
     pub github: Arc<dyn GitHubIssues>,
     on_unload: Mutex<Vec<UnloadFn>>,
 }
 
 impl PluginContext {
     /// `onUnload(fn)` — register a teardown callback.
-    pub fn on_unload(&self, cb: impl FnOnce() + Send + 'static) {
-        if let Ok(mut list) = self.on_unload.lock() {
-            list.push(Box::new(cb));
-        }
+    pub(crate) fn on_unload(&self, cb: impl FnOnce() + Send + 'static) {
+        self.on_unload.lock_recover().push(Box::new(cb));
     }
 
     /// Drain and return the registered teardown callbacks (the manager runs them
     /// during `unloadAll`).
-    pub fn take_unload_callbacks(&self) -> Vec<UnloadFn> {
-        self.on_unload
-            .lock()
-            .map(|mut list| std::mem::take(&mut *list))
-            .unwrap_or_default()
+    pub(crate) fn take_unload_callbacks(&self) -> Vec<UnloadFn> {
+        std::mem::take(&mut *self.on_unload.lock_recover())
     }
 }
 
@@ -237,10 +189,7 @@ pub struct PluginContextDeps {
     pub manifest: PluginManifest,
     pub plugin_dir: PathBuf,
     pub host_db: Arc<dyn PluginHostDb>,
-    pub daemon_bus: Arc<PublicDaemonBus>,
     pub emit: EmitSink,
-    /// The adapter registrar, exposed only when `adapters` is declared.
-    pub adapters: Option<Arc<dyn AdapterRegistrar>>,
     /// The GitHub Issues port, exposed only when `http:outbound` is declared
     /// (D2). `None` when the daemon's automations engine failed to start.
     pub github: Option<Arc<dyn GitHubIssues>>,
@@ -267,16 +216,9 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
         Arc::new(guards::GuardAttachments)
     };
 
-    let events: Arc<dyn PluginEventBus> = if has(PluginCapability::DaemonPublicEvents) {
-        Arc::new(create_plugin_event_bus(&deps.manifest.id, deps.daemon_bus))
-    } else {
-        Arc::new(guards::GuardEventBus)
-    };
-
     let ui: Arc<dyn PluginUi> =
         if has(PluginCapability::UiPanels) || has(PluginCapability::UiNotifications) {
-            let host_db = Arc::clone(&deps.host_db);
-            let gate = Box::new(move || plugin_notify_enabled(host_db.as_ref()));
+            let gate = notification_gate(Arc::clone(&deps.host_db));
             Arc::new(create_plugin_ui_context(
                 &deps.manifest.id,
                 Arc::clone(&deps.emit),
@@ -286,36 +228,11 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
             Arc::new(guards::NoopUi)
         };
 
-    let config = {
-        let read_db = Arc::clone(&deps.host_db);
-        let write_db = Arc::clone(&deps.host_db);
-        Arc::new(create_plugin_config(
-            &deps.manifest.id,
-            Box::new(move |key| {
-                read_db
-                    .settings_get("plugin", key)
-                    .and_then(|s| serde_json::from_str(&s).ok())
-            }),
-            Box::new(move |key, value| {
-                let encoded = serde_json::to_string(&value).unwrap_or_default();
-                write_db.settings_set("plugin", key, &encoded);
-            }),
-        ))
-    };
-
     let chats = build_chat_service(
         &deps.manifest,
         Arc::clone(&deps.host_db),
         Arc::clone(&deps.emit),
     );
-    let projects = build_project_service(Arc::clone(&deps.host_db));
-
-    let adapters = if has(PluginCapability::Adapters) {
-        deps.adapters
-    } else {
-        None
-    };
-
     let github: Arc<dyn GitHubIssues> = if has(PluginCapability::HttpOutbound) {
         match deps.github {
             Some(github) => github,
@@ -329,29 +246,11 @@ pub fn build_plugin_context(deps: PluginContextDeps) -> Result<Arc<PluginContext
         manifest: deps.manifest,
         db,
         attachments,
-        events,
         ui,
-        config,
         chats,
-        projects,
-        adapters,
         github,
         on_unload: Mutex::new(Vec::new()),
     }))
-}
-
-/// `readNotificationConfig(db).other.plugin` — the gate `createPluginUIContext`
-/// receives.
-fn plugin_notify_enabled(host_db: &dyn PluginHostDb) -> bool {
-    struct Reader<'a>(&'a dyn PluginHostDb);
-    impl mainframe_services::settings::SettingsReader for Reader<'_> {
-        fn get(&self, ns: &str, key: &str) -> Option<String> {
-            self.0.settings_get(ns, key)
-        }
-    }
-    mainframe_services::notifications::read_notification_config(&Reader(host_db))
-        .other
-        .plugin
 }
 
 mod guards {
@@ -363,6 +262,9 @@ mod guards {
 
     pub struct GuardDb;
     impl PluginDatabase for GuardDb {
+        fn actor(&self) -> Result<&crate::db_context::PluginSqlite, PluginError> {
+            Err(cap_err("storage"))
+        }
         fn run_migration(&self, _sql: String) -> BoxFuture<'_, Result<(), PluginError>> {
             Box::pin(async { Err(cap_err("storage")) })
         }
@@ -413,30 +315,6 @@ mod guards {
         }
     }
 
-    pub struct GuardEventBus;
-    impl PluginEventBus for GuardEventBus {
-        fn emit(&self, _e: &str, _p: Value) -> Result<(), PluginError> {
-            Err(cap_err("daemon:public-events"))
-        }
-        fn on(&self, _e: &str, _h: Arc<dyn Fn(Value) + Send + Sync>) -> Result<(), PluginError> {
-            Err(cap_err("daemon:public-events"))
-        }
-        fn on_daemon_event(
-            &self,
-            _e: &str,
-            _h: Arc<dyn Fn(PublicDaemonEvent) + Send + Sync>,
-        ) -> Result<(), PluginError> {
-            Err(cap_err("daemon:public-events"))
-        }
-        fn on_chat_event(
-            &self,
-            _e: &str,
-            _h: Arc<dyn Fn(ChatEvent) + Send + Sync>,
-        ) -> Result<(), PluginError> {
-            Err(cap_err("daemon:public-events"))
-        }
-    }
-
     /// UI without `ui:panels`/`ui:notifications`. The TS throwing Proxy has no
     /// sync-fallible analogue here (these methods return no Result), so calls are
     /// logged and dropped — the one deviation from the throwing guard, on an
@@ -450,22 +328,13 @@ mod guards {
         fn remove_panel(&self, _id: Option<&str>) {}
         fn add_action(&self, _id: &str, _label: &str, _shortcut: &str, _icon: Option<&str>) {}
         fn remove_action(&self, _id: &str) {}
-        fn notify(&self, _options: NotifyOptions) {}
+        fn notify(&self, _options: NotifyOptions) -> BoxFuture<'_, ()> {
+            Box::pin(async {})
+        }
     }
 
     pub use crate::github_port_guard::GuardGitHub;
 }
 
-// PORT STATUS: src/plugins/context.ts
-// confidence: medium
-// todos: 1
-// notes: gating replicated — db/attachments (storage), events
-// (daemon:public-events), ui (ui:panels|ui:notifications), adapters. The
-// throwing Proxy becomes guard impls returning CapabilityRequired for the
-// fallible surfaces (db/attachments/events, asserted by context.test); the sync
-// ui guard (NoopUi) logs+drops instead of throwing (documented deviation, untested
-// path). config/services are always present. The behavioral trait interfaces
-// (deferred from types/plugin.ts) live here over BoxFuture. PluginHostDb is the
-// DatabaseManager slice buildPluginContext reads; the server impls it over the Db
-// actor. TODO(port): getMessages (chat:read:content) is omitted from ChatService
-// (unused by builtins).
+mod notification;
+use notification::notification_gate;

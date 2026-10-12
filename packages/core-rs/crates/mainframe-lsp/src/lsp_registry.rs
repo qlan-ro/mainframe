@@ -1,14 +1,9 @@
-//! Ported from `packages/core/src/lsp/lsp-registry.ts`.
-//!
 //! Language-server registry: the static `id -> LspServerConfig` table, the
-//! extension -> language map, and bring-your-own command resolution. The TS
-//! twin resolved `typescript-language-server`/`pyright` from `node_modules`
-//! bundled alongside the Node daemon (`require.resolve` + `process.execPath`);
-//! the Rust daemon ships no bundled servers, so every language (including
-//! `jdtls`, which was already PATH-only) resolves the same way: a project-local
-//! `node_modules/.bin`, then a Python venv, then a `command -v` probe on the
-//! resolved login-shell `PATH`. Fails soft — an unresolved server is `None`,
-//! never an error.
+//! extension -> language map, and bring-your-own command resolution. The daemon
+//! ships no bundled servers, so every language resolves the same way: a project-local
+//! `node_modules/.bin`, then a Python venv, then a scan of the resolved
+//! login-shell `PATH` for an executable of that name. Fails soft — an
+//! unresolved server is `None`, never an error.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -54,35 +49,28 @@ fn default_configs() -> Vec<LspServerConfig> {
 }
 
 /// The static language-server registry. Immutable after construction
-/// (CONCURRENCY.tsv: `configs`/`extensionMap` are `SINGLE_TASK`, read-only).
+/// (`configs`/`extension_map` are read-only).
 pub struct LspRegistry {
     configs: HashMap<String, LspServerConfig>,
-    /// Preserves declaration order for `get_all_language_ids` (parity with the
-    /// TS insertion-ordered `Map`).
+    /// Preserves declaration order for `get_all_language_ids`.
     order: Vec<String>,
-    extension_map: HashMap<String, String>,
-    /// Boot-resolved login-shell `PATH`, applied to the `command -v` probe and the
-    /// external-server spawn so packaged builds find CLIs outside the bare launchd
-    /// `PATH` (mirrors the TS `enrichPath` env mutation). `None` = inherit.
-    resolved_path: Option<String>,
+    /// Boot-resolved login-shell `PATH`, scanned for the server executable and
+    /// applied to the external-server spawn so packaged builds find CLIs outside
+    /// the bare launchd `PATH`. `None` = inherit.
+    resolved_path: Option<mainframe_runtime::ResolvedPath>,
 }
 
 impl LspRegistry {
     pub fn new() -> Self {
         let mut configs = HashMap::new();
         let mut order = Vec::new();
-        let mut extension_map = HashMap::new();
         for config in default_configs() {
-            for ext in &config.languages {
-                extension_map.insert(ext.clone(), config.id.clone());
-            }
             order.push(config.id.clone());
             configs.insert(config.id.clone(), config);
         }
         Self {
             configs,
             order,
-            extension_map,
             resolved_path: None,
         }
     }
@@ -92,7 +80,7 @@ impl LspRegistry {
     /// spawns.
     #[must_use]
     pub fn with_resolved_path(mut self, path: impl Into<String>) -> Self {
-        self.resolved_path = Some(path.into());
+        self.resolved_path = Some(mainframe_runtime::ResolvedPath::from_value(path.into()));
         self
     }
 
@@ -106,19 +94,15 @@ impl LspRegistry {
         self.configs.get(language_id)
     }
 
-    pub fn get_language_for_extension(&self, ext: &str) -> Option<String> {
-        self.extension_map.get(ext).cloned()
-    }
-
     pub fn get_all_language_ids(&self) -> Vec<String> {
         self.order.clone()
     }
 
     /// Resolves a language's command by trying, in order: a project-local
     /// `node_modules/.bin/<cmd>`, a Python venv (project `.venv/bin` then
-    /// `$VIRTUAL_ENV/bin`), then a `command -v` probe against the boot-resolved
-    /// login-shell `PATH`. Fails soft — `None` when nothing resolves, never an
-    /// error, so an unavailable server never blocks the caller.
+    /// `$VIRTUAL_ENV/bin`), then a scan of the boot-resolved login-shell `PATH`
+    /// for an executable of that name. Fails soft — `None` when nothing
+    /// resolves, never an error, so an unavailable server never blocks the caller.
     pub async fn resolve_command(
         &self,
         language_id: &str,
@@ -209,17 +193,18 @@ async fn venv_bin(project_path: &str, virtual_env: Option<&str>, cmd: &str) -> O
         .then(|| candidate.to_string_lossy().into_owned())
 }
 
-/// `command -v <cmd>` against `resolved_path` (falls back to the inherited
-/// process `PATH` when unset). Shell is needed for the `command -v` builtin, but
-/// `cmd` is passed as a positional arg ($1) — never interpolated into the
-/// script — so it can't be parsed as shell syntax.
+/// Whether `cmd` is an executable on the resolved `PATH` (the daemon's own
+/// `PATH` when none was injected); the directory scan runs off the executor.
 async fn command_on_path(cmd: &str, resolved_path: Option<&str>) -> bool {
-    let mut probe = tokio::process::Command::new("/bin/sh");
-    probe.args(["-c", "command -v \"$1\"", "sh", cmd]);
-    if let Some(path) = resolved_path {
-        probe.env("PATH", path);
-    }
-    matches!(probe.output().await, Ok(out) if out.status.success())
+    let path = mainframe_runtime::ResolvedPath::from_value(
+        resolved_path
+            .map(str::to_owned)
+            .unwrap_or_else(|| std::env::var("PATH").unwrap_or_default()),
+    );
+    let cmd = cmd.to_string();
+    tokio::task::spawn_blocking(move || path.find(&cmd).is_some())
+        .await
+        .unwrap_or(false)
 }
 
 impl Default for LspRegistry {
@@ -229,15 +214,5 @@ impl Default for LspRegistry {
 }
 
 #[cfg(test)]
+#[path = "lsp_registry_tests.rs"]
 mod tests;
-
-// PORT STATUS: packages/core/src/lsp/lsp-registry.ts (99 lines)
-// confidence: high (config table, extension map) / new (BYO resolution order)
-// todos: 0
-// notes: the TS twin resolved bundled servers via `require.resolve` against the
-//   Node daemon's own node_modules, which has no Rust analogue and no live
-//   deployment behavior worth preserving byte-for-byte (Rust ships no bundled
-//   servers). `resolve_command` instead does bring-your-own discovery for every
-//   language, config-driven rather than a `bundled: bool` branch: project-local
-//   `node_modules/.bin`, then a Python venv, then the `command -v` PATH probe
-//   `jdtls` already used. Unknown-language and PATH-probe branches are faithful.

@@ -1,7 +1,7 @@
-//! Ported from `src/server/routes/tunnel.ts` — the cloudflared tunnel routes.
+//! The cloudflared tunnel routes.
 //!
 //! Four endpoints under `/api/tunnel`: `status`, `config`, `start`, `stop`. `start`
-//! and `stop` drive `ctx.tunnel_manager`, update the `/health` tunnel URL via
+//! and `stop` drive `ctx.infra.tunnel_manager`, update the `/health` tunnel URL via
 //! `set_tunnel_url`, and persist the tunnel config through `save_config`.
 
 use std::sync::Arc;
@@ -16,17 +16,13 @@ use mainframe_runtime::config::{PartialMainframeConfig, get_config, save_config}
 use serde_json::{Value, json};
 
 use crate::ctx::AppCtx;
+use crate::input_error::InputError;
+use crate::respond::fail_with;
 use crate::respond::{fail, ok, ok_empty};
 
 async fn get_status(State(ctx): State<Arc<AppCtx>>) -> Response {
-    let url = ctx
-        .tunnel_manager
-        .as_ref()
-        .and_then(|t| t.get_url("daemon"));
-    let verified = match (&url, ctx.tunnel_manager.as_ref()) {
-        (Some(_), Some(manager)) => manager.verify("daemon").await,
-        _ => false,
-    };
+    let url = ctx.infra.tunnel_manager.get_url("daemon");
+    let verified = url.is_some() && ctx.infra.tunnel_manager.verify("daemon").await;
     ok(json!({ "running": url.is_some(), "url": url, "verified": verified }))
 }
 
@@ -34,7 +30,7 @@ async fn get_config_route() -> Response {
     let config = match get_config() {
         Ok(config) => config,
         Err(err) => {
-            tracing::warn!(%err, "tunnel config read failed");
+            tracing::warn!(error = %err, "tunnel config read failed");
             return ok(json!({ "hasToken": false, "url": Value::Null }));
         }
     };
@@ -45,14 +41,15 @@ async fn get_config_route() -> Response {
 }
 
 async fn start(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Response {
-    let (Some(manager), true) = (ctx.tunnel_manager.as_ref(), ctx.port != 0) else {
+    let manager = &ctx.infra.tunnel_manager;
+    if ctx.core.port == 0 {
         return fail(StatusCode::BAD_REQUEST, "Tunnel not available");
     };
 
     let body = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
     let (body_token, body_url) = match parse_start_body(&body) {
         Ok(pair) => pair,
-        Err(error) => return fail(StatusCode::BAD_REQUEST, error),
+        Err(error) => return fail_with(&error),
     };
 
     // Fall back to the persisted config when the renderer omits a token — this
@@ -75,7 +72,7 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Res
         token: Some(token),
         url: named_url,
     });
-    match manager.start(ctx.port, "daemon", options).await {
+    match manager.start(ctx.core.port, "daemon", options).await {
         Ok(url) => {
             ctx.set_tunnel_url(Some(url.clone()));
             // Only persist new credentials when the caller explicitly provided them.
@@ -93,69 +90,65 @@ async fn start(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Res
                 }
             };
             if let Err(err) = save_config(partial) {
-                tracing::warn!(%err, "tunnel start: save_config failed");
+                tracing::warn!(error = %err, "save_config failed");
             }
             ok(json!({ "url": url }))
         }
-        Err(message) => fail(StatusCode::INTERNAL_SERVER_ERROR, message),
+        Err(error) => fail(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
     }
 }
 
 async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Response {
-    let Some(manager) = ctx.tunnel_manager.as_ref() else {
-        return fail(StatusCode::BAD_REQUEST, "Tunnel not available");
-    };
+    let manager = &ctx.infra.tunnel_manager;
     let body = body.map(|Json(v)| v).unwrap_or_else(|| json!({}));
     let clear_config = match parse_stop_body(&body) {
         Ok(clear) => clear,
-        Err(error) => return fail(StatusCode::BAD_REQUEST, error),
+        Err(error) => return fail_with(&error),
     };
 
-    manager.stop("daemon");
+    manager.stop("daemon").await;
     ctx.set_tunnel_url(None);
 
-    // TODO(port): the TS clears the persisted token/url on clearConfig
-    // (`saveConfig({ tunnel: false, tunnelToken: undefined, tunnelUrl: undefined })`).
-    // The ported `save_config` merges a `PartialMainframeConfig` where `None` means
-    // "leave unchanged", so it cannot force-clear a field without a change to the
-    // (done, off-limits) `mainframe-runtime::config`. The tunnel is still disabled
-    // (`tunnel: false`), but stale credentials persist. Flagged as a blocker.
+    // TODO: `clearConfig` should also clear the persisted token/url. `save_config`
+    // merges a `PartialMainframeConfig` where `None` means "leave unchanged", so
+    // it cannot force-clear a field without a change to `mainframe-runtime::config`.
+    // The tunnel is still disabled (`tunnel: false`), but stale credentials persist.
     let partial = PartialMainframeConfig {
         tunnel: Some(false),
         ..PartialMainframeConfig::default()
     };
     if let Err(err) = save_config(partial) {
-        tracing::warn!(%err, "tunnel stop: save_config failed");
+        tracing::warn!(error = %err, "save_config failed");
     }
     let _ = clear_config;
     ok_empty()
 }
 
-/// `TunnelStartBody` — `{ token?: string.min(1), url?: url() }`.
-fn parse_start_body(body: &Value) -> Result<(Option<String>, Option<String>), String> {
+/// Start body: an optional non-empty `token` and an optional URL `url`.
+fn parse_start_body(body: &Value) -> Result<(Option<String>, Option<String>), InputError> {
     let token = match body.get("token") {
         None | Some(Value::Null) => None,
         Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
-        _ => return Err("Invalid token".to_string()),
+        _ => return Err(InputError::Rejected("Invalid token")),
     };
     let url = match body.get("url") {
         None | Some(Value::Null) => None,
         Some(Value::String(s)) if is_url(s) => Some(s.clone()),
-        _ => return Err("Invalid url".to_string()),
+        _ => return Err(InputError::Rejected("Invalid url")),
     };
     Ok((token, url))
 }
 
-/// `TunnelStopBody` — `{ clearConfig?: boolean }`.
-fn parse_stop_body(body: &Value) -> Result<bool, String> {
+/// Stop body: an optional boolean `clearConfig`.
+fn parse_stop_body(body: &Value) -> Result<bool, InputError> {
     match body.get("clearConfig") {
         None | Some(Value::Null) => Ok(false),
         Some(Value::Bool(b)) => Ok(*b),
-        _ => Err("Invalid clearConfig".to_string()),
+        _ => Err(InputError::Rejected("Invalid clearConfig")),
     }
 }
 
-/// Minimal `z.url()` stand-in: a scheme + `://` + non-empty authority.
+/// Minimal URL check: a scheme + `://` + non-empty authority.
 fn is_url(s: &str) -> bool {
     match s.split_once("://") {
         Some((scheme, rest)) => !scheme.is_empty() && !rest.is_empty(),
@@ -171,37 +164,40 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/tunnel/stop", post(stop))
 }
 
-// PORT STATUS: src/server/routes/tunnel.ts (108 lines)
-// confidence: medium
-// todos: 1
-// notes: status = getUrl('daemon') + verify (cached /health probe); config reads
-// getConfig hasToken/url. start gates on tunnel_manager + a non-zero port, validates
-// the body (token min(1), url()), falls back to the persisted token/url, short-
-// circuits an already-running tunnel when no new token is given, then start →
-// set_tunnel_url → save_config (credentials only when both were provided). stop
-// stops + set_tunnel_url(None) + save_config({tunnel:false}). KNOWN GAP: clearConfig
-// cannot clear the persisted token/url because save_config's None means "keep"
-// (mainframe-runtime is a done, off-limits crate) — see the TODO(port) above.
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn start_body_validation() {
-        assert_eq!(parse_start_body(&json!({})), Ok((None, None)));
+        assert_eq!(parse_start_body(&json!({})).unwrap(), (None, None));
         assert_eq!(
-            parse_start_body(&json!({ "token": "t", "url": "https://x.com" })),
-            Ok((Some("t".to_string()), Some("https://x.com".to_string())))
+            parse_start_body(&json!({ "token": "t", "url": "https://x.com" })).unwrap(),
+            (Some("t".to_string()), Some("https://x.com".to_string()))
         );
-        assert!(parse_start_body(&json!({ "token": "" })).is_err());
-        assert!(parse_start_body(&json!({ "url": "not-a-url" })).is_err());
+        assert_eq!(
+            parse_start_body(&json!({ "token": "" }))
+                .unwrap_err()
+                .to_string(),
+            "Invalid token"
+        );
+        assert_eq!(
+            parse_start_body(&json!({ "url": "not-a-url" }))
+                .unwrap_err()
+                .to_string(),
+            "Invalid url"
+        );
     }
 
     #[test]
     fn stop_body_validation() {
-        assert_eq!(parse_stop_body(&json!({})), Ok(false));
-        assert_eq!(parse_stop_body(&json!({ "clearConfig": true })), Ok(true));
-        assert!(parse_stop_body(&json!({ "clearConfig": "yes" })).is_err());
+        assert!(!parse_stop_body(&json!({})).unwrap());
+        assert!(parse_stop_body(&json!({ "clearConfig": true })).unwrap());
+        assert_eq!(
+            parse_stop_body(&json!({ "clearConfig": "yes" }))
+                .unwrap_err()
+                .to_string(),
+            "Invalid clearConfig"
+        );
     }
 }

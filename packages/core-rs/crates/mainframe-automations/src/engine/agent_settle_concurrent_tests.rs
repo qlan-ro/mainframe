@@ -1,5 +1,5 @@
 //! MUST-FIX 3 — an agent failure that arrives out-of-band (settle, not
-//! `start()`) inside a concurrent branch. Before this fix, `fail_waiting_step`
+//! `start()`) inside a concurrent branch. Before this fix, the agent settle path
 //! never told the branch driver at all: with `keepGoing: false` it finalized
 //! the run immediately while a sibling chat kept running unattended, and the
 //! failed leaf's own branch marker was never written, so a later replay would
@@ -308,7 +308,7 @@ async fn keep_going_false_out_of_band_interrupt_marks_the_branch_failed() {
 }
 
 /// Nothing else exercises `timeoutMinutes` together with `concurrency` —
-/// the combination per-entry `wake_at` (Phase 4a) exists for. Both branches
+/// the combination per-entry `wake_at` exists for. Both branches
 /// share one `timeoutMinutes`, so both come due in the same sweep; the
 /// assertion that matters is that EACH gets its OWN branch marker (not one
 /// shared verdict) via the SAME out-of-band path as the settle tests above.

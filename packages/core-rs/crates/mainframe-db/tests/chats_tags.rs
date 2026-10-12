@@ -1,5 +1,9 @@
-//! Ported from `packages/core/src/db/__tests__/chats-tags.test.ts`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::rc::Rc;
 
@@ -171,7 +175,7 @@ fn list_filtered_includes_archived_chats_when_include_archived_is_true() {
     s.chats
         .update(
             &archived.id,
-            &mainframe_db::ChatUpdate {
+            &mainframe_types::chat_patch::ChatPatch {
                 status: Some(mainframe_types::chat::ChatStatus::Archived),
                 ..Default::default()
             },

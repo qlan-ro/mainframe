@@ -1,6 +1,6 @@
-//! G3 golden test (#178, AC9, plan `## Task groups` > G3): the display graph
-//! a cold-reloaded chat renders from its Claude JSONL transcript must be
-//! identical to the graph the same session renders while live-streamed.
+//! Golden test: the display graph a cold-reloaded chat renders from its Claude
+//! JSONL transcript must be identical to the graph the same session renders
+//! while live-streamed.
 //!
 //! The fixture (`fixtures/golden-session-with-tool-calls.jsonl`) is a
 //! trimmed, verbatim excerpt of an actual recorded Claude Code session on
@@ -21,7 +21,7 @@
 //! the entry, and withholding the same claim) so grouping in
 //! `prepare_messages_for_client` picks the same *first* raw entry as the
 //! display item's base id on both sides — closing what was previously a
-//! real base-id divergence (AC9, decision 10).
+//! real base-id divergence.
 //!
 //! **Live** replays the transcript the way the daemon actually builds one:
 //! - The human-typed prompt goes through
@@ -31,7 +31,7 @@
 //!   send (not just a queued one) and hands the CLI on stdin
 //!   (`build_user_payload`'s `uuid` field), which the CLI persists verbatim
 //!   as the entry's own `uuid`. This closes what was previously a permanent
-//!   live-vs-reload id gap for an unqueued human message (AC9, decision 10) —
+//!   live-vs-reload id gap for an unqueued human message —
 //!   see the module-level note in `chat_manager/send_queue.rs`.
 //! - Every other transcript line (assistant turns AND the CLI's own
 //!   tool_result echoes, both "user" and "assistant"-typed stream-json
@@ -51,7 +51,12 @@
 //! Tool timing comes from live observation and is absent from provider history.
 //! The test asserts that boundary before comparing every other graph field,
 //! excluding only the display timestamp minted on live receipt.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 #[path = "live_vs_cold_reload_golden/timing.rs"]
 mod timing;
@@ -63,82 +68,19 @@ use timing::{OBSERVED_AT, assert_and_remove_live_timing, normalize};
 use mainframe_acp::encoder::{EncodedItem, encode};
 use mainframe_adapter_claude::events::handle_stdout;
 use mainframe_adapter_claude::history::load_history;
-use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
 use mainframe_adapter_claude::session::ClaudeSession;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
-use mainframe_chat::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps};
 use mainframe_chat::message_cache::MessageCache;
-use mainframe_chat::permission_manager::PermissionManager;
-use mainframe_chat::types::ActiveChat;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
-use mainframe_types::adapter::{DetectedPr, SessionOptions};
-use mainframe_types::chat::{ChatMessageType, QueuedMessageRef, TodoItem};
-use mainframe_types::context::SkillFileEntry;
-use mainframe_types::display::ToolCategories;
-use mainframe_types::events::DaemonEvent;
+use mainframe_display::display_pipeline::prepare_messages_for_client;
+use mainframe_types::adapter::SessionOptions;
+use mainframe_types::chat::ChatMessageType;
 use serde_json::Value;
 
 const FIXTURE: &str = include_str!("fixtures/golden-session-with-tool-calls.jsonl");
 const SESSION_ID: &str = "9d21c142-41f1-4474-a69e-926bea77010d";
 const CHAT_ID: &str = "chat-golden-178";
 const PROJECT_PATH: &str = "/tmp/golden-178";
-
-/// A no-op `EventHandlerDeps`: this test drives the sink purely to populate
-/// the raw `MessageCache` the way a live CLI stdout stream would, and reads
-/// that cache back directly rather than through the deps-mediated display
-/// path, so every hook here can be inert.
-struct NoopDeps;
-
-impl EventHandlerDeps for NoopDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        None
-    }
-    fn emit_event(&self, _event: DaemonEvent) {}
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        Vec::new()
-    }
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        Box::new(mainframe_display::FullRebuildProjector::new(
-            |_raw, _overlay, _categories| Vec::new(),
-        ))
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        false
-    }
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-}
 
 fn fixture_entries() -> Vec<Value> {
     FIXTURE
@@ -185,16 +127,22 @@ fn claude_session() -> Arc<ClaudeSession> {
 /// (`build_user_payload`'s `uuid` field) — the CLI persists that same uuid as
 /// the transcript entry's own `uuid`, which is what this fixture's human
 /// prompt entry carries. Forcing it here is what makes a real send and a
-/// cold reload agree on this item's id (module doc above, decision 10); every
+/// cold reload agree on this item's id (module doc above); every
 /// other line goes through `handle_stdout` into a real `EventHandler` sink,
 /// matching a spawned CLI process's stdout.
 fn run_live_pipeline() -> Vec<mainframe_types::chat::ChatMessage> {
     let cache = Arc::new(Mutex::new(MessageCache::with_clock(Arc::new(|| {
         OBSERVED_AT
     }))));
-    let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let deps = Arc::new(NoopDeps);
-    let handler = EventHandler::new(cache.clone(), permissions, deps);
+    let handler = mainframe_chat::test_support::presentation_handler(
+        cache.clone(),
+        || {
+            Box::new(mainframe_display::FullRebuildProjector::new(|_, _, _| {
+                Vec::new()
+            }))
+        },
+        None,
+    );
     let session = claude_session();
     let sink = handler.build_sink(CHAT_ID, Some(SESSION_ID.to_string()));
 

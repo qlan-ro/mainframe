@@ -17,7 +17,7 @@ function forkBaseInput(custom: SessionCustom, adapter?: AdapterInfo): ForkBaseIn
     adapterName: adapter?.name ?? custom.adapterId,
     temporary: custom.temporary,
     noProject: custom.noProject,
-    claudeSessionId: custom.claudeSessionId,
+    vendorSessionId: custom.vendorSessionId,
     transcriptMissing: custom.transcriptMissing,
     directoryMissing: custom.directoryMissing ?? false,
   };

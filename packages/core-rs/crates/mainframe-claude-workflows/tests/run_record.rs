@@ -1,7 +1,10 @@
-//! Red-phase (Task 8): `record::parse_run_record` / `record::read_run_records`
-//! over the on-disk `wf_<runId>.json` shape (verified fact 5). Turned green by
-//! Task 14.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! `record::parse_run_record` / `record::read_run_records` over the on-disk
+//! `wf_<runId>.json` shape.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_claude_workflows::record::{parse_run_record, read_run_records};
 use mainframe_types::claude_workflow::ClaudeWorkflowRunSource;

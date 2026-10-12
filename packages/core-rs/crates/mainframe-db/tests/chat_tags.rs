@@ -1,5 +1,8 @@
-//! Ported from `packages/core/src/db/__tests__/chat-tags.test.ts`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::rc::Rc;
 

@@ -1,10 +1,10 @@
-//! Which comparators fit which token type, and their wire names (Node
-//! parity: packages/types/src/automation-domain/comparators.ts).
+//! Which comparators fit which token type, and their wire names (the
+//! TypeScript copy is packages/types/src/automation-domain/comparators.ts).
 
 use super::condition::Comparator;
 use super::scope::TokenType;
 
-/// Comparators that fit each token type (Node's BY_TYPE table; `contains`
+/// Comparators that fit each token type (`BY_TYPE` in the TypeScript copy; `contains`
 /// is polymorphic — text substring, list membership).
 pub(crate) fn comparators_for(token_type: TokenType) -> &'static [Comparator] {
     match token_type {
@@ -51,8 +51,3 @@ pub(crate) fn comparator_wire_name(comparator: Comparator) -> &'static str {
         Comparator::IsOneOf => "is_one_of",
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of scope.rs when the `$name` namespace landed there.

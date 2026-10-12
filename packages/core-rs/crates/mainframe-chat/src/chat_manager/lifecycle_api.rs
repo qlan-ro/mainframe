@@ -1,8 +1,10 @@
 //! Lifecycle and permission delegations off the `ChatManager` facade.
 use super::*;
+use crate::chat_teardown::TeardownMode;
+use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
-    pub async fn create_chat(&self, new_chat: NewChat) -> Chat {
+    pub async fn create_chat(&self, new_chat: NewChat) -> Result<Chat, LifecycleError> {
         self.lifecycle.create_chat(new_chat, None, None).await
     }
 
@@ -14,7 +16,7 @@ impl ChatManager {
         new_chat: NewChat,
         worktree_path: Option<&str>,
         branch_name: Option<&str>,
-    ) -> Chat {
+    ) -> Result<Chat, LifecycleError> {
         self.lifecycle
             .create_chat_with_defaults(new_chat, worktree_path, branch_name)
             .await
@@ -28,28 +30,30 @@ impl ChatManager {
     /// from the chat). Backs `POST /api/chats/:id/trust-workspace`.
     pub async fn trust_workspace(&self, chat_id: &str) -> Result<(), TrustWorkspaceError> {
         let chat = self
+            .shared
             .deps
-            .chats_get(chat_id)
+            .chats_get(chat_id)?
             .ok_or_else(|| TrustWorkspaceError::ChatNotFound(chat_id.to_string()))?;
         let project_path = self
+            .shared
             .deps
             .projects_get_path(&chat.project_id)
             .ok_or_else(|| TrustWorkspaceError::ProjectNotFound(chat.project_id.clone()))?;
         let effective_path = chat.worktree_path.unwrap_or(project_path);
-        self.deps
+        self.shared
+            .deps
             .write_workspace_trust(&effective_path)
             .await
             .map_err(TrustWorkspaceError::Write)
     }
 
     /// A chat left on screen through an idle offload keeps its facade session
-    /// (`idle_offload.rs` deliberately emits no `ChatEnded`), so a reload
-    /// here — or via `start_chat`'s own internal `load_chat` call on a
-    /// resumed send — rebuilds the cache under the transcript's own ids,
-    /// different from the ids that session cached live for the same items
-    /// (todo #178, AC6/AC9). `ChatLifecycleManager::do_load_chat` notifies
-    /// `Resync` itself when it actually reloads, so BOTH paths cover it —
-    /// see the module note there.
+    /// (`idle_offload.rs` deliberately emits no `ChatEnded`), so a reload here
+    /// — or via `start_chat`'s own internal `load_chat` call on a resumed send
+    /// — rebuilds the cache under the transcript's own ids, different from the
+    /// ids that session cached live for the same items.
+    /// `ChatLifecycleManager::do_load_chat` notifies `Resync` itself when it
+    /// actually reloads, so BOTH paths cover it — see the module note there.
     pub async fn load_chat(&self, chat_id: &str) {
         self.lifecycle.load_chat(chat_id).await;
     }
@@ -73,22 +77,22 @@ impl ChatManager {
         self.lifecycle.orchestration().attach(hooks);
     }
 
-    /// Rule 6: a chat's side chat (if any) is discarded before the lifecycle
-    /// archive runs — the worktree removal `delete_worktree` may trigger
-    /// happens there, and discarding first keeps the side chat from
-    /// referencing a worktree the archive is about to remove.
+    /// A chat's side chat (if any) is discarded before the lifecycle archive
+    /// runs — the worktree removal `delete_worktree` may trigger happens there,
+    /// and discarding first keeps the side chat from referencing a worktree the
+    /// archive is about to remove.
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
         self.lifecycle.orchestration().stopping(chat_id).await;
-        if let Some(chat) = self.deps.chats_get(chat_id)
+        if let Some(chat) =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id))
             && let Some(side_chat_id) = chat.side_chat_id.clone()
             && let Err(err) = self.discard_chat(&side_chat_id).await
         {
-            tracing::warn!(chat_id, side_chat_id, %err, "failed to discard side chat before archiving its parent");
+            tracing::warn!(chat_id, side_chat_id, error = %err, "failed to discard side chat before archiving its parent");
         }
         self.lifecycle.archive_chat(chat_id, delete_worktree).await;
-        self.deps.tracker_remove_chat(chat_id);
-        self.event_handler.clear_display_state(chat_id);
-        self.worktree_offers.forget(chat_id);
+        self.teardown.clear(chat_id, TeardownMode::Archive);
+        self.shared.deps.tracker_remove_chat(chat_id);
         self.event_handler
             .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
                 chat_id: chat_id.to_string(),
@@ -97,9 +101,8 @@ impl ChatManager {
 
     pub async fn end_chat(&self, chat_id: &str) {
         self.lifecycle.end_chat(chat_id).await;
-        self.deps.tracker_remove_chat(chat_id);
-        self.event_handler.clear_display_state(chat_id);
-        self.worktree_offers.forget(chat_id);
+        self.teardown.clear(chat_id, TeardownMode::End);
+        self.shared.deps.tracker_remove_chat(chat_id);
         self.event_handler
             .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
                 chat_id: chat_id.to_string(),
@@ -107,34 +110,41 @@ impl ChatManager {
     }
 
     pub fn unarchive_chat(&self, chat_id: &str) -> Option<Chat> {
-        self.deps.chats_update(
-            chat_id,
-            &ChatUpdate {
-                status: Some(mainframe_types::chat::ChatStatus::Active),
-                ..Default::default()
-            },
+        let update = storage_event!(
+            self.shared, Some(chat_id);
+            self.shared.prepare_update(
+                chat_id,
+                &ChatPatch {
+                    status: Some(mainframe_types::chat::ChatStatus::Active),
+                    ..Default::default()
+                },
+            ),
+            None
         );
-        let chat = self.deps.chats_get(chat_id)?;
-        self.emit(DaemonEvent::ChatUpdated {
-            chat: chat.clone(),
-            reason: None,
-        });
+        let chat =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id), None)?;
+        update.emit(chat.clone(), None);
         Some(chat)
     }
 
     pub fn rename_chat(&self, chat_id: &str, title: &str) {
-        self.deps.chats_update(
-            chat_id,
-            &ChatUpdate {
-                title: Some(title.to_string()),
-                ..Default::default()
-            },
+        let update = storage_event!(
+            self.shared, Some(chat_id);
+            self.shared.prepare_update(
+                chat_id,
+                &ChatPatch {
+                    title: Some(title.to_string()),
+                    ..Default::default()
+                },
+            )
         );
         if let Some(cell) = self.get_active(chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).chat.title = Some(title.to_string());
+            cell.lock_recover().chat.title = Some(title.to_string());
         }
-        if let Some(chat) = self.deps.chats_get(chat_id) {
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        if let Some(chat) =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id))
+        {
+            update.emit(chat, None);
         }
     }
 
@@ -165,9 +175,5 @@ impl ChatManager {
 
     pub fn has_pending_permission(&self, chat_id: &str) -> bool {
         self.permission_handler.has_pending_permission(chat_id)
-    }
-
-    pub fn clear_pending_permission(&self, chat_id: &str) {
-        self.permission_handler.clear_pending_permission(chat_id);
     }
 }

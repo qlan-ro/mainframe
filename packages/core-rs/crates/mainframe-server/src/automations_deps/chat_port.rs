@@ -1,20 +1,19 @@
-//! Narrow ChatManager seam for the agent port (Node agent-port.ts
-//! `ChatPortDeps` structural subset) — fakeable in unit tests without a full
-//! `ChatManagerDeps` graph.
+//! Narrow ChatManager seam for the agent port — fakeable in unit tests without
+//! a full `ChatManagerDeps` graph.
 
 use std::sync::Arc;
 
-use mainframe_automations::engine::BoxFuture;
-use mainframe_chat::chat_manager::ChatManager;
+use mainframe_chat::chat_manager::{ChatManager, SendError};
+use mainframe_chat::config_manager::ConfigError;
 use mainframe_orchestration::last_assistant_text;
+use mainframe_types::BoxFuture;
 use mainframe_types::chat::NewChat;
 
 pub trait AgentChatPort: Send + Sync {
-    /// `createChatWithDefaults` → the new chat id. `branch_name` rides the
-    /// create so the chat row carries it from birth (v1 agent-port parity).
+    /// `create_chat_with_defaults` → the new chat id. `branch_name` rides the
+    /// create so the chat row carries it from birth.
     /// `automation_run_id` stamps the chat as automation-created so the
     /// sessions sidebar hides it from the default list.
-    #[allow(clippy::too_many_arguments)]
     fn create_chat<'a>(
         &'a self,
         project_id: &'a str,
@@ -23,20 +22,20 @@ pub trait AgentChatPort: Send + Sync {
         permission_mode: Option<&'a str>,
         branch_name: Option<&'a str>,
         automation_run_id: &'a str,
-    ) -> BoxFuture<'a, String>;
+    ) -> BoxFuture<'a, Result<String, mainframe_chat::lifecycle_manager::LifecycleError>>;
     fn enable_worktree<'a>(
         &'a self,
         chat_id: &'a str,
         base_branch: &'a str,
         branch_name: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>>;
+    ) -> BoxFuture<'a, Result<(), ConfigError>>;
     fn send_message<'a>(
         &'a self,
         chat_id: &'a str,
         content: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>>;
+    ) -> BoxFuture<'a, Result<(), SendError>>;
     /// The last assistant text block — the step's `result` output and the A2
-    /// parse input (mirrors `get_last_assistant_text`, without the push cap).
+    /// parse input (without the push notification length cap).
     fn last_assistant_text<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, String>;
     /// Best-effort session stop (run-cancel sweep).
     fn interrupt<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
@@ -61,9 +60,10 @@ impl AgentChatPort for ChatManagerPort {
         permission_mode: Option<&'a str>,
         branch_name: Option<&'a str>,
         automation_run_id: &'a str,
-    ) -> BoxFuture<'a, String> {
+    ) -> BoxFuture<'a, Result<String, mainframe_chat::lifecycle_manager::LifecycleError>> {
         Box::pin(async move {
-            self.chats
+            Ok(self
+                .chats
                 .create_chat_with_defaults(
                     NewChat {
                         project_id: project_id.to_string(),
@@ -71,7 +71,7 @@ impl AgentChatPort for ChatManagerPort {
                         model: model.map(str::to_string),
                         permission_mode: permission_mode.map(str::to_string),
                         automation_run_id: Some(automation_run_id.to_string()),
-                        // An existing caller passing temporary=false (rule 2):
+                        // An existing caller passing temporary=false:
                         // automation-created chats are already hidden from the
                         // default listing by `automation_run_id`.
                         temporary: false,
@@ -80,8 +80,8 @@ impl AgentChatPort for ChatManagerPort {
                     None,
                     branch_name,
                 )
-                .await
-                .id
+                .await?
+                .id)
         })
     }
 
@@ -90,12 +90,11 @@ impl AgentChatPort for ChatManagerPort {
         chat_id: &'a str,
         base_branch: &'a str,
         branch_name: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
+    ) -> BoxFuture<'a, Result<(), ConfigError>> {
         Box::pin(async move {
             self.chats
                 .enable_worktree(chat_id, base_branch, branch_name)
                 .await
-                .map_err(|err| err.to_string())
         })
     }
 
@@ -103,13 +102,8 @@ impl AgentChatPort for ChatManagerPort {
         &'a self,
         chat_id: &'a str,
         content: &'a str,
-    ) -> BoxFuture<'a, Result<(), String>> {
-        Box::pin(async move {
-            self.chats
-                .send_message(chat_id, content, None, None)
-                .await
-                .map_err(|err| err.to_string())
-        })
+    ) -> BoxFuture<'a, Result<(), SendError>> {
+        Box::pin(async move { self.chats.send_message(chat_id, content, None, None).await })
     }
 
     fn last_assistant_text<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, String> {
@@ -120,8 +114,3 @@ impl AgentChatPort for ChatManagerPort {
         Box::pin(async move { self.chats.interrupt_chat(chat_id).await })
     }
 }
-
-// PORT STATUS: packages/core/src/automations/agent-port.ts (ChatPortDeps)
-// confidence: high
-// todos: 0
-// notes: —

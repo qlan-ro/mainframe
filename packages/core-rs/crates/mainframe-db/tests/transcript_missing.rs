@@ -1,17 +1,20 @@
-//! Ported from `packages/core/src/db/__tests__/transcript-missing.test.ts`.
-//!
 //! The `transcript_missing` column, its `mapRow` boolean coercion, and the
 //! `clear_session` / `clear_worktree` degraded-recovery helpers. (The migration
 //! that adds the column itself is version 25 in `mainframe-db::migrations`, with
 //! its own test; here we exercise the repository read/write path.)
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
+use mainframe_types::chat_patch::ChatPatch;
 use std::rc::Rc;
 
 use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
-use mainframe_db::{ChatUpdate, ChatsRepository, ProjectsRepository};
+use mainframe_db::{ChatsRepository, ProjectsRepository};
 use mainframe_types::chat::NewChat;
 
 fn setup() -> (ChatsRepository, ProjectsRepository, String) {
@@ -54,7 +57,7 @@ fn persists_transcript_missing_through_update_and_maps_it_back_as_a_boolean() {
     chats
         .update(
             &chat.id,
-            &ChatUpdate {
+            &ChatPatch {
                 transcript_missing: Some(true),
                 ..Default::default()
             },
@@ -68,7 +71,7 @@ fn persists_transcript_missing_through_update_and_maps_it_back_as_a_boolean() {
     chats
         .update(
             &chat.id,
-            &ChatUpdate {
+            &ChatPatch {
                 transcript_missing: Some(false),
                 ..Default::default()
             },
@@ -93,7 +96,7 @@ fn includes_transcript_missing_in_list_results() {
     chats
         .update(
             &chat.id,
-            &ChatUpdate {
+            &ChatPatch {
                 transcript_missing: Some(true),
                 ..Default::default()
             },
@@ -121,8 +124,8 @@ fn clear_session_clears_identity_and_resets_the_transcript_flag() {
     chats
         .update(
             &chat.id,
-            &ChatUpdate {
-                claude_session_id: Some("dead-session".to_string()),
+            &ChatPatch {
+                vendor_session_id: Some("dead-session".to_string()),
                 session_file_path: Some(
                     "/home/u/.claude/projects/x/dead-session.jsonl".to_string(),
                 ),
@@ -135,7 +138,7 @@ fn clear_session_clears_identity_and_resets_the_transcript_flag() {
     chats.clear_session(&chat.id).unwrap();
 
     let loaded = chats.get(&chat.id).unwrap().unwrap();
-    assert_eq!(loaded.claude_session_id, None);
+    assert_eq!(loaded.vendor_session_id, None);
     assert_eq!(loaded.session_file_path, None);
     assert_eq!(loaded.transcript_missing, Some(false));
 }
@@ -153,7 +156,7 @@ fn clear_worktree_clears_binding_so_chat_rebinds_to_project_root() {
     chats
         .update(
             &chat.id,
-            &ChatUpdate {
+            &ChatPatch {
                 worktree_path: Some(Some("/project/.worktrees/feat-x".to_string())),
                 branch_name: Some(Some("feat-x".to_string())),
                 ..Default::default()

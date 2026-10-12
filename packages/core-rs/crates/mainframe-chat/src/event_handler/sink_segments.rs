@@ -3,13 +3,14 @@
 //! that carried the block, interrupted or not).
 
 use mainframe_types::segment::{HandoffStatus, SegmentLayout, SegmentResultDelta};
+use mainframe_types::sync::LockExt as _;
 
-use super::*;
+use super::{ChatMessageType, SessionResult, SessionSinkImpl};
 use crate::segments::divider::{divider_for, divider_id, is_divider, refresh_divider};
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn record_segment_result(&self, data: &SessionResult) {
-        let Some(store) = self.deps.segment_store() else {
+        let Some(store) = self.shared.deps.segment_store() else {
             return;
         };
         let (first_message_id, last_message_id) = self.turn_message_ids();
@@ -37,7 +38,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             return;
         };
         store.set_handoff_status(&pending.id, HandoffStatus::Delivered);
-        let name_of = |id: &str| self.deps.adapter_name(id);
+        let name_of = |id: &str| self.shared.deps.adapter_fork_info(id).name;
         if refresh_divider(&self.messages, store, &self.chat_id, &active.id, &name_of) {
             self.emit_display();
         }
@@ -47,7 +48,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     /// (Claude `/clear`) or a spawn after a context reset leaves the chat on a
     /// new segment whose divider a warm cache does not have yet.
     pub(super) fn sync_active_divider(&self) {
-        let Some(store) = self.deps.segment_store() else {
+        let Some(store) = self.shared.deps.segment_store() else {
             return;
         };
         let Some(layout) = store
@@ -59,12 +60,12 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         let Some(active) = layout.active() else {
             return;
         };
-        let name_of = |id: &str| self.deps.adapter_name(id);
+        let name_of = |id: &str| self.shared.deps.adapter_fork_info(id).name;
         let Some(divider) = divider_for(&self.chat_id, &layout, &active.id, &name_of) else {
             return;
         };
         let appended = {
-            let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+            let mut messages = self.messages.lock_recover();
             let id = divider_id(&active.id);
             let warm = messages.get(&self.chat_id).is_some_and(|m| !m.is_empty());
             let present = messages
@@ -82,7 +83,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
 
     /// The turn's user message (the latest one) and its last message.
     fn turn_message_ids(&self) -> (Option<String>, Option<String>) {
-        let messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+        let messages = self.messages.lock_recover();
         let Some(list) = messages.get(&self.chat_id) else {
             return (None, None);
         };

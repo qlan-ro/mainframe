@@ -1,9 +1,9 @@
-//! Fork resolver, version gate, and fork-point pinning for the Codex adapter
-//! (todo #368 — see `docs/plans/2026-09-27-todo-368-codex-fork.md`). Mirrors
-//! `mainframe_adapter_claude::fork`'s split of a pure decision (`ThreadTarget`)
-//! from the async pin, but Codex's own `thread/fork` RPC replaces Claude's
-//! transcript-copy mechanism: forking needs no `dest_dir` write, only the
-//! parent's thread id and (optionally) its last turn id at pin time.
+//! Fork resolver, version gate, and fork-point pinning for the Codex adapter.
+//! Mirrors `mainframe_adapter_claude::fork`'s split of a pure decision
+//! (`ThreadTarget`) from the async pin, but Codex's own `thread/fork` RPC
+//! replaces Claude's transcript-copy mechanism: forking needs no `dest_dir`
+//! write, only the parent's thread id and (optionally) its last turn id at pin
+//! time.
 
 use mainframe_types::adapter::ForkSource;
 use mainframe_types::transcript::TranscriptLocation;
@@ -61,8 +61,8 @@ pub(crate) fn resolve_thread_target(
 /// `CodexSession::ensure_thread`/`load_history`'s shared entry point: resolves
 /// [`ThreadTarget`] from the session's own id, its pending fork source, and
 /// whether this spawn is no-persistence — including the async own-transcript
-/// probe, so `session.rs` gains only this one call site (todo #368; keeps
-/// that already-oversized file to call sites only, per the plan).
+/// probe, so `session.rs` gains only this one call site (keeping that
+/// already-oversized file to call sites only).
 /// `transcript_present_override` is a test seam only (`CodexSession::
 /// set_transcript_present_override`) — the real probe reads
 /// `~/.codex/state_5.sqlite` via `locate_codex_transcript`, which
@@ -92,30 +92,14 @@ pub(crate) async fn resolve_target(
 
 /// Parses `major.minor.patch` and compares against [`FORK_MIN_CODEX_VERSION`].
 /// A version with fewer than 3 numeric components, or a non-numeric major/minor,
-/// counts as unsupported (todo #368 AC: "an unparsable version… counts as
-/// unsupported").
+/// counts as unsupported.
 pub(crate) fn fork_supported(version: &str) -> bool {
-    let mut parts = version.split('.');
-    let (Some(major), Some(minor), Some(patch)) = (parts.next(), parts.next(), parts.next()) else {
-        return false;
-    };
-    let Ok(major) = major.parse::<u32>() else {
-        return false;
-    };
-    let Ok(minor) = minor.parse::<u32>() else {
-        return false;
-    };
-    // A trailing pre-release/build suffix (rare for `codex --version`) only
-    // affects the patch component; take its leading digits.
-    let patch_digits: String = patch.chars().take_while(char::is_ascii_digit).collect();
-    let Ok(patch) = patch_digits.parse::<u32>() else {
-        return false;
-    };
-    (major, minor, patch) >= FORK_MIN_CODEX_VERSION
+    mainframe_adapter_api::version::CliVersion::parse_leading(version)
+        .and_then(|parsed| parsed.components_u32())
+        .is_some_and(|parts| parts >= FORK_MIN_CODEX_VERSION)
 }
 
-/// `capabilities().fork`'s reason copy (todo #368 AC: "a version-specific
-/// reason, exactly as #343's… refusal path already renders for Codex today").
+/// `capabilities().fork`'s version-specific reason copy.
 pub(crate) fn fork_unavailable_reason_for(version: Option<&str>) -> Option<String> {
     let version = version?;
     if fork_supported(version) {
@@ -128,100 +112,5 @@ pub(crate) fn fork_unavailable_reason_for(version: Option<&str>) -> Option<Strin
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn fork_source(last_turn_id: Option<&str>) -> ForkSource {
-        ForkSource {
-            source_session_id: "parent-thread".to_string(),
-            resume_path: None,
-            last_turn_id: last_turn_id.map(str::to_string),
-        }
-    }
-
-    // ---- resolve_thread_target ----
-
-    #[test]
-    fn own_id_with_no_fork_source_resumes_plainly() {
-        assert_eq!(
-            resolve_thread_target(Some("own-id"), false, None),
-            ThreadTarget::Resume("own-id".to_string())
-        );
-    }
-
-    #[test]
-    fn own_id_with_fork_source_and_transcript_present_resumes_plainly() {
-        let source = fork_source(Some("turn-1"));
-        assert_eq!(
-            resolve_thread_target(Some("own-id"), true, Some(&source)),
-            ThreadTarget::Resume("own-id".to_string())
-        );
-    }
-
-    #[test]
-    fn no_own_id_with_fork_source_forks() {
-        let source = fork_source(Some("turn-1"));
-        assert_eq!(
-            resolve_thread_target(None, false, Some(&source)),
-            ThreadTarget::Fork {
-                source_id: "parent-thread".to_string(),
-                last_turn_id: Some("turn-1".to_string()),
-            }
-        );
-    }
-
-    #[test]
-    fn own_id_with_fork_source_and_missing_transcript_falls_back_to_fork() {
-        let source = fork_source(None);
-        assert_eq!(
-            resolve_thread_target(Some("own-id"), false, Some(&source)),
-            ThreadTarget::Fork {
-                source_id: "parent-thread".to_string(),
-                last_turn_id: None,
-            }
-        );
-    }
-
-    #[test]
-    fn no_own_id_and_no_fork_source_starts_fresh() {
-        assert_eq!(
-            resolve_thread_target(None, false, None),
-            ThreadTarget::Start
-        );
-    }
-
-    // ---- fork_supported ----
-
-    #[test]
-    fn fork_supported_below_at_and_above_the_floor() {
-        assert!(!fork_supported("0.142.9"));
-        assert!(fork_supported("0.143.0"));
-        assert!(fork_supported("0.155.1"));
-    }
-
-    #[test]
-    fn fork_supported_is_false_for_an_unparsable_version() {
-        assert!(!fork_supported(""));
-        assert!(!fork_supported("not-a-version"));
-        assert!(!fork_supported("0.143"));
-    }
-
-    // ---- fork_unavailable_reason_for ----
-
-    #[test]
-    fn reason_is_none_when_version_unknown_or_supported() {
-        assert_eq!(fork_unavailable_reason_for(None), None);
-        assert_eq!(fork_unavailable_reason_for(Some("0.155.1")), None);
-    }
-
-    #[test]
-    fn reason_names_the_floor_and_installed_version_when_below_it() {
-        assert_eq!(
-            fork_unavailable_reason_for(Some("0.140.0")),
-            Some(
-                "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
-                    .to_string()
-            )
-        );
-    }
-}
+#[path = "fork_tests.rs"]
+mod tests;

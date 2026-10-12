@@ -1,5 +1,6 @@
 //! The message send path + CLI-owned queue delegations off the `ChatManager` facade.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 pub(super) type LiveSession = (Arc<Mutex<ActiveChat>>, Arc<dyn AdapterSession>);
 
@@ -11,8 +12,8 @@ impl ChatManager {
         attachment_ids: Option<&[String]>,
         command: Option<CommandMeta>,
     ) -> Result<(), SendError> {
-        // Register before reading any registry/cache state (todo #178); the
-        // guard drops on every return path below, `?` included.
+        // Register before reading any registry/cache state; the guard drops on
+        // every return path below, `?` included.
         let _send_guard = self.lifecycle.begin_send(chat_id).await;
 
         let chat = self.get_chat(chat_id);
@@ -70,13 +71,10 @@ impl ChatManager {
 
     /// Stamp turn start (for `onResult`'s `turnDurationMs`) and tell the chat
     /// surface the manager has taken ownership of this prompt — accepted
-    /// whether it dispatches immediately or lands behind a running turn (plan
-    /// task 10; `send_plain_text`/`dispatch_command` fire the matching
-    /// `TurnStarted`).
+    /// whether it dispatches immediately or lands behind a running turn
+    /// (`send_plain_text`/`dispatch_command` fire the matching `TurnStarted`).
     fn mark_turn_accepted(&self, post: &Arc<Mutex<ActiveChat>>, chat_id: &str) {
-        post.lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .turn_started_at = Some(now_ms());
+        post.lock_recover().turn_started_at = Some(now_ms());
         self.event_handler.notify_chat_surface(
             crate::chat_surface::ChatSurfaceEvent::TurnAccepted {
                 chat_id: chat_id.to_string(),
@@ -84,13 +82,13 @@ impl ChatManager {
         );
     }
 
-    /// Loads any existing history into the cache FIRST (todo #350 R1, finding
-    /// 5): a cold or evicted chat's cache is empty, and appending straight
-    /// into it would replace the whole transcript with just this one error
-    /// message — the next resume snapshot then shows nothing else.
+    /// Loads any existing history into the cache FIRST: a cold or evicted
+    /// chat's cache is empty, and appending straight into it would replace the
+    /// whole transcript with just this one error message — the next resume
+    /// snapshot then shows nothing else.
     async fn emit_worktree_missing_error(&self, chat_id: &str, chat: &Chat) {
         self.get_messages(chat_id).await;
-        let error_msg = self.messages.lock().unwrap_or_else(|e| e.into_inner())
+        let error_msg = self.shared.messages.lock_recover()
             .create_transient_message(
                 chat_id,
                 ChatMessageType::Error,
@@ -103,9 +101,9 @@ impl ChatManager {
                 })],
                 None,
             );
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.shared
+            .messages
+            .lock_recover()
             .append(chat_id, error_msg);
         self.event_handler.emit_display(chat_id);
     }
@@ -113,8 +111,7 @@ impl ChatManager {
     fn session_is_spawned(&self, chat_id: &str) -> bool {
         self.get_active(chat_id)
             .map(|c| {
-                c.lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                c.lock_recover()
                     .session
                     .as_ref()
                     .is_some_and(|s| s.is_spawned())
@@ -131,9 +128,7 @@ impl ChatManager {
     ) -> Result<(), SendError> {
         let transcript_missing = chat.and_then(|c| c.transcript_missing).unwrap_or(false);
         if transcript_missing && !self.session_is_spawned(chat_id) {
-            self.continue_here(chat_id)
-                .await
-                .map_err(|e| SendError(e.to_string()))?;
+            self.continue_here(chat_id).await?;
         }
         Ok(())
     }
@@ -141,31 +136,34 @@ impl ChatManager {
     pub(super) fn require_live_session(&self, chat_id: &str) -> Result<LiveSession, SendError> {
         let post = self
             .get_active(chat_id)
-            .ok_or_else(|| SendError(format!("Chat {chat_id} not running")))?;
+            .ok_or_else(|| SendError::NotRunning(chat_id.to_string()))?;
         let session = {
-            let guard = post.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = post.lock_recover();
             match guard.session.clone() {
                 Some(s) if s.is_spawned() => s,
-                _ => return Err(SendError(format!("Chat {chat_id} not running"))),
+                _ => return Err(SendError::NotRunning(chat_id.to_string())),
             }
         };
         Ok((post, session))
     }
 
-    pub(super) fn set_working(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, now: &str) {
-        {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
-            guard.chat.process_state = Some(Some(ProcessState::Working));
-            guard.chat.updated_at = now.to_string();
-        }
-        self.deps.chats_update(
-            chat_id,
-            &ChatUpdate {
+    pub(super) fn set_working(&self, cell: &Arc<Mutex<ActiveChat>>, now: &str) {
+        let chat_id = cell.lock_recover().chat.id.clone();
+        let update = self.shared.prepare_live_update(
+            &chat_id,
+            &ChatPatch {
                 process_state: Some(Some(ProcessState::Working)),
-                updated_at: Some(now.to_string()),
+                updated_at: Some(now.to_owned()),
                 ..Default::default()
             },
         );
+        let chat = {
+            let mut guard = cell.lock_recover();
+            guard.chat.process_state = Some(Some(ProcessState::Working));
+            guard.chat.updated_at = now.to_owned();
+            guard.chat.clone()
+        };
+        update.emit(chat, None);
     }
 
     pub async fn edit_queued_message(
@@ -192,14 +190,14 @@ impl ChatManager {
             return Ok(());
         }
 
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.shared
+            .queued_refs
+            .lock_recover()
             .retain(|q| q.uuid != r.uuid);
         self.notify_queue_changed(chat_id);
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.shared
+            .messages
+            .lock_recover()
             .remove_by_id(chat_id, &r.message_id);
         self.event_handler.emit_display(chat_id);
 
@@ -230,13 +228,13 @@ impl ChatManager {
             return Ok(());
         }
 
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.shared
+            .queued_refs
+            .lock_recover()
             .retain(|q| q.uuid != r.uuid);
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.shared
+            .messages
+            .lock_recover()
             .remove_by_id(chat_id, &r.message_id);
         self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
@@ -246,20 +244,20 @@ impl ChatManager {
 
     /// How many accepted prompts are queued behind this chat's running turn.
     /// The ACP facade's prompt port reads this right after `send_message` to
-    /// fill the queued-state extension metadata (spec decision 11).
+    /// fill the queued-state extension metadata.
     pub fn queued_message_count(&self, chat_id: &str) -> usize {
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.shared
+            .queued_refs
+            .lock_recover()
             .iter()
             .filter(|r| r.chat_id == chat_id)
             .count()
     }
 
     fn find_ref(&self, chat_id: &str, message_id: &str) -> Option<QueuedMessageRef> {
-        self.queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.shared
+            .queued_refs
+            .lock_recover()
             .iter()
             .find(|r| r.chat_id == chat_id && r.message_id == message_id)
             .cloned()

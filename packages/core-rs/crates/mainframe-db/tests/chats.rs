@@ -1,12 +1,16 @@
-//! Ported from `packages/core/src/db/__tests__/chats.test.ts`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
+use mainframe_types::chat_patch::ChatPatch;
 use std::rc::Rc;
 
 use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
-use mainframe_db::{ChatListFilters, ChatUpdate, ChatsRepository, ProjectsRepository};
+use mainframe_db::{ChatListFilters, ChatsRepository, ProjectsRepository};
 use mainframe_types::adapter::EffortLevel;
 use mainframe_types::chat::{ChatStatus, NO_PROJECT_ID, NewChat, TodoItem, TodoStatus};
 use mainframe_types::settings::ExecutionMode;
@@ -131,7 +135,7 @@ fn list_all_includes_archived_chats() {
     chats
         .update(
             &chat1.id,
-            &ChatUpdate {
+            &ChatPatch {
                 status: Some(ChatStatus::Archived),
                 ..Default::default()
             },
@@ -265,7 +269,7 @@ fn dismissed_worktrees_are_scoped_per_chat() {
     );
 }
 
-// ── effort round-trip (todo #302) ──────────────────────────────────────────
+// ── effort round-trip ──────────────────────────────────────────────────────
 
 #[test]
 fn chat_effort_round_trips_ultra() {
@@ -275,15 +279,18 @@ fn chat_effort_round_trips_ultra() {
     chats
         .update(
             &chat.id,
-            &ChatUpdate {
-                effort: Some(Some(EffortLevel::Ultra)),
+            &ChatPatch {
+                tuning: mainframe_types::chat::SessionTuning {
+                    effort: Some(Some(EffortLevel::Ultra)),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         )
         .unwrap();
 
     let fetched = chats.get(&chat.id).unwrap().unwrap();
-    assert_eq!(fetched.effort, Some(Some(EffortLevel::Ultra)));
+    assert_eq!(fetched.tuning.effort, Some(Some(EffortLevel::Ultra)));
 }
 
 #[test]
@@ -303,8 +310,11 @@ fn chat_effort_round_trips_for_pre_existing_levels() {
         chats
             .update(
                 &chat.id,
-                &ChatUpdate {
-                    effort: Some(Some(level)),
+                &ChatPatch {
+                    tuning: mainframe_types::chat::SessionTuning {
+                        effort: Some(Some(level)),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
             )
@@ -312,7 +322,7 @@ fn chat_effort_round_trips_for_pre_existing_levels() {
 
         let fetched = chats.get(&chat.id).unwrap().unwrap();
         assert_eq!(
-            fetched.effort,
+            fetched.tuning.effort,
             Some(Some(level)),
             "level {level:?} did not round-trip"
         );
@@ -326,7 +336,7 @@ fn chat_effort_defaults_to_none_when_never_set() {
     let chat = chats.create(&new_chat(&p.id)).unwrap();
 
     let fetched = chats.get(&chat.id).unwrap().unwrap();
-    assert_eq!(fetched.effort, None);
+    assert_eq!(fetched.tuning.effort, None);
 }
 
 #[test]
@@ -341,7 +351,7 @@ fn chat_effort_reads_back_none_for_a_bogus_stored_value() {
     .unwrap();
 
     let fetched = chats.get(&chat.id).unwrap().unwrap();
-    assert_eq!(fetched.effort, None);
+    assert_eq!(fetched.tuning.effort, None);
 }
 
 #[test]
@@ -377,7 +387,7 @@ fn permission_mode_reads_back_none_for_a_bogus_stored_value() {
     assert_eq!(fetched.permission_mode, None);
 }
 
-// ── temporary / non-project sessions (#346) ─────────────────────────────────
+// ── temporary / non-project sessions ────────────────────────────────────────
 
 #[test]
 fn a_normal_chat_defaults_to_not_temporary_and_not_no_project() {
@@ -545,8 +555,8 @@ fn mark_context_lost_stamps_the_loss_time_and_clears_the_resume_target() {
     chats
         .update(
             &chat.id,
-            &ChatUpdate {
-                claude_session_id: Some("sess-1".to_string()),
+            &ChatPatch {
+                vendor_session_id: Some("sess-1".to_string()),
                 session_file_path: Some("/tmp/sess-1.jsonl".to_string()),
                 vendor_session_ephemeral: Some(true),
                 ..Default::default()
@@ -563,7 +573,7 @@ fn mark_context_lost_stamps_the_loss_time_and_clears_the_resume_target() {
         fetched.context_lost_at.as_deref(),
         Some("2026-09-24T00:00:00.000Z")
     );
-    assert_eq!(fetched.claude_session_id, None);
+    assert_eq!(fetched.vendor_session_id, None);
     assert_eq!(fetched.session_file_path, None);
     assert!(!fetched.vendor_session_ephemeral);
 }

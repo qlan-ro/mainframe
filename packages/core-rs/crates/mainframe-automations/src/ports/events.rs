@@ -1,13 +1,13 @@
 //! Event port: every engine transition the UI must see leaves through this
 //! sink. The payload shapes are the contract §4 WS bodies; mainframe-server
-//! (T9.x) maps `AutomationEvent` onto `DaemonEvent` variants 1:1.
+//! maps `AutomationEvent` onto `DaemonEvent` variants 1:1.
 
 use serde::Serialize;
 
 use crate::store::{InteractionRecord, RunRecord};
 
 // Canonical wire payloads live in `mainframe-types` (the DaemonEvent
-// variants carry them, T9.1); the engine keeps its original local names.
+// variants carry them); the engine keeps its own local names.
 pub use mainframe_types::automation::{
     AutomationCompletedStatus as CompletedStatus,
     AutomationInteractionSummary as InteractionSummary, AutomationRunSummary as RunSummary,
@@ -48,14 +48,14 @@ pub trait EventSink: Send + Sync {
     fn emit(&self, event: AutomationEvent);
 }
 
-/// App events the trigger router consumes (T8.3). Carries app events only —
+/// App events the trigger router consumes. Carries app events only —
 /// GitHub PR opened/merged are webhook presets, not events (contract §1) —
 /// and `automation.completed` for chaining, which the CompletionEmitter
 /// feeds without a round-trip through the daemon bus.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CuratedEvent {
-    /// The CLI process behind a chat reached a terminal reason (the T9.2
-    /// port impl maps terminal `chat.updated` frames onto this).
+    /// The CLI process behind a chat reached a terminal reason (the
+    /// server-side port impl maps terminal `chat.updated` frames onto this).
     SessionFinished { chat_id: String, reason: String },
     AutomationCompleted {
         automation_id: String,
@@ -65,7 +65,7 @@ pub enum CuratedEvent {
     },
 }
 
-/// Subscription port (T8.3): the daemon side owns the broadcast sender and
+/// Subscription port: the daemon side owns the broadcast sender and
 /// maps its own event stream into `CuratedEvent`s — no polling.
 pub trait EventSource: Send + Sync {
     fn subscribe(&self) -> tokio::sync::broadcast::Receiver<CuratedEvent>;
@@ -98,9 +98,3 @@ pub fn to_run_summary(run: &RunRecord) -> RunSummary {
         error: run.checkpoint.error.clone(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1, A6), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node engine/run-summary.ts (trigger projects {kind} only;
-//        `tokens` reserved by the AutomationRunSummary type).

@@ -15,48 +15,39 @@ use axum::routing::{get, post};
 use mainframe_types::segment::SwitchProviderRequest;
 
 use crate::ctx::AppCtx;
+use crate::respond::status_of;
 use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 #[cfg(test)]
+#[path = "chat_switch_tests.rs"]
 mod tests;
-
-/// The daemon's identifier convention (`^[a-zA-Z0-9_-]+$`).
-fn id_ok(id: &str) -> bool {
-    !id.is_empty()
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-}
 
 async fn switch_provider(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
 ) -> Response {
-    if !id_ok(&id) {
+    if !mainframe_types::ids::is_safe_identifier(&id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid chat id");
     }
     let Some(req) = parse_body::<SwitchProviderRequest>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    if !id_ok(&req.adapter_id) {
+    if !mainframe_types::ids::is_safe_identifier(&req.adapter_id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid adapterId");
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "switch_provider needs ChatManager (unwired)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "provider switch unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.switch_provider(&id, &req).await {
         Ok(chat) => ok(chat),
         Err(err) => {
-            let status =
-                StatusCode::from_u16(err.status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = status_of(&err);
             if status == StatusCode::INTERNAL_SERVER_ERROR {
-                tracing::error!(chat_id = %id, %err, "provider switch failed");
+                return crate::respond::fail_internal(
+                    format!("provider switch failed chat_id={id}"),
+                    &err,
+                    err.to_string(),
+                );
             }
             fail(status, err.to_string())
         }
@@ -64,11 +55,12 @@ async fn switch_provider(
 }
 
 async fn list_segments(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    if !id_ok(&id) {
+    if !mainframe_types::ids::is_safe_identifier(&id) {
         return fail(StatusCode::BAD_REQUEST, "Invalid chat id");
     }
     let lookup = id.clone();
     let result = ctx
+        .core
         .db
         .call(move |db| match db.chats.get(&lookup)? {
             Some(_) => db.segments.list_wire(&lookup).map(Some),

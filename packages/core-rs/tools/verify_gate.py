@@ -17,11 +17,15 @@ masked code, which contains only real tokens.
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
 
 from verify_gate_lexer import mask_code
+from arch_tiers import check_document
+from verify_gate_ratchet import check_ratchet
+from verify_gate_rules import check_retired_sources, scan_conventions, check_lengths
 from verify_gate_sources import source_root, test_only_files, test_spans, in_test_span
 
 
@@ -41,7 +45,7 @@ ALWAYS_FORBIDDEN = [
 # guard so a future rule change can't accidentally trip its own grep.
 FORBID_DECLARATION = re.compile(r"#!\[forbid\(unsafe_code\)\]")
 
-# panic! is test-exempt like unwrap/expect: PORTING forbids it outside
+# panic! is test-exempt like unwrap/expect: reject it outside
 # #[cfg(test)] code and main.rs boot, and tests use it idiomatically.
 UNWRAP_EXPECT = [
     (re.compile(r"\bpanic!\("), "panic!("),
@@ -56,8 +60,8 @@ def is_main_boot(path: Path) -> bool:
 
 
 def is_binary_crate(path: Path) -> bool:
-    """The daemon binary crate may use `anyhow` at its top level (PORTING.md §5,
-    §8; plan §5). Library crates may not."""
+    """The daemon binary crate may use `anyhow` at its top level.
+    Library crates may not."""
     return "mainframe-daemon" in path.parts
 
 
@@ -67,7 +71,7 @@ def scan_file(path: Path, test_files: set[Path] | None = None) -> list[str]:
     raw_lines = text.splitlines()
     masked = mask_code(text)
     masked_lines = masked.splitlines(keepends=True)
-    spans = test_spans(masked)
+    spans = test_spans(masked, text)
     if test_files is None:
         test_files = test_only_files(source_root(path))
     file_is_test_exempt = is_main_boot(path) or path.resolve() in test_files
@@ -104,8 +108,16 @@ def main() -> int:
 
     all_violations: list[str] = []
     test_files = test_only_files(crates_dir)
+    sleep_allowed = set(json.loads((Path(__file__).parent / "test_sleep_allowlist.json").read_text()))
     for path in sorted(crates_dir.rglob("*.rs")):
         all_violations.extend(scan_file(path, test_files))
+        all_violations.extend(scan_conventions(path, test_files, sleep_allowed))
+    limits = json.loads((Path(__file__).parent / "file_length_ratchet.json").read_text())
+    all_violations.extend(check_retired_sources(crates_dir.parent))
+    all_violations.extend(check_lengths(crates_dir, limits, test_files))
+    all_violations.extend(check_ratchet(crates_dir, limits))
+
+    all_violations.extend(check_document(crates_dir, crates_dir.resolve().parents[2] / "docs/ARCHITECTURE.md"))
 
     if all_violations:
         print(f"verify-gate: {len(all_violations)} forbidden-pattern violation(s):\n")

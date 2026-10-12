@@ -1,18 +1,16 @@
-//! Phase 4a — the concurrent branch driver. `walk_frame` used to return on
+//! The concurrent branch driver. `walk_frame` used to return on
 //! the first `Parked`, so starting N agents at once was impossible: agent 1
 //! parks and the walk stops before agent 2 ever starts. These tests pin that
 //! N branches now start together, wait-for-all failure, the branch marker's
-//! replay safety, and per-entry `wake_at` (Node parity: none — greenfield).
+//! replay safety, and per-entry `wake_at`.
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use serde_json::json;
 
 use crate::domain::Step;
-use crate::store::{RunRecord, RunStatus, StepStatus};
+use crate::store::{RunRecord, RunStatus, StepKind, StepStatus};
 
-use super::markers::{BRANCH_OUTCOME_KIND, REPEAT_WATERMARK_KIND, is_engine_marker};
 use super::test_support::{
     FakePorts, Harness, ask_agent_step, completed, concurrent_repeat_step, cond_is, definition,
     empty_outputs, harness, if_step, manual_with_payload, notify_step, repeat_step, text,
@@ -54,14 +52,22 @@ async fn settle_leaf(
 }
 
 async fn settle(h: &Harness, run_id: &str, pred: impl Fn(&RunRecord) -> bool) -> RunRecord {
-    for _ in 0..100 {
-        let record = h.store.get_run(run_id).await.unwrap().unwrap();
-        if pred(&record) {
-            return record;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    panic!("run {run_id} never reached the expected state");
+    let mut result = None;
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
+            let record = h.store.get_run(run_id).await.unwrap().unwrap();
+            if pred(&record) {
+                result = Some(record);
+                return true;
+            }
+            false
+        },
+    )
+    .await
+    .expect("state did not settle before timeout");
+    result.expect("polling condition produced a result")
 }
 
 #[tokio::test]
@@ -285,14 +291,14 @@ async fn branch_outcome_markers_are_engine_state_excluded_from_the_timeline_pred
         .checkpoint
         .steps
         .values()
-        .filter(|e| e.kind == BRANCH_OUTCOME_KIND)
+        .filter(|e| e.kind == StepKind::BranchOutcome)
         .count();
     assert_eq!(branch_markers, 2, "one branch marker per branch");
     let watermark_markers = finished
         .checkpoint
         .steps
         .values()
-        .filter(|e| e.kind == REPEAT_WATERMARK_KIND)
+        .filter(|e| e.kind == StepKind::RepeatWatermark)
         .count();
     assert_eq!(
         watermark_markers, 1,
@@ -301,14 +307,10 @@ async fn branch_outcome_markers_are_engine_state_excluded_from_the_timeline_pred
     // The route the server's `project_timeline` filters on: every marker
     // kind is excluded, and no user-facing leaf entry is ever mistaken for
     // one.
-    assert!(is_engine_marker(BRANCH_OUTCOME_KIND));
-    assert!(is_engine_marker(REPEAT_WATERMARK_KIND));
-    assert!(!is_engine_marker(
-        &finished.checkpoint.steps["agent#0"].kind
-    ));
-    assert!(!is_engine_marker(
-        &finished.checkpoint.steps["agent#1"].kind
-    ));
+    assert!(StepKind::BranchOutcome.is_engine_marker());
+    assert!(StepKind::RepeatWatermark.is_engine_marker());
+    assert!(!finished.checkpoint.steps["agent#0"].kind.is_engine_marker());
+    assert!(!finished.checkpoint.steps["agent#1"].kind.is_engine_marker());
 }
 
 #[tokio::test]
@@ -439,78 +441,4 @@ async fn concurrency_absent_or_one_is_byte_identical_to_sequential() {
     );
 }
 
-#[tokio::test]
-async fn a_nested_suffix_inside_one_branch_does_not_unlock_a_later_branch_early() {
-    // Branch 0 has a nested (sequential) repeat inside it. Walked to its
-    // THIRD sub-item, that nested leaf's ref is "agent#0#2" — a naive
-    // `ends_with("#2")` check would misread that as branch 2 ("#2") already
-    // being outstanding, letting it jump the concurrency:2 budget while
-    // branch 1 is still genuinely outstanding.
-    let h = harness().await;
-    let calls = Arc::new(Mutex::new(Vec::<String>::new()));
-    let seen = calls.clone();
-    let ports = FakePorts {
-        ask_agent: Box::new(move |_step, ctx: &VerbContext<'_>| {
-            seen.lock().unwrap().push(ctx.step_ref.to_string());
-            StepOutcome::Wait { wake_at: None }
-        }),
-        ..FakePorts::default()
-    };
-    let engine = h.interpreter(ports);
-    let def = definition(vec![concurrent_repeat_step(
-        "fanout",
-        token_ref("trigger", "items", None),
-        2,
-        vec![repeat_step(
-            "inner",
-            token_ref("trigger", "subitems", None),
-            vec![ask_agent_step("agent", false)],
-        )],
-    )]);
-    let run = engine
-        .start_run(
-            &h.automation_id,
-            def,
-            manual_with_payload(json!({
-                "items": ["a", "b", "c"],
-                "subitems": ["p", "q", "r"],
-            })),
-            None,
-        )
-        .await
-        .unwrap();
-
-    // Budget of 2: branches 0 and 1 both start; branch 2 stays excluded.
-    engine.advance(&run.id).await.unwrap();
-    assert_eq!(*calls.lock().unwrap(), vec!["agent#0#0", "agent#1#0"]);
-
-    // Walk branch 0's nested repeat to its third sub-item without ever
-    // letting branch 1 settle, so the budget stays fully spent throughout.
-    settle_leaf(&h, &run.id, "agent#0#0", StepStatus::Succeeded, None).await;
-    engine.advance(&run.id).await.unwrap();
-    assert_eq!(
-        *calls.lock().unwrap(),
-        vec!["agent#0#0", "agent#1#0", "agent#0#1"]
-    );
-
-    settle_leaf(&h, &run.id, "agent#0#1", StepStatus::Succeeded, None).await;
-    engine.advance(&run.id).await.unwrap();
-    assert_eq!(
-        *calls.lock().unwrap(),
-        vec!["agent#0#0", "agent#1#0", "agent#0#1", "agent#0#2"]
-    );
-
-    // Re-advance without settling anything: branch 1 is still outstanding,
-    // so the concurrency:2 budget is spent — branch 2 must not start just
-    // because branch 0's nested ref happens to end in "#2".
-    engine.advance(&run.id).await.unwrap();
-    assert_eq!(
-        *calls.lock().unwrap(),
-        vec!["agent#0#0", "agent#1#0", "agent#0#1", "agent#0#2"],
-        "branch 2 must stay excluded while the concurrency:2 budget is spent"
-    );
-    assert_eq!(
-        h.store.get_run(&run.id).await.unwrap().unwrap().status,
-        RunStatus::Waiting
-    );
-}
+include!("blocks_concurrent_tests_additional_cases.rs");

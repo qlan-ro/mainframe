@@ -27,7 +27,7 @@ pub fn handle_notification(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
-    tracing::debug!(module = "codex:events", method, "codex notification");
+    tracing::debug!(method, "codex notification");
     match method {
         "thread/started" => decode(params, |p: ThreadStartedParams| {
             handle_thread_started(p, sink, state)
@@ -73,11 +73,7 @@ fn handle_unmapped(method: &str) {
         | "item/reasoning/textDelta"
         | "thread/name/updated" => {}
         _ if method.starts_with("codex/event/") => {}
-        _ => tracing::debug!(
-            module = "codex:events",
-            method,
-            "codex: unhandled notification"
-        ),
+        _ => tracing::debug!(method, "unhandled notification"),
     }
 }
 
@@ -94,23 +90,20 @@ fn handle_account_rate_limits_updated(
     params: AccountRateLimitsUpdatedParams,
     sink: &Arc<dyn SessionSink>,
 ) {
-    let quota =
-        normalize_rate_limit_snapshot(&params.rate_limits, chrono::Utc::now().timestamp_millis());
+    let quota = normalize_rate_limit_snapshot(&params.rate_limits, mainframe_types::time::now_ms());
     // C2 (#268): a snapshot that recognizes zero windows must not ingest — it would
     // bump freshness with no data behind it. Warn only when slots were present but
     // unrecognized (a genuine format drift), staying quiet on a benign empty snapshot.
     if !has_recognized_window(&quota) {
         if snapshot_has_window(&params.rate_limits) {
-            tracing::warn!(
-                "codex rate limit: snapshot had windows but none were recognized; skipping ingest"
-            );
+            tracing::warn!("snapshot had windows but none were recognized; skipping ingest");
         }
         return;
     }
     sink.on_provider_quota("codex", quota);
 }
 
-/// Which session a notification's `threadId` belongs to (task 17, todo #247):
+/// Which session a notification's `threadId` belongs to:
 /// the parent's own thread (or untagged, or pre-`thread/started`), a registered
 /// child, or neither — an item from a thread nobody named must be dropped, not
 /// leaked to the parent's transcript.
@@ -141,7 +134,7 @@ fn handle_item_started(
     let Some(sink) = owner_sink(&owner, sink, state) else {
         return;
     };
-    let _ = presentation_for_item(
+    presentation_for_item(
         params.thread_id.as_deref(),
         params.turn_id.as_deref(),
         &params.item,
@@ -230,13 +223,12 @@ fn render_completed(
         }
         Err(_) => {
             tracing::debug!(
-                module = "codex:events",
                 r#type = params
                     .item
                     .get("type")
                     .and_then(|v| v.as_str())
                     .unwrap_or(""),
-                "codex: unhandled item type"
+                "unhandled item type"
             );
         }
     }
@@ -253,10 +245,7 @@ fn owner_sink(
 ) -> Option<Arc<dyn SessionSink>> {
     match owner {
         Owner::Unknown => {
-            tracing::debug!(
-                module = "codex:events",
-                "codex: dropping item from an unregistered thread"
-            );
+            tracing::debug!("dropping item from an unregistered thread");
             None
         }
         Owner::Child(t) => {

@@ -133,9 +133,3 @@ pub struct WebhookRegistration {
     /// `registration` field is what means "not registered".
     pub last_delivery_at: Option<String>,
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: tagged enums wrap per-kind structs so deny_unknown_fields fires
-//        (enum-level deny is inert on internally tagged enums).

@@ -1,7 +1,6 @@
-//! `encode_content` and its per-leaf-kind helpers, split out of
-//! `encoder.rs` (todo #350, plan task 37, R2.13) — the 125-line match this
-//! module breaks up was itself the single biggest function in the crate
-//! (`cargo clippy -- -W clippy::too_many_lines`).
+//! `encode_content` and its per-leaf-kind helpers, split out of `encoder.rs` —
+//! the 125-line match this module breaks up was itself the single biggest
+//! function in the crate (`cargo clippy -- -W clippy::too_many_lines`).
 
 use mainframe_types::display::{StreamingLeafKind, has_attachment_evidence};
 
@@ -26,14 +25,14 @@ pub(super) fn push_text(blocks: &mut Vec<ContentBlock>, text: &str) {
 /// leaves accumulate into message items and thinking leaves into thought
 /// items, each segmented at the points where another item interrupts the run.
 ///
-/// `streaming` marks the item backed by the partial overlay (spec Decision
-/// 39, `encoder.rs::encode_revision`): when the message or thought
-/// accumulator is still open at `finish` and its kind matches, the finished
-/// item's `ItemMeta.streaming` is `Some(true)`. A segment closed earlier by
-/// an interruption never carries it — only the segment still open at the end
-/// of this container is "the one streaming right now". `None` everywhere
-/// (`encode`'s plain call, and every nested `TaskGroup` call) reproduces
-/// today's unmarked output exactly.
+/// `streaming` marks the item backed by the partial overlay
+/// (`encoder.rs::encode_revision`): when the message or thought accumulator is
+/// still open at `finish` and its kind matches, the finished item's
+/// `ItemMeta.streaming` is `Some(true)`. A segment closed earlier by an
+/// interruption never carries it — only the segment still open at the end of
+/// this container is "the one streaming right now". `None` everywhere
+/// (`encode`'s plain call, and every nested `TaskGroup` call) produces
+/// unmarked output.
 pub(super) fn encode_content(
     content: &[DisplayContent],
     container: &Container<'_>,
@@ -129,6 +128,10 @@ fn handle_leaf(
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "exhaustive dispatch table for display node variants"
+)]
 fn handle_node(
     node: &DisplayNode,
     container: &Container<'_>,
@@ -148,17 +151,17 @@ fn handle_node(
             ..
         } => {
             if *category != ToolCategory::Hidden {
-                out.push(tool_call_item(
+                out.push(tool_call_item(crate::encoder::tool_call::ToolCallInput {
                     id,
                     name,
                     input,
-                    *category,
+                    category: *category,
                     result,
                     container,
-                    None,
-                    *timing,
+                    group_id: None,
+                    timing: *timing,
                     command_execution,
-                ));
+                }));
             }
         }
         DisplayNode::ToolGroup { calls } => encode_tool_group(calls, container, out),
@@ -169,7 +172,16 @@ fn handle_node(
             result,
             timing,
         } => handle_task_group(
-            agent_id, task_args, calls, result, container, role, out, *timing,
+            TaskGroupInput {
+                agent_id,
+                task_args,
+                calls,
+                result,
+            },
+            container,
+            role,
+            out,
+            *timing,
         ),
         DisplayNode::TaskProgress { items } => handle_task_progress(items, container, out),
         DisplayNode::PermissionRequest { .. } => {}
@@ -193,12 +205,20 @@ fn handle_node(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct TaskGroupInput<'a> {
+    pub(super) agent_id: &'a str,
+    pub(super) task_args: &'a HashMap<String, Value>,
+    pub(super) calls: &'a [DisplayContent],
+    pub(super) result: &'a Option<ToolCallResult>,
+}
+
 fn handle_task_group(
-    agent_id: &str,
-    task_args: &HashMap<String, Value>,
-    calls: &[DisplayContent],
-    result: &Option<ToolCallResult>,
+    TaskGroupInput {
+        agent_id,
+        task_args,
+        calls,
+        result,
+    }: TaskGroupInput<'_>,
     container: &Container<'_>,
     role: ItemRole,
     out: &mut Vec<EncodedItem>,
@@ -216,9 +236,9 @@ fn handle_task_group(
         message_meta: None,
         parent_tool_call_id: Some(agent_id),
     };
-    // The overlay backs only the top-level container `encode_revision` names
-    // (todo #350 R2); a subagent's own content never streams yet (follow-up
-    // 3), so this nested call always passes `None`.
+    // The overlay backs only the top-level container `encode_revision` names;
+    // a subagent's own content never streams, so this nested call always
+    // passes `None`.
     encode_content(calls, &child, role, out, None);
 }
 
@@ -231,17 +251,17 @@ fn handle_task_progress(
         let mut source_container = container.clone();
         source_container.path.push(index);
         if item.category != ToolCategory::Hidden {
-            out.push(tool_call_item(
-                &item.id,
-                &item.name,
-                &item.input,
-                item.category,
-                &item.result,
-                &source_container,
-                None,
-                item.timing,
-                &None,
-            ));
+            out.push(tool_call_item(crate::encoder::tool_call::ToolCallInput {
+                id: &item.id,
+                name: &item.name,
+                input: &item.input,
+                category: item.category,
+                result: &item.result,
+                container: &source_container,
+                group_id: None,
+                timing: item.timing,
+                command_execution: &None,
+            }));
         }
     }
 }

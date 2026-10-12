@@ -1,4 +1,4 @@
-//! Benchmark (todo #376 G4 task 4, `#[ignore]`d): old (full `prepare`/
+//! Benchmark (`#[ignore]`d): old (full `prepare`/
 //! `encode_revision`/`diff`/`record` every partial) vs. new
 //! (`IncrementalProjector` + per-container `encode_container`/`apply`/
 //! `record_delta`) per-partial cost, same active turn at 100/1,000/10,000
@@ -15,10 +15,10 @@ use std::time::Instant;
 use mainframe_acp::RevisionLog;
 use mainframe_acp::SessionState;
 use mainframe_acp::encoder;
-use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
-use mainframe_adapter_claude::messages::incremental::IncrementalProjector;
 use mainframe_chat::message_cache::MessageCache;
 use mainframe_display::DisplayProjector;
+use mainframe_display::display_pipeline::prepare_messages_for_client;
+use mainframe_display::incremental::IncrementalProjector;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::StreamingLeafKind;

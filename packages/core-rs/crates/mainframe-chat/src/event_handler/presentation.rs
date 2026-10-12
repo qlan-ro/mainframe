@@ -18,7 +18,7 @@ pub(super) fn apply_update(current: &mut TranscriptPresentation, update: &Transc
 
 /// Apply `update` to one cached message's presentation context. Returns
 /// whether the stored value actually changed, so `MessageCache::update_in_place`
-/// journals only real edits for the display projector (todo #376).
+/// journals only real edits for the display projector.
 fn update_message_presentation(message: &mut ChatMessage, update: &PresentationUpdate) -> bool {
     let presentation = &update.presentation;
     if update
@@ -53,7 +53,7 @@ fn update_message_presentation(message: &mut ChatMessage, update: &PresentationU
     }
 }
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn partial_with_presentation(
         &self,
         id: &str,
@@ -85,8 +85,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             return;
         }
         self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .update_in_place(&self.chat_id, |message| {
                 update_message_presentation(message, &update)
             });

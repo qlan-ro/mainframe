@@ -1,9 +1,9 @@
-//! Task 14: the run driver's failure taxonomy (per-pair vs run-stopping) and
+//! The run driver's failure taxonomy (per-pair vs run-stopping) and
 //! report retention. Happy-path and optimization scenarios live in
 //! `run_tests.rs`.
 //!
-//! Every test uses its own project id: the one-run-per-project guard (task
-//! 15) is a real process-wide static, and `cargo test` runs these in
+//! Every test uses its own project id: the one-run-per-project guard
+//! is a real process-wide static, and `cargo test` runs these in
 //! parallel threads sharing that static.
 
 use std::sync::Arc;

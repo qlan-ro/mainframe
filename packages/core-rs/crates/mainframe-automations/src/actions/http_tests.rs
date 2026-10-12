@@ -1,6 +1,6 @@
-//! T6.5 — http.request over wiremock: method/url/body/header delivery,
-//! bearer credential injection, non-2xx failure, `{status, body}`-only
-//! outputs (contract §5 — no `result`).
+//! http.request over wiremock: method/url/body/header delivery, bearer
+//! credential injection, non-2xx failure, `{status, body}`-only outputs
+//! (contract §5 — no `result`).
 
 use serde_json::json;
 use wiremock::matchers::{body_json, body_string, header, method, path};

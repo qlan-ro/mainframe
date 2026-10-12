@@ -1,11 +1,10 @@
-//! T6.2 — flat-id action registry: catalog contents, output-type enum wire
-//! names, idempotent flag, duplicate/unknown id errors.
+//! Flat-id action registry: catalog contents, output-type enum wire names,
+//! idempotent flag, duplicate/unknown id errors.
 
 use std::collections::BTreeMap;
 
+use mainframe_types::BoxFuture;
 use serde_json::json;
-
-use crate::engine::BoxFuture;
 
 use super::manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, ActionOutputType};
 use super::registry::ActionRegistry;
@@ -109,54 +108,79 @@ fn unknown_id_is_an_error() {
     assert_eq!(err.to_string(), "unknown action 'nope.nothing'");
 }
 
-/// Cross-check: every built-in's manifest outputs match the frozen contract
-/// §5 table already encoded in `domain::catalog` (names AND order).
+/// Contract §5: every launch action's named outputs, in order, as the
+/// validator sees them. The manifests are the single source, so this pins
+/// the contract's output table against accidental manifest edits.
 #[test]
-fn builtin_catalog_matches_the_contract_output_table() {
-    let mut registry = ActionRegistry::new();
-    super::register_builtin_actions(&mut registry).unwrap();
+fn launch_catalog_matches_the_contract_output_table() {
+    use crate::domain::catalog::action_outputs;
+    use crate::domain::scope::TokenType::{List, Number, Text};
 
-    let catalog = registry.catalog();
+    let mut registry = ActionRegistry::new();
+    super::register_all_actions(&mut registry).unwrap();
+    let ids: Vec<&str> = registry.catalog().iter().map(|m| m.id).collect();
     assert_eq!(
-        catalog.iter().map(|m| m.id).collect::<Vec<_>>(),
-        vec![
+        ids,
+        [
             "run_command",
             "files.append",
             "files.write",
             "files.read",
             "http.request",
+            "github.create_pr",
+            "github.list_prs",
+            "notion.add_row",
+            "ado.create_item",
         ]
     );
-    for manifest in &catalog {
-        let expected = crate::domain::catalog::action_outputs(manifest.id);
-        let actual: Vec<(&str, &str)> = manifest
-            .outputs
-            .iter()
-            .map(|o| {
-                (
-                    o.name.as_str(),
-                    match o.output_type {
-                        ActionOutputType::Text => "text",
-                        ActionOutputType::Number => "number",
-                        ActionOutputType::List => "list",
-                        ActionOutputType::Record => "record",
-                    },
-                )
-            })
+
+    let expected = [
+        ("run_command", vec![("output", Text), ("exitCode", Number)]),
+        ("files.append", vec![]),
+        ("files.write", vec![]),
+        ("files.read", vec![("content", Text)]),
+        ("http.request", vec![("status", Number), ("body", Text)]),
+        (
+            "github.create_pr",
+            vec![("prUrl", Text), ("prNumber", Number)],
+        ),
+        ("github.list_prs", vec![("prs", List)]),
+        ("notion.add_row", vec![("pageUrl", Text)]),
+        (
+            "ado.create_item",
+            vec![("workItemId", Number), ("url", Text)],
+        ),
+        ("mcp:server:tool", vec![("result", Text)]),
+        ("nope.nothing", vec![]),
+    ];
+    for (id, outputs) in expected {
+        let outputs: Vec<_> = outputs
+            .into_iter()
+            .map(|(name, token_type)| (name.to_string(), token_type))
             .collect();
-        let expected: Vec<(&str, &str)> = expected
-            .iter()
-            .map(|(name, ty)| (*name, ty.describe()))
-            .collect();
-        assert_eq!(actual, expected, "outputs drifted for '{}'", manifest.id);
+        assert_eq!(action_outputs(id), outputs, "outputs drifted for '{id}'");
     }
 }
 
-/// T7.3/Part-0 — the wire `ActionCatalogEntry` shape (GET
-/// /api/automation-actions): camelCase keys, `credentialLabelHint` omitted
-/// when absent, `available` true for an action with no external
-/// prerequisite, and `fields`/`hasOutputAs`/`idempotent` now cross the wire
-/// (the bug this test used to assert away).
+/// `known_manifest` reads the static `LAUNCH_MANIFESTS` table, never the
+/// registered actions, so the two must hold the same manifests in the same
+/// order or validation and the catalog would disagree.
+#[test]
+fn the_static_manifest_table_matches_the_registered_actions() {
+    let mut registry = ActionRegistry::new();
+    super::register_all_actions(&mut registry).unwrap();
+    let table: Vec<ActionManifest> = super::LAUNCH_MANIFESTS
+        .iter()
+        .map(|manifest| manifest())
+        .collect();
+    assert_eq!(registry.catalog(), table);
+}
+
+/// The wire `ActionCatalogEntry` shape (GET /api/automation-actions): camelCase
+/// keys, `credentialLabelHint` omitted when absent, `available` true for an
+/// action with no external prerequisite, and
+/// `fields`/`hasOutputAs`/`idempotent` now cross the wire (the bug this test
+/// used to assert away).
 #[tokio::test]
 async fn wire_catalog_projects_manifests_to_the_contract_shape() {
     let mut registry = ActionRegistry::new();
@@ -226,9 +250,9 @@ async fn wire_catalog_projects_manifests_to_the_contract_shape() {
     assert_eq!(add_row["idempotent"], false);
 }
 
-/// T7.3 — the MCP catalog-entry seam: an `mcp:<server>:<tool>` id with
-/// output `{result: text}` round-trips through the wire shape. No MCP
-/// client, config source, or `actions/mcp.rs` ships at launch (R5).
+/// The MCP catalog-entry seam: an `mcp:<server>:<tool>` id with output
+/// `{result: text}` round-trips through the wire shape. No MCP client, config
+/// source, or `actions/mcp.rs` ships at launch (R5).
 #[test]
 fn mcp_catalog_entry_shape_round_trips() {
     let entry = super::registry::ActionCatalogEntry::mcp_seam("linear", "create_issue");
@@ -260,6 +284,6 @@ fn is_idempotent_reads_the_manifest_and_defaults_false() {
 
     assert!(registry.is_idempotent("safe.read"));
     assert!(!registry.is_idempotent("effectful.write"));
-    // Unregistered ids are treated as non-idempotent (Decision 12).
+    // Unregistered ids are treated as non-idempotent.
     assert!(!registry.is_idempotent("unknown.id"));
 }

@@ -1,5 +1,6 @@
 //! In-memory `TaskStore` for the tool tests.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::orchestration::DelegatedTask;
@@ -14,7 +15,7 @@ pub struct FakeTasks {
 
 impl FakeTasks {
     pub fn all(&self) -> Vec<DelegatedTask> {
-        self.rows.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.rows.lock_recover().clone()
     }
 
     pub fn find(&self, id: &str) -> Option<DelegatedTask> {
@@ -29,17 +30,14 @@ impl FakeTasks {
 impl TaskStore for FakeTasks {
     fn insert(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>> {
         Box::pin(async move {
-            self.rows
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(task);
+            self.rows.lock_recover().push(task);
             Ok(())
         })
     }
 
     fn update(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>> {
         Box::pin(async move {
-            let mut rows = self.rows.lock().unwrap_or_else(|e| e.into_inner());
+            let mut rows = self.rows.lock_recover();
             if let Some(row) = rows.iter_mut().find(|t| t.id == task.id) {
                 *row = task;
             }
@@ -92,7 +90,7 @@ impl TaskStore for FakeTasks {
     fn interrupt_unfinished(&self) -> BoxFuture<'_, usize> {
         Box::pin(async move {
             use mainframe_types::orchestration::{TaskDelivery, TaskStatus};
-            let mut rows = self.rows.lock().unwrap_or_else(|e| e.into_inner());
+            let mut rows = self.rows.lock_recover();
             let mut n = 0;
             for row in rows.iter_mut().filter(|t| !t.status.is_terminal()) {
                 row.status = TaskStatus::Interrupted;

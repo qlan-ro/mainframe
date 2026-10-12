@@ -9,9 +9,7 @@ use mainframe_types::segment::{
 use rusqlite::Connection;
 
 use crate::chat_native_sessions::{self as natives, NativePatch};
-use crate::chat_segments::{
-    RecordOutcome, ensure_seeded, list, record_native_id, start_context_reset,
-};
+use crate::chat_segments::{RecordOutcome, ensure_seeded, list, record_native_id};
 use crate::{DbError, chat_handoffs};
 
 pub use mainframe_types::segment::SegmentResultDelta;
@@ -66,13 +64,6 @@ impl SegmentsRepository {
         Ok(outcome)
     }
 
-    pub fn start_context_reset(&self, chat_id: &str) -> Result<(), DbError> {
-        let tx = self.db.unchecked_transaction()?;
-        start_context_reset(&tx, chat_id)?;
-        tx.commit()?;
-        Ok(())
-    }
-
     /// Worktree moves relocate every owned transcript, not only the active one.
     pub fn set_session_file_path(&self, native_ref: &str, path: &str) -> Result<(), DbError> {
         let tx = self.db.unchecked_transaction()?;
@@ -81,24 +72,6 @@ impl SegmentsRepository {
             native_ref,
             &NativePatch {
                 session_file_path: Some(path.to_string()),
-                ..Default::default()
-            },
-        )?;
-        if let Some(native) = natives::get(&tx, native_ref)? {
-            natives::write_mirror(&tx, &native.chat_id)?;
-        }
-        tx.commit()?;
-        Ok(())
-    }
-
-    /// Marks one native row's transcript missing (or present) and re-mirrors.
-    pub fn set_transcript_missing(&self, native_ref: &str, missing: bool) -> Result<(), DbError> {
-        let tx = self.db.unchecked_transaction()?;
-        natives::apply_patch(
-            &tx,
-            native_ref,
-            &NativePatch {
-                transcript_missing: Some(missing),
                 ..Default::default()
             },
         )?;
@@ -144,9 +117,9 @@ impl SegmentsRepository {
     pub fn replace_active_native(&self, chat_id: &str) -> Result<SegmentLayout, DbError> {
         let tx = self.db.unchecked_transaction()?;
         let segment = crate::chat_segments::active(&tx, chat_id)?
-            .ok_or_else(|| DbError::Message(format!("chat {chat_id} has no active segment")))?;
+            .ok_or_else(|| DbError::Invariant(format!("chat {chat_id} has no active segment")))?;
         let native = natives::active(&tx, chat_id)?
-            .ok_or_else(|| DbError::Message(format!("chat {chat_id} has no active session")))?;
+            .ok_or_else(|| DbError::Invariant(format!("chat {chat_id} has no active session")))?;
         let fresh = format!("ns_{}", nanoid::nanoid!());
         natives::insert_fresh(
             &tx,

@@ -1,4 +1,4 @@
-//! T8.3 — event router + chaining: `session.finished` starts matching
+//! Event router + chaining: `session.finished` starts matching
 //! automations with trigger tokens (agent-owned chats excluded); run
 //! finalize emits `automation.completed{status}` and the
 //! `automation.finished`/`automation.failed` selectors filter it by status
@@ -6,7 +6,6 @@
 //! automation with ⟨its result⟩.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use serde_json::{Map, json};
 use tempfile::TempDir;
@@ -16,7 +15,7 @@ use crate::domain::{
     AutomationCreateInput, AutomationDefinition, AutomationEventName, AutomationScope,
     EventTrigger, Step, Trigger,
 };
-use crate::engine::test_support::{CollectingSink, FakeClock, FakePorts, run_action_step};
+use crate::engine::test_support::{CollectingSink, FakePorts, fake_clock, run_action_step};
 use crate::engine::{Interpreter, InterpreterDeps, StepOutcome};
 use crate::ports::{AutomationEvent, CompletedStatus, CuratedEvent, EventSource};
 use crate::store::{AutomationDb, AutomationStore, RunStore, RunTriggerContext, RunTriggerKind};
@@ -55,7 +54,7 @@ async fn harness(ports: FakePorts, agent_owned: Option<Arc<dyn AgentOwnedChats>>
         store: runs.clone(),
         ports: Arc::new(ports),
         events: sink.clone(),
-        clock: Arc::new(FakeClock),
+        clock: fake_clock(),
         is_idempotent: None,
         agent_waits: None,
         on_finalized: Some(emitter.clone()),
@@ -447,16 +446,11 @@ async fn event_loop_subscribes_and_dispatches() {
     let handle = spawn_event_loop(h.router.clone(), source);
 
     tx.send(session_finished("chat-1")).unwrap();
-    let mut fired = false;
-    for _ in 0..100 {
-        if h.runs.list_runs(&watcher, 10).await.unwrap().len() == 1 {
-            fired = true;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    tokio::time::timeout(std::time::Duration::from_secs(10), h.sink.wait_for(|event| {
+        matches!(event, AutomationEvent::RunUpdated { run } if run.automation_id == watcher)
+    })).await.unwrap();
     handle.abort();
-    assert!(fired, "the subscribed loop dispatched the event to a run");
+    assert_eq!(h.runs.list_runs(&watcher, 10).await.unwrap().len(), 1);
 }
 
 #[test]

@@ -1,34 +1,41 @@
 //! `mainframe-adapter-api` — the adapter contract crate.
 //!
-//! - `adapter` ports the *behavioral* half of `packages/types/src/adapter.ts`
-//!   (the `Adapter` / `AdapterSession` / `SessionSink` traits). The DATA half of
-//!   that file lives in `mainframe-types::adapter`.
-//! - this `lib.rs` ports `packages/core/src/adapters/index.ts` — the
-//!   `AdapterRegistry` (the `index.ts → ::lib` crate-map row) — plus the shared
-//!   support types (`BoxFuture`, `RunResult`, `AdapterError`) and the
-//!   `RefreshDeps` injection trait.
-//! - `resolve_executable` ports `packages/core/src/adapters/resolve-executable.ts`.
+//! - `adapter` holds the behavioral half of the adapter contract (the
+//!   `Adapter` / `AdapterSession` / `SessionSink` traits). The data half lives
+//!   in `mainframe-types::adapter`.
+//! - this `lib.rs` holds the `AdapterRegistry`, plus the shared support types
+//!   (`BoxFuture`, `RunResult`, `AdapterError`) and the `RefreshDeps` injection
+//!   trait.
+//! - `resolve_executable` resolves and persists each adapter's CLI executable path.
 //!
 //! The `AdapterRegistry` tests live in `tests/registry.rs` (they exercise only
-//! the public surface) so this file stays a focused port of `index.ts`.
+//! the public surface) so this file stays focused on the registry.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 
-use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use dashmap::{DashMap, DashSet};
+use mainframe_runtime::sync::SingleFlight;
 use mainframe_types::adapter::{AdapterInfo, AdapterModel, CatalogSource};
 use mainframe_types::events::DaemonEvent;
-use tokio::sync::Notify;
 
 pub mod adapter;
 pub mod plan_mode_actions;
 pub mod pr_detection;
 pub mod resolve_executable;
 pub mod title;
+pub mod version;
 
 pub use adapter::{
     Adapter, AdapterSession, ContextFiles, FORK_CUT_NOT_FOUND_REASON, ForkCut, ForkPinError,
@@ -39,12 +46,12 @@ pub use plan_mode_actions::{
 };
 pub use title::finalize_title;
 // The control envelopes are DATA (they live in mainframe-types); re-exported here
-// so adapter consumers get them from the contract crate (crate-map §2.6).
+// so adapter consumers get them from the contract crate.
 pub use mainframe_types::adapter::{ControlRequest, ControlResponse};
 
 /// A boxed, `Send` future — the manual async-fn-in-trait building block used by
 /// every `dyn`-compatible async trait method in this crate.
-pub type BoxFuture<'a, T> = Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// Result of a spawned child process (`{ ok, stdout }`). Shared by `RefreshDeps`
 /// and the `resolve_executable` `Runner`.
@@ -54,55 +61,65 @@ pub struct RunResult {
     pub stdout: String,
 }
 
-/// Errors surfaced across the adapter contract. Library crates use `thiserror`.
+/// Errors surfaced across the adapter contract. The texts reach the chat's
+/// error banner and REST bodies verbatim.
 #[derive(Debug, thiserror::Error)]
 pub enum AdapterError {
+    /// An error carried as plain text: the CLI's own `error` events, JSON-RPC
+    /// error replies and recorded fixture failures, plus the daemon-side
+    /// plan-mode relay (`SendError::into_adapter_error` in the chat crate),
+    /// which has no richer channel through this crate.
     #[error("{0}")]
     Message(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Exec(#[from] mainframe_runtime::process::ExecError),
+    /// The session's CLI process has not been spawned yet (or has exited).
+    #[error("Session {0} not spawned")]
+    NotSpawned(String),
+    #[error("Session {0} stdin queue is full")]
+    StdinFull(String),
+    #[error("Session {0} has no active turn to steer")]
+    NoActiveTurn(String),
+    /// The adapter has no mechanism for the operation (`"steer a running turn"`).
+    #[error("this adapter cannot {0}")]
+    Unsupported(&'static str),
+    #[error("Project directory does not exist or is not accessible: {0}")]
+    ProjectDirMissing(String),
+    /// A helper process could not be started (`"title binary"`).
+    #[error("failed to spawn {what} {binary}: {source}")]
+    Spawn {
+        what: &'static str,
+        binary: String,
+        #[source]
+        source: std::io::Error,
+    },
+    /// The full text names the operation that ran out of time.
+    #[error("{0}")]
+    Timeout(&'static str),
+    /// A helper process exited unsuccessfully; `detail` is its status and,
+    /// when there is one, its stderr.
+    #[error("{what} exited with {detail}")]
+    Exited { what: &'static str, detail: String },
+    /// The CLI answered a control request with anything but success.
+    #[error("{subtype} failed: {reason}")]
+    ControlFailed { subtype: String, reason: String },
+    /// Something the session needs (a resolved model, the model proxy) is not
+    /// available; the static text tells the user what to do.
+    #[error("{0}")]
+    Unavailable(&'static str),
+    /// The adapter's own bookkeeping contradicts itself (a spawn that left no
+    /// process info). Never the user's doing.
+    #[error("{0}")]
+    Invariant(&'static str),
 }
 
 const REFRESH_LIST_CAP_MS: u64 = 2_000;
 
-/// `\d+\.\d+\.\d+` — the first `N.N.N` triple in `stdout`. Hand-rolled (no regex
-/// crate in the allowlist); mirrors the TS `parseVersion` in `index.ts`.
-fn parse_version(stdout: &str) -> Option<String> {
-    let b = stdout.as_bytes();
-    let n = b.len();
-    let mut i = 0;
-    while i < n {
-        if b[i].is_ascii_digit() {
-            let mut j = i;
-            while j < n && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j < n && b[j] == b'.' {
-                j += 1;
-                let g2 = j;
-                while j < n && b[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > g2 && j < n && b[j] == b'.' {
-                    j += 1;
-                    let g3 = j;
-                    while j < n && b[j].is_ascii_digit() {
-                        j += 1;
-                    }
-                    if j > g3 {
-                        return Some(stdout[i..j].to_string());
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-    None
-}
-
-/// Injected refresh dependencies (mirrors the TS `RefreshDeps` interface in
-/// `index.ts`). `SINGLE_TASK` per CONCURRENCY.tsv row 132 — set once via
-/// `configure_refresh`.
+/// Injected refresh dependencies, set once via `configure_refresh`.
 pub trait RefreshDeps: Send + Sync {
     fn resolve_executable_path(&self, adapter_id: String) -> BoxFuture<'_, Option<String>>;
     fn run(
@@ -111,10 +128,8 @@ pub trait RefreshDeps: Send + Sync {
         args: Vec<String>,
         timeout_ms: Option<u64>,
     ) -> BoxFuture<'_, RunResult>;
-    /// Emit a daemon event. The TS `emitEvent` is a synchronous fan-out; the Rust
-    /// impl is a non-blocking channel send, so (unlike TS) it cannot throw — the
-    /// `applyRefresh` try/catch around it collapses (the snapshot is already
-    /// updated before this call, preserving the invariant that catch protected).
+    /// Emit a daemon event. The impl is a non-blocking channel send, so it
+    /// cannot fail, and the snapshot is already updated before this call.
     fn emit_event(&self, event: DaemonEvent);
 }
 
@@ -125,21 +140,16 @@ struct RefreshPatch {
 }
 
 /// Registry of the daemon's adapters plus their materialized `AdapterInfo`
-/// snapshots. Concurrency classes per CONCURRENCY.tsv rows 130-135; the registry
-/// itself is shared as `Arc<AdapterRegistry>`.
+/// snapshots. The registry itself is shared as `Arc<AdapterRegistry>`.
 #[derive(Default)]
 pub struct AdapterRegistry {
     adapters: Arc<DashMap<String, Arc<dyn Adapter>>>,
     snapshots: Arc<DashMap<String, AdapterInfo>>,
     deps: OnceLock<Arc<dyn RefreshDeps>>,
     refresh_allowed: AtomicBool,
-    /// Per-adapter single-flight (rule 9). Modelled with `Notify` rather than
-    /// `futures::future::Shared` because `futures` is a deferred workspace dep;
-    /// a concurrent caller awaits the in-flight run's `Notify` instead of
-    /// re-running. (A late waiter that subscribes after `notify_waiters()` fires
-    /// re-runs rather than blocks — benign, and untriggered by the sequential
-    /// tests; revisit if `futures::Shared` lands.)
-    in_flight: Arc<DashMap<String, Arc<Notify>>>,
+    refresh_ids: OnceLock<std::collections::HashSet<String>>,
+    /// Concurrent refreshes share a cancellation-safe completion claim.
+    in_flight: SingleFlight,
     succeeded: Arc<DashSet<String>>,
 }
 
@@ -168,12 +178,19 @@ impl AdapterRegistry {
     }
 
     pub fn configure_refresh(&self, deps: Arc<dyn RefreshDeps>) {
-        // TS reassigns `this.deps`; `OnceLock` accepts the first setter (boot).
-        let _ = self.deps.set(deps);
+        // `OnceLock` accepts the first setter (boot); later calls are ignored.
+        /* expected */
+        let _ = self.deps.set(deps); // First attachment wins.
     }
 
     pub fn allow_refresh(&self) {
         self.refresh_allowed.store(true, Ordering::SeqCst);
+    }
+
+    pub fn allow_refresh_for(&self, ids: impl IntoIterator<Item = String>) {
+        /* expected */
+        let _ = self.refresh_ids.set(ids.into_iter().collect()); // First attachment wins.
+        self.allow_refresh();
     }
 
     /// STATIC-ONLY seed: no CLI spawn. Safe to call before server start.
@@ -188,7 +205,7 @@ impl AdapterRegistry {
                     description: format!("{} adapter", adapter.name()),
                     installed: false,
                     version: None,
-                    models: adapter.get_fallback_models().unwrap_or_default(),
+                    models: adapter.catalog(),
                     models_revision: Some(1),
                     catalog_source: Some(CatalogSource::Fallback),
                     capabilities: adapter.capabilities(),
@@ -204,10 +221,11 @@ impl AdapterRegistry {
 
     pub async fn list(&self) -> Vec<AdapterInfo> {
         if self.refresh_allowed.load(Ordering::SeqCst) {
-            // TS races refreshAll against a 2s cap (the timer is `.unref()`ed).
-            // `tokio::time::timeout` cancels refreshAll if the cap wins — the boot
-            // path calls refreshAll uncapped, and later list() calls re-trigger via
-            // the idempotent single-flight, so the cancelled work is not lost.
+            // Race refresh_all against a 2s cap: `tokio::time::timeout` cancels it
+            // if the cap wins — the boot path calls refresh_all uncapped, and later
+            // list() calls re-trigger via the idempotent single-flight, so the
+            // cancelled work is not lost.
+            /* expected */
             let _ = tokio::time::timeout(
                 Duration::from_millis(REFRESH_LIST_CAP_MS),
                 self.refresh_all(),
@@ -217,17 +235,14 @@ impl AdapterRegistry {
         self.get_snapshots()
     }
 
-    /// Per-adapter, parallel-in-TS, single-flight. Idempotent.
+    /// Per-adapter, single-flight. Idempotent.
     pub async fn refresh_all(&self) {
-        // TS uses Promise.allSettled (parallel) and logs each rejection. The Rust
-        // port awaits each in turn (no `futures::join_all`); `refresh_adapter`
+        // Awaits each adapter in turn (no `futures::join_all`); `refresh_adapter`
         // still dedups concurrent callers via `in_flight`, and each rejection is
-        // logged here with the same message.
+        // logged here.
         for id in self.adapter_ids() {
             if let Err(err) = self.refresh_adapter(&id).await {
-                tracing::warn!(
-                    module = "adapter-registry",
-                    ?err,
+                tracing::warn!(error = ?err,
                     "adapter refresh rejected"
                 );
             }
@@ -242,78 +257,35 @@ impl AdapterRegistry {
         if !self.refresh_allowed.load(Ordering::SeqCst) || self.succeeded.contains(adapter_id) {
             return Ok(());
         }
-        // Single-flight: atomically claim the slot, or await an in-flight run.
-        let notify = {
-            use dashmap::mapref::entry::Entry;
-            match self.in_flight.entry(adapter_id.to_string()) {
-                Entry::Occupied(e) => {
-                    let existing = e.get().clone();
-                    drop(e); // release the shard guard before awaiting (rule 2)
-                    existing.notified().await;
-                    return Ok(());
-                }
-                Entry::Vacant(e) => {
-                    let n = Arc::new(Notify::new());
-                    e.insert(n.clone());
-                    n
-                }
+        match self.in_flight.claim(adapter_id) {
+            Ok(_claim) => self.run_refresh(adapter_id).await,
+            Err(waiter) => {
+                waiter.wait().await;
+                Ok(())
             }
-        };
-        let result = self.run_refresh(adapter_id).await;
-        self.in_flight.remove(adapter_id); // mirrors `.finally(() => inFlight.delete)`
-        notify.notify_waiters();
-        result
+        }
     }
 
     async fn run_refresh(&self, adapter_id: &str) -> Result<(), AdapterError> {
-        // In E2E the only adapters whose live state matters are the mock replay
-        // CLIs: the default `mock-cli` and, when the provider-switch harness
-        // registers a second identity for switching between two mocks
-        // (`mainframe-daemon/src/e2e_mock.rs::SECOND_MOCK_ID`), `mock-cli-b`.
-        // This crate sits below `mainframe-daemon` and cannot import that
-        // constant, so the match is by prefix; probing claude/codex here costs
-        // a `--version` spawn plus a model-catalog spawn each (~1s a piece when
-        // those CLIs are actually installed on the dev machine), and
-        // `/api/adapters` blocks on this refresh — a cost the harness pays on
-        // every describe's daemon boot (100+ a run). Skip the real adapters and
-        // leave them on their seeded fallback snapshot.
-        if !adapter_id.starts_with("mock-cli") && std::env::var_os("E2E_MODE").is_some() {
-            return Ok(());
-        }
         let Some(adapter) = self.adapters.get(adapter_id).map(|e| e.value().clone()) else {
             return Ok(());
         };
         let Some(deps) = self.deps.get().cloned() else {
             return Ok(());
         };
-        let exe_path = deps.resolve_executable_path(adapter_id.to_string()).await;
-        // One `--version` spawn covers installed AND version (use the resolved path).
-        let ver = deps
-            .run(
-                exe_path.clone().unwrap_or_else(|| adapter.id().to_string()),
-                vec!["--version".to_string()],
-                Some(5_000),
-            )
-            .await;
-        let mut installed = ver.ok;
-        let mut version = if ver.ok {
-            parse_version(&ver.stdout)
-        } else {
-            None
-        };
-        // The spawn above assumes a literal CLI binary on PATH. Plugin-provided
-        // adapters have no such binary and would ENOENT — fall back to asking the
-        // adapter directly before concluding "not installed".
-        if !installed {
-            installed = adapter.is_installed().await?;
-            if installed {
-                version = adapter.get_version().await?;
-            }
+        if self
+            .refresh_ids
+            .get()
+            .is_some_and(|ids| !ids.contains(adapter_id))
+        {
+            return Ok(());
         }
+        let exe_path = deps.resolve_executable_path(adapter_id.to_string()).await;
+        let (installed, version) = probe_installation(&adapter, &deps, &exe_path).await?;
         // Report the version once, however it was determined (primary `--version`
         // spawn or the fallback path above), before either `apply_refresh` call
         // site below recomputes `capabilities()` — a version-gated capability
-        // (Codex's `fork`, todo #368) reads this synchronously from `capabilities()`
+        // (Codex's `fork`) reads this synchronously from `capabilities()`
         // and must see it before the snapshot is rebuilt.
         adapter.observe_cli_version(version.as_deref());
         // Skip live discovery for an uninstalled adapter — no point spawning a probe.
@@ -328,33 +300,13 @@ impl AdapterRegistry {
                 &deps,
             );
             tracing::warn!(
-                module = "adapter-registry",
                 adapter_id,
                 exe_path,
                 "adapter not installed — skipping live catalog discovery"
             );
             return Ok(());
         }
-        // Live catalog: Claude probes; Codex (no probeModels) lists.
-        let models: Option<Vec<AdapterModel>> = {
-            let res = if adapter.has_probe_models() {
-                adapter.probe_models(exe_path.clone()).await
-            } else {
-                adapter.list_models().await.map(Some)
-            };
-            match res {
-                Ok(m) => m,
-                Err(err) => {
-                    tracing::warn!(
-                        module = "adapter-registry",
-                        ?err,
-                        adapter_id,
-                        "live model refresh threw; keeping fallback catalog"
-                    );
-                    None
-                }
-            }
-        };
+        let models = refresh_catalog(&adapter, adapter_id, exe_path.clone()).await;
         let got_live = models.as_ref().map(|m| !m.is_empty()).unwrap_or(false);
         self.apply_refresh(
             adapter_id,
@@ -365,17 +317,20 @@ impl AdapterRegistry {
             },
             &deps,
         );
+        self.mark_catalog_refresh(adapter_id, &exe_path, got_live);
+        Ok(())
+    }
+
+    fn mark_catalog_refresh(&self, adapter_id: &str, exe_path: &Option<String>, got_live: bool) {
         if got_live {
             self.succeeded.insert(adapter_id.to_string());
         } else {
             tracing::warn!(
-                module = "adapter-registry",
                 adapter_id,
                 exe_path,
                 "no live catalog — will retry on next refresh"
             );
         }
-        Ok(())
     }
 
     fn apply_refresh(&self, adapter_id: &str, patch: RefreshPatch, deps: &Arc<dyn RefreshDeps>) {
@@ -385,45 +340,15 @@ impl AdapterRegistry {
         let adapter = self.adapters.get(adapter_id).map(|e| e.value().clone());
         let installed = patch.installed;
         let models_changed = patch.models.is_some();
-        let models_revision = if models_changed {
-            Some(prev.models_revision.unwrap_or(1) + 1)
-        } else {
-            prev.models_revision
-        };
-        // Recomputed from the adapter every refresh (todo #368): a
-        // version-gated capability (Codex's `fork`) can flip after
-        // `observe_cli_version` ran, with no catalog change at all. Missing
-        // adapter (shouldn't happen — `prev` came from this same registry)
-        // keeps whatever the snapshot already had.
-        let capabilities = adapter
-            .as_ref()
-            .map(|a| a.capabilities())
-            .unwrap_or(prev.capabilities);
-        let fork_unavailable_reason = adapter.as_ref().and_then(|a| a.fork_unavailable_reason());
-        let capabilities_changed = capabilities != prev.capabilities;
-        let reason_changed = fork_unavailable_reason != prev.fork_unavailable_reason;
-        let next = AdapterInfo {
-            id: prev.id.clone(),
-            name: prev.name.clone(),
-            description: prev.description.clone(),
-            installed: patch.installed,
-            version: patch.version.clone().or_else(|| prev.version.clone()),
-            models: patch.models.clone().unwrap_or_else(|| prev.models.clone()),
-            models_revision,
-            catalog_source: if models_changed {
-                Some(CatalogSource::Probed)
-            } else {
-                prev.catalog_source
-            },
-            capabilities,
-            fork_unavailable_reason,
-        };
-        // Mutate the cache BEFORE emitting (rule 7) so a blocked subscriber cannot
+        let next = refresh_snapshot(&prev, &patch, adapter.as_ref());
+        let models_revision = next.models_revision;
+        let capabilities_changed = next.capabilities != prev.capabilities;
+        let reason_changed = next.fork_unavailable_reason != prev.fork_unavailable_reason;
+        // Mutate the cache BEFORE emitting so a blocked subscriber cannot
         // leave the snapshot un-updated.
         self.snapshots.insert(adapter_id.to_string(), next.clone());
         if let (Some(models), Some(rev)) = (&patch.models, models_revision) {
             tracing::info!(
-                module = "adapter-registry",
                 adapter_id,
                 models_revision = rev,
                 count = models.len(),
@@ -432,7 +357,7 @@ impl AdapterRegistry {
         }
         // Emit whenever anything a client might act on changed — not just the
         // catalog — so a capability/reason flip with no model change (Codex's
-        // fork gate, todo #368) still reaches an open websocket.
+        // fork gate) still reaches an open websocket.
         if models_changed || capabilities_changed || reason_changed {
             deps.emit_event(DaemonEvent::AdapterModelsUpdated {
                 adapter_id: adapter_id.to_string(),
@@ -446,16 +371,17 @@ impl AdapterRegistry {
     }
 }
 
-// PORT STATUS: src/adapters/index.ts (167 lines) + trait half of packages/types/src/adapter.ts
-// confidence: medium
-// notes: index.ts → this lib.rs (AdapterRegistry); the adapter.ts behavioral
-// notes: interfaces landed in the sibling `adapter.rs` (kept out of lib.rs for a
-// notes: clean side-by-side diff and the 300-line budget). Concurrency per
-// notes: CONCURRENCY.tsv 130-135. Two documented gaps vs TS, both benign and
-// notes: untriggered by the ported tests: (1) refresh_all awaits sequentially
-// notes: instead of Promise.allSettled (no futures::join_all); (2) list()'s 2s cap
-// notes: uses tokio::time::timeout, which CANCELS refreshAll on elapse rather than
-// notes: leaving it running — boot calls refreshAll uncapped and single-flight
-// notes: re-triggers make this lossless. Single-flight uses Notify (rule 9) since
-// notes: futures::Shared is a deferred dep. Tests in tests/registry.rs.
-// todos: 0
+pub mod skills;
+pub use skills::SkillsProvider;
+
+pub mod quota;
+pub use quota::QuotaSource;
+
+mod external_sessions;
+pub use external_sessions::ExternalSessions;
+
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
+
+mod refresh_helpers;
+use refresh_helpers::{probe_installation, refresh_catalog, refresh_snapshot};

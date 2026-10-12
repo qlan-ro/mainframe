@@ -1,10 +1,14 @@
-//! Agent port (T4.3): the ask_agent verb's only door into the chat system.
+//! Agent port: the ask_agent verb's only door into the chat system.
 //! The engine renders/parses; the port starts sessions and reports their
-//! terminal outcome. Production impl lives in mainframe-server (T9.2).
+//! terminal outcome. Production impl lives in mainframe-server.
+
+use mainframe_types::BoxFuture;
 
 use crate::domain::ExpectedOutput;
-use crate::engine::BoxFuture;
 
+/// Why the chat system could not start or steer an ask_agent session. The
+/// text becomes the step error, and no caller branches on the cause, so it
+/// stays a message.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("{0}")]
 pub struct AgentPortError(pub String);
@@ -69,10 +73,3 @@ pub trait AgentPort: Send + Sync {
     ) -> BoxFuture<'a, Result<AgentOutcome, AgentPortError>>;
     fn cancel<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Result<(), AgentPortError>>;
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: Node splits this across AgentChatPort (createChatAndSend/sendMessage)
-//        + chat.updated event wiring; Rust folds the waker into watch/retry
-//        futures so the wait is re-attachable after restart (durable wait).

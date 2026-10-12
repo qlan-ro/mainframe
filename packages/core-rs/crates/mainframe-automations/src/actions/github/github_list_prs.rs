@@ -6,18 +6,19 @@
 
 use std::collections::BTreeMap;
 
+use mainframe_github::github_http::{GITHUB_API, github_headers};
+use mainframe_types::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::engine::BoxFuture;
-use crate::github_http::{GITHUB_API, github_headers};
 use crate::tokens::TokenValue;
 
+use super::super::http::{client, send_json};
 use super::super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
-use super::super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
-use super::parse_json;
+use super::super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -50,7 +51,7 @@ struct FoundPr {
 
 pub struct GithubListPrsAction {
     base: String,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
 }
 
 impl GithubListPrsAction {
@@ -61,7 +62,7 @@ impl GithubListPrsAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: super::super::http_client(),
+            client: client(),
         }
     }
 }
@@ -72,26 +73,30 @@ impl Default for GithubListPrsAction {
     }
 }
 
-impl Action for GithubListPrsAction {
-    fn manifest(&self) -> ActionManifest {
-        ActionManifest {
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn list_prs_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
             id: "github.list_prs",
             title: "GitHub: list my open pull requests",
             group: ActionGroup::Connector,
             auth: ActionAuth::Token,
             credential_label_hint: Some("github"),
-            params_schema: json!({
-                "type": "object",
-                "properties": {
-                    "author": {"type": "string", "default": "@me"}
-                },
-                "additionalProperties": false
-            }),
-            fields: vec![ActionField::text("author", "Author").placeholder("@me")],
-            has_output_as: false,
             outputs: vec![ActionOutput::new("prs", ActionOutputType::List)],
             idempotent: true,
-        }
+        },
+        vec![ActionParam::field(
+            ActionField::text("author", "Author").placeholder("@me"),
+            json!({"type": "string", "default": "@me"}),
+        )],
+        Value::Bool(false),
+    )
+}
+
+impl Action for GithubListPrsAction {
+    fn manifest(&self) -> ActionManifest {
+        list_prs_manifest()
     }
 
     fn execute<'a>(
@@ -104,25 +109,17 @@ impl Action for GithubListPrsAction {
             let input: ListPrsInput = parse_input("github.list_prs", params)?;
             let query = format!("is:pr state:open author:{}", input.author);
 
-            let mut request =
-                github_headers(self.client.get(format!("{}/search/issues", self.base)))
-                    .query(&[("q", query)]);
+            let mut request = github_headers(
+                self.client
+                    .as_ref()
+                    .map_err(|err| ActionError(format!("{OP} failed: {err}")))?
+                    .get(format!("{}/search/issues", self.base)),
+            )
+            .query(&[("q", query)]);
             if let Some(creds) = &ctx.creds {
                 request = request.bearer_auth(&creds.token);
             }
-            let response = request
-                .send()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            let status = response.status().as_u16();
-            let body = response
-                .text()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            if status >= 400 {
-                return Err(http_failure(OP, status, ctx, &body));
-            }
-            let found: SearchIssuesResponse = parse_json(&body, OP)?;
+            let found: SearchIssuesResponse = send_json(request, OP, ctx, |_| None).await?;
 
             let prs = found
                 .items
@@ -143,9 +140,3 @@ impl Action for GithubListPrsAction {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.1;
-// REST migration off `gh` is the 2026-08-19 provider-connections plan), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of github.rs to stay under the 300-line file cap.

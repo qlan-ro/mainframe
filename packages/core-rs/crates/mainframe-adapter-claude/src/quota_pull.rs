@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/quota-pull.ts`.
-//!
 //! Harvests Claude's plan quota: pulls `/usage`, parses its prose into windows,
 //! and stamps the resolved account identity. Identity and usage are read
 //! concurrently. The identity is stamped even on an `unknown` parse so the
@@ -8,7 +6,6 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::process::Stdio;
 use std::time::Duration;
 
 use mainframe_adapter_api::AdapterError;
@@ -59,7 +56,8 @@ const STDERR_SNIPPET_LEN: usize = 500;
 /// the title-generator (stdin closed, no session persistence). Zero model tokens,
 /// ~1s. The CLI uses its own auth — no credential handling here.
 pub async fn spawn_claude_usage(binary: &str, path: &str) -> Result<String, AdapterError> {
-    let run = Command::new(binary)
+    let mut command = Command::new(binary);
+    command
         .args([
             "-p",
             "/usage",
@@ -70,17 +68,22 @@ pub async fn spawn_claude_usage(binary: &str, path: &str) -> Result<String, Adap
         // edition-2024 forbids mutating process env; PATH is threaded explicitly
         // so packaged builds find `claude`, mirroring the title-generator spawn.
         .env("PATH", path)
-        .env("NO_COLOR", "1")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .output();
+        .env("NO_COLOR", "1");
 
-    let output = match tokio::time::timeout(Duration::from_millis(USAGE_TIMEOUT_MS), run).await {
-        Ok(res) => res.map_err(AdapterError::from)?,
-        Err(_) => return Err(AdapterError::Message("claude /usage pull timed out".into())),
-    };
+    let output = mainframe_runtime::process::run_captured(
+        command,
+        Some(Duration::from_millis(USAGE_TIMEOUT_MS)),
+    )
+    .await
+    .map_err(|error| match error {
+        mainframe_runtime::process::ExecError::Timeout => {
+            AdapterError::Timeout("claude /usage pull timed out")
+        }
+        mainframe_runtime::process::ExecError::Spawn(error)
+        | mainframe_runtime::process::ExecError::Io(error) => AdapterError::from(error),
+        error => AdapterError::Exec(error),
+    })?;
+
     usage_output_to_result(
         output.status.success(),
         output.status.code(),
@@ -93,7 +96,7 @@ pub async fn spawn_claude_usage(binary: &str, path: &str) -> Result<String, Adap
 /// nonzero exit. Failing (rather than returning empty stdout) is load-bearing: an
 /// `Ok("")` parses fail-closed and would ingest as a successful pull, wiping the
 /// last-known quota. Returning `Err` routes the manager into keep-last-known
-/// backoff instead (#268 F1, mirroring the Node throw).
+/// backoff instead (#268 F1).
 fn usage_output_to_result(
     success: bool,
     code: Option<i32>,
@@ -109,94 +112,12 @@ fn usage_output_to_result(
         .take(STDERR_SNIPPET_LEN)
         .collect();
     let code = code.map_or_else(|| "signal".to_string(), |c| c.to_string());
-    Err(AdapterError::Message(format!(
-        "claude /usage pull exited with code {code}: {snippet}"
-    )))
+    Err(AdapterError::Exited {
+        what: "claude /usage pull",
+        detail: format!("code {code}: {snippet}"),
+    })
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const NOW: i64 = 1_752_814_800_000; // 2026-07-18T06:00:00Z, before the fixture's reset instants
-    const USAGE: &str =
-        "Current session: 19% used \u{b7} resets Jul 18 at 10:10am (Europe/Bucharest)";
-
-    fn run_usage_ok(text: &'static str) -> Box<RunUsage> {
-        Box::new(move || Box::pin(async move { Ok(text.to_string()) }))
-    }
-    fn read_identity_fixed(identity: &'static str) -> Box<ReadIdentity> {
-        Box::new(move || Box::pin(async move { identity.to_string() }))
-    }
-
-    #[tokio::test]
-    async fn parses_the_injected_usage_output_and_stamps_the_resolved_account_identity() {
-        let run_usage = run_usage_ok(USAGE);
-        let read_identity = read_identity_fixed("uuid-123");
-        let quota = pull_claude_quota(PullClaudeQuotaDeps {
-            run_usage: &run_usage,
-            read_identity: Some(&read_identity),
-            now: NOW,
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(
-            quota.status,
-            mainframe_types::adapter::ProviderQuotaStatus::Ok
-        );
-        assert_eq!(quota.session.as_ref().unwrap().used_percent, 19.0);
-        assert_eq!(quota.account_identity.as_deref(), Some("uuid-123"));
-        assert_eq!(quota.observed_at, NOW);
-    }
-
-    #[test]
-    fn usage_output_returns_stdout_on_a_successful_exit() {
-        let result = usage_output_to_result(true, Some(0), USAGE.as_bytes(), b"");
-        assert_eq!(result.unwrap(), USAGE);
-    }
-
-    #[test]
-    fn usage_output_errors_with_code_and_stderr_snippet_on_a_nonzero_exit() {
-        let result = usage_output_to_result(false, Some(1), b"", b"boom: not logged in");
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("code 1"), "err was: {err}");
-        assert!(err.contains("boom: not logged in"), "err was: {err}");
-    }
-
-    #[test]
-    fn usage_output_errors_even_when_stdout_is_nonempty_on_a_nonzero_exit() {
-        // A nonzero exit must never surface stdout as success — that would ingest
-        // and wipe the last-known quota.
-        let result = usage_output_to_result(false, None, USAGE.as_bytes(), b"killed");
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn stamps_the_identity_even_when_the_provider_parses_to_unknown() {
-        let run_usage = run_usage_ok("garbage line");
-        let read_identity = read_identity_fixed("unknown");
-        let quota = pull_claude_quota(PullClaudeQuotaDeps {
-            run_usage: &run_usage,
-            read_identity: Some(&read_identity),
-            now: NOW,
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(
-            quota.status,
-            mainframe_types::adapter::ProviderQuotaStatus::Unknown
-        );
-        assert_eq!(quota.account_identity.as_deref(), Some("unknown"));
-    }
-}
-
-// PORT STATUS: src/plugins/builtin/claude/quota-pull.ts (44 lines)
-// confidence: high
-// todos: 0
-// notes: `runUsage`/`readIdentity` are injected as boxed async closures (Rust has
-// notes: no bare async-fn-value equivalent of the TS deps object) so tests need no
-// notes: real spawn or filesystem read, matching the TS seam. `spawnClaudeUsage`
-// notes: mirrors title_generator.rs's Command/Stdio/timeout pattern (PATH threaded
-// notes: explicitly, kill_on_drop, 30s timeout -> Err on elapse).
+#[path = "quota_pull_tests.rs"]
+mod tests;

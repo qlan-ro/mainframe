@@ -1,6 +1,5 @@
-//! T4.2 — Repeat blocks: `#<i>` stepRefs, `current` isolation, the
-//! MAX_REPEAT_ITEMS guard, mid-iteration parks, and nested `#i#j` chaining
-//! (Node parity: engine-blocks.test.ts).
+//! Repeat blocks: `#<i>` stepRefs, `current` isolation, the MAX_REPEAT_ITEMS
+//! guard, mid-iteration parks, and nested `#i#j` chaining.
 
 use std::sync::{Arc, Mutex};
 
@@ -10,11 +9,11 @@ use crate::store::{RunStatus, StepStatus};
 use crate::tokens;
 
 use super::StepOutcome;
-use super::blocks::MAX_REPEAT_ITEMS;
 use super::test_support::{
     FakePorts, ask_me_step, completed, definition, empty_outputs, harness, manual_with_payload,
     notify_step, repeat_step, text, token, token_ref,
 };
+use crate::domain::MAX_REPEAT_ITEMS;
 
 fn rendering_ports(rendered: Arc<Mutex<Vec<String>>>) -> FakePorts {
     FakePorts {

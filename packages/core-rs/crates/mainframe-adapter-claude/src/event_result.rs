@@ -2,13 +2,12 @@ use super::*;
 pub(super) fn handle_result_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
     session
         .state
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .lock_recover()
         .presentation
         .finish(event, sink);
     surface_command_error(event, sink);
     let last_usage = {
-        let mut st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut st = session.state.lock_recover();
         st.partial.clear();
         st.last_assistant_usage.take()
     };

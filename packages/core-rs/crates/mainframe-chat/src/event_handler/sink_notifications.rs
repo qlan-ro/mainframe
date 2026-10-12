@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_cli_message(&self, text: &str) {
         let message = self.transient(
             ChatMessageType::System,
@@ -36,19 +36,19 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     pub(super) fn handle_trust_required(&self, project_path: &str) {
-        self.deps.emit_event(DaemonEvent::ChatTrustRequired {
+        self.shared.emit(DaemonEvent::ChatTrustRequired {
             chat_id: self.chat_id.clone(),
             project_path: project_path.to_string(),
         });
     }
 
     pub(super) fn handle_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
-        self.deps.on_provider_quota(adapter_id, quota);
+        self.shared.deps.on_provider_quota(adapter_id, quota);
     }
 
     pub(super) fn handle_api_retry(&self, attempt: i64, reason: Option<String>) {
         // The marker must be recorded before the clearing revision it
-        // precedes (T16, R1.4): the hub attaches a pending marker to the
+        // precedes: the hub attaches a pending marker to the
         // first eligible upsert on the NEXT revision, and the display
         // revision below is that revision's trigger — recording the marker
         // after emitting it would let the clearing frame go out unmarked.
@@ -80,30 +80,34 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         let Some(attention) = normalize_attention_body(message) else {
             return;
         };
-        if !self.deps.notify_attention_request() {
-            return;
-        }
-        let admitted = self
-            .attention_dedupe
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .admit(&self.chat_id, &attention.dedupe_key, Instant::now());
-        if !admitted {
-            return;
-        }
-        self.deps.emit_event(DaemonEvent::ChatNotification {
-            chat_id: self.chat_id.clone(),
-            title: "Claude needs your attention".to_string(),
-            body: attention.body.clone(),
-            level: ChatNotificationLevel::Success,
-            kind: Some(ChatNotificationKind::AttentionRequest),
-        });
-        self.deps.send_push(PushOut {
-            chat_id: self.chat_id.clone(),
-            title: "Claude needs your attention".to_string(),
-            body: attention.body,
-            push_type: "attention_request".to_string(),
-            priority: "high".to_string(),
-        });
+        let shared = self.shared.clone();
+        let chat_id = self.chat_id.clone();
+        let dedupe = self.attention_dedupe.clone();
+        self.shared.when_notification_enabled(
+            crate::chat_manager::notifications::NotificationGate::Attention,
+            move || {
+                let admitted =
+                    dedupe
+                        .lock_recover()
+                        .admit(&chat_id, &attention.dedupe_key, Instant::now());
+                if !admitted {
+                    return;
+                }
+                shared.emit(DaemonEvent::ChatNotification {
+                    chat_id: chat_id.clone(),
+                    title: "Claude needs your attention".to_string(),
+                    body: attention.body.clone(),
+                    level: ChatNotificationLevel::Success,
+                    kind: Some(ChatNotificationKind::AttentionRequest),
+                });
+                shared.deps.send_push(PushOut {
+                    chat_id: chat_id.clone(),
+                    title: "Claude needs your attention".to_string(),
+                    body: attention.body,
+                    push_type: "attention_request".to_string(),
+                    priority: "high".to_string(),
+                });
+            },
+        );
     }
 }

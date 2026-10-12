@@ -1,27 +1,27 @@
-//! `http.request` (T6.5, Node actions/http.ts). Contract §5: outputs are
-//! `{status: number, body: text}` ONLY — `headers` is dropped and `body` is
-//! always raw response text (no content-type-based JSON parsing). Non-2xx
-//! (>= 400, Node parity — redirects are followed) fails the step, mirroring
-//! run_command's non-zero-exit convention.
+//! `http.request`. Contract §5: outputs are `{status: number, body: text}` ONLY
+//! — `headers` is dropped and `body` is always raw response text (no
+//! content-type-based JSON parsing). Non-2xx (>= 400; redirects are followed)
+//! fails the step, like run_command's non-zero-exit convention.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use mainframe_types::BoxFuture;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
+use super::http::{body_snippet, client};
 use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
 use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 const MAX_TIMEOUT_MS: u64 = 120_000;
-const ERROR_BODY_SNIPPET_CHARS: usize = 500;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -53,8 +53,7 @@ struct HttpInput {
     url: String,
     #[serde(default)]
     headers: Option<BTreeMap<String, String>>,
-    /// `string | object | array` (zod union parity) — other JSON types are
-    /// rejected below.
+    /// `string | object | array` — other JSON types are rejected below.
     #[serde(default)]
     body: Option<Value>,
     #[serde(default)]
@@ -62,14 +61,12 @@ struct HttpInput {
 }
 
 pub struct HttpRequestAction {
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
 }
 
 impl HttpRequestAction {
     pub fn new() -> Self {
-        Self {
-            client: super::http_client(),
-        }
+        Self { client: client() }
     }
 }
 
@@ -79,31 +76,30 @@ impl Default for HttpRequestAction {
     }
 }
 
-impl Action for HttpRequestAction {
-    fn manifest(&self) -> ActionManifest {
-        ActionManifest {
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn http_request_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
             id: "http.request",
             title: "HTTP request",
             group: ActionGroup::Builtin,
             auth: ActionAuth::Token,
             credential_label_hint: None,
-            params_schema: params_schema(),
-            fields: vec![
-                ActionField::select(
-                    "method",
-                    "Method",
-                    &["GET", "POST", "PUT", "PATCH", "DELETE"],
-                ),
-                ActionField::chip("url", "URL").placeholder("https://api.example.com/…"),
-                ActionField::chiparea("body", "Body"),
-            ],
-            has_output_as: false,
             outputs: vec![
                 ActionOutput::new("status", ActionOutputType::Number),
                 ActionOutput::new("body", ActionOutputType::Text),
             ],
             idempotent: false,
-        }
+        },
+        param_specs(),
+        Value::Bool(false),
+    )
+}
+
+impl Action for HttpRequestAction {
+    fn manifest(&self) -> ActionManifest {
+        http_request_manifest()
     }
 
     fn execute<'a>(
@@ -123,23 +119,13 @@ impl Action for HttpRequestAction {
                 )));
             }
 
-            let mut headers = build_headers(input.headers.as_ref())?;
-            if let Some(creds) = &ctx.creds
-                && !headers.contains_key(AUTHORIZATION)
-            {
-                let bearer = HeaderValue::from_str(&format!("Bearer {}", creds.token))
-                    .map_err(|_| invalid("credential token is not a valid header value".into()))?;
-                headers.insert(AUTHORIZATION, bearer);
-            }
-            headers.insert(
-                HeaderName::from_static("x-idempotency-key"),
-                HeaderValue::from_str(&ctx.idempotency_key)
-                    .unwrap_or_else(|_| HeaderValue::from_static("")),
-            );
+            let mut headers = request_headers(&input, ctx)?;
 
             let method = input.method.unwrap_or(Method::Get);
             let mut request = self
                 .client
+                .as_ref()
+                .map_err(|err| ActionError(format!("HTTP client initialization failed: {err}")))?
                 .request(method.into(), url)
                 .timeout(Duration::from_millis(timeout_ms));
             request = match &input.body {
@@ -164,17 +150,14 @@ impl Action for HttpRequestAction {
                 ActionError(format!("HTTP request to {} failed: {err}", input.url))
             })?;
             if status >= 400 {
-                let snippet: String = body.chars().take(ERROR_BODY_SNIPPET_CHARS).collect();
+                let snippet = body_snippet(&body);
                 return Err(ActionError(format!(
                     "HTTP {status} from {}: {snippet}",
                     input.url
                 )));
             }
 
-            let mut outputs = ActionOutputs::new();
-            outputs.insert("status".to_string(), TokenValue::Number(f64::from(status)));
-            outputs.insert("body".to_string(), TokenValue::Text(body));
-            Ok(outputs)
+            Ok(response_outputs(status, body))
         })
     }
 }
@@ -197,24 +180,57 @@ fn invalid(detail: String) -> ActionError {
     ActionError(format!("invalid input for 'http.request': {detail}"))
 }
 
-fn params_schema() -> Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"], "default": "GET"},
-            "url": {"type": "string", "format": "uri"},
-            "headers": {"type": "object", "additionalProperties": {"type": "string"}},
-            "body": {"anyOf": [{"type": "string"}, {"type": "object"}, {"type": "array"}]},
-            "timeoutMs": {"type": "integer", "minimum": 1, "maximum": 120000, "default": 30000}
-        },
-        "required": ["url"],
-        "additionalProperties": false
-    })
+fn param_specs() -> Vec<ActionParam> {
+    vec![
+        ActionParam::field(
+            ActionField::select(
+                "method",
+                "Method",
+                &["GET", "POST", "PUT", "PATCH", "DELETE"],
+            ),
+            json!({"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"], "default": "GET"}),
+        ),
+        ActionParam::field(
+            ActionField::chip("url", "URL").placeholder("https://api.example.com/…"),
+            json!({"type": "string", "format": "uri"}),
+        )
+        .required(),
+        ActionParam::hidden(
+            "headers",
+            json!({"type": "object", "additionalProperties": {"type": "string"}}),
+        ),
+        ActionParam::field(
+            ActionField::chiparea("body", "Body"),
+            json!({"anyOf": [{"type": "string"}, {"type": "object"}, {"type": "array"}]}),
+        ),
+        ActionParam::hidden(
+            "timeoutMs",
+            json!({"type": "integer", "minimum": 1, "maximum": 120000, "default": 30000}),
+        ),
+    ]
 }
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.5), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/http.ts (bearer-unless-authored auth,
-//        x-idempotency-key, JSON body content-type, >=400 throw); reqwest
-//        follows redirects like fetch.
+fn request_headers(input: &HttpInput, ctx: &ActionCtx) -> Result<HeaderMap, ActionError> {
+    let mut headers = build_headers(input.headers.as_ref())?;
+    if let Some(creds) = &ctx.creds
+        && !headers.contains_key(AUTHORIZATION)
+    {
+        let bearer = HeaderValue::from_str(&format!("Bearer {}", creds.token))
+            .map_err(|_| invalid("credential token is not a valid header value".into()))?;
+        headers.insert(AUTHORIZATION, bearer);
+    }
+    headers.insert(
+        HeaderName::from_static("x-idempotency-key"),
+        HeaderValue::from_str(&ctx.idempotency_key)
+            .unwrap_or_else(|_| HeaderValue::from_static("")),
+    );
+
+    Ok(headers)
+}
+
+fn response_outputs(status: u16, body: String) -> ActionOutputs {
+    let mut outputs = ActionOutputs::new();
+    outputs.insert("status".to_string(), TokenValue::Number(f64::from(status)));
+    outputs.insert("body".to_string(), TokenValue::Text(body));
+    outputs
+}

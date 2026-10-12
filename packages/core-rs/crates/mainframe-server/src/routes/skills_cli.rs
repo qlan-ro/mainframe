@@ -1,5 +1,5 @@
-//! Greenfield (todo #243): `/api/projects/{id}/skills-cli/…` — installs and
-//! uninstalls skills via the `skills` CLI. The service layer
+//! `/api/projects/{id}/skills-cli/…` — installs and uninstalls skills via the
+//! `skills` CLI. The service layer
 //! (`skills_cli::{manifest,probe,install,uninstall}`) does the validation and
 //! CLI work; this module only resolves the project, parses the request shape,
 //! and maps `SkillsCliError` onto the wire contract.
@@ -17,8 +17,8 @@ use serde_json::json;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
+use crate::routes::body::parse_body;
 use crate::routes::files::resolve_base;
-use crate::routes::projects::parse_body;
 use crate::skills_cli::{
     self, ManifestOutcome, ProbeOutcome, ProcessRunner, Scope, SkillsCliError,
 };
@@ -38,7 +38,7 @@ fn fail_with_tail(error: &str, tail: &str, exit_code: Option<i32>) -> Response {
 
 fn map_error(operation: &str, project_id: &str, err: SkillsCliError) -> Response {
     match err {
-        SkillsCliError::Rejected(reason) => fail(StatusCode::BAD_REQUEST, reason),
+        SkillsCliError::Rejected(reason) => fail(StatusCode::BAD_REQUEST, reason.to_string()),
         SkillsCliError::Busy => fail(
             StatusCode::CONFLICT,
             "A skills operation is already running for this project",
@@ -116,10 +116,10 @@ fn probe_json(outcome: ProbeOutcome) -> serde_json::Value {
 async fn manifest(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     let base = match resolve_base(&ctx, &id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
-    let runner = ProcessRunner::new(ctx.resolved_path.clone());
-    match skills_cli::manifest(&runner, &ctx.resolved_path, &id, &base).await {
+    let runner = ProcessRunner::new(ctx.core.resolved_path.clone());
+    match skills_cli::manifest(&runner, &ctx.core.resolved_path, &id, &base).await {
         Ok(outcome) => ok(manifest_json(outcome)),
         Err(err) => map_error("manifest", &id, err),
     }
@@ -133,7 +133,7 @@ struct ProbeBody {
 async fn probe(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Bytes) -> Response {
     let base = match resolve_base(&ctx, &id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(parsed) = parse_body::<ProbeBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
@@ -141,8 +141,8 @@ async fn probe(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Byt
     let Some(source) = parsed.source.filter(|s| !s.is_empty()) else {
         return fail(StatusCode::BAD_REQUEST, "source is required");
     };
-    let runner = ProcessRunner::new(ctx.resolved_path.clone());
-    match skills_cli::probe(&runner, &ctx.resolved_path, &id, &base, &source).await {
+    let runner = ProcessRunner::new(ctx.core.resolved_path.clone());
+    match skills_cli::probe(&runner, &ctx.core.resolved_path, &id, &base, &source).await {
         Ok(outcome) => ok(probe_json(outcome)),
         Err(err) => map_error("probe", &id, err),
     }
@@ -160,7 +160,7 @@ struct InstallBody {
 async fn install(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Bytes) -> Response {
     let base = match resolve_base(&ctx, &id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(parsed) = parse_body::<InstallBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
@@ -175,16 +175,18 @@ async fn install(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: B
         );
     };
     let skills = parsed.skills.unwrap_or_default();
-    let runner = ProcessRunner::new(ctx.resolved_path.clone());
+    let runner = ProcessRunner::new(ctx.core.resolved_path.clone());
     let result = skills_cli::install(
         &runner,
-        &ctx.resolved_path,
-        &id,
-        &base,
-        &source,
-        &skills,
-        scope,
-        parsed.adapter_id.as_deref(),
+        &ctx.core.resolved_path,
+        crate::skills_cli::InstallRequest {
+            project_id: &id,
+            project_path: &base,
+            source: &source,
+            skills: &skills,
+            scope,
+            adapter_id: parsed.adapter_id.as_deref(),
+        },
     )
     .await;
     match result {
@@ -208,7 +210,7 @@ async fn uninstall(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, None).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(parsed) = parse_body::<UninstallBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
@@ -220,10 +222,10 @@ async fn uninstall(
         );
     };
     let skills = parsed.skills.unwrap_or_default();
-    let runner = ProcessRunner::new(ctx.resolved_path.clone());
+    let runner = ProcessRunner::new(ctx.core.resolved_path.clone());
     let result = skills_cli::uninstall(
         &runner,
-        &ctx.resolved_path,
+        &ctx.core.resolved_path,
         &id,
         &base,
         &skills,
@@ -250,10 +252,10 @@ mod tests {
     use super::*;
     use crate::skills_cli::{ProbedSkill, SkillsCliEntry};
 
-    // Pins the wire contract the TS `SkillsCliEntrySchema`/`ProbedSkillSchema`
-    // now decode with `.nullish()`: a name-only entry or bare-name probe
-    // candidate serializes its absent fields as explicit JSON `null`, not an
-    // omitted key.
+    // Wire contract: `SkillsCliEntrySchema`/`ProbedSkillSchema` in
+    // `packages/types/src/skills-cli.ts` decode with `.nullish()`: a name-only
+    // entry or bare-name probe candidate serializes its absent fields as explicit
+    // JSON `null`, not an omitted key.
     #[test]
     fn manifest_json_serializes_a_name_only_entry_with_explicit_null_fields() {
         let outcome = ManifestOutcome::Available {

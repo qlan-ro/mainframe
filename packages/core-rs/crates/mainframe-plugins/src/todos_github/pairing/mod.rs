@@ -1,4 +1,4 @@
-//! Explicit todo↔issue pairing (todo #286): `list_remote_issues` lists open
+//! Explicit todo↔issue pairing: `list_remote_issues` lists open
 //! issues annotated with their local pairing, `import_issues` creates one
 //! task per selected issue, and `publish_task` creates an issue from an
 //! existing task. Neither stamps the touch map (`touch::stamp_*`) — the
@@ -66,7 +66,7 @@ fn port_err(err: GitHubPortError) -> PairingError {
     PairingError::Port(err)
 }
 
-pub async fn list_remote_issues(
+pub(crate) async fn list_remote_issues(
     ctx: &PluginContext,
     project_id: &str,
 ) -> Result<Vec<RemoteIssue>, PairingError> {
@@ -105,7 +105,7 @@ pub async fn list_remote_issues(
 
 /// Skips (rather than fails) an issue already paired or one the port
 /// couldn't fetch, so one bad number never blocks the rest of the batch.
-pub async fn import_issues(
+pub(crate) async fn import_issues(
     ctx: &PluginContext,
     project_id: &str,
     issue_numbers: &[i64],
@@ -133,9 +133,9 @@ pub async fn import_issues(
         match import::import_one(ctx, project_id, &link.credential_label, &repo, issue_number).await
         {
             Ok(imported) => result.imported.push(imported),
-            Err(reason) => result.skipped.push(Skipped {
+            Err(err) => result.skipped.push(Skipped {
                 issue_number,
-                reason,
+                reason: err.to_string(),
             }),
         }
     }
@@ -145,7 +145,7 @@ pub async fn import_issues(
 /// Refuses an already-paired task before making any GitHub call. A `done`
 /// task publishes as an open issue, then closes it as completed — the create
 /// DTO has no state field, so this always costs two calls when closing.
-pub async fn publish_task(
+pub(crate) async fn publish_task(
     ctx: &PluginContext,
     project_id: &str,
     todo_id: &str,

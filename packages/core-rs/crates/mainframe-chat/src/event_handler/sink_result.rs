@@ -1,11 +1,11 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn handle_result(&self, data: SessionResult) {
         if self.take_partial_overlay() {
             self.emit_display();
         }
-        let Some(cell) = self.deps.get_active_chat(&self.chat_id) else {
+        let Some(cell) = self.shared.active(&self.chat_id) else {
             return;
         };
         self.retire_fork();
@@ -13,25 +13,30 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         let totals = self.result_totals(&cell, &data);
         let now = now_iso8601();
         let refs_after = self.reconcile_result_queue();
-        self.persist_result(&cell, &data, totals, refs_after.len(), now);
+        let update = self.persist_result(&cell, &data, totals, refs_after.len(), now);
         self.record_segment_result(&data);
         let (reason, was_interrupted, is_error) = self.result_reason(&data);
-        self.emit_result_state(&cell, reason, was_interrupted, is_error);
+        self.emit_result_state(update, &cell, reason, was_interrupted, is_error);
         self.emit_turn_duration(&cell);
         self.result_notifications(&data, cost, was_interrupted, is_error);
     }
 
     fn retire_fork(&self) {
-        if let Some(pending) = self.deps.get_pending_fork(&self.chat_id) {
-            self.deps.clear_pending_fork(&self.chat_id);
+        if let Some(pending) = storage_event!(
+            self.shared, Some(&self.chat_id);
+            self.shared.deps.get_pending_fork(&self.chat_id)
+        ) {
+            storage_event!(
+                self.shared, Some(&self.chat_id);
+                self.shared.deps.clear_pending_fork(&self.chat_id)
+            );
             let chat_id = self.chat_id.clone();
             let snapshot_dir = pending.snapshot_dir;
             tokio::spawn(async move {
                 if let Err(err) = tokio::fs::remove_dir_all(&snapshot_dir).await
                     && err.kind() != std::io::ErrorKind::NotFound
                 {
-                    warn!(
-                        %err,
+                    warn!(error = %err,
                         chat_id,
                         snapshot_dir,
                         "failed to remove a retired fork's snapshot directory"
@@ -58,7 +63,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             .unwrap_or(0);
 
         {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             (
                 guard.chat.total_cost + cost,
                 guard.chat.total_tokens_input + tokens_input,
@@ -73,7 +78,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         totals: (f64, i64, i64),
         queue_remaining: usize,
         now: String,
-    ) {
+    ) -> crate::chat_manager::PendingChatUpdate<'_> {
         let next_process_state = if queue_remaining > 0 {
             ProcessState::Working
         } else {
@@ -83,15 +88,14 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         // Context size: prefer the adapter's explicit per-turn report
         // (`contextTokens`; None = "unknown this turn — keep the stored value").
         // Each adapter resolves the value at its source: claude sends the last
-        // parent assistant usage (or None when unknown), and codex resolves the TS
-        // sink's `undefined → fall back to usage` path at its boundary by sending
-        // this turn's raw input usage (event-handler.ts:366). So None always means
+        // parent assistant usage (or None when unknown), and Codex sends this
+        // turn's raw input usage. So None always means
         // "keep stored" here; a zero must never clobber a real stored size.
         let context_update: Option<i64> = data.context_tokens.filter(|&v| v > 0);
 
-        self.deps.chats_update(
+        let update = self.shared.prepare_live_update(
             &self.chat_id,
-            &EventChatUpdate {
+            &ChatPatch {
                 total_cost: Some(totals.0),
                 total_tokens_input: Some(totals.1),
                 total_tokens_output: Some(totals.2),
@@ -102,7 +106,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             },
         );
         {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             guard.chat.total_cost = totals.0;
             guard.chat.total_tokens_input = totals.1;
             guard.chat.total_tokens_output = totals.2;
@@ -112,17 +116,14 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             guard.chat.process_state = Some(Some(next_process_state));
             guard.chat.updated_at = now;
         }
+        update
     }
     fn result_reason(&self, data: &SessionResult) -> (ChatUpdatedReason, bool, bool) {
         let was_interrupted = self
             .permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .clear_interrupted(&self.chat_id);
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear(&self.chat_id);
+        self.permissions.lock_recover().clear(&self.chat_id);
 
         let is_error = data.subtype.as_deref() == Some("error_during_execution")
             && data.is_error != Some(false);
@@ -140,23 +141,21 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
     fn emit_result_state(
         &self,
+        update: crate::chat_manager::PendingChatUpdate<'_>,
         cell: &Arc<Mutex<ActiveChat>>,
         reason: ChatUpdatedReason,
         was_interrupted: bool,
         is_error: bool,
     ) {
-        let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
+        let chat = cell.lock_recover().chat.clone();
         debug!(
             chat_id = self.chat_id,
             ?reason,
             was_interrupted,
             is_error,
-            "onResult: emitting chat.updated with processState=idle"
+            "emitting chat.updated with processState=idle"
         );
-        self.deps.emit_event(DaemonEvent::ChatUpdated {
-            chat,
-            reason: Some(reason),
-        });
+        update.emit(chat, Some(reason));
         self.notify_surface(ChatSurfaceEvent::TurnFinished {
             chat_id: self.chat_id.clone(),
             stop_reason: match reason {
@@ -167,11 +166,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         });
     }
     fn emit_turn_duration(&self, cell: &Arc<Mutex<ActiveChat>>) {
-        let turn_started_at = cell
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .turn_started_at
-            .take();
+        let turn_started_at = cell.lock_recover().turn_started_at.take();
         if let Some(started) = turn_started_at {
             let turn_duration_ms = now_ms() - started;
             let mut md: HashMap<String, serde_json::Value> = HashMap::new();

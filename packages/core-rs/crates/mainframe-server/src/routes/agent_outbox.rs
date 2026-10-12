@@ -25,9 +25,7 @@ async fn cancel(
     if check_id("chatId", &chat_id).is_err() || check_id("entryId", &entry_id).is_err() {
         return fail(StatusCode::BAD_REQUEST, "Invalid id");
     }
-    let Some(service) = ctx.orchestration.as_ref() else {
-        return fail(StatusCode::SERVICE_UNAVAILABLE, "orchestration unavailable");
-    };
+    let service = &ctx.chat.orchestration;
     if service.cancel_outbox_entry(&chat_id, &entry_id).await {
         ok_empty()
     } else {
@@ -45,7 +43,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_validates_ids_and_answers_404_for_a_missing_entry() {
-        let ctx = AppCtx::test_ctx_with_orchestration();
+        let ctx = AppCtx::test_ctx();
         let bad = cancel(
             State(Arc::clone(&ctx)),
             Path(("../x".to_string(), "ob1".to_string())),

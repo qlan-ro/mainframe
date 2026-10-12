@@ -1,31 +1,19 @@
-//! Integration tests for `routes/suggestions.rs`, translated from
-//! `server/routes/__tests__/suggestions.test.ts`. Real spawned app + in-memory
+//! Integration tests for `routes/suggestions.rs`. Real spawned app + in-memory
 //! DB + real git repos in a tempdir; ripgrep runs for real (resolved off PATH in
 //! the test environment).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
-use std::path::Path;
-
 use reqwest::StatusCode;
-use serde_json::{Value, json};
-use support::{TestServer, spawn_test_server};
+use serde_json::json;
+use support::spawn_test_server;
 
-fn run_git(cwd: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
+use support::helpers::run_git;
 
 fn init_repo() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -39,11 +27,7 @@ fn init_repo() -> tempfile::TempDir {
     dir
 }
 
-async fn get_json(server: &TestServer, path: &str) -> (StatusCode, Value) {
-    let res = reqwest::get(server.http_url(path)).await.unwrap();
-    let status = res.status();
-    (status, res.json().await.unwrap())
-}
+use support::helpers::get_json;
 
 #[tokio::test]
 async fn returns_a_churn_suggestion_for_a_repo_with_uncommitted_changes() {

@@ -1,15 +1,14 @@
-//! Conformance harness (T10.2/T10.3): builds the real `AutomationsEngine` over
+//! Conformance harness: builds the real `AutomationsEngine` over
 //! a tempfile `automations.db` with the fake ports + recording action
-//! registry, loads the six canonical fixtures by relative path (never
+//! registry, loads the seven canonical fixtures by relative path (never
 //! re-authored), and drives runs to completion. Restart scenarios rebuild a
 //! fresh engine over the SAME db/credentials paths, mirroring a daemon
 //! crash-and-reboot.
 
-#![allow(dead_code)]
+#![allow(dead_code, reason = "Shared test helpers")]
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use hmac::{Hmac, Mac};
 use serde_json::{Map, Value};
@@ -23,7 +22,9 @@ use mainframe_automations::triggers::{WebhookDecision, WebhookHeaders};
 use mainframe_automations::{AutomationsConfig, AutomationsEngine, AutomationsPorts};
 
 pub use crate::fake_actions::{ActionRecorder, FakeActions, build_actions};
-pub use crate::fakes::{CollectingSink, FakeAgentPort, FakeClock, FakeNotifier, FixedProjects};
+pub use mainframe_automations::testkit::{
+    CollectingSink, FakeAgentPort, FakeClock, FakeNotifier, FixedProjects,
+};
 
 /// A single engine over a tempdir, with handles to every fake for assertions.
 pub struct Rig {
@@ -51,7 +52,7 @@ pub fn load_fixture(name: &str) -> AutomationCreateInput {
 }
 
 /// Build an engine over explicit paths so a second engine can adopt the same
-/// store (restart parity); pass a fresh `FakeActions`/agent per engine so a
+/// store (a restart); pass a fresh `FakeActions`/agent per engine so a
 /// scenario can assert per-engine invocation counts.
 pub async fn build_engine(
     db: &Path,
@@ -73,7 +74,7 @@ pub async fn build_engine(
             notifier,
             events: sink,
             projects: Arc::new(FixedProjects(root)),
-            clock: Arc::new(FakeClock),
+            clock: Arc::new(FakeClock::default()),
             event_source: None,
             registry: Some(actions.registry.clone()),
         },
@@ -129,25 +130,19 @@ impl Rig {
     }
 
     pub async fn wait(&self, run_id: &str, status: RunStatus) -> RunRecord {
-        wait_status(&self.engine, run_id, status).await
+        tokio::time::timeout(std::time::Duration::from_secs(10), self.sink.wait_for(|event| {
+            matches!(event, mainframe_automations::ports::AutomationEvent::RunUpdated { run } if run.id == run_id && run.status == status)
+        })).await.unwrap();
+        self.engine.get_run(run_id).await.unwrap().unwrap()
     }
 
-    /// The chat cancel rides a detached task, so it can land after the run is
-    /// already `Cancelled` — poll for it instead of reading it once.
     pub async fn wait_chat_cancel(&self, chat_id: &str) {
-        for _ in 0..600 {
-            let told = self
-                .agent
-                .cancels
-                .lock()
-                .unwrap()
-                .contains(&chat_id.to_string());
-            if told {
-                return;
-            }
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-        panic!("chat {chat_id} was never told to stop");
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            self.agent.wait_for_cancel(chat_id),
+        )
+        .await
+        .unwrap();
     }
 
     pub async fn pending(&self) -> InteractionRecord {
@@ -167,27 +162,33 @@ impl Rig {
 }
 
 pub async fn wait_status(engine: &AutomationsEngine, run_id: &str, status: RunStatus) -> RunRecord {
-    for _ in 0..600 {
-        if let Some(run) = engine.get_run(run_id).await.unwrap()
-            && run.status == status
-        {
-            return run;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    let actual = engine.get_run(run_id).await.unwrap().map(|r| r.status);
-    panic!("run {run_id} never reached {status:?} (last: {actual:?})");
+    let mut result = None;
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
+            if let Some(run) = engine.get_run(run_id).await.unwrap()
+                && run.status == status
+            {
+                result = Some(run);
+                return true;
+            }
+            false
+        },
+    )
+    .await
+    .expect("state did not settle before timeout");
+    result.expect("polling condition produced a result")
 }
 
 /// Poll until a fake action has been invoked at least `count` times.
 pub async fn wait_action(recorder: &ActionRecorder, action_id: &str, count: usize) {
-    for _ in 0..600 {
-        if recorder.count(action_id) >= count {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    panic!("action {action_id} never reached {count} call(s)");
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        recorder.wait_for(action_id, count),
+    )
+    .await
+    .unwrap();
 }
 
 /// GitHub's `sha256=<lowercase-hex>` HMAC-SHA256 over the raw body.

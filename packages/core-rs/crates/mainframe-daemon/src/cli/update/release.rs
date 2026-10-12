@@ -1,10 +1,11 @@
-//! Ported from the release-picking parts of `packages/core/src/cli/update.ts`.
+//! Release selection for `mainframe update`.
 //!
 //! Pure logic only — no I/O — so it can be unit-tested against hardcoded
-//! expectations without a network or filesystem (the parity oracle is
-//! `packages/core/src/cli/__tests__/update.test.ts`).
+//! expectations without a network or filesystem.
 
 use serde::Deserialize;
+
+use super::UpdateError;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GhAsset {
@@ -23,9 +24,9 @@ pub struct GhRelease {
     pub assets: Vec<GhAsset>,
 }
 
-/// `standaloneArtifactName()` — maps the running platform to the release
+/// Maps the running platform to the release
 /// artifact filename it should install.
-pub fn standalone_artifact_name(platform: &str, arch: &str) -> Result<String, String> {
+pub(crate) fn standalone_artifact_name(platform: &str, arch: &str) -> Result<String, UpdateError> {
     let os = match platform {
         "darwin" => Some("darwin"),
         "linux" => Some("linux"),
@@ -38,20 +39,21 @@ pub fn standalone_artifact_name(platform: &str, arch: &str) -> Result<String, St
     };
     match (os, cpu) {
         (Some(os), Some(cpu)) => Ok(format!("mainframe-daemon-{os}-{cpu}.tar.gz")),
-        _ => Err(format!(
-            "Unsupported platform for self-update: {platform}-{arch}"
-        )),
+        _ => Err(UpdateError::UnsupportedPlatform {
+            platform: platform.to_string(),
+            arch: arch.to_string(),
+        }),
     }
 }
 
-/// `pickRelease()` — picks the release to install from a GitHub `/releases`
+/// Picks the release to install from a GitHub `/releases`
 /// list (newest first), honoring an explicit `version` or the newest
 /// stable/pre-release per `include_prerelease`.
-pub fn pick_release(
+pub(crate) fn pick_release(
     releases: &[GhRelease],
     version: Option<&str>,
     include_prerelease: bool,
-) -> Result<GhRelease, String> {
+) -> Result<GhRelease, UpdateError> {
     let published: Vec<&GhRelease> = releases.iter().filter(|r| !r.draft).collect();
 
     if let Some(version) = version {
@@ -60,7 +62,7 @@ pub fn pick_release(
             .iter()
             .find(|r| r.tag_name == version || norm(&r.tag_name) == norm(version))
             .map(|r| (*r).clone())
-            .ok_or_else(|| format!("No release found for version {version}"));
+            .ok_or_else(|| UpdateError::NoSuchVersion(version.to_string()));
     }
 
     if let Some(newest) = published
@@ -70,22 +72,22 @@ pub fn pick_release(
         return Ok((*newest).clone());
     }
 
-    let hint = if published.iter().any(|r| r.prerelease) {
-        " Only pre-releases exist — retry with `mainframe update --pre`."
-    } else {
-        ""
-    };
-    Err(format!("No matching release found.{hint}"))
+    Err(UpdateError::NoMatchingRelease {
+        only_prereleases: published.iter().any(|r| r.prerelease),
+    })
 }
 
 /// `assetUrl()` — resolves the download URL of `artifact` within a release.
-pub fn asset_url(release: &GhRelease, artifact: &str) -> Result<String, String> {
+pub(crate) fn asset_url(release: &GhRelease, artifact: &str) -> Result<String, UpdateError> {
     release
         .assets
         .iter()
         .find(|a| a.name == artifact)
         .map(|a| a.browser_download_url.clone())
-        .ok_or_else(|| format!("Release {} does not include {artifact}.", release.tag_name))
+        .ok_or_else(|| UpdateError::MissingAsset {
+            tag: release.tag_name.clone(),
+            artifact: artifact.to_string(),
+        })
 }
 
 #[derive(Debug, Default)]
@@ -96,8 +98,8 @@ struct SemVer {
     prerelease: Vec<String>,
 }
 
-/// `parseSemver()`. Tolerates a leading `v`; non-numeric core segments parse
-/// as 0, matching the TS `Number(n) || 0`.
+/// Parse semver with an optional leading `v`; non-numeric core segments become
+/// 0.
 fn parse_semver(version: &str) -> SemVer {
     let version = version.trim_start_matches('v');
     let mut segments = version.split('-');
@@ -118,7 +120,7 @@ fn parse_semver(version: &str) -> SemVer {
 }
 
 /// `compareSemver()` — negative if `a` < `b`, 0 if equal, positive if `a` > `b`.
-pub fn compare_semver(a: &str, b: &str) -> i64 {
+pub(crate) fn compare_semver(a: &str, b: &str) -> i64 {
     let va = parse_semver(a);
     let vb = parse_semver(b);
     if va.major != vb.major {
@@ -163,21 +165,22 @@ fn compare_prerelease(pa: &[String], pb: &[String]) -> i64 {
     0
 }
 
-/// `assertNotDowngrade()` — refuses to install a release that isn't newer
+/// Refuses to install a release that isn't newer
 /// than `current_version`, unless `force` is set.
-pub fn assert_not_downgrade(
+pub(crate) fn assert_not_downgrade(
     release: &GhRelease,
     current_version: &str,
     force: bool,
-) -> Result<(), String> {
+) -> Result<(), UpdateError> {
     if force || compare_semver(&release.tag_name, current_version) > 0 {
         return Ok(());
     }
-    Err(format!(
-        "{} is not newer than the running version (v{current_version}). Refusing to downgrade — pass --force to override.",
-        release.tag_name
-    ))
+    Err(UpdateError::NotNewer {
+        tag: release.tag_name.clone(),
+        current: current_version.to_string(),
+    })
 }
 
 #[cfg(test)]
+#[path = "release_tests.rs"]
 mod tests;

@@ -1,9 +1,8 @@
 //! `session/resume`: the one method whose cost is unbounded — a cold chat's
 //! snapshot loads the whole transcript off disk — so it runs off the
-//! socket-loop task (todo #350, PR #688 review). Only the `AwaitingSeed`
-//! claim stays inline, because live frames racing the snapshot must be
-//! buffered from the moment the client asked, not from whenever the spawned
-//! task gets scheduled.
+//! socket-loop task. Only the `AwaitingSeed` claim stays inline, because live
+//! frames racing the snapshot must be buffered from the moment the client
+//! asked, not from whenever the spawned task gets scheduled.
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -33,14 +32,14 @@ pub(super) fn start_resume(
     ports: Arc<dyn ResumePort>,
 ) {
     let session_id = params_session_id(request.params.as_ref());
-    // Mark this session as awaiting its snapshot BEFORE anything awaits, so
-    // a live revision that races it is buffered rather than lost (T5, R2.9).
-    // `begin_resume` also hands back the chat's revision log (todo #377)
-    // paired with its pre-snapshot boundary, which the reply's `cursor`
-    // must carry (see `begin_resume`'s doc for the race argument).
+    // Mark this session as awaiting its snapshot BEFORE anything awaits, so a
+    // live revision that races it is buffered rather than lost. `begin_resume`
+    // also hands back the chat's revision log paired with its pre-snapshot
+    // boundary, which the reply's `cursor` must carry (see `begin_resume`'s doc
+    // for the race argument).
     let (revision_log, resume_boundary) = session_id
         .as_deref()
-        .and_then(|id| ctx.facade_hub.begin_resume(connection, id))
+        .and_then(|id| ctx.chat.facade_hub.begin_resume(connection, id))
         .map_or((None, None), |(log, boundary)| (Some(log), Some(boundary)));
     // Queued here, on the socket loop, so arrival order is acquisition order.
     let wait = session_id
@@ -61,7 +60,7 @@ pub(super) fn start_resume(
 
 /// The two settlement flags a resume delivery and its failure path share —
 /// bundled so `deliver_resume` stays under clippy's argument-count limit
-/// now that it also takes `revision_log` (todo #377).
+/// now that it also takes `revision_log`.
 struct DeliveryProgress {
     /// Set the moment the reply goes out, so the failure path below knows
     /// whether the client's promise has settled without asking the session
@@ -83,7 +82,7 @@ struct ResumeTask {
     ctx: Arc<AppCtx>,
     connection: Arc<FacadeConnection>,
     ports: Arc<dyn ResumePort>,
-    /// The chat's revision log (todo #377), from `begin_resume` — `None`
+    /// The chat's revision log, from `begin_resume` — `None`
     /// for a connection that did not opt into revision cursors.
     revision_log: Option<Arc<Mutex<RevisionLog>>>,
     /// `begin_resume`'s pre-snapshot boundary for `revision_log` — carried
@@ -187,14 +186,14 @@ fn fail_resume(failure: ResumeFailure<'_>) {
         ));
     }
     let Some(session_id) = session_id else {
-        error!(%cause, "acp facade: resume delivery failed with no session to recover");
+        error!(%cause, "resume delivery failed with no session to recover");
         return;
     };
     // The reply reached the client, but the panic struck before
     // `reset_session`'s own `replay_complete` send — this delivery still
     // owes the client the closing marker for the reply it already has, with
     // `aborted: true` so a staged client discards whatever partial replay it
-    // received (spec Decision 38).
+    // received.
     if replied && !completed {
         connection.send_json(&mainframe_acp::replay_complete_notification(
             session_id, true,
@@ -206,7 +205,7 @@ fn fail_resume(failure: ResumeFailure<'_>) {
         session_id,
         failures,
         resync_suppressed = failures > 1,
-        "acp facade: resume delivery failed"
+        "resume delivery failed"
     );
     // The client answers a resync with another resume, so a failure that
     // repeats on the same transcript would loop at round-trip speed. After
@@ -233,7 +232,7 @@ async fn deliver_resume(
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
     ports: &dyn ResumePort,
-    // The log paired with `begin_resume`'s pre-snapshot boundary (#377):
+    // The log paired with `begin_resume`'s pre-snapshot boundary:
     // one tuple, so the reply cursor cannot drift from the planned-against log.
     revision_log: Option<(&Mutex<RevisionLog>, RevisionCursor)>,
     progress: DeliveryProgress,
@@ -262,9 +261,9 @@ async fn deliver_resume(
         redelivered_gate: redelivered_gate.as_deref(),
         preview_ids: &replay.preview_ids,
     };
-    let hub = &ctx.facade_hub;
+    let hub = &ctx.chat.facade_hub;
     hub.reset_session(connection, &session_id, seed, |conn| {
-        // Spec Decision 42: an opted-in connection takes the replay as a few
+        // An opted-in connection takes the replay as a few
         // compressed batches; every other arm below is unchanged either way.
         if conn.is_compressed_replay_opted_in() {
             for note in mainframe_acp::replay_batch_notifications(&session_id, &replay.updates) {
@@ -293,10 +292,7 @@ async fn deliver_resume(
 /// The queued-prompt snapshot every resume replay closes with — empty when
 /// the harness runs without a `ChatManager`.
 fn queued_for(ctx: &Arc<AppCtx>, session_id: &str) -> Vec<mainframe_types::chat::QueuedMessageRef> {
-    ctx.chat_manager
-        .as_ref()
-        .map(|cm| cm.get_queued_for_chat(session_id))
-        .unwrap_or_default()
+    ctx.chat.chat_manager.get_queued_for_chat(session_id)
 }
 
 /// The rpc id of the gate this replay redelivers itself, which the hub's
@@ -309,4 +305,5 @@ fn redelivered_gate_id(replay: &mainframe_acp::ResumeReplay) -> Option<String> {
 }
 
 #[cfg(test)]
+#[path = "resume_tests.rs"]
 mod tests;

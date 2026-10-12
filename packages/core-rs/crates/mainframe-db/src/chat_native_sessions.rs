@@ -1,14 +1,14 @@
 //! `chat_native_sessions` rows and the `chats` mirror.
 //!
-//! The mirror invariant: `chats.adapter_id`, `claude_session_id`,
+//! The mirror invariant: `chats.adapter_id`, `vendor_session_id`,
 //! `session_file_path`, the three `last_context_*` columns and
 //! `transcript_missing` always describe the active segment's native session.
 //! Every write to those columns goes through this module, inside the caller's
 //! transaction, so the two never disagree.
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::SessionTuning;
 use mainframe_types::segment::NativeSessionRecord;
+use mainframe_types::time::now_iso8601;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::DbError;
@@ -46,7 +46,7 @@ fn parse_tuning(raw: &str) -> Option<SessionTuning> {
         Ok(tuning) => Some(tuning),
         Err(err) => {
             // A corrupt snapshot only loses the restore-on-return convenience.
-            tracing::warn!(%err, "ignoring unreadable native-session tuning snapshot");
+            tracing::warn!(error = %err, "ignoring unreadable native-session tuning snapshot");
             None
         }
     }

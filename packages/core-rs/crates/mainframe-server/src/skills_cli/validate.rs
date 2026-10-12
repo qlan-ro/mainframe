@@ -2,6 +2,24 @@
 //! reach the CLI runner — every entry point in `mod.rs` validates before
 //! resolving a binary or spawning anything.
 
+/// Input the skills routes refuse before any CLI runs. The text is the 400
+/// body the route answers with.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum SkillInputError {
+    #[error(
+        "Source must be an owner/repo shorthand, an allow-listed github.com/gitlab.com URL, or an SSH remote"
+    )]
+    UnsupportedSource,
+    #[error("At least one skill is required")]
+    NoSkills,
+    #[error("Skill name must not be empty")]
+    EmptyName,
+    #[error("Skill name must not start with a dash")]
+    LeadingDash,
+    #[error("Skill name must not contain control characters")]
+    ControlCharacters,
+}
+
 const ALLOWED_HOSTS: &[&str] = &[
     "github.com",
     "www.github.com",
@@ -9,7 +27,7 @@ const ALLOWED_HOSTS: &[&str] = &[
     "www.gitlab.com",
 ];
 
-pub fn validate_source(source: &str) -> Result<(), String> {
+pub fn validate_source(source: &str) -> Result<(), SkillInputError> {
     let trimmed = source.trim();
     let looks_local = trimmed.starts_with('/')
         || trimmed.starts_with("./")
@@ -26,10 +44,7 @@ pub fn validate_source(source: &str) -> Result<(), String> {
             || is_allowed_https(trimmed)
             || is_allowed_ssh(trimmed))
     {
-        return Err(
-            "Source must be an owner/repo shorthand, an allow-listed github.com/gitlab.com URL, or an SSH remote"
-                .to_string(),
-        );
+        return Err(SkillInputError::UnsupportedSource);
     }
     Ok(())
 }
@@ -65,15 +80,15 @@ fn is_allowed_ssh(source: &str) -> bool {
     parts.len() == 2 && parts.iter().all(|p| !p.is_empty())
 }
 
-pub fn validate_skill_name(name: &str) -> Result<(), String> {
+pub fn validate_skill_name(name: &str) -> Result<(), SkillInputError> {
     if name.is_empty() {
-        return Err("Skill name must not be empty".to_string());
+        return Err(SkillInputError::EmptyName);
     }
     if name.starts_with('-') {
-        return Err("Skill name must not start with a dash".to_string());
+        return Err(SkillInputError::LeadingDash);
     }
     if name.chars().any(char::is_control) {
-        return Err("Skill name must not contain control characters".to_string());
+        return Err(SkillInputError::ControlCharacters);
     }
     Ok(())
 }

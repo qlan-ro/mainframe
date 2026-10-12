@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 mod common;
 use common::Recorder;
 use mainframe_adapter_codex::event_mapper::{CodexSessionState, handle_notification};

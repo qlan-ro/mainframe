@@ -4,8 +4,7 @@ use mainframe_types::tool_call_timing::ToolCallTiming;
 use super::*;
 
 /// Flatten a `tool_group` in place, stamping the daemon's membership on each
-/// visible member: the first visible member's id doubles as the group id —
-/// the same scheme the legacy projection used (`map-assistant-blocks.ts`).
+/// visible member: the first visible member's id doubles as the group id.
 pub(super) fn encode_tool_group(
     calls: &[DisplayContent],
     container: &Container<'_>,
@@ -34,17 +33,17 @@ pub(super) fn encode_tool_group(
         }) = call
             && *category != ToolCategory::Hidden
         {
-            out.push(tool_call_item(
+            out.push(tool_call_item(crate::encoder::tool_call::ToolCallInput {
                 id,
                 name,
                 input,
-                *category,
+                category: *category,
                 result,
-                &source_container,
-                group_id.as_deref(),
-                *timing,
+                container: &source_container,
+                group_id: group_id.as_deref(),
+                timing: *timing,
                 command_execution,
-            ));
+            }));
         }
     }
 }
@@ -66,17 +65,30 @@ fn status_for(result: &Option<ToolCallResult>) -> ToolCallStatus {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+pub(super) struct ToolCallInput<'a> {
+    pub(super) id: &'a str,
+    pub(super) name: &'a str,
+    pub(super) input: &'a HashMap<String, Value>,
+    pub(super) category: ToolCategory,
+    pub(super) result: &'a Option<ToolCallResult>,
+    pub(super) container: &'a Container<'a>,
+    pub(super) group_id: Option<&'a str>,
+    pub(super) timing: Option<ToolCallTiming>,
+    pub(super) command_execution: &'a Option<Box<CommandExecutionMetadata>>,
+}
+
 pub(super) fn tool_call_item(
-    id: &str,
-    name: &str,
-    input: &HashMap<String, Value>,
-    category: ToolCategory,
-    result: &Option<ToolCallResult>,
-    container: &Container<'_>,
-    group_id: Option<&str>,
-    timing: Option<ToolCallTiming>,
-    command_execution: &Option<Box<CommandExecutionMetadata>>,
+    ToolCallInput {
+        id,
+        name,
+        input,
+        category,
+        result,
+        container,
+        group_id,
+        timing,
+        command_execution,
+    }: ToolCallInput<'_>,
 ) -> EncodedItem {
     EncodedItem::ToolCall {
         id: id.to_string(),
@@ -95,11 +107,10 @@ pub(super) fn tool_call_item(
     }
 }
 
-/// `agent_id` doubles as the task group's stable id — it is the unique
-/// tool_use id the subagent-launching tool call carried, not a synthesized
-/// value (`display_helpers.rs` regression #184 comment: "use the unique
-/// tool_use id, not description"). `subagent: true` marks that `title` is
-/// the task description, not a tool name.
+/// `agent_id` doubles as the task group's stable id — it is the unique tool_use
+/// id the subagent-launching tool call carried, not a synthesized value such as
+/// the description. `subagent: true` marks that `title` is the task
+/// description, not a tool name.
 pub(super) fn task_group_item(
     agent_id: &str,
     task_args: &HashMap<String, Value>,

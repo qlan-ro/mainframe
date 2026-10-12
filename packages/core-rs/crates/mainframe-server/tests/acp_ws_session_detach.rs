@@ -1,6 +1,9 @@
-//! `_mainframe.dev/session_detach` (todo #350, plan task 8, D2). Split out of
-//! `acp_ws_integration.rs` to keep that file under the 300-line cap.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! `_mainframe.dev/session_detach`.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -16,6 +19,7 @@ async fn server_with_mock_adapter() -> TestServer {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     server
@@ -24,8 +28,7 @@ async fn server_with_mock_adapter() -> TestServer {
 /// Attaches by prompting (attach-on-send runs even though the prompt itself
 /// fails — no `ChatManager` in this harness; it still needs the `initialize`
 /// handshake, which gates the attach), detaches, then asserts a further
-/// chat-surface revision for that session produces no frame on this socket
-/// (D2, R2.3).
+/// chat-surface revision for that session produces no frame on this socket.
 #[tokio::test]
 async fn session_detach_stops_session_updates() {
     let server = server_with_mock_adapter().await;
@@ -62,6 +65,7 @@ async fn session_detach_stops_session_updates() {
     // Still attached: a chat-surface revision reaches the socket.
     server
         .ctx
+        .chat
         .facade_hub
         .on_chat_surface_event(revision_event("chat-1", "hello"));
     let frame = ws.read_event().await;
@@ -77,6 +81,7 @@ async fn session_detach_stops_session_updates() {
     // Detached: the same kind of revision now reaches nothing.
     server
         .ctx
+        .chat
         .facade_hub
         .on_chat_surface_event(revision_event("chat-1", "hello world"));
     let timed_out = tokio::time::timeout(Duration::from_millis(200), ws.read_event())

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use mainframe_adapter_api::ContextFiles;
 use mainframe_types::context::{ContextFile, ContextFileSource};
 
-pub fn collect_codex_context_files(project_path: &str) -> ContextFiles {
+pub(crate) fn collect_codex_context_files(project_path: &str) -> ContextFiles {
     let home = std::env::var_os("CODEX_HOME")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)

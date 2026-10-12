@@ -42,7 +42,7 @@ impl TryFrom<TimingFields> for ToolCallTiming {
     }
 }
 
-pub fn deserialize_optional<'de, D: Deserializer<'de>>(
+pub(crate) fn deserialize_optional<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<ToolCallTiming>, D::Error> {
     let value = serde_json::Value::deserialize(deserializer)?;

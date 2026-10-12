@@ -1,5 +1,3 @@
-//! Ported from `src/server/routes/chat-recovery.ts`.
-//!
 //! Degraded-chat recovery routes — the actions behind the unified degraded-chat
 //! card (missing transcript / missing worktree). All three re-emit an enriched
 //! `chat.updated` via the ChatManager so clients clear the card live.
@@ -9,7 +7,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 
 use crate::ctx::AppCtx;
@@ -41,14 +39,9 @@ async fn run(ctx: &Arc<AppCtx>, chat_id: &str, action: RecoveryAction) -> Respon
         );
     }
     let label = action.label();
-    // The recovery ops are ChatManager-backed with no db fallback; when the
-    // manager is unwired (Phase-3 harness) the route reports the seam.
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id, "chat recovery needs ChatManager (unwired)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
-    };
+    let cm = &ctx.chat.chat_manager;
     if cm.get_chat(chat_id).is_none() {
-        return fail(StatusCode::NOT_FOUND, "Chat not found");
+        return crate::respond::ApiError::chat_not_found().into_response();
     }
     let result = match action {
         RecoveryAction::RecreateWorktree => cm.recreate_worktree(chat_id).await,
@@ -57,16 +50,7 @@ async fn run(ctx: &Arc<AppCtx>, chat_id: &str, action: RecoveryAction) -> Respon
     };
     match result {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            // Honor `err.statusCode` (recreateChatWorktree tags branch-gone 409),
-            // else the default 400; the error message crosses the wire verbatim.
-            let status = err
-                .status_code()
-                .and_then(|code| StatusCode::from_u16(code).ok())
-                .unwrap_or(StatusCode::BAD_REQUEST);
-            tracing::warn!(chat_id, %err, "{label} failed");
-            fail(status, err.to_string())
-        }
+        Err(err) => crate::respond::fail_domain(format!("{label} failed chat_id={chat_id}"), &err),
     }
 }
 
@@ -98,42 +82,20 @@ pub fn router() -> Router<Arc<AppCtx>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::to_bytes;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        let body = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
-        (status, body)
-    }
+    use crate::test_support::read_json as read;
 
-    // Without a wired ChatManager the recovery ops have no db fallback, so every
-    // route reports the seam (mirrors the other manager-backed routes). The
-    // getChat-404, 409-branch-gone, and happy-path assertions from
-    // chat-recovery.test.ts are covered by the degraded_recovery / chat_manager
-    // oracle in mainframe-chat.
     #[tokio::test]
-    async fn recovery_routes_report_the_seam_without_a_chat_manager() {
+    async fn recovery_routes_report_missing_chat() {
         let ctx = AppCtx::test_ctx();
         for action in [
             RecoveryAction::RecreateWorktree,
             RecoveryAction::ContinueHere,
             RecoveryAction::ContinueInProjectRoot,
         ] {
-            let (status, body) = read(run(&ctx, "c1", action).await).await;
-            assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-            assert_eq!(body["error"], "Operation failed");
+            let (status, body) = read(run(&ctx, "c1", action).await).await.unwrap();
+            assert_eq!(status, StatusCode::NOT_FOUND);
+            assert_eq!(body["error"], "Chat not found");
         }
     }
 }
-
-// PORT STATUS: src/server/routes/chat-recovery.ts (3 POST routes)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424): new degraded-chat recovery routes
-// (recreate-worktree / continue-here / continue-in-project-root) → okEmpty. The id
-// param 404s an unknown chat before the action runs; a DegradedRecoveryError maps
-// its status_code() (BranchGone → 409) else 400, with the Display message crossing
-// the wire verbatim (as the TS `err.statusCode`/`err.message` pass-through does).
-// ChatManager-backed with no db fallback, so the unwired harness reports the 500
-// seam like the other Phase-4 routes.

@@ -1,8 +1,8 @@
-//! Single-item `SessionUpdate` construction — creation and clearing — split
-//! out of `session_state.rs` (todo #350, plan task 37, R2.13). The
-//! comparison logic (`revise_update`, `content_revision`, `chunk_extension`)
-//! that decides WHETHER two snapshots differ stays in the parent module;
-//! this module only builds the update for a single, already-decided item.
+//! Single-item `SessionUpdate` construction — creation and clearing — split out
+//! of `session_state.rs`. The comparison logic (`revise_update`,
+//! `content_revision`, `chunk_extension`) that decides WHETHER two snapshots
+//! differ stays in the parent module; this module only builds the update for a
+//! single, already-decided item.
 
 use mainframe_types::acp::content::ContentChunk;
 use mainframe_types::acp::extensions::ITEM_CREATED_META_KEY;
@@ -64,10 +64,10 @@ pub(super) fn create_patch<T>(value: Option<T>) -> Option<Option<T>> {
     value.map(Some)
 }
 
-/// Stamps `_meta["_mainframe.dev"].created: true` (spec Decision 37): every
-/// live creation and every resume replay frame goes through `create_update`,
-/// so the marker exactly means "this frame is the item's complete first
-/// state" — nothing else in this module sets it.
+/// Stamps `_meta["_mainframe.dev"].created: true`: every live creation and
+/// every resume replay frame goes through `create_update`, so the marker
+/// exactly means "this frame is the item's complete first state" — nothing else
+/// in this module sets it.
 fn created_meta(meta: &Option<Value>) -> Option<Option<Value>> {
     Some(Some(merge_namespace(
         meta.clone(),

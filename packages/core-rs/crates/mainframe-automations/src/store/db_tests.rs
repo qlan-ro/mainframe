@@ -1,4 +1,4 @@
-//! T2.1 — DB open + contract DDL (plan §Phase 2; contract §3).
+//! DB open + contract DDL (contract §3).
 
 use rusqlite::Connection;
 use tempfile::TempDir;
@@ -136,7 +136,7 @@ async fn unknown_tables_survive_open() {
     let dir = TempDir::new().unwrap();
     let path = db_path(&dir);
     {
-        // Pre-seed a foreign engine's private table (Node's trigger_state).
+        // Pre-seed a table this engine does not own (`trigger_state`).
         let conn = Connection::open(&path).unwrap();
         conn.execute_batch(
             "CREATE TABLE trigger_state (automation_id TEXT, trigger_id TEXT);

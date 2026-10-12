@@ -36,7 +36,7 @@ export function sessionResolutionCandidates(args: {
         s.remoteId != null &&
         s.remoteId !== activeChatId &&
         s.custom.projectId === projectId &&
-        s.custom.claudeSessionId != null,
+        s.custom.vendorSessionId != null,
     )
     .map((s) => ({ chatId: s.remoteId!, title: s.title, updatedAt: s.custom.updatedAt }));
 }

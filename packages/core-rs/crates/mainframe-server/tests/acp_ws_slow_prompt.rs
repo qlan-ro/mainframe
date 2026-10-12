@@ -1,10 +1,13 @@
-//! A slow `session/prompt` blocks neither the socket loop (todo #350, plan
-//! task 10, R3.6) nor the ordering its own session's `session/cancel`
-//! depends on. Split out of `acp_ws_integration.rs` — these are the tests in
-//! the group that need the group-1-step-0 `FacadeServer` fixture and a
-//! barrier adapter, both sizable enough to justify their own file.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! A slow `session/prompt` blocks neither the socket loop nor the ordering its
+//! own session's `session/cancel` depends on. These tests need the
+//! `FacadeServer` fixture and a barrier adapter.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
+use mainframe_types::sync::LockExt as _;
 mod support;
 
 use std::sync::Arc;
@@ -97,10 +100,7 @@ async fn a_cancel_for_the_same_session_lands_after_its_prompt_is_in_flight() {
     .await;
     let _ = read_until(&mut ws, |v| v["id"] == json!(2)).await;
     assert!(
-        interrupts
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_empty(),
+        interrupts.lock_recover().is_empty(),
         "a cancel must not interrupt a turn its own prompt has not started yet"
     );
 
@@ -108,19 +108,14 @@ async fn a_cancel_for_the_same_session_lands_after_its_prompt_is_in_flight() {
     let prompt_reply = read_until(&mut ws, |v| v["id"] == json!(1)).await;
     assert!(prompt_reply.get("result").is_some() || prompt_reply.get("error").is_some());
 
-    let log = tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            {
-                let seen = interrupts.lock().unwrap_or_else(|e| e.into_inner());
-                if !seen.is_empty() {
-                    return seen.clone();
-                }
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    })
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(5),
+        async || !interrupts.lock_recover().is_empty(),
+    )
     .await
-    .expect("the cancel must reach the session once the prompt releases it");
+    .expect("cancel reached the session");
+    let log = interrupts.lock_recover().clone();
 
     assert_eq!(
         log,

@@ -57,21 +57,21 @@ describe('chatToThreadCustom — identity & status custom fields', () => {
     ['custom.adapterId equals chat.adapterId', {}, (r) => r.custom.adapterId, 'claude'],
     [
       // the agent CLI's own session id (copied via the row context menu), NOT the mainframe chat id
-      'custom.claudeSessionId forwards chat.claudeSessionId when present',
+      'custom.vendorSessionId forwards chat.claudeSessionId when present',
       { claudeSessionId: 'cli-sess-abc' },
-      (r) => r.custom.claudeSessionId,
+      (r) => r.custom.vendorSessionId,
       'cli-sess-abc',
     ],
     [
-      'custom.claudeSessionId is undefined when chat.claudeSessionId is absent',
+      'custom.vendorSessionId is undefined when chat.claudeSessionId is absent',
       {},
-      (r) => r.custom.claudeSessionId,
+      (r) => r.custom.vendorSessionId,
       undefined,
     ],
     [
-      'custom.claudeSessionId does not equal the mainframe chat id',
+      'custom.vendorSessionId does not equal the mainframe chat id',
       { id: 'chat-1', claudeSessionId: 'cli-sess-abc' },
-      (r) => r.custom.claudeSessionId !== r.remoteId,
+      (r) => r.custom.vendorSessionId !== r.remoteId,
       true,
     ],
     ['custom.status equals chat.status', { status: 'paused' }, (r) => r.custom.status, 'paused'],

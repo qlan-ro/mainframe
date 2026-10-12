@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/messages/session-files.ts`.
-
 use mainframe_types::chat::{ChatMessage, MessageContent, MessageContentNode};
 
 const FILE_TOOLS: [&str; 2] = ["Write", "Edit"];
@@ -79,10 +77,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/messages/session-files.ts (22 lines)
-// confidence: high
-// todos: 0
-// notes: FILE_TOOLS = {Write, Edit}; `block.input?.file_path` truthy check →
-// as_str + non-empty. Neutral ChatMessage input; no Claude JSONL shapes. No TS
-// __tests__ file — sanity test covers dedupe + tool filtering.

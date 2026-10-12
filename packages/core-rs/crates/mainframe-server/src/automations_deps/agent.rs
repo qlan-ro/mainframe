@@ -1,13 +1,14 @@
 //! `AgentPort` over the ChatManager seam: start a chat, watch the broadcast
 //! for its terminal `chat.updated`, read the final assistant text.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 
-use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::ports::{
     AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest,
 };
+use mainframe_types::BoxFuture;
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
 use tokio::sync::broadcast;
 
@@ -86,11 +87,7 @@ impl DaemonAgentPort {
     }
 
     fn take_receiver(&self, chat_id: &str) -> broadcast::Receiver<DaemonEvent> {
-        let taken = self
-            .pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(chat_id);
+        let taken = self.pending.lock_recover().remove(chat_id);
         taken.unwrap_or_else(|| self.broadcast.subscribe())
     }
 
@@ -134,7 +131,8 @@ impl AgentPort for DaemonAgentPort {
                 .resolve_project_id(request.project_id.as_deref())
                 .await?;
             if request.auto_approve.as_ref().is_some_and(|a| !a.is_empty()) {
-                // R6: no ChatManager parameter exists yet — loud, never silent.
+                // No ChatManager parameter carries this yet — warn loudly, never
+                // drop it silently.
                 tracing::warn!(
                     "ask_agent auto-approve scope is not supported by the chat manager yet (R6); option ignored"
                 );
@@ -156,7 +154,8 @@ impl AgentPort for DaemonAgentPort {
                     branch_name,
                     &request.run_id,
                 )
-                .await;
+                .await
+                .map_err(step_error)?;
 
             if let Some(worktree) = &request.worktree {
                 let base = self
@@ -165,22 +164,18 @@ impl AgentPort for DaemonAgentPort {
                 self.chats
                     .enable_worktree(&chat_id, &base, &worktree.branch_name)
                     .await
-                    .map_err(AgentPortError)?;
+                    .map_err(step_error)?;
             }
 
             // Subscribe BEFORE the send so the terminal event cannot race the
             // upcoming watch() call.
             self.pending
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .insert(chat_id.clone(), self.broadcast.subscribe());
 
             if let Err(err) = self.chats.send_message(&chat_id, &request.prompt).await {
-                self.pending
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .remove(&chat_id);
-                return Err(AgentPortError(err));
+                self.pending.lock_recover().remove(&chat_id);
+                return Err(step_error(err));
             }
             Ok(AgentHandle { chat_id })
         })
@@ -206,7 +201,7 @@ impl AgentPort for DaemonAgentPort {
             self.chats
                 .send_message(chat_id, correction)
                 .await
-                .map_err(AgentPortError)?;
+                .map_err(step_error)?;
             self.wait_terminal(chat_id, rx).await
         })
     }
@@ -219,11 +214,7 @@ impl AgentPort for DaemonAgentPort {
     }
 }
 
-// PORT STATUS: packages/core/src/automations/agent-port.ts +
-// verbs/agent-waits.ts onChatFinished (the watch loop folds the wait table
-// into a future — Rust durable-wait design, T4.3)
-// confidence: high
-// todos: 0
-// notes: worktree base branch defaults to the project's current branch when
-//        the step omits baseBranch (the enable-worktree route requires an
-//        explicit base; an automation has no UI picker to supply one).
+/// A chat-system refusal becomes the ask_agent step's error, by its text.
+fn step_error(err: impl std::fmt::Display) -> AgentPortError {
+    AgentPortError(err.to_string())
+}

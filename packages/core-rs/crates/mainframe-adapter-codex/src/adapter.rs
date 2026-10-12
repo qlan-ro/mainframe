@@ -1,5 +1,4 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/adapter.ts`.
-
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -71,23 +70,22 @@ pub fn map_codex_model(m: &ModelInfo) -> AdapterModel {
 pub struct CodexAdapter {
     sessions: Arc<Mutex<Vec<Arc<CodexSession>>>>,
     /// Model catalog is static per session; cache it so resolution doesn't respawn
-    /// a temp app-server each time (CONCURRENCY.tsv 104).
+    /// a temp app-server each time.
     cached_models: Arc<Mutex<Option<Vec<AdapterModel>>>>,
     /// Boot-resolved login-shell `PATH`, applied to every spawned `codex` CLI so
-    /// packaged builds find it outside the bare launchd `PATH` (mirrors the TS
-    /// `enrichPath` env mutation).
+    /// packaged builds find it outside the bare launchd `PATH`.
     resolved_path: ResolvedPath,
-    /// Shared with every other adapter (todo #327) so a Codex sub-agent's
+    /// Shared with every other adapter so a Codex sub-agent's
     /// activity row lands in the same chat-scoped live set a Claude sub-agent's
     /// does.
     background_tasks: Arc<BackgroundTaskTracker>,
-    /// The CLI version the registry's last successful refresh observed (todo
-    /// #368) — `AdapterRegistry::run_refresh` reports it via
-    /// `observe_cli_version` before calling the now-synchronous `capabilities()`.
-    /// `None` before the first refresh, or when the version could not be
-    /// determined; `capabilities().fork` is `false` in both cases.
+    /// The CLI version the registry's last successful refresh observed —
+    /// `AdapterRegistry::run_refresh` reports it via `observe_cli_version` before
+    /// calling the synchronous `capabilities()`. `None` before the first
+    /// refresh, or when the version could not be determined; `capabilities().fork`
+    /// is `false` in both cases.
     observed_version: Arc<Mutex<Option<String>>>,
-    /// Test seam only (todo #368) — `pin_fork_point`'s temp-app-server
+    /// Test seam only — `pin_fork_point`'s temp-app-server
     /// executable. `"codex"` in production; see `CodexSession::
     /// history_executable`'s doc comment for why bare-name PATH resolution
     /// can't be overridden from a test.
@@ -115,13 +113,10 @@ impl CodexAdapter {
         }
     }
 
-    /// Test-only override for `pin_fork_point`'s temp-app-server executable
-    /// (todo #368) — see the field doc comment.
+    /// Test-only override for `pin_fork_point`'s temp-app-server executable — see
+    /// the field doc comment.
     pub fn set_pin_executable(&self, executable: &str) {
-        *self
-            .pin_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = executable.to_string();
+        *self.pin_executable.lock_recover() = executable.to_string();
     }
 
     pub fn create_plan_mode_handler(&self) -> CodexPlanModeHandler {
@@ -141,28 +136,18 @@ impl CodexAdapter {
     }
 
     async fn load_models(&self, executable: &str) -> Vec<AdapterModel> {
-        if let Some(cached) = self
-            .cached_models
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
-        {
+        if let Some(cached) = self.cached_models.lock_recover().clone() {
             return cached;
         }
-        let client = match spawn_temp_app_server(
-            executable,
-            None,
-            false,
-            self.resolved_path.as_str(),
-        )
-        .await
-        {
-            Ok(c) => c,
-            Err(err) => {
-                tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list models");
-                return Vec::new();
-            }
-        };
+        let client =
+            match spawn_temp_app_server(executable, None, false, self.resolved_path.as_str()).await
+            {
+                Ok(c) => c,
+                Err(err) => {
+                    tracing::warn!(error = %err, "failed to list models");
+                    return Vec::new();
+                }
+            };
         let models: Vec<AdapterModel> = match client.request("model/list", None).await {
             Ok(v) => match serde_json::from_value::<ModelListResult>(v) {
                 Ok(result) => result
@@ -172,385 +157,26 @@ impl CodexAdapter {
                     .map(map_codex_model)
                     .collect(),
                 Err(err) => {
-                    tracing::warn!(module = "codex:adapter", err = %err, "codex: failed to list models");
+                    tracing::warn!(error = %err, "failed to list models");
                     Vec::new()
                 }
             },
             Err(err) => {
-                tracing::warn!(module = "codex:adapter", err = %err.0, "codex: failed to list models");
+                tracing::warn!(error = %err.0, "failed to list models");
                 Vec::new()
             }
         };
         client.close();
         // Don't cache transient failures (empty).
         if !models.is_empty() {
-            *self.cached_models.lock().unwrap_or_else(|e| e.into_inner()) = Some(models.clone());
+            *self.cached_models.lock_recover() = Some(models.clone());
         }
         models
     }
 }
 
-impl Adapter for CodexAdapter {
-    fn get_context_files(&self, project_path: &str) -> Option<mainframe_adapter_api::ContextFiles> {
-        Some(crate::context_files::collect_codex_context_files(
-            project_path,
-        ))
-    }
-
-    fn id(&self) -> &str {
-        "codex"
-    }
-    fn name(&self) -> &str {
-        "Codex"
-    }
-    fn supports_steer(&self) -> bool {
-        true
-    }
-    fn capabilities(&self) -> AdapterCapabilities {
-        let version = self
-            .observed_version
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        AdapterCapabilities {
-            plan_mode: true,
-            auto_mode: false,
-            // Verified interactively on 0.155.1: thread/start ephemeral:true alongside
-            // Mainframe's persist-history params keeps four-turn streaming, an approval
-            // gate and an interrupt working, with no rollout file or threads row. See
-            // docs/research/adapters/codex/CONSUMED-SURFACE.md.
-            no_persistence: true,
-            // True only on a CLI with the `thread/fork` `lastTurnId` surface (todo
-            // #368) — `None` (never refreshed, or version undetermined) is `false`.
-            fork: version.as_deref().is_some_and(fork_supported),
-        }
-    }
-
-    /// Todo #368: the registry calls this once per refresh (before
-    /// `apply_refresh`), on both the primary and fallback version-detection
-    /// path, so `capabilities().fork`'s version gate stays synchronous.
-    fn observe_cli_version(&self, version: Option<&str>) {
-        *self
-            .observed_version
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = version.map(str::to_string);
-    }
-
-    fn fork_unavailable_reason(&self) -> Option<String> {
-        let version = self
-            .observed_version
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        fork_unavailable_reason_for(version.as_deref())
-    }
-
-    /// Pin a fork's starting point (todo #368): read the parent thread through a
-    /// temporary app-server and pin its last turn id. Writes nothing to
-    /// `request.dest_dir` — Codex's `thread/fork` needs no on-disk snapshot.
-    fn pin_fork_point(
-        &self,
-        request: ForkPinRequest,
-    ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
-        let path = self.resolved_path.clone();
-        let executable = self
-            .pin_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        Box::pin(async move { pin_fork_point(request, &executable, path.as_str()).await })
-    }
-
-    fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
-        let path = self.resolved_path.clone();
-        Box::pin(async move {
-            match tokio::process::Command::new("codex")
-                .arg("--version")
-                .env("PATH", path.as_str())
-                .output()
-                .await
-            {
-                Ok(out) => Ok(out.status.success()),
-                Err(_) => Ok(false),
-            }
-        })
-    }
-
-    fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
-        let path = self.resolved_path.clone();
-        Box::pin(async move {
-            match tokio::process::Command::new("codex")
-                .arg("--version")
-                .env("PATH", path.as_str())
-                .output()
-                .await
-            {
-                Ok(out) if out.status.success() => {
-                    let stdout = String::from_utf8_lossy(&out.stdout);
-                    Ok(Some(
-                        parse_version(&stdout).unwrap_or_else(|| stdout.trim().to_string()),
-                    ))
-                }
-                _ => Ok(None),
-            }
-        })
-    }
-
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        Some(Vec::new())
-    }
-
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async move { Ok(self.load_models("codex").await) })
-    }
-
-    fn has_probe_models(&self) -> bool {
-        true
-    }
-
-    /// `probeModels(executablePath?)` — probe with the configured Codex binary
-    /// (#430). Delegates to `load_models`, which caches non-empty catalogs.
-    fn probe_models(
-        &self,
-        executable_path: Option<String>,
-    ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
-        Box::pin(async move {
-            let exe = executable_path.unwrap_or_else(|| "codex".to_string());
-            Ok(Some(self.load_models(&exe).await))
-        })
-    }
-
-    fn generate_title(
-        &self,
-        content: String,
-        binary: String,
-    ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
-        let path = self.resolved_path.clone();
-        Box::pin(async move { generate_codex_title(&content, &binary, path.as_str()).await })
-    }
-
-    /// `locateTranscript(sessionId)` — Codex resolves the rollout from its state DB
-    /// via the thread registry, so `project_path`/`session_file_path` are unused.
-    fn locate_transcript(
-        &self,
-        session_id: String,
-        _project_path: String,
-        _session_file_path: Option<String>,
-    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
-        Box::pin(async move { Ok(locate_codex_transcript(&session_id, None).await) })
-    }
-
-    fn get_tool_categories(&self) -> Option<ToolCategories> {
-        Some(ToolCategories {
-            explore: HashSet::new(),
-            // Codex todoList items — hidden from chat; Context tab TasksSection handles them.
-            hidden: HashSet::from(["todo_list".to_string()]),
-            // declared for parity; redundant once hidden filter fires.
-            progress: HashSet::from(["todo_list".to_string()]),
-            subagent: HashSet::from(["CollabAgent".to_string()]),
-        })
-    }
-
-    fn configured_model(
-        &self,
-        project_path: String,
-        executable_path: Option<String>,
-    ) -> BoxFuture<'_, Option<String>> {
-        Box::pin(async move {
-            crate::effective_model::probe(
-                executable_path.as_deref().unwrap_or("codex"),
-                self.resolved_path.as_str(),
-                &project_path,
-            )
-            .await
-        })
-    }
-
-    fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
-        let session = Arc::new(CodexSession::new(
-            options,
-            None,
-            self.resolved_path.clone(),
-            Arc::clone(&self.background_tasks),
-        ));
-        let sessions = self.sessions.clone();
-        let id = session.id().to_string();
-        session.set_on_exit(Box::new(move || {
-            sessions
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .retain(|s| s.id() != id);
-        }));
-        self.sessions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(session.clone());
-        session
-    }
-
-    fn kill_all(&self) {
-        let drained: Vec<Arc<CodexSession>> = self
-            .sessions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .drain(..)
-            .collect();
-        for session in drained {
-            tokio::spawn(async move {
-                if let Err(err) = session.kill().await {
-                    tracing::warn!(module = "codex:adapter", err = %err, "failed to kill codex session during killAll");
-                }
-            });
-        }
-    }
-}
-
-/// The first `N.N.N` triple in `stdout` (mirrors the TS `stdout.match(/(\d+\.\d+\.\d+)/)`).
-fn parse_version(stdout: &str) -> Option<String> {
-    let b = stdout.as_bytes();
-    let n = b.len();
-    let mut i = 0;
-    while i < n {
-        if b[i].is_ascii_digit() {
-            let mut j = i;
-            while j < n && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j < n && b[j] == b'.' {
-                j += 1;
-                let g2 = j;
-                while j < n && b[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > g2 && j < n && b[j] == b'.' {
-                    j += 1;
-                    let g3 = j;
-                    while j < n && b[j].is_ascii_digit() {
-                        j += 1;
-                    }
-                    if j > g3 {
-                        return Some(stdout[i..j].to_string());
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-    None
-}
+mod contract;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::ReasoningEffortOption;
-    use mainframe_types::adapter::EffortLevel;
-
-    // --- list-models.test.ts ---
-    #[test]
-    fn maps_efforts_default_fast_tier_personality_is_default() {
-        let m = ModelInfo {
-            id: "gpt-5.5".to_string(),
-            display_name: Some("GPT-5.5".to_string()),
-            description: Some("Frontier".to_string()),
-            hidden: Some(false),
-            is_default: Some(false),
-            supports_personality: Some(true),
-            additional_speed_tiers: Some(vec!["fast".to_string()]),
-            default_reasoning_effort: Some(EffortLevel::Medium),
-            supported_reasoning_efforts: Some(vec![
-                ReasoningEffortOption {
-                    reasoning_effort: EffortLevel::Low,
-                    description: String::new(),
-                },
-                ReasoningEffortOption {
-                    reasoning_effort: EffortLevel::Medium,
-                    description: String::new(),
-                },
-                ReasoningEffortOption {
-                    reasoning_effort: EffortLevel::High,
-                    description: String::new(),
-                },
-                ReasoningEffortOption {
-                    reasoning_effort: EffortLevel::Xhigh,
-                    description: String::new(),
-                },
-            ]),
-        };
-        let model = map_codex_model(&m);
-        assert_eq!(
-            model.supported_efforts,
-            Some(vec![
-                EffortLevel::Low,
-                EffortLevel::Medium,
-                EffortLevel::High,
-                EffortLevel::Xhigh
-            ])
-        );
-        assert_eq!(model.default_effort, Some(EffortLevel::Medium));
-        assert_eq!(model.supports_fast, Some(true));
-        assert_eq!(model.supports_personality, Some(true));
-    }
-
-    #[test]
-    fn maps_a_known_and_an_unknown_model_id_to_a_non_null_context_window() {
-        let known = ModelInfo {
-            id: "gpt-5.5".to_string(),
-            ..ModelInfo::default()
-        };
-        assert_eq!(map_codex_model(&known).context_window, Some(272_000));
-
-        let unknown = ModelInfo {
-            id: "some-future-model".to_string(),
-            ..ModelInfo::default()
-        };
-        assert_eq!(
-            map_codex_model(&unknown).context_window,
-            Some(crate::context_window::DEFAULT_CODEX_CONTEXT_WINDOW)
-        );
-    }
-
-    #[test]
-    fn deserializes_model_list_with_ultra_reasoning_effort() {
-        let payload = serde_json::json!({
-            "data": [{
-                "id": "gpt-6-codex",
-                "displayName": "GPT-6 Codex",
-                "defaultReasoningEffort": "ultra",
-                "supportedReasoningEfforts": [
-                    { "reasoningEffort": "high", "description": "" },
-                    { "reasoningEffort": "ultra", "description": "" }
-                ]
-            }]
-        });
-        let result: ModelListResult =
-            serde_json::from_value(payload).expect("ultra reasoning effort must deserialize");
-        let model = map_codex_model(&result.data[0]);
-        assert_eq!(model.id, "gpt-6-codex");
-        assert_eq!(model.default_effort, Some(EffortLevel::Ultra));
-        assert_eq!(
-            model.supported_efforts,
-            Some(vec![EffortLevel::High, EffortLevel::Ultra])
-        );
-    }
-}
-
-// PORT STATUS: src/plugins/builtin/codex/adapter.ts (160 lines)
-// confidence: medium
-// todos: 0
-// notes: #430 — listExternalSessions delegates to the disk scanner (external_sessions.rs;
-// notes: thread/list RPC + ThreadListResult removed). loadModels(executable) extracted;
-// notes: listModels → load_models("codex"), probeModels(exe) → load_models(exe??"codex").
-// notes: spawn_temp_app_server now takes the executable (probe uses the configured path).
-// notes: has_probe_models()=true + probe_models/locate_transcript are Adapter-trait
-// notes: overrides (so the registry dispatch in adapter-api probes Codex with the
-// notes: configured binary, mirroring `typeof adapter.probeModels === 'function'`).
-// notes: list_external_sessions/create_plan_mode_handler stay inherent (the trait defers
-// notes: external-session CRUD + createPlanModeHandler — adapter-api's own TODO(port)).
-// notes: sessions = Arc<Mutex<Vec<Arc<CodexSession>>>> (CONCURRENCY.tsv 103; Vec + id
-// notes: retain instead of a HashSet since Arc<CodexSession> isn't Hash), cachedModels
-// notes: Arc<Mutex<Option<..>>> (104). killAll spawns a kill task per session (TS
-// notes: fire-and-forget .catch). is_installed/get_version shell out to `codex
-// notes: --version`; parse_version mirrors adapter-api's hand-rolled N.N.N scan.
-// notes: get_fallback_models returns Some(vec![]) (TS returns []). mapCodexModel test
-// notes: ported inline; the probeModels-with-configured-path test lives in
-// notes: tests/list_models.rs (fake app-server). index.ts `activate` re-exported from lib.rs.
+#[path = "adapter_tests.rs"]
+mod tests;

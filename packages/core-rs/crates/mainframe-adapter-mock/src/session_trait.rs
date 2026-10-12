@@ -1,3 +1,5 @@
+use crate::recorded_method::RecordedMethod;
+use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -45,12 +47,11 @@ impl AdapterSession for ReplaySession {
         Box::pin(async move {
             self.ensure_loaded().await?;
             self.spawned.store(true, Ordering::SeqCst);
-            *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink;
+            *self.sink.lock_recover() = sink;
             // `mcp_call` steps reach the daemon with this spawn's credential.
-            *self.orchestration.lock().unwrap_or_else(|e| e.into_inner()) =
-                options.and_then(|o| o.orchestration_mcp);
+            *self.orchestration.lock_recover() = options.and_then(|o| o.orchestration_mcp);
             let (batch, base) = {
-                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                let mut state = self.state.lock_recover();
                 let base = state.last_delay;
                 let batch = state.replay.drain_outputs();
                 if let Some(last) = batch.last() {
@@ -100,7 +101,7 @@ impl AdapterSession for ReplaySession {
                     sink.on_queued_processed(&uuid);
                 }
             }
-            self.advance("sendMessage").await;
+            self.advance(RecordedMethod::SendMessage).await;
             Ok(())
         })
     }
@@ -110,14 +111,14 @@ impl AdapterSession for ReplaySession {
         _response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
-            self.advance("respondToPermission").await;
+            self.advance(RecordedMethod::RespondToPermission).await;
             Ok(())
         })
     }
 
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async move {
-            self.advance("interrupt").await;
+            self.advance(RecordedMethod::Interrupt).await;
             Ok(())
         })
     }
@@ -153,7 +154,7 @@ impl AdapterSession for ReplaySession {
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin(async move {
             self.ensure_loaded().await?;
-            let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let state = self.state.lock_recover();
             let mut history = messages_from_events(&state.replay.events, &self.id);
             if let Some(cut) = self.fork_cut.as_deref()
                 && let Some(end) = history.iter().position(|m| m.id == cut)

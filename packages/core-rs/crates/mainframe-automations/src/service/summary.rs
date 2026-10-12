@@ -1,6 +1,6 @@
-//! `AutomationSummary` — the CRUD-route wire shape (TS `AutomationSummary`,
-//! Node rowToSummary): `description` omits when absent, `projectId` is
-//! `string | null`.
+//! `AutomationSummary` — the CRUD-route wire shape (wire contract: the UI
+//! reads it as `AutomationSummary` in packages/types/src/automation.ts):
+//! `description` omits when absent, `projectId` is `string | null`.
 
 use serde::Serialize;
 
@@ -36,7 +36,7 @@ pub(super) fn to_summary(record: &AutomationRecord) -> AutomationSummary {
     }
 }
 
-/// Node AutomationValidationError message: messages joined with `; `, with a
+/// Validation error message: messages joined with `; `, with a
 /// fallback when a validator produced no text.
 pub(super) fn join_validation(errors: &[ValidationError]) -> String {
     let joined = errors
@@ -50,8 +50,3 @@ pub(super) fn join_validation(errors: &[ValidationError]) -> String {
         joined
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service-helpers.ts rowToSummary (12 lines)
-// confidence: high
-// todos: 0
-// notes: —

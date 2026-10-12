@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -5,7 +6,7 @@ use std::time::Duration;
 
 use nanoid::nanoid;
 use serde_json::{Value, json};
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::Notify;
 
 use mainframe_adapter_api::{
     AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput, SessionSink,
@@ -31,6 +32,7 @@ use crate::task_events::ClaudeTaskEvents;
 use crate::tuning::tuning_to_flag_settings;
 
 pub struct ClaudeSession {
+    span: tracing::Span,
     pub id: String,
     pub project_path: String,
     resume_session_id: Option<String>,
@@ -59,6 +61,7 @@ impl ClaudeSession {
         let control = Arc::new(ControlRequestChannel::new(id.clone()));
         let chat_id = options.chat_id.clone().unwrap_or_default();
         ClaudeSession {
+            span: tracing::info_span!("adapter_session", adapter = "claude", session_id = %id, chat_id = ?options.mainframe_chat_id),
             id,
             project_path: options.project_path.clone(),
             resume_session_id: options.chat_id,
@@ -96,21 +99,19 @@ impl ClaudeSession {
         }
     }
     pub fn init_weak(self: &Arc<Self>) {
-        let _ = self.weak_self.set(Arc::downgrade(self));
+        /* expected */
+        let _ = self.weak_self.set(Arc::downgrade(self)); // First attachment wins.
     }
     pub fn set_on_exit(&self, cb: Box<dyn Fn() + Send + Sync>) {
-        *self.on_exit.lock().unwrap_or_else(|e| e.into_inner()) = Some(cb);
+        *self.on_exit.lock_recover() = Some(cb);
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, ClaudeSessionState> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner())
+        self.state.lock_recover()
     }
 
     fn stdin_clone(&self) -> Option<StdinTx> {
-        self.stdin_tx
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.stdin_tx.lock_recover().clone()
     }
     fn available_stdin(&self) -> Option<StdinTx> {
         match self.stdin_clone() {
@@ -132,7 +133,7 @@ impl ClaudeSession {
     pub fn is_spawned(&self) -> bool {
         self.state().child.is_some()
     }
-    pub fn is_endpoint_session(&self) -> bool {
+    pub(crate) fn is_endpoint_session(&self) -> bool {
         self.shared.endpoint.load(Ordering::SeqCst)
     }
 
@@ -179,7 +180,7 @@ impl ClaudeSession {
 mod model_tests;
 
 #[cfg(test)]
-#[path = "session_tests/support.rs"]
+#[path = "session_tests_support.rs"]
 mod tests;
 
 #[path = "session_adapter.rs"]

@@ -1,24 +1,23 @@
-//! Todo #363, plan task 3: a `tool_result` carrying image blocks produces the
-//! same `ToolResult` (content + images) whether it arrives live through
-//! `events::handle_stdout` or via history reload's
-//! `history_converters::convert_history_entry` — modelled on
-//! `live_vs_history_id_parity.rs`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! A `tool_result` carrying image blocks produces the same `ToolResult`
+//! (content + images) whether it arrives live through `events::handle_stdout`
+//! or via history reload's `history_converters::convert_history_entry` —
+//! modelled on `live_vs_history_id_parity.rs`.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::{Arc, Mutex};
 
-use mainframe_adapter_api::{AdapterError, LoadedSkill, SessionSink};
+use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_claude::events::handle_stdout;
 use mainframe_adapter_claude::history_converters::convert_history_entry;
 use mainframe_adapter_claude::session::ClaudeSession;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
-use mainframe_types::adapter::{
-    ContextUsage, ControlRequest, DetectedPr, MessageMetadata, ProviderQuota, SessionOptions,
-    SessionResult,
-};
-use mainframe_types::chat::{ChatMessageType, MessageContent, MessageContentNode, TodoItem};
-use mainframe_types::context::SkillFileEntry;
+use mainframe_types::adapter::{ProviderQuota, SessionOptions};
+use mainframe_types::chat::{ChatMessageType, MessageContent, MessageContentNode};
 use serde_json::{Value, json};
 
 /// Captures the content passed to `on_tool_result` — the live-path
@@ -29,26 +28,29 @@ struct ToolResultRecordingSink {
 }
 
 impl SessionSink for ToolResultRecordingSink {
-    fn on_init(&self, _session_id: &str) {}
-    fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
+    mainframe_adapter_api::forward_session_sink!(on_init, on_result);
+
+    mainframe_adapter_api::forward_session_sink!(
+        on_message,
+        on_permission,
+        on_exit,
+        on_error,
+        on_compact,
+        on_compact_start,
+        on_context_usage,
+        on_plan_file,
+        on_skill_file,
+        on_queued_processed,
+        on_todo_update,
+        on_pr_detected,
+        on_cli_message,
+        on_skill_loaded,
+        on_subagent_child
+    );
+
     fn on_tool_result(&self, content: Vec<MessageContent>, _vendor_id: Option<String>) {
         *self.tool_result_content.lock().unwrap() = Some(content);
     }
-    fn on_permission(&self, _request: ControlRequest) {}
-    fn on_result(&self, _data: SessionResult) {}
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self, _vendor_id: Option<&str>) {}
-    fn on_compact_start(&self) {}
-    fn on_context_usage(&self, _usage: ContextUsage) {}
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
-    fn on_pr_detected(&self, _pr: DetectedPr) {}
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-    fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
     fn on_provider_quota(&self, _adapter_id: &str, _quota: ProviderQuota) {}
 }
 
@@ -71,7 +73,7 @@ fn session() -> Arc<ClaudeSession> {
 }
 
 /// A user entry whose sole content is a `tool_result` carrying one base64
-/// PNG image block — the `Read`-of-a-screenshot shape (todo #363).
+/// PNG image block — the `Read`-of-a-screenshot shape.
 fn image_tool_result_entry() -> Value {
     json!({
         "type": "user",

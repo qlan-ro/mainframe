@@ -1,70 +1,27 @@
-//! Facade tests (T9.2): construction over a tempfile DB with fake ports,
+//! Facade tests: construction over a tempfile DB with fake ports,
 //! CRUD + validation, manual runs, and A8 delete-cancels-active-runs.
 
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
 
+use mainframe_types::BoxFuture;
 use tempfile::TempDir;
 
 use crate::credentials::FileCredentialStore;
 use crate::domain::{
     AskMeStep, AutomationCreateInput, AutomationFormField, AutomationScope, FormFieldType, Step,
 };
-use crate::engine::BoxFuture;
 use crate::engine::test_support::{
-    CollectingSink, FakeClock, ask_agent_step, definition, notify_step, text,
+    CollectingSink, ask_agent_step, definition, fake_clock, notify_step, text,
 };
 use crate::error::StoreError;
-use crate::ports::{
-    AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest, Notification, Notifier,
-    NotifyError, ProjectRegistry,
-};
+use crate::ports::{AgentHandle, AgentOutcome, AgentPort, AgentPortError, AgentRequest};
 use crate::store::RunStatus;
+use crate::testkit::{FakeAgentPort, FakeNotifier, FixedProjects};
 
 use super::start::StartError;
 use super::{AutomationsConfig, AutomationsEngine, AutomationsPorts, EngineError};
-
-struct NoAgent;
-
-impl AgentPort for NoAgent {
-    fn start(&self, _request: AgentRequest) -> BoxFuture<'_, Result<AgentHandle, AgentPortError>> {
-        Box::pin(async { Err(AgentPortError("no agent in this test".to_string())) })
-    }
-    fn watch<'a>(
-        &'a self,
-        _chat_id: &'a str,
-    ) -> BoxFuture<'a, Result<AgentOutcome, AgentPortError>> {
-        Box::pin(async { Err(AgentPortError("no agent in this test".to_string())) })
-    }
-    fn retry<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _correction: &'a str,
-    ) -> BoxFuture<'a, Result<AgentOutcome, AgentPortError>> {
-        Box::pin(async { Err(AgentPortError("no agent in this test".to_string())) })
-    }
-    fn cancel<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Result<(), AgentPortError>> {
-        Box::pin(async { Ok(()) })
-    }
-}
-
-struct OkNotifier;
-
-impl Notifier for OkNotifier {
-    fn notify(&self, _notification: Notification) -> BoxFuture<'_, Result<(), NotifyError>> {
-        Box::pin(async { Ok(()) })
-    }
-}
-
-struct FixedProjects(String);
-
-impl ProjectRegistry for FixedProjects {
-    fn resolve_project_root<'a>(&'a self, _project_id: Option<&'a str>) -> BoxFuture<'a, String> {
-        Box::pin(async move { self.0.clone() })
-    }
-}
 
 pub(super) async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, TempDir) {
     let dir = tempfile::tempdir().unwrap();
@@ -77,11 +34,11 @@ pub(super) async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, Te
             credentials,
         },
         AutomationsPorts {
-            agent: Arc::new(NoAgent),
-            notifier: Arc::new(OkNotifier),
+            agent: Arc::new(FakeAgentPort::failing_start("no agent in this test")),
+            notifier: Arc::new(FakeNotifier::default()),
             events: sink.clone(),
             projects: Arc::new(FixedProjects(dir.path().to_string_lossy().into_owned())),
-            clock: Arc::new(FakeClock),
+            clock: fake_clock(),
             event_source: None,
             registry: None,
         },
@@ -92,7 +49,7 @@ pub(super) async fn engine() -> (Arc<AutomationsEngine>, Arc<CollectingSink>, Te
 }
 
 /// Builds an engine over an explicit db/credentials path so a second engine
-/// can reconcile the SAME store after the first is dropped (restart parity).
+/// can reconcile the SAME store after the first is dropped (a restart).
 async fn build_engine(
     db_path: &Path,
     credentials_path: &Path,
@@ -107,10 +64,10 @@ async fn build_engine(
         },
         AutomationsPorts {
             agent,
-            notifier: Arc::new(OkNotifier),
+            notifier: Arc::new(FakeNotifier::default()),
             events: sink,
             projects: Arc::new(FixedProjects(".".to_string())),
-            clock: Arc::new(FakeClock),
+            clock: fake_clock(),
             event_source: None,
             registry: None,
         },
@@ -238,14 +195,22 @@ async fn wait_for_status(
     run_id: &str,
     wanted: RunStatus,
 ) -> crate::store::RunRecord {
-    for _ in 0..100 {
-        let run = engine.get_run(run_id).await.unwrap().unwrap();
-        if run.status == wanted {
-            return run;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-    panic!("run {run_id} never reached {wanted:?}");
+    let mut result = None;
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || {
+            let run = engine.get_run(run_id).await.unwrap().unwrap();
+            if run.status == wanted {
+                result = Some(run);
+                return true;
+            }
+            false
+        },
+    )
+    .await
+    .expect("state did not settle before timeout");
+    result.expect("polling condition produced a result")
 }
 
 #[tokio::test]
@@ -374,37 +339,4 @@ async fn start_is_idempotent_and_double_start_errors() {
     assert!(matches!(err, StartError::AlreadyStarted));
 }
 
-#[tokio::test]
-async fn start_reconciles_live_runs_and_reattaches_agent_watches() {
-    let dir = tempfile::tempdir().unwrap();
-    let db_path = dir.path().join("automations.db");
-    let creds = dir.path().join("automation-credentials.json");
-
-    // Engine 1 parks the ask_agent step and is then dropped mid-wait.
-    let run_id = {
-        let sink = Arc::new(CollectingSink::default());
-        let engine1 = build_engine(&db_path, &creds, Arc::new(ParkingAgent), sink).await;
-        let created = engine1.create(standup_input("Standup")).await.unwrap();
-        let run = engine1.run_manually(&created.id).await.unwrap();
-        let waiting = wait_for_status(&engine1, &run.id, RunStatus::Waiting).await;
-        // The chat id is durably stamped on the checkpoint entry.
-        let entry = waiting.checkpoint.steps.get("agent").unwrap();
-        assert_eq!(entry.chat_id.as_deref(), Some("chat-parked"));
-        run.id
-    };
-
-    // Engine 2 adopts the same store: reconcile re-attaches the watch, the
-    // agent completes, and the run finishes WITHOUT starting a second chat.
-    let sink = Arc::new(CollectingSink::default());
-    let agent = Arc::new(AdoptingAgent::default());
-    let engine2 = build_engine(&db_path, &creds, agent.clone(), sink).await;
-    engine2.start().await.unwrap();
-
-    let done = wait_for_status(&engine2, &run_id, RunStatus::Succeeded).await;
-    assert_eq!(done.status, RunStatus::Succeeded);
-    assert_eq!(
-        agent.start_calls.load(Ordering::SeqCst),
-        0,
-        "reconcile must re-attach the existing chat, not open a new one"
-    );
-}
+include!("service_tests_additional_cases.rs");

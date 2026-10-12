@@ -1,4 +1,4 @@
-//! `/acp/{adapter-profile}` — the ACP v2 chat-facade WS upgrade (todo #350).
+//! `/acp/{adapter-profile}` — the ACP v2 chat-facade WS upgrade.
 //! Self-authenticates like `/` and `/lsp/:projectId/:language`; the profile
 //! segment must name a registered adapter. This module is only the axum
 //! socket shell: inbound frames route through `dispatch::handle_inbound`
@@ -49,7 +49,7 @@ pub(crate) async fn acp_ws_handler(
     }
     // Checked after auth so an unauthenticated caller cannot probe which
     // adapter ids are registered.
-    if ctx.adapter_registry.get(&profile).is_none() {
+    if ctx.core.adapter_registry.get(&profile).is_none() {
         return (StatusCode::NOT_FOUND, "Unknown adapter profile").into_response();
     }
 
@@ -112,13 +112,13 @@ async fn handle_heartbeat_tick(sequence: u64, socket: &mut WebSocket) -> bool {
 /// `select!` between inbound frames, hub-pushed outbound frames, the
 /// heartbeat ticker, and the throttle flush tick until either side closes.
 async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: String) {
-    let (client_id, connection, mut outbound) = ctx.facade_hub.register(profile);
+    let (client_id, connection, mut outbound) = ctx.chat.facade_hub.register(profile);
 
     let daemon = DaemonInfo {
-        version: ctx.version.clone(),
-        heartbeat_interval_ms: ctx.facade_heartbeat_interval_ms,
+        version: ctx.core.version.clone(),
+        heartbeat_interval_ms: ctx.chat.facade_heartbeat_interval_ms,
     };
-    let mut heartbeat = periodic(ctx.facade_heartbeat_interval_ms).await;
+    let mut heartbeat = periodic(ctx.chat.facade_heartbeat_interval_ms).await;
     let mut flush = periodic(FACADE_THROTTLE_INTERVAL_MS as u64).await;
     let mut sequence: u64 = 0;
 
@@ -133,7 +133,7 @@ async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: Str
                 handle_heartbeat_tick(sequence, &mut socket).await
             }
             _ = flush.tick() => {
-                ctx.facade_hub.flush_connection(&connection);
+                ctx.chat.facade_hub.flush_connection(&connection);
                 false
             }
         };
@@ -142,5 +142,5 @@ async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: Str
         }
     }
 
-    ctx.facade_hub.unregister(&client_id);
+    ctx.chat.facade_hub.unregister(&client_id);
 }

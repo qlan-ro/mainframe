@@ -1,6 +1,4 @@
-//! Ported from `packages/types/src/plugin.ts`.
-//!
-//! This module ports the **data** shapes only: capabilities, UI contribution
+//! This module holds the **data** shapes only: capabilities, UI contribution
 //! manifests, the public/chat event unions, and the service-summary DTOs. The
 //! behavioral interfaces (`PluginContext`, `PluginEventBus`, `PluginUIContext`,
 //! `PluginConfig`, `PluginDatabaseContext`, `PluginAttachmentContext`,
@@ -8,8 +6,7 @@
 //! are runtime contracts (they carry `pino.Logger`, an express `Router`, and
 //! method signatures). They belong to the `mainframe-plugins` crate as traits, not
 //! here as serde data.
-// TODO(port): the plugin behavioral traits live in mainframe-plugins; per PORTING.md
-// §2.9 v1 is builtin-only and external JS plugin loading is dropped.
+// Plugins are builtin-only; external JS plugin loading is not supported.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -242,84 +239,5 @@ pub struct PluginAttachmentMeta {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn capability_renames() {
-        assert_eq!(
-            serde_json::to_string(&PluginCapability::DaemonPublicEvents).unwrap(),
-            "\"daemon:public-events\""
-        );
-        assert_eq!(
-            serde_json::to_string(&PluginCapability::ChatReadContent).unwrap(),
-            "\"chat:read:content\""
-        );
-    }
-
-    #[test]
-    fn zone_id_kebab() {
-        assert_eq!(
-            serde_json::to_string(&ZoneId::BottomLeft).unwrap(),
-            "\"bottom-left\""
-        );
-    }
-
-    #[test]
-    fn manifest_ui_accepts_single_and_array() {
-        let single = r#"{"zone":"left-top","label":"Files"}"#;
-        let ui: PluginManifestUi = serde_json::from_str(single).unwrap();
-        assert!(matches!(ui, PluginManifestUi::Single(_)));
-
-        let multi = r#"[{"zone":"left-top","label":"Files"},{"zone":"fullview","label":"Board"}]"#;
-        let ui: PluginManifestUi = serde_json::from_str(multi).unwrap();
-        assert!(matches!(ui, PluginManifestUi::Multi(_)));
-    }
-
-    #[test]
-    fn public_daemon_event_completed_tagged() {
-        let json = r#"{"type":"chat.completed","chatId":"c1","projectId":"p1","cost":0.0842,"durationMs":1200}"#;
-        let e: PublicDaemonEvent = serde_json::from_str(json).unwrap();
-        assert!(matches!(e, PublicDaemonEvent::ChatCompleted { .. }));
-        assert_eq!(serde_json::to_string(&e).unwrap(), json);
-    }
-
-    #[test]
-    fn chat_event_message_added_carries_chat_message() {
-        let json = r#"{"type":"message.added","chatId":"c1","message":{"id":"m1","chatId":"c1","type":"user","content":[],"timestamp":"2026-07-08T00:00:00.000Z"}}"#;
-        let e: ChatEvent = serde_json::from_str(json).unwrap();
-        assert!(matches!(e, ChatEvent::MessageAdded { .. }));
-        assert_eq!(serde_json::to_string(&e).unwrap(), json);
-    }
-
-    #[test]
-    fn chat_event_tool_called_tagged() {
-        let json =
-            r#"{"type":"tool.called","chatId":"c1","toolName":"Bash","args":{"command":"ls"}}"#;
-        let e: ChatEvent = serde_json::from_str(json).unwrap();
-        assert!(matches!(e, ChatEvent::ToolCalled { .. }));
-        assert_eq!(serde_json::to_string(&e).unwrap(), json);
-    }
-
-    #[test]
-    fn chat_summary_serializes_null_title() {
-        let json = r#"{"id":"c1","title":null,"projectId":"p1","adapterId":"claude","createdAt":"2026-07-08T00:00:00Z","totalCost":0.0}"#;
-        let s: ChatSummary = serde_json::from_str(json).unwrap();
-        assert!(s.title.is_none());
-        assert_eq!(serde_json::to_string(&s).unwrap(), json);
-    }
-}
-
-// PORT STATUS: packages/types/src/plugin.ts (225 lines)
-// confidence: medium
-// todos: 1
-// notes: only the serde-data shapes are ported (capabilities, UI manifests, the
-// PublicDaemonEvent/ChatEvent tagged unions, ChatSummary/ProjectSummary/
-// PluginAttachmentMeta). Behavioral interfaces carrying pino.Logger / express
-// Router / method signatures are NOT ported here — they belong to
-// mainframe-plugins as traits (v1 builtin-only; external JS plugin loading dropped
-// per §2.9). PublicDaemonEventName / ChatEventName string-union aliases collapse
-// into the tagged-enum discriminants. cost/totalCost are f64 (fractional);
-// durationMs/sizeBytes are i64. ChatEvent.message is crate::chat::ChatMessage.
-// ChatSummary.title (string|null) is required-nullable → Option WITHOUT skip.
-// PublicDaemonEvent/ChatEvent/ChatSummary derive PartialEq (Value/f64 are not Eq).
+#[path = "plugin_tests.rs"]
+mod tests;

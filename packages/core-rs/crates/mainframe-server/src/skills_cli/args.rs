@@ -8,11 +8,11 @@ use super::Scope;
 /// to `claude-code` today (only Claude's skills surface exists); kept as a
 /// named function so a second adapter is a one-line change instead of a
 /// literal repeated at four call sites.
-pub fn agent_for_adapter(_adapter_id: Option<&str>) -> &'static str {
+pub(crate) fn agent_for_adapter(_adapter_id: Option<&str>) -> &'static str {
     "claude-code"
 }
 
-pub fn list_args(scope: Scope) -> Vec<String> {
+pub(crate) fn list_args(scope: Scope) -> Vec<String> {
     let mut args = vec!["list".to_string(), "--json".to_string()];
     if scope == Scope::Global {
         args.push("--global".to_string());
@@ -24,14 +24,14 @@ pub fn probe_args(source: &str) -> Vec<String> {
     vec!["add".to_string(), source.to_string(), "--list".to_string()]
 }
 
-pub fn add_args(source: &str, skills: &[String], agent: &str, scope: Scope) -> Vec<String> {
+pub(crate) fn add_args(source: &str, skills: &[String], agent: &str, scope: Scope) -> Vec<String> {
     let mut args = vec!["add".to_string(), source.to_string()];
     push_skill_flags(&mut args, skills);
     push_agent_scope_yes(&mut args, agent, scope);
     args
 }
 
-pub fn remove_args(skills: &[String], agent: &str, scope: Scope) -> Vec<String> {
+pub(crate) fn remove_args(skills: &[String], agent: &str, scope: Scope) -> Vec<String> {
     let mut args = vec!["remove".to_string()];
     push_skill_flags(&mut args, skills);
     push_agent_scope_yes(&mut args, agent, scope);

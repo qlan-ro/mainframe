@@ -1,13 +1,18 @@
 [package]
 name = "mainframe-chat"
 edition.workspace = true
+rust-version.workspace = true
 version.workspace = true
 publish.workspace = true
 
 [lints]
 workspace = true
 
+[features]
+test-support = ["mainframe-adapter-api/test-support", "mainframe-runtime/test-support", "dep:mainframe-adapter-claude"]
+
 [dependencies]
+mainframe-adapter-claude = { workspace = true, optional = true }
 tokio = { workspace = true }
 dashmap = { workspace = true }
 thiserror = { workspace = true }
@@ -18,6 +23,7 @@ chrono = { workspace = true }
 nanoid = { workspace = true }
 dirs = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-db = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-adapter-api = { workspace = true }
 mainframe-display = { workspace = true }
@@ -25,12 +31,7 @@ mainframe-services = { workspace = true }
 mainframe-background-tasks = { workspace = true }
 
 [dev-dependencies]
+mainframe-adapter-api = { workspace = true, features = ["test-support"] }
 tempfile = { workspace = true }
 mainframe-runtime = { workspace = true, features = ["test-support"] }
-# The real production projector (todo #376 follow-up): a fake like
-# `FullRebuildProjector` can never reproduce an empty-groups seed bug, so the
-# `display_snapshot`-then-`append` regression test needs the actual
-# `IncrementalProjector`, not the deps-trait fake every other test here uses.
 mainframe-adapter-claude = { workspace = true }
-# The handoff marker round trip through the Codex history loaders.
-mainframe-adapter-codex = { workspace = true }

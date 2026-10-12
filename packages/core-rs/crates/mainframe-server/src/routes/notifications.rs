@@ -24,7 +24,7 @@ use serde::Deserialize;
 use crate::automations_deps::broadcast_and_push;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 #[derive(Deserialize)]
 struct NotifyBody {
@@ -61,7 +61,7 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
         data: serde_json::json!({}),
         priority: PushPriority::Default,
     };
-    broadcast_and_push(&ctx.broadcast, &ctx.services.push, event, message).await;
+    broadcast_and_push(&ctx.core.broadcast, &ctx.services.push, event, message).await;
     ok_empty()
 }
 

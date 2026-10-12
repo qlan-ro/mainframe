@@ -1,4 +1,4 @@
-//! Codex model context windows (todo #352). `model/list` carries no window,
+//! Codex model context windows. `model/list` carries no window,
 //! so this is a snapshot of codex-cli 0.153.4's packaged `modelCatalogJson`,
 //! consulted only when the wire's own `tokenUsage.modelContextWindow` is
 //! absent.
@@ -22,7 +22,7 @@ const KNOWN_WINDOWS: &[(&str, i64)] = &[
 ];
 
 /// The table's window for a known model id, with no default — callers that
-/// must not guess (the emission path, AC 4) use this.
+/// must not guess (the emission path) use this.
 pub(crate) fn known_context_window(id: Option<&str>) -> Option<i64> {
     let id = id?;
     KNOWN_WINDOWS

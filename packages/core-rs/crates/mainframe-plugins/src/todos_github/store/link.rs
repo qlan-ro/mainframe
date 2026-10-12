@@ -18,7 +18,7 @@ pub struct Link {
 }
 
 /// Upserts the single link row for `link.project_id`.
-pub async fn insert_link(ctx: &PluginContext, link: &Link) -> Result<(), PluginError> {
+pub(crate) async fn insert_link(ctx: &PluginContext, link: &Link) -> Result<(), PluginError> {
     ctx.db
         .execute(
             "INSERT INTO github_links
@@ -42,7 +42,10 @@ pub async fn insert_link(ctx: &PluginContext, link: &Link) -> Result<(), PluginE
         .await
 }
 
-pub async fn read_link(ctx: &PluginContext, project_id: &str) -> Result<Option<Link>, PluginError> {
+pub(crate) async fn read_link(
+    ctx: &PluginContext,
+    project_id: &str,
+) -> Result<Option<Link>, PluginError> {
     let row = ctx
         .db
         .query_one(
@@ -53,7 +56,7 @@ pub async fn read_link(ctx: &PluginContext, project_id: &str) -> Result<Option<L
     Ok(row.map(row_to_link))
 }
 
-pub async fn delete_link(ctx: &PluginContext, project_id: &str) -> Result<(), PluginError> {
+pub(crate) async fn delete_link(ctx: &PluginContext, project_id: &str) -> Result<(), PluginError> {
     ctx.db
         .execute(
             "DELETE FROM github_links WHERE project_id = ?".into(),

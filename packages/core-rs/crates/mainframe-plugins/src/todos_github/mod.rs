@@ -1,4 +1,4 @@
-//! GitHub Issues sync for the todos plugin (todo #286): the workflow-label
+//! GitHub Issues sync for the todos plugin: the workflow-label
 //! denylist, the additive schema + store, and the per-field touch map that
 //! records local recency without disturbing `todos.updated_at`.
 
@@ -12,6 +12,7 @@ pub mod store;
 pub mod touch;
 
 #[cfg(test)]
+#[path = "acceptance_tests_mod.rs"]
 mod acceptance_tests;
 
 #[cfg(test)]
@@ -24,6 +25,7 @@ mod labels_tests;
 mod pairing_tests;
 
 #[cfg(test)]
+#[path = "reconcile_tests_mod.rs"]
 mod reconcile_tests;
 
 #[cfg(test)]
@@ -36,9 +38,11 @@ mod run_test_support;
 mod run_tests;
 
 #[cfg(test)]
+#[path = "routes_tests_mod.rs"]
 mod routes_tests;
 
 #[cfg(test)]
+#[path = "store_tests_mod.rs"]
 mod store_tests;
 
 #[cfg(test)]

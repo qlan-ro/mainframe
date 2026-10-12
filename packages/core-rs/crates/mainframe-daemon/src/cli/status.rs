@@ -1,4 +1,4 @@
-//! Ported from `packages/core/src/cli/status.ts` — `mainframe status`.
+//! The `mainframe status` command.
 //!
 //! Prints the running daemon's health (status/version/port/tunnel/data dir) and
 //! the list of paired devices.
@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::connect_failure_message;
 
-/// `runStatus()`.
+/// Runs `mainframe status`.
 pub async fn run_status() {
     let config = match mainframe_runtime::config::get_config() {
         Ok(config) => config,
@@ -17,7 +17,13 @@ pub async fn run_status() {
         }
     };
     let base_url = format!("http://127.0.0.1:{}", config.port);
-    let client = reqwest::Client::new();
+    let client = match mainframe_runtime::http::client() {
+        Ok(client) => client,
+        Err(_) => {
+            eprintln!("{}", connect_failure_message(&base_url));
+            std::process::exit(1);
+        }
+    };
 
     let health: Value = match client.get(format!("{base_url}/health")).send().await {
         Ok(res) => res.json().await.unwrap_or(Value::Null),
@@ -53,7 +59,7 @@ pub async fn run_status() {
     std::process::exit(0);
 }
 
-/// `runStatus()`'s health block — the `Mainframe Daemon` status/version/port/
+/// The `mainframe status` health block — the `Mainframe Daemon` status/version/port/
 /// tunnel/data-dir summary printed above the device list.
 fn format_status_report(health: &Value, port: u16, data_dir: &str) -> String {
     let status = health.get("status").and_then(Value::as_str).unwrap_or("?");
@@ -71,7 +77,7 @@ fn format_status_report(health: &Value, port: u16, data_dir: &str) -> String {
     )
 }
 
-/// `runStatus()`'s paired-device list, printed after the health block.
+/// The `mainframe status` paired-device list, printed after the health block.
 fn format_devices(devices: &[Value]) -> String {
     if devices.is_empty() {
         return "\n  Paired devices: none".to_string();
@@ -86,11 +92,6 @@ fn format_devices(devices: &[Value]) -> String {
     lines.join("\n")
 }
 
-// PORT STATUS: src/cli/status.ts (46 lines)
-// confidence: high
-// notes: reqwest GET /health + /api/auth/devices against the loopback daemon.
-// `lastSeen` is printed verbatim (the TS `new Date(...).toLocaleString()` is locale-
-// dependent; the ISO string is the faithful, deterministic rendering here).
-
 #[cfg(test)]
+#[path = "status_tests.rs"]
 mod tests;

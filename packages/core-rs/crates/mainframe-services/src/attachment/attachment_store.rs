@@ -1,16 +1,9 @@
-//! Ported from `src/attachment/attachment-store.ts`.
-
 use std::path::{Path, PathBuf};
 
+use mainframe_types::http_status::{HttpStatus, StatusKind};
 use serde::{Deserialize, Serialize};
 
 /// A single safe path segment — matches nanoid's alphabet; rejects `..`, `/`, etc.
-fn is_safe_segment(s: &str) -> bool {
-    // /^[A-Za-z0-9_-]+$/
-    !s.is_empty()
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -48,12 +41,13 @@ pub struct StoredAttachmentMeta {
 }
 
 /// Fallible-operation error surfaced by `save` (the write path). Read paths
-/// (`get`/`list`/`delete_chat`) never return `Err` — they mirror the TS
-/// swallow-to-null/empty behavior.
+/// (`get`/`list`/`delete_chat`) never return `Err`; they return null or empty
+/// results when a read fails.
 #[derive(Debug, thiserror::Error)]
 pub enum AttachmentError {
-    #[error("{0}")]
-    Message(String),
+    /// A chat id that is not a single safe path segment.
+    #[error("Invalid chatId path segment: {0:?}")]
+    InvalidChatId(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -62,6 +56,15 @@ pub enum AttachmentError {
 
 pub struct AttachmentStore {
     base_dir: PathBuf,
+}
+
+impl HttpStatus for AttachmentError {
+    fn status_kind(&self) -> StatusKind {
+        match self {
+            Self::InvalidChatId(_) => StatusKind::BadRequest,
+            Self::Io(_) | Self::Json(_) => StatusKind::Internal,
+        }
+    }
 }
 
 impl AttachmentStore {
@@ -74,10 +77,8 @@ impl AttachmentStore {
     /// Resolve a chat's attachment dir, rejecting any chatId that is not a single
     /// safe path segment, closing the path-traversal seam.
     fn chat_dir(&self, chat_id: &str) -> Result<PathBuf, AttachmentError> {
-        if !is_safe_segment(chat_id) {
-            return Err(AttachmentError::Message(format!(
-                "Invalid chatId path segment: {chat_id:?}"
-            )));
+        if !mainframe_types::ids::is_safe_identifier(chat_id) {
+            return Err(AttachmentError::InvalidChatId(chat_id.to_string()));
         }
         Ok(self.base_dir.join(chat_id))
     }
@@ -98,9 +99,7 @@ impl AttachmentStore {
             let materialized_path = match self.materialize(&files_dir, &id, &attachment).await {
                 Ok(path) => Some(path),
                 Err(err) => {
-                    tracing::warn!(
-                        module = "attachment-store",
-                        ?err,
+                    tracing::warn!(error = ?err,
                         chat_id,
                         name = %attachment.name,
                         "failed to materialize attachment file"
@@ -136,14 +135,18 @@ impl AttachmentStore {
     ) -> Result<String, AttachmentError> {
         let safe_name = sanitize_file_name(&attachment.name);
         let materialized = files_dir.join(format!("{id}-{safe_name}"));
-        tokio::fs::write(&materialized, decode_base64(&attachment.data)).await?;
+        tokio::fs::write(
+            &materialized,
+            mainframe_types::base64_data::decode_lenient(&attachment.data),
+        )
+        .await?;
         Ok(materialized.to_string_lossy().into_owned())
     }
 
     pub async fn get(&self, chat_id: &str, attachment_id: &str) -> Option<StoredAttachment> {
         // `attachment_id` is a caller-supplied path segment; reject anything that
         // isn't a single safe segment before it can escape the chat dir.
-        if !is_safe_segment(attachment_id) {
+        if !mainframe_types::ids::is_safe_identifier(attachment_id) {
             return None;
         }
         let dir = self.chat_dir(chat_id).ok()?;
@@ -197,12 +200,9 @@ impl AttachmentStore {
         match self.chat_dir(chat_id) {
             Ok(dir) => {
                 if let Err(err) = tokio::fs::remove_dir_all(&dir).await {
-                    // `rm` with force ignores a missing dir; mirror that by
-                    // ignoring NotFound, but surface anything else.
+                    // A missing directory is already deleted; surface other errors.
                     if err.kind() != std::io::ErrorKind::NotFound {
-                        tracing::warn!(
-                            module = "attachment-store",
-                            ?err,
+                        tracing::warn!(error = ?err,
                             chat_id,
                             "failed to delete chat attachments"
                         );
@@ -210,9 +210,7 @@ impl AttachmentStore {
                 }
             }
             Err(err) => {
-                tracing::warn!(
-                    module = "attachment-store",
-                    ?err,
+                tracing::warn!(error = ?err,
                     chat_id,
                     "failed to delete chat attachments"
                 );
@@ -221,7 +219,10 @@ impl AttachmentStore {
     }
 }
 
-fn sanitize_file_name(name: &str) -> String {
+/// `basename(name).replace(/[^\w.\-() ]+/g, '_').trim()` with an
+/// `attachment.bin` fallback for an empty result — the on-disk name for an
+/// uploaded file (the record keeps the original).
+pub fn sanitize_file_name(name: &str) -> String {
     let base = Path::new(name)
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
@@ -253,411 +254,6 @@ fn sanitize_file_name(name: &str) -> String {
     }
 }
 
-/// Lenient base64 decoder mirroring `Buffer.from(data, 'base64')` (which skips
-/// invalid characters rather than throwing). No `base64` crate is in the §8
-/// allowlist, so it is hand-rolled.
-fn decode_base64(input: &str) -> Vec<u8> {
-    fn val(c: u8) -> Option<u8> {
-        match c {
-            b'A'..=b'Z' => Some(c - b'A'),
-            b'a'..=b'z' => Some(c - b'a' + 26),
-            b'0'..=b'9' => Some(c - b'0' + 52),
-            b'+' => Some(62),
-            b'/' => Some(63),
-            _ => None,
-        }
-    }
-    let mut out = Vec::new();
-    let mut buf: u32 = 0;
-    let mut bits: u32 = 0;
-    for &c in input.as_bytes() {
-        if c == b'=' {
-            break;
-        }
-        let Some(v) = val(c) else {
-            continue; // skip whitespace / invalid chars (Node is lenient)
-        };
-        buf = (buf << 6) | u32::from(v);
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((buf >> bits) as u8);
-        }
-    }
-    out
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn b64(s: &str) -> String {
-        // Encode with the standard alphabet + padding (test helper mirroring
-        // Buffer.from(x).toString('base64')).
-        const ALPHA: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        let bytes = s.as_bytes();
-        let mut out = String::new();
-        for chunk in bytes.chunks(3) {
-            let b = [
-                chunk[0],
-                *chunk.get(1).unwrap_or(&0),
-                *chunk.get(2).unwrap_or(&0),
-            ];
-            let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-            out.push(ALPHA[((n >> 18) & 63) as usize] as char);
-            out.push(ALPHA[((n >> 12) & 63) as usize] as char);
-            out.push(if chunk.len() > 1 {
-                ALPHA[((n >> 6) & 63) as usize] as char
-            } else {
-                '='
-            });
-            out.push(if chunk.len() > 2 {
-                ALPHA[(n & 63) as usize] as char
-            } else {
-                '='
-            });
-        }
-        out
-    }
-
-    async fn store() -> (tempfile::TempDir, AttachmentStore) {
-        let dir = tempfile::tempdir().unwrap();
-        let store = AttachmentStore::new(dir.path());
-        (dir, store)
-    }
-
-    #[tokio::test]
-    async fn saves_an_image_and_retrieves_it_by_id() {
-        let (_d, store) = store().await;
-        let metas = store
-            .save(
-                "chat-1",
-                vec![StoredAttachment {
-                    name: "photo.png".into(),
-                    media_type: "image/png".into(),
-                    size_bytes: 100,
-                    kind: AttachmentKind::Image,
-                    data: b64("fake-image-data"),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        let meta = &metas[0];
-        assert_eq!(meta.name, "photo.png");
-        assert_eq!(meta.kind, AttachmentKind::Image);
-
-        let retrieved = store.get("chat-1", &meta.id).await.unwrap();
-        assert_eq!(retrieved.name, "photo.png");
-        assert_eq!(retrieved.data, b64("fake-image-data"));
-    }
-
-    #[tokio::test]
-    async fn returns_none_for_non_existent_attachment() {
-        let (_d, store) = store().await;
-        assert!(store.get("chat-1", "nonexistent-id").await.is_none());
-    }
-
-    #[tokio::test]
-    async fn list_returns_empty_for_unknown_chat() {
-        let (_d, store) = store().await;
-        assert!(store.list("unknown-chat").await.is_empty());
-    }
-
-    #[tokio::test]
-    async fn lists_all_attachments_for_a_chat() {
-        let (_d, store) = store().await;
-        store
-            .save(
-                "chat-2",
-                vec![
-                    StoredAttachment {
-                        name: "a.png".into(),
-                        media_type: "image/png".into(),
-                        size_bytes: 10,
-                        kind: AttachmentKind::Image,
-                        data: String::new(),
-                        original_path: None,
-                        materialized_path: None,
-                    },
-                    StoredAttachment {
-                        name: "b.png".into(),
-                        media_type: "image/png".into(),
-                        size_bytes: 20,
-                        kind: AttachmentKind::Image,
-                        data: String::new(),
-                        original_path: None,
-                        materialized_path: None,
-                    },
-                ],
-            )
-            .await
-            .unwrap();
-        let list = store.list("chat-2").await;
-        assert_eq!(list.len(), 2);
-        let names: Vec<&str> = list.iter().map(|a| a.name.as_str()).collect();
-        assert!(names.contains(&"a.png"));
-        assert!(names.contains(&"b.png"));
-    }
-
-    #[tokio::test]
-    async fn delete_chat_removes_all_attachments() {
-        let (_d, store) = store().await;
-        store
-            .save(
-                "chat-3",
-                vec![StoredAttachment {
-                    name: "c.png".into(),
-                    media_type: "image/png".into(),
-                    size_bytes: 10,
-                    kind: AttachmentKind::Image,
-                    data: String::new(),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        store.delete_chat("chat-3").await;
-        assert!(store.list("chat-3").await.is_empty());
-    }
-
-    #[tokio::test]
-    async fn delete_chat_does_not_throw_when_dir_missing() {
-        let (_d, store) = store().await;
-        store.delete_chat("nonexistent-chat").await; // must not panic
-    }
-
-    #[tokio::test]
-    async fn strips_path_traversal_from_file_name() {
-        let (dir, store) = store().await;
-        let metas = store
-            .save(
-                "chat-4",
-                vec![StoredAttachment {
-                    name: "../../etc/passwd".into(),
-                    media_type: "text/plain".into(),
-                    size_bytes: 10,
-                    kind: AttachmentKind::File,
-                    data: b64("data"),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        let mp = metas[0].materialized_path.as_ref().unwrap();
-        assert!(!mp.contains(".."));
-        assert!(mp.contains(&dir.path().to_string_lossy().into_owned()));
-    }
-
-    #[tokio::test]
-    async fn empty_after_sanitize_falls_back_to_attachment_bin() {
-        let (_d, store) = store().await;
-        let metas = store
-            .save(
-                "chat-5",
-                vec![StoredAttachment {
-                    name: "   ".into(),
-                    media_type: "text/plain".into(),
-                    size_bytes: 5,
-                    kind: AttachmentKind::File,
-                    data: b64("hello"),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        assert!(
-            metas[0]
-                .materialized_path
-                .as_ref()
-                .unwrap()
-                .ends_with("attachment.bin")
-        );
-    }
-
-    #[tokio::test]
-    async fn rejects_traversal_chat_id_on_save() {
-        let (_d, store) = store().await;
-        let err = store
-            .save(
-                "../evil",
-                vec![StoredAttachment {
-                    name: "x.txt".into(),
-                    media_type: "text/plain".into(),
-                    size_bytes: 1,
-                    kind: AttachmentKind::File,
-                    data: String::new(),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await;
-        assert!(matches!(err, Err(AttachmentError::Message(m)) if m.contains("Invalid chatId")));
-    }
-
-    #[tokio::test]
-    async fn returns_none_empty_for_traversal_chat_id_on_read_paths() {
-        let (_d, store) = store().await;
-        assert!(store.get("../../etc", "passwd").await.is_none());
-        assert!(store.list("../evil").await.is_empty());
-        store.delete_chat("../evil").await; // must not panic
-    }
-
-    #[tokio::test]
-    async fn accepts_normal_nanoid_style_chat_ids() {
-        let (_d, store) = store().await;
-        let metas = store
-            .save(
-                "aB3_x-Yz",
-                vec![StoredAttachment {
-                    name: "a.png".into(),
-                    media_type: "image/png".into(),
-                    size_bytes: 1,
-                    kind: AttachmentKind::Image,
-                    data: String::new(),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        assert_eq!(metas.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn rejects_traversal_attachment_id_on_get() {
-        let (_d, store) = store().await;
-        store
-            .save(
-                "chat-victim",
-                vec![StoredAttachment {
-                    name: "s.txt".into(),
-                    media_type: "text/plain".into(),
-                    size_bytes: 1,
-                    kind: AttachmentKind::File,
-                    data: String::new(),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        assert!(
-            store
-                .get("chat-a", "../chat-victim/some-id")
-                .await
-                .is_none()
-        );
-        assert!(store.get("chat-a", "..%2Fchat-victim").await.is_none());
-    }
-
-    #[tokio::test]
-    async fn materializes_image_bytes_and_records_the_path() {
-        let (_d, store) = store().await;
-        let metas = store
-            .save(
-                "chat-img-1",
-                vec![StoredAttachment {
-                    name: "shot.png".into(),
-                    media_type: "image/png".into(),
-                    size_bytes: 15,
-                    kind: AttachmentKind::Image,
-                    data: b64("fake-image-data"),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        let path = metas[0].materialized_path.as_ref().unwrap();
-        let bytes = tokio::fs::read(path).await.unwrap();
-        assert_eq!(bytes, b"fake-image-data");
-    }
-
-    #[tokio::test]
-    async fn stored_image_metadata_carries_the_materialized_path() {
-        let (_d, store) = store().await;
-        let metas = store
-            .save(
-                "chat-img-2",
-                vec![StoredAttachment {
-                    name: "shot.png".into(),
-                    media_type: "image/png".into(),
-                    size_bytes: 15,
-                    kind: AttachmentKind::Image,
-                    data: b64("fake-image-data"),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        let meta = &metas[0];
-        let stored = store.get("chat-img-2", &meta.id).await.unwrap();
-        assert_eq!(stored.materialized_path, meta.materialized_path);
-    }
-
-    #[tokio::test]
-    async fn strips_path_traversal_from_image_file_name() {
-        let (dir, store) = store().await;
-        let metas = store
-            .save(
-                "chat-img-3",
-                vec![StoredAttachment {
-                    name: "../../etc/passwd".into(),
-                    media_type: "image/png".into(),
-                    size_bytes: 10,
-                    kind: AttachmentKind::Image,
-                    data: b64("data"),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        let mp = metas[0].materialized_path.as_ref().unwrap();
-        assert!(!mp.contains(".."));
-        assert!(mp.contains(&dir.path().to_string_lossy().into_owned()));
-    }
-
-    #[tokio::test]
-    async fn delete_chat_removes_materialized_images() {
-        let (_d, store) = store().await;
-        let metas = store
-            .save(
-                "chat-img-4",
-                vec![StoredAttachment {
-                    name: "shot.png".into(),
-                    media_type: "image/png".into(),
-                    size_bytes: 15,
-                    kind: AttachmentKind::Image,
-                    data: b64("fake-image-data"),
-                    original_path: None,
-                    materialized_path: None,
-                }],
-            )
-            .await
-            .unwrap();
-        let path = metas[0].materialized_path.clone().unwrap();
-        store.delete_chat("chat-img-4").await;
-        assert!(tokio::fs::metadata(&path).await.is_err());
-        assert!(store.list("chat-img-4").await.is_empty());
-    }
-}
-
-// PORT STATUS: src/attachment/attachment-store.ts (159 lines)
-// confidence: high
-// todos: 0
-// notes: async fs via tokio::fs (Promise.all → sequential awaits, order preserved).
-// SAFE_SEGMENT regex → is_safe_segment byte check; nanoid! for ids (same alphabet).
-// The .json blob is the StoredAttachment with materializedPath overridden
-// (serde camelCase + skip_serializing_if None mirrors JSON.stringify omitting
-// undefined). delete_chat ignores NotFound to mirror `rm {force:true}`; other
-// errors log the same warn. base64 decode is hand-rolled (no base64 crate in the
-// §8 allowlist) and lenient like Buffer.from. size_bytes is i64. Materialization
-// is kind-agnostic (todo #300): every attachment, image or file, is written to
-// the chat's files/ dir and its path recorded on the stored metadata.
+#[path = "attachment_store_tests.rs"]
+mod tests;

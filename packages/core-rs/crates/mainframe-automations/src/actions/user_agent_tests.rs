@@ -16,7 +16,8 @@ use super::ado::AdoCreateItemAction;
 use super::github::GithubCreatePrAction;
 use super::http_action::HttpRequestAction;
 use super::notion::NotionAddRowAction;
-use super::{Action, ActionCtx, USER_AGENT};
+use super::{Action, ActionCtx};
+use crate::USER_AGENT;
 
 fn ctx() -> ActionCtx {
     ActionCtx {

@@ -1,7 +1,7 @@
-//! Pure GitHub sync reconciliation (todo #286): a 3-way comparison of the
+//! Pure GitHub sync reconciliation: a 3-way comparison of the
 //! local task, the remote issue, and the stored baseline decides what
 //! changed — never a clock alone (spec "What a sync run does"). No I/O here;
-//! `run.rs` is the only caller and owns every side effect this plan names.
+//! `run.rs` is the only caller and owns every side effect.
 
 mod fields;
 mod labels;
@@ -45,7 +45,7 @@ pub struct Baseline {
     pub labels: Vec<String>,
 }
 
-/// The per-field-family local-recency clock (D3) — never the task row's
+/// The per-field-family local-recency clock — never the task row's
 /// general `updated_at`. Absent entries compare as unresolved, same as a
 /// remote stamp that can't be read.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -107,15 +107,7 @@ pub fn reconcile(
     let mut remote_writes = RemoteWrites::default();
     let mut report_rows = Vec::new();
 
-    let title = fields::reconcile_scalar(fields::ScalarInput {
-        field: "title",
-        local_value: &local.title,
-        remote_value: &remote.title,
-        baseline_value: &baseline.title,
-        local_at: touch.title_at.as_deref(),
-        remote_at: remote.title_at.as_deref(),
-        remote_coarse: false,
-    });
+    let title = reconcile_title(local, remote, baseline, touch);
     fields::apply(
         title.clone(),
         &mut local_writes.title,
@@ -161,4 +153,21 @@ pub fn reconcile(
             labels: label_outcome.next_labels,
         },
     }
+}
+
+fn reconcile_title(
+    local: &LocalTask,
+    remote: &RemoteIssueView,
+    baseline: &Baseline,
+    touch: &TouchTimes,
+) -> fields::ScalarOutcome {
+    fields::reconcile_scalar(fields::ScalarInput {
+        field: "title",
+        local_value: &local.title,
+        remote_value: &remote.title,
+        baseline_value: &baseline.title,
+        local_at: touch.title_at.as_deref(),
+        remote_at: remote.title_at.as_deref(),
+        remote_coarse: false,
+    })
 }

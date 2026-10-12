@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/quota-parse.ts`.
-//!
 //! Anchor-based parser for the human-prose output of `claude -p "/usage"`. Percent
 //! is load-bearing (a parse failure fails the whole provider to `unknown`, #251);
 //! reset is best-effort (an unparseable reset nulls that window's `resetsAt` and
@@ -27,7 +25,7 @@ fn unknown(observed_at: i64) -> ProviderQuota {
 }
 
 /// Parse `claude -p "/usage"` prose into a `ProviderQuota`. Mirrors `parseClaudeUsage`.
-pub fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
+pub(crate) fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
     let mut session: Option<QuotaWindow> = None;
     let mut weekly: Option<QuotaWindow> = None;
     let mut model_windows: Vec<QuotaWindow> = Vec::new();
@@ -45,7 +43,7 @@ pub fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
             continue;
         }
         if is_no_data(line) {
-            tracing::info!(line, "claude /usage: recognized no-data (non-subscriber)");
+            tracing::info!(line, "recognized no-data (non-subscriber)");
             return unknown(now);
         }
 
@@ -65,34 +63,21 @@ pub fn parse_claude_usage(text: &str, now: i64) -> ProviderQuota {
             };
             model_windows.push(w);
         } else {
-            tracing::warn!(
-                line,
-                "claude /usage: unclassifiable line, failing provider to unknown"
-            );
+            tracing::warn!(line, "unclassifiable line, failing provider to unknown");
             return unknown(now);
         }
         saw_window = true;
     }
 
     if !saw_window {
-        tracing::info!("claude /usage: no windows recognized, provider unknown");
+        tracing::info!("no windows recognized, provider unknown");
         return unknown(now);
     }
-    ProviderQuota {
-        status: ProviderQuotaStatus::Ok,
-        observed_at: now,
-        session,
-        weekly,
-        model_windows,
-        account_identity: None,
-    }
+    known_quota(now, session, weekly, model_windows)
 }
 
 fn fail_closed(line: &str, now: i64) -> ProviderQuota {
-    tracing::warn!(
-        line,
-        "claude /usage: percent parse failed, failing provider to unknown"
-    );
+    tracing::warn!(line, "percent parse failed, failing provider to unknown");
     unknown(now)
 }
 
@@ -234,7 +219,7 @@ fn take_token(s: &str) -> Option<(&str, &str)> {
 /// Resolves the clock + meridiem, accepting the meridiem glued to the time
 /// (`10:10am`) or separated by whitespace (`10:10 am`, already split into a
 /// following token). Returns `(hour12, minute, is_pm, remaining)`; the meridiem is
-/// required — a bare `10:10` yields `None`, mirroring the TS `(am|pm)` group.
+/// required — a bare `10:10` yields `None`.
 fn parse_time_and_meridiem<'a>(
     time_tok: &str,
     after_time: &'a str,
@@ -301,161 +286,8 @@ fn wall_clock_in_zone_to_epoch_ms(
     Some(local.timestamp_millis())
 }
 
+mod status;
+use status::known_quota;
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const FIXTURE: &str = include_str!("__fixtures__/claude-usage.txt");
-
-    // A fixed clock before both reset instants so the future-year inference picks 2026.
-    fn now() -> i64 {
-        chrono::Utc
-            .with_ymd_and_hms(2026, 7, 18, 6, 0, 0)
-            .unwrap()
-            .timestamp_millis()
-    }
-    fn session_reset() -> i64 {
-        chrono::Utc
-            .with_ymd_and_hms(2026, 7, 18, 7, 10, 0)
-            .unwrap()
-            .timestamp_millis()
-    }
-    fn weekly_reset() -> i64 {
-        chrono::Utc
-            .with_ymd_and_hms(2026, 7, 23, 13, 0, 0)
-            .unwrap()
-            .timestamp_millis()
-    }
-
-    #[test]
-    fn parses_all_three_windows_from_the_golden_fixture() {
-        let quota = parse_claude_usage(FIXTURE, now());
-        assert_eq!(quota.status, ProviderQuotaStatus::Ok);
-        assert_eq!(quota.observed_at, now());
-        assert_eq!(
-            quota.session,
-            Some(QuotaWindow {
-                kind: QuotaWindowKind::Session,
-                used_percent: 19.0,
-                resets_at: Some(session_reset()),
-                observed_at: Some(now()),
-                label: None,
-            })
-        );
-        assert_eq!(
-            quota.weekly,
-            Some(QuotaWindow {
-                kind: QuotaWindowKind::Weekly,
-                used_percent: 25.0,
-                resets_at: Some(weekly_reset()),
-                observed_at: Some(now()),
-                label: None,
-            })
-        );
-        assert_eq!(
-            quota.model_windows,
-            vec![QuotaWindow {
-                kind: QuotaWindowKind::WeeklyModel,
-                used_percent: 33.0,
-                resets_at: Some(weekly_reset()),
-                observed_at: Some(now()),
-                label: Some("Fable".to_string()),
-            }]
-        );
-    }
-
-    #[test]
-    fn never_parses_the_whats_contributing_breakdown_into_windows() {
-        let quota = parse_claude_usage(FIXTURE, now());
-        assert_eq!(quota.model_windows.len(), 1);
-    }
-
-    #[test]
-    fn keeps_the_percent_but_nulls_resets_at_when_the_reset_is_unparseable() {
-        let quota = parse_claude_usage("Current session: 42% used \u{b7} resets soon", now());
-        assert_eq!(quota.status, ProviderQuotaStatus::Ok);
-        assert_eq!(
-            quota.session,
-            Some(QuotaWindow {
-                kind: QuotaWindowKind::Session,
-                used_percent: 42.0,
-                resets_at: None,
-                observed_at: Some(now()),
-                label: None,
-            })
-        );
-    }
-
-    #[test]
-    fn fails_the_whole_provider_to_unknown_on_an_unclassifiable_non_empty_line() {
-        let text = "You are currently using your subscription to power your Claude Code usage\n\nTotally unexpected line";
-        let quota = parse_claude_usage(text, now());
-        assert_eq!(quota.status, ProviderQuotaStatus::Unknown);
-        assert_eq!(quota.model_windows, Vec::<QuotaWindow>::new());
-        assert_eq!(quota.observed_at, now());
-    }
-
-    #[test]
-    fn fails_the_whole_provider_to_unknown_when_a_recognized_window_line_has_no_percent() {
-        let quota = parse_claude_usage(
-            "Current session: resets Jul 18 at 10:10am (Europe/Bucharest)",
-            now(),
-        );
-        assert_eq!(quota.status, ProviderQuotaStatus::Unknown);
-        assert_eq!(quota.session, None);
-    }
-
-    #[test]
-    fn returns_unknown_for_the_recognized_non_subscriber_message() {
-        let quota = parse_claude_usage("/usage is only available for subscription plans", now());
-        assert_eq!(quota.status, ProviderQuotaStatus::Unknown);
-        assert_eq!(quota.model_windows, Vec::<QuotaWindow>::new());
-        assert_eq!(quota.observed_at, now());
-    }
-
-    #[test]
-    fn parses_the_reset_with_the_meridiem_glued_to_the_time() {
-        let quota = parse_claude_usage(
-            "Current session: 19% used \u{b7} resets Jul 18 at 10:10am (Europe/Bucharest)",
-            now(),
-        );
-        assert_eq!(quota.session.unwrap().resets_at, Some(session_reset()));
-    }
-
-    #[test]
-    fn parses_the_reset_with_a_space_before_the_meridiem() {
-        let quota = parse_claude_usage(
-            "Current session: 19% used \u{b7} resets Jul 18 at 10:10 am (Europe/Bucharest)",
-            now(),
-        );
-        assert_eq!(quota.session.unwrap().resets_at, Some(session_reset()));
-    }
-
-    #[test]
-    fn parses_the_percent_with_and_without_a_space_before_used() {
-        let spaced = parse_claude_usage("Current session: 50% used", now());
-        let glued = parse_claude_usage("Current session: 50%used", now());
-        assert_eq!(spaced.session.unwrap().used_percent, 50.0);
-        assert_eq!(glued.session.unwrap().used_percent, 50.0);
-    }
-
-    #[test]
-    fn returns_unknown_when_no_windows_are_present_at_all() {
-        let quota = parse_claude_usage(
-            "You are currently using your subscription to power your Claude Code usage",
-            now(),
-        );
-        assert_eq!(quota.status, ProviderQuotaStatus::Unknown);
-    }
-}
-
-// PORT STATUS: src/plugins/builtin/claude/quota-parse.ts (158 lines)
-// confidence: high
-// todos: 0
-// notes: hand-rolled anchor matching (no regex crate in this workspace, matching
-// notes: events.rs precedent) instead of the TS RegExp literals; same anchors,
-// notes: same fail-closed/best-effort split. Reset zone math uses chrono-tz's
-// notes: `TimeZone::from_local_datetime` directly instead of the TS Intl-based
-// notes: offset derivation — same result, no hand-rolled UTC-offset arithmetic
-// notes: needed on this side. Golden fixture copied verbatim into
-// notes: src/__fixtures__/claude-usage.txt from the TS test fixture.
+#[path = "quota_parse_tests.rs"]
+mod tests;

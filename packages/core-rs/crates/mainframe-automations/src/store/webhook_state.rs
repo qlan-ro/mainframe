@@ -20,7 +20,7 @@ impl WebhookStateStore {
 
     /// Stamps the hook's last accepted delivery. `at` is an RFC 3339 string:
     /// the value goes straight to the wire, and the editor renders it.
-    pub async fn record_delivery(&self, hook_id: &str, at: &str) -> Result<(), StoreError> {
+    pub(crate) async fn record_delivery(&self, hook_id: &str, at: &str) -> Result<(), StoreError> {
         let hook_id = hook_id.to_string();
         let at = at.to_string();
         self.db
@@ -52,9 +52,3 @@ impl WebhookStateStore {
             .await
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-25-todo-234-automations-editor-plan.md T7), not a TS port
-// confidence: high
-// todos: 0
-// notes: the fourth table in automations.db; Node has no equivalent, so a
-//        file handed back to that engine simply ignores it.

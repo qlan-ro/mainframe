@@ -2,7 +2,11 @@
 //! non-loopback caller without a token — ONLY the webhook ingress path is
 //! auth-exempt, and the exemption is exactly one path segment wide (it must
 //! not reopen the X-Forwarded-For finding).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 

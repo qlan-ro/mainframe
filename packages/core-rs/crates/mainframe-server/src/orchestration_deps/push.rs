@@ -27,35 +27,37 @@ pub(crate) struct DelegatedPush {
 
 /// `Some` when `chat_id` is a delegated child; `None` for any other chat,
 /// which keeps its usual body and opens itself.
-pub(crate) fn delegated_permission_push(db: &Db, chat_id: &str) -> Option<DelegatedPush> {
+pub(crate) async fn delegated_permission_push(db: &Db, chat_id: &str) -> Option<DelegatedPush> {
     let id = chat_id.to_string();
-    let read = db.call_blocking(move |d| {
-        let Some(child) = d.chats.get(&id)? else {
-            return Ok(None);
-        };
-        let Some(parent_id) = task_parent(&child) else {
-            return Ok(None);
-        };
-        let parent = d.chats.get(&parent_id)?;
-        let parent_title = parent.as_ref().and_then(|p| p.title.clone());
-        let mut open_chat_id = parent_id;
-        let mut cursor = parent;
-        for _ in 0..MAX_ANCESTORS {
-            let Some(next) = cursor.as_ref().and_then(task_parent) else {
-                break;
+    let read = db
+        .call(move |d| {
+            let Some(child) = d.chats.get(&id)? else {
+                return Ok(None);
             };
-            cursor = d.chats.get(&next)?;
-            open_chat_id = next;
-        }
-        Ok(Some(DelegatedPush {
-            body: body(child.title.as_deref(), parent_title.as_deref()),
-            open_chat_id,
-        }))
-    });
+            let Some(parent_id) = task_parent(&child) else {
+                return Ok(None);
+            };
+            let parent = d.chats.get(&parent_id)?;
+            let parent_title = parent.as_ref().and_then(|p| p.title.clone());
+            let mut open_chat_id = parent_id;
+            let mut cursor = parent;
+            for _ in 0..MAX_ANCESTORS {
+                let Some(next) = cursor.as_ref().and_then(task_parent) else {
+                    break;
+                };
+                cursor = d.chats.get(&next)?;
+                open_chat_id = next;
+            }
+            Ok(Some(DelegatedPush {
+                body: body(child.title.as_deref(), parent_title.as_deref()),
+                open_chat_id,
+            }))
+        })
+        .await;
     match read {
         Ok(push) => push,
         Err(err) => {
-            tracing::warn!(chat_id, %err, "failed to read a delegated chat for its push");
+            tracing::warn!(chat_id, error = %err, "failed to read a delegated chat for its push");
             None
         }
     }

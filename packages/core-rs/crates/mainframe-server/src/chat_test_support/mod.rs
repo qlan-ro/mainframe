@@ -1,8 +1,8 @@
 //! A minimal `Adapter`/`AdapterSession` pair that actually "spawns" (unlike
 //! `routes/session_transcripts.rs`'s `StubAdapter`, whose `create_session` is
-//! `unreachable!`) — for route tests that need `ctx.chat_manager` wired to a
-//! real `ChatManager` (todo #346, AC 26) and drive it through a create/start
-//! round trip without touching a real CLI process.
+//! `unreachable!`) — for route tests that need `ctx.chat.chat_manager` wired to a
+//! real `ChatManager` and drive it through a create/start round trip without
+//! touching a real CLI process.
 #![cfg(test)]
 
 use std::sync::Arc;
@@ -19,19 +19,23 @@ use mainframe_types::adapter::{
 use mainframe_types::chat::{ChatMessage, ResolvedTuning};
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::transcript::TranscriptLocation;
 
 mod app_ctx;
 
-pub(crate) use app_ctx::{test_ctx, test_ctx_with_chat_manager, test_ctx_with_orchestration};
+pub(crate) use app_ctx::build_test_context;
 
 static NEXT_SESSION_ID: AtomicUsize = AtomicUsize::new(1);
 
 /// Registers under whatever `id` it is built with (route tests use `"claude"`
 /// to match their bodies' `adapterId`). `no_persistence` mirrors the
-/// registry capability the rule-7 spawn decision reads.
+/// registry capability the chat spawn decision reads.
 pub(crate) struct StubAdapter {
     id: String,
     no_persistence: bool,
+    pub(crate) transcript_location: Option<TranscriptLocation>,
+    pub(crate) conflicts: Vec<String>,
+    pub(crate) tool_reader: Option<Arc<dyn Adapter>>,
     /// How many `StubSession::kill` calls this adapter's sessions have seen
     /// (shared across every session it hands out) — lets a caller prove a
     /// project/chat teardown actually stopped a live process.
@@ -43,17 +47,42 @@ impl StubAdapter {
         Arc::new(Self {
             id: id.to_string(),
             no_persistence,
+            transcript_location: None,
+            tool_reader: None,
+            conflicts: Vec::new(),
             kills: Arc::new(AtomicUsize::new(0)),
         })
     }
 }
 
 impl Adapter for StubAdapter {
+    fn config_conflicts(&self) -> BoxFuture<'_, Vec<String>> {
+        Box::pin(async { self.conflicts.clone() })
+    }
+
+    fn read_tool_result(&self, path: String, tool_id: String) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async move {
+            match &self.tool_reader {
+                Some(reader) => reader.read_tool_result(path, tool_id).await,
+                None => None,
+            }
+        })
+    }
+
     fn id(&self) -> &str {
         &self.id
     }
     fn name(&self) -> &str {
         &self.id
+    }
+    fn locate_transcript(
+        &self,
+        _session_id: String,
+        _project_path: String,
+        _session_file_path: Option<String>,
+    ) -> BoxFuture<'_, Result<Option<TranscriptLocation>, AdapterError>> {
+        let location = self.transcript_location.clone();
+        Box::pin(async move { Ok(location) })
     }
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {
@@ -69,8 +98,8 @@ impl Adapter for StubAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(None) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        Vec::new()
     }
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
         let id = options.chat_id.clone().unwrap_or_else(|| {
@@ -201,5 +230,3 @@ impl AdapterSession for StubSession {
         ok()
     }
 }
-
-// Not a port; test scaffolding only. No PORT STATUS trailer.

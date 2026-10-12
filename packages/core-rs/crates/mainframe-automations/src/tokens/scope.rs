@@ -1,6 +1,6 @@
-//! Token scope with parent-chain Repeat isolation (plan T3.1): a Repeat
-//! iteration is a child scope carrying its own `current` item; bindings made
-//! inside it die with it, while everything above stays visible.
+//! Token scope with parent-chain Repeat isolation: a Repeat iteration is a
+//! child scope carrying its own `current` item; bindings made inside it die
+//! with it, while everything above stays visible.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -39,13 +39,14 @@ impl Scope<'_> {
     /// Sets `current` on THIS scope level — the interpreter builds one flat
     /// scope per walk frame (Node `buildTokenContext`) and stamps the
     /// innermost Repeat item on it.
-    pub fn set_current(&mut self, item: TokenValue) {
+    pub(crate) fn set_current(&mut self, item: TokenValue) {
         self.current_item = Some(item);
     }
 
     /// A Repeat iteration: sees everything above, owns `current`, and drops
     /// its own bindings when the iteration ends.
-    pub fn child_iteration(&self, item: TokenValue) -> Scope<'_> {
+    #[cfg(test)]
+    pub(crate) fn child_iteration(&self, item: TokenValue) -> Scope<'_> {
         Scope {
             parent: Some(self),
             clock: None,
@@ -88,7 +89,7 @@ impl Scope<'_> {
         match output {
             // Local calendar date.
             "today" => Some(TokenValue::Text(now.format("%Y-%m-%d").to_string())),
-            // UTC instant, Node `toISOString()` form (millis + literal Z).
+            // UTC instant, JS `toISOString()` form (millis + literal Z).
             "now" => Some(TokenValue::Text(
                 now.with_timezone(&Utc)
                     .to_rfc3339_opts(SecondsFormat::Millis, true),
@@ -105,8 +106,8 @@ impl Scope<'_> {
     }
 }
 
-/// Dot-path descent (Node `digField`): records by key, lists by integer
-/// index; any miss along the way resolves to `None`, never an error.
+/// Dot-path descent: records by key, lists by integer index; any miss along the
+/// way resolves to `None`, never an error.
 pub(crate) fn dig(value: &TokenValue, field: &str) -> Option<TokenValue> {
     let mut cursor = value.clone();
     for key in field.split('.') {
@@ -118,9 +119,3 @@ pub(crate) fn dig(value: &TokenValue, field: &str) -> Option<TokenValue> {
     }
     Some(cursor)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: `current` ignores TokenRef.output (Node parity — the editor writes
-//        output:"item" but resolution keys on the reserved stepId alone).

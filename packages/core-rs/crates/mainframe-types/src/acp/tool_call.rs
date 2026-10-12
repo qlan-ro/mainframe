@@ -5,7 +5,7 @@
 //! sibling `ToolCallContentChunk`. `ToolCallContent` carries the `content`
 //! (block) and `diff` variants; `terminal` is an explicit deviation — the
 //! facade declines the `terminal/*` client services a `terminalId` would
-//! point into (spec Decision 16).
+//! point into.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

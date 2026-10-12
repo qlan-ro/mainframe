@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/claude-workflow.ts`.
-//!
 //! Wire types for a Claude CLI workflow run (`/workflows` scripts), assembled
 //! from `task_progress`/`task_updated` system events and the on-disk
 //! `wf_<runId>.json` record. Prefixed `ClaudeWorkflow*` to stay distinct from

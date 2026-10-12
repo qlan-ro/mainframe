@@ -1,16 +1,16 @@
 //! The facade hub — the live assembly point between the chat-surface seam
-//! (`mainframe_chat::chat_surface`) and the `/acp/{profile}` connections
-//! (todo #350, live-wiring pass). One `FacadeHub` exists per daemon, attached
-//! to the `ChatManager` at boot (`build_chat_manager`); it fans every
-//! chat-surface event out to the connections attached to that chat, with the
-//! per-session encode → diff → throttle pipeline delegated to the pure
-//! `mainframe_acp::SessionStream`. This file owns the connection registry
-//! and the resume seed/teardown lifecycle; `fanout.rs` owns per-event
-//! delivery and `handlers.rs` the `ChatSurface` sink itself.
+//! (`mainframe_chat::chat_surface`) and the `/acp/{profile}` connections. One
+//! `FacadeHub` exists per daemon, attached to the `ChatManager` at boot
+//! (`build_chat_manager`); it fans every chat-surface event out to the
+//! connections attached to that chat, with the per-session encode → diff →
+//! throttle pipeline delegated to the pure `mainframe_acp::SessionStream`. This
+//! file owns the connection registry and the resume seed/teardown lifecycle;
+//! `fanout.rs` owns per-event delivery and `handlers.rs` the `ChatSurface` sink
+//! itself.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use dashmap::DashMap;
 use mainframe_acp::revision_log::RevisionLog;
@@ -32,16 +32,16 @@ pub use fanout::ResumeSeed;
 use fanout::drain_into;
 use revisions::RevisionRegistry;
 
-/// Coalescing window for chunk fan-out (spec decision 14) and the cadence of
-/// each connection's flush tick — an implementation choice per the spec; the
-/// no-full-resend guarantee itself lives in `SessionState`, not here.
+/// Coalescing window for chunk fan-out and the cadence of each connection's
+/// flush tick — an implementation choice; the no-full-resend guarantee itself
+/// lives in `SessionState`, not here.
 pub const FACADE_THROTTLE_INTERVAL_MS: i64 = 100;
 
 pub struct FacadeHub {
     connections: DashMap<String, Arc<FacadeConnection>>,
     gates: Mutex<GateRegistry>,
     throttle_interval_ms: i64,
-    /// Per-chat revision logs (todo #377) — see `revisions.rs`.
+    /// Per-chat revision logs — see `revisions.rs`.
     revisions: RevisionRegistry,
 }
 
@@ -77,7 +77,7 @@ impl FacadeHub {
         (client_id, connection, rx)
     }
 
-    pub fn unregister(&self, client_id: &str) {
+    pub(crate) fn unregister(&self, client_id: &str) {
         self.connections.remove(client_id);
     }
 
@@ -103,29 +103,28 @@ impl FacadeHub {
     }
 
     /// Mark `chat_id` as awaiting a resume snapshot, before that snapshot is
-    /// awaited (T5, R2.9): a live event racing the await has nothing seeded
-    /// to diff against, so [`Self::on_chat_surface_event`] buffers it here
-    /// instead of dropping it. Discarding a prior `Live` state is safe — a
-    /// resume always ends by fully reseeding via [`Self::reset_session`] —
-    /// but an overlapping earlier await is NOT: two resumes for one session
-    /// can be in flight at once (a gap watchdog racing a reattach), and the
-    /// second claim would throw away everything the first one's window had
-    /// already buffered.
+    /// awaited: a live event racing the await has nothing seeded to diff
+    /// against, so [`Self::on_chat_surface_event`] buffers it here instead of
+    /// dropping it. Discarding a prior `Live` state is safe — a resume always
+    /// ends by fully reseeding via [`Self::reset_session`] — but an overlapping
+    /// earlier await is NOT: two resumes for one session can be in flight at
+    /// once (a gap watchdog racing a reattach), and the second claim would
+    /// throw away everything the first one's window had already buffered.
     ///
-    /// Returns the chat's revision log (todo #377) for an opted-in
-    /// connection, creating one if it has none yet, paired with the log's
-    /// boundary at this exact moment — read under the log's own lock, right
-    /// after the `AwaitingSeed` claim above is installed and strictly
-    /// BEFORE the caller awaits `ResumePort::resume_snapshot`. This is the
-    /// boundary for which "any change at or below it was emitted before the
-    /// snapshot read" actually holds: any `record` racing the snapshot
-    /// await lands after this claim exists, so it is buffered as catch-up
-    /// here, never missed outright, and never silently folded into the
-    /// reply's own cursor either — `dispatch_resume`/`revision::resolve`
-    /// must reply with THIS boundary, not a fresh `log.boundary()` read
-    /// after the snapshot, or the reply could acknowledge a change the
-    /// client never received (see `revision::resolve`'s doc for the full
-    /// argument). `None` for a connection that did not opt in.
+    /// Returns the chat's revision log for an opted-in connection, creating one
+    /// if it has none yet, paired with the log's boundary at this exact moment
+    /// — read under the log's own lock, right after the `AwaitingSeed` claim
+    /// above is installed and strictly BEFORE the caller awaits
+    /// `ResumePort::resume_snapshot`. This is the boundary for which "any
+    /// change at or below it was emitted before the snapshot read" actually
+    /// holds: any `record` racing the snapshot await lands after this claim
+    /// exists, so it is buffered as catch-up here, never missed outright, and
+    /// never silently folded into the reply's own cursor either —
+    /// `dispatch_resume`/`revision::resolve` must reply with THIS boundary, not
+    /// a fresh `log.boundary()` read after the snapshot, or the reply could
+    /// acknowledge a change the client never received (see
+    /// `revision::resolve`'s doc for the full argument). `None` for a
+    /// connection that did not opt in.
     pub fn begin_resume(
         &self,
         connection: &FacadeConnection,
@@ -147,7 +146,7 @@ impl FacadeHub {
         drop(sessions);
         let log =
             self.revision_log_for_resume(connection.is_revision_cursors_opted_in(), chat_id)?;
-        let boundary = log.lock().unwrap_or_else(|err| err.into_inner()).boundary();
+        let boundary = log.lock_recover().boundary();
         Some((log, boundary))
     }
 
@@ -167,10 +166,10 @@ impl FacadeHub {
     /// — the client's `session/resume` promise must settle even when its own
     /// detach won the race.
     ///
-    /// Both arms close with `_mainframe.dev/replay_complete` (spec Decision
-    /// 38) right after their last replay frame (`queue_state`, in the seeded
-    /// arm's `replay` closure) and before any buffered catch-up — the
-    /// invariant every successful reply gets exactly one matching marker.
+    /// Both arms close with `_mainframe.dev/replay_complete` right after their
+    /// last replay frame (`queue_state`, in the seeded arm's `replay` closure)
+    /// and before any buffered catch-up — the invariant every successful reply
+    /// gets exactly one matching marker.
     pub fn reset_session(
         &self,
         connection: &FacadeConnection,
@@ -225,7 +224,7 @@ impl FacadeHub {
             debug!(
                 chat_id,
                 request_id = %request.request_id,
-                "acp facade: skipped redelivering a gate resolved since the snapshot"
+                "skipped redelivering a gate resolved since the snapshot"
             );
             return;
         }
@@ -236,13 +235,13 @@ impl FacadeHub {
         self.locked_registry().claim(chat_id, request_id)
     }
 
-    pub fn release_gate(&self, chat_id: &str, request_id: &str) {
+    pub(crate) fn release_gate(&self, chat_id: &str, request_id: &str) {
         self.locked_registry().release(chat_id, request_id);
     }
 
     /// Flush every attached session's held throttle tail on `connection` —
     /// the socket loop's periodic tick.
-    pub fn flush_connection(&self, connection: &FacadeConnection) {
+    pub(crate) fn flush_connection(&self, connection: &FacadeConnection) {
         let now = now_ms();
         let mut sessions = connection.locked_sessions();
         for (chat_id, slot) in sessions.iter_mut() {
@@ -255,16 +254,12 @@ impl FacadeHub {
     }
 
     fn locked_registry(&self) -> std::sync::MutexGuard<'_, GateRegistry> {
-        self.gates.lock().unwrap_or_else(|e| e.into_inner())
+        self.gates.lock_recover()
     }
 }
 
-fn now_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
+use mainframe_types::time::now_ms;
 
 #[cfg(test)]
+#[path = "hub_tests.rs"]
 mod tests;

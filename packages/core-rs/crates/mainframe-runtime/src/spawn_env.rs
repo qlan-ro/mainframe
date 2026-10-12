@@ -1,18 +1,15 @@
-//! Ported from `enrichPath()` in `src/index.ts` (packages/core).
-//!
-//! The TS daemon resolved a user's interactive-shell `PATH` at boot and
-//! **mutated `process.env.PATH`**, so every child process it spawned
-//! (claude/codex CLIs, `which` detection, title generation, LSP servers, launch
-//! processes, `lsof`/`kill`) inherited a full toolchain PATH. In a packaged app
-//! the daemon starts from a bare launchd/login PATH (`/usr/bin:/bin:…`), so
-//! without this the CLIs live in `/opt/homebrew/bin` or `~/.local/bin` and
-//! spawns fail with `ENOENT`.
+//! Resolves the user's interactive-shell `PATH` at boot so every child process
+//! the daemon spawns (claude/codex CLIs, title generation, LSP servers, launch
+//! processes, `ps`/`lsof`/`pgrep`) gets a full toolchain PATH, and so CLI
+//! detection ([`ResolvedPath::find`]) scans the same directories. In a
+//! packaged app the daemon starts from a bare launchd/login PATH
+//! (`/usr/bin:/bin:…`), so without this the CLIs live in `/opt/homebrew/bin`
+//! or `~/.local/bin` and spawns fail with `ENOENT`.
 //!
 //! Under edition 2024 `std::env::set_var` is `unsafe` and these crates are
 //! `#![forbid(unsafe_code)]`, so the resolved value cannot be written back into
 //! the process env. Instead it is captured once at boot as a [`ResolvedPath`]
-//! and threaded explicitly into every spawn site as an `env("PATH", …)` override
-//! — the same effect the TS achieved by mutating the shared env.
+//! and threaded explicitly into every spawn site as an `env("PATH", …)` override.
 
 use std::sync::Arc;
 
@@ -22,7 +19,22 @@ use std::sync::Arc;
 pub struct ResolvedPath(Arc<str>);
 
 impl ResolvedPath {
-    /// Resolve the interactive-shell `PATH` (mirrors `enrichPath()`): probe the
+    pub fn apply(&self, command: &mut tokio::process::Command) {
+        command.env("PATH", self.as_str());
+    }
+
+    pub fn find(&self, name: &str) -> Option<std::path::PathBuf> {
+        use std::os::unix::fs::PermissionsExt;
+        std::env::split_paths(self.as_str())
+            .map(|dir| dir.join(name))
+            .find(|path| {
+                path.metadata().is_ok_and(|metadata| {
+                    metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
+                })
+            })
+    }
+
+    /// Resolve the interactive-shell `PATH`: probe the
     /// login shell for its `PATH`, falling back to the current `PATH` plus the
     /// common user/toolchain bin dirs when the shell probe fails or is empty.
     ///
@@ -51,13 +63,13 @@ impl ResolvedPath {
                     tracing::debug!(
                         shell,
                         path_length = resolved.split(':').count(),
-                        "enrichPath: resolved from login shell"
+                        "resolved from login shell"
                     );
                     return Self(Arc::from(resolved.as_str()));
                 }
             }
             Err(err) => {
-                tracing::warn!(%err, "enrichPath: login shell failed, using fallback");
+                tracing::warn!(error = %err, "login shell failed, using fallback");
             }
         }
         Self::fallback()
@@ -90,7 +102,7 @@ impl ResolvedPath {
         tracing::debug!(
             ?additions,
             total_paths = path.split(':').count(),
-            "enrichPath: fallback applied"
+            "fallback applied"
         );
         Self(Arc::from(path.as_str()))
     }

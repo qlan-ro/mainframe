@@ -1,16 +1,6 @@
-//! Ported from `src/server/routes/chats.ts` — chat registry reads, archive,
-//! title/pinned/tuning/effort PATCH, unarchive, messages/display-messages,
-//! session-files and tool-result.
-//!
-//! Reads (`listFiltered`/`listChats`/`getChat`) route through the ChatManager
-//! facade when it is wired (enriched: displayStatus/isRunning/worktreeMissing),
-//! else the raw `ctx.db.chats` path (Phase-3 harness). The pinned/tuning/effort
-//! PATCH routes persist via `ctx.db.chats.update` then run the TS `applyChatTuning`
-//! follow-ups (`syncChatFields` + fire-and-forget `applyTuning` + `emitChatUpdated`)
-//! through the facade when wired. Live-session-orchestration routes (archive,
-//! getDisplayMessages, getMessagesFromDisk, getPendingPermission, unarchive) call the
-//! real facade methods, falling back to the failure envelope when it is unavailable.
+//! Chat registry reads, history, archive, and tuning updates through ChatManager.
 
+use axum::response::IntoResponse;
 use std::sync::Arc;
 
 use axum::Router;
@@ -22,16 +12,15 @@ use axum::routing::{get, patch, post};
 use serde::Deserialize;
 
 use mainframe_adapter_claude::messages::session_files::extract_session_file_paths;
-use mainframe_chat::chat_manager::ChatFieldsPartial;
-use mainframe_chat::event_handler::compute_session_file_path;
-use mainframe_db::chats::ChatListFilters;
 use mainframe_types::adapter::EffortLevel;
 use mainframe_types::chat::Chat;
+use mainframe_types::chat_patch::ChatPatch;
+use mainframe_types::transcript::TranscriptLocation;
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok};
+use crate::respond::{ApiError, fail, ok};
+use crate::routes::body::parse_body;
 use crate::routes::chat_discard::refuse_if_temporary;
-use crate::routes::projects::parse_body;
 
 const TAG_ALLOWED: fn(char) -> bool = |c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
 
@@ -58,7 +47,7 @@ pub(crate) struct ListQuery {
 }
 
 pub(crate) async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQuery>) -> Response {
-    // Zod `.refine` — every parsed tag must match [a-z0-9-]+ or the whole query 400s.
+    // Every parsed tag must match [a-z0-9-]+ or the whole query 400s.
     let tags_all: Option<Vec<String>> = match &q.tags {
         Some(raw) => {
             let parts = split_csv(raw);
@@ -72,32 +61,13 @@ pub(crate) async fn list(State(ctx): State<Arc<AppCtx>>, Query(q): Query<ListQue
     let synth: Vec<String> = q.synthetic.as_deref().map(split_csv).unwrap_or_default();
     let has_worktree = synth.iter().any(|s| s == "has-worktree");
     let include_temporary = q.include_temporary.unwrap_or(false);
-    // The facade enriches (displayStatus/isRunning/worktreeMissing); the db path is
-    // the Phase-3 harness fallback (chat_manager unwired) and returns raw rows.
-    if let Some(cm) = ctx.chat_manager.as_ref() {
-        return ok(cm.list_filtered(
-            q.project.as_deref(),
-            tags_all.as_deref(),
-            has_worktree,
-            true,
-            include_temporary,
-        ));
-    }
-    let filters = ChatListFilters {
-        project_id: q.project,
-        tags_all,
+    crate::respond::storage(ctx.chat.chat_manager.list_filtered(
+        q.project.as_deref(),
+        tags_all.as_deref(),
         has_worktree,
-        include_archived: true,
+        true,
         include_temporary,
-    };
-    match ctx
-        .db
-        .call(move |db| db.chats.list_filtered(&filters))
-        .await
-    {
-        Ok(chats) => ok(chats),
-        Err(err) => crate::async_err::internal_error("list chats", &err),
-    }
+    ))
 }
 
 #[derive(Deserialize)]
@@ -107,11 +77,11 @@ pub(crate) struct ListForProjectQuery {
 }
 
 /// `ChatsRepository::list` (backing both the facade and db paths here) is the
-/// SAME unfiltered read `remove_project` uses internally (rule 3), so it must
-/// keep returning temporary chats; this route filters the result itself
-/// instead of adding a filter to that shared read. Also drops a side chat
-/// (temporary with a parent, todo #344) even with `include_temporary` set —
-/// `list`'s DB-layer filter already excludes it (mainframe-db rule 7).
+/// SAME unfiltered read `remove_project` uses internally, so it must keep
+/// returning temporary chats; this route filters the result itself instead of
+/// adding a filter to that shared read. Also drops a side chat (temporary with
+/// a parent) even with `include_temporary` set — `list`'s DB-layer filter
+/// already excludes it.
 fn filter_temporary(chats: Vec<Chat>, include_temporary: bool) -> Vec<Chat> {
     let is_side_chat =
         |c: &Chat| c.temporary && c.parent_chat_id.as_ref().is_some_and(|p| p.is_some());
@@ -127,29 +97,19 @@ pub(crate) async fn list_for_project(
     Query(q): Query<ListForProjectQuery>,
 ) -> Response {
     let include_temporary = q.include_temporary.unwrap_or(false);
-    if let Some(cm) = ctx.chat_manager.as_ref() {
-        return ok(filter_temporary(
-            cm.list_chats(&project_id),
-            include_temporary,
-        ));
-    }
-    match ctx.db.call(move |db| db.chats.list(&project_id)).await {
-        Ok(chats) => ok(filter_temporary(chats, include_temporary)),
-        Err(err) => crate::async_err::internal_error("list project chats", &err),
-    }
+    crate::respond::storage(
+        ctx.chat
+            .chat_manager
+            .list_chats(&project_id)
+            .map(|chats| filter_temporary(chats, include_temporary)),
+    )
 }
 
 pub(crate) async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    if let Some(cm) = ctx.chat_manager.as_ref() {
-        return match cm.get_chat(&id) {
-            Some(chat) => ok(chat),
-            None => fail(StatusCode::NOT_FOUND, "Chat not found"),
-        };
-    }
-    match ctx.db.call(move |db| db.chats.get(&id)).await {
+    match ctx.chat.chat_manager.try_get_chat(&id) {
         Ok(Some(chat)) => ok(chat),
-        Ok(None) => fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => crate::async_err::internal_error("get chat", &err),
+        Ok(None) => crate::respond::ApiError::chat_not_found().into_response(),
+        Err(error) => crate::respond::ApiError::from(error).into_response(),
     }
 }
 
@@ -165,10 +125,7 @@ async fn archive(
     Query(q): Query<ArchiveQuery>,
 ) -> Response {
     let delete_worktree = q.delete_worktree.as_deref() != Some("false");
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "archive chat is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::NOT_FOUND, "Operation failed");
-    };
+    let cm = &ctx.chat.chat_manager;
     if let Some(chat) = cm.get_chat(&id)
         && let Some(resp) = refuse_if_temporary(&chat, "archive")
     {
@@ -179,10 +136,7 @@ async fn archive(
 }
 
 async fn messages(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "getDisplayMessages needs ChatManager (unwired)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
-    };
+    let cm = &ctx.chat.chat_manager;
     let mut payload = cm.get_display_messages(&id).await;
     payload.workflow_runs =
         crate::routes::chat_workflow_runs::workflow_runs_for_chat(&ctx, &id).await;
@@ -202,10 +156,7 @@ async fn pending_permission(State(ctx): State<Arc<AppCtx>>, Path(id): Path<Strin
             "String must contain at least 1 character(s)",
         );
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "getPendingPermission is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
-    };
+    let cm = &ctx.chat.chat_manager;
     let permission = cm.get_pending_permission(&id).await;
     ok(permission)
 }
@@ -219,38 +170,16 @@ async fn set_title(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
-) -> Response {
+) -> Result<Response, ApiError> {
     let title = match parse_body::<TitleBody>(&body).and_then(|b| b.title) {
         Some(t) if !t.trim().is_empty() => t.trim().to_string(),
-        _ => return fail(StatusCode::BAD_REQUEST, "Title is required"),
+        _ => return Err(ApiError::BadRequest("Title is required".into())),
     };
-    // Faithful path uses the facade rename (emits chat.updated); when the manager
-    // is not wired yet (Phase-3 harness) the db write is the load-bearing effect.
-    if let Some(cm) = ctx.chat_manager.as_ref() {
+    {
+        let cm = &ctx.chat.chat_manager;
         cm.rename_chat(&id, &title);
-    } else {
-        let (cid, t) = (id.clone(), title.clone());
-        if let Err(err) = ctx
-            .db
-            .call(move |db| {
-                db.chats.update(
-                    &cid,
-                    &mainframe_db::chats::ChatUpdate {
-                        title: Some(t),
-                        ..Default::default()
-                    },
-                )
-            })
-            .await
-        {
-            return crate::async_err::internal_error("rename chat", &err);
-        }
     }
-    match ctx.db.call(move |db| db.chats.get(&id)).await {
-        Ok(Some(chat)) => ok(chat),
-        Ok(None) => fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => crate::async_err::internal_error("get chat", &err),
-    }
+    Ok(ok(ctx.require_chat(&id).await?))
 }
 
 #[derive(Deserialize)]
@@ -262,26 +191,23 @@ async fn set_pinned(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
-) -> Response {
+) -> Result<Response, ApiError> {
     let Some(pinned) = parse_body::<PinnedBody>(&body).and_then(|b| b.pinned) else {
-        return fail(StatusCode::BAD_REQUEST, "pinned (boolean) is required");
+        return Err(ApiError::BadRequest("pinned (boolean) is required".into()));
     };
     let lookup = id.clone();
-    let existing = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
-    };
+    let existing = ctx.require_chat(&lookup).await?;
     if let Some(resp) = refuse_if_temporary(&existing, "pin") {
-        return resp;
+        return Ok(resp);
     }
     let cid = id.clone();
     if let Err(err) = ctx
+        .core
         .db
         .call(move |db| {
             db.chats.update(
                 &cid,
-                &mainframe_db::chats::ChatUpdate {
+                &ChatPatch {
                     pinned: Some(pinned),
                     ..Default::default()
                 },
@@ -289,24 +215,21 @@ async fn set_pinned(
         })
         .await
     {
-        return crate::async_err::internal_error("update pinned", &err);
+        return Err(ApiError::internal("update pinned", err));
     }
     let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
-    };
-    if let Some(cm) = ctx.chat_manager.as_ref() {
+    let chat = ctx.require_chat(&lookup).await?;
+    {
+        let cm = &ctx.chat.chat_manager;
         cm.sync_chat_fields(
             &id,
-            ChatFieldsPartial {
+            ChatPatch {
                 pinned: Some(pinned),
                 ..Default::default()
             },
         );
     }
-    ok(chat)
+    Ok(ok(chat))
 }
 
 fn parse_effort_field(v: &serde_json::Value) -> Result<Option<EffortLevel>, ()> {
@@ -325,67 +248,55 @@ fn parse_nullable_bool_field(v: &serde_json::Value) -> Result<Option<bool>, ()> 
     }
 }
 
-/// Build a tri-state `ChatUpdate` from a raw JSON tuning object. Only present keys
+/// Build a tri-state `ChatPatch` from a raw JSON tuning object. Only present keys
 /// are written (undefined skipped); `null` writes SQL NULL. Returns `Err` on any
 /// ill-typed field so the caller emits the route's 400.
-fn tuning_update(
-    obj: &serde_json::Map<String, serde_json::Value>,
-) -> Result<mainframe_db::chats::ChatUpdate, ()> {
-    let mut update = mainframe_db::chats::ChatUpdate::default();
+fn tuning_update(obj: &serde_json::Map<String, serde_json::Value>) -> Result<ChatPatch, ()> {
+    let mut update = ChatPatch::default();
     if let Some(v) = obj.get("effort") {
-        update.effort = Some(parse_effort_field(v)?);
+        update.tuning.effort = Some(parse_effort_field(v)?);
     }
     if let Some(v) = obj.get("fast") {
-        update.fast = Some(parse_nullable_bool_field(v)?);
+        update.tuning.fast = Some(parse_nullable_bool_field(v)?);
     }
     if let Some(v) = obj.get("ultracode") {
-        update.ultracode = Some(parse_nullable_bool_field(v)?);
+        update.tuning.ultracode = Some(parse_nullable_bool_field(v)?);
     }
     if let Some(v) = obj.get("adaptiveThinking") {
-        update.adaptive_thinking = Some(parse_nullable_bool_field(v)?);
+        update.tuning.adaptive_thinking = Some(parse_nullable_bool_field(v)?);
     }
     Ok(update)
 }
 
-/// Build the `ChatFieldsPartial` the facade cache-sync needs from a db tuning patch.
-/// The tri-state columns line up 1:1 (`pinned` is not a tuning field here).
-fn tuning_partial(update: &mainframe_db::chats::ChatUpdate) -> ChatFieldsPartial {
-    ChatFieldsPartial {
-        effort: update.effort,
-        fast: update.fast,
-        ultracode: update.ultracode,
-        adaptive_thinking: update.adaptive_thinking,
-        pinned: None,
-    }
-}
-
 /// Persist the RAW tuning partial (tri-state), fetch the chat, then run the facade
-/// follow-ups — `syncChatFields` (mirror the cache), fire-and-forget `applyTuning`
-/// (live re-apply, no-op without a session), `emitChatUpdated` (broadcast). Mirrors
-/// the TS `applyChatTuning`.
+/// follow-ups — `sync_chat_fields` (mirror the cache), fire-and-forget
+/// `apply_tuning` (live re-apply, no-op without a session), `emit_chat_updated`
+/// (broadcast).
 async fn apply_and_return(
     ctx: &Arc<AppCtx>,
     id: String,
-    update: mainframe_db::chats::ChatUpdate,
-) -> Response {
-    let partial = tuning_partial(&update);
+    update: ChatPatch,
+) -> Result<Response, ApiError> {
+    let partial = update.clone();
     let cid = id.clone();
-    if let Err(err) = ctx.db.call(move |db| db.chats.update(&cid, &update)).await {
-        return crate::async_err::internal_error("update tuning", &err);
+    if let Err(err) = ctx
+        .core
+        .db
+        .call(move |db| db.chats.update(&cid, &update))
+        .await
+    {
+        return Err(ApiError::internal("update tuning", err));
     }
     let lookup = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
-    };
-    if let Some(cm) = ctx.chat_manager.clone() {
+    let chat = ctx.require_chat(&lookup).await?;
+    {
+        let cm = ctx.chat.chat_manager.clone();
         cm.sync_chat_fields(&id, partial);
         let (apply_cm, apply_id) = (cm.clone(), id.clone());
         tokio::spawn(async move { apply_cm.apply_tuning(&apply_id).await });
         cm.emit_chat_updated(&id);
     }
-    ok(chat)
+    Ok(ok(chat))
 }
 
 async fn set_tuning(
@@ -400,7 +311,7 @@ async fn set_tuning(
     let Ok(update) = tuning_update(&obj) else {
         return fail(StatusCode::BAD_REQUEST, "invalid tuning payload");
     };
-    apply_and_return(&ctx, id, update).await
+    apply_and_return(&ctx, id, update).await.into_response()
 }
 
 async fn set_effort(
@@ -427,18 +338,18 @@ async fn set_effort(
             "effort must be a valid level or null",
         );
     };
-    let update = mainframe_db::chats::ChatUpdate {
-        effort: Some(effort),
+    let update = ChatPatch {
+        tuning: mainframe_types::chat::SessionTuning {
+            effort: Some(effort),
+            ..Default::default()
+        },
         ..Default::default()
     };
-    apply_and_return(&ctx, id, update).await
+    apply_and_return(&ctx, id, update).await.into_response()
 }
 
 async fn unarchive(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "unarchive chat is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
-    };
+    let cm = &ctx.chat.chat_manager;
     if let Some(chat) = cm.get_chat(&id)
         && let Some(resp) = refuse_if_temporary(&chat, "unarchive")
     {
@@ -446,15 +357,12 @@ async fn unarchive(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
     }
     match cm.unarchive_chat(&id) {
         Some(chat) => ok(chat),
-        None => fail(StatusCode::NOT_FOUND, "Chat not found"),
+        None => crate::respond::ApiError::chat_not_found().into_response(),
     }
 }
 
 async fn session_files(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "getMessagesFromDisk needs ChatManager (unwired)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Operation failed");
-    };
+    let cm = &ctx.chat.chat_manager;
     // Load from disk to include subagent file changes absent from the in-memory
     // cache during an active session.
     let messages = cm.get_messages_from_disk(&id).await;
@@ -462,81 +370,83 @@ async fn session_files(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -
     ok(serde_json::json!({ "files": files }))
 }
 
-fn tool_use_id_ok(id: &str) -> bool {
-    !id.is_empty()
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-}
-
 async fn tool_result(
     State(ctx): State<Arc<AppCtx>>,
     Path((id, tool_use_id)): Path<(String, String)>,
-) -> Response {
-    if id.is_empty() || !tool_use_id_ok(&tool_use_id) {
-        return fail(StatusCode::BAD_REQUEST, "Invalid parameters");
+) -> Result<Response, ApiError> {
+    if id.is_empty() || !mainframe_types::ids::is_safe_identifier(&tool_use_id) {
+        return Err(ApiError::BadRequest("Invalid parameters".into()));
     }
     let lookup_id = id.clone();
-    let chat = match ctx.db.call(move |db| db.chats.get(&lookup_id)).await {
-        Ok(Some(chat)) => chat,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
-    };
+    let chat = ctx.require_chat(&lookup_id).await?;
 
-    let mut file_path = chat.session_file_path.clone();
-    if file_path.is_none()
-        && let Some(session_id) = chat.claude_session_id.clone()
-    {
-        let project_id = chat.project_id.clone();
-        let project_path = match ctx.db.call(move |db| db.projects.get(&project_id)).await {
-            Ok(project) => project.map(|p| p.path),
-            Err(err) => return crate::async_err::internal_error("get project", &err),
-        };
-        let cwd = chat.worktree_path.clone().or(project_path);
-        if let Some(cwd) = cwd {
-            let computed = compute_session_file_path(&cwd, &session_id);
-            let (cid, fp) = (chat.id.clone(), computed.clone());
-            if let Err(err) = ctx
-                .db
-                .call(move |db| {
-                    db.chats.update(
-                        &cid,
-                        &mainframe_db::chats::ChatUpdate {
-                            session_file_path: Some(fp),
-                            ..Default::default()
-                        },
-                    )
-                })
-                .await
-            {
-                return crate::async_err::internal_error("persist session file path", &err);
-            }
-            file_path = Some(computed);
-        }
-    }
-
-    let Some(file_path) = file_path else {
-        return fail(StatusCode::NOT_FOUND, "No session file for chat");
+    let file_path = match resolve_tool_result_path(&ctx, &chat).await {
+        Ok(Some(path)) => path,
+        Err(error) => return Err(error),
+        Ok(None) => return Err(ApiError::NotFound("No session file for chat".into())),
     };
-    // A Codex chat's session file is a rollout, where the tool call's display
-    // id is the rollout `call_id`; everything else is a Claude JSONL.
-    let content = if chat.adapter_id == "codex" {
-        mainframe_adapter_codex::read_tool_result_from_rollout::read_tool_result_from_rollout(
-            &file_path,
-            &tool_use_id,
-        )
-        .await
-    } else {
-        mainframe_adapter_claude::messages::read_tool_result_from_jsonl::read_tool_result_from_jsonl(
-            &file_path,
-            &tool_use_id,
-        )
-        .await
+    let content = match ctx.core.adapter_registry.get(&chat.adapter_id) {
+        Some(adapter) => adapter.read_tool_result(file_path, tool_use_id).await,
+        None => None,
     };
     match content {
-        Some(content) => ok(serde_json::json!({ "content": content })),
-        None => fail(StatusCode::NOT_FOUND, "Tool result not available"),
+        Some(content) => Ok(ok(serde_json::json!({ "content": content }))),
+        None => Err(ApiError::NotFound("Tool result not available".into())),
     }
+}
+
+async fn resolve_tool_result_path(
+    ctx: &AppCtx,
+    chat: &Chat,
+) -> Result<Option<String>, crate::respond::ApiError> {
+    if let Some(path) = &chat.session_file_path {
+        return Ok(Some(path.clone()));
+    }
+    let Some(session_id) = &chat.vendor_session_id else {
+        return Ok(None);
+    };
+    let project_id = chat.project_id.clone();
+    let project_path = ctx
+        .core
+        .db
+        .call(move |db| db.projects.get(&project_id))
+        .await
+        .map_err(|err| crate::respond::ApiError::internal("get project", &err))?
+        .map(|project| project.path);
+    let Some(cwd) = chat.worktree_path.clone().or(project_path) else {
+        return Ok(None);
+    };
+    let Some(adapter) = ctx.core.adapter_registry.get(&chat.adapter_id) else {
+        return Ok(None);
+    };
+    let location = match adapter
+        .locate_transcript(session_id.clone(), cwd, None)
+        .await
+    {
+        Ok(location) => location,
+        Err(err) => {
+            tracing::warn!(chat_id = %chat.id, error = %err, "tool result transcript lookup failed");
+            None
+        }
+    };
+    let Some(TranscriptLocation::Present(path)) = location else {
+        return Ok(None);
+    };
+    let (cid, fp) = (chat.id.clone(), path.clone());
+    ctx.core
+        .db
+        .call(move |db| {
+            db.chats.update(
+                &cid,
+                &ChatPatch {
+                    session_file_path: Some(fp),
+                    ..Default::default()
+                },
+            )
+        })
+        .await
+        .map_err(|err| crate::respond::ApiError::internal("persist session file path", &err))?;
+    Ok(Some(path))
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -561,450 +471,5 @@ pub fn router() -> Router<Arc<AppCtx>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::body::to_bytes;
-    use mainframe_db::chats::ChatUpdate;
-    use mainframe_types::chat::ChatStatus;
-    use std::collections::HashMap;
-
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        let body = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
-        (status, body)
-    }
-
-    /// Seeds the chats-filter fixture and returns the label→id map (ids are nanoid,
-    /// so the TS `c1..c5` labels are captured, not asserted literally).
-    async fn seed(ctx: &Arc<AppCtx>) -> HashMap<&'static str, String> {
-        ctx.db
-            .call(|db| {
-                db.projects.create("/tmp/p", Some("p"))?;
-                db.projects.create("/tmp/q", Some("q"))?;
-                let p1 = db
-                    .projects
-                    .list()?
-                    .into_iter()
-                    .find(|p| p.path == "/tmp/p")
-                    .unwrap()
-                    .id;
-                let p2 = db
-                    .projects
-                    .list()?
-                    .into_iter()
-                    .find(|p| p.path == "/tmp/q")
-                    .unwrap()
-                    .id;
-
-                let mut ids: HashMap<&'static str, String> = HashMap::new();
-                let mut mk = |label: &'static str,
-                              project: &str,
-                              worktree: Option<&str>,
-                              archived: bool|
-                 -> Result<(), mainframe_db::DbError> {
-                    let chat = db.chats.create(&mainframe_types::chat::NewChat {
-                        project_id: project.to_string(),
-                        adapter_id: "claude".to_string(),
-                        ..Default::default()
-                    })?;
-                    let update = ChatUpdate {
-                        worktree_path: Some(worktree.map(str::to_string)),
-                        status: archived.then_some(ChatStatus::Archived),
-                        ..Default::default()
-                    };
-                    db.chats.update(&chat.id, &update)?;
-                    ids.insert(label, chat.id);
-                    Ok(())
-                };
-                mk("c1", &p1, Some("/wt/c1"), false)?;
-                mk("c2", &p1, None, false)?;
-                mk("c3", &p1, Some("/wt/c3"), false)?;
-                mk("c4", &p2, Some("/wt/c4"), false)?;
-                mk("c5", &p1, Some("/wt/c5"), true)?;
-                db.chat_tags
-                    .set_for_chat(&ids["c1"], &["feature".to_string()], &db.tags)?;
-                db.chat_tags
-                    .set_for_chat(&ids["c2"], &["feature".to_string()], &db.tags)?;
-                db.chat_tags
-                    .set_for_chat(&ids["c3"], &["bug".to_string()], &db.tags)?;
-                Ok(ids)
-            })
-            .await
-            .unwrap()
-    }
-
-    fn q(project: Option<&str>, tags: Option<&str>, synthetic: Option<&str>) -> Query<ListQuery> {
-        Query(ListQuery {
-            project: project.map(str::to_string),
-            tags: tags.map(str::to_string),
-            synthetic: synthetic.map(str::to_string),
-            include_temporary: None,
-        })
-    }
-
-    async fn ids_of(resp: Response) -> Vec<String> {
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::OK);
-        let mut ids: Vec<String> = body["data"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|c| c["id"].as_str().unwrap().to_string())
-            .collect();
-        ids.sort();
-        ids
-    }
-
-    fn labels(ids: &HashMap<&str, String>, keys: &[&str]) -> Vec<String> {
-        let mut v: Vec<String> = keys.iter().map(|k| ids[*k].clone()).collect();
-        v.sort();
-        v
-    }
-
-    #[tokio::test]
-    async fn no_filters_returns_all_including_archived() {
-        let ctx = AppCtx::test_ctx();
-        let ids = seed(&ctx).await;
-        let got = ids_of(list(State(ctx.clone()), q(None, None, None)).await).await;
-        assert_eq!(got, labels(&ids, &["c1", "c2", "c3", "c4", "c5"]));
-    }
-
-    #[tokio::test]
-    async fn filters_by_project() {
-        let ctx = AppCtx::test_ctx();
-        let ids = seed(&ctx).await;
-        // resolve p2 via c4's project by querying chats
-        let p2 = ctx
-            .db
-            .call(|db| {
-                Ok(db
-                    .projects
-                    .list()?
-                    .into_iter()
-                    .find(|p| p.path == "/tmp/q")
-                    .unwrap()
-                    .id)
-            })
-            .await
-            .unwrap();
-        let got = ids_of(list(State(ctx.clone()), q(Some(&p2), None, None)).await).await;
-        assert_eq!(got, labels(&ids, &["c4"]));
-    }
-
-    #[tokio::test]
-    async fn filters_by_tags() {
-        let ctx = AppCtx::test_ctx();
-        let ids = seed(&ctx).await;
-        let got = ids_of(list(State(ctx.clone()), q(None, Some("feature"), None)).await).await;
-        assert_eq!(got, labels(&ids, &["c1", "c2"]));
-    }
-
-    #[tokio::test]
-    async fn filters_by_synthetic_has_worktree() {
-        let ctx = AppCtx::test_ctx();
-        let ids = seed(&ctx).await;
-        let got = ids_of(list(State(ctx.clone()), q(None, None, Some("has-worktree"))).await).await;
-        assert_eq!(got, labels(&ids, &["c1", "c3", "c4", "c5"]));
-    }
-
-    #[tokio::test]
-    async fn ignores_has_pr_synthetic() {
-        let ctx = AppCtx::test_ctx();
-        seed(&ctx).await;
-        let got = ids_of(list(State(ctx.clone()), q(None, None, Some("has-pr"))).await).await;
-        assert_eq!(got.len(), 5);
-    }
-
-    #[tokio::test]
-    async fn populates_tags_on_filtered_results() {
-        let ctx = AppCtx::test_ctx();
-        let ids = seed(&ctx).await;
-        let (_, body) = read(list(State(ctx.clone()), q(None, Some("feature"), None)).await).await;
-        let c1 = body["data"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|c| c["id"] == serde_json::json!(ids["c1"]))
-            .unwrap();
-        assert_eq!(c1["tags"], serde_json::json!(["feature"]));
-    }
-
-    #[tokio::test]
-    async fn rejects_malformed_tags_400() {
-        let ctx = AppCtx::test_ctx();
-        let (status, _) =
-            read(list(State(ctx.clone()), q(None, Some("feature,BAD!"), None)).await).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn get_missing_chat_404() {
-        let ctx = AppCtx::test_ctx();
-        let (status, body) = read(get_one(State(ctx.clone()), Path("nope".into())).await).await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
-        assert_eq!(body["error"], "Chat not found");
-    }
-
-    #[tokio::test]
-    async fn set_pinned_requires_boolean_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = set_pinned(
-            State(ctx.clone()),
-            Path("c".into()),
-            axum::body::Bytes::from("{}"),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "pinned (boolean) is required");
-    }
-
-    #[tokio::test]
-    async fn set_pinned_refuses_a_temporary_chat_409() {
-        let ctx = AppCtx::test_ctx();
-        let (_, _, temp_id) = seed_one_temporary_chat(&ctx).await;
-
-        let resp = set_pinned(
-            State(ctx.clone()),
-            Path(temp_id),
-            axum::body::Bytes::from(r#"{"pinned":true}"#),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::CONFLICT);
-        assert_eq!(body["error"], "cannot pin a temporary chat");
-    }
-
-    #[tokio::test]
-    async fn set_effort_rejects_bad_level_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = set_effort(
-            State(ctx.clone()),
-            Path("c".into()),
-            axum::body::Bytes::from(r#"{"effort":"turbo"}"#),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "effort must be a valid level or null");
-    }
-
-    /// Pin, not a red test: `parse_effort_field` is pure serde and already
-    /// accepts `"ultra"`. The chat doesn't exist in `test_ctx`, so the request
-    /// fails later in `apply_and_return` — this only proves validation cleared.
-    #[tokio::test]
-    async fn set_effort_accepts_ultra_past_validation() {
-        let ctx = AppCtx::test_ctx();
-        let resp = set_effort(
-            State(ctx.clone()),
-            Path("c".into()),
-            axum::body::Bytes::from(r#"{"effort":"ultra"}"#),
-        )
-        .await;
-        let (_, body) = read(resp).await;
-        assert_ne!(body["error"], "effort must be a valid level or null");
-    }
-
-    #[tokio::test]
-    async fn tool_result_rejects_bad_tool_use_id_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = tool_result(State(ctx.clone()), Path(("c".into(), "bad id!".into()))).await;
-        let (status, _) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn tool_result_missing_chat_404() {
-        let ctx = AppCtx::test_ctx();
-        let resp = tool_result(State(ctx.clone()), Path(("nope".into(), "abc".into()))).await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
-        assert_eq!(body["error"], "Chat not found");
-    }
-
-    // ── includeTemporary (todo #346, AC 26) ───────────────────────────────────
-
-    async fn seed_one_temporary_chat(ctx: &Arc<AppCtx>) -> (String, String, String) {
-        ctx.db
-            .call(|db| {
-                let project = db.projects.create("/tmp/temp-list", None)?;
-                let normal = db.chats.create(&mainframe_types::chat::NewChat {
-                    project_id: project.id.clone(),
-                    adapter_id: "claude".to_string(),
-                    ..Default::default()
-                })?;
-                let temp = db.chats.create(&mainframe_types::chat::NewChat {
-                    project_id: project.id.clone(),
-                    adapter_id: "claude".to_string(),
-                    temporary: true,
-                    ..Default::default()
-                })?;
-                Ok((project.id, normal.id, temp.id))
-            })
-            .await
-            .unwrap()
-    }
-
-    #[tokio::test]
-    async fn list_excludes_temporary_by_default_and_includes_it_when_asked() {
-        let ctx = AppCtx::test_ctx();
-        let (_, normal_id, temp_id) = seed_one_temporary_chat(&ctx).await;
-
-        let excluded = ids_of(list(State(ctx.clone()), q(None, None, None)).await).await;
-        assert!(excluded.contains(&normal_id));
-        assert!(!excluded.contains(&temp_id));
-
-        let included = ids_of(
-            list(
-                State(ctx.clone()),
-                Query(ListQuery {
-                    project: None,
-                    tags: None,
-                    synthetic: None,
-                    include_temporary: Some(true),
-                }),
-            )
-            .await,
-        )
-        .await;
-        assert!(included.contains(&normal_id));
-        assert!(included.contains(&temp_id));
-    }
-
-    #[tokio::test]
-    async fn list_for_project_excludes_temporary_by_default_and_includes_it_when_asked() {
-        let ctx = AppCtx::test_ctx();
-        let (project_id, normal_id, temp_id) = seed_one_temporary_chat(&ctx).await;
-
-        let excluded = ids_of(
-            list_for_project(
-                State(ctx.clone()),
-                Path(project_id.clone()),
-                Query(ListForProjectQuery {
-                    include_temporary: None,
-                }),
-            )
-            .await,
-        )
-        .await;
-        assert!(excluded.contains(&normal_id));
-        assert!(!excluded.contains(&temp_id));
-
-        let included = ids_of(
-            list_for_project(
-                State(ctx.clone()),
-                Path(project_id),
-                Query(ListForProjectQuery {
-                    include_temporary: Some(true),
-                }),
-            )
-            .await,
-        )
-        .await;
-        assert!(included.contains(&normal_id));
-        assert!(included.contains(&temp_id));
-    }
-
-    // Side-chat listing-exclusion tests moved to routes/chat_side_chat/tests.rs.
-    // ── archive/unarchive refuse a temporary chat (todo #346, AC 26 — needs a
-    // real ChatManager) ───────────────────────────────────────────────────────
-
-    async fn create_temporary_chat(ctx: &Arc<AppCtx>) -> String {
-        ctx.chat_manager
-            .as_ref()
-            .unwrap()
-            .create_chat_with_defaults(
-                mainframe_types::chat::NewChat {
-                    project_id: mainframe_types::chat::NO_PROJECT_ID.to_string(),
-                    adapter_id: "claude".to_string(),
-                    temporary: true,
-                    ..Default::default()
-                },
-                None,
-                None,
-            )
-            .await
-            .id
-    }
-
-    #[tokio::test]
-    async fn archive_refuses_a_temporary_chat_409() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
-        ctx.adapter_registry
-            .register(crate::chat_test_support::StubAdapter::new("claude", false));
-        let id = create_temporary_chat(&ctx).await;
-
-        let (status, body) = read(
-            archive(
-                State(ctx.clone()),
-                Path(id),
-                Query(ArchiveQuery {
-                    delete_worktree: None,
-                }),
-            )
-            .await,
-        )
-        .await;
-        assert_eq!(status, StatusCode::CONFLICT);
-        assert_eq!(body["error"], "cannot archive a temporary chat");
-    }
-
-    #[tokio::test]
-    async fn unarchive_refuses_a_temporary_chat_409() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
-        ctx.adapter_registry
-            .register(crate::chat_test_support::StubAdapter::new("claude", false));
-        let id = create_temporary_chat(&ctx).await;
-
-        let (status, body) = read(unarchive(State(ctx.clone()), Path(id)).await).await;
-        assert_eq!(status, StatusCode::CONFLICT);
-        assert_eq!(body["error"], "cannot unarchive a temporary chat");
-    }
-
-    #[tokio::test]
-    async fn excludes_automation_created_chats_from_the_default_list() {
-        let ctx = AppCtx::test_ctx();
-        let ids = seed(&ctx).await;
-        let automated_id = ctx
-            .db
-            .call(|db| {
-                let p1 = db
-                    .projects
-                    .list()?
-                    .into_iter()
-                    .find(|p| p.path == "/tmp/p")
-                    .unwrap()
-                    .id;
-                Ok(db
-                    .chats
-                    .create(&mainframe_types::chat::NewChat {
-                        project_id: p1,
-                        adapter_id: "claude".to_string(),
-                        automation_run_id: Some("run-1".to_string()),
-                        ..Default::default()
-                    })?
-                    .id)
-            })
-            .await
-            .unwrap();
-
-        let got = ids_of(list(State(ctx.clone()), q(None, None, None)).await).await;
-
-        assert!(!got.contains(&automated_id));
-        assert_eq!(got, labels(&ids, &["c1", "c2", "c3", "c4", "c5"]));
-    }
-}
-
-// PORT STATUS: src/server/routes/chats.ts (13 endpoints, 295 lines)
-// confidence: medium
-// todos: 0
-// notes: Reads (list/listFiltered, listChats, getChat) route through the ChatManager
-// facade (enriched: displayStatus/isRunning/worktreeMissing) when wired, else the raw
-// db path (Phase-3 harness). archive / getDisplayMessages (messages) /
-// getMessagesFromDisk (session-files) / getPendingPermission / unarchive are now real
-// facade calls. pinned/tuning/effort PATCH + tool-result port over ctx.db.chats
-// (+ compute_session_file_path / read_tool_result_from_jsonl / extract_session_file_paths
-// helpers); the tuning/pinned PATCHes run the TS `applyChatTuning` follow-ups
-// (syncChatFields + fire-and-forget applyTuning + emitChatUpdated) when the manager is
-// wired. title uses the facade rename when wired, else a db title write.
+#[path = "chats_tests.rs"]
+mod tests;

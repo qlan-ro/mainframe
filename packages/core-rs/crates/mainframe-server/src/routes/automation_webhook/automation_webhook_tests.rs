@@ -1,14 +1,13 @@
-//! Webhook ingress route tests (T9.3, A7): signature → preset predicate →
+//! Webhook ingress route tests: signature → preset predicate →
 //! staleness → replay dedup → run, with the exact status matrix.
 
 use std::time::Duration;
 
-use axum::body::{Bytes, to_bytes};
+use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::response::Response;
 use hmac::{Hmac, Mac};
-use serde_json::{Value, json};
+use serde_json::json;
 use sha2::Sha256;
 
 use crate::routes::automations_test_support::{AutomationsHarness, automations_ctx};
@@ -17,14 +16,7 @@ use super::ingest;
 
 const SECRET: &str = "hook-secret";
 
-async fn read(resp: Response) -> (StatusCode, Value) {
-    let status = resp.status();
-    let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    (
-        status,
-        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
-    )
-}
+use crate::test_support::read_json as read;
 
 fn sign(body: &[u8]) -> String {
     let mut mac = Hmac::<Sha256>::new_from_slice(SECRET.as_bytes()).unwrap();
@@ -91,7 +83,8 @@ async fn unknown_hook_404() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["error"], "unknown webhook");
 }
@@ -109,7 +102,8 @@ async fn bad_signature_401() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body["error"], "invalid signature");
 }
@@ -129,14 +123,20 @@ async fn valid_delivery_starts_a_run_and_a_replay_is_a_200_noop() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::OK);
     assert_eq!(envelope, json!({ "success": true }));
-    // Give the spawned advance a beat, then assert exactly one run.
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(10),
+        std::time::Duration::from_millis(5),
+        async || !(run_count(&h, &automation_id).await == 0),
+    )
+    .await
+    .expect("webhook run created");
     assert_eq!(run_count(&h, &automation_id).await, 1);
 
-    // A7 — the same delivery id replays as a 200 no-op, not a second run.
+    // The same delivery id replays as a 200 no-op, not a second run.
     let (status, _) = read(
         ingest(
             State(h.ctx.clone()),
@@ -146,7 +146,8 @@ async fn valid_delivery_starts_a_run_and_a_replay_is_a_200_noop() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::OK);
     assert_eq!(run_count(&h, &automation_id).await, 1);
 }
@@ -165,7 +166,8 @@ async fn preset_mismatch_is_a_204_with_no_run() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::NO_CONTENT);
     assert_eq!(run_count(&h, &automation_id).await, 0);
 }
@@ -174,7 +176,7 @@ async fn preset_mismatch_is_a_204_with_no_run() {
 async fn stale_delivery_is_dropped_with_204() {
     let h = automations_ctx().await;
     let automation_id = webhook_automation(&h, "h3", None).await;
-    let stale_ms = chrono::Utc::now().timestamp_millis() - 11 * 60 * 1000;
+    let stale_ms = mainframe_types::time::now_ms() - 11 * 60 * 1000;
     let payload = format!(r#"{{"event":"push","timestamp":{stale_ms},"id":"d-3"}}"#);
     let (status, _) = read(
         ingest(
@@ -185,7 +187,8 @@ async fn stale_delivery_is_dropped_with_204() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::NO_CONTENT);
     assert_eq!(run_count(&h, &automation_id).await, 0);
 }
@@ -204,7 +207,8 @@ async fn missing_delivery_id_400() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(envelope["error"].as_str().unwrap().contains("delivery id"));
 }
@@ -223,7 +227,8 @@ async fn invalid_json_with_a_valid_signature_400() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(envelope["error"], "invalid JSON payload");
 }

@@ -1,7 +1,6 @@
-//! CLI `patch.status` → tracker action / run status mapping. See the plan's
-//! *Status mapping tables* — the same table backs three call sites: the
-//! background-task tracker (`task_update_action`, `terminal_task_status`) and
-//! the workflow-run store (`run_status`).
+//! CLI `patch.status` → tracker action / run status mapping. The same table
+//! backs three call sites: the background-task tracker (`task_update_action`,
+//! `terminal_task_status`) and the workflow-run store (`run_status`).
 
 use mainframe_types::background_task::BackgroundTaskStatus;
 use mainframe_types::claude_workflow::ClaudeWorkflowRunStatus;

@@ -56,9 +56,3 @@ fn resolve(target: &NameTarget, scope: &Scope<'_>) -> Option<TokenValue> {
         }),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T3.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node tokens/substitute.ts renderChipText plus
-//        automation-domain/variables.ts renderVariableText.

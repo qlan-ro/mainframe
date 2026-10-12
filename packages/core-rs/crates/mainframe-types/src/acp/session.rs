@@ -3,10 +3,10 @@
 //! `AgentCapabilities`/`mcpServers`/`additionalDirectories`/`configOptions`/
 //! `replayFrom` are kept as opaque `serde_json::Value` — their substructure
 //! (auth, elicitation, MCP server wiring, session config options, the resume
-//! cursor scheme) is orthogonal to the payload grammar this task vendors and
-//! is either declined by the spec (auth, fs/terminal) or owned by a later
-//! group (group E's cursor scheme, task 15). The Mainframe extension
-//! capabilities that *are* this task's concern live in `extensions.rs` and
+//! cursor scheme) is orthogonal to the payload grammar vendored here and
+//! is either declined by the spec (auth, fs/terminal) or owned elsewhere
+//! (the cursor scheme). The Mainframe extension
+//! capabilities that *are* part of the grammar live in `extensions.rs` and
 //! ride under `_meta["_mainframe.dev"]`.
 
 use serde::{Deserialize, Serialize};
@@ -15,8 +15,8 @@ use serde_json::Value;
 pub type SessionId = String;
 pub type ProtocolVersion = u16;
 
-/// The ACP v2 protocol version this vendored subset targets (spec decision 2:
-/// frozen snapshot `d0370de50e16`, `schema/v2/meta.json` `"version": 2`).
+/// The ACP v2 protocol version this vendored subset targets (frozen snapshot
+/// `d0370de50e16`, `schema/v2/meta.json` `"version": 2`).
 pub const PINNED_PROTOCOL_VERSION: ProtocolVersion = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -110,9 +110,8 @@ pub struct ResumeSessionRequest {
     pub additional_directories: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp_servers: Option<Vec<Value>>,
-    /// Opaque replay cursor (`ReplayFrom`) — the cursor scheme itself is
-    /// group E's concern (plan task 15); this task only needs the field to
-    /// exist and round-trip.
+    /// Opaque replay cursor (`ReplayFrom`) — the cursor scheme itself lives
+    /// elsewhere; this type only needs the field to exist and round-trip.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replay_from: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "_meta")]

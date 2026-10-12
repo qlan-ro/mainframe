@@ -1,3 +1,4 @@
+use crate::recorded_method::RecordedMethod;
 use std::sync::Arc;
 
 use mainframe_adapter_api::{AdapterError, LoadedSkill, SessionSink};
@@ -9,15 +10,15 @@ use mainframe_types::context::SkillFileEntry;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::fixture::RecordedEvent;
+use crate::fixture::{RecordedEvent, RecordedEventError};
 
-fn arg<T: DeserializeOwned>(event: &RecordedEvent, index: usize) -> Result<T, String> {
+fn arg<T: DeserializeOwned>(event: &RecordedEvent, index: usize) -> Result<T, RecordedEventError> {
     let value = event
         .args
         .get(index)
         .cloned()
-        .ok_or_else(|| format!("missing argument {index}"))?;
-    serde_json::from_value(value).map_err(|error| error.to_string())
+        .ok_or(RecordedEventError::MissingArgument(index))?;
+    Ok(serde_json::from_value(value)?)
 }
 
 pub(crate) fn emit_event(sink: Arc<dyn SessionSink>, event: RecordedEvent) {
@@ -26,60 +27,67 @@ pub(crate) fn emit_event(sink: Arc<dyn SessionSink>, event: RecordedEvent) {
     }
 }
 
-fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), String> {
-    match event.method.as_str() {
-        "onInit" => sink.on_init(&arg::<String>(event, 0)?),
-        "onMessage" => sink.on_message(
+#[expect(
+    clippy::too_many_lines,
+    reason = "recorded sink method dispatch table with typed payload decoders"
+)]
+fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), RecordedEventError> {
+    match &event.method {
+        RecordedMethod::OnInit => sink.on_init(&arg::<String>(event, 0)?),
+        RecordedMethod::OnMessage => sink.on_message(
             arg::<Vec<MessageContent>>(event, 0)?,
             arg::<Option<MessageMetadata>>(event, 1)?,
         ),
         // `args[1]` (the vendor id) is optional so pre-existing recorded
         // fixtures that predate it keep replaying unchanged.
-        "onToolResult" => sink.on_tool_result(
+        RecordedMethod::OnToolResult => sink.on_tool_result(
             arg(event, 0)?,
             match event.args.get(1) {
                 Some(_) => arg::<Option<String>>(event, 1)?,
                 None => None,
             },
         ),
-        "onPermission" => sink.on_permission(arg::<ControlRequest>(event, 0)?),
-        "onPermissionCancelled" => sink.on_permission_cancelled(&arg::<String>(event, 0)?),
-        "onResult" => sink.on_result(arg::<SessionResult>(event, 0)?),
-        "onExit" => sink.on_exit(arg::<Option<i32>>(event, 0)?),
-        "onError" => sink.on_error(AdapterError::Message(recorded_error(event)?)),
+        RecordedMethod::OnPermission => sink.on_permission(arg::<ControlRequest>(event, 0)?),
+        RecordedMethod::OnPermissionCancelled => {
+            sink.on_permission_cancelled(&arg::<String>(event, 0)?)
+        }
+        RecordedMethod::OnResult => sink.on_result(arg::<SessionResult>(event, 0)?),
+        RecordedMethod::OnExit => sink.on_exit(arg::<Option<i32>>(event, 0)?),
+        RecordedMethod::OnError => sink.on_error(AdapterError::Message(recorded_error(event)?)),
         // `args[0]` (the vendor id) is optional so pre-existing recorded
         // fixtures that predate it keep replaying unchanged.
-        "onCompact" => {
+        RecordedMethod::OnCompact => {
             let vendor_id = match event.args.first() {
                 Some(_) => arg::<Option<String>>(event, 0)?,
                 None => None,
             };
             sink.on_compact(vendor_id.as_deref())
         }
-        "onCompactStart" => sink.on_compact_start(),
-        "onContextUsage" => sink.on_context_usage(arg::<ContextUsage>(event, 0)?),
-        "onPlanFile" => sink.on_plan_file(&arg::<String>(event, 0)?),
-        "onSkillFile" => sink.on_skill_file(arg::<SkillFileEntry>(event, 0)?),
-        "onQueuedProcessed" => sink.on_queued_processed(&arg::<String>(event, 0)?),
-        "onTodoUpdate" => sink.on_todo_update(arg::<Vec<TodoItem>>(event, 0)?),
-        "onPrDetected" => sink.on_pr_detected(arg::<DetectedPr>(event, 0)?),
-        "onCliMessage" => sink.on_cli_message(&arg::<String>(event, 0)?),
-        "onSkillLoaded" => sink.on_skill_loaded(arg::<LoadedSkill>(event, 0)?),
-        "onSubagentChild" => sink.on_subagent_child(
+        RecordedMethod::OnCompactStart => sink.on_compact_start(),
+        RecordedMethod::OnContextUsage => sink.on_context_usage(arg::<ContextUsage>(event, 0)?),
+        RecordedMethod::OnPlanFile => sink.on_plan_file(&arg::<String>(event, 0)?),
+        RecordedMethod::OnSkillFile => sink.on_skill_file(arg::<SkillFileEntry>(event, 0)?),
+        RecordedMethod::OnQueuedProcessed => sink.on_queued_processed(&arg::<String>(event, 0)?),
+        RecordedMethod::OnTodoUpdate => sink.on_todo_update(arg::<Vec<TodoItem>>(event, 0)?),
+        RecordedMethod::OnPrDetected => sink.on_pr_detected(arg::<DetectedPr>(event, 0)?),
+        RecordedMethod::OnCliMessage => sink.on_cli_message(&arg::<String>(event, 0)?),
+        RecordedMethod::OnSkillLoaded => sink.on_skill_loaded(arg::<LoadedSkill>(event, 0)?),
+        RecordedMethod::OnSubagentChild => sink.on_subagent_child(
             &arg::<String>(event, 0)?,
             arg::<Vec<MessageContent>>(event, 1)?,
         ),
-        "onTrustRequired" => sink.on_trust_required(&arg::<String>(event, 0)?),
-        "onProviderQuota" => {
+        RecordedMethod::OnTrustRequired => sink.on_trust_required(&arg::<String>(event, 0)?),
+        RecordedMethod::OnProviderQuota => {
             sink.on_provider_quota(&arg::<String>(event, 0)?, arg::<ProviderQuota>(event, 1)?)
         }
-        // todo #350 group D task 11: extends the fixture vocabulary so a
-        // captured `api_error` retry can be replayed through the sink.
-        "onApiRetry" => sink.on_api_retry(arg::<i64>(event, 0)?, arg::<Option<String>>(event, 1)?),
-        // todo #350: a recording can now emit a partial for message A, then
+        // Lets a captured `api_error` retry be replayed through the sink.
+        RecordedMethod::OnApiRetry => {
+            sink.on_api_retry(arg::<i64>(event, 0)?, arg::<Option<String>>(event, 1)?)
+        }
+        // A recording can emit a partial for message A, then
         // `onApiRetry`, then the completed message B — the sequence the
         // no-ghost-bubble e2e scenario asserts against.
-        "onMessagePartial" => sink.on_message_partial(
+        RecordedMethod::OnMessagePartial => sink.on_message_partial(
             arg::<String>(event, 0)?.as_str(),
             arg::<Vec<MessageContent>>(event, 1)?,
         ),
@@ -88,11 +96,12 @@ fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), St
     Ok(())
 }
 
-fn recorded_error(event: &RecordedEvent) -> Result<String, String> {
+/// The recorded CLI error text, which replays verbatim as `AdapterError::Message`.
+fn recorded_error(event: &RecordedEvent) -> Result<String, RecordedEventError> {
     let value = event
         .args
         .first()
-        .ok_or_else(|| "missing argument 0".to_string())?;
+        .ok_or(RecordedEventError::MissingArgument(0))?;
     if let Some(message) = value.as_str() {
         return Ok(message.to_string());
     }
@@ -100,141 +109,9 @@ fn recorded_error(event: &RecordedEvent) -> Result<String, String> {
         .get("message")
         .and_then(Value::as_str)
         .map(str::to_string)
-        .ok_or_else(|| "invalid recorded error".to_string())
+        .ok_or(RecordedEventError::InvalidError)
 }
 
 #[cfg(test)]
-mod tests {
-    use std::sync::Mutex;
-
-    use serde_json::json;
-
-    use mainframe_types::content::LeafContent;
-
-    use crate::fixture::EventDirection;
-
-    use super::*;
-
-    #[derive(Default)]
-    struct RecordingSink {
-        cancelled: Mutex<Vec<String>>,
-        api_retries: Mutex<Vec<(i64, Option<String>)>>,
-        partials: Mutex<Vec<(String, Vec<MessageContent>)>>,
-    }
-    impl SessionSink for RecordingSink {
-        fn on_init(&self, _session_id: &str) {}
-        fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
-        fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
-        fn on_permission(&self, _request: ControlRequest) {}
-        fn on_permission_cancelled(&self, request_id: &str) {
-            self.cancelled
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(request_id.to_string());
-        }
-        fn on_result(&self, _data: SessionResult) {}
-        fn on_exit(&self, _code: Option<i32>) {}
-        fn on_error(&self, _error: AdapterError) {}
-        fn on_compact(&self, _vendor_id: Option<&str>) {}
-        fn on_compact_start(&self) {}
-        fn on_context_usage(&self, _usage: ContextUsage) {}
-        fn on_plan_file(&self, _file_path: &str) {}
-        fn on_skill_file(&self, _entry: SkillFileEntry) {}
-        fn on_queued_processed(&self, _uuid: &str) {}
-        fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
-        fn on_pr_detected(&self, _pr: DetectedPr) {}
-        fn on_cli_message(&self, _text: &str) {}
-        fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-        fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
-        fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
-            self.api_retries
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push((attempt, reason));
-        }
-        fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
-            self.partials
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push((api_message_id.to_string(), content));
-        }
-    }
-
-    fn recorded(method: &str, args: Vec<Value>) -> RecordedEvent {
-        RecordedEvent {
-            dir: EventDirection::Out,
-            method: method.to_string(),
-            args,
-            delay_ms: 0,
-            files: Vec::new(),
-            deleted: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn dispatches_a_recorded_on_permission_cancelled() {
-        let sink = Arc::new(RecordingSink::default());
-        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
-        let event = recorded("onPermissionCancelled", vec![json!("req_1")]);
-
-        dispatch(&dyn_sink, &event).unwrap();
-
-        assert_eq!(
-            *sink.cancelled.lock().unwrap_or_else(|e| e.into_inner()),
-            vec!["req_1".to_string()]
-        );
-    }
-
-    #[test]
-    fn dispatches_a_recorded_on_api_retry() {
-        let sink = Arc::new(RecordingSink::default());
-        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
-        let event = recorded("onApiRetry", vec![json!(2), json!("overloaded_error")]);
-
-        dispatch(&dyn_sink, &event).unwrap();
-
-        assert_eq!(
-            *sink.api_retries.lock().unwrap_or_else(|e| e.into_inner()),
-            vec![(2, Some("overloaded_error".to_string()))]
-        );
-    }
-
-    #[test]
-    fn dispatches_a_recorded_on_message_partial() {
-        let sink = Arc::new(RecordingSink::default());
-        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
-        let event = recorded(
-            "onMessagePartial",
-            vec![json!("msg_a"), json!([{ "type": "text", "text": "Hel" }])],
-        );
-
-        dispatch(&dyn_sink, &event).unwrap();
-
-        let partials = sink.partials.lock().unwrap_or_else(|e| e.into_inner());
-        assert_eq!(partials.len(), 1);
-        assert_eq!(partials[0].0, "msg_a");
-        assert_eq!(
-            partials[0].1,
-            vec![MessageContent::Leaf(LeafContent::Text {
-                text: "Hel".to_string(),
-                parent_tool_use_id: None,
-            })]
-        );
-    }
-
-    #[test]
-    fn an_unknown_method_returns_ok_without_touching_the_sink() {
-        let sink = Arc::new(RecordingSink::default());
-        let dyn_sink: Arc<dyn SessionSink> = sink.clone();
-        let event = recorded("onSomethingNobodyHeardOf", vec![json!("x")]);
-
-        dispatch(&dyn_sink, &event).unwrap();
-
-        assert!(
-            sink.cancelled
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .is_empty()
-        );
-    }
-}
+#[path = "dispatch_tests.rs"]
+mod tests;

@@ -4,7 +4,11 @@
 //! fork's history stops there. Driven against the same fake app-server as
 //! `fork.rs`.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 mod fork_support;

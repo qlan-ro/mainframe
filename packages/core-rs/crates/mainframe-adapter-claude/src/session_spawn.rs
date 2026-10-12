@@ -10,19 +10,11 @@ impl ClaudeSession {
         let (options, executable, resume_target, include_partial) =
             self.probe_spawn_options(options).await?;
         let (args, base_mode) = build_args(&options, &resume_target, include_partial);
-        *self
-            .base_permission_mode
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = base_mode;
+        *self.base_permission_mode.lock_recover() = base_mode;
 
         let real = tokio::fs::canonicalize(&self.project_path)
             .await
-            .map_err(|_| {
-                AdapterError::Message(format!(
-                    "Project directory does not exist or is not accessible: {}",
-                    self.project_path
-                ))
-            })?;
+            .map_err(|_| AdapterError::ProjectDirMissing(self.project_path.clone()))?;
         self.state().real_project_path = real.to_string_lossy().to_string();
 
         let mut cmd = build_spawn_command(
@@ -38,14 +30,21 @@ impl ClaudeSession {
         );
         let mut child = cmd.spawn()?;
 
-        let handle = self.bind_child(&child);
+        let pid = child.id().unwrap_or(0);
         self.start_stdin(child.stdin.take());
         self.apply_spawn_tuning(&options);
-        self.start_output(child.stdout.take(), active_sink.clone(), handle_stdout);
-        self.start_output(child.stderr.take(), active_sink.clone(), handle_stderr);
-        self.wait_for_exit(child, handle, active_sink);
+        let pumps = [
+            self.start_output(child.stdout.take(), active_sink.clone(), handle_stdout),
+            self.start_output(child.stderr.take(), active_sink.clone(), handle_stderr),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        let process = mainframe_runtime::process::ManagedProcess::spawn(child, pumps);
+        let handle = self.bind_child(pid, &process);
+        self.wait_for_exit(process.exit(), handle, active_sink);
         self.get_process_info()
-            .ok_or_else(|| AdapterError::Message("spawn produced no process info".to_string()))
+            .ok_or(AdapterError::Invariant("spawn produced no process info"))
     }
     async fn endpoint_options(
         &self,
@@ -60,11 +59,7 @@ impl ClaudeSession {
         let proxy_env = match &endpoint_model {
             Some(bare) => {
                 options.model = Some(bare.clone());
-                Some(
-                    cliproxy::resolve_env(None, options.small_fast_model.as_deref(), bare)
-                        .await
-                        .map_err(AdapterError::Message)?,
-                )
+                Some(cliproxy::resolve_env(None, options.small_fast_model.as_deref(), bare).await?)
             }
             None => None,
         };
@@ -83,7 +78,7 @@ impl ClaudeSession {
             .clone()
             .unwrap_or_else(|| "claude".to_string());
 
-        *self.executable.lock().unwrap_or_else(|e| e.into_inner()) = executable.clone();
+        *self.executable.lock_recover() = executable.clone();
         let include_partial = crate::partial_stream::supports_partial_messages(
             &executable,
             self.resolved_path.as_str(),
@@ -112,7 +107,7 @@ impl ClaudeSession {
         if let Some(tuning) = &options.tuning {
             let settings = tuning_to_flag_settings(tuning);
             if !settings.is_empty() {
-                self.control.send(
+                self.send_control(
                     self.stdin_clone().as_ref(),
                     &json!({ "subtype": "apply_flag_settings", "settings": settings }),
                 );
@@ -137,17 +132,11 @@ pub(super) fn build_spawn_command(
     resolved_path: &str,
     proxy: Option<&CliProxyEnv>,
 ) -> tokio::process::Command {
-    let mut cmd = tokio::process::Command::new(executable);
+    let path = mainframe_runtime::ResolvedPath::from_value(resolved_path);
+    let mut cmd = mainframe_runtime::process::cli_command(executable, &path);
     cmd.args(args)
         .current_dir(project_path)
-        .env("PATH", resolved_path)
-        .env("FORCE_COLOR", "0")
-        .env("NO_COLOR", "1")
-        .env_remove("CLAUDECODE")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true);
+        .env_remove("CLAUDECODE");
     if let Some(proxy) = proxy {
         cmd.env("ANTHROPIC_BASE_URL", &proxy.base_url)
             .env("ANTHROPIC_AUTH_TOKEN", &proxy.auth_token)

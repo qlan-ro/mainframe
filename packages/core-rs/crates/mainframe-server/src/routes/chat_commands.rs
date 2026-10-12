@@ -1,10 +1,4 @@
-//! Ported from `src/server/routes/chat-commands.ts` — chat create + config PATCH
-//! + interrupt/resume/trust-workspace commands + queue edit/cancel.
-//!
-//! create (createChatWithDefaults), config PATCH (updateChatConfig),
-//! interrupt/resume/trust-workspace and queue edit/cancel all port over the
-//! `ChatManager` facade and are gated on the manager being wired. Existence is
-//! checked against `ctx.db.chats` so 404s are honoured before the facade call.
+//! Chat configuration, interrupt/resume/trust commands, and queue edits through ChatManager.
 
 use std::sync::Arc;
 
@@ -12,7 +6,7 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{patch, post};
 use serde::Deserialize;
 
@@ -20,31 +14,24 @@ use mainframe_types::settings::ExecutionMode;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 /// serde only invokes this when the key is present, so a plain `Option<T>`
 /// would collapse an explicit JSON `null` into the same `None` as an absent
 /// key. Wrapping in `Some` here keeps absent → outer `None` and present
-/// (including `null`) → outer `Some`, which is what rule 4's `projectId`
-/// presence check needs.
-fn double_option<'de, D, T>(de: D) -> Result<Option<Option<T>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: serde::Deserialize<'de>,
-{
-    serde::Deserialize::deserialize(de).map(Some)
-}
-
-async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, Response> {
+/// (including `null`) → outer `Some`, which is what the `projectId` presence
+/// check needs.
+async fn chat_exists(ctx: &Arc<AppCtx>, id: &str) -> Result<bool, crate::respond::ApiError> {
     let lookup = id.to_string();
-    match ctx.db.call(move |db| db.chats.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.chats.get(&lookup)).await {
         Ok(chat) => Ok(chat.is_some()),
-        Err(err) => Err(crate::async_err::internal_error("get chat", &err)),
+        Err(err) => Err(crate::respond::ApiError::internal("get chat", &err)),
     }
 }
 
-/// `UpdateChatConfigBody` (ws-schemas): every field optional; `permissionMode`
-/// is `z.enum(EXECUTION_MODES)` (no `plan`), so it maps to `ExecutionMode`.
+/// Config PATCH body: every field optional; `permissionMode` takes one of
+/// `EXECUTION_MODES` from `packages/types/src/settings.ts` (no `plan`), so it
+/// maps to `ExecutionMode`.
 #[derive(Deserialize)]
 struct UpdateChatConfigBody {
     #[serde(rename = "adapterId")]
@@ -54,10 +41,14 @@ struct UpdateChatConfigBody {
     permission_mode: Option<ExecutionMode>,
     #[serde(rename = "planMode")]
     plan_mode: Option<bool>,
-    /// Rule 4: a chat's project is fixed at creation. Detected as an explicit
+    /// A chat's project is fixed at creation. Detected as an explicit
     /// field (present at all, any value including `null`) rather than
     /// `deny_unknown_fields`, because other clients may send extra keys today.
-    #[serde(rename = "projectId", default, deserialize_with = "double_option")]
+    #[serde(
+        rename = "projectId",
+        default,
+        deserialize_with = "mainframe_types::serde_util::double_option"
+    )]
     project_id: Option<Option<serde_json::Value>>,
 }
 
@@ -66,8 +57,7 @@ async fn update_config(
     Path(id): Path<String>,
     body: Bytes,
 ) -> Response {
-    // validate(UpdateChatConfigBody, ...): a non-object body or a bad
-    // permissionMode enum fails the parse → 400, mirroring the TS Zod refine.
+    // A non-object body or a bad permissionMode enum fails the parse → 400.
     let Some(cfg) = parse_body::<UpdateChatConfigBody>(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
@@ -75,17 +65,11 @@ async fn update_config(
         return fail(StatusCode::BAD_REQUEST, "projectId cannot be changed");
     }
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "updateChatConfig is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "updateChatConfig unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm
         .update_chat_config(
             &id,
@@ -98,63 +82,49 @@ async fn update_config(
     {
         Ok(()) => match cm.get_chat(&id) {
             Some(chat) => ok(chat),
-            None => fail(StatusCode::NOT_FOUND, "Chat not found"),
+            None => crate::respond::ApiError::chat_not_found().into_response(),
         },
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "updateChatConfig failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("updateChatConfig failed chat_id={}", id),
+            &err,
+            err.to_string(),
+        ),
     }
 }
 
 /// Shared command scaffold: 404 when the chat is unknown, else run + okEmpty.
 async fn interrupt(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "interrupt is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "interrupt unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     cm.interrupt_chat(&id).await;
     ok_empty()
 }
 
 async fn resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "resume is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "resume unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     cm.resume_chat(&id).await;
     ok_empty()
 }
 
 async fn trust_workspace(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "trustWorkspace is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "trustWorkspace unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.trust_workspace(&id).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "trust-workspace failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_domain(format!("trust-workspace failed id={id}"), &err),
     }
 }
 
@@ -175,20 +145,18 @@ async fn queue_edit(
         return fail(StatusCode::BAD_REQUEST, "content is required");
     };
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "queue.edit is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "queue.edit unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.edit_queued_message(&id, &message_id, &content).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "queue.edit failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("queue.edit failed chat_id={}", id),
+            &err,
+            err.to_string(),
+        ),
     }
 }
 
@@ -197,23 +165,18 @@ async fn queue_cancel(
     Path((id, message_id)): Path<(String, String)>,
 ) -> Response {
     match chat_exists(&ctx, &id).await {
-        Ok(false) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     }
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "queue.cancel is a Phase-4 seam (ChatManager unavailable)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "queue.cancel unavailable",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.cancel_queued_message(&id, &message_id).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(chat_id = %id, %err, "queue.cancel failed");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("queue.cancel failed chat_id={}", id),
+            &err,
+            err.to_string(),
+        ),
     }
 }
 
@@ -230,99 +193,5 @@ pub fn router() -> Router<Arc<AppCtx>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::body::to_bytes;
-
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        (
-            status,
-            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
-        )
-    }
-
-    #[tokio::test]
-    async fn update_config_rejects_a_project_id_field_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = update_config(
-            State(ctx.clone()),
-            Path("nope".into()),
-            axum::body::Bytes::from(r#"{"projectId":"other-project"}"#),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "projectId cannot be changed");
-    }
-
-    #[tokio::test]
-    async fn update_config_rejects_a_null_project_id_field_400() {
-        // The refusal is keyed on the field's PRESENCE (rule 4), not its value —
-        // an explicit `null` still counts.
-        let ctx = AppCtx::test_ctx();
-        let resp = update_config(
-            State(ctx.clone()),
-            Path("nope".into()),
-            axum::body::Bytes::from(r#"{"projectId":null}"#),
-        )
-        .await;
-        assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
-    }
-
-    #[test]
-    fn update_chat_config_body_accepts_auto() {
-        let body = parse_body::<UpdateChatConfigBody>(&axum::body::Bytes::from(
-            r#"{"permissionMode":"auto"}"#,
-        ));
-        assert!(matches!(
-            body.and_then(|b| b.permission_mode),
-            Some(ExecutionMode::Auto)
-        ));
-    }
-
-    #[test]
-    fn update_chat_config_body_rejects_unknown_mode() {
-        let body = parse_body::<UpdateChatConfigBody>(&axum::body::Bytes::from(
-            r#"{"permissionMode":"turbo"}"#,
-        ));
-        assert!(body.is_none());
-    }
-
-    #[tokio::test]
-    async fn interrupt_missing_chat_404() {
-        let ctx = AppCtx::test_ctx();
-        let (status, body) = read(interrupt(State(ctx.clone()), Path("nope".into())).await).await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
-        assert_eq!(body["error"], "Chat not found");
-    }
-
-    #[tokio::test]
-    async fn queue_edit_rejects_empty_content_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = queue_edit(
-            State(ctx.clone()),
-            Path(("c".into(), "m".into())),
-            axum::body::Bytes::from(r#"{"content":""}"#),
-        )
-        .await;
-        assert_eq!(read(resp).await.0, StatusCode::BAD_REQUEST);
-    }
-}
-
-// PORT STATUS: src/server/routes/chat-commands.ts (7 endpoints, 96 lines)
-// confidence: high
-// todos: 0
-// notes: create (createChatWithDefaults) + config PATCH (updateChatConfig) +
-// interrupt/resume/trust-workspace/queue-edit/queue-cancel port over the
-// ChatManager facade — all self-gate on ctx.chat_manager, wired at boot (Task
-// 4.6c), so they are live. updateChatConfig parses UpdateChatConfigBody
-// (permissionMode is z.enum(EXECUTION_MODES) → ExecutionMode, no `plan`),
-// delegates to ChatManager.update_chat_config (chat_manager.rs), then returns
-// ok(get_chat(id)), matching TS. trust-workspace now delegates to
-// ChatManager::trust_workspace (writeWorkspaceTrust is ported in
-// mainframe-adapter-claude::trust_store) — the db existence 404 is honoured
-// first, then any chat/project-not-found or write error 500s with the error
-// message, matching the TS route's try/catch. Zod enum/refine 400 messages are
-// approximated; the both-or-neither worktree refine string matches TS.
+#[path = "chat_commands_tests.rs"]
+mod tests;

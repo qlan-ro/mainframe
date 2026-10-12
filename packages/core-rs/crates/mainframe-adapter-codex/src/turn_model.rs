@@ -11,12 +11,7 @@ pub(crate) fn resolve_turn_model(
     non_empty(configured)
         .or_else(|| non_empty(reported))
         .map(str::to_owned)
-        .ok_or_else(|| {
-            AdapterError::Message(
-                "Codex did not report a model. Select a model in the composer or check the Codex configuration."
-                    .into(),
-            )
-        })
+        .ok_or(AdapterError::Unavailable("Codex did not report a model. Select a model in the composer or check the Codex configuration."))
 }
 
 #[cfg(test)]

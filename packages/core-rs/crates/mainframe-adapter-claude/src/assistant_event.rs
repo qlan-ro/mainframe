@@ -1,10 +1,11 @@
+use mainframe_types::sync::LockExt as _;
 use serde_json::Value;
 
 use mainframe_adapter_api::SessionSink;
-use mainframe_services::todos::normalize::{TodoSource, normalize_todos};
 use mainframe_types::adapter::{MessageMetadata, MessageUsage};
 use mainframe_types::chat::{MessageContent, TodoItem};
 use mainframe_types::context::SkillFileEntry;
+use mainframe_types::todo_normalize::{TodoSource, normalize_todos};
 
 use crate::session::{ClaudeSession, ClaudeSessionState};
 use crate::skill_path::resolve_skill_path;
@@ -15,9 +16,8 @@ pub(crate) fn blocks_to_message_content(blocks: &[Value]) -> Vec<MessageContent>
             |b| match serde_json::from_value::<MessageContent>(b.clone()) {
                 Ok(mc) => Some(mc),
                 Err(err) => {
-                    tracing::warn!(
-                        ?err,
-                        "assistant event: unrepresentable content block skipped"
+                    tracing::warn!(error = ?err,
+                        "unrepresentable content block skipped"
                     );
                     None
                 }
@@ -68,7 +68,11 @@ fn scan_attention_requests(content: &[Value], sink: &dyn SessionSink) {
     }
 }
 
-pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
+pub(crate) fn handle_assistant_event(
+    session: &ClaudeSession,
+    event: &Value,
+    sink: &dyn SessionSink,
+) {
     let message = event.get("message");
     let usage = message.and_then(|m| m.get("usage"));
 
@@ -79,7 +83,7 @@ pub fn handle_assistant_event(session: &ClaudeSession, event: &Value, sink: &dyn
         scan_attention_requests(content, sink);
     }
 
-    let mut guard = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = session.state.lock_recover();
     let st: &mut ClaudeSessionState = &mut guard;
 
     if let Some(u) = usage {

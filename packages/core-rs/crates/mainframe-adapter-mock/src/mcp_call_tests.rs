@@ -1,11 +1,7 @@
 use std::sync::Mutex;
 
-use mainframe_adapter_api::{AdapterError, LoadedSkill};
-use mainframe_types::adapter::{
-    ContextUsage, ControlRequest, DetectedPr, MessageMetadata, SessionResult,
-};
-use mainframe_types::chat::{MessageContentNode, TodoItem};
-use mainframe_types::context::SkillFileEntry;
+use mainframe_types::adapter::MessageMetadata;
+use mainframe_types::chat::MessageContentNode;
 use mainframe_types::orchestration::SecretToken;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -19,34 +15,37 @@ struct Captured {
 }
 
 impl SessionSink for Captured {
-    fn on_init(&self, _session_id: &str) {}
+    mainframe_adapter_api::forward_session_sink!(
+        on_init,
+        on_permission,
+        on_result,
+        on_exit,
+        on_error,
+        on_compact,
+        on_compact_start,
+        on_context_usage,
+        on_plan_file,
+        on_skill_file,
+        on_queued_processed,
+        on_todo_update,
+        on_pr_detected,
+        on_cli_message,
+        on_skill_loaded,
+        on_subagent_child
+    );
+
     fn on_message(&self, content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {
         self.messages.lock().unwrap().push(content);
     }
     fn on_tool_result(&self, content: Vec<MessageContent>, _vendor_id: Option<String>) {
         self.results.lock().unwrap().push(content);
     }
-    fn on_permission(&self, _request: ControlRequest) {}
-    fn on_result(&self, _data: SessionResult) {}
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self, _vendor_id: Option<&str>) {}
-    fn on_compact_start(&self) {}
-    fn on_context_usage(&self, _usage: ContextUsage) {}
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
-    fn on_pr_detected(&self, _pr: DetectedPr) {}
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-    fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
 }
 
 fn step(arg: Value) -> RecordedEvent {
     RecordedEvent {
         dir: EventDirection::Out,
-        method: MCP_CALL_METHOD.into(),
+        method: crate::recorded_method::RecordedMethod::McpCall,
         args: vec![arg],
         delay_ms: 0,
         files: Vec::new(),
@@ -117,7 +116,7 @@ fn the_e2e_delegate_recording_carries_a_valid_mcp_call_step() {
     let events = crate::parse_fixture(text).unwrap();
     let steps: Vec<_> = events
         .iter()
-        .filter(|e| e.method == MCP_CALL_METHOD)
+        .filter(|e| e.method == crate::recorded_method::RecordedMethod::McpCall)
         .collect();
     assert_eq!(steps.len(), 1);
     let call = parse_call(steps[0]).unwrap();

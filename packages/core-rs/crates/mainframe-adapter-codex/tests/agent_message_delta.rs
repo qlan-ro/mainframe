@@ -1,11 +1,15 @@
-//! Todo #378 — `item/agentMessage/delta` streams through the partial overlay.
+//! `item/agentMessage/delta` streams through the partial overlay.
 //! Growing-text and completion-parity cases replay the real capture
 //! (`agent-message-delta-0.155.1.jsonl`, codex-cli 0.155.1); every guard case
 //! (child/unknown thread, stale turn, already-completed item, malformed
 //! payload, teardown) is built from small synthetic notifications so each
 //! assertion pins one condition without depending on the capture's exact
 //! shape.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod common;
 

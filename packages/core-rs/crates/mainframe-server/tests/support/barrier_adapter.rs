@@ -1,10 +1,11 @@
 //! A minimal `Adapter` whose session `spawn()` blocks on a `oneshot` gate
-//! until released (todo #350, plan task 10) — the deterministic
-//! (non-timing-dependent) way to prove a slow cold-chat start does not block
-//! the socket loop's handling of a concurrent frame for another chat.
+//! until released — the deterministic (non-timing-dependent) way to prove a
+//! slow cold-chat start does not block the socket loop's handling of a
+//! concurrent frame for another chat.
 //! Every other method is a trivial success stub: the test that uses this
 //! adapter only cares about the spawn barrier.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -72,8 +73,8 @@ impl Adapter for BarrierAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(None) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        Vec::new()
     }
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
         Arc::new(BarrierSession {
@@ -117,7 +118,7 @@ impl AdapterSession for BarrierSession {
         _sink: Option<Arc<dyn mainframe_adapter_api::SessionSink>>,
     ) -> BoxFuture<'_, Result<AdapterProcess, AdapterError>> {
         Box::pin(async move {
-            let rx = self.gate.lock().unwrap_or_else(|e| e.into_inner()).take();
+            let rx = self.gate.lock_recover().take();
             if let Some(rx) = rx {
                 let _ = rx.await;
             }
@@ -157,8 +158,7 @@ impl AdapterSession for BarrierSession {
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(async {
             self.interrupts
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .lock_recover()
                 .push(self.spawned.load(Ordering::SeqCst));
             Ok(())
         })

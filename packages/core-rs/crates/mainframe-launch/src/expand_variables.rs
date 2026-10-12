@@ -1,10 +1,8 @@
-//! Ported from `src/launch/expand-variables.ts`.
-//!
 //! Recursive `${VAR}` / `${VAR:-default}` substitution plus leading-`~`
 //! expansion over an arbitrary JSON value. Non-string scalars pass through
-//! unchanged. The TS uses a global regex
+//! unchanged. The grammar is the global regex
 //! (`/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-(.*?))?\}/g`); no `regex` crate is
-//! allowlisted, so the same grammar is hand-scanned left-to-right with JS
+//! allowlisted, so it is hand-scanned left-to-right with JS
 //! `String.replace` semantics: a `${` that does not form a valid reference is
 //! emitted literally and scanning resumes one byte later.
 
@@ -12,9 +10,19 @@ use std::collections::HashMap;
 
 use serde_json::{Map, Value};
 
-/// Expand every string in `raw`, recursing into arrays and objects. Errors with
-/// the TS message when a referenced variable is unset and carries no default.
-pub fn expand_variables(raw: &Value, env: &HashMap<String, String>) -> Result<Value, String> {
+/// A `${NAME}` reference with no value in the environment and no default.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "Unresolved variable '{0}' in launch.json. Set it in your environment or provide a default: ${{{0}:-<value>}}"
+)]
+pub struct UnresolvedVariable(pub String);
+
+/// Expand every string in `raw`, recursing into arrays and objects. Errors
+/// when a referenced variable is unset and carries no default.
+pub fn expand_variables(
+    raw: &Value,
+    env: &HashMap<String, String>,
+) -> Result<Value, UnresolvedVariable> {
     match raw {
         Value::String(s) => Ok(Value::String(expand_string(s, env)?)),
         Value::Array(items) => {
@@ -35,7 +43,7 @@ pub fn expand_variables(raw: &Value, env: &HashMap<String, String>) -> Result<Va
     }
 }
 
-fn expand_string(value: &str, env: &HashMap<String, String>) -> Result<String, String> {
+fn expand_string(value: &str, env: &HashMap<String, String>) -> Result<String, UnresolvedVariable> {
     let expanded = replace_vars(value, env)?;
 
     // Tilde expansion: `~` alone or a leading `~/` become the home directory.
@@ -51,7 +59,7 @@ fn expand_string(value: &str, env: &HashMap<String, String>) -> Result<String, S
     Ok(expanded)
 }
 
-fn replace_vars(value: &str, env: &HashMap<String, String>) -> Result<String, String> {
+fn replace_vars(value: &str, env: &HashMap<String, String>) -> Result<String, UnresolvedVariable> {
     let mut out = String::with_capacity(value.len());
     let mut rest = value;
     loop {
@@ -67,11 +75,7 @@ fn replace_vars(value: &str, env: &HashMap<String, String>) -> Result<String, St
                     Some(env_value) => env_value.clone(),
                     None => match default {
                         Some(default_value) => default_value,
-                        None => {
-                            return Err(format!(
-                                "Unresolved variable '{name}' in launch.json. Set it in your environment or provide a default: ${{{name}:-<value>}}"
-                            ));
-                        }
+                        None => return Err(UnresolvedVariable(name)),
                     },
                 };
                 out.push_str(&resolved);
@@ -127,120 +131,5 @@ fn parse_var(s: &str) -> Option<(String, Option<String>, usize)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    fn env(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs
-            .iter()
-            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
-            .collect()
-    }
-
-    #[test]
-    fn replaces_var_from_env() {
-        let result =
-            expand_variables(&json!({ "port": "${PORT}" }), &env(&[("PORT", "3000")])).unwrap();
-        assert_eq!(result, json!({ "port": "3000" }));
-    }
-
-    #[test]
-    fn replaces_var_default_with_env_value_when_set() {
-        let result = expand_variables(
-            &json!({ "port": "${PORT:-8080}" }),
-            &env(&[("PORT", "3000")]),
-        )
-        .unwrap();
-        assert_eq!(result, json!({ "port": "3000" }));
-    }
-
-    #[test]
-    fn uses_default_when_env_var_is_unset() {
-        let result = expand_variables(&json!({ "port": "${PORT:-8080}" }), &env(&[])).unwrap();
-        assert_eq!(result, json!({ "port": "8080" }));
-    }
-
-    #[test]
-    fn errors_on_unresolved_variable_without_default() {
-        let err = expand_variables(&json!({ "port": "${PORT}" }), &env(&[])).unwrap_err();
-        assert!(err.contains("Unresolved variable 'PORT' in launch.json"));
-    }
-
-    #[test]
-    fn handles_multiple_expansions_in_one_string() {
-        let result = expand_variables(
-            &json!({ "url": "http://${HOST:-localhost}:${PORT:-3000}/api" }),
-            &env(&[]),
-        )
-        .unwrap();
-        assert_eq!(result, json!({ "url": "http://localhost:3000/api" }));
-    }
-
-    #[test]
-    fn expands_variables_in_arrays() {
-        let result =
-            expand_variables(&json!({ "args": ["--port", "${PORT:-3000}"] }), &env(&[])).unwrap();
-        assert_eq!(result, json!({ "args": ["--port", "3000"] }));
-    }
-
-    #[test]
-    fn recurses_into_nested_objects() {
-        let result = expand_variables(
-            &json!({ "env": { "DAEMON_PORT": "${PORT:-31416}" } }),
-            &env(&[]),
-        )
-        .unwrap();
-        assert_eq!(result, json!({ "env": { "DAEMON_PORT": "31416" } }));
-    }
-
-    #[test]
-    fn passes_through_numbers_booleans_and_null_unchanged() {
-        let result = expand_variables(
-            &json!({ "port": 3000, "preview": true, "url": null }),
-            &env(&[]),
-        )
-        .unwrap();
-        assert_eq!(
-            result,
-            json!({ "port": 3000, "preview": true, "url": null })
-        );
-    }
-
-    #[test]
-    fn expands_tilde_in_values() {
-        let result = expand_variables(&json!({ "dir": "~/data" }), &env(&[])).unwrap();
-        let dir = result["dir"].as_str().unwrap();
-        assert!(dir.starts_with('/') && dir.ends_with("/data"));
-    }
-
-    #[test]
-    fn expands_tilde_combined_with_variable_expansion() {
-        let result =
-            expand_variables(&json!({ "dir": "~/${SUBDIR:-mainframe}" }), &env(&[])).unwrap();
-        let dir = result["dir"].as_str().unwrap();
-        assert!(dir.starts_with('/') && dir.ends_with("/mainframe"));
-    }
-
-    #[test]
-    fn handles_empty_default() {
-        let result = expand_variables(&json!({ "val": "${EMPTY:-}" }), &env(&[])).unwrap();
-        assert_eq!(result, json!({ "val": "" }));
-    }
-
-    #[test]
-    fn leaves_strings_without_patterns_unchanged() {
-        let result = expand_variables(&json!({ "name": "Core Daemon" }), &env(&[])).unwrap();
-        assert_eq!(result, json!({ "name": "Core Daemon" }));
-    }
-}
-
-// PORT STATUS: src/launch/expand-variables.ts (32 lines)
-// confidence: high
-// todos: 0
-// notes: global regex → hand-scanned `${NAME(:-default)?}` grammar with JS
-// String.replace semantics (an invalid `${` is emitted literally, scan resumes
-// +1). env is a HashMap (TS `Record<string,string|undefined>`); an empty-string
-// value is present (Some("")) and wins over a default, matching `!= null`.
-// homedir → dirs::home_dir(); `~/rest` → `${home}/rest` mirrors `home +
-// slice(1)`. All 13 expand-variables.test.ts cases translated.
+#[path = "expand_variables_tests.rs"]
+mod tests;

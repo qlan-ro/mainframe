@@ -1,19 +1,13 @@
-//! Ported from `packages/core/src/background-tasks/lsof.ts`.
-
+use mainframe_types::sync::LockExt as _;
 use std::future::Future;
 use std::pin::Pin;
-use std::process::Stdio;
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use tokio::process::Command;
 
-/// An `execFile` rejection `code`: `number | string` in TS.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecCode {
-    Number(i64),
-    Text(String),
-}
+/// An exec failure `code`: numeric or textual.
+pub use mainframe_runtime::process::ExecCode;
 
 fn code_display(code: &Option<ExecCode>) -> String {
     match code {
@@ -38,104 +32,82 @@ pub struct LsofExecError {
 }
 
 type ExecFuture = Pin<Box<dyn Future<Output = Result<ExecOk, LsofExecError>> + Send>>;
-/// `promisify(execFile)` shape: `(cmd, args) -> Promise<{ stdout }>`.
+/// Exec seam: `(cmd, args)` resolving to the captured stdout.
 pub type ExecFn = Arc<dyn Fn(String, Vec<String>) -> ExecFuture + Send + Sync>;
 pub type WarnFn = Arc<dyn Fn(&str) + Send + Sync>;
 
 const TIMEOUT_MS: u64 = 2000;
 
-struct Seam {
+pub(crate) struct Seam {
     exec: ExecFn,
     logger: WarnFn,
     warned_missing: bool,
 }
 
-fn default_exec() -> ExecFn {
-    Arc::new(|cmd: String, args: Vec<String>| Box::pin(real_exec(cmd, args)) as ExecFuture)
+fn default_exec(path: mainframe_runtime::ResolvedPath) -> ExecFn {
+    Arc::new(move |cmd, args| Box::pin(real_exec(cmd, args, path.clone())))
 }
 
 fn default_logger() -> WarnFn {
-    Arc::new(|msg: &str| tracing::warn!(target: "background-tasks:lsof", "{msg}"))
+    Arc::new(|msg: &str| tracing::warn!("{msg}"))
 }
 
-fn seam() -> &'static Mutex<Seam> {
-    static SEAM: OnceLock<Mutex<Seam>> = OnceLock::new();
-    SEAM.get_or_init(|| {
-        Mutex::new(Seam {
-            exec: default_exec(),
-            logger: default_logger(),
-            warned_missing: false,
-        })
+pub(crate) fn new_seam(path: mainframe_runtime::ResolvedPath) -> Mutex<Seam> {
+    Mutex::new(Seam {
+        exec: default_exec(path),
+        logger: default_logger(),
+        warned_missing: false,
     })
 }
 
-fn lock_seam() -> MutexGuard<'static, Seam> {
-    seam()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+fn lock_seam(process: &crate::process::ProcessDeps) -> MutexGuard<'_, Seam> {
+    process.lsof.lock_recover()
 }
 
 /// Test-only seam (also resets the ENOENT warn-once latch).
-pub fn set_exec_for_tests(fn_: ExecFn) {
-    let mut g = lock_seam();
+#[cfg(test)]
+pub(crate) fn set_exec_for_tests(process: &crate::process::ProcessDeps, fn_: ExecFn) {
+    let mut g = lock_seam(process);
     g.exec = fn_;
     g.warned_missing = false;
 }
 
 /// Test-only seam — swap the logger so warn calls are observable.
-pub fn set_logger_for_tests(logger: WarnFn) {
-    let mut g = lock_seam();
+#[cfg(test)]
+pub(crate) fn set_logger_for_tests(process: &crate::process::ProcessDeps, logger: WarnFn) {
+    let mut g = lock_seam(process);
     g.logger = logger;
     g.warned_missing = false;
 }
 
 /// The default `_exec` — run `lsof -F pan -- <path>` with a 2s timeout.
-async fn real_exec(cmd: String, args: Vec<String>) -> Result<ExecOk, LsofExecError> {
+async fn real_exec(
+    cmd: String,
+    args: Vec<String>,
+    path: mainframe_runtime::ResolvedPath,
+) -> Result<ExecOk, LsofExecError> {
+    use mainframe_runtime::process::{ExecError, run_captured};
     let mut command = Command::new(&cmd);
-    command
-        .args(&args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    crate::spawn_env::apply(&mut command);
-
-    let child = match command.spawn() {
-        Ok(child) => child,
-        Err(err) => {
-            let code = if err.kind() == std::io::ErrorKind::NotFound {
-                Some(ExecCode::Text("ENOENT".to_string()))
-            } else {
-                None
+    command.args(&args);
+    path.apply(&mut command);
+    let output = run_captured(command, Some(Duration::from_millis(TIMEOUT_MS)))
+        .await
+        .map_err(|error| {
+            let (code, signal) = match error {
+                ExecError::Timeout => (None, Some("SIGTERM".to_string())),
+                ExecError::Spawn(error) => (
+                    (error.kind() == std::io::ErrorKind::NotFound)
+                        .then(|| ExecCode::Text("ENOENT".to_string())),
+                    None,
+                ),
+                error => (Some(ExecCode::Text(error.to_string())), None),
             };
-            return Err(LsofExecError {
+            LsofExecError {
                 code,
-                signal: None,
+                signal,
                 stdout: None,
-            });
-        }
-    };
-
-    let output =
-        match tokio::time::timeout(Duration::from_millis(TIMEOUT_MS), child.wait_with_output())
-            .await
-        {
-            Ok(Ok(output)) => output,
-            // execFile timeout kills the child and rejects with a SIGTERM signal.
-            Err(_elapsed) => {
-                return Err(LsofExecError {
-                    code: None,
-                    signal: Some("SIGTERM".to_string()),
-                    stdout: None,
-                });
             }
-            Ok(Err(err)) => {
-                return Err(LsofExecError {
-                    code: Some(ExecCode::Text(err.to_string())),
-                    signal: None,
-                    stdout: None,
-                });
-            }
-        };
+        })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     if output.status.success() {
@@ -149,8 +121,21 @@ async fn real_exec(cmd: String, args: Vec<String>) -> Result<ExecOk, LsofExecErr
     }
 }
 
-async fn run_lsof(path: &str) -> Result<String, String> {
-    let exec = lock_seam().exec.clone();
+/// Why an `lsof` probe gave no answer. Only logged and skipped: a failed
+/// probe never marks a task stopped.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum LsofError {
+    #[error("lsof not installed")]
+    NotInstalled,
+    #[error("lsof killed by signal {0}")]
+    Signal(String),
+    /// `code` renders as the exit code, the error code text, or `undefined`.
+    #[error("lsof exited code={0}")]
+    Exited(String),
+}
+
+async fn run_lsof(process: &crate::process::ProcessDeps, path: &str) -> Result<String, LsofError> {
+    let exec = lock_seam(process).exec.clone();
     let result = exec(
         "lsof".to_string(),
         vec![
@@ -169,205 +154,46 @@ async fn run_lsof(path: &str) -> Result<String, String> {
                 return Ok(e.stdout.unwrap_or_default());
             }
             if e.code == Some(ExecCode::Text("ENOENT".to_string())) {
-                // Liveness ticks fire once per task per minute. Warn once per
-                // process to keep logs sane.
-                let mut g = lock_seam();
+                // Share the missing-tool warning across this tracker's liveness ticks.
+                let mut g = lock_seam(process);
                 if !g.warned_missing {
                     (g.logger)("lsof binary not found; background-task OS fallbacks disabled");
                     g.warned_missing = true;
                 }
-                return Err("lsof not installed".to_string());
+                return Err(LsofError::NotInstalled);
             }
             if let Some(signal) = e.signal {
-                return Err(format!("lsof killed by signal {signal}"));
+                return Err(LsofError::Signal(signal));
             }
-            Err(format!("lsof exited code={}", code_display(&e.code)))
+            Err(LsofError::Exited(code_display(&e.code)))
         }
     }
 }
 
-fn parse_pids(stdout: &str, accept: impl Fn(&str) -> bool) -> Vec<u32> {
-    let mut pids: Vec<u32> = Vec::new();
-    let mut pending_pid: Option<u32> = None;
-    for line in stdout.split('\n') {
-        if line.is_empty() {
-            continue;
-        }
-        let mut chars = line.chars();
-        let tag = chars.next().unwrap_or('\0');
-        let rest = &line[tag.len_utf8()..];
-        if tag == 'p' {
-            pending_pid = match rest.parse::<i64>() {
-                Ok(n) if n > 0 => u32::try_from(n).ok(),
-                _ => None,
-            };
-        } else if tag == 'a'
-            && let Some(pid) = pending_pid
-        {
-            if accept(rest) {
-                pids.push(pid);
-            }
-            pending_pid = None;
-        }
-    }
-    pids
-}
+use mainframe_runtime::process::inspect::parse_pids;
 
-pub async fn lsof_writers_detailed(path: &str) -> Result<Vec<u32>, String> {
-    let stdout = run_lsof(path).await?;
+pub(crate) async fn lsof_writers_detailed(
+    process: &crate::process::ProcessDeps,
+    path: &str,
+) -> Result<Vec<u32>, LsofError> {
+    let stdout = run_lsof(process, path).await?;
     Ok(parse_pids(&stdout, |m| m == "w" || m == "u"))
 }
 
-pub async fn lsof_writers(path: &str) -> Vec<u32> {
-    lsof_writers_detailed(path).await.unwrap_or_default()
+pub(crate) async fn lsof_writers(process: &crate::process::ProcessDeps, path: &str) -> Vec<u32> {
+    lsof_writers_detailed(process, path)
+        .await
+        .unwrap_or_default()
 }
 
-pub async fn lsof_any(path: &str) -> Vec<u32> {
-    match run_lsof(path).await {
+#[cfg(test)]
+pub(crate) async fn lsof_any(process: &crate::process::ProcessDeps, path: &str) -> Vec<u32> {
+    match run_lsof(process, path).await {
         Ok(stdout) => parse_pids(&stdout, |_| true),
         Err(_) => Vec::new(),
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::seam_test_guard;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    fn ok_exec(stdout: &'static str) -> ExecFn {
-        Arc::new(move |_cmd, _args| {
-            Box::pin(async move {
-                Ok(ExecOk {
-                    stdout: stdout.to_string(),
-                })
-            }) as ExecFuture
-        })
-    }
-
-    fn fail_exec(err: LsofExecError) -> ExecFn {
-        Arc::new(move |_cmd, _args| {
-            let err = err.clone();
-            Box::pin(async move { Err(err) }) as ExecFuture
-        })
-    }
-
-    #[tokio::test]
-    async fn parses_write_mode_fds_only() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(ok_exec("p1234\naw\nn/p\np5678\nar\nn/p\np9012\nau\nn/p\n"));
-        assert_eq!(lsof_writers_detailed("/p").await, Ok(vec![1234, 9012]));
-    }
-
-    #[tokio::test]
-    async fn exit_code_1_is_ok_empty() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(fail_exec(LsofExecError {
-            code: Some(ExecCode::Number(1)),
-            signal: None,
-            stdout: Some(String::new()),
-        }));
-        assert_eq!(lsof_writers_detailed("/p").await, Ok(vec![]));
-    }
-
-    #[tokio::test]
-    async fn enoent_is_not_ok() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(fail_exec(LsofExecError {
-            code: Some(ExecCode::Text("ENOENT".to_string())),
-            signal: None,
-            stdout: None,
-        }));
-        let r = lsof_writers_detailed("/p").await;
-        assert!(r.is_err());
-        assert!(r.unwrap_err().to_lowercase().contains("lsof"));
-    }
-
-    #[tokio::test]
-    async fn exit_code_2_is_not_ok() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(fail_exec(LsofExecError {
-            code: Some(ExecCode::Number(2)),
-            signal: None,
-            stdout: None,
-        }));
-        assert!(lsof_writers_detailed("/p").await.is_err());
-    }
-
-    #[tokio::test]
-    async fn timeout_signal_is_not_ok() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(fail_exec(LsofExecError {
-            code: None,
-            signal: Some("SIGTERM".to_string()),
-            stdout: None,
-        }));
-        assert!(lsof_writers_detailed("/p").await.is_err());
-    }
-
-    #[tokio::test]
-    async fn rejects_non_numeric_pids_defensively() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(ok_exec("pabc\naw\nn/p\np42\naw\nn/p\n"));
-        assert_eq!(lsof_writers_detailed("/p").await, Ok(vec![42]));
-    }
-
-    #[tokio::test]
-    async fn writers_returns_empty_when_unavailable() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(fail_exec(LsofExecError {
-            code: Some(ExecCode::Text("ENOENT".to_string())),
-            signal: None,
-            stdout: None,
-        }));
-        assert_eq!(lsof_writers("/p").await, Vec::<u32>::new());
-    }
-
-    #[tokio::test]
-    async fn writers_returns_pids_on_success() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(ok_exec("p7\naw\nn/p\n"));
-        assert_eq!(lsof_writers("/p").await, vec![7]);
-    }
-
-    #[tokio::test]
-    async fn any_returns_pids_regardless_of_access_mode() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(ok_exec("p1\nar\nn/p\np2\naw\nn/p\n"));
-        assert_eq!(lsof_any("/p").await, vec![1, 2]);
-    }
-
-    #[tokio::test]
-    async fn only_logs_warn_once_across_repeated_enoent_calls() {
-        let _guard = seam_test_guard();
-        set_exec_for_tests(fail_exec(LsofExecError {
-            code: Some(ExecCode::Text("ENOENT".to_string())),
-            signal: None,
-            stdout: None,
-        })); // also resets warned_missing
-        let count = Arc::new(AtomicUsize::new(0));
-        let count2 = count.clone();
-        set_logger_for_tests(Arc::new(move |_msg: &str| {
-            count2.fetch_add(1, Ordering::SeqCst);
-        }));
-        let r1 = lsof_writers_detailed("/p").await;
-        let r2 = lsof_writers_detailed("/p").await;
-        assert!(r1.is_err());
-        assert!(r2.is_err());
-        assert_eq!(count.load(Ordering::SeqCst), 1);
-        // Restore the default logger so later tests don't inherit the counter.
-        set_logger_for_tests(default_logger());
-    }
-}
-
-// PORT STATUS: src/background-tasks/lsof.ts (90 lines)
-// confidence: high
-// todos: 0
-// notes: module-level `_exec`/`_log`/`warnedMissing` seams → OnceLock<Mutex<Seam>>
-// (no static mut / lazy_static). `__setExecForTests`/`__setLoggerForTests` →
-// set_exec_for_tests/set_logger_for_tests (both reset warned_missing, as TS).
-// Real `_exec` runs the exact `lsof -F pan -- <path>` argv with a 2s timeout
-// (kill_on_drop). Seam lock is never held across `.await`. lsofWritersDetailed's
-// `{ok,pids}|{ok,error}` union → Result<Vec<u32>,String>. Tests serialize on the
-// crate seam guard (parallel test threads share the global). All lsof.test.ts
-// cases translated, incl. warn-once.
+#[path = "lsof_tests.rs"]
+mod tests;

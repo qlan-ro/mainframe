@@ -1,8 +1,6 @@
 //! Pure `apply_patch` envelope parsing for `rollout_reconstruct`'s
 //! `custom_tool_call` handling — split out to keep `rollout_reconstruct.rs`
-//! under the 300-line ceiling (todo #339 task 16 widened that file to also
-//! dispatch unified-exec pairs, which pushed apply_patch's own logic over the
-//! limit).
+//! (which also dispatches unified-exec pairs) under the 300-line ceiling.
 
 use crate::item_types::{FileChange, FileChangeItem, PatchChangeKind, ThreadItem};
 

@@ -79,7 +79,7 @@ async fn load_discovered_history(
             if line.trim().is_empty() {
                 continue;
             }
-            tracing::trace!(module = "claude:history", session_id = %session_id, file = %file, line = %line, "[jsonl]");
+            tracing::trace!(session_id = %session_id, file = %file, line = %line, "jsonl line");
 
             let entry: Value = match serde_json::from_str(&line) {
                 Ok(v) => v,
@@ -97,10 +97,10 @@ mod history_discovery;
 #[cfg(test)]
 #[path = "history_tests.rs"]
 mod tests;
-pub use history_discovery::*;
+pub(crate) use history_discovery::*;
 #[path = "history_paths.rs"]
 mod history_paths;
-pub use history_paths::*;
+pub(crate) use history_paths::*;
 
 #[derive(Default)]
 struct HistoryLoad {

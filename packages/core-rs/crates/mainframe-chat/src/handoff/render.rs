@@ -33,7 +33,7 @@ pub fn escape(text: &str) -> String {
 }
 
 /// `[{kind} · turn {n} · {Provider}]` then the item text.
-pub fn render_item(item: &HandoffItem) -> String {
+pub(crate) fn render_item(item: &HandoffItem) -> String {
     format!(
         "[{} · turn {} · {}]\n{}",
         item.kind.label(),
@@ -86,7 +86,7 @@ pub fn render_block(h: &HeaderInput, items: &[HandoffItem], total: usize) -> Str
 
 /// The block around an already-rendered body, with explicit counters, so the
 /// selection can price the header at its widest before choosing items.
-pub fn render_envelope(
+pub(crate) fn render_envelope(
     h: &HeaderInput,
     body: &str,
     selected: usize,

@@ -1,12 +1,8 @@
-//! Ported from `src/workspace/worktree.ts`.
-
 use std::collections::HashMap;
 use std::path::Path;
-use std::time::Duration;
 
-use mainframe_db::ProjectsRepository;
+use mainframe_git::git_parse::{WorktreeEntry, parse_worktree_list};
 use mainframe_types::chat::Project;
-use serde::{Deserialize, Serialize};
 
 /// Default `execGit` timeout (30s). `0` means no timeout — for genuinely
 /// long-running operations such as `worktree add`.
@@ -18,48 +14,37 @@ pub enum WorktreeError {
     Git(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error(transparent)]
-    Db(#[from] mainframe_db::DbError),
 }
 
-/// Local faithful port of `src/server/routes/exec-git.ts` (`execGit`).
-///
-// TODO(port): replace with `mainframe_git::exec_git` once §2.4 lands — that
-// crate is still an empty placeholder, so worktree.ts's git callers use this
-// duplicate helper for now.
-async fn exec_git(args: &[&str], cwd: &str, timeout_ms: u64) -> Result<String, WorktreeError> {
-    // Mirror `await access(cwd)` → throw `Directory not accessible: ${cwd}`.
-    if tokio::fs::metadata(cwd).await.is_err() {
-        return Err(WorktreeError::Git(format!(
-            "Directory not accessible: {cwd}"
-        )));
-    }
-    let mut cmd = tokio::process::Command::new("git");
-    cmd.args(args).current_dir(cwd).kill_on_drop(true);
-
-    let output = if timeout_ms == 0 {
-        cmd.output().await?
-    } else {
-        match tokio::time::timeout(Duration::from_millis(timeout_ms), cmd.output()).await {
-            Ok(result) => result?,
-            Err(_) => return Err(WorktreeError::Git("git command timed out".to_string())),
+async fn run_worktree_git(
+    args: &[&str],
+    cwd: &str,
+    timeout_ms: u64,
+) -> Result<String, WorktreeError> {
+    use mainframe_git::git_exec::{GitExecCode, GitExecOptions, exec_git};
+    let args = args
+        .iter()
+        .map(|value| (*value).to_string())
+        .collect::<Vec<_>>();
+    exec_git(
+        &args,
+        cwd,
+        Some(GitExecOptions {
+            timeout: Some(timeout_ms),
+        }),
+    )
+    .await
+    .map_err(|error| {
+        if error.code == Some(GitExecCode::Text("ETIMEDOUT".to_string())) {
+            WorktreeError::Git("git command timed out".to_string())
+        } else if let Some(stderr) = error.stderr {
+            WorktreeError::Git(stderr)
+        } else if error.code.is_none() {
+            WorktreeError::Io(std::io::Error::other(error.message))
+        } else {
+            WorktreeError::Git(error.message)
         }
-    };
-
-    if !output.status.success() {
-        // execFileAsync rejects on a non-zero exit.
-        return Err(WorktreeError::Git(
-            String::from_utf8_lossy(&output.stderr).into_owned(),
-        ));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WorktreeEntry {
-    pub path: String,
-    // `branch: string | null` — serialize null (not omitted) to mirror the TS shape.
-    pub branch: Option<String>,
+    })
 }
 
 /// True when `worktreePath` is a usable git worktree: the directory exists AND
@@ -79,32 +64,6 @@ pub async fn is_directory_present_async(path: &str) -> bool {
     tokio::fs::metadata(path).await.is_ok_and(|m| m.is_dir())
 }
 
-pub fn parse_worktree_list(output: &str) -> Vec<WorktreeEntry> {
-    let mut entries: Vec<WorktreeEntry> = Vec::new();
-    let mut current_path: Option<String> = None;
-    let mut current_branch: Option<String> = None;
-
-    for line in output.split('\n') {
-        if let Some(rest) = line.strip_prefix("worktree ") {
-            current_path = Some(rest.to_string());
-            current_branch = None;
-        } else if let Some(rest) = line.strip_prefix("branch ") {
-            current_branch = Some(rest.to_string());
-        } else if line == "detached" {
-            current_branch = None;
-        } else if line.is_empty() && current_path.is_some() {
-            entries.push(WorktreeEntry {
-                path: current_path.take().unwrap_or_default(),
-                branch: current_branch.take(),
-            });
-            current_path = None;
-            current_branch = None;
-        }
-    }
-
-    entries
-}
-
 /// `refs/heads/feat/x` → `feat/x`. `strip_prefix`, not `replace`: a branch named
 /// `feat/refs/heads/x` is legal and must survive intact.
 pub fn short_branch(git_ref: &str) -> &str {
@@ -112,7 +71,7 @@ pub fn short_branch(git_ref: &str) -> &str {
 }
 
 pub async fn get_worktrees(project_path: &str) -> Vec<WorktreeEntry> {
-    match exec_git(
+    match run_worktree_git(
         &["worktree", "list", "--porcelain"],
         project_path,
         DEFAULT_GIT_TIMEOUT_MS,
@@ -144,7 +103,7 @@ pub async fn create_worktree(
 
     tokio::fs::create_dir_all(&worktree_dir).await?;
     // No timeout: `worktree add` can clone/checkout a large tree and run hooks.
-    exec_git(
+    run_worktree_git(
         &[
             "worktree",
             "add",
@@ -161,22 +120,6 @@ pub async fn create_worktree(
         worktree_path: worktree_path_str,
         branch_name: branch_name.to_string(),
     })
-}
-
-pub async fn backfill_worktree_relationships(
-    projects: &ProjectsRepository,
-) -> Result<(), WorktreeError> {
-    let all_projects = projects.list()?;
-    for (child_id, parent_id) in compute_worktree_parent_links(&all_projects).await {
-        tracing::info!(
-            module = "worktree-backfill",
-            child_id = %child_id,
-            parent_id = %parent_id,
-            "Backfilling worktree relationship"
-        );
-        projects.set_parent_project(&child_id, &parent_id)?;
-    }
-    Ok(())
 }
 
 /// Git-only phase of the worktree backfill: over a snapshot of every project,
@@ -219,7 +162,7 @@ fn has_parent(project: &Project) -> bool {
 
 pub async fn branch_exists(project_path: &str, branch_name: &str) -> bool {
     let ref_arg = format!("refs/heads/{branch_name}");
-    exec_git(
+    run_worktree_git(
         &["rev-parse", "--verify", "--quiet", &ref_arg],
         project_path,
         DEFAULT_GIT_TIMEOUT_MS,
@@ -238,9 +181,13 @@ pub async fn add_worktree_for_branch(
 ) -> Result<(), WorktreeError> {
     // Drop the stale registration git still holds for the deleted directory.
     // best-effort
-    let _ = exec_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await;
+    if let Err(error) =
+        run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await
+    {
+        tracing::warn!(%error, path = %project_path, operation = "worktree_prune", "failed to prune stale worktree references");
+    }
     // No timeout: checkout of a large tree can exceed the default cap (see create_worktree).
-    exec_git(
+    run_worktree_git(
         &["worktree", "add", worktree_path, branch_name],
         project_path,
         0,
@@ -250,7 +197,7 @@ pub async fn add_worktree_for_branch(
 }
 
 pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_name: &str) {
-    if exec_git(
+    if run_worktree_git(
         &["worktree", "remove", worktree_path, "--force"],
         project_path,
         DEFAULT_GIT_TIMEOUT_MS,
@@ -259,220 +206,28 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
     .is_err()
     {
         // best-effort: worktree dir may already be gone
-        let _ = tokio::fs::remove_dir_all(worktree_path).await;
+        if let Err(error) = tokio::fs::remove_dir_all(worktree_path).await {
+            tracing::warn!(%error, path = %worktree_path, "failed to remove worktree directory");
+        }
         // best-effort
-        let _ = exec_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await;
+        if let Err(error) =
+            run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await
+        {
+            tracing::warn!(%error, path = %project_path, operation = "worktree_prune", "failed to prune removed worktree references");
+        }
     }
     // best-effort: branch may not exist or may still be checked out elsewhere
-    let _ = exec_git(
+    if let Err(error) = run_worktree_git(
         &["branch", "-D", branch_name],
         project_path,
         DEFAULT_GIT_TIMEOUT_MS,
     )
-    .await;
+    .await
+    {
+        tracing::warn!(%error, path = %project_path, operation = "branch_delete", "failed to delete worktree branch");
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn short_branch_strips_the_leading_refs_heads() {
-        assert_eq!(
-            short_branch("refs/heads/feat/switch-offer"),
-            "feat/switch-offer"
-        );
-    }
-
-    #[test]
-    fn short_branch_leaves_an_embedded_refs_heads_intact() {
-        assert_eq!(
-            short_branch("refs/heads/feat/refs/heads/x"),
-            "feat/refs/heads/x"
-        );
-    }
-
-    #[test]
-    fn short_branch_returns_a_bare_name_unchanged() {
-        assert_eq!(short_branch("main"), "main");
-    }
-
-    #[tokio::test]
-    async fn present_true_for_linked_worktree_git_file_pointer() {
-        let dir = tempfile::tempdir().unwrap();
-        let wt = dir.path().join("linked");
-        tokio::fs::create_dir(&wt).await.unwrap();
-        tokio::fs::write(wt.join(".git"), "gitdir: /repo/.git/worktrees/linked\n")
-            .await
-            .unwrap();
-        assert!(is_worktree_present(wt.to_str().unwrap()));
-    }
-
-    #[tokio::test]
-    async fn present_true_for_main_checkout_git_directory() {
-        let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().join("repo");
-        tokio::fs::create_dir_all(repo.join(".git")).await.unwrap();
-        assert!(is_worktree_present(repo.to_str().unwrap()));
-    }
-
-    #[tokio::test]
-    async fn present_false_for_orphaned_stub_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        let stub = dir.path().join("agent-stub");
-        tokio::fs::create_dir(&stub).await.unwrap();
-        assert!(!is_worktree_present(stub.to_str().unwrap()));
-    }
-
-    #[test]
-    fn present_false_for_path_that_does_not_exist() {
-        assert!(!is_worktree_present("/definitely/does/not/exist/nope"));
-    }
-
-    #[test]
-    fn is_directory_present_sync_true_for_existing_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        assert!(is_directory_present(dir.path().to_str().unwrap()));
-    }
-
-    #[test]
-    fn is_directory_present_sync_false_for_missing_path() {
-        assert!(!is_directory_present("/definitely/does/not/exist/nope"));
-    }
-
-    #[test]
-    fn is_directory_present_sync_false_for_a_file_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("f.txt");
-        std::fs::write(&file, "x").unwrap();
-        assert!(!is_directory_present(file.to_str().unwrap()));
-    }
-
-    #[tokio::test]
-    async fn is_directory_present_async_true_for_existing_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        assert!(is_directory_present_async(dir.path().to_str().unwrap()).await);
-    }
-
-    #[tokio::test]
-    async fn is_directory_present_async_false_for_missing_path() {
-        assert!(!is_directory_present_async("/definitely/does/not/exist/nope").await);
-    }
-
-    #[tokio::test]
-    async fn is_directory_present_async_false_for_a_file_path() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("f.txt");
-        tokio::fs::write(&file, "x").await.unwrap();
-        assert!(!is_directory_present_async(file.to_str().unwrap()).await);
-    }
-
-    #[test]
-    fn parses_porcelain_output_into_worktree_entries() {
-        let output = [
-            "worktree /Users/dev/my-project",
-            "HEAD abc1234",
-            "branch refs/heads/main",
-            "",
-            "worktree /Users/dev/my-project/.worktrees/feat-x",
-            "HEAD def5678",
-            "branch refs/heads/feat-x",
-            "",
-        ]
-        .join("\n");
-
-        let entries = parse_worktree_list(&output);
-        assert_eq!(
-            entries,
-            vec![
-                WorktreeEntry {
-                    path: "/Users/dev/my-project".to_string(),
-                    branch: Some("refs/heads/main".to_string()),
-                },
-                WorktreeEntry {
-                    path: "/Users/dev/my-project/.worktrees/feat-x".to_string(),
-                    branch: Some("refs/heads/feat-x".to_string()),
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn handles_detached_head_entries() {
-        let output = [
-            "worktree /Users/dev/repo",
-            "HEAD abc1234",
-            "branch refs/heads/main",
-            "",
-            "worktree /Users/dev/repo/.worktrees/detached",
-            "HEAD def5678",
-            "detached",
-            "",
-        ]
-        .join("\n");
-
-        let entries = parse_worktree_list(&output);
-        assert_eq!(
-            entries,
-            vec![
-                WorktreeEntry {
-                    path: "/Users/dev/repo".to_string(),
-                    branch: Some("refs/heads/main".to_string()),
-                },
-                WorktreeEntry {
-                    path: "/Users/dev/repo/.worktrees/detached".to_string(),
-                    branch: None,
-                },
-            ]
-        );
-    }
-
-    #[test]
-    fn returns_empty_array_for_empty_input() {
-        assert_eq!(parse_worktree_list(""), Vec::new());
-    }
-
-    async fn run_git(cwd: &str, args: &[&str]) {
-        let status = tokio::process::Command::new("git")
-            .args(args)
-            .current_dir(cwd)
-            .output()
-            .await
-            .expect("git available");
-        assert!(status.status.success(), "git {args:?} failed");
-    }
-
-    #[tokio::test]
-    async fn branch_exists_true_for_existing_false_for_missing() {
-        let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().to_str().unwrap();
-        run_git(repo, &["init", "-q"]).await;
-        run_git(repo, &["config", "user.email", "t@t.dev"]).await;
-        run_git(repo, &["config", "user.name", "Tester"]).await;
-        tokio::fs::write(dir.path().join("f.txt"), "x")
-            .await
-            .unwrap();
-        run_git(repo, &["add", "."]).await;
-        run_git(repo, &["commit", "-q", "-m", "init"]).await;
-        run_git(repo, &["branch", "feat-x"]).await;
-
-        assert!(branch_exists(repo, "feat-x").await);
-        assert!(!branch_exists(repo, "does-not-exist").await);
-    }
-}
-
-// PORT STATUS: src/workspace/worktree.ts (150 lines, incl. #424 recovery helpers)
-// confidence: medium
-// todos: 1
-// notes: parseWorktreeList / isWorktreePresent are exact ports (isWorktreePresent
-// keeps the intentional sync existsSync via Path::exists). exec_git is a LOCAL
-// faithful port of exec-git.ts (mainframe_git::exec_git §2.4 not yet ported —
-// TODO(port) marks the swap). backfill takes &ProjectsRepository (mainframe-db,
-// Rc<Connection> → !Send): the future is !Send, fine while un-spawned; a later
-// phase wraps the DB in a Send handle. has_parent mirrors the JS truthy check on
-// parentProjectId (non-null, non-empty). remove_worktree returns () (all steps
-// best-effort, swallowed like the TS). #424 degraded-recovery helpers added:
-// branch_exists (rev-parse --verify --quiet refs/heads/<b>, Err→false) and
-// add_worktree_for_branch (best-effort `worktree prune` then `worktree add path
-// branch`, no timeout). Tests ported from worktree.test.ts + a real-git
-// branch_exists check.
+#[path = "worktree_tests.rs"]
+mod tests;

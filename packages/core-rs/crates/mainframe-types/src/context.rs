@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/context.ts`.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,10 +107,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&a).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/context.ts (41 lines)
-// confidence: high
-// todos: 0
-// notes: literal-union `source`/`kind` fields → dedicated enums (ContextFileSource,
-// MentionSource, MentionKind, SessionAttachmentKind). sizeBytes → i64 (byte count).
-// Optional `path`/`originalPath` → Option + skip_serializing_if.

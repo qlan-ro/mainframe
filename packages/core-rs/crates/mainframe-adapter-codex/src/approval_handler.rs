@@ -1,10 +1,9 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/approval-handler.ts`.
-//!
 //! Maps Codex app-server *server requests* (approvals + requestUserInput) onto the
 //! Mainframe `ControlRequest`/`ControlResponse` permission flow: `intake.rs`
 //! on the way in, `answers.rs` on the way back out, `approval_options.rs` for
 //! the option list a gate offers.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -12,6 +11,7 @@ use mainframe_adapter_api::{ControlResponse, SessionSink};
 use serde_json::{Value, json};
 
 use crate::event_mapper::CurrentTurnPlan;
+use crate::jsonrpc::JsonRpcError;
 use crate::types::RequestId;
 
 mod answers;
@@ -21,7 +21,8 @@ mod intake;
 use answers::{answer_approval, answer_user_input};
 
 /// `respond(id, result)` — the JSON-RPC reply callback captured per request.
-pub type RespondFn = Box<dyn Fn(RequestId, Value) + Send + Sync>;
+/// An `Err` means the reply never reached the app-server.
+pub type RespondFn = Box<dyn Fn(RequestId, Value) -> Result<(), JsonRpcError> + Send + Sync>;
 
 #[derive(Debug, Clone, Default)]
 pub struct PlanContext {
@@ -59,48 +60,38 @@ impl ApprovalHandler {
     }
 
     pub fn set_plan_context(&self, ctx: PlanContext) {
-        *self.plan_context.lock().unwrap_or_else(|e| e.into_inner()) = ctx;
+        *self.plan_context.lock_recover() = ctx;
     }
 
-    pub fn resolve(&self, response: &ControlResponse) {
-        let entry = self
-            .pending
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&response.request_id);
+    /// Answer the pending request `response` resolves. `Err` when the answer
+    /// could not be written, so the turn would otherwise wait on it silently.
+    pub fn resolve(&self, response: &ControlResponse) -> Result<(), JsonRpcError> {
+        let entry = self.pending.lock_recover().remove(&response.request_id);
         let Some(entry) = entry else {
             tracing::warn!(
-                module = "codex:approvals",
                 request_id = %response.request_id,
-                "codex: no pending approval for requestId"
+                "no pending approval for requestId"
             );
-            return;
+            return Ok(());
         };
         if entry.method == "item/tool/requestUserInput" {
-            answer_user_input(entry, response);
+            answer_user_input(entry, response)
         } else {
-            answer_approval(entry, response);
+            answer_approval(entry, response)
         }
     }
 
-    pub fn reject_all(&self) {
-        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+    pub(crate) fn reject_all(&self) {
+        let mut pending = self.pending.lock_recover();
         for (_, entry) in pending.drain() {
-            if entry.method == "item/tool/requestUserInput" {
-                (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }));
+            let result = if entry.method == "item/tool/requestUserInput" {
+                (entry.respond)(entry.json_rpc_id, json!({ "answers": {} }))
             } else {
-                (entry.respond)(entry.json_rpc_id, json!({ "decision": "decline" }));
+                (entry.respond)(entry.json_rpc_id, json!({ "decision": "decline" }))
+            };
+            if let Err(error) = result {
+                tracing::warn!(%error, "pending approval not rejected");
             }
         }
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/approval-handler.ts (284 lines)
-// confidence: high
-// todos: 0
-// notes: pending/planContext behind Mutex (CONCURRENCY.tsv 101/102, session-scoped
-// notes: leaf locks). RespondFn = Box<dyn Fn(RequestId, Value) + Send + Sync> mirrors
-// notes: the TS per-request respond callback. questions/options are handled as raw
-// notes: serde_json Values (structural, matching TS). `insert_if_present` reproduces
-// notes: the JS omit-when-undefined behavior for command/cwd/reason input keys.
-// notes: Tests in tests/approval_handler/ (routing + resolve, assertion-for-assertion).

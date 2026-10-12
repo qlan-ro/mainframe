@@ -1,9 +1,13 @@
-//! `/acp/{adapter-profile}` integration tests (todo #350, plan tasks 8-9):
-//! auth parity with `/`, profile validation, the `initialize` handshake's
-//! both branches (criterion 1: supported version succeeds, unsupported gets a
-//! structured error with the connection still open), the heartbeat cadence,
-//! and the facade connection registry (criterion 11's daemon half).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! `/acp/{adapter-profile}` integration tests: auth parity with `/`, profile
+//! validation, the `initialize` handshake's both branches (supported version
+//! succeeds, unsupported gets a structured error with the connection still
+//! open), the heartbeat cadence, and the daemon side of the facade connection
+//! registry.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -17,6 +21,7 @@ async fn server_with_mock_adapter() -> TestServer {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     server
@@ -35,7 +40,7 @@ fn initialize_request(id: i64, protocol_version: i64) -> serde_json::Value {
 }
 
 /// Connect and negotiate, draining the `initialize` reply — every method but
-/// `initialize` itself is refused before this (R3.21).
+/// `initialize` itself is refused before this.
 async fn connect_initialized(server: &TestServer, path: &str) -> WsClient {
     let mut ws = WsClient::connect(server.addr, path, None).await.unwrap();
     ws.send_json(&initialize_request(0, 2)).await;
@@ -73,6 +78,7 @@ async fn upgrade_rejects_invalid_token_from_non_localhost() {
     let server = spawn_test_server(Some("test-secret".to_string())).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     match WsClient::connect(server.addr, "/acp/mock-cli?token=garbage", Some("2.2.2.2")).await {
@@ -210,7 +216,7 @@ async fn session_resume_reaches_the_resume_port() {
     );
 
     // The replay always ends with the turn state (idle: no ChatManager to
-    // report running) before the queue snapshot (plan task 2).
+    // report running) before the queue snapshot.
     let state_update = ws.read_event().await;
     assert_eq!(state_update["method"], json!("session/update"));
     assert_eq!(
@@ -226,8 +232,8 @@ async fn session_resume_reaches_the_resume_port() {
     assert_eq!(queue_state["params"]["sessionId"], json!("no-such-chat"));
     assert_eq!(queue_state["params"]["refs"], json!([]));
 
-    // `_mainframe.dev/replay_complete` closes the replay (spec Decision 38),
-    // after `queue_state` and before any buffered catch-up (none here).
+    // `_mainframe.dev/replay_complete` closes the replay, after `queue_state`
+    // and before any buffered catch-up (none here).
     let marker = ws.read_event().await;
     assert_eq!(marker["method"], json!("_mainframe.dev/replay_complete"));
     assert_eq!(marker["params"]["sessionId"], json!("no-such-chat"));
@@ -264,6 +270,7 @@ async fn heartbeat_arrives_periodically_at_the_configured_cadence() {
     .await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     let mut ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
@@ -284,24 +291,4 @@ async fn heartbeat_arrives_periodically_at_the_configured_cadence() {
 
 // ── connection registry ──────────────────────────────────────────────────────
 
-#[tokio::test]
-async fn connecting_registers_a_facade_client_and_disconnecting_unregisters_it() {
-    let server = server_with_mock_adapter().await;
-    assert_eq!(server.ctx.facade_hub.connection_count(), 0);
-
-    let ws = WsClient::connect(server.addr, "/acp/mock-cli", None)
-        .await
-        .unwrap();
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-    while server.ctx.facade_hub.connection_count() == 0 && tokio::time::Instant::now() < deadline {
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    assert_eq!(server.ctx.facade_hub.connection_count(), 1);
-
-    drop(ws);
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
-    while server.ctx.facade_hub.connection_count() != 0 && tokio::time::Instant::now() < deadline {
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    assert_eq!(server.ctx.facade_hub.connection_count(), 0);
-}
+include!("cases/acp_ws_integration_additional_cases.rs");

@@ -1,55 +1,21 @@
 //! Live-detection specs for `PrDetectionSink`, the `SessionSink` decorator that
-//! runs PR scanning at the one seam every adapter crosses (todo #339, tasks
-//! 6-8). Red-phase until Group C lands `PrDetectionSink`
-//! (`pr_detection/sink.rs`): expect "cannot find type/function `PrDetectionSink`"
-//! until then — do not weaken these specs to make them compile early.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! runs PR scanning at the one seam every adapter crosses.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_api::pr_detection::PrDetectionSink;
-use mainframe_adapter_api::{AdapterError, LoadedSkill, SessionSink};
-use mainframe_types::adapter::{
-    ContextUsage, ControlRequest, DetectedPr, DetectedPrSource, MessageMetadata, SessionResult,
-};
-use mainframe_types::chat::{MessageContent, MessageContentNode, TodoItem};
-use mainframe_types::context::SkillFileEntry;
+use mainframe_types::adapter::{DetectedPr, DetectedPrSource};
+use mainframe_types::chat::{MessageContent, MessageContentNode};
 use serde_json::Value;
 
-#[derive(Default)]
-struct RecordingSink {
-    prs: Mutex<Vec<DetectedPr>>,
-}
-
-impl RecordingSink {
-    fn prs(&self) -> Vec<DetectedPr> {
-        self.prs.lock().unwrap_or_else(|e| e.into_inner()).clone()
-    }
-}
-
-impl SessionSink for RecordingSink {
-    fn on_init(&self, _session_id: &str) {}
-    fn on_message(&self, _content: Vec<MessageContent>, _metadata: Option<MessageMetadata>) {}
-    fn on_tool_result(&self, _content: Vec<MessageContent>, _vendor_id: Option<String>) {}
-    fn on_permission(&self, _request: ControlRequest) {}
-    fn on_result(&self, _data: SessionResult) {}
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: AdapterError) {}
-    fn on_compact(&self, _vendor_id: Option<&str>) {}
-    fn on_compact_start(&self) {}
-    fn on_context_usage(&self, _usage: ContextUsage) {}
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
-    fn on_pr_detected(&self, pr: DetectedPr) {
-        self.prs.lock().unwrap_or_else(|e| e.into_inner()).push(pr);
-    }
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-    fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
-}
+use mainframe_adapter_api::test_support::RecordingSink;
 
 fn tool_use(id: &str, name: &str, command: Option<&str>) -> MessageContent {
     let mut input = HashMap::new();
@@ -91,7 +57,7 @@ fn drive(tool_use_block: MessageContent, result_block: MessageContent) -> Vec<De
     inner.prs()
 }
 
-// --- Task 6: Claude-shaped input ---------------------------------------
+// --- Claude-shaped input -----------------------------------------------
 
 #[test]
 fn bash_pr_create_command_and_pr_url_result_yields_created_source() {
@@ -292,7 +258,7 @@ fn azure_pr_json_payload_result_yields_the_right_owner_repo_number() {
     );
 }
 
-// --- Task 7: Codex-shaped parity ----------------------------------------
+// --- Codex-shaped parity ------------------------------------------------
 
 /// Built the way `thread_item_render.rs::render_command_execution` builds it:
 /// one `Bash` tool_use carrying the raw shell command, then one tool_result
@@ -332,7 +298,7 @@ fn codex_shaped_input_produces_the_same_pr_as_claude_shaped_input_for_the_same_u
     );
 }
 
-// --- Task 8: tool-meta eviction ------------------------------------------
+// --- tool-meta eviction --------------------------------------------------
 
 #[test]
 fn tool_result_reusing_a_consumed_tool_use_id_emits_nothing_the_second_time() {

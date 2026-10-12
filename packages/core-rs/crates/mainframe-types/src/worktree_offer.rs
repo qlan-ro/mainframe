@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/worktree-offer.ts`.
-
 use serde::{Deserialize, Serialize};
 
 /// A worktree the daemon noticed an agent register mid-session, offered to the

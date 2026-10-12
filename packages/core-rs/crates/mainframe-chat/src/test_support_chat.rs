@@ -1,19 +1,17 @@
-//! `test_chat` split out of `test_support.rs` (kept under the 300-line cap when
-//! the history-cache test fields landed in `FakeSession`) — re-exported from
-//! there so every existing `crate::test_support::test_chat` call site keeps
-//! working unchanged.
+//! `test_chat` is re-exported from `test_support.rs` so callers can use
+//! `crate::test_support::test_chat`.
 
 use mainframe_types::chat::{Chat, ChatStatus};
 use mainframe_types::settings::ExecutionMode;
 
 /// A minimal `Chat` for tests that only care about a few fields.
-pub fn test_chat(id: &str) -> Chat {
+fn fixture_chat(id: &str) -> Chat {
     Chat {
         id: id.to_string(),
         adapter_id: "claude".to_string(),
         project_id: "p1".to_string(),
         title: None,
-        claude_session_id: None,
+        vendor_session_id: None,
         session_file_path: None,
         model: Some("old-model".to_string()),
         permission_mode: Some(ExecutionMode::Default),
@@ -42,10 +40,7 @@ pub fn test_chat(id: &str) -> Chat {
         transcript_missing: None,
         todos: None,
         pinned: None,
-        effort: None,
-        fast: None,
-        ultracode: None,
-        adaptive_thinking: None,
+        tuning: Default::default(),
         detected_prs: None,
         tags: None,
         automation_run_id: None,
@@ -61,4 +56,33 @@ pub fn test_chat(id: &str) -> Chat {
     }
 }
 
-// Not a port; test scaffolding only. No PORT STATUS trailer.
+pub struct ChatBuilder(Chat);
+
+impl ChatBuilder {
+    pub fn new(id: &str) -> Self {
+        Self(fixture_chat(id))
+    }
+    pub fn status(mut self, status: ChatStatus) -> Self {
+        self.0.status = status;
+        self
+    }
+    pub fn worktree(mut self, path: Option<&str>) -> Self {
+        self.0.worktree_path = path.map(str::to_string);
+        self
+    }
+    pub fn title(mut self, title: &str) -> Self {
+        self.0.title = Some(title.into());
+        self
+    }
+    pub fn vendor_session(mut self, id: &str) -> Self {
+        self.0.vendor_session_id = Some(id.into());
+        self
+    }
+    pub fn build(self) -> Chat {
+        self.0
+    }
+}
+
+pub fn test_chat(id: &str) -> Chat {
+    ChatBuilder::new(id).build()
+}

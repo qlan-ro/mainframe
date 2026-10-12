@@ -1,30 +1,27 @@
-//! Ported from `src/server/routes/git.ts` — the 5 git-read endpoints
-//! (status/working-stat/branch/branch-diffs/diff).
+//! The 5 git-read endpoints (status/working-stat/branch/branch-diffs/diff).
 //!
 //! Also the crate-local home of the effective-path resolution helpers that
-//! `git_write` and `git_chat` share (the TS `getEffectivePath` /
-//! `ChatManager.getEffectivePath` seam). Phase 3 has no `ChatManager`, so those
-//! helpers reconstruct its behavior from the `mainframe-db` chats/projects repos
-//! plus `mainframe-services::workspace::is_worktree_present`.
+//! `git_write` and `git_chat` share. They resolve paths from the `mainframe-db`
+//! chats/projects repos plus `mainframe-services::workspace::is_worktree_present`,
+//! not through the `ChatManager`.
 
 use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use mainframe_db::DbError;
 use mainframe_git::git_parse::{is_not_git_repo, parse_diff_name_status, parse_status_lines};
 use mainframe_git::git_service::GitServiceError;
 use serde::Deserialize;
-use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
-use crate::path_utils::resolve_and_validate_path;
 use crate::respond::{fail, ok};
+use mainframe_runtime::fs::resolve_and_validate_path;
 
 /// `?chatId=` query param shared by the project-scoped git routes.
 #[derive(Debug, Default, Deserialize)]
@@ -33,9 +30,8 @@ pub(crate) struct ChatIdQuery {
     pub(crate) chat_id: Option<String>,
 }
 
-/// `GitDiffQuery` — `src/server/routes/git.ts`. `source` is validated (rejects a
-/// non-`git` value with 400) but never branched on; the response hardcodes
-/// `source: "git"`.
+/// `source` is validated (rejects a non-`git` value with 400) but never branched
+/// on; the response hardcodes `source: "git"`.
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GitDiffQuery {
@@ -48,25 +44,19 @@ struct GitDiffQuery {
 
 // ── shared helpers (crate-local; used by git_write + git_chat) ────────────────
 
-/// `isNotGitRepo(err)` over a `GitServiceError`: only a wrapped `execGit`
-/// rejection whose message names "not a git repository" qualifies.
+/// Whether a `GitServiceError` means "not a git repository": only a wrapped
+/// `exec_git` rejection whose message names "not a git repository" qualifies.
 pub(crate) fn is_not_git_repo_err(err: &GitServiceError) -> bool {
     matches!(err, GitServiceError::Exec(e) if is_not_git_repo(e))
 }
 
-/// `err instanceof Error ? err.message : String(err)` — the git error string the
-/// git-write/git-chat routes leak in their non-opaque failure envelopes.
+/// The git error string the git-write/git-chat routes leak in their non-opaque
+/// failure envelopes.
 pub(crate) fn git_error_message(err: &GitServiceError) -> String {
     err.to_string()
 }
 
-/// Parse a JSON request body into `T`. Mirrors `schema.safeParse(req.body)`'s
-/// failure path (an empty/malformed body becomes a validation error → 400).
-pub(crate) fn parse_json_body<T: DeserializeOwned>(bytes: &[u8]) -> Result<T, String> {
-    serde_json::from_slice(bytes).map_err(|e| e.to_string())
-}
-
-/// `getEffectivePath(ctx, projectId, chatId?)` — the project-scoped resolver.
+/// The project-scoped effective-path resolver.
 /// `Ok(None)` covers project-not-found, the cross-project guard, and a deleted
 /// worktree (callers disambiguate via [`chat_worktree_missing`]).
 pub(crate) async fn get_effective_path(
@@ -74,70 +64,34 @@ pub(crate) async fn get_effective_path(
     project_id: &str,
     chat_id: Option<&str>,
 ) -> Result<Option<String>, DbError> {
-    let pid = project_id.to_string();
-    let Some(project) = ctx.db.call(move |db| db.projects.get(&pid)).await? else {
-        return Ok(None);
-    };
-    if let Some(chat_id) = chat_id {
-        let cid = chat_id.to_string();
-        if let Some(chat) = ctx.db.call(move |db| db.chats.get(&cid)).await? {
-            if chat.project_id != project_id {
-                return Ok(None);
-            }
-            if let Some(wt) = chat.worktree_path {
-                if worktree_missing(&wt).await {
-                    return Ok(None);
-                }
-                return Ok(Some(wt));
-            }
-        }
+    match ctx.resolve_scope(project_id, chat_id).await {
+        Ok(scope) => Ok(Some(scope.path)),
+        Err(mainframe_services::workspace::ScopeError::Database(error)) => Err(error),
+        Err(_) => Ok(None),
     }
-    Ok(Some(project.path))
 }
 
-/// `ChatManager.getEffectivePath(chatId)` — the chat-scoped resolver (no
-/// projectId, so no cross-project guard). `Ok(None)` = chat unknown, project
-/// unknown, or worktree deleted.
 pub(crate) async fn resolve_chat_path(
     ctx: &AppCtx,
     chat_id: &str,
 ) -> Result<Option<String>, DbError> {
-    let cid = chat_id.to_string();
-    let Some(chat) = ctx.db.call(move |db| db.chats.get(&cid)).await? else {
+    let cid = chat_id.to_owned();
+    let Some(chat) = ctx.core.db.call(move |db| db.chats.get(&cid)).await? else {
         return Ok(None);
     };
-    if let Some(wt) = chat.worktree_path {
-        if worktree_missing(&wt).await {
-            return Ok(None);
-        }
-        return Ok(Some(wt));
-    }
-    let pid = chat.project_id.clone();
-    Ok(ctx
-        .db
-        .call(move |db| db.projects.get(&pid))
-        .await?
-        .map(|p| p.path))
+    get_effective_path(ctx, &chat.project_id, Some(chat_id)).await
 }
 
-/// `getChat(chatId)?.worktreeMissing ?? false` — the enrichment flag callers
-/// check to turn a `null` effective path into a 409 (vs a 404).
 pub(crate) async fn chat_worktree_missing(ctx: &AppCtx, chat_id: &str) -> Result<bool, DbError> {
-    let cid = chat_id.to_string();
-    let chat = ctx.db.call(move |db| db.chats.get(&cid)).await?;
-    match chat.and_then(|c| c.worktree_path) {
-        Some(wt) => Ok(worktree_missing(&wt).await),
-        None => Ok(false),
+    let cid = chat_id.to_owned();
+    let Some(chat) = ctx.core.db.call(move |db| db.chats.get(&cid)).await? else {
+        return Ok(false);
+    };
+    match ctx.resolve_scope(&chat.project_id, Some(chat_id)).await {
+        Err(mainframe_services::workspace::ScopeError::Database(error)) => Err(error),
+        Err(mainframe_services::workspace::ScopeError::WorktreeMissing(_)) => Ok(true),
+        _ => Ok(false),
     }
-}
-
-/// `!isWorktreePresent(worktreePath)` — the filesystem check off the async
-/// runtime (PORTING forbids sync I/O in the daemon).
-async fn worktree_missing(worktree_path: &str) -> bool {
-    let wt = worktree_path.to_string();
-    !tokio::task::spawn_blocking(move || mainframe_services::workspace::is_worktree_present(&wt))
-        .await
-        .unwrap_or(false)
 }
 
 // ── handlers ─────────────────────────────────────────────────────────────────
@@ -150,10 +104,16 @@ async fn status(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
-    match ctx.git.for_project(base_path.clone()).status_raw().await {
+    match ctx
+        .core
+        .git
+        .for_project(base_path.clone())
+        .status_raw()
+        .await
+    {
         Ok(raw) => ok(json!({ "files": parse_status_lines(&raw) })),
         Err(e) => {
             if !is_not_git_repo_err(&e) {
@@ -172,15 +132,22 @@ async fn working_stat(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
-    match ctx.git.for_project(base_path.clone()).working_stat().await {
+    match ctx
+        .core
+        .git
+        .for_project(base_path.clone())
+        .working_stat()
+        .await
+    {
         Ok(stat) => ok(stat),
-        Err(e) => {
-            tracing::warn!(error = %e, base_path, "Failed to compute working stat");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, git_error_message(&e))
-        }
+        Err(e) => crate::respond::fail_internal(
+            format!("Failed to compute working stat base_path={}", base_path),
+            &e,
+            git_error_message(&e),
+        ),
     }
 }
 
@@ -192,10 +159,11 @@ async fn branch(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
     match ctx
+        .core
         .git
         .for_project(base_path.clone())
         .current_branch()
@@ -219,10 +187,10 @@ async fn branch_diffs(
 ) -> Response {
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
-    let svc = ctx.git.for_project(base_path.clone());
+    let svc = ctx.core.git.for_project(base_path.clone());
     match compute_branch_diffs(&svc).await {
         Ok(v) => ok(v),
         Err(e) => {
@@ -270,11 +238,11 @@ async fn diff(
     }
     let base_path = match get_effective_path(&ctx, &id, q.chat_id.as_deref()).await {
         Ok(Some(p)) => p,
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => return crate::respond::ApiError::project_not_found().into_response(),
         Err(e) => return internal_error("Failed to resolve project path", &e),
     };
 
-    let svc = ctx.git.for_project(base_path.clone());
+    let svc = ctx.core.git.for_project(base_path.clone());
     let diff_args: Vec<String> = match (&q.file, &q.base) {
         (Some(f), Some(b)) => vec![format!("{b}..HEAD"), "--".into(), f.clone()],
         (Some(f), None) => vec!["--".into(), f.clone()],
@@ -312,7 +280,7 @@ async fn diff(
 }
 
 /// The 5 git-read routes. `git_write` / `git_chat` are mounted separately in
-/// `http.rs` (the TS `gitRoutes` re-`use`s them; the Rust app merges each).
+/// `http.rs`.
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
         .route("/api/projects/{id}/git/branch-diffs", get(branch_diffs))
@@ -321,14 +289,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/projects/{id}/git/branch", get(branch))
         .route("/api/projects/{id}/git/diff", get(diff))
 }
-
-// PORT STATUS: src/server/routes/git.ts (5 read endpoints)
-// confidence: high
-// todos: 0
-// notes: git-read soft errors stay `success:true` envelopes (status/branch/
-// branch-diffs/diff fall back to empty payloads; only working-stat 500s with the
-// leaked message). `isNotGitRepo` narrows to `GitServiceError::Exec` + the parse
-// helper. The effective-path helpers (get_effective_path / resolve_chat_path /
-// chat_worktree_missing) reconstruct the Phase-4 ChatManager seam from the db
-// repos + workspace::is_worktree_present and are shared with git_write/git_chat.
-// GitDiffQuery.source is validated (non-`git` → 400) but never branched on.

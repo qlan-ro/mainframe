@@ -34,7 +34,7 @@ pub(crate) async fn probe(executable: &str, path: &str, cwd: &str) -> Option<Str
     let client = match spawn_temp_app_server(executable, Some(Path::new(cwd)), true, path).await {
         Ok(client) => client,
         Err(error) => {
-            tracing::warn!(module = "codex:models", %error, "could not start Codex model probe");
+            tracing::warn!(%error, "could not start Codex model probe");
             return None;
         }
     };
@@ -43,11 +43,11 @@ pub(crate) async fn probe(executable: &str, path: &str, cwd: &str) -> Option<Str
     match result {
         Ok(Ok(model)) => model,
         Ok(Err(error)) => {
-            tracing::warn!(module = "codex:models", %error, "could not resolve Codex configured model");
+            tracing::warn!(%error, "could not resolve Codex configured model");
             None
         }
         Err(error) => {
-            tracing::warn!(module = "codex:models", %error, "Codex configured model probe timed out");
+            tracing::warn!(%error, "Codex configured model probe timed out");
             None
         }
     }

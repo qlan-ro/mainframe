@@ -1,6 +1,6 @@
 //! Reads the local task row and decides whether a dispute is even possible
 //! before spending an extra GitHub call: `issue_field_times` only matters when
-//! both sides moved a dated field since the baseline (task 15's cost note).
+//! both sides moved a dated field since the baseline.
 
 use serde_json::Value;
 

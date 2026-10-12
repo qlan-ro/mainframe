@@ -1,11 +1,10 @@
-//! T7 — the webhook registration route. Registering arms the hook and hands
+//! The webhook registration route. Registering arms the hook and hands
 //! back the URL a user pastes into GitHub; the same registration then rides
 //! along on every read of the automation.
 
-use axum::body::{Bytes, to_bytes};
+use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Response;
 use hmac::{Hmac, Mac};
 use mainframe_automations::triggers::{WebhookDecision, WebhookHeaders};
 use serde_json::{Value, json};
@@ -16,14 +15,7 @@ use crate::routes::automations_test_support::{AutomationsHarness, automations_ct
 use super::get_one;
 use super::registration::register;
 
-async fn read(resp: Response) -> (StatusCode, Value) {
-    let status = resp.status();
-    let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    (
-        status,
-        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
-    )
-}
+use crate::test_support::read_json as read;
 
 fn webhook_body(name: &str) -> Value {
     json!({
@@ -38,7 +30,9 @@ fn webhook_body(name: &str) -> Value {
 
 async fn create_webhook_automation(h: &AutomationsHarness) -> String {
     let body = Bytes::from(serde_json::to_vec(&webhook_body("Deploy watch")).unwrap());
-    let (status, envelope) = read(super::create(State(h.ctx.clone()), body).await).await;
+    let (status, envelope) = read(super::create(State(h.ctx.clone()), body).await)
+        .await
+        .unwrap();
     assert_eq!(status, StatusCode::OK);
     envelope["data"]["id"].as_str().unwrap().to_string()
 }
@@ -49,7 +43,9 @@ async fn register_arms_the_hook_and_returns_the_local_ingest_url() {
     let id = create_webhook_automation(&h).await;
 
     let (status, body) =
-        read(register(State(h.ctx.clone()), Path((id.clone(), "wt".to_string()))).await).await;
+        read(register(State(h.ctx.clone()), Path((id.clone(), "wt".to_string()))).await)
+            .await
+            .unwrap();
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["success"], json!(true));
@@ -58,7 +54,7 @@ async fn register_arms_the_hook_and_returns_the_local_ingest_url() {
         body["data"]["url"],
         format!(
             "http://127.0.0.1:{}/api/automation-webhooks/hook-1",
-            h.ctx.port
+            h.ctx.core.port
         ),
         "the daemon has no public tunnel — the URL is the local ingest endpoint"
     );
@@ -82,7 +78,9 @@ async fn a_delivery_signed_with_the_registration_secret_is_accepted() {
     let id = create_webhook_automation(&h).await;
 
     let (_, registered) =
-        read(register(State(h.ctx.clone()), Path((id.clone(), "wt".to_string()))).await).await;
+        read(register(State(h.ctx.clone()), Path((id.clone(), "wt".to_string()))).await)
+            .await
+            .unwrap();
     let secret = registered["data"]["secret"]
         .as_str()
         .expect("registering hands back the signing secret the sender needs")
@@ -105,7 +103,9 @@ async fn a_delivery_signed_with_the_registration_secret_is_accepted() {
         "a delivery signed with the registration secret must run, got {decision:?}"
     );
 
-    let (_, read_back) = read(get_one(State(h.ctx.clone()), Path(id)).await).await;
+    let (_, read_back) = read(get_one(State(h.ctx.clone()), Path(id)).await)
+        .await
+        .unwrap();
     let registration = &read_back["data"]["definition"]["triggers"][0]["registration"];
     assert!(
         registration["lastDeliveryAt"].is_string(),
@@ -130,12 +130,14 @@ async fn register_404s_for_an_unknown_automation_or_trigger() {
         )
         .await,
     )
-    .await;
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["error"], "automation or webhook trigger not found");
 
-    let (status, _) =
-        read(register(State(h.ctx.clone()), Path((id, "nope".to_string()))).await).await;
+    let (status, _) = read(register(State(h.ctx.clone()), Path((id, "nope".to_string()))).await)
+        .await
+        .unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -144,7 +146,9 @@ async fn get_embeds_the_registration_only_once_the_hook_is_armed() {
     let h = automations_ctx().await;
     let id = create_webhook_automation(&h).await;
 
-    let (_, body) = read(get_one(State(h.ctx.clone()), Path(id.clone())).await).await;
+    let (_, body) = read(get_one(State(h.ctx.clone()), Path(id.clone())).await)
+        .await
+        .unwrap();
     assert_eq!(
         body["data"]["definition"]["triggers"][0]["registration"],
         Value::Null,
@@ -153,7 +157,9 @@ async fn get_embeds_the_registration_only_once_the_hook_is_armed() {
 
     register(State(h.ctx.clone()), Path((id.clone(), "wt".to_string()))).await;
 
-    let (_, body) = read(get_one(State(h.ctx.clone()), Path(id)).await).await;
+    let (_, body) = read(get_one(State(h.ctx.clone()), Path(id)).await)
+        .await
+        .unwrap();
     // The delivery stamp itself is pinned engine-side (service/registration_tests);
     // what the route owns is composing the URL and hanging it off the trigger.
     let registration = &body["data"]["definition"]["triggers"][0]["registration"];
@@ -162,7 +168,7 @@ async fn get_embeds_the_registration_only_once_the_hook_is_armed() {
         registration["url"],
         format!(
             "http://127.0.0.1:{}/api/automation-webhooks/hook-1",
-            h.ctx.port
+            h.ctx.core.port
         )
     );
     assert_eq!(registration["lastDeliveryAt"], Value::Null);

@@ -14,7 +14,7 @@ pub(super) fn handle_system_event(session: &ClaudeSession, event: &Value, sink: 
             sink.on_compact_start();
         }
         Some("task_progress") => {
-            let st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+            let st = session.state.lock_recover();
             crate::workflow_events::handle_task_progress(&st, event);
         }
         _ => {}
@@ -27,22 +27,13 @@ fn handle_init(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    session
-        .state
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .chat_id = session_id.clone();
+    session.state.lock_recover().chat_id = session_id.clone();
     session.set_status(mainframe_types::adapter::AdapterProcessStatus::Ready);
     sink.on_init(&session_id);
 }
 
 fn handle_retry(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
-    session
-        .state
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .presentation
-        .invalidate(sink);
+    session.state.lock_recover().presentation.invalidate(sink);
     let attempt = event
         .get("retryAttempt")
         .and_then(Value::as_i64)
@@ -51,17 +42,12 @@ fn handle_retry(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
         .get("error")
         .and_then(Value::as_str)
         .map(str::to_string);
-    session
-        .state
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .partial
-        .clear();
+    session.state.lock_recover().partial.clear();
     sink.on_api_retry(attempt, reason);
 }
 
 fn handle_task_started(session: &ClaudeSession, event: &Value, _sink: &dyn SessionSink) {
-    let mut st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut st = session.state.lock_recover();
     let task_id = event
         .get("task_id")
         .and_then(Value::as_str)
@@ -83,13 +69,13 @@ fn handle_task_started(session: &ClaudeSession, event: &Value, _sink: &dyn Sessi
     );
     if !st.mainframe_chat_id.is_empty() {
         let chat_id = st.mainframe_chat_id.clone();
-        let claude_session_id = st.chat_id.clone();
+        let vendor_session_id = st.chat_id.clone();
         let real_cwd = st.real_project_path.clone();
         st.task_events.handle_task_started(
             &chat_id,
             task_started_payload(event, task_id),
             TaskStartedCtx {
-                claude_session_id,
+                vendor_session_id,
                 real_cwd,
             },
         );
@@ -97,7 +83,7 @@ fn handle_task_started(session: &ClaudeSession, event: &Value, _sink: &dyn Sessi
 }
 
 fn handle_task_updated(session: &ClaudeSession, event: &Value, _sink: &dyn SessionSink) {
-    let st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let st = session.state.lock_recover();
     if !st.mainframe_chat_id.is_empty() {
         let chat_id = st.mainframe_chat_id.clone();
         let loc = crate::workflow_events::record_location(&st);
@@ -110,7 +96,7 @@ fn handle_task_updated(session: &ClaudeSession, event: &Value, _sink: &dyn Sessi
 }
 
 fn handle_task_notification(session: &ClaudeSession, event: &Value, _sink: &dyn SessionSink) {
-    let mut st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut st = session.state.lock_recover();
     let task_id = event
         .get("task_id")
         .and_then(Value::as_str)

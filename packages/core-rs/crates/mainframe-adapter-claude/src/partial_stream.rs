@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -10,7 +11,6 @@ use mainframe_adapter_api::SessionSink;
 use mainframe_types::chat::MessageContent;
 use mainframe_types::content::LeafContent;
 
-use crate::adapter::first_version_triple;
 use crate::session::ClaudeSession;
 const PARTIAL_MESSAGES_MIN_VERSION: (u64, u64, u64) = (1, 0, 109);
 const PARTIAL_EMIT_INTERVAL_MS: i64 = 50;
@@ -51,7 +51,7 @@ impl PartialMessageState {
         self.block = None;
         self.last_emit_ms = None;
     }
-    pub fn clear_block(&mut self) {
+    pub(crate) fn clear_block(&mut self) {
         self.block = None;
     }
 }
@@ -59,13 +59,7 @@ fn emit_due(last: Option<i64>, interval_ms: i64, now_ms: i64) -> bool {
     last.is_none_or(|last| now_ms - last >= interval_ms)
 }
 
-fn now_ms() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
+use mainframe_types::time::now_ms;
 
 fn leaf_for(kind: PartialBlockKind, text: String) -> MessageContent {
     match kind {
@@ -80,7 +74,7 @@ fn leaf_for(kind: PartialBlockKind, text: String) -> MessageContent {
     }
 }
 
-pub fn handle_stream_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
+pub(crate) fn handle_stream_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
     if event
         .get("parent_tool_use_id")
         .and_then(Value::as_str)
@@ -93,7 +87,7 @@ pub fn handle_stream_event(session: &ClaudeSession, event: &Value, sink: &dyn Se
         return;
     };
 
-    let mut guard = session.state.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = session.state.lock_recover();
     let id = if inner.get("type").and_then(Value::as_str) == Some("message_start") {
         inner
             .get("message")
@@ -150,12 +144,11 @@ fn accumulate_delta(
     let block = partial.block.as_ref()?;
     Some((message_id, block.kind, block.text.clone()))
 }
-pub async fn supports_partial_messages(executable: &str, resolved_path: &str) -> bool {
+pub(crate) async fn supports_partial_messages(executable: &str, resolved_path: &str) -> bool {
     static CACHE: OnceLock<Mutex<HashMap<String, Arc<OnceCell<bool>>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
     let cell = cache
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .lock_recover()
         .entry(executable.to_string())
         .or_insert_with(|| Arc::new(OnceCell::new()))
         .clone();
@@ -168,7 +161,7 @@ async fn probe_and_log(executable: &str, resolved_path: &str) -> bool {
         None => {
             warn!(
                 reason = executable,
-                "claude: --include-partial-messages probe failed or timed out; downgrading to legacy streaming"
+                "--include-partial-messages probe failed or timed out; downgrading to legacy streaming"
             );
             false
         }
@@ -176,7 +169,7 @@ async fn probe_and_log(executable: &str, resolved_path: &str) -> bool {
             warn!(
                 reason = executable,
                 version,
-                "claude: CLI version below --include-partial-messages minimum; downgrading to legacy streaming"
+                "CLI version below --include-partial-messages minimum; downgrading to legacy streaming"
             );
             false
         }
@@ -185,35 +178,34 @@ async fn probe_and_log(executable: &str, resolved_path: &str) -> bool {
 }
 
 async fn probe_version(executable: &str, resolved_path: &str) -> Option<String> {
-    let output = tokio::time::timeout(
-        Duration::from_secs(5),
-        tokio::process::Command::new(executable)
-            .arg("--version")
-            .env("PATH", resolved_path)
-            .output(),
-    )
-    .await
-    .ok()?
-    .ok()?;
+    let mut command = tokio::process::Command::new(executable);
+    command.arg("--version").env("PATH", resolved_path);
+    let output = mainframe_runtime::process::run_captured(command, Some(Duration::from_secs(5)))
+        .await
+        .ok()?;
     if !output.status.success() {
         return None;
     }
-    first_version_triple(&String::from_utf8_lossy(&output.stdout))
+    mainframe_adapter_api::version::CliVersion::parse(&String::from_utf8_lossy(&output.stdout))
+        .map(|version| version.to_string())
 }
 
 fn version_at_least(version: &str, min: (u64, u64, u64)) -> bool {
-    let mut parts = version.split('.').map(str::parse::<u64>);
-    let (Some(Ok(major)), Some(Ok(minor)), Some(Ok(patch))) =
-        (parts.next(), parts.next(), parts.next())
-    else {
+    let Some(patch) = version.split('.').nth(2) else {
         return false;
     };
-    (major, minor, patch) >= min
+    if patch.is_empty() || !patch.bytes().all(|byte| byte.is_ascii_digit()) {
+        return false;
+    }
+    mainframe_adapter_api::version::CliVersion::parse_leading(version)
+        .and_then(|parsed| parsed.components_u64())
+        .is_some_and(|parts| parts >= min)
 }
 
 #[cfg(test)]
 mod probe_tests;
 #[cfg(test)]
+#[path = "partial_stream_tests.rs"]
 mod tests;
 
 fn update_partial(

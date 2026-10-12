@@ -1,6 +1,6 @@
-//! Task 17: publishing an existing local task as a new GitHub issue (AC6).
+//! Publishing an existing local task as a new GitHub issue (AC6).
 
-use mainframe_runtime::time::now_iso8601;
+use mainframe_types::time::now_iso8601;
 use serde_json::Value;
 
 use crate::PluginError;
@@ -68,7 +68,6 @@ pub(super) async fn close_as_completed(
         .await
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn build_published_pair(
     todo_id: &str,
     project_id: &str,

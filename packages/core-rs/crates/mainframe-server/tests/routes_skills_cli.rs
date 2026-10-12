@@ -1,11 +1,11 @@
-//! Route-level tests for the not-yet-mounted `/api/projects/{id}/skills-cli/…`
-//! routes (todo #243, plan Group A — `rust-cli-tests`, task A4; spec AC 9, 10,
-//! 14; Decision 2). RED until Group B (`rust-cli-service`) mounts
-//! `routes::skills_cli::router()` in `http.rs`. These exercise only paths
-//! that never spawn a process: unknown-project 404s and input-validation
-//! 400s. Do not stub the routes to make this pass — a router this file
-//! can't reach proves nothing about Group B's behavior.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Route-level tests for the `/api/projects/{id}/skills-cli/…` routes. These
+//! exercise only paths that never spawn a process: unknown-project 404s and
+//! input-validation 400s.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -13,11 +13,7 @@ use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::{TestServer, spawn_test_server};
 
-async fn get_json(server: &TestServer, path: &str) -> (StatusCode, Value) {
-    let res = reqwest::get(server.http_url(path)).await.unwrap();
-    let status = res.status();
-    (status, res.json().await.unwrap())
-}
+use support::helpers::get_json;
 
 async fn post_json(server: &TestServer, path: &str, body: Value) -> (StatusCode, Value) {
     let res = reqwest::Client::new()

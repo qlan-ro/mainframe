@@ -105,7 +105,7 @@ fn ask_user_question_falls_back_to_empty_string() {
         respond,
     );
     let request = rec.permissions()[0].clone();
-    // T19, R3.5: a bare `behavior: "deny"` with no message/updatedInput is
+    // A bare `behavior: "deny"` with no message/updatedInput is
     // now a genuine decline (`reject_on_request_user_input_sends_no_answer`
     // pins that shape) — this test's own case, an allow carrying no real
     // answer data, still falls back to an empty string.

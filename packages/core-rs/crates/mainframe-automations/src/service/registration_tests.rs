@@ -1,4 +1,4 @@
-//! T7 — webhook registration. The editor's panel asks four things: what URL
+//! Webhook registration. The editor's panel asks four things: what URL
 //! do I paste into GitHub, what do I sign with, is the hook armed, and has
 //! anything ever arrived. Arming provisions and reveals the signing secret
 //! (reads never carry it); the delivery stamp is read back from the store;

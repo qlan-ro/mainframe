@@ -1,12 +1,13 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/__tests__/list-models.test.ts`.
-//!
 //! The `mapCodexModel` mapping assertions live inline in `src/adapter.rs`; this file
-//! ports the `probes models with the configured executable path` case. The vitest
-//! version mocks `node:child_process`; the Rust port drives a real `codex app-server`
+//! checks model probing with the configured executable path. It drives an app-server
 //! handshake against a fake newline-JSON-RPC executable at the configured path, which
 //! proves both the mapping/hidden-filter and that the configured binary is spawned.
 #![cfg(unix)]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -16,7 +17,7 @@ use mainframe_adapter_codex::CodexAdapter;
 use tempfile::tempdir;
 
 /// A fake `codex` that answers `initialize` (id 1) then `model/list` (id 2) over
-/// newline-delimited JSON-RPC, mirroring the app-server handshake.
+/// newline-delimited JSON-RPC.
 const FAKE_APP_SERVER: &str = r#"#!/bin/sh
 IFS= read -r _initialize
 printf '{"id":1,"result":{"userAgent":"codex/0.144.1","codexHome":"/tmp/.codex"}}\n'
@@ -36,9 +37,8 @@ async fn probes_models_with_the_configured_executable_path() {
     fs::set_permissions(&fake, perms).unwrap();
 
     let adapter = CodexAdapter::default();
-    assert!(adapter.has_probe_models());
     let models = adapter
-        .probe_models(Some(fake.to_str().unwrap().to_string()))
+        .refresh_catalog(Some(fake.to_str().unwrap().to_string()))
         .await
         .unwrap()
         .expect("probe returns a catalog");

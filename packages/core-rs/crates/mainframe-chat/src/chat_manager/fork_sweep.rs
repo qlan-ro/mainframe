@@ -1,34 +1,34 @@
-//! `ChatManager::sweep_unreferenced_fork_snapshots` (todo #343) — moved out of
-//! `fork_api.rs` to keep that file under the 300-line ceiling once
-//! `fork_chat` grew the from-message path.
+//! `ChatManager::sweep_unreferenced_fork_snapshots` — moved out of
+//! `fork_api.rs` to keep that file under the 300-line ceiling once `fork_chat`
+//! grew the from-message path.
 use super::*;
 
 impl ChatManager {
-    /// Startup sweep (todo #343): remove any directory directly under
+    /// Startup sweep: remove any directory directly under
     /// `fork_snapshots_dir()` that no chat's `pending_fork` currently
     /// references. Covers a crash between pin and the DB insert (the chat row
     /// was never created, so `on_result` never runs to retire it) and project
     /// removal (which deletes chat rows directly, bypassing retirement too).
     /// Best-effort throughout: every failure is logged, never surfaced.
     pub async fn sweep_unreferenced_fork_snapshots(&self) {
-        let root = self.deps.fork_snapshots_dir();
-        let referenced: std::collections::HashSet<String> = self
-            .deps
-            .chats_list_all()
-            .into_iter()
-            .filter_map(|chat| self.deps.get_pending_fork(&chat.id))
-            .map(|pending| pending.snapshot_dir)
-            .collect();
+        let root = self.shared.deps.fork_snapshots_dir();
+        let mut referenced = std::collections::HashSet::new();
+        for chat in storage_event!(self.shared, self.shared.deps.chats_list_all()) {
+            if let Some(pending) =
+                storage_event!(self.shared, self.shared.deps.get_pending_fork(&chat.id))
+            {
+                referenced.insert(pending.snapshot_dir);
+            }
+        }
 
         let mut entries = match tokio::fs::read_dir(&root).await {
             Ok(entries) => entries,
             // Nothing has ever been pinned — the directory doesn't exist yet.
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
             Err(err) => {
-                tracing::warn!(
-                    %err,
+                tracing::warn!(error = %err,
                     root,
-                    "fork-snapshot sweep: failed to list the snapshots directory"
+                    "failed to list the snapshots directory"
                 );
                 return;
             }
@@ -38,7 +38,7 @@ impl ChatManager {
                 Ok(Some(entry)) => entry,
                 Ok(None) => break,
                 Err(err) => {
-                    tracing::warn!(%err, root, "fork-snapshot sweep: failed to read an entry");
+                    tracing::warn!(error = %err, root, "failed to read an entry");
                     break;
                 }
             };
@@ -47,16 +47,12 @@ impl ChatManager {
                 continue;
             }
             if let Err(err) = tokio::fs::remove_dir_all(&path).await {
-                tracing::warn!(
-                    %err,
+                tracing::warn!(error = %err,
                     path,
-                    "fork-snapshot sweep: failed to remove an unreferenced snapshot directory"
+                    "failed to remove an unreferenced snapshot directory"
                 );
             } else {
-                tracing::info!(
-                    path,
-                    "fork-snapshot sweep: removed an unreferenced snapshot directory"
-                );
+                tracing::info!(path, "removed an unreferenced snapshot directory");
             }
         }
     }

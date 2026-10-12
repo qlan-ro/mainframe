@@ -1,9 +1,8 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/external-sessions.ts`.
-//!
 //! Lists importable external (Claude-native) sessions for a project: a stat-only
 //! candidate scan across matching `~/.claude/projects` dirs, then bounded-
 //! concurrency enrichment with a process-lifetime cache.
 
+use mainframe_types::sync::LockExt as _;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -31,7 +30,7 @@ pub struct ExternalSessionListOpts {
 
 /// Stat-only candidate pass: UUID-named jsonl across matching dirs, deduped +
 /// sorted mtime desc.
-pub async fn scan_lite_candidates(
+pub(crate) async fn scan_lite_candidates(
     project_path: &str,
     exclude_set: &HashSet<String>,
 ) -> Vec<Candidate> {
@@ -46,13 +45,9 @@ pub async fn scan_lite_candidates(
         };
         while let Ok(Some(entry)) = entries.next_entry().await {
             let name = entry.file_name().to_string_lossy().to_string();
-            if !is_uuid_jsonl(&name) {
+            let Some(session_id) = candidate_session_id(&name, exclude_set) else {
                 continue;
-            }
-            let session_id = name[..name.len() - ".jsonl".len()].to_string();
-            if exclude_set.contains(&session_id) {
-                continue;
-            }
+            };
             let file_path = Path::new(&dir).join(&name).to_string_lossy().to_string();
             let meta = match tokio::fs::metadata(&file_path).await {
                 Ok(m) => m,
@@ -85,17 +80,7 @@ pub async fn scan_lite_candidates(
 
     let mut candidates: Vec<Candidate> = by_session.into_values().collect();
     // `b.mtimeMs - a.mtimeMs || (a.sessionId < b.sessionId ? 1 : -1)`
-    candidates.sort_by(|a, b| {
-        if b.mtime_ms != a.mtime_ms {
-            b.mtime_ms
-                .partial_cmp(&a.mtime_ms)
-                .unwrap_or(Ordering::Equal)
-        } else if a.session_id < b.session_id {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        }
-    });
+    sort_candidates(&mut candidates);
     candidates
 }
 
@@ -126,25 +111,23 @@ async fn enrich_window(
                 }
                 let c = &window[i];
                 if let Some(cached) = get_cached(&cache, &c.session_id, c.mtime_ms, c.size) {
-                    if let Ok(mut g) = out.lock() {
-                        g[i] = Some(cached);
-                    }
+                    out.lock_recover()[i] = Some(cached);
                     continue;
                 }
                 if let Some(meta) = enrich_session(c, &project_path).await {
                     set_cached(&cache, &c.session_id, c.mtime_ms, c.size, meta.clone());
-                    if let Ok(mut g) = out.lock() {
-                        g[i] = Some(meta);
-                    }
+                    out.lock_recover()[i] = Some(meta);
                 }
             }
         }));
     }
     for h in handles {
-        let _ = h.await;
+        if let Err(error) = h.await {
+            tracing::warn!(%error, path = %project_path, operation = "enrich_session", "session enrichment worker failed");
+        }
     }
 
-    let results = out.lock().map(|g| g.clone()).unwrap_or_default();
+    let results = out.lock_recover().clone();
     results
         .into_iter()
         .flatten()
@@ -170,8 +153,7 @@ pub async fn list_external_sessions(
     let limit = opts.and_then(|o| o.limit).unwrap_or(DEFAULT_LIMIT);
 
     // scan_lite_candidates is infallible here (all fallible steps are handled
-    // internally), so the TS try/catch (`external-session lite scan failed`) is
-    // unreachable in the port; kept as a note rather than a dead Result branch.
+    // internally), so there is no lite-scan error branch to handle.
     let exclude_set: HashSet<String> = exclude_session_ids.iter().cloned().collect();
     let candidates = scan_lite_candidates(project_path, &exclude_set).await;
 
@@ -198,6 +180,31 @@ pub async fn list_external_sessions(
         total,
         next_offset,
     }
+}
+
+fn sort_candidates(candidates: &mut [Candidate]) {
+    candidates.sort_by(|a, b| {
+        if b.mtime_ms != a.mtime_ms {
+            b.mtime_ms
+                .partial_cmp(&a.mtime_ms)
+                .unwrap_or(Ordering::Equal)
+        } else if a.session_id < b.session_id {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    });
+}
+
+fn candidate_session_id(name: &str, exclude_set: &HashSet<String>) -> Option<String> {
+    if !is_uuid_jsonl(name) {
+        return None;
+    }
+    let session_id = name[..name.len() - ".jsonl".len()].to_string();
+    if exclude_set.contains(&session_id) {
+        return None;
+    }
+    Some(session_id)
 }
 
 #[cfg(test)]
@@ -233,16 +240,3 @@ mod tests {
         assert_eq!(page.next_offset, None);
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/external-sessions.ts (105 lines)
-// confidence: high
-// todos: 0
-// notes: getCached/setCached now take the injected cache (CONCURRENCY.tsv
-// SHARED_MAP) so listExternalSessions/enrichWindow gained a `cache` param owned
-// by the adapter. Bounded concurrency (ENRICH_CONCURRENCY=8) reproduced with a
-// shared AtomicUsize cursor + N tokio tasks writing index-ordered slots (the
-// `futures` crate is deferred/unavailable). The sort comparator matches
-// `b.mtimeMs - a.mtimeMs || (a.sessionId < b.sessionId ? 1 : -1)`. mtimeMs from
-// SystemTime → ms f64. scan_lite_candidates is infallible so the TS lite-scan
-// try/catch is unreachable (noted). No TS __tests__ file — sanity tests cover the
-// empty-project + limit<=0 paths.

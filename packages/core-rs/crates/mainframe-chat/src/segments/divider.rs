@@ -6,6 +6,7 @@ use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, Messag
 use mainframe_types::segment::{
     HandoffRecord, ProviderSwitchMarker, SegmentLayout, SegmentRecord, SegmentTotals,
 };
+use mainframe_types::sync::LockExt as _;
 
 /// Deterministic, so live and cold dividers share one id.
 pub fn divider_id(segment_id: &str) -> String {
@@ -36,7 +37,7 @@ fn totals(layout: &SegmentLayout, segment: &SegmentRecord) -> SegmentTotals {
 }
 
 /// `None` for the chat's first segment (it has no divider) or an unknown id.
-pub fn build_marker(
+pub(crate) fn build_marker(
     layout: &SegmentLayout,
     segment_id: &str,
     name_of: &dyn Fn(&str) -> String,
@@ -65,7 +66,7 @@ pub fn build_marker(
     })
 }
 
-pub fn divider_message(
+pub(crate) fn divider_message(
     chat_id: &str,
     marker: ProviderSwitchMarker,
     timestamp: &str,
@@ -101,7 +102,7 @@ pub fn divider_for(
 
 /// Rebuilds a segment's divider from `layout` in the cache (its handoff was
 /// built or delivered). Returns whether the cached divider changed.
-pub fn refresh_divider(
+pub(crate) fn refresh_divider(
     messages: &std::sync::Mutex<crate::message_cache::MessageCache>,
     store: &dyn super::SegmentStore,
     chat_id: &str,
@@ -115,14 +116,11 @@ pub fn refresh_divider(
         return false;
     };
     let id = divider_id(segment_id);
-    messages
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .update_in_place(chat_id, |m| {
-            if m.id != id || m.content == fresh.content {
-                return false;
-            }
-            m.content = fresh.content.clone();
-            true
-        })
+    messages.lock_recover().update_in_place(chat_id, |m| {
+        if m.id != id || m.content == fresh.content {
+            return false;
+        }
+        m.content = fresh.content.clone();
+        true
+    })
 }

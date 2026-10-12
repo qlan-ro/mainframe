@@ -32,7 +32,7 @@ fn expecting(step: Step) -> Step {
     }
 }
 
-/// `agent_settle.rs::load_waiting_step` looks up `expects` via
+/// `agent_settle.rs::load_waiting_expects` looks up `expects` via
 /// `find_step_by_id` — nested inside a `retry`, a miss silently drops the
 /// A2 output contract instead of failing loudly.
 #[tokio::test]
@@ -69,7 +69,8 @@ async fn expects_inside_a_retry_still_parses_the_structured_output() {
     );
 }
 
-/// `deadline.rs::fail_step` looks up `keepGoing` via `find_step_by_id` —
+/// The deadline sweep's out-of-band failure looks up `keepGoing` via
+/// `find_step_by_id` —
 /// nested inside a `retry`, a miss reads `false` and finalizes the run even
 /// when the step itself declared `keepGoing: true`.
 #[tokio::test]
@@ -112,7 +113,7 @@ fn idempotent_engine(h: &Harness, ports: FakePorts, idempotent: bool) -> Interpr
 /// would have left it, carrying the PLAIN `step_id` a nested block's ref
 /// suffixes off of.
 async fn seed_running(h: &Harness, run_id: &str, step_ref: &str, step_id: &str, kind: &str) {
-    let (step_ref, step_id, kind) = (step_ref.to_string(), step_id.to_string(), kind.to_string());
+    let (step_ref, step_id, kind) = (step_ref.to_string(), step_id.to_string(), kind.into());
     h.store
         .patch_checkpoint(run_id, move |cp| {
             cp.steps.insert(

@@ -1,4 +1,4 @@
-//! Hand-rolled scanning primitives (no `regex` crate — §8 allowlist). Shared by
+//! Hand-rolled scanning primitives (no `regex` crate in the allowlist). Shared by
 //! `parse.rs` (URL scanning) and `command.rs` (word-sequence command matching).
 
 use super::DetectedPrCore;

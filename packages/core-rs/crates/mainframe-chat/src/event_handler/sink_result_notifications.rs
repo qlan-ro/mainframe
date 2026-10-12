@@ -1,6 +1,6 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn result_notifications(
         &self,
         data: &SessionResult,
@@ -12,7 +12,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
             if !was_interrupted {
                 self.notify_result_error(data);
             }
-        } else if self.deps.notify_task_complete() {
+        } else {
             self.notify_result_complete(cost);
         }
     }
@@ -42,46 +42,63 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         );
         self.append_and_display(message);
 
-        if self.deps.notify_session_error() {
-            self.deps.emit_event(DaemonEvent::ChatNotification {
-                chat_id: self.chat_id.clone(),
-                title: "Session Error".to_string(),
-                body: "A session ended unexpectedly".to_string(),
-                level: ChatNotificationLevel::Error,
-                kind: Some(ChatNotificationKind::SessionError),
-            });
-            self.deps.send_push(PushOut {
-                chat_id: self.chat_id.clone(),
-                title: "Session Error".to_string(),
-                body: "A session ended unexpectedly".to_string(),
-                push_type: "error".to_string(),
-                priority: "high".to_string(),
-            });
-        }
+        let shared = self.shared.clone();
+        let chat_id = self.chat_id.clone();
+        self.shared.when_notification_enabled(
+            crate::chat_manager::notifications::NotificationGate::Error,
+            move || {
+                shared.emit(DaemonEvent::ChatNotification {
+                    chat_id: chat_id.clone(),
+                    title: "Session Error".to_string(),
+                    body: "A session ended unexpectedly".to_string(),
+                    level: ChatNotificationLevel::Error,
+                    kind: Some(ChatNotificationKind::SessionError),
+                });
+                shared.deps.send_push(PushOut {
+                    chat_id: chat_id.clone(),
+                    title: "Session Error".to_string(),
+                    body: "A session ended unexpectedly".to_string(),
+                    push_type: "error".to_string(),
+                    priority: "high".to_string(),
+                });
+            },
+        );
     }
     fn notify_result_complete(&self, cost: f64) {
         let last_text = {
-            let msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
-            get_last_assistant_text(msgs.get(&self.chat_id))
+            let msgs = self.messages.lock_recover();
+            mainframe_types::chat_text::truncate_with_ellipsis(
+                &mainframe_types::chat_text::last_assistant_text(
+                    msgs.get(&self.chat_id).map(Vec::as_slice).unwrap_or(&[]),
+                ),
+                PUSH_BODY_MAX_LENGTH,
+            )
         };
         let body = if last_text.is_empty() {
             format!("Session finished (cost: ${cost:.4})")
         } else {
             last_text
         };
-        self.deps.emit_event(DaemonEvent::ChatNotification {
-            chat_id: self.chat_id.clone(),
-            title: "Task Complete".to_string(),
-            body: body.clone(),
-            level: ChatNotificationLevel::Success,
-            kind: Some(ChatNotificationKind::TaskComplete),
-        });
-        self.deps.send_push(PushOut {
-            chat_id: self.chat_id.clone(),
-            title: "Task Complete".to_string(),
-            body,
-            push_type: "task_complete".to_string(),
-            priority: "default".to_string(),
-        });
+        let shared = self.shared.clone();
+        let chat_id = self.chat_id.clone();
+        self.shared.when_notification_enabled(
+            crate::chat_manager::notifications::NotificationGate::Complete,
+            move || {
+                shared.emit(DaemonEvent::ChatNotification {
+                    chat_id: chat_id.clone(),
+                    title: "Task Complete".to_string(),
+                    body: body.clone(),
+                    level: ChatNotificationLevel::Success,
+                    kind: Some(ChatNotificationKind::TaskComplete),
+                });
+                shared.deps.send_push(PushOut {
+                    chat_id: chat_id.clone(),
+                    title: "Task Complete".to_string(),
+                    body,
+                    push_type: "task_complete".to_string(),
+                    priority: "default".to_string(),
+                });
+            },
+        );
     }
 }

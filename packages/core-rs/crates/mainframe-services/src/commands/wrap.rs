@@ -1,5 +1,3 @@
-//! Ported from `src/commands/wrap.ts`.
-
 use rand::Rng;
 
 pub fn wrap_mainframe_command(name: &str, _content: &str, args: Option<&str>) -> String {
@@ -53,10 +51,3 @@ mod tests {
         assert!(out.contains("\">\n\n\nWrap your entire response in:"));
     }
 }
-
-// PORT STATUS: src/commands/wrap.ts (16 lines)
-// confidence: high
-// todos: 0
-// notes: joins the same 8 lines with '\n'. `_content` is unused (as in the TS).
-// randomUUID().slice(0,8) → 8 random hex chars via `rand` (the id is random and
-// not asserted on the wire). No TS test existed; added structural coverage.

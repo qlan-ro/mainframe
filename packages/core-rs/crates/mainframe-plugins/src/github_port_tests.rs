@@ -1,45 +1,46 @@
 //! `ctx.github` never panics and never reaches the network: without the
 //! `http:outbound` capability, or without a wired dependency (the automations
-//! engine failed to start), every call fails loudly with a readable reason
-//! (D2, fact 10).
+//! engine failed to start), every call fails loudly with a readable reason.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use mainframe_types::chat::{Chat, Project};
+use mainframe_types::chat::Chat;
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
 
 use super::context::{EmitSink, PluginContextDeps, PluginHostDb, build_plugin_context};
-use super::event_bus::PublicDaemonBus;
 use super::github_port::{GitHubIssues, RepoRef};
 
 #[derive(Default)]
 struct NullHostDb;
 impl PluginHostDb for NullHostDb {
-    fn chats_list(&self, _p: &str) -> Vec<Chat> {
-        Vec::new()
+    fn chats_list(&self, _p: &str) -> Result<Vec<Chat>, crate::PluginError> {
+        Ok(Vec::new())
     }
-    fn chats_get(&self, _id: &str) -> Option<Chat> {
-        None
+    fn chats_get(&self, _id: &str) -> Result<Option<Chat>, crate::PluginError> {
+        Ok(None)
     }
-    fn chats_create(&self, p: &str, a: &str, _m: Option<&str>, _mode: Option<&str>) -> Chat {
-        serde_json::from_value(serde_json::json!({
-            "id": "chat-1", "adapterId": a, "projectId": p, "status": "active",
-            "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
-            "totalCost": 0.0, "totalTokensInput": 0, "totalTokensOutput": 0,
-            "lastContextTokensInput": 0,
-        }))
-        .unwrap()
+    fn chats_create(
+        &self,
+        p: &str,
+        a: &str,
+        _m: Option<&str>,
+        _mode: Option<&str>,
+    ) -> Result<Chat, crate::PluginError> {
+        Ok({
+            serde_json::from_value(serde_json::json!({
+                "id": "chat-1", "adapterId": a, "projectId": p, "status": "active",
+                "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
+                "totalCost": 0.0, "totalTokensInput": 0, "totalTokensOutput": 0,
+                "lastContextTokensInput": 0,
+            }))
+            .unwrap()
+        })
     }
-    fn settings_get(&self, _c: &str, _k: &str) -> Option<String> {
-        None
-    }
-    fn settings_set(&self, _c: &str, _k: &str, _v: &str) {}
-    fn projects_list(&self) -> Vec<Project> {
-        Vec::new()
-    }
-    fn projects_get(&self, _id: &str) -> Option<Project> {
-        None
+    fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
+        static EMPTY: std::sync::LazyLock<mainframe_types::settings_kv::MemorySettings> =
+            std::sync::LazyLock::new(Default::default);
+        &*EMPTY
     }
 }
 
@@ -125,9 +126,7 @@ fn deps(caps: Vec<PluginCapability>, github: Option<Arc<dyn GitHubIssues>>) -> P
         manifest: manifest(caps),
         plugin_dir: PathBuf::new(),
         host_db: Arc::new(NullHostDb),
-        daemon_bus: Arc::new(PublicDaemonBus::new()),
         emit,
-        adapters: None,
         github,
     }
 }

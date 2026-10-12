@@ -1,5 +1,4 @@
-//! Ported from `packages/types/src/suggestion.ts`.
-
+use crate::validation::RefinementError;
 use serde::{Deserialize, Serialize};
 
 /// Visual tint for a repo suggestion tile. `accent` = churn/neutral; `amber` = TODO/warning.
@@ -27,15 +26,15 @@ impl Suggestion {
     /// non-empty (`z.string().min(1)`) constraints on `icon`, `title`, `prefill`.
     /// `meta` is a plain `z.string()` (empty allowed); `tint` is enforced by the
     /// enum during deserialization.
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), RefinementError> {
         if self.icon.is_empty() {
-            return Err("icon must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("icon"));
         }
         if self.title.is_empty() {
-            return Err("title must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("title"));
         }
         if self.prefill.is_empty() {
-            return Err("prefill must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("prefill"));
         }
         Ok(())
     }
@@ -84,13 +83,3 @@ mod tests {
         assert!(serde_json::from_value::<Vec<Suggestion>>(valid()).is_err());
     }
 }
-
-// PORT STATUS: packages/types/src/suggestion.ts (27 lines)
-// confidence: high
-// todos: 0
-// notes: SuggestionSchema (zod) → serde struct + SuggestionTint enum for shape,
-// plus a `validate()` fn for the `.min(1)` refinements. SuggestionListSchema is a
-// bare `Vec<Suggestion>`. `validate()` returns `Result<(), String>` (no shared
-// ValidationError type — the types crate has neither `thiserror` nor a
-// lib.rs-registered validation module; the message is not wire-visible, tests only
-// assert pass/fail).

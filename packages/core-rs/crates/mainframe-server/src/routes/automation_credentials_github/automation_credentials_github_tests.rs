@@ -1,22 +1,17 @@
 //! Route-level device-flow tests. The HTTP semantics of `start`/`poll_once`
 //! itself (interval, slow_down, expired_token, access_denied...) are covered
-//! against a mock GitHub in `mainframe-automations`'s `github_device_tests`;
+//! against a mock GitHub in `mainframe-github`'s `github_device_tests`;
 //! this file covers the route's own job: outcome→response mapping and that
 //! a `Connected` poll persists the token without echoing it back.
 
-use axum::body::to_bytes;
-use mainframe_automations::github_device::GithubDeviceFlow;
+use mainframe_github::github_device::GithubDeviceFlow;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::{device_flow_status_for, poll_and_respond, start_response};
 use crate::routes::automations_test_support::automations_ctx;
 
-async fn body_json(resp: axum::response::Response) -> (axum::http::StatusCode, serde_json::Value) {
-    let status = resp.status();
-    let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    (status, serde_json::from_slice(&bytes).unwrap())
-}
+use crate::test_support::body_json;
 
 fn epoch_ms_now() -> i64 {
     std::time::SystemTime::now()
@@ -34,7 +29,9 @@ async fn device_status_reports_unconfigured_when_no_client_id_is_set() {
     let flow = GithubDeviceFlow::with_urls("http://unused/code", "http://unused/token", "");
 
     assert!(!flow.is_configured());
-    let (status, body) = body_json(device_flow_status_for(&flow).await).await;
+    let (status, body) = body_json(device_flow_status_for(&flow).await)
+        .await
+        .unwrap();
 
     assert_eq!(status, axum::http::StatusCode::OK);
     assert_eq!(body["data"]["configured"], false);
@@ -49,7 +46,9 @@ async fn device_status_reports_configured_once_a_client_id_ships() {
     );
 
     assert!(flow.is_configured());
-    let (status, body) = body_json(device_flow_status_for(&flow).await).await;
+    let (status, body) = body_json(device_flow_status_for(&flow).await)
+        .await
+        .unwrap();
 
     assert_eq!(status, axum::http::StatusCode::OK);
     assert_eq!(body["data"]["configured"], true);
@@ -61,7 +60,7 @@ async fn start_reports_not_configured_when_no_client_id_is_set() {
     // must read as "unavailable" rather than a generic failure, and that has
     // to stay true regardless of whether this repo's own app is configured.
     let flow = GithubDeviceFlow::with_urls("http://unused/code", "http://unused/token", "");
-    let (status, body) = body_json(start_response(flow.start().await)).await;
+    let (status, body) = body_json(start_response(flow.start().await)).await.unwrap();
 
     assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED);
     assert_eq!(body["success"], false);
@@ -85,7 +84,9 @@ async fn poll_connected_persists_the_token_and_never_echoes_it() {
         "test-client",
     );
 
-    let (status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await).await;
+    let (status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
+        .await
+        .unwrap();
 
     assert_eq!(status, axum::http::StatusCode::OK);
     assert_eq!(
@@ -125,7 +126,9 @@ async fn poll_connected_for_a_github_app_persists_the_refresh_token_and_expiry()
     );
 
     let before = epoch_ms_now();
-    let (status, _body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await).await;
+    let (status, _body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
+        .await
+        .unwrap();
     assert_eq!(status, axum::http::StatusCode::OK);
 
     let creds = harness.engine.credentials().get("github").await.unwrap();
@@ -157,7 +160,9 @@ async fn poll_pending_reports_status_without_touching_the_credential_store() {
         "test-client",
     );
 
-    let (status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await).await;
+    let (status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
+        .await
+        .unwrap();
 
     assert_eq!(status, axum::http::StatusCode::OK);
     assert_eq!(body["data"]["status"], "pending");
@@ -182,7 +187,9 @@ async fn poll_slow_down_reports_the_new_interval() {
         "test-client",
     );
 
-    let (_status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await).await;
+    let (_status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
+        .await
+        .unwrap();
 
     assert_eq!(
         body["data"],
@@ -209,8 +216,9 @@ async fn poll_expired_and_denied_report_distinct_statuses() {
             "test-client",
         );
 
-        let (_status, body) =
-            body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await).await;
+        let (_status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
+            .await
+            .unwrap();
 
         assert_eq!(
             body["data"]["status"], expected_status,

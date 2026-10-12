@@ -1,10 +1,12 @@
-//! Ported from `packages/core/src/adapters/__tests__/registry.test.ts`.
-//!
 //! Integration test (exercises only the public `AdapterRegistry` surface + the
-//! `Adapter` / `AdapterSession` / `RefreshDeps` traits) so `lib.rs` stays a clean
-//! port of `index.ts`. The five `AdapterRegistry catalog materialization`
-//! assertions are ported one-for-one.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! `Adapter` / `AdapterSession` / `RefreshDeps` traits) so `lib.rs` stays
+//! focused on the registry.
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -136,23 +138,23 @@ impl AdapterSession for StubSession {
     }
 }
 
-// ─── the configurable fake Adapter (mirrors the TS `fakeAdapter`) ───────────────
+// ─── the configurable fake Adapter ───────────────────────────────────────────────
 struct FakeAdapter {
     id: String,
     name: String,
-    has_probe: bool,
+    uses_probe_catalog: bool,
     probe_result: Option<Vec<AdapterModel>>,
-    list_models_seq: Mutex<VecDeque<Vec<AdapterModel>>>,
-    list_models_default: Vec<AdapterModel>,
+    refresh_catalog_seq: Mutex<VecDeque<Vec<AdapterModel>>>,
+    refresh_catalog_default: Vec<AdapterModel>,
     fallback_models: Vec<AdapterModel>,
     installed: bool,
     version: String,
     is_installed_calls: AtomicUsize,
     get_version_calls: AtomicUsize,
-    list_models_calls: AtomicUsize,
+    refresh_catalog_calls: AtomicUsize,
     probe_calls: AtomicUsize,
     probe_args: Mutex<Vec<Option<String>>>,
-    /// Todo #368: when `true`, `capabilities().fork` and
+    /// When `true`, `capabilities().fork` and
     /// `fork_unavailable_reason()` depend on whatever `observe_cli_version` last
     /// reported, instead of the fixed `fork: false` every other test relies on.
     fork_version_gated: bool,
@@ -165,16 +167,16 @@ impl FakeAdapter {
         Self {
             id: "claude".into(),
             name: "Claude".into(),
-            has_probe: true,
+            uses_probe_catalog: true,
             probe_result: None,
-            list_models_seq: Mutex::new(VecDeque::new()),
-            list_models_default: fb.clone(),
+            refresh_catalog_seq: Mutex::new(VecDeque::new()),
+            refresh_catalog_default: fb.clone(),
             fallback_models: fb,
             installed: true,
             version: "1.0.0".into(),
             is_installed_calls: AtomicUsize::new(0),
             get_version_calls: AtomicUsize::new(0),
-            list_models_calls: AtomicUsize::new(0),
+            refresh_catalog_calls: AtomicUsize::new(0),
             probe_calls: AtomicUsize::new(0),
             probe_args: Mutex::new(Vec::new()),
             fork_version_gated: false,
@@ -187,8 +189,8 @@ impl FakeAdapter {
     fn get_version_count(&self) -> usize {
         self.get_version_calls.load(Ordering::SeqCst)
     }
-    fn list_models_count(&self) -> usize {
-        self.list_models_calls.load(Ordering::SeqCst)
+    fn refresh_catalog_count(&self) -> usize {
+        self.refresh_catalog_calls.load(Ordering::SeqCst)
     }
     fn probe_count(&self) -> usize {
         self.probe_calls.load(Ordering::SeqCst)
@@ -235,38 +237,38 @@ impl Adapter for FakeAdapter {
         let v = self.version.clone();
         Box::pin(async move { Ok(Some(v)) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        self.list_models_calls.fetch_add(1, Ordering::SeqCst);
-        let models = self
-            .list_models_seq
-            .lock()
-            .unwrap()
-            .pop_front()
-            .unwrap_or_else(|| self.list_models_default.clone());
-        Box::pin(async move { Ok(models) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        self.fallback_models.clone()
     }
-    fn has_probe_models(&self) -> bool {
-        self.has_probe
-    }
-    fn probe_models(
+
+    fn refresh_catalog(
         &self,
         executable_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
-        self.probe_calls.fetch_add(1, Ordering::SeqCst);
-        self.probe_args.lock().unwrap().push(executable_path);
-        let r = self.probe_result.clone();
-        Box::pin(async move { Ok(r) })
+        if self.uses_probe_catalog {
+            self.probe_calls.fetch_add(1, Ordering::SeqCst);
+            self.probe_args.lock().unwrap().push(executable_path);
+            let result = self.probe_result.clone();
+            Box::pin(async move { Ok(result) })
+        } else {
+            self.refresh_catalog_calls.fetch_add(1, Ordering::SeqCst);
+            let models = self
+                .refresh_catalog_seq
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or_else(|| self.refresh_catalog_default.clone());
+            Box::pin(async move { Ok(Some(models)) })
+        }
     }
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        Some(self.fallback_models.clone())
-    }
+
     fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
         Arc::new(StubSession)
     }
     fn kill_all(&self) {}
 }
 
-// ─── the injected RefreshDeps fake (mirrors the TS `deps(emit, path)`) ──────────
+// ─── the injected RefreshDeps fake ───────────────────────────────────────────────
 struct FakeDeps {
     resolve_path: Option<String>,
     run_result: RunResult,
@@ -309,7 +311,7 @@ async fn seeds_statically_without_spawning() {
     assert_eq!(snaps[0].models_revision, Some(1));
     assert_eq!(a.is_installed_count(), 0);
     assert_eq!(a.get_version_count(), 0);
-    assert_eq!(a.list_models_count(), 0);
+    assert_eq!(a.refresh_catalog_count(), 0);
 }
 
 #[tokio::test]
@@ -368,7 +370,7 @@ async fn bumps_revision_flips_catalog_source_and_emits_after_allow_refresh() {
                 installed: Some(true),
                 // FakeAdapter's capabilities/reason never depend on version in
                 // this test, but the event still carries the current values
-                // whenever it fires (todo #368), same as `installed` above.
+                // whenever it fires, same as `installed` above.
                 capabilities: Some(a.capabilities()),
                 fork_unavailable_reason: a.fork_unavailable_reason(),
             })
@@ -385,9 +387,9 @@ async fn latches_per_adapter_failed_retries_succeeded_does_not() {
     let mut bad_fa = FakeAdapter::new();
     bad_fa.id = "codex".into();
     bad_fa.name = "Codex".into();
-    bad_fa.has_probe = false;
-    bad_fa.list_models_seq = Mutex::new(VecDeque::from([vec![], vec![model("c", "C")]]));
-    bad_fa.list_models_default = vec![];
+    bad_fa.uses_probe_catalog = false;
+    bad_fa.refresh_catalog_seq = Mutex::new(VecDeque::from([vec![], vec![model("c", "C")]]));
+    bad_fa.refresh_catalog_default = vec![];
     bad_fa.fallback_models = vec![];
     let bad = Arc::new(bad_fa);
 
@@ -405,7 +407,7 @@ async fn latches_per_adapter_failed_retries_succeeded_does_not() {
     reg.refresh_all().await; // ok succeeds+latches; codex returns [] → not latched
     reg.refresh_all().await; // ok skipped (latched); codex retries → succeeds
     assert_eq!(ok.probe_count(), 1);
-    assert_eq!(bad.list_models_count(), 2);
+    assert_eq!(bad.refresh_catalog_count(), 2);
 }
 
 #[tokio::test]
@@ -449,7 +451,7 @@ async fn default_generate_title_returns_no_title_for_an_adapter_without_a_title_
     assert_eq!(result.unwrap(), None);
 }
 
-// Todo #368: a version-gated adapter's capability flips after `run_refresh`
+// A version-gated adapter's capability flips after `run_refresh`
 // calls `observe_cli_version`, and the snapshot + emitted event carry the new
 // capabilities and reason even when the catalog itself never changes (no live
 // model list this refresh) — the registry must not gate the event on
@@ -460,9 +462,9 @@ async fn capability_and_reason_flip_after_observed_version_even_with_no_catalog_
     fa.id = "codex".into();
     fa.name = "Codex".into();
     fa.fork_version_gated = true;
-    fa.has_probe = false;
-    fa.list_models_seq = Mutex::new(VecDeque::from([vec![]]));
-    fa.list_models_default = vec![];
+    fa.uses_probe_catalog = false;
+    fa.refresh_catalog_seq = Mutex::new(VecDeque::from([vec![]]));
+    fa.refresh_catalog_default = vec![];
     fa.fallback_models = vec![];
     let a = Arc::new(fa);
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -517,3 +519,5 @@ async fn capability_and_reason_flip_after_observed_version_even_with_no_catalog_
         other => panic!("unexpected event: {other:?}"),
     }
 }
+
+include!("cases/registry_additional_cases.rs");

@@ -1,5 +1,4 @@
-//! T4.1 — linear walk over the frozen checkpoint definition (Node parity:
-//! engine-linear.test.ts).
+//! Linear walk over the frozen checkpoint definition.
 
 use std::sync::{Arc, Mutex};
 

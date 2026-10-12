@@ -11,7 +11,6 @@
 //! (`GithubCredentialConnect.tsx`) — it never touches GitHub.
 
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::Router;
 use axum::body::Bytes;
@@ -20,7 +19,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::{get, post};
 use mainframe_automations::AutomationsEngine;
-use mainframe_automations::github_device::{
+use mainframe_github::github_device::{
     DeviceFlowError, DeviceStart, GithubDeviceFlow, PollOutcome,
 };
 use serde::Deserialize;
@@ -29,7 +28,7 @@ use serde_json::json;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
 use crate::routes::automations::{engine, unavailable};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const GITHUB_CREDENTIAL_LABEL: &str = "github";
 
@@ -111,13 +110,11 @@ async fn poll_and_respond(
                 .await
             {
                 Ok(()) => ok(json!({ "status": "connected" })),
-                Err(err) => {
-                    tracing::error!(error = %err, "failed to persist the GitHub device-flow token");
-                    fail(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "failed to save the GitHub connection",
-                    )
-                }
+                Err(err) => crate::respond::fail_internal(
+                    "failed to persist the GitHub device-flow token",
+                    &err,
+                    "failed to save the GitHub connection",
+                ),
             }
         }
         Ok(PollOutcome::Pending) => ok(json!({ "status": "pending" })),
@@ -134,10 +131,7 @@ async fn poll_and_respond(
 /// Wall-clock ms this many seconds from now, for a GitHub-App token's
 /// `expires_at` — GitHub reports expiry as a duration, not an instant.
 fn epoch_ms_after(seconds: u64) -> i64 {
-    let now_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
+    let now_ms = mainframe_types::time::now_ms();
     now_ms + seconds as i64 * 1000
 }
 

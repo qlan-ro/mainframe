@@ -1,12 +1,12 @@
-//! Ported from `src/server/routes/tags.ts` — tag CRUD + per-chat tag assignment.
+//! Tag CRUD and per-chat tag assignment.
 //!
-//! `TagColor` is the shared enum (`z.enum(TAG_PALETTE)` → serde parse; an
-//! out-of-palette color fails the body parse → 400). Mutating handlers wrap the
-//! repo call and surface any error as a 400 with the verbatim message (the TS
-//! `try/catch → String(err.message)`); the read handlers let an error fall
-//! through to the opaque 500 (the TS un-wrapped path). DELETE deviates from the
-//! rest of the API on purpose: it ends 204 with NO body, not the `{success}`
-//! envelope.
+//! `TagColor` is the shared palette enum (an out-of-palette color fails the body
+//! parse → 400). Mutating handlers answer a rejected name with a 400 and a
+//! missing tag with a 404, both with the verbatim message; any other store
+//! failure, like every read failure, is the opaque 500. DELETE deviates from the
+//! rest of the API on purpose: it ends
+//! 204 with NO body, not the `{success}` envelope (wire contract:
+//! `packages/ui/src/lib/api/tags.ts` sends it through `requestNoContent`).
 
 use std::sync::Arc;
 
@@ -20,9 +20,10 @@ use mainframe_types::tags::TagColor;
 use serde::Deserialize;
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok};
+use crate::respond::fail_or_internal;
+use crate::respond::{ApiError, fail, ok};
+use crate::routes::body::parse_body;
 use crate::routes::chat_discard::refuse_if_temporary;
-use crate::routes::projects::parse_body;
 
 #[derive(Deserialize)]
 struct CreateBody {
@@ -41,12 +42,8 @@ struct SetChatTagsBody {
     tags: Vec<String>,
 }
 
-fn bad_request(err: &mainframe_db::DbError) -> Response {
-    fail(StatusCode::BAD_REQUEST, err.to_string())
-}
-
 async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
-    match ctx.db.call(|db| db.tags.list()).await {
+    match ctx.core.db.call(|db| db.tags.list()).await {
         Ok(tags) => ok(tags),
         Err(err) => crate::async_err::internal_error("list tags", &err),
     }
@@ -57,9 +54,14 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
     let CreateBody { name, color } = parsed;
-    match ctx.db.call(move |db| db.tags.upsert(&name, color)).await {
+    match ctx
+        .core
+        .db
+        .call(move |db| db.tags.upsert(&name, color))
+        .await
+    {
         Ok(tag) => (StatusCode::CREATED, ok(tag)).into_response(),
-        Err(err) => bad_request(&err),
+        Err(err) => fail_or_internal("create tag", &err),
     }
 }
 
@@ -72,7 +74,7 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
     }
 
     let lookup = name.clone();
-    match ctx.db.call(move |db| db.tags.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.tags.get(&lookup)).await {
         Ok(Some(_)) => {}
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Tag not found"),
         Err(err) => return crate::async_err::internal_error("get tag", &err),
@@ -80,6 +82,7 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
 
     let PatchBody { rename, color } = parsed;
     let result = ctx
+        .core
         .db
         .call(move |db| {
             if let Some(ref new_name) = rename {
@@ -94,25 +97,30 @@ async fn update(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>, body: 
         .await;
     match result {
         Ok(tag) => ok(tag),
-        Err(err) => bad_request(&err),
+        Err(err) => fail_or_internal("update tag", &err),
     }
 }
 
 async fn remove(State(ctx): State<Arc<AppCtx>>, Path(name): Path<String>) -> Response {
     let lookup = name.clone();
-    match ctx.db.call(move |db| db.tags.get(&lookup)).await {
+    match ctx.core.db.call(move |db| db.tags.get(&lookup)).await {
         Ok(Some(_)) => {}
         Ok(None) => return fail(StatusCode::NOT_FOUND, "Tag not found"),
         Err(err) => return crate::async_err::internal_error("get tag", &err),
     }
-    match ctx.db.call(move |db| db.tags.remove(&name)).await {
+    match ctx.core.db.call(move |db| db.tags.remove(&name)).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => crate::async_err::internal_error("remove tag", &err),
     }
 }
 
 async fn list_chat_tags(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    match ctx.db.call(move |db| db.chat_tags.list_for_chat(&id)).await {
+    match ctx
+        .core
+        .db
+        .call(move |db| db.chat_tags.list_for_chat(&id))
+        .await
+    {
         Ok(tags) => ok(tags),
         Err(err) => crate::async_err::internal_error("list chat tags", &err),
     }
@@ -122,22 +130,17 @@ async fn set_chat_tags(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
     body: Bytes,
-) -> Response {
+) -> Result<Response, ApiError> {
     let Some(parsed): Option<SetChatTagsBody> = parse_body(&body) else {
-        return fail(StatusCode::BAD_REQUEST, "Invalid request body");
+        return Err(ApiError::BadRequest("Invalid request body".into()));
     };
-    let lookup = id.clone();
-    match ctx.db.call(move |db| db.chats.get(&lookup)).await {
-        Ok(Some(chat)) => {
-            if let Some(resp) = refuse_if_temporary(&chat, "tag") {
-                return resp;
-            }
-        }
-        Ok(None) => return fail(StatusCode::NOT_FOUND, "Chat not found"),
-        Err(err) => return crate::async_err::internal_error("get chat", &err),
+    let chat = ctx.require_chat(&id).await?;
+    if let Some(response) = refuse_if_temporary(&chat, "tag") {
+        return Ok(response);
     }
     let tags = parsed.tags;
     let result = ctx
+        .core
         .db
         .call(move |db| {
             db.chat_tags.set_for_chat(&id, &tags, &db.tags)?;
@@ -145,10 +148,10 @@ async fn set_chat_tags(
         })
         .await;
     match result {
-        // ctx.chats?.syncChatTags is an optional Phase-4/5 ChatManager hook — a
-        // no-op when the manager is absent, so it is intentionally omitted here.
-        Ok(persisted) => ok(persisted),
-        Err(err) => bad_request(&err),
+        // `ChatManager::sync_chat_tags` (mirrors the tags onto the cached active
+        // chat) is not called here.
+        Ok(persisted) => Ok(ok(persisted)),
+        Err(err) => Ok(fail_or_internal("set chat tags", &err)),
     }
 }
 
@@ -164,24 +167,17 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 #[cfg(test)]
 mod tests {
-    use axum::body::to_bytes;
 
     use super::*;
     use crate::ctx::AppCtx;
 
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        (
-            status,
-            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
-        )
-    }
+    use crate::test_support::read_json as read;
 
     #[tokio::test]
     async fn set_chat_tags_refuses_a_temporary_chat_409() {
         let ctx = AppCtx::test_ctx();
         let chat_id = ctx
+            .core
             .db
             .call(|db| {
                 let project = db.projects.create("/tmp/tags-temp", None)?;
@@ -203,20 +199,8 @@ mod tests {
             axum::body::Bytes::from(r#"{"tags":["feature"]}"#),
         )
         .await;
-        let (status, body) = read(resp).await;
+        let (status, body) = read(resp).await.unwrap();
         assert_eq!(status, StatusCode::CONFLICT);
         assert_eq!(body["error"], "cannot tag a temporary chat");
     }
 }
-
-// PORT STATUS: src/server/routes/tags.ts (6 endpoints, 98 lines)
-// confidence: high
-// todos: 0
-// notes: z.enum(TAG_PALETTE) → Option<TagColor> serde parse (out-of-palette →
-// body-parse fail → 400). PatchBody's `.refine(rename||color)` → explicit
-// both-None → 400 "rename or color required". Mutating handlers map DbError →
-// 400 with the verbatim message (TS try/catch → String(err.message), which also
-// carries the validate-tag-name reserved/short strings); read handlers → opaque
-// 500. rename+setColor+get run in ONE db.call so the read-back is atomic on the
-// DB thread. DELETE ends 204 with an empty body (the pinned deviation). The
-// optional ctx.chats.syncChatTags hook is a Phase-4/5 no-op and is omitted.

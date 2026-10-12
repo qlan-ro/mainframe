@@ -1,12 +1,14 @@
-//! HTTP integration tests — translated from `middleware/__tests__/auth.test.ts`
-//! (via reqwest against a real spawned app) plus `/health` shape and the CORS
-//! contract. Auth is exercised through the mounted routers: an authenticated but
-//! unmatched path returns `404` (auth passed), a rejected one returns `401`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! HTTP integration tests (via reqwest against a real spawned app) for the auth
+//! middleware, the `/health` shape, and the CORS contract. Auth is exercised
+//! through the mounted routers: an authenticated but unmatched path returns
+//! `404` (auth passed), a rejected one returns `401`.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
-
-use std::time::Duration;
 
 use reqwest::{Method, StatusCode};
 use support::spawn_test_server;
@@ -27,7 +29,7 @@ async fn health_returns_ok_shape() {
         .unwrap();
     assert_eq!(body["status"], "ok");
     assert_eq!(body["version"], "0.0.0-test");
-    // Main catch-up (#442): the health body identifies the port's owner pid.
+    // The health body identifies the port's owner pid.
     assert!(body["pid"].as_u64().is_some_and(|p| p > 0));
     assert!(body["tunnelUrl"].is_null());
     let ts = body["timestamp"].as_str().unwrap();
@@ -80,8 +82,8 @@ async fn rejects_non_localhost_without_token() {
 async fn rejects_forged_leftmost_loopback_hop_through_tunnel() {
     // Tunnel attack: cloudflared runs on loopback and appends the real client to
     // `X-Forwarded-For`. A forged leftmost `127.0.0.1` must NOT be treated as a
-    // loopback bypass — Express `trust proxy = 'loopback'` (proxy-addr) resolves
-    // the appended untrusted hop, so a tokenless request is rejected with 401.
+    // loopback bypass — the trust-proxy=loopback rule (proxy-addr) resolves the
+    // appended untrusted hop, so a tokenless request is rejected with 401.
     let server = spawn_test_server(Some(SECRET.to_string())).await;
     let status = reqwest::Client::new()
         .get(server.http_url("/api/auth/devices"))
@@ -189,6 +191,7 @@ async fn rejects_token_with_stale_epoch() {
     let stale_token = server.register_device_token(SECRET, "mobile-1").await;
     server
         .ctx
+        .core
         .db
         .call(|db| db.devices.increment_auth_epoch("mobile-1"))
         .await
@@ -260,7 +263,7 @@ async fn echoes_localhost_origin_but_not_foreign_origin() {
         "nosniff"
     );
 
-    // Main catch-up (#411): the packaged-Tauri custom-scheme origin is echoed.
+    // The packaged-Tauri custom-scheme origin is echoed.
     let tauri = client
         .get(server.http_url("/health"))
         .header("Origin", "tauri://localhost")
@@ -272,8 +275,3 @@ async fn echoes_localhost_origin_but_not_foreign_origin() {
         "tauri://localhost"
     );
 }
-
-// A short delay is baked into spawn_test_server; expose the constant so the
-// intent is obvious if a reader wonders why we don't poll for readiness.
-#[allow(dead_code)]
-const _READY_HINT: Duration = Duration::from_millis(20);

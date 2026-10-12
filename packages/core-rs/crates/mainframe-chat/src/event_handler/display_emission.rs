@@ -4,14 +4,14 @@ use super::*;
 /// sink: advance the chat's display projection and hand the resulting delta
 /// to the chat-surface seam (the ACP facade's per-connection `SessionStream`
 /// owns all diffing). Holds the `MessageCache` guard across `notify` (same
-/// as before todo #376): emissions are serialized and the hub handles each
+/// as before ): emissions are serialized and the hub handles each
 /// synchronously.
-pub(super) fn emit_display_for<D: EventHandlerDeps>(
+pub(super) fn emit_display_for(
     chat_id: &str,
     messages: &Arc<Mutex<MessageCache>>,
     partial_overlays: &PartialOverlays,
     categories: Option<&ToolCategories>,
-    deps: &D,
+    deps: &dyn ChatManagerDeps,
     surface: Option<&Arc<dyn ChatSurface>>,
 ) {
     // The in-flight partial content projects as a synthetic tail message: it
@@ -19,9 +19,9 @@ pub(super) fn emit_display_for<D: EventHandlerDeps>(
     // message id the completed message will keep), so the surface streams
     // the growing block instead of waiting for its completion.
     let overlay = partial_overlays.message_for(chat_id);
-    let mut msgs = messages.lock().unwrap_or_else(|e| e.into_inner());
+    let mut msgs = messages.lock_recover();
     let delta = msgs.project_display(chat_id, overlay.as_ref(), categories, || {
-        deps.display_projector()
+        deps.display_projector(chat_id)
     });
     // The streaming rule reads only the current last container (ordinal
     // `len - 1`), via the snapshot's cheap `with_mut` peek — never a full

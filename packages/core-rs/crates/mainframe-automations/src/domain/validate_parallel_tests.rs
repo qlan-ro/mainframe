@@ -1,7 +1,7 @@
-//! Phase 4b validation: `parallel`'s branch-count bounds, its interaction
+//! Parallel-block validation: `parallel`'s branch-count bounds, its interaction
 //! with `break`, and the nested fan-out cap counting a `parallel`'s branch
 //! count the same way it already counts a concurrent repeat's factor. Split
-//! out as its own seam, mirroring `validate_concurrency_tests.rs` (Phase 4a).
+//! out as its own seam, like `validate_concurrency_tests.rs`.
 
 use serde_json::{Value, json};
 

@@ -1,25 +1,24 @@
-//! Ported from `packages/core/src/chat/context-tracker.ts`.
-
+use mainframe_types::seam_error::SeamError;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
 use mainframe_adapter_api::AdapterRegistry;
 use mainframe_adapter_api::{AdapterSession, BoxFuture};
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::{ChatMessage, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::{
     ContextFile, MentionKind, MentionSource, SessionAttachment, SessionContext, SessionMention,
     SkillFileEntry,
 };
+use mainframe_types::time::now_iso8601;
 
 /// The `db.chats.*` surface `context-tracker` reads (narrow slice of `DatabaseManager`).
 pub trait ContextDb: Send + Sync {
-    fn add_mention(&self, chat_id: &str, mention: &SessionMention) -> bool;
-    fn get_mentions(&self, chat_id: &str) -> Vec<SessionMention>;
-    fn get_plan_files(&self, chat_id: &str) -> Vec<String>;
-    fn get_skill_files(&self, chat_id: &str) -> Vec<SkillFileEntry>;
+    fn add_mention(&self, chat_id: &str, mention: &SessionMention) -> Result<bool, SeamError>;
+    fn get_mentions(&self, chat_id: &str) -> Result<Vec<SessionMention>, SeamError>;
+    fn get_plan_files(&self, chat_id: &str) -> Result<Vec<String>, SeamError>;
+    fn get_skill_files(&self, chat_id: &str) -> Result<Vec<SkillFileEntry>, SeamError>;
 }
 
 /// `attachmentStore?.list(chatId)`.
@@ -27,12 +26,16 @@ pub trait AttachmentLister: Send + Sync {
     fn list<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Vec<SessionAttachment>>;
 }
 
-pub fn extract_mentions_from_text(chat_id: &str, text: Option<&str>, db: &dyn ContextDb) -> bool {
+pub fn extract_mentions_from_text(
+    chat_id: &str,
+    text: Option<&str>,
+    db: &dyn ContextDb,
+) -> Result<bool, SeamError> {
     let Some(text) = text else {
-        return false;
+        return Ok(false);
     };
     if text.is_empty() {
-        return false;
+        return Ok(false);
     }
     let chars: Vec<char> = text.chars().collect();
     let mut changed = false;
@@ -59,17 +62,16 @@ pub fn extract_mentions_from_text(chat_id: &str, text: Option<&str>, db: &dyn Co
                 path: Some(cleaned),
                 timestamp: now_iso8601(),
             };
-            if db.add_mention(chat_id, &mention) {
+            if db.add_mention(chat_id, &mention)? {
                 changed = true;
             }
         } else {
             i += 1;
         }
     }
-    changed
+    Ok(changed)
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn get_session_context(
     chat_id: &str,
     project_path: &str,
@@ -78,19 +80,8 @@ pub async fn get_session_context(
     session: Option<&Arc<dyn AdapterSession>>,
     attachment_store: Option<&dyn AttachmentLister>,
     adapter_id: Option<&str>,
-) -> SessionContext {
-    let mut global_files: Vec<ContextFile> = Vec::new();
-    let mut project_files: Vec<ContextFile> = Vec::new();
-    if let Some(session) = session {
-        let files = session.get_context_files();
-        global_files = files.global;
-        project_files = files.project;
-    } else if let Some(adapter) = adapter_id.and_then(|id| adapters.get(id))
-        && let Some(files) = adapter.get_context_files(project_path)
-    {
-        global_files = files.global;
-        project_files = files.project;
-    }
+) -> Result<SessionContext, SeamError> {
+    let (global_files, project_files) = context_files(project_path, adapters, session, adapter_id);
 
     let to_relative = |p: &str| -> String {
         if Path::new(p).is_absolute() {
@@ -105,7 +96,7 @@ pub async fn get_session_context(
         .unwrap_or_default();
     let deduped_files = dedupe_context_files(global_files, project_files, project_path, &home_dir);
 
-    let raw_mentions = db.get_mentions(chat_id);
+    let raw_mentions = db.get_mentions(chat_id)?;
     let mentions = raw_mentions
         .into_iter()
         .map(|mut m| {
@@ -118,20 +109,20 @@ pub async fn get_session_context(
         None => Vec::new(),
     };
     let modified_files = db
-        .get_plan_files(chat_id)
+        .get_plan_files(chat_id)?
         .iter()
         .map(|p| to_relative(p))
         .collect();
-    let skill_files = dedupe_skill_files(db.get_skill_files(chat_id), |p| Path::new(p).exists());
+    let skill_files = dedupe_skill_files(db.get_skill_files(chat_id)?, |p| Path::new(p).exists());
 
-    SessionContext {
+    Ok(SessionContext {
         global_files: deduped_files.global,
         project_files: deduped_files.project,
         mentions,
         attachments,
         modified_files,
         skill_files,
-    }
+    })
 }
 
 /// Drop repeated skill entries. The same skill can be persisted under two paths
@@ -145,7 +136,7 @@ pub async fn get_session_context(
 /// keep every entry whose file exists (distinct real skills survive), and drop
 /// the non-existent fallback stubs. When nothing in the group exists, keep the
 /// first so the skill name still surfaces. `path_exists` is injectable for tests.
-pub fn dedupe_skill_files(
+pub(crate) fn dedupe_skill_files(
     skills: Vec<SkillFileEntry>,
     path_exists: impl Fn(&str) -> bool,
 ) -> Vec<SkillFileEntry> {
@@ -203,7 +194,7 @@ pub struct DedupedContextFiles {
 /// to the same physical file as a global one (e.g. a session opened at the home
 /// dir, where .claude/CLAUDE.md IS the global CLAUDE.md) so it isn't listed twice
 /// (#222). Global entries are kept as canonical.
-pub fn dedupe_context_files(
+pub(crate) fn dedupe_context_files(
     global: Vec<ContextFile>,
     project: Vec<ContextFile>,
     project_path: &str,
@@ -257,7 +248,7 @@ fn join_path(base: &str, rest: &str) -> String {
     )
 }
 
-pub fn extract_latest_plan_file_from_messages(messages: &[ChatMessage]) -> Option<String> {
+pub(crate) fn extract_latest_plan_file_from_messages(messages: &[ChatMessage]) -> Option<String> {
     for msg in messages.iter().rev() {
         for block in msg.content.iter().rev() {
             let text = match block {
@@ -279,7 +270,7 @@ pub fn extract_latest_plan_file_from_messages(messages: &[ChatMessage]) -> Optio
     None
 }
 
-pub fn extract_plan_file_path_from_text(text: &str) -> Option<String> {
+pub(crate) fn extract_plan_file_path_from_text(text: &str) -> Option<String> {
     if let Some(saved) = match_saved_plan(text) {
         return Some(saved);
     }
@@ -363,297 +354,8 @@ fn path_relative(from: &str, to: &str) -> String {
     out.join("/")
 }
 
+mod files;
+use files::context_files;
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use mainframe_adapter_api::ContextFiles;
-    use mainframe_types::context::ContextFileSource;
-
-    fn ctx(path: &str, content: &str, source: ContextFileSource) -> ContextFile {
-        ContextFile {
-            path: path.to_string(),
-            content: content.to_string(),
-            source,
-        }
-    }
-    fn skill(path: &str, display_name: &str) -> SkillFileEntry {
-        SkillFileEntry {
-            path: path.to_string(),
-            display_name: display_name.to_string(),
-        }
-    }
-
-    const PLUGIN: &str = "/home/me/.claude/plugins/cache/mkt/sp/1.0/skills/tdd/SKILL.md";
-    const FALLBACK: &str = "/home/me/.claude/skills/tdd/SKILL.md";
-
-    /// A `ContextDb` returning fixed skill files and empty mentions/plan files.
-    struct CtxDb {
-        skills: Vec<SkillFileEntry>,
-    }
-    impl ContextDb for CtxDb {
-        fn add_mention(&self, _chat_id: &str, _mention: &SessionMention) -> bool {
-            false
-        }
-        fn get_mentions(&self, _chat_id: &str) -> Vec<SessionMention> {
-            Vec::new()
-        }
-        fn get_plan_files(&self, _chat_id: &str) -> Vec<String> {
-            Vec::new()
-        }
-        fn get_skill_files(&self, _chat_id: &str) -> Vec<SkillFileEntry> {
-            self.skills.clone()
-        }
-    }
-
-    /// A minimal `Adapter` double whose only meaningful method is
-    /// `get_context_files` (returns the fixture); everything else is inert.
-    struct CtxAdapter {
-        context: mainframe_adapter_api::ContextFiles,
-    }
-    impl mainframe_adapter_api::Adapter for CtxAdapter {
-        fn id(&self) -> &str {
-            "claude"
-        }
-        fn name(&self) -> &str {
-            "Claude"
-        }
-        fn capabilities(&self) -> mainframe_types::adapter::AdapterCapabilities {
-            mainframe_types::adapter::AdapterCapabilities {
-                plan_mode: false,
-                auto_mode: false,
-                no_persistence: false,
-                fork: false,
-            }
-        }
-        fn is_installed(
-            &self,
-        ) -> mainframe_adapter_api::BoxFuture<'_, Result<bool, mainframe_adapter_api::AdapterError>>
-        {
-            Box::pin(async { Ok(true) })
-        }
-        fn get_version(
-            &self,
-        ) -> mainframe_adapter_api::BoxFuture<
-            '_,
-            Result<Option<String>, mainframe_adapter_api::AdapterError>,
-        > {
-            Box::pin(async { Ok(None) })
-        }
-        fn list_models(
-            &self,
-        ) -> mainframe_adapter_api::BoxFuture<
-            '_,
-            Result<
-                Vec<mainframe_types::adapter::AdapterModel>,
-                mainframe_adapter_api::AdapterError,
-            >,
-        > {
-            Box::pin(async { Ok(Vec::new()) })
-        }
-        fn create_session(
-            &self,
-            _options: mainframe_types::adapter::SessionOptions,
-        ) -> Arc<dyn AdapterSession> {
-            Arc::new(crate::test_support::FakeSession::default())
-        }
-        fn kill_all(&self) {}
-        fn get_context_files(
-            &self,
-            _project_path: &str,
-        ) -> Option<mainframe_adapter_api::ContextFiles> {
-            Some(self.context.clone())
-        }
-    }
-
-    #[test]
-    fn dedupe_skill_files_drops_fallback_stub_when_real_path_exists() {
-        let skills = vec![
-            skill(PLUGIN, "tdd"),
-            skill(FALLBACK, "tdd"),
-            skill("/home/me/.claude/skills/verify/SKILL.md", "verify"),
-        ];
-        let exists = |p: &str| p == PLUGIN || p.ends_with("verify/SKILL.md");
-        assert_eq!(
-            dedupe_skill_files(skills, exists),
-            vec![
-                skill(PLUGIN, "tdd"),
-                skill("/home/me/.claude/skills/verify/SKILL.md", "verify"),
-            ]
-        );
-    }
-
-    #[test]
-    fn dedupe_skill_files_keeps_real_path_even_when_fallback_listed_first() {
-        let skills = vec![skill(FALLBACK, "tdd"), skill(PLUGIN, "tdd")];
-        let exists = |p: &str| p == PLUGIN;
-        assert_eq!(
-            dedupe_skill_files(skills, exists),
-            vec![skill(PLUGIN, "tdd")]
-        );
-    }
-
-    #[test]
-    fn dedupe_skill_files_keeps_two_distinct_real_skills_sharing_a_leaf_name() {
-        let personal = "/home/me/.claude/skills/tdd/SKILL.md";
-        let skills = vec![skill(personal, "tdd"), skill(PLUGIN, "tdd")];
-        assert_eq!(
-            dedupe_skill_files(skills, |_p| true),
-            vec![skill(personal, "tdd"), skill(PLUGIN, "tdd")]
-        );
-    }
-
-    #[test]
-    fn dedupe_skill_files_surfaces_name_once_when_no_candidate_exists() {
-        let skills = vec![skill(PLUGIN, "tdd"), skill(FALLBACK, "tdd")];
-        assert_eq!(
-            dedupe_skill_files(skills, |_p| false),
-            vec![skill(PLUGIN, "tdd")]
-        );
-    }
-
-    #[test]
-    fn dedupe_skill_files_removes_exact_path_repeats() {
-        let skills = vec![skill(PLUGIN, "tdd"), skill(PLUGIN, "tdd")];
-        assert_eq!(
-            dedupe_skill_files(skills, |_p| true),
-            vec![skill(PLUGIN, "tdd")]
-        );
-    }
-
-    #[test]
-    fn dedupe_context_files_drops_project_file_pointing_at_a_global_one() {
-        let home = "/home/me";
-        let global = vec![ctx("~/.claude/CLAUDE.md", "g", ContextFileSource::Global)];
-        let project = vec![ctx(".claude/CLAUDE.md", "g", ContextFileSource::Project)];
-
-        let result = dedupe_context_files(global.clone(), project, home, home);
-
-        assert_eq!(result.global, global);
-        assert_eq!(result.project, Vec::<ContextFile>::new());
-    }
-
-    #[test]
-    fn dedupe_context_files_keeps_distinct_and_removes_within_list_repeats() {
-        let home = "/home/me";
-        let project = vec![
-            ctx("CLAUDE.md", "a", ContextFileSource::Project),
-            ctx("CLAUDE.md", "a", ContextFileSource::Project),
-            ctx(".claude/AGENTS.md", "b", ContextFileSource::Project),
-        ];
-
-        let result = dedupe_context_files(Vec::new(), project, "/proj", home);
-
-        assert_eq!(
-            result.project,
-            vec![
-                ctx("CLAUDE.md", "a", ContextFileSource::Project),
-                ctx(".claude/AGENTS.md", "b", ContextFileSource::Project),
-            ]
-        );
-    }
-
-    #[tokio::test]
-    async fn get_session_context_dedupes_skills_and_drops_project_dupes() {
-        // Skill paths under a root that cannot exist, so the on-disk dedup is
-        // deterministic (neither resolves → the first is kept).
-        let skill_root = "/mf-nonexistent-test-root/.claude";
-        let skills = vec![
-            skill(
-                &format!("{skill_root}/plugins/cache/mkt/sp/1.0/skills/tdd/SKILL.md"),
-                "tdd",
-            ),
-            skill(&format!("{skill_root}/skills/tdd/SKILL.md"), "tdd"),
-        ];
-        let home = dirs::home_dir()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "/home/me".to_string());
-        let context = ContextFiles {
-            global: vec![ctx("~/.claude/CLAUDE.md", "g", ContextFileSource::Global)],
-            project: vec![ctx(".claude/CLAUDE.md", "g", ContextFileSource::Project)],
-        };
-
-        let db = CtxDb { skills };
-        let adapters = AdapterRegistry::new();
-        adapters.register(Arc::new(CtxAdapter { context }));
-
-        let out = get_session_context(
-            "chat-1",
-            &home, // project opened at home → its .claude/CLAUDE.md is the global file
-            &db,
-            &adapters,
-            None,
-            None,
-            Some("claude"),
-        )
-        .await;
-
-        assert_eq!(
-            out.skill_files,
-            vec![skill(
-                &format!("{skill_root}/plugins/cache/mkt/sp/1.0/skills/tdd/SKILL.md"),
-                "tdd"
-            )]
-        );
-        assert_eq!(out.global_files.len(), 1);
-        assert_eq!(out.project_files, Vec::<ContextFile>::new());
-    }
-
-    #[test]
-    fn saved_plan_path_wins() {
-        let text = "Your plan has been saved to: /Users/x/proj/.plans/plan.md and more";
-        assert_eq!(
-            extract_plan_file_path_from_text(text),
-            Some("/Users/x/proj/.plans/plan.md".to_string())
-        );
-    }
-
-    #[test]
-    fn generic_backtick_wrapped_path() {
-        let text = "see `/tmp/notes.md` now";
-        assert_eq!(
-            extract_plan_file_path_from_text(text),
-            Some("/tmp/notes.md".to_string())
-        );
-    }
-
-    #[test]
-    fn no_match_returns_none() {
-        assert_eq!(extract_plan_file_path_from_text("nothing here"), None);
-    }
-
-    #[test]
-    fn relative_below_project() {
-        assert_eq!(path_relative("/a/b", "/a/b/c/d.md"), "c/d.md");
-        assert_eq!(path_relative("/a/b/c", "/a/x/y.md"), "../../x/y.md");
-    }
-
-    #[test]
-    fn clean_reference_strips_tag_and_punctuation() {
-        assert_eq!(clean_reference("src/foo.ts),"), "src/foo.ts");
-        assert_eq!(
-            clean_reference("src/foo.ts</command-message>"),
-            "src/foo.ts"
-        );
-    }
-}
-
-// PORT STATUS: src/chat/context-tracker.ts (199 lines)
-// confidence: medium
-// todos: 0
-// notes: Main catch-up (#432): dedupeContextFiles / toAbsoluteContextPath (`~`/rel
-// notes: resolution) + dedupeSkillFiles (path dedup then on-disk existence tie-break
-// notes: within a display-name group) + get_session_context wires both; SessionContext
-// notes: shape unchanged. `path.join` → a minimal POSIX join_path (single-segment
-// notes: relative inputs only, as the callers guarantee). context-tracker.test.ts
-// notes: ported (dedupeSkillFiles ×5, dedupeContextFiles ×2, getSessionContext ×1 via
-// notes: an in-crate ContextDb + Adapter double, since chat tests use trait fakes not
-// notes: mainframe-db).
-// notes: 4 free functions ported. The four JS regexes are hand-rolled (no regex
-// notes: crate in the allowlist): `@(\S+)` mention scan, the two plan-path patterns
-// notes: (saved = last `.md` in the leading run; generic = a `/…​.md` run bounded by
-// notes: start/space/backtick), and the `</…>`+trailing-punct ref cleanup — medium
-// notes: confidence pending a fixture. `path.relative` → a POSIX `path_relative`
-// notes: (absolute inputs only, as the callers guarantee). `db`/`attachmentStore`
-// notes: are narrow injected traits; `adapters` uses the concrete AdapterRegistry
-// notes: (get_context_files is on the Adapter trait). No TS test file; added sanity
-// notes: tests for the hand-rolled parsers.
+#[path = "context_tracker_tests.rs"]
+mod tests;

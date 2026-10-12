@@ -1,21 +1,18 @@
-//! Ported from `packages/core/src/db/tags.ts`.
-
 use std::rc::Rc;
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::tags::{Tag, TagColor};
+use mainframe_types::time::now_iso8601;
 use rusqlite::Connection;
 
-use crate::DbError;
 use crate::tag_color::hash_tag_color;
 use crate::validate_tag_name::{ValidateResult, validate_tag_name};
+use crate::{
+    DbError,
+    sql_types::{FromRow, SqlEnum, query_all, query_opt},
+};
 
 pub struct TagsRepository {
     db: Rc<Connection>,
-}
-
-fn parse_tag_color(s: String) -> Result<TagColor, DbError> {
-    Ok(serde_json::from_value(serde_json::Value::String(s))?)
 }
 
 impl TagsRepository {
@@ -28,42 +25,26 @@ impl TagsRepository {
     }
 
     pub fn list(&self) -> Result<Vec<Tag>, DbError> {
-        let mut stmt = self
-            .db
-            .prepare("SELECT name, color, created_at as createdAt FROM tags ORDER BY name")?;
-        let mut rows = stmt.query([])?;
-        let mut out = Vec::new();
-        while let Some(row) = rows.next()? {
-            out.push(Tag {
-                name: row.get("name")?,
-                color: parse_tag_color(row.get("color")?)?,
-                created_at: row.get("createdAt")?,
-            });
-        }
-        Ok(out)
+        query_all(
+            &self.db,
+            "SELECT name, color, created_at FROM tags ORDER BY name",
+            [],
+        )
     }
 
     pub fn get(&self, name: &str) -> Result<Option<Tag>, DbError> {
-        let normalized = self.normalize(name);
-        let mut stmt = self
-            .db
-            .prepare("SELECT name, color, created_at as createdAt FROM tags WHERE name = ?")?;
-        let mut rows = stmt.query([normalized])?;
-        match rows.next()? {
-            Some(row) => Ok(Some(Tag {
-                name: row.get("name")?,
-                color: parse_tag_color(row.get("color")?)?,
-                created_at: row.get("createdAt")?,
-            })),
-            None => Ok(None),
-        }
+        query_opt(
+            &self.db,
+            "SELECT name, color, created_at FROM tags WHERE name = ?",
+            [self.normalize(name)],
+        )
     }
 
     /// Idempotent upsert. Returns the existing row if present, else creates with auto color.
     pub fn upsert(&self, raw_name: &str, color: Option<TagColor>) -> Result<Tag, DbError> {
         let normalized = match validate_tag_name(raw_name) {
             ValidateResult::Ok { normalized } => normalized,
-            ValidateResult::Err { error } => return Err(DbError::Message(error)),
+            ValidateResult::Err { error } => return Err(DbError::Invalid(error)),
         };
         if let Some(existing) = self.get(&normalized)? {
             return Ok(existing);
@@ -88,7 +69,10 @@ impl TagsRepository {
             rusqlite::params![crate::enum_to_db_string(&color)?, normalized],
         )?;
         if changes == 0 {
-            return Err(DbError::Message(format!("Tag not found: {normalized}")));
+            return Err(DbError::NotFound {
+                entity: "Tag",
+                id: normalized,
+            });
         }
         Ok(())
     }
@@ -98,7 +82,7 @@ impl TagsRepository {
         let from = self.normalize(from_raw);
         let to = match validate_tag_name(to_raw) {
             ValidateResult::Ok { normalized } => normalized,
-            ValidateResult::Err { error } => return Err(DbError::Message(error)),
+            ValidateResult::Err { error } => return Err(DbError::Invalid(error)),
         };
         if from == to {
             return Ok(());
@@ -130,21 +114,37 @@ impl TagsRepository {
         tx.execute("DELETE FROM chat_tags WHERE tag = ?", [&normalized])?;
         let changes = tx.execute("DELETE FROM tags WHERE name = ?", [&normalized])?;
         if changes == 0 {
-            return Err(DbError::Message(format!("Tag not found: {normalized}")));
+            return Err(DbError::NotFound {
+                entity: "Tag",
+                id: normalized,
+            });
         }
         tx.commit()?;
         Ok(())
     }
 }
 
-// PORT STATUS: src/db/tags.ts (80 lines)
-// confidence: high
-// notes: validate_tag_name / hash_tag_color are imported from the sibling
-// modules relocated into this crate (§2.15). `throw new Error(v.error)` /
-// "Tag not found: X" become DbError::Message with byte-identical strings (the
-// ported tests assert /reserved/i and /not found/i). rename()/remove() use
-// unchecked_transaction() (Rc<Connection>); on the "Tag not found" early return
-// the tx drops → ROLLBACK, matching the TS transaction that never commits. Tag
-// color is stored as its serde string and parsed back via serde. Tests in
-// tests/tags.rs.
-// todos: 0
+impl FromRow for Tag {
+    type Error = DbError;
+
+    /// A stored colour outside the palette is logged and read as the name's
+    /// hashed palette colour (what `upsert` would have assigned), the same
+    /// warn-and-default policy as the chat and todo rows, so one bad row does
+    /// not fail every tag listing.
+    fn from_row(row: &rusqlite::Row<'_>) -> Result<Self, DbError> {
+        let name: String = row.get("name")?;
+        let raw: String = row.get("color")?;
+        let color = SqlEnum::<TagColor>::parse(raw.clone()).unwrap_or_else(|error| {
+            tracing::warn!(
+                tag = %name, raw, %error,
+                "invalid stored colour; using the name's palette colour"
+            );
+            hash_tag_color(&name)
+        });
+        Ok(Self {
+            name,
+            color,
+            created_at: row.get("created_at")?,
+        })
+    }
+}

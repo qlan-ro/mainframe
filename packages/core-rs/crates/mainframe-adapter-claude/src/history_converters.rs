@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::MessageUsage;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
+use mainframe_types::time::now_iso8601;
 use serde_json::Value;
 
 use crate::history_tool_result::{build_tool_result_blocks, js_truthy};
 
-pub fn synthesize_unknown_command_from_user_entry(
+pub(crate) fn synthesize_unknown_command_from_user_entry(
     entry: &Value,
     chat_id: &str,
 ) -> Option<Vec<ChatMessage>> {
@@ -55,7 +55,7 @@ fn match_unknown_command(t: &str) -> Option<String> {
     if name.is_empty() { None } else { Some(name) }
 }
 
-pub fn synthesize_skill_loaded_from_user_entry(
+pub(crate) fn synthesize_skill_loaded_from_user_entry(
     entry: &Value,
     chat_id: &str,
 ) -> Option<ChatMessage> {
@@ -103,7 +103,10 @@ pub fn synthesize_skill_loaded_from_user_entry(
 pub struct ExtractOpts {
     pub skip_interrupted: bool,
 }
-pub fn extract_user_content_blocks(blocks: &[Value], opts: &ExtractOpts) -> Vec<MessageContent> {
+pub(crate) fn extract_user_content_blocks(
+    blocks: &[Value],
+    opts: &ExtractOpts,
+) -> Vec<MessageContent> {
     let mut result: Vec<MessageContent> = Vec::new();
     for block in blocks {
         let btype = block.get("type").and_then(Value::as_str);

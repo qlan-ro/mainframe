@@ -1,4 +1,4 @@
-//! Ported from `src/quota/constants.ts` — the lifecycle duration/staleness knobs.
+//! Quota lifecycle durations and staleness thresholds.
 //! All values are epoch-milliseconds spans (`i64`), matching the shared type's
 //! `resetsAt`/`observedAt` unit.
 

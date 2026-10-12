@@ -1,25 +1,29 @@
-//! Ported from `packages/core/src/plugins/` — the builtin plugin registry, the
-//! capability contexts (db / attachments / ui / events / config), the manifest
-//! validator, the chat/project service surfaces, and the builtin `todos` plugin.
+//! The builtin plugin registry, the capability contexts (db / attachments / ui
+//! / events / config), the manifest validator, the chat/project service
+//! surfaces, and the builtin `todos` plugin.
 //!
-//! v1 is **builtin-only** (PORTING.md §2.9 / §5): `claude` and `codex` are their
-//! own native crates; `todos` lives here. Dynamic third-party JS plugin loading
-//! is dropped — the manifest/capability model is preserved so a WASM loader can
-//! restore it later, but no JS runtime is ported. This is the one deliberate
-//! behavior change; the `manager` load-from-disk path (`loadAll`/`loadPlugin`)
-//! is therefore replaced by `load_builtin` only.
+//! Plugins are **builtin-only**: `claude` and `codex` are their own native
+//! crates; `todos` lives here. There is no dynamic third-party plugin loading
+//! and no JS runtime — the manifest/capability model is kept so a WASM loader
+//! can add loading later, and the `manager` registers plugins through
+//! `load_builtin` only.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 
 pub mod attachment_context;
-pub mod config_context;
 pub mod context;
 pub mod db_context;
-pub mod event_bus;
 pub mod github_port;
 mod github_port_guard;
 pub mod manager;
-pub mod security;
 pub mod services;
 pub mod todos;
 pub mod todos_github;
@@ -29,10 +33,9 @@ pub mod ui_context;
 mod github_port_tests;
 
 pub use context::{
-    AdapterRegistrar, AttachmentData, AttachmentUpload, ChatService, CreateChatArgs,
-    CreateChatResult, EmitSink, NotifyOptions, PluginAttachments, PluginConfig, PluginContext,
-    PluginContextDeps, PluginDatabase, PluginEventBus, PluginHostDb, PluginUi, ProjectService,
-    build_plugin_context,
+    AttachmentData, AttachmentUpload, ChatService, CreateChatArgs, CreateChatResult, EmitSink,
+    NotifyOptions, PluginAttachments, PluginContext, PluginContextDeps, PluginDatabase,
+    PluginHostDb, PluginUi, build_plugin_context,
 };
 pub use db_context::PluginDatabaseContext;
 pub use github_port::{
@@ -42,9 +45,8 @@ pub use github_port::{
 pub use mainframe_adapter_api::BoxFuture;
 pub use manager::PluginManager;
 
-/// Fallible-operation error for the plugin layer. `Message` and
-/// `CapabilityRequired` carry verbatim human strings so the TS `throw new
-/// Error(...)` sites round-trip their exact text.
+/// Fallible-operation error for the plugin layer. Plugin routes answer every
+/// one of these with an opaque 500, so no text here is wire contract.
 #[derive(Debug, thiserror::Error)]
 pub enum PluginError {
     #[error(transparent)]
@@ -53,21 +55,33 @@ pub enum PluginError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-    /// `capabilityGuard(cap)` — thrown when a gated subsystem is used without its
-    /// manifest capability. Text matches `context.ts` verbatim.
+    /// The worker thread that owns a plugin's `data.db` could not take or
+    /// answer the request.
+    #[error("plugin database worker {0}")]
+    Worker(&'static str),
+    /// A store failure that is not one of the flattened variants above (a
+    /// dead worker, a broken invariant).
+    #[error(transparent)]
+    Db(mainframe_db::DbError),
+    /// Returned when a gated subsystem is used without its manifest
+    /// capability.
     #[error("Plugin capability '{0}' is required but not declared in manifest")]
     CapabilityRequired(String),
+    /// An attachment entity id that is not a single safe path segment.
+    #[error("Invalid entityId path segment: {0:?}")]
+    InvalidEntityId(String),
+    /// A row the plugin just wrote could not be read back.
     #[error("{0}")]
-    Message(String),
+    Invariant(&'static str),
 }
 
-// PORT STATUS: src/plugins/ (crate root barrel)
-// confidence: medium
-// todos: 1
-// notes: builtin-only per §2.9/§5 — dynamic JS load path dropped (manager keeps
-// load_builtin only). Behavioral interfaces the types crate deferred
-// (PluginContext, PluginEventBus, PluginUIContext, ChatServiceAPI, …) land here
-// as Rust traits over BoxFuture (dyn-safe, reusing mainframe-adapter-api). The
-// per-plugin SQLite runs on a dedicated actor thread (db_context) mirroring the
-// main Db actor's single-connection discipline (CONCURRENCY.tsv db-context row).
-// TODO(port): external plugin loading dropped in v1.
+impl From<mainframe_db::DbError> for PluginError {
+    fn from(error: mainframe_db::DbError) -> Self {
+        match error {
+            mainframe_db::DbError::Sqlite(error) => Self::Sqlite(error),
+            mainframe_db::DbError::Json(error) => Self::Json(error),
+            mainframe_db::DbError::Io(error) => Self::Io(error),
+            other => Self::Db(other),
+        }
+    }
+}

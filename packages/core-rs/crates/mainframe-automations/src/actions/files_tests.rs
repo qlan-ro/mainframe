@@ -1,5 +1,5 @@
-//! T6.4 — files.append / files.write / files.read: create-or-append,
-//! truncate, text/lines read, `~` expansion, contract §5 outputs.
+//! files.append / files.write / files.read: create-or-append, truncate,
+//! text/lines read, `~` expansion, contract §5 outputs.
 
 use serde_json::json;
 
@@ -134,8 +134,8 @@ fn tilde_expands_to_home() {
         expand_user_path("~/notes/log.md"),
         home.join("notes/log.md")
     );
-    // `~user` and mid-string `~` are NOT expanded (Node parity: only a
-    // leading `~` / `~/` is).
+    // `~user` and mid-string `~` are NOT expanded (only a leading `~` /
+    // `~/` is).
     assert_eq!(
         expand_user_path("/data/~backup"),
         std::path::PathBuf::from("/data/~backup")
@@ -145,7 +145,7 @@ fn tilde_expands_to_home() {
         expand_user_path("/var/log/x.txt"),
         std::path::PathBuf::from("/var/log/x.txt")
     );
-    // Relative paths resolve against the process cwd (path.resolve parity).
+    // Relative paths resolve against the process cwd.
     let cwd = std::env::current_dir().unwrap();
     assert_eq!(expand_user_path("rel/file.txt"), cwd.join("rel/file.txt"));
 }
@@ -158,7 +158,7 @@ fn manifests_match_contract() {
     assert!(!append.idempotent);
 
     // Truncating write is restart-safe: blindly re-running it converges on
-    // the same file body (Node ships idempotent: true).
+    // the same file body.
     let write = FilesWriteAction.manifest();
     assert_eq!(write.id, "files.write");
     assert!(write.outputs.is_empty());

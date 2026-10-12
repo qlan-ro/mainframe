@@ -1,6 +1,5 @@
-//! `POST /api/chats/{id}/fork` (todo #343; from-message forks per
-//! `docs/specs/2026-10-06-fork-from-message.md`). Moved out of
-//! `chat_commands.rs`, which was already over the 300-line ceiling.
+//! `POST /api/chats/{id}/fork` (from-message forks per
+//! `docs/specs/2026-10-06-fork-from-message.md`).
 //!
 //! `ChatManager::fork_chat` runs every eligibility check and maps its own
 //! failures to the Daemon contract table's statuses; this handler owns request
@@ -21,15 +20,16 @@ use serde::Deserialize;
 use mainframe_chat::chat_manager::{ForkChatError, ForkPoint};
 
 use crate::ctx::AppCtx;
+use crate::respond::status_of;
 use crate::respond::{fail, ok};
-use crate::routes::identifier::is_identifier;
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
+use mainframe_types::ids::is_safe_identifier;
 
 /// Longest `fromMessageId` accepted. Chat message ids are nanoids or vendor
 /// uuids, far below this; the cap only bounds what a client can send.
 const MAX_MESSAGE_ID_LEN: usize = 128;
 
-/// No body, `{}`, or `{"fromMessageId": null}` is #343's whole-chat fork.
+/// No body, `{}`, or `{"fromMessageId": null}` is a whole-chat fork.
 /// `deny_unknown_fields` 400s any other key instead of silently ignoring it.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -43,7 +43,7 @@ fn fork_point(body: &Bytes) -> Option<ForkPoint> {
     let parsed = parse_body::<ForkChatBody>(body)?;
     match parsed.from_message_id {
         None => Some(ForkPoint::Current),
-        Some(id) if is_identifier(&id) && id.len() <= MAX_MESSAGE_ID_LEN => {
+        Some(id) if is_safe_identifier(&id) && id.len() <= MAX_MESSAGE_ID_LEN => {
             Some(ForkPoint::BeforeMessage(id))
         }
         Some(_) => None,
@@ -57,18 +57,18 @@ async fn fork(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: Byte
     let Some(point) = fork_point(&body) else {
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "fork is a Phase-4 seam (ChatManager unavailable)");
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "fork unavailable");
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.fork_chat(&id, point).await {
         Ok(chat) => ok(chat),
         Err(ForkChatError::NotFound(_)) => fail(StatusCode::NOT_FOUND, "Not found"),
         Err(err) => {
-            let status = StatusCode::from_u16(err.status_code())
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = status_of(&err);
             if status == StatusCode::INTERNAL_SERVER_ERROR {
-                tracing::error!(chat_id = %id, %err, "fork failed");
+                return crate::respond::fail_internal(
+                    format!("fork failed chat_id={id}"),
+                    &err,
+                    err.to_string(),
+                );
             }
             fail(status, err.to_string())
         }

@@ -8,6 +8,8 @@ import type { ExecutionMode } from './settings.js';
 import type { LeafContent } from './content.js';
 import type { AgentOutboxEntry, ChatDelegation } from './orchestration.js';
 
+export type VendorSessionId = string;
+
 export interface TodoItem {
   content: string;
   status: 'pending' | 'in_progress' | 'completed';
@@ -42,7 +44,7 @@ export interface Chat {
   adapterId: string;
   projectId: string;
   title?: string;
-  claudeSessionId?: string;
+  claudeSessionId?: VendorSessionId;
   sessionFilePath?: string;
   model?: string;
   permissionMode?: ExecutionMode;

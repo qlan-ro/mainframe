@@ -1,0 +1,137 @@
+use super::*;
+use mainframe_types::adapter::EffortLevel;
+use mainframe_types::chat::ChatStatus;
+use mainframe_types::settings_kv::MemorySettings;
+
+fn chat_with(model: &str, effort: EffortLevel) -> Chat {
+    Chat {
+        id: "c".to_string(),
+        adapter_id: "claude".to_string(),
+        project_id: "p".to_string(),
+        title: None,
+        vendor_session_id: None,
+        session_file_path: None,
+        model: Some(model.to_string()),
+        permission_mode: None,
+        plan_mode: None,
+        status: ChatStatus::Active,
+        created_at: String::new(),
+        updated_at: String::new(),
+        total_cost: 0.0,
+        total_tokens_input: 0,
+        total_tokens_output: 0,
+        last_context_tokens_input: 0,
+        last_context_total_tokens: None,
+        last_context_max_tokens: None,
+        context_files: None,
+        mentions: None,
+        modified_files: None,
+        worktree_path: None,
+        branch_name: None,
+        process_state: None,
+        display_status: None,
+        is_running: None,
+        background_activity: None,
+        worktree_missing: None,
+        directory_missing: None,
+        missing_directory_path: None,
+        transcript_missing: None,
+        todos: None,
+        pinned: None,
+        tuning: mainframe_types::chat::SessionTuning {
+            effort: Some(Some(effort)),
+            fast: None,
+            ultracode: None,
+            adaptive_thinking: None,
+        },
+        detected_prs: None,
+        tags: None,
+        automation_run_id: None,
+        temporary: false,
+        no_project: false,
+        context_lost_at: None,
+        vendor_session_ephemeral: false,
+        scratch_path: None,
+        parent_chat_id: None,
+        side_chat_id: None,
+        side_chat_waiting: None,
+        orchestration: Default::default(),
+    }
+}
+
+struct TestDeps {
+    models: Vec<AdapterModel>,
+    chat: Chat,
+    settings: MemorySettings,
+}
+
+fn model(id: &str, is_default: bool, supported: &[EffortLevel]) -> AdapterModel {
+    AdapterModel {
+        id: id.to_string(),
+        label: id.to_string(),
+        description: None,
+        resolved_model: None,
+        context_window: None,
+        is_default: if is_default { Some(true) } else { None },
+        is_older: None,
+        group: None,
+        supported_efforts: Some(supported.to_vec()),
+        default_effort: None,
+        supports_fast: None,
+        supports_ultracode: None,
+        supports_adaptive_thinking: None,
+        supports_personality: None,
+    }
+}
+
+#[tokio::test]
+async fn keeps_xhigh_when_the_probed_model_supports_it() {
+    let models = vec![model(
+        "opus[1m]",
+        false,
+        &[
+            EffortLevel::Low,
+            EffortLevel::Medium,
+            EffortLevel::High,
+            EffortLevel::Xhigh,
+            EffortLevel::Max,
+        ],
+    )];
+    let deps = TestDeps {
+        models,
+        chat: chat_with("opus[1m]", EffortLevel::Xhigh),
+        settings: MemorySettings::default(),
+    };
+    let t = Some(resolve_tuning_for_chat(&deps.chat, &deps.settings, &deps.models).await);
+    assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::Xhigh)));
+}
+
+#[tokio::test]
+async fn falls_back_to_the_is_default_probed_model_for_an_alias_id() {
+    let models = vec![model(
+        "claude-x",
+        true,
+        &[EffortLevel::Low, EffortLevel::High],
+    )];
+    let deps = TestDeps {
+        models,
+        chat: chat_with("default", EffortLevel::High),
+        settings: MemorySettings::default(),
+    };
+    let t = Some(resolve_tuning_for_chat(&deps.chat, &deps.settings, &deps.models).await);
+    assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::High)));
+}
+
+#[tokio::test]
+async fn a_chat_without_its_own_effort_takes_the_stored_provider_default() {
+    let models = vec![model("opus", false, &[EffortLevel::Low, EffortLevel::High])];
+    let mut chat = chat_with("opus", EffortLevel::Low);
+    chat.tuning.effort = None;
+    let deps = TestDeps {
+        models,
+        chat,
+        settings: MemorySettings::default().with("provider", "claude.defaultEffort", "high"),
+    };
+    let t = Some(resolve_tuning_for_chat(&deps.chat, &deps.settings, &deps.models).await);
+    assert_eq!(t.map(|t| t.effort), Some(Some(EffortLevel::High)));
+}

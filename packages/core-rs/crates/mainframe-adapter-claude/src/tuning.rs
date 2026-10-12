@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/tuning.ts`.
-
 use mainframe_types::adapter::TUNABLE_FEATURES;
 use mainframe_types::chat::ResolvedTuning;
 use serde_json::{Map, Value};
@@ -10,7 +8,7 @@ use serde_json::{Map, Value};
 /// The TS returns `Record<string, unknown>`; the Rust equivalent is a
 /// `serde_json::Map` (the object body of the `apply_flag_settings` control_request
 /// `settings` field).
-pub fn tuning_to_flag_settings(t: &ResolvedTuning) -> Map<String, Value> {
+pub(crate) fn tuning_to_flag_settings(t: &ResolvedTuning) -> Map<String, Value> {
     let mut s: Map<String, Value> = Map::new();
     if let Some(effort) = t.effort {
         s.insert(
@@ -19,8 +17,8 @@ pub fn tuning_to_flag_settings(t: &ResolvedTuning) -> Map<String, Value> {
         );
     }
     for f in TUNABLE_FEATURES.iter() {
-        // `s[f.claudeSetting] = t[f.key]` — ResolvedTuning is a struct in Rust, so
-        // the JS dynamic index maps to a match on the (fixed) feature keys.
+        // `s[f.claudeSetting] = t[f.key]` — ResolvedTuning is a struct, so the
+        // lookup is a match on the (fixed) feature keys.
         let val = match f.key {
             "fast" => t.fast,
             "ultracode" => t.ultracode,
@@ -66,9 +64,3 @@ mod tests {
         );
     }
 }
-
-// PORT STATUS: src/plugins/builtin/claude/tuning.ts (11 lines)
-// confidence: high
-// todos: 0
-// notes: returns serde_json::Map (the TS Record<string, unknown>); the JS dynamic
-// notes: `t[f.key]` index becomes a match on the three fixed TUNABLE_FEATURES keys.

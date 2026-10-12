@@ -1,4 +1,4 @@
-//! Concurrent branch driver (Phase 4a). `walk_frame` used to return on the
+//! Concurrent branch driver. `walk_frame` used to return on the
 //! first `Parked`, which made starting N agents at once impossible — agent 1
 //! parks and the walk stops before agent 2 ever starts. This module runs a
 //! list of branches within one checkpoint instead; `blocks_concurrent_repeat`
@@ -6,11 +6,11 @@
 
 use crate::domain::Step;
 use crate::error::StoreError;
-use crate::store::{AutomationCheckpoint, StepStatus};
+use crate::store::{AutomationCheckpoint, StepKind, StepStatus};
 
 use super::WalkResult;
 use super::checkpoint::WalkFrame;
-use super::markers::{BRANCH_OUTCOME_KIND, branch_marker, mark_outcome};
+use super::markers::{branch_marker, mark_outcome};
 use super::walk::{StepsResult, WalkCtx, walk_frame};
 
 /// One concurrently-run branch: its own walk frame (so a `#<index>`-suffixed
@@ -54,7 +54,7 @@ async fn advance_branch(
                 ctx,
                 marker,
                 block_id,
-                BRANCH_OUTCOME_KIND,
+                StepKind::BranchOutcome,
                 StepStatus::Succeeded,
                 None,
             )
@@ -66,7 +66,7 @@ async fn advance_branch(
                 ctx,
                 marker,
                 block_id,
-                BRANCH_OUTCOME_KIND,
+                StepKind::BranchOutcome,
                 StepStatus::Failed,
                 Some(error),
             )
@@ -146,10 +146,3 @@ pub(crate) async fn run_branches(
         checkpoint: current,
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md Phase 4a), not a TS port
-// confidence: high
-// todos: 0
-// notes: run_branches is the general driver, agnostic to WHICH branches it's
-//        given each pass; blocks_concurrent_repeat.rs is its scheduler for
-//        `repeat`'s `concurrency` field.

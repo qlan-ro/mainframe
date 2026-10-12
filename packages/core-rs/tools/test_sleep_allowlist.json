@@ -1,0 +1,10 @@
+{
+  "mainframe-automations/src/actions/run_command_tests.rs::dropping_the_spawn_future_kills_the_shell_subprocess": "Let the shell child start, then wait beyond its sentinel deadline after cancellation.",
+  "mainframe-launch/src/launch_manager_tests_exit_order.rs::a_restart_during_the_drain_keeps_its_status_and_preview_tunnel": "Wait beyond the retired shell grandchild pipe-drain deadline before checking the replacement.",
+  "mainframe-launch/src/launch_manager_tests_start_stop.rs::signal_group_does_not_fall_back_to_the_pid_when_the_group_is_gone": "Observe that the unrelated sleep child survives a rejected process-group signal.",
+  "mainframe-launch/src/tunnel_manager/behavior_tests.rs::tunnel_survives_continued_child_logging_after_start_resolves": "Let the cloudflared stand-in emit post-start output before checking it remains alive.",
+  "mainframe-launch/src/tunnel_manager/behavior_tests.rs::start_resolves_with_url_when_dns_outlasts_the_start_timeout": "Let the stopped cloudflared stand-in exit watcher attempt a duplicate event.",
+  "mainframe-launch/src/tunnel_manager/shutdown_tests.rs::restarting_a_label_keeps_the_new_tunnel_when_the_old_child_exits": "Let the replaced cloudflared stand-in exit watcher run before checking the replacement.",
+  "mainframe-runtime/src/test_support.rs::write_shell_script": "The executable shell probe retries an OS child writer race.",
+  "mainframe-runtime/src/test_support.rs::poll_until": "The shared polling helper waits between condition checks."
+}

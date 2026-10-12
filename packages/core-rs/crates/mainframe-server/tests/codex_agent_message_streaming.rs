@@ -1,90 +1,31 @@
-//! Todo #378, end-to-end runtime coverage: a real `EventHandler` sink wired
+//! End-to-end runtime coverage: a real `EventHandler` sink wired
 //! to the real display pipeline (the production `IncrementalProjector`), driven by
 //! the Codex adapter's `handle_notification` replaying the captured
 //! `item/agentMessage/delta` stream (codex-cli 0.155.1). Pins the
 //! `DisplayRevision` → `encode_revision` transitions a live chat-surface
 //! subscriber actually sees: growing streamed text, a single converged
 //! completion under the same item id, and no overlay left behind.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::{Arc, Mutex};
 
 use mainframe_acp::encoder::{EncodedItem, encode_revision};
 use mainframe_adapter_codex::event_mapper::{CodexSessionState, handle_notification};
 use mainframe_chat::chat_surface::{ChatSurface, ChatSurfaceEvent};
-use mainframe_chat::event_handler::{EventChatUpdate, EventHandler, EventHandlerDeps};
 use mainframe_chat::message_cache::MessageCache;
-use mainframe_chat::permission_manager::PermissionManager;
-use mainframe_chat::types::ActiveChat;
 use mainframe_types::acp::content::ContentBlock;
 use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
-use mainframe_types::adapter::DetectedPr;
-use mainframe_types::chat::{QueuedMessageRef, TodoItem};
-use mainframe_types::context::SkillFileEntry;
-use mainframe_types::display::{DisplayMessage, StreamingLeafKind, ToolCategories};
-use mainframe_types::events::DaemonEvent;
+use mainframe_types::display::{DisplayMessage, StreamingLeafKind};
 use serde_json::Value;
 
 const FIXTURE: &str = include_str!("fixtures/agent-message-delta-0.155.1.jsonl");
 const CHAT_ID: &str = "chat-codex-378";
 const SESSION_ID: &str = "codex-session-378";
-
-/// A deps impl with every hook inert except `display_projector`, which
-/// returns the production `IncrementalProjector` over the real shared
-/// display pipeline (established fact: Codex chats run through it too,
-/// `mainframe-server/src/chat_deps.rs`) — the thing this test actually needs
-/// live, since the streaming determination
-/// (`display_projection::streaming_leaf_kind`) depends on its output shape.
-struct Deps;
-
-impl EventHandlerDeps for Deps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        None
-    }
-    fn emit_event(&self, _event: DaemonEvent) {}
-    fn get_tool_categories(&self, _chat_id: &str) -> Option<ToolCategories> {
-        None
-    }
-    fn on_queued_processed(&self, _chat_id: &str, _uuid: &str) {}
-    fn on_queued_cleared(&self, _chat_id: &str) {}
-    fn get_queued_refs(&self, _chat_id: &str) -> Vec<QueuedMessageRef> {
-        Vec::new()
-    }
-    fn display_projector(&self) -> Box<dyn mainframe_display::DisplayProjector> {
-        Box::new(mainframe_adapter_claude::messages::incremental::IncrementalProjector::new())
-    }
-    fn strip_command_tags(&self, text: &str) -> String {
-        text.to_string()
-    }
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
-    fn projects_get_path(&self, _project_id: &str) -> Option<String> {
-        None
-    }
-    fn add_plan_file(&self, _chat_id: &str, _file_path: &str) -> bool {
-        false
-    }
-    fn add_skill_file(&self, _chat_id: &str, _entry: &SkillFileEntry) -> bool {
-        false
-    }
-    fn update_todos(&self, _chat_id: &str, _todos: &[TodoItem]) {}
-    fn add_detected_prs(&self, _chat_id: &str, _prs: &[DetectedPr]) -> Vec<DetectedPr> {
-        Vec::new()
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn notify_task_complete(&self) -> bool {
-        false
-    }
-    fn notify_session_error(&self) -> bool {
-        false
-    }
-    fn notify_attention_request(&self) -> bool {
-        false
-    }
-    fn tracker_end_all_running(&self, _chat_id: &str) {}
-    fn workflow_runs_stop_all(&self, _chat_id: &str) {}
-}
 
 /// Records every `DisplayRevision`'s `(messages, streaming)` pair, in order.
 #[derive(Default)]
@@ -159,8 +100,11 @@ fn fixture_notifications() -> Vec<(String, Value)> {
 #[test]
 fn deltas_stream_then_converge_under_the_same_item_id_with_no_overlay_left_behind() {
     let cache = Arc::new(Mutex::new(MessageCache::new()));
-    let permissions = Arc::new(Mutex::new(PermissionManager::new()));
-    let handler = EventHandler::new(cache, permissions, Arc::new(Deps));
+    let handler = mainframe_chat::test_support::presentation_handler(
+        cache,
+        || Box::new(mainframe_display::incremental::IncrementalProjector::new()),
+        None,
+    );
     let surface = Arc::new(RevisionSurface::default());
     handler.set_chat_surface(surface.clone());
     let sink = handler.build_sink(CHAT_ID, Some(SESSION_ID.to_string()));

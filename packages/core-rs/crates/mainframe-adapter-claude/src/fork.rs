@@ -1,6 +1,4 @@
-//! Fork pinning and resume-target resolution for the Claude adapter (todo #343
-//! Group 2 — see `docs/plans/2026-09-24-todo-343-fork-thread.md` "Fork-point
-//! mechanism").
+//! Fork pinning and resume-target resolution for the Claude adapter.
 //!
 //! `pin_fork_point` snapshots the parent's transcript into a Mainframe-owned
 //! directory at the moment of the fork action, so the fork's first spawn has a
@@ -36,14 +34,14 @@ pub enum ResumeTarget {
 /// Decide the resume target without ever using the parent's session id as a
 /// bare `--resume` value.
 ///
-/// When there is no pending fork source, this is existing (pre-#343)
-/// behavior: an own session id always resumes plainly, regardless of
-/// transcript presence on disk — the CLI itself is responsible for failing
-/// loudly if that id turns out to be unresumable. The `own_transcript_present`
-/// probe only matters when a fork source is also pinned, to decide whether a
-/// fork's own first-turn transcript has appeared yet (covers a first turn
-/// that crashed after `on_init` but before the CLI wrote the transcript — the
-/// fork source is still pinned then, so resolution falls back to it).
+/// When there is no pending fork source, an own session id always resumes
+/// plainly, regardless of transcript presence on disk — the CLI itself is
+/// responsible for failing loudly if that id turns out to be unresumable. The
+/// `own_transcript_present` probe only matters when a fork source is also
+/// pinned, to decide whether a fork's own first-turn transcript has appeared
+/// yet (covers a first turn that crashed after `on_init` but before the CLI
+/// wrote the transcript — the fork source is still pinned then, so resolution
+/// falls back to it).
 pub fn resolve_resume(
     own_id: Option<&str>,
     own_transcript_present: bool,

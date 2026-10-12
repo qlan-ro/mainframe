@@ -3,6 +3,8 @@
 //! (fresh, or resuming its earlier native session) and carries the handoff.
 //! An unsent fork's pin becomes a borrowed view of its parent first.
 use super::*;
+use mainframe_services::settings::read_setting;
+use mainframe_types::sync::LockExt as _;
 
 use mainframe_types::segment::{
     BorrowConversion, SegmentLayout, SwitchCommit, SwitchProviderRequest,
@@ -33,7 +35,7 @@ impl ChatManager {
     ) -> Result<Chat, SwitchError> {
         // An unsent fork's pre-send history bounds its borrowed pin. Read it
         // before the claim: a history read waits out the claim.
-        let fork_history = match self.deps.get_pending_fork(chat_id) {
+        let fork_history = match self.shared.deps.get_pending_fork(chat_id)? {
             Some(_) => self.get_messages(chat_id).await,
             None => Vec::new(),
         };
@@ -42,11 +44,11 @@ impl ChatManager {
             self.check_switch(chat_id, req)?;
             // Exclusive with sends, loads and spawns, like an idle offload;
             // a send that arrives meanwhile waits for the release.
-            if !self.lifecycle.try_claim_offload(chat_id) {
+            let Some(claim) = self.lifecycle.try_claim_offload(chat_id) else {
                 return Err(SwitchError::TurnInFlight);
-            }
+            };
             let outcome = self.switch_claimed(chat_id, req, &fork_history).await;
-            self.lifecycle.release_offload(chat_id);
+            drop(claim);
             outcome?
         };
         match outcome {
@@ -59,8 +61,7 @@ impl ChatManager {
                     None,
                     Some(plan_mode),
                 )
-                .await
-                .map_err(|e| SwitchError::Failed(e.to_string()))?;
+                .await?;
                 self.get_chat(chat_id)
                     .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))
             }
@@ -76,9 +77,9 @@ impl ChatManager {
         let chat = self
             .get_chat(chat_id)
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
-        let target = self.deps.adapter_info(&req.adapter_id);
-        let from_name = self.deps.adapter_fork_info(&chat.adapter_id).name;
-        let queued = queued_for_chat(&self.queued_refs, chat_id).len();
+        let target = self.shared.deps.adapter_info(&req.adapter_id);
+        let from_name = self.shared.deps.adapter_fork_info(&chat.adapter_id).name;
+        let queued = self.shared.queued_for_chat(chat_id).len();
         check_switch_allowed(&SwitchCheck {
             chat: &chat,
             target_id: &req.adapter_id,
@@ -102,12 +103,14 @@ impl ChatManager {
             return Ok(SwitchOutcome::Done(Box::new(chat)));
         }
         let store = self
+            .shared
             .deps
             .segment_store()
-            .ok_or_else(|| SwitchError::Failed("Provider switching is unavailable".into()))?;
-        let unsent_fork = self.deps.get_pending_fork(chat_id).is_some();
+            .ok_or(SwitchError::Unavailable)?;
+        let unsent_fork = self.shared.deps.get_pending_fork(chat_id)?.is_some();
         if !unsent_fork && !store.has_native_id(chat_id) {
             let target_plan_mode = self
+                .shared
                 .deps
                 .adapter_info(&req.adapter_id)
                 .is_some_and(|a| a.capabilities.plan_mode);
@@ -119,14 +122,18 @@ impl ChatManager {
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
         let borrow = self.unsent_fork_borrow(&chat, &mut layout, fork_history);
         if unsent_fork && borrow.is_none() {
-            return Err(SwitchError::Failed(
-                "Couldn't switch this fork before its first message".into(),
-            ));
+            return Err(SwitchError::UnsentFork);
         }
-        let mut commit = self.plan_commit(&chat, &layout, req)?;
+        let default_model = read_setting(
+            self.shared.deps.settings(),
+            "provider",
+            &format!("{}.defaultModel", req.adapter_id),
+        )
+        .await;
+        let mut commit = self.plan_commit(&chat, &layout, req, default_model)?;
         commit.borrow_pinned = borrow;
         self.detach_session(chat_id).await;
-        let layout = store.commit_switch(&commit).map_err(SwitchError::Failed)?;
+        let layout = store.commit_switch(&commit)?;
         let chat = self.apply_switch(chat_id, &commit, &layout)?;
         Ok(SwitchOutcome::Done(Box::new(chat)))
     }
@@ -136,14 +143,13 @@ impl ChatManager {
         chat: &Chat,
         layout: &SegmentLayout,
         req: &SwitchProviderRequest,
+        default_model: Option<String>,
     ) -> Result<SwitchCommit, SwitchError> {
         let caps = self
+            .shared
             .deps
             .adapter_info(&req.adapter_id)
             .map(|a| a.capabilities);
-        let default_model = self
-            .deps
-            .settings_get("provider", &format!("{}.defaultModel", req.adapter_id));
         let now = now_iso8601();
         let new_segment_id = format!("seg_{}", nanoid::nanoid!());
         let new_native_id = format!("ns_{}", nanoid::nanoid!());
@@ -160,7 +166,7 @@ impl ChatManager {
             new_segment_id: &new_segment_id,
             new_native_id: &new_native_id,
         })
-        .ok_or_else(|| SwitchError::Failed(format!("Chat {} has no active segment", chat.id)))
+        .ok_or_else(|| SwitchError::NoActiveSegment(chat.id.clone()))
     }
 
     /// An unsent fork's pinned row as a borrowed view of its parent's source
@@ -172,12 +178,16 @@ impl ChatManager {
         layout: &mut SegmentLayout,
         messages: &[ChatMessage],
     ) -> Option<BorrowConversion> {
-        let pending = self.deps.get_pending_fork(&chat.id)?;
+        let pending = storage_event!(
+            self.shared,
+            self.shared.deps.get_pending_fork(&chat.id),
+            None
+        )?;
         let parent_layout = chat
             .parent_chat_id
             .clone()
             .flatten()
-            .and_then(|parent| self.deps.segment_store()?.layout(&parent));
+            .and_then(|parent| self.shared.deps.segment_store()?.layout(&parent));
         let conversion = borrow_conversion(&BorrowInput {
             chat,
             layout,
@@ -191,16 +201,13 @@ impl ChatManager {
 
     /// Kills the CLI if one is spawned; the next send spawns the target.
     async fn detach_session(&self, chat_id: &str) {
-        let session = self.get_active(chat_id).and_then(|cell| {
-            cell.lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .session
-                .take()
-        });
+        let session = self
+            .get_active(chat_id)
+            .and_then(|cell| cell.lock_recover().session.take());
         if let Some(session) = session
             && let Err(err) = session.kill().await
         {
-            tracing::warn!(?err, chat_id, "provider switch: failed to stop the session");
+            tracing::warn!(error = ?err, chat_id, "failed to stop the session");
         }
     }
 
@@ -213,11 +220,12 @@ impl ChatManager {
         layout: &SegmentLayout,
     ) -> Result<Chat, SwitchError> {
         let fresh = self
+            .shared
             .deps
-            .chats_get(chat_id)
+            .chats_get(chat_id)?
             .ok_or_else(|| SwitchError::NotFound(chat_id.to_string()))?;
         if let Some(cell) = self.get_active(chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).chat = fresh;
+            cell.lock_recover().chat = fresh;
         }
         let changed = self.apply_divider_changes(chat_id, commit, layout);
         if changed {
@@ -239,7 +247,7 @@ impl ChatManager {
         commit: &SwitchCommit,
         layout: &SegmentLayout,
     ) -> bool {
-        let mut messages = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+        let mut messages = self.shared.messages.lock_recover();
         // A cold chat composes its dividers on load; only a warm cache is edited.
         if messages.get(chat_id).is_none_or(Vec::is_empty) {
             return false;
@@ -249,7 +257,7 @@ impl ChatManager {
             changed |= messages.remove_by_id(chat_id, &divider_id(&pending.segment_id));
         }
         if let Some(open) = &commit.open_segment {
-            let name_of = |id: &str| self.deps.adapter_fork_info(id).name;
+            let name_of = |id: &str| self.shared.deps.adapter_fork_info(id).name;
             if let Some(divider) = divider_for(chat_id, layout, &open.id, &name_of) {
                 messages.append(chat_id, divider);
                 changed = true;

@@ -1,19 +1,21 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-#[path = "claude_presentation_streaming/support.rs"]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
+#[path = "support/presentation.rs"]
 mod support;
 use mainframe_acp::encoder::{EncodedItem, encode_revision};
 use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_claude::{events::handle_stdout, session::ClaudeSession};
-use mainframe_chat::{
-    event_handler::EventHandler, message_cache::MessageCache, permission_manager::PermissionManager,
-};
+use mainframe_chat::{event_handler::EventHandler, message_cache::MessageCache};
 use mainframe_types::adapter::SessionOptions;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use support::*;
 struct Harness {
     cache: Arc<Mutex<MessageCache>>,
-    handler: EventHandler<Deps>,
+    handler: EventHandler,
     sink: Arc<dyn SessionSink>,
     session: ClaudeSession,
     surface: Arc<RevisionSurface>,
@@ -21,11 +23,7 @@ struct Harness {
 impl Harness {
     fn new() -> Self {
         let cache = Arc::new(Mutex::new(MessageCache::new()));
-        let handler = EventHandler::new(
-            cache.clone(),
-            Arc::new(Mutex::new(PermissionManager::new())),
-            Arc::new(Deps),
-        );
+        let handler = handler(cache.clone(), "Task");
         let surface = Arc::new(RevisionSurface::default());
         handler.set_chat_surface(surface.clone());
         let sink = handler.build_sink("chat", Some("session".into()));
@@ -146,7 +144,7 @@ fn assert_legacy_parity(h: &Harness) {
             meta.remove("transcriptPresentation");
         }
     }
-    let display = mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client(
+    let display = mainframe_display::display_pipeline::prepare_messages_for_client(
         &raw,
         Some(&mainframe_types::display::ToolCategories {
             subagent: std::collections::HashSet::from(["Task".into()]),

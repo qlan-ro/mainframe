@@ -1,6 +1,6 @@
-//! A client's answer to a daemon-initiated `session/request_permission`
-//! (todo #350, live-wiring pass) — split out of `dispatch.rs` to keep it
-//! under the 300-line cap (T10). `handle_gate_answer` is `dispatch.rs`'s
+//! A client's answer to a daemon-initiated `session/request_permission` —
+//! split out of `dispatch.rs` to keep it under the 300-line cap.
+//! `handle_gate_answer` is `dispatch.rs`'s
 //! only call in; everything else here is this module's own plumbing.
 
 use mainframe_acp::{AnswerOutcome, GateAnswerError, parse_permission_answer};
@@ -19,12 +19,12 @@ pub(super) async fn handle_gate_answer(
     ports: &dyn GatePort,
     connection: &std::sync::Arc<FacadeConnection>,
 ) {
-    let Some(RequestId::Str(rpc_id)) = response.id.clone() else {
-        debug!("acp facade: response with no recognizable id dropped");
+    let Some(RequestId::String(rpc_id)) = response.id.clone() else {
+        debug!("response with no recognizable id dropped");
         return;
     };
     let Some(pending) = connection.peek_gate(&rpc_id) else {
-        debug!(rpc_id, "acp facade: response matches no pending gate");
+        debug!(rpc_id, "response matches no pending gate");
         return;
     };
     let answer = match response.outcome {
@@ -34,19 +34,18 @@ pub(super) async fn handle_gate_answer(
                 Err(err) => {
                     // Keep the gate pending: a malformed answer must not
                     // destroy the client's only chance to answer it.
-                    warn!(rpc_id, %err, "acp facade: malformed permission answer");
+                    warn!(rpc_id, error = %err, "malformed permission answer");
                     return;
                 }
             }
         }
         JsonRpcOutcome::Error { error } => {
             // A client that cannot parse the gate says so; treat it as a
-            // deny instead of leaving the turn hanging until the CLI dies
-            // (R3.7).
+            // deny instead of leaving the turn hanging until the CLI dies.
             warn!(
                 rpc_id,
                 code = error.code,
-                "acp facade: client answered a gate with an error, denying it"
+                "client answered a gate with an error, denying it"
             );
             let control = deny_response(&pending.request);
             apply_control_response(&rpc_id, pending, control, hub, ports, connection).await;
@@ -91,7 +90,7 @@ async fn apply_gate_answer(
         Err(GateAnswerError::UnknownOption(option)) => {
             // Never treated as approval (spec); the gate stays pending so a
             // corrected answer can still land.
-            warn!(rpc_id, option, "acp facade: unknown permission option");
+            warn!(rpc_id, option, "unknown permission option");
             return;
         }
     };
@@ -99,9 +98,8 @@ async fn apply_gate_answer(
 }
 
 /// The claim-apply tail shared by a parsed client answer and a synthesized
-/// deny (T4): remove the connection's own pending entry, claim the gate on
-/// the hub, and forward to the port — restoring both on a transport failure
-/// (T3).
+/// deny: remove the connection's own pending entry, claim the gate on the
+/// hub, and forward to the port — restoring both on a transport failure.
 async fn apply_control_response(
     rpc_id: &str,
     pending: PendingGate,
@@ -114,7 +112,7 @@ async fn apply_control_response(
     connection.remove_gate(rpc_id);
     match hub.claim_gate(&pending.chat_id, &request_id) {
         AnswerOutcome::AlreadyResolved => {
-            debug!(rpc_id, "acp facade: late answer to a resolved gate");
+            debug!(rpc_id, "late answer to a resolved gate");
         }
         AnswerOutcome::Apply => {
             if let Err(err) = ports.respond_to_permission(&pending.chat_id, control).await {
@@ -122,14 +120,15 @@ async fn apply_control_response(
                 // AlreadyResolved, and restore the connection's own pending
                 // entry so the SAME rpc_id is answerable again — a transport
                 // failure must not strand the CLI waiting on a gate the
-                // client believes it already answered (R2.5).
+                // client believes it already answered.
                 hub.release_gate(&pending.chat_id, &request_id);
                 connection.restore_gate(rpc_id, pending);
-                warn!(rpc_id, %err, "acp facade: respond_to_permission failed");
+                warn!(rpc_id, error = %err, "respond_to_permission failed");
             }
         }
     }
 }
 
 #[cfg(test)]
+#[path = "gate_answers_tests.rs"]
 mod tests;

@@ -21,7 +21,7 @@ pub struct BorrowInput<'a> {
 }
 
 /// `None` when the fork has no parent or no active segment.
-pub fn borrow_conversion(i: &BorrowInput<'_>) -> Option<BorrowConversion> {
+pub(crate) fn borrow_conversion(i: &BorrowInput<'_>) -> Option<BorrowConversion> {
     let owner = i.chat.parent_chat_id.clone().flatten()?;
     let native_ref = i.layout.active()?.native_session_ref.clone();
     let source_id = i.pending.fork_source.source_session_id.clone();

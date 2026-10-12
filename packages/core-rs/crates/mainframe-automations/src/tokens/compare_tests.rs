@@ -1,31 +1,24 @@
-//! T3.2 — comparator matrix (contract §1/A3). Unset tokens are false, never
+//! Comparator matrix (contract §1/A3). Unset tokens are false, never
 //! an error; scalar comparators reject array operands/values outright
-//! (the Node fix — a joined-string coincidence must not match).
+//! (a joined-string coincidence must not match).
 
 use std::sync::Arc;
 
-use chrono::DateTime;
 use serde_json::Number;
 
 use crate::domain::{
     Comparator, ConditionMatch, ConditionRow, ConditionValue, ScalarValue, TokenRef,
 };
-use crate::ports::Clock;
+use crate::testkit::FakeClock;
 
 use super::compare::evaluate;
 use super::scope::Scope;
 use super::value::TokenValue;
 
-struct FakeClock;
-
-impl Clock for FakeClock {
-    fn now(&self) -> chrono::DateTime<chrono::FixedOffset> {
-        DateTime::parse_from_rfc3339("2026-07-12T21:30:00+02:00").unwrap()
-    }
-}
-
 fn scope_with(bindings: &[(&str, &str, TokenValue)]) -> Scope<'static> {
-    let mut scope = Scope::root(Arc::new(FakeClock));
+    let mut scope = Scope::root(Arc::new(
+        FakeClock::at("2026-07-12T21:30:00+02:00").unwrap(),
+    ));
     for (step, output, value) in bindings {
         scope.bind(step, output, value.clone());
     }
@@ -283,7 +276,7 @@ fn scalar_comparators_return_false_for_array_operands_and_values() {
 #[test]
 fn unset_tokens_are_false_never_an_error() {
     let scope = scope_with(&[]);
-    // Even is_not / is_empty — Node short-circuits a null operand to false.
+    // Even is_not / is_empty — a null operand short-circuits to false.
     assert!(!eval_one(
         &scope,
         cond("ghost", "result", Comparator::IsNot, text_value("x"))
@@ -308,7 +301,7 @@ fn all_and_any_match_modes() {
     assert!(!evaluate(&[hit(), miss()], ConditionMatch::All, &scope));
     assert!(evaluate(&[miss(), hit()], ConditionMatch::Any, &scope));
     assert!(!evaluate(&[miss(), miss()], ConditionMatch::Any, &scope));
-    // Vacuous truth mirrors JS every()/some().
+    // Vacuous truth: an empty `all` holds, an empty `any` does not.
     assert!(evaluate(&[], ConditionMatch::All, &scope));
     assert!(!evaluate(&[], ConditionMatch::Any, &scope));
 }

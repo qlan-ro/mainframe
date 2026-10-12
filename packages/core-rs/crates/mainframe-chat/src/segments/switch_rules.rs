@@ -2,9 +2,13 @@
 //! The UI disables the provider tabs with the same copy.
 
 use mainframe_types::adapter::AdapterInfo;
+use mainframe_types::http_status::{HttpStatus, StatusKind};
+use mainframe_types::seam_error::SeamError;
+
+use crate::config_manager::ConfigError;
 use mainframe_types::chat::{Chat, DisplayStatus, ProcessState};
 
-#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum SwitchError {
     #[error("Chat {0} not found")]
     NotFound(String),
@@ -25,18 +29,37 @@ pub enum SwitchError {
          Wait for them to finish, or press Stop, then switch."
     )]
     BackgroundWork(String),
-    #[error("{0}")]
-    Failed(String),
+    /// The deps impl has no segment store.
+    #[error("Provider switching is unavailable")]
+    Unavailable,
+    #[error("Couldn't switch this fork before its first message")]
+    UnsentFork,
+    #[error("Chat {0} has no active segment")]
+    NoActiveSegment(String),
+    /// Applying the new provider to a chat that has not sent yet failed.
+    #[error(transparent)]
+    Config(#[from] ConfigError),
+    /// The segment store refused the switch's transaction.
+    #[error(transparent)]
+    Store(#[from] SeamError),
 }
 
-impl SwitchError {
+impl HttpStatus for SwitchError {
     /// The HTTP status the route answers with.
-    pub fn status(&self) -> u16 {
+    fn status_kind(&self) -> StatusKind {
         match self {
-            Self::NotFound(_) => 404,
-            Self::NotInstalled(_) | Self::UnknownModel { .. } => 422,
-            Self::Failed(_) => 500,
-            _ => 409,
+            Self::NotFound(_) => StatusKind::NotFound,
+            Self::NotInstalled(_) | Self::UnknownModel { .. } => StatusKind::Unprocessable,
+            Self::Unavailable
+            | Self::UnsentFork
+            | Self::NoActiveSegment(_)
+            | Self::Config(_)
+            | Self::Store(_) => StatusKind::Internal,
+            Self::SideChat
+            | Self::Temporary
+            | Self::TurnInFlight
+            | Self::Queued
+            | Self::BackgroundWork(_) => StatusKind::Conflict,
         }
     }
 }
@@ -54,7 +77,7 @@ pub struct SwitchCheck<'a> {
 }
 
 /// `None` and `"default"` both mean "the adapter's default model".
-pub fn is_default_model(model: Option<&str>) -> bool {
+pub(crate) fn is_default_model(model: Option<&str>) -> bool {
     model.is_none_or(|m| m.is_empty() || m == "default")
 }
 

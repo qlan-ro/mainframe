@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
@@ -11,7 +12,7 @@ use mainframe_types::adapter::{
 use mainframe_types::display::ToolCategories;
 
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
-use mainframe_claude_workflows::store::ClaudeWorkflowStore;
+use mainframe_background_tasks::workflow_sink::WorkflowSink;
 
 use crate::plan_mode_handler::MockPlanModeHandler;
 use crate::session::{ReplayCache, ReplaySession};
@@ -24,14 +25,14 @@ pub struct MockCliAdapter {
     /// Present only when the daemon wired its tracker in. Without it the replay
     /// behaves exactly as before: transcripts, but no background-task events.
     tracker: Option<Arc<BackgroundTaskTracker>>,
-    workflows: Option<Arc<ClaudeWorkflowStore>>,
+    workflows: Option<Arc<dyn WorkflowSink>>,
     /// Reported by `capabilities().no_persistence`. Defaults to false; tests that
     /// need the no-persistence chat behavior opt in via `with_no_persistence`
-    /// (todo #346 — the mock adapter must be able to report either value).
+    /// (the mock adapter must be able to report either value).
     no_persistence: bool,
     /// Whether `capabilities().fork` reports `true` and `pin_fork_point` echoes
-    /// the source instead of returning `Unsupported` (todo #343). Tests opt in
-    /// via `with_fork_capable(true)`; default `false` mirrors Codex today.
+    /// the source instead of returning `Unsupported`. Tests opt in via
+    /// `with_fork_capable(true)`; the default is `false`.
     fork_capable: bool,
     /// The last `pin_fork_point` request, so tests can assert the cut the
     /// chat layer resolved.
@@ -50,7 +51,7 @@ impl MockCliAdapter {
     /// the CLI's own task notifications.
     pub fn with_tracker(
         tracker: Arc<BackgroundTaskTracker>,
-        workflows: Arc<ClaudeWorkflowStore>,
+        workflows: Arc<dyn WorkflowSink>,
     ) -> Self {
         Self {
             tracker: Some(tracker),
@@ -60,13 +61,14 @@ impl MockCliAdapter {
     }
 
     /// Opt the mock adapter into reporting the no-persistence capability, so
-    /// integration tests can exercise both the on and off paths (todo #346).
-    pub fn with_no_persistence(mut self, value: bool) -> Self {
+    /// integration tests can exercise both the on and off paths.
+    #[cfg(test)]
+    pub(crate) fn with_no_persistence(mut self, value: bool) -> Self {
         self.no_persistence = value;
         self
     }
 
-    /// Toggle the fork capability this adapter reports (todo #343 tests).
+    /// Toggle the fork capability this adapter reports (fork tests).
     pub fn with_fork_capable(mut self, fork_capable: bool) -> Self {
         self.fork_capable = fork_capable;
         self
@@ -82,7 +84,7 @@ impl MockCliAdapter {
     }
 
     /// The environment variable naming this adapter's recordings key.
-    pub fn recording_key_var(&self) -> Option<String> {
+    pub(crate) fn recording_key_var(&self) -> Option<String> {
         let (id, _) = self.identity.as_ref()?;
         Some(format!(
             "E2E_RECORDING_KEY_{}",
@@ -98,11 +100,9 @@ impl MockCliAdapter {
     }
 
     /// The last request `pin_fork_point` received, if any.
-    pub fn last_pin_request(&self) -> Option<ForkPinRequest> {
-        self.last_pin_request
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+    #[cfg(test)]
+    pub(crate) fn last_pin_request(&self) -> Option<ForkPinRequest> {
+        self.last_pin_request.lock_recover().clone()
     }
 
     fn bridge(&self) -> Option<Arc<TaskBridge>> {
@@ -184,6 +184,14 @@ fn model(
 }
 
 impl Adapter for MockCliAdapter {
+    fn skills(&self) -> Option<Arc<dyn mainframe_adapter_api::SkillsProvider>> {
+        Some(Arc::new(crate::skills_provider::Provider))
+    }
+
+    fn display_decoders(&self) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+        Arc::new(mainframe_display::decoders::MainframeDecoders)
+    }
+
     fn id(&self) -> &str {
         self.identity.as_ref().map_or(DEFAULT_ID, |(id, _)| id)
     }
@@ -206,11 +214,8 @@ impl Adapter for MockCliAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(Some("0.1.0".to_string())) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(models()) })
-    }
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        Some(models())
+    fn catalog(&self) -> Vec<AdapterModel> {
+        models()
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
@@ -237,7 +242,7 @@ impl Adapter for MockCliAdapter {
         };
         let key = self.recording_key();
         let index = {
-            let mut indexes = self.indexes.lock().unwrap_or_else(|e| e.into_inner());
+            let mut indexes = self.indexes.lock_recover();
             let index = *indexes.get(&key).unwrap_or(&0);
             indexes.insert(key.clone(), index + 1);
             index
@@ -269,10 +274,7 @@ impl Adapter for MockCliAdapter {
         &self,
         request: ForkPinRequest,
     ) -> BoxFuture<'_, Result<ForkSource, ForkPinError>> {
-        *self
-            .last_pin_request
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(request.clone());
+        *self.last_pin_request.lock_recover() = Some(request.clone());
         if !self.fork_capable {
             return Box::pin(async { Err(ForkPinError::Unsupported) });
         }

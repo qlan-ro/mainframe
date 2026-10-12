@@ -1,28 +1,29 @@
-//! notion.add_row connector (T7.2, Node actions/notion.ts). No schema-lookup
-//! endpoint exists yet for per-column Notion property types (contract §9
-//! "under-built product surfaces"), so every non-databaseId param is sent as
-//! a rich_text property — the params record is already flat key/value
-//! ChipText output (dates like ⟨Today⟩ arrive pre-rendered), not a typed
-//! Notion schema.
+//! notion.add_row connector. No schema-lookup endpoint exists yet for
+//! per-column Notion property types (contract §9 "under-built product
+//! surfaces"), so every non-databaseId param is sent as a rich_text property —
+//! the params record is already flat key/value ChipText output (dates like
+//! ⟨Today⟩ arrive pre-rendered), not a typed Notion schema.
 
 use std::collections::BTreeMap;
 
+use mainframe_types::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
+use super::http::{client, send_json};
 use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
-use super::{Action, ActionCtx, ActionError, ActionOutputs, http_failure, parse_input};
+use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
 
 const NOTION_API: &str = "https://api.notion.com";
 const NOTION_VERSION: &str = "2022-06-28";
 
-/// `databaseId` + a flat catchall of string column values (zod
-/// `.catchall(z.string())` parity — a non-string extra fails the parse).
+/// `databaseId` + a flat catchall of string column values (a non-string
+/// extra fails the parse).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AddRowInput {
@@ -38,7 +39,7 @@ struct CreatedPage {
 
 pub struct NotionAddRowAction {
     base: String,
-    client: reqwest::Client,
+    client: Result<reqwest::Client, reqwest::Error>,
 }
 
 impl NotionAddRowAction {
@@ -49,7 +50,7 @@ impl NotionAddRowAction {
     pub fn with_base_url(base: impl Into<String>) -> Self {
         Self {
             base: base.into(),
-            client: super::http_client(),
+            client: client(),
         }
     }
 }
@@ -60,32 +61,33 @@ impl Default for NotionAddRowAction {
     }
 }
 
-impl Action for NotionAddRowAction {
-    fn manifest(&self) -> ActionManifest {
-        ActionManifest {
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn add_row_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
             id: "notion.add_row",
             title: "Notion: add database row",
             group: ActionGroup::Connector,
             auth: ActionAuth::Token,
             credential_label_hint: Some("notion"),
-            params_schema: json!({
-                "type": "object",
-                "properties": {
-                    "databaseId": {"type": "string", "minLength": 1}
-                },
-                "required": ["databaseId"],
-                "additionalProperties": {"type": "string"}
-            }),
-            // Only `databaseId` is a named field: the row's column values are
-            // `additionalProperties` (any string key), and there is no
-            // per-database schema-lookup endpoint to enumerate them into
-            // structured rows (module doc) — so they have no field-schema
-            // entry, same as before this fix.
-            fields: vec![ActionField::chip("databaseId", "Database")],
-            has_output_as: false,
             outputs: vec![ActionOutput::new("pageUrl", ActionOutputType::Text)],
             idempotent: false,
-        }
+        },
+        vec![
+            ActionParam::field(
+                ActionField::chip("databaseId", "Database"),
+                json!({"type": "string", "minLength": 1}),
+            )
+            .required(),
+        ],
+        json!({"type": "string"}),
+    )
+}
+
+impl Action for NotionAddRowAction {
+    fn manifest(&self) -> ActionManifest {
+        add_row_manifest()
     }
 
     fn execute<'a>(
@@ -104,6 +106,8 @@ impl Action for NotionAddRowAction {
 
             let mut request = self
                 .client
+                .as_ref()
+                .map_err(|err| ActionError(format!("HTTP client initialization failed: {err}")))?
                 .post(format!("{}/v1/pages", self.base))
                 .header("Notion-Version", NOTION_VERSION)
                 .json(&json!({
@@ -113,20 +117,7 @@ impl Action for NotionAddRowAction {
             if let Some(creds) = &ctx.creds {
                 request = request.bearer_auth(&creds.token);
             }
-            let response = request
-                .send()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            let status = response.status().as_u16();
-            let body = response
-                .text()
-                .await
-                .map_err(|err| ActionError(format!("{OP} failed: {err}")))?;
-            if status >= 400 {
-                return Err(http_failure(OP, status, ctx, &body));
-            }
-            let page: CreatedPage = serde_json::from_str(&body)
-                .map_err(|err| ActionError(format!("{OP} failed: unexpected response ({err})")))?;
+            let page: CreatedPage = send_json(request, OP, ctx, |_| None).await?;
 
             let mut outputs = ActionOutputs::new();
             outputs.insert("pageUrl".to_string(), TokenValue::Text(page.url));
@@ -135,8 +126,30 @@ impl Action for NotionAddRowAction {
     }
 }
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T7.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/notion.ts (rich_text-only properties until a
-//        column-picker/schema endpoint exists — contract §9).
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn initialization_failure_is_an_action_error_without_a_fallback_request() {
+        let action = NotionAddRowAction {
+            base: "http://127.0.0.1:1".to_string(),
+            client: mainframe_runtime::http::builder()
+                .user_agent("invalid\nagent")
+                .build(),
+        };
+        assert!(action.client.is_err());
+        let ctx = ActionCtx {
+            creds: None,
+            credential_label: None,
+            idempotency_key: "run:step".to_string(),
+            project_root: "/project".to_string(),
+            worktree_path: None,
+        };
+        let error = action
+            .execute(&json!({"databaseId": "db-1", "Name": "row"}), &ctx)
+            .await
+            .unwrap_err();
+        assert_eq!(error.0, "HTTP client initialization failed: builder error");
+    }
+}

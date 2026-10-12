@@ -4,12 +4,13 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::chat_test_support::StubAdapter;
+use crate::ctx::AppCtx;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 
-use super::MCP_BODY_LIMIT_BYTES;
-use crate::chat_test_support::StubAdapter;
-use crate::ctx::AppCtx;
+#[path = "mcp_limit_tests.rs"]
+mod limit_tests;
 
 struct Server {
     base: String,
@@ -18,7 +19,7 @@ struct Server {
 
 impl Server {
     async fn start() -> Self {
-        let ctx = AppCtx::test_ctx_with_orchestration();
+        let ctx = AppCtx::test_ctx();
         let app = crate::http::build_app(Arc::clone(&ctx));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -36,8 +37,9 @@ impl Server {
 
     /// A chat in a fresh project plus a live credential for it.
     async fn caller(&self) -> (String, String) {
-        let chats = self.ctx.chat_manager.clone().unwrap();
+        let chats = self.ctx.chat.chat_manager.clone();
         self.ctx
+            .core
             .adapter_registry
             .register(StubAdapter::new("claude", false));
         let dir = std::env::temp_dir().join(format!("mf-mcp-{}", nanoid::nanoid!()));
@@ -45,6 +47,7 @@ impl Server {
         let path = dir.to_string_lossy().into_owned();
         let project = self
             .ctx
+            .core
             .db
             .call(move |d| d.projects.create(&path, None))
             .await
@@ -55,8 +58,9 @@ impl Server {
                 adapter_id: "claude".into(),
                 ..Default::default()
             })
-            .await;
-        let service = self.ctx.orchestration.clone().unwrap();
+            .await
+            .unwrap();
+        let service = self.ctx.chat.orchestration.clone();
         let token = service.issue_launch(&chat.id, "sess-1").token;
         (chat.id, token.expose().to_string())
     }
@@ -169,7 +173,7 @@ async fn auth_failures_are_401_with_a_bearer_challenge() {
         assert_eq!(challenge, "Bearer realm=\"mainframe\"");
     }
     let (chat_id, token) = server.caller().await;
-    server.ctx.orchestration.clone().unwrap().revoke(&chat_id);
+    server.ctx.chat.orchestration.clone().revoke(&chat_id);
     let res = server.post(Some(&token)).json(&ping).send().await.unwrap();
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
@@ -220,10 +224,6 @@ async fn browser_tunnel_and_malformed_requests_are_refused() {
         old.json(&ping).send().await.unwrap().status(),
         StatusCode::BAD_REQUEST
     );
-
-    let huge = "x".repeat(MCP_BODY_LIMIT_BYTES + 1);
-    let res = server.post(Some(&token)).body(huge).send().await.unwrap();
-    assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE);
 }
 
 #[tokio::test]

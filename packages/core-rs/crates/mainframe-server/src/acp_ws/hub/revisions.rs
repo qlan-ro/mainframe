@@ -1,10 +1,11 @@
-//! Per-chat `RevisionLog` registry and the `FacadeHub` methods that record
-//! into it and reset its epoch (todo #377), split out of `hub.rs` (already
-//! at 294 lines before this todo). Eviction is always safe: a dropped log
-//! is exactly an unknown epoch to its chat's next resume, and
-//! `RevisionLog::plan` already treats that as a full replay — nothing on
-//! the wire distinguishes "evicted" from "the daemon restarted".
+//! Per-chat `RevisionLog` registry and the `FacadeHub` methods that record into
+//! it and reset its epoch, split out of `hub.rs` to keep that file under the
+//! 300-line cap. Eviction is always safe: a dropped log is exactly an unknown
+//! epoch to its chat's next resume, and `RevisionLog::plan` already treats that
+//! as a full replay — nothing on the wire distinguishes "evicted" from "the
+//! daemon restarted".
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -86,7 +87,7 @@ impl RevisionRegistry {
     }
 
     fn locked(&self) -> std::sync::MutexGuard<'_, RegistryState> {
-        self.state.lock().unwrap_or_else(|err| err.into_inner())
+        self.state.lock_recover()
     }
 
     fn touch(&self, state: &mut RegistryState, chat_id: &str) {
@@ -120,10 +121,9 @@ impl FacadeHub {
     /// recorded, non-empty change; `None` when there is no log, nothing
     /// changed, or a vanished tool call forced an epoch reset instead.
     ///
-    /// Todo #376 G4: `delta`-shaped (`RevisionLog::record_delta`) rather than
-    /// a flat item list — `full` is the lazy fresh-attach fallback
-    /// `record_delta` forces only when this log is unseeded and `delta` is
-    /// incremental.
+    /// `delta`-shaped (`RevisionLog::record_delta`) rather than a flat item
+    /// list — `full` is the lazy fresh-attach fallback `record_delta` forces
+    /// only when this log is unseeded and `delta` is incremental.
     pub(super) fn record_display_delta(
         &self,
         chat_id: &str,
@@ -131,7 +131,7 @@ impl FacadeHub {
         full: impl FnOnce() -> Vec<Vec<EncodedItem>>,
     ) -> Option<RevisionCursor> {
         let log = self.revisions.get(chat_id)?;
-        let mut locked = log.lock().unwrap_or_else(|err| err.into_inner());
+        let mut locked = log.lock_recover();
         match locked.record_delta(delta, full) {
             RecordOutcome::Recorded(_) => Some(locked.boundary()),
             RecordOutcome::Unchanged => None,
@@ -158,7 +158,7 @@ impl FacadeHub {
     #[cfg(test)]
     pub(super) fn revision_boundary(&self, chat_id: &str) -> Option<RevisionCursor> {
         let log = self.revisions.get(chat_id)?;
-        Some(log.lock().unwrap_or_else(|err| err.into_inner()).boundary())
+        Some(log.lock_recover().boundary())
     }
 
     /// `TranscriptCleared`, `Resync`, and a finished `Compaction` all
@@ -174,4 +174,5 @@ impl FacadeHub {
 }
 
 #[cfg(test)]
+#[path = "revisions_tests.rs"]
 mod tests;

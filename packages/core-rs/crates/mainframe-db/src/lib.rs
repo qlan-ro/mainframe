@@ -1,17 +1,29 @@
-//! Ported from `packages/core/src/db/*` — the `DatabaseManager` handle,
-//! migration runner, schema, and the six repositories.
+//! The `DatabaseManager` handle, migration runner, schema, and the
+//! repositories.
 //!
-//! `better-sqlite3` is synchronous; this port keeps the synchronous API
-//! (rusqlite, a single shared connection). Async wrapping (`spawn_blocking`,
-//! `Db` handle) is a later phase and intentionally NOT added here.
+//! Repositories are synchronous; `actor::SqliteActor` serializes async access.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 
+use mainframe_types::http_status::{HttpStatus, StatusKind};
 use rusqlite::Connection;
 
+pub mod actor;
+pub mod sql_types;
+mod sqlite;
+pub use sqlite::{OpenOptions, open_sqlite};
+mod chat_assignments;
 pub mod chat_handoffs;
 mod chat_native_sessions;
 pub mod chat_segments;
@@ -22,11 +34,14 @@ pub mod chat_tags;
 pub mod chats;
 pub mod delegated_tasks;
 pub mod devices;
+pub mod migrate;
 pub mod migrations;
 mod orchestration;
 pub mod projects;
+mod relocation;
 pub mod schema;
 pub mod settings;
+mod settings_kv;
 mod side_chats;
 pub mod tag_color;
 pub mod tags;
@@ -35,16 +50,16 @@ pub mod validate_tag_name;
 pub use chat_handoffs::HandoffsRepository;
 pub use chat_segments::{RecordOutcome, SegmentResultDelta, SegmentsRepository};
 pub use chat_tags::ChatTagsRepository;
-pub use chats::{ChatListFilters, ChatUpdate, ChatsRepository, ForkInsert, PendingFork};
+pub use chats::{ChatListFilters, ChatsRepository, ForkInsert, PendingFork};
 pub use delegated_tasks::DelegatedTasksRepository;
 pub use devices::DevicesRepository;
 pub use projects::ProjectsRepository;
 pub use settings::SettingsRepository;
 pub use tags::TagsRepository;
 
-/// Fallible-operation error for the whole DB layer. `Message` carries a verbatim
-/// human string so `throw new Error(msg)` sites round-trip their exact text
-/// (several are asserted by regex in the ported tests and cross the wire later).
+/// Fallible-operation error for the whole DB layer. The texts of `NotFound`,
+/// `Invalid` and `Invariant` reach REST bodies verbatim, so they are part of the
+/// wire contract.
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
     #[error(transparent)]
@@ -53,45 +68,51 @@ pub enum DbError {
     Json(#[from] serde_json::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    /// The worker thread that owns the connection could not take or answer
+    /// the request.
+    #[error("database worker {0}")]
+    Worker(&'static str),
+    /// A row the operation names does not exist (`Tag not found: rust`).
+    #[error("{entity} not found: {id}")]
+    NotFound { entity: &'static str, id: String },
+    /// The caller's input breaks a rule the store enforces: an invalid tag
+    /// name, a protected row.
     #[error("{0}")]
-    Message(String),
+    Invalid(String),
+    /// Stored rows, or a file the layer just wrote, contradict an invariant
+    /// the operation relies on. Never the caller's fault.
+    #[error("{0}")]
+    Invariant(String),
+}
+
+impl HttpStatus for DbError {
+    fn status_kind(&self) -> StatusKind {
+        match self {
+            Self::NotFound { .. } => StatusKind::NotFound,
+            Self::Invalid(_) => StatusKind::BadRequest,
+            Self::Sqlite(_)
+            | Self::Json(_)
+            | Self::Io(_)
+            | Self::Worker(_)
+            | Self::Invariant(_) => StatusKind::Internal,
+        }
+    }
 }
 
 /// Serialize a serde enum to its wire/DB string (e.g. `ChatStatus::Active` →
-/// `"active"`). Mirrors the implicit string cast the TS repositories rely on.
+/// `"active"`).
 pub(crate) fn enum_to_db_string<T: serde::Serialize>(value: &T) -> Result<String, DbError> {
     match serde_json::to_value(value)? {
         serde_json::Value::String(s) => Ok(s),
-        other => Err(DbError::Message(format!(
+        other => Err(DbError::Invariant(format!(
             "expected string enum, got {other}"
         ))),
     }
 }
 
-/// Mirrors `config.ts`'s `getDataDir()`. Not yet available from
-/// `mainframe_runtime::config` (only the `DAEMON_PORT` override is ported there),
-/// so it is replicated here for `DatabaseManager::new()`.
-fn get_data_dir() -> Result<PathBuf, DbError> {
-    // TODO(port): delegate to mainframe_runtime::config::get_data_dir once that
-    // ports the dataDir path (only DAEMON_PORT is ported there today).
-    // `??` in the TS is nullish-only: an unset var falls back, an empty string
-    // does not. `env::var` returns `Err` only when unset, so this matches.
-    let dir = match std::env::var("MAINFRAME_DATA_DIR") {
-        Ok(value) => PathBuf::from(value),
-        Err(_) => dirs::home_dir()
-            .ok_or_else(|| DbError::Message("could not resolve home directory".into()))?
-            .join(".mainframe"),
-    };
-    if !dir.exists() {
-        std::fs::create_dir_all(&dir)?;
-    }
-    Ok(dir)
-}
-
-/// Owns the single SQLite connection and exposes the repositories, mirroring the
-/// TS `DatabaseManager`. The connection is shared with each repository via
-/// `Rc<Connection>` (single-threaded, synchronous — one shared handle, exactly
-/// like `better-sqlite3`).
+/// Owns the single SQLite connection and exposes the repositories. The
+/// connection is shared with each repository via `Rc<Connection>`
+/// (single-threaded, synchronous — one shared handle).
 pub struct DatabaseManager {
     db: Rc<Connection>,
     pub projects: ProjectsRepository,
@@ -106,18 +127,21 @@ pub struct DatabaseManager {
 }
 
 impl DatabaseManager {
-    /// Opens `~/.mainframe/mainframe.db` (or `$MAINFRAME_DATA_DIR/mainframe.db`),
-    /// enabling WAL + foreign keys, then runs migrations.
-    pub fn new() -> Result<Self, DbError> {
-        let db_path = get_data_dir()?.join("mainframe.db");
+    /// Opens the daemon database at `db_path` (`<dataDir>/mainframe.db`). A
+    /// database found only at `legacy_db_path` is moved there first; if that
+    /// move fails, the legacy database is opened for this boot instead.
+    pub fn new(db_path: &Path, legacy_db_path: &Path) -> Result<Self, DbError> {
+        let db_path = relocation::resolve_database_path(db_path, legacy_db_path);
+        if let Some(dir) = db_path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
         Self::open(&db_path)
     }
 
     /// Opens the DB at `db_path` (creating it if absent), applies the WAL +
     /// foreign-keys pragmas, and runs the migration chain.
     pub fn open(db_path: &Path) -> Result<Self, DbError> {
-        let conn = Connection::open(db_path)?;
-        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")?;
+        let conn = open_sqlite(db_path, OpenOptions::default())?;
 
         schema::initialize_schema(&conn)?;
 
@@ -147,9 +171,8 @@ impl DatabaseManager {
         })
     }
 
-    /// Closes the connection. `better-sqlite3`'s `close()` is explicit; in Rust
-    /// the connection drops when the last `Rc` is released, so this consumes
-    /// `self` to make the intent visible.
+    /// Closes the connection. It drops when the last `Rc` is released, so this
+    /// consumes `self` to make the intent visible.
     pub fn close(self) {
         drop(self);
     }
@@ -159,14 +182,39 @@ impl DatabaseManager {
         &self.db
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
 
-// PORT STATUS: src/db/index.ts (49 lines)
-// confidence: medium
-// notes: `DatabaseManager` mirrors the TS class (pub repo fields, WAL +
-// foreign_keys pragmas, initializeSchema). getDataDir() is replicated locally
-// pending mainframe_runtime::config porting the dataDir path (see the inline
-// deferral marker at get_data_dir). Repositories share one Rc<Connection> (single-threaded,
-// synchronous) — Phase B replaces this with the async Db handle / spawn_blocking.
-// close() consumes self (Rust drops the connection when the last Rc is released).
-// DbError + enum_to_db_string are crate-wide helpers with no TS counterpart.
-// todos: 1
+    #[test]
+    fn creates_the_database_under_a_new_data_directory() {
+        let root = tempdir().unwrap();
+        let db_path = root.path().join("configured").join("mainframe.db");
+        let legacy_db = root.path().join("legacy").join("mainframe.db");
+
+        DatabaseManager::new(&db_path, &legacy_db).unwrap().close();
+
+        assert!(db_path.exists());
+        assert!(!root.path().join("legacy").exists());
+    }
+
+    #[test]
+    fn opens_a_moved_legacy_database_with_its_data() {
+        let root = tempdir().unwrap();
+        let db_path = root.path().join("configured").join("mainframe.db");
+        let legacy_db = root.path().join("mainframe.db");
+        let conn = Connection::open(&legacy_db).unwrap();
+        conn.execute_batch("CREATE TABLE migration_proof (value TEXT); INSERT INTO migration_proof VALUES ('kept');").unwrap();
+        drop(conn);
+
+        let db = DatabaseManager::new(&db_path, &legacy_db).unwrap();
+        let value: String = db
+            .connection()
+            .query_row("SELECT value FROM migration_proof", [], |row| row.get(0))
+            .unwrap();
+
+        assert_eq!(value, "kept");
+        assert!(!legacy_db.exists());
+    }
+}

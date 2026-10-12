@@ -1,6 +1,6 @@
-//! T2.2 — run store: checkpoint persistence, the dedup insert race,
-//! resumable listing, and the checkpoint wire shape. Status derivation and
-//! terminal-immutability tests live in run_status_tests.rs.
+//! Run store: checkpoint persistence, the dedup insert race, resumable listing,
+//! and the checkpoint wire shape. Status derivation and terminal-immutability
+//! tests live in run_status_tests.rs.
 
 use serde_json::json;
 
@@ -160,7 +160,7 @@ async fn corrupt_checkpoint_row_is_finalized_failed_and_excluded_from_live() {
 
 #[tokio::test]
 async fn checkpoint_serde_matches_the_node_wire_shape() {
-    // Explicit nulls where Node types `T | null`; omitted TS-optionals.
+    // Explicit nulls for the nullable fields; optional fields omitted.
     let entry = step_entry("s1", StepStatus::Succeeded);
     let value = serde_json::to_value(&entry).unwrap();
     assert_eq!(

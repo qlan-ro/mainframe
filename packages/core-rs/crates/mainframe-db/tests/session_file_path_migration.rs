@@ -1,5 +1,8 @@
-//! Ported from `packages/core/src/db/__tests__/session-file-path-migration.test.ts`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use rusqlite::Connection;
 

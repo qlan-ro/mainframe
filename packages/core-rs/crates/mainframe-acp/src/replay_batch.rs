@@ -1,16 +1,15 @@
-//! Compressed replay batches (spec Decision 42): a `session/resume` replay
-//! for a connection that opted in travels as a few
-//! `_mainframe.dev/replay_batch` notifications, each carrying up to
-//! [`REPLAY_BATCH_MAX_UPDATES`] `session/update` payloads as a zlib-deflated
-//! JSON array in base64, instead of one text frame per update.
+//! Compressed replay batches: a `session/resume` replay for a connection that
+//! opted in travels as a few `_mainframe.dev/replay_batch` notifications, each
+//! carrying up to [`REPLAY_BATCH_MAX_UPDATES`] `session/update` payloads as a
+//! zlib-deflated JSON array in base64, instead of one text frame per update.
 //!
-//! The replay is the only large transfer on the facade (a long chat's is
-//! tens of megabytes of JSON, which deflates five to ten times), and the
-//! Rust WebSocket stack the daemon uses has no permessage-deflate, so the
-//! compression lives in the payload: plain text frames, nothing to negotiate
-//! at the transport, and a client decodes with a stock inflater. Live frames
-//! are small and stay as they are; a connection that did not opt in gets the
-//! per-update replay, byte-identical to before.
+//! The replay is the only large transfer on the facade (a long chat's is tens
+//! of megabytes of JSON, which deflates five to ten times), and the Rust
+//! WebSocket stack the daemon uses has no permessage-deflate, so the
+//! compression lives in the payload: plain text frames, nothing to negotiate at
+//! the transport, and a client decodes with a stock inflater. Live frames are
+//! small and stay as they are; a connection that did not opt in gets the
+//! per-update replay, one text frame per `session/update`.
 
 use std::io::Write;
 
@@ -40,19 +39,28 @@ pub fn replay_batch_notifications(
         .filter_map(|chunk| match encode_batch(chunk) {
             Ok(data) => Some(notification(session_id, chunk.len(), data)),
             Err(err) => {
-                tracing::warn!(%err, session_id, count = chunk.len(), "acp facade: dropped a replay batch");
+                tracing::warn!(error = %err, session_id, count = chunk.len(), "dropped a replay batch");
                 None
             }
         })
         .collect()
 }
 
+/// Why one replay batch could not be encoded (it is logged and dropped).
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum EncodeBatchError {
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Deflate(#[from] std::io::Error),
+}
+
 /// The payload for one batch: base64 of the zlib-deflated JSON array.
-pub fn encode_batch(updates: &[SessionUpdate]) -> Result<String, String> {
-    let json = serde_json::to_vec(updates).map_err(|err| err.to_string())?;
+pub(crate) fn encode_batch(updates: &[SessionUpdate]) -> Result<String, EncodeBatchError> {
+    let json = serde_json::to_vec(updates)?;
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
-    encoder.write_all(&json).map_err(|err| err.to_string())?;
-    let bytes = encoder.finish().map_err(|err| err.to_string())?;
+    encoder.write_all(&json)?;
+    let bytes = encoder.finish()?;
     Ok(STANDARD.encode(bytes))
 }
 
@@ -70,4 +78,5 @@ fn notification(session_id: &str, count: usize, data: String) -> JsonRpcNotifica
 }
 
 #[cfg(test)]
+#[path = "replay_batch_tests.rs"]
 mod tests;

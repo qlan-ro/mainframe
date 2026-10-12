@@ -1,9 +1,6 @@
-//! Ported from `packages/types/src/adapter.ts`.
-//!
 //! Data types only. The `Adapter` / `AdapterSession` / `SessionSink` *trait*
-//! interfaces from the TS file live in `mainframe-adapter-api` (per the crate
-//! map §2.6); this module ports the serde DTOs they exchange plus the pure
-//! effort-clamp logic.
+//! interfaces live in `mainframe-adapter-api`; this module holds the serde DTOs
+//! they exchange plus the pure effort-clamp logic.
 
 use serde::{Deserialize, Serialize};
 
@@ -32,8 +29,8 @@ pub struct MessageMetadata {
     pub usage: Option<MessageUsage>,
     /// The adapter's own stable id for this message (Claude: transcript
     /// `uuid`; Codex: thread-item id) — never serialized to the wire, only
-    /// consumed by `SessionSinkImpl::on_message` as the `ChatMessage.id`
-    /// (todo #350 group B, stable-ids). `None` falls back to a minted nanoid.
+    /// consumed by `SessionSinkImpl::on_message` as the `ChatMessage.id`.
+    /// `None` falls back to a minted nanoid.
     #[serde(skip)]
     pub vendor_id: Option<String>,
 }
@@ -74,7 +71,7 @@ pub struct ForkSource {
     pub source_session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resume_path: Option<String>,
-    /// The parent's last turn id at the moment of pinning (todo #368) — Codex's
+    /// The parent's last turn id at the moment of pinning — Codex's
     /// `thread/fork` forks "through, inclusive" this turn, so the fork point
     /// stays fixed at the click even if the parent gains turns afterward.
     /// `None` when the parent had no turns yet, or the adapter has no turn-level
@@ -128,7 +125,7 @@ pub struct SessionSpawnOptions {
     /// Set only for a temporary chat whose adapter reports
     /// `AdapterCapabilities.no_persistence`. The chat layer never sets this for a
     /// non-temporary chat or for an adapter without the capability. A no-persistence
-    /// spawn never carries a resume target (todo #346).
+    /// spawn never carries a resume target.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub no_persistence: Option<bool>,
     /// The orchestration MCP endpoint + this spawn's bearer token. Never
@@ -241,7 +238,7 @@ pub struct ControlRequest {
     pub suggestions: Vec<ControlUpdate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision_reason: Option<String>,
-    /// The adapter's own ordered option list (plan task 7, D4). `None` keeps
+    /// The adapter's own ordered option list. `None` keeps
     /// today's Claude derivation (`gates::offered_options`); Codex sets
     /// `Some` with its real accept/acceptForSession/decline or question
     /// choices, so `gates::parse_answer` no longer has to guess a fixed
@@ -251,7 +248,7 @@ pub struct ControlRequest {
 }
 
 /// Whether a granted permission covers just this call or the rest of the
-/// session (plan task 7, D4). Distinct from `ControlUpdate::SetMode`, which
+/// session. Distinct from `ControlUpdate::SetMode`, which
 /// Claude still uses for its own persisted rule scopes — this rides the
 /// answer itself for adapters (Codex) that have no equivalent rule store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -367,13 +364,13 @@ pub struct AdapterCapabilities {
     pub auto_mode: bool,
     /// The adapter's CLI has a native mechanism to run a session without writing
     /// a vendor transcript (Claude `--no-session-persistence`, Codex
-    /// `thread/start.ephemeral`), verified interactively (todo #346 spike).
+    /// `thread/start.ephemeral`), verified interactively.
     /// `#[serde(default)]` so a payload recorded before this field existed still
     /// deserializes, defaulting to false (no mechanism).
     #[serde(default)]
     pub no_persistence: bool,
-    /// Whether this adapter can branch a chat's conversation into a new chat
-    /// (todo #343). Absent on the wire (older daemon) deserializes to `false`.
+    /// Whether this adapter can branch a chat's conversation into a new chat.
+    /// Absent on the wire (older daemon) deserializes to `false`.
     #[serde(default)]
     pub fork: bool,
 }
@@ -393,7 +390,7 @@ pub struct AdapterInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_source: Option<CatalogSource>,
     pub capabilities: AdapterCapabilities,
-    /// Why `capabilities.fork` is currently `false` (todo #368), e.g. a CLI
+    /// Why `capabilities.fork` is currently `false`, e.g. a CLI
     /// below the version that introduced the fork RPC. `None` when fork is
     /// available or the adapter has no version-gated fork story. Absent on the
     /// wire (older daemon, or an adapter/state with no reason) deserializes to
@@ -463,9 +460,10 @@ pub fn model_endpoint(model: &str) -> Option<&str> {
         .map(|(endpoint, _)| endpoint)
 }
 
-/// Single source of truth for the boolean tuning features. Mirrors the TS
-/// `TUNABLE_FEATURES` const array (resolver clamp, Claude flag-settings mapping,
-/// and renderer gating all iterate this).
+/// Single source of truth for the boolean tuning features (resolver clamp, Claude
+/// flag-settings mapping, and renderer gating all iterate this). Wire contract:
+/// the keys must match `TUNABLE_FEATURES` in `packages/types/src/adapter.ts`,
+/// which the UI's `ProviderTuningDefaults` pane iterates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TunableFeature {
     pub key: &'static str,
@@ -580,310 +578,5 @@ pub struct ExternalSessionPage {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::{Value, json};
-
-    fn roundtrip<T>(v: Value)
-    where
-        T: serde::de::DeserializeOwned + serde::Serialize,
-    {
-        let parsed: T = serde_json::from_value(v.clone()).unwrap();
-        let back = serde_json::to_value(&parsed).unwrap();
-        assert_eq!(v, back);
-    }
-
-    #[test]
-    fn control_request_full_tagged_suggestion() {
-        let v = json!({
-            "requestId": "req_001",
-            "toolName": "Bash",
-            "toolUseId": "toolu_01A",
-            "input": { "command": "rm -rf /tmp/scratch" },
-            "suggestions": [
-                {
-                    "type": "addRules",
-                    "rules": [ { "toolName": "Bash", "ruleContent": "rm -rf /tmp/*" } ],
-                    "behavior": "allow",
-                    "destination": "session"
-                }
-            ],
-            "decisionReason": "Destructive command outside project root"
-        });
-        roundtrip::<ControlRequest>(v);
-    }
-
-    #[test]
-    fn control_request_minimal_omits_reason() {
-        let v = json!({
-            "requestId": "req_001",
-            "toolName": "Bash",
-            "toolUseId": "toolu_01A",
-            "input": { "command": "ls" },
-            "suggestions": []
-        });
-        roundtrip::<ControlRequest>(v.clone());
-        let s =
-            serde_json::to_string(&serde_json::from_value::<ControlRequest>(v).unwrap()).unwrap();
-        assert!(!s.contains("decisionReason"));
-    }
-
-    #[test]
-    fn control_update_set_mode_variant() {
-        let v = json!({ "type": "setMode", "mode": "plan", "destination": "session" });
-        roundtrip::<ControlUpdate>(v);
-    }
-
-    #[test]
-    fn adapter_capabilities_roundtrip_with_no_persistence() {
-        roundtrip::<AdapterCapabilities>(json!({
-            "planMode": true,
-            "autoMode": false,
-            "noPersistence": true,
-            "fork": false
-        }));
-    }
-
-    #[test]
-    fn adapter_capabilities_fork_absent_defaults_false() {
-        let caps: AdapterCapabilities =
-            serde_json::from_value(json!({ "planMode": true, "autoMode": false })).unwrap();
-        assert!(!caps.fork);
-        roundtrip::<AdapterCapabilities>(json!({
-            "planMode": true,
-            "autoMode": true,
-            "noPersistence": false,
-            "fork": true
-        }));
-    }
-
-    #[test]
-    fn adapter_info_fork_unavailable_reason_roundtrips_and_omits_when_absent() {
-        let v = json!({
-            "id": "codex",
-            "name": "Codex",
-            "description": "Codex adapter",
-            "installed": true,
-            "models": [],
-            "capabilities": { "planMode": false, "autoMode": false, "noPersistence": false, "fork": false },
-            "forkUnavailableReason": "Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)"
-        });
-        roundtrip::<AdapterInfo>(v);
-
-        let no_reason: AdapterInfo = serde_json::from_value(json!({
-            "id": "claude",
-            "name": "Claude",
-            "description": "Claude adapter",
-            "installed": true,
-            "models": [],
-            "capabilities": { "planMode": false, "autoMode": false, "fork": true }
-        }))
-        .unwrap();
-        assert_eq!(no_reason.fork_unavailable_reason, None);
-        let s = serde_json::to_string(&no_reason).unwrap();
-        assert!(!s.contains("forkUnavailableReason"));
-    }
-
-    #[test]
-    fn adapter_capabilities_missing_no_persistence_defaults_false() {
-        let parsed: AdapterCapabilities = serde_json::from_value(json!({
-            "planMode": true,
-            "autoMode": false
-        }))
-        .unwrap();
-        assert!(!parsed.no_persistence);
-    }
-
-    #[test]
-    fn session_spawn_options_omits_no_persistence_when_absent() {
-        let opts = SessionSpawnOptions {
-            model: None,
-            permission_mode: None,
-            plan_mode: None,
-            executable_path: None,
-            system_prompt: None,
-            tuning: None,
-            small_fast_model: None,
-            default_model: None,
-            no_persistence: None,
-            orchestration_mcp: None,
-        };
-        let v = serde_json::to_value(&opts).unwrap();
-        assert!(v.as_object().unwrap().get("noPersistence").is_none());
-    }
-
-    #[test]
-    fn session_spawn_options_carries_no_persistence_true() {
-        let opts = SessionSpawnOptions {
-            model: None,
-            permission_mode: None,
-            plan_mode: None,
-            executable_path: None,
-            system_prompt: None,
-            tuning: None,
-            small_fast_model: None,
-            default_model: None,
-            no_persistence: Some(true),
-            orchestration_mcp: None,
-        };
-        let v = serde_json::to_value(&opts).unwrap();
-        assert_eq!(v["noPersistence"], json!(true));
-    }
-
-    #[test]
-    fn fork_source_camel_case_and_optional_resume_path() {
-        roundtrip::<ForkSource>(json!({ "sourceSessionId": "sess_1" }));
-        roundtrip::<ForkSource>(json!({
-            "sourceSessionId": "sess_1",
-            "resumePath": "/tmp/fork-snapshots/n1/sess_1.jsonl"
-        }));
-    }
-
-    /// Todo #368: `lastTurnId` round-trips camelCase, is omitted when absent,
-    /// and an older payload with no such key still deserializes (`serde(default)`).
-    #[test]
-    fn fork_source_last_turn_id_roundtrips_and_is_optional() {
-        roundtrip::<ForkSource>(json!({
-            "sourceSessionId": "sess_1",
-            "lastTurnId": "turn_9"
-        }));
-        let older_payload: ForkSource =
-            serde_json::from_value(json!({ "sourceSessionId": "sess_1" })).unwrap();
-        assert_eq!(older_payload.last_turn_id, None);
-
-        let s = serde_json::to_string(&ForkSource {
-            source_session_id: "sess_1".to_string(),
-            resume_path: None,
-            last_turn_id: None,
-        })
-        .unwrap();
-        assert!(!s.contains("lastTurnId"));
-    }
-
-    #[test]
-    fn session_options_fork_source_omitted_when_absent() {
-        let opts = SessionOptions {
-            project_path: "/tmp".to_string(),
-            chat_id: None,
-            mainframe_chat_id: "mf_1".to_string(),
-            session_file_path: None,
-            fork_source: None,
-        };
-        let s = serde_json::to_string(&opts).unwrap();
-        assert!(!s.contains("forkSource"));
-    }
-
-    #[test]
-    fn adapter_model_minimal_and_full() {
-        roundtrip::<AdapterModel>(json!({ "id": "claude-sonnet-5", "label": "Sonnet 5" }));
-        roundtrip::<AdapterModel>(json!({
-            "id": "claude-opus-4-8",
-            "label": "Opus 4.8",
-            "description": "Most capable Claude model",
-            "resolvedModel": "claude-opus-4-8-20260101",
-            "contextWindow": 200000,
-            "isDefault": true,
-            "supportedEfforts": ["low", "medium", "high", "max"],
-            "defaultEffort": "medium",
-            "supportsFast": true,
-            "supportsUltracode": true,
-            "supportsAdaptiveThinking": true,
-            "supportsPersonality": false
-        }));
-    }
-
-    #[test]
-    fn effort_level_xhigh_serializes_without_underscore() {
-        assert_eq!(
-            serde_json::to_string(&EffortLevel::Xhigh).unwrap(),
-            "\"xhigh\""
-        );
-        let e: EffortLevel = serde_json::from_str("\"xhigh\"").unwrap();
-        assert_eq!(e, EffortLevel::Xhigh);
-    }
-
-    #[test]
-    fn effort_level_ultra_round_trips() {
-        assert_eq!(
-            serde_json::to_string(&EffortLevel::Ultra).unwrap(),
-            "\"ultra\""
-        );
-        let e: EffortLevel = serde_json::from_str("\"ultra\"").unwrap();
-        assert_eq!(e, EffortLevel::Ultra);
-    }
-
-    #[test]
-    fn external_session_page_null_next_offset() {
-        let v = json!({ "sessions": [], "total": 0, "nextOffset": null });
-        roundtrip::<ExternalSessionPage>(v);
-    }
-
-    #[test]
-    fn session_result_context_tokens_optional() {
-        // absent contextTokens → None → omitted on the way back out
-        // (SessionResult keys are snake_case except the camelCase contextTokens)
-        roundtrip::<SessionResult>(json!({ "subtype": "success", "is_error": false }));
-        // explicit number survives
-        roundtrip::<SessionResult>(json!({ "contextTokens": 12345, "is_error": false }));
-        // explicit null collapses to None (absent) on re-serialize
-        let r: SessionResult = serde_json::from_value(json!({ "contextTokens": null })).unwrap();
-        assert_eq!(r.context_tokens, None);
-        assert!(!serde_json::to_string(&r).unwrap().contains("contextTokens"));
-    }
-
-    #[test]
-    fn detected_pr_source_enum() {
-        roundtrip::<DetectedPr>(json!({
-            "url": "https://github.com/qlan-ro/mainframe/pull/412",
-            "owner": "qlan-ro",
-            "repo": "mainframe",
-            "number": 412,
-            "source": "created"
-        }));
-    }
-
-    #[test]
-    fn clamp_matches_ts_logic() {
-        use EffortLevel as E;
-        // requested supported → itself
-        assert_eq!(
-            clamp_effort_to_supported(E::High, &[E::Low, E::Medium, E::High], None),
-            Some(E::High)
-        );
-        // not supported, default supported → default
-        assert_eq!(
-            clamp_effort_to_supported(E::Max, &[E::Low, E::Medium, E::High], Some(E::Medium)),
-            Some(E::Medium)
-        );
-        // not supported, no usable default → highest ≤ requested
-        assert_eq!(
-            clamp_effort_to_supported(E::High, &[E::Low, E::Medium], None),
-            Some(E::Medium)
-        );
-        // requested below everything → lowest supported
-        assert_eq!(
-            clamp_effort_to_supported(E::None, &[E::Medium, E::High], None),
-            Some(E::Medium)
-        );
-        // empty → None
-        assert_eq!(clamp_effort_to_supported(E::High, &[], None), None);
-    }
-}
-
-// PORT STATUS: packages/types/src/adapter.ts (395 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#424/#425/#441): SessionResult.contextTokens (Option<i64>,
-// serde default+skip; absent/null both → None, three-way branch lives in the
-// event-handler producer) and AdapterModel.resolvedModel (Option<String>, skip).
-// The new Adapter TRAIT methods generateTitle/isTranscriptPresent land in
-// mainframe-adapter-api (behavioral half). Data DTOs + effort-clamp logic only;
-// the Adapter/AdapterSession/
-// SessionSink TRAIT interfaces are intentionally NOT here — they port to
-// mainframe-adapter-api (crate map §2.6). MessageMetadata.usage / SessionResult
-// fields stay snake_case (they mirror the CLI usage payload; fixture
-// message.added shows input_tokens/output_tokens). ControlUpdate is internally
-// tagged (rename_all gives addRules/replaceRules/... tag values). References
-// crate::settings::{ExecutionMode,PermissionMode} and crate::chat::ResolvedTuning
-// (owned by the sibling types-port task). TUNABLE_FEATURES / clampEffortToSupported
-// ported as const + fn with a logic-parity test.
+#[path = "adapter_tests.rs"]
+mod tests;

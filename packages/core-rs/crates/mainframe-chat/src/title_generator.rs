@@ -1,11 +1,9 @@
-//! Ported from `packages/core/src/chat/title-generator.ts`.
-//!
 //! Callers must hand these functions [`crate::message_markers::visible_message_text`]
 //! output, not a raw wire body — a title has to read like the message did.
 
 /// Deterministic fallback title: the first user message, cleaned and truncated at
 /// a word boundary.
-pub fn derive_title_from_message(content: &str) -> String {
+pub(crate) fn derive_title_from_message(content: &str) -> String {
     let cleaned = collapse_whitespace(content);
     let chars: Vec<char> = cleaned.chars().collect();
     if chars.len() <= 50 {
@@ -17,14 +15,14 @@ pub fn derive_title_from_message(content: &str) -> String {
         Some(idx) if idx > 20 => truncated[..idx].iter().collect(),
         _ => truncated.iter().collect(),
     };
-    format!("{head}\u{2026}")
+    mainframe_types::chat_text::with_ellipsis(&head)
 }
 
 /// Which CLI generates the title for `adapter_id`. The `provider.<adapterId>.titleBinary`
 /// setting wins; otherwise each adapter titles with its own binary. It used to fall back
 /// to `claude` for every adapter, which asked a Codex-only user's machine to shell out to
 /// a CLI it may not have installed (#275).
-pub fn resolve_title_binary(setting: Option<String>, adapter_id: &str) -> String {
+pub(crate) fn resolve_title_binary(setting: Option<String>, adapter_id: &str) -> String {
     setting
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| adapter_id.to_string())
@@ -86,12 +84,3 @@ mod tests {
         assert!(!out.contains("  "));
     }
 }
-
-// PORT STATUS: src/chat/title-generator.ts (7 lines)
-// confidence: high
-// todos: 0
-// notes: Main catch-up (#430): `generateTitle` was moved out to the Claude adapter
-// notes: (`mainframe-adapter-claude::title_generator::generate_claude_title`); this
-// notes: module now keeps only the deterministic `deriveTitleFromMessage` fallback.
-// notes: String slicing uses `chars` (Rust scalar) vs TS UTF-16 units — divergence
-// notes: only on astral-plane input.

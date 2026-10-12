@@ -1,15 +1,9 @@
-//! A `TestServer` with a REAL `ChatManager` wired as `ctx.chat_manager` and
-//! the facade hub as its chat surface (todo #350, plan group 1 step 0) — the
-//! fixture `acp_ws_integration.rs`'s live-wiring tests need, since the plain
-//! `spawn_test_server` harness runs with `chat_manager: None`. Mirrors
-//! `chat_background_activity.rs`'s harness, plus the facade hub and a
-//! pre-created project/chat so a test can prompt a real session immediately.
+//! A test server with a facade-backed chat manager and a pre-created project/chat.
 
-use std::collections::HashMap;
+use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
 use dashmap::DashMap;
 use mainframe_adapter_api::{Adapter, AdapterRegistry};
@@ -23,23 +17,11 @@ use mainframe_server::{build_app, build_chat_manager, spawn_broadcast_pump};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
-use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
 use mainframe_types::events::DaemonEvent;
 use tokio::net::TcpListener;
 
 use super::TestServer;
-
-struct NoopQuotaSettings;
-
-impl QuotaSettingsStore for NoopQuotaSettings {
-    fn get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn get_by_category(&self, _category: &str) -> HashMap<String, String> {
-        HashMap::new()
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
 
 /// A live facade session ready to drive: `chat_id` belongs to a real project
 /// row, and `profile` is the adapter id its `/acp/{profile}` route serves.
@@ -51,13 +33,14 @@ pub struct FacadeServer {
 }
 
 impl FacadeServer {
-    /// A second chat under the same project/adapter — T10's cold-start-vs-
-    /// cancel ordering test needs two independent sessions.
+    /// A second chat under the same project/adapter — `acp_ws_slow_prompt.rs`'s
+    /// cold-start-vs-cancel ordering test needs two independent sessions.
     pub async fn create_chat(&self) -> String {
         let project_id = self.project_id.clone();
         let profile = self.profile.clone();
         self.server
             .ctx
+            .core
             .db
             .call(move |d| {
                 d.chats.create(&mainframe_types::chat::NewChat {
@@ -72,15 +55,16 @@ impl FacadeServer {
     }
 }
 
-/// `adapter` is injected (not hardcoded to the mock) so T10's barrier
-/// adapter can reuse this fixture without a second harness.
+/// `adapter` is injected (not hardcoded to the mock) so the barrier adapter
+/// (`support/barrier_adapter.rs`) can reuse this fixture without a second
+/// harness.
 pub async fn spawn_facade_server(adapter: Arc<dyn Adapter>) -> FacadeServer {
     spawn_facade_server_with(adapter, mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS).await
 }
 
 /// `heartbeat_interval_ms` shrinks the cadence so a test can observe several
-/// ticks inside a bounded timeout (T10: proof the socket loop is not stuck
-/// on a blocked prompt).
+/// ticks inside a bounded timeout (proof the socket loop is not stuck on a
+/// blocked prompt).
 pub async fn spawn_facade_server_with(
     adapter: Arc<dyn Adapter>,
     heartbeat_interval_ms: u64,
@@ -99,29 +83,28 @@ pub async fn spawn_facade_server_with(
     let facade_hub = Arc::new(mainframe_server::FacadeHub::default());
     let quota_tx = broadcast.clone();
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(move |event| {
             let _ = quota_tx.send(event);
         }),
         now: None,
     }));
 
-    let manager = build_chat_manager(
-        db.clone(),
-        Arc::clone(&adapter_registry),
-        Arc::clone(&tracker),
-        Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-        Arc::new(PushService::new()),
-        GitFactory,
-        broadcast.clone(),
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+    let manager = build_chat_manager(mainframe_server::ChatManagerParams {
+        db: db.clone(),
+        adapters: Arc::clone(&adapter_registry),
+        background_tasks: Arc::clone(&tracker),
+        attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+        push: Arc::new(PushService::new()),
+        git: GitFactory,
+        broadcast: broadcast.clone(),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::new(ClaudeWorkflowStore::new()),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        Some(facade_hub.as_chat_surface()),
-        data_dir.path().to_path_buf(),
-    );
+        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+        chat_surface: Some(facade_hub.as_chat_surface()),
+        data_dir: data_dir.path().to_path_buf(),
+    });
 
     let path = data_dir.path().to_string_lossy().into_owned();
     let project = db
@@ -139,37 +122,31 @@ pub async fn spawn_facade_server_with(
         })
         .unwrap();
 
-    let ctx = Arc::new(AppCtx {
-        db,
-        git: GitFactory,
-        services: Services {
-            attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-            push: Arc::new(PushService::new()),
-            watcher: Arc::new(watcher),
-        },
-        broadcast,
-        adapter_registry,
-        background_tasks: tracker,
-        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
-        chat_manager: Some(manager),
-        launch_registry: None,
-        tunnel_manager: None,
-        port_tunnels: None,
-        lsp_manager: None,
-        plugin_manager: None,
-        automations: None,
-        orchestration: None,
-        quota: None,
-        data_dir: data_dir.path().to_path_buf(),
-        version: "0.0.0-test".to_string(),
-        port: 0,
-        auth_secret: None,
-        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-        ws_clients: Arc::new(DashMap::new()),
-        facade_hub,
-        facade_heartbeat_interval_ms: heartbeat_interval_ms,
-    });
+    let ctx = Arc::new(
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
+            .git(GitFactory)
+            .services(Services {
+                attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+                push: Arc::new(PushService::new()),
+                watcher: Arc::new(watcher),
+            })
+            .broadcast(broadcast)
+            .adapter_registry(adapter_registry)
+            .background_tasks(tracker)
+            .claude_workflows(Arc::new(ClaudeWorkflowStore::new()))
+            .chat_manager(manager)
+            .automations(None)
+            .version("0.0.0-test".to_string())
+            .port(0)
+            .auth_secret(None)
+            .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
+            .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
+            .ws_clients(Arc::new(DashMap::new()))
+            .facade_hub(facade_hub)
+            .facade_heartbeat_interval_ms(heartbeat_interval_ms)
+            .build()
+            .unwrap(),
+    );
     spawn_broadcast_pump(Arc::clone(&ctx));
 
     let app = build_app(Arc::clone(&ctx));
@@ -184,7 +161,6 @@ pub async fn spawn_facade_server_with(
         )
         .await
     });
-    tokio::time::sleep(Duration::from_millis(20)).await;
 
     FacadeServer {
         server: TestServer {
@@ -201,7 +177,7 @@ pub async fn spawn_facade_server_with(
 /// One chat-surface revision for `chat_id`, pushed straight at the hub by the
 /// tests that check who is (and is not) subscribed to a session's fan-out.
 /// Wraps the single message in a `full` `DisplayDelta` over a fresh
-/// `DisplaySnapshot` (todo #376) — the shape `emit_display_for` now emits.
+/// `DisplaySnapshot` — the shape `emit_display_for` emits.
 pub fn revision_event(chat_id: &str, text: &str) -> mainframe_chat::chat_surface::ChatSurfaceEvent {
     let messages = vec![mainframe_types::display::DisplayMessage {
         id: "m1".to_string(),

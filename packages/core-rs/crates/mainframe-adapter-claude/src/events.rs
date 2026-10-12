@@ -1,3 +1,4 @@
+use mainframe_types::sync::LockExt as _;
 use serde_json::Value;
 
 use mainframe_adapter_api::{AdapterError, SessionSink};
@@ -15,7 +16,7 @@ use crate::user_event::handle_user_event;
 
 pub fn handle_stdout(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
     let lines: Vec<String> = {
-        let mut st = session.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut st = session.state.lock_recover();
         st.buffer.push_str(&String::from_utf8_lossy(chunk));
         let mut parts: Vec<String> = st.buffer.split('\n').map(str::to_string).collect();
         st.buffer = parts.pop().unwrap_or_default();
@@ -27,7 +28,7 @@ pub fn handle_stdout(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSi
             continue;
         }
         session.bump_last_activity();
-        tracing::trace!(session_id = %session.id, line = %line, "[stream-json]");
+        tracing::trace!(session_id = %session.id, line = %line, "stream-json line");
         if let Ok(event) = serde_json::from_str::<Value>(line.trim()) {
             handle_event(session, &event, sink);
         }
@@ -57,7 +58,7 @@ fn is_trust_permissions(lower: &str) -> bool {
     lower.contains("permissions.allow") || lower.contains("hastrustdialogaccepted")
 }
 
-pub fn handle_stderr(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
+pub(crate) fn handle_stderr(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
     let message = String::from_utf8_lossy(chunk).trim().to_string();
     if message.is_empty() {
         return;
@@ -78,7 +79,7 @@ fn handle_rate_limit_event(session: &ClaudeSession, event: &Value, sink: &dyn Se
         return;
     }
     let info = event.get("rate_limit_info");
-    let now = chrono::Utc::now().timestamp_millis();
+    let now = mainframe_types::time::now_ms();
     if let Some(quota) = normalize_rate_limit_event(info, now) {
         sink.on_provider_quota("claude", quota);
     }
@@ -112,7 +113,7 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
             {
                 tracing::debug!(
                     session_id = %session.id,
-                    "claude: skipping subagent result event (parent_tool_use_id present)"
+                    "skipping subagent result event (parent_tool_use_id present)"
                 );
                 return;
             }
@@ -122,14 +123,14 @@ fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) 
             tracing::debug!(
                 session_id = %session.id,
                 r#type = ?ty,
-                "claude: unhandled event type"
+                "unhandled event type"
             );
         }
     }
 }
 
 #[cfg(test)]
-#[path = "events_tests/support.rs"]
+#[path = "events_tests_support.rs"]
 mod tests;
 
 #[path = "event_system.rs"]
@@ -137,7 +138,7 @@ mod event_system;
 use event_system::*;
 #[path = "event_control.rs"]
 mod event_control;
-pub use event_control::handle_control_response_event;
+pub(crate) use event_control::handle_control_response_event;
 use event_control::{handle_control_cancel_request_event, handle_control_request_event};
 #[path = "event_result.rs"]
 mod event_result;

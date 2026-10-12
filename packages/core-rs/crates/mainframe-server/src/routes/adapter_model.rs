@@ -3,8 +3,9 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::Response,
+    response::{IntoResponse, Response},
 };
+use mainframe_types::settings_kv::SettingsKv as _;
 use serde::Deserialize;
 
 use crate::{
@@ -24,7 +25,7 @@ pub(super) async fn resolve(
     Path(adapter_id): Path<String>,
     Query(query): Query<ModelQuery>,
 ) -> Response {
-    let Some(adapter) = ctx.adapter_registry.get(&adapter_id) else {
+    let Some(adapter) = ctx.core.adapter_registry.get(&adapter_id) else {
         return fail(StatusCode::NOT_FOUND, "Adapter not found");
     };
     if let Some(id) = &query.chat_id {
@@ -32,14 +33,10 @@ pub(super) async fn resolve(
     }
     let cwd = match project_path(&ctx, query.project_id).await {
         Ok(path) => path,
-        Err(response) => return response,
+        Err(response) => return response.into_response(),
     };
     let key = format!("{adapter_id}.executablePath");
-    let executable = match ctx
-        .db
-        .call(move |db| db.settings.get("provider", &key))
-        .await
-    {
+    let executable = match ctx.core.db.get("provider", &key).await {
         Ok(value) => value.filter(|value| !value.is_empty()),
         Err(err) => return crate::async_err::internal_error("get provider executable", &err),
     };
@@ -52,11 +49,9 @@ async fn observed_model(
     chat_id: &str,
     project_id: Option<&str>,
 ) -> Response {
-    let Some(manager) = ctx.chat_manager.as_ref() else {
-        return fail(StatusCode::NOT_FOUND, "Chat not found");
-    };
+    let manager = &ctx.chat.chat_manager;
     let Some(chat) = manager.get_chat(chat_id) else {
-        return fail(StatusCode::NOT_FOUND, "Chat not found");
+        return crate::respond::ApiError::chat_not_found().into_response();
     };
     if chat.adapter_id != adapter_id || project_id.is_some_and(|id| id != chat.project_id) {
         return fail(
@@ -78,20 +73,19 @@ async fn observed_model(
     ok(if unchanged { model } else { None })
 }
 
-async fn project_path(ctx: &AppCtx, id: Option<String>) -> Result<String, Response> {
+async fn project_path(
+    ctx: &AppCtx,
+    id: Option<String>,
+) -> Result<String, crate::respond::ApiError> {
     let Some(id) = id else {
         return dirs::home_dir()
             .map(|p| p.to_string_lossy().into_owned())
             .ok_or_else(|| {
-                fail(
+                crate::respond::ApiError::new(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Home directory unavailable",
                 )
             });
     };
-    match ctx.db.call(move |db| db.projects.get(&id)).await {
-        Ok(Some(project)) => Ok(project.path),
-        Ok(None) => Err(fail(StatusCode::NOT_FOUND, "Project not found")),
-        Err(err) => Err(crate::async_err::internal_error("get project", &err)),
-    }
+    Ok(ctx.require_project(&id).await?.path)
 }

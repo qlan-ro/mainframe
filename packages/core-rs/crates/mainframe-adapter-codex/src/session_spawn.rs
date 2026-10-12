@@ -7,26 +7,19 @@ impl CodexSession {
     ) -> Result<AdapterProcess, AdapterError> {
         let (options, sink) = self.configure_spawn(options, sink);
         if std::fs::metadata(&self.project_path).is_err() {
-            return Err(AdapterError::Message(format!(
-                "Project directory does not exist or is not accessible: {}",
-                self.project_path
-            )));
+            return Err(AdapterError::ProjectDirMissing(self.project_path.clone()));
         }
 
         let child = self.spawn_process(&options)?;
         let approval = Arc::new(ApprovalHandler::new(sink.clone()));
-        *self
-            .approval_handler
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = Some(approval.clone());
+        *self.approval_handler.lock_recover() = Some(approval.clone());
 
         let handlers = self.build_handlers(approval);
         let client = Arc::new(JsonRpcClient::new(child, handlers));
-        *self.client.lock().unwrap_or_else(|e| e.into_inner()) = Some(client.clone());
+        *self.client.lock_recover() = Some(client.clone());
         self.initialize_client(&client, &*sink).await?;
 
         tracing::info!(
-            module = "codex:session",
             session_id = %self.id,
             project_path = %self.project_path,
             resume = self.resume_thread_id.is_some(),
@@ -48,7 +41,7 @@ impl CodexSession {
         }
 
         self.get_process_info()
-            .ok_or_else(|| AdapterError::Message("no process info".to_string()))
+            .ok_or(AdapterError::Invariant("no process info"))
     }
     fn configure_spawn(
         &self,
@@ -68,9 +61,9 @@ impl CodexSession {
             orchestration_mcp: None,
         });
         let sink = sink.unwrap_or_else(null_sink);
-        *self.sink.lock().unwrap_or_else(|e| e.into_inner()) = sink.clone();
+        *self.sink.lock_recover() = sink.clone();
         {
-            let mut cfg = self.config.lock().unwrap_or_else(|e| e.into_inner());
+            let mut cfg = self.config.lock_recover();
             cfg.model = model::explicit_model(options.model.as_deref());
             cfg.permission_mode = options.permission_mode.unwrap_or(ExecutionMode::Default);
             cfg.plan_mode = options.plan_mode.unwrap_or(false);
@@ -95,15 +88,14 @@ impl CodexSession {
         {
             Ok(Ok(_)) => {
                 client.notify("initialized", None);
-                *self.status.lock().unwrap_or_else(|e| e.into_inner()) =
-                    AdapterProcessStatus::Ready;
+                *self.status.lock_recover() = AdapterProcessStatus::Ready;
             }
-            Ok(Err(e)) => return Err(AdapterError::Message(e.0)),
+            Ok(Err(e)) => return Err(e.into()),
             Err(_) => {
-                tracing::error!(module = "codex:session", session_id = %self.id, "codex handshake timeout");
-                sink.on_error(AdapterError::Message("handshake timeout".to_string()));
+                tracing::error!(session_id = %self.id, "codex handshake timeout");
+                sink.on_error(AdapterError::Timeout("handshake timeout"));
                 client.close();
-                return Err(AdapterError::Message("handshake timeout".to_string()));
+                return Err(AdapterError::Timeout("handshake timeout"));
             }
         }
         Ok(())
@@ -116,10 +108,7 @@ impl CodexSession {
             .executable_path
             .clone()
             .unwrap_or_else(|| "codex".to_string());
-        *self
-            .history_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner()) = executable.clone();
+        *self.history_executable.lock_recover() = executable.clone();
         let mut cmd = build_app_server_command(
             &executable,
             Some(Path::new(&self.project_path)),
@@ -129,12 +118,10 @@ impl CodexSession {
             &mut cmd,
             options.orchestration_mcp.as_ref(),
         );
-        let child = cmd
-            .spawn()
-            .map_err(|e| AdapterError::Message(e.to_string()))?;
+        let child = cmd.spawn()?;
         self.pid
             .store(child.id().map(|p| p as i64).unwrap_or(0), Ordering::SeqCst);
-        *self.status.lock().unwrap_or_else(|e| e.into_inner()) = AdapterProcessStatus::Starting;
+        *self.status.lock_recover() = AdapterProcessStatus::Starting;
 
         Ok(child)
     }
@@ -157,15 +144,9 @@ pub(super) fn build_app_server_command(
     cwd: Option<&Path>,
     path: &str,
 ) -> tokio::process::Command {
-    let mut cmd = tokio::process::Command::new(executable);
-    cmd.arg("app-server")
-        .env("PATH", path)
-        .env("FORCE_COLOR", "0")
-        .env("NO_COLOR", "1")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true);
+    let path = mainframe_runtime::ResolvedPath::from_value(path);
+    let mut cmd = mainframe_runtime::process::cli_command(executable, &path);
+    cmd.arg("app-server");
     if let Some(cwd) = cwd {
         cmd.current_dir(cwd);
     }
@@ -179,9 +160,7 @@ pub(crate) async fn spawn_temp_app_server(
     path: &str,
 ) -> Result<Arc<JsonRpcClient>, AdapterError> {
     let mut cmd = build_app_server_command(executable, cwd, path);
-    let child = cmd
-        .spawn()
-        .map_err(|e| AdapterError::Message(e.to_string()))?;
+    let child = cmd.spawn()?;
     let client = Arc::new(JsonRpcClient::new(
         child,
         JsonRpcHandlers {
@@ -194,7 +173,7 @@ pub(crate) async fn spawn_temp_app_server(
     client
         .request("initialize", Some(initialize_params(with_capabilities)))
         .await
-        .map_err(|e| AdapterError::Message(e.0))?;
+        .map_err(AdapterError::from)?;
     client.notify("initialized", None);
     Ok(client)
 }

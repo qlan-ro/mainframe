@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/quota-identity.ts`.
-//!
 //! Resolves the logged-in Codex account identity: `account/read`'s email first,
 //! then `~/.codex/auth.json`'s `tokens.account_id`, then a synthetic
 //! `apiKey`/`bedrock` bucket for keyless auth. A transient RPC or file-read
@@ -51,7 +49,7 @@ pub(crate) async fn read_codex_account_identity(deps: ReadCodexAccountIdentityDe
     let account = match (deps.read_account)().await {
         Ok(account) => account,
         Err(err) => {
-            tracing::warn!(%err, "codex account/read failed; identity transient");
+            tracing::warn!(error = %err, "codex account/read failed; identity transient");
             return CODEX_IDENTITY_TRANSIENT.to_string();
         }
     };
@@ -71,7 +69,7 @@ pub(crate) async fn read_codex_account_identity(deps: ReadCodexAccountIdentityDe
     let auth_file = match auth_file {
         Ok(auth_file) => auth_file,
         Err(err) => {
-            tracing::warn!(%err, "codex auth.json unreadable; identity transient");
+            tracing::warn!(error = %err, "codex auth.json unreadable; identity transient");
             return CODEX_IDENTITY_TRANSIENT.to_string();
         }
     };
@@ -105,7 +103,7 @@ fn synthetic_bucket(account: Option<&Account>) -> String {
         Some(Account::ApiKey) => "apiKey".to_string(),
         Some(Account::AmazonBedrock { .. }) => "bedrock".to_string(),
         _ => {
-            tracing::info!(?account, "codex: no identifiable account; identity unknown");
+            tracing::info!(?account, "no identifiable account; identity unknown");
             CODEX_IDENTITY_UNKNOWN.to_string()
         }
     }
@@ -125,138 +123,10 @@ async fn read_default_auth_file(path: &Path) -> Result<Option<CodexAuthFile>, Ad
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(err) => return Err(AdapterError::from(err)),
     };
-    let parsed: CodexAuthFile =
-        serde_json::from_str(&raw).map_err(|err| AdapterError::Message(err.to_string()))?;
+    let parsed: CodexAuthFile = serde_json::from_str(&raw).map_err(AdapterError::from)?;
     Ok(Some(parsed))
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn account_ok(account: Option<Account>) -> Box<ReadAccount> {
-        Box::new(move || {
-            let account = account.clone();
-            Box::pin(async move { Ok(account) })
-        })
-    }
-    fn account_err() -> Box<ReadAccount> {
-        Box::new(|| Box::pin(async { Err(AdapterError::Message("app-server unreachable".into())) }))
-    }
-    fn auth_file_ok(account_id: Option<&'static str>) -> Box<ReadAuthFile> {
-        Box::new(move || {
-            Box::pin(async move {
-                Ok(Some(CodexAuthFile {
-                    tokens: Some(AuthTokens {
-                        account_id: account_id.map(str::to_string),
-                    }),
-                }))
-            })
-        })
-    }
-    fn auth_file_none() -> Box<ReadAuthFile> {
-        Box::new(|| Box::pin(async { Ok(None) }))
-    }
-    fn auth_file_err() -> Box<ReadAuthFile> {
-        Box::new(|| Box::pin(async { Err(AdapterError::Message("EACCES".into())) }))
-    }
-
-    #[tokio::test]
-    async fn returns_the_account_read_email_for_a_chatgpt_account() {
-        let read_account = account_ok(Some(Account::Chatgpt {
-            email: Some("a@b.com".into()),
-            plan_type: Some("plus".into()),
-        }));
-        let identity = read_codex_account_identity(ReadCodexAccountIdentityDeps {
-            read_account: &read_account,
-            read_auth_file: None,
-        })
-        .await;
-        assert_eq!(identity, "a@b.com");
-    }
-
-    #[tokio::test]
-    async fn falls_back_to_auth_json_account_id_when_the_chatgpt_account_has_no_email() {
-        let read_account = account_ok(Some(Account::Chatgpt {
-            email: None,
-            plan_type: Some("plus".into()),
-        }));
-        let read_auth_file = auth_file_ok(Some("uuid-456"));
-        let identity = read_codex_account_identity(ReadCodexAccountIdentityDeps {
-            read_account: &read_account,
-            read_auth_file: Some(&read_auth_file),
-        })
-        .await;
-        assert_eq!(identity, "uuid-456");
-    }
-
-    #[tokio::test]
-    async fn returns_a_synthetic_api_key_bucket_when_there_is_no_email_and_no_auth_json_fallback() {
-        let read_account = account_ok(Some(Account::ApiKey));
-        let read_auth_file = auth_file_none();
-        let identity = read_codex_account_identity(ReadCodexAccountIdentityDeps {
-            read_account: &read_account,
-            read_auth_file: Some(&read_auth_file),
-        })
-        .await;
-        assert_eq!(identity, "apiKey");
-    }
-
-    #[tokio::test]
-    async fn returns_a_synthetic_bedrock_bucket_for_amazon_bedrock_accounts() {
-        let read_account = account_ok(Some(Account::AmazonBedrock {
-            credential_source: Some("env".into()),
-        }));
-        let read_auth_file = auth_file_none();
-        let identity = read_codex_account_identity(ReadCodexAccountIdentityDeps {
-            read_account: &read_account,
-            read_auth_file: Some(&read_auth_file),
-        })
-        .await;
-        assert_eq!(identity, "bedrock");
-    }
-
-    #[tokio::test]
-    async fn returns_the_unknown_bucket_when_there_is_no_account_at_all() {
-        let read_account = account_ok(None);
-        let read_auth_file = auth_file_none();
-        let identity = read_codex_account_identity(ReadCodexAccountIdentityDeps {
-            read_account: &read_account,
-            read_auth_file: Some(&read_auth_file),
-        })
-        .await;
-        assert_eq!(identity, CODEX_IDENTITY_UNKNOWN);
-    }
-
-    #[tokio::test]
-    async fn returns_the_transient_sentinel_when_account_read_fails() {
-        let read_account = account_err();
-        let identity = read_codex_account_identity(ReadCodexAccountIdentityDeps {
-            read_account: &read_account,
-            read_auth_file: None,
-        })
-        .await;
-        assert_eq!(identity, CODEX_IDENTITY_TRANSIENT);
-    }
-
-    #[tokio::test]
-    async fn returns_the_transient_sentinel_when_auth_json_is_present_but_unreadable() {
-        let read_account = account_ok(Some(Account::ApiKey));
-        let read_auth_file = auth_file_err();
-        let identity = read_codex_account_identity(ReadCodexAccountIdentityDeps {
-            read_account: &read_account,
-            read_auth_file: Some(&read_auth_file),
-        })
-        .await;
-        assert_eq!(identity, CODEX_IDENTITY_TRANSIENT);
-    }
-}
-
-// PORT STATUS: src/plugins/builtin/codex/quota-identity.ts (75 lines)
-// confidence: high
-// todos: 0
-// notes: readAccount/readAuthFile are injected as boxed async closures returning
-// notes: Result (Rust has no bare try/catch, so the TS try/catch-to-transient-
-// notes: sentinel branches become Err arms) mirroring quota_pull's deps seam.
-// notes: CodexAuthFile/AuthTokens stay module-private, matching the TS file's
-// notes: locally-scoped interface (not exported via types.ts).
+#[path = "quota_identity_tests.rs"]
+mod tests;

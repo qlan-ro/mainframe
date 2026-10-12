@@ -15,7 +15,7 @@ use serde::Deserialize;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 #[derive(Deserialize)]
 struct OfferBody {
@@ -43,20 +43,11 @@ async fn accept_worktree_offer(
     let Some(path) = worktree_path(&body) else {
         return fail(StatusCode::BAD_REQUEST, MISSING_PATH);
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "accept-worktree-offer needs ChatManager (unwired)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to switch worktree",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.accept_worktree_offer(&id, &path).await {
         Ok(()) => ok_empty(),
         Err(err) => {
-            let status = StatusCode::from_u16(err.status_code())
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-            tracing::warn!(chat_id = %id, %err, "accept-worktree-offer failed");
-            fail(status, err.to_string())
+            crate::respond::fail_domain(format!("accept-worktree-offer failed chat_id={id}"), &err)
         }
     }
 }
@@ -69,20 +60,11 @@ async fn dismiss_worktree_offer(
     let Some(path) = worktree_path(&body) else {
         return fail(StatusCode::BAD_REQUEST, MISSING_PATH);
     };
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(chat_id = %id, "dismiss-worktree-offer needs ChatManager (unwired)");
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to switch worktree",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     match cm.dismiss_worktree_offer(&id, &path) {
         Ok(()) => ok_empty(),
         Err(err) => {
-            let status = StatusCode::from_u16(err.status_code())
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-            tracing::warn!(chat_id = %id, %err, "dismiss-worktree-offer failed");
-            fail(status, err.to_string())
+            crate::respond::fail_domain(format!("dismiss-worktree-offer failed chat_id={id}"), &err)
         }
     }
 }
@@ -100,86 +82,5 @@ pub fn router() -> Router<Arc<AppCtx>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::body::to_bytes;
-
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        (
-            status,
-            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
-        )
-    }
-
-    #[tokio::test]
-    async fn accept_rejects_empty_body_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = accept_worktree_offer(
-            State(ctx.clone()),
-            Path("c".into()),
-            axum::body::Bytes::from(""),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "Worktree path is required");
-    }
-
-    #[tokio::test]
-    async fn accept_rejects_empty_worktree_path_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = accept_worktree_offer(
-            State(ctx.clone()),
-            Path("c".into()),
-            axum::body::Bytes::from(r#"{"worktreePath":""}"#),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "Worktree path is required");
-    }
-
-    #[tokio::test]
-    async fn dismiss_rejects_empty_body_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = dismiss_worktree_offer(
-            State(ctx.clone()),
-            Path("c".into()),
-            axum::body::Bytes::from(""),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "Worktree path is required");
-    }
-
-    #[tokio::test]
-    async fn accept_and_dismiss_fail_with_unwired_chat_manager_500() {
-        let ctx = AppCtx::test_ctx();
-        let (accept_status, accept_body) = read(
-            accept_worktree_offer(
-                State(ctx.clone()),
-                Path("c".into()),
-                axum::body::Bytes::from(r#"{"worktreePath":"/tmp/wt"}"#),
-            )
-            .await,
-        )
-        .await;
-        assert_eq!(accept_status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(accept_body["error"], "Failed to switch worktree");
-
-        let (dismiss_status, dismiss_body) = read(
-            dismiss_worktree_offer(
-                State(ctx.clone()),
-                Path("c".into()),
-                axum::body::Bytes::from(r#"{"worktreePath":"/tmp/wt"}"#),
-            )
-            .await,
-        )
-        .await;
-        assert_eq!(dismiss_status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(dismiss_body["error"], "Failed to switch worktree");
-    }
-}
+#[path = "worktree_offer_tests.rs"]
+mod tests;

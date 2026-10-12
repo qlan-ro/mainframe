@@ -33,11 +33,7 @@ impl CodexSession {
             ThreadTarget::Start => return Ok(Vec::new()),
         };
 
-        let executable = self
-            .history_executable
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let executable = self.history_executable.lock_recover().clone();
         let temp = match spawn_temp_app_server(
             &executable,
             Some(Path::new(&self.project_path)),
@@ -48,7 +44,7 @@ impl CodexSession {
         {
             Ok(c) => c,
             Err(err) => {
-                tracing::warn!(module = "codex:session", err = %err, thread_id = %read_thread_id, "codex: failed to load history");
+                tracing::warn!(error = %err, thread_id = %read_thread_id, "failed to load history");
                 return Ok(Vec::new());
             }
         };
@@ -64,7 +60,7 @@ impl CodexSession {
         match result {
             Ok(msgs) => Ok(msgs),
             Err(err) => {
-                tracing::warn!(module = "codex:session", err = %err, thread_id = %read_thread_id, "codex: failed to load history");
+                tracing::warn!(error = %err, thread_id = %read_thread_id, "failed to load history");
                 Ok(Vec::new())
             }
         }
@@ -73,16 +69,11 @@ impl CodexSession {
         let Some(thread_id) = self.resume_thread_id.clone() else {
             return Ok(Vec::new());
         };
-        let deps = self
-            .scan_deps
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let deps = self.scan_deps.lock_recover().clone();
         match rollout_scan_records(&thread_id, deps.as_ref()).await {
             Some(records) => Ok(records),
             None => {
                 tracing::debug!(
-                    module = "codex:session",
                     thread_id,
                     "no rollout for PR scan; falling back to thread/read"
                 );

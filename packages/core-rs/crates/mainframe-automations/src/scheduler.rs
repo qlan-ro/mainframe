@@ -1,8 +1,7 @@
-//! Pure schedule computation (T8.1, Node triggers/schedule.ts +
-//! cron-parser). A plain-language `SchedulePattern` compiles to a cron
-//! string evaluated in the caller's timezone (contract §1: all schedules
-//! run in local time — cron never crosses the API); croner does the
-//! occurrence math. The 30 s sweep (T8.2) lives in `triggers::sweep`.
+//! Pure schedule computation. A plain-language `SchedulePattern` compiles
+//! to a cron string evaluated in the caller's timezone (contract §1: all
+//! schedules run in local time — cron never crosses the API); croner does
+//! the occurrence math. The 30 s sweep lives in `triggers::sweep`.
 
 use std::str::FromStr;
 
@@ -16,7 +15,7 @@ use crate::domain::SchedulePattern;
 pub enum ScheduleError {
     /// `0 */n * * *` resets at midnight, so a non-divisor n would fire at
     /// uneven gaps — the picker offers only divisors and this defends any
-    /// caller that bypasses schema validation (Node compileSchedule parity).
+    /// caller that bypasses schema validation.
     #[error("every_n_hours 'n' ({0}) must evenly divide 24")]
     NotADivisorOf24(u32),
 
@@ -35,7 +34,7 @@ pub enum ScheduleError {
 }
 
 /// SchedulePattern → 5-field cron string (Node triggers/schedule.ts).
-pub fn compile_schedule(pattern: &SchedulePattern) -> Result<String, ScheduleError> {
+pub(crate) fn compile_schedule(pattern: &SchedulePattern) -> Result<String, ScheduleError> {
     match pattern {
         SchedulePattern::Daily(daily) => daily_cron(&daily.at, "*"),
         SchedulePattern::Weekdays(weekdays) => daily_cron(&weekdays.at, "1-5"),
@@ -99,7 +98,8 @@ fn parse_at(at: &str) -> Result<(u32, u32), ScheduleError> {
 /// once a `once` schedule has passed. Croner resolves DST edges: a fixed
 /// time falling in a spring-forward gap snaps to the first valid instant
 /// after it; a fall-back ambiguity fires at the earliest of the pair.
-pub fn next_occurrence<Tz: TimeZone>(
+#[cfg(test)]
+pub(crate) fn next_occurrence<Tz: TimeZone>(
     pattern: &SchedulePattern,
     after: &DateTime<Tz>,
 ) -> Result<Option<DateTime<Tz>>, ScheduleError> {
@@ -115,7 +115,7 @@ pub fn next_occurrence<Tz: TimeZone>(
 /// primitive (locked decision: no trigger_state table; each sweep recomputes
 /// the current slot and lets the dedup index reject re-fires). `None` when
 /// no occurrence exists within croner's backward search horizon (~1 year).
-pub fn latest_occurrence_at_or_before<Tz: TimeZone>(
+pub(crate) fn latest_occurrence_at_or_before<Tz: TimeZone>(
     pattern: &SchedulePattern,
     now: &DateTime<Tz>,
 ) -> Result<Option<DateTime<Tz>>, ScheduleError> {
@@ -134,7 +134,7 @@ pub fn latest_occurrence_at_or_before<Tz: TimeZone>(
 /// Naive local `YYYY-MM-DDTHH:mm:ss` (Node scheduler.ts toLocalIso) — feeds
 /// `trigger.scheduledFor` and the dedup key `<triggerId>|<scheduledFor>`,
 /// which must be byte-identical across engines sharing an automations.db.
-pub fn scheduled_for_string<Tz: TimeZone>(occurrence: &DateTime<Tz>) -> String {
+pub(crate) fn scheduled_for_string<Tz: TimeZone>(occurrence: &DateTime<Tz>) -> String {
     occurrence
         .naive_local()
         .format("%Y-%m-%dT%H:%M:%S")
@@ -144,10 +144,3 @@ pub fn scheduled_for_string<Tz: TimeZone>(occurrence: &DateTime<Tz>) -> String {
 fn parse_cron(pattern: &SchedulePattern) -> Result<Cron, ScheduleError> {
     Ok(Cron::from_str(&compile_schedule(pattern)?)?)
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node triggers/schedule.ts compileSchedule + cron-parser
-//        local-time evaluation; croner replaces cron-parser, and
-//        find_previous_occurrence replaces Node's stored next_fire_at rows.

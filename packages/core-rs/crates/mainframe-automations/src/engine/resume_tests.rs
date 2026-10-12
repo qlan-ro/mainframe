@@ -1,6 +1,5 @@
-//! T4.1 — resume over the same store: replay never re-runs committed steps,
-//! and a stranded `running` marker follows the Decision-12 restart policy
-//! (Node parity: engine-resume.test.ts).
+//! Resume over the same store: replay never re-runs committed steps,
+//! and a stranded `running` marker follows the restart-mid-action policy.
 
 use std::sync::{Arc, Mutex};
 
@@ -22,7 +21,7 @@ async fn seed_step(
     kind: &str,
     status: StepStatus,
 ) {
-    let (step_id, kind) = (step_id.to_string(), kind.to_string());
+    let (step_id, kind) = (step_id.to_string(), kind.into());
     h.store
         .patch_checkpoint(run_id, move |cp| {
             cp.steps.insert(

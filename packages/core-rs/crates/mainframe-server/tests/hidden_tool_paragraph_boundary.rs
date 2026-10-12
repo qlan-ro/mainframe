@@ -1,4 +1,4 @@
-//! Production-path regression for todo #383: a hidden-category tool call
+//! Production-path regression: a hidden-category tool call
 //! (Claude's `TodoWrite`, `AskUserQuestion`, ...) sitting between two visible
 //! text contributions of one display message must not let the two texts
 //! coalesce with no separator once the hidden call is dropped.
@@ -12,14 +12,19 @@
 //! `live_vs_cold_reload_golden.rs` exercises), with the adapter's real
 //! `ClaudeAdapter::default().get_tool_categories()` rather than a hand-built
 //! `ToolCategories`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::collections::HashMap;
 
 use mainframe_acp::encoder::{EncodedItem, ItemRole, encode, encode_revision};
 use mainframe_adapter_api::Adapter;
 use mainframe_adapter_claude::adapter::ClaudeAdapter;
-use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
+use mainframe_display::display_pipeline::prepare_messages_for_client;
 use mainframe_types::acp::content::ContentBlock;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;

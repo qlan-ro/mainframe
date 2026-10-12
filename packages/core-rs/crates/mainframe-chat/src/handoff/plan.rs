@@ -13,11 +13,11 @@ pub struct Coverage {
 }
 
 impl Coverage {
-    pub fn from_ordinal(&self) -> u32 {
+    pub(crate) fn first_ordinal(&self) -> u32 {
         self.ordinals.first().copied().unwrap_or(0)
     }
 
-    pub fn to_ordinal(&self) -> u32 {
+    pub(crate) fn to_ordinal(&self) -> u32 {
         self.ordinals.last().copied().unwrap_or(0)
     }
 }
@@ -57,7 +57,7 @@ pub fn plan_coverage(
 }
 
 /// Every earlier segment, borrowed ones included.
-pub fn full_coverage(layout: &SegmentLayout, target: &SegmentRecord) -> Coverage {
+pub(crate) fn full_coverage(layout: &SegmentLayout, target: &SegmentRecord) -> Coverage {
     Coverage {
         strategy: HandoffStrategy::Full,
         ordinals: ordinals_between(layout, None, target.ordinal),

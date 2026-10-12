@@ -1,14 +1,14 @@
 use super::*;
 
-impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
+impl SessionSinkImpl {
     pub(super) fn emit_display(&self) {
-        let categories = self.deps.get_tool_categories(&self.chat_id);
+        let categories = self.shared.deps.get_tool_categories(&self.chat_id);
         emit_display_for(
             &self.chat_id,
             &self.messages,
             &self.partial_overlays,
             categories.as_ref(),
-            self.deps.as_ref(),
+            self.shared.deps.as_ref(),
             self.chat_surface.get(),
         );
     }
@@ -22,7 +22,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     /// Remove THIS session's overlay entry; reports whether one was present
     /// so abort paths (retry, result, exit) only re-emit when content
     /// vanishes. Never touches a different session's overlay for the same
-    /// chat (T13, R3.19).
+    /// chat.
     pub(super) fn take_partial_overlay(&self) -> bool {
         self.partial_overlays
             .take(&self.chat_id, self.session_key())
@@ -33,10 +33,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     pub(super) fn append_and_display(&self, message: ChatMessage) {
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .append(&self.chat_id, message);
+        self.messages.lock_recover().append(&self.chat_id, message);
         self.emit_display();
     }
 
@@ -50,7 +47,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     }
 
     /// `transient`, with an adapter-supplied id in place of a minted nanoid
-    /// (todo #350 group B, stable-ids task 5).
+    /// so live and replayed messages share the same id.
     pub(super) fn transient_with_id(
         &self,
         r#type: ChatMessageType,
@@ -59,8 +56,7 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
         vendor_id: Option<String>,
     ) -> ChatMessage {
         self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .create_transient_message_with_vendor_id(
                 &self.chat_id,
                 r#type,
@@ -75,31 +71,21 @@ impl<D: EventHandlerDeps + 'static> SessionSinkImpl<D> {
     /// what `on_permission` emits for a freshly enqueued front request.
     pub(super) fn promote_next(&self, next: Option<ControlRequest>) {
         if let Some(next) = next {
-            let notify = self.deps.should_notify_permission(Some(&next.tool_name));
             self.notify_surface(ChatSurfaceEvent::GateRaised {
                 chat_id: self.chat_id.clone(),
                 request: next.clone(),
             });
-            if notify {
-                let tool = &next.tool_name;
-                self.deps.send_push(PushOut {
-                    chat_id: self.chat_id.clone(),
-                    title: "Permission Required".to_string(),
-                    body: format!("Agent wants to run: {tool}"),
-                    push_type: "permission".to_string(),
-                    priority: "high".to_string(),
-                });
-            }
+            self.shared.permission_push(&self.chat_id, &next.tool_name);
         }
-        if let Some(cell) = self.deps.get_active_chat(&self.chat_id) {
-            let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
-            self.deps
-                .emit_event(DaemonEvent::ChatUpdated { chat, reason: None });
+        if let Some(cell) = self.shared.active(&self.chat_id) {
+            let chat = cell.lock_recover().chat.clone();
+            self.shared
+                .emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }
 }
 
-impl<D: EventHandlerDeps + 'static> SessionSink for SessionSinkImpl<D> {
+impl SessionSink for SessionSinkImpl {
     fn on_message_with_presentation(
         &self,
         content: Vec<MessageContent>,

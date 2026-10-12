@@ -1,9 +1,10 @@
 //! The dispatch half of `send_message`: command vs plain text, and the
 //! first-message titling both share. The queued-turn bookkeeping
 //! (`queued_message_metadata`, `record_queued_ref`) lives in the sibling
-//! `send_queue.rs` (todo #350, plan task 37).
+//! `send_queue.rs`.
 
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 /// Everything the plain-text tail needs from attachment processing, with the
 /// typed text already folded in.
@@ -16,25 +17,18 @@ struct Outgoing {
 
 impl ChatManager {
     /// First-message titling: the deterministic fallback, then LLM summarization.
-    /// No-op once the chat has a title — EXCEPT a fork's provisional title
-    /// (todo #343), which still triggers generation on the first send even
-    /// though it is non-empty: without this, a fork's `<title> (fork)` title
-    /// would never be replaced. A user rename before that first message (the
-    /// title no longer equals the stored provisional title) still wins, and so
-    /// does disabled generation (`do_generate_title`'s own no-op).
+    /// No-op once the chat has a title — EXCEPT a fork's provisional title, which
+    /// still triggers generation on the first send even though it is non-empty:
+    /// without this, a fork's `<title> (fork)` title would never be replaced. A
+    /// user rename before that first message (the title no longer equals the
+    /// stored provisional title) still wins, and so does disabled generation
+    /// (`do_generate_title`'s own no-op).
     fn assign_initial_title(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, content: &str) {
-        let current_title = cell
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .title
-            .clone()
-            .unwrap_or_default();
+        let current_title = cell.lock_recover().chat.title.clone().unwrap_or_default();
         let title_empty = current_title.is_empty();
-        let is_untouched_fork_title = self
-            .deps
-            .get_pending_fork(chat_id)
-            .is_some_and(|pending| pending.provisional_title == current_title);
+        let is_untouched_fork_title =
+            storage_event!(self.shared, Some(chat_id); self.shared.deps.get_pending_fork(chat_id))
+                .is_some_and(|pending| pending.provisional_title == current_title);
         if !title_empty && !is_untouched_fork_title {
             return;
         }
@@ -46,25 +40,26 @@ impl ChatManager {
         if title_empty {
             let title = derive_title_from_message(&visible_content);
             {
-                let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+                let mut guard = cell.lock_recover();
                 guard.chat.title = Some(title.clone());
             }
-            self.deps.chats_update(
-                chat_id,
-                &ChatUpdate {
-                    title: Some(title),
-                    ..Default::default()
-                },
+            let chat = cell.lock_recover().chat.clone();
+            storage_event!(
+                self.shared, Some(chat_id);
+                self.shared.update_and_emit(
+                    chat,
+                    &ChatPatch {
+                        title: Some(title),
+                        ..Default::default()
+                    },
+                )
             );
-            let chat = cell.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
-        // TS fires `doGenerateTitle(...).catch(...)` WITHOUT awaiting: title
-        // generation shells out to the CLI, so awaiting it here would both stall
-        // the send and shift its `chat.updated` ahead of the turn's result/
-        // contextUsage events. Spawn it so the emission lands after the turn,
-        // matching Node's stream ordering. A fork's provisional title is left
-        // exactly as `create_fork` stored it until generation produces one.
+        // Title generation runs WITHOUT awaiting: it shells out to the CLI, so
+        // awaiting it here would both stall the send and shift its `chat.updated`
+        // ahead of the turn's result/contextUsage events. Spawn it so the emission
+        // lands after the turn. A fork's provisional title is left exactly as
+        // `create_fork` stored it until generation produces one.
         let lifecycle = self.lifecycle.clone();
         let chat_id_owned = chat_id.to_string();
         tokio::spawn(async move {
@@ -76,11 +71,10 @@ impl ChatManager {
 
     /// Both dispatch shapes store and emit the user's text, so they share this.
     ///
-    /// `vendor_id`, when given, becomes the stored message's own id in place
-    /// of a minted nanoid — the same uuid handed to `send_message` below, so
-    /// the CLI records this turn's transcript entry under the id the daemon
-    /// already committed to live (`docs/specs/2026-09-25-todo-178-idle-whole-
-    /// chat-offload.md` decision 10: live and cold-reloaded ids must match).
+    /// `vendor_id`, when given, becomes the stored message's own id in place of
+    /// a minted nanoid — the same uuid handed to `send_message` below, so the
+    /// CLI records this turn's transcript entry under the id the daemon already
+    /// committed to live (live and cold-reloaded ids must match).
     fn store_user_message(
         &self,
         chat_id: &str,
@@ -90,9 +84,9 @@ impl ChatManager {
         vendor_id: Option<String>,
     ) -> ChatMessage {
         let message = self
+            .shared
             .messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .create_transient_message_with_vendor_id(
                 chat_id,
                 ChatMessageType::User,
@@ -104,9 +98,9 @@ impl ChatManager {
                 },
                 vendor_id,
             );
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.shared
+            .messages
+            .lock_recover()
             .append(chat_id, message.clone());
         self.event_handler.emit_display(chat_id);
         if attachment_ids.map(|a| !a.is_empty()).unwrap_or(false) {
@@ -130,7 +124,9 @@ impl ChatManager {
             text_prefix,
             attachment_previews,
         } = match attachment_ids {
-            Some(ids) if !ids.is_empty() => self.deps.process_attachments(chat_id, ids).await,
+            Some(ids) if !ids.is_empty() => {
+                self.shared.deps.process_attachments(chat_id, ids).await
+            }
             _ => ProcessedAttachments::default(),
         };
         if !content.is_empty() {
@@ -167,15 +163,11 @@ impl ChatManager {
         content: &str,
         handoff: Option<&str>,
     ) -> Result<(), SendError> {
-        // A command dispatched while another turn is already running (T17,
-        // R3.12) is not a turn start — a turn is already in progress. Only a
-        // command sent to a free chat opens one.
-        let was_working = post
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .chat
-            .process_state
-            == Some(Some(ProcessState::Working));
+        // A command dispatched while another turn is already running is not a
+        // turn start — a turn is already in progress. Only a command sent to a
+        // free chat opens one.
+        let was_working =
+            post.lock_recover().chat.process_state == Some(Some(ProcessState::Working));
         self.store_user_message(
             chat_id,
             vec![MessageContent::Leaf(LeafContent::Text {
@@ -203,9 +195,7 @@ impl ChatManager {
                 .await?;
         }
         let now = now_iso8601();
-        self.set_working(post, chat_id, &now);
-        let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
-        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.set_working(post, &now);
         // Commands are never queued behind a running turn, so acceptance
         // (send_entry.rs) and start are the same moment — UNLESS a turn was
         // already running: the command still bypasses the queue and runs
@@ -247,60 +237,6 @@ impl ChatManager {
         // state that does not exist yet. A steer that then fails never got
         // the CLI's attention at all, so both are rolled back rather than
         // left to look delivered/queued.
-        let handoff = match delivery {
-            Delivery::Steer => {
-                let message = self.store_user_message(
-                    chat_id,
-                    outgoing.message_content,
-                    transient_metadata,
-                    attachment_ids,
-                    Some(message_uuid.clone()),
-                );
-                // Claude's steer is also a queued send when replay-ack
-                // applies (`queued_message_metadata`): the running
-                // transition is reported once, on the ack, not here too.
-                if is_queued {
-                    self.record_queued_ref(
-                        chat_id,
-                        &message,
-                        message_uuid.clone(),
-                        content,
-                        attachment_ids,
-                    );
-                }
-                if let Err(err) = session
-                    .steer(outgoing.text, Some(message_uuid.clone()))
-                    .await
-                {
-                    if is_queued {
-                        self.remove_queued_ref(chat_id, &message_uuid);
-                    }
-                    self.messages
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .remove_by_id(chat_id, &message.id);
-                    self.event_handler.emit_display(chat_id);
-                    return Err(err.into());
-                }
-                if self.deps.extract_mentions_from_text(chat_id, content) {
-                    self.emit(DaemonEvent::ContextUpdated {
-                        chat_id: chat_id.to_string(),
-                        file_paths: None,
-                    });
-                }
-                self.assign_initial_title(post, chat_id, content);
-                if !is_queued {
-                    self.event_handler.notify_chat_surface(
-                        crate::chat_surface::ChatSurfaceEvent::TurnStarted {
-                            chat_id: chat_id.to_string(),
-                        },
-                    );
-                }
-                return Ok(());
-            }
-            Delivery::Turn { handoff } => handoff,
-        };
-
         let message = self.store_user_message(
             chat_id,
             outgoing.message_content,
@@ -308,20 +244,31 @@ impl ChatManager {
             attachment_ids,
             Some(message_uuid.clone()),
         );
+        let handoff = match delivery {
+            Delivery::Steer => {
+                return self
+                    .deliver_steer(
+                        post,
+                        session,
+                        SteerMessage {
+                            chat_id,
+                            content,
+                            attachment_ids,
+                            message,
+                            message_uuid,
+                            is_queued,
+                            text: outgoing.text,
+                        },
+                    )
+                    .await;
+            }
+            Delivery::Turn { handoff } => handoff,
+        };
 
-        if self.deps.extract_mentions_from_text(chat_id, content) {
-            self.emit(DaemonEvent::ContextUpdated {
-                chat_id: chat_id.to_string(),
-                file_paths: None,
-            });
-        }
-
-        self.assign_initial_title(post, chat_id, content);
+        self.record_message_context(post, chat_id, content);
 
         let now = now_iso8601();
-        self.set_working(post, chat_id, &now);
-        let chat = post.lock().unwrap_or_else(|e| e.into_inner()).chat.clone();
-        self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+        self.set_working(post, &now);
 
         let uuid = Some(message_uuid.clone());
         // The provider gets the handoff block; the stored message keeps
@@ -331,8 +278,8 @@ impl ChatManager {
 
         if is_queued {
             self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);
-            // Queued: `TurnStarted` waits for the CLI to dequeue it
-            // (event_handler.rs's `on_queued_processed`).
+        // Queued: `TurnStarted` waits for the CLI to dequeue it
+        // (event_handler.rs's `on_queued_processed`).
         } else {
             self.event_handler.notify_chat_surface(
                 crate::chat_surface::ChatSurfaceEvent::TurnStarted {
@@ -350,3 +297,15 @@ fn with_handoff(handoff: Option<&str>, text: String) -> String {
         None => text,
     }
 }
+
+struct SteerMessage<'a> {
+    chat_id: &'a str,
+    content: &'a str,
+    attachment_ids: Option<&'a [String]>,
+    message: ChatMessage,
+    message_uuid: String,
+    is_queued: bool,
+    text: String,
+}
+
+mod delivery;

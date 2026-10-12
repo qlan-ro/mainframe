@@ -1,7 +1,7 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, reason = "Test assertions and scenarios")]
 
 use mainframe_acp::encoder::{EncodedItem, encode};
-use mainframe_adapter_claude::messages::display_pipeline::prepare_messages_for_client;
+use mainframe_display::display_pipeline::prepare_messages_for_client;
 use mainframe_types::chat::ChatMessage;
 use mainframe_types::display::ToolCategories;
 use serde_json::{Value, json};

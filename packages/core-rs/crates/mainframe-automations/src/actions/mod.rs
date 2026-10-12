@@ -1,22 +1,24 @@
-//! run_action registry + built-in actions (plan Phase 6). Every action is a
-//! trait object behind the flat-id `ActionRegistry`; the run_action verb
-//! (Node verbs/run-action.ts) renders ChipText params, resolves the
-//! credential label, and hands this layer a JSON input object.
+//! run_action registry + built-in actions. Every action is a trait object
+//! behind the flat-id `ActionRegistry`; the run_action verb renders ChipText
+//! params, resolves the credential label, and hands this layer a JSON input
+//! object.
 
-pub mod ado;
-pub mod files;
-pub mod github;
-pub mod http_action;
-pub mod manifest;
-pub mod notion;
-mod paths;
-pub mod registry;
-pub mod run_command;
+pub(crate) mod ado;
+pub(crate) mod files;
+pub(crate) mod github;
+pub(crate) mod http;
+pub(crate) mod http_action;
+pub(crate) mod manifest;
+pub(crate) mod notion;
+pub(crate) mod registry;
+pub(crate) mod run_command;
 mod shell;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
+use mainframe_types::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -24,16 +26,14 @@ pub use manifest::{ActionAuth, ActionGroup, ActionManifest, ActionOutput, Action
 pub use registry::{ActionCatalogEntry, ActionRegistry};
 
 use crate::credentials::Credentials;
-use crate::engine::BoxFuture;
 use crate::tokens::TokenValue;
 
-/// What an action sees at execution time (Node actions/types.ts ActionCtx).
-/// Cancellation is structural — the interpreter drops the walk future — so
-/// no abort signal is threaded through.
+/// What an action sees at execution time. Cancellation is structural — the
+/// interpreter drops the walk future — so no abort signal is threaded through.
 pub struct ActionCtx {
     pub creds: Option<Credentials>,
     /// The label `creds` was resolved from (the step's `credential` field) —
-    /// connector auth failures name it so the fix is actionable (plan T7.1).
+    /// connector auth failures name it so the fix is actionable.
     pub credential_label: Option<String>,
     /// `runId:stepRef` — passed through to actions that support idempotency
     /// keys (e.g. HTTP).
@@ -47,6 +47,8 @@ pub struct ActionCtx {
     pub worktree_path: Option<String>,
 }
 
+/// A step action's failure. The text is the step error the run shows, and no
+/// caller branches on the cause, so it stays a message.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
 pub struct ActionError(pub String);
@@ -79,41 +81,8 @@ pub trait Action: Send + Sync {
     }
 }
 
-pub(crate) use crate::USER_AGENT;
-
-/// The one client every connector builds from, so no future connector can
-/// reach an API with a bare `reqwest::Client::new()` again.
-pub(crate) fn http_client() -> reqwest::Client {
-    match reqwest::Client::builder().user_agent(USER_AGENT).build() {
-        Ok(client) => client,
-        Err(err) => {
-            // Only the TLS backend can fail here, and that fails every request
-            // anyway — so log and let the call site report the real failure.
-            tracing::error!(%err, "automations: HTTP client built without a User-Agent");
-            reqwest::Client::new()
-        }
-    }
-}
-
-const ERROR_BODY_SNIPPET_CHARS: usize = 500;
-
-/// Connector HTTP failure (Node's `<op> failed (<status>): <500-char body>`),
-/// plus the plan-T7.1 twist: an auth rejection names the credential label the
-/// step used so the failure is actionable from the run timeline.
-pub(crate) fn http_failure(op: &str, status: u16, ctx: &ActionCtx, body: &str) -> ActionError {
-    let snippet: String = body.chars().take(ERROR_BODY_SNIPPET_CHARS).collect();
-    if status == 401 || status == 403 {
-        let cred = match &ctx.credential_label {
-            Some(label) => format!("credential '{label}'"),
-            None => "no credential configured".to_string(),
-        };
-        return ActionError(format!("{op} failed ({status}, {cred}): {snippet}"));
-    }
-    ActionError(format!("{op} failed ({status}): {snippet}"))
-}
-
-/// Strict input parse — unknown fields rejected (zod `.strict()` parity),
-/// with the Node verb's error text (`invalid input for '<id>': …`).
+/// Strict input parse — unknown fields rejected, with the error text
+/// `invalid input for '<id>': …`.
 pub(crate) fn parse_input<T: DeserializeOwned>(
     action_id: &str,
     params: &Value,
@@ -122,9 +91,8 @@ pub(crate) fn parse_input<T: DeserializeOwned>(
         .map_err(|err| ActionError(format!("invalid input for '{action_id}': {err}")))
 }
 
-/// `~` expansion + absolute resolution (Node verbs/run-action.ts
-/// resolvePath): a leading `~` or `~/` becomes the home dir; a relative
-/// path resolves against the process cwd, mirroring `path.resolve`.
+/// `~` expansion + absolute resolution: a leading `~` or `~/` becomes the
+/// home dir; a relative path resolves against the process cwd.
 pub(crate) fn expand_user_path(path: &str) -> PathBuf {
     if let Some(home) = dirs::home_dir() {
         if path == "~" {
@@ -142,36 +110,79 @@ pub(crate) fn expand_user_path(path: &str) -> PathBuf {
     }
 }
 
-/// Registers every launch built-in (Node actions/register-all.ts). MCP stays
-/// a catalog seam (contract §9) — nothing registers an `mcp:*` action here.
-pub fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
-    registry.register(Box::new(run_command::RunCommandAction))?;
-    registry.register(Box::new(files::FilesAppendAction))?;
-    registry.register(Box::new(files::FilesWriteAction))?;
-    registry.register(Box::new(files::FilesReadAction))?;
-    registry.register(Box::new(http_action::HttpRequestAction::new()))?;
-    Ok(())
+/// The launch built-ins, in catalog order. MCP stays a catalog seam
+/// (contract §9): nothing registers an `mcp:*` action here.
+fn builtin_actions() -> Vec<Box<dyn Action>> {
+    vec![
+        Box::new(run_command::RunCommandAction),
+        Box::new(files::FilesAppendAction),
+        Box::new(files::FilesWriteAction),
+        Box::new(files::FilesReadAction),
+        Box::new(http_action::HttpRequestAction::new()),
+    ]
 }
 
-/// Curated connectors (plan Phase 7).
-pub fn register_curated_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
-    registry.register(Box::new(github::GithubCreatePrAction::new()))?;
-    registry.register(Box::new(github::GithubListPrsAction::new()))?;
-    registry.register(Box::new(notion::NotionAddRowAction::new()))?;
-    registry.register(Box::new(ado::AdoCreateItemAction::new()))?;
-    Ok(())
+/// Curated connectors, in catalog order.
+fn curated_actions() -> Vec<Box<dyn Action>> {
+    vec![
+        Box::new(github::GithubCreatePrAction::new()),
+        Box::new(github::GithubListPrsAction::new()),
+        Box::new(notion::NotionAddRowAction::new()),
+        Box::new(ado::AdoCreateItemAction::new()),
+    ]
 }
 
-/// The launch catalog: built-ins + curated connectors, in Node's
-/// register-all.ts order.
-pub fn register_all_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
-    register_builtin_actions(registry)?;
-    register_curated_actions(registry)?;
-    Ok(())
+/// The built-ins alone, for tests that pin the builtin catalog.
+#[cfg(test)]
+pub(crate) fn register_builtin_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
+    builtin_actions()
+        .into_iter()
+        .try_for_each(|action| registry.register(action))
+}
+
+/// The launch catalog: built-ins, then curated connectors.
+pub(crate) fn register_all_actions(registry: &mut ActionRegistry) -> Result<(), ActionError> {
+    builtin_actions()
+        .into_iter()
+        .chain(curated_actions())
+        .try_for_each(|action| registry.register(action))
+}
+
+/// Every launch action's manifest constructor, in catalog order. These are
+/// plain functions over static metadata: reading one builds no action, so no
+/// connector HTTP client exists until the registry registers the actions.
+/// Each action's `Action::manifest` returns the same function's value, and
+/// `registry_tests` pins this table to `register_all_actions`.
+const LAUNCH_MANIFESTS: [fn() -> ActionManifest; 9] = [
+    run_command::run_command_manifest,
+    files::append_manifest,
+    files::overwrite_manifest,
+    files::read_manifest,
+    http_action::http_request_manifest,
+    github::create_pr_manifest,
+    github::list_prs_manifest,
+    notion::add_row_manifest,
+    ado::create_item_manifest,
+];
+
+/// The manifest of a launch action by id, for code that needs an action's
+/// declared shape without a registry at hand (the validator's output table in
+/// `domain::catalog`, the `outputAs` lookup). Reads `LAUNCH_MANIFESTS`, so
+/// validation never constructs an action. Unknown and `mcp:*` ids return
+/// `None`.
+pub(crate) fn known_manifest(action_id: &str) -> Option<&'static ActionManifest> {
+    static MANIFESTS: OnceLock<Vec<ActionManifest>> = OnceLock::new();
+    MANIFESTS
+        .get_or_init(|| LAUNCH_MANIFESTS.iter().map(|manifest| manifest()).collect())
+        .iter()
+        .find(|manifest| manifest.id == action_id)
 }
 
 #[cfg(test)]
 mod files_tests;
+
+#[cfg(test)]
+mod manifest_schema_tests;
 
 #[cfg(test)]
 mod github_tests;
@@ -193,9 +204,3 @@ mod run_command_tests;
 
 #[cfg(test)]
 mod user_agent_tests;
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.2-T7.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: built-ins (T6.3-T6.5) + curated connectors (T7.1/T7.2) registered;
-//        MCP is a catalog-entry seam only (T7.3, contract §9).

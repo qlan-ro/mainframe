@@ -1,18 +1,15 @@
-//! Ported from `src/server/fs-utils.ts`.
-//!
 //! Shared filesystem helpers for the file/search routes: the ignored-directory
-//! and binary-extension deny lists, the `hasBinaryExtension` double-extension
-//! check, and `listProjectFiles` (git `ls-files` primary, symlink-contained walk
-//! fallback). Also hosts two Node-`path` shims (`relative`, `path_resolve`) the
-//! route handlers lean on, since the std library has no direct analogue.
+//! and binary-extension deny lists, the `has_binary_extension` double-extension
+//! check, and `list_project_files` (git `ls-files` primary, symlink-contained
+//! walk fallback). Also hosts two lexical path helpers (`relative`,
+//! `path_resolve`) the route handlers lean on, since the std library has no
+//! direct analogue.
 
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
-use mainframe_git::{GitExecCode, exec_git};
-
 /// Directories skipped by the project walk and excluded from ripgrep `--files`
-/// globs. Mirrors the TS `IGNORED_DIRS` set (order preserved for the glob build).
+/// globs. The order is preserved for the glob build.
 pub const IGNORED_DIRS: &[&str] = &[
     ".git",
     "node_modules",
@@ -65,16 +62,17 @@ pub const BINARY_EXTENSIONS: &[&str] = &[
     ".sqlite", ".sqlite3", ".db",
 ];
 
+#[cfg(test)]
 const WALK_LIMIT: usize = 10_000;
 
 /// True when `name` is one of the ignored directory names.
-pub fn is_ignored_dir(name: &str) -> bool {
+pub(crate) fn is_ignored_dir(name: &str) -> bool {
     IGNORED_DIRS.contains(&name)
 }
 
 /// Mirrors `hasBinaryExtension`: checks the double-extension (`.min.js`) first
 /// (slice from the first dot), then Node's `path.extname` (from the last dot).
-pub fn has_binary_extension(file_path: &str) -> bool {
+pub(crate) fn has_binary_extension(file_path: &str) -> bool {
     let base = Path::new(file_path)
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -90,7 +88,7 @@ pub fn has_binary_extension(file_path: &str) -> bool {
     !ext.is_empty() && BINARY_EXTENSIONS.contains(&ext)
 }
 
-/// Node `path.extname`: the substring from the last dot in the segment, or `""`
+/// The extension: the substring from the last dot in the segment, or `""`
 /// when there is no dot or the only dot is the leading one (e.g. `.env` → `""`).
 fn extname(base: &str) -> &str {
     match base.rfind('.') {
@@ -99,9 +97,10 @@ fn extname(base: &str) -> &str {
     }
 }
 
-/// Node `path.relative(from, to)` over absolute, normalized paths: the shared
-/// prefix is dropped, remaining `from` components become `..`, then the `to`
-/// tail is appended. Used to re-base absolute paths to project-relative ones.
+/// The relative path from `from` to `to` over absolute, normalized paths: the
+/// shared prefix is dropped, remaining `from` components become `..`, then the
+/// `to` tail is appended. Used to re-base absolute paths to project-relative
+/// ones.
 pub fn relative(from: &Path, to: &Path) -> String {
     let from_comps: Vec<Component<'_>> = from.components().collect();
     let to_comps: Vec<Component<'_>> = to.components().collect();
@@ -119,10 +118,10 @@ pub fn relative(from: &Path, to: &Path) -> String {
     out.to_string_lossy().into_owned()
 }
 
-/// Node `path.resolve(base, requested)` (lexical, no filesystem access): an
-/// absolute `requested` replaces `base`; otherwise they are joined; then `.`/`..`
-/// segments are collapsed. Used only as the best-effort fallback in
-/// `paths/resolve` when `realpath` fails.
+/// Lexical path resolution of `requested` against `base` (no filesystem
+/// access): an absolute `requested` replaces `base`; otherwise they are joined;
+/// then `.`/`..` segments are collapsed. Used only as the best-effort fallback
+/// in `paths/resolve` when `realpath` fails.
 pub fn path_resolve(base: &str, requested: &str) -> String {
     let joined = if Path::new(requested).is_absolute() {
         PathBuf::from(requested)
@@ -151,38 +150,6 @@ pub fn path_resolve(base: &str, requested: &str) -> String {
         buf.push(c.as_os_str());
     }
     buf.to_string_lossy().into_owned()
-}
-
-/// Mirrors `listProjectFiles`: with `include_ignored`, walk everything (build
-/// artifacts included); otherwise ask git for tracked + untracked-not-ignored
-/// files, falling back to the ignored-dir-skipping walk when git fails.
-pub async fn list_project_files(project_path: &str, include_ignored: bool) -> Vec<String> {
-    if include_ignored {
-        return walk_project_files(project_path, false, WALK_LIMIT).await;
-    }
-
-    let args = [
-        "ls-files".to_string(),
-        "--cached".to_string(),
-        "--others".to_string(),
-        "--exclude-standard".to_string(),
-    ];
-    match exec_git(&args, project_path, None).await {
-        Ok(output) => output
-            .split('\n')
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .map(str::to_string)
-            .collect(),
-        Err(err) => {
-            // Exit 128 = "not a git repo"; anything else is unexpected — log it,
-            // then fall back to the walk either way.
-            if err.code != Some(GitExecCode::Number(128)) {
-                tracing::warn!(error = %err, project_path, "git ls-files failed unexpectedly, falling back to walk");
-            }
-            walk_project_files(project_path, true, WALK_LIMIT).await
-        }
-    }
 }
 
 /// Recursive project walk stopping at `limit` files. Each entry is realpath'd and
@@ -231,16 +198,11 @@ pub(crate) async fn walk_project_files(
                 Ok(p) => p,
                 Err(_) => continue,
             };
-            if !crate::path_utils::is_within_base(root, &real_full) {
+            if !mainframe_runtime::fs::is_within_base(root, &real_full) {
                 continue;
             }
-            let is_dir = match entry.file_type().await {
-                Ok(ft) if ft.is_symlink() => tokio::fs::metadata(&full_path)
-                    .await
-                    .map(|m| m.is_dir())
-                    .unwrap_or(false),
-                Ok(ft) => ft.is_dir(),
-                Err(_) => continue,
+            let Some(is_dir) = entry_is_directory(&entry, &full_path).await else {
+                continue;
             };
             if is_dir {
                 if entered.insert(real_full) {
@@ -255,18 +217,16 @@ pub(crate) async fn walk_project_files(
 }
 
 #[cfg(test)]
+#[path = "fs_utils_tests.rs"]
 mod tests;
 
-// PORT STATUS: src/server/fs-utils.ts (IGNORED_DIRS, BINARY_EXTENSIONS,
-// hasBinaryExtension, listProjectFiles/walkProjectFiles)
-// confidence: high
-// todos: 0
-// notes: Node `readdir(withFileTypes)` → `tokio::fs::read_dir`; the recursive
-// `walk` is expressed iteratively with an explicit stack (no async-recursion
-// boxing) — pre-order vs stack order is unobservable (no route asserts walk
-// ordering; the git `ls-files` primary path preserves git's own order). Symlink
-// containment reuses `path_utils::is_within_base` (the sep-guarded prefix check,
-// equivalent to TS `realFull.startsWith(projectPath + sep)`). `git ls-files`
-// via `mainframe_git::exec_git`; non-128 errors log then fall back to the walk,
-// matching the TS `code !== 128` branch. `relative`/`path_resolve` are Node
-// `path` shims added here (std has no analogue) for the route handlers.
+async fn entry_is_directory(entry: &tokio::fs::DirEntry, full_path: &Path) -> Option<bool> {
+    Some(match entry.file_type().await {
+        Ok(ft) if ft.is_symlink() => tokio::fs::metadata(&full_path)
+            .await
+            .map(|m| m.is_dir())
+            .unwrap_or(false),
+        Ok(ft) => ft.is_dir(),
+        Err(_) => return None,
+    })
+}

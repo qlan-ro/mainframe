@@ -1,6 +1,7 @@
 [package]
 name = "mainframe-adapter-claude"
 edition.workspace = true
+rust-version.workspace = true
 version.workspace = true
 publish.workspace = true
 
@@ -24,14 +25,14 @@ mainframe-adapter-api = { workspace = true }
 mainframe-display = { workspace = true }
 mainframe-background-tasks = { workspace = true }
 mainframe-claude-workflows = { workspace = true }
-mainframe-services = { workspace = true }
 mainframe-orchestration = { workspace = true }
 
 [dev-dependencies]
+mainframe-adapter-api = { workspace = true, features = ["test-support"] }
 tempfile = { workspace = true }
 # test-util enables tokio's paused-clock helpers (advance / start_paused) used by
 # the session kill/stop-task and task-events TTL tests.
 tokio = { workspace = true, features = ["test-util"] }
-# T18: shares mainframe-chat/mainframe-server's LogCapture tracing layer
+# Shares mainframe-chat/mainframe-server's LogCapture tracing layer
 # instead of duplicating it for the probe-downgrade test.
 mainframe-runtime = { workspace = true, features = ["test-support"] }

@@ -16,13 +16,16 @@
 //! This module owns the sync offer state machine; `rescan` owns the async half
 //! that fills it.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use mainframe_types::sync::LockExt as _;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use mainframe_adapter_api::BoxFuture;
-use mainframe_services::workspace::{WorktreeEntry, get_worktrees};
 use mainframe_types::events::DaemonEvent;
+use mainframe_types::http_status::{HttpStatus, StatusKind};
 use mainframe_types::worktree_offer::{WorktreeOfferOutcome, WorktreeSwitchOffer};
+
+use crate::chat_manager::ChatShared;
+use crate::config_manager::ConfigError;
 
 mod rescan;
 
@@ -31,6 +34,8 @@ pub type NowFn = Arc<dyn Fn() -> i64 + Send + Sync>;
 /// Errors surfaced by the offer routes; the messages cross the wire verbatim.
 #[derive(Debug, thiserror::Error)]
 pub enum OfferError {
+    #[error(transparent)]
+    Store(#[from] mainframe_types::seam_error::SeamError),
     #[error("No pending worktree offer for that path")]
     NotPending,
     #[error("A worktree switch is already in progress")]
@@ -39,33 +44,19 @@ pub enum OfferError {
     ChatBusy,
     #[error("Worktree no longer exists")]
     Vanished,
-    #[error("{0}")]
-    Message(String),
+    /// Rebinding the chat onto the accepted worktree failed.
+    #[error(transparent)]
+    Rebind(#[from] ConfigError),
 }
 
-impl OfferError {
-    pub fn status_code(&self) -> u16 {
+impl HttpStatus for OfferError {
+    fn status_kind(&self) -> StatusKind {
         match self {
-            OfferError::SwitchInProgress | OfferError::ChatBusy => 409,
-            _ => 400,
+            Self::Store(_) => StatusKind::Internal,
+            OfferError::SwitchInProgress | OfferError::ChatBusy => StatusKind::Conflict,
+            OfferError::NotPending | OfferError::Vanished => StatusKind::BadRequest,
+            OfferError::Rebind(err) => err.status_kind(),
         }
-    }
-}
-
-/// The narrow surface the registry needs. `list_worktrees` defaults to the real
-/// git call, so only tests carry an override.
-pub trait WorktreeOfferDeps: Send + Sync {
-    fn emit_event(&self, event: DaemonEvent);
-    fn projects_get_path(&self, project_id: &str) -> Option<String>;
-    /// `(project_id, worktree_path)` for the chat.
-    fn chat_binding(&self, chat_id: &str) -> Option<(String, Option<String>)>;
-    /// Every *other* chat's worktree path in this project.
-    fn other_chat_worktrees(&self, project_id: &str, chat_id: &str) -> HashSet<String>;
-    fn get_dismissed_worktrees(&self, chat_id: &str) -> Vec<String>;
-    fn add_dismissed_worktree(&self, chat_id: &str, worktree_path: &str) -> bool;
-
-    fn list_worktrees<'a>(&'a self, project_path: &'a str) -> BoxFuture<'a, Vec<WorktreeEntry>> {
-        Box::pin(async move { get_worktrees(project_path).await })
     }
 }
 
@@ -82,28 +73,26 @@ struct ChatOffers {
 }
 
 pub struct WorktreeOfferRegistry {
-    deps: Arc<dyn WorktreeOfferDeps>,
+    shared: Arc<ChatShared>,
     now: NowFn,
     state: Mutex<HashMap<String, ChatOffers>>,
 }
 
 impl WorktreeOfferRegistry {
-    pub fn new(deps: Arc<dyn WorktreeOfferDeps>) -> Self {
-        Self::with_clock(deps, Arc::new(|| chrono::Utc::now().timestamp_millis()))
+    pub(crate) fn new(shared: Arc<ChatShared>) -> Self {
+        Self::with_clock(shared, Arc::new(mainframe_types::time::now_ms))
     }
 
-    pub fn with_clock(deps: Arc<dyn WorktreeOfferDeps>, now: NowFn) -> Self {
+    pub(crate) fn with_clock(shared: Arc<ChatShared>, now: NowFn) -> Self {
         Self {
-            deps,
+            shared,
             now,
             state: Mutex::new(HashMap::new()),
         }
     }
 
     fn lock(&self) -> MutexGuard<'_, HashMap<String, ChatOffers>> {
-        self.state
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.state.lock_recover()
     }
 
     pub fn snapshot(&self, chat_id: &str) -> Vec<WorktreeSwitchOffer> {
@@ -114,6 +103,21 @@ impl WorktreeOfferRegistry {
         let mut offers: Vec<WorktreeSwitchOffer> = chat.pending.values().cloned().collect();
         offers.sort_by_key(|offer| offer.detected_at);
         offers
+    }
+
+    #[cfg(test)]
+    pub(crate) fn seed_pending_for_test(&self, chat_id: &str, worktree_path: &str) {
+        let offer = WorktreeSwitchOffer {
+            chat_id: chat_id.to_string(),
+            worktree_path: worktree_path.to_string(),
+            branch_name: None,
+            detected_at: 1,
+        };
+        self.lock()
+            .entry(chat_id.to_string())
+            .or_default()
+            .pending
+            .insert(worktree_path.to_string(), offer);
     }
 
     /// Permanent: the path lands in the chat's dismissed column, so it survives
@@ -132,8 +136,10 @@ impl WorktreeOfferRegistry {
             }
             chat.pending.remove(worktree_path);
         }
-        self.deps.add_dismissed_worktree(chat_id, worktree_path);
-        self.deps.emit_event(resolved_event(
+        self.shared
+            .deps
+            .add_dismissed_worktree(chat_id, worktree_path)?;
+        self.shared.emit(resolved_event(
             chat_id,
             worktree_path,
             WorktreeOfferOutcome::Dismissed,
@@ -143,7 +149,7 @@ impl WorktreeOfferRegistry {
 
     /// Claims the one switch slot. The offer stays pending: a rebind that fails
     /// must leave the user something to retry.
-    pub fn claim_accept(
+    pub(crate) fn claim_accept(
         &self,
         chat_id: &str,
         worktree_path: &str,
@@ -162,7 +168,7 @@ impl WorktreeOfferRegistry {
         Ok(offer)
     }
 
-    pub fn release_accept(&self, chat_id: &str) {
+    pub(crate) fn release_accept(&self, chat_id: &str) {
         let mut state = self.lock();
         if let Some(chat) = state.get_mut(chat_id) {
             chat.switching = None;
@@ -175,7 +181,7 @@ impl WorktreeOfferRegistry {
 
     /// The single source of `resolved{accepted}` — a rebind counts as an accept
     /// however it was initiated, and a rebind nobody offered stays silent.
-    pub fn on_binding_changed(&self, chat_id: &str, worktree_path: Option<&str>) {
+    pub(crate) fn on_binding_changed(&self, chat_id: &str, worktree_path: Option<&str>) {
         if let Some(worktree_path) = worktree_path {
             self.resolve(chat_id, worktree_path, WorktreeOfferOutcome::Accepted);
         }
@@ -189,12 +195,12 @@ impl WorktreeOfferRegistry {
                 .is_some_and(|chat| chat.pending.remove(worktree_path).is_some())
         };
         if removed {
-            self.deps
-                .emit_event(resolved_event(chat_id, worktree_path, outcome));
+            self.shared
+                .emit(resolved_event(chat_id, worktree_path, outcome));
         }
     }
 
-    /// Drops the chat's state on delete or dispose so the map stays bounded.
+    /// Drops the chat's state on teardown so the map stays bounded.
     pub fn forget(&self, chat_id: &str) {
         self.lock().remove(chat_id);
     }
@@ -213,4 +219,5 @@ fn resolved_event(
 }
 
 #[cfg(test)]
+#[path = "worktree_offer_tests.rs"]
 mod tests;

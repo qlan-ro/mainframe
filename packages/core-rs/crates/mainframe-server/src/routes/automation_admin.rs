@@ -1,6 +1,5 @@
-//! Interactions, action catalog, credentials (Node
-//! routes/automation-admin.ts). Credential GETs never return secret
-//! material; the `^[a-zA-Z0-9_-]+$` label rule keeps the reserved
+//! Interactions, action catalog, credentials. Credential GETs never return
+//! secret material; the `^[a-zA-Z0-9_-]+$` label rule keeps the reserved
 //! `webhook:<hookId>` labels out of user-facing CRUD (no colon) — those are
 //! provisioned and revealed by the webhook register route instead.
 
@@ -20,14 +19,7 @@ use serde_json::json;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
 use crate::routes::automations::{engine, engine_error, unavailable};
-use crate::routes::projects::parse_body;
-
-fn valid_label(label: &str) -> bool {
-    !label.is_empty()
-        && label
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-}
+use crate::routes::body::parse_body;
 
 fn invalid_label(label: &str) -> Response {
     fail(
@@ -69,7 +61,7 @@ async fn respond(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: B
         Err(err @ (InteractionError::AlreadyAnswered | InteractionError::AlreadyCancelled)) => {
             fail(StatusCode::CONFLICT, err.to_string())
         }
-        // Field-level validation + store errors → 400 (Node's catch-all).
+        // Field-level validation + store errors → 400 (the catch-all).
         Err(err) => fail(StatusCode::BAD_REQUEST, err.to_string()),
     }
 }
@@ -96,7 +88,7 @@ async fn get_credential(State(ctx): State<Arc<AppCtx>>, Path(label): Path<String
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
-    if !valid_label(&label) {
+    if !mainframe_types::ids::is_safe_identifier(&label) {
         return invalid_label(&label);
     }
     match engine.credential_kind(&label).await {
@@ -118,7 +110,7 @@ async fn put_credential(
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
-    if !valid_label(&label) {
+    if !mainframe_types::ids::is_safe_identifier(&label) {
         return invalid_label(&label);
     }
     let Some(parsed): Option<CredentialBody> = parse_body(&body) else {
@@ -126,13 +118,11 @@ async fn put_credential(
     };
     match engine.set_credential(&label, parsed.token).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(label, error = %err, "set credential failed");
-            fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to save credential",
-            )
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("set credential failed label={}", label),
+            &err,
+            "failed to save credential",
+        ),
     }
 }
 
@@ -140,18 +130,16 @@ async fn delete_credential(State(ctx): State<Arc<AppCtx>>, Path(label): Path<Str
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
-    if !valid_label(&label) {
+    if !mainframe_types::ids::is_safe_identifier(&label) {
         return invalid_label(&label);
     }
     match engine.delete_credential(&label).await {
         Ok(()) => ok_empty(),
-        Err(err) => {
-            tracing::error!(label, error = %err, "delete credential failed");
-            fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to delete credential",
-            )
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("delete credential failed label={}", label),
+            &err,
+            "failed to delete credential",
+        ),
     }
 }
 
@@ -171,8 +159,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 #[cfg(test)]
 mod automation_admin_tests;
-
-// PORT STATUS: src/server/routes/automation-admin.ts (7 endpoints, 128 lines)
-// confidence: high
-// todos: 0
-// notes: —

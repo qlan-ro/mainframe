@@ -1,10 +1,15 @@
-//! Shared harness for #289's wiring-level transcript-presence tests. Drives
-//! the production stack through `build_chat_manager` (see
-//! `chat_background_activity.rs`, #273's structural template) rather than a
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+//! Shared harness for the wiring-level transcript-presence tests. Drives the
+//! production stack through `build_chat_manager` (see
+//! `chat_background_activity.rs`, the structural template) rather than a
 //! hand-built `ChatManagerDeps` fake.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
-use std::collections::HashMap;
+use mainframe_types::settings_kv::MemorySettings;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -16,14 +21,14 @@ use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_chat::chat_manager::ChatManager;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 use mainframe_db::DatabaseManager;
-use mainframe_db::chats::ChatUpdate;
 use mainframe_server::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 use mainframe_server::{Db, GitFactory, build_chat_manager};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::push::PushService;
-use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel, SessionOptions};
 use mainframe_types::chat::Chat;
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::transcript::TranscriptLocation;
 use tempfile::TempDir;
@@ -80,8 +85,8 @@ impl Adapter for StubAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(None) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        Box::pin(async { Ok(vec![]) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        Vec::new()
     }
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
         Arc::new(ReplaySession::new(options, Vec::new()))
@@ -110,18 +115,6 @@ impl Adapter for StubAdapter {
     }
 }
 
-struct NoopQuotaSettings;
-
-impl QuotaSettingsStore for NoopQuotaSettings {
-    fn get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn get_by_category(&self, _category: &str) -> HashMap<String, String> {
-        HashMap::new()
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
-
 pub struct Harness {
     pub manager: Arc<ChatManager>,
     pub db: Db,
@@ -135,7 +128,7 @@ pub struct Harness {
 /// otherwise the seeded chat points at `"unregistered-adapter"`, an id the
 /// registry never knows about. `seed_missing` seeds the persisted
 /// `transcript_missing` flag before any reconciliation runs — reconciliation
-/// skips a chat with no session id, so every case seeds `claude_session_id`.
+/// skips a chat with no session id, so every case seeds `vendor_session_id`.
 pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) -> Harness {
     let data_dir = tempfile::tempdir().unwrap();
     let db = Db::spawn(|| DatabaseManager::open(Path::new(":memory:"))).unwrap();
@@ -149,7 +142,7 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
         None => "unregistered-adapter".to_string(),
     };
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(|_| {}),
         now: None,
     }));
@@ -174,8 +167,8 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
     db.call_blocking(move |d| {
         d.chats.update(
             &chat_id_for_seed,
-            &ChatUpdate {
-                claude_session_id: Some("sess-1".to_string()),
+            &ChatPatch {
+                vendor_session_id: Some("sess-1".to_string()),
                 transcript_missing: seed_missing,
                 ..Default::default()
             },
@@ -183,22 +176,21 @@ pub fn harness(adapter: Option<Arc<StubAdapter>>, seed_missing: Option<bool>) ->
     })
     .unwrap();
 
-    let manager = build_chat_manager(
-        db.clone(),
-        registry,
-        Arc::new(BackgroundTaskTracker::new()),
-        Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-        Arc::new(PushService::new()),
-        GitFactory,
-        broadcast.clone(),
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+    let manager = build_chat_manager(mainframe_server::ChatManagerParams {
+        db: db.clone(),
+        adapters: registry,
+        background_tasks: Arc::new(BackgroundTaskTracker::new()),
+        attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+        push: Arc::new(PushService::new()),
+        git: GitFactory,
+        broadcast: broadcast.clone(),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::new(ClaudeWorkflowStore::new()),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        data_dir.path().to_path_buf(),
-    );
+        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+        chat_surface: None,
+        data_dir: data_dir.path().to_path_buf(),
+    });
 
     Harness {
         manager,

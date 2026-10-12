@@ -44,7 +44,7 @@ fn opened_segment<'a>(message: &ChatMessage, segments: &'a [&SegmentRecord]) -> 
 
 /// Removes a leading handoff block from a user message (live messages never
 /// carry one; this makes the cold copy byte-identical).
-pub fn strip_message_marker(message: &mut ChatMessage) {
+pub(crate) fn strip_message_marker(message: &mut ChatMessage) {
     if let Some(text) = first_text_mut(message) {
         let stripped = strip_marker(text);
         if stripped.len() != text.len() {

@@ -163,7 +163,7 @@ pub struct PresentationUpdate {
     pub source_message_ids: Option<Vec<String>>,
 }
 
-pub fn deserialize_sources<'de, D: serde::Deserializer<'de>>(
+pub(crate) fn deserialize_sources<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<PresentationSources>, D::Error> {
     let value = serde_json::Value::deserialize(deserializer)?;

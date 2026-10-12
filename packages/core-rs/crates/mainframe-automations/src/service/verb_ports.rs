@@ -1,12 +1,11 @@
-//! The production `VerbPorts` — the four real verbs wired together
-//! (Node service.buildPorts).
+//! The production `VerbPorts` — the four real verbs wired together.
 
 use std::sync::Arc;
 
+use mainframe_types::BoxFuture;
+
 use crate::domain::{AskAgentStep, AskMeStep, NotifyStep, RunActionStep};
-use crate::engine::{
-    AgentVerb, BoxFuture, NotifyVerb, RunActionVerb, StepOutcome, VerbContext, VerbPorts,
-};
+use crate::engine::{AgentVerb, NotifyVerb, RunActionVerb, StepOutcome, VerbContext, VerbPorts};
 use crate::interactions::AskMeVerb;
 
 pub(super) struct EngineVerbPorts {
@@ -49,8 +48,3 @@ impl VerbPorts for EngineVerbPorts {
         Box::pin(self.notify.execute(step, ctx))
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts buildPorts (25 lines)
-// confidence: high
-// todos: 0
-// notes: —

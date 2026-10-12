@@ -17,9 +17,7 @@ use mainframe_types::orchestration::{MCP_SERVER_NAME, OrchestrationMcpLaunch};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::fixture::RecordedEvent;
-
-pub const MCP_CALL_METHOD: &str = "mcp_call";
+use crate::fixture::{RecordedEvent, RecordedEventError};
 
 const PROTOCOL_VERSION: &str = "2025-06-18";
 
@@ -52,9 +50,13 @@ impl McpOutcome {
     }
 }
 
-pub fn parse_call(event: &RecordedEvent) -> Result<McpCall, String> {
-    let arg = event.args.first().cloned().ok_or("missing argument 0")?;
-    serde_json::from_value(arg).map_err(|error| error.to_string())
+pub(crate) fn parse_call(event: &RecordedEvent) -> Result<McpCall, RecordedEventError> {
+    let arg = event
+        .args
+        .first()
+        .cloned()
+        .ok_or(RecordedEventError::MissingArgument(0))?;
+    Ok(serde_json::from_value(arg)?)
 }
 
 /// One `tools/call` against the spawn's endpoint. Never panics: a refused or
@@ -93,7 +95,7 @@ pub async fn call_tool(
 
 /// A JSON-RPC response to `tools/call`: the first text block of `result`, or
 /// the protocol error's message.
-pub fn parse_response(text: &str) -> McpOutcome {
+pub(crate) fn parse_response(text: &str) -> McpOutcome {
     let Ok(value) = serde_json::from_str::<Value>(text) else {
         return McpOutcome::failed("mcp response is not JSON");
     };

@@ -1,10 +1,5 @@
-//! Ported from `src/server/routes/projects.ts` — project registry CRUD.
+//! Project registry CRUD.
 //!
-//! Also hosts `parse_body`, the shared request-body parser the Phase-3 route
-//! modules use: it treats an empty/whitespace body as `{}` (Express's
-//! `express.json()` default) and yields `None` on malformed/ill-typed JSON so
-//! each caller can emit its own 400 envelope string (matching each route's exact
-//! Zod `safeParse` failure).
 
 use std::sync::Arc;
 
@@ -15,26 +10,16 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::get;
 use serde::Deserialize;
-use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use mainframe_services::workspace::worktree::is_directory_present_async;
 use mainframe_types::chat::Project;
 
+use mainframe_chat::chat_manager::RemoveProjectError;
+
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
-
-/// Parse `body` into `T`, treating an empty/whitespace body as `{}`. Returns
-/// `None` on malformed JSON or a type mismatch — the caller maps that to its
-/// route-specific 400 envelope (the TS `validate()`/`safeParse()` 400 path).
-pub(crate) fn parse_body<T: DeserializeOwned>(body: &Bytes) -> Option<T> {
-    let slice: &[u8] = if body.iter().all(u8::is_ascii_whitespace) {
-        b"{}"
-    } else {
-        body
-    };
-    serde_json::from_slice(slice).ok()
-}
+use crate::routes::body::parse_body;
 
 #[derive(Deserialize)]
 struct CreateProjectBody {
@@ -43,7 +28,7 @@ struct CreateProjectBody {
 }
 
 async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
-    match ctx.db.call(|db| db.projects.list()).await {
+    match ctx.core.db.call(|db| db.projects.list()).await {
         Ok(mut projects) => {
             for project in &mut projects {
                 stamp_availability(project).await;
@@ -55,12 +40,12 @@ async fn list(State(ctx): State<Arc<AppCtx>>) -> Response {
 }
 
 async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    match ctx.db.call(move |db| db.projects.get(&id)).await {
+    match ctx.core.db.call(move |db| db.projects.get(&id)).await {
         Ok(Some(mut project)) => {
             stamp_availability(&mut project).await;
             ok(project)
         }
-        Ok(None) => fail(StatusCode::NOT_FOUND, "Project not found"),
+        Ok(None) => crate::respond::ApiError::project_not_found().into_response(),
         Err(err) => crate::async_err::internal_error("get project", &err),
     }
 }
@@ -85,7 +70,12 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     }
 
     let path = parsed.path.clone();
-    let existing = match ctx.db.call(move |db| db.projects.get_by_path(&path)).await {
+    let existing = match ctx
+        .core
+        .db
+        .call(move |db| db.projects.get_by_path(&path))
+        .await
+    {
         Ok(existing) => existing,
         Err(err) => return crate::async_err::internal_error("lookup project by path", &err),
     };
@@ -104,6 +94,7 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
     let path = parsed.path;
     let name = parsed.name;
     match ctx
+        .core
         .db
         .call(move |db| db.projects.create(&path, name.as_deref()))
         .await
@@ -115,30 +106,15 @@ async fn create(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Response {
 
 /// `ChatManager::remove_project`'s result → the route envelope. Split out
 /// because the route harness cannot build a ChatManager to reach the Err arm.
-fn removal_response(result: Result<(), String>) -> Response {
+fn removal_response(result: Result<(), RemoveProjectError>) -> Response {
     match result {
         Ok(()) => ok_empty(),
-        Err(err) => fail(StatusCode::INTERNAL_SERVER_ERROR, err),
+        Err(err) => crate::respond::fail_with(&err),
     }
 }
 
 async fn remove(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    // ChatManager.remove_project stops the project's live sessions and tears
-    // down its worktrees before deleting the row, then reports whether the row
-    // delete itself succeeded so a failed delete answers with `fail()` instead
-    // of a false `ok_empty()`. When the ChatManager is unwired the teardown
-    // cannot run, so the endpoint keeps the TS failure-path 500 envelope
-    // (ChatManager construction is a documented blocker).
-    let Some(cm) = ctx.chat_manager.as_ref() else {
-        tracing::warn!(
-            project_id = %id,
-            "DELETE /api/projects/:id needs ChatManager.removeProject (unwired)"
-        );
-        return fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to remove project",
-        );
-    };
+    let cm = &ctx.chat.chat_manager;
     removal_response(cm.remove_project(&id).await)
 }
 
@@ -149,139 +125,5 @@ pub fn router() -> Router<Arc<AppCtx>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use axum::body::to_bytes;
-
-    use super::*;
-
-    async fn body_json(resp: Response) -> (StatusCode, serde_json::Value) {
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        (status, serde_json::from_slice(&bytes).unwrap())
-    }
-
-    #[tokio::test]
-    async fn removal_response_ok_emits_the_empty_success_envelope() {
-        let (status, body) = body_json(removal_response(Ok(()))).await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(body, json!({ "success": true }));
-    }
-
-    #[tokio::test]
-    async fn removal_response_err_emits_the_failure_envelope_with_the_message() {
-        let (status, body) =
-            body_json(removal_response(Err("database is locked".to_string()))).await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(
-            body,
-            json!({ "success": false, "error": "database is locked" })
-        );
-    }
-
-    #[tokio::test]
-    async fn get_one_404s_for_the_hidden_scratch_project_row() {
-        let ctx = AppCtx::test_ctx();
-        let (status, body) =
-            body_json(get_one(State(ctx.clone()), Path("mainframe-no-project".to_string())).await)
-                .await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
-        assert_eq!(body["error"], "Project not found");
-    }
-
-    #[tokio::test]
-    async fn list_never_returns_the_hidden_scratch_project_row() {
-        let ctx = AppCtx::test_ctx();
-        let (_, body) = body_json(list(State(ctx.clone())).await).await;
-        let ids: Vec<String> = body["data"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|p| p["id"].as_str().unwrap().to_string())
-            .collect();
-        assert!(!ids.contains(&"mainframe-no-project".to_string()));
-    }
-
-    // ── DELETE via a real ChatManager (todo #346, AC 10/26) ───────────────────
-
-    #[tokio::test]
-    async fn removing_a_project_deletes_its_temporary_chat_and_stops_the_process() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
-        let adapter = crate::chat_test_support::StubAdapter::new("claude", false);
-        ctx.adapter_registry.register(adapter.clone());
-        let project_dir =
-            std::env::temp_dir().join(format!("mf-remove-temp-{}", nanoid::nanoid!()));
-        std::fs::create_dir_all(&project_dir).unwrap();
-        let project_path = project_dir.to_string_lossy().into_owned();
-        let project = ctx
-            .db
-            .call(move |db| db.projects.create(&project_path, None))
-            .await
-            .unwrap();
-        let chat = ctx
-            .chat_manager
-            .as_ref()
-            .unwrap()
-            .create_chat_with_defaults(
-                mainframe_types::chat::NewChat {
-                    project_id: project.id.clone(),
-                    adapter_id: "claude".to_string(),
-                    temporary: true,
-                    ..Default::default()
-                },
-                None,
-                None,
-            )
-            .await;
-        ctx.chat_manager
-            .as_ref()
-            .unwrap()
-            .start_chat(&chat.id)
-            .await;
-
-        let (status, _) =
-            body_json(remove(State(ctx.clone()), Path(project.id.clone())).await).await;
-        assert_eq!(
-            adapter.kills.load(std::sync::atomic::Ordering::SeqCst),
-            1,
-            "removing the project must stop the temporary chat's live process"
-        );
-        assert_eq!(status, StatusCode::OK);
-
-        assert!(
-            ctx.db
-                .call(move |db| db.chats.get(&chat.id))
-                .await
-                .unwrap()
-                .is_none(),
-            "the temporary chat's row must be deleted along with its project"
-        );
-        assert!(
-            ctx.db
-                .call(move |db| db.projects.get(&project.id))
-                .await
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    #[tokio::test]
-    async fn delete_refuses_the_hidden_scratch_project() {
-        let ctx = AppCtx::test_ctx_with_chat_manager();
-        let (status, body) =
-            body_json(remove(State(ctx.clone()), Path("mainframe-no-project".to_string())).await)
-                .await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(body["success"], false);
-    }
-}
-
-// PORT STATUS: src/server/routes/projects.ts (4 endpoints, 57 lines)
-// confidence: medium
-// todos: 0
-// notes: GET list / GET :id / POST ported 1:1 over ctx.db.projects (list/get/
-// get_by_path/create). POST's 409 carries `data: existing` (a non-standard fail
-// envelope) so it is hand-built, not via `fail()`. CreateProjectBody path.min(1)
-// → serde String + explicit non-empty check. DELETE :id calls the real
-// ChatManager.remove_project (stops live sessions + tears down worktrees before
-// the row delete) and maps its Result through `removal_response()`; unwired
-// (Phase-3 harness) → the TS failure-path 500 string.
+#[path = "projects_tests.rs"]
+mod tests;

@@ -1,12 +1,8 @@
 //! `ExternalSessionFacade` — object-safe erasure of `ExternalSessionService<D>`.
 use super::*;
+use mainframe_types::seam_error::SeamError;
 
-/// Object-safe facade over `ExternalSessionService<D>` (`ctx.chats.
-/// getExternalSessionService()`). `ChatManager` only ever holds the
-/// already-erased `Arc<dyn ChatManagerDeps>`, so the generic service is built
-/// once at boot from the concrete deps type (see
-/// `mainframe_server::chat_deps::build_chat_manager`, where that type is still
-/// known) and injected here pre-erased via [`ChatManager::with_external_sessions`].
+/// Object-safe access to the external-session service built over shared chat state.
 pub trait ExternalSessionFacade: Send + Sync {
     fn start_auto_scan(&self, project_id: &str);
     fn stop_auto_scan(&self, project_id: &str);
@@ -16,8 +12,7 @@ pub trait ExternalSessionFacade: Send + Sync {
         project_id: &'a str,
         offset: i64,
         limit: i64,
-    ) -> BoxFuture<'a, ExternalSessionPage>;
-    #[allow(clippy::too_many_arguments)]
+    ) -> BoxFuture<'a, Result<ExternalSessionPage, SeamError>>;
     fn import_session<'a>(
         &'a self,
         project_id: &'a str,
@@ -26,7 +21,7 @@ pub trait ExternalSessionFacade: Send + Sync {
         title: Option<&'a str>,
         created_at: Option<&'a str>,
         modified_at: Option<&'a str>,
-    ) -> BoxFuture<'a, Chat>;
+    ) -> BoxFuture<'a, Result<Chat, SeamError>>;
 }
 
 impl<D: ExternalSessionDeps + 'static> ExternalSessionFacade for ExternalSessionService<D> {
@@ -44,7 +39,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionFacade for ExternalSession
         project_id: &'a str,
         offset: i64,
         limit: i64,
-    ) -> BoxFuture<'a, ExternalSessionPage> {
+    ) -> BoxFuture<'a, Result<ExternalSessionPage, SeamError>> {
         Box::pin(async move { self.scan_page(project_id, offset, limit).await })
     }
     fn import_session<'a>(
@@ -55,7 +50,7 @@ impl<D: ExternalSessionDeps + 'static> ExternalSessionFacade for ExternalSession
         title: Option<&'a str>,
         created_at: Option<&'a str>,
         modified_at: Option<&'a str>,
-    ) -> BoxFuture<'a, Chat> {
+    ) -> BoxFuture<'a, Result<Chat, SeamError>> {
         Box::pin(async move {
             self.import_session(
                 project_id,

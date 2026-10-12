@@ -4,9 +4,10 @@
 //! app-server reject a steer that raced the turn's end instead of starting a
 //! new turn with it.
 
+use mainframe_types::sync::LockExt as _;
 use serde_json::{Value, json};
 
-use super::*;
+use super::{AdapterError, CodexSession};
 
 /// The `turn/steer` params for one text message.
 pub(crate) fn steer_params(
@@ -16,32 +17,25 @@ pub(crate) fn steer_params(
 ) -> Result<Value, AdapterError> {
     let crate::user_input::TurnInput { input, .. } =
         crate::user_input::build_turn_input(message, &[]);
-    let input = serde_json::to_value(&input).map_err(|e| AdapterError::Message(e.to_string()))?;
+    let input = serde_json::to_value(&input).map_err(AdapterError::from)?;
     Ok(json!({ "threadId": thread_id, "expectedTurnId": turn_id, "input": input }))
 }
 
 impl CodexSession {
     pub(super) async fn steer_inner(&self, message: String) -> Result<(), AdapterError> {
-        let client = self
-            .client
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let client = self.client.lock_recover().clone();
         let (thread_id, turn_id) = {
-            let st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            let st = self.state.lock_recover();
             (st.thread_id.clone(), st.current_turn_id.clone())
         };
         let (Some(client), Some(thread_id), Some(turn_id)) = (client, thread_id, turn_id) else {
-            return Err(AdapterError::Message(format!(
-                "Session {} has no active turn to steer",
-                self.id
-            )));
+            return Err(AdapterError::NoActiveTurn(self.id.clone()));
         };
         let params = steer_params(&thread_id, &turn_id, &message)?;
         client
             .request("turn/steer", Some(params))
             .await
-            .map_err(|e| AdapterError::Message(e.0))?;
+            .map_err(AdapterError::from)?;
         Ok(())
     }
 }

@@ -1,8 +1,12 @@
-//! Todo #346 (G2b) — wiring-level tests for the scratch cwd, the no-persistence
-//! spawn decision, context loss, and reconciliation, built on a real
-//! `ChatManager` (`build_chat_manager`) rather than a hand-built deps fake, per
-//! the `transcript_presence_wiring.rs` template.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Wiring-level tests for the scratch cwd, the no-persistence spawn decision,
+//! context loss, and reconciliation, built on a real `ChatManager`
+//! (`build_chat_manager`) rather than a hand-built deps fake, per the
+//! `transcript_presence_wiring.rs` template.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod temporary_chat_lifecycle_support;
 
@@ -23,7 +27,7 @@ async fn restart_survival_marks_context_loss_and_spawns_fresh_when_capable() {
     let after_first_start = support::get_chat(&h, &chat.id);
     assert!(after_first_start.vendor_session_ephemeral);
     let first_id = after_first_start
-        .claude_session_id
+        .vendor_session_id
         .clone()
         .expect("on_init must have stored a provider id");
     assert!(after_first_start.context_lost_at.is_none());
@@ -39,7 +43,7 @@ async fn restart_survival_marks_context_loss_and_spawns_fresh_when_capable() {
         "the dead ephemeral session must be marked lost on the reload"
     );
     let second_id = after_restart
-        .claude_session_id
+        .vendor_session_id
         .expect("the fresh spawn must have stored its own provider id");
     assert_ne!(first_id, second_id, "a fresh spawn must mint a new id");
 }
@@ -56,7 +60,7 @@ async fn restart_survival_resumes_the_same_id_without_the_capability() {
     let after_first_start = support::get_chat(&h, &chat.id);
     assert!(!after_first_start.vendor_session_ephemeral);
     let first_id = after_first_start
-        .claude_session_id
+        .vendor_session_id
         .clone()
         .expect("on_init must have stored a provider id");
 
@@ -70,13 +74,13 @@ async fn restart_survival_resumes_the_same_id_without_the_capability() {
         "a normally-persisted session is never marked lost"
     );
     assert_eq!(
-        after_restart.claude_session_id,
+        after_restart.vendor_session_id,
         Some(first_id),
         "without the capability the chat resumes its stored session id"
     );
 }
 
-/// Rule 7's reconciliation early-return, exercised through the same
+/// The no-persistence reconciliation early-return, exercised through the same
 /// `ChatManager::reconcile_transcript` wiring the history route uses (real
 /// `DaemonChatDeps`, not the pure-function fake in `mainframe-chat`).
 #[tokio::test]
@@ -92,8 +96,8 @@ async fn reconciliation_skips_a_vendor_ephemeral_chat() {
     let before = loaded.transcript_missing;
     let missing = manager.reconcile_transcript(&mut loaded).await;
     assert!(!missing);
-    // Rule 7's early return: the persisted flag is left exactly as it was,
-    // not (re)computed from a transcript-presence check.
+    // The no-persistence early return: the persisted flag is left exactly as it
+    // was, not (re)computed from a transcript-presence check.
     let after = support::get_chat(&h, &chat.id);
     assert_eq!(after.transcript_missing, before);
 }
@@ -147,8 +151,8 @@ async fn non_project_scratch_cwd_is_lazy_stable_and_recreated_when_deleted() {
     );
 }
 
-// ── AC 12: mid-life respawn paths (config respawn, degraded-recovery rebind,
-// next send after a CLI exit), each with the capability on and off ──────────
+// ── mid-life respawn paths (config respawn, degraded-recovery rebind, next
+// send after a CLI exit), each with the capability on and off ───────────────
 
 /// Sets a worktree on `chat_id`, backed by a real directory (`continue_here`'s
 /// caller `do_start_chat` requires it to exist to spawn).
@@ -158,7 +162,7 @@ fn give_worktree(h: &support::Harness, chat_id: &str, path: &str) {
     h.db.call_blocking(move |d| {
         d.chats.update(
             &chat_id,
-            &mainframe_db::chats::ChatUpdate {
+            &mainframe_types::chat_patch::ChatPatch {
                 worktree_path: Some(Some(path)),
                 branch_name: Some(Some("wt".to_string())),
                 ..Default::default()
@@ -177,7 +181,7 @@ async fn config_respawn_starts_fresh_when_capable_and_resumes_without_the_capabi
         let manager = support::rebuild_manager(&h, adapter);
         manager.start_chat(&chat.id).await;
         let first_id = support::get_chat(&h, &chat.id)
-            .claude_session_id
+            .vendor_session_id
             .expect("on_init must have stored a provider id");
 
         // A model change crossing endpoints needs a respawn (rule: the endpoint
@@ -199,7 +203,7 @@ async fn config_respawn_starts_fresh_when_capable_and_resumes_without_the_capabi
 
         let after = support::get_chat(&h, &chat.id);
         let second_id = after
-            .claude_session_id
+            .vendor_session_id
             .expect("the respawn must store a provider id");
         if capable {
             assert!(
@@ -227,7 +231,7 @@ async fn degraded_recovery_rebind_starts_fresh_when_capable_and_resumes_without_
         let manager = support::rebuild_manager(&h, adapter);
         manager.start_chat(&chat.id).await;
         let first_id = support::get_chat(&h, &chat.id)
-            .claude_session_id
+            .vendor_session_id
             .expect("on_init must have stored a provider id");
 
         // Rebinds the chat off its (here: still-present, but the recovery flow
@@ -237,7 +241,7 @@ async fn degraded_recovery_rebind_starts_fresh_when_capable_and_resumes_without_
 
         let after = support::get_chat(&h, &chat.id);
         let second_id = after
-            .claude_session_id
+            .vendor_session_id
             .expect("the rebind's respawn must store a provider id");
         if capable {
             assert!(
@@ -261,7 +265,7 @@ async fn next_send_after_a_cli_exit_starts_fresh_when_capable_and_resumes_withou
         let manager = support::rebuild_manager(&h, adapter);
         manager.start_chat(&chat.id).await;
         let first_id = support::get_chat(&h, &chat.id)
-            .claude_session_id
+            .vendor_session_id
             .expect("on_init must have stored a provider id");
 
         // Model an unexpected CLI exit: the fake session's `interrupt` marks
@@ -277,7 +281,7 @@ async fn next_send_after_a_cli_exit_starts_fresh_when_capable_and_resumes_withou
 
         let after = support::get_chat(&h, &chat.id);
         let second_id = after
-            .claude_session_id
+            .vendor_session_id
             .expect("the post-exit respawn must store a provider id");
         if capable {
             assert!(

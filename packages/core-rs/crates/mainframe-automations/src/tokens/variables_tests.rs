@@ -1,16 +1,16 @@
-//! T6 — `$name` scanning and namespace derivation. The reference
-//! implementation is packages/types/src/automation-domain/variables.ts; the
-//! shared cases live in fixtures/automations/variable-substitution.json.
+//! `$name` scanning and namespace derivation. The reference implementation is
+//! packages/types/src/automation-domain/variables.ts; the shared cases live in
+//! fixtures/automations/variable-substitution.json.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use serde_json::Value;
 
+use crate::domain::LoopMode;
 use crate::domain::{AutomationDefinition, TokenRef};
 use crate::engine::test_support::{
-    FakeClock, ask_agent_step, named_ask_agent_step, notify_step, repeat_step, set_variable_step,
-    text, token_ref,
+    ask_agent_step, cond_is, fake_clock, loop_step, named_ask_agent_step, notify_step,
+    parallel_step, repeat_step, retry_step, set_variable_step, text, token_ref,
 };
 
 use super::scope::Scope;
@@ -158,6 +158,69 @@ fn a_repeat_body_isolates_its_producers_from_later_siblings() {
 }
 
 #[test]
+fn loop_retry_and_parallel_bodies_see_outer_names_and_keep_their_own_inside() {
+    let definition = definition(vec![
+        set_variable_step("set-headline", "headline", vec![text("v2")]),
+        loop_step(
+            "poll",
+            LoopMode::Until,
+            vec![cond_is("set-pass", "value", "done")],
+            3,
+            vec![
+                set_variable_step("set-pass", "pass", vec![text("done")]),
+                notify_step("in-loop", vec![text("$headline $pass")]),
+            ],
+        ),
+        retry_step(
+            "attempts",
+            2,
+            vec![
+                set_variable_step("set-try", "attempt", vec![text("ok")]),
+                notify_step("in-retry", vec![text("$headline $attempt")]),
+            ],
+        ),
+        parallel_step(
+            "fan",
+            vec![
+                vec![set_variable_step("set-left", "left", vec![text("l")])],
+                vec![notify_step("in-branch", vec![text("$headline")])],
+            ],
+        ),
+        notify_step("after", vec![text("$headline")]),
+    ]);
+
+    let index = build_name_index(&definition);
+
+    for step_id in ["in-loop", "in-retry", "in-branch"] {
+        assert_eq!(
+            target(&index[step_id], "headline"),
+            step_ref("set-headline", "value"),
+            "{step_id} sees the name bound before its block"
+        );
+    }
+    assert_eq!(
+        target(&index["in-loop"], "pass"),
+        step_ref("set-pass", "value")
+    );
+    assert_eq!(
+        target(&index["in-retry"], "attempt"),
+        step_ref("set-try", "value")
+    );
+    assert!(
+        !index["in-branch"].contains_key("left"),
+        "a parallel branch never sees a sibling branch's outputs"
+    );
+
+    let after = &index["after"];
+    for leaked in ["pass", "attempt", "left"] {
+        assert!(
+            !after.contains_key(leaked),
+            "`${leaked}` dies with its block"
+        );
+    }
+}
+
+#[test]
 fn later_holders_of_a_derived_name_get_a_numeric_suffix() {
     let definition = definition(vec![
         ask_agent_step("a1", false),
@@ -240,7 +303,7 @@ fn renders_every_shared_substitution_case() {
 
     for case in cases {
         let name = case["name"].as_str().unwrap();
-        let mut scope = Scope::root(Arc::new(FakeClock));
+        let mut scope = Scope::root(fake_clock());
         let mut names = NameMap::new();
         for (key, value) in case["scope"].as_object().unwrap() {
             if let Some(token_value) = TokenValue::from_json(value) {

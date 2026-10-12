@@ -1385,6 +1385,7 @@ dependencies = [
  "mainframe-types",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1394,9 +1395,13 @@ name = "mainframe-adapter-api"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-adapter-api",
+ "mainframe-display",
+ "mainframe-runtime",
  "mainframe-types",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
@@ -1415,7 +1420,6 @@ dependencies = [
  "mainframe-display",
  "mainframe-orchestration",
  "mainframe-runtime",
- "mainframe-services",
  "mainframe-types",
  "nanoid",
  "reqwest",
@@ -1455,12 +1459,13 @@ version = "0.0.0"
 dependencies = [
  "mainframe-adapter-api",
  "mainframe-background-tasks",
- "mainframe-claude-workflows",
+ "mainframe-display",
  "mainframe-types",
  "reqwest",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1476,6 +1481,10 @@ dependencies = [
  "hex",
  "hmac",
  "keyring",
+ "mainframe-automations",
+ "mainframe-db",
+ "mainframe-github",
+ "mainframe-runtime",
  "mainframe-types",
  "nanoid",
  "rand 0.8.6",
@@ -1495,8 +1504,8 @@ dependencies = [
 name = "mainframe-background-tasks"
 version = "0.0.0"
 dependencies = [
- "chrono",
  "dashmap",
+ "mainframe-runtime",
  "mainframe-types",
  "rustix",
  "serde",
@@ -1516,8 +1525,8 @@ dependencies = [
  "dirs",
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
- "mainframe-adapter-codex",
  "mainframe-background-tasks",
+ "mainframe-db",
  "mainframe-display",
  "mainframe-runtime",
  "mainframe-services",
@@ -1535,13 +1544,11 @@ dependencies = [
 name = "mainframe-claude-workflows"
 version = "0.0.0"
 dependencies = [
- "chrono",
  "dashmap",
  "mainframe-types",
  "serde",
  "serde_json",
  "tempfile",
- "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1552,7 +1559,6 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "dashmap",
- "dirs",
  "mainframe-acp",
  "mainframe-adapter-api",
  "mainframe-adapter-claude",
@@ -1562,6 +1568,7 @@ dependencies = [
  "mainframe-background-tasks",
  "mainframe-claude-workflows",
  "mainframe-db",
+ "mainframe-github",
  "mainframe-launch",
  "mainframe-lsp",
  "mainframe-plugins",
@@ -1575,6 +1582,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
  "tokio",
  "tracing",
  "wiremock",
@@ -1584,7 +1592,6 @@ dependencies = [
 name = "mainframe-db"
 version = "0.0.0"
 dependencies = [
- "dirs",
  "mainframe-runtime",
  "mainframe-types",
  "nanoid",
@@ -1593,6 +1600,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "tokio",
  "tracing",
 ]
 
@@ -1610,6 +1618,7 @@ name = "mainframe-git"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-runtime",
  "mainframe-types",
  "serde",
  "tempfile",
@@ -1619,11 +1628,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "mainframe-github"
+version = "0.0.0"
+dependencies = [
+ "mainframe-types",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
 name = "mainframe-launch"
 version = "0.0.0"
 dependencies = [
  "dashmap",
  "dirs",
+ "mainframe-runtime",
  "mainframe-types",
  "reqwest",
  "serde",
@@ -1639,6 +1662,7 @@ name = "mainframe-lsp"
 version = "0.0.0"
 dependencies = [
  "dashmap",
+ "mainframe-runtime",
  "mainframe-types",
  "serde",
  "serde_json",
@@ -1653,7 +1677,7 @@ name = "mainframe-orchestration"
 version = "0.0.0"
 dependencies = [
  "base64",
- "chrono",
+ "mainframe-runtime",
  "mainframe-types",
  "rand 0.8.6",
  "serde",
@@ -1671,7 +1695,9 @@ dependencies = [
  "axum",
  "dashmap",
  "mainframe-adapter-api",
+ "mainframe-db",
  "mainframe-git",
+ "mainframe-github",
  "mainframe-runtime",
  "mainframe-services",
  "mainframe-types",
@@ -1690,17 +1716,19 @@ dependencies = [
 name = "mainframe-runtime"
 version = "0.0.0"
 dependencies = [
- "chrono",
  "dirs",
  "hex",
  "hmac",
  "mainframe-types",
  "rand 0.8.6",
+ "reqwest",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
  "thiserror",
+ "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -1734,11 +1762,13 @@ dependencies = [
  "mainframe-db",
  "mainframe-display",
  "mainframe-git",
+ "mainframe-github",
  "mainframe-launch",
  "mainframe-lsp",
  "mainframe-orchestration",
  "mainframe-plugins",
  "mainframe-runtime",
+ "mainframe-server",
  "mainframe-services",
  "mainframe-types",
  "nanoid",
@@ -1760,9 +1790,10 @@ dependencies = [
 name = "mainframe-services"
 version = "0.0.0"
 dependencies = [
- "dashmap",
  "dirs",
  "mainframe-db",
+ "mainframe-git",
+ "mainframe-runtime",
  "mainframe-types",
  "nanoid",
  "notify",
@@ -1780,9 +1811,13 @@ dependencies = [
 name = "mainframe-types"
 version = "0.0.0"
 dependencies = [
+ "base64",
  "chrono",
+ "nanoid",
  "serde",
  "serde_json",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

@@ -1,7 +1,6 @@
-//! Skills-CLI service (todo #243): install/uninstall skills via the `skills`
-//! CLI, spawned on the daemon host. Split into submodules to keep every file
-//! under the 300-line/50-line limits; see the plan's Group B
-//! (`rust-cli-service`) task list for the file-by-file breakdown.
+//! Skills-CLI service: install/uninstall skills via the `skills` CLI, spawned
+//! on the daemon host. Split into submodules to keep every file under the
+//! 300-line/50-line limits.
 //!
 //! Each entry point validates input, resolves the CLI binary
 //! ([`resolve::resolve_cli`]), builds the argv ([`args`]), runs it
@@ -30,7 +29,7 @@ pub use run::ProcessRunner;
 /// `impl Future` (a trait method), so it's boxed like the three other
 /// crate-level precedents (`mainframe-adapter-api`, `mainframe-automations`,
 /// `mainframe-launch`).
-pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// One CLI invocation: program, argv (never a shell string), and cwd.
 #[derive(Debug, Clone)]
@@ -59,7 +58,7 @@ pub struct CliOutcome {
 
 /// The runner seam: production wiring passes [`ProcessRunner`]; tests pass a
 /// recording double. Not an `AppCtx` field — constructed per call from
-/// `ctx.resolved_path`, since it carries no state beyond the `PATH`.
+/// `ctx.core.resolved_path`, since it carries no state beyond the `PATH`.
 pub trait SkillsCliRunner: Send + Sync {
     fn run(&self, spec: CommandSpec, timeout_ms: u64) -> BoxFuture<'_, CliOutcome>;
 }
@@ -67,9 +66,9 @@ pub trait SkillsCliRunner: Send + Sync {
 /// Failure outcomes the four entry points can return.
 #[derive(Debug)]
 pub enum SkillsCliError {
-    /// Rejected input (source/skill-name/scope/empty-skills) — never reaches
-    /// the CLI runner.
-    Rejected(String),
+    /// Rejected input (source/skill-name/empty-skills) — never reaches the
+    /// CLI runner.
+    Rejected(validate::SkillInputError),
     /// A second operation for this project is already in flight.
     Busy,
     /// The CLI itself failed: nonzero exit, spawn failure, or timeout.
@@ -232,18 +231,26 @@ pub async fn probe(
     Ok(probe_parse::parse_probe(&raw))
 }
 
-// The 8-argument signature is pinned by tests/skills_cli_unit.rs's doc
-// comment (Group A's contract); a params struct would diverge from it.
-#[allow(clippy::too_many_arguments)]
+pub struct InstallRequest<'a> {
+    pub project_id: &'a str,
+    pub project_path: &'a str,
+    pub source: &'a str,
+    pub skills: &'a [String],
+    pub scope: Scope,
+    pub adapter_id: Option<&'a str>,
+}
+
 pub async fn install(
     runner: &dyn SkillsCliRunner,
     path: &ResolvedPath,
-    project_id: &str,
-    project_path: &str,
-    source: &str,
-    skills: &[String],
-    scope: Scope,
-    adapter_id: Option<&str>,
+    InstallRequest {
+        project_id,
+        project_path,
+        source,
+        skills,
+        scope,
+        adapter_id,
+    }: InstallRequest<'_>,
 ) -> Result<(), SkillsCliError> {
     let _guard = locks::acquire(project_id).ok_or(SkillsCliError::Busy)?;
     validate::validate_source(source).map_err(SkillsCliError::Rejected)?;
@@ -280,7 +287,7 @@ pub async fn uninstall(
 fn validate_skills(skills: &[String]) -> Result<(), SkillsCliError> {
     if skills.is_empty() {
         return Err(SkillsCliError::Rejected(
-            "At least one skill is required".to_string(),
+            validate::SkillInputError::NoSkills,
         ));
     }
     for skill in skills {

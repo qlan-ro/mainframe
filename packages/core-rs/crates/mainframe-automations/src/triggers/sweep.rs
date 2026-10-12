@@ -1,4 +1,4 @@
-//! Sweep-driven schedule triggers (T8.2). No timers-per-schedule and no
+//! Sweep-driven schedule triggers. No timers-per-schedule and no
 //! stored next-fire state (locked decision: derived, not stored): every 30 s
 //! the sweep recomputes each enabled schedule's latest occurrence ≤ now and
 //! offers it to the runs table — the `uq_runs_dedup` unique index, keyed
@@ -19,8 +19,7 @@ use crate::store::{AutomationRecord, AutomationStore, RunTriggerContext, RunTrig
 use super::fire::TriggerFirer;
 
 /// A fire more than this late is a missed slot handled by `onMissed`
-/// (Node scheduler.ts: stale is strictly greater than the window; the
-/// interval cap it also applies never binds for hourly-or-slower schedules).
+/// (stale means strictly greater than the window).
 const FRESH_WINDOW_MS: i64 = 5 * 60_000;
 
 pub const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
@@ -41,7 +40,7 @@ impl ScheduleSweeper {
         let enabled = match self.automations.list_enabled().await {
             Ok(enabled) => enabled,
             Err(err) => {
-                tracing::error!(error = %err, "schedule sweep: listing automations failed");
+                tracing::error!(error = %err, "listing automations failed");
                 return;
             }
         };
@@ -68,7 +67,7 @@ impl ScheduleSweeper {
                     automation_id = automation.id,
                     trigger_id = trigger.id,
                     error = %err,
-                    "schedule sweep: occurrence computation failed"
+                    "occurrence computation failed"
                 );
                 return;
             }
@@ -99,14 +98,14 @@ impl ScheduleSweeper {
                 automation_id = automation.id,
                 trigger_id = trigger.id,
                 error = %err,
-                "schedule sweep: fire failed"
+                "fire failed"
             );
         }
     }
 
-    /// The 30 s driver the facade arms at boot (T10.1). `Delay` tick
-    /// behavior: after a laptop sleep the missed ticks collapse into one
-    /// sweep — the dedup index makes that sweep fire each slot at most once.
+    /// The 30 s driver the facade arms at boot. `Delay` tick behavior: after a
+    /// laptop sleep the missed ticks collapse into one sweep — the dedup index
+    /// makes that sweep fire each slot at most once.
     pub fn spawn(self: Arc<Self>, clock: Arc<dyn Clock>) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(SWEEP_INTERVAL);
@@ -118,9 +117,3 @@ impl ScheduleSweeper {
         })
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: replaces Node's CronScheduler + trigger_state rows with derived
-//        latest-occurrence math over the runs table's unique index.

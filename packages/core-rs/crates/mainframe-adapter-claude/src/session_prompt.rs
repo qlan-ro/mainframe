@@ -1,19 +1,33 @@
 use super::*;
+use crate::session_control::StdinWriteError;
 impl ClaudeSession {
-    pub(super) fn write_stdin(&self, line: String) {
+    /// Queue one line for the CLI's stdin. A closed stdin is the exit path's
+    /// business and is only logged; a full queue is reported to the caller.
+    pub(super) fn write_stdin(&self, line: String) -> Result<(), AdapterError> {
         if let Some(tx) = self.stdin_clone() {
             let mut bytes = line.into_bytes();
             bytes.push(b'\n');
-            let _ = tx.send(bytes);
+            self.queue_stdin(&tx, bytes)?;
         }
         self.bump_last_activity();
+        Ok(())
+    }
+    fn queue_stdin(&self, tx: &StdinTx, bytes: Vec<u8>) -> Result<(), AdapterError> {
+        match tx.try_write(bytes) {
+            Ok(()) => Ok(()),
+            Err(StdinWriteError::Closed) => {
+                tracing::debug!(session_id = %self.id, "stdin write skipped: child stdin closed");
+                Ok(())
+            }
+            Err(error @ StdinWriteError::Full) => {
+                tracing::warn!(session_id = %self.id, %error, "stdin write rejected");
+                Err(AdapterError::StdinFull(self.id.clone()))
+            }
+        }
     }
     pub async fn send_command(&self, command: String, args: String) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         let chat_id = self.state().chat_id.clone();
         let text = format!(
@@ -25,8 +39,7 @@ impl ClaudeSession {
             "message": { "role": "user", "content": [{ "type": "text", "text": text }] },
             "parent_tool_use_id": null,
         });
-        self.write_stdin(payload.to_string());
-        Ok(())
+        self.write_stdin(payload.to_string())
     }
     pub async fn send_message(
         &self,
@@ -35,31 +48,23 @@ impl ClaudeSession {
         uuid: Option<String>,
     ) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         let chat_id = self.state().chat_id.clone();
         let payload =
             crate::user_payload::build_user_payload(&chat_id, &message, &images, uuid.as_deref());
-        self.write_stdin(payload.to_string());
-        Ok(())
+        self.write_stdin(payload.to_string())
     }
     /// A user message the CLI folds into the running turn at its next tool
     /// boundary (`priority: "next"`). Never `"now"`: that aborts in-flight
     /// tool batches (`terminal_reason: "aborted_tools"`).
     pub async fn steer(&self, message: String, uuid: Option<String>) -> Result<(), AdapterError> {
         if !self.is_spawned() {
-            return Err(AdapterError::Message(format!(
-                "Session {} not spawned",
-                self.id
-            )));
+            return Err(AdapterError::NotSpawned(self.id.clone()));
         }
         let chat_id = self.state().chat_id.clone();
         let payload = crate::user_payload::build_steer_payload(&chat_id, &message, uuid.as_deref());
-        self.write_stdin(payload.to_string());
-        Ok(())
+        self.write_stdin(payload.to_string())
     }
     pub async fn respond_to_permission(
         &self,
@@ -86,7 +91,7 @@ impl ClaudeSession {
                 session_id = %self.id,
                 request_id = %response.request_id,
                 tool_name = ?response.tool_name,
-                "respondToPermission: stdin unavailable, response dropped"
+                "stdin unavailable, response dropped"
             );
             return Ok(());
         };
@@ -100,12 +105,11 @@ impl ClaudeSession {
         );
         let mut bytes = json_str.into_bytes();
         bytes.push(b'\n');
-        let _ = tx.send(bytes);
-        Ok(())
+        self.queue_stdin(&tx, bytes)
     }
     pub async fn cancel_queued_message(&self, uuid: String) -> Result<bool, AdapterError> {
         let Some(tx) = self.available_stdin() else {
-            tracing::warn!(session_id = %self.id, uuid = %uuid, "cancelQueuedMessage: stdin unavailable");
+            tracing::warn!(session_id = %self.id, uuid = %uuid, "stdin unavailable");
             return Ok(false);
         };
         let raw = self
@@ -132,7 +136,7 @@ impl ClaudeSession {
         task_id: String,
     ) -> Result<StopBackgroundTaskResult, AdapterError> {
         let Some(tx) = self.available_stdin() else {
-            tracing::warn!(session_id = %self.id, task_id = %task_id, "stopBackgroundTask: stdin unavailable");
+            tracing::warn!(session_id = %self.id, task_id = %task_id, "stdin unavailable");
             return Ok(StopBackgroundTaskResult {
                 ok: false,
                 error: Some("stdin unavailable".to_string()),

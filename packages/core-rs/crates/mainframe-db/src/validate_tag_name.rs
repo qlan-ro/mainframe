@@ -1,15 +1,12 @@
-//! Ported from `packages/core/src/lib/validate-tag-name.ts`.
-//!
-//! Relocated into `mainframe-db` (its sole consumer, `tags.rs`) per PORTING.md
-//! §2.15, alongside `tag_color`.
+//! Tag name validation. Lives in `mainframe-db` because its sole consumer is
+//! `tags.rs`.
 
 use mainframe_types::tags::RESERVED_TAG_PREFIX;
 
 const MIN_LEN: usize = 2;
 const MAX_LEN: usize = 24;
 
-/// Discriminated result mirroring the TS `ValidateResult` union
-/// (`{ ok: true, normalized } | { ok: false, error }`).
+/// Validation outcome: the normalized name, or the error message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValidateResult {
     Ok { normalized: String },
@@ -87,12 +84,3 @@ mod tests {
         }
     }
 }
-
-// PORT STATUS: src/lib/validate-tag-name.ts (21 lines)
-// confidence: high
-// notes: RELOCATED from lib/ into mainframe-db per §2.15 (sole consumer is
-// tags.rs). ValidateResult is a Rust enum mirroring the TS discriminated union;
-// error strings are byte-identical (asserted by tags.rs regex tests). Length
-// checks use char counts (JS `.length` is UTF-16 units, but tag input is ASCII).
-// Tests ported from lib/__tests__/validate-tag-name.test.ts.
-// todos: 0

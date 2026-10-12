@@ -1,6 +1,5 @@
-//! Moved out of `session.rs` (task 3, todo #247) to keep that file smaller.
 //! `load_history_inner` — the loadHistory temp-app-server + thread/read
-//! recursion, unchanged.
+//! recursion, kept apart from `session.rs` to keep that file smaller.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,12 +15,12 @@ use crate::session::de;
 use crate::thread_registry::{AgentMetadata, lookup_agent_metadata};
 use crate::types::{ThreadItem, ThreadReadResult, ThreadReadTurn};
 
-/// An unsent fork's `load_history` reads the *source* thread through its
-/// pinned `last_turn_id`, inclusive — everything after stays invisible until
-/// the fork's own first turn actually inherits it via `thread/fork` (todo
-/// #368). A cap id absent from the source (fork point retired, or a stale pin)
-/// keeps every turn rather than silently emptying the transcript. Pure and
-/// unit-testable, split out of `load_history_inner`'s live-client call.
+/// An unsent fork's `load_history` reads the *source* thread through its pinned
+/// `last_turn_id`, inclusive — everything after stays invisible until the
+/// fork's own first turn actually inherits it via `thread/fork`. A cap id
+/// absent from the source (fork point retired, or a stale pin) keeps every turn
+/// rather than silently emptying the transcript. Pure and unit-testable, split
+/// out of `load_history_inner`'s live-client call.
 pub(crate) fn truncate_at_turn_cap(
     mut turns: Vec<ThreadReadTurn>,
     turn_cap: Option<&str>,
@@ -34,7 +33,6 @@ pub(crate) fn truncate_at_turn_cap(
         Some(idx) => turns.truncate(idx + 1),
         None => {
             tracing::warn!(
-                module = "codex:history",
                 cap_id,
                 thread_id,
                 "fork turn cap id not found in the source thread; keeping all turns"
@@ -57,7 +55,7 @@ pub(crate) async fn load_history_inner(
             Some(json!({ "threadId": resume_thread_id, "includeTurns": true })),
         )
         .await
-        .map_err(|e| AdapterError::Message(e.0))?)?;
+        .map_err(AdapterError::from)?)?;
 
     let turns = truncate_at_turn_cap(
         read.thread.turns.unwrap_or_default(),
@@ -123,7 +121,7 @@ async fn load_children(
                 child_items_by_thread.insert(child_id.clone(), items);
             }
             Err(err) => {
-                tracing::warn!(module = "codex:session", err = %err.0, child_id, "codex: failed to read child thread, nesting will be skipped");
+                tracing::warn!(error = %err.0, child_id, "failed to read child thread, nesting will be skipped");
             }
         }
     }
@@ -131,9 +129,9 @@ async fn load_children(
     Ok(child_items_by_thread)
 }
 
-/// Child thread ids to fetch and nest, from both naming routes (todo #247
-/// task 21): a `subAgentActivity` ping of any kind, and a `wait`'s
-/// `receiverThreadIds` (the legacy route). Deduped and order-preserving.
+/// Child thread ids to fetch and nest, from both naming routes: a
+/// `subAgentActivity` ping of any kind, and a `wait`'s `receiverThreadIds` (the
+/// legacy route). Deduped and order-preserving.
 fn collect_child_thread_ids(all_items: &[ThreadItem]) -> Vec<String> {
     let mut child_thread_ids: Vec<String> = Vec::new();
     let mut push_unique = |id: &str| {
@@ -156,90 +154,5 @@ fn collect_child_thread_ids(all_items: &[ThreadItem]) -> Vec<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::{collect_child_thread_ids, truncate_at_turn_cap};
-    use crate::types::{ThreadItem, ThreadReadTurn};
-
-    fn items(v: serde_json::Value) -> Vec<ThreadItem> {
-        serde_json::from_value(v).expect("items parse")
-    }
-
-    fn turn(id: &str) -> ThreadReadTurn {
-        ThreadReadTurn {
-            id: id.to_string(),
-            status: "completed".to_string(),
-            items: Vec::new(),
-            timing: Default::default(),
-        }
-    }
-
-    // ---- truncate_at_turn_cap (todo #368) ----
-
-    #[test]
-    fn no_cap_keeps_every_turn() {
-        let turns = vec![turn("t1"), turn("t2")];
-        assert_eq!(truncate_at_turn_cap(turns.clone(), None, "thread-1"), turns);
-    }
-
-    #[test]
-    fn cap_at_the_first_turn_drops_everything_after_it() {
-        let turns = vec![turn("t1"), turn("t2"), turn("t3")];
-        let capped = truncate_at_turn_cap(turns, Some("t1"), "thread-1");
-        assert_eq!(
-            capped.into_iter().map(|t| t.id).collect::<Vec<_>>(),
-            vec!["t1".to_string()]
-        );
-    }
-
-    #[test]
-    fn cap_at_the_last_turn_keeps_everything() {
-        let turns = vec![turn("t1"), turn("t2")];
-        let capped = truncate_at_turn_cap(turns, Some("t2"), "thread-1");
-        assert_eq!(
-            capped.into_iter().map(|t| t.id).collect::<Vec<_>>(),
-            vec!["t1".to_string(), "t2".to_string()]
-        );
-    }
-
-    #[test]
-    fn an_unknown_cap_id_keeps_every_turn() {
-        let turns = vec![turn("t1"), turn("t2")];
-        let capped = truncate_at_turn_cap(turns.clone(), Some("does-not-exist"), "thread-1");
-        assert_eq!(capped, turns);
-    }
-
-    #[test]
-    fn collects_the_child_thread_id_from_a_started_activity_ping() {
-        let all = items(json!([
-            { "id": "s1", "type": "subAgentActivity", "kind": "started", "agentThreadId": "child-1", "agentPath": "/root/child" },
-        ]));
-        assert_eq!(collect_child_thread_ids(&all), vec!["child-1".to_string()]);
-    }
-
-    #[test]
-    fn collects_the_child_thread_id_from_a_waits_receiver_list() {
-        let all = items(json!([
-            { "id": "w1", "type": "collabAgentToolCall", "tool": "wait", "status": "completed", "receiverThreadIds": ["child-2"] },
-        ]));
-        assert_eq!(collect_child_thread_ids(&all), vec!["child-2".to_string()]);
-    }
-
-    #[test]
-    fn dedupes_a_child_named_by_both_routes() {
-        let all = items(json!([
-            { "id": "s1", "type": "subAgentActivity", "kind": "started", "agentThreadId": "child-3", "agentPath": "/root/child" },
-            { "id": "w1", "type": "collabAgentToolCall", "tool": "wait", "status": "completed", "receiverThreadIds": ["child-3"] },
-        ]));
-        assert_eq!(collect_child_thread_ids(&all), vec!["child-3".to_string()]);
-    }
-
-    #[test]
-    fn ignores_a_non_wait_collab_tool_call_and_a_started_ping_with_no_activity() {
-        let all = items(json!([
-            { "id": "sp1", "type": "collabAgentToolCall", "tool": "spawnAgent", "status": "completed", "receiverThreadIds": ["child-4"] },
-        ]));
-        assert_eq!(collect_child_thread_ids(&all), Vec::<String>::new());
-    }
-}
+#[path = "history_load_tests.rs"]
+mod tests;

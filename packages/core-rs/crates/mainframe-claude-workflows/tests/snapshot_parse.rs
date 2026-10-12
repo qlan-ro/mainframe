@@ -1,6 +1,9 @@
-//! Red-phase (Task 6): `snapshot::parse_snapshot` over a `workflow_progress`
-//! cumulative array. Turned green by Task 12.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! `snapshot::parse_snapshot` over a `workflow_progress` cumulative array.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use mainframe_claude_workflows::snapshot::parse_snapshot;
 use mainframe_types::claude_workflow::ClaudeWorkflowAgentState;

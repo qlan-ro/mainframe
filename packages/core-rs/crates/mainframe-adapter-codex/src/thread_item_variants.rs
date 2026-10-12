@@ -84,7 +84,7 @@ pub struct FileChange {
 pub struct FileChangeItem {
     pub id: String,
     pub changes: Vec<FileChange>,
-    /// `PatchApplyStatus` — kept `String` to mirror the TS string comparisons.
+    /// `PatchApplyStatus` — kept `String` to tolerate unknown status values.
     pub status: String,
 }
 

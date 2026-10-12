@@ -12,8 +12,8 @@ use crate::frontmatter::parse_frontmatter;
 
 use super::{ADAPTER_ID, home_dir, nonempty_attr, read_dir_names, skill_scope_str};
 
-/// Insertion-ordered dedupe map mirroring the TS `Map<string, Skill>`
-/// (`set` overwrites in place, iteration preserves first-insert order).
+/// Insertion-ordered dedupe map (`set` overwrites in place, iteration
+/// preserves first-insert order).
 struct SkillMap {
     order: Vec<String>,
     map: HashMap<String, Skill>,
@@ -75,33 +75,7 @@ pub async fn list_skills(project_path: &str) -> Vec<Skill> {
     )
     .await;
 
-    let plugins_path = home
-        .join(".claude")
-        .join("plugins")
-        .join("installed_plugins.json");
-    if let Ok(plugins_raw) = fs::read_to_string(&plugins_path).await
-        && let Ok(plugins_file) = serde_json::from_str::<Value>(&plugins_raw)
-        && let Some(plugins_map) = plugins_file.get("plugins").and_then(Value::as_object)
-    {
-        for (key, installations) in plugins_map {
-            let plugin_name = key.split('@').next().unwrap_or(key).to_string();
-            if let Some(installs) = installations.as_array() {
-                for install in installs {
-                    if let Some(install_path) = install.get("installPath").and_then(Value::as_str) {
-                        let plugin_skills_dir = Path::new(install_path).join("skills");
-                        scan_skills_dir(
-                            &plugin_skills_dir,
-                            SkillScope::Plugin,
-                            &mut skills,
-                            Some(&plugin_name),
-                        )
-                        .await;
-                    }
-                }
-            }
-        }
-    }
-    // No plugins file or parse error → the `if let` chain falls through.
+    scan_installed_plugins(&home, &mut skills).await;
 
     skills.into_values()
 }
@@ -215,6 +189,36 @@ async fn scan_commands_dir(dir: &Path, scope: SkillScope, skills: &mut SkillMap)
             );
         }
     }
+}
+
+async fn scan_installed_plugins(home: &Path, skills: &mut SkillMap) {
+    let plugins_path = home
+        .join(".claude")
+        .join("plugins")
+        .join("installed_plugins.json");
+    if let Ok(plugins_raw) = fs::read_to_string(&plugins_path).await
+        && let Ok(plugins_file) = serde_json::from_str::<Value>(&plugins_raw)
+        && let Some(plugins_map) = plugins_file.get("plugins").and_then(Value::as_object)
+    {
+        for (key, installations) in plugins_map {
+            let plugin_name = key.split('@').next().unwrap_or(key).to_string();
+            if let Some(installs) = installations.as_array() {
+                for install in installs {
+                    if let Some(install_path) = install.get("installPath").and_then(Value::as_str) {
+                        let plugin_skills_dir = Path::new(install_path).join("skills");
+                        scan_skills_dir(
+                            &plugin_skills_dir,
+                            SkillScope::Plugin,
+                            skills,
+                            Some(&plugin_name),
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
+    }
+    // No plugins file or parse error → the `if let` chain falls through.
 }
 
 #[cfg(test)]

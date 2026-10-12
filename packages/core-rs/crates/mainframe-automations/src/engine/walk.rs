@@ -1,7 +1,7 @@
-//! Linear step walker (Node walk.ts): skip committed steps, park on
-//! `waiting`, execute the first live leaf, commit, continue. If/Repeat never
-//! write an entry under their own id — only leaf verbs do — so re-entering a
-//! block on resume is always safe.
+//! Linear step walker: skip committed steps, park on `waiting`, execute the
+//! first live leaf, commit, continue. If/Repeat never write an entry under
+//! their own id — only leaf verbs do — so re-entering a block on resume is
+//! always safe.
 
 use std::sync::Arc;
 
@@ -10,10 +10,10 @@ use serde_json::{Map, Value};
 use crate::domain::Step;
 use crate::error::StoreError;
 use crate::ports::{AutomationEvent, Clock, EventSink, to_run_summary};
-use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepStatus, epoch_ms_now};
+use crate::store::{AutomationCheckpoint, RunRecord, RunStore, StepKind, StepStatus, epoch_ms_now};
 use crate::tokens::{NameIndex, NameMap, render};
 
-use super::checkpoint::{WalkFrame, build_scope, park_step, set_step};
+use super::checkpoint::{WalkFrame, build_scope};
 use super::{BoxFuture, StepOutcome, VerbContext, VerbPorts, WalkResult, blocks, blocks_parallel};
 
 pub(crate) struct WalkCtx<'a> {
@@ -110,8 +110,8 @@ async fn run_leaf(
     ctx: &WalkCtx<'_>,
     frame: &WalkFrame,
 ) -> Result<StepsResult, StoreError> {
-    // Decision 12: commit a pre-effect `running` marker for verbs whose side
-    // effects cannot be blindly re-run after a crash.
+    // Restart-mid-action policy: commit a pre-effect `running` marker for verbs
+    // whose side effects cannot be blindly re-run after a crash.
     let non_idempotent = matches!(step, Step::RunAction(_) | Step::AskAgent(_));
     let current = if non_idempotent {
         commit(ctx, step, step_ref, StepStatus::Running, None, None)
@@ -123,61 +123,23 @@ async fn run_leaf(
 
     let scope = build_scope(&current, frame, ctx.clock.clone());
     let no_names = NameMap::new();
+    let names = ctx.names.get(step.id()).unwrap_or_else(|| {
+        tracing::warn!(
+            run_id = ctx.run_id,
+            step_id = step.id(),
+            "step missing from the name index; rendering with no bound names"
+        );
+        &no_names
+    });
     let verb_ctx = VerbContext {
         run_id: ctx.run_id,
         step_ref,
         scope: &scope,
-        names: ctx.names.get(step.id()).unwrap_or(&no_names),
+        names,
     };
     let outcome = dispatch(step, ctx.ports, verb_ctx).await;
 
-    match outcome {
-        StepOutcome::Completed { outputs } => {
-            let record = commit(
-                ctx,
-                step,
-                step_ref,
-                StepStatus::Succeeded,
-                Some(outputs),
-                None,
-            )
-            .await?;
-            emit_settled(ctx, &record);
-            Ok(StepsResult {
-                result: WalkResult::Done,
-                checkpoint: record.checkpoint,
-            })
-        }
-        StepOutcome::Wait { wake_at } => {
-            let (step_ref_owned, step_id, kind) = commit_keys(step, step_ref);
-            let record = ctx
-                .store
-                .patch_checkpoint(ctx.run_id, move |cp| {
-                    park_step(cp, &step_ref_owned, &step_id, &kind, wake_at);
-                })
-                .await?;
-            Ok(StepsResult {
-                result: WalkResult::Parked,
-                checkpoint: record.checkpoint,
-            })
-        }
-        StepOutcome::Failed { error } => {
-            let record = commit(
-                ctx,
-                step,
-                step_ref,
-                StepStatus::Failed,
-                None,
-                Some(error.clone()),
-            )
-            .await?;
-            emit_settled(ctx, &record);
-            Ok(StepsResult {
-                result: WalkResult::Failed { error },
-                checkpoint: record.checkpoint,
-            })
-        }
-    }
+    settle_leaf(outcome, ctx, step, step_ref).await
 }
 
 /// A6 — every leaf-step terminal transition streams to the run view.
@@ -187,12 +149,8 @@ fn emit_settled(ctx: &WalkCtx<'_>, record: &RunRecord) {
     });
 }
 
-fn commit_keys(step: &Step, step_ref: &str) -> (String, String, String) {
-    (
-        step_ref.to_string(),
-        step.id().to_string(),
-        step.kind_name().to_string(),
-    )
+fn commit_keys(step: &Step, step_ref: &str) -> (String, String, StepKind) {
+    (step_ref.to_string(), step.id().to_string(), step.kind())
 }
 
 async fn commit(
@@ -206,7 +164,17 @@ async fn commit(
     let (step_ref, step_id, kind) = commit_keys(step, step_ref);
     ctx.store
         .patch_checkpoint(ctx.run_id, move |cp| {
-            set_step(cp, &step_ref, &step_id, &kind, status, outputs, error, None);
+            cp.set_step(
+                &step_ref,
+                &step_id,
+                kind,
+                crate::store::StepTransition {
+                    status,
+                    outputs,
+                    error,
+                    wake_at: None,
+                },
+            );
         })
         .await
 }
@@ -241,8 +209,57 @@ async fn dispatch(step: &Step, ports: &dyn VerbPorts, ctx: VerbContext<'_>) -> S
     }
 }
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T4.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node engine/walk.ts (walkFrame/runLeaf); commits funnel
-//        through RunStore::patch_checkpoint (one-tx read-modify-write).
+async fn settle_leaf(
+    outcome: StepOutcome,
+    ctx: &WalkCtx<'_>,
+    step: &Step,
+    step_ref: &str,
+) -> Result<StepsResult, StoreError> {
+    match outcome {
+        StepOutcome::Completed { outputs } => {
+            let record = commit(
+                ctx,
+                step,
+                step_ref,
+                StepStatus::Succeeded,
+                Some(outputs),
+                None,
+            )
+            .await?;
+            emit_settled(ctx, &record);
+            Ok(StepsResult {
+                result: WalkResult::Done,
+                checkpoint: record.checkpoint,
+            })
+        }
+        StepOutcome::Wait { wake_at } => {
+            let (step_ref_owned, step_id, kind) = commit_keys(step, step_ref);
+            let record = ctx
+                .store
+                .patch_checkpoint(ctx.run_id, move |cp| {
+                    cp.park_step(&step_ref_owned, &step_id, kind, wake_at);
+                })
+                .await?;
+            Ok(StepsResult {
+                result: WalkResult::Parked,
+                checkpoint: record.checkpoint,
+            })
+        }
+        StepOutcome::Failed { error } => {
+            let record = commit(
+                ctx,
+                step,
+                step_ref,
+                StepStatus::Failed,
+                None,
+                Some(error.clone()),
+            )
+            .await?;
+            emit_settled(ctx, &record);
+            Ok(StepsResult {
+                result: WalkResult::Failed { error },
+                checkpoint: record.checkpoint,
+            })
+        }
+    }
+}

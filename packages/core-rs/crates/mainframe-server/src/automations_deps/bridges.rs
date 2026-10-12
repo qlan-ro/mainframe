@@ -3,16 +3,16 @@
 
 use std::sync::Arc;
 
-use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::ports::{
     AutomationEvent, CuratedEvent, EventSink, EventSource, Notification, Notifier, NotifyError,
 };
 use mainframe_services::push::{PushMessage, PushPriority, PushService};
+use mainframe_types::BoxFuture;
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
 use tokio::sync::broadcast;
 
-/// WS `automation.notification` + mobile push (Node verbs/notify.ts:
-/// `data: {runId}`, priority default). Best-effort by contract.
+/// WS `automation.notification` + mobile push (`data: {runId}`, default
+/// priority). Best-effort by contract.
 pub struct DaemonNotifier {
     broadcast: broadcast::Sender<DaemonEvent>,
     push: Arc<PushService>,
@@ -51,7 +51,7 @@ impl Notifier for DaemonNotifier {
 /// runs) and `routes::notifications` (standalone, run-less notifications) so
 /// the two calls aren't duplicated. Best-effort — `PushService::send_push`
 /// has no `Result`, so a push failure never reaches the caller.
-pub async fn broadcast_and_push(
+pub(crate) async fn broadcast_and_push(
     broadcast: &broadcast::Sender<DaemonEvent>,
     push: &PushService,
     event: DaemonEvent,
@@ -61,7 +61,7 @@ pub async fn broadcast_and_push(
     push.send_push(message).await;
 }
 
-/// Engine event → daemon bus. The payload types are shared (T9.1), so the
+/// Engine event → daemon bus. The payload types are shared, so the
 /// mapping is a plain move — no re-serialization to drift.
 pub struct DaemonEventSink {
     broadcast: broadcast::Sender<DaemonEvent>,
@@ -79,7 +79,7 @@ impl EventSink for DaemonEventSink {
     }
 }
 
-pub fn map_automation_event(event: AutomationEvent) -> DaemonEvent {
+pub(crate) fn map_automation_event(event: AutomationEvent) -> DaemonEvent {
     match event {
         AutomationEvent::RunUpdated { run } => DaemonEvent::AutomationRunUpdated { run },
         AutomationEvent::InteractionCreated { interaction } => {
@@ -109,8 +109,8 @@ pub fn map_automation_event(event: AutomationEvent) -> DaemonEvent {
 }
 
 /// Daemon bus → `CuratedEvent` stream for the trigger router: terminal
-/// `chat.updated` frames become `session.finished` (contract §1 — app events
-/// only; chaining rides the CompletionEmitter, not this bridge).
+/// `chat.updated` frames become `session.finished` (app events only; chaining
+/// rides the CompletionEmitter, not this bridge).
 pub struct DaemonEventSource {
     tx: broadcast::Sender<CuratedEvent>,
 }
@@ -157,11 +157,3 @@ fn reason_str(reason: ChatUpdatedReason) -> &'static str {
         ChatUpdatedReason::Interrupted => "interrupted",
     }
 }
-
-// PORT STATUS: packages/core/src/automations/service.ts onDaemonEvent +
-// verbs/notify.ts push path
-// confidence: high
-// todos: 0
-// notes: the source keeps its own channel so subscribers created later
-//        (start(), T10.1) miss nothing that matters — bindings are derived
-//        per event, no arming state.

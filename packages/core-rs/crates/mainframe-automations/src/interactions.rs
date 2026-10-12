@@ -1,24 +1,23 @@
-//! Form pause/respond (T5.1, Node verbs/ask-me.ts): the ask_me verb creates
-//! a pending interaction and parks; `InteractionService::respond` validates,
-//! claims `pending→answered` + writes the answers into the checkpoint in ONE
-//! transaction (`InteractionStore::resolve_interaction`, contract §3), then
-//! advances. No timeouts — interactions never expire (contract §9).
+//! Form pause/respond: the ask_me verb creates a pending interaction and parks;
+//! `InteractionService::respond` validates, claims `pending→answered` + writes
+//! the answers into the checkpoint in ONE transaction
+//! (`InteractionStore::resolve_interaction`, contract §3), then advances. No
+//! timeouts — interactions never expire (contract §9).
 
 use std::sync::Arc;
 
 use serde_json::{Map, Value};
 
 use crate::domain::AskMeStep;
-use crate::engine::checkpoint::{recompute_wake_at, set_step};
 use crate::engine::{RunAdvancer, StepOutcome, VerbContext};
 use crate::error::StoreError;
 use crate::ports::{
     AutomationEvent, EventSink, Notification, NotificationLinks, Notifier, to_interaction_summary,
 };
 use crate::store::{
-    AutomationStore, InteractionRecord, InteractionStatus, InteractionStore, RunStore, StepStatus,
+    AutomationStore, InteractionRecord, InteractionStatus, InteractionStore, RunStore, StepKind,
+    StepStatus,
 };
-
 mod form;
 
 pub(crate) use form::validate_form;
@@ -31,7 +30,7 @@ pub enum InteractionError {
     AlreadyAnswered,
     #[error("interaction already cancelled")]
     AlreadyCancelled,
-    /// Field-level validation errors, joined for the wire like Node's
+    /// Field-level validation errors, joined with `; ` for the wire as
     /// `invalid response: ...`.
     #[error("invalid response: {}", errors.join("; "))]
     Invalid { errors: Vec<String> },
@@ -114,15 +113,16 @@ impl AskMeVerb {
         let parked = self
             .runs
             .patch_checkpoint(ctx.run_id, move |cp| {
-                set_step(
-                    cp,
+                cp.set_step(
                     &step_ref,
                     &step_id,
-                    "ask_me",
-                    StepStatus::Waiting,
-                    None,
-                    None,
-                    None,
+                    StepKind::AskMe,
+                    crate::store::StepTransition {
+                        status: StepStatus::Waiting,
+                        outputs: None,
+                        error: None,
+                        wake_at: None,
+                    },
                 );
                 if let Some(entry) = cp.steps.get_mut(&step_ref) {
                     entry.interaction_id = Some(interaction_id);
@@ -130,7 +130,7 @@ impl AskMeVerb {
                 // A sibling branch may still hold an armed deadline — an
                 // ask_me park never carries one of its own, so recompute
                 // instead of clobbering the run-level min with None.
-                recompute_wake_at(cp);
+                cp.recompute_wake_at();
             })
             .await;
         match parked {
@@ -148,14 +148,14 @@ impl AskMeVerb {
         }
     }
 
-    /// Best-effort attention ping (T5.1): automation name as title, the form
+    /// Best-effort attention ping: automation name as title, the form
     /// title as body. Never fails the pause.
     async fn send_notification(&self, run_id: &str, form_title: &str) {
         let run = match self.runs.get_run(run_id).await {
             Ok(Some(run)) => run,
             Ok(None) => return,
             Err(err) => {
-                tracing::warn!(run_id, error = %err, "ask_me notification: run load failed");
+                tracing::warn!(run_id, error = %err, "run load failed");
                 return;
             }
         };
@@ -179,14 +179,14 @@ impl AskMeVerb {
     }
 }
 
-pub struct InteractionService {
+pub(crate) struct InteractionService {
     interactions: InteractionStore,
     advancer: Arc<dyn RunAdvancer>,
     events: Arc<dyn EventSink>,
 }
 
 impl InteractionService {
-    pub fn new(
+    pub(crate) fn new(
         interactions: InteractionStore,
         advancer: Arc<dyn RunAdvancer>,
         events: Arc<dyn EventSink>,
@@ -243,9 +243,3 @@ fn failed(err: StoreError) -> StepOutcome {
         error: err.to_string(),
     }
 }
-
-// PORT STATUS: packages/core/src/automations/verbs/ask-me.ts (139 lines)
-// confidence: high
-// todos: 0
-// notes: Rust adds the T5.1 Notifier ping on pause (plan-mandated; Node has
-//        no interaction push) and stamps interactionId on the entry.

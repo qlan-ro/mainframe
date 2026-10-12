@@ -1,17 +1,15 @@
-//! Ported from the *behavioral* half of `packages/types/src/adapter.ts` — the
-//! `SessionSink`, `AdapterSession`, and `Adapter` interfaces. The serde DATA half
-//! of that same TS file (DTOs, `clampEffortToSupported`, `TUNABLE_FEATURES`) lives
-//! in `mainframe-types::adapter`; this module imports those and adds the traits.
+//! The behavioral half of the adapter contract: the `SessionSink`,
+//! `AdapterSession`, and `Adapter` traits. The serde data half (DTOs,
+//! `clamp_effort_to_supported`, `TUNABLE_FEATURES`) lives in
+//! `mainframe-types::adapter`; this module imports those and adds the traits.
 //!
-//! Trait-object vs generic (per CONCURRENCY.tsv rows 130/93/95): the registry
-//! stores `Arc<dyn Adapter>` and `ChatState` holds `Arc<dyn AdapterSession>`, so
-//! both are trait objects. Rust async-fn-in-trait is not `dyn`-compatible and the
-//! workspace has no `async-trait`, so every async method returns
-//! `BoxFuture<'_, ..>` by hand (the same manual pattern already used in
-//! `mainframe-services::workspace::session_files`). `SessionSink`'s methods mirror
-//! the TS `void` callbacks 1:1 as synchronous fire-and-forget calls: the Rust
-//! implementations emit over channels (`broadcast`/`mpsc` sends, non-blocking), so
-//! no method needs to return a future.
+//! Trait-object vs generic: the registry stores `Arc<dyn Adapter>` and
+//! `ChatState` holds `Arc<dyn AdapterSession>`, so both are trait objects. Rust
+//! async-fn-in-trait is not `dyn`-compatible and the workspace has no
+//! `async-trait`, so every async method returns `BoxFuture<'_, ..>` by hand (the
+//! same manual pattern used by the other adapter capabilities). `SessionSink`'s methods are
+//! synchronous fire-and-forget calls: the implementations emit over channels
+//! (`broadcast`/`mpsc` sends, non-blocking), so no method needs to return a future.
 
 use std::sync::Arc;
 
@@ -60,8 +58,8 @@ pub struct StopBackgroundTaskResult {
     pub error: Option<String>,
 }
 
-/// Payload of `SessionSink::on_skill_loaded` — the inline
-/// `{ skillName, path, content }` object from the TS interface.
+/// Payload of `SessionSink::on_skill_loaded`: `{ skillName, path, content }`
+/// on the wire.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadedSkill {
@@ -76,7 +74,7 @@ pub use adapter_session::AdapterSession;
 pub use session_sink::SessionSink;
 
 /// Input to `Adapter::pin_fork_point` — everything an adapter needs to pin a
-/// fork's starting point without a live session (todo #343). `dest_dir` is a
+/// fork's starting point without a live session. `dest_dir` is a
 /// Mainframe-owned, adapter-agnostic directory the adapter may write into (the
 /// Claude adapter copies the transcript there).
 #[derive(Debug, Clone, PartialEq)]
@@ -85,7 +83,7 @@ pub struct ForkPinRequest {
     pub cwd: String,
     pub session_file_path: Option<String>,
     pub dest_dir: String,
-    /// `None` pins the parent's current end (todo #343). `Some` pins the point
+    /// `None` pins the parent's current end. `Some` pins the point
     /// immediately before one of the parent's user messages (fork from a
     /// message), so the fork holds everything before it and nothing after.
     pub cut: Option<ForkCut>,
@@ -121,11 +119,39 @@ pub enum ForkPinError {
 
 /// An adapter (a CLI integration). Trait object stored as `Arc<dyn Adapter>`.
 ///
-/// The optional TS methods that gate on `typeof adapter.X === 'function'` are
-/// modelled as capability probes + default methods: `has_probe_models()` mirrors
-/// `typeof adapter.probeModels === 'function'` (the registry uses it to choose
-/// probe-vs-list), and `get_fallback_models()` mirrors `adapter.getFallbackModels?.()`.
+/// Optional features have defaults; catalogs can be read without spawning a CLI.
 pub trait Adapter: Send + Sync {
+    fn relocate_transcript(
+        &self,
+        _session: String,
+        _old_dir: String,
+        _new_dir: String,
+    ) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
+        Box::pin(async { Ok(None) })
+    }
+
+    fn external_sessions(&self) -> Option<Arc<dyn crate::ExternalSessions>> {
+        None
+    }
+    fn read_tool_result(&self, _path: String, _tool_id: String) -> BoxFuture<'_, Option<String>> {
+        Box::pin(async { None })
+    }
+    fn config_conflicts(&self) -> BoxFuture<'_, Vec<String>> {
+        Box::pin(async { Vec::new() })
+    }
+
+    fn quota_source(&self) -> Option<Arc<dyn crate::QuotaSource>> {
+        None
+    }
+
+    fn skills(&self) -> Option<Arc<dyn crate::SkillsProvider>> {
+        None
+    }
+
+    fn display_decoders(&self) -> Arc<dyn mainframe_display::ToolResultDecoders> {
+        Arc::new(mainframe_display::decoders::NoopDecoders)
+    }
+
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn capabilities(&self) -> AdapterCapabilities;
@@ -138,26 +164,14 @@ pub trait Adapter: Send + Sync {
 
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>>;
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>>;
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>>;
-
-    /// `true` when this adapter implements `probe_models` (mirrors the TS
-    /// `typeof adapter.probeModels === 'function'` check). Default `false`.
-    fn has_probe_models(&self) -> bool {
-        false
+    fn catalog(&self) -> Vec<AdapterModel> {
+        Vec::new()
     }
-    /// Live-catalog probe (`probeModels?`). `Ok(None)` means "probed, no catalog";
-    /// only invoked by the registry when `has_probe_models()` is `true`.
-    fn probe_models(
+    fn refresh_catalog(
         &self,
-        executable_path: Option<String>,
+        _executable_path: Option<String>,
     ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
-        let _ = executable_path;
-        Box::pin(async { Ok(None) })
-    }
-    /// Synchronous static fallback catalog for spawn-free startup seeding
-    /// (`getFallbackModels?`). Default `None`.
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        None
+        Box::pin(async { Ok(Some(self.catalog())) })
     }
 
     fn configured_model(
@@ -170,6 +184,11 @@ pub trait Adapter: Send + Sync {
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession>;
     fn kill_all(&self);
+
+    /// Initial transcript path when this adapter has a predictable file layout.
+    fn initial_transcript_path(&self, _session_id: &str, _cwd: &str) -> Option<String> {
+        None
+    }
 
     /// `getToolCategories?` — default `None`.
     fn get_tool_categories(&self) -> Option<ToolCategories> {
@@ -224,7 +243,7 @@ pub trait Adapter: Send + Sync {
         None
     }
 
-    /// Pin a fork's starting point (todo #343): locate and snapshot whatever the
+    /// Pin a fork's starting point: locate and snapshot whatever the
     /// adapter needs to branch `request.source_session_id`'s conversation
     /// without disturbing it. Default `Unsupported` — adapters with no fork
     /// mechanism need not override this; `ChatManager::fork_chat` treats
@@ -237,7 +256,7 @@ pub trait Adapter: Send + Sync {
         Box::pin(async { Err(ForkPinError::Unsupported) })
     }
 
-    /// Report the CLI version the registry's refresh observed (todo #368), so a
+    /// Report the CLI version the registry's refresh observed, so a
     /// capability that depends on the installed version (Codex's `fork`, gated
     /// on a minimum CLI release) can be computed synchronously from
     /// `capabilities()` without that method itself spawning a process.
@@ -250,34 +269,12 @@ pub trait Adapter: Send + Sync {
         let _ = version;
     }
 
-    /// A human-readable reason `capabilities().fork` is currently `false`
-    /// (todo #368), or `None` when fork is available or the adapter has no
+    /// A human-readable reason `capabilities().fork` is currently `false`,
+    /// or `None` when fork is available or the adapter has no
     /// version-gated fork story at all. Surfaced verbatim by the Fork menu item
     /// and the REST route's 422 body — adapter-agnostic on the caller side, so
     /// this is the only place the wording lives. Default `None`.
     fn fork_unavailable_reason(&self) -> Option<String> {
         None
     }
-
-    // TODO(port): the optional skill/agent/command/external-session CRUD methods
-    // from adapter.ts are deferred to the phase that ports the concrete
-    // claude/codex adapters and their routes — their default wire semantics
-    // (unsupported vs empty) must be pinned against those callers, not guessed
-    // here. The registry + chat-session consumers do not need them.
 }
-
-// PORT STATUS: behavioral half of packages/types/src/adapter.ts (Adapter/
-// AdapterSession/SessionSink traits)
-// confidence: high
-// todos: 1 (skill/agent/command/external-session CRUD, deferred to the
-//   concrete-adapter phase — see the TODO above)
-// notes: Main catch-up (#424/#430) adds two OPTIONAL Adapter methods with default
-// `Ok(None)` bodies so existing adapters keep compiling and each concrete adapter
-// (Wave 1) overrides: generate_title(content, binary) and is_transcript_present(
-// session_id, project_path, session_file_path). Owned `String` params (not &str)
-// to stay consistent with this trait's async BoxFuture methods; `None` return =
-// "unsupported / cannot determine — don't flag".
-// notes: todo #240 adds a third optional method, locate_transcript, alongside
-// is_transcript_present — same default-Ok(None) shape, same owned-String args.
-// notes: is_transcript_present was later folded into locate_transcript (presence
-// is `Present`), so reconciliation can also follow a relocated transcript.

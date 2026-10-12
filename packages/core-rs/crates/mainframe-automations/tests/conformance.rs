@@ -1,12 +1,14 @@
-//! Seven-fixture conformance suite (plan T10.2) + durability/cancel matrix
-//! (T10.3). Each `§12` reference automation is driven end-to-end through the
-//! real `AutomationsEngine` facade with recording fakes; assertions target the
-//! behaviors the plan names per fixture. One integration target keeps the
+//! Seven-fixture conformance suite + durability/cancel matrix. Each `§12`
+//! reference automation is driven end-to-end through the real
+//! `AutomationsEngine` facade with recording fakes; assertions target the
+//! behaviors the contract names per fixture. One integration target keeps the
 //! harness compiled once; the scenario modules live under `conformance/`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
-
-#[path = "conformance/fakes.rs"]
-mod fakes;
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::too_many_lines,
+    reason = "Test assertions and scenarios"
+)]
 
 #[path = "conformance/fake_actions.rs"]
 mod fake_actions;

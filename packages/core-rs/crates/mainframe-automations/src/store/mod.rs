@@ -4,6 +4,8 @@
 //! scheduler state derived).
 
 pub mod automation_store;
+mod checkpoint_mutation;
+pub(crate) use checkpoint_mutation::StepTransition;
 pub mod db;
 pub mod interaction_store;
 pub(crate) mod run_rows;
@@ -24,11 +26,12 @@ use serde_json::Value;
 use crate::domain::{AutomationDefinition, AutomationFormField, AutomationScope};
 use crate::error::StoreError;
 
-// Statuses/kinds are the canonical wire enums in `mainframe-types` (T9.1);
-// the engine keeps its original local names via aliases.
+// Statuses/kinds are the canonical wire enums in `mainframe-types`;
+// the engine keeps its own local names via aliases.
 pub use mainframe_types::automation::{
     AutomationInteractionStatus as InteractionStatus, AutomationRunStatus as RunStatus,
-    AutomationStepStatus as StepStatus, AutomationTriggerKind as RunTriggerKind,
+    AutomationStepKind as StepKind, AutomationStepStatus as StepStatus,
+    AutomationTriggerKind as RunTriggerKind,
 };
 
 /// The statuses `RunStore::finalize` may set (a run never re-enters
@@ -74,15 +77,15 @@ impl RunTriggerContext {
     }
 }
 
-/// One `stepRef` entry (contract §2). The Node engine writes
-/// `outputs`/`error`/`startedAt`/`finishedAt` as explicit `null` (they are
-/// `T | null` typed there), so those carry no `skip_serializing_if`;
-/// `chatId`/`interactionId` are TS-optional and omitted when absent.
+/// One `stepRef` entry (contract §2). The stored shape writes
+/// `outputs`/`error`/`startedAt`/`finishedAt` as explicit `null`, so those
+/// carry no `skip_serializing_if`; `chatId`/`interactionId` are optional and
+/// omitted when absent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckpointStep {
     pub step_id: String,
-    pub kind: String,
+    pub kind: StepKind,
     pub status: StepStatus,
     #[serde(default)]
     pub outputs: Option<serde_json::Map<String, Value>>,
@@ -96,7 +99,7 @@ pub struct CheckpointStep {
     pub chat_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interaction_id: Option<String>,
-    /// This entry's own deadline (Phase 4a): only a `waiting` entry carries
+    /// This entry's own deadline: only a `waiting` entry carries
     /// one. `AutomationCheckpoint::wake_at` stays the min across every
     /// waiting entry — the sweep's cheap pre-filter — so N concurrent parks
     /// each keep an independent deadline instead of the last write winning.
@@ -131,11 +134,11 @@ impl AutomationCheckpoint {
     }
 
     /// Deduped chatIds off every ask_agent entry seen so far — notification
-    /// links (contract Decision 4: "chatIds from checkpoint agent steps").
-    pub fn agent_chat_ids(&self) -> Vec<String> {
+    /// links from checkpoint agent steps.
+    pub(crate) fn agent_chat_ids(&self) -> Vec<String> {
         let mut chat_ids = Vec::new();
         for entry in self.steps.values() {
-            if entry.kind == "ask_agent"
+            if entry.kind == StepKind::AskAgent
                 && let Some(chat_id) = &entry.chat_id
                 && !chat_ids.contains(chat_id)
             {
@@ -148,7 +151,7 @@ impl AutomationCheckpoint {
 
 /// A5 — a run whose checkpoint has ANY step `waiting` reports `waiting`
 /// regardless of `wakeAt` (ask_me waits carry a null wakeAt by design).
-pub fn derive_run_status(checkpoint: &AutomationCheckpoint) -> RunStatus {
+pub(crate) fn derive_run_status(checkpoint: &AutomationCheckpoint) -> RunStatus {
     if checkpoint.wake_at.is_some() {
         return RunStatus::Waiting;
     }
@@ -212,8 +215,10 @@ pub(crate) fn parse_db_enum<T: serde::de::DeserializeOwned>(
 }
 
 pub(crate) fn epoch_ms_now() -> i64 {
-    chrono::Utc::now().timestamp_millis()
+    mainframe_types::time::now_ms()
 }
+
+mod columns;
 
 #[cfg(test)]
 mod automation_store_tests;
@@ -235,9 +240,3 @@ mod test_support;
 
 #[cfg(test)]
 mod webhook_state_tests;
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.1-T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: checkpoint serde mirrors Node store/types.ts null-vs-omit exactly
-//        (shared automations.db can be handed between engines on a flip).

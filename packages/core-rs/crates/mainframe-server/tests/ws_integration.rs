@@ -1,8 +1,11 @@
-//! WebSocket integration tests — translated from `websocket-auth.test.ts`,
-//! `ws-file-subscribe.test.ts`, and `websocket-broadcast-gating.test.ts`, plus
-//! the connect/ready/subscribe/ack/file:changed flow the task pins. Real app,
+//! WebSocket integration tests — auth, file subscriptions, and broadcast
+//! gating, plus the connect/ready/subscribe/ack/file:changed flow. Real app,
 //! real FileWatcherService, real in-memory DB (no mocks).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -82,27 +85,18 @@ async fn file_subscribe_absolute_acks_and_receives_file_changed() {
             .is_some_and(|p| p.ends_with("hello.ts"))
     );
 
-    // Re-write the file on a cadence until the event arrives. Under the CPU
-    // contention of the full parallel workspace run the notify watcher can
-    // register after the first write lands, dropping that single event; a
-    // periodic re-write guarantees a change occurs once the backend is live.
-    // The cadence must exceed the watcher's 200ms trailing debounce (each new
-    // event resets it): a 200ms cadence phase-locks with the debounce on Linux
-    // CI and the emit can lose the reset race every cycle, timing this test out.
-    // `loop` with its own counter, not `for i in 0..`: the task runs until it is
-    // aborted below, and an unbounded integer range is a wrapping loop to clippy.
-    let writer_file = file.clone();
-    let writer = tokio::spawn(async move {
-        let mut i: u64 = 0;
+    let changed = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            tokio::time::sleep(Duration::from_millis(500)).await;
-            let _ = std::fs::write(&writer_file, format!("// changed {i}"));
-            i += 1;
+            std::fs::write(&file, "// changed").unwrap();
+            if let Ok(event) =
+                tokio::time::timeout(Duration::from_secs(1), ws.wait_for("file:changed")).await
+            {
+                break event;
+            }
         }
-    });
-
-    let changed = ws.wait_for("file:changed").await;
-    writer.abort();
+    })
+    .await
+    .expect("file watcher observed a write");
     assert!(
         changed["path"]
             .as_str()
@@ -160,6 +154,7 @@ async fn file_subscribe_rejects_chat_project_ownership_mismatch() {
     let proj_a_for_chat = proj_a.clone();
     let chat_id = server
         .ctx
+        .core
         .db
         .call(move |db| {
             db.chats.create(&mainframe_types::chat::NewChat {
@@ -225,16 +220,18 @@ async fn connection_global_event_reaches_unsubscribed_client() {
     ws.wait_for("connection.ready").await;
 
     // chat.notification is connection-global — delivered even without a subscription.
-    let _ = server
-        .ctx
-        .broadcast
-        .send(mainframe_types::events::DaemonEvent::ChatNotification {
-            chat_id: "background-chat".into(),
-            title: "Task Complete".into(),
-            body: "done".into(),
-            level: mainframe_types::events::ChatNotificationLevel::Success,
-            kind: Some(mainframe_types::events::ChatNotificationKind::TaskComplete),
-        });
+    let _ =
+        server
+            .ctx
+            .core
+            .broadcast
+            .send(mainframe_types::events::DaemonEvent::ChatNotification {
+                chat_id: "background-chat".into(),
+                title: "Task Complete".into(),
+                body: "done".into(),
+                level: mainframe_types::events::ChatNotificationLevel::Success,
+                kind: Some(mainframe_types::events::ChatNotificationKind::TaskComplete),
+            });
     let event = ws.wait_for("chat.notification").await;
     assert_eq!(event["chatId"], "background-chat");
 }
@@ -249,6 +246,7 @@ async fn chat_scoped_event_withheld_from_unsubscribed_client() {
     // client that never subscribed to that chat.
     let _ = server
         .ctx
+        .core
         .broadcast
         .send(mainframe_types::events::DaemonEvent::ChatEnded {
             chat_id: "background-chat".into(),

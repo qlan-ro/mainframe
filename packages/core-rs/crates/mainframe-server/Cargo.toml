@@ -1,20 +1,24 @@
 [package]
 name = "mainframe-server"
 edition.workspace = true
+rust-version.workspace = true
 version.workspace = true
 publish.workspace = true
 
 [lints]
 workspace = true
 
+[features]
+test-support = []
+
 [dependencies]
 axum = { workspace = true }
 tower-http = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 toml = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
@@ -25,6 +29,7 @@ mainframe-orchestration = { workspace = true }
 mainframe-acp = { workspace = true }
 mainframe-display = { workspace = true }
 mainframe-types = { workspace = true }
+mainframe-github = { workspace = true }
 mainframe-runtime = { workspace = true }
 mainframe-db = { workspace = true }
 mainframe-git = { workspace = true }
@@ -46,6 +51,10 @@ grep-regex = { workspace = true }
 grep-matcher = { workspace = true }
 
 [dev-dependencies]
+mainframe-adapter-api = { workspace = true, features = ["test-support"] }
+mainframe-chat = { workspace = true, features = ["test-support"] }
+mainframe-server = { path = ".", features = ["test-support"] }
+mainframe-automations = { workspace = true, features = ["testkit"] }
 tempfile = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }

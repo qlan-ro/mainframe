@@ -1,45 +1,22 @@
-//! Route tests for `git_write.rs` — the commit + working-stat assertions from
-//! `git-review.test.ts` (translated onto real git repos instead of a mocked
-//! `GitService`), plus branch listing/creation coverage. Real collaborators: a
-//! temp git repo per test, a real in-memory DB project row.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Route tests for `git_write.rs` — the commit + working-stat assertions (on
+//! real git repos, not a mocked `GitService`), plus branch listing/creation
+//! coverage. Real collaborators: a temp git repo per test, a real in-memory DB
+//! project row.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
-
-use std::path::Path;
 
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::{TestServer, spawn_test_server};
 
-fn run_git(cwd: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
 /// Init a repo with one commit, using repo-local identity/no-sign config so the
 /// daemon's own `GitService` commits succeed regardless of the host git config.
-fn init_repo() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    run_git(dir.path(), &["init", "-b", "main"]);
-    run_git(dir.path(), &["config", "user.email", "t@t.com"]);
-    run_git(dir.path(), &["config", "user.name", "T"]);
-    run_git(dir.path(), &["config", "commit.gpgsign", "false"]);
-    std::fs::write(dir.path().join("README.md"), "hello\n").unwrap();
-    run_git(dir.path(), &["add", "-A"]);
-    run_git(dir.path(), &["commit", "-m", "init"]);
-    dir
-}
+use support::helpers::init_repo;
 
 async fn post(server: &TestServer, path: &str, body: Value) -> reqwest::Response {
     reqwest::Client::new()
@@ -116,11 +93,10 @@ async fn commit_returns_success_with_commit_hash() {
 
 #[tokio::test]
 async fn commit_returns_500_with_leaked_message_when_nothing_to_commit() {
-    // Translated from git-review.test.ts's mocked "commitAll throws" case. With a
-    // real repo the clean-tree commit fails at git itself (exit 1), so the leaked
-    // message is git's exec error rather than the mock's literal "Nothing to
-    // commit" — the contract under test is 500 + `success:false` + a leaked,
-    // non-opaque git message (NOT the "Internal server error" async_err handler).
+    // With a real repo the clean-tree commit fails at git itself (exit 1), so the
+    // leaked message is git's exec error — the contract under test is 500 +
+    // `success:false` + a leaked, non-opaque git message (NOT the "Internal
+    // server error" async_err handler).
     let server = spawn_test_server(None).await;
     let repo = init_repo(); // clean tree → commit fails
     let id = server.create_project(repo.path().to_str().unwrap()).await;

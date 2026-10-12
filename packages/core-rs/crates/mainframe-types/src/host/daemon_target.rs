@@ -1,5 +1,4 @@
-//! Ported from `packages/types/src/host/daemon-target.ts`.
-
+use crate::validation::RefinementError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,80 +47,20 @@ pub struct DaemonMeta {
 
 impl DaemonMeta {
     /// The `.min(1)` refinements from `DaemonMetaSchema` (id/label/host non-empty).
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), RefinementError> {
         if self.id.is_empty() {
-            return Err("id must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("id"));
         }
         if self.label.is_empty() {
-            return Err("label must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("label"));
         }
         if self.host.is_empty() {
-            return Err("host must contain at least 1 character".to_string());
+            return Err(RefinementError::TooShort("host"));
         }
         Ok(())
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn daemon_target_serializes_null_token() {
-        let json = r#"{"id":"local","kind":"local","label":"This Mac","baseUrl":"http://127.0.0.1:31415","token":null}"#;
-        let t: DaemonTarget = serde_json::from_str(json).unwrap();
-        assert_eq!(t.kind, DaemonKind::Local);
-        assert!(t.token.is_none());
-        assert_eq!(serde_json::to_string(&t).unwrap(), json);
-    }
-
-    #[test]
-    fn daemon_meta_omits_optionals_and_validates() {
-        let json =
-            r#"{"id":"remote-1","kind":"remote","label":"Server","host":"box.example:31415"}"#;
-        let m: DaemonMeta = serde_json::from_str(json).unwrap();
-        assert!(m.validate().is_ok());
-        assert_eq!(serde_json::to_string(&m).unwrap(), json);
-    }
-
-    #[test]
-    fn daemon_meta_validate_rejects_empty_host() {
-        let m = DaemonMeta {
-            id: "x".to_string(),
-            kind: DaemonKind::Local,
-            label: "l".to_string(),
-            host: String::new(),
-            device: None,
-            paired: None,
-            scheme: None,
-        };
-        assert!(m.validate().is_err());
-    }
-
-    #[test]
-    fn daemon_meta_pre_change_shape_omits_scheme() {
-        let json =
-            r#"{"id":"remote-1","kind":"remote","label":"Server","host":"box.example:31415"}"#;
-        let m: DaemonMeta = serde_json::from_str(json).unwrap();
-        assert_eq!(m.scheme, None);
-        assert_eq!(serde_json::to_string(&m).unwrap(), json);
-    }
-
-    #[test]
-    fn daemon_meta_round_trips_http_scheme() {
-        let json = r#"{"id":"remote-1","kind":"remote","label":"Server","host":"127.0.0.1:31415","scheme":"http"}"#;
-        let m: DaemonMeta = serde_json::from_str(json).unwrap();
-        assert_eq!(m.scheme, Some(DaemonScheme::Http));
-        assert_eq!(serde_json::to_string(&m).unwrap(), json);
-    }
-}
-
-// PORT STATUS: packages/types/src/host/daemon-target.ts (23 lines)
-// confidence: high
-// todos: 0
-// notes: host bridge/registry type — not daemon-consumed (low priority per §2.1).
-// `kind` literal-union → DaemonKind enum, shared by DaemonTarget and DaemonMeta.
-// `token: string | null` is required-nullable → Option WITHOUT skip. DaemonMeta
-// mirrors DaemonMetaSchema (zod); the `.min(1)` refinements become validate().
-// `scheme` is optional (absent = https) so old registry files without the key
-// keep loading unchanged.
+#[path = "daemon_target_tests.rs"]
+mod tests;

@@ -274,7 +274,7 @@ async fn start(
             TaskStatus::Failed,
             "The task prompt could not be delivered.",
         );
-        tracing::warn!(task_id = task.id, ?err, "delegated task prompt failed");
+        tracing::warn!(task_id = task.id, error = ?err, "delegated task prompt failed");
         return svc.finalize(task, failure).await;
     }
     task.status = TaskStatus::Running;

@@ -99,4 +99,5 @@ fn apply_to_blocks(blocks: &mut [DisplayContent], timings: &HashMap<&str, ToolCa
 }
 
 #[cfg(test)]
+#[path = "tool_call_timing_tests.rs"]
 mod tests;

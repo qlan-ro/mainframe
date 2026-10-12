@@ -47,7 +47,7 @@ interface SessionContextMenuProps {
    */
   canOpenSideChat: boolean;
   onOpenSideChat: () => void;
-  claudeSessionId?: string;
+  vendorSessionId?: string;
   children: ReactNode;
 }
 
@@ -65,11 +65,11 @@ export function SessionContextMenu({
   onFork,
   canOpenSideChat,
   onOpenSideChat,
-  claudeSessionId,
+  vendorSessionId,
   children,
 }: SessionContextMenuProps) {
   function handleCopyId() {
-    if (claudeSessionId != null) void navigator.clipboard.writeText(claudeSessionId);
+    if (vendorSessionId != null) void navigator.clipboard.writeText(vendorSessionId);
   }
 
   return (
@@ -125,7 +125,7 @@ export function SessionContextMenu({
           <ArchiveIcon />
           {temporary ? 'Discard' : 'Archive'}
         </ContextMenuItem>
-        {claudeSessionId != null && (
+        {vendorSessionId != null && (
           <>
             <ContextMenuSeparator />
             <ContextMenuItem data-testid="sessions-ctx-copy-id" onSelect={handleCopyId}>

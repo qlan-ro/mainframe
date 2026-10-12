@@ -1,5 +1,3 @@
-//! Ported from `src/server/routes/files.ts`.
-//!
 //! Eight endpoints over project files and the filesystem: directory tree,
 //! file-name search, flat file listing, GET/PUT file content, path resolution,
 //! external absolute-path read, and filesystem browse. Every project-scoped path
@@ -15,18 +13,17 @@ use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path as AxPath, Query, State};
 use axum::http::StatusCode;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use mainframe_db::{DatabaseManager, DbError};
-use mainframe_types::chat::{Chat, Project};
 use serde::Serialize;
 
-use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::fs_utils::{has_binary_extension, is_ignored_dir, path_resolve, relative};
-use crate::path_utils::{resolve_and_validate_path, resolve_readable_path};
+use crate::input_error::InputError;
+use crate::path_utils::resolve_readable_path;
 use crate::respond::{fail, ok};
 use crate::ripgrep::{ListFilesOptions, list_files_with_ripgrep};
+use mainframe_runtime::fs::resolve_and_validate_path;
 
 const TREE_HIDDEN: &[&str] = &[".git"];
 
@@ -39,56 +36,15 @@ struct FsEntry {
     path: String,
 }
 
-// ── effective-path resolution ────────────────────────────────────────────────
-
-/// Sync `getEffectivePath` (runs on the DB thread). Mirrors `types.ts`: project
-/// not found → `None`; a `chatId` from a different project → `None`; a live
-/// worktree wins over the project root. `worktreeMissing` is a ChatManager
-/// runtime field absent from the DB (always `None` here) → the missing-worktree
-/// short-circuit is a Phase-4/5 seam.
-pub(crate) fn effective_path_sync(
-    db: &DatabaseManager,
-    project_id: &str,
-    chat_id: Option<&str>,
-) -> Result<Option<String>, DbError> {
-    let Some(project) = db.projects.get(project_id)? else {
-        return Ok(None);
-    };
-    if let Some(cid) = chat_id
-        && let Some(chat) = db.chats.get(cid)?
-    {
-        if chat.project_id != project_id {
-            return Ok(None);
-        }
-        if let Some(worktree) = chat.worktree_path {
-            // TODO(port-phase4/5): honor ChatManager's runtime worktreeMissing.
-            if chat.worktree_missing == Some(true) {
-                return Ok(None);
-            }
-            return Ok(Some(worktree));
-        }
-    }
-    Ok(Some(project.path))
-}
-
-/// Handler-side base resolver: `Ok(base)` or an already-built `404`/`500`
-/// response. Wraps [`effective_path_sync`] on the DB thread.
 pub(crate) async fn resolve_base(
     ctx: &AppCtx,
     project_id: &str,
     chat_id: Option<&str>,
-) -> Result<String, Response> {
-    let pid = project_id.to_string();
-    let cid = chat_id.map(str::to_string);
-    match ctx
-        .db
-        .call(move |db| effective_path_sync(db, &pid, cid.as_deref()))
+) -> Result<String, crate::respond::ApiError> {
+    ctx.resolve_scope(project_id, chat_id)
         .await
-    {
-        Ok(Some(base)) => Ok(base),
-        Ok(None) => Err(fail(StatusCode::NOT_FOUND, "Project not found")),
-        Err(err) => Err(internal_error("resolving effective path", &err)),
-    }
+        .map(|scope| scope.path)
+        .map_err(Into::into)
 }
 
 fn qget<'a>(q: &'a HashMap<String, String>, key: &str) -> Option<&'a str> {
@@ -104,7 +60,7 @@ async fn tree(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     // `req.query.path || '.'` — an empty string is falsy → '.'.
     let dir_path = qget(&q, "path").filter(|p| !p.is_empty()).unwrap_or(".");
@@ -179,14 +135,14 @@ async fn search_files(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let query = qget(&q, "q").unwrap_or("").to_lowercase();
     if query.is_empty() {
         return ok(Vec::<FileHit>::new());
     }
     if tokio::fs::canonicalize(&base).await.is_err() {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     }
     let limit = parse_limit(qget(&q, "limit"), 50, 200);
     let scan_limit = limit.saturating_mul(4);
@@ -265,11 +221,11 @@ async fn files_list(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let limit = parse_limit(qget(&q, "limit"), 5000, 5000);
     if tokio::fs::canonicalize(&base).await.is_err() {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
+        return crate::respond::ApiError::project_not_found().into_response();
     }
 
     let mut files: Vec<String> = Vec::new();
@@ -322,7 +278,7 @@ async fn file_content(
 ) -> Response {
     let base = match resolve_base(&ctx, &id, qget(&q, "chatId")).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(file_path) = qget(&q, "path").filter(|p| !p.is_empty()) else {
         return fail(StatusCode::BAD_REQUEST, "path query required");
@@ -347,7 +303,7 @@ async fn file_content(
     };
     if is_base64 {
         ok(
-            serde_json::json!({ "path": file_path, "content": base64_encode(&bytes), "encoding": "base64" }),
+            serde_json::json!({ "path": file_path, "content": mainframe_types::base64_data::encode(&bytes), "encoding": "base64" }),
         )
     } else {
         ok(serde_json::json!({ "path": file_path, "content": String::from_utf8_lossy(&bytes) }))
@@ -366,10 +322,10 @@ async fn write_file(
     let chat_id = parsed.get("chatId").and_then(|v| v.as_str());
     let file_path = match require_nonempty_string(&parsed, "path") {
         Ok(p) => p,
-        Err(msg) => return fail(StatusCode::BAD_REQUEST, msg),
+        Err(err) => return crate::respond::fail_with(&err),
     };
-    // WriteFileBody.content = z.string() (no `.min(1)`, so an empty string is
-    // valid). Missing/non-string reproduces the Zod v4 type-mismatch prose.
+    // `content` must be a string (an empty string is valid). Missing/non-string
+    // returns the Zod v4 type-mismatch message.
     let content = match parsed.get("content") {
         None => {
             return fail(
@@ -383,17 +339,18 @@ async fn write_file(
 
     let base = match resolve_base(&ctx, &id, chat_id).await {
         Ok(b) => b,
-        Err(resp) => return resp,
+        Err(resp) => return resp.into_response(),
     };
     let Some(full) = resolve_and_validate_path(&base, file_path).await else {
         return fail(StatusCode::FORBIDDEN, "Path outside project");
     };
     match tokio::fs::write(&full, content).await {
         Ok(()) => ok(serde_json::json!({ "path": file_path })),
-        Err(err) => {
-            tracing::warn!(error = %err, path = file_path, "Failed to write file");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Failed to write file")
-        }
+        Err(err) => crate::respond::fail_internal(
+            format!("Failed to write file path={}", file_path),
+            &err,
+            "Failed to write file",
+        ),
     }
 }
 
@@ -421,31 +378,12 @@ async fn resolve_path(
     };
     let chat_id = qget(&q, "chatId").map(str::to_string);
 
-    let pid = id.clone();
-    let cid = chat_id.clone();
-    let lookup = ctx
-        .db
-        .call(move |db| Ok((db.projects.get(&pid)?, chat_lookup(db, cid.as_deref())?)))
-        .await;
-    let (project, chat) = match lookup {
-        Ok(v) => v,
-        Err(err) => return internal_error("resolving path", &err),
+    let scope = match ctx.resolve_scope(&id, chat_id.as_deref()).await {
+        Ok(scope) => scope,
+        Err(error) => return crate::respond::ApiError::from(error).into_response(),
     };
-    let Some(project) = project else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
-    };
-    // Phase-4/5 seam: worktreeMissing is a ChatManager runtime field (always
-    // None from the DB) — the 409 branch is structurally present but inert here.
-    if let Some(chat) = &chat
-        && chat.worktree_missing == Some(true)
-    {
-        return fail(StatusCode::CONFLICT, "Worktree missing");
-    }
-    let Some(base) = effective_from(&project, chat.as_ref(), &id) else {
-        return fail(StatusCode::NOT_FOUND, "Project not found");
-    };
-
-    let base_kind = if base != project.path {
+    let base = scope.path;
+    let base_kind = if base != scope.project_path {
         "worktree"
     } else {
         "project"
@@ -464,28 +402,6 @@ async fn resolve_path(
         "basePath": real_base,
         "contained": contained,
     }))
-}
-
-fn chat_lookup(db: &DatabaseManager, chat_id: Option<&str>) -> Result<Option<Chat>, DbError> {
-    match chat_id {
-        Some(cid) => db.chats.get(cid),
-        None => Ok(None),
-    }
-}
-
-fn effective_from(project: &Project, chat: Option<&Chat>, project_id: &str) -> Option<String> {
-    if let Some(chat) = chat {
-        if chat.project_id != project_id {
-            return None;
-        }
-        if let Some(worktree) = &chat.worktree_path {
-            if chat.worktree_missing == Some(true) {
-                return None;
-            }
-            return Some(worktree.clone());
-        }
-    }
-    Some(project.path.clone())
 }
 
 /// Resolve `requested` against `base`: strict containment → `contained:true`;
@@ -541,7 +457,7 @@ async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Resp
             );
         }
     };
-    // encoding: z.enum(['base64']).optional() — absent, or exactly "base64".
+    // `encoding` is absent, or exactly "base64".
     let encoding = qget(&q, "encoding");
     if let Some(enc) = encoding
         && enc != "base64"
@@ -564,38 +480,10 @@ async fn external_file_content(Query(q): Query<HashMap<String, String>>) -> Resp
     if is_blocked_external(&resolved) {
         return fail(StatusCode::FORBIDDEN, "Access to this path is not allowed");
     }
-    let Ok(meta) = tokio::fs::metadata(&resolved).await else {
-        tracing::warn!(path = resolved, "Failed to stat external file");
-        return fail(StatusCode::NOT_FOUND, "File not found");
-    };
-    if !meta.is_file() {
-        return fail(StatusCode::BAD_REQUEST, "Path is not a file");
+    if let Err(response) = validate_external_file(&resolved, is_base64).await {
+        return *response;
     }
-    // Same limits as the project files route: binary viewers need more headroom.
-    let max_mb: u64 = if is_base64 { 10 } else { 2 };
-    if meta.len() > max_mb * 1024 * 1024 {
-        return fail(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            format!("File too large (max {max_mb}MB)"),
-        );
-    }
-    match tokio::fs::read(&resolved).await {
-        Ok(bytes) => {
-            if is_base64 {
-                ok(
-                    serde_json::json!({ "path": resolved, "content": base64_encode(&bytes), "encoding": "base64" }),
-                )
-            } else {
-                ok(
-                    serde_json::json!({ "path": resolved, "content": String::from_utf8_lossy(&bytes) }),
-                )
-            }
-        }
-        Err(err) => {
-            tracing::warn!(error = %err, path = resolved, "Failed to read external file");
-            fail(StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file")
-        }
-    }
+    read_external_file(&resolved, is_base64).await
 }
 
 // ── GET /api/filesystem/browse ───────────────────────────────────────────────
@@ -704,56 +592,32 @@ fn parse_booleanish(raw: Option<&str>) -> Result<bool, ()> {
 }
 
 /// Zod v4 message for `z.string()` receiving a non-string value: the `received`
-/// suffix is the JSON typeof (`Buffer.toString('base64')`-style prose parity).
+/// suffix is the JSON typeof.
 fn zod_type_mismatch(v: &serde_json::Value) -> String {
-    let received = match v {
+    InputError::ExpectedString(json_typeof(v)).to_string()
+}
+
+/// The JSON `typeof` zod names in a type-mismatch message.
+fn json_typeof(v: &serde_json::Value) -> &'static str {
+    match v {
         serde_json::Value::Null => "null",
         serde_json::Value::Bool(_) => "boolean",
         serde_json::Value::Number(_) => "number",
         serde_json::Value::Array(_) => "array",
         serde_json::Value::Object(_) => "object",
         serde_json::Value::String(_) => "string",
-    };
-    format!("Invalid input: expected string, received {received}")
+    }
 }
 
-fn require_nonempty_string<'a>(v: &'a serde_json::Value, key: &str) -> Result<&'a str, String> {
+fn require_nonempty_string<'a>(v: &'a serde_json::Value, key: &str) -> Result<&'a str, InputError> {
     match v.get(key) {
-        None => Err("Invalid input: expected string, received undefined".to_string()),
-        Some(serde_json::Value::String(s)) if s.is_empty() => {
-            Err("Too small: expected string to have >=1 characters".to_string())
-        }
+        None => Err(InputError::ExpectedString("undefined")),
+        Some(serde_json::Value::String(s)) if s.is_empty() => Err(InputError::Rejected(
+            "Too small: expected string to have >=1 characters",
+        )),
         Some(serde_json::Value::String(s)) => Ok(s),
-        Some(other) => Err(zod_type_mismatch(other)),
+        Some(other) => Err(InputError::ExpectedString(json_typeof(other))),
     }
-}
-
-const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-/// Standard base64 with padding — matches Node `Buffer.toString('base64')`.
-fn base64_encode(input: &[u8]) -> String {
-    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
-    for chunk in input.chunks(3) {
-        let b = [
-            chunk[0],
-            *chunk.get(1).unwrap_or(&0),
-            *chunk.get(2).unwrap_or(&0),
-        ];
-        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-        out.push(B64[((n >> 18) & 63) as usize] as char);
-        out.push(B64[((n >> 12) & 63) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            B64[((n >> 6) & 63) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            B64[(n & 63) as usize] as char
-        } else {
-            '='
-        });
-    }
-    out
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -770,63 +634,8 @@ pub fn router() -> Router<Arc<AppCtx>> {
         )
 }
 
+mod external;
+use external::{read_external_file, validate_external_file};
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn base64_matches_node_buffer() {
-        assert_eq!(base64_encode(b""), "");
-        assert_eq!(base64_encode(b"f"), "Zg==");
-        assert_eq!(base64_encode(b"fo"), "Zm8=");
-        assert_eq!(base64_encode(b"foo"), "Zm9v");
-        assert_eq!(base64_encode(b"hello world\n"), "aGVsbG8gd29ybGQK");
-    }
-
-    #[test]
-    fn fuzzy_match_is_subsequence() {
-        assert!(fuzzy_match("hlo", "hello"));
-        assert!(!fuzzy_match("xyz", "hello"));
-        assert!(fuzzy_match("abc", "aXbXc"));
-    }
-
-    #[test]
-    fn parse_limit_clamps_and_defaults() {
-        assert_eq!(parse_limit(None, 50, 200), 50);
-        assert_eq!(parse_limit(Some("30"), 50, 200), 30);
-        assert_eq!(parse_limit(Some("0"), 50, 200), 50);
-        assert_eq!(parse_limit(Some("9999"), 50, 200), 200);
-        assert_eq!(parse_limit(Some("junk"), 50, 200), 50);
-    }
-
-    #[test]
-    fn blocklist_rejects_sensitive_paths() {
-        assert!(is_blocked_external("/etc/shadow"));
-        assert!(is_blocked_external("/etc/sudoers/extra"));
-        assert!(is_blocked_external("/home/u/.ssh/id_rsa"));
-        assert!(is_blocked_external("/home/u/.aws/credentials"));
-        assert!(is_blocked_external("/home/u/.netrc"));
-        assert!(is_blocked_external("/home/u/.gnupg/secring.gpg"));
-        assert!(!is_blocked_external("/home/u/.aws/config"));
-        assert!(!is_blocked_external("/home/u/project/file.txt"));
-    }
-}
-
-// PORT STATUS: src/server/routes/files.ts (8 endpoints) + types.ts getEffectivePath
-// confidence: high
-// todos: 2
-// notes: getEffectivePath (from types.ts) lives here as effective_path_sync until
-// a shared routes-helpers module exists — TODO(port): consolidate once all
-// Phase-3 route files land (git.rs et al. need it too). worktreeMissing is a
-// ChatManager runtime field absent from the DB, so the missing-worktree
-// short-circuit (null / 409) is a Phase-4/5 seam (always inert here). Zod v4
-// `validate()` 400 bodies reproduced byte-for-byte ("Invalid input: expected
-// string, received undefined", "Too small: expected string to have >=1
-// characters", the type-mismatch prose) + the booleanish union's "Invalid
-// input". `path.relative`/`path.resolve` via fs_utils shims;
-// realpathSync → tokio canonicalize. Tree/browse sort uses byte Ord (not JS
-// localeCompare) — ordering is unasserted. base64 hand-rolled (no crate in the
-// allowlist), verified against Node Buffer vectors. Main catch-up (#436): the
-// external-file route accepts `encoding=base64` (10MB cap, base64 body +
-// `encoding:'base64'`; else 2MB utf-8) and the blocklist adds `.aws/credentials`,
-// `.netrc`, and `.gnupg/`.
+#[path = "files_tests.rs"]
+mod tests;

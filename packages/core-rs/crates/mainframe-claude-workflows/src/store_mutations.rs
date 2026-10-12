@@ -4,15 +4,15 @@
 
 use mainframe_types::claude_workflow::{ClaudeWorkflowRun, ClaudeWorkflowRunStatus};
 
-/// Per D7/D8: a record is final by definition, so it supersedes the retained
+/// A record is final by definition, so it supersedes the retained
 /// run's `phases`, `agents`, `status`, `terminal_at` and `structure_revision`
 /// regardless of `structure_revision`. Cumulative totals stay at
 /// `max(retained, incoming)` so observed numbers never regress, and a learned
 /// `run_id`/`workflow_name` is copied from whichever side already has one.
 ///
 /// Two carve-outs: a record whose `phases` and `agents` are both empty does not
-/// clobber a populated retained run's structure (the same inversion as *Merge
-/// precedence* rule 2), and an `Unavailable` status does not overwrite a known
+/// clobber a populated retained run's structure (the same inversion as merge
+/// precedence rule 2), and an `Unavailable` status does not overwrite a known
 /// one.
 pub(crate) fn resolve_record(
     retained: &ClaudeWorkflowRun,

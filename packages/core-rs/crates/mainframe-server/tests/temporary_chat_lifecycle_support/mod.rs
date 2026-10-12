@@ -1,12 +1,16 @@
-//! Harness for todo #346's G2b integration tests: a real `ChatManager` (via
+//! Harness for the temporary-chat integration tests: a real `ChatManager` (via
 //! `build_chat_manager`, production `DaemonChatDeps`) over an in-memory DB,
 //! paired with the `session` module's minimal `Adapter`/`AdapterSession`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 pub mod session;
 
-use std::collections::HashMap;
+use mainframe_types::settings_kv::MemorySettings;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -19,23 +23,12 @@ use mainframe_server::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 use mainframe_server::{Db, GitFactory, build_chat_manager};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::push::PushService;
-use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
 use mainframe_types::chat::{Chat, NewChat};
 use tempfile::TempDir;
 use tokio::sync::broadcast;
 
 pub use session::{ADAPTER_ID, TestAdapter};
-
-struct NoopQuotaSettings;
-impl QuotaSettingsStore for NoopQuotaSettings {
-    fn get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn get_by_category(&self, _category: &str) -> HashMap<String, String> {
-        HashMap::new()
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
 
 pub struct Harness {
     pub db: Db,
@@ -70,26 +63,25 @@ pub fn rebuild_manager(h: &Harness, adapter: Arc<dyn Adapter>) -> Arc<ChatManage
     let registry = Arc::new(mainframe_adapter_api::AdapterRegistry::new());
     registry.register(adapter);
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(|_| {}),
         now: None,
     }));
-    build_chat_manager(
-        h.db.clone(),
-        registry,
-        Arc::new(BackgroundTaskTracker::new()),
-        Arc::new(AttachmentStore::new(h.data_dir.path().join("attachments"))),
-        Arc::new(PushService::new()),
-        GitFactory,
-        h.broadcast.clone(),
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+    build_chat_manager(mainframe_server::ChatManagerParams {
+        db: h.db.clone(),
+        adapters: registry,
+        background_tasks: Arc::new(BackgroundTaskTracker::new()),
+        attachments: Arc::new(AttachmentStore::new(h.data_dir.path().join("attachments"))),
+        push: Arc::new(PushService::new()),
+        git: GitFactory,
+        broadcast: h.broadcast.clone(),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::new(ClaudeWorkflowStore::new()),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        h.data_dir.path().to_path_buf(),
-    )
+        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+        chat_surface: None,
+        data_dir: h.data_dir.path().to_path_buf(),
+    })
 }
 
 /// Creates a project-scoped chat directly through the DB (bypassing the route
@@ -132,14 +124,4 @@ pub fn get_chat(h: &Harness, chat_id: &str) -> Chat {
     h.db.call_blocking(move |d| d.chats.get(&id))
         .unwrap()
         .expect("chat row must still exist")
-}
-
-/// Opens (or reveals) `parent_id`'s side chat through the real `ChatManager`
-/// (todo #344), the same path the daemon route calls. `#[allow(dead_code)]`:
-/// only `side_chat_lifecycle.rs` calls this among this module's consumers.
-#[allow(dead_code)]
-pub async fn create_side_chat(mgr: &ChatManager, parent_id: &str) -> Chat {
-    mgr.open_side_chat(parent_id)
-        .await
-        .expect("open_side_chat should succeed")
 }

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
+  grep: process.env['MF_E2E_ALLOW_REAL_ADAPTER'] === '1' ? /@real/ : undefined,
   // Builds the UI bundle once and starts the shared vite preview (a stateless static server) for
   // the whole run; returns a teardown that kills it. See fixtures/global-setup.ts.
   globalSetup: './fixtures/global-setup.ts',

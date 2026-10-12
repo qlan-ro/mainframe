@@ -1,18 +1,28 @@
-//! Ported from `packages/types/src/*` — pure serde structs/enums, one `.rs` per `.ts`.
+//! Pure serde structs/enums for the wire types in `packages/types/src/*`, one `.rs` per `.ts`.
 //!
 //! `packages/types/src/index.ts` is a barrel re-export only; it has no Rust module
 //! counterpart here — this `lib.rs` plays that role (crate root re-exports go here
 //! once the submodules have real content). `__fixtures__/` and `__tests__/` are test
-//! support, not port targets, and are intentionally omitted from the module list.
+//! support, not wire types, and are intentionally omitted from the module list.
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 
 pub mod acp;
 pub mod adapter;
 pub mod api;
 pub mod automation;
 pub mod background_task;
+pub mod base64_data;
 pub mod chat;
+pub mod chat_text;
 pub mod claude_workflow;
 pub mod command;
 pub mod command_execution;
@@ -23,23 +33,38 @@ pub mod display;
 pub mod events;
 pub mod git;
 pub mod host;
+pub mod http_status;
+pub mod ids;
 pub mod launch;
 pub mod lsp;
 pub mod orchestration;
+pub mod paths;
 pub mod plugin;
+pub mod resume;
+pub mod seam_error;
 pub mod search;
 pub mod segment;
 mod segment_records;
+pub mod serde_util;
 pub mod settings;
+pub mod settings_kv;
 pub mod setup_advisor;
 pub mod skill;
 pub mod suggestion;
 pub mod tags;
+pub mod time;
+pub mod validation;
+pub type BoxFuture<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
 pub mod task_progress;
 pub mod transcript;
-pub mod workflow;
 pub mod worktree_offer;
 
 pub mod tool_call_timing;
 
 pub mod transcript_presentation;
+
+pub mod sync;
+
+pub mod chat_patch;
+
+pub mod todo_normalize;

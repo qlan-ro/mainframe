@@ -1,15 +1,10 @@
-//! Ported from `packages/core/src/chat/event-handler.ts`.
-
+use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use mainframe_adapter_api::SessionSink;
 use mainframe_adapter_api::pr_detection::PrDetectionSink;
-use mainframe_display::DisplayProjector;
-#[cfg(test)]
-use mainframe_display::FullRebuildProjector;
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::adapter::{
     ContextUsage, ControlRequest, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
 };
@@ -17,20 +12,23 @@ use mainframe_types::chat::{
     ChatMessage, ChatMessageType, MessageContent, MessageContentNode, ProcessState,
     QueuedMessageRef, TodoItem,
 };
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::content::LeafContent;
 use mainframe_types::context::SkillFileEntry;
 use mainframe_types::display::{DisplayMessage, StreamingLeafKind, ToolCategories};
 use mainframe_types::events::{
     ChatNotificationKind, ChatNotificationLevel, ChatUpdatedReason, DaemonEvent,
 };
+use mainframe_types::time::now_iso8601;
 use tracing::{debug, warn};
 
 use crate::attention_request::{AttentionDedupe, normalize_attention_body};
+use crate::chat_manager::{ChatManagerDeps, ChatShared};
 use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent, CompactionPhase, TurnStopReason};
-use crate::fork::PendingForkState;
 use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
+use crate::worktree_offer::WorktreeOfferRegistry;
 use display_projection::streaming_leaf_kind;
 use partial_overlay::PartialOverlays;
 use worktree_tool::{creates_worktree, moves_transcript};
@@ -40,10 +38,10 @@ mod partial_overlay;
 mod worktree_tool;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
-/// `computeSessionFilePath` — encode a cwd the Claude way and point at the jsonl.
-pub fn compute_session_file_path(cwd: &str, session_id: &str) -> String {
-    let encoded = sanitize(cwd);
-    let safe_session = sanitize(session_id);
+#[cfg(any(test, feature = "test-support"))]
+pub(crate) fn compute_session_file_path(cwd: &str, session_id: &str) -> String {
+    let encoded = mainframe_types::paths::encode_claude_project_path(cwd);
+    let safe_session = mainframe_types::paths::encode_claude_project_path(session_id);
     let home = dirs::home_dir().unwrap_or_default();
     home.join(".claude")
         .join("projects")
@@ -53,77 +51,41 @@ pub fn compute_session_file_path(cwd: &str, session_id: &str) -> String {
         .into_owned()
 }
 
-/// `s.replace(/[^a-zA-Z0-9-]/g, '-')`.
-fn sanitize(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect()
-}
-
 /// Truncate to [`PUSH_BODY_MAX_LENGTH`] chars, ending in an ellipsis; shared
 /// with `attention_request::normalize_attention_body`.
 pub(crate) fn truncate_push_body(text: &str) -> String {
-    if text.chars().count() <= PUSH_BODY_MAX_LENGTH {
-        return text.to_string();
-    }
-    let head: String = text.chars().take(PUSH_BODY_MAX_LENGTH - 1).collect();
-    format!("{head}\u{2026}")
+    mainframe_types::chat_text::truncate_with_ellipsis(text, PUSH_BODY_MAX_LENGTH)
 }
 
-fn get_last_assistant_text(msgs: Option<&Vec<ChatMessage>>) -> String {
-    let Some(msgs) = msgs else {
-        return String::new();
-    };
-    for msg in msgs.iter().rev() {
-        if msg.r#type != ChatMessageType::Assistant {
-            continue;
-        }
-        for block in msg.content.iter().rev() {
-            if let MessageContent::Leaf(LeafContent::Text { text, .. }) = block {
-                let text = text.trim();
-                if text.is_empty() {
-                    continue;
-                }
-                return truncate_push_body(text);
-            }
-        }
-    }
-    String::new()
-}
-
-pub struct EventHandler<D: EventHandlerDeps + 'static> {
+pub struct EventHandler {
+    shared: Arc<ChatShared>,
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     partial_overlays: PartialOverlays,
-    deps: Arc<D>,
-    /// Survives a session resume (plan decision P3) — kept on the handler,
+    /// A confirmed worktree-creating tool result triggers its rescan.
+    worktree_offers: Arc<WorktreeOfferRegistry>,
+    /// Survives a session resume because it is kept on the handler,
     /// not the per-session sink `build_sink` recreates.
     attention_dedupe: Arc<Mutex<AttentionDedupe>>,
-    /// The chat-surface observer (todo #350 plan task 10), attached after
-    /// construction via [`EventHandler::set_chat_surface`] — mirrors
+    /// The chat-surface observer, attached after construction via
+    /// [`EventHandler::set_chat_surface`] — mirrors
     /// `ChatManager::attach_self`'s `OnceLock` pattern so a handler built with
     /// no surface attached (most tests) is a silent no-op, not a construction
     /// error.
     chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
-impl<D: EventHandlerDeps + 'static> EventHandler<D> {
-    pub fn new(
-        messages: Arc<Mutex<MessageCache>>,
-        permissions: Arc<Mutex<PermissionManager>>,
-        deps: Arc<D>,
+impl EventHandler {
+    pub(crate) fn new(
+        shared: Arc<ChatShared>,
+        worktree_offers: Arc<WorktreeOfferRegistry>,
     ) -> Self {
         Self {
-            messages,
-            permissions,
+            messages: shared.messages.clone(),
+            permissions: shared.permissions.clone(),
+            shared,
             partial_overlays: PartialOverlays::new(),
-            deps,
+            worktree_offers,
             attention_dedupe: Arc::new(Mutex::new(AttentionDedupe::default())),
             chat_surface: Arc::new(OnceLock::new()),
         }
@@ -133,19 +95,20 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
     /// no-op (the `OnceLock` already holds the first surface), matching
     /// `attach_self`'s convention elsewhere in this crate.
     pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
-        let _ = self.chat_surface.set(surface);
+        /* expected */
+        let _ = self.chat_surface.set(surface); // First attachment wins.
     }
 
     /// Notify the attached surface (a no-op when none is attached). Public so
     /// `ChatManager`'s send path (turn accepted/started, outside the sink)
     /// can drive the same observer the sink drives.
-    pub fn notify_chat_surface(&self, event: ChatSurfaceEvent) {
+    pub(crate) fn notify_chat_surface(&self, event: ChatSurfaceEvent) {
         chat_surface::notify(self.chat_surface.get(), event);
     }
 
-    /// `buildSink(chatId, sessionId, respondToPermission)`. The TS sink never calls
-    /// `respondToPermission` (it is `_respondToPermission`), so the Rust sink drops
-    /// it; chat_manager retains the callback separately.
+    /// Build the session sink for `chat_id`. The sink never answers permissions
+    /// itself, so it takes no responder; chat_manager retains that callback
+    /// separately.
     pub fn build_sink(
         &self,
         chat_id: &str,
@@ -157,7 +120,8 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             messages: self.messages.clone(),
             permissions: self.permissions.clone(),
             partial_overlays: self.partial_overlays.clone(),
-            deps: self.deps.clone(),
+            shared: self.shared.clone(),
+            worktree_offers: self.worktree_offers.clone(),
             pending_file_paths: Mutex::new(HashMap::new()),
             pending_subagent_ids: Mutex::new(HashSet::new()),
             pending_worktree_triggers: Mutex::new(HashSet::new()),
@@ -165,21 +129,21 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
             attention_dedupe: self.attention_dedupe.clone(),
             chat_surface: self.chat_surface.clone(),
         });
-        // PR detection is adapter-neutral (todo #339): wrapping here, the one
-        // construction point every session's sink comes from, is what makes
-        // every adapter inherit it — none needs its own scanning code.
+        // PR detection is adapter-neutral: wrapping here, the one construction
+        // point every session's sink comes from, is what makes every adapter
+        // inherit it — none needs its own scanning code.
         Arc::new(PrDetectionSink::new(inner))
     }
 
     /// Emit a display revision for a chat (code paths outside the session sink).
-    pub fn emit_display(&self, chat_id: &str) {
-        let categories = self.deps.get_tool_categories(chat_id);
+    pub(crate) fn emit_display(&self, chat_id: &str) {
+        let categories = self.shared.deps.get_tool_categories(chat_id);
         emit_display_for(
             chat_id,
             &self.messages,
             &self.partial_overlays,
             categories.as_ref(),
-            self.deps.as_ref(),
+            self.shared.deps.as_ref(),
             self.chat_surface.get(),
         );
     }
@@ -190,20 +154,18 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         self.partial_overlays.remove_chat(chat_id);
     }
 
-    /// The chat's current in-flight overlay message, for `ChatManager`'s
-    /// resume snapshot (todo #382) — the same read `emit_display_for` uses
-    /// for live revisions, so a snapshot taken mid-stream can project it
-    /// through the identical step.
+    /// The chat's current in-flight overlay message, for `ChatManager`'s resume
+    /// snapshot — the same read `emit_display_for` uses for live revisions, so
+    /// a snapshot taken mid-stream can project it through the identical step.
     pub fn current_overlay_message(&self, chat_id: &str) -> Option<ChatMessage> {
         self.partial_overlays.message_for(chat_id)
     }
 
-    /// The resume-snapshot read (todo #382, #376): bring the chat's
-    /// projection current the same way a live emission does, but without
-    /// notifying — any non-empty delta this produces is stashed as the
-    /// slot's pending delta and merged into the next live emission
-    /// (`MessageCache::display_snapshot`). Returns the materialized
-    /// container list and the overlay's streaming kind, if any.
+    /// The resume-snapshot read: bring the chat's projection current the same
+    /// way a live emission does, but without notifying — any non-empty delta
+    /// this produces is stashed as the slot's pending delta and merged into the
+    /// next live emission (`MessageCache::display_snapshot`). Returns the
+    /// materialized container list and the overlay's streaming kind, if any.
     ///
     /// `raw` is the caller's own freshly-read history (`ChatManager::get_messages`'s
     /// return), not re-derived from the cache: a cold load past `MAX_CHATS`
@@ -215,12 +177,12 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
         chat_id: &str,
         raw: &[ChatMessage],
     ) -> (Vec<DisplayMessage>, Option<StreamingLeafKind>) {
-        let categories = self.deps.get_tool_categories(chat_id);
+        let categories = self.shared.deps.get_tool_categories(chat_id);
         let overlay = self.partial_overlays.message_for(chat_id);
-        let mut msgs = self.messages.lock().unwrap_or_else(|e| e.into_inner());
+        let mut msgs = self.messages.lock_recover();
         let materialized =
             msgs.display_snapshot(chat_id, raw, overlay.as_ref(), categories.as_ref(), || {
-                self.deps.display_projector()
+                self.shared.deps.display_projector(chat_id)
             });
         let streaming = overlay
             .as_ref()
@@ -229,13 +191,14 @@ impl<D: EventHandlerDeps + 'static> EventHandler<D> {
     }
 }
 
-struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
+struct SessionSinkImpl {
     chat_id: String,
     built_for_session_id: Option<String>,
     messages: Arc<Mutex<MessageCache>>,
     permissions: Arc<Mutex<PermissionManager>>,
     partial_overlays: PartialOverlays,
-    deps: Arc<D>,
+    shared: Arc<ChatShared>,
+    worktree_offers: Arc<WorktreeOfferRegistry>,
     pending_file_paths: Mutex<HashMap<String, String>>,
     pending_subagent_ids: Mutex<HashSet<String>>,
     pending_worktree_triggers: Mutex<HashSet<String>>,
@@ -244,9 +207,7 @@ struct SessionSinkImpl<D: EventHandlerDeps + 'static> {
     chat_surface: Arc<OnceLock<Arc<dyn ChatSurface>>>,
 }
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;
 
 #[cfg(test)]
 mod attention_tests;
@@ -270,15 +231,15 @@ mod pr_detection_wiring_tests;
 mod stable_id_characterization_tests;
 
 #[cfg(test)]
-#[path = "event_handler/tests/support.rs"]
+#[path = "event_handler_tests_support.rs"]
 mod tests;
 
 mod tool_timing;
 #[cfg(test)]
 mod tool_timing_tests;
 
-mod deps;
-pub use deps::{EventChatUpdate, EventHandlerDeps, PushOut};
+mod push;
+pub use push::PushOut;
 mod display_emission;
 use display_emission::emit_display_for;
 mod sink;

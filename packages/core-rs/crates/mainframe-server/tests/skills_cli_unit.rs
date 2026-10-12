@@ -1,12 +1,6 @@
-//! Unit-level tests for the not-yet-built `mainframe_server::skills_cli`
-//! module (todo #243, plan Group A — `rust-cli-tests`, tasks A1–A3). RED
-//! until Group B (`rust-cli-service`) lands `skills_cli/{mod,resolve,args,
-//! validate,run,manifest,probe_parse,locks}.rs`. Do not stub the module to
-//! make this compile — a module this file can't exercise proves nothing
-//! about Group B's behavior.
+//! Unit-level tests for the `mainframe_server::skills_cli` module.
 //!
-//! Contract pinned here (mirrors the plan's B1 skeleton and wire contract
-//! verbatim; Group B implements exactly this):
+//! Contract pinned here:
 //!
 //! ```ignore
 //! pub struct CommandSpec { pub program: String, pub args: Vec<String>, pub cwd: String }
@@ -24,16 +18,21 @@
 //!
 //! pub async fn manifest(runner: &dyn SkillsCliRunner, path: &ResolvedPath, project_id: &str, project_path: &str) -> Result<ManifestOutcome, SkillsCliError>;
 //! pub async fn probe(runner: &dyn SkillsCliRunner, path: &ResolvedPath, project_id: &str, project_path: &str, source: &str) -> Result<ProbeOutcome, SkillsCliError>;
-//! pub async fn install(runner: &dyn SkillsCliRunner, path: &ResolvedPath, project_id: &str, project_path: &str, source: &str, skills: &[String], scope: Scope, adapter_id: Option<&str>) -> Result<(), SkillsCliError>;
+//! pub async fn install(runner: &dyn SkillsCliRunner, path: &ResolvedPath, request: InstallRequest<'_>) -> Result<(), SkillsCliError>;
 //! pub async fn uninstall(runner: &dyn SkillsCliRunner, path: &ResolvedPath, project_id: &str, project_path: &str, skills: &[String], scope: Scope, adapter_id: Option<&str>) -> Result<(), SkillsCliError>;
 //! ```
 //!
-//! Submodules exercised directly by later tasks: `skills_cli::validate`,
+//! Submodules exercised directly by later tests: `skills_cli::validate`,
 //! `skills_cli::manifest::{parse_entries, merge}`, `skills_cli::resolve::{resolve_cli, CliBinary}`,
 //! `skills_cli::run::{tail, TAIL_CHARS}`, `skills_cli::probe_parse::parse_probe`,
 //! `skills_cli::locks::acquire`.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -159,12 +158,14 @@ async fn install_argv_is_add_with_explicit_skills_agent_and_yes() {
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a", "b"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a", "b"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -198,12 +199,14 @@ async fn install_global_scope_adds_the_global_flag() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Global,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Global,
+            adapter_id: Some("claude"),
+        },
     )
     .await
     .unwrap();
@@ -303,24 +306,28 @@ async fn no_argv_contains_a_telemetry_or_dangerously_accept_flag() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await
     .unwrap();
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Global,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Global,
+            adapter_id: Some("claude"),
+        },
     )
     .await
     .unwrap();
@@ -370,12 +377,14 @@ async fn no_argument_derived_from_user_input_starts_with_a_dash() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["my skill.v2"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["my skill.v2"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await
     .unwrap();
@@ -401,24 +410,28 @@ async fn unknown_adapter_falls_back_to_claude_code() {
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("codex"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("codex"),
+        },
     )
     .await
     .unwrap();
     mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        None,
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: None,
+        },
     )
     .await
     .unwrap();
@@ -435,10 +448,9 @@ async fn unknown_adapter_falls_back_to_claude_code() {
 }
 
 // ---------------------------------------------------------------------------
-// A2 — validation, manifest merge/parse, resolve, exit-mapping, probe-parse
-// (spec AC 9, 10, 13; R2, R3). Group B's validate.rs, manifest.rs, resolve.rs,
-// run.rs and probe_parse.rs each implement exactly the contract pinned by the
-// assertions below.
+// Validation, manifest merge/parse, resolve, exit-mapping, probe-parse.
+// validate.rs, manifest.rs, resolve.rs, run.rs and probe_parse.rs each
+// implement exactly the contract pinned by the assertions below.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -462,12 +474,14 @@ async fn source_rejected_when_empty_dashed_local_path_or_off_allowlist() {
         let result = mainframe_server::skills_cli::install(
             &runner,
             &path,
-            project_id,
-            PROJECT_PATH,
-            source,
-            &owned(&["a"]),
-            Scope::Project,
-            Some("claude"),
+            mainframe_server::skills_cli::InstallRequest {
+                project_id,
+                project_path: PROJECT_PATH,
+                source,
+                skills: &owned(&["a"]),
+                scope: Scope::Project,
+                adapter_id: Some("claude"),
+            },
         )
         .await;
         assert!(
@@ -498,6 +512,12 @@ async fn source_accepted_for_shorthand_https_allowlist_and_ssh() {
             "expected {source:?} to be accepted"
         );
     }
+    assert_eq!(
+        mainframe_server::skills_cli::validate::validate_source("/etc/skills")
+            .unwrap_err()
+            .to_string(),
+        "Source must be an owner/repo shorthand, an allow-listed github.com/gitlab.com URL, or an SSH remote"
+    );
 }
 
 #[tokio::test]
@@ -508,11 +528,15 @@ async fn skill_name_allows_spaces_and_dots_and_rejects_dash_prefix_and_control_c
             "expected {accepted:?} to be accepted"
         );
     }
-    for rejected in ["-x", "a\u{7}b", ""] {
-        assert!(
-            mainframe_server::skills_cli::validate::validate_skill_name(rejected).is_err(),
-            "expected {rejected:?} to be rejected"
-        );
+    let rejections = [
+        ("-x", "Skill name must not start with a dash"),
+        ("a\u{7}b", "Skill name must not contain control characters"),
+        ("", "Skill name must not be empty"),
+    ];
+    for (rejected, text) in rejections {
+        let err = mainframe_server::skills_cli::validate::validate_skill_name(rejected)
+            .expect_err("rejected");
+        assert_eq!(err.to_string(), text, "{rejected:?}");
     }
 }
 
@@ -688,12 +712,14 @@ async fn nonzero_exit_maps_to_a_failure_carrying_the_ansi_stripped_tail() {
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -727,12 +753,14 @@ async fn spawn_failure_and_timeout_map_to_failures_with_their_own_reasons() {
     let spawn_result = mainframe_server::skills_cli::install(
         &spawn_failure_runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -746,12 +774,14 @@ async fn spawn_failure_and_timeout_map_to_failures_with_their_own_reasons() {
     let timeout_result = mainframe_server::skills_cli::install(
         &timeout_runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -856,10 +886,10 @@ async fn probe_with_no_skills_is_probed_with_an_empty_list_not_unparseable() {
 }
 
 // ---------------------------------------------------------------------------
-// A3 — per-project concurrency guard (spec AC 10; D3). Group B's locks.rs
-// implements exactly the module-level DashSet + RAII guard contract pinned
-// below: `acquire(project_id) -> Option<Guard>`, refusing a second
-// concurrent operation for the same project id and releasing on drop.
+// Per-project concurrency guard. locks.rs implements exactly the module-level
+// DashSet + RAII guard contract pinned below: `acquire(project_id) ->
+// Option<Guard>`, refusing a second concurrent operation for the same project
+// id and releasing on drop.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -874,12 +904,14 @@ async fn second_operation_for_the_same_project_is_refused_while_one_is_in_flight
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        project_id,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id,
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -904,12 +936,14 @@ async fn a_different_project_is_not_blocked() {
     let result = mainframe_server::skills_cli::install(
         &runner,
         &path,
-        "guard-project-b",
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
+        mainframe_server::skills_cli::InstallRequest {
+            project_id: "guard-project-b",
+            project_path: PROJECT_PATH,
+            source: "owner/repo",
+            skills: &owned(&["a"]),
+            scope: Scope::Project,
+            adapter_id: Some("claude"),
+        },
     )
     .await;
 
@@ -924,54 +958,4 @@ async fn a_different_project_is_not_blocked() {
     );
 }
 
-#[tokio::test]
-async fn the_guard_is_released_when_the_operation_finishes_and_when_it_fails() {
-    let (_dir, path) = fake_skills_binary();
-    let succeeding_project = "guard-project-success";
-    let failing_project = "guard-project-failure";
-
-    let success_runner = RecordingRunner::queued(vec![success_outcome()]);
-    mainframe_server::skills_cli::install(
-        &success_runner,
-        &path,
-        succeeding_project,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
-    )
-    .await
-    .expect("install succeeds");
-    assert!(
-        mainframe_server::skills_cli::locks::acquire(succeeding_project).is_some(),
-        "the guard must be released after a successful operation"
-    );
-
-    let failing_runner = RecordingRunner::queued(vec![CliOutcome {
-        started: true,
-        timed_out: false,
-        exit_code: Some(1),
-        stdout: String::new(),
-        stderr: "error: boom".to_string(),
-    }]);
-    let failed = mainframe_server::skills_cli::install(
-        &failing_runner,
-        &path,
-        failing_project,
-        PROJECT_PATH,
-        "owner/repo",
-        &owned(&["a"]),
-        Scope::Project,
-        Some("claude"),
-    )
-    .await;
-    assert!(
-        matches!(failed, Err(SkillsCliError::Cli { .. })),
-        "expected the queued nonzero exit to surface as a Cli error, got {failed:?}"
-    );
-    assert!(
-        mainframe_server::skills_cli::locks::acquire(failing_project).is_some(),
-        "the guard must be released after a failed operation too"
-    );
-}
+include!("cases/skills_cli_unit_additional_cases.rs");

@@ -1,14 +1,13 @@
-//! Idle whole-chat offload (todo #178): the full release sequence the scanner
-//! (`idle_scanner.rs`) drives per candidate. Not a port of any TS file — the
-//! old scanner only killed the CLI process; this extends that into "release
-//! the chat as one unit" (plan
-//! `docs/plans/2026-09-25-todo-178-idle-whole-chat-offload.md`, "Design").
+//! Idle whole-chat offload: the full release sequence the scanner
+//! (`idle_scanner.rs`) drives per candidate. Rather than only killing the CLI
+//! process, it releases the chat as one unit.
 //!
 //! "Offloaded" stores no new state: after step 4 the chat has no registry
 //! cell and no cache entry, so the next `load_chat` reloads its transcript
 //! fresh (the existing cold-load path) and the next `send_message` respawns
 //! via `--resume`.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{AdapterSession, BoxFuture};
@@ -16,42 +15,39 @@ use mainframe_types::chat::QueuedMessageRef;
 use mainframe_types::events::DaemonEvent;
 use tracing::{info, warn};
 
-use crate::event_handler::{EventHandler, EventHandlerDeps};
-use crate::idle_scanner::{ActiveChatRegistry, IDLE_THRESHOLD_MS, IdleOffloader, idle_since};
-use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleManagerDeps};
-use crate::message_cache::MessageCache;
+use crate::chat_manager::Registry;
+use crate::chat_teardown::{ChatTeardown, TeardownMode};
+use crate::idle_scanner::{IDLE_THRESHOLD_MS, IdleOffloader, idle_since};
+use crate::lifecycle_manager::ChatLifecycleManager;
 use crate::permission_manager::PermissionManager;
 
-/// The offload sequence for one `ChatManager` (Design steps 1-6), built once
+/// The offload sequence for one `ChatManager`, built once
 /// from the same shared `Arc`s the manager already holds (registry, cache,
 /// permissions, queued refs, lifecycle, event handler) and stored as a trait
 /// object so `IdleSessionScanner`'s periodic task needs no `Weak<ChatManager>`.
-pub struct ChatOffload<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> {
-    active_chats: ActiveChatRegistry,
-    messages: Arc<Mutex<MessageCache>>,
+pub struct ChatOffload {
+    active_chats: Registry,
     permissions: Arc<Mutex<PermissionManager>>,
     queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
-    lifecycle: Arc<ChatLifecycleManager<L>>,
-    event_handler: Arc<EventHandler<E>>,
+    lifecycle: Arc<ChatLifecycleManager>,
+    teardown: Arc<ChatTeardown>,
     threshold_ms: i64,
 }
 
-impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOffload<L, E> {
-    pub fn new(
-        active_chats: ActiveChatRegistry,
-        messages: Arc<Mutex<MessageCache>>,
+impl ChatOffload {
+    pub(crate) fn new(
+        active_chats: Registry,
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
-        lifecycle: Arc<ChatLifecycleManager<L>>,
-        event_handler: Arc<EventHandler<E>>,
+        lifecycle: Arc<ChatLifecycleManager>,
+        teardown: Arc<ChatTeardown>,
     ) -> Self {
         Self::with_threshold(
             active_chats,
-            messages,
             permissions,
             queued_refs,
             lifecycle,
-            event_handler,
+            teardown,
             IDLE_THRESHOLD_MS,
         )
     }
@@ -59,22 +55,20 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
     /// Test seam: a chat idle relative to the real wall clock past a tiny
     /// threshold behaves exactly like a chat idle 2+ hours past the real one,
     /// so tests inject a small threshold rather than a fake clock.
-    pub fn with_threshold(
-        active_chats: ActiveChatRegistry,
-        messages: Arc<Mutex<MessageCache>>,
+    pub(crate) fn with_threshold(
+        active_chats: Registry,
         permissions: Arc<Mutex<PermissionManager>>,
         queued_refs: Arc<Mutex<Vec<QueuedMessageRef>>>,
-        lifecycle: Arc<ChatLifecycleManager<L>>,
-        event_handler: Arc<EventHandler<E>>,
+        lifecycle: Arc<ChatLifecycleManager>,
+        teardown: Arc<ChatTeardown>,
         threshold_ms: i64,
     ) -> Self {
         Self {
             active_chats,
-            messages,
             permissions,
             queued_refs,
             lifecycle,
-            event_handler,
+            teardown,
             threshold_ms,
         }
     }
@@ -83,18 +77,16 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         // Step 1: claim the offload slot, or skip — a concurrent load/start/
         // send/interrupt/history-read (or a second scan pass, AC5) already
         // owns this chat.
-        if !self.lifecycle.try_claim_offload(chat_id) {
+        let Some(claim) = self.lifecycle.try_claim_offload(chat_id) else {
             return;
-        }
+        };
 
-        // Step 2: re-check everything now that the slot is claimed (AC4: a
-        // race between candidate selection and this claim must resolve in
-        // favor of staying live). `session_handle` is itself an `Option`
-        // (todo #381): a session-less, never-spawned, or already-exited
-        // handle is a valid, eligible offload — only the OUTER `None` means
-        // "skip".
+        // Step 2: re-check everything now that the slot is claimed (a race
+        // between candidate selection and this claim must resolve in favor of
+        // staying live). `session_handle` is itself an `Option`: a
+        // session-less, never-spawned, or already-exited handle is a valid,
+        // eligible offload — only the OUTER `None` means "skip".
         let Some(session_handle) = self.recheck(chat_id) else {
-            self.lifecycle.release_offload(chat_id);
             return;
         };
 
@@ -104,47 +96,38 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         if let Some(session) = &session_handle
             && let Err(err) = session.kill().await
         {
-            warn!(?err, chat_id, "idle offload: failed to kill session");
+            warn!(error = ?err, chat_id, "failed to kill session");
         }
         self.lifecycle.orchestration().revoke(chat_id);
 
         // Step 4: drop the registry cell, the cache entry, and per-chat
-        // bookkeeping (partial-overlay + permission state). Do NOT emit
-        // `ChatEnded` here (Design): that would tell the chat surface a
+        // bookkeeping (see `TeardownMode::Offload` for what survives). Do NOT
+        // emit `ChatEnded` here (Design): that would tell the chat surface a
         // possibly-on-screen chat's facade session ended.
-        self.active_chats.remove(chat_id);
-        self.messages
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .release(chat_id);
-        self.event_handler.clear_display_state(chat_id);
-        self.permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .forget(chat_id);
+        self.teardown.clear(chat_id, TeardownMode::Offload);
 
         // Step 5: release the slot.
-        self.lifecycle.release_offload(chat_id);
+        drop(claim);
 
         // Step 6: broadcast.
-        info!(chat_id, "idle offload: released chat");
+        info!(chat_id, "released chat");
         self.lifecycle.emit_event(DaemonEvent::ChatOffloaded {
             chat_id: chat_id.to_string(),
         });
     }
 
-    /// Step 2's re-check (todo #381: extended to session-less/unspawned
-    /// cells). The OUTER `Option` is the skip signal: `None` means some
-    /// condition still blocks offload, and the caller has already claimed
-    /// the offload slot and must release it itself. `Some(handle)` means
-    /// every condition holds (idle past the threshold per `idle_since`, not
-    /// Working, no pending permission, no queued message); `handle` itself
-    /// is `None` for a cell with no session (or one that never spawned) —
-    /// that is a valid, eligible offload, not a skip.
+    /// Step 2's re-check, covering session-less/unspawned cells too. The OUTER
+    /// `Option` is the skip signal: `None` means some condition still blocks
+    /// offload, and the caller has already claimed the offload slot and must
+    /// release it itself. `Some(handle)` means every condition holds (idle past
+    /// the threshold per `idle_since`, not Working, no pending permission, no
+    /// queued message); `handle` itself is `None` for a cell with no session
+    /// (or one that never spawned) — that is a valid, eligible offload, not a
+    /// skip.
     fn recheck(&self, chat_id: &str) -> Option<Option<Arc<dyn AdapterSession>>> {
         let cell = self.active_chats.get(chat_id)?.value().clone();
         let (session, last_used_at, process_state) = {
-            let guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let guard = cell.lock_recover();
             (
                 guard.session.clone(),
                 guard.last_used_at,
@@ -164,18 +147,12 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
         if now_ms() - last <= self.threshold_ms {
             return None;
         }
-        if self
-            .permissions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .has_pending(chat_id)
-        {
+        if self.permissions.lock_recover().has_pending(chat_id) {
             return None;
         }
         let has_queued = self
             .queued_refs
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .iter()
             .any(|r| r.chat_id == chat_id);
         if has_queued {
@@ -185,16 +162,10 @@ impl<L: LifecycleManagerDeps + 'static, E: EventHandlerDeps + 'static> ChatOfflo
     }
 }
 
-impl<L, E> IdleOffloader for ChatOffload<L, E>
-where
-    L: LifecycleManagerDeps + 'static,
-    E: EventHandlerDeps + 'static,
-{
+impl IdleOffloader for ChatOffload {
     fn offload<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
         Box::pin(self.try_offload(chat_id))
     }
 }
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+use mainframe_types::time::now_ms;

@@ -11,7 +11,7 @@ use crate::item_types::WebSearchItem;
 /// An `openPage` action renders as `WebFetch{url}`; every other action (search,
 /// none, or an unrecognized tag) keeps today's `WebSearch{query}` pair. Either
 /// way it's emitted already-complete — `webSearch.results` is deliberately not
-/// read (todo #356 plan, "Established facts"), so the tool_result content is
+/// read, so the tool_result content is
 /// always `""`.
 pub(crate) fn render_web_search(w: &WebSearchItem, sink: &Arc<dyn SessionSink>) {
     let (name, input) = w.tool_use_name_and_input();

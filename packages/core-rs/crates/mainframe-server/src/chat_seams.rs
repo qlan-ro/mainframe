@@ -1,15 +1,14 @@
-//! Phase-5 seam traits for the subsystems the `ChatManager` depends on that are
-//! not yet ported (the `mainframe-launch` crate). The `ChatManagerDeps` methods
-//! that reach these subsystems delegate to the seam so, when Phase 5 lands, the
-//! real `LaunchRegistry` slots in behind the same trait with no change to the
-//! wired `DaemonChatDeps`.
+//! Seam traits for the launch subsystem the `ChatManager` depends on: launch
+//! process teardown ([`LaunchStopper`]) and port-tunnel teardown
+//! ([`ScopeTunnelStopper`]). The `ChatManagerDeps` methods that reach these
+//! subsystems delegate to the seam, so the daemon boot wires the
+//! `mainframe-launch` registry-backed impls and test harnesses wire the no-op
+//! ones with no change to `DaemonChatDeps`.
 //!
-//! Only launch is stubbed here. The other subsystems the task flagged as
-//! Phase-5-shaped (notifications, per-chat todos, push) turned out to be already
-//! ported — `mainframe_services::notifications`, `db.chats.update_todos`, and
-//! `mainframe_services::push::PushService` — so `DaemonChatDeps` wires them to the
-//! real implementations rather than stubbing them (stubbing ported behaviour would
-//! *reduce* fidelity). See `chat_deps.rs`.
+//! Notifications, per-chat todos and push are not seams: `DaemonChatDeps` wires
+//! them to the real implementations (`mainframe_services::notifications`,
+//! `db.chats.update_todos`, and `mainframe_services::push::PushService`). See
+//! `chat_deps.rs`.
 
 use std::sync::Arc;
 
@@ -17,19 +16,15 @@ use mainframe_adapter_api::BoxFuture;
 use mainframe_launch::{LaunchRegistry, PortTunnelRegistry};
 
 use crate::db::Db;
-use crate::routes::files::effective_path_sync;
+use mainframe_services::workspace::resolve_scope;
 
 /// The launch-process control surface the `ChatManager` needs before it tears
-/// down a worktree (`chats.setStopLaunchProcesses` in `index.ts`). Mirrors the
-/// single call the TS makes: `const m = launchRegistry.get(projectId, path);
-/// if (m) await m.stopAll();`.
-///
-/// TODO(port-phase5): replace `NoopLaunchStopper` with an impl backed by the
-/// ported `mainframe-launch::LaunchRegistry`.
+/// down a worktree: look up the scope's launch manager and, if there is one,
+/// stop all of its processes.
 pub trait LaunchStopper: Send + Sync {
     /// Stop every launch process bound to `(project_id, effective_path)`. Returns
-    /// `None` when there is no launch manager for that scope — faithful to the TS
-    /// `if (m)` guard (no configs → nothing to stop).
+    /// `None` when there is no launch manager for that scope (no configs →
+    /// nothing to stop).
     fn stop_launch_processes<'a>(
         &'a self,
         project_id: &'a str,
@@ -37,9 +32,8 @@ pub trait LaunchStopper: Send + Sync {
     ) -> Option<BoxFuture<'a, ()>>;
 }
 
-/// The Phase-4 default: no launch registry exists yet, so there is never a
-/// manager to stop. Matches `chats.setStopLaunchProcesses` never having been
-/// wired (the TS `stopLaunchProcesses` stays `undefined`).
+/// The no-op stopper for harnesses that run without a launch registry: there
+/// is never a manager to stop.
 pub struct NoopLaunchStopper;
 
 impl LaunchStopper for NoopLaunchStopper {
@@ -51,21 +45,13 @@ impl LaunchStopper for NoopLaunchStopper {
         tracing::debug!(
             project_id,
             effective_path,
-            "stopLaunchProcesses seam: launch registry not ported (Phase 5) — no-op"
+            "launch registry not ported (Phase 5) — no-op"
         );
         None
     }
 }
 
-/// Convenience constructor for the boot path.
-pub fn default_launch_stopper() -> Arc<dyn LaunchStopper> {
-    Arc::new(NoopLaunchStopper)
-}
-
-/// The production `LaunchStopper`, backed by the real `LaunchRegistry` (Task 5.5).
-/// Mirrors `chats.setStopLaunchProcesses(async (projectId, projectPath) => {
-/// const m = launchRegistry.get(projectId, projectPath); if (m) await m.stopAll();
-/// })` in `index.ts`.
+/// The production `LaunchStopper`, backed by the `LaunchRegistry`.
 pub struct RegistryLaunchStopper {
     registry: Arc<LaunchRegistry>,
 }
@@ -82,7 +68,7 @@ impl LaunchStopper for RegistryLaunchStopper {
         project_id: &'a str,
         effective_path: &'a str,
     ) -> Option<BoxFuture<'a, ()>> {
-        // `if (m)` guard: no manager for this scope → nothing to stop.
+        // No manager for this scope → nothing to stop.
         let manager = self.registry.get(project_id, effective_path)?;
         Some(Box::pin(async move {
             manager.stop_all().await;
@@ -90,7 +76,7 @@ impl LaunchStopper for RegistryLaunchStopper {
     }
 }
 
-/// The port-tunnel teardown surface (#279), a sibling of [`LaunchStopper`] rather
+/// The port-tunnel teardown surface, a sibling of [`LaunchStopper`] rather
 /// than a branch inside it: a scope that never ran a launch config has no
 /// `LaunchRegistry` entry, and those are exactly the scopes that tunnel a dev
 /// server started by hand.
@@ -104,7 +90,7 @@ pub trait ScopeTunnelStopper: Send + Sync {
     ) -> Option<BoxFuture<'a, ()>>;
 }
 
-/// No registry (route-unit harness / a daemon booted without tunnels).
+/// No-op tunnel teardown for test harnesses.
 pub struct NoopScopeTunnelStopper;
 
 impl ScopeTunnelStopper for NoopScopeTunnelStopper {
@@ -115,10 +101,6 @@ impl ScopeTunnelStopper for NoopScopeTunnelStopper {
     ) -> Option<BoxFuture<'a, ()>> {
         None
     }
-}
-
-pub fn default_scope_tunnel_stopper() -> Arc<dyn ScopeTunnelStopper> {
-    Arc::new(NoopScopeTunnelStopper)
 }
 
 /// The production impl. The registry keys tunnels by the chat that started them,
@@ -135,8 +117,7 @@ impl RegistryScopeTunnelStopper {
         Self { registry, db }
     }
 
-    /// `None` also means "stop": the owning chat is gone or its worktree
-    /// vanished, so no live scope can claim the tunnel.
+    /// Stop unclaimed tunnels when their owning chat no longer exists.
     async fn belongs_to_scope(
         &self,
         project_id: &str,
@@ -147,13 +128,16 @@ impl RegistryScopeTunnelStopper {
         let cid = chat_id.to_string();
         let resolved = self
             .db
-            .call(move |db| effective_path_sync(db, &pid, Some(&cid)))
+            .call(move |db| Ok(resolve_scope(db, &pid, Some(&cid))))
             .await;
         match resolved {
-            Ok(Some(path)) => path == effective_path,
-            Ok(None) => true,
+            Ok(Ok(scope)) => scope.path == effective_path,
+            Ok(Err(error)) => {
+                tracing::debug!(%error, "tunnel scope unavailable");
+                true
+            }
             Err(err) => {
-                tracing::warn!(%err, project_id, chat_id, "port-tunnel scope resolution failed");
+                tracing::warn!(error = %err, project_id, chat_id, "port-tunnel scope resolution failed");
                 false
             }
         }
@@ -176,18 +160,9 @@ impl ScopeTunnelStopper for RegistryScopeTunnelStopper {
                     .belongs_to_scope(project_id, &chat_id, effective_path)
                     .await
                 {
-                    self.registry.stop(port);
+                    self.registry.stop(port).await;
                 }
             }
         }))
     }
 }
-
-// PORT STATUS: (launch seam for chat/index.ts setStopLaunchProcesses)
-// confidence: high
-// todos: 0
-// notes: Task 5.5 wired the real RegistryLaunchStopper over mainframe-launch's
-// LaunchRegistry (get(projectId, path) → if Some, stop_all()), matching the TS
-// `setStopLaunchProcesses` closure exactly. NoopLaunchStopper stays as the
-// route-unit/test fallback (→ None, the `if (m)` guard with no manager).
-// notifications / per-chat todos / push are ported + wired in chat_deps.rs.

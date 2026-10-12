@@ -53,7 +53,7 @@ beforeEach(() => {
   state.remoteId = 'chat-1';
   state.custom = {
     adapterId: 'claude',
-    claudeSessionId: 'sess-1',
+    vendorSessionId: 'sess-1',
     temporary: false,
     noProject: false,
     transcriptMissing: false,

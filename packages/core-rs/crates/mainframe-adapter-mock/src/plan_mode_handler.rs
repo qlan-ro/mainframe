@@ -25,9 +25,8 @@ impl PlanModeActionHandler for MockPlanModeHandler {
             ctx.update_chat(PlanChatUpdate {
                 plan_mode: Some(false),
                 permission_mode: Some(response.execution_mode.unwrap_or(ExecutionMode::Default)),
-                clear_claude_session_id: false,
-            });
-            ctx.emit_chat_updated();
+                clear_vendor_session_id: false,
+            })?;
             Ok(())
         })
     }
@@ -53,7 +52,7 @@ impl PlanModeActionHandler for MockPlanModeHandler {
         ctx: &'a dyn PlanActionContext,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
         Box::pin(async move {
-            tracing::debug!(chat_id = %ctx.chat_id(), "mock-cli: plan rejection already forwarded");
+            tracing::debug!(chat_id = %ctx.chat_id(), "plan rejection already forwarded");
             Ok(())
         })
     }
@@ -65,11 +64,12 @@ impl PlanModeActionHandler for MockPlanModeHandler {
         ctx: &'a dyn PlanActionContext,
     ) -> BoxFuture<'a, Result<(), AdapterError>> {
         Box::pin(async move {
-            tracing::debug!(chat_id = %ctx.chat_id(), "mock-cli: plan revision already forwarded");
+            tracing::debug!(chat_id = %ctx.chat_id(), "plan revision already forwarded");
             Ok(())
         })
     }
 }
 
 #[cfg(test)]
+#[path = "plan_mode_handler_tests.rs"]
 mod tests;

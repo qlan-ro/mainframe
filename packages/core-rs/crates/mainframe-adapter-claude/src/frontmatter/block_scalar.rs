@@ -1,6 +1,6 @@
 //! YAML block-scalar (`|`/`>`) reader for the hand-rolled frontmatter parser.
 //! Scope: `|`, `|-`, `|+`, `>`, `>-`, `>+` only — explicit indentation
-//! indicators (`|2`, `>4`) are out of scope (todo #317 Decision D8) and fall
+//! indicators (`|2`, `>4`) are out of scope and fall
 //! back to `None`, which the caller treats as an inline scalar.
 
 #[derive(Debug, PartialEq, Eq)]
@@ -11,7 +11,7 @@ pub(crate) enum Style {
 
 /// Clip (YAML's unmarked default) is folded into `Strip` — a description is a
 /// display string, so its one guaranteed trailing newline is noise every
-/// consumer would otherwise have to trim (todo #317 Decision D2).
+/// consumer would otherwise have to trim.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Chomp {
     Strip,
@@ -80,7 +80,7 @@ fn strip_indent(line: &str, indent: usize) -> String {
         return String::new();
     }
     // Cut within this line's own spaces, not `indent`: an under-indented
-    // continuation must never be sliced mid-char or lose text (todo #317).
+    // continuation must never be sliced mid-char or lose text.
     let cut = leading_spaces(line).min(indent);
     line[cut..].to_string()
 }
@@ -125,84 +125,5 @@ fn fold_paragraphs(lines: &[String]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_header_accepts_the_six_forms() {
-        assert_eq!(
-            parse_header("|"),
-            Some(Header {
-                style: Style::Literal,
-                chomp: Chomp::Strip
-            })
-        );
-        assert_eq!(
-            parse_header("|-"),
-            Some(Header {
-                style: Style::Literal,
-                chomp: Chomp::Strip
-            })
-        );
-        assert_eq!(
-            parse_header("|+"),
-            Some(Header {
-                style: Style::Literal,
-                chomp: Chomp::Keep
-            })
-        );
-        assert_eq!(
-            parse_header(">"),
-            Some(Header {
-                style: Style::Folded,
-                chomp: Chomp::Strip
-            })
-        );
-        assert_eq!(
-            parse_header(">-"),
-            Some(Header {
-                style: Style::Folded,
-                chomp: Chomp::Strip
-            })
-        );
-        assert_eq!(
-            parse_header(">+"),
-            Some(Header {
-                style: Style::Folded,
-                chomp: Chomp::Keep
-            })
-        );
-    }
-
-    #[test]
-    fn parse_header_rejects_unsupported_forms() {
-        assert_eq!(parse_header("|2"), None);
-        assert_eq!(parse_header(">4"), None);
-        assert_eq!(parse_header("Work with PDFs"), None);
-    }
-
-    #[test]
-    fn read_block_strips_a_mixed_indentation_block() {
-        let lines = ["  outer", "    nested", "  outer2", "next"];
-        let header = Header {
-            style: Style::Literal,
-            chomp: Chomp::Strip,
-        };
-        let (value, end) = read_block(&lines, 0, &header);
-        assert_eq!(value, "outer\n  nested\nouter2");
-        assert_eq!(end, 3);
-    }
-
-    #[test]
-    fn read_block_handles_under_indented_multibyte_continuation() {
-        // Byte 4 falls inside '✅' — the old indent-anchored slice panicked here.
-        let lines = ["    outer", "  ✅ done", "next"];
-        let header = Header {
-            style: Style::Literal,
-            chomp: Chomp::Strip,
-        };
-        let (value, end) = read_block(&lines, 0, &header);
-        assert_eq!(value, "outer\n✅ done");
-        assert_eq!(end, 2);
-    }
-}
+#[path = "block_scalar_tests.rs"]
+mod tests;

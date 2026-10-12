@@ -1,8 +1,10 @@
-//! Ported from `src/server/routes/respond.ts` — the canonical response envelope.
+//! The canonical response envelope.
 //!
 //! `ok(data)` → `{"success":true,"data":<data>}`, `ok_empty()` →
 //! `{"success":true}`, `fail(status, error)` → `{"success":false,"error":"..."}`.
 //! Each returns an axum `Response` so route handlers stay `-> Response`.
+//! Wire contract: the UI matches these field names
+//! (`packages/ui/src/lib/api/http.ts` reads `success`, `data` and `error`).
 
 use axum::Json;
 use axum::http::StatusCode;
@@ -20,14 +22,47 @@ pub fn ok_empty() -> Response {
     Json(json!({ "success": true })).into_response()
 }
 
-/// `fail(res, status, error)` — failure envelope at the given HTTP status.
 pub fn fail(status: StatusCode, error: impl Into<String>) -> Response {
-    (
-        status,
-        Json(json!({ "success": false, "error": error.into() })),
-    )
-        .into_response()
+    ApiError::from_status(status, error.into()).into_response()
 }
+
+pub fn fail_internal(
+    context: impl Into<String>,
+    source: impl std::fmt::Display,
+    message: impl Into<String>,
+) -> Response {
+    ApiError::Internal {
+        context: context.into(),
+        source: mainframe_types::seam_error::SeamError::msg(source.to_string()),
+        public_message: Some(message.into()),
+    }
+    .into_response()
+}
+
+pub fn fail_domain(
+    context: impl Into<String>,
+    error: &(impl mainframe_types::http_status::HttpStatus + std::fmt::Display),
+) -> Response {
+    let status = status_of(error);
+    if status.is_server_error() {
+        fail_internal(context, error, error.to_string())
+    } else {
+        fail(status, error.to_string())
+    }
+}
+
+pub fn storage<T: Serialize>(
+    result: Result<T, mainframe_types::seam_error::SeamError>,
+) -> Response {
+    match result {
+        Ok(value) => ok(value),
+        Err(error) => ApiError::internal("chat storage operation", error).into_response(),
+    }
+}
+
+mod error;
+pub use error::ApiError;
+pub use error::{fail_or_internal, fail_with, status_code, status_of};
 
 #[cfg(test)]
 mod tests {
@@ -62,10 +97,6 @@ mod tests {
     }
 }
 
-// PORT STATUS: src/server/routes/respond.ts (3 helpers)
-// confidence: high
-// todos: 0
-// notes: TS mutates an Express `res`; the Rust port returns an axum `Response`
-// so handlers stay `-> Response`. `ok`/`ok_empty` default to 200 (Express
-// `res.json` default); `fail` carries the status. Envelope bytes verified
-// against respond.test.ts assertions (translated below).
+#[cfg(test)]
+#[path = "respond/golden_tests.rs"]
+mod golden_tests;

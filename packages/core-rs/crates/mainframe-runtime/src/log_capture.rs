@@ -12,6 +12,7 @@
 //! already depend on `mainframe-runtime`, so this lives here instead of being
 //! duplicated per crate.
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 
 struct ReasonVisitor(Option<String>);
@@ -45,8 +46,7 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for LogCapture {
         let mut visitor = ReasonVisitor(None);
         event.record(&mut visitor);
         self.events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .push((*event.metadata().level(), visitor.0));
     }
 }
@@ -65,8 +65,7 @@ impl LogCapture {
     /// daemon logging so unrelated lines don't perturb the count.
     pub fn events_with_reason(events: &CapturedEvents) -> Vec<(tracing::Level, String)> {
         events
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .iter()
             .filter_map(|(level, reason)| reason.clone().map(|r| (*level, r)))
             .collect()

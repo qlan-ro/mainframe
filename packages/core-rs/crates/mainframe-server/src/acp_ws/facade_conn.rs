@@ -1,7 +1,8 @@
 //! One attached `/acp/{profile}` connection: the outbound frame channel its
 //! socket loop drains, per-session stream state, and gates delivered but not
-//! yet answered (todo #350, live-wiring pass).
+//! yet answered.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,34 +25,33 @@ pub struct FacadeConnection {
     sessions: Mutex<HashMap<String, SessionSlot>>,
     pending_gates: Mutex<HashMap<String, PendingGate>>,
     /// Set once a successful `initialize` negotiates the pinned protocol
-    /// version (R3.21) — read from the socket-loop task on every inbound
-    /// frame, so an `Atomic` rather than a `Mutex` (no critical section to
-    /// hold, just a flag).
+    /// version — read from the socket-loop task on every inbound frame, so an
+    /// `Atomic` rather than a `Mutex` (no critical section to hold, just a
+    /// flag).
     negotiated: AtomicBool,
-    /// Set once a successful `initialize` also opted into revision-
-    /// versioned resume cursors (todo #377, spec
-    /// `REVISION_CURSORS_OPT_IN_KEY`). Gates every `cursor` reply meta,
-    /// `_mainframe.dev/cursor` notification, and the hub's decision to
-    /// create this chat's `RevisionLog` on this connection's resume — a
+    /// Set once a successful `initialize` also opted into revision-versioned
+    /// resume cursors (`REVISION_CURSORS_OPT_IN_KEY`). Gates every `cursor`
+    /// reply meta, `_mainframe.dev/cursor` notification, and the hub's decision
+    /// to create this chat's `RevisionLog` on this connection's resume — a
     /// connection that never sets this gets byte-identical legacy behavior.
     revision_cursors_opted_in: AtomicBool,
     /// Set once a successful `initialize` opted into replay result previews
-    /// (spec Decision 41, `REPLAY_RESULT_PREVIEWS_OPT_IN_KEY`): this
+    /// (`REPLAY_RESULT_PREVIEWS_OPT_IN_KEY`): this
     /// connection's full resume replays send old tool results as previews
     /// and its seeded streams keep trimming those ids. Never set means every
     /// replayed result stays full, byte-identical to before.
     replay_result_previews_opted_in: AtomicBool,
     /// Set once a successful `initialize` opted into compressed replay
-    /// batches (spec Decision 42, `COMPRESSED_REPLAY_OPT_IN_KEY`): this
+    /// batches (`COMPRESSED_REPLAY_OPT_IN_KEY`): this
     /// connection's resume replays travel as `_mainframe.dev/replay_batch`
     /// frames instead of one `session/update` per item.
     compressed_replay_opted_in: AtomicBool,
-    /// One `tokio::sync::Mutex` per session, held for the duration of a
-    /// spawned `session/prompt` (T10). Serializes concurrent prompts for the
-    /// SAME session — queue position and D1's tail ordering both depend on
-    /// which of two concurrent prompts enqueues first — while leaving
-    /// different sessions free to run their prompts in parallel.
-    prompt_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    /// One `tokio::sync::Mutex` per session, held for the duration of a spawned
+    /// `session/prompt`. Serializes concurrent prompts for the SAME session —
+    /// queue position and the queue's tail ordering both depend on which of two
+    /// concurrent prompts enqueues first — while leaving different sessions
+    /// free to run their prompts in parallel.
+    prompt_locks: mainframe_runtime::sync::KeyedMutex,
     /// Consecutive failed `session/resume` deliveries per session. NOT
     /// reclaimed by `forget_chat`: the failure path detaches the session
     /// itself, and reclaiming there would reset the very count that stops a
@@ -70,7 +70,7 @@ impl FacadeConnection {
             revision_cursors_opted_in: AtomicBool::new(false),
             replay_result_previews_opted_in: AtomicBool::new(false),
             compressed_replay_opted_in: AtomicBool::new(false),
-            prompt_locks: Mutex::new(HashMap::new()),
+            prompt_locks: mainframe_runtime::sync::KeyedMutex::default(),
             resume_failures: Mutex::new(HashMap::new()),
         }
     }
@@ -81,7 +81,7 @@ impl FacadeConnection {
     /// it — so two frames spawned back to back could acquire in either order.
     /// Polling once here, on the socket loop, makes arrival order the
     /// acquisition order.
-    pub fn enqueue_prompt_lock(&self, session_id: &str) -> SessionLockWait {
+    pub(crate) fn enqueue_prompt_lock(&self, session_id: &str) -> SessionLockWait {
         // `unconstrained`: tokio's `Acquire::poll` checks the coop budget
         // before the semaphore, so a spent budget would report Pending with
         // no waiter registered — queued in name, last in line in fact.
@@ -98,44 +98,37 @@ impl FacadeConnection {
     /// Acquire this session's prompt-serialization lock, creating it on
     /// first use. Held by the caller for the lifetime of one spawned prompt
     /// dispatch.
-    pub fn session_prompt_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
-        self.prompt_locks
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .entry(session_id.to_string())
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
-            .clone()
+    pub(crate) fn session_prompt_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.prompt_locks.get(session_id)
     }
 
     /// Count one failed resume for `chat_id` and report how many in a row
     /// that makes — the failure path pushes its recovery notification on the
     /// first only.
-    pub fn record_resume_failure(&self, chat_id: &str) -> u32 {
+    pub(crate) fn record_resume_failure(&self, chat_id: &str) -> u32 {
         let mut failures = self.locked_resume_failures();
         let count = failures.entry(chat_id.to_string()).or_insert(0);
         *count += 1;
         *count
     }
 
-    pub fn clear_resume_failures(&self, chat_id: &str) {
+    pub(crate) fn clear_resume_failures(&self, chat_id: &str) {
         self.locked_resume_failures().remove(chat_id);
     }
 
     fn locked_resume_failures(&self) -> std::sync::MutexGuard<'_, HashMap<String, u32>> {
-        self.resume_failures
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.resume_failures.lock_recover()
     }
 
-    pub fn is_negotiated(&self) -> bool {
+    pub(crate) fn is_negotiated(&self) -> bool {
         self.negotiated.load(Ordering::Relaxed)
     }
 
-    pub fn mark_negotiated(&self) {
+    pub(crate) fn mark_negotiated(&self) {
         self.negotiated.store(true, Ordering::Relaxed);
     }
 
-    pub fn is_revision_cursors_opted_in(&self) -> bool {
+    pub(crate) fn is_revision_cursors_opted_in(&self) -> bool {
         self.revision_cursors_opted_in.load(Ordering::Relaxed)
     }
 
@@ -144,20 +137,20 @@ impl FacadeConnection {
             .store(true, Ordering::Relaxed);
     }
 
-    pub fn is_replay_result_previews_opted_in(&self) -> bool {
+    pub(crate) fn is_replay_result_previews_opted_in(&self) -> bool {
         self.replay_result_previews_opted_in.load(Ordering::Relaxed)
     }
 
-    pub fn mark_replay_result_previews_opted_in(&self) {
+    pub(crate) fn mark_replay_result_previews_opted_in(&self) {
         self.replay_result_previews_opted_in
             .store(true, Ordering::Relaxed);
     }
 
-    pub fn is_compressed_replay_opted_in(&self) -> bool {
+    pub(crate) fn is_compressed_replay_opted_in(&self) -> bool {
         self.compressed_replay_opted_in.load(Ordering::Relaxed)
     }
 
-    pub fn mark_compressed_replay_opted_in(&self) {
+    pub(crate) fn mark_compressed_replay_opted_in(&self) {
         self.compressed_replay_opted_in
             .store(true, Ordering::Relaxed);
     }
@@ -165,11 +158,11 @@ impl FacadeConnection {
     pub(super) fn locked_sessions(
         &self,
     ) -> std::sync::MutexGuard<'_, HashMap<String, SessionSlot>> {
-        self.sessions.lock().unwrap_or_else(|e| e.into_inner())
+        self.sessions.lock_recover()
     }
 
     fn locked_gates(&self) -> std::sync::MutexGuard<'_, HashMap<String, PendingGate>> {
-        self.pending_gates.lock().unwrap_or_else(|e| e.into_inner())
+        self.pending_gates.lock_recover()
     }
 
     pub fn is_attached(&self, chat_id: &str) -> bool {
@@ -190,9 +183,9 @@ impl FacadeConnection {
 
     /// Re-register a gate under its original id after a failed apply — the
     /// answer path already removed it, and a client retry must find the same
-    /// rpc_id answerable again (T3). No frame is sent; the client already
+    /// rpc_id answerable again. No frame is sent; the client already
     /// has the request.
-    pub fn restore_gate(&self, rpc_id: &str, pending: PendingGate) {
+    pub(crate) fn restore_gate(&self, rpc_id: &str, pending: PendingGate) {
         self.locked_gates().insert(rpc_id.to_string(), pending);
     }
 
@@ -201,22 +194,12 @@ impl FacadeConnection {
     /// otherwise all three outlive the chat for the connection's whole
     /// lifetime.
     ///
-    /// The prompt lock goes only when nothing else holds it. A call still in
-    /// flight owns a clone, and replacing the entry would hand the next call
-    /// for that session a different mutex — two calls then enqueue
-    /// concurrently, which is the ordering the lock exists to prevent. The
-    /// entry a running call keeps alive is reclaimed by the next teardown.
+    /// Pruning weak entries never replaces a lock held by an active prompt.
     pub fn forget_chat(&self, chat_id: &str) {
         self.locked_sessions().remove(chat_id);
         self.locked_gates()
             .retain(|_, gate| gate.chat_id != chat_id);
-        let mut locks = self.prompt_locks.lock().unwrap_or_else(|e| e.into_inner());
-        if locks
-            .get(chat_id)
-            .is_some_and(|lock| Arc::strong_count(lock) == 1)
-        {
-            locks.remove(chat_id);
-        }
+        self.prompt_locks.prune();
     }
 
     fn send_frame(&self, payload: String) {
@@ -242,24 +225,24 @@ impl FacadeConnection {
     pub fn send_json<T: serde::Serialize>(&self, frame: &T) {
         match serde_json::to_string(frame) {
             Ok(payload) => self.send_frame(payload),
-            Err(err) => warn!(%err, "acp facade: failed to serialize outbound frame"),
+            Err(err) => warn!(error = %err, "failed to serialize outbound frame"),
         }
     }
 
     /// A pre-serialized frame, sent unthrottled — a spawned `session/prompt`
     /// reply, which belongs to no session's update FIFO.
-    pub fn send_raw(&self, payload: String) {
+    pub(crate) fn send_raw(&self, payload: String) {
         self.send_frame(payload);
     }
 
     /// Dispatch one throttle-drained frame: an update through the normal
-    /// `session/update` envelope, a raw frame as-is (T6), or a revision-
-    /// cursor boundary (todo #377) as `_mainframe.dev/cursor` — only for a
+    /// `session/update` envelope, a raw frame as-is, or a revision-
+    /// cursor boundary as `_mainframe.dev/cursor` — only for a
     /// connection that opted in. The run-op layer already filters a cursor
     /// out before it ever reaches a non-opted connection's throttle FIFO
     /// (`fanout.rs::run_op`); this check is the second, defensive gate, so
     /// nothing short of that filtering ever reaches the wire for one.
-    pub fn send_throttled(&self, chat_id: &str, frame: ThrottledFrame) {
+    pub(crate) fn send_throttled(&self, chat_id: &str, frame: ThrottledFrame) {
         match frame {
             ThrottledFrame::Update(update) => self.send_update(chat_id, update),
             ThrottledFrame::Raw(payload) => self.send_frame(payload),
@@ -275,7 +258,7 @@ impl FacadeConnection {
     /// correlation, without sending anything — the send is a separate step
     /// (`send_raw`/`send_throttled`) so the live raise path can throttle it
     /// while registration itself stays unconditional and immediate.
-    pub fn register_gate(&self, chat_id: &str, request: &ControlRequest) {
+    pub(crate) fn register_gate(&self, chat_id: &str, request: &ControlRequest) {
         self.locked_gates().insert(
             rpc_id_string(&request.request_id),
             PendingGate {
@@ -298,10 +281,11 @@ impl FacadeConnection {
 /// remembered — the string form of [`gate_request_id`].
 pub fn rpc_id_string(request_id: &str) -> String {
     match gate_request_id(request_id) {
-        RequestId::Str(s) => s,
+        RequestId::String(s) => s,
         RequestId::Number(n) => n.to_string(),
     }
 }
 
 #[cfg(test)]
+#[path = "facade_conn_tests.rs"]
 mod tests;

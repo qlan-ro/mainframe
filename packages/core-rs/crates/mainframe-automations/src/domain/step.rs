@@ -4,6 +4,7 @@
 //! `step_verbs.rs`, split out once `ParallelBlock` pushed this file over the
 //! 300-line cap.
 
+use mainframe_types::automation::AutomationStepKind;
 use serde::{Deserialize, Serialize};
 
 use super::condition::{ConditionMatch, ConditionRow};
@@ -31,6 +32,21 @@ pub enum Step {
     Parallel(ParallelBlock),
 }
 
+/// How a block's bodies relate to the token scope and to `break`: `if`
+/// re-emits both branches' outputs to later siblings, `repeat` adds
+/// `Current item`, and every other block keeps its body's outputs inside.
+/// `concurrent` repeats and `parallel` branches run side by side, so a
+/// `break` cannot leave them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ScopeRule {
+    Leaf,
+    If,
+    Repeat { concurrent: bool },
+    Loop,
+    Retry,
+    Parallel,
+}
+
 impl Step {
     pub fn id(&self) -> &str {
         match self {
@@ -49,24 +65,25 @@ impl Step {
         }
     }
 
-    pub fn kind_name(&self) -> &'static str {
+    /// The checkpoint kind this step's entries are recorded under.
+    pub(crate) fn kind(&self) -> AutomationStepKind {
         match self {
-            Step::AskAgent(_) => "ask_agent",
-            Step::AskMe(_) => "ask_me",
-            Step::RunAction(_) => "run_action",
-            Step::Notify(_) => "notify",
-            Step::SetVariable(_) => "set_variable",
-            Step::Wait(_) => "wait",
-            Step::Break(_) => "break",
-            Step::If(_) => "if",
-            Step::Repeat(_) => "repeat",
-            Step::Loop(_) => "loop",
-            Step::Retry(_) => "retry",
-            Step::Parallel(_) => "parallel",
+            Step::AskAgent(_) => AutomationStepKind::AskAgent,
+            Step::AskMe(_) => AutomationStepKind::AskMe,
+            Step::RunAction(_) => AutomationStepKind::RunAction,
+            Step::Notify(_) => AutomationStepKind::Notify,
+            Step::SetVariable(_) => AutomationStepKind::SetVariable,
+            Step::Wait(_) => AutomationStepKind::Wait,
+            Step::Break(_) => AutomationStepKind::Break,
+            Step::If(_) => AutomationStepKind::If,
+            Step::Repeat(_) => AutomationStepKind::Repeat,
+            Step::Loop(_) => AutomationStepKind::Loop,
+            Step::Retry(_) => AutomationStepKind::Retry,
+            Step::Parallel(_) => AutomationStepKind::Parallel,
         }
     }
 
-    pub fn keep_going(&self) -> bool {
+    pub(crate) fn keep_going(&self) -> bool {
         match self {
             Step::AskAgent(s) => s.keep_going,
             Step::AskMe(s) => s.keep_going,
@@ -80,6 +97,46 @@ impl Step {
             Step::Loop(s) => s.keep_going,
             Step::Retry(s) => s.keep_going,
             Step::Parallel(s) => s.keep_going,
+        }
+    }
+
+    /// Every step list nested directly under this step, in authoring order:
+    /// `if`'s then and otherwise, the body of `repeat`/`loop`/`retry`, and each
+    /// `parallel` branch. Leaves have none. Scope walks recurse through this so
+    /// none of them can miss a block kind.
+    pub fn child_bodies(&self) -> Vec<&[Step]> {
+        match self {
+            Step::If(s) => vec![&s.then, &s.otherwise],
+            Step::Repeat(s) => vec![&s.steps],
+            Step::Loop(s) => vec![&s.steps],
+            Step::Retry(s) => vec![&s.steps],
+            Step::Parallel(s) => s.branches.iter().map(Vec::as_slice).collect(),
+            Step::AskAgent(_)
+            | Step::AskMe(_)
+            | Step::RunAction(_)
+            | Step::Notify(_)
+            | Step::SetVariable(_)
+            | Step::Wait(_)
+            | Step::Break(_) => Vec::new(),
+        }
+    }
+
+    pub(crate) fn scope_rule(&self) -> ScopeRule {
+        match self {
+            Step::If(_) => ScopeRule::If,
+            Step::Repeat(s) => ScopeRule::Repeat {
+                concurrent: s.concurrency.is_some_and(|n| n > 1),
+            },
+            Step::Loop(_) => ScopeRule::Loop,
+            Step::Retry(_) => ScopeRule::Retry,
+            Step::Parallel(_) => ScopeRule::Parallel,
+            Step::AskAgent(_)
+            | Step::AskMe(_)
+            | Step::RunAction(_)
+            | Step::Notify(_)
+            | Step::SetVariable(_)
+            | Step::Wait(_)
+            | Step::Break(_) => ScopeRule::Leaf,
         }
     }
 }
@@ -174,6 +231,11 @@ pub struct IfBlock {
     pub otherwise: Vec<Step>,
 }
 
+/// Contract §2: an unbounded Repeat rewrites the whole checkpoint JSON per
+/// advance() (O(N²)); cap fan-out instead of discovering it in production.
+/// Loop passes and retry attempts share the cap.
+pub(crate) const MAX_REPEAT_ITEMS: usize = 500;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RepeatBlock {
@@ -183,13 +245,13 @@ pub struct RepeatBlock {
     /// The list token to iterate (wire name `items`, not `over`).
     pub items: TokenRef,
     /// Absent or `1`: today's exact sequential behavior. `2..=32`: up to that
-    /// many iterations run concurrently through the branch driver (Phase 4a).
+    /// many iterations run concurrently through the branch driver.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub concurrency: Option<u32>,
     pub steps: Vec<Step>,
 }
 
-/// Heterogeneous concurrent block (Phase 4b): unlike Repeat's concurrency,
+/// Heterogeneous concurrent block: unlike Repeat's concurrency,
 /// which runs the SAME body once per item, a branch here is authored
 /// directly — every branch starts before the block parks, and it settles
 /// wait-for-all exactly like a concurrent Repeat (`engine/blocks_concurrent.rs`
@@ -205,33 +267,19 @@ pub struct ParallelBlock {
 
 /// Recursively finds a step by id, descending into `if`'s then/otherwise,
 /// `repeat`/`loop`/`retry`'s inner steps, and every `parallel` branch — the
-/// same tree shape the walk traverses (Node parity:
-/// automation-domain/tokens.ts `findStepById`).
-pub fn find_step_by_id<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a Step> {
+/// same tree shape the token walk traverses.
+pub(crate) fn find_step_by_id<'a>(steps: &'a [Step], step_id: &str) -> Option<&'a Step> {
     for step in steps {
         if step.id() == step_id {
             return Some(step);
         }
-        let nested = match step {
-            Step::If(block) => find_step_by_id(&block.then, step_id)
-                .or_else(|| find_step_by_id(&block.otherwise, step_id)),
-            Step::Repeat(block) => find_step_by_id(&block.steps, step_id),
-            Step::Loop(block) => find_step_by_id(&block.steps, step_id),
-            Step::Retry(block) => find_step_by_id(&block.steps, step_id),
-            Step::Parallel(block) => block
-                .branches
-                .iter()
-                .find_map(|branch| find_step_by_id(branch, step_id)),
-            _ => None,
-        };
+        let nested = step
+            .child_bodies()
+            .into_iter()
+            .find_map(|body| find_step_by_id(body, step_id));
         if nested.is_some() {
             return nested;
         }
     }
     None
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: wire truth = packages/types/src/automation.ts; A9 attachments included.

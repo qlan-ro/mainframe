@@ -1,29 +1,27 @@
-//! OS-keychain-backed `CredentialStore` (2026-08-19 provider-connections
-//! plan, Deliverable 1): a pasted PAT belongs in the platform keychain, not
-//! a 0600 JSON file. `KeyringBackend` is the seam tests stand in for — the
-//! `keyring` crate's own mock module can't fill that role, because its
-//! `MockCredentialBuilder::build` ignores `service`/`user` and hands back a
+//! OS-keychain-backed `CredentialStore`: a pasted PAT belongs in the platform
+//! keychain, not a 0600 JSON file. `KeyringBackend` is the seam tests stand in
+//! for — the `keyring` crate's own mock module can't fill that role, because
+//! its `MockCredentialBuilder::build` ignores `service`/`user` and hands back a
 //! fresh, unpersisted `MockCredential` on every `Entry::new` call, and this
-//! store opens a fresh `Entry` per operation. A homegrown fake is the only
-//! way to assert persistence across `get`/`set`/`delete` without touching
-//! (or prompting for) the real OS keychain in tests.
+//! store opens a fresh `Entry` per operation. A homegrown fake is the only way
+//! to assert persistence across `get`/`set`/`delete` without touching (or
+//! prompting for) the real OS keychain in tests.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+use mainframe_types::BoxFuture;
 use tokio::sync::RwLock;
-
-use crate::engine::BoxFuture;
 
 use super::{CredentialError, CredentialStore, Credentials};
 
 /// One secret slot, addressed by label.
 pub(crate) trait KeyringBackend: Send + Sync {
-    fn get(&self, label: &str) -> Result<Option<String>, String>;
-    fn set(&self, label: &str, secret: &str) -> Result<(), String>;
+    fn get(&self, label: &str) -> Result<Option<String>, keyring::Error>;
+    fn set(&self, label: &str, secret: &str) -> Result<(), keyring::Error>;
     /// Deleting an absent label is not an error — `CredentialStore::delete`
     /// on an already-gone label is a no-op for every backend.
-    fn delete(&self, label: &str) -> Result<(), String>;
+    fn delete(&self, label: &str) -> Result<(), keyring::Error>;
 }
 
 /// Its own service namespace, separate from the Tauri shell's
@@ -40,25 +38,22 @@ impl SystemKeyringBackend {
 }
 
 impl KeyringBackend for SystemKeyringBackend {
-    fn get(&self, label: &str) -> Result<Option<String>, String> {
-        let entry = keyring::Entry::new(SERVICE, label).map_err(|err| err.to_string())?;
-        match entry.get_password() {
+    fn get(&self, label: &str) -> Result<Option<String>, keyring::Error> {
+        match keyring::Entry::new(SERVICE, label)?.get_password() {
             Ok(secret) => Ok(Some(secret)),
             Err(keyring::Error::NoEntry) => Ok(None),
-            Err(err) => Err(err.to_string()),
+            Err(err) => Err(err),
         }
     }
 
-    fn set(&self, label: &str, secret: &str) -> Result<(), String> {
-        let entry = keyring::Entry::new(SERVICE, label).map_err(|err| err.to_string())?;
-        entry.set_password(secret).map_err(|err| err.to_string())
+    fn set(&self, label: &str, secret: &str) -> Result<(), keyring::Error> {
+        keyring::Entry::new(SERVICE, label)?.set_password(secret)
     }
 
-    fn delete(&self, label: &str) -> Result<(), String> {
-        let entry = keyring::Entry::new(SERVICE, label).map_err(|err| err.to_string())?;
-        match entry.delete_credential() {
+    fn delete(&self, label: &str) -> Result<(), keyring::Error> {
+        match keyring::Entry::new(SERVICE, label)?.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(err) => Err(err.to_string()),
+            Err(err) => Err(err),
         }
     }
 }
@@ -101,16 +96,9 @@ impl<B: KeyringBackend> KeyringCredentialStore<B> {
         if let Some(parent) = self.index_path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        let file_name = self
-            .index_path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "automation-credentials-labels.json".to_string());
-        let tmp = self
-            .index_path
-            .with_file_name(format!("{file_name}.tmp-{}", nanoid::nanoid!(8)));
-        tokio::fs::write(&tmp, json).await?;
-        tokio::fs::rename(&tmp, &self.index_path).await?;
+        mainframe_runtime::fs::write_atomic(&self.index_path, json.as_bytes(), false)
+            .await
+            .map_err(|error| error.source)?;
         Ok(())
     }
 }
@@ -139,9 +127,7 @@ impl<B: KeyringBackend + 'static> CredentialStore for KeyringCredentialStore<B> 
     ) -> BoxFuture<'a, Result<(), CredentialError>> {
         Box::pin(async move {
             let json = serde_json::to_string(&creds)?;
-            self.backend
-                .set(label, &json)
-                .map_err(CredentialError::Keyring)?;
+            self.backend.set(label, &json)?;
             let mut labels = self.labels.write().await;
             labels.insert(label.to_string());
             self.persist_index(&labels).await
@@ -150,9 +136,7 @@ impl<B: KeyringBackend + 'static> CredentialStore for KeyringCredentialStore<B> 
 
     fn delete<'a>(&'a self, label: &'a str) -> BoxFuture<'a, Result<(), CredentialError>> {
         Box::pin(async move {
-            self.backend
-                .delete(label)
-                .map_err(CredentialError::Keyring)?;
+            self.backend.delete(label)?;
             let mut labels = self.labels.write().await;
             labels.remove(label);
             self.persist_index(&labels).await
@@ -163,9 +147,3 @@ impl<B: KeyringBackend + 'static> CredentialStore for KeyringCredentialStore<B> 
         Box::pin(async move { self.labels.read().await.iter().cloned().collect() })
     }
 }
-
-// PORT STATUS: greenfield (2026-08-19 automations-provider-connections plan, Deliverable 1)
-// confidence: high
-// todos: 0
-// notes: the label index is the only non-secret state this store keeps on
-//        disk; the actual token round-trips through `KeyringBackend` alone.

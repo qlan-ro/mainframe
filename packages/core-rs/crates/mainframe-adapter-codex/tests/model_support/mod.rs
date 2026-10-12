@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, reason = "Shared test helpers")]
 use mainframe_adapter_api::AdapterSession;
 use mainframe_adapter_codex::CodexSession;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;

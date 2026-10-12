@@ -110,7 +110,7 @@ pub struct TokenUsageUpdatedParams {
 impl TokenUsageUpdatedParams {
     /// Resolves the usage to report, preferring the legacy top-level `usage`,
     /// then the capture's `tokenUsage.last`, then `tokenUsage.total`.
-    pub fn resolved_usage(&self) -> Option<Usage> {
+    pub(crate) fn resolved_usage(&self) -> Option<Usage> {
         if let Some(usage) = &self.usage {
             return Some(usage.clone());
         }

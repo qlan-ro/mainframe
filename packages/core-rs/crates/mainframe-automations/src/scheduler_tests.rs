@@ -1,4 +1,4 @@
-//! T8.1 — pure schedule computation: SchedulePattern → cron (local time),
+//! Pure schedule computation: SchedulePattern → cron (local time),
 //! next occurrence and latest-at-or-before across day and DST edges. Tests
 //! pin a named tz (America/New_York; DST 2026: Mar 8 spring-forward, Nov 1
 //! fall-back) because prod runs in the machine's local tz.
@@ -244,8 +244,8 @@ fn once_has_no_cron_form_and_rejects_malformed_timestamps() {
 
 #[test]
 fn scheduled_for_uses_the_naive_local_form() {
-    // Node's toLocalIso: `YYYY-MM-DDTHH:mm:ss`, no timezone suffix — the
-    // dedup key `<triggerId>|<scheduledFor>` must match across engines.
+    // `YYYY-MM-DDTHH:mm:ss`, no timezone suffix — the dedup key
+    // `<triggerId>|<scheduledFor>` must match keys already persisted.
     assert_eq!(
         scheduled_for_string(&ny(2026, 7, 12, 21, 0)),
         "2026-07-12T21:00:00"

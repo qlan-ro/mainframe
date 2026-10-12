@@ -1,35 +1,23 @@
-//! Integration tests for the not-yet-mounted
-//! `GET /api/projects/{id}/automation-recommendations` route (spec AC 7).
-//!
-//! T18 is expected RED: the handler is T19's job. Do not stub it to pass this
-//! file — a route this file can't reach proves nothing about T19's behavior.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Integration tests for the `GET /api/projects/{id}/automation-recommendations`
+//! route.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
 use std::fs;
-use std::path::Path;
 
 use reqwest::StatusCode;
-use serde_json::{Value, json};
-use support::{TestServer, spawn_test_server};
+use serde_json::json;
+use support::spawn_test_server;
 
-fn run_git(cwd: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
+use support::helpers::run_git;
 
-/// The rich fixture from T9's fingerprint test: a Next.js + React + Supabase
+/// The rich fixture from the fingerprint tests
+/// (`src/setup_advisor/fingerprint/tests.rs`): a Next.js + React + Supabase
 /// project with prettier/tsconfig/docker tooling, a tests dir, env + lock
 /// files, and a GitHub origin.
 fn rich_fixture_repo() -> tempfile::TempDir {
@@ -67,11 +55,7 @@ fn rich_fixture_repo() -> tempfile::TempDir {
     dir
 }
 
-async fn get_json(server: &TestServer, path: &str) -> (StatusCode, Value) {
-    let res = reqwest::get(server.http_url(path)).await.unwrap();
-    let status = res.status();
-    (status, res.json().await.unwrap())
-}
+use support::helpers::get_json;
 
 #[tokio::test]
 async fn returns_a_report_with_camel_case_fields_for_a_registered_fixture_project() {

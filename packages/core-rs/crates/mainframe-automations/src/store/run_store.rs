@@ -2,14 +2,16 @@
 //! terminal immutability, the dedup insert race, and boot's resumable scan.
 
 use nanoid::nanoid;
-use rusqlite::params;
+use rusqlite::{Connection, params};
 
 use crate::domain::AutomationDefinition;
 use crate::error::StoreError;
 
+use mainframe_db::sql_types::query_all;
+
 use super::run_rows::{
-    RowParts, assert_not_terminal, assert_step_outputs_within_cap, finalize_corrupt_run, get_by_id,
-    is_unique_violation, parts_to_record, require, row_to_parts,
+    assert_not_terminal, assert_step_outputs_within_cap, finalize_corrupt_run, get_by_id,
+    is_unique_violation, require,
 };
 use super::{
     AutomationCheckpoint, AutomationDb, RunRecord, RunTriggerContext, TerminalStatus,
@@ -30,7 +32,7 @@ impl RunStore {
     /// `dedup_key` is `None` for manual runs — SQLite treats every NULL as
     /// distinct in the unique index, so manual runs never collide, while a
     /// duplicate trigger fire loses the insert race (`DuplicateFire`).
-    pub async fn create_run(
+    pub(crate) async fn create_run(
         &self,
         automation_id: &str,
         definition: AutomationDefinition,
@@ -79,11 +81,11 @@ impl RunStore {
         self.db
             .call(move |conn| {
                 // rowid tie-breaks started_at (ms ties on fast successive creates).
-                let mut stmt = conn.prepare(
+                query_all(
+                    conn,
                     "SELECT * FROM automation_runs WHERE automation_id = ?1 ORDER BY started_at DESC, rowid DESC LIMIT ?2",
-                )?;
-                let rows = stmt.query_map(params![automation_id, limit], row_to_parts)?;
-                rows.map(|r| parts_to_record(r?)).collect()
+                    params![automation_id, limit],
+                )
             })
             .await
     }
@@ -91,22 +93,21 @@ impl RunStore {
     /// Boot reconcile's entry point — every `running|waiting` run. One row
     /// with a corrupt checkpoint must not abort the scan for the rest: it is
     /// finalized `failed` in place and excluded.
-    pub async fn list_live_runs(&self) -> Result<Vec<RunRecord>, StoreError> {
+    pub(crate) async fn list_live_runs(&self) -> Result<Vec<RunRecord>, StoreError> {
         self.db
             .call(|conn| {
                 let mut stmt = conn.prepare(
-                    "SELECT * FROM automation_runs WHERE status IN ('running','waiting')",
+                    "SELECT id FROM automation_runs WHERE status IN ('running','waiting')",
                 )?;
-                let parts: Vec<RowParts> = stmt
-                    .query_map([], row_to_parts)?
+                let ids: Vec<String> = stmt
+                    .query_map([], |row| row.get(0))?
                     .collect::<Result<_, _>>()?;
                 drop(stmt);
-                let mut runs = Vec::with_capacity(parts.len());
-                for part in parts {
-                    let run_id = part.id.clone();
-                    match parts_to_record(part) {
-                        Ok(run) => runs.push(run),
-                        Err(err) => {
+                let mut runs = Vec::with_capacity(ids.len());
+                for run_id in ids {
+                    match get_by_id(conn, &run_id) {
+                        Ok(run) => runs.extend(run),
+                        Err(err @ StoreError::Corrupt { .. }) => {
                             tracing::error!(
                                 run_id,
                                 error = %err,
@@ -114,6 +115,7 @@ impl RunStore {
                             );
                             finalize_corrupt_run(conn, &run_id)?;
                         }
+                        Err(err) => return Err(err),
                     }
                 }
                 Ok(runs)
@@ -124,7 +126,8 @@ impl RunStore {
     /// Whole-checkpoint write (the engine single-flights per run). Refuses a
     /// terminal run (A8), enforces the 4 MB per-step outputs cap, and derives
     /// the run-level status from the new checkpoint (A5).
-    pub async fn save_checkpoint(
+    #[cfg(test)]
+    pub(crate) async fn save_checkpoint(
         &self,
         run_id: &str,
         checkpoint: AutomationCheckpoint,
@@ -150,7 +153,7 @@ impl RunStore {
     /// commit funnel. Same A8/cap/A5 guarantees as `save_checkpoint`, but the
     /// read and the write share a transaction so a concurrent interaction
     /// resolve can never be clobbered by a stale in-memory copy.
-    pub async fn patch_checkpoint(
+    pub(crate) async fn patch_checkpoint(
         &self,
         run_id: &str,
         mutate: impl FnOnce(&mut AutomationCheckpoint) + Send + 'static,
@@ -158,23 +161,30 @@ impl RunStore {
         let run_id = run_id.to_string();
         self.db
             .call(move |conn| {
-                let tx = conn.transaction()?;
-                let parts = assert_not_terminal(&tx, &run_id)?;
-                let mut checkpoint: AutomationCheckpoint = serde_json::from_str(&parts.checkpoint)
-                    .map_err(|source| StoreError::Corrupt {
-                        what: "run checkpoint",
-                        id: run_id.clone(),
-                        source,
-                    })?;
-                mutate(&mut checkpoint);
-                assert_step_outputs_within_cap(&checkpoint)?;
-                let status = derive_run_status(&checkpoint);
-                tx.execute(
-                    "UPDATE automation_runs SET checkpoint = ?2, status = ?3 WHERE id = ?1",
-                    params![run_id, serde_json::to_string(&checkpoint)?, status.as_str()],
-                )?;
-                tx.commit()?;
+                patch_in_transaction(conn, &run_id, |cp| {
+                    mutate(cp);
+                    true
+                })?;
                 require(conn, &run_id)
+            })
+            .await
+    }
+
+    /// `patch_checkpoint` for a guarded transition: `mutate` reports whether
+    /// it changed anything, and when it returns false the transaction rolls
+    /// back without an UPDATE and this returns `None`.
+    pub(crate) async fn patch_checkpoint_if(
+        &self,
+        run_id: &str,
+        mutate: impl FnOnce(&mut AutomationCheckpoint) -> bool + Send + 'static,
+    ) -> Result<Option<RunRecord>, StoreError> {
+        let run_id = run_id.to_string();
+        self.db
+            .call(move |conn| {
+                if !patch_in_transaction(conn, &run_id, mutate)? {
+                    return Ok(None);
+                }
+                require(conn, &run_id).map(Some)
             })
             .await
     }
@@ -194,13 +204,7 @@ impl RunStore {
             .call(move |conn| {
                 let now = epoch_ms_now();
                 let tx = conn.transaction()?;
-                let parts = assert_not_terminal(&tx, &run_id)?;
-                let mut checkpoint: AutomationCheckpoint = serde_json::from_str(&parts.checkpoint)
-                    .map_err(|source| StoreError::Corrupt {
-                        what: "run checkpoint",
-                        id: run_id.clone(),
-                        source,
-                    })?;
+                let mut checkpoint = assert_not_terminal(&tx, &run_id)?.checkpoint;
                 checkpoint.wake_at = None;
                 if error.is_some() {
                     checkpoint.error = error;
@@ -222,10 +226,26 @@ impl RunStore {
     }
 }
 
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: finalize also cancels the run's pending interactions in the same
-//        transaction (A8: run-cancel is atomic with interaction cancel);
-//        Node splits this across savepoint-joined store calls. Row mapping
-//        and in-tx helpers live in run_rows.rs (300-line file cap).
+/// The shared read-modify-write: reads the live checkpoint under the A8
+/// guard, applies `mutate`, and commits the checkpoint with its derived
+/// status (A5) only when `mutate` returns true. Returns whether it wrote.
+fn patch_in_transaction(
+    conn: &mut Connection,
+    run_id: &str,
+    mutate: impl FnOnce(&mut AutomationCheckpoint) -> bool,
+) -> Result<bool, StoreError> {
+    let tx = conn.transaction()?;
+    let mut checkpoint = assert_not_terminal(&tx, run_id)?.checkpoint;
+    if !mutate(&mut checkpoint) {
+        // Dropping the transaction rolls it back: nothing was written.
+        return Ok(false);
+    }
+    assert_step_outputs_within_cap(&checkpoint)?;
+    let status = derive_run_status(&checkpoint);
+    tx.execute(
+        "UPDATE automation_runs SET checkpoint = ?2, status = ?3 WHERE id = ?1",
+        params![run_id, serde_json::to_string(&checkpoint)?, status.as_str()],
+    )?;
+    tx.commit()?;
+    Ok(true)
+}

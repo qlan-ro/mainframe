@@ -1,10 +1,8 @@
-//! Ported from `packages/core/src/db/projects.ts`.
-
 use std::path::Path;
 use std::rc::Rc;
 
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::chat::{NO_PROJECT_ID, Project};
+use mainframe_types::time::now_iso8601;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::DbError;
@@ -101,19 +99,11 @@ impl ProjectsRepository {
         })
     }
 
-    pub fn update_last_opened(&self, id: &str) -> Result<(), DbError> {
-        self.db.execute(
-            "UPDATE projects SET last_opened_at = ? WHERE id = ?",
-            rusqlite::params![now_iso8601(), id],
-        )?;
-        Ok(())
-    }
-
     /// Refuses the hidden scratch project row (rule 1): removing it would
     /// cascade-delete every non-project chat's row.
     pub fn remove(&self, id: &str) -> Result<(), DbError> {
         if id == NO_PROJECT_ID {
-            return Err(DbError::Message(
+            return Err(DbError::Invalid(
                 "cannot remove the hidden scratch project".to_string(),
             ));
         }
@@ -144,14 +134,3 @@ impl ProjectsRepository {
         Ok(())
     }
 }
-
-// PORT STATUS: src/db/projects.ts (77 lines)
-// confidence: high
-// notes: Project.parent_project_id is the types crate's tri-state
-// Option<Option<String>>; DB NULL → Some(None) (serializes null), value →
-// Some(Some(_)), matching the TS spread where the key is always present.
-// create()'s basename() fallback uses Path::file_name(). remove() uses
-// unchecked_transaction() (Rc<Connection> can't yield &mut Connection); RAII drop
-// rolls back on error, matching db.transaction(). now_iso8601() preserves the
-// `new Date().toISOString()` wire format. Tests in tests/projects.rs.
-// todos: 0

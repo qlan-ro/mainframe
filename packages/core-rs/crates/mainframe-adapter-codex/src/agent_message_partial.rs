@@ -1,10 +1,8 @@
-//! Todo #378: feeds top-level Codex `item/agentMessage/delta` notifications
-//! into the shared partial-message overlay (`SessionSink::on_message_partial`),
-//! so Codex agent text streams in place instead of arriving whole at
-//! `item/completed`. No TS counterpart — this notification postdates the
-//! retired TS plugin.
+//! Feeds top-level Codex `item/agentMessage/delta` notifications into the
+//! shared partial-message overlay (`SessionSink::on_message_partial`), so Codex
+//! agent text streams in place instead of arriving whole at `item/completed`.
 //!
-//! Scope is limited to the parent's own top-level agent text (plan decision):
+//! Scope is limited to the parent's own top-level agent text:
 //! a registered child thread's deltas are dropped here and its completed
 //! message still renders as it always has (`thread_item_render.rs`).
 
@@ -83,7 +81,7 @@ impl AgentMessagePartialState {
     /// item AND `thread_id` matches (or the completion carries none), drops
     /// the in-flight text so a stray late delta cannot resurrect it under a
     /// mismatched thread.
-    pub fn mark_item_completed(&mut self, item_id: &str, thread_id: Option<&str>) {
+    pub(crate) fn mark_item_completed(&mut self, item_id: &str, thread_id: Option<&str>) {
         self.completed_this_turn.insert(item_id.to_string());
         let is_in_flight = self
             .in_flight
@@ -176,10 +174,4 @@ fn emit_due(last: Option<i64>, interval_ms: i64, now_ms: i64) -> bool {
     last.is_none_or(|last| now_ms - last >= interval_ms)
 }
 
-fn now_ms() -> i64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
-}
+use mainframe_types::time::now_ms;

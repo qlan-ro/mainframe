@@ -1,36 +1,37 @@
 //! Domain model for Automations v2 — serde shapes are the ratified wire
-//! contract (docs/plans/2026-07-12-automations-v2-contract.md §1).
+//! contract (§1).
 
-pub mod automation;
+pub(crate) mod automation;
 pub(crate) mod catalog;
 pub(crate) mod comparators;
-pub mod concurrent_branch;
-pub mod condition;
-pub mod form;
+pub(crate) mod concurrent_branch;
+pub(crate) mod condition;
+pub(crate) mod form;
 pub(crate) mod scope;
-pub mod step;
+pub(crate) mod scoped_walk;
+pub(crate) mod step;
 mod step_verbs;
-pub mod template;
-pub mod token;
-pub mod trigger;
-pub mod validate;
+pub(crate) mod template;
+pub(crate) mod token;
+pub(crate) mod trigger;
+pub(crate) mod validate;
 pub(crate) mod validate_breaks;
 pub(crate) mod validate_concurrency;
 pub(crate) mod validate_variables;
 
 pub use automation::{AutomationCreateInput, AutomationDefinition, AutomationScope};
-pub use concurrent_branch::enclosing_concurrent_branch;
+pub(crate) use concurrent_branch::enclosing_concurrent_branch;
 pub use condition::{Comparator, ConditionMatch, ConditionRow, ConditionValue, ScalarValue};
 pub use form::{AutomationFormField, FormFieldType, ShowWhen};
 pub use step::{
     BreakStep, IfBlock, LoopBlock, LoopMode, ParallelBlock, RepeatBlock, RetryBlock, Step,
-    find_step_by_id,
 };
+pub(crate) use step::{MAX_REPEAT_ITEMS, find_step_by_id};
 pub use step_verbs::{
     AskAgentStep, AskMeStep, ExpectedOutput, ExpectedOutputType, NotifyStep, OutputAs,
     RunActionStep, SetVariableStep, WaitStep, WorktreeSpec,
 };
-pub use template::{ChipPart, ChipText, chip_tokens};
+pub use template::{ChipPart, ChipText};
 pub use token::{TOKEN_STEP_BUILTIN, TOKEN_STEP_CURRENT, TOKEN_STEP_TRIGGER, TokenRef};
 pub use trigger::{
     AutomationEventName, DailySchedule, EventTrigger, EveryNHoursSchedule, OnMissed, OnceSchedule,
@@ -63,9 +64,9 @@ mod validate_tests;
 #[cfg(test)]
 mod validate_variable_tests;
 
-/// T1.2 — the canonical fixtures (contract §8, authored by Node Phase 0) must
-/// deserialize, and re-serialize to the exact same JSON. Rust loads them by
-/// relative path and never authors its own.
+/// The canonical fixtures (contract §8) must deserialize, and re-serialize to
+/// the exact same JSON. These tests load them by relative path and never
+/// author their own.
 #[cfg(test)]
 mod fixture_tests {
     use std::path::PathBuf;
@@ -105,8 +106,3 @@ mod fixture_tests {
         }
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1-T1.2), not a TS port
-// confidence: high
-// todos: 0
-// notes: fixture validate-clean assertion lands with validation (T1.3).

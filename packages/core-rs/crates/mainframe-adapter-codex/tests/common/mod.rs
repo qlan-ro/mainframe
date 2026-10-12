@@ -1,19 +1,16 @@
 //! Shared test support: a `SessionSink` that records the callbacks the codex
-//! event-mapper / approval-handler drive (mirrors the vitest `createSink()` mocks).
-#![allow(dead_code)] // each test binary uses a subset of Recorder's surface
+//! event-mapper / approval-handler drive.
+#![allow(dead_code, reason = "Shared test helpers")] // each test binary uses a subset of Recorder's surface
 
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use mainframe_adapter_api::{AdapterError, ControlRequest, LoadedSkill, SessionSink};
+use mainframe_adapter_api::{AdapterError, ControlRequest, SessionSink};
 use mainframe_adapter_codex::event_mapper::{CodexSessionState, handle_notification};
 use mainframe_adapter_codex::thread_registry::ThreadRegistryDeps;
-use mainframe_types::adapter::{
-    ContextUsage, DetectedPr, MessageMetadata, ProviderQuota, SessionResult,
-};
+use mainframe_types::adapter::{ContextUsage, MessageMetadata, ProviderQuota, SessionResult};
 use mainframe_types::chat::{MessageContent, TodoItem};
-use mainframe_types::context::SkillFileEntry;
 use serde_json::Value;
 
 #[derive(Default)]
@@ -31,13 +28,14 @@ pub struct Recorded {
     /// in emission order — `nested_blocks`/`top_level_blocks` read this.
     pub ordered_blocks: Vec<MessageContent>,
     pub cli_messages: Vec<String>,
-    /// `vendor_id`s from every `on_message`/`on_tool_result` call, in order —
-    /// todo #350 group B, stable-ids task 5.
+    /// `vendor_id`s from every `on_message`/`on_tool_result` call, in order.
     pub message_vendor_ids: Vec<Option<String>>,
     pub tool_result_vendor_ids: Vec<Option<String>>,
     pub context_usages: Vec<ContextUsage>,
-    /// Every `on_message_partial(id, content)` call, in order (todo #378).
+    /// Every `on_message_partial(id, content)` call, in order.
     pub partials: Vec<(String, Vec<MessageContent>)>,
+    /// Every `on_error` message, in order.
+    pub errors: Vec<String>,
 }
 
 #[derive(Clone, Default)]
@@ -62,8 +60,8 @@ impl Recorder {
     pub fn results(&self) -> Vec<SessionResult> {
         self.0.lock().unwrap().results.clone()
     }
-    /// Every `on_init(session_id)` call, in order (todo #368: a fork's first
-    /// spawn reports the *new* thread id here, not the parent's).
+    /// Every `on_init(session_id)` call, in order: a fork's first
+    /// spawn reports the *new* thread id here, not the parent's.
     pub fn inits(&self) -> Vec<String> {
         self.0.lock().unwrap().inits.clone()
     }
@@ -72,6 +70,9 @@ impl Recorder {
     }
     pub fn provider_quotas(&self) -> Vec<(String, ProviderQuota)> {
         self.0.lock().unwrap().provider_quotas.clone()
+    }
+    pub fn errors(&self) -> Vec<String> {
+        self.0.lock().unwrap().errors.clone()
     }
     pub fn compacts(&self) -> usize {
         self.0.lock().unwrap().compacts
@@ -122,6 +123,16 @@ impl Recorder {
 struct RecordingSink(Arc<Mutex<Recorded>>);
 
 impl SessionSink for RecordingSink {
+    mainframe_adapter_api::forward_session_sink!(
+        on_exit,
+        on_plan_file,
+        on_skill_file,
+        on_queued_processed,
+        on_pr_detected,
+        on_skill_loaded,
+        on_subagent_child
+    );
+
     fn on_init(&self, session_id: &str) {
         self.0.lock().unwrap().inits.push(session_id.to_string());
     }
@@ -145,8 +156,9 @@ impl SessionSink for RecordingSink {
     fn on_result(&self, data: SessionResult) {
         self.0.lock().unwrap().results.push(data);
     }
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: AdapterError) {}
+    fn on_error(&self, error: AdapterError) {
+        self.0.lock().unwrap().errors.push(error.to_string());
+    }
     fn on_compact(&self, _vendor_id: Option<&str>) {
         self.0.lock().unwrap().compacts += 1;
     }
@@ -163,18 +175,12 @@ impl SessionSink for RecordingSink {
             .partials
             .push((api_message_id.to_string(), content));
     }
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
     fn on_todo_update(&self, todos: Vec<TodoItem>) {
         self.0.lock().unwrap().todos.push(todos);
     }
-    fn on_pr_detected(&self, _pr: DetectedPr) {}
     fn on_cli_message(&self, text: &str) {
         self.0.lock().unwrap().cli_messages.push(text.to_string());
     }
-    fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-    fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
         self.0
             .lock()

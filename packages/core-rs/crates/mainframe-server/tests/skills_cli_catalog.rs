@@ -7,32 +7,37 @@
 //! promises. When it breaks, these tests are how you'll know it broke here and
 //! not in the UI.
 
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::Mutex;
 
-use mainframe_server::skills_cli::catalog::{self, RegistryFetcher};
+use mainframe_server::skills_cli::catalog::{self, RegistryError, RegistryFetcher};
 use mainframe_server::skills_cli::{BoxFuture, CatalogOutcome};
 
 const HOME_FIXTURE: &str = include_str!("fixtures/skills-sh-home.html");
 
 /// Replies with one canned body (or failure) and counts the calls.
 struct StubFetcher {
-    reply: Result<String, String>,
+    /// `None` fails every call with a 503.
+    reply: Option<String>,
     calls: Mutex<usize>,
 }
 
 impl StubFetcher {
     fn ok(body: &str) -> Self {
         Self {
-            reply: Ok(body.to_string()),
+            reply: Some(body.to_string()),
             calls: Mutex::new(0),
         }
     }
 
     fn failing() -> Self {
         Self {
-            reply: Err("connection refused".to_string()),
+            reply: None,
             calls: Mutex::new(0),
         }
     }
@@ -43,9 +48,11 @@ impl StubFetcher {
 }
 
 impl RegistryFetcher for StubFetcher {
-    fn get(&self, _url: String) -> BoxFuture<'_, Result<String, String>> {
+    fn get(&self, _url: String) -> BoxFuture<'_, Result<String, RegistryError>> {
         *self.calls.lock().unwrap() += 1;
-        let reply = self.reply.clone();
+        let reply = self.reply.clone().ok_or(RegistryError::Status(
+            reqwest::StatusCode::SERVICE_UNAVAILABLE,
+        ));
         Box::pin(async move { reply })
     }
 }

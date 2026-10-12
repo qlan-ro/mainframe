@@ -22,6 +22,7 @@ mod task_store;
 mod workspace;
 
 #[cfg(test)]
+#[path = "../orchestration_deps_tests.rs"]
 mod tests;
 
 pub use chat_port::DaemonOrchestrationPort;

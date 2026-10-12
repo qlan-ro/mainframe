@@ -1,8 +1,12 @@
 //! Integration tests for `routes/tunnel_ports.rs` — the per-port quick tunnels
-//! behind the localhost chips (#279). The harness drives a stub `cloudflared`
+//! behind the localhost chips. The harness drives a stub `cloudflared`
 //! that mints `https://abc-def<n>.trycloudflare.com` and logs every spawn, so
 //! "reused, not respawned" is asserted on the process count, not just the URL.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -34,6 +38,7 @@ async fn tunnel_server(stub: TunnelStub) -> TestServer {
 async fn seed_chat(server: &TestServer) -> String {
     server
         .ctx
+        .core
         .db
         .call(|db| {
             let project = db.projects.create("/tmp/port-tunnels-proj", Some("p"))?;
@@ -153,7 +158,18 @@ async fn a_mid_start_tunnel_lists_as_starting_without_a_url() {
         let body = json!({ "port": 5173, "chatId": chat_id });
         async move { client().post(url).json(&body).send().await }
     });
-    tokio::time::sleep(Duration::from_millis(150)).await;
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(10),
+        Duration::from_millis(5),
+        async || {
+            let (_, body) = get(&server, "/api/tunnel/ports").await;
+            body["data"]["tunnels"]
+                .as_array()
+                .is_some_and(|rows| !rows.is_empty())
+        },
+    )
+    .await
+    .expect("start request registered the tunnel");
 
     let (_, body) = get(&server, "/api/tunnel/ports").await;
     assert_eq!(
@@ -246,7 +262,7 @@ async fn an_unknown_chat_is_rejected() {
     )
     .await;
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body, json!({ "success": false, "error": "Chat not found" }));
     assert_eq!(server.tunnel_spawn_count(), 0);
 }
@@ -278,7 +294,7 @@ async fn a_stop_body_without_a_port_is_rejected() {
 }
 
 #[tokio::test]
-async fn every_route_reports_unavailable_without_a_registry() {
+async fn every_route_reports_unavailable_without_a_listen_port() {
     let server = spawn_test_server(None).await;
     let expected = json!({ "success": false, "error": "Tunnel not available" });
 

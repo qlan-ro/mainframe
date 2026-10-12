@@ -1,15 +1,14 @@
-//! Retry (Part 3 Phase 3). The load-bearing detail is that attempts cannot be
-//! inferred by replaying the walk — `walk_frame` skips an already-`failed`
-//! entry — so each attempt gets its own frame plus a marker recording its
-//! outcome. These tests pin both halves.
+//! Retry. The load-bearing detail is that attempts cannot be inferred by
+//! replaying the walk — `walk_frame` skips an already-`failed` entry — so each
+//! attempt gets its own frame plus a marker recording its outcome. These tests
+//! pin both halves.
 
 use std::sync::{Arc, Mutex};
 
 use serde_json::json;
 
-use crate::store::{RunStatus, StepStatus};
+use crate::store::{RunStatus, StepKind, StepStatus};
 
-use super::markers::RETRY_ATTEMPT_KIND;
 use super::test_support::{
     FakePorts, completed, definition, failed, harness, manual, notify_step, retry_step, text,
 };
@@ -170,12 +169,12 @@ async fn attempt_markers_are_engine_state_not_user_steps() {
         .checkpoint
         .steps
         .values()
-        .filter(|e| e.kind == RETRY_ATTEMPT_KIND)
+        .filter(|e| e.kind == StepKind::RetryAttempt)
         .collect();
     assert_eq!(markers.len(), 2, "one marker per consumed attempt");
     // The route filters on this kind; if it ever changed, the run view would
     // look up a verb that does not exist.
-    assert!(markers.iter().all(|e| e.kind == "retry_attempt"));
+    assert!(markers.iter().all(|e| e.kind.as_str() == "retry_attempt"));
 }
 
 #[tokio::test]

@@ -1,11 +1,4 @@
-//! Ported from `src/server/routes/external-sessions.ts` — list + import external
-//! CLI sessions.
-//!
-//! Both endpoints go through `ChatManager::external_session_service()`, wired in
-//! `chat_deps::build_chat_manager` via `ExternalSessionDeps for DaemonChatDeps`.
-//! When no `ChatManager` is present (e.g. the route-unit test harness), they fall
-//! back to the "external session service unavailable" 500 the seam used before
-//! wiring.
+//! Lists and imports CLI sessions through ChatManager external-session services.
 
 use std::sync::Arc;
 
@@ -18,8 +11,8 @@ use axum::routing::{get, post};
 use serde::Deserialize;
 
 use crate::ctx::AppCtx;
-use crate::respond::{fail, ok};
-use crate::routes::projects::parse_body;
+use crate::respond::fail;
+use crate::routes::body::parse_body;
 
 const SERVICE_UNAVAILABLE: &str = "external session service unavailable";
 
@@ -40,16 +33,12 @@ async fn list(
         tracing::warn!(%project_id, "invalid external-sessions query");
         return fail(StatusCode::BAD_REQUEST, "Invalid query params");
     }
-    let Some(service) = ctx
-        .chat_manager
-        .as_ref()
-        .and_then(|m| m.external_session_service())
-    else {
+    let Some(service) = ctx.chat.chat_manager.external_session_service() else {
         return fail(StatusCode::INTERNAL_SERVER_ERROR, SERVICE_UNAVAILABLE);
     };
     service.start_auto_scan(&project_id);
     let page = service.scan_page(&project_id, offset, limit).await;
-    ok(page)
+    crate::respond::storage(page)
 }
 
 #[derive(Deserialize)]
@@ -89,11 +78,7 @@ async fn import(
         tracing::warn!(%project_id, "invalid import request body");
         return fail(StatusCode::BAD_REQUEST, "Invalid request body");
     };
-    let Some(service) = ctx
-        .chat_manager
-        .as_ref()
-        .and_then(|m| m.external_session_service())
-    else {
+    let Some(service) = ctx.chat.chat_manager.external_session_service() else {
         return fail(StatusCode::INTERNAL_SERVER_ERROR, SERVICE_UNAVAILABLE);
     };
     let chat = service
@@ -106,7 +91,7 @@ async fn import(
             body.modified_at.as_deref(),
         )
         .await;
-    ok(chat)
+    crate::respond::storage(chat)
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {
@@ -119,94 +104,5 @@ pub fn router() -> Router<Arc<AppCtx>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::body::to_bytes;
-
-    async fn read(resp: Response) -> (StatusCode, serde_json::Value) {
-        let status = resp.status();
-        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-        (
-            status,
-            serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
-        )
-    }
-
-    #[tokio::test]
-    async fn list_rejects_out_of_range_limit_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = list(
-            State(ctx.clone()),
-            Path("p".into()),
-            Query(ListQuery {
-                offset: Some(0),
-                limit: Some(300),
-            }),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "Invalid query params");
-    }
-
-    #[tokio::test]
-    async fn list_valid_query_without_chat_manager_500() {
-        let ctx = AppCtx::test_ctx();
-        let resp = list(
-            State(ctx.clone()),
-            Path("p".into()),
-            Query(ListQuery {
-                offset: None,
-                limit: None,
-            }),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(body["error"], SERVICE_UNAVAILABLE);
-    }
-
-    #[tokio::test]
-    async fn import_rejects_bad_session_id_400() {
-        let ctx = AppCtx::test_ctx();
-        let resp = import(
-            State(ctx.clone()),
-            Path("p".into()),
-            axum::body::Bytes::from(r#"{"sessionId":"bad id!","adapterId":"claude"}"#),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(body["error"], "Invalid request body");
-    }
-
-    #[tokio::test]
-    async fn import_valid_body_without_chat_manager_500() {
-        let ctx = AppCtx::test_ctx();
-        let resp = import(
-            State(ctx.clone()),
-            Path("p".into()),
-            axum::body::Bytes::from(r#"{"sessionId":"abc-123","adapterId":"claude"}"#),
-        )
-        .await;
-        let (status, body) = read(resp).await;
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(body["error"], SERVICE_UNAVAILABLE);
-    }
-}
-
-// PORT STATUS: src/server/routes/external-sessions.ts (2 endpoints, 65 lines)
-// confidence: high
-// todos: 1
-// notes: Both endpoints now call ChatManager::external_session_service()
-// (wired in mainframe-server/src/chat_deps.rs). Query/body validation
-// (offset>=0, limit 0..=200, sessionId [a-zA-Z0-9-]+, adapterId min1) ports 1:1.
-// createdAt/modifiedAt/title are forwarded to importSession as plain optional
-// strings without Zod's `.datetime()`/max-500 checks — deliberately deferred,
-// since the underlying ExternalSessionService/DB layer does its own parsing and
-// a malformed value fails there instead of at this validation boundary. The
-// route-unit test harness (`AppCtx::test_ctx()`) has `chat_manager: None`, so
-// the "service unavailable" 500 path is what's exercised here; the real
-// scan/import behavior is covered by mainframe-chat's
-// chat_manager::tests::with_external_sessions_* tests against a fake
-// ExternalSessionDeps.
+#[path = "external_sessions_tests.rs"]
+mod tests;

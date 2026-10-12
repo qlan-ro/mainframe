@@ -1,27 +1,40 @@
 //! Registry/queue reads, enriched registry reads, and in-memory cache sync.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
     pub fn get_chat(&self, chat_id: &str) -> Option<Chat> {
-        let mut chat = self
-            .get_active(chat_id)
-            .map(|c| c.lock().unwrap_or_else(|e| e.into_inner()).chat.clone())
-            .or_else(|| self.deps.chats_get(chat_id))?;
-        self.enricher.enrich(&mut chat);
-        Some(chat)
+        storage_event!(self.shared, Some(chat_id); self.try_get_chat(chat_id), None)
     }
 
-    pub fn list_chats(&self, project_id: &str) -> Vec<Chat> {
-        self.enrich_all(self.deps.chats_list(project_id))
+    pub fn try_get_chat(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<Chat>, mainframe_types::seam_error::SeamError> {
+        let chat = match self.get_active(chat_id) {
+            Some(cell) => Some(cell.lock_recover().chat.clone()),
+            None => self.shared.deps.chats_get(chat_id)?,
+        };
+        Ok(chat.map(|mut chat| {
+            self.shared.enrich(&mut chat);
+            chat
+        }))
     }
 
-    pub fn list_all_chats(&self) -> Vec<Chat> {
-        self.enrich_all(self.deps.chats_list_all())
+    pub fn list_chats(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<Chat>, mainframe_types::seam_error::SeamError> {
+        Ok(self.enrich_all(self.shared.deps.chats_list(project_id)?))
+    }
+
+    pub fn list_all_chats(&self) -> Result<Vec<Chat>, mainframe_types::seam_error::SeamError> {
+        Ok(self.enrich_all(self.shared.deps.chats_list_all()?))
     }
 
     fn enrich_all(&self, mut chats: Vec<Chat>) -> Vec<Chat> {
         for chat in &mut chats {
-            self.enricher.enrich(chat);
+            self.shared.enrich(chat);
         }
         chats
     }
@@ -29,8 +42,7 @@ impl ChatManager {
     pub fn is_chat_running(&self, chat_id: &str) -> bool {
         self.get_active(chat_id)
             .map(|c| {
-                c.lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                c.lock_recover()
                     .session
                     .as_ref()
                     .is_some_and(|s| s.is_spawned())
@@ -40,14 +52,14 @@ impl ChatManager {
 
     pub fn get_session_for_chat(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         self.get_active(chat_id)
-            .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone())
+            .and_then(|c| c.lock_recover().session.clone())
     }
 
     /// Return all queued refs for a chat, oldest-first (enqueue order) —
     /// `queue_state` snapshots render in this order, so it is part of the wire
     /// contract, not a courtesy.
     pub fn get_queued_for_chat(&self, chat_id: &str) -> Vec<QueuedMessageRef> {
-        queued_for_chat(&self.queued_refs, chat_id)
+        self.shared.queued_for_chat(chat_id)
     }
 
     /// Announce the chat's current queued snapshot on the chat-surface seam
@@ -61,12 +73,9 @@ impl ChatManager {
         );
     }
 
-    pub fn handle_queued_processed(&self, chat_id: &str, uuid: &str) {
-        handle_queued_processed(&self.queued_refs, chat_id, uuid);
-    }
-
-    pub fn clear_all_queued_for_chat(&self, chat_id: &str) {
-        clear_all_queued_for_chat(&self.queued_refs, chat_id);
+    #[cfg(test)]
+    pub(crate) fn handle_queued_processed(&self, chat_id: &str, uuid: &str) {
+        self.shared.handle_queued_processed(chat_id, uuid);
     }
 
     // ── registry reads (enriched) ────────────────────────────────────────────
@@ -78,14 +87,14 @@ impl ChatManager {
         has_worktree: bool,
         include_archived: bool,
         include_temporary: bool,
-    ) -> Vec<Chat> {
-        self.enrich_all(self.deps.chats_list_filtered(
+    ) -> Result<Vec<Chat>, mainframe_types::seam_error::SeamError> {
+        Ok(self.enrich_all(self.shared.deps.chats_list_filtered(
             project_id,
             tags_all,
             has_worktree,
             include_archived,
             include_temporary,
-        ))
+        )?))
     }
 
     /// Working directory for `chatId`: the worktree path when present and still on
@@ -99,45 +108,31 @@ impl ChatManager {
             }
             return Some(wt);
         }
-        self.deps.projects_get_path(&chat.project_id)
-    }
-
-    pub fn get_project_path(&self, project_id: &str) -> Option<String> {
-        self.deps.projects_get_path(project_id)
-    }
-
-    pub fn get_chat_project_id(&self, chat_id: &str) -> Option<String> {
-        self.get_chat(chat_id).map(|c| c.project_id)
+        self.shared.deps.projects_get_path(&chat.project_id)
     }
 
     // ── in-memory cache sync + out-of-band broadcast ─────────────────────────
 
-    /// Mirror the persisted tags onto the cached active chat so a later
-    /// `chat.updated` (e.g. from resumeChat) does not broadcast stale tags.
-    pub fn sync_chat_tags(&self, chat_id: &str, tags: Vec<String>) {
-        if let Some(cell) = self.get_active(chat_id) {
-            cell.lock().unwrap_or_else(|e| e.into_inner()).chat.tags = Some(tags);
-        }
-    }
-
-    /// Apply a partial DB-backed update to the cached active chat (same staleness
-    /// guard as `sync_chat_tags`). Only present fields are written.
-    pub fn sync_chat_fields(&self, chat_id: &str, partial: ChatFieldsPartial) {
+    /// Apply the tuning and `pinned` fields of an already-persisted patch to the
+    /// cached active chat (same staleness guard as `sync_chat_tags`). Only
+    /// present fields are written; every other `ChatPatch` field is ignored
+    /// because the tuning/pinned PATCH routes are the only callers.
+    pub fn sync_chat_fields(&self, chat_id: &str, partial: ChatPatch) {
         let Some(cell) = self.get_active(chat_id) else {
             return;
         };
-        let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(v) = partial.effort {
-            guard.chat.effort = Some(v);
+        let mut guard = cell.lock_recover();
+        if let Some(v) = partial.tuning.effort {
+            guard.chat.tuning.effort = Some(v);
         }
-        if let Some(v) = partial.fast {
-            guard.chat.fast = Some(v);
+        if let Some(v) = partial.tuning.fast {
+            guard.chat.tuning.fast = Some(v);
         }
-        if let Some(v) = partial.ultracode {
-            guard.chat.ultracode = Some(v);
+        if let Some(v) = partial.tuning.ultracode {
+            guard.chat.tuning.ultracode = Some(v);
         }
-        if let Some(v) = partial.adaptive_thinking {
-            guard.chat.adaptive_thinking = Some(v);
+        if let Some(v) = partial.tuning.adaptive_thinking {
+            guard.chat.tuning.adaptive_thinking = Some(v);
         }
         if let Some(v) = partial.pinned {
             guard.chat.pinned = Some(v);
@@ -145,7 +140,7 @@ impl ChatManager {
     }
 
     /// Broadcast `chat.updated` for a chat whose fields were persisted out-of-band
-    /// (e.g. the tuning PATCH). Mirrors `notify_worktree_deleted`'s enriched re-emit.
+    /// (e.g. the tuning PATCH or worktree deletion).
     pub fn emit_chat_updated(&self, chat_id: &str) {
         if let Some(chat) = self.get_chat(chat_id) {
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
@@ -158,34 +153,84 @@ impl ChatManager {
     /// cell keeps what was read when the chat loaded.
     pub fn refresh_agent_lineage(&self, chat_id: &str) {
         if let Some(cell) = self.get_active(chat_id)
-            && let Some(row) = self.deps.chats_get(chat_id)
+            && let Some(row) =
+                storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id))
         {
-            let mut guard = cell.lock().unwrap_or_else(|e| e.into_inner());
+            let mut guard = cell.lock_recover();
             guard.chat.orchestration = row.orchestration;
             guard.chat.parent_chat_id = row.parent_chat_id;
         }
         self.emit_chat_updated(chat_id);
     }
 
-    /// Re-emit `chat.updated` for every non-archived chat bound to `worktree_path`
-    /// so clients pick up the new `worktreeMissing` flag.
-    pub fn notify_worktree_deleted(&self, worktree_path: &str) {
-        for chat in self.deps.chats_list_all() {
-            if chat.worktree_path.as_deref() != Some(worktree_path) {
+    pub async fn stop_worktree_services(
+        &self,
+        project_id: &str,
+        worktree_path: &str,
+    ) -> Result<Vec<String>, mainframe_types::seam_error::SeamError> {
+        self.stop_worktree_services_with_aliases(project_id, worktree_path, &[])
+            .await
+    }
+
+    pub async fn stop_worktree_services_with_aliases(
+        &self,
+        project_id: &str,
+        worktree_path: &str,
+        aliases: &[&str],
+    ) -> Result<Vec<String>, mainframe_types::seam_error::SeamError> {
+        let canonical = tokio::fs::canonicalize(worktree_path).await.ok();
+        let mut paths = std::collections::HashSet::from([worktree_path.to_string()]);
+        if let Some(path) = &canonical {
+            paths.insert(path.to_string_lossy().into_owned());
+        }
+        paths.extend(aliases.iter().map(|path| (*path).to_owned()));
+        let mut chats = Vec::new();
+        for chat in self.shared.deps.chats_list_all()? {
+            if chat.project_id != project_id {
                 continue;
             }
-            self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
+            let Some(path) = chat.worktree_path.as_deref() else {
+                continue;
+            };
+            let matches = std::path::Path::new(path) == std::path::Path::new(worktree_path)
+                || (canonical.is_some() && tokio::fs::canonicalize(path).await.ok() == canonical);
+            if matches {
+                paths.insert(path.to_string());
+                chats.push(chat.id);
+            }
+        }
+        for path in paths {
+            if let Some(stop) = self.shared.deps.stop_launch_processes(project_id, &path) {
+                stop.await;
+            }
+            if let Some(stop) = self.shared.deps.stop_scope_tunnels(project_id, &path) {
+                stop.await;
+            }
+        }
+        Ok(chats)
+    }
+
+    #[cfg(test)]
+    pub async fn notify_worktree_deleted(&self, project_id: &str, worktree_path: &str) {
+        for chat_id in storage_event!(
+            self.shared,
+            self.stop_worktree_services(project_id, worktree_path).await
+        ) {
+            self.emit_chat_updated(&chat_id);
         }
     }
 
     /// Live-apply resolved tuning to the running session, if any.
     pub async fn apply_tuning(&self, chat_id: &str) {
-        apply_tuning_impl(&self.active_chats, &self.deps, chat_id).await;
+        apply_tuning_impl(&self.shared.active_chats, &self.shared.deps, chat_id).await;
     }
 
     /// Record a mention and refresh the session context.
     pub fn add_mention(&self, chat_id: &str, mention: SessionMention) {
-        self.deps.chats_add_mention(chat_id, &mention);
+        storage_event!(
+            self.shared, Some(chat_id);
+            self.shared.deps.chats_add_mention(chat_id, &mention)
+        );
         self.emit(DaemonEvent::ContextUpdated {
             chat_id: chat_id.to_string(),
             file_paths: None,

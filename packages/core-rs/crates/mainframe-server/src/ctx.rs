@@ -1,8 +1,7 @@
 //! `AppCtx` — the Arc-shared application context every route module and the WS
-//! layer read. Mirrors the `ctx` object assembled in `src/server/http.ts` plus
-//! the `HttpServerDeps` / WebSocketManager collaborators, narrowed to the
-//! Phase-3 surface (chat/adapter/launch/plugin/workflow managers are Phase 4/5).
+//! layer read.
 
+use mainframe_types::sync::RwLockExt as _;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
@@ -27,14 +26,13 @@ use crate::acp_ws::FacadeHub;
 use crate::db::Db;
 use crate::websocket::WsClients;
 
-/// The `defaultRun` process runner, as the `Runner` trait resolve-executable
-/// injects. `resolveAdapterExecutable` (the settings `resolvedExecutable`
+/// The default process runner, as the `Runner` trait resolve-executable
+/// injects. `resolve_adapter_executable` (the settings `resolvedExecutable`
 /// enrichment and the daemon's refresh deps) takes `&dyn Runner`; this is the
-/// single production impl over `default_run` (`execFile` + 5s timeout).
+/// single production impl over `default_run` (spawn + 5s default timeout).
 ///
-/// Carries the boot-resolved login-shell `PATH` so `which`/`where` detection and
-/// version probes find CLIs outside the packaged app's bare `PATH` (the TS twin
-/// relied on `enrichPath` mutating `process.env.PATH`).
+/// Carries the boot-resolved login-shell `PATH` so version probes find CLIs
+/// outside the packaged app's bare `PATH`.
 #[derive(Default)]
 pub struct DefaultRunner {
     pub path: Option<ResolvedPath>,
@@ -70,21 +68,21 @@ impl mainframe_adapter_api::resolve_executable::Runner for DefaultRunner {
 /// Stateless per-project `GitService` factory (the contract's `git` handle).
 /// `GitService::for_project` carries no shared state, and per-project write
 /// serialization uses the module-level lock in `mainframe_git`, so this is a
-/// zero-sized entry point — route modules call `ctx.git.for_project(path)`.
+/// zero-sized entry point — route modules call `ctx.core.git.for_project(path)`.
 #[derive(Clone, Copy, Default)]
 pub struct GitFactory;
 
 impl GitFactory {
-    /// Build a `GitService` scoped to `project_path`. Mirrors the TS
-    /// `new GitService(projectPath)` call route handlers make per request.
+    /// Build a `GitService` scoped to `project_path`; route handlers call this
+    /// per request.
     pub fn for_project(&self, project_path: impl Into<String>) -> mainframe_git::GitService {
         mainframe_git::GitService::for_project(project_path)
     }
 }
 
-/// The cross-cutting daemon service handles (§2.4). `commands` and
+/// The cross-cutting daemon service handles. `commands` and
 /// `provider-config` are free functions over the db, not stored handles, so they
-/// have no field here — route modules call them with `ctx.db`.
+/// have no field here — route modules call them with `ctx.core.db`.
 #[derive(Clone)]
 pub struct Services {
     pub attachments: Arc<AttachmentStore>,
@@ -92,187 +90,159 @@ pub struct Services {
     pub watcher: Arc<FileWatcherService>,
 }
 
-/// Shared application context. Built once in the daemon and handed to axum as
-/// `Arc<AppCtx>` state; `Db`, the service handles, and the broadcast sender are
-/// all `Send + Sync + Clone`, so the whole struct is `Send + Sync`.
 pub struct AppCtx {
+    pub core: CoreCtx,
+    pub chat: ChatCtx,
+    pub infra: InfraCtx,
+    pub services: ServicesCtx,
+}
+
+pub struct CoreCtx {
     pub db: Db,
-    /// Per-project git command factory (contract `git` handle).
     pub git: GitFactory,
-    pub services: Services,
-    /// Event fan-out. Route handlers and the file watcher publish here; the WS
-    /// layer subscribes and applies per-chat gating (§ws-events broadcastScoping).
     pub broadcast: broadcast::Sender<DaemonEvent>,
-    /// The live WS client registry (tsv SHARED_MAP `clients`), consulted by the
-    /// broadcast fan-out and populated per connection.
-    pub ws_clients: WsClients,
-    /// The ACP facade hub (todo #350): the `/acp/{profile}` connection
-    /// registry plus the `ChatSurface` fan-out that streams chat-surface
-    /// events to attached facade sessions. The same `Arc` is attached to the
-    /// `ChatManager` at boot (`build_chat_manager`).
-    pub facade_hub: Arc<FacadeHub>,
-    /// Heartbeat cadence advertised in `initialize`'s `_meta` and used by the
-    /// facade socket loop. Production default is
-    /// `mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS`; test harnesses shrink
-    /// it to stay inside their timeout budget.
-    pub facade_heartbeat_interval_ms: u64,
-    /// The `AdapterRegistry` (contract `adapters` handle). Backs `GET /api/adapters`
-    /// (`list()` with installed/version probing) and the agents/skills routes'
-    /// existence check. Cheap to construct (`AdapterRegistry::new()`), so it is a
-    /// concrete handle rather than a Phase-4 `Option` seam.
     pub adapter_registry: Arc<AdapterRegistry>,
-    /// The `BackgroundTaskTracker` (contract `backgroundTasks` handle). Backs the
-    /// `/api/chats/:chatId/background-tasks*` routes. Cheap to construct, so concrete.
     pub background_tasks: Arc<BackgroundTaskTracker>,
-    /// The `ClaudeWorkflowStore` (retained in-memory Claude workflow runs). Backs
-    /// the chat-history `workflowRuns` fold. Cheap to construct, so concrete.
     pub claude_workflows: Arc<ClaudeWorkflowStore>,
-    /// The `ChatManager` (contract `chats` handle). `None` until the daemon boot
-    /// (the next task) wires construction — `ChatManager::new` needs a full
-    /// `ChatManagerDeps` impl, so the Phase-3 test harness cannot build one. Chat
-    /// route handlers gate on `Some` and fall back to the TS failure-path envelope
-    /// when absent (mirrors the `projects::remove` Phase-4 seam).
-    pub chat_manager: Option<Arc<ChatManager>>,
-    /// The per-project `LaunchRegistry` (contract `launchRegistry` handle). Backs
-    /// the `/api/projects/:id/launch/*` routes. `None` in the route-unit harness.
-    pub launch_registry: Option<Arc<LaunchRegistry>>,
-    /// The cloudflared `TunnelManager` (contract `tunnelManager` handle). Backs the
-    /// `/api/tunnel/*` routes. `None` in the route-unit harness.
-    pub tunnel_manager: Option<Arc<TunnelManager>>,
-    /// Per-port quick tunnels for the localhost chips (#279), sharing the
-    /// `TunnelManager` above. `Some` whenever `tunnel_manager` is.
-    pub port_tunnels: Option<Arc<PortTunnelRegistry>>,
-    /// The `LspManager` (contract `lspManager` handle). Backs `GET
-    /// /api/lsp/languages` and the `/lsp/:projectId/:language` WS upgrade. `None`
-    /// in the route-unit harness.
-    pub lsp_manager: Option<Arc<LspManager>>,
-    /// The `PluginManager` (contract `pluginManager` handle). Its router is nested
-    /// under `/api/plugins` by `build_app`. `None` in the route-unit harness.
-    pub plugin_manager: Option<Arc<PluginManager>>,
-    /// The Automations v2 engine (T9.2). `Some` in the daemon boot; `None` in
-    /// the route-unit harness — automation routes answer 503 while absent
-    /// (Node parity: "automation service not available").
-    pub automations: Option<Arc<AutomationsEngine>>,
-    /// The orchestration MCP server behind `POST /mcp`. `Some` in the daemon
-    /// boot; `None` in harnesses that do not exercise it (the route answers
-    /// 503 while absent).
-    pub orchestration: Option<Arc<OrchestrationService>>,
-    /// The account-wide provider quota service (`quota` handle). Backs the
-    /// `/api/providers/:id/quota*` routes; `None` in the route-unit harness and
-    /// when quota harvesting is not wired — routes answer `okEmpty` / `503`.
-    pub quota: Option<Arc<dyn QuotaService>>,
     pub data_dir: PathBuf,
     pub version: String,
-    /// The daemon listen port (`config.port`). The tunnel `start` route needs it to
-    /// spawn cloudflared against `http://localhost:{port}`.
     pub port: u16,
-    /// `AUTH_TOKEN_SECRET`. `None` disables auth entirely (middleware + WS
-    /// upgrade become no-ops) — the exact `whenSecretUnset` contract.
     pub auth_secret: Option<String>,
-    /// The boot-resolved login-shell `PATH` (see `mainframe_runtime::ResolvedPath`).
-    /// Threaded into on-demand executable resolution (settings route) and any
-    /// route that spawns a CLI, mirroring the TS `enrichPath` env mutation.
     pub resolved_path: ResolvedPath,
-    /// `/health`'s `tunnelUrl`. Interior-mutable so the tunnel routes' `setTunnelUrl`
-    /// and the boot-time daemon-tunnel start can update what `/health` reports —
-    /// mirrors the mutated `ctx.tunnelUrl` closure in `http.ts`.
+}
+
+pub struct ChatCtx {
+    pub chat_manager: Arc<ChatManager>,
+    pub facade_hub: Arc<FacadeHub>,
+    pub facade_heartbeat_interval_ms: u64,
+    pub orchestration: Arc<OrchestrationService>,
+}
+
+pub struct InfraCtx {
+    pub launch_registry: Arc<LaunchRegistry>,
+    pub tunnel_manager: Arc<TunnelManager>,
+    pub port_tunnels: Arc<PortTunnelRegistry>,
+    pub lsp_manager: Arc<LspManager>,
+    pub plugin_manager: Arc<PluginManager>,
+    pub ws_clients: WsClients,
     pub tunnel_url: Arc<RwLock<Option<String>>>,
 }
 
+pub struct ServicesCtx {
+    pub attachments: Arc<AttachmentStore>,
+    pub push: Arc<PushService>,
+    pub watcher: Arc<FileWatcherService>,
+    pub automations: Option<Arc<AutomationsEngine>>,
+    pub quota: Arc<dyn QuotaService>,
+}
+
+mod builder;
+pub use builder::{AppCtxBuilder, BuildError};
+
 impl AppCtx {
-    /// Read the current `/health` tunnel URL (`ctx.tunnelUrl ?? getTunnelUrl?.()`).
+    pub fn builder(db: Db, data_dir: PathBuf) -> AppCtxBuilder {
+        AppCtxBuilder::new(db, data_dir)
+    }
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn test_builder(db: Db, data_dir: PathBuf) -> AppCtxBuilder {
+        let mut builder = AppCtxBuilder::new(db, data_dir);
+        builder.test_defaults = true;
+        builder
+    }
+    pub async fn require_chat(
+        &self,
+        id: &str,
+    ) -> Result<mainframe_types::chat::Chat, crate::respond::ApiError> {
+        let id = id.to_string();
+        self.core
+            .db
+            .call(move |db| db.chats.get(&id))
+            .await?
+            .ok_or_else(crate::respond::ApiError::chat_not_found)
+    }
+
+    pub async fn require_project(
+        &self,
+        id: &str,
+    ) -> Result<mainframe_types::chat::Project, crate::respond::ApiError> {
+        let id = id.to_string();
+        self.core
+            .db
+            .call(move |db| db.projects.get(&id))
+            .await?
+            .ok_or_else(crate::respond::ApiError::project_not_found)
+    }
+
+    /// Read the current `/health` tunnel URL.
     pub fn tunnel_url(&self) -> Option<String> {
-        self.tunnel_url
-            .read()
-            .map(|guard| guard.clone())
-            .unwrap_or(None)
+        self.infra.tunnel_url.read_recover().clone()
     }
 
-    /// `setTunnelUrl(url)` — the mutator the tunnel routes call after start/stop.
+    /// The mutator the tunnel routes call after start/stop.
     pub fn set_tunnel_url(&self, url: Option<String>) {
-        if let Ok(mut guard) = self.tunnel_url.write() {
-            *guard = url;
-        }
+        *self.infra.tunnel_url.write_recover() = url;
     }
 
-    /// Worktree-aware effective path (`getEffectivePath(ctx, projectId, chatId)`
-    /// from `routes/types.ts`): the chat's worktree when the chatId points to a
-    /// live worktree of this project; the project root otherwise. `None` on an
-    /// unknown project, a cross-project chat, or a missing worktree.
-    pub async fn effective_path(&self, project_id: &str, chat_id: Option<&str>) -> Option<String> {
-        let pid = project_id.to_string();
-        let cid = chat_id.map(str::to_string);
-        self.db
-            .call(move |d| {
-                let Some(project) = d.projects.get(&pid)? else {
-                    return Ok(None);
-                };
-                if let Some(cid) = &cid
-                    && let Some(chat) = d.chats.get(cid)?
-                {
-                    // Reject cross-project access.
-                    if chat.project_id != pid {
-                        return Ok(None);
-                    }
-                    if let Some(worktree_path) = &chat.worktree_path
-                        && !worktree_path.is_empty()
-                    {
-                        if chat.worktree_missing == Some(true) {
-                            return Ok(None);
-                        }
-                        return Ok(Some(worktree_path.clone()));
-                    }
-                }
-                Ok(Some(project.path))
+    pub async fn resolve_scope(
+        &self,
+        project_id: &str,
+        chat_id: Option<&str>,
+    ) -> Result<mainframe_services::workspace::ScopePath, mainframe_services::workspace::ScopeError>
+    {
+        let pid = project_id.to_owned();
+        let cid = chat_id.map(str::to_owned);
+        let scope = self
+            .core
+            .db
+            .call(move |db| {
+                Ok(mainframe_services::workspace::resolve_scope(
+                    db,
+                    &pid,
+                    cid.as_deref(),
+                ))
             })
-            .await
-            .ok()
-            .flatten()
+            .await??;
+        mainframe_services::workspace::check_scope_presence(scope).await
+    }
+
+    pub async fn effective_path(&self, project_id: &str, chat_id: Option<&str>) -> Option<String> {
+        match self.resolve_scope(project_id, chat_id).await {
+            Ok(scope) => Some(scope.path),
+            Err(error) => {
+                tracing::debug!(%error, "scope unavailable");
+                None
+            }
+        }
     }
 }
 
 #[cfg(test)]
 impl AppCtx {
-    /// Build a fully-real `Arc<AppCtx>` for route unit tests over an in-memory DB
-    /// and real service collaborators (no mocks), with `chat_manager: None` — the
-    /// same surface the integration harness assembles. Route tests seed via
-    /// `ctx.db` and call handlers directly (the route modules are mounted by the
-    /// next task, so `build_app` does not yet include them).
     pub(crate) fn test_ctx() -> Arc<AppCtx> {
-        crate::chat_test_support::test_ctx()
-    }
-
-    /// Like [`Self::test_ctx`], but with a REAL `ChatManager` (via
-    /// `build_chat_manager`, same production `DaemonChatDeps` the daemon boot
-    /// wires) so route tests can reach the create/discard/archive/unarchive/
-    /// remove-project success paths those routes gate on `chat_manager` being
-    /// `Some` (todo #346, AC 26) — `Self::test_ctx`'s `chat_manager: None` can
-    /// only reach each route's "unavailable" fallback. Register an adapter on
-    /// the returned ctx's `adapter_registry` before creating a chat under its
-    /// id (see `chat_test_support::StubAdapter`).
-    pub(crate) fn test_ctx_with_chat_manager() -> Arc<AppCtx> {
-        crate::chat_test_support::test_ctx_with_chat_manager()
-    }
-
-    /// Like [`Self::test_ctx_with_chat_manager`], with the orchestration MCP
-    /// service attached as the daemon boot attaches it.
-    pub(crate) fn test_ctx_with_orchestration() -> Arc<AppCtx> {
-        crate::chat_test_support::test_ctx_with_orchestration()
+        crate::chat_test_support::build_test_context()
     }
 }
 
-// PORT STATUS: src/server/http.ts (ctx assembly) + WebSocketManager deps
-// confidence: medium
-// todos: 1
-// notes: Narrowed to Phase-3 collaborators, extended in Task 4.6a with the
-// chat-facing handles: `adapter_registry` (AdapterRegistry) + `background_tasks`
-// (BackgroundTaskTracker) are concrete Arcs (cheap ::new); `chat_manager` is
-// Option<Arc<ChatManager>> because ChatManager::new needs a full ChatManagerDeps
-// impl the test harness cannot build — the daemon boot (next task) sets Some(..).
-// Task 5.5 wired the remaining managers: launch_registry, tunnel_manager,
-// lsp_manager, plugin_manager are Option<Arc<..>> (Some in the daemon boot, None in
-// the route-unit harness). `port` backs the tunnel start route; `tunnel_url` is now
-// interior-mutable (Arc<RwLock<..>>) so setTunnelUrl + the boot tunnel start update
-// what /health reports. `effective_path` ports getEffectivePath over the Db actor.
-// workflows stays deliberately unported (SCOPE DECISION 2026-07-10). `Services`
-// bundles the §2.4 handles that routes/WS need (attachments, push, file watcher).
+#[cfg(test)]
+mod poisoned_lock_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn tunnel_url_write_survives_a_poisoned_lock() {
+        let ctx = AppCtx::test_ctx();
+        std::thread::scope(|scope| {
+            assert!(
+                scope
+                    .spawn(|| {
+                        let _guard = ctx.infra.tunnel_url.write().unwrap();
+                        panic!("poison tunnel URL");
+                    })
+                    .join()
+                    .is_err()
+            );
+        });
+
+        ctx.set_tunnel_url(Some("https://example.test".to_string()));
+        assert_eq!(ctx.tunnel_url().as_deref(), Some("https://example.test"));
+    }
+}

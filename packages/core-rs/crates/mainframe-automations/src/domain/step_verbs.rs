@@ -1,8 +1,8 @@
 //! The leaf verbs (`ask_agent`, `ask_me`, `run_action`, `notify`,
 //! `set_variable`, `wait`) — split out of `step.rs` (300-line cap) once
-//! Phase 4b's `ParallelBlock` pushed it over. Every block type (`if`,
-//! `repeat`, `loop`, `retry`, `parallel`) stays in `step.rs`, next to the
-//! `Step` enum they nest inside.
+//! `ParallelBlock` pushed it over. Every block type (`if`, `repeat`, `loop`,
+//! `retry`, `parallel`) stays in `step.rs`, next to the `Step` enum they nest
+//! inside.
 
 use std::collections::BTreeMap;
 
@@ -147,9 +147,3 @@ pub struct SetVariableStep {
     pub name: String,
     pub value: ChipText,
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T1.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: split out of step.rs (Phase 4b, 300-line cap); wire truth =
-//        packages/types/src/automation.ts; A9 attachments included.

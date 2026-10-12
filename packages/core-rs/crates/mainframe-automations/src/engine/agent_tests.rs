@@ -1,4 +1,4 @@
-//! T4.3 — ask_agent verb over AgentPort: park with chatId, durable wait,
+//! ask_agent verb over AgentPort: park with chatId, durable wait,
 //! completion resume, error policy, restart re-watch, deadline sweep.
 
 use std::sync::{Arc, Mutex};
@@ -241,7 +241,7 @@ async fn resume_after_restart_watches_waiting_agent_entries() {
 
     // "Restart": a second verb + interpreter over the same store, new port.
     let port2 = Arc::new(FakeAgentPort::default());
-    let verb2 = AgentVerb::new(port2.clone(), rig.h.store.clone(), rig.h.sink.clone());
+    let verb2 = AgentVerb::new(port2.clone(), rig.h.store.clone());
     let mut deps = rig.h.deps(FakePorts::default());
     deps.agent_waits = Some(verb2.clone());
     let engine2 = Arc::new(Interpreter::new(deps));
@@ -250,13 +250,12 @@ async fn resume_after_restart_watches_waiting_agent_entries() {
     let parked = rig.h.store.get_run(&run.id).await.unwrap().unwrap();
     verb2.resume_run_watches(&parked);
 
-    // Poll: the watch attach is a spawned task.
-    for _ in 0..200 {
-        if !port2.watch_calls.lock().unwrap().is_empty() {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
-    }
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        port2.wait_for_watch("chat-1"),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         *port2.watch_calls.lock().unwrap(),
         vec!["chat-1".to_string()]
@@ -314,6 +313,56 @@ async fn deadline_sweep_fails_an_overdue_agent_step() {
 }
 
 #[tokio::test]
+async fn deadline_failure_streams_the_step_transition_before_finalizing() {
+    // The agent settle path emits RunUpdated as soon as it writes a step
+    // failure; the deadline sweep must stream the same transition, not just
+    // the terminal record that follows it.
+    let rig = agent_rig(FakePorts::default()).await;
+    let step = match ask_agent_step("agent-1", false) {
+        Step::AskAgent(mut s) => {
+            s.timeout_minutes = Some(1);
+            Step::AskAgent(s)
+        }
+        _ => unreachable!(),
+    };
+    let run = rig
+        .engine
+        .start_run(&rig.h.automation_id, definition(vec![step]), manual(), None)
+        .await
+        .unwrap();
+    rig.engine.advance(&run.id).await.unwrap();
+    let wake_at = rig
+        .h
+        .store
+        .get_run(&run.id)
+        .await
+        .unwrap()
+        .unwrap()
+        .checkpoint
+        .wake_at
+        .unwrap();
+    let before = rig.h.sink.run_updates().len();
+
+    rig.engine.sweep_due(wake_at + 1).await.unwrap();
+
+    let swept: Vec<(String, RunStatus, Option<String>)> = rig.h.sink.run_updates()[before..]
+        .iter()
+        .map(|update| (update.id.clone(), update.status, update.error.clone()))
+        .collect();
+    assert_eq!(
+        swept,
+        vec![
+            (run.id.clone(), RunStatus::Running, None),
+            (
+                run.id.clone(),
+                RunStatus::Failed,
+                Some("agent step deadline exceeded".to_string())
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn a_late_watch_error_after_success_is_dropped() {
     // The settle path must ignore an outcome for a chat whose wait is gone
     // (e.g. an errored duplicate delivery after the step already settled).
@@ -337,14 +386,14 @@ async fn a_late_watch_error_after_success_is_dropped() {
     // A second outcome for the same chat has nobody waiting — nothing changes.
     rig.port
         .complete("chat-1", Err(AgentPortError("boom".to_string())));
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    assert_eq!(rig.port.pending_outcomes("chat-1").await, 1);
     assert_eq!(
         rig.h.store.get_run(&run.id).await.unwrap().unwrap().status,
         RunStatus::Succeeded
     );
 }
 
-// --- T4.4 (A2): structured agent outputs -------------------------------
+// --- A2: structured agent outputs ---------------------------------------
 
 fn agent_expecting_scope(id: &str) -> Step {
     use crate::domain::{ExpectedOutput, ExpectedOutputType};

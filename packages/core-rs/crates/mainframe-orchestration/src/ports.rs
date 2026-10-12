@@ -2,9 +2,6 @@
 //! implements them over `ChatManager`, the DB, git, and the event broadcast
 //! (`mainframe-server/src/orchestration_deps/`); tests use in-memory fakes.
 
-use std::future::Future;
-use std::pin::Pin;
-
 use mainframe_types::chat::{ChatMessage, ChatStatus};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::orchestration::DelegatedTask;
@@ -14,7 +11,7 @@ use tokio::sync::broadcast;
 use crate::errors::PortError;
 use crate::policy::Privileges;
 
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+pub use mainframe_types::BoxFuture;
 
 /// A pending permission or question gate, as `chat_wait` reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +49,7 @@ pub struct ChatView {
 
 impl ChatView {
     #[must_use]
-    pub fn privileges(&self) -> Privileges {
+    pub(crate) fn privileges(&self) -> Privileges {
         Privileges {
             adapter_id: self.adapter_id.clone(),
             mode: self.permission_mode,
@@ -63,7 +60,7 @@ impl ChatView {
     /// Side chats, temporary chats, and automation chats are the user's own
     /// scratch space; agents may not list, send to, or drive them.
     #[must_use]
-    pub fn is_agent_addressable(&self) -> bool {
+    pub(crate) fn is_agent_addressable(&self) -> bool {
         !self.temporary && !self.automation
     }
 }
@@ -156,7 +153,7 @@ pub trait OrchestrationPort: Send + Sync {
         &'a self,
         project_id: &'a str,
         include_archived: bool,
-    ) -> BoxFuture<'a, Vec<ChatView>>;
+    ) -> BoxFuture<'a, Result<Vec<ChatView>, PortError>>;
     fn project_exists<'a>(&'a self, project_id: &'a str) -> BoxFuture<'a, bool>;
     /// The chat's cached transcript. May load history from disk; never spawns
     /// the chat's CLI.

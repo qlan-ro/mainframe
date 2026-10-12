@@ -1,4 +1,4 @@
-//! Serde helper for ACP's patch-field convention (todo #350, ACP-EVALUATION.md
+//! Serde helper for ACP's patch-field convention (ACP-EVALUATION.md
 //! "What to borrow" #1): on an upsert/patch frame, an **omitted** key leaves
 //! the field unchanged, `null` clears it, and a value replaces it. A bare
 //! `Option<T>` cannot distinguish omitted from explicit `null` — both
@@ -7,12 +7,14 @@
 //! `#[serde(default, skip_serializing_if = "patch::is_absent")]`.
 //!
 //! `default` supplies `None` (omitted) when the key is missing, so
-//! `deserialize` below only ever runs for a key that *is* present, and
+//! the shared `deserialize` only ever runs for a key that *is* present, and
 //! therefore only ever needs to distinguish `null` from a value.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Serialize, Serializer};
 
-pub fn is_absent<T>(value: &Option<Option<T>>) -> bool {
+pub use crate::serde_util::double_option as deserialize;
+
+pub(crate) fn is_absent<T>(value: &Option<Option<T>>) -> bool {
     value.is_none()
 }
 
@@ -25,15 +27,6 @@ where
         Some(inner) => inner.serialize(serializer),
         None => serializer.serialize_none(),
     }
-}
-
-pub fn deserialize<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
-where
-    T: Deserialize<'de>,
-    D: Deserializer<'de>,
-{
-    let inner: Option<T> = Option::deserialize(deserializer)?;
-    Ok(Some(inner))
 }
 
 #[cfg(test)]

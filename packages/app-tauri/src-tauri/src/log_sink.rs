@@ -129,25 +129,53 @@ where
 
 // ── Log directory ─────────────────────────────────────────────────────────────
 
-/// Returns `${MAINFRAME_DATA_DIR}/logs` or `~/.mainframe/logs`.
-///
-/// Takes the optional override as a parameter so this pure function can be
-/// tested without touching the global environment.
-pub fn log_dir_with_override(data_dir_override: Option<&str>) -> PathBuf {
-    let base = data_dir_override
-        .map(PathBuf::from)
-        .or_else(|| std::env::var("MAINFRAME_DATA_DIR").ok().map(PathBuf::from))
-        .unwrap_or_else(|| {
-            dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("/tmp"))
-                .join(".mainframe")
-        });
-    base.join("logs")
+/// The subset of the daemon's `config.json` the shell needs. Every field the
+/// daemon's `PartialMainframeConfig` types is declared with the same type, so a
+/// file the daemon rejects as a whole (and ignores) is rejected here too.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // fields other than `data_dir` exist only to match the daemon's parse
+struct DaemonConfigFile {
+    port: Option<u16>,
+    data_dir: Option<String>,
+    tunnel: Option<bool>,
+    tunnel_url: Option<String>,
+    tunnel_token: Option<String>,
+    auth_secret: Option<String>,
 }
 
-/// Returns `${MAINFRAME_DATA_DIR}/logs` or `~/.mainframe/logs`.
+/// The daemon's data directory, resolved by the daemon's own rule
+/// (`mainframe_runtime::config`): a non-empty `$MAINFRAME_DATA_DIR` wins;
+/// otherwise `dataDir` from `<default_dir>/config.json`; otherwise
+/// `default_dir`. An unreadable or malformed `config.json`, or a blank
+/// `dataDir`, counts as absent.
+///
+/// Takes the env value and default directory as parameters so it is testable
+/// without touching the process environment or the home directory.
+fn data_dir_from(env_data_dir: Option<&str>, default_dir: &Path) -> PathBuf {
+    if let Some(dir) = env_data_dir.filter(|dir| !dir.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    let config_path = default_dir.join("config.json");
+    let configured = std::fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<DaemonConfigFile>(&content).ok())
+        .and_then(|config| config.data_dir)
+        .filter(|dir| !dir.trim().is_empty());
+    match configured {
+        Some(dir) => PathBuf::from(dir),
+        None => default_dir.to_path_buf(),
+    }
+}
+
+/// `<data dir>/logs`, the directory the daemon writes its own `server.*` logs
+/// to, so shell and daemon logs sit side by side.
 pub fn log_dir() -> PathBuf {
-    log_dir_with_override(None)
+    let default_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+        .join(".mainframe");
+    let env_data_dir = std::env::var("MAINFRAME_DATA_DIR").ok();
+    data_dir_from(env_data_dir.as_deref(), &default_dir).join("logs")
 }
 
 // ── Retention purge ───────────────────────────────────────────────────────────
@@ -304,22 +332,68 @@ pub fn init_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
 mod tests {
     use super::*;
 
-    // ── log_dir: pure-function test (no env mutation, race-free) ─────────────
+    // ── data_dir_from: pure-function tests (no env mutation, race-free) ──────
 
-    #[test]
-    fn log_dir_with_override_uses_supplied_dir() {
-        assert_eq!(
-            log_dir_with_override(Some("/tmp/mf-logtest")),
-            PathBuf::from("/tmp/mf-logtest/logs")
-        );
+    fn temp_default_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("mf-datadir-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
     }
 
     #[test]
-    fn log_dir_with_no_override_falls_through_to_env_or_home() {
-        // Just verify it returns *something* ending in /logs without touching
-        // global env (the concrete value depends on the test runner's env).
-        let d = log_dir_with_override(None);
-        assert!(d.to_string_lossy().ends_with("/logs"));
+    fn data_dir_prefers_the_env_override_over_config_json() {
+        let default_dir = temp_default_dir("env");
+        std::fs::write(default_dir.join("config.json"), r#"{"dataDir":"/srv/from-config"}"#)
+            .unwrap();
+        assert_eq!(
+            data_dir_from(Some("/srv/from-env"), &default_dir),
+            PathBuf::from("/srv/from-env")
+        );
+        std::fs::remove_dir_all(&default_dir).ok();
+    }
+
+    #[test]
+    fn data_dir_uses_config_json_data_dir() {
+        let default_dir = temp_default_dir("config");
+        std::fs::write(
+            default_dir.join("config.json"),
+            r#"{"port":31415,"dataDir":"/srv/from-config","extra":true}"#,
+        )
+        .unwrap();
+        assert_eq!(data_dir_from(None, &default_dir), PathBuf::from("/srv/from-config"));
+        assert_eq!(data_dir_from(Some(""), &default_dir), PathBuf::from("/srv/from-config"));
+        std::fs::remove_dir_all(&default_dir).ok();
+    }
+
+    #[test]
+    fn data_dir_ignores_a_blank_config_json_data_dir() {
+        let default_dir = temp_default_dir("blank");
+        for blank in [
+            r#"{"dataDir":""}"#,
+            r#"{"dataDir":"   "}"#,
+            r#"{"dataDir":"\t\n"}"#,
+        ] {
+            std::fs::write(default_dir.join("config.json"), blank).unwrap();
+            assert_eq!(data_dir_from(None, &default_dir), default_dir);
+        }
+        std::fs::remove_dir_all(&default_dir).ok();
+    }
+
+    #[test]
+    fn data_dir_falls_back_to_the_default_dir() {
+        let default_dir = temp_default_dir("fallback");
+        // No config.json yet.
+        assert_eq!(data_dir_from(None, &default_dir), default_dir);
+        // Malformed JSON, and a field the daemon would reject, both count as absent.
+        std::fs::write(default_dir.join("config.json"), "{not json").unwrap();
+        assert_eq!(data_dir_from(None, &default_dir), default_dir);
+        std::fs::write(
+            default_dir.join("config.json"),
+            r#"{"port":"not-a-port","dataDir":"/srv/ignored"}"#,
+        )
+        .unwrap();
+        assert_eq!(data_dir_from(None, &default_dir), default_dir);
+        std::fs::remove_dir_all(&default_dir).ok();
     }
 
     // ── Retention purge ───────────────────────────────────────────────────────

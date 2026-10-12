@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/thread-registry.ts`.
-//!
 //! Reads `~/.codex/state_5.sqlite` (Codex's own thread registry, read-only) to
 //! look up sub-agent metadata not exposed via app-server JSON-RPC:
 //!   - `agent_nickname` (e.g. "Maxwell")
@@ -40,7 +38,7 @@ pub fn lookup_agent_metadata(thread_ids: &[String]) -> HashMap<String, AgentMeta
 
 /// As `lookup_agent_metadata`, but reads `deps.db_path` when given (tests
 /// inject a seeded sqlite file instead of the real `~/.codex/state_5.sqlite`).
-pub fn lookup_agent_metadata_with(
+pub(crate) fn lookup_agent_metadata_with(
     thread_ids: &[String],
     deps: Option<&ThreadRegistryDeps>,
 ) -> HashMap<String, AgentMetadata> {
@@ -54,7 +52,6 @@ pub fn lookup_agent_metadata_with(
     };
     if std::fs::metadata(&path).is_err() {
         tracing::debug!(
-            module = "codex:thread-registry",
             db_path = %path.display(),
             "codex state DB not accessible — agent name lookup skipped"
         );
@@ -69,9 +66,8 @@ pub fn lookup_agent_metadata_with(
         }
         Err(err) => {
             tracing::warn!(
-                module = "codex:thread-registry",
-                err = %err,
-                "codex: failed to read thread registry"
+                error = %err,
+                "failed to read thread registry"
             );
         }
     }
@@ -106,13 +102,13 @@ fn read_metadata(
 }
 
 /// The agent's role (e.g. "explorer") — best for the card subtitle.
-pub fn describe_agent(meta: Option<&AgentMetadata>) -> Option<String> {
+pub(crate) fn describe_agent(meta: Option<&AgentMetadata>) -> Option<String> {
     let meta = meta?;
     meta.role.clone().or_else(|| meta.nickname.clone())
 }
 
 /// The agent's nickname (e.g. "Maxwell") — used as the card title (subagent_type).
-pub fn agent_title(meta: Option<&AgentMetadata>) -> Option<String> {
+pub(crate) fn agent_title(meta: Option<&AgentMetadata>) -> Option<String> {
     let meta = meta?;
     meta.nickname.clone().or_else(|| meta.role.clone())
 }
@@ -156,12 +152,3 @@ mod tests {
         assert!(result.is_empty());
     }
 }
-
-// PORT STATUS: src/plugins/builtin/codex/thread-registry.ts (72 lines)
-// confidence: high
-// todos: 0
-// notes: better-sqlite3 (sync, read-only) -> rusqlite Connection::open_with_flags
-// notes: (READ_ONLY). Kept SYNCHRONOUS to mirror the TS (called from the sync
-// notes: event-mapper path); it is a one-shot read of an EXTERNAL Codex DB, not the
-// notes: daemon's own store, so it does not route through mainframe-db's Db actor.
-// notes: describe_agent/agent_title return Option<String> (TS `string | null`).

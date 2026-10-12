@@ -12,8 +12,9 @@
 use std::collections::HashMap;
 
 use crate::domain::{
-    AutomationDefinition, Step, TOKEN_STEP_CURRENT, TokenRef,
-    scope::{TokenInfo, builtin_tokens, current_item_info, step_produces, trigger_tokens},
+    AutomationDefinition, TOKEN_STEP_CURRENT, TokenRef,
+    scope::{TokenInfo, builtin_tokens, trigger_tokens},
+    scoped_walk::walk_scoped,
     token::TokenSourceKind,
 };
 
@@ -103,7 +104,7 @@ fn scan_body(text: &str, from: usize) -> (String, Vec<String>, usize) {
 /// The braced spelling exists because the bare one needs a word boundary, so
 /// `todo/$id` is literal text; the editor inserts `${id}` mid-word, and it is
 /// recognized anywhere.
-pub fn extract_variable_refs(text: &str) -> Vec<VariableRef> {
+pub(crate) fn extract_variable_refs(text: &str) -> Vec<VariableRef> {
     let bytes = text.as_bytes();
     let mut refs = Vec::new();
     let mut i = 0;
@@ -157,7 +158,7 @@ const IMPLICIT_AGENT_OUTPUTS: [&str; 2] = ["result", "chatId"];
 
 /// Folds arbitrary text into a `$name`-safe identifier. Lossy on purpose —
 /// collisions are resolved by suffixing in `build_variable_namespace`.
-pub fn sanitize_variable_name(raw: &str) -> String {
+pub(crate) fn sanitize_variable_name(raw: &str) -> String {
     let mut snake = String::with_capacity(raw.len() + 1);
     let mut previous: Option<char> = None;
     for ch in raw.chars() {
@@ -247,37 +248,14 @@ fn target_for(info: &TokenInfo) -> NameTarget {
 }
 
 /// The names every step in a definition can address, from the same scope walk
-/// validation uses (`domain::validate::walk`): `if` leaks both branches to
-/// later siblings, `repeat` isolates its body and adds `Current item`.
-pub fn build_name_index(definition: &AutomationDefinition) -> NameIndex {
+/// validation uses (`domain::scoped_walk::walk_scoped`), so a name resolves
+/// at run time exactly where the editor said it would.
+pub(crate) fn build_name_index(definition: &AutomationDefinition) -> NameIndex {
     let mut scope = builtin_tokens();
     scope.extend(trigger_tokens(&definition.triggers));
     let mut index = NameIndex::new();
-    walk(&definition.steps, &mut scope, &mut index);
+    walk_scoped(&definition.steps, &mut scope, (), &mut |step, scope, ()| {
+        index.insert(step.id().to_string(), build_variable_namespace(scope));
+    });
     index
 }
-
-fn walk(steps: &[Step], scope: &mut Vec<TokenInfo>, index: &mut NameIndex) {
-    for step in steps {
-        index.insert(step.id().to_string(), build_variable_namespace(scope));
-        match step {
-            Step::If(block) => {
-                walk(&block.then, &mut scope.clone(), index);
-                walk(&block.otherwise, &mut scope.clone(), index);
-                scope.extend(step_produces(step));
-            }
-            Step::Repeat(block) => {
-                let mut inner = scope.clone();
-                inner.push(current_item_info());
-                walk(&block.steps, &mut inner, index);
-            }
-            _ => scope.extend(step_produces(step)),
-        }
-    }
-}
-
-// PORT STATUS: TS port of packages/types/src/automation-domain/variables.ts (T6)
-// confidence: high
-// todos: 0
-// notes: rename helpers stay TS-only — they rewrite editor drafts, which the
-//        runtime never does.

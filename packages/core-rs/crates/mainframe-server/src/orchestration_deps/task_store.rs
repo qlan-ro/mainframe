@@ -3,8 +3,8 @@
 use mainframe_db::DbError;
 use mainframe_orchestration::errors::PortError;
 use mainframe_orchestration::ports::{BoxFuture, TaskStore};
-use mainframe_runtime::time::now_iso8601;
 use mainframe_types::orchestration::DelegatedTask;
+use mainframe_types::time::now_iso8601;
 
 use crate::db::Db;
 
@@ -27,7 +27,7 @@ impl DbTaskStore {
         match self.db.call(f).await {
             Ok(value) => value,
             Err(err) => {
-                tracing::warn!(what, %err, "delegated task read failed");
+                tracing::warn!(what, error = %err, "delegated task read failed");
                 T::default()
             }
         }

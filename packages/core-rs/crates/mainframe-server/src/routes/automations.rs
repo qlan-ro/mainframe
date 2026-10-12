@@ -1,6 +1,6 @@
-//! Automations v2 CRUD + runs routes (contract §4; Node
-//! routes/automations.ts): WS4 envelope, 202 on a started manual run,
-//! timeline projection with 32 KB output-preview truncation.
+//! Automations v2 CRUD + runs routes (contract §4): WS4 envelope, 202 on a
+//! started manual run, timeline projection with 32 KB output-preview
+//! truncation.
 
 use std::sync::Arc;
 
@@ -12,7 +12,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use mainframe_automations::domain::AutomationCreateInput;
-use mainframe_automations::engine::is_engine_marker;
 use mainframe_automations::ports::to_run_summary;
 use mainframe_automations::store::RunRecord;
 use mainframe_automations::{AutomationsEngine, EngineError};
@@ -22,13 +21,13 @@ use serde_json::json;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const OUTPUT_PREVIEW_MAX_BYTES: usize = 32 * 1024;
 
-/// Every handler self-gates on the engine (Node: `if (!service) 503`).
+/// Every handler self-gates on the engine (503 when it is absent).
 pub(crate) fn engine(ctx: &AppCtx) -> Option<&Arc<AutomationsEngine>> {
-    ctx.automations.as_ref()
+    ctx.services.automations.as_ref()
 }
 
 pub(crate) fn unavailable() -> Response {
@@ -111,7 +110,7 @@ async fn get_one(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Resp
     let Some(engine) = engine(&ctx) else {
         return unavailable();
     };
-    match registration::get_with_registrations(engine, &id, ctx.port).await {
+    match registration::get_with_registrations(engine, &id, ctx.core.port).await {
         Ok(Some(summary)) => ok(summary),
         Ok(None) => fail(StatusCode::NOT_FOUND, "automation not found"),
         Err(err) => engine_error(err),
@@ -146,7 +145,7 @@ struct EnabledBody {
     enabled: bool,
 }
 
-/// A4 — the library toggle's route.
+/// The library toggle's route.
 async fn set_enabled(
     State(ctx): State<Arc<AppCtx>>,
     Path(id): Path<String>,
@@ -221,11 +220,11 @@ fn project_timeline(run: &RunRecord) -> Vec<AutomationTimelineEntry> {
         // Retry attempts and concurrent-branch outcomes are engine state, not
         // user steps: neither has a verb the editor could render, and
         // surfacing one would put an unknown kind in front of the run view.
-        .filter(|(_, entry)| !is_engine_marker(&entry.kind))
+        .filter(|(_, entry)| !entry.kind.is_engine_marker())
         .map(|(step_ref, entry)| AutomationTimelineEntry {
             step_ref: step_ref.clone(),
             step_id: entry.step_id.clone(),
-            kind: entry.kind.clone(),
+            kind: entry.kind.as_str().to_string(),
             status: entry.status,
             output_preview: output_preview(entry.outputs.as_ref()),
             error: entry.error.clone(),
@@ -237,8 +236,8 @@ fn project_timeline(run: &RunRecord) -> Vec<AutomationTimelineEntry> {
         .collect()
 }
 
-/// Node routes/automations.ts outputPreview: whole-JSON preview or a loud
-/// truncation marker — never a partial JSON document.
+/// Whole-JSON preview or a loud truncation marker — never a partial JSON
+/// document.
 fn output_preview(outputs: Option<&serde_json::Map<String, serde_json::Value>>) -> Option<String> {
     let outputs = outputs?;
     let rendered = serde_json::Value::Object(outputs.clone()).to_string();
@@ -275,9 +274,3 @@ mod registration;
 mod automations_tests;
 #[cfg(test)]
 mod registration_tests;
-
-// PORT STATUS: src/server/routes/automations.ts (9 endpoints, 177 lines)
-// confidence: high
-// todos: 0
-// notes: unused `delete`/`put` route fns are used via the builder chain; the
-//        timeline `error` stays `T | null` (Node parity), other optionals omit.

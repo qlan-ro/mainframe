@@ -1,11 +1,11 @@
-//! Recording action registry for the conformance harness (T10.2). The engine
+//! Recording action registry for the conformance harness. The engine
 //! runs its REAL run_action verb; only the actions themselves are faked, so a
 //! run never hits real GitHub/Notion HTTP or the user's home directory. Each
 //! fake records the rendered params it received (so a scenario asserts token
 //! wiring precisely) and can be `hold()`-gated mid-effect to model a crash /
-//! cancel while a step is `running` (T10.3). Idempotent flags mirror the real
+//! cancel while a step is `running`. Idempotent flags match the real
 //! catalog so the restart policy behaves identically.
-#![allow(dead_code)]
+#![allow(dead_code, reason = "Shared test helpers")]
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,8 +18,8 @@ use mainframe_automations::actions::{
     Action, ActionAuth, ActionCtx, ActionError, ActionGroup, ActionManifest, ActionOutputs,
     ActionRegistry,
 };
-use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::tokens::TokenValue;
+use mainframe_types::BoxFuture;
 
 /// A mid-effect barrier. Open by default (pass-through); once `hold()`, the
 /// next `execute` blocks at the gate until `release()` — long enough for a
@@ -54,10 +54,23 @@ impl Gate {
 /// Every fake action appends `(action_id, rendered_params)` here.
 #[derive(Clone, Default)]
 pub struct ActionRecorder {
+    changed: Arc<Notify>,
     calls: Arc<Mutex<Vec<(String, Value)>>>,
 }
 
 impl ActionRecorder {
+    pub async fn wait_for(&self, action_id: &str, count: usize) {
+        loop {
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            if self.count(action_id) >= count {
+                return;
+            }
+            changed.await;
+        }
+    }
+
     pub fn calls_for(&self, action_id: &str) -> Vec<Value> {
         self.calls
             .lock()
@@ -110,6 +123,7 @@ impl Action for RecordingAction {
                 .lock()
                 .unwrap()
                 .push((self.id.to_string(), params.clone()));
+            self.recorder.changed.notify_waiters();
             self.gate.pass().await;
             Ok(self.outputs.clone())
         })

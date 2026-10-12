@@ -1,10 +1,11 @@
-//! Webhook ingest pipeline (T8.3): sequences the webhook.rs primitives into
+//! Webhook ingest pipeline: sequences the webhook.rs primitives into
 //! one HTTP-agnostic decision — signature → JSON → preset predicate → A7
-//! staleness → delivery-id replay dedup → in-memory sample → run. The T9.3
+//! staleness → delivery-id replay dedup → in-memory sample → run. The
 //! route maps decisions onto statuses: UnknownHook 404, InvalidSignature
 //! 401, InvalidJson/MissingDeliveryId 400, PresetMismatch/StaleDelivery 204,
 //! Duplicate/Accepted 200, StartFailed 500 (sender retries — A7).
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -96,7 +97,8 @@ impl WebhookProcessor {
         }
     }
 
-    pub fn latest_sample(&self, automation_id: &str, trigger_id: &str) -> Option<Value> {
+    #[cfg(test)]
+    pub(crate) fn latest_sample(&self, automation_id: &str, trigger_id: &str) -> Option<Value> {
         self.lock_samples()
             .get(&(automation_id.to_string(), trigger_id.to_string()))
             .cloned()
@@ -199,7 +201,7 @@ impl WebhookProcessor {
                 let run_id = run.id.clone();
                 tokio::spawn(async move {
                     if let Err(err) = interpreter.advance(&run_id).await {
-                        tracing::error!(run_id, error = %err, "webhook delivery: advance failed");
+                        tracing::error!(run_id, error = %err, "advance failed");
                     }
                 });
                 WebhookDecision::Accepted {
@@ -220,11 +222,11 @@ impl WebhookProcessor {
     /// delivery.
     async fn stamp_delivery(&self, hook_id: &str, now_ms: i64) {
         let Some(at) = chrono::DateTime::from_timestamp_millis(now_ms) else {
-            tracing::warn!(hook_id, now_ms, "webhook delivery: unrepresentable clock");
+            tracing::warn!(hook_id, now_ms, "unrepresentable clock");
             return;
         };
         if let Err(err) = self.state.record_delivery(hook_id, &at.to_rfc3339()).await {
-            tracing::warn!(hook_id, error = %err, "webhook delivery: recording the delivery time failed");
+            tracing::warn!(hook_id, error = %err, "recording the delivery time failed");
         }
     }
 
@@ -255,9 +257,7 @@ impl WebhookProcessor {
 
     /// Poisoned-map recovery matches advance.rs's lock_map rationale.
     fn lock_samples(&self) -> std::sync::MutexGuard<'_, HashMap<(String, String), Value>> {
-        self.samples
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.samples.lock_recover()
     }
 }
 
@@ -290,9 +290,3 @@ fn screen(
             .rejected(hook_id, "no X-GitHub-Delivery header and no payload id")
     })
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node routes/automation-webhook.ts order (signature → JSON →
-//        preset → staleness → delivery id → sample → enabled → start).

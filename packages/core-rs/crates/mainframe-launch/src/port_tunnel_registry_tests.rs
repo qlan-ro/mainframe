@@ -1,0 +1,253 @@
+use std::future::Future;
+use std::pin::{Pin, pin};
+use std::sync::Arc;
+use std::time::Duration;
+
+use super::{PortTunnelRegistry, PortTunnelScope, port_tunnel_label};
+use crate::test_support::{
+    spawn_count, write_counting_cloudflared, write_silent_cloudflared, write_slow_cloudflared,
+};
+use crate::tunnel_error::TunnelStartError;
+use crate::tunnel_manager::{TunnelConfig, TunnelManager};
+
+fn registry_with(bin: String) -> (Arc<TunnelManager>, Arc<PortTunnelRegistry>) {
+    let config = TunnelConfig {
+        cloudflared_bin: bin,
+        dns_poll: Duration::from_millis(20),
+        dns_timeout: Duration::from_millis(60),
+        start_timeout: Duration::from_millis(3_000),
+        ..TunnelConfig::default()
+    };
+    let manager = Arc::new(TunnelManager::with_config(None, config));
+    let registry = Arc::new(PortTunnelRegistry::new(manager.clone()));
+    (manager, registry)
+}
+
+/// Drives a start into its mid-start state and no further. `start` records the
+/// entry and spawns cloudflared before its first suspension point, so one poll
+/// is the whole precondition — waiting a fixed number of milliseconds instead
+/// only bets on the scheduler, and reports a start that failed outright as an
+/// empty registry rather than as its error.
+async fn enter_mid_start<F: Future>(start: Pin<&mut F>)
+where
+    F::Output: std::fmt::Debug,
+{
+    tokio::select! {
+        biased;
+        outcome = start => panic!("the start resolved instead of staying mid-start: {outcome:?}"),
+        () = std::future::ready(()) => {}
+    }
+}
+
+fn scope(chat_id: &str) -> PortTunnelScope {
+    PortTunnelScope {
+        project_id: "proj-1".to_string(),
+        chat_id: chat_id.to_string(),
+    }
+}
+
+#[tokio::test]
+async fn concurrent_starts_for_one_port_spawn_a_single_cloudflared() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
+
+    let (first, second) = tokio::join!(
+        registry.start(5173, scope("chat-a")),
+        registry.start(5173, scope("chat-b")),
+    );
+
+    assert_eq!(first.unwrap(), "https://abc-def1.trycloudflare.com");
+    assert_eq!(second.unwrap(), "https://abc-def1.trycloudflare.com");
+    assert_eq!(spawn_count(dir.path()), 1);
+}
+
+#[tokio::test]
+async fn a_second_start_reuses_the_ready_tunnel() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
+
+    let first = registry.start(5173, scope("chat-a")).await.unwrap();
+    let second = registry.start(5173, scope("chat-a")).await.unwrap();
+
+    assert_eq!(first, "https://abc-def1.trycloudflare.com");
+    assert_eq!(second, first);
+    assert_eq!(spawn_count(dir.path()), 1);
+}
+
+#[tokio::test]
+async fn a_ready_entry_the_manager_lost_is_restarted() {
+    let dir = tempfile::tempdir().unwrap();
+    let (manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
+
+    let first = registry.start(5173, scope("chat-a")).await.unwrap();
+    manager.stop(&port_tunnel_label(5173)).await; // behind the registry's back
+    let second = registry.start(5173, scope("chat-a")).await.unwrap();
+
+    assert_eq!(first, "https://abc-def1.trycloudflare.com");
+    assert_eq!(second, "https://abc-def2.trycloudflare.com");
+    assert_eq!(spawn_count(dir.path()), 2);
+}
+
+#[tokio::test]
+async fn list_prunes_a_ready_entry_the_manager_lost() {
+    let dir = tempfile::tempdir().unwrap();
+    let (manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
+
+    registry.start(5173, scope("chat-a")).await.unwrap();
+    assert_eq!(registry.list().len(), 1);
+
+    manager.stop(&port_tunnel_label(5173)).await;
+
+    assert_eq!(registry.list(), vec![]);
+    assert_eq!(registry.entries_for_project("proj-1"), vec![]);
+}
+
+#[tokio::test]
+async fn list_reports_a_ready_tunnel_with_its_url() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
+
+    registry.start(5173, scope("chat-a")).await.unwrap();
+
+    let listed = registry.list();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].port, 5173);
+    assert!(listed[0].ready);
+    assert_eq!(
+        listed[0].url.as_deref(),
+        Some("https://abc-def1.trycloudflare.com")
+    );
+}
+
+#[tokio::test]
+async fn list_reports_a_mid_start_tunnel_without_a_url() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_manager, registry) = registry_with(write_silent_cloudflared(dir.path()));
+
+    let mut starting = pin!(registry.start(5173, scope("chat-a")));
+    enter_mid_start(starting.as_mut()).await;
+
+    let listed = registry.list();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].port, 5173);
+    assert!(!listed[0].ready);
+    assert_eq!(listed[0].url, None);
+}
+
+#[tokio::test]
+async fn stopping_an_unknown_or_already_stopped_port_is_a_no_op() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
+
+    registry.stop(5173).await;
+    registry.start(5173, scope("chat-a")).await.unwrap();
+    registry.stop(5173).await;
+    registry.stop(5173).await;
+
+    assert_eq!(registry.list(), vec![]);
+}
+
+#[tokio::test]
+async fn stopping_a_mid_start_tunnel_cancels_it_once_it_resolves() {
+    let dir = tempfile::tempdir().unwrap();
+    let (manager, registry) = registry_with(write_slow_cloudflared(dir.path()));
+
+    let mut starting = pin!(registry.start(5173, scope("chat-a")));
+    enter_mid_start(starting.as_mut()).await;
+    registry.stop(5173).await;
+
+    assert!(matches!(starting.await, Err(TunnelStartError::Cancelled)));
+    assert_eq!(manager.get_url(&port_tunnel_label(5173)), None);
+    assert_eq!(registry.list(), vec![]);
+}
+
+#[tokio::test]
+async fn entries_for_project_reports_only_that_project_with_its_owning_chats() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
+
+    registry.start(5173, scope("chat-a")).await.unwrap();
+    registry
+        .start(
+            5174,
+            PortTunnelScope {
+                project_id: "proj-2".to_string(),
+                chat_id: "chat-b".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        registry.entries_for_project("proj-1"),
+        vec![(5173, "chat-a".to_string())]
+    );
+    assert_eq!(
+        registry.entries_for_project("proj-2"),
+        vec![(5174, "chat-b".to_string())]
+    );
+    assert_eq!(registry.entries_for_project("proj-3"), vec![]);
+}
+
+#[tokio::test]
+async fn the_last_start_takes_ownership_of_the_tunnel() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_manager, registry) = registry_with(write_counting_cloudflared(dir.path()));
+
+    registry.start(5173, scope("chat-a")).await.unwrap();
+    registry.start(5173, scope("chat-b")).await.unwrap();
+
+    assert_eq!(
+        registry.entries_for_project("proj-1"),
+        vec![(5173, "chat-b".to_string())]
+    );
+    assert_eq!(spawn_count(dir.path()), 1);
+}
+
+#[tokio::test]
+async fn a_failed_start_leaves_no_entry_behind() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_manager, registry) =
+        registry_with(dir.path().join("missing-cloudflared").display().to_string());
+
+    assert!(registry.start(5173, scope("chat-a")).await.is_err());
+    assert_eq!(registry.list(), vec![]);
+}
+
+#[tokio::test]
+async fn starts_during_cancelled_child_teardown_share_the_cancelled_outcome() {
+    use crate::test_support::{recording_signal, write_ready_term_ignoring_cloudflared};
+    let dir = tempfile::tempdir().unwrap();
+    let mut manager = TunnelManager::with_config(
+        None,
+        TunnelConfig {
+            cloudflared_bin: write_ready_term_ignoring_cloudflared(dir.path()),
+            dns_poll: Duration::from_millis(10),
+            dns_timeout: Duration::from_millis(30),
+            stop_grace: Duration::from_millis(300),
+            ..TunnelConfig::default()
+        },
+    );
+    let (signal, signals) = recording_signal();
+    manager.set_signal(signal);
+    let manager = Arc::new(manager);
+    let registry = Arc::new(PortTunnelRegistry::new(manager.clone()));
+    let mut starting = pin!(registry.start(5173, scope("chat-a")));
+    enter_mid_start(starting.as_mut()).await;
+    registry.stop(5173).await;
+    let second = async {
+        mainframe_runtime::test_support::poll_until(
+            Duration::from_secs(2),
+            Duration::from_millis(5),
+            async || !(signals.lock().unwrap().is_empty()),
+        )
+        .await
+        .unwrap();
+        registry.start(5173, scope("chat-b")).await
+    };
+    let (first, second) = tokio::join!(starting, second);
+    assert!(matches!(first, Err(TunnelStartError::Cancelled)));
+    assert!(matches!(second, Err(TunnelStartError::Cancelled)));
+    assert_eq!(manager.live_count(), 0);
+    assert!(registry.list().is_empty());
+}

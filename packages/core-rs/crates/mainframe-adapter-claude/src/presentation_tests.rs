@@ -1,4 +1,6 @@
+#[path = "presentation_tests_lifecycle.rs"]
 mod lifecycle;
+#[path = "presentation_tests_support.rs"]
 mod support;
 use mainframe_types::transcript_presentation::PresentationPhase;
 use serde_json::{Value, json};

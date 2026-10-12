@@ -1,5 +1,3 @@
-//! Ported from `packages/types/src/skill.ts`.
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,7 +43,7 @@ pub struct AgentConfig {
     pub file_path: String,
     pub content: String,
     /// The complete declared frontmatter `description`, when the file has one
-    /// (todo #317) — `description` carries the one-line picker caption.
+    /// — `description` carries the one-line picker caption.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub full_description: Option<String>,
 }
@@ -90,11 +88,3 @@ mod tests {
         assert_eq!(serde_json::to_string(&a).unwrap(), json);
     }
 }
-
-// PORT STATUS: packages/types/src/skill.ts (37 lines)
-// confidence: high
-// todos: 0
-// notes: `scope` literal-unions → SkillScope (project|global|plugin) and AgentScope
-// (project|global). CreateSkillInput/CreateAgentInput reuse AgentScope (the TS
-// inline `'project' | 'global'`). Optional pluginName/invocationName → Option +
-// skip_serializing_if.

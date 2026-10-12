@@ -3,61 +3,49 @@
 //! before it even looks for an active session.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
-use mainframe_adapter_api::{AdapterError, BoxFuture};
 use mainframe_types::adapter::ControlBehavior;
-use mainframe_types::chat::ChatMessage;
-use mainframe_types::events::DaemonEvent;
 
 use super::*;
-use crate::event_handler::EventChatUpdate;
-use crate::test_support::{FakeSession, test_chat};
+use crate::chat_manager::construct::Collaborators;
+use crate::test_support::{FakeDeps, FakeSession, test_chat};
 
-#[derive(Default)]
-struct GuardDeps {
-    start_chat_calls: Arc<AtomicUsize>,
+/// A permission handler over the shared fake with "chat-1" stored but not
+/// yet active, so an answer that starts the chat is visible as its cell.
+struct Harness {
+    shared: Arc<ChatShared>,
+    handler: ChatPermissionHandler,
 }
 
-impl PermissionHandlerDeps for GuardDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        None
+impl Harness {
+    fn new() -> Self {
+        let deps = FakeDeps::with_chats(vec![test_chat("chat-1")]);
+        let shared = ChatShared::new(deps);
+        let collab = Collaborators::build(&shared, &Arc::new(OnceLock::new()));
+        Self {
+            shared,
+            handler: collab.permission_handler,
+        }
     }
-    fn start_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-        self.start_chat_calls.fetch_add(1, Ordering::SeqCst);
-        Box::pin(async {})
+
+    fn enqueue(&self, request_id: &str) {
+        self.shared
+            .permissions
+            .lock_recover()
+            .enqueue("chat-1", request(request_id));
     }
-    fn emit_event(&self, _event: DaemonEvent) {}
-    fn emit_display(&self, _chat_id: &str) {}
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
-    fn get_messages<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Vec<ChatMessage>> {
-        Box::pin(async { Vec::new() })
+
+    fn cancel(&self, request_id: &str) {
+        self.shared
+            .permissions
+            .lock_recover()
+            .cancel("chat-1", request_id);
     }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn plan_mode_handle_no_process(
-        &self,
-        _chat_id: &str,
-        _active: &Arc<Mutex<ActiveChat>>,
-        _response: &ControlResponse,
-    ) {
-    }
-    fn plan_mode_handle_clear_context<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _active: Arc<Mutex<ActiveChat>>,
-        _response: ControlResponse,
-    ) -> BoxFuture<'a, Result<(), AdapterError>> {
-        Box::pin(async { Ok(()) })
-    }
-    fn plan_mode_handle_escalation<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _active: Arc<Mutex<ActiveChat>>,
-        _response: ControlResponse,
-    ) -> BoxFuture<'a, Result<(), AdapterError>> {
-        Box::pin(async { Ok(()) })
+
+    /// Whether the answer started the chat: `start_chat` loads it into the
+    /// registry, so an answer that was dropped leaves no cell behind.
+    fn chat_started(&self) -> bool {
+        self.shared.active("chat-1").is_some()
     }
 }
 
@@ -88,101 +76,33 @@ fn allow(request_id: &str) -> ControlResponse {
     }
 }
 
-fn handler_with(
-    permissions: PermissionManager,
-) -> (Arc<AtomicUsize>, ChatPermissionHandler<GuardDeps>) {
-    let start_chat_calls = Arc::new(AtomicUsize::new(0));
-    let deps = GuardDeps {
-        start_chat_calls: start_chat_calls.clone(),
-    };
-    let handler = ChatPermissionHandler::new(
-        Arc::new(Mutex::new(permissions)),
-        Arc::new(Mutex::new(MessageCache::new())),
-        deps,
-    );
-    (start_chat_calls, handler)
-}
-
 #[tokio::test]
 async fn an_answer_naming_a_cancelled_request_is_dropped() {
-    let mut permissions = PermissionManager::new();
-    permissions.enqueue("chat-1", request("r1"));
-    permissions.enqueue("chat-1", request("r2"));
-    permissions.cancel("chat-1", "r1");
-    let (deps, handler) = handler_with(permissions);
+    let h = Harness::new();
+    h.enqueue("r1");
+    h.enqueue("r2");
+    h.cancel("r1");
 
-    let result = handler.respond_to_permission("chat-1", allow("r1")).await;
+    let result = h.handler.respond_to_permission("chat-1", allow("r1")).await;
 
     assert!(result.is_ok());
-    assert_eq!(deps.load(Ordering::SeqCst), 0);
+    assert!(!h.chat_started());
     assert_eq!(
-        handler.get_pending_permission("chat-1").await,
+        h.handler.get_pending_permission("chat-1").await,
         Some(request("r2"))
     );
 }
 
 #[tokio::test]
 async fn an_answer_for_a_live_request_still_reaches_the_no_session_path() {
-    let mut permissions = PermissionManager::new();
-    permissions.enqueue("chat-1", request("r1"));
-    permissions.enqueue("chat-1", request("r2"));
-    let (deps, handler) = handler_with(permissions);
+    let h = Harness::new();
+    h.enqueue("r1");
+    h.enqueue("r2");
 
-    let result = handler.respond_to_permission("chat-1", allow("r1")).await;
+    let result = h.handler.respond_to_permission("chat-1", allow("r1")).await;
 
     assert!(result.is_ok());
-    assert_eq!(deps.load(Ordering::SeqCst), 1);
-}
-
-/// Deps for the race test below: a real active session (so `respond_to_permission`
-/// reaches `handle_normal_permission`), with `emit_event` calls captured for
-/// inspection after the handler call returns.
-struct RaceDeps {
-    cell: Arc<Mutex<ActiveChat>>,
-    events: Arc<Mutex<Vec<DaemonEvent>>>,
-}
-
-impl PermissionHandlerDeps for RaceDeps {
-    fn get_active_chat(&self, _chat_id: &str) -> Option<Arc<Mutex<ActiveChat>>> {
-        Some(self.cell.clone())
-    }
-    fn start_chat<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
-    }
-    fn emit_event(&self, event: DaemonEvent) {
-        self.events.lock().unwrap().push(event);
-    }
-    fn emit_display(&self, _chat_id: &str) {}
-    fn chats_update(&self, _chat_id: &str, _patch: &EventChatUpdate) {}
-    fn get_messages<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Vec<ChatMessage>> {
-        Box::pin(async { Vec::new() })
-    }
-    fn should_notify_permission(&self, _tool_name: Option<&str>) -> bool {
-        false
-    }
-    fn plan_mode_handle_no_process(
-        &self,
-        _chat_id: &str,
-        _active: &Arc<Mutex<ActiveChat>>,
-        _response: &ControlResponse,
-    ) {
-    }
-    fn plan_mode_handle_clear_context<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _active: Arc<Mutex<ActiveChat>>,
-        _response: ControlResponse,
-    ) -> BoxFuture<'a, Result<(), AdapterError>> {
-        Box::pin(async { Ok(()) })
-    }
-    fn plan_mode_handle_escalation<'a>(
-        &'a self,
-        _chat_id: &'a str,
-        _active: Arc<Mutex<ActiveChat>>,
-        _response: ControlResponse,
-    ) -> BoxFuture<'a, Result<(), AdapterError>> {
-        Box::pin(async { Ok(()) })
-    }
+    assert!(h.chat_started());
 }
 
 /// Pins the interleaving from #284's review: queue [r1, r2, r3]; the client
@@ -193,11 +113,11 @@ impl PermissionHandlerDeps for RaceDeps {
 /// no longer matches r1 and do nothing, leaving r2 pending.
 #[tokio::test]
 async fn a_cancel_landing_mid_response_does_not_promote_past_the_new_front() {
-    let mut permissions = PermissionManager::new();
-    permissions.enqueue("chat-1", request("r1"));
-    permissions.enqueue("chat-1", request("r2"));
-    permissions.enqueue("chat-1", request("r3"));
-    let permissions = Arc::new(Mutex::new(permissions));
+    let h = Harness::new();
+    h.enqueue("r1");
+    h.enqueue("r2");
+    h.enqueue("r3");
+    let permissions = h.shared.permissions.clone();
 
     let cancel_permissions = permissions.clone();
     let session = Arc::new(FakeSession {
@@ -211,27 +131,17 @@ async fn a_cancel_landing_mid_response_does_not_promote_past_the_new_front() {
         test_chat("chat-1"),
         Some(session),
     )));
-    let events = Arc::new(Mutex::new(Vec::new()));
-    let deps = RaceDeps {
-        cell,
-        events: events.clone(),
-    };
-    let handler = ChatPermissionHandler::new(
-        permissions.clone(),
-        Arc::new(Mutex::new(MessageCache::new())),
-        deps,
-    );
+    h.shared.active_chats.insert("chat-1".to_string(), cell);
     let surface = Arc::new(GateCapture::default());
-    handler.set_chat_surface(surface.clone());
+    h.handler.set_chat_surface(surface.clone());
 
-    let result = handler.respond_to_permission("chat-1", allow("r1")).await;
+    let result = h.handler.respond_to_permission("chat-1", allow("r1")).await;
 
     assert!(result.is_ok());
     assert_eq!(
         permissions.lock().unwrap().get_pending("chat-1"),
         Some(&request("r2"))
     );
-    drop(events);
     let promoted = surface.raised();
     assert!(promoted.is_empty(), "unexpected promotion: {promoted:?}");
 }
@@ -246,34 +156,27 @@ struct GateCapture {
 
 impl GateCapture {
     fn raised(&self) -> Vec<String> {
-        self.raised
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.raised.lock_recover().clone()
     }
 }
 
 impl crate::chat_surface::ChatSurface for GateCapture {
     fn on_chat_surface_event(&self, event: crate::chat_surface::ChatSurfaceEvent) {
         if let crate::chat_surface::ChatSurfaceEvent::GateRaised { request, .. } = event {
-            self.raised
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(request.request_id);
+            self.raised.lock_recover().push(request.request_id);
         }
     }
 }
 
 #[tokio::test]
 async fn an_answer_arriving_after_the_queue_was_cleared_is_still_dropped() {
-    let mut permissions = PermissionManager::new();
-    permissions.enqueue("chat-1", request("r1"));
-    permissions.cancel("chat-1", "r1");
-    permissions.clear("chat-1");
-    let (deps, handler) = handler_with(permissions);
+    let h = Harness::new();
+    h.enqueue("r1");
+    h.cancel("r1");
+    h.shared.permissions.lock_recover().clear("chat-1");
 
-    let result = handler.respond_to_permission("chat-1", allow("r1")).await;
+    let result = h.handler.respond_to_permission("chat-1", allow("r1")).await;
 
     assert!(result.is_ok());
-    assert_eq!(deps.load(Ordering::SeqCst), 0);
+    assert!(!h.chat_started());
 }

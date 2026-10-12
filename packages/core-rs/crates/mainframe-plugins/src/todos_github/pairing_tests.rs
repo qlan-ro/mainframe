@@ -1,4 +1,4 @@
-//! Task 16: explicit pairing — import creates one task per selected issue
+//! Explicit pairing — import creates one task per selected issue
 //! (AC3, AC5), re-import is idempotent (AC4), publish creates an issue from
 //! an existing task and closes it when the task is `done` (AC6), a paired
 //! task refuses a second publish, and the issue list annotates pairing
@@ -94,6 +94,30 @@ async fn reimporting_the_same_issue_is_idempotent_and_reports_it_skipped() {
     assert_eq!(second.skipped.len(), 1);
     assert_eq!(second.skipped[0].issue_number, 10);
     assert_eq!(todo_count(ctx, "p1").await, 1);
+}
+
+#[tokio::test]
+async fn an_issue_github_refuses_is_skipped_with_the_github_error_text() {
+    let fake = Arc::new(FakeGitHub::default().with_get_error(
+        11,
+        GitHubPortError::Request {
+            status: 410,
+            message: "issue was deleted".into(),
+        },
+    ));
+    let harness = setup(fake).await;
+    let ctx = &harness.ctx;
+    link_project(ctx, "p1").await;
+
+    let result = pairing::import_issues(ctx, "p1", &[11]).await.unwrap();
+
+    assert!(result.imported.is_empty());
+    assert_eq!(result.skipped.len(), 1);
+    assert_eq!(result.skipped[0].issue_number, 11);
+    assert_eq!(
+        result.skipped[0].reason,
+        "request failed (410): issue was deleted"
+    );
 }
 
 #[tokio::test]

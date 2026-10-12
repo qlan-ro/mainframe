@@ -6,7 +6,7 @@ const BASE: ForkAvailabilityInput = {
   adapterName: 'Codex',
   temporary: false,
   noProject: false,
-  claudeSessionId: 'sess-1',
+  vendorSessionId: 'sess-1',
   transcriptMissing: false,
   directoryMissing: false,
   isRunning: false,
@@ -19,14 +19,14 @@ describe('forkAvailability', () => {
   });
 
   it('reason 1: no fork capability names the adapter, checked before session presence', () => {
-    expect(forkAvailability({ ...BASE, capabilityFork: false, claudeSessionId: undefined })).toEqual({
+    expect(forkAvailability({ ...BASE, capabilityFork: false, vendorSessionId: undefined })).toEqual({
       enabled: false,
       reason: "Forking isn't available for Codex chats yet",
     });
   });
 
   it('a temporary chat cannot be forked, checked before session presence (todo #346)', () => {
-    expect(forkAvailability({ ...BASE, temporary: true, claudeSessionId: undefined })).toEqual({
+    expect(forkAvailability({ ...BASE, temporary: true, vendorSessionId: undefined })).toEqual({
       enabled: false,
       reason: "Temporary chats can't be forked",
     });
@@ -40,7 +40,7 @@ describe('forkAvailability', () => {
   });
 
   it('reason 2: no provider session yet', () => {
-    expect(forkAvailability({ ...BASE, claudeSessionId: undefined })).toEqual({
+    expect(forkAvailability({ ...BASE, vendorSessionId: undefined })).toEqual({
       enabled: false,
       reason: 'Nothing to fork yet',
     });
@@ -93,7 +93,7 @@ describe('forkAvailability', () => {
       forkAvailability({
         ...BASE,
         capabilityFork: false,
-        claudeSessionId: undefined,
+        vendorSessionId: undefined,
         capabilityReason: 'Forking Codex chats needs Codex CLI 0.143.0 or newer (installed: 0.140.0)',
       }),
     ).toEqual({
@@ -103,7 +103,7 @@ describe('forkAvailability', () => {
   });
 
   it('falls back to the generic no-capability copy when no reason is given', () => {
-    expect(forkAvailability({ ...BASE, capabilityFork: false, claudeSessionId: undefined })).toEqual({
+    expect(forkAvailability({ ...BASE, capabilityFork: false, vendorSessionId: undefined })).toEqual({
       enabled: false,
       reason: "Forking isn't available for Codex chats yet",
     });

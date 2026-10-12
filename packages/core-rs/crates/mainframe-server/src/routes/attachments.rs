@@ -1,11 +1,10 @@
-//! Ported from `src/server/routes/attachments.ts` — attachment upload (POST)
-//! and serve (GET), backed by the services `AttachmentStore`.
+//! Attachment upload (POST) and serve (GET), backed by the services
+//! `AttachmentStore`.
 //!
-//! Structural note: `AppCtx.services.attachments` is always present (an
-//! `Arc<AttachmentStore>`), so the TS "attachment store not configured" 500
-//! branch is unreachable in the Rust port — the store cannot be absent. The
-//! remaining behavior (count/size/mediaType limits, kind defaulting, the GET
-//! 404) is ported 1:1.
+//! `AppCtx.services.attachments` is always present (an `Arc<AttachmentStore>`),
+//! so there is no "attachment store not configured" error path. The routes
+//! enforce the count/size/mediaType limits, default the kind, and 404 a missing
+//! attachment on GET.
 
 use std::sync::Arc;
 
@@ -20,7 +19,6 @@ use mainframe_services::attachment::attachment_store::AttachmentKind;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok};
 
@@ -127,7 +125,7 @@ async fn upload(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>, body: By
         }
         Err(e) => {
             log_upload(&id, count, total_bytes, "save failed");
-            internal_error("Failed to save attachments", &e)
+            crate::respond::fail_or_internal("Failed to save attachments", &e)
         }
     }
 }
@@ -151,17 +149,3 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/chats/{id}/attachments", post(upload))
         .route("/api/chats/{chatId}/attachments/{attachmentId}", get(serve))
 }
-
-// PORT STATUS: src/server/routes/attachments.ts (upload + serve)
-// confidence: high
-// todos: 0
-// notes: The "store not configured" 500 branch is unreachable — AppCtx always
-// carries an Arc<AttachmentStore>, so that field cannot be None. Size check is
-// byte-identical: computed = floor(len*3/4), rejected when the declared OR
-// computed size exceeds 5MB. kind defaults to image/ vs file by mediaType. save
-// failure → opaque 500 (Express 5 forwards the async rejection to the global
-// handler). GET returns the stored attachment in the success envelope; None →
-// 404. No chat-existence check — the TS route performs none either.
-// Observability (#219): one tracing record per upload outcome (chat_id, count,
-// total_bytes, outcome — never a name, the base64 payload, or original_path)
-// and one for a GET 404, so a rejected upload leaves server-side evidence.

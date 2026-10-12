@@ -1,11 +1,13 @@
-//! Attach-on-prompt (todo #350, plan task 35, R3.13). Split out of
-//! `acp_ws_integration.rs` to keep that file under the 300-line cap. Pins
-//! the ordering `dispatch.rs`'s `session/prompt` arm documents: attach runs
-//! inline, ahead of the spawn, so a connection observes a session from the
-//! moment it sends a prompt rather than from whenever the spawned task gets
-//! scheduled. Moving `attach` below the spawn (or behind
+//! Attach-on-prompt. Pins the ordering `dispatch.rs`'s `session/prompt` arm
+//! documents: attach runs inline, ahead of the spawn, so a connection observes
+//! a session from the moment it sends a prompt rather than from whenever the
+//! spawned task gets scheduled. Moving `attach` below the spawn (or behind
 //! `dispatch_with_prompt`) must fail this test.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
@@ -23,6 +25,7 @@ async fn server_with_mock_adapter() -> TestServer {
     let server = spawn_test_server(None).await;
     server
         .ctx
+        .core
         .adapter_registry
         .register(std::sync::Arc::new(MockCliAdapter::default()));
     server
@@ -68,6 +71,7 @@ async fn prompting_subscribes_the_connection() {
 
     server
         .ctx
+        .chat
         .facade_hub
         .on_chat_surface_event(revision_event("chat-1", "hello"));
     let frame = ws.read_event().await;
@@ -134,9 +138,9 @@ async fn attach_precedes_a_still_blocked_prompts_own_reply() {
 
     // A resume for the UNRELATED chat B, answered on the same socket, can
     // only have been processed after A's prompt frame's own `handle_inbound`
-    // call returned (todo #350: `handle_inbound` is awaited inline in the
-    // socket `select!`) — a synchronization point standing in for "attach
-    // for A has already run", since A's own reply is still barrier-blocked.
+    // call returned (`handle_inbound` is awaited inline in the socket
+    // `select!`) — a synchronization point standing in for "attach for A has
+    // already run", since A's own reply is still barrier-blocked.
     ws.send_json(&json!({
         "jsonrpc": "2.0", "id": 2, "method": "session/resume",
         "params": { "sessionId": chat_b, "cwd": "/tmp" }
@@ -151,6 +155,7 @@ async fn attach_precedes_a_still_blocked_prompts_own_reply() {
     facade
         .server
         .ctx
+        .chat
         .facade_hub
         .on_chat_surface_event(revision_event(&chat_a, "t35-marker"));
     let marker = read_until(&mut ws, |v| {

@@ -60,7 +60,7 @@ pub fn parse_run_record(value: &Value) -> Option<ClaudeWorkflowRun> {
     })
 }
 
-/// D15 reserves `Unavailable` for a record with no recoverable structure, so an
+/// `Unavailable` is reserved for a record with no recoverable structure, so an
 /// unrecognized or absent status downgrades a record only when it also parsed
 /// nothing. With structure in hand the run is finished but unclassifiable —
 /// `Stopped`, the same landing spot `status::task_update_action` gives the

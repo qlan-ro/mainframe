@@ -1,10 +1,12 @@
-//! Red-phase (Task 10): pins the not-yet-existing `workflow_events` module's
-//! public surface (Task 17's `task_updated_payload` / `parse_launch_result`),
-//! `task_events::map_task_kind`'s workflow/agent split, and three lock-regression
-//! dispatch tests that drive `events::handle_stdout` end-to-end. The pure tests
-//! turn green at Task 17; the three dispatch tests stay red until Task 20 wires
-//! `workflow_events` into `events.rs`/`user_event.rs`.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Pins the `workflow_events` module's public surface (`task_updated_payload` /
+//! `parse_launch_result`), `task_events::map_task_kind`'s workflow/agent split,
+//! and three lock-regression dispatch tests that drive `events::handle_stdout`
+//! end-to-end.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,7 +26,7 @@ use mainframe_types::claude_workflow::{
 };
 use serde_json::json;
 
-// ---- pure functions (green at Task 17) ----
+// ---- pure functions ----
 
 #[test]
 fn task_updated_payload_prefers_patch_status_over_the_top_level_status() {
@@ -97,50 +99,36 @@ fn parse_launch_result_returns_none_without_a_run_id() {
     assert!(parse_launch_result(&text).is_none());
 }
 
-// ---- dispatch lock-regression tests (green at Task 20) ----
+// ---- dispatch lock-regression tests ----
 
 struct NoopSink;
 impl SessionSink for NoopSink {
-    fn on_init(&self, _session_id: &str) {}
-    fn on_message(
-        &self,
-        _content: Vec<mainframe_types::chat::MessageContent>,
-        _metadata: Option<mainframe_types::adapter::MessageMetadata>,
-    ) {
-    }
-    fn on_tool_result(
-        &self,
-        _content: Vec<mainframe_types::chat::MessageContent>,
-        _vendor_id: Option<String>,
-    ) {
-    }
-    fn on_permission(&self, _request: mainframe_types::adapter::ControlRequest) {}
-    fn on_result(&self, _data: mainframe_types::adapter::SessionResult) {}
-    fn on_exit(&self, _code: Option<i32>) {}
-    fn on_error(&self, _error: mainframe_adapter_api::AdapterError) {}
-    fn on_compact(&self, _vendor_id: Option<&str>) {}
-    fn on_compact_start(&self) {}
-    fn on_context_usage(&self, _usage: mainframe_types::adapter::ContextUsage) {}
-    fn on_plan_file(&self, _file_path: &str) {}
-    fn on_skill_file(&self, _entry: mainframe_types::context::SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<mainframe_types::chat::TodoItem>) {}
-    fn on_pr_detected(&self, _pr: mainframe_types::adapter::DetectedPr) {}
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: mainframe_adapter_api::adapter::LoadedSkill) {}
-    fn on_subagent_child(
-        &self,
-        _parent_tool_use_id: &str,
-        _blocks: Vec<mainframe_types::chat::MessageContent>,
-    ) {
-    }
+    mainframe_adapter_api::forward_session_sink!(on_init, on_result);
+
+    mainframe_adapter_api::forward_session_sink!(
+        on_message,
+        on_tool_result,
+        on_permission,
+        on_exit,
+        on_error,
+        on_compact,
+        on_compact_start,
+        on_context_usage,
+        on_plan_file,
+        on_skill_file,
+        on_queued_processed,
+        on_todo_update,
+        on_pr_detected,
+        on_cli_message,
+        on_skill_loaded,
+        on_subagent_child
+    );
 }
 
 const CHAT: &str = "mf-chat-1";
 
-/// Pins Task 18's threading of the workflow store alongside `background_tasks`
-/// into `ClaudeSession::new`. Task 18 owns adjusting this call if it settles on
-/// a different constructor shape.
+/// Builds a session with the workflow store threaded alongside
+/// `background_tasks` into `ClaudeSession::new`.
 fn session_with_store(
     tracker: Arc<BackgroundTaskTracker>,
     store: Arc<ClaudeWorkflowStore>,
@@ -312,7 +300,9 @@ fn workflow_tool_result_links_the_tracker_and_the_workflow_store_without_deadloc
 struct RemoveDirOnDrop(String);
 impl Drop for RemoveDirOnDrop {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        if let Err(error) = std::fs::remove_dir_all(&self.0) {
+            tracing::warn!(%error, "best-effort operation failed");
+        }
     }
 }
 
@@ -353,66 +343,21 @@ fn write_record(project_path: &str, session_id: &str, task_id: &str) -> RemoveDi
 }
 
 async fn await_record_source(store: &ClaudeWorkflowStore, task_id: &str) -> ClaudeWorkflowRun {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-    loop {
-        let run = store
-            .runs_for_chat(CHAT)
-            .into_iter()
-            .find(|r| r.task_id == task_id);
-        if let Some(run) = run
-            && run.source == ClaudeWorkflowRunSource::Record
-        {
-            return run;
+    let mut events = store.subscribe();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Some(run) = store
+                .runs_for_chat(CHAT)
+                .into_iter()
+                .find(|r| r.task_id == task_id && r.source == ClaudeWorkflowRunSource::Record)
+            {
+                return run;
+            }
+            events.recv().await.unwrap();
         }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "terminal reconcile never applied the on-disk record"
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    })
+    .await
+    .expect("terminal reconcile applied the on-disk record")
 }
 
-/// `spawn_terminal_reconcile` only runs when `record_location` resolves, which
-/// needs a CLI session id — the `chat_id: None` sessions above never reach it.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_terminal_notification_reconciles_the_on_disk_record() {
-    let dir = tempfile::tempdir().unwrap();
-    let project_path = dir.path().to_string_lossy().into_owned();
-    let _cleanup = write_record(&project_path, "sess-wf-1", "task-9");
-
-    let tracker = Arc::new(BackgroundTaskTracker::new());
-    let store = Arc::new(ClaudeWorkflowStore::new());
-    let session = session_with_options(
-        tracker,
-        store.clone(),
-        &project_path,
-        Some("sess-wf-1".to_string()),
-    );
-    feed(
-        &session,
-        json!({ "type": "system", "subtype": "task_started", "task_id": "task-9", "task_type": "local_workflow", "description": "todo lane" }),
-    );
-
-    // `spawn_blocking` keeps the dispatch off the async worker while staying in
-    // the runtime `spawn_terminal_reconcile` needs; the timeout is the same
-    // non-reentrant-mutex guard the tests above use.
-    let dispatch = tokio::task::spawn_blocking({
-        let session = session.clone();
-        move || {
-            feed(
-                &session,
-                json!({ "type": "system", "subtype": "task_notification", "task_id": "task-9", "status": "completed", "summary": "ok" }),
-            );
-        }
-    });
-    tokio::time::timeout(Duration::from_secs(1), dispatch)
-        .await
-        .expect("handle_stdout must not deadlock on ClaudeSessionState")
-        .unwrap();
-
-    let run = await_record_source(&store, "task-9").await;
-    assert_eq!(run.run_id, Some("run-42".to_string()));
-    assert_eq!(run.phases.len(), 1);
-    assert_eq!(run.agents.len(), 1);
-    assert_eq!(run.status, ClaudeWorkflowRunStatus::Completed);
-}
+include!("cases/workflow_task_events_additional_cases.rs");

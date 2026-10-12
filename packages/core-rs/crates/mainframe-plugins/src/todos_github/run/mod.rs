@@ -1,7 +1,7 @@
-//! The sync-run driver (todo #286): the only place in `todos_github` that
+//! The sync-run driver: the only place in `todos_github` that
 //! calls the `GitHubIssues` port. Reads the link, reconciles every eligible
 //! pair through the pure `reconcile` module, and persists both the writes and
-//! the run's report. One run per project at a time (fact 12, AC35).
+//! the run's report. One run per project at a time.
 
 mod apply;
 mod fetch;
@@ -9,7 +9,7 @@ mod fetch;
 use std::sync::LazyLock;
 
 use dashmap::DashMap;
-use mainframe_runtime::time::now_iso8601;
+use mainframe_types::time::now_iso8601;
 
 use crate::PluginError;
 use crate::context::PluginContext;
@@ -36,7 +36,10 @@ impl From<PluginError> for RunError {
 /// running is refused rather than queued or blocked.
 static RUNNING: LazyLock<DashMap<String, ()>> = LazyLock::new(DashMap::new);
 
-pub async fn run_sync(ctx: &PluginContext, project_id: &str) -> Result<store::Run, RunError> {
+pub(crate) async fn run_sync(
+    ctx: &PluginContext,
+    project_id: &str,
+) -> Result<store::Run, RunError> {
     if RUNNING.insert(project_id.to_string(), ()).is_some() {
         return Err(RunError::AlreadyRunning);
     }
@@ -46,7 +49,7 @@ pub async fn run_sync(ctx: &PluginContext, project_id: &str) -> Result<store::Ru
 }
 
 /// Read access to the mutual-exclusion set for `GET /link`'s `running` field
-/// (routes.rs, task 19) — the route surface has no other way to answer it.
+/// (routes.rs) — the route surface has no other way to answer it.
 pub fn is_running(project_id: &str) -> bool {
     RUNNING.contains_key(project_id)
 }
@@ -55,10 +58,7 @@ async fn run_sync_inner(ctx: &PluginContext, project_id: &str) -> Result<store::
     let mut link = store::read_link(ctx, project_id)
         .await?
         .ok_or(RunError::NotLinked)?;
-    let repo = RepoRef {
-        owner: link.owner.clone(),
-        repo: link.repo.clone(),
-    };
+    let repo = linked_repo(&link);
     let pairs = store::pairs_for_project(ctx, project_id).await?;
 
     let run_id = nanoid::nanoid!();
@@ -105,9 +105,7 @@ async fn run_sync_inner(ctx: &PluginContext, project_id: &str) -> Result<store::
         failure_kind: stop.as_ref().map(|(kind, _)| kind.to_string()),
         failure_message: stop.as_ref().map(|(_, message)| message.clone()),
     };
-    store::insert_run(ctx, &run).await?;
-    store::insert_report_rows(ctx, &report_rows).await?;
-    store::prune_runs(ctx, project_id, KEEP_RUNS).await?;
+    persist_run(ctx, project_id, &run, &report_rows).await?;
     Ok(run)
 }
 
@@ -196,4 +194,23 @@ async fn handle_port_error(
 
 fn internal(err: PluginError) -> (&'static str, String) {
     ("internal", err.to_string())
+}
+
+async fn persist_run(
+    ctx: &PluginContext,
+    project_id: &str,
+    run: &store::Run,
+    report_rows: &[store::ReportRow],
+) -> Result<(), PluginError> {
+    store::insert_run(ctx, run).await?;
+    store::insert_report_rows(ctx, report_rows).await?;
+    store::prune_runs(ctx, project_id, KEEP_RUNS).await?;
+    Ok(())
+}
+
+fn linked_repo(link: &store::Link) -> RepoRef {
+    RepoRef {
+        owner: link.owner.clone(),
+        repo: link.repo.clone(),
+    }
 }

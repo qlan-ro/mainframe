@@ -1,4 +1,4 @@
-//! Wiring-level regression coverage for #273: the daemon's production
+//! Wiring-level regression coverage: the daemon's production
 //! `ChatManagerDeps` (`DaemonChatDeps`, assembled by `build_chat_manager`) must
 //! feed `ChatManager` enrichment the tracker's real live-task set. Unlike
 //! `mainframe-chat`'s `background_activity` unit tests — which call the private
@@ -7,8 +7,13 @@
 //! its own `start`/`end` API, read back only through `ChatManager`'s public
 //! broadcast and read paths. A regression where `tracker_list_live` silently
 //! falls back to an empty default would fail every case here.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
+use mainframe_types::settings_kv::MemorySettings;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -23,7 +28,7 @@ use mainframe_server::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 use mainframe_server::{Db, GitFactory, build_chat_manager};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::push::PushService;
-use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
 use mainframe_types::background_task::{
     BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
 };
@@ -31,18 +36,6 @@ use mainframe_types::chat::{Chat, DisplayStatus};
 use mainframe_types::events::DaemonEvent;
 use tempfile::TempDir;
 use tokio::sync::broadcast;
-
-struct NoopQuotaSettings;
-
-impl QuotaSettingsStore for NoopQuotaSettings {
-    fn get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn get_by_category(&self, _category: &str) -> HashMap<String, String> {
-        HashMap::new()
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
 
 struct Harness {
     manager: Arc<ChatManager>,
@@ -59,7 +52,7 @@ fn harness() -> Harness {
     let (broadcast, _keepalive) = broadcast::channel::<DaemonEvent>(64);
     let tracker = Arc::new(BackgroundTaskTracker::new());
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(|_| {}),
         now: None,
     }));
@@ -79,22 +72,21 @@ fn harness() -> Harness {
         })
         .unwrap();
 
-    let manager = build_chat_manager(
+    let manager = build_chat_manager(mainframe_server::ChatManagerParams {
         db,
-        Arc::new(AdapterRegistry::new()),
-        Arc::clone(&tracker),
-        Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-        Arc::new(PushService::new()),
-        GitFactory,
-        broadcast.clone(),
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+        adapters: Arc::new(AdapterRegistry::new()),
+        background_tasks: Arc::clone(&tracker),
+        attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+        push: Arc::new(PushService::new()),
+        git: GitFactory,
+        broadcast: broadcast.clone(),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::new(ClaudeWorkflowStore::new()),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        data_dir.path().to_path_buf(),
-    );
+        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+        chat_surface: None,
+        data_dir: data_dir.path().to_path_buf(),
+    });
 
     Harness {
         manager,
@@ -179,13 +171,14 @@ async fn read_paths_enrich_background_activity() {
     seed(&h, "w-1", BackgroundWorkKind::Workflow, "deploy");
 
     assert_live(&h.manager.get_chat(&h.chat_id).expect("chat must exist"), 1);
-    let listed = h.manager.list_chats(&h.project_id);
+    let listed = h.manager.list_chats(&h.project_id).unwrap();
     assert_live(listed.iter().find(|c| c.id == h.chat_id).unwrap(), 1);
-    let listed_all = h.manager.list_all_chats();
+    let listed_all = h.manager.list_all_chats().unwrap();
     assert_live(listed_all.iter().find(|c| c.id == h.chat_id).unwrap(), 1);
     let filtered = h
         .manager
-        .list_filtered(Some(&h.project_id), None, false, false, false);
+        .list_filtered(Some(&h.project_id), None, false, false, false)
+        .unwrap();
     assert_live(filtered.iter().find(|c| c.id == h.chat_id).unwrap(), 1);
 }
 

@@ -1,10 +1,11 @@
-//! Revision-cursor resume support (todo #377), split out of `resume.rs` to
-//! keep it under 300 lines. Resolves a `session/resume` cursor against a
-//! chat's `RevisionLog` when the connection opted in and the chat has one;
-//! otherwise falls straight through to the legacy item/start replay
-//! (`super::replay`) with no `cursor` meta at all — byte-identical to the
-//! pre-#377 wire for a connection that never negotiated the feature.
+//! Revision-cursor resume support, split out of `resume.rs` to keep it under
+//! 300 lines. Resolves a `session/resume` cursor against a chat's `RevisionLog`
+//! when the connection opted in and the chat has one; otherwise falls straight
+//! through to the item/start replay (`super::replay`) with no `cursor` meta at
+//! all, so a connection that never negotiated the feature sees no
+//! revision-cursor fields.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -59,11 +60,10 @@ pub(super) fn resolve(
             cursor: None,
         };
     };
-    let mut log = log_mutex.lock().unwrap_or_else(|err| err.into_inner());
-    // `seed_containers`, not `seed` (todo #376 G2 task 5): seeds the same
-    // flat item baseline `seed` would, plus the container index a later
-    // `record_delta` needs — additive here, since nothing in this crate
-    // calls `record_delta` against a chat's log yet (G4 wires the hub).
+    let mut log = log_mutex.lock_recover();
+    // `seed_containers`, not `seed`: seeds the same flat item baseline `seed`
+    // would, plus the container index the hub's later `record_delta` calls
+    // need.
     log.seed_containers(containers);
 
     let Some(cursor) = parse_revision_cursor(replay_from) else {
@@ -106,4 +106,5 @@ fn parse_revision_cursor(replay_from: Option<&Value>) -> Option<WireRevisionCurs
 }
 
 #[cfg(test)]
+#[path = "revision_tests.rs"]
 mod tests;

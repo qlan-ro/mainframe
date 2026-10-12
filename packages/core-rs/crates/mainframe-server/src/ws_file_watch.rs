@@ -1,20 +1,18 @@
-//! Ported from `src/server/ws-file-watch.ts`.
-//!
-//! Per-connection file-watch bookkeeping (PER_ENTITY per CONCURRENCY.tsv — lives
-//! inside the connection's own state, guarded by that connection's mutex) plus
-//! `resolveSubscribePath`: resolving a client-supplied path to an absolute,
-//! containment-validated path, with the chat→project ownership check.
+//! Per-connection file-watch bookkeeping (lives inside the connection's own
+//! state, guarded by that connection's mutex) plus subscribe-path resolution:
+//! resolving a client-supplied path to an absolute, containment-validated path,
+//! with the chat→project ownership check.
 
 use std::collections::{HashMap, HashSet};
 
-use mainframe_db::DatabaseManager;
+use crate::ctx::AppCtx;
 use mainframe_services::files::FileWatcherService;
 
-use crate::path_utils::resolve_and_validate_path;
+use mainframe_runtime::fs::resolve_and_validate_path;
 
 /// Composite map key so the same relative path under different projects/chats
 /// never collides. Mirrors `compositeKey`.
-pub fn composite_key(
+pub(crate) fn composite_key(
     requested_path: &str,
     project_id: Option<&str>,
     chat_id: Option<&str>,
@@ -39,7 +37,7 @@ impl WsFileWatch {
     /// Realpath + is-file check, then register the watch (once per resolved path)
     /// and record the composite mapping. Returns `(requestedPath, resolvedPath)`
     /// for the `subscribe:file:ack`, or `None` if the file is missing / not a
-    /// regular file (the TS logs a warn and returns without acking).
+    /// regular file (logged as a warning; no ack is sent).
     pub async fn subscribe(
         &mut self,
         requested_path: &str,
@@ -65,7 +63,7 @@ impl WsFileWatch {
                 return None;
             }
             Err(err) => {
-                tracing::warn!(%err, path = %resolved.display(), "subscribe:file rejected: stat failed");
+                tracing::warn!(error = %err, path = %resolved.display(), "subscribe:file rejected: stat failed");
                 return None;
             }
         }
@@ -101,7 +99,7 @@ impl WsFileWatch {
     }
 
     /// Drop every watch this client holds (on socket close).
-    pub fn unsubscribe_all(&mut self, file_watcher: &FileWatcherService) {
+    pub(crate) fn unsubscribe_all(&mut self, file_watcher: &FileWatcherService) {
         for path in self.file_subscriptions.drain() {
             file_watcher.unsubscribe(&path);
         }
@@ -109,63 +107,48 @@ impl WsFileWatch {
     }
 }
 
-/// The base directory for a *relative* `subscribe:file`, with the chat→project
-/// ownership check. Runs on the DB thread (sync repo access) — the caller then
-/// containment-validates the requested path against this base. Mirrors the
-/// non-absolute branch of `resolveSubscribePath`; returns `None` (reject) on a
-/// missing projectId, an ownership mismatch, or an unresolvable base.
-///
-/// Absolute paths are handled by the caller (returned as-is, no base) exactly as
-/// the TS `if (requestedPath.startsWith('/')) return requestedPath;` fast-path.
-pub fn resolve_subscribe_base(
-    db: &DatabaseManager,
+/// Rejects unknown chats and missing worktrees before relative-path containment checks.
+pub(crate) async fn resolve_subscribe_base(
+    ctx: &AppCtx,
     project_id: &str,
     chat_id: Option<&str>,
 ) -> Option<String> {
-    if let Some(cid) = chat_id {
-        // Only reject when the chat exists AND belongs to a different project
-        // (TS: `chatProjectId !== null && chatProjectId !== projectId`).
-        if let Ok(Some(chat)) = db.chats.get(cid)
-            && chat.project_id != project_id
-        {
-            return None;
+    match ctx.resolve_scope(project_id, chat_id).await {
+        Ok(scope) => Some(scope.path),
+        Err(error) => {
+            tracing::debug!(%error, "file subscription scope unavailable");
+            None
         }
     }
-    match chat_id {
-        Some(cid) => effective_path(db, cid),
-        None => project_path(db, project_id),
-    }
-}
-
-/// `ChatManager.getEffectivePath(chatId)` approximation: the chat's stored
-/// worktree path if set, else its project's path.
-fn effective_path(db: &DatabaseManager, chat_id: &str) -> Option<String> {
-    let chat = db.chats.get(chat_id).ok().flatten()?;
-    match chat.worktree_path {
-        Some(worktree) => Some(worktree),
-        None => project_path(db, &chat.project_id),
-    }
-}
-
-/// `ChatManager.getProjectPath(projectId)`: the project's root path.
-fn project_path(db: &DatabaseManager, project_id: &str) -> Option<String> {
-    db.projects.get(project_id).ok().flatten().map(|p| p.path)
 }
 
 /// Containment-validate a relative `requested_path` against `base` (async
 /// realpath), matching the `resolveAndValidatePath(base, requested)` tail of
 /// `resolveSubscribePath`.
-pub async fn validate_relative(base: &str, requested_path: &str) -> Option<String> {
+pub(crate) async fn validate_relative(base: &str, requested_path: &str) -> Option<String> {
     resolve_and_validate_path(base, requested_path).await
 }
 
-// PORT STATUS: src/server/ws-file-watch.ts (WsFileWatch + resolveSubscribePath)
-// confidence: medium
-// todos: 1
-// notes: WsFileWatch is per-connection PER_ENTITY state (guarded by the
-// connection mutex in websocket.rs). `resolveSubscribePath` is split: the
-// db-dependent base resolution + ownership check (`resolve_subscribe_base`) runs
-// on the DB thread; the async realpath containment check (`validate_relative`)
-// runs on the caller task. TODO(port-phase4): `effective_path` approximates
-// ChatManager.getEffectivePath by reading the chat's stored `worktree_path`; the
-// full live-worktree validation lands with the ChatManager port.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn file_subscription_rejects_unknown_chat_but_accepts_project_scope() {
+        let ctx = AppCtx::test_ctx();
+        let project = ctx
+            .core
+            .db
+            .call(|db| db.projects.create("/workspace", None))
+            .await
+            .unwrap();
+        assert_eq!(
+            resolve_subscribe_base(&ctx, &project.id, Some("unknown")).await,
+            None
+        );
+        assert_eq!(
+            resolve_subscribe_base(&ctx, &project.id, None).await,
+            Some(project.path)
+        );
+    }
+}

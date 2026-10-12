@@ -1,42 +1,22 @@
-//! Ported from `packages/core/src/git/project-lock.ts`.
-//!
-//! Per-project async mutex map. The TS module chained a `Map<string,
-//! Promise<void>>` and returned a `release()` callback; the Rust port keeps one
-//! `tokio::sync::Mutex` per project path (fair → FIFO) and hands back an owned
-//! guard whose drop *is* the release. Per CONCURRENCY.tsv this state is a
-//! module-level `SHARED_MAP` behind a `OnceLock` (no `lazy_static`/`static mut`),
-//! orthogonal to the chat lock (never nested with it — lock-ordering rule 6).
+use mainframe_runtime::sync::KeyedMutex;
+use std::sync::OnceLock;
+use tokio::sync::OwnedMutexGuard;
 
-use std::sync::{Arc, OnceLock};
-
-use dashmap::DashMap;
-use tokio::sync::{Mutex, OwnedMutexGuard};
-
-type Locks = DashMap<String, Arc<Mutex<()>>>;
-
-fn locks() -> &'static Locks {
-    static LOCKS: OnceLock<Locks> = OnceLock::new();
-    LOCKS.get_or_init(Locks::new)
-}
-
-/// Acquire a mutex for a project path. Returns a guard; dropping it releases the
-/// lock (mirrors the TS `release()` callback). Concurrent callers on the same
-/// path wait in FIFO order.
 pub async fn acquire_project_lock(project_path: &str) -> OwnedMutexGuard<()> {
-    // Clone the per-path Arc out of the map, then drop the shard guard *before*
-    // awaiting the lock (never hold a DashMap shard guard across `.await`).
-    let mutex = locks()
-        .entry(project_path.to_string())
-        .or_insert_with(|| Arc::new(Mutex::new(())))
-        .clone();
-    mutex.lock_owned().await
+    static LOCKS: OnceLock<KeyedMutex> = OnceLock::new();
+    LOCKS
+        .get_or_init(KeyedMutex::default)
+        .acquire(project_path)
+        .await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
+    use tokio::sync::Mutex;
 
     #[tokio::test]
     async fn serializes_concurrent_callers_on_same_path() {
@@ -53,7 +33,7 @@ mod tests {
                 let _guard = acquire_project_lock("/same/project").await;
                 let now = active.fetch_add(1, Ordering::SeqCst) + 1;
                 max_active.fetch_max(now, Ordering::SeqCst);
-                tokio::time::sleep(Duration::from_millis(5)).await;
+                tokio::task::yield_now().await;
                 order.lock().await.push(id);
                 active.fetch_sub(1, Ordering::SeqCst);
             }));
@@ -79,12 +59,3 @@ mod tests {
         assert!(acquired.is_ok());
     }
 }
-
-// PORT STATUS: packages/core/src/git/project-lock.ts (20 lines)
-// confidence: high
-// notes: The TS FIFO promise-chain becomes one tokio::sync::Mutex per path
-// (tokio's Mutex is fair, so FIFO holds). `release()` -> dropping the returned
-// OwnedMutexGuard. State: OnceLock<DashMap<String, Arc<Mutex<()>>>> per
-// CONCURRENCY.tsv (SHARED_MAP; module-level singleton, no static mut). Key is
-// String (the raw project path, matching the TS Map<string> key) rather than the
-// tsv's suggested PathBuf, to avoid path normalization diverging from TS keying.

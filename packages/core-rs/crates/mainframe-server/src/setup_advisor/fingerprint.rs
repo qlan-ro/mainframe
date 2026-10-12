@@ -53,7 +53,7 @@ async fn root_entries(real_root: &Path) -> Vec<(String, bool)> {
     let mut read_dir = match tokio::fs::read_dir(real_root).await {
         Ok(rd) => rd,
         Err(err) => {
-            tracing::warn!(error = %err, "setup advisor: project root is unreadable");
+            tracing::warn!(error = %err, "project root is unreadable");
             return Vec::new();
         }
     };
@@ -96,8 +96,8 @@ fn apply_root_entries(fp: &mut ProjectFingerprint, entries: &[(String, bool)]) {
 
 /// Fingerprints the project rooted at `root`.
 ///
-/// Takes only a root so todo #192 can import it standalone; it knows nothing
-/// about recommendations. Read-only: no writes, no subprocesses.
+/// Takes only a root so other callers can import it standalone; it knows
+/// nothing about recommendations. Read-only: no writes, no subprocesses.
 pub async fn fingerprint(root: &Path) -> ProjectFingerprint {
     let mut fp = ProjectFingerprint::default();
     // Canonicalize once at the entry point: every containment check below
@@ -106,7 +106,7 @@ pub async fn fingerprint(root: &Path) -> ProjectFingerprint {
     let real_root = match tokio::fs::canonicalize(root).await {
         Ok(path) => path,
         Err(err) => {
-            tracing::warn!(error = %err, "setup advisor: project root does not resolve");
+            tracing::warn!(error = %err, "project root does not resolve");
             return fp;
         }
     };
@@ -122,4 +122,5 @@ pub async fn fingerprint(root: &Path) -> ProjectFingerprint {
 }
 
 #[cfg(test)]
+#[path = "fingerprint_tests.rs"]
 mod tests;

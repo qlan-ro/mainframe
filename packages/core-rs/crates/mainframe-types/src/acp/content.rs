@@ -1,8 +1,8 @@
 //! ACP content blocks (schema `ContentBlock`) and streamed chunks
-//! (`ContentChunk`), scoped to the `text` and `image` variants (spec
-//! Decision 22): both have producers (`LeafContent::Text`/`Image`), while
+//! (`ContentChunk`), scoped to the `text` and `image` variants: both have
+//! producers (`LeafContent::Text`/`Image`), while
 //! `audio`/`resource`/`resource_link` stay out — no producer in any adapter
-//! pipeline (spec Decision 17). Adding a variant is additive to this enum.
+//! pipeline. Adding a variant is additive to this enum.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

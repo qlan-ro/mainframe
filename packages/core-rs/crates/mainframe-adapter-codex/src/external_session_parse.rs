@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/plugins/builtin/codex/external-session-parse.ts`.
-//!
 //! Parsing for Codex rollout JSONL heads: session_meta facts and the first real
 //! user prompt. Kept separate from the filesystem scan so both stay small.
 //!
@@ -226,7 +224,7 @@ fn collapse_whitespace(s: &str) -> String {
 }
 
 /// First block, across all user messages, that isn't injected context.
-pub fn first_user_prompt(lines: &[RolloutLine]) -> Option<String> {
+pub(crate) fn first_user_prompt(lines: &[RolloutLine]) -> Option<String> {
     for line in lines {
         for text in user_text_blocks(line) {
             if text.is_empty() || is_preamble(&text) {
@@ -241,7 +239,7 @@ pub fn first_user_prompt(lines: &[RolloutLine]) -> Option<String> {
     None
 }
 
-pub fn extract_meta(lines: &[RolloutLine], head: &str) -> RolloutMeta {
+pub(crate) fn extract_meta(lines: &[RolloutLine], head: &str) -> RolloutMeta {
     let meta = lines
         .iter()
         .find(|l| l.kind.as_deref() == Some("session_meta"))
@@ -310,33 +308,5 @@ fn cwd_regex(head: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn strip_tag_pairs_removes_image_block() {
-        assert_eq!(
-            clean_prompt("<image name=[Image #1]></image>Add a dark mode toggle to settings"),
-            "Add a dark mode toggle to settings"
-        );
-    }
-
-    #[test]
-    fn cwd_regex_extracts_first_value() {
-        assert_eq!(
-            cwd_regex(r#"{"payload":{"cwd":"/Users/dev/app","x":1}}"#).as_deref(),
-            Some("/Users/dev/app")
-        );
-    }
-}
-
-// PORT STATUS: src/plugins/builtin/codex/external-session-parse.ts (91 lines)
-// confidence: high
-// todos: 0
-// notes: NEW (#430). RolloutLine/payload/content deserialize with serde (unknown
-// notes: fields tolerated). The three JS regexes are hand-rolled scanners (no `regex`
-// notes: crate on the allowlist): strip_tag_pairs = /<[^>]+>[^<]*<\/[^>]+>/g,
-// notes: strip_tags = /<[^>]+>/g, collapse_whitespace = /\s+/g→' ', cwd_regex =
-// notes: /"cwd"\s*:\s*"((?:[^"\\]|\\.)*)"/ (raw capture, escapes intact). is_preamble
-// notes: mirrors the prefix list + first-200-char <INSTRUCTIONS> probe. extract_meta's
-// notes: git branch `|| undefined` maps to filter(non-empty).
+#[path = "external_session_parse_tests.rs"]
+mod tests;

@@ -1,16 +1,18 @@
-//! Shared integration-test harness: spawns `build_app` on an ephemeral port with
-//! a real in-memory DB + real service collaborators (no mocks), plus a minimal
-//! hand-rolled RFC-6455 WebSocket client (no ws client crate is in the workspace
-//! allowlist).
-#![allow(clippy::unwrap_used, clippy::expect_used, dead_code)]
+//! Integration harness with an in-memory database and a WebSocket client.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
+#![allow(clippy::too_many_lines, dead_code, reason = "Shared test helpers")]
 
 pub mod barrier_adapter;
 pub mod facade;
 pub mod raw_http;
+pub mod settings_http;
 pub mod tool_timing_adapter;
 
 use std::net::SocketAddr;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -94,39 +96,39 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
         let _ = watcher_tx.send(event);
     });
     let port_tunnels = tunnel.map(|stub| build_port_tunnels(data_dir.path(), stub, &broadcast));
-    let ctx = Arc::new(AppCtx {
-        db,
-        git: GitFactory,
-        services: Services {
-            attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-            push: Arc::new(PushService::new()),
-            watcher: Arc::new(watcher),
-        },
-        broadcast,
-        adapter_registry: Arc::new(mainframe_adapter_api::AdapterRegistry::new()),
-        background_tasks: Arc::new(
-            mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
-        ),
-        claude_workflows: Arc::new(mainframe_claude_workflows::store::ClaudeWorkflowStore::new()),
-        chat_manager: None,
-        launch_registry: None,
-        tunnel_manager: None,
-        port_tunnels,
-        lsp_manager: None,
-        plugin_manager: None,
-        automations: None,
-        orchestration: None,
-        quota: None,
-        data_dir: data_dir.path().to_path_buf(),
-        version: "0.0.0-test".to_string(),
-        port,
-        auth_secret,
-        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-        ws_clients: Arc::new(DashMap::new()),
-        facade_hub: Arc::new(mainframe_server::FacadeHub::default()),
-        facade_heartbeat_interval_ms,
-    });
+    let ctx = Arc::new(
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
+            .git(GitFactory)
+            .services(Services {
+                attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+                push: Arc::new(PushService::new()),
+                watcher: Arc::new(watcher),
+            })
+            .broadcast(broadcast)
+            .adapter_registry(Arc::new(mainframe_adapter_api::AdapterRegistry::new()))
+            .background_tasks(Arc::new(
+                mainframe_background_tasks::tracker::BackgroundTaskTracker::new(),
+            ))
+            .claude_workflows(Arc::new(
+                mainframe_claude_workflows::store::ClaudeWorkflowStore::new(),
+            ))
+            .port_tunnels(port_tunnels.unwrap_or_else(|| {
+                Arc::new(mainframe_launch::PortTunnelRegistry::new(Arc::new(
+                    mainframe_launch::TunnelManager::new(None),
+                )))
+            }))
+            .automations(None)
+            .version("0.0.0-test".to_string())
+            .port(port)
+            .auth_secret(auth_secret)
+            .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
+            .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
+            .ws_clients(Arc::new(DashMap::new()))
+            .facade_hub(Arc::new(mainframe_server::FacadeHub::default()))
+            .facade_heartbeat_interval_ms(facade_heartbeat_interval_ms)
+            .build()
+            .unwrap(),
+    );
     spawn_broadcast_pump(Arc::clone(&ctx));
 
     let app = build_app(Arc::clone(&ctx));
@@ -142,8 +144,6 @@ pub async fn spawn_test_server_with(opts: TestServerOptions) -> TestServer {
         .await
     });
 
-    // Give the listener a beat to start accepting.
-    tokio::time::sleep(Duration::from_millis(20)).await;
     TestServer {
         addr,
         ctx,
@@ -174,8 +174,7 @@ fn build_port_tunnels(
         ),
     };
     let script = dir.join(name);
-    std::fs::write(&script, body).unwrap();
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    mainframe_runtime::test_support::write_shell_script(&script, &body).unwrap();
 
     let tx = broadcast.clone();
     let manager = mainframe_launch::TunnelManager::with_config(
@@ -210,6 +209,7 @@ impl TestServer {
         let did = device_id.to_string();
         let epoch = self
             .ctx
+            .core
             .db
             .call(move |db| {
                 db.devices.add(&did, "Test Device")?;
@@ -224,6 +224,7 @@ impl TestServer {
     pub async fn create_project(&self, path: &str) -> String {
         let path = path.to_string();
         self.ctx
+            .core
             .db
             .call(move |db| db.projects.create(&path, None))
             .await
@@ -418,3 +419,5 @@ impl WsClient {
         self.stream.read_exact(buf).await.ok().map(|_| ())
     }
 }
+
+pub mod helpers;

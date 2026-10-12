@@ -1,30 +1,29 @@
-//! Shared harness for `run.rs`/`pairing.rs` tests (todo #286): unlike the
+//! Shared harness for `run.rs`/`pairing.rs` tests: unlike the
 //! rest of `todos_github`, those two modules call the `GitHubIssues` port, so
 //! `todos::tests::setup()` (which hardcodes `github: None`) can't be reused.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use axum::extract::State;
-use mainframe_types::chat::{Chat, Project};
+use mainframe_types::chat::Chat;
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
+use mainframe_types::settings_kv::{MemorySettings, SettingsKv};
 
 use crate::context::{PluginContextDeps, PluginHostDb, build_plugin_context};
-use crate::event_bus::PublicDaemonBus;
 use crate::github_port::GitHubIssues;
 use crate::{PluginContext, todos};
 
 #[derive(Default)]
 struct FakeHostDb {
-    settings: Mutex<HashMap<(String, String), String>>,
+    settings: MemorySettings,
 }
 
 impl PluginHostDb for FakeHostDb {
-    fn chats_list(&self, _project_id: &str) -> Vec<Chat> {
-        Vec::new()
+    fn chats_list(&self, _project_id: &str) -> Result<Vec<Chat>, crate::PluginError> {
+        Ok(Vec::new())
     }
-    fn chats_get(&self, _id: &str) -> Option<Chat> {
-        None
+    fn chats_get(&self, _id: &str) -> Result<Option<Chat>, crate::PluginError> {
+        Ok(None)
     }
     fn chats_create(
         &self,
@@ -32,27 +31,11 @@ impl PluginHostDb for FakeHostDb {
         _adapter_id: &str,
         _model: Option<&str>,
         _permission_mode: Option<&str>,
-    ) -> Chat {
+    ) -> Result<Chat, crate::PluginError> {
         unreachable!("the sync engine never creates chats")
     }
-    fn settings_get(&self, category: &str, key: &str) -> Option<String> {
-        self.settings
-            .lock()
-            .unwrap()
-            .get(&(category.to_string(), key.to_string()))
-            .cloned()
-    }
-    fn settings_set(&self, category: &str, key: &str, value: &str) {
-        self.settings
-            .lock()
-            .unwrap()
-            .insert((category.to_string(), key.to_string()), value.to_string());
-    }
-    fn projects_list(&self) -> Vec<Project> {
-        Vec::new()
-    }
-    fn projects_get(&self, _id: &str) -> Option<Project> {
-        None
+    fn settings(&self) -> &dyn SettingsKv {
+        &self.settings
     }
 }
 
@@ -83,9 +66,7 @@ pub(crate) async fn setup(github: Arc<dyn GitHubIssues>) -> Harness {
         manifest,
         plugin_dir: dir.path().to_path_buf(),
         host_db: host,
-        daemon_bus: Arc::new(PublicDaemonBus::new()),
         emit: Arc::new(|_| {}),
-        adapters: None,
         github: Some(github),
     })
     .unwrap();

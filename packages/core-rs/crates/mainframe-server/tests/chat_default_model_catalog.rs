@@ -1,6 +1,11 @@
 //! Provider model selections survive incomplete adapter catalogs.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
+use mainframe_types::settings_kv::MemorySettings;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -12,26 +17,13 @@ use mainframe_server::chat_seams::{NoopLaunchStopper, NoopScopeTunnelStopper};
 use mainframe_server::{Db, GitFactory, build_chat_manager};
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::push::PushService;
-use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
 use mainframe_types::adapter::{AdapterCapabilities, AdapterModel};
-use std::collections::HashMap;
 use tempfile::TempDir;
 use tokio::sync::broadcast;
 
-struct NoopQuotaSettings;
-
-impl QuotaSettingsStore for NoopQuotaSettings {
-    fn get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn get_by_category(&self, _category: &str) -> HashMap<String, String> {
-        HashMap::new()
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
-
 /// A minimal `Adapter` double whose only purpose is to advertise a fixed model
-/// catalog via `get_fallback_models()` so `AdapterRegistry::seed_static_snapshots`
+/// catalog via `catalog()` so `AdapterRegistry::seed_static_snapshots`
 /// can populate a snapshot without spawning a CLI. The test never starts a
 /// session, so `create_session` is unreachable.
 struct CatalogAdapter {
@@ -60,13 +52,10 @@ impl Adapter for CatalogAdapter {
     fn get_version(&self) -> BoxFuture<'_, Result<Option<String>, AdapterError>> {
         Box::pin(async { Ok(None) })
     }
-    fn list_models(&self) -> BoxFuture<'_, Result<Vec<AdapterModel>, AdapterError>> {
-        let models = self.models.clone();
-        Box::pin(async move { Ok(models) })
+    fn catalog(&self) -> Vec<AdapterModel> {
+        self.models.clone()
     }
-    fn get_fallback_models(&self) -> Option<Vec<AdapterModel>> {
-        Some(self.models.clone())
-    }
+
     fn create_session(
         &self,
         _options: mainframe_types::adapter::SessionOptions,
@@ -107,7 +96,7 @@ fn harness(saved_default: Option<&str>, chat_adapter_id: &str) -> Harness {
     let (broadcast, _keepalive) = broadcast::channel::<mainframe_types::events::DaemonEvent>(64);
     let tracker = Arc::new(mainframe_background_tasks::tracker::BackgroundTaskTracker::new());
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(|_| {}),
         now: None,
     }));
@@ -131,22 +120,21 @@ fn harness(saved_default: Option<&str>, chat_adapter_id: &str) -> Harness {
             .unwrap();
     }
 
-    let manager = build_chat_manager(
+    let manager = build_chat_manager(mainframe_server::ChatManagerParams {
         db,
-        registry,
-        tracker,
-        Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
-        Arc::new(PushService::new()),
-        GitFactory,
+        adapters: registry,
+        background_tasks: tracker,
+        attachments: Arc::new(AttachmentStore::new(data_dir.path().join("attachments"))),
+        push: Arc::new(PushService::new()),
+        git: GitFactory,
         broadcast,
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
         quota,
-        Arc::new(ClaudeWorkflowStore::new()),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        data_dir.path().to_path_buf(),
-    );
+        claude_workflows: Arc::new(ClaudeWorkflowStore::new()),
+        chat_surface: None,
+        data_dir: data_dir.path().to_path_buf(),
+    });
 
     Harness {
         manager,
@@ -170,7 +158,8 @@ async fn saved_default_outside_the_catalog_is_preserved() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.model.as_deref(), Some("model-retired"));
     let reread = h.manager.get_chat(&chat.id).expect("chat must exist");
@@ -194,7 +183,8 @@ async fn saved_default_present_in_the_catalog_survives() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.model.as_deref(), Some("model-live"));
 }
@@ -214,7 +204,8 @@ async fn an_adapter_without_a_snapshot_keeps_the_saved_default() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(chat.model.as_deref(), Some("model-retired"));
 }

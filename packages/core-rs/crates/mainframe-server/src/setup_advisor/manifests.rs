@@ -7,8 +7,8 @@ use std::path::Path;
 
 use mainframe_types::setup_advisor::ProjectFingerprint;
 
-use crate::path_utils::is_within_base;
 use crate::setup_advisor::detections::push_unique;
+use mainframe_runtime::fs::is_within_base;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Bucket {
@@ -91,7 +91,7 @@ async fn contained_root_file(real_root: &Path, name: &str) -> Option<std::path::
     if !is_within_base(real_root, &real) {
         tracing::warn!(
             file = name,
-            "setup advisor: root file resolves outside the project; skipping"
+            "root file resolves outside the project; skipping"
         );
         return None;
     }
@@ -113,7 +113,7 @@ pub(super) async fn read_contained_root_file(real_root: &Path, name: &str) -> Op
         tracing::warn!(
             file = name,
             size,
-            "setup advisor: manifest exceeds the size cap; skipping it"
+            "manifest exceeds the size cap; skipping it"
         );
         return None;
     }
@@ -159,7 +159,7 @@ async fn detect_package_json(real_root: &Path, fp: &mut ProjectFingerprint) {
         return;
     };
     let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&raw) else {
-        tracing::warn!("setup advisor: package.json is not valid JSON; skipping it");
+        tracing::warn!("package.json is not valid JSON; skipping it");
         return;
     };
     for section in ["dependencies", "devDependencies"] {
@@ -232,7 +232,7 @@ async fn detect_pyproject(real_root: &Path, fp: &mut ProjectFingerprint) {
         return;
     };
     let Ok(parsed) = raw.parse::<toml::Value>() else {
-        tracing::warn!("setup advisor: pyproject.toml is not valid TOML; skipping it");
+        tracing::warn!("pyproject.toml is not valid TOML; skipping it");
         return;
     };
     record(fp, Bucket::Language, "python");
@@ -265,4 +265,5 @@ pub async fn detect_root_manifests(real_root: &Path, fp: &mut ProjectFingerprint
 }
 
 #[cfg(test)]
+#[path = "manifests_tests.rs"]
 mod tests;

@@ -1,17 +1,15 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/external-session-enrich.ts`.
-//!
 //! Reads the head/tail of an external session JSONL, applies hide rules
 //! (sidechain / team / wrong-cwd), and projects it to an `ExternalSession`.
 
 use std::io::SeekFrom;
 
 use chrono::{DateTime, Utc};
-use mainframe_runtime::time::{now_iso8601, to_iso8601};
 use mainframe_types::adapter::ExternalSession;
+use mainframe_types::time::{now_iso8601, to_iso8601};
 use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
-use crate::external_session_paths::cwd_belongs_to_project;
+use mainframe_types::paths::cwd_belongs_to_project;
 
 pub const SYNTHETIC_TITLE: &str = "(session)";
 const READ_BYTES: u64 = 64 * 1024;
@@ -201,13 +199,15 @@ fn fallback_from_ms(ms: f64) -> String {
 
 /// Read the file's head/tail, apply hide rules, and project to an
 /// `ExternalSession` (or `None` to drop).
-pub async fn enrich_session(candidate: &Candidate, project_path: &str) -> Option<ExternalSession> {
+pub(crate) async fn enrich_session(
+    candidate: &Candidate,
+    project_path: &str,
+) -> Option<ExternalSession> {
     let (head, tail) = match read_head_tail(&candidate.file_path).await {
         Ok(ht) => ht,
         Err(err) => {
             tracing::warn!(
-                module = "claude:external-session-enrich",
-                err = %err,
+                error = %err,
                 file_path = %candidate.file_path,
                 "failed to read external session file"
             );
@@ -226,21 +226,14 @@ pub async fn enrich_session(candidate: &Candidate, project_path: &str) -> Option
     all.extend(tail_entries);
 
     let cwd = pick_string(&all, "cwd");
-    if !cwd_belongs_to_project(cwd.as_deref(), project_path) {
+    if !cwd_belongs_to_project(cwd.as_deref().filter(|cwd| !cwd.is_empty()), project_path) {
         return None;
     }
 
     let git_branch = pick_string(&all, "gitBranch");
     let created_at = pick_string(&all, "timestamp");
 
-    let first_user = head_entries.iter().find(|e| {
-        e.get("type").and_then(Value::as_str) == Some("user")
-            && e.get("message").and_then(|m| m.get("content")).is_some()
-    });
-    let first_prompt_raw =
-        first_user.and_then(|e| raw_text(e.get("message").and_then(|m| m.get("content")), 2000));
-    let first_prompt =
-        first_prompt_raw.map(|r| clean_prompt(&r).chars().take(500).collect::<String>());
+    let first_prompt = first_prompt(&head_entries);
 
     // Title precedence: customTitle > aiTitle > summary > firstPrompt > synthetic.
     let title = pick_string(&all, "customTitle")
@@ -249,13 +242,7 @@ pub async fn enrich_session(candidate: &Candidate, project_path: &str) -> Option
         .or_else(|| first_prompt.clone())
         .unwrap_or_else(|| SYNTHETIC_TITLE.to_string());
 
-    let modified_at = match tokio::fs::metadata(&candidate.file_path).await {
-        Ok(m) => match m.modified() {
-            Ok(t) => to_iso8601(DateTime::<Utc>::from(t)),
-            Err(_) => fallback_from_ms(candidate.mtime_ms),
-        },
-        Err(_) => fallback_from_ms(candidate.mtime_ms),
-    };
+    let modified_at = modification_time(candidate).await;
 
     Some(ExternalSession {
         session_id: candidate.session_id.clone(),
@@ -274,119 +261,26 @@ pub async fn enrich_session(candidate: &Candidate, project_path: &str) -> Option
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+#[path = "external_session_enrich_tests.rs"]
+mod tests;
 
-    async fn write_temp(content: &str) -> (tempfile::TempDir, Candidate) {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("abc.jsonl");
-        tokio::fs::write(&file, content).await.unwrap();
-        let cand = Candidate {
-            session_id: "abc".to_string(),
-            file_path: file.to_string_lossy().to_string(),
-            mtime_ms: 1000.0,
-            size: 0,
-        };
-        (dir, cand)
-    }
-
-    #[tokio::test]
-    async fn uses_custom_title_over_ai_over_first_prompt() {
-        let (_d, cand) = write_temp(
-            &serde_json::json!({
-                "type": "user",
-                "cwd": "/p",
-                "timestamp": "2026-01-01T00:00:00Z",
-                "customTitle": "My Title",
-                "aiTitle": "AI Title",
-                "message": { "content": "Fix login" }
-            })
-            .to_string(),
-        )
-        .await;
-        let s = enrich_session(&cand, "/p").await.unwrap();
-        assert_eq!(s.title.as_deref(), Some("My Title"));
-    }
-
-    #[tokio::test]
-    async fn falls_back_to_ai_title_then_first_prompt() {
-        let (_d1, c1) = write_temp(
-            &serde_json::json!({
-                "type": "user", "cwd": "/p", "timestamp": "2026-01-01T00:00:00Z",
-                "aiTitle": "AI Title", "message": { "content": "Fix login" }
-            })
-            .to_string(),
-        )
-        .await;
-        assert_eq!(
-            enrich_session(&c1, "/p").await.unwrap().title.as_deref(),
-            Some("AI Title")
-        );
-
-        let (_d2, c2) = write_temp(
-            &serde_json::json!({
-                "type": "user", "cwd": "/p", "timestamp": "2026-01-01T00:00:00Z",
-                "message": { "content": "Fix login" }
-            })
-            .to_string(),
-        )
-        .await;
-        let s = enrich_session(&c2, "/p").await.unwrap();
-        assert_eq!(s.title.as_deref(), Some("Fix login"));
-        assert_eq!(s.first_prompt.as_deref(), Some("Fix login"));
-    }
-
-    #[tokio::test]
-    async fn drops_sidechain_sessions() {
-        let (_d, c) = write_temp(
-            &serde_json::json!({ "type": "user", "isSidechain": true, "cwd": "/p", "message": { "content": "x" } })
-                .to_string(),
-        )
-        .await;
-        assert!(enrich_session(&c, "/p").await.is_none());
-    }
-
-    #[tokio::test]
-    async fn drops_team_sessions() {
-        let (_d, c) = write_temp(
-            &serde_json::json!({ "type": "user", "teamName": "acme", "cwd": "/p", "message": { "content": "x" } })
-                .to_string(),
-        )
-        .await;
-        assert!(enrich_session(&c, "/p").await.is_none());
-    }
-
-    #[tokio::test]
-    async fn drops_wrong_cwd_sessions() {
-        let (_d, c) = write_temp(
-            &serde_json::json!({ "type": "user", "cwd": "/p-web", "timestamp": "2026-01-01T00:00:00Z", "message": { "content": "x" } })
-                .to_string(),
-        )
-        .await;
-        assert!(enrich_session(&c, "/p").await.is_none());
-    }
-
-    #[tokio::test]
-    async fn keeps_empty_session_with_synthetic_title() {
-        let (_d, c) = write_temp(
-            &serde_json::json!({ "type": "system", "cwd": "/p", "timestamp": "2026-01-01T00:00:00Z" }).to_string(),
-        )
-        .await;
-        let s = enrich_session(&c, "/p").await.unwrap();
-        assert_eq!(s.title.as_deref(), Some(SYNTHETIC_TITLE));
+async fn modification_time(candidate: &Candidate) -> String {
+    match tokio::fs::metadata(&candidate.file_path).await {
+        Ok(m) => match m.modified() {
+            Ok(t) => to_iso8601(DateTime::<Utc>::from(t)),
+            Err(_) => fallback_from_ms(candidate.mtime_ms),
+        },
+        Err(_) => fallback_from_ms(candidate.mtime_ms),
     }
 }
 
-// PORT STATUS: src/plugins/builtin/claude/external-session-enrich.ts (140 lines)
-// confidence: high
-// todos: 0
-// notes: readHeadTail uses positional read_exact (head from 0, tail via seek);
-// Buffer.toString('utf-8') → from_utf8_lossy (64KB boundary may split a
-// codepoint). The hide-flag regexes and cleanPrompt's three regexes are
-// hand-rolled. `.slice(0,N)` → chars().take(N) (UTF-16-unit vs char divergence on
-// astral chars — untested edge). summary is intentionally NOT populated (the TS
-// return omits it though it feeds title precedence). mtime → chrono
-// DateTime::<Utc>::from(SystemTime); the mtimeMs fallback uses
-// from_timestamp_millis. All 6 TS tests ported using real temp files (the TS
-// mocked fs open/stat — tokio::fs isn't mockable, so real files exercise the
-// same path and assert the same title/firstPrompt outputs).
+fn first_prompt(head_entries: &[Value]) -> Option<String> {
+    let first_user = head_entries.iter().find(|e| {
+        e.get("type").and_then(Value::as_str) == Some("user")
+            && e.get("message").and_then(|m| m.get("content")).is_some()
+    });
+    let first_prompt_raw =
+        first_user.and_then(|e| raw_text(e.get("message").and_then(|m| m.get("content")), 2000));
+
+    first_prompt_raw.map(|r| clean_prompt(&r).chars().take(500).collect::<String>())
+}

@@ -130,7 +130,7 @@ pub fn cap_chars(text: &str, max: usize) -> String {
 /// The success envelope. Claude shows `structuredContent` in place of the text
 /// when both exist, so both carry the same object.
 #[must_use]
-pub fn tool_success(result: Value) -> Value {
+pub(crate) fn tool_success(result: Value) -> Value {
     let text = result.to_string();
     if text.len() > RESULT_BUDGET_BYTES {
         // Tools budget their own output; reaching this means a tool forgot to,
@@ -145,7 +145,7 @@ pub fn tool_success(result: Value) -> Value {
 }
 
 #[must_use]
-pub fn tool_failure(err: &ToolError) -> Value {
+pub(crate) fn tool_failure(err: &ToolError) -> Value {
     json!({
         "content": [{ "type": "text", "text": err.to_string() }],
         "structuredContent": {

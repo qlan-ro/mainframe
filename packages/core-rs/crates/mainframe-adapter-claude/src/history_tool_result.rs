@@ -1,16 +1,13 @@
-//! Ported from `packages/core/src/plugins/builtin/claude/history-tool-result.ts`.
-//!
 //! Shared builders for turning a Claude JSONL `message.content` array plus its
-//! `toolUseResult` sidecar into transcript `tool_result` blocks. The TS operates
-//! on untyped `Record<string, unknown>`; the port navigates `serde_json::Value`
-//! the same way. Also home to the small JS-semantics JSON helpers reused by the
-//! history-converters / history-subagents siblings.
+//! `toolUseResult` sidecar into transcript `tool_result` blocks, navigating
+//! untyped `serde_json::Value`. Also home to the small JSON compatibility helpers
+//! reused by the history-converters / history-subagents siblings.
 
 use mainframe_types::chat::{DiffHunk, MessageContent, MessageContentNode};
 use mainframe_types::content::ToolResultImage;
 use serde_json::Value;
 
-// ── shared JS-semantics helpers ─────────────────────────────────────────────
+// ── shared JSON compatibility helpers ─────────────────────────────────────────────
 
 /// JS truthiness for a possibly-absent JSON value (`!!v`).
 pub(crate) fn js_truthy(v: Option<&Value>) -> bool {
@@ -23,7 +20,10 @@ pub(crate) fn js_truthy(v: Option<&Value>) -> bool {
     }
 }
 
-pub fn derive_modified_file(tur: Option<&Value>, original_file: Option<&str>) -> Option<String> {
+pub(crate) fn derive_modified_file(
+    tur: Option<&Value>,
+    original_file: Option<&str>,
+) -> Option<String> {
     let tur = tur?;
     let tur_type = tur.get("type").and_then(Value::as_str);
     if let Some(Value::String(content)) = tur.get("content")
@@ -48,7 +48,7 @@ pub fn derive_modified_file(tur: Option<&Value>, original_file: Option<&str>) ->
     None
 }
 
-pub fn extract_tool_result_content(content: Option<&Value>) -> String {
+pub(crate) fn extract_tool_result_content(content: Option<&Value>) -> String {
     // `JSON.stringify(content ?? '')`: null/absent → '' → `""`.
     let Some(value) = content else {
         return "\"\"".to_string();
@@ -66,8 +66,8 @@ pub fn extract_tool_result_content(content: Option<&Value>) -> String {
                 return texts.join("\n");
             }
             // An image-only array (no text blocks) never stringifies to JSON —
-            // the images travel separately via `extract_tool_result_images`
-            // (todo #363); base64 must never land in the text content.
+            // the images travel separately via `extract_tool_result_images`;
+            // base64 must never land in the text content.
             let is_image_only = !arr.is_empty()
                 && arr
                     .iter()
@@ -85,8 +85,8 @@ pub fn extract_tool_result_content(content: Option<&Value>) -> String {
 
 /// Extract `source.type == "base64"` image blocks from a `tool_result`
 /// content array, in source order. Non-array content and non-base64 or
-/// malformed image blocks yield nothing (todo #363).
-pub fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolResultImage> {
+/// malformed image blocks yield nothing.
+pub(crate) fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolResultImage> {
     let Some(Value::Array(arr)) = content else {
         return Vec::new();
     };
@@ -109,7 +109,10 @@ pub fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolResultImag
         .collect()
 }
 
-pub fn build_tool_result_blocks(message: &Value, tur: Option<&Value>) -> Vec<MessageContent> {
+pub(crate) fn build_tool_result_blocks(
+    message: &Value,
+    tur: Option<&Value>,
+) -> Vec<MessageContent> {
     let raw_content = match message.get("content") {
         Some(Value::Array(arr)) => arr,
         _ => return Vec::new(),
@@ -150,93 +153,10 @@ pub fn build_tool_result_blocks(message: &Value, tur: Option<&Value>) -> Vec<Mes
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
+#[path = "history_tool_result_tests.rs"]
+mod tests;
 
-    #[test]
-    fn extract_string_content() {
-        assert_eq!(extract_tool_result_content(Some(&json!("hello"))), "hello");
-    }
-
-    #[test]
-    fn extract_flattens_text_blocks() {
-        let c = json!([{ "type": "text", "text": "A" }, { "type": "text", "text": "B" }]);
-        assert_eq!(extract_tool_result_content(Some(&c)), "A\nB");
-    }
-
-    #[test]
-    fn extract_null_becomes_empty_json_string() {
-        assert_eq!(extract_tool_result_content(None), "\"\"");
-        assert_eq!(extract_tool_result_content(Some(&Value::Null)), "\"\"");
-    }
-
-    #[test]
-    fn derive_modified_from_create_content() {
-        let tur = json!({ "type": "create", "content": "new file body" });
-        assert_eq!(
-            derive_modified_file(Some(&tur), None),
-            Some("new file body".to_string())
-        );
-    }
-
-    #[test]
-    fn derive_modified_from_edit_first_occurrence() {
-        let tur = json!({ "oldString": "a", "newString": "b" });
-        assert_eq!(
-            derive_modified_file(Some(&tur), Some("a a")),
-            Some("b a".to_string())
-        );
-    }
-
-    #[test]
-    fn derive_modified_replace_all() {
-        let tur = json!({ "oldString": "a", "newString": "b", "replaceAll": true });
-        assert_eq!(
-            derive_modified_file(Some(&tur), Some("a a")),
-            Some("b b".to_string())
-        );
-    }
-
-    #[test]
-    fn build_blocks_filters_to_tool_results() {
-        let message = json!({
-            "content": [
-                { "type": "text", "text": "ignore" },
-                { "type": "tool_result", "tool_use_id": "tu_1", "content": "OK", "is_error": false }
-            ]
-        });
-        let blocks = build_tool_result_blocks(&message, None);
-        assert_eq!(blocks.len(), 1);
-        match &blocks[0] {
-            MessageContent::Node(MessageContentNode::ToolResult {
-                tool_use_id,
-                content,
-                is_error,
-                ..
-            }) => {
-                assert_eq!(tool_use_id, "tu_1");
-                assert_eq!(content, "OK");
-                assert!(!is_error);
-            }
-            _ => panic!("expected tool_result"),
-        }
-    }
-}
-
-// Tool-result image tests (todo #363) live in a sibling file to keep this one
+// Tool-result image tests live in a sibling file to keep this one
 // under the 300-line cap; `super::*` inside it resolves against this module.
 #[cfg(test)]
 mod image_tests;
-
-// PORT STATUS: src/plugins/builtin/claude/history-tool-result.ts (58 lines)
-// confidence: high
-// todos: 0
-// notes: operates on serde_json::Value like the TS Record<string,unknown>.
-// structuredPatch is deserialized to Vec<DiffHunk> (TS casts blindly); malformed
-// hunks are dropped rather than passed through raw (typed MessageContent can't
-// hold arbitrary JSON) — CLI shape is stable. js_truthy/get are pub(crate) so
-// history-converters/history-subagents share them (3+ call sites) without a new
-// module file. WIRE NOTE: the JSON.stringify fallback for object-shaped
-// tool_result content uses serde_json (BTreeMap-sorted keys) vs JS insertion
-// order — untested edge; the covered paths are string + text-array.

@@ -1,50 +1,28 @@
 //! Route tests for `git_chat.rs` — the worktree-missing (409) / chat-not-found
-//! (404) guards and the cross-project guard from `git-chat.test.ts`, translated
-//! onto a real DB + real git repos. Chats are created via the db chats repo and
-//! their `worktree_path` set through `ChatUpdate` (the Phase-4 ChatManager is not
-//! required — resolution goes through the shared git.rs helpers).
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! (404) guards and the cross-project guard, on a real DB + real git repos.
+//! Chats are created via the db chats repo and their `worktree_path` set through
+//! `ChatPatch` (no ChatManager is required — resolution goes through the shared
+//! git.rs helpers).
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
-use std::path::Path;
-
-use mainframe_db::ChatUpdate;
+use mainframe_types::chat_patch::ChatPatch;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use support::{TestServer, spawn_test_server};
 
-fn run_git(cwd: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
-
-fn init_repo() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    run_git(dir.path(), &["init", "-b", "main"]);
-    run_git(dir.path(), &["config", "user.email", "t@t.com"]);
-    run_git(dir.path(), &["config", "user.name", "T"]);
-    run_git(dir.path(), &["config", "commit.gpgsign", "false"]);
-    std::fs::write(dir.path().join("README.md"), "hello\n").unwrap();
-    run_git(dir.path(), &["add", "-A"]);
-    run_git(dir.path(), &["commit", "-m", "init"]);
-    dir
-}
+use support::helpers::init_repo;
 
 async fn create_chat(server: &TestServer, project_id: &str) -> String {
     let pid = project_id.to_string();
     server
         .ctx
+        .core
         .db
         .call(move |db| {
             db.chats.create(&mainframe_types::chat::NewChat {
@@ -63,11 +41,12 @@ async fn set_worktree(server: &TestServer, chat_id: &str, path: &str) {
     let wt = path.to_string();
     server
         .ctx
+        .core
         .db
         .call(move |db| {
             db.chats.update(
                 &cid,
-                &ChatUpdate {
+                &ChatPatch {
                     worktree_path: Some(Some(wt)),
                     ..Default::default()
                 },

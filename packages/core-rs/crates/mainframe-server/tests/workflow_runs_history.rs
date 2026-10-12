@@ -1,24 +1,21 @@
-//! Red-phase (Task 11): `GET /api/chats/{id}/messages` folding `ctx.claude_workflows`'s
-//! retained runs with on-disk `wf_<runId>.json` records into
-//! `ChatHistoryPayload.workflowRuns`. Turned green by Tasks 21-25.
-//!
-//! `support::spawn_test_server_with` hardcodes `chat_manager: None` (the route
-//! 500s without one) and has no `claude_workflows` field yet, so this file
-//! builds its own harness: a real `ChatManager` via `build_chat_manager`
-//! (`chat_background_activity.rs`'s pattern) wired into a real `axum::serve`
-//! instance (`support::spawn_test_server_with`'s pattern), plus the
-//! not-yet-existing `claude_workflows` store field Task 22 adds to `AppCtx`.
+//! `GET /api/chats/{id}/messages` folding `ctx.core.claude_workflows`'s retained
+//! runs with on-disk `wf_<runId>.json` records into
+//! `ChatHistoryPayload.workflowRuns`.
 //!
 //! `record()`'s nested `json!` fixture (phases + workflow_progress agents) needs
 //! more than the default macro depth to expand.
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
 #![recursion_limit = "256"]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
-use std::collections::HashMap;
+use mainframe_types::settings_kv::MemorySettings;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
 use dashmap::DashMap;
 use mainframe_adapter_api::AdapterRegistry;
@@ -26,7 +23,6 @@ use mainframe_adapter_claude::transcript::get_session_jsonl_path;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::store::{ClaudeWorkflowStore, ProgressUsage};
 use mainframe_db::DatabaseManager;
-use mainframe_db::chats::ChatUpdate;
 use mainframe_server::ctx::{AppCtx, Services};
 use mainframe_server::{
     Db, GitFactory, build_app, build_chat_manager, chat_seams::NoopLaunchStopper,
@@ -35,22 +31,12 @@ use mainframe_server::{
 use mainframe_services::attachment::AttachmentStore;
 use mainframe_services::files::FileWatcherService;
 use mainframe_services::push::PushService;
-use mainframe_services::quota::{QuotaManager, QuotaManagerDeps, QuotaSettingsStore};
+use mainframe_services::quota::{QuotaManager, QuotaManagerDeps};
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::net::TcpListener;
-
-struct NoopQuotaSettings;
-impl QuotaSettingsStore for NoopQuotaSettings {
-    fn get(&self, _category: &str, _key: &str) -> Option<String> {
-        None
-    }
-    fn get_by_category(&self, _category: &str) -> HashMap<String, String> {
-        HashMap::new()
-    }
-    fn set(&self, _category: &str, _key: &str, _value: &str) {}
-}
 
 /// `get_session_jsonl_path` always derives under the real `~/.claude/projects`
 /// tree (`transcript.rs`'s own seam), so scenarios with an on-disk record write
@@ -58,11 +44,14 @@ impl QuotaSettingsStore for NoopQuotaSettings {
 struct RemoveDirOnDrop(String);
 impl Drop for RemoveDirOnDrop {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        if let Err(error) = std::fs::remove_dir_all(&self.0) {
+            tracing::warn!(%error, "best-effort operation failed");
+        }
     }
 }
 
 struct Harness {
+    ctx: Arc<AppCtx>,
     addr: SocketAddr,
     store: Arc<ClaudeWorkflowStore>,
     chat_id: String,
@@ -83,7 +72,7 @@ async fn harness(session_id: &str) -> Harness {
     let attachments = Arc::new(AttachmentStore::new(data_dir.path().join("attachments")));
     let push = Arc::new(PushService::new());
     let quota = Arc::new(QuotaManager::new(QuotaManagerDeps {
-        settings: Box::new(NoopQuotaSettings),
+        settings: Arc::new(MemorySettings::default()),
         emit_event: Box::new(|_| {}),
         now: None,
     }));
@@ -113,8 +102,8 @@ async fn harness(session_id: &str) -> Harness {
         move |d| {
             d.chats.update(
                 &chat_id,
-                &ChatUpdate {
-                    claude_session_id: Some(session_id),
+                &ChatPatch {
+                    vendor_session_id: Some(session_id),
                     ..Default::default()
                 },
             )
@@ -122,54 +111,47 @@ async fn harness(session_id: &str) -> Harness {
     })
     .unwrap();
 
-    let manager = build_chat_manager(
-        db.clone(),
-        Arc::new(AdapterRegistry::new()),
-        Arc::clone(&tracker),
-        Arc::clone(&attachments),
-        Arc::clone(&push),
-        GitFactory,
-        broadcast.clone(),
-        Arc::new(NoopLaunchStopper),
-        Arc::new(NoopScopeTunnelStopper),
-        quota,
-        Arc::clone(&store),
-        mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        None,
-        data_dir.path().to_path_buf(),
-    );
-
-    let ctx = Arc::new(AppCtx {
-        db,
+    let manager = build_chat_manager(mainframe_server::ChatManagerParams {
+        db: db.clone(),
+        adapters: Arc::new(AdapterRegistry::new()),
+        background_tasks: Arc::clone(&tracker),
+        attachments: Arc::clone(&attachments),
+        push: Arc::clone(&push),
         git: GitFactory,
-        services: Services {
-            attachments,
-            push,
-            watcher: Arc::new(watcher),
-        },
-        broadcast,
-        adapter_registry: Arc::new(AdapterRegistry::new()),
-        background_tasks: tracker,
+        broadcast: broadcast.clone(),
+        launch: Arc::new(NoopLaunchStopper),
+        scope_tunnels: Arc::new(NoopScopeTunnelStopper),
+        quota,
         claude_workflows: Arc::clone(&store),
-        chat_manager: Some(manager),
-        launch_registry: None,
-        tunnel_manager: None,
-        port_tunnels: None,
-        lsp_manager: None,
-        plugin_manager: None,
-        automations: None,
-        orchestration: None,
-        quota: None,
+        chat_surface: None,
         data_dir: data_dir.path().to_path_buf(),
-        version: "0.0.0-test".to_string(),
-        port: 0,
-        auth_secret: None,
-        resolved_path: mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"),
-        tunnel_url: Arc::new(std::sync::RwLock::new(None)),
-        ws_clients: Arc::new(DashMap::new()),
-        facade_hub: Arc::new(mainframe_server::FacadeHub::default()),
-        facade_heartbeat_interval_ms: mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS,
     });
+
+    let ctx = Arc::new(
+        AppCtx::test_builder(db, data_dir.path().to_path_buf())
+            .git(GitFactory)
+            .services(Services {
+                attachments,
+                push,
+                watcher: Arc::new(watcher),
+            })
+            .broadcast(broadcast)
+            .adapter_registry(Arc::new(AdapterRegistry::new()))
+            .background_tasks(tracker)
+            .claude_workflows(Arc::clone(&store))
+            .chat_manager(manager)
+            .automations(None)
+            .version("0.0.0-test".to_string())
+            .port(0)
+            .auth_secret(None)
+            .resolved_path(mainframe_runtime::ResolvedPath::from_value("/usr/bin:/bin"))
+            .tunnel_url(Arc::new(std::sync::RwLock::new(None)))
+            .ws_clients(Arc::new(DashMap::new()))
+            .facade_hub(Arc::new(mainframe_server::FacadeHub::default()))
+            .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
+            .build()
+            .unwrap(),
+    );
     spawn_broadcast_pump(Arc::clone(&ctx));
 
     let app = build_app(Arc::clone(&ctx));
@@ -184,9 +166,9 @@ async fn harness(session_id: &str) -> Harness {
         )
         .await
     });
-    tokio::time::sleep(Duration::from_millis(20)).await;
 
     Harness {
+        ctx,
         addr,
         store,
         chat_id: chat.id,
@@ -211,7 +193,7 @@ impl Harness {
 }
 
 /// Writes `wf_<runId>.json` into the real `~/.claude/projects/<encoded>/<sessionId>/workflows/`
-/// tree the future route resolves from the chat's `claude_session_id` + project path, returning
+/// tree the future route resolves from the chat's `vendor_session_id` + project path, returning
 /// a guard that removes the whole encoded project dir on drop.
 fn write_record(
     project_path: &str,
@@ -406,3 +388,5 @@ async fn a_retained_snapshots_phases_and_agents_survive_the_route() {
     assert_eq!(runs[0]["agents"][0]["agentId"], "agent-alpha");
     assert_eq!(runs[0]["agents"][0]["state"], "progress");
 }
+
+include!("cases/workflow_runs_history_additional_cases.rs");

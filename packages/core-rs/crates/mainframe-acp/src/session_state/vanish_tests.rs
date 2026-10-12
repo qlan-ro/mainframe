@@ -1,9 +1,8 @@
 //! `SessionState::diff`'s vanish/fresh-session/retry cases — split out of
-//! `tests.rs` (todo #350, plan task 37, R2.13). The parent file keeps the
-//! per-item revision/chunking/meta cases; this one covers what happens at
-//! the whole-snapshot level when an item disappears or a session starts
-//! fresh. Builders duplicated rather than shared (three lines each,
-//! `tests.rs`'s own pattern for its sibling test files).
+//! `tests.rs`. The parent file keeps the per-item revision/chunking/meta cases;
+//! this one covers what happens at the whole-snapshot level when an item
+//! disappears or a session starts fresh. Builders duplicated rather than shared
+//! (three lines each, `tests.rs`'s own pattern for its sibling test files).
 
 use super::*;
 use crate::encoder::{EncodedItem, ItemRole};

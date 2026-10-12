@@ -1,6 +1,6 @@
 //! Tool-result content assembly for the canonical encoder: the preview text
-//! block (with its namespaced truncation marker, spec Decision 20) and the
-//! `diff` entry an Edit/Write result maps to (spec Decision 15).
+//! block (with its namespaced truncation marker) and the `diff` entry an
+//! Edit/Write result maps to.
 
 use std::collections::HashMap;
 
@@ -29,9 +29,9 @@ pub(super) fn result_content(
             meta: truncation_meta(r),
         },
     }];
-    // One image content entry per tool-result image (todo #363), after the
-    // text entry and before the diff entry. Never subject to the text
-    // truncation threshold — images ride the result untruncated.
+    // One image content entry per tool-result image, after the text entry and
+    // before the diff entry. Never subject to the text truncation threshold —
+    // images ride the result untruncated.
     out.extend(r.images.iter().map(|img| ToolCallContent::Content {
         content: ContentBlock::Image {
             data: img.data.clone(),
@@ -44,13 +44,13 @@ pub(super) fn result_content(
     out
 }
 
-/// A daemon-truncated result marks its preview text block with the
-/// namespaced `truncated`/`fullBytes` pair (spec Decision 20) — the joined
-/// text alone cannot say "this is a preview of N bytes", which the legacy
-/// dialect's `ToolCallResult` carries inline and the expand affordance needs.
-/// An AskUserQuestion result's collected answers ride the same namespace
-/// (desktop-cutover pass): the answered-question card renders them, and the
-/// joined text cannot express the question/answer structure.
+/// A daemon-truncated result marks its preview text block with the namespaced
+/// `truncated`/`fullBytes` pair — the joined text alone cannot say "this is a
+/// preview of N bytes", which the legacy dialect's `ToolCallResult` carries
+/// inline and the expand affordance needs. An AskUserQuestion result's
+/// collected answers ride the same namespace: the answered-question card
+/// renders them, and the joined text cannot express the question/answer
+/// structure.
 fn truncation_meta(result: &ToolCallResult) -> Option<Value> {
     let mut ns = serde_json::Map::new();
     if result.truncated == Some(true)
@@ -73,11 +73,10 @@ fn truncation_meta(result: &ToolCallResult) -> Option<Value> {
     Some(json!({ MAINFRAME_META_NAMESPACE: ns }))
 }
 
-/// A result carrying structured hunks becomes a `diff` content entry after
-/// the text block: `changes` + `patch` are the ACP-conformant surface a
-/// generic client renders, and the hunks/full-file text the desktop Edit/
-/// Write cards consume ride the diff's own `_meta["_mainframe.dev"]`
-/// (spec Decision 15).
+/// A result carrying structured hunks becomes a `diff` content entry after the
+/// text block: `changes` + `patch` are the ACP-conformant surface a generic
+/// client renders, and the hunks/full-file text the desktop Edit/Write cards
+/// consume ride the diff's own `_meta["_mainframe.dev"]`.
 fn diff_content(
     name: &str,
     input: &HashMap<String, Value>,

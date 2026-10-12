@@ -1,9 +1,9 @@
-//! `run_command` (T6.3, Node actions/run-command.ts). A1 (contract §6):
-//! script chips never touch shell text — each chip becomes its own `MF_<n>`
-//! child env var and the script gets a quoted `"$MF_<n>"` where the chip
-//! sat; only author-typed literal text is shell source. `cwd` is never
-//! shell source either: `custom` is the one mode that runs user text, and
-//! it goes through realpath containment against the project root.
+//! `run_command`. A1 (contract §6): script chips never touch shell text — each
+//! chip becomes its own `MF_<n>` child env var and the script gets a quoted
+//! `"$MF_<n>"` where the chip sat; only author-typed literal text is shell
+//! source. `cwd` is never shell source either: `custom` is the one mode that
+//! runs user text, and it goes through realpath containment against the project
+//! root.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -12,11 +12,12 @@ use crate::domain::OutputAs;
 use crate::tokens::TokenValue;
 
 use super::manifest::{
-    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionOutput, ActionOutputType,
+    ActionAuth, ActionField, ActionGroup, ActionManifest, ActionMeta, ActionOutput,
+    ActionOutputType, ActionParam,
 };
-use super::paths::resolve_and_validate_path;
 use super::shell::{resolve_shell, spawn_script, tail_chars};
 use super::{Action, ActionCtx, ActionError, ActionOutputs, parse_input};
+use mainframe_runtime::fs::resolve_and_validate_path;
 
 const STDERR_TAIL_CHARS: usize = 4000;
 
@@ -64,36 +65,37 @@ struct RunCommandInput {
 
 pub struct RunCommandAction;
 
-impl Action for RunCommandAction {
-    fn manifest(&self) -> ActionManifest {
-        ActionManifest {
+/// The manifest, readable without building the action (see
+/// `actions::known_manifest`).
+pub(crate) fn run_command_manifest() -> ActionManifest {
+    ActionManifest::new(
+        ActionMeta {
             id: "run_command",
             title: "Run command",
             group: ActionGroup::Builtin,
             auth: ActionAuth::None,
             credential_label_hint: None,
-            params_schema: params_schema(),
-            fields: vec![
-                ActionField::code("script", "Script").placeholder("pnpm test"),
-                ActionField::select("runIn", "Run in", &["project root", "worktree", "custom"]),
-                ActionField::chip("customPath", "Path")
-                    .placeholder("~/code/my-project")
-                    .show_when("runIn", "custom"),
-            ],
-            has_output_as: true,
             outputs: vec![
                 ActionOutput::new("output", ActionOutputType::Text),
                 ActionOutput::new("exitCode", ActionOutputType::Number),
             ],
             idempotent: false,
-        }
+        },
+        param_specs(),
+        Value::Bool(false),
+    )
+}
+
+impl Action for RunCommandAction {
+    fn manifest(&self) -> ActionManifest {
+        run_command_manifest()
     }
 
     fn execute<'a>(
         &'a self,
         params: &'a Value,
         ctx: &'a ActionCtx,
-    ) -> crate::engine::BoxFuture<'a, Result<ActionOutputs, ActionError>> {
+    ) -> mainframe_types::BoxFuture<'a, Result<ActionOutputs, ActionError>> {
         Box::pin(async move {
             let input: RunCommandInput = parse_input("run_command", params)?;
             if input.script.is_empty() {
@@ -190,11 +192,11 @@ fn format_output(stdout: &str, output_as: Option<OutputAs>) -> TokenValue {
     }
 }
 
-fn params_schema() -> Value {
-    json!({
-        "type": "object",
-        "properties": {
-            "script": {
+fn param_specs() -> Vec<ActionParam> {
+    vec![
+        ActionParam::field(
+            ActionField::code("script", "Script").placeholder("pnpm test"),
+            json!({
                 "type": "array",
                 "minItems": 1,
                 "items": {
@@ -213,14 +215,25 @@ fn params_schema() -> Value {
                         }
                     ]
                 }
-            },
-            "runIn": {"type": "string", "enum": ["project root", "worktree", "custom"]},
-            "customPath": {"type": "string"},
-            "outputAs": {"type": "string", "enum": ["text", "lines"]}
-        },
-        "required": ["script", "runIn"],
-        "additionalProperties": false
-    })
+            }),
+        )
+        .required(),
+        ActionParam::field(
+            ActionField::select("runIn", "Run in", &["project root", "worktree", "custom"]),
+            json!({"type": "string", "enum": ["project root", "worktree", "custom"]}),
+        )
+        .required(),
+        ActionParam::field(
+            ActionField::chip("customPath", "Path")
+                .placeholder("~/code/my-project")
+                .show_when("runIn", "custom"),
+            json!({"type": "string"}),
+        ),
+        ActionParam::hidden(
+            "outputAs",
+            json!({"type": "string", "enum": ["text", "lines"]}),
+        ),
+    ]
 }
 
 #[cfg(test)]
@@ -233,10 +246,3 @@ pub(crate) async fn resolve_cwd_for_test(
         .map_err(|err| ActionError(err.to_string()))?;
     resolve_cwd(ctx, run_in, custom_path).await
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T6.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors Node actions/run-command.ts (compileScript/resolveCwd/
-//        spawnScript/formatOutput); 8 MB cap = Node's execFile maxBuffer,
-//        enforced by capped stream reads + kill instead of maxBuffer.

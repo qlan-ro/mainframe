@@ -29,9 +29,7 @@ pub(super) fn u8_to_status(v: u8) -> AdapterProcessStatus {
     }
 }
 
-pub(super) fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+pub(super) use mainframe_types::time::now_ms;
 pub struct ClaudeSessionState {
     pub(crate) presentation: crate::transcript_presentation::ClaudePresentation,
     pub chat_id: String,

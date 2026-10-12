@@ -12,11 +12,13 @@
 //! `tool_use` naming a subagent tool starts a task, and the matching `tool_result`
 //! ends it. Work that a recording never resolves stays running, which is exactly
 //! what a fixture wants when the point is to show live work.
+use crate::recorded_method::RecordedMethod;
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed, TerminalUpdate};
-use mainframe_claude_workflows::store::ClaudeWorkflowStore;
+use mainframe_background_tasks::workflow_sink::WorkflowSink;
 use mainframe_types::background_task::{
     BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
 };
@@ -34,7 +36,7 @@ const WORKFLOW_TOOL: &str = "Workflow";
 
 pub(crate) struct TaskBridge {
     tracker: Arc<BackgroundTaskTracker>,
-    workflows: Option<Arc<ClaudeWorkflowStore>>,
+    workflows: Option<Arc<dyn WorkflowSink>>,
     /// tool_use_id → task_id, so a later tool_result can end the right task.
     started: Mutex<HashMap<String, String>>,
 }
@@ -42,7 +44,7 @@ pub(crate) struct TaskBridge {
 impl TaskBridge {
     pub(crate) fn new(
         tracker: Arc<BackgroundTaskTracker>,
-        workflows: Option<Arc<ClaudeWorkflowStore>>,
+        workflows: Option<Arc<dyn WorkflowSink>>,
     ) -> Self {
         Self {
             tracker,
@@ -58,12 +60,12 @@ impl TaskBridge {
         // `task_progress` snapshots the recorder never captured, so a recording
         // carries the finished `ClaudeWorkflowRun` instead. Everything downstream —
         // the run panel, the phase list, the agent grid — reads the same record.
-        if event.method == "onWorkflowRun" {
+        if event.method == RecordedMethod::OnWorkflowRun {
             self.apply_run(chat_id, event);
             return;
         }
-        let blocks: Vec<MessageContent> = match event.method.as_str() {
-            "onMessage" | "onToolResult" => match event.args.first() {
+        let blocks: Vec<MessageContent> = match &event.method {
+            RecordedMethod::OnMessage | RecordedMethod::OnToolResult => match event.args.first() {
                 Some(value) => match serde_json::from_value(value.clone()) {
                     Ok(blocks) => blocks,
                     Err(_) => return,
@@ -99,18 +101,8 @@ impl TaskBridge {
         input: &HashMap<String, serde_json::Value>,
     ) {
         let string = |key: &str| input.get(key).and_then(|v| v.as_str()).unwrap_or_default();
-        let backgrounded = input
-            .get("run_in_background")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false);
-        let kind = if name == WORKFLOW_TOOL {
-            BackgroundWorkKind::Workflow
-        } else if SUBAGENT_TOOLS.contains(&name) {
-            BackgroundWorkKind::Agent
-        } else if name == "Bash" && backgrounded {
-            BackgroundWorkKind::Bash
-        } else {
-            return; // foreground work is not background work
+        let Some(kind) = background_kind(name, input) else {
+            return;
         };
         let workflow_name = (kind == BackgroundWorkKind::Workflow).then(|| {
             let named = string("workflowName");
@@ -131,8 +123,7 @@ impl TaskBridge {
         };
         let task_id = format!("mock-{tool_use_id}");
         self.started
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .lock_recover()
             .insert(tool_use_id.to_string(), task_id.clone());
         self.tracker.start(
             chat_id,
@@ -175,11 +166,7 @@ impl TaskBridge {
     }
 
     fn end(&self, chat_id: &str, tool_use_id: &str, content: &str, is_error: bool) {
-        let task_id = self
-            .started
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(tool_use_id);
+        let task_id = self.started.lock_recover().remove(tool_use_id);
         let Some(task_id) = task_id else {
             return; // a result for foreground work, or for a task we never started
         };
@@ -212,162 +199,25 @@ impl TaskBridge {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
+#[path = "task_bridge_tests.rs"]
+mod tests;
 
-    fn event(method: &str, args: serde_json::Value) -> RecordedEvent {
-        serde_json::from_value(json!({
-            "dir": "out",
-            "method": method,
-            "args": args,
-            "delayMs": 0,
-        }))
-        .expect("recorded event")
-    }
-
-    fn bridge() -> (TaskBridge, Arc<BackgroundTaskTracker>) {
-        let tracker = Arc::new(BackgroundTaskTracker::new());
-        (TaskBridge::new(Arc::clone(&tracker), None), tracker)
-    }
-
-    #[test]
-    fn subagent_tool_use_starts_a_running_task() {
-        let (bridge, tracker) = bridge();
-        bridge.observe(
-            "chat-1",
-            &event(
-                "onMessage",
-                json!([[{ "type": "tool_use", "id": "toolu_1", "name": "Task",
-                          "input": { "description": "Audit the cart module",
-                                     "prompt": "Look for edge cases" } }]]),
-            ),
-        );
-        let running = tracker.list_live("chat-1");
-        assert_eq!(running.len(), 1);
-        assert_eq!(running[0].kind, BackgroundWorkKind::Agent);
-        assert_eq!(running[0].description, "Audit the cart module");
-    }
-
-    #[test]
-    fn matching_tool_result_ends_it() {
-        let (bridge, tracker) = bridge();
-        bridge.observe(
-            "chat-1",
-            &event(
-                "onMessage",
-                json!([[{ "type": "tool_use", "id": "toolu_1", "name": "Task", "input": {} }]]),
-            ),
-        );
-        bridge.observe(
-            "chat-1",
-            &event(
-                "onToolResult",
-                json!([[{ "type": "tool_result", "toolUseId": "toolu_1",
-                          "content": "done", "isError": false }]]),
-            ),
-        );
-        assert!(tracker.list_live("chat-1").is_empty());
-    }
-
-    #[test]
-    fn unresolved_work_keeps_running() {
-        let (bridge, tracker) = bridge();
-        bridge.observe(
-            "chat-1",
-            &event(
-                "onMessage",
-                json!([[{ "type": "tool_use", "id": "a", "name": "Task", "input": {} },
-                        { "type": "tool_use", "id": "b", "name": "Bash",
-                          "input": { "command": "pnpm test --watch", "run_in_background": true } }]]),
-            ),
-        );
-        bridge.observe(
-            "chat-1",
-            &event(
-                "onToolResult",
-                json!([[{ "type": "tool_result", "toolUseId": "a", "content": "ok", "isError": false }]]),
-            ),
-        );
-        let running = tracker.list_live("chat-1");
-        assert_eq!(running.len(), 1);
-        assert_eq!(running[0].kind, BackgroundWorkKind::Bash);
-    }
-
-    #[test]
-    fn workflow_tool_use_starts_a_workflow_row_and_seeds_a_run() {
-        let tracker = Arc::new(BackgroundTaskTracker::new());
-        let workflows = Arc::new(ClaudeWorkflowStore::new());
-        let bridge = TaskBridge::new(Arc::clone(&tracker), Some(Arc::clone(&workflows)));
-        bridge.observe(
-            "chat-1",
-            &event(
-                "onMessage",
-                json!([[{ "type": "tool_use", "id": "toolu_wf", "name": "Workflow",
-                          "input": { "name": "release-readiness",
-                                     "description": "Release readiness" } }]]),
-            ),
-        );
-        let running = tracker.list_live("chat-1");
-        assert_eq!(running.len(), 1);
-        assert_eq!(running[0].kind, BackgroundWorkKind::Workflow);
-        assert_eq!(
-            running[0].workflow_name.as_deref(),
-            Some("release-readiness")
-        );
-
-        let runs = workflows.runs_for_chat("chat-1");
-        assert_eq!(runs.len(), 1);
-        assert_eq!(runs[0].task_id, "mock-toolu_wf");
-        assert_eq!(runs[0].status, ClaudeWorkflowRunStatus::Running);
-    }
-
-    #[test]
-    fn a_recorded_run_snapshot_replaces_the_seed() {
-        let tracker = Arc::new(BackgroundTaskTracker::new());
-        let workflows = Arc::new(ClaudeWorkflowStore::new());
-        let bridge = TaskBridge::new(Arc::clone(&tracker), Some(Arc::clone(&workflows)));
-        bridge.observe(
-            "chat-1",
-            &event(
-                "onMessage",
-                json!([[{ "type": "tool_use", "id": "toolu_wf", "name": "Workflow",
-                          "input": { "name": "release-readiness" } }]]),
-            ),
-        );
-        bridge.observe(
-            "chat-1",
-            &event(
-                "onWorkflowRun",
-                json!([{ "taskId": "mock-toolu_wf", "workflowName": "release-readiness",
-                         "status": "running", "source": "snapshot",
-                         "totalTokens": 12000, "durationMs": 41000,
-                         "phases": [{ "index": 0, "title": "Scan" }],
-                         "agents": [{ "agentId": "a1", "index": 0, "phaseIndex": 0,
-                                      "label": "scan:routes", "state": "done",
-                                      "tokens": 4000, "toolCalls": 9, "durationMs": 12000 }] }]),
-            ),
-        );
-        let runs = workflows.runs_for_chat("chat-1");
-        assert_eq!(runs.len(), 1);
-        assert_eq!(runs[0].phases.len(), 1);
-        assert_eq!(runs[0].agents.len(), 1);
-        assert_eq!(runs[0].total_tokens, 12000);
-    }
-
-    #[test]
-    fn foreground_tools_are_not_background_work() {
-        let (bridge, tracker) = bridge();
-        bridge.observe(
-            "chat-1",
-            &event(
-                "onMessage",
-                json!([[{ "type": "tool_use", "id": "r", "name": "Read",
-                          "input": { "file_path": "index.ts" } },
-                        { "type": "tool_use", "id": "s", "name": "Bash",
-                          "input": { "command": "ls" } }]]),
-            ),
-        );
-        assert!(tracker.list_live("chat-1").is_empty());
-    }
+fn background_kind(
+    name: &str,
+    input: &HashMap<String, serde_json::Value>,
+) -> Option<BackgroundWorkKind> {
+    let backgrounded = input
+        .get("run_in_background")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let kind = if name == WORKFLOW_TOOL {
+        BackgroundWorkKind::Workflow
+    } else if SUBAGENT_TOOLS.contains(&name) {
+        BackgroundWorkKind::Agent
+    } else if name == "Bash" && backgrounded {
+        BackgroundWorkKind::Bash
+    } else {
+        return None; // Foreground work has no background task.
+    };
+    Some(kind)
 }

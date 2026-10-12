@@ -1,49 +1,23 @@
 //! Route tests for `git.rs` — the 5 read endpoints, including the working-stat
-//! assertions from `git-review.test.ts` and the git-read soft-error envelopes
-//! (status/branch fall back to `success:true` on a non-git dir). Real git repos,
-//! real DB project rows, no mocks.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! assertions and the git-read soft-error envelopes (status/branch fall back to
+//! `success:true` on a non-git dir). Real git repos, real DB project rows, no
+//! mocks.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
 mod support;
 
-use std::path::Path;
-
 use reqwest::StatusCode;
-use serde_json::Value;
-use support::{TestServer, spawn_test_server};
+use support::spawn_test_server;
 
-fn run_git(cwd: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-}
+use support::helpers::run_git;
 
-fn init_repo() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    run_git(dir.path(), &["init", "-b", "main"]);
-    run_git(dir.path(), &["config", "user.email", "t@t.com"]);
-    run_git(dir.path(), &["config", "user.name", "T"]);
-    run_git(dir.path(), &["config", "commit.gpgsign", "false"]);
-    std::fs::write(dir.path().join("README.md"), "hello\n").unwrap();
-    run_git(dir.path(), &["add", "-A"]);
-    run_git(dir.path(), &["commit", "-m", "init"]);
-    dir
-}
+use support::helpers::init_repo;
 
-async fn get_json(server: &TestServer, path: &str) -> (StatusCode, Value) {
-    let res = reqwest::get(server.http_url(path)).await.unwrap();
-    let status = res.status();
-    (status, res.json().await.unwrap())
-}
+use support::helpers::get_json;
 
 // ── working-stat ─────────────────────────────────────────────────────────────
 

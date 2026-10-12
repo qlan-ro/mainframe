@@ -1,4 +1,4 @@
-//! T8.3 — webhook primitives: `sha256=<lowercase-hex>` HMAC verification
+//! Webhook primitives: `sha256=<lowercase-hex>` HMAC verification
 //! (timing-safe, uppercase rejected), preset predicates, delivery ids, the
 //! A7 staleness window, and one-time secret provisioning.
 

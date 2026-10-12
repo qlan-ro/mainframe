@@ -1,13 +1,13 @@
-//! Ported from `src/server/routes/auth.ts` — mobile pairing + device management.
+//! Mobile pairing and device management.
 //!
-//! The pairing / rate-limit / recent-pairing maps are process-global in the TS
-//! (module-level `Map`s shared across every router instance); they map to a
-//! single `LazyLock<Mutex<AuthState>>` here with the exact TTLs and thresholds.
-//! The `AUTH_TOKEN_SECRET` the TS reads per-request from `process.env` comes from
-//! `AppCtx.auth_secret` (the daemon reads it once at boot); the devices repo and
-//! push service are the `AppCtx` handles. `req.auth` (set by the auth middleware)
-//! is read back from request extensions as `Extension<TokenPayload>`.
+//! The pairing / rate-limit / recent-pairing maps are process-global (shared
+//! across every router instance): a single `LazyLock<Mutex<AuthState>>` with
+//! fixed TTLs and thresholds. `AUTH_TOKEN_SECRET` comes from `AppCtx.auth_secret`
+//! (the daemon reads it once at boot); the devices repo and push service are the
+//! `AppCtx` handles. The token payload set by the auth middleware is read back
+//! from request extensions as `Extension<TokenPayload>`.
 
+use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, LazyLock, Mutex};
@@ -29,7 +29,7 @@ use crate::ctx::AppCtx;
 use crate::middleware::auth::validate_device_token;
 use crate::net::trust_proxy_client_ip;
 use crate::respond::{fail, ok, ok_empty};
-use crate::routes::projects::parse_body;
+use crate::routes::body::parse_body;
 
 const PAIRING_EXPIRY_MS: i64 = 5 * 60 * 1000;
 const MAX_PAIRING_ATTEMPTS: u32 = 5;
@@ -63,18 +63,7 @@ struct AuthState {
 
 static AUTH_STATE: LazyLock<Mutex<AuthState>> = LazyLock::new(|| Mutex::new(AuthState::default()));
 
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
-
-/// Test-only reset of the process-global pairing state (mirrors `_resetAuthState`).
-pub fn reset_auth_state() {
-    if let Ok(mut state) = AUTH_STATE.lock() {
-        state.pending.clear();
-        state.rate.clear();
-        state.recent.clear();
-    }
-}
+use mainframe_types::time::now_ms;
 
 fn clean_recent_pairings(state: &mut AuthState) {
     let now = now_ms();
@@ -197,27 +186,26 @@ fn bearer_token(headers: &HeaderMap) -> Option<String> {
 
 fn client_ip_from(peer: &SocketAddr, headers: &HeaderMap) -> String {
     let forwarded = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
-    // `req.ip` for the confirm rate-limit key uses Express trust-proxy=loopback,
+    // The confirm rate-limit key resolves the client IP with trust-proxy=loopback,
     // the same proxy-addr rule as the auth middleware (not the WS first-hop rule).
     trust_proxy_client_ip(&peer.ip().to_string(), forwarded)
 }
 
 async fn pair(State(ctx): State<Arc<AppCtx>>) -> Response {
-    if ctx.auth_secret.is_none() {
+    if ctx.core.auth_secret.is_none() {
         return fail(StatusCode::BAD_REQUEST, "Auth not configured");
     }
     let code = generate_pairing_code();
-    if let Ok(mut state) = AUTH_STATE.lock() {
-        state.pending.insert(
-            code.clone(),
-            PendingPairing {
-                device_name: "Unknown Device".to_string(),
-                created_at: now_ms(),
-                failed_attempts: 0,
-            },
-        );
-        clean_expired_pairings(&mut state);
-    }
+    let mut state = AUTH_STATE.lock_recover();
+    state.pending.insert(
+        code.clone(),
+        PendingPairing {
+            device_name: "Unknown Device".to_string(),
+            created_at: now_ms(),
+            failed_attempts: 0,
+        },
+    );
+    clean_expired_pairings(&mut state);
     ok(json!({ "pairingCode": code }))
 }
 
@@ -233,89 +221,17 @@ async fn confirm(
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let Some(secret) = ctx.auth_secret.clone() else {
+    let Some(secret) = ctx.core.auth_secret.clone() else {
         return fail(StatusCode::BAD_REQUEST, "Auth not configured");
     };
     let ip = client_ip_from(&peer, &headers);
 
-    let Some(parsed): Option<ConfirmBody> = parse_body(&body) else {
-        // Rate limit is checked before body parse in the TS; mirror that order.
-        if let Ok(mut state) = AUTH_STATE.lock()
-            && is_rate_limited(&mut state, &ip)
-        {
-            return fail(
-                StatusCode::TOO_MANY_REQUESTS,
-                "Too many attempts, try again later",
-            );
-        }
-        return fail(StatusCode::BAD_REQUEST, "Invalid request body");
+    let parsed = match validate_confirm_body(&body, &ip) {
+        Ok(parsed) => parsed,
+        Err(response) => return *response,
     };
-    // confirmBodySchema: pairingCode.min(1), deviceName.min(1).optional,
-    // clientDeviceId.uuid. serde alone accepts an empty pairingCode or an
-    // empty-but-present deviceName, both of which Zod rejects — fold those into
-    // the same rate-limit-then-400 path so a Zod-rejected body never pairs.
-    if parsed.pairing_code.is_empty()
-        || parsed.device_name.as_deref() == Some("")
-        || !is_valid_uuid(&parsed.client_device_id)
-    {
-        if let Ok(mut state) = AUTH_STATE.lock()
-            && is_rate_limited(&mut state, &ip)
-        {
-            return fail(
-                StatusCode::TOO_MANY_REQUESTS,
-                "Too many attempts, try again later",
-            );
-        }
-        return fail(StatusCode::BAD_REQUEST, "Invalid request body");
-    }
 
-    let outcome = {
-        let Ok(mut state) = AUTH_STATE.lock() else {
-            return fail(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error");
-        };
-        if is_rate_limited(&mut state, &ip) {
-            return fail(
-                StatusCode::TOO_MANY_REQUESTS,
-                "Too many attempts, try again later",
-            );
-        }
-        clean_expired_pairings(&mut state);
-
-        match state.pending.get_mut(&parsed.pairing_code) {
-            None => {
-                record_failure(&mut state, &ip);
-                ConfirmOutcome::Reject(fail(
-                    StatusCode::UNAUTHORIZED,
-                    "Invalid or expired pairing code",
-                ))
-            }
-            Some(pairing) if now_ms() - pairing.created_at > PAIRING_EXPIRY_MS => {
-                state.pending.remove(&parsed.pairing_code);
-                record_failure(&mut state, &ip);
-                ConfirmOutcome::Reject(fail(
-                    StatusCode::UNAUTHORIZED,
-                    "Invalid or expired pairing code",
-                ))
-            }
-            Some(pairing) => {
-                pairing.failed_attempts += 1;
-                if pairing.failed_attempts > MAX_PAIRING_ATTEMPTS {
-                    state.pending.remove(&parsed.pairing_code);
-                    record_failure(&mut state, &ip);
-                    ConfirmOutcome::Reject(fail(
-                        StatusCode::UNAUTHORIZED,
-                        "Too many failed attempts, pairing code invalidated",
-                    ))
-                } else {
-                    let default_name = pairing.device_name.clone();
-                    state.pending.remove(&parsed.pairing_code);
-                    let device_id = format!("mobile-{}", parsed.client_device_id);
-                    let name = parsed.device_name.clone().unwrap_or(default_name);
-                    ConfirmOutcome::Proceed { device_id, name }
-                }
-            }
-        }
-    };
+    let outcome = consume_pairing(&parsed, &ip);
 
     let (device_id, name) = match outcome {
         ConfirmOutcome::Reject(resp) => return resp,
@@ -325,6 +241,7 @@ async fn confirm(
     let did = device_id.clone();
     let dname = name.clone();
     let epoch = match ctx
+        .core
         .db
         .call(move |db| {
             db.devices.add(&did, &dname)?;
@@ -338,28 +255,26 @@ async fn confirm(
 
     let token = generate_token(&secret, &device_id, Some(epoch));
 
-    if let Ok(mut state) = AUTH_STATE.lock() {
-        state.recent.insert(
-            parsed.pairing_code.clone(),
-            RecentPairing {
-                device_id: device_id.clone(),
-                device_name: name,
-                consumed_at: now_ms(),
-            },
-        );
-    }
+    AUTH_STATE.lock_recover().recent.insert(
+        parsed.pairing_code.clone(),
+        RecentPairing {
+            device_id: device_id.clone(),
+            device_name: name,
+            consumed_at: now_ms(),
+        },
+    );
 
     ok(json!({ "token": token, "deviceId": device_id }))
 }
 
 async fn status(State(ctx): State<Arc<AppCtx>>, headers: HeaderMap) -> Response {
-    let Some(secret) = ctx.auth_secret.clone() else {
+    let Some(secret) = ctx.core.auth_secret.clone() else {
         return ok(json!({ "valid": true, "authEnabled": false }));
     };
     let Some(token) = bearer_token(&headers) else {
         return ok(json!({ "valid": false }));
     };
-    match validate_device_token(&ctx.db, secret, token).await {
+    match validate_device_token(&ctx.core.db, secret, token).await {
         Some(payload) => ok(json!({ "valid": true, "deviceId": payload.device_id })),
         None => ok(json!({ "valid": false })),
     }
@@ -389,7 +304,7 @@ async fn register_push(
 }
 
 async fn list_devices(State(ctx): State<Arc<AppCtx>>) -> Response {
-    match ctx.db.call(|db| db.devices.get_all()).await {
+    match ctx.core.db.call(|db| db.devices.get_all()).await {
         Ok(devices) => ok(devices),
         Err(err) => crate::async_err::internal_error("list devices", &err),
     }
@@ -400,7 +315,7 @@ async fn delete_device(
     axum::extract::Path(device_id): axum::extract::Path<String>,
 ) -> Response {
     let did = device_id.clone();
-    if let Err(err) = ctx.db.call(move |db| db.devices.remove(&did)).await {
+    if let Err(err) = ctx.core.db.call(move |db| db.devices.remove(&did)).await {
         return crate::async_err::internal_error("remove device", &err);
     }
     ctx.services.push.unregister_device(&device_id);
@@ -414,9 +329,7 @@ async fn pair_status(Query(params): Query<HashMap<String, String>>) -> Response 
     if !is_valid_pair_code(code) {
         return fail(StatusCode::BAD_REQUEST, "Invalid code");
     }
-    let Ok(mut state) = AUTH_STATE.lock() else {
-        return fail(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error");
-    };
+    let mut state = AUTH_STATE.lock_recover();
     clean_recent_pairings(&mut state);
     match state.recent.get(code) {
         None => ok(json!({ "paired": false })),
@@ -439,16 +352,5 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/auth/pair-status", get(pair_status))
 }
 
-// PORT STATUS: src/server/routes/auth.ts (7 endpoints, 249 lines)
-// confidence: high
-// todos: 0
-// notes: module-global pairing/rate-limit/recent Maps → one LazyLock<Mutex<AuthState>>
-// (process-global, matching TS semantics) with identical TTLs/thresholds;
-// `_resetAuthState` → `reset_auth_state`. Secret read from AppCtx.auth_secret (boot
-// value), not process.env. `req.ip` (trust-proxy=loopback) → net::trust_proxy_client_ip
-// over ConnectInfo + x-forwarded-for. `req.auth` → Extension<TokenPayload>. Zod schemas
-// (confirmBodySchema uuid+min1, registerPushSchema min1, pairStatusQuerySchema
-// [A-Z0-9]{6}) → serde parse + explicit refinements (is_valid_uuid, non-empty,
-// is_valid_pair_code). devices/push via AppCtx handles. No QR payload is emitted by
-// this route (the terminal QR is CLI-side, per the task note). Locks are never held
-// across an await (confirm validates + drops the lock before the DB call).
+mod confirm;
+use confirm::{consume_pairing, validate_confirm_body};

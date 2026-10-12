@@ -1,9 +1,9 @@
-//! Phase 4b — the `parallel` block. Its branches are authored directly
-//! (heterogeneous bodies), unlike `blocks_concurrent_repeat`'s identical body
-//! run once per item, but it drives through the SAME `run_branches` — so
-//! these tests pin that the two never diverge: every branch starts before
-//! either settles, one settling leaves the others parked, and wait-for-all
-//! failure reports the lowest-indexed error regardless of settle order.
+//! The `parallel` block. Its branches are authored directly (heterogeneous
+//! bodies), unlike `blocks_concurrent_repeat`'s identical body run once per
+//! item, but it drives through the SAME `run_branches` — so these tests pin
+//! that the two never diverge: every branch starts before either settles, one
+//! settling leaves the others parked, and wait-for-all failure reports the
+//! lowest-indexed error regardless of settle order.
 
 use std::sync::{Arc, Mutex};
 
@@ -232,10 +232,3 @@ async fn a_parallel_below_the_top_level_failing_a_leaf_out_of_band_resolves_the_
         "the sibling branch that genuinely succeeded must not be dragged down"
     );
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md Phase 4b), not a TS port
-// confidence: high
-// todos: 0
-// notes: mirrors blocks_concurrent_tests.rs + agent_settle_concurrent_tests.rs
-//        1:1 — the parallel driver IS the concurrent-repeat driver, so any
-//        divergence here would be a real behavioral bug, not a style choice.

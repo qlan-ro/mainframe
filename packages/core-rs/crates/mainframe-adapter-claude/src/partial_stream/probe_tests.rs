@@ -1,11 +1,11 @@
-//! The version-probe half of `partial_stream.rs`'s tests (T18, R3.20). Split
-//! out of `tests.rs` (todo #350, plan task 37, R2.13) — the probe tests need
-//! none of the accumulation-test fixtures (`PartialRec`, `session()`, the
-//! event-shape builders), only `LogCapture` and `supports_partial_messages`.
+//! The version-probe half of `partial_stream.rs`'s tests. Split out of
+//! `tests.rs` — the probe tests need none of the accumulation-test fixtures
+//! (`PartialRec`, `session()`, the event-shape builders), only `LogCapture` and
+//! `supports_partial_messages`.
 
 use super::*;
 
-// T18, R3.20: the `OnceCell` cache keyed by executable is process-global and
+// The `OnceCell` cache keyed by executable is process-global and
 // shared across this whole test binary, so a probe result once cached for a
 // given executable string would silently short-circuit a later test. Each
 // probe test below uses its own executable string for that reason.

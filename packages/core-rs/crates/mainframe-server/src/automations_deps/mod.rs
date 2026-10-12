@@ -1,4 +1,4 @@
-//! Production port impls for the automations engine (T9.2) — the
+//! Production port impls for the automations engine — the
 //! `DaemonChatDeps` inversion applied to `mainframe-automations`: the engine
 //! crate defines the traits, this module implements them over the live
 //! ChatManager / PushService / broadcast bus, and `build_automations_engine`
@@ -11,11 +11,11 @@ mod chat_port;
 use std::path::Path;
 use std::sync::Arc;
 
-use mainframe_automations::engine::BoxFuture;
 use mainframe_automations::ports::{ProjectRegistry, SystemClock};
 use mainframe_automations::{AutomationsConfig, AutomationsEngine, AutomationsPorts};
 use mainframe_chat::chat_manager::ChatManager;
 use mainframe_services::push::PushService;
+use mainframe_types::BoxFuture;
 use mainframe_types::events::DaemonEvent;
 use tokio::sync::broadcast;
 
@@ -23,14 +23,12 @@ use crate::ctx::GitFactory;
 use crate::db::Db;
 
 pub use agent::DaemonAgentPort;
-pub use bridges::{
-    DaemonEventSink, DaemonEventSource, DaemonNotifier, broadcast_and_push, map_automation_event,
-};
+pub(crate) use bridges::broadcast_and_push;
+pub use bridges::{DaemonEventSink, DaemonEventSource, DaemonNotifier};
 pub use chat_port::{AgentChatPort, ChatManagerPort};
 
-/// `ActionCtx.projectRoot` resolution (Node service.resolveProjectRoot): the
-/// automation's own project when set, else the workspace's first project,
-/// else the daemon cwd.
+/// `ActionCtx::project_root` resolution: the automation's own project when set,
+/// else the workspace's first project, else the daemon cwd.
 pub struct DbProjectRegistry {
     db: Db,
 }
@@ -70,8 +68,7 @@ impl ProjectRegistry for DbProjectRegistry {
 /// Assemble the production engine from the daemon's live collaborators.
 /// Called once at boot, after `build_chat_manager`. A construction failure
 /// (unwritable data dir) logs and returns `None` — the daemon serves
-/// everything else and the automation routes answer 503 (Node parity:
-/// "AutomationService failed to start — continuing without automations").
+/// everything else and the automation routes answer 503.
 pub async fn build_automations_engine(
     db: Db,
     chats: Arc<ChatManager>,
@@ -114,11 +111,5 @@ pub async fn build_automations_engine(
 }
 
 #[cfg(test)]
+#[path = "../automations_deps_tests.rs"]
 mod tests;
-
-// PORT STATUS: packages/core/src/index.ts (AutomationService wiring) +
-// automations/agent-port.ts
-// confidence: high
-// todos: 0
-// notes: engine start()/reconcile is T10.1; boot only constructs + stores the
-//        handle in AppCtx and stop()s it in the ordered shutdown.

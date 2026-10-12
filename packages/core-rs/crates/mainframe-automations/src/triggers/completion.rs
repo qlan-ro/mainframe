@@ -1,11 +1,12 @@
-//! The chaining hook (T8.3, Node service.ts emitCompletionEvent +
-//! service-helpers.ts summarizeRunResult): a `succeeded|failed` finalize
-//! emits `automation.completed` and feeds the router directly, so the
-//! EventSource port stays app-events-only.
+//! The chaining hook: a `succeeded|failed` finalize emits
+//! `automation.completed` and feeds the router directly, so the EventSource
+//! port stays app-events-only.
 
 use std::sync::{Arc, OnceLock};
 
-use crate::engine::{BoxFuture, RunFinalizedHook};
+use mainframe_types::BoxFuture;
+
+use crate::engine::RunFinalizedHook;
 use crate::ports::{AutomationEvent, CompletedStatus, CuratedEvent, EventSink};
 use crate::store::{AutomationStore, RunRecord, RunStatus};
 use crate::tokens::TokenValue;
@@ -29,7 +30,7 @@ impl CompletionEmitter {
         })
     }
 
-    pub fn bind_router(&self, router: Arc<TriggerRouter>) {
+    pub(crate) fn bind_router(&self, router: Arc<TriggerRouter>) {
         if self.router.set(router).is_err() {
             tracing::warn!("completion emitter router already bound; ignoring rebind");
         }
@@ -42,14 +43,14 @@ impl RunFinalizedHook for CompletionEmitter {
             let status = match run.status {
                 RunStatus::Succeeded => CompletedStatus::Succeeded,
                 RunStatus::Failed => CompletedStatus::Failed,
-                // Cancelled never completes (Node parity).
+                // Cancelled never completes.
                 _ => return,
             };
             let automation_name = match self.automations.get(&run.automation_id).await {
                 Ok(Some(automation)) => automation.name,
                 Ok(None) => run.automation_id.clone(),
                 Err(err) => {
-                    tracing::warn!(error = %err, "completion emitter: name lookup failed");
+                    tracing::warn!(error = %err, "name lookup failed");
                     run.automation_id.clone()
                 }
             };
@@ -75,22 +76,18 @@ impl RunFinalizedHook for CompletionEmitter {
     }
 }
 
-/// The ⟨its result⟩ token a chained trigger reads (Node summarizeRunResult):
-/// the run error on failure; else the last-finished step's outputs, coerced
-/// with the Decision-9 stringification chips use. Node takes the last
-/// checkpoint entry in insertion order; the BTreeMap equivalent is the
-/// entry with the greatest finish/start stamp.
+/// The ⟨its result⟩ token a chained trigger reads: the run error on
+/// failure; else the last-finished step's outputs, coerced with the literal
+/// substitution chips use. The checkpoint's BTreeMap keeps no insertion
+/// order, so "last-finished" is the entry with the greatest finish/start
+/// stamp.
 ///
-/// ACCEPTED DIVERGENCE: on a same-millisecond (finished_at, started_at) tie
-/// this picks the lexically-greatest stepRef, whereas Node picks the JS-object
-/// insertion (execution) order. The contract §2 checkpoint carries no
-/// execution-sequence field, and adding one would diverge Rust's checkpoint
-/// from both the contract and the Node engine — so true parity needs an
-/// insertion-ordered `steps` map on BOTH arms, tracked as a cross-engine
-/// follow-up. The tie only reaches the chained-automation ⟨its result⟩ when the
-/// terminal step shares a millisecond with a sibling; sequential runs are
-/// monotonic and unaffected.
-pub fn summarize_run_result(run: &RunRecord) -> String {
+/// On a same-millisecond (finished_at, started_at) tie, this selects the
+/// lexically greatest stepRef. The checkpoint has no execution sequence, so
+/// completion order cannot be reconstructed from it. The tie only affects a
+/// chained automation when terminal steps share a millisecond; sequential
+/// runs are monotonic and unaffected.
+pub(crate) fn summarize_run_result(run: &RunRecord) -> String {
     if run.status == RunStatus::Failed {
         return run
             .checkpoint
@@ -115,8 +112,3 @@ pub fn summarize_run_result(run: &RunRecord) -> String {
         _ => serde_json::to_string(outputs).unwrap_or_default(),
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T8.3), not a TS port
-// confidence: high
-// todos: 0
-// notes: split from router.rs for the 300-line file cap.

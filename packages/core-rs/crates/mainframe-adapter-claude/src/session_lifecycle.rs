@@ -5,7 +5,7 @@ impl ClaudeSession {
         state.presentation.invalidate(sink);
         state.child = None;
         drop(state);
-        *self.stdin_tx.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        *self.stdin_tx.lock_recover() = None;
     }
     pub async fn kill(&self) -> Result<(), AdapterError> {
         self.state().presentation.invalidate(&NullSink);
@@ -32,11 +32,10 @@ impl ClaudeSession {
         let Some(child) = child else { return Ok(()) };
 
         let stdin = self.stdin_clone();
-        self.control
-            .send(stdin.as_ref(), &json!({ "subtype": "interrupt" }));
+        self.send_control(stdin.as_ref(), &json!({ "subtype": "interrupt" }));
         let task_ids: Vec<String> = { self.state().active_tasks.keys().cloned().collect() };
         for task_id in &task_ids {
-            self.control.send(
+            self.send_control(
                 stdin.as_ref(),
                 &json!({ "subtype": "stop_task", "task_id": task_id }),
             );
@@ -47,7 +46,7 @@ impl ClaudeSession {
         let session_id = self.id.clone();
         let handle = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(10_000)).await;
-            let mut st = state.lock().unwrap_or_else(|e| e.into_inner());
+            let mut st = state.lock_recover();
             st.interrupt_timer = None;
             let same = st
                 .child
@@ -65,18 +64,29 @@ impl ClaudeSession {
         self.state().interrupt_timer = Some(handle);
         Ok(())
     }
-    pub fn clear_interrupt_timer(&self) {
+    pub(crate) fn clear_interrupt_timer(&self) {
         if let Some(h) = self.state().interrupt_timer.take() {
             h.abort();
         }
     }
-    pub fn request_context_usage(&self) {
+    pub(crate) fn request_context_usage(&self) {
         if self.state().child.is_none() {
             return;
         }
         let stdin = self.stdin_clone();
-        self.control
-            .send(stdin.as_ref(), &json!({ "subtype": "get_context_usage" }));
+        self.send_control(stdin.as_ref(), &json!({ "subtype": "get_context_usage" }));
+    }
+    /// Fire-and-forget control request: nothing awaits it, so a write failure
+    /// is logged with the request's subtype rather than returned.
+    pub(super) fn send_control(&self, stdin: Option<&StdinTx>, request: &serde_json::Value) {
+        if let Err(error) = self.control.send(stdin, request) {
+            tracing::warn!(
+                session_id = %self.id,
+                subtype = ?request.get("subtype").and_then(serde_json::Value::as_str),
+                %error,
+                "control_request not written"
+            );
+        }
     }
     pub fn get_context_files(&self) -> ContextFiles {
         collect_claude_context_files(&self.project_path, None)

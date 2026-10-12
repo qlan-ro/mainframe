@@ -1,36 +1,66 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
+use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use mainframe_adapter_api::{AdapterError, AdapterSession, LoadedSkill, SessionSink};
+use mainframe_adapter_api::{AdapterError, AdapterSession, SessionSink};
 use mainframe_adapter_mock::{ReplaySession, parse_fixture, sanitize_key};
 use mainframe_types::adapter::{
-    ContextUsage, ControlRequest, ControlResponse, DetectedPr, MessageMetadata, SessionOptions,
-    SessionResult,
+    ControlRequest, ControlResponse, MessageMetadata, SessionOptions, SessionResult,
 };
-use mainframe_types::chat::{MessageContent, MessageContentNode, TodoItem};
-use mainframe_types::context::SkillFileEntry;
+use mainframe_types::chat::{MessageContent, MessageContentNode};
 
 #[derive(Default)]
 struct RecordingSink {
     calls: Mutex<Vec<String>>,
+    changed: tokio::sync::Notify,
+    plan_gate: Option<Arc<std::sync::Barrier>>,
 }
 
 impl RecordingSink {
+    async fn wait_for_calls(&self, count: usize) {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let changed = self.changed.notified();
+                tokio::pin!(changed);
+                changed.as_mut().enable();
+                if self.calls().len() >= count {
+                    return;
+                }
+                changed.await;
+            }
+        })
+        .await
+        .expect("recorded callbacks");
+    }
+
     fn push(&self, call: impl Into<String>) {
-        self.calls
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(call.into());
+        self.calls.lock_recover().push(call.into());
+        self.changed.notify_waiters();
     }
 
     fn calls(&self) -> Vec<String> {
-        self.calls.lock().unwrap_or_else(|e| e.into_inner()).clone()
+        self.calls.lock_recover().clone()
     }
 }
 
 impl SessionSink for RecordingSink {
+    mainframe_adapter_api::forward_session_sink!(
+        on_context_usage,
+        on_skill_file,
+        on_queued_processed,
+        on_todo_update,
+        on_pr_detected,
+        on_cli_message,
+        on_skill_loaded,
+        on_subagent_child
+    );
+
     fn on_init(&self, session_id: &str) {
         self.push(format!("init:{session_id}"));
     }
@@ -67,20 +97,15 @@ impl SessionSink for RecordingSink {
         self.push("compact-start");
     }
 
-    fn on_context_usage(&self, _usage: ContextUsage) {}
     fn on_plan_file(&self, file_path: &str) {
-        if file_path == "0" {
-            std::thread::sleep(Duration::from_millis(20));
+        if file_path == "0"
+            && let Some(gate) = &self.plan_gate
+        {
+            gate.wait();
+            gate.wait();
         }
         self.push(format!("plan:{file_path}"));
     }
-    fn on_skill_file(&self, _entry: SkillFileEntry) {}
-    fn on_queued_processed(&self, _uuid: &str) {}
-    fn on_todo_update(&self, _todos: Vec<TodoItem>) {}
-    fn on_pr_detected(&self, _pr: DetectedPr) {}
-    fn on_cli_message(&self, _text: &str) {}
-    fn on_skill_loaded(&self, _entry: LoadedSkill) {}
-    fn on_subagent_child(&self, _parent_tool_use_id: &str, _blocks: Vec<MessageContent>) {}
 }
 
 fn options(project_path: String) -> SessionOptions {
@@ -93,7 +118,7 @@ fn options(project_path: String) -> SessionOptions {
     }
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn replays_sink_calls_and_ignores_a_late_permission_response() {
     let events = parse_fixture(include_str!("fixtures/replay.ndjson")).unwrap();
     let session = ReplaySession::new(options("/tmp/mf-e2e-current".to_string()), events);
@@ -104,7 +129,7 @@ async fn replays_sink_calls_and_ignores_a_late_permission_response() {
         .send_message("hello".to_string(), Vec::new(), Some("u1".to_string()))
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(140)).await;
+    sink.wait_for_calls(4).await;
 
     assert_eq!(
         sink.calls(),
@@ -223,14 +248,24 @@ async fn preserves_fixture_order_when_delays_hit_the_cap() {
         options("/tmp/project".to_string()),
         parse_fixture(&lines.join("\n")).unwrap(),
     );
-    let sink = Arc::new(RecordingSink::default());
+    let gate = Arc::new(std::sync::Barrier::new(2));
+    let sink = Arc::new(RecordingSink {
+        plan_gate: Some(gate.clone()),
+        ..Default::default()
+    });
     session.spawn(None, Some(sink.clone())).await.unwrap();
 
     session
         .send_message(String::new(), Vec::new(), None)
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(180)).await;
+    tokio::task::spawn_blocking(move || {
+        gate.wait();
+        gate.wait();
+    })
+    .await
+    .unwrap();
+    sink.wait_for_calls(8).await;
 
     assert_eq!(
         sink.calls(),

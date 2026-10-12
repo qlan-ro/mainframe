@@ -1,12 +1,17 @@
 //! Opens `<dataDir>/automations.db` — a separate file from `mainframe.db`
 //! (contract §3), outside its migration chain, with its own `user_version=1`.
-//! The three contract tables plus `automation_webhook_state` (T7 — the one
-//! webhook fact that must outlive a restart); Node's `trigger_state` /
-//! `agent_waits` are that engine's private caches and both engines ignore
-//! unknown tables in the file.
+//! The three contract tables plus `automation_webhook_state` (the one
+//! webhook fact that must outlive a restart). Unknown tables in the file
+//! (such as `trigger_state` / `agent_waits` from an older engine) are
+//! ignored.
 
+use mainframe_db::{
+    OpenOptions,
+    actor::{ActorError, SqliteActor},
+    open_sqlite,
+};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use rusqlite::Connection;
 
@@ -57,12 +62,29 @@ CREATE TABLE IF NOT EXISTS automation_webhook_state (
 );
 ";
 
-/// The rusqlite `Connection` is `Send + !Sync`; it lives behind an
-/// `Arc<Mutex<_>>` and every query runs inside `spawn_blocking` so the
-/// event loop never blocks on SQLite I/O.
 #[derive(Clone)]
 pub struct AutomationDb {
-    conn: Arc<Mutex<Connection>>,
+    actor: SqliteActor<Connection, StoreError>,
+}
+
+impl From<ActorError> for StoreError {
+    fn from(error: ActorError) -> Self {
+        match error {
+            ActorError::Io(error) => Self::Io(error),
+            ActorError::Worker(what) => Self::Worker(what),
+        }
+    }
+}
+
+impl From<mainframe_db::DbError> for StoreError {
+    fn from(error: mainframe_db::DbError) -> Self {
+        match error {
+            mainframe_db::DbError::Sqlite(error) => Self::Sqlite(error),
+            mainframe_db::DbError::Json(error) => Self::Json(error),
+            mainframe_db::DbError::Io(error) => Self::Io(error),
+            other => Self::Db(other),
+        }
+    }
 }
 
 impl AutomationDb {
@@ -70,50 +92,52 @@ impl AutomationDb {
         let path: PathBuf = path.as_ref().to_path_buf();
         tokio::task::spawn_blocking(move || Self::open_blocking(&path))
             .await
-            .map_err(|e| StoreError::Task(e.to_string()))?
+            .map_err(StoreError::Task)?
     }
 
     fn open_blocking(path: &Path) -> Result<Self, StoreError> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let conn = Connection::open(path)?;
-        conn.execute_batch(
-            "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;",
-        )?;
-        conn.execute_batch(DDL)?;
-        let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if version == 0 {
-            conn.execute_batch("PRAGMA user_version = 1")?;
-        }
-        Ok(Self {
-            conn: Arc::new(Mutex::new(conn)),
-        })
+        let path = path.to_path_buf();
+        let actor = SqliteActor::spawn_named("mainframe-automation-db", move || {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let conn = open_sqlite(
+                &path,
+                OpenOptions {
+                    busy_timeout: Some(Duration::from_millis(5000)),
+                },
+            )?;
+            let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
+            if version > 0 {
+                mainframe_db::migrate::run_batch(&conn, DDL)?;
+            }
+            mainframe_db::migrate::run_versioned(
+                &conn,
+                &[mainframe_db::migrate::Migration {
+                    version: 1,
+                    up: |connection| {
+                        connection.execute_batch(DDL)?;
+                        Ok(())
+                    },
+                }],
+                1,
+            )?;
+            Ok(conn)
+        })?;
+        Ok(Self { actor })
     }
 
-    /// Runs `f` on a blocking worker with exclusive access to the connection.
-    /// The typed stores are the intended interface; this is their (and the
-    /// tests') single funnel to the connection.
     pub async fn call<F, R>(&self, f: F) -> Result<R, StoreError>
     where
         F: FnOnce(&mut Connection) -> Result<R, StoreError> + Send + 'static,
         R: Send + 'static,
     {
-        let conn = Arc::clone(&self.conn);
-        tokio::task::spawn_blocking(move || {
-            // A poisoned mutex only means another worker panicked mid-query;
-            // the connection itself is still usable, so recover the guard.
-            let mut guard = conn.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            f(&mut guard)
-        })
-        .await
-        .map_err(|e| StoreError::Task(e.to_string()))?
+        self.actor
+            .call_mut(move |conn| {
+                // A failed operation must not retire the automation connection.
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(conn)))
+                    .map_err(|_| StoreError::Panicked)?
+            })
+            .await
     }
 }
-
-// PORT STATUS: greenfield (docs/plans/2026-07-12-automations-v2-rust-engine.md T2.1), not a TS port
-// confidence: high
-// todos: 0
-// notes: DDL column shapes match Node's db.ts exactly (shared automations.db);
-//        index names follow this plan's T2.1 (uq_runs_dedup, idx_runs_*) —
-//        Node creates its own names, both are IF NOT EXISTS and coexist.

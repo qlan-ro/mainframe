@@ -1,7 +1,7 @@
 //! JSON-RPC 2.0 envelope (ACP's transport framing). Method-specific params and
 //! results (`InitializeRequest`, `ToolCallUpdate`, ...) are typed separately in
 //! sibling modules and travel inside `params`/`result` as `serde_json::Value` —
-//! the facade connection (group C, out of this task's scope) dispatches on
+//! the facade connection dispatches on
 //! `method` before typing the payload.
 
 use serde::{Deserialize, Serialize};
@@ -10,11 +10,11 @@ use serde_json::Value;
 /// JSON-RPC request id: a number, a string, or (discouraged but legal) `null`.
 /// `null` is represented by `Option<RequestId>::None`, which serializes to the
 /// wire `null` on the envelope's `id` field without a `skip_serializing_if`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RequestId {
     Number(i64),
-    Str(String),
+    String(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

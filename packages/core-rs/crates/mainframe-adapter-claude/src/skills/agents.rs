@@ -1,5 +1,5 @@
 //! Agent listing + CRUD: `.claude/agents/*.md`. The description shown in the
-//! `@` picker is derived by `crate::agent_description` (todo #317) — frontmatter
+//! `@` picker is derived by `crate::agent_description` — frontmatter
 //! first, heading heuristic as the no-frontmatter fallback.
 
 use std::path::{Path, PathBuf};
@@ -84,8 +84,8 @@ pub async fn create_agent(
         adapter_id: ADAPTER_ID.to_string(),
         name: input.name.clone(),
         description: input.description.clone(),
-        // No frontmatter is written for a freshly created agent (Decision D5),
-        // so there is nothing declared to carry as the complete value.
+        // No frontmatter is written for a freshly created agent, so there is
+        // nothing declared to carry as the complete value.
         full_description: None,
         scope: input.scope,
         file_path: file_path.to_string_lossy().into_owned(),
@@ -122,65 +122,12 @@ pub async fn delete_agent(agent_id: &str, project_path: &str) -> Result<(), Skil
         .find(|a| a.id == agent_id)
         .ok_or_else(|| SkillsError::AgentNotFound(agent_id.to_string()))?;
     // `rm(file, { force: true })` — force ignores a missing file.
-    let _ = fs::remove_file(&agent.file_path).await;
+    if let Err(error) = fs::remove_file(&agent.file_path).await {
+        tracing::warn!(%error, path = %agent.file_path, "failed to remove agent file");
+    }
     Ok(())
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    const BLOCK_SCALAR_AGENT: &str = include_str!("../__fixtures__/agent-block-scalar.md");
-
-    #[tokio::test]
-    async fn create_and_list_agent_derives_description_from_heading() {
-        let tmp = tempdir().unwrap();
-        let input = CreateAgentInput {
-            name: "planner".to_string(),
-            description: "Plans work".to_string(),
-            content: "Body text".to_string(),
-            scope: AgentScope::Project,
-        };
-        let agent = create_agent(tmp.path().to_str().unwrap(), &input)
-            .await
-            .unwrap();
-        assert_eq!(agent.id, "claude:project:agent:planner");
-        assert_eq!(agent.content, "# planner\n\nBody text");
-
-        let agents = list_agents(tmp.path().to_str().unwrap()).await;
-        let planner = agents
-            .iter()
-            .find(|a| a.name == "planner")
-            .expect("planner");
-        // First non-blank line "# planner" → heading prefix stripped.
-        assert_eq!(planner.description, "planner");
-    }
-
-    #[tokio::test]
-    async fn list_agents_carries_full_description_alongside_the_summary() {
-        let tmp = tempdir().unwrap();
-        let agents_dir = tmp.path().join(".claude").join("agents");
-        fs::create_dir_all(&agents_dir).await.unwrap();
-        fs::write(agents_dir.join("todo317-planner.md"), BLOCK_SCALAR_AGENT)
-            .await
-            .unwrap();
-
-        let agents = list_agents(tmp.path().to_str().unwrap()).await;
-        let planner = agents
-            .iter()
-            .find(|a| a.scope == AgentScope::Project && a.name == "todo317-planner")
-            .expect("todo317-planner agent");
-
-        assert_eq!(
-            planner.description,
-            "Use this agent to write a spec or an implementation plan from an approved brainstorm/design."
-        );
-        let full = planner
-            .full_description
-            .as_deref()
-            .expect("full description");
-        assert!(full.contains("<example>"));
-        assert!(full.contains("Examples:"));
-    }
-}
+#[path = "agents_tests.rs"]
+mod tests;

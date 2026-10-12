@@ -1,11 +1,17 @@
 //! Provider segments (migration 31): backfill, the `chats` mirror invariant,
 //! the `record_native_id` rule, insert-path seeding, and dedupe.
-#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Test assertions and scenarios"
+)]
 
+use mainframe_types::chat_patch::ChatPatch;
 use rusqlite::Connection;
 
 use mainframe_db::migrations::run_migrations;
-use mainframe_db::{ChatUpdate, DatabaseManager, RecordOutcome, SegmentResultDelta};
+use mainframe_db::{DatabaseManager, RecordOutcome, SegmentResultDelta};
 use mainframe_types::chat::{Chat, NewChat};
 use mainframe_types::segment::{HandoffRecord, HandoffStatus, HandoffStrategy, SegmentKind};
 
@@ -30,8 +36,8 @@ fn set_session(db: &DatabaseManager, chat_id: &str, session: &str) {
     db.chats
         .update(
             chat_id,
-            &ChatUpdate {
-                claude_session_id: Some(session.to_string()),
+            &ChatPatch {
+                vendor_session_id: Some(session.to_string()),
                 ..Default::default()
             },
         )
@@ -169,7 +175,7 @@ fn record_native_id_sets_ignores_and_resets() {
             .get(&chat.id)
             .unwrap()
             .unwrap()
-            .claude_session_id
+            .vendor_session_id
             .as_deref(),
         Some("b")
     );
@@ -187,8 +193,8 @@ fn record_native_id_sets_ignores_and_resets() {
 fn record_native_id_rebinds_a_still_empty_segment_instead_of_resetting() {
     let (_dir, db, pid) = open();
     let chat = new_chat(&db, &pid, "codex");
-    // `chats.rs::update` routes `claude_session_id` and `session_file_path`
-    // through separate `EventChatUpdate`s (see `handle_init`), so the path
+    // `chats.rs::update` routes `vendor_session_id` and `session_file_path`
+    // through separate `ChatPatch`s (see `handle_init`), so the path
     // argument here is `None`, matching the real call site.
     assert_eq!(
         db.segments
@@ -244,7 +250,7 @@ fn record_native_id_rebinds_a_still_empty_segment_instead_of_resetting() {
             .get(&chat.id)
             .unwrap()
             .unwrap()
-            .claude_session_id
+            .vendor_session_id
             .as_deref(),
         Some("thread_real")
     );
@@ -257,8 +263,8 @@ fn chats_update_keeps_the_mirror_equal_to_the_active_native_row() {
     db.chats
         .update(
             &chat.id,
-            &ChatUpdate {
-                claude_session_id: Some("s1".into()),
+            &ChatPatch {
+                vendor_session_id: Some("s1".into()),
                 session_file_path: Some("/f/s1.jsonl".into()),
                 last_context_total_tokens: Some(500),
                 last_context_max_tokens: Some(2000),
@@ -271,7 +277,7 @@ fn chats_update_keeps_the_mirror_equal_to_the_active_native_row() {
         .native(&layout.active().unwrap().native_session_ref)
         .unwrap();
     let row = db.chats.get(&chat.id).unwrap().unwrap();
-    assert_eq!(native.native_session_id, row.claude_session_id);
+    assert_eq!(native.native_session_id, row.vendor_session_id);
     assert_eq!(native.session_file_path, row.session_file_path);
     assert_eq!(
         native.last_context_total_tokens,
@@ -287,7 +293,7 @@ fn clear_session_opens_a_context_reset_and_keeps_dedupe() {
     set_session(&db, &chat.id, "old");
     db.chats.clear_session(&chat.id).unwrap();
     let row = db.chats.get(&chat.id).unwrap().unwrap();
-    assert_eq!(row.claude_session_id, None);
+    assert_eq!(row.vendor_session_id, None);
     let layout = db.segments.layout(&chat.id).unwrap();
     assert_eq!(layout.segments.len(), 2);
     assert_eq!(layout.active().unwrap().kind, SegmentKind::ContextReset);
@@ -309,16 +315,4 @@ fn clear_session_opens_a_context_reset_and_keeps_dedupe() {
     assert_eq!(db.segments.layout(&chat.id).unwrap().segments.len(), 2);
 }
 
-#[test]
-fn mark_context_lost_clears_an_unshared_native_id_in_place() {
-    let (_dir, db, pid) = open();
-    let chat = new_chat(&db, &pid, "claude");
-    set_session(&db, &chat.id, "eph");
-    db.chats
-        .mark_context_lost(&chat.id, "2026-01-01T00:00:00Z")
-        .unwrap();
-    let row = db.chats.get(&chat.id).unwrap().unwrap();
-    assert_eq!(row.claude_session_id, None);
-    assert_eq!(row.context_lost_at.as_deref(), Some("2026-01-01T00:00:00Z"));
-    assert_eq!(db.segments.layout(&chat.id).unwrap().segments.len(), 1);
-}
+include!("cases/chat_segments_additional_cases.rs");

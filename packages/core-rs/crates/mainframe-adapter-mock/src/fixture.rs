@@ -1,3 +1,4 @@
+use crate::recorded_method::RecordedMethod;
 use mainframe_adapter_api::AdapterError;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 use mainframe_types::content::LeafContent;
@@ -23,13 +24,25 @@ pub struct RecordedFile {
 #[serde(rename_all = "camelCase")]
 pub struct RecordedEvent {
     pub dir: EventDirection,
-    pub method: String,
+    pub method: crate::recorded_method::RecordedMethod,
     pub args: Vec<Value>,
     pub delay_ms: i64,
     #[serde(default)]
     pub files: Vec<RecordedFile>,
     #[serde(default)]
     pub deleted: Vec<String>,
+}
+
+/// Why a recorded event's arguments could not be replayed.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum RecordedEventError {
+    #[error("missing argument {0}")]
+    MissingArgument(usize),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    /// An `onError` argument that is neither a string nor `{ message }`.
+    #[error("invalid recorded error")]
+    InvalidError,
 }
 
 #[derive(Debug, Clone)]
@@ -43,11 +56,11 @@ impl ReplayState {
         Self { events, cursor: 0 }
     }
 
-    pub fn is_exhausted(&self) -> bool {
+    pub(crate) fn is_exhausted(&self) -> bool {
         self.cursor >= self.events.len()
     }
 
-    pub fn consume_input(&mut self) -> Option<RecordedEvent> {
+    pub(crate) fn consume_input(&mut self) -> Option<RecordedEvent> {
         let event = self.events.get(self.cursor)?;
         if event.dir != EventDirection::In {
             return None;
@@ -56,7 +69,7 @@ impl ReplayState {
         Some(event.clone())
     }
 
-    pub fn drain_outputs(&mut self) -> Vec<RecordedEvent> {
+    pub(crate) fn drain_outputs(&mut self) -> Vec<RecordedEvent> {
         let start = self.cursor;
         while self.cursor < self.events.len() && self.events[self.cursor].dir != EventDirection::In
         {
@@ -65,19 +78,19 @@ impl ReplayState {
         self.events[start..self.cursor].to_vec()
     }
 
-    pub fn drain_optional_interrupts(&mut self) -> Vec<RecordedEvent> {
+    pub(crate) fn drain_optional_interrupts(&mut self) -> Vec<RecordedEvent> {
         let mut drained = Vec::new();
-        while self.peek_input("interrupt") {
+        while self.peek_input(&RecordedMethod::Interrupt) {
             self.cursor += 1;
             drained.extend(self.drain_outputs());
         }
         drained
     }
 
-    pub fn peek_input(&self, method: &str) -> bool {
+    pub(crate) fn peek_input(&self, method: &RecordedMethod) -> bool {
         self.events
             .get(self.cursor)
-            .map(|event| event.dir == EventDirection::In && event.method == method)
+            .map(|event| event.dir == EventDirection::In && &event.method == method)
             .unwrap_or(false)
     }
 }
@@ -102,14 +115,18 @@ pub(crate) fn messages_from_events(events: &[RecordedEvent], chat_id: &str) -> V
 }
 
 fn event_message(event: &RecordedEvent, index: usize, chat_id: &str) -> Option<ChatMessage> {
-    let (r#type, content) = match (event.dir.clone(), event.method.as_str()) {
-        (EventDirection::Out, "onMessage") => (ChatMessageType::Assistant, event_content(event)?),
-        (EventDirection::Out, "onToolResult") => {
+    let (r#type, content) = match (event.dir.clone(), &event.method) {
+        (EventDirection::Out, crate::recorded_method::RecordedMethod::OnMessage) => {
+            (ChatMessageType::Assistant, event_content(event)?)
+        }
+        (EventDirection::Out, crate::recorded_method::RecordedMethod::OnToolResult) => {
             (ChatMessageType::ToolResult, event_content(event)?)
         }
         // A recorded prompt is a user turn, as in a real CLI's transcript —
         // a from-message fork resolves its cut against these.
-        (EventDirection::In, "sendMessage") => (ChatMessageType::User, prompt_content(event)?),
+        (EventDirection::In, crate::recorded_method::RecordedMethod::SendMessage) => {
+            (ChatMessageType::User, prompt_content(event)?)
+        }
         _ => return None,
     };
     Some(ChatMessage {

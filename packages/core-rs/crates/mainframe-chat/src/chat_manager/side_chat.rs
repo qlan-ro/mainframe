@@ -1,9 +1,11 @@
-//! `ChatManager::open_side_chat` (todo #344, rules 3-4): open or reveal a
-//! chat's side chat, seeded from the parent's resolved config. Discard reuses
-//! the existing temporary-chat discard path (`discard.rs`); rule 4's parent
-//! re-sync is shared by both `open_side_chat` and `discard.rs`'s side-chat
-//! branch.
+//! `ChatManager::open_side_chat`: open or reveal a chat's side chat, seeded
+//! from the parent's resolved config. Discard reuses the existing
+//! temporary-chat discard path (`discard.rs`); the parent re-sync is shared by
+//! both `open_side_chat` and `discard.rs`'s side-chat branch.
 use super::*;
+use mainframe_types::http_status::{HttpStatus, StatusKind};
+use mainframe_types::seam_error::SeamError;
+use mainframe_types::sync::LockExt as _;
 
 /// Whether `chat` is itself a side chat: temporary AND has a parent. No third
 /// concept — this is the wire contract's own definition (plan Goal).
@@ -22,30 +24,29 @@ pub enum OpenSideChatError {
     ParentIsSideChat,
     #[error("This chat's folder is missing")]
     DirectoryMissing,
-    #[error("{0}")]
-    InsertFailed(String),
+    #[error(transparent)]
+    InsertFailed(SeamError),
 }
 
-impl OpenSideChatError {
+impl HttpStatus for OpenSideChatError {
     /// The REST status the wire contract assigns this failure.
-    pub fn status_code(&self) -> u16 {
+    fn status_kind(&self) -> StatusKind {
         match self {
-            OpenSideChatError::NotFound(_) => 404,
+            OpenSideChatError::NotFound(_) => StatusKind::NotFound,
             OpenSideChatError::Archived
             | OpenSideChatError::ParentIsSideChat
-            | OpenSideChatError::DirectoryMissing => 409,
-            OpenSideChatError::InsertFailed(_) => 500,
+            | OpenSideChatError::DirectoryMissing => StatusKind::Conflict,
+            OpenSideChatError::InsertFailed(_) => StatusKind::Internal,
         }
     }
 }
 
 impl ChatManager {
-    /// Open (or reveal) `parent_id`'s side chat (rule 3). Refusals run in the
-    /// plan's order and write no row. A parent that already has a side chat
-    /// reveals it instead of minting a second one; two concurrent opens
-    /// converge on the same row because the DB worker serializes
-    /// `find_or_create_side_chat`'s select-then-insert against the partial
-    /// unique index (migration 30).
+    /// Open (or reveal) `parent_id`'s side chat. Refusals run in a fixed order
+    /// and write no row. A parent that already has a side chat reveals it
+    /// instead of minting a second one; two concurrent opens converge on the
+    /// same row because the DB worker serializes `find_or_create_side_chat`'s
+    /// select-then-insert against the partial unique index (migration 30).
     pub async fn open_side_chat(&self, parent_id: &str) -> Result<Chat, OpenSideChatError> {
         let parent = self
             .get_chat(parent_id)
@@ -61,6 +62,7 @@ impl ChatManager {
         }
 
         let (side_chat, _created) = self
+            .shared
             .deps
             .chats_find_or_create_side_chat(&parent)
             .map_err(OpenSideChatError::InsertFailed)?;
@@ -70,18 +72,15 @@ impl ChatManager {
         Ok(self.get_chat(&side_chat.id).unwrap_or(side_chat))
     }
 
-    /// Rule 4: sync the parent's active cell (mirrors `rename_chat`'s title
-    /// sync), then emit an enriched `ChatUpdated` for the parent. Shared by
+    /// Sync the parent's active cell (mirrors `rename_chat`'s title sync), then
+    /// emit an enriched `ChatUpdated` for the parent. Shared by
     /// `open_side_chat` (side chat id set) and `discard_chat`'s side-chat
     /// branch (side chat id cleared).
     pub(super) fn sync_parent_side_chat_id(&self, parent_id: &str, side_chat_id: Option<String>) {
         if let Some(cell) = self.get_active(parent_id) {
-            cell.lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .chat
-                .side_chat_id = side_chat_id;
+            cell.lock_recover().chat.side_chat_id = side_chat_id;
         }
-        if let Some(chat) = self.deps.chats_get(parent_id) {
+        if let Some(chat) = storage_event!(self.shared, self.shared.deps.chats_get(parent_id)) {
             self.emit(DaemonEvent::ChatUpdated { chat, reason: None });
         }
     }

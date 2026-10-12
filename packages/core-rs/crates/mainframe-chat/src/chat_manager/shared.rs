@@ -1,5 +1,6 @@
-//! Free helpers shared across the facade and the sub-manager Deps wrappers.
+//! Helpers shared by the chat facade and its managers.
 use super::*;
+use mainframe_types::sync::LockExt as _;
 
 pub(super) fn is_working(chat: &Chat) -> bool {
     chat.process_state == Some(Some(ProcessState::Working))
@@ -7,9 +8,9 @@ pub(super) fn is_working(chat: &Chat) -> bool {
 
 /// `enrichChat` — set displayStatus/isRunning/backgroundActivity/directory signals.
 /// Mutates in place. `live_tasks` is `tracker.listLive(chat.id)`. `side_chat_waiting`
-/// (todo #344 rule 9) is `permissions.has_pending(side_id)` when this chat has a
-/// side chat, else `None` — `display_status`/`is_running` stay this chat's own so
-/// the fork-availability gate (which reads `hasPending`) is unaffected.
+/// is `permissions.has_pending(side_id)` when this chat has a side chat, else `None`
+/// — `display_status`/`is_running` stay this chat's own so the fork-availability gate
+/// (which reads `hasPending`) is unaffected.
 pub(super) fn enrich_chat(
     chat: &mut Chat,
     has_pending: bool,
@@ -49,14 +50,14 @@ pub(super) fn enrich_chat(
 /// `ChatManager.applyTuning` — live-apply resolved tuning to the running session.
 /// Shared by the facade method and the config manager's `apply_tuning` dep (a model
 /// switch re-resolves + re-applies). No live session → applied at next spawn.
-pub(super) async fn apply_tuning_impl(
+pub(crate) async fn apply_tuning_impl(
     active_chats: &Registry,
     deps: &Arc<dyn ChatManagerDeps>,
     chat_id: &str,
 ) {
     let session = active_chats
         .get(chat_id)
-        .and_then(|c| c.lock().unwrap_or_else(|e| e.into_inner()).session.clone());
+        .and_then(|c| c.lock_recover().session.clone());
     let Some(session) = session else {
         return;
     };
@@ -64,64 +65,59 @@ pub(super) async fn apply_tuning_impl(
         return;
     };
     if let Err(err) = session.apply_tuning(resolved).await {
-        tracing::warn!(?err, chat_id, "live applyTuning failed");
+        tracing::warn!(error = ?err, chat_id, "live applyTuning failed");
     }
 }
 
-// ── queued-ref helpers (shared by the facade + EhDeps) ───────────────────────
-
-pub(super) fn queued_for_chat(refs: &QueuedRefs, chat_id: &str) -> Vec<QueuedMessageRef> {
-    refs.lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .iter()
-        .filter(|r| r.chat_id == chat_id)
-        .cloned()
-        .collect()
-}
-
-pub(super) fn handle_queued_processed(refs: &QueuedRefs, chat_id: &str, uuid: &str) {
-    let removed = {
-        let mut guard = refs.lock().unwrap_or_else(|e| e.into_inner());
-        guard
-            .iter()
-            .position(|r| r.uuid == uuid)
-            .map(|i| guard.remove(i))
+/// Composes a multi-segment chat's history; `None` for a single-segment chat
+/// (or a deps impl without segments), whose one session loads as before.
+pub(crate) async fn compose_if_multi(
+    deps: &dyn ChatManagerDeps,
+    chat_id: &str,
+) -> Option<crate::segments::compose::Composed> {
+    let store = deps.segment_store()?;
+    let layout = store
+        .layout(chat_id)
+        .filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?;
+    let chat = match deps.chats_get(chat_id) {
+        Ok(chat) => chat?,
+        Err(error) => {
+            tracing::error!(%error, chat_id, "history storage read failed");
+            deps.emit_event(DaemonEvent::Error {
+                chat_id: Some(chat_id.into()),
+                error: error.to_string(),
+            });
+            return None;
+        }
     };
-    if let Some(r) = removed {
-        info!(
-            chat_id,
-            uuid,
-            message_id = r.message_id,
-            "CLI processed queued message"
-        );
-    }
-}
-
-pub(super) fn clear_all_queued_for_chat(refs: &QueuedRefs, chat_id: &str) {
-    let mut guard = refs.lock().unwrap_or_else(|e| e.into_inner());
-    let before = guard.len();
-    guard.retain(|r| r.chat_id != chat_id);
-    let removed = before - guard.len();
-    drop(guard);
-    if removed > 0 {
-        info!(chat_id, removed, "cleared queued refs for exited chat");
-    }
+    Some(crate::segments::compose::compose(deps, &chat, &layout).await)
 }
 
 /// Build a stateless history-load session for `chat` (shared by the facade's
 /// `get_messages`/`get_messages_from_disk` and the permission handler's history
 /// restore). `None` when the chat has no Claude session / pending fork / adapter
-/// / project — an unsent fork (todo #343) has no `claude_session_id` yet, so it
-/// resumes from `chats.pending_fork`'s `fork_source` instead; this is the path a
-/// freshly forked chat's pre-first-message history takes (still in
-/// `active_chats`, so `load_chat` never runs `do_load_chat` for it).
-pub(super) fn build_history_session(
+/// / project — an unsent fork has no `vendor_session_id` yet, so it resumes from
+/// `chats.pending_fork`'s `fork_source` instead; this is the path a freshly
+/// forked chat's pre-first-message history takes (still in `active_chats`, so
+/// `load_chat` never runs `do_load_chat` for it).
+pub(crate) fn build_history_session(
     deps: &Arc<dyn ChatManagerDeps>,
     chat: &Chat,
     chat_id: &str,
 ) -> Option<Arc<dyn AdapterSession>> {
-    let own_id = chat.claude_session_id.clone();
-    let fork_source = deps.get_pending_fork(chat_id).map(|p| p.fork_source);
+    let own_id = chat.vendor_session_id.clone();
+    let fork_source = match deps.get_pending_fork(chat_id) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::error!(%error, chat_id, "pending fork read failed");
+            deps.emit_event(DaemonEvent::Error {
+                chat_id: Some(chat_id.into()),
+                error: error.to_string(),
+            });
+            return None;
+        }
+    }
+    .map(|p| p.fork_source);
     if own_id.is_none() && fork_source.is_none() {
         return None;
     }
@@ -151,6 +147,4 @@ pub(crate) fn remap_history(history: Vec<ChatMessage>, chat_id: &str) -> Vec<Cha
         .collect()
 }
 
-pub(super) fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
-}
+pub(super) use mainframe_types::time::now_ms;

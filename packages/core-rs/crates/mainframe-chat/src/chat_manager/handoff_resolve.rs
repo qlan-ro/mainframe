@@ -40,8 +40,8 @@ impl ChatManager {
             HandoffStatus::Superseded
         };
         store.set_handoff_status(&live.id, status);
-        let name_of = |id: &str| self.deps.adapter_fork_info(id).name;
-        if refresh_divider(&self.messages, store, chat_id, &active.id, &name_of) {
+        let name_of = |id: &str| self.shared.deps.adapter_fork_info(id).name;
+        if refresh_divider(&self.shared.messages, store, chat_id, &active.id, &name_of) {
             self.event_handler.emit_display(chat_id);
         }
         delivered
@@ -66,7 +66,7 @@ impl ChatManager {
             session_file_path: native.session_file_path.clone(),
             fork_source: None,
         };
-        let Some(session) = self.deps.create_session(&native.adapter_id, options) else {
+        let Some(session) = self.shared.deps.create_session(&native.adapter_id, options) else {
             return false;
         };
         match session.load_history().await {
@@ -80,10 +80,9 @@ impl ChatManager {
                     })
             }),
             Err(err) => {
-                tracing::warn!(
-                    ?err,
+                tracing::warn!(error = ?err,
                     chat_id,
-                    "handoff: could not read the target transcript"
+                    "could not read the target transcript"
                 );
                 false
             }
@@ -101,6 +100,7 @@ impl ChatManager {
             return false;
         };
         let located = self
+            .shared
             .deps
             .locate_transcript(
                 &native.adapter_id,

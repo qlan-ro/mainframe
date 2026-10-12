@@ -1,8 +1,6 @@
-//! Ported from `packages/core/src/messages/parse-unified-diff.ts`.
-//!
-//! Adapter-agnostic: parses a unified-diff string into `DiffHunk`s (§2.5 display
-//! side). The TS `HUNK_HEADER_RE` regex is hand-rolled here — the display crate
-//! carries no regex dependency and the header grammar is fixed.
+//! Adapter-agnostic: parses a unified-diff string into `DiffHunk`s. The hunk
+//! header grammar is hand-rolled — the display crate carries no regex
+//! dependency and the grammar is fixed.
 
 use mainframe_types::chat::DiffHunk;
 
@@ -55,8 +53,8 @@ pub fn parse_unified_diff(diff: &str) -> Vec<DiffHunk> {
     hunks
 }
 
-/// Matches `^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@` — the TS `HUNK_HEADER_RE`.
-/// Absent `,<lines>` groups default to `1` (matching `parseInt(...) : 1`). The
+/// Matches `^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`.
+/// Absent `,<lines>` groups default to `1`. The
 /// regex is not end-anchored, so trailing section text after ` @@` is ignored.
 fn parse_hunk_header(line: &str) -> Option<(i64, i64, i64, i64)> {
     let rest = line.strip_prefix("@@ -")?;
@@ -78,7 +76,7 @@ fn take_optional_count(s: &str) -> Option<(i64, &str)> {
     }
 }
 
-/// Consumes a leading run of ASCII digits, mirroring `\d+` + `parseInt(_, 10)`.
+/// Consumes a leading run of ASCII decimal digits.
 fn take_number(s: &str) -> Option<(i64, &str)> {
     let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
     if end == 0 {
@@ -89,78 +87,5 @@ fn take_number(s: &str) -> Option<(i64, &str)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn empty_or_whitespace_returns_no_hunks() {
-        assert!(parse_unified_diff("").is_empty());
-        assert!(parse_unified_diff("   \n  ").is_empty());
-    }
-
-    #[test]
-    fn headerless_diff_collapses_into_a_single_default_hunk() {
-        let hunks = parse_unified_diff("+foo\n-bar");
-        assert_eq!(hunks.len(), 1);
-        assert_eq!(hunks[0].old_start, 1);
-        assert_eq!(hunks[0].old_lines, 0);
-        assert_eq!(hunks[0].new_start, 1);
-        assert_eq!(hunks[0].new_lines, 0);
-        assert_eq!(hunks[0].lines, vec!["+foo".to_string(), "-bar".to_string()]);
-    }
-
-    #[test]
-    fn single_header_with_counts() {
-        let hunks = parse_unified_diff("@@ -1,3 +2,4 @@\n context\n+added");
-        assert_eq!(hunks.len(), 1);
-        assert_eq!(hunks[0].old_start, 1);
-        assert_eq!(hunks[0].old_lines, 3);
-        assert_eq!(hunks[0].new_start, 2);
-        assert_eq!(hunks[0].new_lines, 4);
-        assert_eq!(
-            hunks[0].lines,
-            vec![" context".to_string(), "+added".to_string()]
-        );
-    }
-
-    #[test]
-    fn header_without_comma_counts_defaults_to_one() {
-        let hunks = parse_unified_diff("@@ -5 +6 @@\n-x");
-        assert_eq!(hunks.len(), 1);
-        assert_eq!(hunks[0].old_start, 5);
-        assert_eq!(hunks[0].old_lines, 1);
-        assert_eq!(hunks[0].new_start, 6);
-        assert_eq!(hunks[0].new_lines, 1);
-        assert_eq!(hunks[0].lines, vec!["-x".to_string()]);
-    }
-
-    #[test]
-    fn trailing_section_text_after_header_is_ignored() {
-        let hunks = parse_unified_diff("@@ -1,1 +1,1 @@ fn foo() {\n-a\n+b");
-        assert_eq!(hunks.len(), 1);
-        assert_eq!(hunks[0].old_start, 1);
-        assert_eq!(hunks[0].lines, vec!["-a".to_string(), "+b".to_string()]);
-    }
-
-    #[test]
-    fn multiple_headers_produce_multiple_hunks() {
-        let hunks = parse_unified_diff("@@ -1,1 +1,1 @@\n-a\n@@ -10,2 +10,3 @@\n+b\n+c");
-        assert_eq!(hunks.len(), 2);
-        assert_eq!(hunks[0].old_start, 1);
-        assert_eq!(hunks[0].lines, vec!["-a".to_string()]);
-        assert_eq!(hunks[1].old_start, 10);
-        assert_eq!(hunks[1].old_lines, 2);
-        assert_eq!(hunks[1].new_lines, 3);
-        assert_eq!(hunks[1].lines, vec!["+b".to_string(), "+c".to_string()]);
-    }
-}
-
-// PORT STATUS: src/messages/parse-unified-diff.ts (46 lines)
-// confidence: high
-// todos: 0
-// notes: §2.5 display side (pure parser over DiffHunk from mainframe-types::chat).
-// notes: HUNK_HEADER_RE is hand-rolled (no regex dep in the display crate) —
-// notes: same grammar, same defaults (absent count → 1), same non-end-anchored
-// notes: match (trailing section text ignored). Headerless default hunk keeps
-// notes: oldLines/newLines = 0 exactly as the TS lazy branch does. Tests derived
-// notes: from the TS doc contract (TS had no sibling test file).
+#[path = "parse_unified_diff_tests.rs"]
+mod tests;

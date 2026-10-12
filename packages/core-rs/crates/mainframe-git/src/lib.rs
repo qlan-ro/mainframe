@@ -1,12 +1,17 @@
 //! `mainframe-git` — the git subprocess primitive, porcelain parsers, the
 //! `GitService` command surface, and the per-project async lock.
-//!
-//! Ported from `packages/core/src/git/*` and `src/server/routes/exec-git.ts`.
 
 #![forbid(unsafe_code)]
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::too_many_lines,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "Test assertions and scenarios"
+    )
+)]
 
-pub mod exec_git;
 pub mod git_exec;
 pub mod git_parse;
 pub mod git_service;
@@ -24,10 +29,3 @@ pub use git_service::{
     AbortResult, DetectedBaseBranch, GitExec, GitService, GitServiceError, RealGitExec,
 };
 pub use project_lock::acquire_project_lock;
-
-// PORT STATUS: crate root (re-exports; no TS index.ts counterpart in src/git/)
-// confidence: high
-// todos: 0
-// notes: Modules — git_exec (git/git-exec.ts), git_parse (git/git-parse.ts),
-// git_service (git/git-service.ts), project_lock (git/project-lock.ts), exec_git
-// (server/routes/exec-git.ts, re-export of git_exec per single-canonical rule).

@@ -1,5 +1,3 @@
-//! Ported from `packages/core/src/chat/resolve-tuning.ts`.
-
 use mainframe_types::adapter::{
     AdapterModel, EffortLevel, TUNABLE_FEATURES, clamp_effort_to_supported,
 };
@@ -95,13 +93,3 @@ fn model_capability(model: &AdapterModel, capability: &str) -> Option<bool> {
         _ => None,
     }
 }
-
-// PORT STATUS: src/chat/resolve-tuning.ts (44 lines)
-// confidence: high
-// todos: 0
-// notes: `firstDefined(...) ?? 'medium'` → `Option::or` chain + `unwrap_or(Medium)`.
-// notes: TS dynamic `provider[f.providerDefault]` / `chat[f.key]` / `model[f.capability]`
-// notes: property access becomes match-on-string helpers keyed by the TunableFeature
-// notes: constants (3 features). `providerRaw === 'true'` → BoolString::True check.
-// notes: ProviderTuningDefaults uses `BoolString` (the typed ProviderConfig fields)
-// notes: rather than raw 'true'/'false' strings; resolve_tuning_for_chat adapts.
