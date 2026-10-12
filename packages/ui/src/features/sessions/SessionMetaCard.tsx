@@ -7,7 +7,7 @@
  * DOMRect because no hover-card primitive was installed there; v2 has one, so
  * the manual portal and `use-row-hover-card` are dropped.
  */
-import { AlertTriangle, Bot, FolderGit2, GitBranch, GitFork, ListChecks } from 'lucide-react';
+import { AlertTriangle, Bot, FolderGit2, GitBranch, ListChecks, Split } from 'lucide-react';
 import type { ChatDelegation, DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
 import { Badge } from '@/components/ui/badge';
 import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
@@ -104,7 +104,7 @@ function ForkedFromRow({ parentState }: { parentState: ParentLineageState }) {
   return (
     <div data-testid="sessions-meta-card-forked-from" className="flex items-center gap-1.5 text-xs">
       <FieldLabel>Forked from</FieldLabel>
-      <GitFork aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <Split aria-hidden className="size-3 shrink-0 text-muted-foreground" />
       <span className="truncate">{parentLineageValue(parentState)}</span>
     </div>
   );
@@ -154,7 +154,7 @@ function ForkCountRow({ count }: { count: number }) {
   return (
     <div data-testid="sessions-meta-card-fork-count" className="flex items-center gap-1.5 text-xs">
       <FieldLabel>Forked</FieldLabel>
-      <GitFork aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <Split aria-hidden className="size-3 shrink-0 text-muted-foreground" />
       <span className="truncate">{count}x</span>
     </div>
   );

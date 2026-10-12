@@ -4,6 +4,7 @@ import { Message, MessageContent, MessageFooter } from '@/components/ui/message'
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { MessageActionBar } from './MessageActionBar';
+import { AssistantForkAction } from './AssistantForkAction';
 import { MessageTiming } from './MessageTiming';
 import { MessageTimestamp } from './MessageTimestamp';
 import { AssistantErrorBlock } from './AssistantErrorBlock';
@@ -41,6 +42,7 @@ export function AssistantMessage() {
                 {isNested ? parts : <MessagePathContextMenu>{parts}</MessagePathContextMenu>}
                 <MessageFooter className="min-h-6 gap-2 px-0">
                   <MessageActionBar />
+                  <AssistantForkAction />
                   <MessageTimestamp />
                   <MessageTiming />
                 </MessageFooter>

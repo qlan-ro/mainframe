@@ -1,6 +1,6 @@
 /**
  * ActionIconButton — the ghost icon button with a tooltip that every message
- * action bar uses (assistant Copy/More, user "Fork from here").
+ * action bar uses (assistant Copy/More/Fork).
  *
  * A disabled button gets no pointer events, so its tooltip would never open:
  * the trigger is then a wrapping span (the same idiom `SessionContextMenu`

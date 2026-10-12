@@ -34,8 +34,7 @@ import { ChatColumnHeader } from '../thread/ChatColumnHeader';
 import { SideChatHost } from '@/features/side-chat/SideChatHost';
 
 /**
- * Restores a `draft-stash` seed (a "Fork from here" prefill, or a #178
- * offload-release draft) into THIS zone's own composer. Mounted inside the
+ * Restores a stashed draft after a split handoff or #178 offload release into THIS zone's own composer. Mounted inside the
  * zone's rebound `AuiProvider`, so `useAui().thread` resolves to its
  * `ExternalThread` client, not the outer/main one — `useChatRuntimeHook`'s
  * hidden kept-warm instance for this same chatId defers to this effect

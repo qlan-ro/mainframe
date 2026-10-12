@@ -17,7 +17,7 @@
  * data-testid: session-tab-ctx-<action>.
  */
 import type { ReactNode } from 'react';
-import { Columns2, EyeOff, GitFork, MessageSquarePlus, PinIcon, SquareSplitHorizontal, XIcon } from 'lucide-react';
+import { Columns2, EyeOff, MessageSquarePlus, PinIcon, Split, SquareSplitHorizontal, XIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -93,7 +93,7 @@ export function SessionTabContextMenu({
         )}
         {forkAvailability.enabled ? (
           <ContextMenuItem data-testid="session-tab-ctx-fork" onSelect={onFork}>
-            <GitFork />
+            <Split />
             Fork
           </ContextMenuItem>
         ) : (
@@ -102,7 +102,7 @@ export function SessionTabContextMenu({
           <Hint label={forkAvailability.reason}>
             <span className="flex">
               <ContextMenuItem data-testid="session-tab-ctx-fork" disabled>
-                <GitFork />
+                <Split />
                 Fork
               </ContextMenuItem>
             </span>

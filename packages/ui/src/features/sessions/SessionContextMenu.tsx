@@ -9,11 +9,11 @@ import {
   ArchiveIcon,
   Columns2,
   CopyIcon,
-  GitFork,
   MessageSquarePlus,
   PencilIcon,
   PinIcon,
   PinOffIcon,
+  Split,
   TagIcon,
 } from 'lucide-react';
 import {
@@ -98,7 +98,7 @@ export function SessionContextMenu({
         </ContextMenuItem>
         {forkAvailability.enabled ? (
           <ContextMenuItem data-testid="sessions-ctx-fork" onSelect={onFork}>
-            <GitFork />
+            <Split />
             Fork
           </ContextMenuItem>
         ) : (
@@ -108,7 +108,7 @@ export function SessionContextMenu({
           <Hint label={forkAvailability.reason}>
             <span className="flex">
               <ContextMenuItem data-testid="sessions-ctx-fork" disabled>
-                <GitFork />
+                <Split />
                 Fork
               </ContextMenuItem>
             </span>

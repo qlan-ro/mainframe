@@ -2,7 +2,7 @@
  * draft-stash — pure module tests (#178 AC14: the draft survives a release).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { markForStash, captureIfMarked, takeStash, seedDraft, handoffDraft } from '../draft-stash';
+import { markForStash, captureIfMarked, takeStash, handoffDraft } from '../draft-stash';
 
 function file(name: string): File {
   return new File(['x'], name);
@@ -103,14 +103,5 @@ describe('draft-stash — captureIfMarked cannot clobber a handed-off draft (cha
     captureIfMarked('chat-race-3', { text: 'fresher at unmount', attachments: [] });
 
     expect(takeStash('chat-race-3')).toEqual({ text: 'fresher at unmount', attachments: [] });
-  });
-});
-
-describe('draft-stash — seedDraft (fork-from-message prefill)', () => {
-  it('a seeded draft is taken exactly once, with no attachments', () => {
-    seedDraft('chat-fork-1', 'try this another way');
-
-    expect(takeStash('chat-fork-1')).toEqual({ text: 'try this another way', attachments: [] });
-    expect(takeStash('chat-fork-1')).toBeUndefined();
   });
 });
