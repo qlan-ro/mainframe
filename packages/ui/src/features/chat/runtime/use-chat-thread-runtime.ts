@@ -203,12 +203,12 @@ export function useChatThreadRuntime(
   // settles after the workspace panel parks to free the width), so this
   // instance can correctly be the one displayed, take the stash above, and
   // THEN lose that status to `ChatZone` once the split catches up — before
-  // the user ever saw it render there. If we took something and this chat is
+  // the user ever saw it render there. If this composer holds a draft and the chat is
   // now BECOMING a visible split-zone member (`isVisibleSplitZone` flips
   // false → true — `useChatRuntimeHook` computes it as
   // `isVisibleZone(zones, chatId) && splitFits`), hand the composer's CURRENT
-  // content (the original stash, or whatever the user edited into it
-  // meanwhile) back to the stash so `ChatZone`'s own restore picks up the
+  // content (a restored draft or text typed directly into the single view)
+  // back to the stash so `ChatZone`'s own restore picks up the
   // latest state instead of a now-empty composer. Clears the local composer
   // too, so a later unsplit back to this same instance doesn't resurrect it
   // stale.
@@ -228,13 +228,14 @@ export function useChatThreadRuntime(
   useEffect(() => {
     const wasVisibleSplitZone = wasVisibleSplitZoneRef.current;
     wasVisibleSplitZoneRef.current = isVisibleSplitZone;
-    if (!tookDraftRef.current || wasVisibleSplitZone || !isVisibleSplitZone) return;
+    if (wasVisibleSplitZone || !isVisibleSplitZone) return;
     const composer = runtimeRef.current?.thread?.composer;
     if (composer == null) return;
     const composerState = composer.getState();
     const attachments = composerState.attachments
       .map((attachment) => attachment.file)
       .filter((file): file is File => file != null);
+    if (!tookDraftRef.current && composerState.text === '' && attachments.length === 0) return;
     handoffDraft(stashKey, { text: composerState.text, attachments });
     tookDraftRef.current = false;
     composer.setText('');
