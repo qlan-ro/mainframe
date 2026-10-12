@@ -30,6 +30,9 @@ export const PREVIEW_BASE = `http://127.0.0.1:${PREVIEW_PORT}`;
  * for a direct `playwright test`.
  */
 function assertAdapterModeChosen(): void {
+  if (process.env['E2E_MODE'] && process.env['MF_E2E_ALLOW_REAL_ADAPTER'] === '1') {
+    throw new Error('Choose either E2E_MODE or MF_E2E_ALLOW_REAL_ADAPTER, not both');
+  }
   if (process.env['E2E_MODE']) return;
   if (process.env['MF_E2E_ALLOW_REAL_ADAPTER'] === '1') return;
   throw new Error(
@@ -37,7 +40,7 @@ function assertAdapterModeChosen(): void {
       'would be inert.\n' +
       '  Normal run:        pnpm test:e2e            (sets E2E_MODE=mock for you)\n' +
       '  Direct invocation: E2E_MODE=mock pnpm --filter @qlan-ro/mainframe-e2e exec playwright test\n' +
-      '  Deliberate live-adapter run: MF_E2E_ALLOW_REAL_ADAPTER=1 (bills real API calls)',
+      '  Live-adapter checks: MF_E2E_ALLOW_REAL_ADAPTER=1 (bills real API calls)',
   );
 }
 
