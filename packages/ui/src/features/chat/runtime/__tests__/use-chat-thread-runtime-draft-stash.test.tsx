@@ -211,6 +211,26 @@ describe('useChatThreadRuntime — handoff when becoming a visible split zone', 
     unmount();
   });
 
+  it('hands off text typed into a narrow fork without an earlier stash', () => {
+    const controller = makeController('chat-handoff-typed');
+    const { rerender, unmount } = renderHook(
+      ({ visible }: { visible: boolean }) =>
+        useChatThreadRuntime(controller, PORT, {
+          active: false,
+          chatId: 'chat-handoff-typed',
+          isVisibleSplitZone: visible,
+        }),
+      { initialProps: { visible: false } },
+    );
+
+    composerState = { text: 'typed in the single view', attachments: [] };
+    rerender({ visible: true });
+
+    expect(takeStash('chat-handoff-typed')).toEqual({ text: 'typed in the single view', attachments: [] });
+    expect(setTextSpy).toHaveBeenLastCalledWith('');
+    unmount();
+  });
+
   it('does nothing when this instance never took anything (no stash to hand off)', () => {
     const controller = makeController('chat-handoff-2');
     const { rerender, unmount } = renderHook(

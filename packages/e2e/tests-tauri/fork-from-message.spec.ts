@@ -1,14 +1,12 @@
 /**
- * §fork-from-message — "Fork from here" on a sent user message
- * (docs/specs/2026-10-06-fork-from-message.md).
+ * §fork-from-message — "Fork from here" after an assistant turn.
  *
  * Runs in E2E_MODE=mock against the `messaging` recording (two prompts). With
- * `mockFork`, the daemon registers the mock adapter as fork-capable
- * (E2E_MOCK_FORK=1); without it the button is disabled with the adapter hint.
+ * `mockFork`, the daemon registers the mock adapter as fork-capable.
  *
  * Testid reference:
- *   chat-user-message          — user turn root (carries data-message-id)
- *   chat-user-message-fork     — the hover bar's "Fork from here" button
+ *   chat-assistant-message     — assistant turn root
+ *   chat-assistant-message-fork — the turn's "Fork from here" button
  *   chat-header-parent-link    — the fork's link back to its parent
  *   chat-composer-input        — composer textarea (one per visible zone)
  */
@@ -21,12 +19,11 @@ import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 const PROMPT_1 = 'What is 2 + 2? Reply with just the number.';
 const PROMPT_2 = 'List the files in this project using bash ls.';
 
-const userMessage = (page: Page, index: number) => page.locator('[data-testid="chat-user-message"]').nth(index);
+const assistantMessage = (page: Page, index: number) => page.getByTestId('chat-assistant-message').nth(index);
 
-/** The fork button lives in a hover bar, so hover its message first. */
 async function forkButton(page: Page, index: number) {
-  await userMessage(page, index).hover();
-  return userMessage(page, index).locator('[data-testid="chat-user-message-fork"]');
+  await assistantMessage(page, index).hover();
+  return assistantMessage(page, index).getByTestId('chat-assistant-message-fork');
 }
 
 async function sendBothPrompts(page: Page) {
@@ -37,9 +34,7 @@ async function sendBothPrompts(page: Page) {
 }
 
 /**
- * The fork zone's own composer — NOT `.first()`, which is DOM order and
- * picks the PARENT zone whenever it renders first (the parent never holds
- * PROMPT_2, so a stale-reapply assertion against `.first()` proves nothing).
+ * The fork zone's own composer. `.first()` can select the parent zone.
  * `chat-zone-` also prefixes the column strip's own `chat-zone-strip-<id>` /
  * `chat-zone-close-<id>` testids, so exclude those to isolate zone roots.
  */
@@ -69,28 +64,19 @@ test.describe('§fork-from-message (fork-capable mock)', () => {
     await closeTauriApp(app);
   });
 
-  test('is disabled on the first message, with its hint', async () => {
+  test('offers forks after earlier and latest completed assistant turns', async () => {
     const { page } = app;
-    const button = await forkButton(page, 0);
-    await expect(button).toBeDisabled();
-    await button.locator('..').hover();
-    await expect(page.getByRole('tooltip')).toContainText('Nothing before this message to fork');
+    await expect(await forkButton(page, 0)).toBeEnabled();
+    await expect(await forkButton(page, 1)).toBeEnabled();
   });
 
-  test('forks before the second message, prefills its text, and cuts the transcript there', async () => {
+  test('forks after the first turn with an empty composer and cuts the transcript there', async () => {
     const { page } = app;
-    const button = await forkButton(page, 1);
+    const button = await forkButton(page, 0);
     await expect(button).toBeEnabled();
     await button.click();
 
     await expect(page.locator('[data-testid="chat-header-parent-link"]').first()).toBeVisible({ timeout: 15_000 });
-    await expect
-      .poll(() =>
-        page
-          .locator('[data-testid="chat-composer-input"]')
-          .evaluateAll((els) => els.map((el) => (el as HTMLTextAreaElement).value)),
-      )
-      .toContain(PROMPT_2);
 
     // The parent was on screen, so the fork opens beside it as a split pair
     // (forkAnchor). Scope the transcript checks per zone so each chat's own
@@ -114,13 +100,12 @@ test.describe('§fork-from-message (fork-capable mock)', () => {
     await expect(parentMessages.nth(0)).toContainText(PROMPT_1);
     await expect(parentMessages.nth(1)).toContainText(PROMPT_2);
 
-    // The fork holds everything the parent showed BEFORE the chosen message:
-    // PROMPT_1 renders read-only. PROMPT_2 is the cut point — it is absent
-    // from the fork's transcript (it waits, unsent, in the composer instead).
+    // The fork holds the first turn, while the later prompt stays only in the parent.
     const forkMessages = forkZone.locator('[data-testid="chat-user-message"]');
     await expect(forkMessages).toHaveCount(1);
     await expect(forkMessages.first()).toContainText(PROMPT_1);
     await expect(forkMessages).not.toContainText(PROMPT_2);
+    await expect(forkZone.getByTestId('chat-composer-input')).toBeEmpty();
   });
 });
 
@@ -128,9 +113,8 @@ test.describe('§fork-from-message (fork-capable mock)', () => {
  * A narrow surface parks the split behind the single-chat view (ChatSurface's
  * `splitFits` gate, `MIN_ZONE_WIDTH` in zones-store.ts) even though the fork
  * is still a `zones` member. The review follow-up on 3e34c95c: zone
- * membership alone must not defer the draft-stash take, or the prefill is
- * lost here (nothing renders `ChatZone`) and, if the window is later
- * widened, reapplied stale over whatever the user already typed or sent.
+ * membership alone must not lose an edit made in the single view when the
+ * window is widened and the fork moves into its own zone.
  */
 test.describe('§fork-from-message (narrow viewport — split parked behind single view)', () => {
   let app: TauriAppFixture;
@@ -150,37 +134,29 @@ test.describe('§fork-from-message (narrow viewport — split parked behind sing
     await closeTauriApp(app);
   });
 
-  test('prefills the fork in the parked single view, and widening hands the edit to its OWN zone, never the stale prefill', async () => {
+  test('keeps an edit made in the parked single view when widened', async () => {
     const { page } = app;
-    const button = await forkButton(page, 1);
+    const button = await forkButton(page, 0);
     await expect(button).toBeEnabled();
     await button.click();
 
     await expect(page.getByTestId('chat-header-parent-link').first()).toBeVisible({ timeout: 15_000 });
-    // Too narrow for the split: ChatSurface renders the single view, so the
-    // fork's composer is this hook instance's own — not a ChatZone's. The
-    // prefill must still land here, or it is lost outright (review follow-up
-    // on 3e34c95c: zone-membership-only skip left NEITHER consumer taking it).
+    // Too narrow for the split: ChatSurface renders the single view.
     await expect(page.getByTestId('chat-split-row')).toHaveCount(0);
     const composer = page.getByTestId('chat-composer-input');
-    await expect(composer).toHaveValue(PROMPT_2);
+    await expect(composer).toBeEmpty();
 
-    // The user edits the prefill before the window ever widens.
     const edited = 'edited before widening — must survive';
     await composer.fill(edited);
 
     // Widening now makes the split fit; the fork renders through its OWN
     // ChatZone for the first time. The single-view instance's handoff effect
     // (review follow-up on 214de9d4) re-stashes whatever the composer holds
-    // — the user's edit, not the stale PROMPT_2 — the moment it loses
-    // displayed status, so ZoneDraftRestore picks up the LATEST state rather
-    // than finding nothing (losing the edit) or re-applying the original
-    // prefill stale over it.
+    // — the user's edit — the moment it loses displayed status.
     await page.setViewportSize({ width: 1600, height: 900 });
     await expect(page.getByTestId('chat-split-row')).toBeVisible();
     const forkComposer = await forkZoneComposer(page, parentChatId);
     await expect(forkComposer).toHaveValue(edited);
-    await expect(forkComposer).not.toHaveValue(PROMPT_2);
   });
 });
 
@@ -191,10 +167,7 @@ test.describe('§fork-from-message (narrow viewport — split parked behind sing
  * the workspace to the bottom strip on the pair becoming visible). This is
  * the exact race review follow-up B on 214de9d4 describes: `splitFits`
  * reads false for a beat right after the pair resolves into `zones` (its
- * ResizeObserver settles asynchronously, after the park), so the hook
- * instance can be "displayed" and take the stash before `ChatZone` ever
- * mounts — the handoff effect must still deliver it there once `splitFits`
- * catches up, not just leave it flashing in the single view.
+ * ResizeObserver settles asynchronously, after the park).
  */
 test.describe('§fork-from-message (mid-width viewport — fits only once the workspace panel parks)', () => {
   let app: TauriAppFixture;
@@ -218,18 +191,16 @@ test.describe('§fork-from-message (mid-width viewport — fits only once the wo
     await closeTauriApp(app);
   });
 
-  test('prefills the fork once the split catches up after the workspace parks', async () => {
+  test('opens an empty fork once the split catches up after the workspace parks', async () => {
     const { page } = app;
-    const button = await forkButton(page, 1);
+    const button = await forkButton(page, 0);
     await expect(button).toBeEnabled();
     await button.click();
 
     await expect(page.getByTestId('chat-header-parent-link').first()).toBeVisible({ timeout: 15_000 });
-    // The pair parks the workspace, splitFits catches up, and ChatZone mounts
-    // — the prefill must land in ITS composer, not vanish in the hand-off.
     await expect(page.getByTestId('chat-split-row')).toBeVisible({ timeout: 15_000 });
     const forkComposer = await forkZoneComposer(page, parentChatId);
-    await expect(forkComposer).toHaveValue(PROMPT_2);
+    await expect(forkComposer).toBeEmpty();
   });
 });
 
@@ -251,7 +222,7 @@ test.describe('§fork-from-message (mock without fork)', () => {
 
   test('is disabled with the adapter hint', async () => {
     const { page } = app;
-    const button = await forkButton(page, 1);
+    const button = await forkButton(page, 0);
     await expect(button).toBeDisabled();
     await button.locator('..').hover();
     await expect(page.getByRole('tooltip')).toContainText("Forking isn't available for Mock CLI chats yet");
