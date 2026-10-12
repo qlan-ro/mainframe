@@ -58,7 +58,7 @@ export function AssistantForkAction() {
         data-testid="chat-assistant-message-fork"
         onClick={() => void fork(chatId, point.kind === 'before' ? { fromMessageId: point.messageId } : undefined)}
       >
-        <Split />
+        <Split className="rotate-90" />
       </ActionIconButton>
     </ActionBarPrimitive.Root>
   );

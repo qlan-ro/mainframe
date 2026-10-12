@@ -2,7 +2,7 @@
  * ChatColumnHeader — every chat column's title row, the single view and each
  * zone of a split alike: the chat's name, its "Forked from" / "Delegated by"
  * link (on a child), its delegated-tasks chip (on a parent), then on the
- * trailing edge the column's own session-details toggle and — for
+ * trailing edge its side-chat and session-details toggles and — for
  * a split zone — the zone close ✕.
  *
  * It sits INSIDE the transcript column (above the thread), so the docked
@@ -15,6 +15,7 @@ import { useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { SessionPanelToggle } from '@/features/session-panel/SessionPanelToggle';
+import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
 import type { PanelColumnId } from '@/features/session-panel/panel-control-store';
 import { ChatHeaderParentLink } from './ChatHeaderParentLink';
 import { ChatHeaderTasksChip } from '../orchestration/ChatHeaderTasksChip';
@@ -48,6 +49,7 @@ export function ChatColumnHeader({ columnId, toggleTestId, tourAnchor = false, z
       <ChatHeaderParentLink />
       <ChatHeaderTasksChip />
       <span className="flex-1" />
+      <SideChatToggle />
       <SessionPanelToggle columnId={columnId} testId={toggleTestId} tourAnchor={tourAnchor} />
       {zone && (
         <Hint label="Close zone">

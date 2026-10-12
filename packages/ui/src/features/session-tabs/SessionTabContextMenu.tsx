@@ -93,7 +93,7 @@ export function SessionTabContextMenu({
         )}
         {forkAvailability.enabled ? (
           <ContextMenuItem data-testid="session-tab-ctx-fork" onSelect={onFork}>
-            <Split />
+            <Split className="rotate-90" />
             Fork
           </ContextMenuItem>
         ) : (
@@ -102,7 +102,7 @@ export function SessionTabContextMenu({
           <Hint label={forkAvailability.reason}>
             <span className="flex">
               <ContextMenuItem data-testid="session-tab-ctx-fork" disabled>
-                <Split />
+                <Split className="rotate-90" />
                 Fork
               </ContextMenuItem>
             </span>

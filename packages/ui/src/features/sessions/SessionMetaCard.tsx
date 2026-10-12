@@ -104,7 +104,7 @@ function ForkedFromRow({ parentState }: { parentState: ParentLineageState }) {
   return (
     <div data-testid="sessions-meta-card-forked-from" className="flex items-center gap-1.5 text-xs">
       <FieldLabel>Forked from</FieldLabel>
-      <Split aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <Split aria-hidden className="size-3 shrink-0 rotate-90 text-muted-foreground" />
       <span className="truncate">{parentLineageValue(parentState)}</span>
     </div>
   );
@@ -154,7 +154,7 @@ function ForkCountRow({ count }: { count: number }) {
   return (
     <div data-testid="sessions-meta-card-fork-count" className="flex items-center gap-1.5 text-xs">
       <FieldLabel>Forked</FieldLabel>
-      <Split aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <Split aria-hidden className="size-3 shrink-0 rotate-90 text-muted-foreground" />
       <span className="truncate">{count}x</span>
     </div>
   );

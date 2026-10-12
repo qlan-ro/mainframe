@@ -22,7 +22,7 @@ export function ChatHeaderParentLink() {
       )}
       onClick={link.onActivate}
     >
-      <Glyph aria-hidden className="size-3 shrink-0" />
+      <Glyph aria-hidden className={cn('size-3 shrink-0', link.relation === 'fork' && 'rotate-90')} />
       <span className="truncate">{link.text}</span>
     </span>
   );

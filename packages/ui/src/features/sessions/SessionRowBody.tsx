@@ -58,7 +58,7 @@ export function RowBody({
             <Split
               aria-hidden
               data-testid="sessions-row-fork-nest-glyph"
-              className="size-3! shrink-0 text-muted-foreground"
+              className="size-3! shrink-0 rotate-90 text-muted-foreground"
             />
           )}
           {renameSlot ?? (
