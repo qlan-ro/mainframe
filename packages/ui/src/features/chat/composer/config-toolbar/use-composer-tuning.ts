@@ -18,6 +18,8 @@ import type {
 import { setChatTuning, setChatConfig, type ChatConfigPatch } from '@/lib/api/chats';
 import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { reinitializeDraftAdapter } from '@/features/sessions/new-thread/initialize-draft';
+import { useSettingsStore } from '@/store/settings';
+import { supportsCliModel } from '@/lib/cli-model';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { synthesizeDraftChat } from './synthesize-draft-chat';
 import { useProviderDefaults } from './use-provider-defaults';
@@ -220,7 +222,13 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
           .finally(() => adapterInitializations.current.delete(id));
         return;
       }
-      patchConfig({ adapterId: id }, 'setAdapter');
+      const target = adapters.find((candidate) => candidate.id === id);
+      const configuredModel = useSettingsStore.getState().providers[id]?.defaultModel;
+      const defaultModel = supportsCliModel(id)
+        ? 'default'
+        : (target?.models.find((candidate) => candidate.isDefault)?.id ?? 'default');
+      const model = configuredModel && configuredModel !== 'default' ? configuredModel : defaultModel;
+      patchConfig({ adapterId: id, model }, 'setAdapter');
     },
     [adapters, draft, draftMode, chatId, patchConfig, port],
   );

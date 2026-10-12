@@ -288,14 +288,44 @@ describe('useComposerTuning — setModel', () => {
 // ---------------------------------------------------------------------------
 
 describe('useComposerTuning — setAdapter', () => {
-  it("calls setChatConfig(port, chatId, { adapterId: 'gemini' }) exactly once", () => {
+  it('switches the provider and resets its model in one config update', () => {
     const { result } = renderHook(() => useComposerTuning([]));
 
     act(() => {
       result.current.setAdapter('gemini');
     });
 
-    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, { adapterId: 'gemini' });
+    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, {
+      adapterId: 'gemini',
+      model: 'default',
+    });
+  });
+
+  it('replaces a board-started Claude model with the Codex CLI model', () => {
+    vi.mocked(useChatExtras).mockReturnValue(
+      makeFakeExtras(makeChat({ model: 'opus' })) as unknown as ReturnType<typeof useChatExtras>,
+    );
+    const codex = { id: 'codex', models: [{ id: 'gpt-6-astra', isDefault: true }] } as AdapterInfo;
+    const { result } = renderHook(() => useComposerTuning([ADAPTER_CLAUDE, codex]));
+
+    act(() => result.current.setAdapter('codex'));
+
+    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, {
+      adapterId: 'codex',
+      model: 'default',
+    });
+  });
+
+  it('uses the target provider configured model when switching', () => {
+    useSettingsStore.getState().loadProviders({ codex: { defaultModel: 'gpt-6-sol' } });
+    const { result } = renderHook(() => useComposerTuning([]));
+
+    act(() => result.current.setAdapter('codex'));
+
+    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, {
+      adapterId: 'codex',
+      model: 'gpt-6-sol',
+    });
   });
 });
 
@@ -647,7 +677,10 @@ describe('useComposerTuning — post-first-send gap: chatId stale, chatConfig re
       result.current.setPermissionMode('yolo' as Parameters<typeof result.current.setPermissionMode>[0]);
     });
 
-    expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(1, PORT, REAL_CHAT_ID, { adapterId: 'gemini' });
+    expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(1, PORT, REAL_CHAT_ID, {
+      adapterId: 'gemini',
+      model: 'default',
+    });
     expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(2, PORT, REAL_CHAT_ID, { planMode: true });
     expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(3, PORT, REAL_CHAT_ID, { permissionMode: 'yolo' });
   });
