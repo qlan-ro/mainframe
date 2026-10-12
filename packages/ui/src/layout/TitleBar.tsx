@@ -8,11 +8,10 @@
  *   [80px traffic lights] — the native cluster; `trafficLightPosition.y` is
  *     tuned to centre on this row (22 for SDK ≤ 15 builds, 26 patched for dev).
  *   [sidebar section] — `calc(56px + var(--sidebar-width) − 80px)`: the rail
- *     (56) and the sidebar sit under this bar, so the sidebar's right edge is
- *     at 56 + width and the 1px rule that ends this section lands on it. The
- *     surface toggle pill sits at its end. Collapsed, the section is 0 wide.
- *   [chat column] — the session tabs, then the right cluster. Collapsed, the
- *     show-sidebar button and the toggle pill re-anchor to its left edge.
+ *     (56) and the sidebar sit under this bar, so the 1px rule at the end of
+ *     this section lands on the sidebar's right edge. Collapsed, it is 0 wide.
+ *   [chat column] — the session tabs, then search and surface toggles.
+ *     Collapsed, the show-sidebar button anchors to its left edge.
  *
  * Only the Chats view fills it: in Tasks / Automations / Setup Advisor /
  * Settings the bar keeps just the lights, the drag region and (collapsed) the
@@ -23,7 +22,6 @@ import { Hint } from '@/components/ui/hint';
 import { useSidebar } from '@/components/ui/sidebar';
 import { SessionTabs } from '@/features/session-tabs/SessionTabs';
 import { useUiPrefs } from '@/store/ui-prefs';
-import { SurfaceRail } from './SurfaceRail';
 import { TitleBarActions } from './TitleBarActions';
 import { SidebarLeftGlyph } from './surface-icons';
 
@@ -38,7 +36,7 @@ export const SIDEBAR_SECTION_WIDTH = `calc(${NAV_RAIL_WIDTH}px + var(--sidebar-w
 export function TitleBar() {
   const { open, setOpen } = useSidebar();
   // Outside Chats the bar is bare window chrome (Codex-style): the tabs, the
-  // surface toggles and the chat actions all belong to the chat surface.
+  // chat actions belong to the chat surface.
   const chats = useUiPrefs((s) => s.sidebarView) === 'chats';
 
   return (
@@ -51,18 +49,9 @@ export function TitleBar() {
         className="flex h-full shrink-0 items-center justify-end overflow-hidden"
         style={{ width: open ? SIDEBAR_SECTION_WIDTH : 0 }}
       >
-        {/* One pill instance at a time — it re-anchors to the chat column when collapsed. */}
-        {open && chats && (
-          <>
-            <SurfaceRail />
-            {/* The rule marks where the sidebar ends under this bar. */}
-            <span aria-hidden className="ml-2 h-[18px] w-px shrink-0 bg-border" />
-          </>
-        )}
+        {open && chats && <span aria-hidden className="h-[18px] w-px shrink-0 bg-border" />}
       </div>
 
-      {/* `pl-1` + the tab strip's own `px-1` = 8px from the rule to the first pill,
-          matching the rule's `ml-2` from the surface toggle pill on its other side. */}
       <div data-testid="title-bar-chat-column" className="flex h-full min-w-0 flex-1 items-center gap-2 pr-3 pl-1">
         {!open && (
           <>
@@ -77,7 +66,6 @@ export function TitleBar() {
                 <SidebarLeftGlyph size={16} />
               </Button>
             </Hint>
-            {chats && <SurfaceRail />}
           </>
         )}
         {chats && <SessionTabs />}

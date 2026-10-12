@@ -55,16 +55,6 @@ export function captureIfMarked(chatId: string, draft: DraftStash): void {
   notifyWaiters(chatId);
 }
 
-/**
- * Seed a thread's composer before it first mounts — a from-message fork puts
- * the chosen message's text here, unsent. Read by the same one-shot
- * `takeStash`, so it lands exactly once and never survives a later remount.
- */
-export function seedDraft(chatId: string, text: string): void {
-  stash.set(chatId, { text, attachments: [] });
-  notifyWaiters(chatId);
-}
-
 /** Call from the runtime hook's mount effect. One-shot: consumes the stash. */
 export function takeStash(chatId: string): DraftStash | undefined {
   const draft = stash.get(chatId);
@@ -81,9 +71,8 @@ export function takeStash(chatId: string): DraftStash | undefined {
  * lose that status to `ChatZone` before the user ever sees it render there.
  * Captures whatever the composer holds NOW — the original stash text, or the
  * user's own edit — so the consumer that takes over picks up the latest
- * state instead of losing it. Unlike `seedDraft`, this is an unconditional
- * handoff between two runtime instances for the same chat id, not a
- * fork-prefill seed before first mount.
+ * state instead of losing it. This is an unconditional handoff between two
+ * runtime instances for the same chat id.
  */
 export function handoffDraft(chatId: string, draft: DraftStash): void {
   stash.set(chatId, draft);

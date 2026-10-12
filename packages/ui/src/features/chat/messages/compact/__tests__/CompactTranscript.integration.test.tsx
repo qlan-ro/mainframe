@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, expect, it } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { AssistantMessage } from '../../AssistantMessage';
 import { disclosureKey } from '../disclosure-store';
 import { CompactFixture, fixtureMessage, fixtureTool } from './fixtures';
+
+vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
 
 beforeEach(() => useUiPrefs.getState().setTranscriptMode('compact'));
 

@@ -1,8 +1,6 @@
 /**
- * TitleBarActions — the title bar's right cluster: search │ side-chat toggle
- * (the focused chat's) · the session-details toggle. The "Forked from" link
- * lives in each chat column's header (ChatColumnHeader). The Setup Advisor
- * button moved to the nav rail (D8) — it's a rail view now, not a sheet.
+ * TitleBarActions — the title bar's right cluster: search │ chat/workspace
+ * surface toggles. Per-chat controls live in each chat column's header.
  */
 import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,11 +8,11 @@ import { Hint } from '@/components/ui/hint';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { chordHint } from '@/features/shortcuts/chord-hint';
-import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useLayoutStore } from '@/store/layout';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
+import { SurfaceRail } from './SurfaceRail';
 
 /**
  * True when the workspace surface's docked Files sidebar sits flush against
@@ -52,8 +50,7 @@ export function TitleBarActions() {
         </Button>
       </Hint>
       <Separator orientation="vertical" className="mx-1 h-4 data-vertical:self-center" />
-      {/* The focused chat's side chat (the root provider follows the focused zone). */}
-      <SideChatToggle />
+      <SurfaceRail />
     </div>
   );
 }

@@ -20,8 +20,8 @@
  * composer — this hidden instance's composer is never shown. Without the
  * skip, this hook's mount effect (which runs well before the zone itself
  * renders) always wins `draft-stash`'s one-shot take and seeds a composer
- * nobody sees, leaving a "Fork from here" prefill (or a #178 offload-release
- * restore) empty in the zone that actually displays.
+ * nobody sees, leaving a #178 offload-release draft empty in the zone
+ * that actually displays.
  *
  * Zone MEMBERSHIP alone over-skips: `ChatSurface` only renders the split (and
  * mounts `ChatZone`, the other consumer) when `splitFits` is ALSO true (the

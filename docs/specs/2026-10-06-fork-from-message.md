@@ -1,5 +1,11 @@
 # Fork from any user message
 
+> UI follow-up #393 (2026-10-12): The action now appears after assistant turns.
+> An older turn forks before its next sent user message; the latest completed
+> turn uses the current-end fork. The new composer is empty. The user-message
+> placement and prefill behavior below describe the original design; the daemon's
+> before-user-message contract remains in use.
+
 Sources: the user's rulings of 2026-10-06 (non-destructive "Fork from here" only;
 no in-place rewind; no file restoration; the parent is never mutated), #343's fork
 spec, and #368's Codex fork. This closes #343's deferred "Forking from an earlier

@@ -5,9 +5,7 @@
  * normal flow (nothing `fixed`). Three sections: the 80px traffic-light
  * reserve, the sidebar section (`calc(56px + var(--sidebar-width) - 80px)`,
  * collapsing to 0), and the chat column (session tabs + right cluster). The
- * surface toggle pill (`SurfaceRail`, testid `surface-rail`) renders ONCE —
- * inside the sidebar section while open, re-anchored to the chat column
- * (after the show-sidebar button) while collapsed.
+ * surface toggle pill lives in the chat column's right cluster.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -15,9 +13,6 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 vi.mock('@/features/session-tabs/SessionTabs', () => ({ SessionTabs: () => <div data-testid="session-tabs-stub" /> }));
-vi.mock('../TitleBarActions', () => ({
-  TitleBarActions: () => <div data-testid="title-bar-actions-stub" />,
-}));
 
 import { TitleBar } from '../TitleBar';
 
@@ -56,22 +51,26 @@ describe('TitleBar — sidebar section width', () => {
   });
 });
 
-describe('TitleBar — the surface toggle pill renders exactly once', () => {
-  it('sits inside the sidebar section while open', () => {
+describe('TitleBar — surface controls', () => {
+  it('renders the chat/workspace pill in the right cluster', () => {
     renderBar(true);
-    const section = screen.getByTestId('title-bar-sidebar-section');
-    expect(screen.getAllByTestId('surface-rail')).toHaveLength(1);
-    expect(section.contains(screen.getByTestId('surface-rail'))).toBe(true);
+    const actions = screen.getByTestId('title-bar-actions');
+    expect(actions.contains(screen.getByTestId('surface-rail'))).toBe(true);
   });
 
-  it('re-anchors to the chat column, after the show-sidebar button, while collapsed', () => {
+  it('keeps the sidebar section free of controls while open', () => {
+    renderBar(true);
+    const section = screen.getByTestId('title-bar-sidebar-section');
+    expect(section.querySelector('button')).toBeNull();
+  });
+
+  it('keeps the right cluster in the chat column while collapsed', () => {
     renderBar(false);
-    expect(screen.getAllByTestId('surface-rail')).toHaveLength(1);
     const column = screen.getByTestId('title-bar-chat-column');
-    expect(column.contains(screen.getByTestId('surface-rail'))).toBe(true);
+    const actions = screen.getByTestId('title-bar-actions');
+    expect(column.contains(actions)).toBe(true);
     const showSidebar = screen.getByTestId('show-sidebar-button');
-    const rail = screen.getByTestId('surface-rail');
-    expect(showSidebar.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(showSidebar.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('shows no show-sidebar button while open', () => {
@@ -85,6 +84,6 @@ describe('TitleBar — composition', () => {
     renderBar(true);
     const column = screen.getByTestId('title-bar-chat-column');
     expect(column.contains(screen.getByTestId('session-tabs-stub'))).toBe(true);
-    expect(column.contains(screen.getByTestId('title-bar-actions-stub'))).toBe(true);
+    expect(column.contains(screen.getByTestId('title-bar-actions'))).toBe(true);
   });
 });

@@ -4,6 +4,8 @@ import { useUiPrefs } from '@/store/ui-prefs';
 import { TurnFixture, finalMessage, turnMessage, turnSource } from './turn-fixtures';
 import { turnTool } from './turn-test-support';
 
+vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
+
 beforeEach(() => useUiPrefs.getState().setTranscriptMode('compact'));
 it('keeps one full native copy scope for mixed UTF16 work/final slices in both modes', async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);

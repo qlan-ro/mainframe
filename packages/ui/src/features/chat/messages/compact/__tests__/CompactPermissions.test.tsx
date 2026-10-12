@@ -9,6 +9,8 @@ import { AssistantMessage } from '../../AssistantMessage';
 import { ChatGateMount } from '../../../gates/ChatGateMount';
 import { CompactFixture, fixtureMessage, fixtureTool } from './fixtures';
 
+vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
+
 function ScopedMessage() {
   return (
     <RootTranscriptScope>

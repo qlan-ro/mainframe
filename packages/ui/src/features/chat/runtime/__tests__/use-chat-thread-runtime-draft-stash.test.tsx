@@ -50,7 +50,7 @@ vi.mock('../../gates/select-front', () => ({
 
 import { useChatThreadRuntime } from '../use-chat-thread-runtime';
 import { createChatThreadState } from '../../controller/chat-thread-state';
-import { markForStash, seedDraft, takeStash } from '../draft-stash';
+import { markForStash, handoffDraft, takeStash } from '../draft-stash';
 
 function makeController(chatId: string): AcpChatController {
   const stableState: ChatThreadState = createChatThreadState(chatId);
@@ -183,8 +183,8 @@ describe('useChatThreadRuntime — draft-stash capture on unmount', () => {
 // NOT `skipDraftRestore` — see the regression group below for why.
 describe('useChatThreadRuntime — handoff when becoming a visible split zone', () => {
   it('re-stashes the composer’s CURRENT content (the user’s edit, not the stale original) when isVisibleSplitZone flips true', () => {
-    seedDraft('chat-handoff-1', 'original prefill');
-    composerState = { text: 'original prefill', attachments: [] };
+    handoffDraft('chat-handoff-1', { text: 'original draft', attachments: [] });
+    composerState = { text: 'original draft', attachments: [] };
     const controller = makeController('chat-handoff-1');
     const { rerender, unmount } = renderHook(
       ({ visible }: { visible: boolean }) =>
@@ -195,7 +195,7 @@ describe('useChatThreadRuntime — handoff when becoming a visible split zone', 
         }),
       { initialProps: { visible: false } },
     );
-    expect(setTextSpy).toHaveBeenCalledWith('original prefill');
+    expect(setTextSpy).toHaveBeenCalledWith('original draft');
     expect(takeStash('chat-handoff-1')).toBeUndefined(); // one-shot: already taken
 
     // The user edits it before the layout (e.g. a split catching up with a
@@ -241,7 +241,7 @@ describe('useChatThreadRuntime — handoff when becoming a visible split zone', 
 // overwrote the real draft with `{ text: '' }`.
 describe('useChatThreadRuntime — a plain focus change never hands off (chat-switch regression)', () => {
   it('leaves the draft alone when skipDraftRestore flips true but this chat never becomes a visible split zone', () => {
-    seedDraft('chat-focus-switch-1', 'drafted before switching chats');
+    handoffDraft('chat-focus-switch-1', { text: 'drafted before switching chats', attachments: [] });
     composerState = { text: 'drafted before switching chats', attachments: [] };
     const controller = makeController('chat-focus-switch-1');
     const { rerender, unmount } = renderHook(
