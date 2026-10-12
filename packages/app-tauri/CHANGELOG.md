@@ -1,5 +1,58 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.2.9
+
+### Patch Changes
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - The automation run view now refreshes as soon as an agent step fails on its deadline, the same way it does when the agent itself fails.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Automations now fill in `$name` variables inside Loop, Retry and Parallel blocks. Before, steps there showed the literal `$name` text instead of the value.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Quitting the desktop app now gives the daemon up to 10 seconds to shut down cleanly instead of killing it at once. While shutting down, and whenever a tunnel or Run-panel preview is stopped, the daemon waits for the cloudflared process to exit, including tunnels still starting, and force-kills any that ignore the stop request after 2 seconds. Language servers get the same fallback.
+
+  Child cleanup starts when shutdown is requested, even if a tunnel-start request is still waiting for registration or DNS. New launch, tunnel, and language-server starts are rejected during shutdown. Pending language-server discovery is cancelled without delaying shutdown.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Newly created and forked chats now carry the same fields as later updates to them, so a chat looks the same to the app before and after its first update.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Forking a chat to a worktree now keeps its `acceptEdits` permission mode.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Keep chat completion, send, and teardown events flowing when storage fails, and restart chats on failed worktree or configuration changes. Report a created worktree's path when attaching it fails; keep notifications ordered with the turn that produced them.
+
+  Stop launches and tunnels before deleting worktrees, including unbound path aliases, then publish status from the live chat. Imported chat creation and title updates now both include display status, running state, and missing-directory fields. Chat list/get requests return 500 on storage failure, failed creation returns an error instead of a stub, and fork snapshot cleanup stops on a database failure.
+
+  Cache notification preferences at boot and refresh them after general settings updates. Keep accepted live settings, working state, plan mode, and generated titles visible during storage failures. If a worktree binding write fails after moving a Claude transcript, restart with the new live binding so resume uses the moved transcript.
+
+- [#784](https://github.com/qlan-ro/mainframe/pull/784) [`4f0046b`](https://github.com/qlan-ro/mainframe/commit/4f0046b62124b8b859a3f06623d6eb76ca72dc3a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Codex's Default permission mode no longer asks before every command. Reads and searches now run without a prompt inside a read-only sandbox, while edits, commands that write, and network access still ask first. Before, Default asked about almost every command and "Accept for session" rarely stuck, because it only remembers that exact command. Delegated tasks also inherit the parent chat's permission mode unless the agent deliberately picks a stricter one, so a task started from an Unattended chat no longer floods you with approval prompts.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Codex chats no longer store a Claude transcript path. Claude chats keep their existing transcript path.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - The configured `dataDir` now applies to the database and to both the daemon's and the desktop app's logs. An existing database in the previous default location moves to the configured directory on startup, including to another volume; if the move fails, Mainframe keeps using the existing database and tries again on the next start.
+
+  Startup claims the daemon port before opening the database, and migration retains SQLite exclusion until the move finishes so another connection cannot write during relocation.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Settings reads go through one shared contract. A damaged stored value (an unknown update channel, a malformed notification group) is reported with its safe default and logged instead of failing silently, and a notification update with a null value is rejected with a 400 instead of being ignored.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Daemon errors now answer with the right HTTP status: a missing chat or project is a 404 instead of a 400 or 500, a refused request such as deleting the hidden scratch project or an invalid attachment chat id is a 400, a busy chat is a 409, and internal failures while moving a chat into a worktree (transcript move, adapter, disk) are 500s instead of 400s. Unexpected storage failures no longer leak database text in tag responses. Error messages are unchanged.
+
+- [#786](https://github.com/qlan-ro/mainframe/pull/786) [`d3e4516`](https://github.com/qlan-ro/mainframe/commit/d3e4516eeebefcb98b82fbec3efd1375ee6b5743) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Asking an agent to "spawn a Codex agent" or "ask Claude to" do something now starts a Mainframe task you can see, instead of a Claude Code plugin's hidden subagent. Delegated task results and other messages from agents now show as full-width cards on the left, like assistant replies, not on the right like your own messages. Their headers show the chat's title instead of a raw chat id. A delegated task's "Delegated by" link no longer reads "Untitled session" for a parent chat started in the same app session.
+
+- [#820](https://github.com/qlan-ro/mainframe/pull/820) [`6e0f573`](https://github.com/qlan-ro/mainframe/commit/6e0f5731bf4d349ce3d50736104dd2aef9dbb092) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Delegated tasks now appear in the parent chat's Activity panel with their current status and a link to the child chat. The parent session stays marked as working while a delegated task runs, including after the parent's own turn ends.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Moving a running chat into a new worktree no longer leaves the chat stopped when its session history cannot be moved; the chat restarts where it was and the error is shown.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Creating or forking a chat, opening a side chat and deleting a todo now either complete fully or leave nothing behind. Todo attachment ids must be a single safe file name, and a damaged value stored in a chat, todo or tag column is logged and shown with a safe default instead of failing the whole list; todo statuses, types and priorities written by other tools are kept as they are.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Return not-found responses for missing chat/project inputs and deleted chat worktrees. Report plugin storage failures instead of returning empty or unpersisted results.
+
+  Preserve workflow history and Run panel controls after a worktree is deleted. Deleting a worktree now stops its launch processes and preview tunnels.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Consolidate daemon process handling into one module: Codex app-server shutdown now asks politely (SIGTERM, 800 ms) before SIGKILL, CLI exits are reported only after their last output was delivered, and writes to a CLI that stopped reading its stdin fail instead of buffering without limit (a Codex approval reply that cannot be delivered now shows as an error). Restarting a launch config right after it exits no longer marks the new process stopped or closes its preview tunnel, and an LSP server that stopped reading its input is still shut down.
+
+- [#812](https://github.com/qlan-ro/mainframe/pull/812) [`2463aef`](https://github.com/qlan-ro/mainframe/commit/2463aefc3dd59fc072a8efe7f8b360a3aa13666a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - When chat title generation fails, the daemon log now shows what the Claude CLI printed (for example "Not logged in" or a usage-limit notice) instead of "<no stderr>".
+
+- Updated dependencies [[`8d026ac`](https://github.com/qlan-ro/mainframe/commit/8d026ac714f54b99072b2b4b16b64859afa5dc6e), [`4f0046b`](https://github.com/qlan-ro/mainframe/commit/4f0046b62124b8b859a3f06623d6eb76ca72dc3a), [`d3e4516`](https://github.com/qlan-ro/mainframe/commit/d3e4516eeebefcb98b82fbec3efd1375ee6b5743), [`6e0f573`](https://github.com/qlan-ro/mainframe/commit/6e0f5731bf4d349ce3d50736104dd2aef9dbb092), [`1fb8e87`](https://github.com/qlan-ro/mainframe/commit/1fb8e87fe1a32fa899b944aa6c0351c4de53f180), [`5466ea6`](https://github.com/qlan-ro/mainframe/commit/5466ea6bcb38c809983aa3d3a44ee7a6ee377d1b)]:
+  - @qlan-ro/mainframe-ui@2.9.0
+
 ## 2.2.8
 
 ### Patch Changes
