@@ -11,7 +11,20 @@ import { __resetSideChatRegistryForTests, registerSideChat } from '@/features/si
 const state = () => useZonesStore.getState();
 
 beforeEach(() => {
-  useZonesStore.setState({ zones: null, focusedIndex: 0 });
+  useZonesStore.setState({ zones: null, subagent: null, focusedIndex: 0 });
+});
+
+describe('native subagent split', () => {
+  it('replaces the chat pair and closes without leaving a persisted chat zone', () => {
+    state().openSplit('parent', 'other');
+    state().openSubagent({ parentChatId: 'parent', toolCallId: 'task-1', messageId: 'm-1', title: 'worker' });
+    expect(state().zones).toBeNull();
+    expect(state().subagent?.toolCallId).toBe('task-1');
+
+    state().closeSubagent();
+    expect(state().subagent).toBeNull();
+    expect(state().zones).toBeNull();
+  });
 });
 
 afterEach(() => {

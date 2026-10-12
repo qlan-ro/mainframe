@@ -28,11 +28,18 @@ registerChatSplitVisibleProbe(() => splitVisibleNow);
 export function useZonesReconciler(): void {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const zones = useZonesStore((s) => s.zones);
+  const subagent = useZonesStore((s) => s.subagent);
+  const parentListed = useAuiState(
+    (s) => subagent == null || s.threads.threadItems.some((item) => item.id === subagent.parentChatId),
+  );
+  useEffect(() => {
+    if (subagent != null && !parentListed) useZonesStore.getState().closeSubagent();
+  }, [subagent, parentListed]);
   // Membership only, NOT `splitFits`: the parked workspace is what frees the
   // width the split needs. Gating on fit made a narrow window park the split,
   // restore the workspace beside the chat, and keep the surface too narrow for
   // the split ever to come back after the window widened again.
-  const visible = splitVisible(zones, mainThreadId);
+  const visible = splitVisible(zones, mainThreadId) || subagent?.parentChatId === mainThreadId;
   splitVisibleNow = visible;
 
   const wasVisible = useRef(false);

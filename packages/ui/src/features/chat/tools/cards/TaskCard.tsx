@@ -20,7 +20,10 @@
 
 import { useState, useCallback } from 'react';
 import type { ToolCallMessagePartComponent, ToolCallMessagePartProps } from '@assistant-ui/react';
-import { Bot, ChevronDown } from 'lucide-react';
+import { Bot, ChevronDown, ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
+import { useZonesStore } from '../../zones/zones-store';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
@@ -126,7 +129,8 @@ function taskHeaderProps({ args, result, isError, status }: ToolCallMessagePartP
 
 export const TaskCard: ToolCallMessagePartComponent = (part) => {
   const { messages, toolCallId } = part;
-  const { messageId = '' } = useTranscriptScope();
+  const { messageId = '', chatId } = useTranscriptScope();
+  const openSubagent = useZonesStore((state) => state.openSubagent);
 
   const header = taskHeaderProps(part);
   const [open, setOpen] = useState(false);
@@ -140,13 +144,29 @@ export const TaskCard: ToolCallMessagePartComponent = (part) => {
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <CollapsibleTrigger
-        data-testid="chat-task-toggle"
-        className="w-full text-left transition-opacity hover:opacity-80"
-        aria-label={`Toggle ${header.agentName} transcript`}
-      >
-        <TaskHeader {...header} />
-      </CollapsibleTrigger>
+      <div className="flex min-w-0 items-center gap-1">
+        <CollapsibleTrigger
+          data-testid="chat-task-toggle"
+          className="min-w-0 flex-1 text-left transition-opacity hover:opacity-80"
+          aria-label={`Toggle ${header.agentName} transcript`}
+        >
+          <TaskHeader {...header} />
+        </CollapsibleTrigger>
+        {chatId && (
+          <Hint label="Open subagent transcript beside this chat">
+            <Button
+              data-testid={`chat-task-open-${toolCallId}`}
+              aria-label="Open subagent transcript beside this chat"
+              variant="ghost"
+              size="icon-xs"
+              className="shrink-0 text-muted-foreground"
+              onClick={() => openSubagent({ parentChatId: chatId, toolCallId, messageId, title: header.agentName })}
+            >
+              <ExternalLink />
+            </Button>
+          </Hint>
+        )}
+      </div>
 
       <CollapsibleContent>
         {messages && messages.length > 0 ? (

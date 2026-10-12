@@ -43,7 +43,7 @@ let __initialization: { status: 'idle' | 'initializing' | 'ready' | 'error'; ret
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: unknown) => unknown) =>
     sel({
-      threads: { mainThreadId: __mainThreadId },
+      threads: { mainThreadId: __mainThreadId, threadItems: __mainThreadId ? [{ id: __mainThreadId }] : [] },
       threadListItem: { id: __mainThreadId, status: __itemStatus },
       thread: { messages: { length: __messageCount } },
     }),
@@ -74,6 +74,14 @@ vi.mock('../use-new-thread-auto-config', () => ({ useNewThreadAutoConfig: () => 
 vi.mock('../../../chat/thread/ChatColumnHeader', () => ({ ChatColumnHeader: () => null }));
 vi.mock('../../../chat/thread/ChatThread', () => ({
   ChatThread: ({ emptyState }: { emptyState?: React.ReactNode }) => <div data-testid="chat-thread">{emptyState}</div>,
+}));
+vi.mock('@/features/chat/zones/ChatZone', () => ({
+  ChatZone: ({ chatId }: { chatId: string }) => <div data-testid={`chat-zone-${chatId}`} />,
+}));
+vi.mock('@/features/chat/zones/SubagentZone', () => ({
+  SubagentZone: ({ subagent }: { subagent: { toolCallId: string } }) => (
+    <div data-testid={`chat-subagent-zone-${subagent.toolCallId}`} />
+  ),
 }));
 vi.mock('../ChatEmptyState', () => ({
   ChatEmptyState: ({ variant, projectId }: { variant: string; projectId?: string }) => (
@@ -107,9 +115,11 @@ class RecordingResizeObserver {
 
 import { ChatSurface } from '../ChatSurface';
 import { useFindInChatStore } from '@/features/chat/find/find-in-chat-store';
+import { useZonesStore } from '@/features/chat/zones/zones-store';
 
 describe('ChatSurface', () => {
   beforeEach(() => {
+    useZonesStore.setState({ zones: null, subagent: null });
     observed = [];
     __mainThreadId = '__LOCALID_1';
     __itemStatus = 'new';
@@ -175,6 +185,28 @@ describe('ChatSurface', () => {
     render(<ChatSurface />);
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
     expect(screen.queryByTestId('empty-welcome')).toBeNull();
+  });
+
+  it('opens a native subagent beside its parent without a second chat session', () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
+    __mainThreadId = 'chat-123';
+    __itemStatus = 'regular';
+    __messageCount = 4;
+    useZonesStore.getState().openSubagent({
+      parentChatId: 'chat-123',
+      toolCallId: 'task-1',
+      messageId: 'm-1',
+      title: 'worker',
+    });
+
+    try {
+      render(<ChatSurface />);
+      expect(screen.getByTestId('chat-split-row')).toBeInTheDocument();
+      expect(screen.getByTestId('chat-zone-chat-123')).toBeInTheDocument();
+      expect(screen.getByTestId('chat-subagent-zone-task-1')).toBeInTheDocument();
+    } finally {
+      width.mockRestore();
+    }
   });
 
   it('mounts the side-chat host in the single view, keyed by the main thread id (todo #344)', () => {

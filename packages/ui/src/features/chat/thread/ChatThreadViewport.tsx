@@ -23,6 +23,7 @@ import {
   CompactingIndicator,
 } from './ChatThreadIndicators';
 import type { ChatThreadVariant } from './ChatThread';
+import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 
 const CompactTranscript = lazy(() =>
   import('../messages/compact/CompactTranscript').then((module) => ({ default: module.CompactTranscript })),
@@ -50,7 +51,7 @@ function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
     </>
   );
 }
-function ThreadFooter({ variant }: { variant: ChatThreadVariant }) {
+function ThreadFooter({ variant, readOnly }: { variant: ChatThreadVariant; readOnly: boolean }) {
   return (
     <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background">
       <ThreadPrimitive.ScrollToBottom asChild>
@@ -72,16 +73,24 @@ function ThreadFooter({ variant }: { variant: ChatThreadVariant }) {
         <GeneratingIndicator />
         <ChatGateMount />
         <div className="flex min-h-0 flex-col">
-          {variant !== 'side' && <WorktreeSwitchBanner />}
-          {/* A side chat is never agent-addressable, so nothing is ever held for it. */}
-          {variant !== 'side' && <AgentOutboxChip />}
-          <ThreadFooterInput variant={variant} />
+          {readOnly ? (
+            <p data-testid="chat-read-only-note" className="py-2 text-center text-xs text-muted-foreground">
+              Delegated task transcript · read-only
+            </p>
+          ) : (
+            <>
+              {variant !== 'side' && <WorktreeSwitchBanner />}
+              {variant !== 'side' && <AgentOutboxChip />}
+              <ThreadFooterInput variant={variant} />
+            </>
+          )}
         </div>
       </div>
     </ThreadPrimitive.ViewportFooter>
   );
 }
 export function ChatThreadViewport({ emptyState, variant }: { emptyState?: ReactNode; variant: ChatThreadVariant }) {
+  const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
   const threadId = useSideAwareThreadId();
   const { viewportRef, contentRef, viewportElement, beginInteraction } = useThreadBottomPin(threadId);
   const scroll = useMemo(() => ({ viewportElement, beginInteraction }), [viewportElement, beginInteraction]);
@@ -106,7 +115,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
           <TranscriptMessages key={threadId ?? ''} />
           <CompactingIndicator />
         </div>
-        <ThreadFooter variant={variant} />
+        <ThreadFooter variant={variant} readOnly={readOnly} />
       </ThreadPrimitive.Viewport>
     </TranscriptScrollProvider>
   );
