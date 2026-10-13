@@ -28,6 +28,7 @@ pub mod chat_workflow_runs;
 pub mod chats;
 pub mod commands;
 pub mod context;
+pub mod delegated_tasks;
 pub mod device;
 pub mod external_sessions;
 pub mod files;

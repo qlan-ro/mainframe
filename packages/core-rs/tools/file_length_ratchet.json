@@ -8,7 +8,7 @@
   "mainframe-adapter-codex/src/external_session_parse.rs": 309,
   "mainframe-adapter-codex/src/external_sessions.rs": 355,
   "mainframe-adapter-codex/tests/agent_message_delta.rs": 496,
-  "mainframe-adapter-codex/tests/collab_activity.rs": 516,
+  "mainframe-adapter-codex/tests/collab_activity.rs": 513,
   "mainframe-adapter-codex/tests/event_mapper.rs": 1179,
   "mainframe-adapter-codex/tests/external_sessions.rs": 395,
   "mainframe-adapter-codex/tests/history.rs": 579,

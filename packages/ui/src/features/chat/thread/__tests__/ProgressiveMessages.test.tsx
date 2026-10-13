@@ -18,6 +18,9 @@ import {
   type ThreadMessageLike,
 } from '@assistant-ui/react';
 import { INITIAL_WINDOW, ProgressiveMessages, REVEAL_STEP } from '../ProgressiveMessages';
+import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
+
+vi.mock('../../runtime/chat-extras', () => ({ useChatExtras: () => ({ state: { chatId: 'chat-1' } }) }));
 
 function Message() {
   const id = useAuiState((s) => s.message.id);
@@ -110,5 +113,20 @@ describe('ProgressiveMessages', () => {
     view.rerender(<Harness repository={transcript(INITIAL_WINDOW + 3)} />);
     await flush();
     expect(renderedIds(view.container)).toHaveLength(INITIAL_WINDOW + 3);
+  });
+
+  it('reveals an older message immediately when Activity jumps to its source', async () => {
+    const view = render(<Harness repository={transcript(INITIAL_WINDOW + REVEAL_STEP + 5)} />);
+    await flush();
+    expect(renderedIds(view.container)).not.toContain('m1');
+    act(() =>
+      window.dispatchEvent(
+        new CustomEvent(ACTIVITY_JUMP_EVENT, {
+          detail: { chatId: 'chat-1', source: { messageId: 'm1', toolCallId: 'call-1' } },
+        }),
+      ),
+    );
+    await flush();
+    expect(renderedIds(view.container)).toContain('m1');
   });
 });

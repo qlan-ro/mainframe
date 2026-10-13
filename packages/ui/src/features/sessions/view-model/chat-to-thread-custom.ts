@@ -17,6 +17,7 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 export interface SessionCustom {
   projectId: string;
   adapterId: string;
+  model?: string;
   /** The agent CLI's own session id (Claude/Codex `--resume` id), if the session has started. */
   vendorSessionId?: string;
   tags: string[];
@@ -106,6 +107,7 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
   const custom: SessionCustom = {
     projectId: chat.projectId,
     adapterId: chat.adapterId,
+    model: chat.model,
     vendorSessionId: chat.claudeSessionId,
     tags: chat.tags ?? [],
     pinned: chat.pinned ?? false,

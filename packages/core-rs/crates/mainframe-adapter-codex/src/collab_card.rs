@@ -79,6 +79,14 @@ pub(crate) fn open_card(
     let ids = [child_thread_id.to_string()];
     let meta_by_thread = lookup_agent_metadata_with(&ids, state.registry_deps.as_ref());
     let title = card_title(meta_by_thread.get(child_thread_id), agent_path);
+    if let Some(name) = agent_path
+        .and_then(|path| path.rsplit('/').next())
+        .filter(|name| !name.is_empty())
+    {
+        state
+            .agent_task_names
+            .insert(child_thread_id.to_string(), name.to_string());
+    }
     let prompt_text = prompt
         .map(str::to_string)
         .or_else(|| state.spawn_prompts.get(child_thread_id).cloned())

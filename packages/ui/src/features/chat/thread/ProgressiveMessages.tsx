@@ -21,6 +21,9 @@
  */
 import { startTransition, useEffect, useState, type ComponentProps } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
+import { useChatExtras } from '../runtime/chat-extras';
+import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
+import type { ActivitySource } from '@/features/session-panel/activity-model';
 
 type MessageComponents = ComponentProps<typeof ThreadPrimitive.MessageByIndex>['components'];
 
@@ -44,7 +47,9 @@ function heldFor(count: number): number {
 }
 
 export function ProgressiveMessages({ components }: { components: MessageComponents }) {
-  const count = useAuiState((s) => s.thread.messages.length);
+  const messages = useAuiState((s) => s.thread.messages);
+  const count = messages.length;
+  const chatId = useChatExtras()?.state.chatId;
   // `held` = how many of the OLDEST messages are not mounted yet. It only ever
   // shrinks, except when a bulk publish lands on an empty thread.
   const [held, setHeld] = useState(() => heldFor(count));
@@ -60,6 +65,17 @@ export function ProgressiveMessages({ components }: { components: MessageCompone
       startTransition(() => setHeld((current) => Math.max(0, current - REVEAL_STEP)));
     });
   }, [held]);
+
+  useEffect(() => {
+    const onJump = (event: Event) => {
+      const detail = (event as CustomEvent<{ chatId: string; source: ActivitySource }>).detail;
+      if (detail.chatId !== chatId) return;
+      const index = messages.findIndex((message) => message.id === detail.source.messageId);
+      if (index >= 0) setHeld((current) => Math.min(current, index));
+    };
+    window.addEventListener(ACTIVITY_JUMP_EVENT, onJump);
+    return () => window.removeEventListener(ACTIVITY_JUMP_EVENT, onJump);
+  }, [chatId, messages]);
 
   const start = Math.min(held, count);
   const items = [];

@@ -110,6 +110,20 @@ impl OrchestrationService {
         cancelled
     }
 
+    /// User-facing cancellation, scoped to the task's parent chat.
+    pub async fn cancel_task_for_parent(&self, parent_chat_id: &str, task_id: &str) -> bool {
+        let Some(task) = self.tasks.get(task_id).await else {
+            return false;
+        };
+        if task.parent_chat_id != parent_chat_id {
+            return false;
+        }
+        if !task.status.is_terminal() {
+            self.cancel_task(task, None).await;
+        }
+        true
+    }
+
     /// The chat where `chat_id`'s delegation chain starts: walks `open`'s
     /// child → parent edges up to `MAX_DEPTH` steps. `chat_id` itself when
     /// nothing delegates to it. Shared by the per-tree task limit and the
