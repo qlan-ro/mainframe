@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAui } from '@assistant-ui/react';
+import { ChevronDown } from 'lucide-react';
 import type { ActivityEntry } from './activity-model';
 import { ActivityRow } from './ActivityRow';
 import { jumpToActivitySource } from './activity-source';
@@ -10,6 +11,7 @@ import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { openInSplit } from '@/features/chat/zones/open-in-split';
 
 const active = (row: ActivityEntry) => row.state === 'running' || row.state === 'waiting';
+type HistoryView = 'closed' | 'preview' | 'all';
 
 function Entry({
   row,
@@ -53,25 +55,36 @@ function HistoryRows({
   chatId,
   adapterId,
   now,
-  showAll,
+  view,
+  onToggle,
   onShowAll,
 }: {
   history: ActivityEntry[];
   chatId?: string;
   adapterId?: string;
   now: number;
-  showAll: boolean;
+  view: HistoryView;
+  onToggle: () => void;
   onShowAll: () => void;
 }) {
   if (!history.length) return null;
-  const visible = showAll ? history : history.slice(0, 6);
+  const visible = view === 'all' ? history : history.slice(0, 6);
   return (
     <>
-      <p className="px-2 pt-2 text-xs font-medium text-muted-foreground">Earlier</p>
-      {visible.map((row) => (
-        <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />
-      ))}
-      {history.length > 6 && !showAll && (
+      <button
+        type="button"
+        aria-label={`Earlier, ${history.length} ${history.length === 1 ? 'item' : 'items'}`}
+        aria-expanded={view !== 'closed'}
+        onClick={onToggle}
+        className="flex items-center gap-1 px-2 pt-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+      >
+        Earlier
+        <span className="ml-auto tabular-nums">{history.length}</span>
+        <ChevronDown className={view === 'closed' ? 'size-3 -rotate-90' : 'size-3'} aria-hidden />
+      </button>
+      {view !== 'closed' &&
+        visible.map((row) => <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />)}
+      {history.length > 6 && view === 'preview' && (
         <button type="button" onClick={onShowAll} className="self-start px-2 py-1 text-xs text-primary hover:underline">
           Show all {history.length}
         </button>
@@ -87,7 +100,8 @@ interface ActivityBodyProps {
   chatId?: string;
   adapterId?: string;
   now: number;
-  showAll: boolean;
+  historyView: HistoryView;
+  onToggleHistory: () => void;
   onShowAll: () => void;
   loadError: string | null;
 }
@@ -99,7 +113,8 @@ function ActivityBody({
   chatId,
   adapterId,
   now,
-  showAll,
+  historyView,
+  onToggleHistory,
   onShowAll,
   loadError,
 }: ActivityBodyProps) {
@@ -122,7 +137,8 @@ function ActivityBody({
         chatId={chatId}
         adapterId={adapterId}
         now={now}
-        showAll={showAll}
+        view={historyView}
+        onToggle={onToggleHistory}
         onShowAll={onShowAll}
       />
       {loadError && (
@@ -136,8 +152,8 @@ function ActivityBody({
 
 export function ActivitySection() {
   const { entries, chatId, adapterId, loadError, now } = useActivityEntries();
-  const [showAll, setShowAll] = useState(false);
-  useEffect(() => setShowAll(false), [chatId]);
+  const [historyView, setHistoryView] = useState<HistoryView>('closed');
+  useEffect(() => setHistoryView('closed'), [chatId]);
   const running = entries.filter((row) => row.state === 'running');
   const waiting = entries.filter((row) => row.state === 'waiting');
   const history = entries
@@ -166,8 +182,9 @@ export function ActivitySection() {
         chatId={chatId}
         adapterId={adapterId}
         now={now}
-        showAll={showAll}
-        onShowAll={() => setShowAll(true)}
+        historyView={historyView}
+        onToggleHistory={() => setHistoryView(historyView === 'closed' ? 'preview' : 'closed')}
+        onShowAll={() => setHistoryView('all')}
         loadError={loadError}
       />
     </section>

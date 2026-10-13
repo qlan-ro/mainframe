@@ -49,16 +49,24 @@ describe('ActivitySection', () => {
     expect(screen.getByText('Waiting')).toBeInTheDocument();
   });
 
-  it('puts finished work under Earlier with an expandable history limit', () => {
+  it('starts with Earlier collapsed, then previews and reveals all finished work', () => {
     state.entries = Array.from({ length: 8 }, (_, index) =>
       row(`done-${index}`, { state: 'completed', endedAt: index * 60_000 }),
     );
     render(<ActivitySection />);
-    expect(screen.getByText('Earlier')).toBeInTheDocument();
+    const earlier = screen.getByRole('button', { name: 'Earlier, 8 items' });
+    expect(earlier).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('session-panel-activity-empty')).toBeNull();
+    expect(screen.queryByTestId('session-panel-activity-done-7')).toBeNull();
+    fireEvent.click(earlier);
+    expect(earlier).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('session-panel-activity-done-7')).toBeInTheDocument();
     expect(screen.queryByTestId('session-panel-activity-done-0')).toBeNull();
     fireEvent.click(screen.getByText('Show all 8'));
     expect(screen.getByTestId('session-panel-activity-done-0')).toBeInTheDocument();
+    fireEvent.click(earlier);
+    expect(earlier).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('session-panel-activity-done-0')).toBeNull();
   });
 
   it('jumps from an Activity row to its tool call in the transcript', () => {

@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import {
-  Activity,
+  Binoculars,
   Bot,
   ChevronDown,
   Clock3,
   ExternalLink,
   MessagesSquare,
+  Route,
   Square,
   SquareTerminal,
-  Workflow,
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -20,10 +20,10 @@ import type { ActivityEntry, ActivityKind } from './activity-model';
 import { ActionFooter, DetailFields, type RowAction } from './ActivityRowDetails';
 
 const ICONS: Record<ActivityKind, LucideIcon> = {
-  workflow: Workflow,
+  workflow: Route,
   subagent: Bot,
   delegated: MessagesSquare,
-  monitor: Activity,
+  monitor: Binoculars,
   scheduled: Clock3,
   command: SquareTerminal,
 };
