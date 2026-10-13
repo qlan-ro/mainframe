@@ -67,7 +67,7 @@ function HistoryRows({
   const visible = showAll ? history : history.slice(0, 6);
   return (
     <>
-      <p className="px-2 pt-2 text-[11px] font-medium text-muted-foreground">Earlier</p>
+      <p className="px-2 pt-2 text-xs font-medium text-muted-foreground">Earlier</p>
       {visible.map((row) => (
         <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />
       ))}
@@ -113,7 +113,7 @@ function ActivityBody({
       {running.map((row) => (
         <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />
       ))}
-      {waiting.length > 0 && <p className="px-2 pt-1 text-[11px] text-muted-foreground">Waiting</p>}
+      {waiting.length > 0 && <p className="px-2 pt-1 text-xs text-muted-foreground">Waiting</p>}
       {waiting.map((row) => (
         <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />
       ))}
@@ -154,7 +154,7 @@ export function ActivitySection() {
         live={running.length > 0}
         liveTestId="session-panel-activity-live"
         action={
-          <span data-testid="session-panel-activity-counts" className="text-[11px] text-muted-foreground">
+          <span data-testid="session-panel-activity-counts" className="text-xs text-muted-foreground">
             {summary}
           </span>
         }

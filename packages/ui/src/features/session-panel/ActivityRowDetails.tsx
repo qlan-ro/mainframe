@@ -80,7 +80,7 @@ export function DetailFields({
       )}
       {row.summary && <p className="wrap-break-word">{row.summary}</p>}
       {(output || row.task?.lastOutputLine) && (
-        <pre className="max-h-40 overflow-auto rounded bg-muted/50 p-2 text-[11px] whitespace-pre-wrap">
+        <pre className="max-h-40 overflow-auto rounded bg-muted/50 p-2 text-xs whitespace-pre-wrap">
           {output || row.task?.lastOutputLine}
         </pre>
       )}

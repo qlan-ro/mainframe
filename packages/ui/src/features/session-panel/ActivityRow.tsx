@@ -250,7 +250,7 @@ function RowHeader({
       </button>
       <span
         className={cn(
-          'shrink-0 pt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground',
+          'shrink-0 pt-0.5 font-mono text-xs tabular-nums text-muted-foreground',
           open ? 'hidden' : 'group-hover:hidden',
         )}
       >
