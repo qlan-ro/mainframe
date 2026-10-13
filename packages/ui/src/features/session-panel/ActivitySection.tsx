@@ -1,199 +1,175 @@
-/** Live CLI work and unfinished delegated chats in the docked session panel. */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAui } from '@assistant-ui/react';
-import { Bot, ChevronLeft, ChevronRight, CircleDashed, SquareTerminal, Workflow } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import {
-  isTerminalTaskStatus,
-  type BackgroundActivityTask,
-  type BackgroundWorkKind,
-  type ClaudeWorkflowRun,
-} from '@qlan-ro/mainframe-types';
-import { cn } from '@/lib/utils';
-import { useChatExtras } from '@/features/chat/runtime/chat-extras';
-import { formatElapsed, useNow } from './background-activity-view';
-import { useWorkflowRun } from '@/features/chat/workflow/use-workflow-run';
-import { WorkflowRunPanel } from '@/features/chat/workflow/WorkflowRunPanel';
-import { runKey } from '@/features/chat/workflow/workflow-progress';
-import { runningCount } from './activity-view';
+import type { ActivityEntry } from './activity-model';
+import { ActivityRow } from './ActivityRow';
+import { jumpToActivitySource } from './activity-source';
+import { useActivityEntries } from './use-activity-entries';
 import { PanelEyebrow } from './PanelEyebrow';
-import { delegatedTasksOf, type DelegatedTaskRow } from '@/features/sessions/view-model/agent-provenance';
-import { useSessionItems } from '@/features/chat/orchestration/use-session-items';
-import { TaskStatusLabel } from '@/features/chat/orchestration/TaskStatusLabel';
+import { useWorkflowRun } from '@/features/chat/workflow/use-workflow-run';
+import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
+import { openInSplit } from '@/features/chat/zones/open-in-split';
 
-const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
-const ELAPSED = 'shrink-0 font-mono text-xs tabular-nums text-muted-foreground';
+const active = (row: ActivityEntry) => row.state === 'running' || row.state === 'waiting';
 
-/** bash and unknown kinds both read as tasks, matching `summarizeByKind`. */
-const KIND_LABEL: Record<BackgroundWorkKind, string> = {
-  agent: 'Agent',
-  bash: 'Task',
-  workflow: 'Workflow',
-  other: 'Task',
-};
-
-const KIND_ICON: Record<BackgroundWorkKind, LucideIcon> = {
-  agent: Bot,
-  bash: SquareTerminal,
-  workflow: Workflow,
-  other: CircleDashed,
-};
-
-function RowBody({
-  kind,
-  title,
-  detail,
-  startedAt,
+function Entry({
+  row,
+  chatId,
+  adapterId,
   now,
 }: {
-  kind: BackgroundWorkKind;
-  title: string;
-  detail: string;
-  startedAt: number;
+  row: ActivityEntry;
+  chatId: string;
+  adapterId?: string;
   now: number;
 }) {
-  const Icon = KIND_ICON[kind] ?? CircleDashed;
+  const aui = useAui();
+  const parentThreadId = useSideAwareThreadId();
+  const run = useWorkflowRun(row.kind === 'workflow' ? row.task?.id : undefined);
+  const childId = row.delegated?.itemId;
+  const openChild =
+    childId && parentThreadId
+      ? () => {
+          openInSplit(parentThreadId, childId);
+          aui.threads.switchToThread(childId);
+        }
+      : undefined;
+  return (
+    <ActivityRow
+      row={row}
+      chatId={chatId}
+      adapterId={adapterId}
+      now={now}
+      run={run}
+      onJump={() => {
+        if (row.source) jumpToActivitySource(chatId, row.source);
+      }}
+      onOpenChild={openChild}
+    />
+  );
+}
+
+function HistoryRows({
+  history,
+  chatId,
+  adapterId,
+  now,
+  showAll,
+  onShowAll,
+}: {
+  history: ActivityEntry[];
+  chatId?: string;
+  adapterId?: string;
+  now: number;
+  showAll: boolean;
+  onShowAll: () => void;
+}) {
+  if (!history.length) return null;
+  const visible = showAll ? history : history.slice(0, 6);
   return (
     <>
-      <Icon
-        data-testid={`session-panel-kind-${kind}`}
-        className="size-3.5 shrink-0 text-muted-foreground"
-        aria-hidden
-      />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm">{title}</div>
-        <div className="truncate text-xs text-muted-foreground">{detail}</div>
-      </div>
-      <span className={ELAPSED}>{formatElapsed(startedAt, now)}</span>
+      <p className="px-2 pt-2 text-[11px] font-medium text-muted-foreground">Earlier</p>
+      {visible.map((row) => (
+        <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />
+      ))}
+      {history.length > 6 && !showAll && (
+        <button type="button" onClick={onShowAll} className="self-start px-2 py-1 text-xs text-primary hover:underline">
+          Show all {history.length}
+        </button>
+      )}
     </>
   );
 }
 
-function TaskRow({ task, now }: { task: BackgroundActivityTask; now: number }) {
+interface ActivityBodyProps {
+  running: ActivityEntry[];
+  waiting: ActivityEntry[];
+  history: ActivityEntry[];
+  chatId?: string;
+  adapterId?: string;
+  now: number;
+  showAll: boolean;
+  onShowAll: () => void;
+  loadError: string | null;
+}
+
+function ActivityBody({
+  running,
+  waiting,
+  history,
+  chatId,
+  adapterId,
+  now,
+  showAll,
+  onShowAll,
+  loadError,
+}: ActivityBodyProps) {
   return (
-    <div data-testid={`session-panel-task-${task.id}`} className={ROW}>
-      <RowBody
-        kind={task.kind}
-        title={task.description || 'Background task'}
-        detail={KIND_LABEL[task.kind] ?? 'Task'}
-        startedAt={task.startedAt}
+    <div className="flex flex-col gap-0.5 px-2 pb-2">
+      {running.length === 0 && waiting.length === 0 && history.length === 0 && (
+        <p data-testid="session-panel-activity-empty" className="px-2 py-1 text-sm text-muted-foreground">
+          Nothing running
+        </p>
+      )}
+      {running.map((row) => (
+        <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />
+      ))}
+      {waiting.length > 0 && <p className="px-2 pt-1 text-[11px] text-muted-foreground">Waiting</p>}
+      {waiting.map((row) => (
+        <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />
+      ))}
+      <HistoryRows
+        history={history}
+        chatId={chatId}
+        adapterId={adapterId}
         now={now}
+        showAll={showAll}
+        onShowAll={onShowAll}
       />
+      {loadError && (
+        <p role="alert" className="px-2 text-xs text-destructive">
+          Could not load earlier tasks: {loadError}
+        </p>
+      )}
     </div>
   );
 }
 
-function DelegatedRow({ task, onOpen }: { task: DelegatedTaskRow; onOpen: (itemId: string) => void }) {
-  return (
-    <button
-      type="button"
-      data-testid={`session-panel-delegated-${task.taskId}`}
-      onClick={() => onOpen(task.itemId)}
-      className={cn(ROW, 'w-full text-left transition-colors hover:bg-foreground/8')}
-    >
-      <Bot className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="min-w-0 flex-1 truncate text-sm">{task.title}</span>
-      <TaskStatusLabel status={task.status} waiting={task.waiting} />
-      <ChevronRight className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-    </button>
-  );
-}
-
-/** The only row that opens something — and only once its run is known. */
-function WorkflowRow({
-  task,
-  now,
-  onOpen,
-}: {
-  task: BackgroundActivityTask;
-  now: number;
-  onOpen: (taskId: string) => void;
-}) {
-  const run = useWorkflowRun(task.id);
-  if (!run) return <TaskRow task={task} now={now} />;
-
-  const agents = run.agents.length;
-  return (
-    <button
-      type="button"
-      data-testid={`session-panel-workflow-${runKey(run)}`}
-      onClick={() => onOpen(task.id)}
-      className={cn(ROW, 'w-full text-left transition-colors hover:bg-foreground/8')}
-    >
-      <RowBody
-        kind="workflow"
-        title={run.workflowName ?? task.description ?? 'Workflow'}
-        detail={`${agents} agent${agents === 1 ? '' : 's'}`}
-        startedAt={task.startedAt}
-        now={now}
-      />
-      <ChevronRight className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-    </button>
-  );
-}
-
-/** Level two: one run's panel, with the way back to the list. */
-function WorkflowDrillIn({ run, onBack }: { run: ClaudeWorkflowRun; onBack: () => void }) {
-  return (
-    <>
-      <button
-        type="button"
-        data-testid={`session-panel-workflow-back-${runKey(run)}`}
-        onClick={onBack}
-        className="flex items-center gap-1 self-start text-xs text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ChevronLeft className="size-3" aria-hidden />
-        Activity
-      </button>
-      <WorkflowRunPanel run={run} />
-    </>
-  );
-}
-
 export function ActivitySection() {
-  const aui = useAui();
-  const items = useSessionItems();
-  const extras = useChatExtras();
-  const chatId = extras?.state.chatId;
-  const backgroundTasks = extras?.state.backgroundTasks;
-  const tasks = useMemo(() => Object.values(backgroundTasks ?? {}), [backgroundTasks]);
-  const delegated = useMemo(
-    () => (chatId == null ? [] : delegatedTasksOf(items, chatId).filter((row) => !isTerminalTaskStatus(row.status))),
-    [items, chatId],
-  );
-  const [drillTaskId, setDrillTaskId] = useState<string | null>(null);
-  const drillRun = useWorkflowRun(drillTaskId ?? undefined);
-  const now = useNow(tasks.length > 0);
-  const running = runningCount(tasks) + delegated.filter((task) => task.status === 'running').length;
-  const active = tasks.length + delegated.length;
-
-  useEffect(() => setDrillTaskId(null), [chatId]);
-
+  const { entries, chatId, adapterId, loadError, now } = useActivityEntries();
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => setShowAll(false), [chatId]);
+  const running = entries.filter((row) => row.state === 'running');
+  const waiting = entries.filter((row) => row.state === 'waiting');
+  const history = entries
+    .filter((row) => !active(row))
+    .sort((a, b) => (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt));
+  const summary =
+    running.length || waiting.length
+      ? `${running.length} running${waiting.length ? ` · ${waiting.length} waiting` : ''}`
+      : 'Nothing running';
   return (
     <section data-testid="session-panel-card-activity" className="shrink-0">
-      <PanelEyebrow label="Activity" live={running > 0} liveTestId="session-panel-activity-live" />
-      <div className="flex flex-col gap-0.5 px-2 pb-2">
-        {drillRun ? (
-          <WorkflowDrillIn run={drillRun} onBack={() => setDrillTaskId(null)} />
-        ) : active === 0 ? (
-          <div data-testid="session-panel-activity-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
-            Nothing running
-          </div>
-        ) : (
-          <>
-            {delegated.map((task) => (
-              <DelegatedRow key={task.taskId} task={task} onOpen={(id) => aui.threads.switchToThread(id)} />
-            ))}
-            {tasks.map((task) =>
-              task.kind === 'workflow' ? (
-                <WorkflowRow key={task.id} task={task} now={now} onOpen={setDrillTaskId} />
-              ) : (
-                <TaskRow key={task.id} task={task} now={now} />
-              ),
-            )}
-          </>
-        )}
-      </div>
+      <PanelEyebrow
+        label="Activity"
+        live={running.length > 0}
+        liveTestId="session-panel-activity-live"
+        action={
+          <span data-testid="session-panel-activity-counts" className="text-[11px] text-muted-foreground">
+            {summary}
+          </span>
+        }
+      />
+      <ActivityBody
+        running={running}
+        waiting={waiting}
+        history={history}
+        chatId={chatId}
+        adapterId={adapterId}
+        now={now}
+        showAll={showAll}
+        onShowAll={() => setShowAll(true)}
+        loadError={loadError}
+      />
     </section>
   );
 }

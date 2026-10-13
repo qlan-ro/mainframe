@@ -130,11 +130,11 @@ fn sub_agent_started_opens_one_running_agent_entry() {
         "expected exactly one live entry, got {live:?}"
     );
     assert_eq!(live[0].kind, BackgroundWorkKind::Agent);
-    assert_eq!(live[0].description, "Maxwell");
+    assert_eq!(live[0].description, "compute_sum");
 }
 
 #[test]
-fn entry_description_equals_the_card_title() {
+fn entry_description_uses_task_name_even_when_card_has_nickname() {
     let (_dir, tracker, mut state) =
         state_with_tracker(&[("child-1", Some("Maxwell"), None, None)]);
     let rec = Recorder::new();
@@ -147,7 +147,8 @@ fn entry_description_equals_the_card_title() {
         .as_str()
         .expect("subagent_type is a string");
     let live = tracker.list_live(CHAT_ID);
-    assert_eq!(live[0].description, subagent_type);
+    assert_eq!(subagent_type, "Maxwell");
+    assert_eq!(live[0].description, "compute_sum");
 }
 
 #[test]
@@ -188,13 +189,9 @@ fn a_late_nickname_does_not_rename_the_entry() {
         &mut state,
     );
 
-    // Opened via `open_via_sub_agent_activity`, whose fixed `agentPath` humanizes
-    // to "compute sum" with no registry metadata (see
-    // `card_title_falls_back_to_humanized_path_when_no_metadata` in
-    // collab_identity.rs) — the row must keep that title, not fall back to
-    // "Sub-agent" or pick up the now-available "Maxwell" nickname.
+    // The activity title stays the original task name after a nickname arrives.
     let live = tracker.list_live(CHAT_ID);
-    assert_eq!(live[0].description, "compute sum");
+    assert_eq!(live[0].description, "compute_sum");
 }
 
 #[test]

@@ -79,6 +79,22 @@ async fn another_parents_task_is_not_found() {
 }
 
 #[tokio::test]
+async fn user_cancellation_is_scoped_to_the_parent_chat() {
+    let f = fixture();
+    let task_id = delegate(&f, &f.ctx, "t").await["taskId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(!f.svc.cancel_task_for_parent("stranger", &task_id).await);
+    assert_eq!(f.tasks.find(&task_id).unwrap().status, TaskStatus::Running);
+    assert!(f.svc.cancel_task_for_parent("parent", &task_id).await);
+    assert_eq!(
+        f.tasks.find(&task_id).unwrap().status,
+        TaskStatus::Cancelled
+    );
+}
+
+#[tokio::test]
 async fn cancel_stops_descendants_first_and_drops_their_deliveries() {
     let f = fixture();
     let out = delegate(&f, &f.ctx, "lead").await;

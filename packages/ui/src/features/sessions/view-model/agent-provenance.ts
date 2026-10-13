@@ -43,6 +43,8 @@ export interface DelegatedTaskRow {
   /** The thread-list item id, for switching to the child. */
   itemId: string;
   title: string;
+  adapterId?: string;
+  model?: string;
   status: TaskStatus;
   /** The child, or a task below it, waits on a permission or question gate. */
   waiting: boolean;
@@ -59,6 +61,8 @@ export function delegatedTasksOf(items: readonly SessionItem[], parentChatId: st
       taskId: delegation.taskId,
       itemId: it.id,
       title: it.title ?? UNTITLED,
+      adapterId: it.custom.adapterId,
+      model: it.custom.model,
       status: delegation.status,
       waiting: delegation.status === 'waiting' || it.custom.hasPending || it.custom.delegatedWaiting === true,
       updatedAt: it.custom.updatedAt,

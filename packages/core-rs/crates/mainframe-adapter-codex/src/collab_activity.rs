@@ -31,6 +31,11 @@ pub(crate) fn open_activity(
         return;
     }
     let task_id = format!("codex-agent-{}", nanoid!());
+    let activity_title = state
+        .agent_task_names
+        .get(child_thread_id)
+        .map(String::as_str)
+        .unwrap_or(title);
     tracker.start(
         &state.mainframe_chat_id,
         TaskSeed {
@@ -38,8 +43,8 @@ pub(crate) fn open_activity(
             kind: BackgroundWorkKind::Agent,
             tool_name: BackgroundTaskToolName::Bash,
             tool_use_id: card_id.to_string(),
-            command: title.to_string(),
-            description: title.to_string(),
+            command: activity_title.to_string(),
+            description: activity_title.to_string(),
             workflow_name: None,
         },
         String::new(),

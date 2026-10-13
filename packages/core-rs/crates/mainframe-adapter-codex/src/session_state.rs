@@ -69,6 +69,7 @@ pub struct CodexSessionState {
     pub background_tasks: Option<Arc<BackgroundTaskTracker>>,
     /// child thread id → its live tracker task id. Presence means "a row is live".
     pub agent_task_ids: HashMap<String, String>,
+    pub agent_task_names: HashMap<String, String>,
     /// The parent's own in-flight `item/agentMessage/delta`
     /// accumulation, fed to `SessionSink::on_message_partial`.
     pub agent_message_partial: AgentMessagePartialState,

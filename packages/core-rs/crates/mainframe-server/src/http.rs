@@ -158,6 +158,7 @@ fn http_routes() -> Router<Arc<AppCtx>> {
         .merge(routes::session_transcripts::router())
         .merge(routes::external_sessions::router())
         .merge(routes::background_tasks::router())
+        .merge(routes::delegated_tasks::router())
         .merge(routes::adapters::router())
         .merge(routes::adapter_catalog::router())
         .merge(routes::skills_cli::router())

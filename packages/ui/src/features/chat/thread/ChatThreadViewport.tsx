@@ -95,12 +95,14 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
   const { viewportRef, contentRef, viewportElement, beginInteraction } = useThreadBottomPin(threadId);
   const scroll = useMemo(() => ({ viewportElement, beginInteraction }), [viewportElement, beginInteraction]);
   const messageCount = useAuiState((s) => s.thread.messages.length);
+  const chatId = useChatExtras()?.state.chatId;
   return (
     <TranscriptScrollProvider value={scroll}>
       <ThreadPrimitive.Viewport
         ref={viewportRef}
         data-testid="chat-thread-viewport"
         data-mf-chat-thread
+        data-mf-chat-id={chatId}
         tabIndex={-1}
         className="relative flex flex-1 flex-col overflow-y-auto [container-type:size]"
       >
