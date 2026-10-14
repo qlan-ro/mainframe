@@ -105,8 +105,11 @@ fork. Claude forks natively in this todo. Codex reports that it cannot fork yet
     beneath the parent.
   - All of a parent's descendants in that group form one contiguous block right
     after it, ordered depth-first, with siblings in the group's own sort order.
-  - The block sits at the parent's own position in the group. A fork's activity
-    never moves its parent.
+  - The block sits at the parent's own position in the group.
+  - A fork always lands in its parent's group (amended by #395). Grouping reads
+    the lineage's anchor: the nearest pinned chat up the chain, else the
+    topmost listed ancestor. In time-ordered groups a lineage buckets and sorts
+    by its freshest member, so an active fork lifts its idle parent into Today.
 - A nested fork row is indented with a left rule, the same recipe as the
   prototype's variant D.
   - Indentation goes one step per level and stops at two levels. Deeper
@@ -175,8 +178,6 @@ fork. Claude forks natively in this todo. Codex reports that it cannot fork yet
 ## Not Included
 
 - Codex fork support, tracked in #368. Codex reports it cannot fork yet. `deferred`
-- Nesting a fork under a parent that sits in a different group; that case uses
-  the fallback glyph. `declined`
 - A persistent row glyph on chats that have forks. The count appears only in the
   hover card. `deferred`
 - Forking from an earlier message ("rewind and fork"). v1 forks from the current
@@ -200,9 +201,10 @@ fork. Claude forks natively in this todo. Codex reports that it cannot fork yet
   forks, both nested under the parent in the group's sort order.
 - **A fork is forked.** The new chat's parent is the fork, not the root.
   Indentation stops at two levels.
-- **Parent and fork land in different groups.** This happens when one is pinned
-  and the other is not, or when they fall in different recency buckets. The fork
-  uses the fallback glyph with the "different group" wording.
+- **Parent and fork land in different groups.** Since #395 this happens only
+  when the fork is pinned and its parent is not. The fork uses the fallback
+  glyph with the "different group" wording. An unpinned fork of a pinned parent
+  nests under it in Pinned.
 - **A tag filter hides the parent.** The fork falls back with the "filtered out"
   wording, and clicking the glyph still activates the parent.
 - **The parent is archived, then unarchived.** While archived, the fork shows the
@@ -277,7 +279,8 @@ fork. Claude forks natively in this todo. Codex reports that it cannot fork yet
     - nesting in each sort mode;
     - descendant block contiguity;
     - the two-level indent cap;
-    - a fork whose parent is in another group staying unnested;
+    - a fork kept in its parent's group across recency buckets and projects;
+    - a pinned fork of an unpinned parent staying unnested;
     - a self-referencing chat rendering flat.
 14. A fork whose parent is in a different group renders unindented with
     `sessions-row-parent-link`, and its Hint text matches the Sidebar section.
@@ -351,9 +354,11 @@ fork. Claude forks natively in this todo. Codex reports that it cannot fork yet
 - Nesting applies in every sort mode, including Status and Name. The design
   offered one rule for all modes. The risk is that a busy fork sits under an
   idle parent in Status mode; revisit if users object. `reversible`
-- A descendant block sits at its root parent's position rather than at its most
-  active member's position. A fork's activity should not move its parent, and
-  this keeps the prototype's adjacency model. `reversible`
+- A descendant block sits at its root parent's position, and the root takes the
+  position of the lineage's most active member. Originally a fork's activity
+  never moved its parent and cross-group forks fell back to the glyph; #395
+  reversed that because forks split from their parents across recency buckets.
+  `reversible`
 - Nested indentation stops at two levels. The prototype showed one level; two
   keeps fork-of-fork readable without using up the narrow sidebar. `reversible`
 - An archived or deleted parent's lineage link is not interactive. Archived

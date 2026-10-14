@@ -3,10 +3,13 @@
  *
  * `nestForks` reorders one already-sorted group's items so every fork sits
  * directly under its parent, in a contiguous depth-first block anchored at
- * the parent's own position, capped at two indent levels. A fork whose parent
- * isn't in this same array (a different group, filtered out, archived, or
- * deleted) is left in the group's own sort position at depth 0 — the row
- * layer renders the fallback glyph for those, via `classifyParent`.
+ * the parent's own position, capped at two indent levels. `group-sessions.ts`
+ * buckets a whole lineage by its `lineageAnchors` anchor (todo #395), so a
+ * fork only lands outside its parent's group when it is pinned and the parent
+ * isn't. A fork whose parent isn't in this same array (that pinned case,
+ * filtered out, archived, or deleted) is left in the group's own sort position
+ * at depth 0 — the row layer renders the fallback glyph for those, via
+ * `classifyParent`.
  *
  * A task chat (a delegated child, orchestration MCP server) never reaches
  * this pass while its parent is loaded — it has no row (`task-chats.ts`).
@@ -81,6 +84,32 @@ export function nestForks(items: readonly SessionItem[]): LineageRow[] {
     if (!visited.has(it.id)) emit(it, 0, new Set());
   }
   return rows;
+}
+
+/**
+ * Maps every item id to the item that decides its group: the nearest pinned
+ * chat on its listed ancestor chain (itself included), else the topmost listed
+ * ancestor. Grouping by anchor keeps a fork in its parent's group so
+ * `nestForks` can always nest it; a pinned fork anchors itself, so pinning
+ * still lifts exactly that chat (and its unpinned descendants) into Pinned.
+ * The walk stops at the first repeated id, so cycles terminate.
+ */
+export function lineageAnchors(items: readonly SessionItem[]): Map<string, SessionItem> {
+  const byId = new Map(items.map((it) => [it.id, it]));
+  const anchors = new Map<string, SessionItem>();
+  for (const it of items) {
+    let anchor = it;
+    const seen = new Set([it.id]);
+    while (!anchor.custom.pinned) {
+      const parentId = anchor.custom.parentChatId;
+      const parent = parentId == null ? undefined : byId.get(parentId);
+      if (parent == null || seen.has(parent.id)) break;
+      seen.add(parent.id);
+      anchor = parent;
+    }
+    anchors.set(it.id, anchor);
+  }
+  return anchors;
 }
 
 /** How a child relates to its parent: a task chat is the parent's task, not a fork of it. */

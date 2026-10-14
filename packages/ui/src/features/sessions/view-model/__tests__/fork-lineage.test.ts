@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
-import { classifyParent, forkCount, nestForks, parentLineageInteractive, parentLineageText } from '../fork-lineage';
+import {
+  classifyParent,
+  forkCount,
+  lineageAnchors,
+  nestForks,
+  parentLineageInteractive,
+  parentLineageText,
+} from '../fork-lineage';
 import { arrangeSessions } from '../group-sessions';
 
 function item(
@@ -123,7 +130,7 @@ describe('nestForks', () => {
 
 describe('nestForks integrated through arrangeSessions (every sort mode)', () => {
   // Fixed reference clock, matching group-sessions.test.ts's convention — a
-  // real Date.now() would make the "different group" case's day-bucketing flaky.
+  // real Date.now() would make the cross-bucket cases' day-bucketing flaky.
   const NOW = new Date(2026, 5, 7, 12, 0, 0).getTime();
   const TODAY = new Date(2026, 5, 7, 9, 0, 0).getTime();
   const EARLIER = new Date(2026, 5, 1, 8, 0, 0).getTime();
@@ -183,14 +190,93 @@ describe('nestForks integrated through arrangeSessions (every sort mode)', () =>
     expect(pinned.depths.fork).toBe(1);
   });
 
-  it('leaves a fork whose parent lands in a different group unnested at depth 0', () => {
-    const items = [item('parent', { updatedAt: EARLIER }), item('fork', { parentChatId: 'parent', updatedAt: NOW })];
+  it("lifts an idle parent into its active fork's day bucket so the fork still nests (todo #395)", () => {
+    const items = [
+      item('parent', { updatedAt: EARLIER }),
+      item('unrelated', { updatedAt: TODAY }),
+      item('fork', { parentChatId: 'parent', updatedAt: NOW }),
+    ];
     const groups = arrangeSessions(items, 'recent', NOW);
-    const today = groups.find((g) => g.label === 'Today')!;
-    expect(today.items.map((i) => i.id)).toEqual(['fork']);
-    expect(today.depths.fork ?? 0).toBe(0);
-    const earlier = groups.find((g) => g.label === 'Earlier')!;
-    expect(earlier.items.map((i) => i.id)).toEqual(['parent']);
+    expect(groups.map((g) => g.label)).toEqual(['Today']);
+    // The lineage sorts by its freshest member (the fork, NOW), ahead of
+    // 'unrelated' (TODAY), and the parent heads its own block.
+    expect(groups[0]!.items.map((i) => i.id)).toEqual(['parent', 'fork', 'unrelated']);
+    expect(groups[0]!.depths.fork).toBe(1);
+  });
+
+  it('keeps a whole fork-of-fork chain together across day buckets', () => {
+    const items = [
+      item('root', { updatedAt: EARLIER }),
+      item('mid', { parentChatId: 'root', updatedAt: EARLIER }),
+      item('leaf', { parentChatId: 'mid', updatedAt: NOW }),
+    ];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(groups.map((g) => g.label)).toEqual(['Today']);
+    expect(groups[0]!.items.map((i) => i.id)).toEqual(['root', 'mid', 'leaf']);
+    expect(groups[0]!.depths).toEqual({ mid: 1, leaf: 2 });
+  });
+
+  it('nests an unpinned fork under its pinned parent inside Pinned', () => {
+    const items = [item('parent', { pinned: true, updatedAt: EARLIER }), item('fork', { parentChatId: 'parent' })];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    expect(groups.map((g) => g.label)).toEqual(['Pinned']);
+    expect(groups[0]!.items.map((i) => i.id)).toEqual(['parent', 'fork']);
+    expect(groups[0]!.depths.fork).toBe(1);
+  });
+
+  it('leaves a pinned fork of an unpinned parent in Pinned, unnested at depth 0', () => {
+    const items = [item('parent', { updatedAt: EARLIER }), item('fork', { parentChatId: 'parent', pinned: true })];
+    const groups = arrangeSessions(items, 'recent', NOW);
+    const pinned = groups.find((g) => g.label === 'Pinned')!;
+    expect(pinned.items.map((i) => i.id)).toEqual(['fork']);
+    expect(pinned.depths.fork ?? 0).toBe(0);
+    expect(groups.find((g) => g.label === 'Earlier')!.items.map((i) => i.id)).toEqual(['parent']);
+  });
+
+  it("nests a fork under its parent's project section in mode 'project'", () => {
+    const items = [
+      item('parent', { projectId: 'proj-a' }),
+      item('fork', { parentChatId: 'parent', projectId: 'proj-b' }),
+    ];
+    const groups = arrangeSessions(items, 'project', NOW, [
+      { id: 'proj-a', name: 'Alpha' },
+      { id: 'proj-b', name: 'Beta' },
+    ]);
+    expect(groups.map((g) => g.label)).toEqual(['Alpha']);
+    expect(groups[0]!.items.map((i) => i.id)).toEqual(['parent', 'fork']);
+  });
+});
+
+describe('lineageAnchors', () => {
+  it('anchors a chain at its topmost listed ancestor', () => {
+    const items = [item('root'), item('mid', { parentChatId: 'root' }), item('leaf', { parentChatId: 'mid' })];
+    const anchors = lineageAnchors(items);
+    expect(['root', 'mid', 'leaf'].map((id) => anchors.get(id)!.id)).toEqual(['root', 'root', 'root']);
+  });
+
+  it('stops at the nearest pinned chat, itself included', () => {
+    const items = [
+      item('root'),
+      item('pinned-mid', { parentChatId: 'root', pinned: true }),
+      item('leaf', { parentChatId: 'pinned-mid' }),
+    ];
+    const anchors = lineageAnchors(items);
+    expect(['root', 'pinned-mid', 'leaf'].map((id) => anchors.get(id)!.id)).toEqual([
+      'root',
+      'pinned-mid',
+      'pinned-mid',
+    ]);
+  });
+
+  it('anchors a fork whose parent is not listed at the fork itself', () => {
+    expect(lineageAnchors([item('fork', { parentChatId: 'gone' })]).get('fork')!.id).toBe('fork');
+  });
+
+  it('terminates on a cycle', () => {
+    const items = [item('a', { parentChatId: 'b' }), item('b', { parentChatId: 'a' })];
+    const anchors = lineageAnchors(items);
+    expect(anchors.get('a')!.id).toBe('b');
+    expect(anchors.get('b')!.id).toBe('a');
   });
 });
 
