@@ -524,7 +524,7 @@ test.describe('§tasks', () => {
   // fixed status order (TaskBoardView.COLUMNS) but sorts WITHIN a column by the
   // active TodoSort, so reading card order inside `tasks-column-open` isolates
   // the sort behavior from status grouping.
-  test('sort menu: priority (default) then Number reorder the open column deterministically', async () => {
+  test('sort menu: Number (default) then Priority reorder the open column deterministically', async () => {
     const { page } = app;
     await openBoard(page);
 
@@ -536,26 +536,26 @@ test.describe('§tasks', () => {
     );
     await expect(cards).toHaveCount(3, { timeout: 10_000 });
 
-    // Default sort = priority ascending (critical=0 first): #5, #3, #4.
-    await expect(cards).toHaveText([/#5/, /#3/, /#4/]);
+    // Default sort = number descending (newest first): #5, #4, #3.
+    await expect(cards).toHaveText([/#5/, /#4/, /#3/]);
 
     // SortMenu is a native DropdownMenu whose radio items `preventDefault()` on
     // select (SortMenu.tsx), so it stays open across picks — one trigger click,
     // then both picks in place. Re-clicking the trigger would toggle the open
     // menu SHUT, and the second option would never be there to click.
     await page.getByTestId('tasks-sort-menu').click();
-    // First pick of Number defaults to descending: #5, #4, #3.
-    await page.getByTestId('tasks-sort-option-number').click();
-    await expect(cards).toHaveText([/#5/, /#4/, /#3/]);
-
     // Picking the already-active key flips its direction: #3, #4, #5.
     await page.getByTestId('tasks-sort-option-number').click();
     await expect(cards).toHaveText([/#3/, /#4/, /#5/]);
 
+    // First pick of Priority defaults to ascending (critical=0 first): #5, #3, #4.
+    await page.getByTestId('tasks-sort-option-priority').click();
+    await expect(cards).toHaveText([/#5/, /#3/, /#4/]);
+
     // Close deterministically — a modal DropdownMenu left open puts
     // `pointer-events: none` on the document and breaks the next click.
     await page.keyboard.press('Escape');
-    await expect(page.getByTestId('tasks-sort-option-number')).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId('tasks-sort-option-priority')).toHaveCount(0, { timeout: 5_000 });
 
     await closeBoard(page);
   });
