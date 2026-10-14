@@ -520,7 +520,7 @@ describe('useTodosStore.setSort', () => {
 // ---------------------------------------------------------------------------
 
 describe('useTodosStore.resetFilters', () => {
-  it('resets filters to empty and sort to {key:priority, dir:asc}', () => {
+  it('resets filters to empty and sort to {key:number, dir:desc}', () => {
     const { result } = renderHook(() => useTodosStore());
 
     // Apply non-default state first
@@ -534,19 +534,19 @@ describe('useTodosStore.resetFilters', () => {
     });
 
     expect(result.current.filters).toEqual({ types: [], priorities: [], labels: [], search: '' });
-    expect(result.current.sort).toEqual({ key: 'priority', dir: 'asc' });
+    expect(result.current.sort).toEqual({ key: 'number', dir: 'desc' });
   });
 });
 
 // ---------------------------------------------------------------------------
-// 10. initial default sort (finding 9.9 — priority-first on open)
+// 10. initial default sort (newest first on open)
 // ---------------------------------------------------------------------------
 
 describe('useTodosStore — initial default sort', () => {
-  it('defaults to {key:priority, dir:asc} so the board opens priority-first', () => {
+  it('defaults to {key:number, dir:desc} so the board opens newest-first', () => {
     // Reconstruct the store's true initial state (beforeEach above overrides
     // it to isolate other tests); read getState() directly, pre-any-action.
     const initialSort = useTodosStore.getInitialState().sort;
-    expect(initialSort).toEqual({ key: 'priority', dir: 'asc' });
+    expect(initialSort).toEqual({ key: 'number', dir: 'desc' });
   });
 });
