@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * MessageActionBar — assistant-turn action bar (Copy + ExportMarkdown only).
+ * MessageActionBar — assistant-turn actions for Copy, ExportMarkdown, and Fork.
  *
- * Adopts native ActionBarPrimitive (autohide=not-last, hideWhenRunning) with
+ * Adopts native ActionBarPrimitive (autohide=not-last) with
  * our Button ghost/icon-sm sizing. Reload, Edit, Feedback and Speak are NOT
  * rendered — they require daemon endpoints or agent capabilities we don't have
  * yet (inventory decision: omit, not disable).
@@ -15,10 +15,11 @@
  */
 
 import type { FC } from 'react';
-import { ActionBarPrimitive, ActionBarMorePrimitive, AuiIf } from '@assistant-ui/react';
+import { ActionBarPrimitive, ActionBarMorePrimitive, AuiIf, useAuiState } from '@assistant-ui/react';
 import { CheckIcon, CopyIcon, DownloadIcon, MoreHorizontalIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ActionIconButton } from './action-icon-button';
+import { AssistantForkAction } from './AssistantForkAction';
 
 // ── Copy button — shows check icon while in copied state ─────────────────────
 
@@ -81,13 +82,14 @@ const MoreMenu: FC = () => (
 
 // ── Root export ──────────────────────────────────────────────────────────────
 
-export const MessageActionBar: FC = () => (
-  <ActionBarPrimitive.Root
-    hideWhenRunning
-    autohide="not-last"
-    className="flex items-center gap-0.5 text-muted-foreground"
-  >
-    <CopyButton />
-    <MoreMenu />
-  </ActionBarPrimitive.Root>
-);
+export const MessageActionBar: FC = () => {
+  const running = useAuiState((s) => s.message.status?.type === 'running' || (s.thread.isRunning && s.message.isLast));
+  if (running) return null;
+  return (
+    <ActionBarPrimitive.Root autohide="not-last" className="flex items-center gap-0.5 text-muted-foreground">
+      <CopyButton />
+      <MoreMenu />
+      <AssistantForkAction />
+    </ActionBarPrimitive.Root>
+  );
+};

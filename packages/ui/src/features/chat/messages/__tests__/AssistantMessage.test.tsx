@@ -37,10 +37,7 @@ vi.mock('../../tools/tool-dispatch', () => ({
   MessageToolGroup: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 vi.mock('../../parts/ZoomableImage', () => ({ ZoomableImage: () => null }));
-vi.mock('../MessageActionBar', () => ({ MessageActionBar: () => null }));
-vi.mock('../AssistantForkAction', () => ({
-  AssistantForkAction: () => <button data-testid="assistant-fork-action" />,
-}));
+vi.mock('../MessageActionBar', () => ({ MessageActionBar: () => <button data-testid="assistant-action-bar" /> }));
 vi.mock('../MessageTiming', () => ({ MessageTiming: () => null }));
 vi.mock('../MessageTimestamp', () => ({ MessageTimestamp: () => null }));
 vi.mock('../AssistantErrorBlock', () => ({ AssistantErrorBlock: ({ text }: { text: string }) => <div>{text}</div> }));
@@ -54,7 +51,7 @@ describe('AssistantMessage — MessagePathContextMenu mounting', () => {
     render(<AssistantMessage />);
     expect(screen.getAllByTestId('chat-message-menu-trigger')).toHaveLength(1);
     expect(screen.getByTestId('grouped-parts-stub')).toBeInTheDocument();
-    expect(screen.getByTestId('assistant-fork-action')).toBeInTheDocument();
+    expect(screen.getByTestId('assistant-action-bar')).toBeInTheDocument();
   });
 
   it('does not wrap when rendered inside a nested (subagent) transcript, markup otherwise identical', () => {
