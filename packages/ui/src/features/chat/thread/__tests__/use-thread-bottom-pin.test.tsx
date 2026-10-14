@@ -22,15 +22,15 @@ class RecordingResizeObserver implements ResizeObserver {
 
 function createViewport() {
   const element = document.createElement('div');
-  const clientHeight = 100;
+  let clientHeight = 100;
   let scrollHeight = 1_000;
   let scrollTop = 900;
 
   Object.defineProperties(element, {
     clientHeight: { get: () => clientHeight },
-    scrollHeight: { get: () => scrollHeight },
+    scrollHeight: { get: () => (clientHeight === 0 ? 0 : scrollHeight) },
     scrollTop: {
-      get: () => scrollTop,
+      get: () => (clientHeight === 0 ? 0 : scrollTop),
       set: (value: number) => {
         scrollTop = Math.min(value, Math.max(0, scrollHeight - clientHeight));
       },
@@ -39,6 +39,9 @@ function createViewport() {
 
   return {
     element,
+    setVisible(visible: boolean) {
+      clientHeight = visible ? 100 : 0;
+    },
     resize(height: number) {
       scrollHeight = height;
       scrollTop = Math.min(scrollTop, Math.max(0, scrollHeight - clientHeight));
@@ -196,4 +199,83 @@ it('leaves the reading position alone when the session has not changed', () => {
   });
 
   expect(viewport.element.scrollTop).toBe(250);
+});
+
+it('observes viewport and composer resizing as well as transcript content', () => {
+  const viewport = createViewport();
+  const content = document.createElement('div');
+  const footer = document.createElement('div');
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
+  act(() => {
+    result.current.contentRef(content);
+    result.current.footerRef(footer);
+    result.current.viewportRef(viewport.element);
+  });
+  const observer = RecordingResizeObserver.instances[RecordingResizeObserver.instances.length - 1]!;
+  expect(observer.observe).toHaveBeenCalledWith(content);
+  expect(observer.observe).toHaveBeenCalledWith(footer);
+  expect(observer.observe).toHaveBeenCalledWith(viewport.element);
+  act(() => {
+    viewport.resize(1_100);
+    notifyResize();
+  });
+  expect(viewport.element.scrollTop).toBe(1_000);
+});
+
+it('does not schedule animation frames for streaming content while reading history', () => {
+  const viewport = createViewport();
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
+  act(() => {
+    result.current.viewportRef(viewport.element);
+    result.current.contentRef(document.createElement('div'));
+    viewport.scrollTo(250);
+    const observer = RecordingResizeObserver.instances[RecordingResizeObserver.instances.length - 1]!;
+    for (let i = 0; i < 30; i++) observer.callback([], observer);
+  });
+  expect(frames).toHaveLength(0);
+  expect(viewport.element.scrollTop).toBe(250);
+});
+
+it('resumes following when growth arrives before the scroll-to-bottom event', () => {
+  const viewport = createViewport();
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
+  act(() => {
+    result.current.viewportRef(viewport.element);
+    result.current.contentRef(document.createElement('div'));
+    viewport.scrollTo(250);
+    viewport.element.scrollTop = 900;
+    viewport.resize(1_100);
+    notifyResize();
+  });
+  expect(viewport.element.scrollTop).toBe(1_000);
+});
+
+it('keeps the reading position when a hidden window reports zero dimensions', () => {
+  const viewport = createViewport();
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
+  act(() => {
+    result.current.viewportRef(viewport.element);
+    result.current.contentRef(document.createElement('div'));
+    viewport.scrollTo(250);
+    viewport.setVisible(false);
+    viewport.element.dispatchEvent(new Event('scroll'));
+    notifyResize();
+    viewport.setVisible(true);
+    notifyResize();
+  });
+  expect(viewport.element.scrollTop).toBe(250);
+});
+
+it('keeps following through duplicate layout scroll events before the resize frame', () => {
+  const viewport = createViewport();
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
+  act(() => {
+    result.current.viewportRef(viewport.element);
+    result.current.contentRef(document.createElement('div'));
+    viewport.resize(1_200);
+    viewport.scrollTo(1_050);
+    viewport.element.dispatchEvent(new Event('scroll'));
+    notifyResize();
+  });
+  expect(viewport.element.scrollTop).toBe(1_100);
 });

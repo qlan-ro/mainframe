@@ -5,7 +5,7 @@ export interface TurnPresentationContext {
   model: TurnPresentation;
   open(key: string): boolean;
   toggle(key: string): void;
-  register(key: string, before: () => void): () => void;
+  register(key: string, before: (automatic?: boolean) => void): () => void;
 }
 const Context = createContext<TurnPresentationContext | null>(null);
 export const TurnPresentationProvider = Context.Provider;

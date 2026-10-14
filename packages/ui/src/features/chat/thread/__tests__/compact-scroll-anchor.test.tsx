@@ -7,7 +7,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
-it('suspends pending bottom pin work during disclosure and resumes prior following', () => {
+it('suspends pending bottom pin work during disclosure and preserves the resulting reading position', () => {
   let resize: () => void = () => {};
   let frame: FrameRequestCallback = () => {};
   vi.stubGlobal(
@@ -46,7 +46,7 @@ it('suspends pending bottom pin work during disclosure and resumes prior followi
     resize();
     frame(0);
   });
-  expect(viewport.scrollTop).toBe(1000);
+  expect(viewport.scrollTop).toBe(500);
 });
 it('restores the outer row offset inside the nearest scrolling detail area', () => {
   vi.useFakeTimers();
@@ -67,6 +67,10 @@ it('restores the outer row offset inside the nearest scrolling detail area', () 
   top = 80;
   rerender({ open: true });
   expect(viewport.scrollTop).toBe(330);
+  viewport.scrollTop = 280;
+  viewport.dispatchEvent(new Event('scroll'));
+  act(() => vi.advanceTimersByTime(200));
+  expect(viewport.scrollTop).toBe(280);
   unmount();
   viewport.remove();
 });
