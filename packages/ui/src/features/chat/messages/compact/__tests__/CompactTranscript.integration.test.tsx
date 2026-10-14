@@ -4,10 +4,32 @@ import { useUiPrefs } from '@/store/ui-prefs';
 import { AssistantMessage } from '../../AssistantMessage';
 import { disclosureKey } from '../disclosure-store';
 import { CompactFixture, fixtureMessage, fixtureTool } from './fixtures';
+import { TurnFixture, finalMessage } from './turn-fixtures';
 
-vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
+vi.mock('../../AssistantForkAction', () => ({
+  AssistantForkAction: () => <button data-testid="chat-assistant-message-fork" />,
+}));
 
 beforeEach(() => useUiPrefs.getState().setTranscriptMode('compact'));
+
+it.each(['compact', 'verbose'] as const)('places Fork with Copy and Export on a completed %s turn', (mode) => {
+  useUiPrefs.getState().setTranscriptMode(mode);
+  render(<TurnFixture rootId="fork-actions" messages={[finalMessage()]} />);
+  const footer = screen.getByTestId('chat-assistant-message').querySelector('[data-slot="message-footer"]');
+  expect(footer).not.toBeNull();
+  const copy = within(footer as HTMLElement).getByTestId('chat-message-copy');
+  expect(copy).toBeInTheDocument();
+  expect(within(footer as HTMLElement).getByTestId('chat-message-more')).toBeInTheDocument();
+  expect(within(footer as HTMLElement).getByTestId('chat-assistant-message-fork').parentElement).toBe(
+    copy.parentElement,
+  );
+});
+
+it('does not show assistant actions on an in-progress compact turn', () => {
+  render(<TurnFixture rootId="running-actions" messages={[finalMessage({ state: 'running' })]} />);
+  expect(screen.queryByTestId('chat-message-copy')).toBeNull();
+  expect(screen.queryByTestId('chat-assistant-message-fork')).toBeNull();
+});
 
 it('preserves an opened call through splitting, merging and remounting', async () => {
   const first = fixtureTool();

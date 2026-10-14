@@ -5,6 +5,7 @@ import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 const state = vi.hoisted(() => ({
   messageId: 'reply-1',
   messageStatus: 'complete',
+  threadRunning: false,
   remoteId: 'chat-1' as string | null,
   custom: {} as Record<string, unknown>,
   messages: [] as Array<Record<string, unknown>>,
@@ -16,7 +17,7 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: (selector: (s: unknown) => unknown) =>
     selector({
       message: { id: state.messageId, status: { type: state.messageStatus } },
-      thread: { messages: state.messages },
+      thread: { messages: state.messages, isRunning: state.threadRunning },
       threadListItem: { id: 'chat-1', remoteId: state.remoteId, custom: state.custom },
       threads: { threadItems: [] },
     }),
@@ -50,6 +51,7 @@ const button = () => screen.getByTestId('chat-assistant-message-fork');
 beforeEach(() => {
   state.messageId = 'reply-1';
   state.messageStatus = 'complete';
+  state.threadRunning = false;
   state.remoteId = 'chat-1';
   state.custom = {
     adapterId: 'claude',
@@ -93,20 +95,25 @@ describe('AssistantForkAction', () => {
     expect(state.fork).toHaveBeenCalledWith('chat-1', undefined);
   });
 
-  it('keeps the latest turn disabled while it runs', () => {
+  it('hides the latest turn action while it runs', () => {
     state.messageId = 'reply-2';
     state.messageStatus = 'running';
     state.custom.isRunning = true;
     render(<AssistantForkAction />);
-    expect(button()).toBeDisabled();
-    expect(screen.getByTestId('hint')).toHaveTextContent('Wait for the current turn to finish or interrupt it');
+    expect(screen.queryByTestId('chat-assistant-message-fork')).toBeNull();
   });
 
-  it('keeps an interrupted earlier turn disabled', () => {
+  it('hides a completed intermediate message while the current turn still runs', () => {
+    state.messageId = 'reply-2';
+    state.threadRunning = true;
+    render(<AssistantForkAction />);
+    expect(screen.queryByTestId('chat-assistant-message-fork')).toBeNull();
+  });
+
+  it('hides an interrupted earlier turn action', () => {
     state.messageStatus = 'incomplete';
     render(<AssistantForkAction />);
-    expect(button()).toBeDisabled();
-    expect(screen.getByTestId('hint')).toHaveTextContent("This turn didn't complete");
+    expect(screen.queryByTestId('chat-assistant-message-fork')).toBeNull();
   });
 
   it('does not offer an intermediate assistant message as a turn boundary', () => {
