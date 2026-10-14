@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   custom: {} as Record<string, unknown>,
   messages: [] as Array<Record<string, unknown>>,
   nested: false,
+  noProvider: false,
   fork: vi.fn(),
 }));
 
@@ -32,7 +33,12 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   TooltipContent: ({ children }: { children: React.ReactNode }) => <span data-testid="hint">{children}</span>,
 }));
-vi.mock('@/features/sessions/use-fork-chat', () => ({ useForkChat: () => state.fork }));
+vi.mock('@/features/sessions/use-fork-chat', () => ({
+  useForkChat: () => {
+    if (state.noProvider) throw new Error('Missing daemon provider');
+    return state.fork;
+  },
+}));
 vi.mock('../nested-transcript-context', () => ({ useIsNestedTranscript: () => state.nested }));
 
 import { useAdaptersStore } from '@/store/adapters';
@@ -70,6 +76,7 @@ beforeEach(() => {
     { id: 'reply-2', role: 'assistant' },
   ];
   state.nested = false;
+  state.noProvider = false;
   state.fork.mockReset();
   useAdaptersStore.setState({ byId: { claude: adapter } });
 });
@@ -144,6 +151,13 @@ describe('AssistantForkAction', () => {
     if (context === 'nested') state.nested = true;
     if (context === 'temporary' || context === 'noProject') state.custom[context] = true;
     if (context === 'draft') state.remoteId = null;
+    render(<AssistantForkAction />);
+    expect(screen.queryByTestId('chat-assistant-message-fork')).toBeNull();
+  });
+
+  it('does not require the daemon provider when the fork action is absent', () => {
+    state.remoteId = null;
+    state.noProvider = true;
     render(<AssistantForkAction />);
     expect(screen.queryByTestId('chat-assistant-message-fork')).toBeNull();
   });

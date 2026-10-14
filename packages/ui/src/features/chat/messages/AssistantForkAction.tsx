@@ -7,7 +7,7 @@ import type { ForkBaseInput } from '@/features/sessions/view-model/fork-availabi
 import { useForkChat } from '@/features/sessions/use-fork-chat';
 import { useAdaptersStore } from '@/store/adapters';
 import { ActionIconButton } from './action-icon-button';
-import { assistantForkAvailability, assistantForkPoint } from './assistant-fork-point';
+import { assistantForkAvailability, assistantForkPoint, type AssistantForkPoint } from './assistant-fork-point';
 import { useIsNestedTranscript } from './nested-transcript-context';
 
 function forkBaseInput(custom: SessionCustom, adapter?: AdapterInfo): ForkBaseInput {
@@ -23,6 +23,31 @@ function forkBaseInput(custom: SessionCustom, adapter?: AdapterInfo): ForkBaseIn
   };
 }
 
+function ForkButton({
+  chatId,
+  point,
+  tooltip,
+  disabled,
+}: {
+  chatId: string;
+  point: NonNullable<AssistantForkPoint>;
+  tooltip: string;
+  disabled: boolean;
+}) {
+  const fork = useForkChat();
+  return (
+    <ActionIconButton
+      tooltip={tooltip}
+      disabled={disabled}
+      aria-label="Fork from here"
+      data-testid="chat-assistant-message-fork"
+      onClick={() => void fork(chatId, point.kind === 'before' ? { fromMessageId: point.messageId } : undefined)}
+    >
+      <Split className="rotate-90" />
+    </ActionIconButton>
+  );
+}
+
 export function AssistantForkAction() {
   const nested = useIsNestedTranscript();
   const messageId = useAuiState((s) => s.message.id);
@@ -32,7 +57,6 @@ export function AssistantForkAction() {
   const chatId = useAuiState((s) => s.threadListItem.remoteId);
   const custom = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems));
   const adapter = useAdaptersStore((s) => (custom == null ? undefined : s.byId[custom.adapterId]));
-  const fork = useForkChat();
   const point = assistantForkPoint(messages, messageId);
 
   if (
@@ -53,15 +77,5 @@ export function AssistantForkAction() {
   });
   const tooltip = reason.enabled ? 'Fork from here' : reason.reason;
 
-  return (
-    <ActionIconButton
-      tooltip={tooltip}
-      disabled={!reason.enabled}
-      aria-label="Fork from here"
-      data-testid="chat-assistant-message-fork"
-      onClick={() => void fork(chatId, point.kind === 'before' ? { fromMessageId: point.messageId } : undefined)}
-    >
-      <Split className="rotate-90" />
-    </ActionIconButton>
-  );
+  return <ForkButton chatId={chatId} point={point} tooltip={tooltip} disabled={!reason.enabled} />;
 }
