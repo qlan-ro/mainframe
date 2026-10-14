@@ -48,7 +48,7 @@
   "mainframe-server/src/acp_ws/hub/fanout.rs": 326,
   "mainframe-server/src/routes/auth.rs": 356,
   "mainframe-server/src/routes/chats.rs": 472,
-  "mainframe-server/src/routes/files.rs": 638,
+  "mainframe-server/src/routes/files.rs": 591,
   "mainframe-server/src/routes/git_write.rs": 481,
   "mainframe-server/src/websocket.rs": 383,
   "mainframe-server/tests/chat_fork.rs": 332,

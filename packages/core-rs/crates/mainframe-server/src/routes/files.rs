@@ -18,7 +18,7 @@ use axum::routing::get;
 use serde::Serialize;
 
 use crate::ctx::AppCtx;
-use crate::fs_utils::{has_binary_extension, is_ignored_dir, path_resolve, relative};
+use crate::fs_utils::{is_ignored_dir, path_resolve, relative};
 use crate::input_error::InputError;
 use crate::path_utils::resolve_readable_path;
 use crate::respond::{fail, ok};
@@ -120,14 +120,6 @@ fn sort_entries(entries: &mut [FsEntry]) {
 
 // ── GET /api/projects/:id/search/files ───────────────────────────────────────
 
-#[derive(Serialize)]
-struct FileHit {
-    name: String,
-    path: String,
-    #[serde(rename = "type")]
-    entry_type: &'static str,
-}
-
 async fn search_files(
     State(ctx): State<Arc<AppCtx>>,
     AxPath(id): AxPath<String>,
@@ -145,10 +137,7 @@ async fn search_files(
         return crate::respond::ApiError::project_not_found().into_response();
     }
     let limit = parse_limit(qget(&q, "limit"), 50, 200);
-    let scan_limit = limit.saturating_mul(4);
-
-    let mut substrings: Vec<FileHit> = Vec::new();
-    let mut fuzzies: Vec<FileHit> = Vec::new();
+    let mut ranked_hits: [Vec<FileHit>; 6] = std::array::from_fn(|_| Vec::new());
 
     let files = list_files_with_ripgrep(
         &base,
@@ -159,57 +148,18 @@ async fn search_files(
     )
     .await;
     for rel in files {
-        if substrings.len() + fuzzies.len() >= scan_limit {
-            break;
-        }
-        add_file_hit(&mut substrings, &mut fuzzies, &rel, false, &query);
-    }
-
-    let combined: Vec<FileHit> = substrings.into_iter().chain(fuzzies).take(limit).collect();
-    ok(combined)
-}
-
-/// File-picker candidacy: skip dirs and binary files; a substring match is
-/// "exact", otherwise a subsequence (fuzzy) match qualifies.
-fn add_file_hit(
-    substrings: &mut Vec<FileHit>,
-    fuzzies: &mut Vec<FileHit>,
-    rel: &str,
-    is_dir: bool,
-    query: &str,
-) {
-    if is_dir || has_binary_extension(rel) {
-        return;
-    }
-    let rel_lower = rel.to_lowercase();
-    let name = basename(rel);
-    if rel_lower.contains(query) {
-        substrings.push(FileHit {
-            name,
-            path: rel.to_string(),
-            entry_type: "file",
-        });
-    } else if fuzzy_match(query, &rel_lower) {
-        fuzzies.push(FileHit {
-            name,
-            path: rel.to_string(),
-            entry_type: "file",
-        });
-    }
-}
-
-fn fuzzy_match(query: &str, target: &str) -> bool {
-    let q: Vec<char> = query.chars().collect();
-    let mut qi = 0;
-    for tc in target.chars() {
-        if qi >= q.len() {
-            break;
-        }
-        if tc == q[qi] {
-            qi += 1;
+        if let Some((rank, hit)) = file_hit(&rel, &query)
+            && ranked_hits[rank].len() < limit
+        {
+            ranked_hits[rank].push(hit);
         }
     }
-    qi == q.len()
+
+    ok(ranked_hits
+        .into_iter()
+        .flatten()
+        .take(limit)
+        .collect::<Vec<_>>())
 }
 
 // ── GET /api/projects/:id/files-list ─────────────────────────────────────────
@@ -636,6 +586,9 @@ pub fn router() -> Router<Arc<AppCtx>> {
 
 mod external;
 use external::{read_external_file, validate_external_file};
+
+mod search;
+use search::{FileHit, file_hit};
 #[cfg(test)]
 #[path = "files_tests.rs"]
 mod tests;

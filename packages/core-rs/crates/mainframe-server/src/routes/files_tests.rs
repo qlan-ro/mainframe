@@ -14,9 +14,9 @@ fn base64_matches_node_buffer() {
 
 #[test]
 fn fuzzy_match_is_subsequence() {
-    assert!(fuzzy_match("hlo", "hello"));
-    assert!(!fuzzy_match("xyz", "hello"));
-    assert!(fuzzy_match("abc", "aXbXc"));
+    assert!(search::fuzzy_match("hlo", "hello"));
+    assert!(!search::fuzzy_match("xyz", "hello"));
+    assert!(search::fuzzy_match("abc", "aXbXc"));
 }
 
 #[test]
