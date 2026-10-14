@@ -100,7 +100,7 @@ it('coordinates native disclosure scroll locking with the viewport bottom-pin co
   render(
     <TurnFixture
       rootId="scroll-outer"
-      scroll={{ viewportElement, beginInteraction }}
+      scroll={{ viewportElement, beginInteraction, isFollowing: () => false }}
       messages={[turnMessage('work', 'Work'), finalMessage()]}
     />,
   );

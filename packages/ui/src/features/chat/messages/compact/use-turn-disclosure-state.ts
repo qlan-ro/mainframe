@@ -11,8 +11,8 @@ export function useTurnDisclosureState(
   const revision = useSyncExternalStore(turnDisclosureStore.subscribe, turnDisclosureStore.snapshot, () => 0);
   const guard = useTurnInteractionGuard(root, model.turns);
   const [automatic, setAutomatic] = useState<ReadonlySet<string>>(() => new Set());
-  const anchors = useRef(new Map<string, () => void>());
-  const register = useCallback((key: string, before: () => void) => {
+  const anchors = useRef(new Map<string, (automatic?: boolean) => void>());
+  const register = useCallback((key: string, before: (automatic?: boolean) => void) => {
     anchors.current.set(key, before);
     return () => {
       anchors.current.delete(key);
@@ -37,7 +37,7 @@ export function useTurnDisclosureState(
         !turn.activeAgent &&
         !blocked.has(key);
       if (turnDisclosureStore.get(key) !== undefined || close === next.has(key)) continue;
-      anchors.current.get(key)?.();
+      anchors.current.get(key)?.(true);
       if (close) next.add(key);
       else next.delete(key);
     }

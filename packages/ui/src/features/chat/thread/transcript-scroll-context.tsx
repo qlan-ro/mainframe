@@ -1,6 +1,7 @@
 import { createContext, useContext, type RefObject } from 'react';
 export interface TranscriptScrollController {
   viewportElement: RefObject<HTMLDivElement | null>;
+  isFollowing: () => boolean;
   beginInteraction: () => () => void;
 }
 const Context = createContext<TranscriptScrollController | null>(null);

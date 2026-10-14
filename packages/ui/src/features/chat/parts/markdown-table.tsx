@@ -7,7 +7,7 @@ import type { ComponentProps } from 'react';
 export function MarkdownTable({ children, ...props }: ComponentProps<'table'>) {
   return (
     <div data-testid="chat-markdown-table-scroll" className="rounded-md border border-border overflow-x-auto my-3">
-      <table className="w-full border-collapse text-sm" {...props}>
+      <table className="w-full table-fixed border-collapse text-sm [overflow-wrap:anywhere]" {...props}>
         {children}
       </table>
     </div>

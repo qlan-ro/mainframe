@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, type ReactNode, type RefCallback } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -51,9 +51,20 @@ function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
     </>
   );
 }
-function ThreadFooter({ variant, readOnly }: { variant: ChatThreadVariant; readOnly: boolean }) {
+function ThreadFooter({
+  variant,
+  readOnly,
+  footerRef,
+}: {
+  variant: ChatThreadVariant;
+  readOnly: boolean;
+  footerRef: RefCallback<HTMLDivElement>;
+}) {
   return (
-    <ThreadPrimitive.ViewportFooter className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background">
+    <ThreadPrimitive.ViewportFooter
+      ref={footerRef}
+      className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background"
+    >
       <ThreadPrimitive.ScrollToBottom asChild>
         <Button
           data-testid="chat-scroll-to-bottom"
@@ -92,33 +103,41 @@ function ThreadFooter({ variant, readOnly }: { variant: ChatThreadVariant; readO
 export function ChatThreadViewport({ emptyState, variant }: { emptyState?: ReactNode; variant: ChatThreadVariant }) {
   const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
   const threadId = useSideAwareThreadId();
-  const { viewportRef, contentRef, viewportElement, beginInteraction } = useThreadBottomPin(threadId);
-  const scroll = useMemo(() => ({ viewportElement, beginInteraction }), [viewportElement, beginInteraction]);
+  const { viewportRef, contentRef, footerRef, viewportElement, beginInteraction, isFollowing } =
+    useThreadBottomPin(threadId);
+  const scroll = useMemo(
+    () => ({ viewportElement, beginInteraction, isFollowing }),
+    [viewportElement, beginInteraction, isFollowing],
+  );
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const chatId = useChatExtras()?.state.chatId;
   return (
     <TranscriptScrollProvider value={scroll}>
-      <ThreadPrimitive.Viewport
-        ref={viewportRef}
-        data-testid="chat-thread-viewport"
-        data-mf-chat-thread
-        data-mf-chat-id={chatId}
-        tabIndex={-1}
-        className="relative flex flex-1 flex-col overflow-y-auto [container-type:size]"
-      >
-        <ChatThreadLoadingSpinner />
-        <div ref={contentRef} className="mx-auto w-full max-w-[680px] flex-1 px-5 py-4">
-          <LoadErrorBanner />
-          {variant !== 'side' && <ContextNotPreservedNotice />}
-          {messageCount === 0 && emptyState != null ? emptyState : null}
-          {/* Keyed by thread: the progressive window (and compact mode's caches)
+      {/* WebKit loses scroll offsets when size containment is on the viewport itself. */}
+      <div className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
+        <ThreadPrimitive.Viewport
+          ref={viewportRef}
+          autoScroll={false}
+          data-testid="chat-thread-viewport"
+          data-mf-chat-thread
+          data-mf-chat-id={chatId}
+          tabIndex={-1}
+          className="relative flex flex-1 flex-col overflow-y-auto"
+        >
+          <ChatThreadLoadingSpinner />
+          <div ref={contentRef} className="mx-auto w-full max-w-[680px] flex-1 px-5 py-4">
+            <LoadErrorBanner />
+            {variant !== 'side' && <ContextNotPreservedNotice />}
+            {messageCount === 0 && emptyState != null ? emptyState : null}
+            {/* Keyed by thread: the progressive window (and compact mode's caches)
               restart from the new thread's tail on a switch instead of
               inheriting the previous thread's state. */}
-          <TranscriptMessages key={threadId ?? ''} />
-          <CompactingIndicator />
-        </div>
-        <ThreadFooter variant={variant} readOnly={readOnly} />
-      </ThreadPrimitive.Viewport>
+            <TranscriptMessages key={threadId ?? ''} />
+            <CompactingIndicator />
+          </div>
+          <ThreadFooter variant={variant} readOnly={readOnly} footerRef={footerRef} />
+        </ThreadPrimitive.Viewport>
+      </div>
     </TranscriptScrollProvider>
   );
 }
