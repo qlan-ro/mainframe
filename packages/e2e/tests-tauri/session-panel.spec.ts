@@ -113,10 +113,13 @@
  *   session-panel-plan-toggle     — AgentPlan header ("{done} of {total}") + collapse trigger
  *   session-panel-plan-progress   — the progress track; its fill carries style="width: N%"
  *   session-panel-plan-step-<i>   — one plan step, keyed by position
- *   session-panel-activity-empty  — "Nothing running"
- *   session-panel-task-<id> / session-panel-workflow-<runKey> — live rows; the
- *                                    `agent`-kind row is covered by the task-subagent
- *                                    describe below, `workflow` stays unreachable
+ *   session-panel-activity-empty  — "Nothing running", only when there is no
+ *                                    history either (finished rows move to Earlier)
+ *   session-panel-activity-counts — the eyebrow summary ("1 running" / "Nothing running")
+ *   session-panel-activity-<entryId> — one row, keyed by the activity entry id
+ *                                    (`task:<taskId>`, `delegated:<taskId>`, …); a
+ *                                    subagent row is covered by the task-subagent
+ *                                    describe below, workflow rows stay unreachable
  *                                    (out of scope — see the ground-truth note)
  *   session-panel-card-launch     — Launch section; ALWAYS rendered once the panel is open
  *   session-panel-launch-live     — its eyebrow's live dot (present while any config runs)
@@ -770,18 +773,23 @@ test.describe('§session-panel — Activity section (task-subagent)', () => {
     const card = await ensurePanelOpen(page).then(() => page.getByTestId('session-panel-card-activity'));
     await expect(card).toBeVisible({ timeout: 5_000 });
 
-    const row = card.getByTestId('session-panel-task-mock-toolu_task_1');
+    const row = card.getByTestId('session-panel-activity-task:mock-toolu_task_1');
     await expect(row).toBeVisible({ timeout: 10_000 });
-    await expect(row.getByTestId('session-panel-kind-agent')).toBeVisible();
-    await expect(row).toContainText('Agent');
-
+    // A subagent row's detail line is the Task call's `subagent_type`.
+    await expect(row).toContainText('general-purpose');
+    await expect(card.locator('[data-testid^="session-panel-activity-task:"]')).toHaveCount(1);
+    await expect(card.getByTestId('session-panel-activity-counts')).toHaveText('1 running');
     await expect(page.getByTestId('session-panel-activity-live')).toBeVisible();
 
     await sendMessage(page, 'Thanks — what did it find?');
     await waitForIdle(page, 60_000);
 
+    // The finished row leaves the running list for the collapsed Earlier group.
     await expect(row).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.getByTestId('session-panel-activity-empty')).toBeVisible();
+    await expect(card.getByTestId('session-panel-activity-counts')).toHaveText('Nothing running');
     await expect(page.getByTestId('session-panel-activity-live')).toHaveCount(0);
+    await card.getByRole('button', { name: 'Earlier, 1 item' }).click();
+    await expect(row).toBeVisible();
+    await expect(row).toContainText('completed');
   });
 });
