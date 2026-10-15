@@ -60,14 +60,113 @@ Killing a Tauri daemon port may also terminate its parent app; it is not a daemo
   hides a chat; it does not delete the fixture.
 - Direct session-state writes to SQLite may not update the running daemon's cache;
   use app/API operations for live state transitions.
-- For filesystem scenarios, register the intended checkout with
-  `POST /api/projects {"path":"<checkout>"}` and use that returned project ID.
-  An existing project named Mainframe may point to a different checkout.
+- Register filesystem fixtures with `POST /api/projects {"path":"<checkout>"}`,
+  or seed only the project row using the recipe below. Neither requires UI setup.
+  Check the returned path; an existing project named Mainframe may use another checkout.
 - For CLI transcript/session-path scenarios on macOS, `/tmp` resolves through
   `/private/tmp`; use a canonical project path (for example under `~/Projects`).
   This does not restrict the skill's artifact directory.
 - External-edit fixtures should avoid the renderer's watched source directories,
   where HMR would interfere with the observation.
+
+### Seed a project in an isolated database
+
+Launch with `MF_QA_RUN_DIR` set to a unique absolute directory under `/tmp/live-qa`
+and wait for harness readiness. Confirm its printed `DATA_DIR` is that run's `data`
+directory. The daemon must create and migrate `mainframe.db` before seeding.
+Use a Rust toolchain meeting `packages/core-rs/Cargo.toml`'s `rust-version`.
+The browser launcher prints process IDs and uses `nohup`; verify the recorded
+processes and endpoints still exist after the launcher returns to your execution host.
+
+Set `MF_QA_PROJECT_PATH` to an existing directory. For native transcript checks,
+use the transcript's original canonical project path, which may differ from the
+checkout being tested. Seeding registers this path; it does not copy or edit it.
+Save this as `$MF_QA_RUN_DIR/project-fixture.py` and run
+`python3 "$MF_QA_RUN_DIR/project-fixture.py" seed` with both variables exported:
+
+```python
+import datetime
+import json
+import os
+from pathlib import Path
+import sqlite3
+import sys
+import uuid
+
+run = Path(os.environ["MF_QA_RUN_DIR"])
+assert run.is_absolute()
+run = run.resolve(strict=True)
+root = Path("/tmp/live-qa").resolve(strict=True)
+assert root in run.parents, "Use a dedicated /tmp/live-qa run directory"
+db = (run / "data/mainframe.db").resolve(strict=True)
+assert db.is_file() and db.parent == run / "data", "Unexpected database path"
+marker = run / "project-fixture.json"
+action = sys.argv[1]
+assert action in ("seed", "restore")
+if action == "seed":
+    project = Path(os.environ["MF_QA_PROJECT_PATH"])
+    assert project.is_absolute() and project.is_dir()
+    fixture = {"id": "qa-" + uuid.uuid4().hex,
+               "path": str(project.resolve(strict=True))}
+    with marker.open("x") as output:
+        json.dump(fixture, output)
+else:
+    fixture = json.loads(marker.read_text())
+assert fixture["id"].startswith("qa-")
+with sqlite3.connect(db.as_uri() + "?mode=rw", uri=True) as conn:
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("BEGIN IMMEDIATE")
+    if action == "seed":
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        conn.execute("INSERT INTO projects "
+                     "(id, name, path, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?)",
+                     (fixture["id"], fixture["id"], fixture["path"], now, now))
+        row = conn.execute("SELECT id, path FROM projects WHERE id=?",
+                           (fixture["id"],)).fetchone()
+        assert row == (fixture["id"], fixture["path"])
+        print(json.dumps(fixture))
+    else:
+        row = conn.execute("SELECT name, path FROM projects WHERE id=?",
+                           (fixture["id"],)).fetchone()
+        assert row is None or row == (fixture["id"], fixture["path"])
+        chat_ids = set(sys.argv[2:])
+        actual = {r[0] for r in conn.execute(
+            "SELECT id FROM chats WHERE project_id=?", (fixture["id"],))}
+        assert actual <= chat_ids, "Unrecorded chats: inspect before restoring"
+        for chat_id in actual:
+            conn.execute("DELETE FROM chats WHERE id=? AND project_id=?",
+                         (chat_id, fixture["id"]))
+            assert not conn.execute("SELECT 1 FROM chat_native_sessions WHERE chat_id=?",
+                                    (chat_id,)).fetchone()
+        conn.execute("DELETE FROM projects WHERE id=?", (fixture["id"],))
+        assert not conn.execute("SELECT 1 FROM projects WHERE id=?",
+                                (fixture["id"],)).fetchone()
+    assert not conn.execute("PRAGMA foreign_key_check").fetchall()
+```
+
+Keep the marker even if insertion fails; inspect the database before retrying.
+Do not use `INSERT OR REPLACE`, reuse another run's marker, or run Python with `-O`,
+which disables the safety assertions. The recipe refuses an absent database and
+paths outside the isolated run, including symlinked data directories.
+
+Verify the marker's ID and canonical path in `GET /api/projects` on the recorded
+daemon port. This route reads SQLite; direct writes do not emit app events or
+refresh daemon caches. Reload the project list before selecting the fixture.
+For an existing native session, call
+`POST /api/projects/{projectId}/external-sessions/import` with
+`{"sessionId":"<native-session-id>","adapterId":"claude"}`.
+Record the returned `data.id` in the run checkpoint before further actions.
+The API creates the chat, native-session and segment records; do not seed those
+rows manually. Check `GET /api/chats/{id}/messages` and the intended UI state.
+
+For restoration, finish evidence capture, stop the run-owned target with the
+explicit recorded ports described above, and verify the daemon has exited. Run
+`python3 "$MF_QA_RUN_DIR/project-fixture.py" restore <recorded-chat-id> ...`,
+omitting IDs if none were imported. The transaction refuses unrecorded chats,
+deletes only this fixture's rows and checks native-session cleanup and foreign keys.
+Other dependencies cause rollback and require inspection. Keep the script and
+marker with the report; do not delete the project directory or native transcript.
+Restart through the harness with the same run directory if further review is needed.
 
 ## UI targeting
 
