@@ -60,14 +60,33 @@ Killing a Tauri daemon port may also terminate its parent app; it is not a daemo
   hides a chat; it does not delete the fixture.
 - Direct session-state writes to SQLite may not update the running daemon's cache;
   use app/API operations for live state transitions.
-- For filesystem scenarios, register the intended checkout with
-  `POST /api/projects {"path":"<checkout>"}` and use that returned project ID.
-  An existing project named Mainframe may point to a different checkout.
+- Register filesystem fixtures with `POST /api/projects {"path":"<checkout>"}`,
+  or seed only the project row using the recipe below. Neither requires UI setup.
+  Check the returned path; an existing project named Mainframe may use another checkout.
 - For CLI transcript/session-path scenarios on macOS, `/tmp` resolves through
   `/private/tmp`; use a canonical project path (for example under `~/Projects`).
   This does not restrict the skill's artifact directory.
 - External-edit fixtures should avoid the renderer's watched source directories,
   where HMR would interfere with the observation.
+
+### Seed a project in an isolated database
+
+For transcript QA, register the project directly in the isolated run's SQLite
+database instead of creating it through the UI. Start the harness first so the
+daemon creates and migrates the database. Use the `DATA_DIR` printed by that run,
+not the normal app database, and record a unique fixture ID for cleanup.
+
+Use the native transcript's original canonical project path. It may differ from
+the checkout being tested; registration does not copy or change that directory.
+
+Confirm the project through `GET /api/projects` and reload the project list.
+Direct database writes do not refresh app caches. Import existing native sessions
+through `POST /api/projects/{projectId}/external-sessions/import` rather than
+inserting chat records yourself. Record the imported chat IDs.
+
+After capturing evidence, stop the run-owned daemon, remove only the fixture and
+its imported chats, and restart the same isolated target unless ending the run.
+Leave the project directory and native transcript untouched.
 
 ## UI targeting
 
