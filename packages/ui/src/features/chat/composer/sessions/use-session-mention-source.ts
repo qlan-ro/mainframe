@@ -15,6 +15,7 @@ import type { TranscriptResolution } from '@qlan-ro/mainframe-types';
 import type { TriggerItem } from '@/components/trigger-engine/types';
 import { listedThreadItemsToSessionItems } from '@/features/sessions/view-model/task-chats';
 import { resolveSessionTranscripts } from '@/lib/api/session-transcripts';
+import { useProjectsStore } from '@/store/projects';
 import { buildSessionMentionItems, sessionResolutionCandidates } from './build-session-mention-items';
 
 export interface SessionMentionSource {
@@ -36,6 +37,8 @@ export function useSessionMentionSource(args: {
   // array inside it returns a fresh reference every read and loops getSnapshot.
   const threadItems = useAuiState((s) => s.threads.threadItems);
   const sessions = useMemo(() => listedThreadItemsToSessionItems(threadItems), [threadItems]);
+  const projects = useProjectsStore((s) => s.projects);
+  const projectNames = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
 
   // Round-tripped through a joined key so the array's IDENTITY changes only when
   // its CONTENTS do — every thread-list update reprojects `sessions`, and an
@@ -43,10 +46,10 @@ export function useSessionMentionSource(args: {
   // `^[a-zA-Z0-9_-]+$`, so `,` can never appear inside one.
   const candidateKey = useMemo(
     () =>
-      sessionResolutionCandidates({ sessions, projectId, activeChatId })
+      sessionResolutionCandidates({ sessions, activeChatId })
         .map((c) => c.chatId)
         .join(','),
-    [sessions, projectId, activeChatId],
+    [sessions, activeChatId],
   );
   const candidateIds = useMemo(() => (candidateKey === '' ? NO_IDS : candidateKey.split(',')), [candidateKey]);
 
@@ -72,7 +75,13 @@ export function useSessionMentionSource(args: {
   }, [refresh]);
 
   return useMemo(() => {
-    const { items, pathByChatId } = buildSessionMentionItems({ sessions, projectId, activeChatId, resolutions });
+    const { items, pathByChatId } = buildSessionMentionItems({
+      sessions,
+      projectId,
+      activeChatId,
+      resolutions,
+      projectNames,
+    });
     return { items, pathByChatId, refresh };
-  }, [sessions, projectId, activeChatId, resolutions, refresh]);
+  }, [sessions, projectId, activeChatId, resolutions, projectNames, refresh]);
 }
