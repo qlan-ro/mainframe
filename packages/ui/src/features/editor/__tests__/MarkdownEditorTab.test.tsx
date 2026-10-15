@@ -125,15 +125,14 @@ describe('MarkdownPreview', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 
-  it('has a centered max-width prose column (max-w-[720px] mx-auto)', () => {
+  it('lets the prose column span the full pane width (no max-width cap)', () => {
     const { container } = render(<MarkdownPreview value={MD} />);
-    // The outer scroll wrapper (data-testid="markdown-preview") must contain an
-    // inner div that carries the centering classes.
     const outer = container.querySelector('[data-testid="markdown-preview"]');
     expect(outer).toBeTruthy();
     const inner = outer?.firstElementChild as HTMLElement | null;
-    expect(inner?.className).toContain('max-w-[720px]');
-    expect(inner?.className).toContain('mx-auto');
+    expect(inner).toBeTruthy();
+    expect(inner?.className).not.toMatch(/\bmax-w-/);
+    expect(inner?.className).not.toContain('mx-auto');
   });
 
   it('renders a fenced JS code block as a plain pre initially', () => {

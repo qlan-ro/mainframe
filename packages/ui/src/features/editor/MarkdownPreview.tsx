@@ -185,7 +185,7 @@ export function MarkdownPreview({ value, notes }: MarkdownPreviewProps) {
 
   return (
     <div data-testid="markdown-preview" className="mf-editor-selectable h-full overflow-auto">
-      <div className="mx-auto max-w-[720px] px-10 pb-16 pt-[36px]">
+      <div className="px-10 pb-16 pt-[36px]">
         <MarkdownNotesProvider value={notesContextValue}>{markdownElement}</MarkdownNotesProvider>
       </div>
     </div>
