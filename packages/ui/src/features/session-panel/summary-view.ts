@@ -11,7 +11,14 @@ import { formatTokenCount } from './context-tokens';
 
 export interface SummaryBranchInput {
   name: string | null;
+}
+
+export interface SummaryWorktreeInput {
   isWorktree: boolean;
+  /** The worktree's directory; absent for a draft's worktree, created on first send. */
+  worktreePath?: string;
+  /** The project root — the tooltip for the main checkout. */
+  projectPath?: string;
 }
 
 export interface SummaryContextInput {
@@ -29,6 +36,8 @@ export interface SummaryChangesInput {
 }
 
 export interface SummaryInput {
+  /** null for a session with no project: there is no checkout to name. */
+  worktree: SummaryWorktreeInput | null;
   branch: SummaryBranchInput;
   context: SummaryContextInput;
   prs: readonly DetectedPr[];
@@ -43,20 +52,39 @@ interface SummaryRowBase {
 }
 
 export type SummaryRow =
-  | (SummaryRowBase & { kind: 'branch'; isWorktree: boolean })
+  | (SummaryRowBase & { kind: 'worktree' })
+  | (SummaryRowBase & { kind: 'branch' })
   | (SummaryRowBase & { kind: 'context'; percent: number })
   | (SummaryRowBase & { kind: 'pr'; number: number; url: string })
   | (SummaryRowBase & { kind: 'changes'; fileCount: number; additions?: number; deletions?: number });
 
-function branchRow({ name, isWorktree }: SummaryBranchInput): SummaryRow | null {
+/** Git's own name for the repo's original checkout is the "main worktree". */
+export const MAIN_CHECKOUT_LABEL = 'Main checkout';
+
+function directoryName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+}
+
+function worktreeRow(worktree: SummaryWorktreeInput | null): SummaryRow | null {
+  if (!worktree) return null;
+  const { isWorktree, worktreePath, projectPath } = worktree;
+  if (!isWorktree) {
+    return {
+      kind: 'worktree',
+      label: 'Worktree',
+      value: MAIN_CHECKOUT_LABEL,
+      tooltip: projectPath ? `Not in a worktree · ${projectPath}` : 'Not in a worktree',
+    };
+  }
+  if (!worktreePath) {
+    return { kind: 'worktree', label: 'Worktree', value: 'New worktree', tooltip: 'Created on first send' };
+  }
+  return { kind: 'worktree', label: 'Worktree', value: directoryName(worktreePath), tooltip: worktreePath };
+}
+
+function branchRow({ name }: SummaryBranchInput): SummaryRow | null {
   if (!name) return null;
-  return {
-    kind: 'branch',
-    label: 'Branch',
-    value: name,
-    tooltip: isWorktree ? `${name} · worktree` : name,
-    isWorktree,
-  };
+  return { kind: 'branch', label: 'Branch', value: name, tooltip: name };
 }
 
 function contextRow({ percent, usedTokens, maxTokens }: SummaryContextInput): SummaryRow | null {
@@ -99,6 +127,8 @@ function changesRow(changes: SummaryChangesInput | null): SummaryRow | null {
 
 export function deriveSummaryRows(input: SummaryInput): SummaryRow[] {
   const rows: SummaryRow[] = [];
+  const worktree = worktreeRow(input.worktree);
+  if (worktree) rows.push(worktree);
   const branch = branchRow(input.branch);
   if (branch) rows.push(branch);
   const context = contextRow(input.context);

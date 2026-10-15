@@ -96,9 +96,10 @@
  *                                    (`PanelSection`)
  *   session-panel-section-toggle-<id>  — its header row (the whole width is the
  *                                    trigger); `data-state` reports open/closed
+ *   session-panel-summary-worktree — worktree row: the worktree's directory, or
+ *                                    "Main checkout" on a main-repo session
  *   session-panel-summary-branch  — branch row; a BUTTON opening BranchPopover now
- *                                    (see git-branch.spec.ts). -branch-wt is its
- *                                    worktree badge (absent on a main-repo session)
+ *                                    (see git-branch.spec.ts)
  *   session-panel-summary-context — context-fill row ("42%") — the ONLY context readout
  *                                    left in the panel; there is no separate rail meter any more
  *   session-panel-summary-changes — working-changes row; click emits open-review
@@ -511,14 +512,14 @@ test.describe('§session-panel — Summary rows', () => {
     await closeTauriApp(app);
   });
 
-  test('the branch row names the live branch and carries no worktree badge', async () => {
+  test('the branch row names the live branch, under a "Main checkout" worktree row', async () => {
     const { page } = app;
     await ensurePanelOpen(page);
     const row = page.getByTestId('session-panel-summary-branch');
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row).toContainText('main');
-    // A main-repo session is not a worktree — the `wt` badge must not render.
-    await expect(page.getByTestId('session-panel-summary-branch-wt')).toHaveCount(0);
+    // A main-repo session is not a worktree — the worktree row says so.
+    await expect(page.getByTestId('session-panel-summary-worktree')).toHaveText('Main checkout');
     // The row IS the branch manager now (git-branch.spec.ts drives it): a plain
     // div would mean the entry point regressed.
     await expect(row).toHaveRole('button');

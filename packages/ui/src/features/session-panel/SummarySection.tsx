@@ -1,17 +1,16 @@
 /**
- * SummarySection — the Session section's rows: what this session IS (branch,
- * context fill) and its working changes. Detected PRs have their own section
+ * SummarySection — the Session section's rows: what this session IS (worktree,
+ * branch, context fill) and its working changes. Detected PRs have their own section
  * (`PullRequestsSection`); the "Session" eyebrow is drawn by the panel.
  *
  * The row kinds come out of `deriveSummaryRows`, which owns every visibility
- * rule (no branch, unresolved usage), and one renderer draws them. A row that
+ * rule (no project, no branch, unresolved usage), and one renderer draws them. A row that
  * has nothing to say is not emitted; when nothing is emitted at all the
  * section says so rather than rendering an empty block.
  */
 import { useState } from 'react';
-import { Gauge, GitBranch, GitCompare, GitPullRequest } from 'lucide-react';
+import { FolderGit2, Gauge, GitBranch, GitCompare, GitPullRequest } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { useChatExtras } from '@/features/chat/runtime/chat-extras';
@@ -28,6 +27,7 @@ const ROW_LABEL = 'min-w-0 flex-1 truncate text-sm';
 const ROW_TRAILING = 'shrink-0 font-mono text-xs tabular-nums text-muted-foreground';
 
 const ROW_ICON: Record<SummaryRow['kind'], ComponentType<{ className?: string }>> = {
+  worktree: FolderGit2,
   branch: GitBranch,
   context: Gauge,
   pr: GitPullRequest,
@@ -38,19 +38,13 @@ function rowTestId(row: SummaryRow): string {
   return row.kind === 'pr' ? `session-panel-summary-pr-${row.number}` : `session-panel-summary-${row.kind}`;
 }
 
-/** The branch row leads with the name itself; every other kind leads with its label. */
+/** The worktree and branch rows lead with the name itself; every other kind leads with its label. */
 function rowText(row: SummaryRow): string {
-  return row.kind === 'branch' ? row.value : row.label;
+  return row.kind === 'worktree' || row.kind === 'branch' ? row.value : row.label;
 }
 
 function RowTrailing({ row }: { row: SummaryRow }) {
-  if (row.kind === 'branch') {
-    return row.isWorktree ? (
-      <Badge data-testid="session-panel-summary-branch-wt" variant="outline">
-        wt
-      </Badge>
-    ) : null;
-  }
+  if (row.kind === 'worktree' || row.kind === 'branch') return null;
   if (row.kind === 'changes') {
     return (
       <>
@@ -151,7 +145,7 @@ function SummaryRowView({ row, onActivate }: { row: SummaryRow; onActivate?: () 
 }
 
 export function SummarySection({ port }: { port: number }) {
-  const { projectId, chatId, branchName, isWorktree, noProject } = useActiveIdentity();
+  const { projectId, chatId, branchName, isWorktree, noProject, worktreePath, projectPath } = useActiveIdentity();
   // `refetch` is the popover-write path: a BranchPopover write broadcasts no
   // `chat.updated`, so nothing else invalidates the displayed branch.
   const { branch, isDraftWorktree, refetch } = useDisplayBranch({
@@ -167,7 +161,8 @@ export function SummarySection({ port }: { port: number }) {
   const changes = useWorkingChanges({ port, projectId, chatId, noProject });
 
   const rows = deriveSummaryRows({
-    branch: { name: branch ?? null, isWorktree },
+    worktree: projectId ? { isWorktree, worktreePath, projectPath } : null,
+    branch: { name: branch ?? null },
     context: { percent, usedTokens: usage?.totalTokens, maxTokens: usage?.maxTokens },
     // PRs render in their own section now.
     prs: [],

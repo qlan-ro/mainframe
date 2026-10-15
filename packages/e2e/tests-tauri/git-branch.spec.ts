@@ -62,8 +62,9 @@
  *     spec still seeds a worktree via REST `enable-worktree`, because that is what
  *     makes the popover's git writes land in an isolated checkout (GitService
  *     resolves `getEffectivePath(ctx, projectId, chatId)` → chat.worktreePath)
- *     instead of the project root. A worktree session also earns the row's `wt`
- *     badge (`session-panel-summary-branch-wt`), asserted in the first test.
+ *     instead of the project root. The Session card's worktree row
+ *     (`session-panel-summary-worktree`) then names that worktree's directory,
+ *     asserted in the first test.
  *   • `onBranchChanged` is wired to `useDisplayBranch`'s own `refetch` (a popover
  *     write broadcasts no `chat.updated`, so nothing else would invalidate it), so
  *     the row DOES refresh after a checkout / create through the menu. That is
@@ -85,7 +86,7 @@
  * features/session-panel/SummarySection.tsx and
  * features/sessions/new-thread/WelcomeState.tsx):
  *   session-panel-summary-branch — the session panel's branch row / menu trigger
- *   session-panel-summary-branch-wt — its worktree badge
+ *   session-panel-summary-worktree — the row above it naming the worktree
  *   welcome-branch               — the draft welcome screen's branch pill / trigger
  *   sessions-welcome             — WelcomeState root (the draft empty state)
  *   git-branch-popover           — DropdownMenuContent root (name kept from the Popover era)
@@ -446,8 +447,8 @@ test.describe('§git-branch — session-panel branch popover', () => {
 
   test('the panel branch row opens the menu; branches lazy-load', async () => {
     const { page } = app;
-    // The row is the trigger AND the readout: a worktree session earns the badge.
-    await expect(page.getByTestId('session-panel-summary-branch-wt')).toBeVisible();
+    // A worktree session names its worktree directory above the branch row.
+    await expect(page.getByTestId('session-panel-summary-worktree')).toContainText('e2e-workspace');
 
     await openBranchPopover(page);
     await expect(page.getByTestId('git-branch-list')).toBeVisible();
