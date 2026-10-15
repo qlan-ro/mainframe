@@ -95,3 +95,49 @@ fn flattened_child_history_keeps_content_without_borrowing_parent_turn_context()
             .any(|b| json!(b)["text"] == "child done")
     );
 }
+#[test]
+fn reloaded_turns_without_visible_user_items_stay_in_separate_containers() {
+    let turns: Vec<ThreadReadTurn> = serde_json::from_value(json!([
+        {"id":"one","status":"completed","items":[
+            {"type":"userMessage","id":"u1","content":[{"type":"text","text":""}]},
+            {"type":"agentMessage","id":"a1","text":"Checking.","phase":"commentary"},
+            {"type":"commandExecution","id":"c1","command":"true","aggregatedOutput":"ok","status":"completed","exitCode":0},
+            {"type":"agentMessage","id":"a2","text":"Done.","phase":"final_answer"}]},
+        {"id":"two","status":"completed","items":[
+            {"type":"userMessage","id":"u2","content":[]},
+            {"type":"agentMessage","id":"b1","text":"Second turn.","phase":"final_answer"}]}
+    ]))
+    .unwrap();
+    let messages = convert_turns(&turns, "thread", &HashMap::new(), &HashMap::new());
+    assert!(
+        messages
+            .iter()
+            .all(|m| m.r#type != mainframe_types::chat::ChatMessageType::User)
+    );
+    let display = mainframe_display::display_pipeline::prepare_messages_for_client(&messages, None);
+    let containers: Vec<_> = display
+        .iter()
+        .map(|m| {
+            json!(m.content)
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|block| {
+                    block["text"]
+                        .as_str()
+                        .unwrap_or(block["type"].as_str().unwrap())
+                        .to_string()
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert_eq!(
+        containers,
+        [
+            vec!["Checking.", "tool_call", "Done."],
+            vec!["Second turn."]
+        ]
+    );
+    let result = &json!(display[0].content)[1]["result"];
+    assert_eq!(result["content"], "ok");
+}

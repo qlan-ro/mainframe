@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use mainframe_types::chat::{ChatMessage, MessageContent};
+use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 use mainframe_types::context::SkillFileEntry;
 use serde_json::Value;
 use tokio::fs::File;
@@ -101,6 +101,9 @@ pub(crate) use history_discovery::*;
 #[path = "history_paths.rs"]
 mod history_paths;
 pub(crate) use history_paths::*;
+#[path = "history_prompt_groups.rs"]
+mod history_prompt_groups;
+use history_prompt_groups::PromptGroups;
 
 #[derive(Default)]
 struct HistoryLoad {
@@ -110,9 +113,13 @@ struct HistoryLoad {
     seen_uuids: HashSet<String>,
     seen_api_message_ids: HashSet<String>,
     agent_id_to_parent_tool_use_id: HashMap<String, String>,
+    prompt_groups: PromptGroups,
 }
 impl HistoryLoad {
     fn entry(&mut self, entry: &Value, session_id: &str, is_subagent_file: bool) {
+        if !is_subagent_file {
+            self.prompt_groups.observe(entry, session_id);
+        }
         if self.filtered(entry, session_id, is_subagent_file) {
             return;
         }
@@ -156,9 +163,13 @@ impl HistoryLoad {
             return;
         }
         self.seen_uuids.insert(msg.id.clone());
+        if msg.r#type == ChatMessageType::Assistant {
+            self.prompt_groups.track(self.messages.len(), entry);
+        }
         self.messages.push(msg);
     }
     fn finish(mut self) -> Vec<ChatMessage> {
+        std::mem::take(&mut self.prompt_groups).apply(&mut self.messages);
         if !self.agent_tools.is_empty() {
             inject_agent_children(&mut self.messages, &self.agent_tools);
         }

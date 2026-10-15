@@ -15,6 +15,7 @@ use super::fold::{convert_single_message, fold_merge_group};
 use super::group::{FrozenTracker, Group};
 use crate::display_helpers::is_internal_user_message;
 use crate::message_grouping::{GroupingDecision, classify_message, is_assistant_or_tool_use};
+use crate::turn_boundary::OpenTurn;
 
 /// The result of one [`refold_range`] call.
 pub(crate) struct RefoldOutcome {
@@ -41,6 +42,7 @@ pub(crate) fn refold_range<'o>(
         frozen_display_ids,
         new_groups: Vec::new(),
         cur_start: None,
+        open_turn: OpenTurn::default(),
         pending_start: range.start,
         pending_duration: None,
         patched_existing: Vec::new(),
@@ -65,6 +67,8 @@ struct Walker<'a, 'o> {
     new_groups: Vec<Group>,
     /// Start of the currently open mergeable accumulator, if any.
     cur_start: Option<usize>,
+    /// Turn key of the open accumulator; a known change closes it.
+    open_turn: OpenTurn,
     /// Start of whatever group comes next — absorbs any leading
     /// filtered/duration-marker indices that didn't start a group of their
     /// own, so every group's `raw_range` stays gapless.
@@ -79,17 +83,24 @@ impl Walker<'_, '_> {
         if msg.r#type == ChatMessageType::User && is_internal_user_message(&msg.content) {
             return;
         }
-        // See the module doc: by the group-boundary invariant, an open
-        // accumulator is the only way `prev_mergeable` is ever true here.
-        let prev_mergeable = self.cur_start.is_some();
+        // A refold starts at a group start, which follows either an
+        // unmergeable group or a turn boundary, so an open accumulator that
+        // admits this message's turn is the only way to merge here.
+        let prev_mergeable = self.cur_start.is_some() && self.open_turn.admits(msg);
         match classify_message(msg, prev_mergeable) {
             GroupingDecision::DurationMarker(duration) => self.on_duration(duration, existing),
-            GroupingDecision::AttachResult | GroupingDecision::Merge => self.open_merge(idx),
+            GroupingDecision::AttachResult => self.open_merge(idx),
+            GroupingDecision::Merge => {
+                self.open_turn.observe(msg);
+                self.open_merge(idx);
+            }
             GroupingDecision::NewGroup if is_assistant_or_tool_use(msg.r#type) => {
-                // `prev_mergeable` was false, but this message itself can
-                // start a fresh mergeable run (the same case `group_messages`
-                // handles by pushing a new `GroupedMessage` that a later
-                // assistant/tool_use message can still merge into).
+                // This message starts a fresh mergeable run (the same case
+                // `group_messages` handles by pushing a new `GroupedMessage`
+                // that a later assistant/tool_use message can still merge
+                // into). A turn boundary first closes the run still open.
+                self.close_open_accumulator(idx);
+                self.open_turn = OpenTurn::starting_with(msg);
                 self.open_merge(idx);
             }
             GroupingDecision::NewGroup => {

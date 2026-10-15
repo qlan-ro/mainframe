@@ -1,10 +1,12 @@
 //! Merges consecutive assistant/tool_use messages into a single turn and
 //! attaches tool_result data so assistant-ui can show both invocation and
-//! result.
+//! result. A known provider turn change (`turn_boundary`) ends the run.
 
 use std::collections::{HashMap, HashSet};
 
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
+
+use crate::turn_boundary::OpenTurn;
 
 /// A `ChatMessage` plus the tool_result blocks attached during grouping, keyed
 /// by `toolUseId`.
@@ -31,7 +33,7 @@ fn turn_duration(msg: &ChatMessage) -> Option<serde_json::Value> {
 /// and the incremental projector's chunked fold apply one definition instead
 /// of two copies that can drift. `prev_mergeable` is whether the group
 /// currently being built is an assistant/tool_use run that can still absorb
-/// a merge or a tool result.
+/// a merge or a tool result, including its turn-boundary check.
 pub enum GroupingDecision {
     /// A `turnDurationMs` system marker — patches the nearest preceding
     /// assistant/tool_use group at any distance and creates no group.
@@ -62,12 +64,14 @@ pub(crate) fn classify_message(msg: &ChatMessage, prev_mergeable: bool) -> Group
 
 pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
     let mut result: Vec<GroupedMessage> = Vec::new();
+    let mut open_turn = OpenTurn::default();
 
     for mut msg in messages {
         super::presentation_grouping::initialize(&mut msg);
         let prev_mergeable = result
             .last()
-            .is_some_and(|prev| is_assistant_or_tool_use(prev.base.r#type));
+            .is_some_and(|prev| is_assistant_or_tool_use(prev.base.r#type))
+            && open_turn.admits(&msg);
 
         match classify_message(&msg, prev_mergeable) {
             GroupingDecision::DurationMarker(duration) => {
@@ -77,12 +81,14 @@ pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
                 attach_tool_result(result.last_mut(), &msg);
             }
             GroupingDecision::Merge => {
+                open_turn.observe(&msg);
                 if let Some(prev) = result.last_mut() {
                     super::presentation_grouping::append(&mut prev.base, &msg);
                     prev.base.content.extend(msg.content);
                 }
             }
             GroupingDecision::NewGroup => {
+                open_turn = OpenTurn::starting_with(&msg);
                 result.push(GroupedMessage {
                     base: msg,
                     tool_results: HashMap::new(),
