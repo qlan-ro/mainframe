@@ -1435,6 +1435,7 @@ dependencies = [
 name = "mainframe-adapter-codex"
 version = "0.0.0"
 dependencies = [
+ "base64",
  "chrono",
  "dirs",
  "mainframe-adapter-api",

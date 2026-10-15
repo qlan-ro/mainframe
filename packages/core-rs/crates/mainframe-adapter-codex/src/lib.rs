@@ -17,6 +17,7 @@
 pub mod adapter;
 pub mod agent_message_partial;
 pub mod approval_handler;
+pub(crate) mod chatgpt_subscription;
 pub(crate) mod collab_activity;
 pub(crate) mod collab_card;
 pub(crate) mod collab_identity;
@@ -64,6 +65,7 @@ mod thread_request;
 pub mod title_generator;
 pub mod transcript;
 pub mod turn_config;
+pub(crate) mod turn_error;
 pub(crate) mod turn_lifecycle;
 pub(crate) mod turn_model;
 pub mod types;
