@@ -20,6 +20,7 @@ import { useHost } from '@/lib/host';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
 import { LINK_MENU_ROWS, httpLinkHref, openInMainframe, useCopyHref, type LinkMenuRowKey } from './link-menu-actions';
+import { useLinkDragSelect } from './link-drag-select';
 
 const ROW_TEST_IDS: Record<LinkMenuRowKey, string> = {
   'open-in-app': 'chat-link-open-in-app',
@@ -36,16 +37,18 @@ export function LinkWithPreview({
   const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
   const menuStatus = statusFor('copy-link');
   const inAppHref = httpLinkHref(href);
+  const { onMouseDown, endedDrag } = useLinkDragSelect();
 
   const handleOpen = useCallback(
     (e?: React.MouseEvent) => {
       if (!href) return;
       e?.preventDefault();
+      if (e && endedDrag()) return;
       host.shell.openExternal(href).catch(() => {
         console.warn('[link-with-preview] openExternal failed', href);
       });
     },
-    [href, host],
+    [href, host, endedDrag],
   );
 
   const handleMenuCopy = onCopySelect('copy-link', copy);
@@ -66,7 +69,9 @@ export function LinkWithPreview({
     <Tooltip>
       <ContextMenu onOpenChange={handleOpenChange}>
         <TooltipTrigger asChild>
-          <ContextMenuTrigger asChild>
+          {/* select-text overrides the trigger primitive's select-none: WebKit drops a
+              user-select:none link from Cmd+C even while it is highlighted (#396). */}
+          <ContextMenuTrigger asChild className="select-text">
             <a
               className={cn(LINK_RULE_CLASS, 'hover:opacity-80 transition-opacity cursor-pointer', className)}
               href={href}
@@ -76,6 +81,9 @@ export function LinkWithPreview({
               // nested trigger's own onContextMenu with checkForDefaultPrevented,
               // so calling preventDefault here would also block THIS link's menu.
               onContextMenu={(e) => e.stopPropagation()}
+              // A drag starting here selects text instead of dragging the link (#396).
+              draggable={false}
+              onMouseDown={onMouseDown}
             />
           </ContextMenuTrigger>
         </TooltipTrigger>

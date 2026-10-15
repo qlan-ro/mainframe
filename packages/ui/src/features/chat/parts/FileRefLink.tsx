@@ -34,6 +34,7 @@ import { toFileRef } from '@/lib/files/file-ref';
 import type { FileHrefTarget } from '@/lib/files/file-href';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useOpenFile } from '../tools/chat-tool-context';
+import { useLinkDragSelect } from './link-drag-select';
 
 const LINK_CLASS =
   'aui-md-a inline-flex items-center gap-1 border-b border-primary/40 text-primary no-underline hover:opacity-80 transition-opacity cursor-pointer';
@@ -89,6 +90,7 @@ export function FileRefLink({ href, fileTarget, className, children, ...props }:
   const bases = useActiveBasesStore((s) => s.bases);
   const { openFile } = useOpenFile();
   const copyFeedback = useMenuCopyFeedback();
+  const { onMouseDown, endedDrag } = useLinkDragSelect();
 
   const ref = toFileRef(fileTarget.path, bases);
   const absolute = ref.absolute ?? ref.relative;
@@ -100,12 +102,15 @@ export function FileRefLink({ href, fileTarget, className, children, ...props }:
 
   const handleOpen = (e?: MouseEvent) => {
     e?.preventDefault();
+    if (e && endedDrag()) return;
     openFile(fileTarget.path, position);
   };
 
   return (
     <ContextMenu onOpenChange={copyFeedback.handleOpenChange}>
-      <ContextMenuTrigger asChild>
+      {/* select-text overrides the trigger primitive's select-none: WebKit drops a
+          user-select:none link from Cmd+C even while it is highlighted (#396). */}
+      <ContextMenuTrigger asChild className="select-text">
         <a
           {...props}
           href={href}
@@ -117,6 +122,9 @@ export function FileRefLink({ href, fileTarget, className, children, ...props }:
           // (see that component), and preventDefault here would suppress
           // THIS link's own menu too.
           onContextMenu={(e) => e.stopPropagation()}
+          // A drag starting here selects text instead of dragging the link (#396).
+          draggable={false}
+          onMouseDown={onMouseDown}
           className={cn(LINK_CLASS, className)}
         >
           <FileCode2 className="size-3 shrink-0" />
