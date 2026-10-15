@@ -28,6 +28,8 @@ impl IncrementalProjector {
 
         self.categories = input.categories.cloned();
         self.had_overlay = input.overlay.is_some();
+        self.durable_len = input.raw.len();
+        self.refresh_result_dependencies(input.raw, 0);
         self.initialized = true;
 
         let len = total_len(&self.groups);

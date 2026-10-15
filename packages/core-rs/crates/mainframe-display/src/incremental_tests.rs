@@ -10,3 +10,5 @@ mod random_sequence;
 mod scaling;
 #[path = "incremental_tests_smoke.rs"]
 mod smoke;
+#[path = "incremental_tests_turn_equivalence.rs"]
+mod turn_equivalence;

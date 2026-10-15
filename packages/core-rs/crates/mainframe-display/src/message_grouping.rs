@@ -1,10 +1,12 @@
 //! Merges consecutive assistant/tool_use messages into a single turn and
 //! attaches tool_result data so assistant-ui can show both invocation and
-//! result.
+//! result. A known provider turn change (`turn_boundary`) ends the run.
 
 use std::collections::{HashMap, HashSet};
 
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
+
+use crate::turn_boundary::OpenTurn;
 
 /// A `ChatMessage` plus the tool_result blocks attached during grouping, keyed
 /// by `toolUseId`.
@@ -31,12 +33,12 @@ fn turn_duration(msg: &ChatMessage) -> Option<serde_json::Value> {
 /// and the incremental projector's chunked fold apply one definition instead
 /// of two copies that can drift. `prev_mergeable` is whether the group
 /// currently being built is an assistant/tool_use run that can still absorb
-/// a merge or a tool result.
+/// a merge or a tool result, including its turn-boundary check.
 pub enum GroupingDecision {
     /// A `turnDurationMs` system marker — patches the nearest preceding
     /// assistant/tool_use group at any distance and creates no group.
     DurationMarker(serde_json::Value),
-    /// A tool_result whose blocks attach to the current mergeable group.
+    /// Unowned tool results retain their preceding-group fallback.
     AttachResult,
     /// An assistant/tool_use message that merges into the current group.
     Merge,
@@ -62,13 +64,24 @@ pub(crate) fn classify_message(msg: &ChatMessage, prev_mergeable: bool) -> Group
 
 pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
     let mut result: Vec<GroupedMessage> = Vec::new();
+    let mut open_turn = OpenTurn::default();
+    let mut tool_owners = HashMap::new();
 
     for mut msg in messages {
         super::presentation_grouping::initialize(&mut msg);
         let prev_mergeable = result
             .last()
-            .is_some_and(|prev| is_assistant_or_tool_use(prev.base.r#type));
+            .is_some_and(|prev| is_assistant_or_tool_use(prev.base.r#type))
+            && open_turn.admits(&msg);
 
+        if msg.r#type == ChatMessageType::ToolResult {
+            attach_owned_results(&mut result, &mut msg, &tool_owners);
+        }
+        register_tool_owners(
+            &msg,
+            &mut tool_owners,
+            result.len() - usize::from(prev_mergeable),
+        );
         match classify_message(&msg, prev_mergeable) {
             GroupingDecision::DurationMarker(duration) => {
                 patch_nearest_assistant_group(&mut result, duration);
@@ -77,12 +90,14 @@ pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
                 attach_tool_result(result.last_mut(), &msg);
             }
             GroupingDecision::Merge => {
+                open_turn.observe(&msg);
                 if let Some(prev) = result.last_mut() {
                     super::presentation_grouping::append(&mut prev.base, &msg);
                     prev.base.content.extend(msg.content);
                 }
             }
             GroupingDecision::NewGroup => {
+                open_turn = OpenTurn::starting_with(&msg);
                 result.push(GroupedMessage {
                     base: msg,
                     tool_results: HashMap::new(),
@@ -93,6 +108,35 @@ pub fn group_messages(messages: Vec<ChatMessage>) -> Vec<GroupedMessage> {
 
     dedupe_tool_use_ids(&mut result);
     result
+}
+
+fn register_tool_owners(msg: &ChatMessage, owners: &mut HashMap<String, usize>, owner: usize) {
+    if !is_assistant_or_tool_use(msg.r#type) {
+        return;
+    }
+    for block in &msg.content {
+        if let MessageContent::Node(MessageContentNode::ToolUse { id, .. }) = block {
+            owners.entry(id.clone()).or_insert(owner);
+        }
+    }
+}
+
+fn attach_owned_results(
+    groups: &mut [GroupedMessage],
+    msg: &mut ChatMessage,
+    owners: &HashMap<String, usize>,
+) {
+    msg.content.retain(|block| {
+        if let MessageContent::Node(MessageContentNode::ToolResult { tool_use_id, .. }) = block
+            && let Some(&owner) = owners.get(tool_use_id)
+        {
+            groups[owner]
+                .tool_results
+                .insert(tool_use_id.clone(), block.clone());
+            return false;
+        }
+        true
+    });
 }
 
 fn patch_nearest_assistant_group(result: &mut [GroupedMessage], duration: serde_json::Value) {

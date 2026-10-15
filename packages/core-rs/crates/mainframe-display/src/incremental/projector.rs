@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 
 mod rebuild;
+mod result_dependencies;
 
 use crate::{
     DisplayDelta, DisplayProjector, DisplaySnapshot, ProjectionInput, ProjectionStats, RawChange,
@@ -43,6 +44,8 @@ pub struct IncrementalProjector {
     scope_before: Vec<SubjectScope>,
     categories: Option<ToolCategories>,
     had_overlay: bool,
+    durable_len: usize,
+    result_dependencies: std::collections::BTreeMap<usize, usize>,
     initialized: bool,
     snapshot: DisplaySnapshot,
     stats: ProjectionStats,
@@ -58,6 +61,8 @@ impl Default for IncrementalProjector {
             scope_before: Vec::new(),
             categories: None,
             had_overlay: false,
+            durable_len: 0,
+            result_dependencies: Default::default(),
             initialized: false,
             snapshot: DisplaySnapshot::new(Vec::new()),
             stats: ProjectionStats::default(),
@@ -112,8 +117,16 @@ impl IncrementalProjector {
     ) -> DisplayDelta {
         let had_append = entries.iter().any(|c| matches!(c, RawChange::Appended));
         let overlay_now = overlay.is_some();
-        let base_r = baseline_rewind_point(&self.groups, had_append, overlay_now, self.had_overlay);
+        let base_r = baseline_rewind_point(
+            &self.groups,
+            had_append,
+            overlay_now,
+            self.had_overlay,
+            self.durable_len,
+        );
         let r = apply_structural_entries(&self.groups, entries, base_r);
+
+        let r = self.result_rewind(raw, entries, r);
 
         let mut suffix_rebuilds = 0usize;
         let mut patched: Vec<usize> = Vec::new();
@@ -131,6 +144,7 @@ impl IncrementalProjector {
 
         self.categories = categories.cloned();
         self.had_overlay = overlay_now;
+        self.durable_len = raw.len();
 
         let len = total_len(&self.groups);
         let changes = self.collect_changes(r, &patched);
@@ -204,6 +218,8 @@ impl IncrementalProjector {
         renumber_from(&mut self.groups, r);
         rebuild_tool_owner(&mut self.tool_owner, &self.groups, r);
         rebuild_display_owner(&mut self.display_owner, &self.groups, r);
+
+        self.refresh_result_dependencies(raw, start);
 
         (groups_rebuilt, outcome.raw_folded)
     }

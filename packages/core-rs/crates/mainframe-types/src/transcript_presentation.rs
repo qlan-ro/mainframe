@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 
 pub const PRESENTATION_SOURCES_KEY: &str = "presentationSources";
 pub const PRESENTATION_CONTEXT_KEY: &str = "transcriptPresentation";
+/// Raw-message metadata naming the provider turn (or prompt group) a message
+/// belongs to. Display grouping never merges two assistant messages whose
+/// known keys differ; the key is stripped from display output.
+pub const TURN_GROUP_KEY: &str = "turnGroup";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

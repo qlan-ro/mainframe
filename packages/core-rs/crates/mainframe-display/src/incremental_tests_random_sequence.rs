@@ -35,11 +35,25 @@ fn a_seeded_random_mutation_sequence_stays_equivalent_to_the_full_pipeline() {
     let mut tool_seq = 0u64;
 
     for _ in 0..150 {
-        run_one_step(&mut h, &mut rng, &mut tool_seq);
+        run_one_step(&mut h, &mut rng, &mut tool_seq, false);
     }
 }
 
-fn run_one_step(h: &mut Harness, rng: &mut Xorshift64, tool_seq: &mut u64) {
+/// The same mix with assistant messages spread over a few turn groups (and
+/// some with unknown provenance), so turn boundaries land at random points
+/// relative to appends, tool results, duration markers and nested patches.
+#[test]
+fn a_seeded_random_sequence_with_turn_groups_stays_equivalent() {
+    let mut rng = Xorshift64::new(0x0394_7e11_b0a2_d0e5);
+    let mut h = Harness::with_categories(task_categories());
+    let mut tool_seq = 0u64;
+
+    for _ in 0..200 {
+        run_one_step(&mut h, &mut rng, &mut tool_seq, true);
+    }
+}
+
+fn run_one_step(h: &mut Harness, rng: &mut Xorshift64, tool_seq: &mut u64, keyed: bool) {
     let choice = rng.below(6);
     let id = h.next_id();
     match choice {
@@ -51,10 +65,12 @@ fn run_one_step(h: &mut Harness, rng: &mut Xorshift64, tool_seq: &mut u64) {
             *tool_seq += 1;
             let tool_id = format!("tu{tool_seq}");
             h.raw.push(assistant(&id, vec![tool_use(&tool_id, "Bash")]));
+            assign_turn_group(h, rng, keyed);
             step_appended(h);
         }
         2 => {
             h.raw.push(assistant(&id, vec![text("partial")]));
+            assign_turn_group(h, rng, keyed);
             step_appended(h);
         }
         3 => append_tool_result_for_last_tool_use(h, tool_seq),
@@ -63,6 +79,19 @@ fn run_one_step(h: &mut Harness, rng: &mut Xorshift64, tool_seq: &mut u64) {
             h.raw.push(duration_marker(&id, 1000 + *tool_seq));
             step_appended(h);
         }
+    }
+}
+
+fn assign_turn_group(h: &mut Harness, rng: &mut Xorshift64, keyed: bool) {
+    let group = if keyed { rng.below(4) } else { 0 };
+    if group == 0 {
+        return;
+    }
+    if let Some(last) = h.raw.last_mut() {
+        last.metadata.get_or_insert_default().insert(
+            mainframe_types::transcript_presentation::TURN_GROUP_KEY.into(),
+            serde_json::json!(format!("p{group}")),
+        );
     }
 }
 

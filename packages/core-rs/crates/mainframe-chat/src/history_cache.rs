@@ -37,10 +37,12 @@ use std::time::SystemTime;
 use mainframe_types::chat::ChatMessage;
 use serde::{Deserialize, Serialize};
 
-/// Bumped whenever the on-disk shape of [`Snapshot`] changes incompatibly —
-/// included in the fingerprint so an old snapshot from a prior format is
-/// always a miss rather than a failed (or, worse, silently wrong) decode.
-const FORMAT_VERSION: u32 = 1;
+/// Bumped whenever the on-disk shape of [`Snapshot`] changes incompatibly,
+/// or history conversion adds data the stored messages lack (2: Claude
+/// prompt-group `turnGroup` metadata) — included in the fingerprint so an
+/// old snapshot is always a miss rather than a failed (or, worse, silently
+/// wrong) decode.
+const FORMAT_VERSION: u32 = 2;
 
 /// How many chats' snapshots the cache directory keeps. Bounds disk use for
 /// installs with a long chat history; newest-by-mtime wins a prune.

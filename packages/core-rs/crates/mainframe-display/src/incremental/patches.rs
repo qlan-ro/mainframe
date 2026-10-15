@@ -67,19 +67,30 @@ pub(crate) fn try_patch_nested(
         return NestedPatchOutcome::FallBack(g);
     }
     let frozen = FrozenTracker::new(tool_owner, g);
+    let results = groups[g]
+        .late_results
+        .iter()
+        .map(|(id, block)| (id.as_str(), (usize::MAX, block)))
+        .collect();
     let (new_display, claimed) = fold_merge_group(
         raw,
         groups[g].raw_range.clone(),
         groups[g].duration_override.as_ref(),
         categories,
         decoders,
+        &results,
         &frozen,
     );
 
     if new_display.is_some() != groups[g].display.is_some() {
         return NestedPatchOutcome::FallBack(g);
     }
-    if owned_after(tool_owner, g, &claimed) {
+    if claimed.len() != groups[g].claimed_tool_ids.len()
+        || claimed
+            .iter()
+            .any(|id| !groups[g].claimed_tool_ids.contains(id))
+        || owned_after(tool_owner, g, &claimed)
+    {
         return NestedPatchOutcome::FallBack(g);
     }
     if task_registrations_changed(groups[g].display.as_ref(), new_display.as_ref()) {

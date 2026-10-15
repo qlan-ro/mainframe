@@ -138,7 +138,7 @@ fn convert_assistant_message(
         sources = super::presentation_display::regroup(&content, &grouped, sources);
         content = grouped;
     }
-    let mut metadata = msg.base.metadata.clone();
+    let mut metadata = crate::turn_boundary::strip_turn_key(msg.base.metadata.clone());
     if !sources.is_empty() {
         super::presentation_grouping::store(metadata.get_or_insert_default(), sources);
     }

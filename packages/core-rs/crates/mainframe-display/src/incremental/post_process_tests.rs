@@ -21,6 +21,7 @@ fn task_group(ordinal_tag: &str, items: Vec<TaskProgressItem>) -> Group {
         }),
         ordinal: Some(0),
         claimed_tool_ids: Vec::new(),
+        late_results: Default::default(),
         duration_override: None,
     }
 }
