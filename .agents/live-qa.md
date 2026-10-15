@@ -93,28 +93,41 @@ import sqlite3
 import sys
 import uuid
 
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
 run = Path(os.environ["MF_QA_RUN_DIR"])
-assert run.is_absolute()
+require(run.is_absolute(),
+        "Run directory must be absolute")
 run = run.resolve(strict=True)
 root = Path("/tmp/live-qa").resolve(strict=True)
-assert root in run.parents, "Use a dedicated /tmp/live-qa run directory"
+require(root in run.parents,
+        "Use a dedicated /tmp/live-qa run directory")
 db = (run / "data/mainframe.db").resolve(strict=True)
-assert db.is_file() and db.parent == run / "data", "Unexpected database path"
+require(db.is_file() and db.parent == run / "data",
+        "Unexpected database path")
 marker = run / "project-fixture.json"
 action = sys.argv[1]
-assert action in ("seed", "restore")
+require(action in ("seed", "restore"),
+        "Expected seed or restore")
 if action == "seed":
     project = Path(os.environ["MF_QA_PROJECT_PATH"])
-    assert project.is_absolute() and project.is_dir()
+    require(project.is_absolute() and project.is_dir(),
+            "Project path must be an existing absolute directory")
     fixture = {"id": "qa-" + uuid.uuid4().hex,
                "path": str(project.resolve(strict=True))}
     with marker.open("x") as output:
         json.dump(fixture, output)
 else:
     fixture = json.loads(marker.read_text())
-assert fixture["id"].startswith("qa-")
+require(fixture["id"].startswith("qa-"),
+        "Invalid fixture ID")
 with sqlite3.connect(db.as_uri() + "?mode=rw", uri=True) as conn:
     conn.execute("PRAGMA foreign_keys=ON")
+    require(conn.execute("PRAGMA foreign_keys").fetchone() == (1,),
+            "Foreign-key enforcement is disabled")
     conn.execute("BEGIN IMMEDIATE")
     if action == "seed":
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -123,30 +136,36 @@ with sqlite3.connect(db.as_uri() + "?mode=rw", uri=True) as conn:
                      (fixture["id"], fixture["id"], fixture["path"], now, now))
         row = conn.execute("SELECT id, path FROM projects WHERE id=?",
                            (fixture["id"],)).fetchone()
-        assert row == (fixture["id"], fixture["path"])
+        require(row == (fixture["id"], fixture["path"]),
+                "Seed readback mismatch")
         print(json.dumps(fixture))
     else:
         row = conn.execute("SELECT name, path FROM projects WHERE id=?",
                            (fixture["id"],)).fetchone()
-        assert row is None or row == (fixture["id"], fixture["path"])
+        require(row is None or row == (fixture["id"], fixture["path"]),
+                "Project ownership mismatch")
         chat_ids = set(sys.argv[2:])
         actual = {r[0] for r in conn.execute(
             "SELECT id FROM chats WHERE project_id=?", (fixture["id"],))}
-        assert actual <= chat_ids, "Unrecorded chats: inspect before restoring"
+        require(actual <= chat_ids,
+                "Unrecorded chats: inspect before restoring")
         for chat_id in actual:
             conn.execute("DELETE FROM chats WHERE id=? AND project_id=?",
                          (chat_id, fixture["id"]))
-            assert not conn.execute("SELECT 1 FROM chat_native_sessions WHERE chat_id=?",
-                                    (chat_id,)).fetchone()
+            require(not conn.execute("SELECT 1 FROM chat_native_sessions WHERE chat_id=?",
+                                    (chat_id,)).fetchone(),
+                    "Native-session rows remain")
         conn.execute("DELETE FROM projects WHERE id=?", (fixture["id"],))
-        assert not conn.execute("SELECT 1 FROM projects WHERE id=?",
-                                (fixture["id"],)).fetchone()
-    assert not conn.execute("PRAGMA foreign_key_check").fetchall()
+        require(not conn.execute("SELECT 1 FROM projects WHERE id=?",
+                                (fixture["id"],)).fetchone(),
+                "Project row remains")
+    require(not conn.execute("PRAGMA foreign_key_check").fetchall(),
+            "Foreign-key violations remain")
 ```
 
 Keep the marker even if insertion fails; inspect the database before retrying.
-Do not use `INSERT OR REPLACE`, reuse another run's marker, or run Python with `-O`,
-which disables the safety assertions. The recipe refuses an absent database and
+Do not use `INSERT OR REPLACE` or reuse another run's marker. Guards raise explicit
+exceptions, including under `python -O`. The recipe refuses an absent database and
 paths outside the isolated run, including symlinked data directories.
 
 Verify the marker's ID and canonical path in `GET /api/projects` on the recorded
@@ -166,7 +185,14 @@ omitting IDs if none were imported. The transaction refuses unrecorded chats,
 deletes only this fixture's rows and checks native-session cleanup and foreign keys.
 Other dependencies cause rollback and require inspection. Keep the script and
 marker with the report; do not delete the project directory or native transcript.
-Restart through the harness with the same run directory if further review is needed.
+Unless teardown was requested, restart the same isolated target through the harness
+with the same `MF_QA_RUN_DIR` and checkout, and verify readiness for interactive review.
+Record the checkout HEAD and build identity again; after HEAD or source changes,
+rebuild before review rather than reusing the earlier binary. Dev targets build on
+`up`; packaged QA needs the rebuild described under Targets and launch.
+After restoration, close and verify closure of the run's named automation browser
+unless the user requested it stay open. An explicit teardown request leaves the
+target stopped; otherwise leave the restarted app server or native app available.
 
 ## UI targeting
 
