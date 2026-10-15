@@ -25,19 +25,11 @@ export interface SessionMentionCandidate {
  */
 export function sessionResolutionCandidates(args: {
   sessions: readonly SessionItem[];
-  projectId: string | null;
   activeChatId: string | null;
 }): SessionMentionCandidate[] {
-  const { sessions, projectId, activeChatId } = args;
-  if (projectId == null) return [];
+  const { sessions, activeChatId } = args;
   return sessions
-    .filter(
-      (s) =>
-        s.remoteId != null &&
-        s.remoteId !== activeChatId &&
-        s.custom.projectId === projectId &&
-        s.custom.vendorSessionId != null,
-    )
+    .filter((s) => s.remoteId != null && s.remoteId !== activeChatId && s.custom.vendorSessionId != null)
     .map((s) => ({ chatId: s.remoteId!, title: s.title, updatedAt: s.custom.updatedAt }));
 }
 
@@ -46,14 +38,19 @@ export function buildSessionMentionItems(args: {
   projectId: string | null;
   activeChatId: string | null;
   resolutions: ReadonlyMap<string, TranscriptResolution>;
+  projectNames: ReadonlyMap<string, string>;
 }): { items: TriggerItem[]; pathByChatId: Map<string, string> } {
-  const { sessions, projectId, activeChatId, resolutions } = args;
-  if (projectId == null) return { items: [], pathByChatId: new Map() };
+  const { sessions, projectId, activeChatId, resolutions, projectNames } = args;
 
   const offerable = sessions
-    .filter((s) => s.remoteId != null && s.remoteId !== activeChatId && s.custom.projectId === projectId)
+    .filter((s) => s.remoteId != null && s.remoteId !== activeChatId)
     .filter((s) => resolutions.get(s.remoteId!)?.state === 'resolved')
-    .sort((a, b) => b.custom.updatedAt - a.custom.updatedAt || a.remoteId!.localeCompare(b.remoteId!));
+    .sort(
+      (a, b) =>
+        Number(b.custom.projectId === projectId) - Number(a.custom.projectId === projectId) ||
+        b.custom.updatedAt - a.custom.updatedAt ||
+        a.remoteId!.localeCompare(b.remoteId!),
+    );
 
   const labels = disambiguateLabels(
     offerable.map((s) => ({ chatId: s.remoteId!, label: sanitizeReferenceLabel(s.title) })),
@@ -63,7 +60,17 @@ export function buildSessionMentionItems(args: {
   const items: TriggerItem[] = offerable.map((s) => {
     const resolution = resolutions.get(s.remoteId!);
     if (resolution?.state === 'resolved') pathByChatId.set(s.remoteId!, resolution.path);
-    return { id: s.remoteId!, type: 'session', label: labels.get(s.remoteId!)! };
+    const projectName = s.custom.noProject
+      ? 'No project'
+      : (projectNames.get(s.custom.projectId) ?? s.custom.projectId);
+    const provider =
+      s.custom.adapterId === 'claude' ? 'Claude' : s.custom.adapterId === 'codex' ? 'Codex' : s.custom.adapterId;
+    return {
+      id: s.remoteId!,
+      type: 'session',
+      label: labels.get(s.remoteId!)!,
+      description: `${projectName} · ${provider}`,
+    };
   });
 
   return { items, pathByChatId };

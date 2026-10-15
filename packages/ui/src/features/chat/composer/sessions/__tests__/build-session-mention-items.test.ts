@@ -9,9 +9,19 @@
 import { describe, it, expect } from 'vitest';
 import type { TranscriptResolution } from '@qlan-ro/mainframe-types';
 import type { SessionItem, SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { buildSessionMentionItems } from '../build-session-mention-items';
+import { buildSessionMentionItems as buildItems } from '../build-session-mention-items';
 
 const PROJECT = 'proj-1';
+const PROJECT_NAMES = new Map([
+  [PROJECT, 'Current project'],
+  ['proj-2', 'Other project'],
+]);
+
+function buildSessionMentionItems(
+  args: Omit<Parameters<typeof buildItems>[0], 'projectNames'>,
+): ReturnType<typeof buildItems> {
+  return buildItems({ ...args, projectNames: PROJECT_NAMES });
+}
 
 function session(overrides: { remoteId: string; title?: string; custom?: Partial<SessionCustom> }): SessionItem {
   return {
@@ -87,19 +97,32 @@ describe('buildSessionMentionItems — exclusions', () => {
     expect(items.map((i) => i.id)).toEqual(['other']);
   });
 
-  it('excludes a session in another project', () => {
+  it('includes resolved sessions across projects and providers, with their source', () => {
     const sessions = [
       session({ remoteId: 'mine', title: 'Mine' }),
-      session({ remoteId: 'theirs', title: 'Theirs', custom: { projectId: 'proj-2' } }),
+      session({
+        remoteId: 'theirs',
+        title: 'Theirs',
+        custom: { projectId: 'proj-2', adapterId: 'codex', updatedAt: 2000 },
+      }),
     ];
     const resolutions = new Map([
       ['mine', resolved('mine', '/t/mine.jsonl')],
       ['theirs', resolved('theirs', '/t/theirs.jsonl')],
     ]);
 
-    const { items } = buildSessionMentionItems({ sessions, projectId: PROJECT, activeChatId: null, resolutions });
+    const { items, pathByChatId } = buildSessionMentionItems({
+      sessions,
+      projectId: PROJECT,
+      activeChatId: null,
+      resolutions,
+    });
 
-    expect(items.map((i) => i.id)).toEqual(['mine']);
+    expect(items).toEqual([
+      { id: 'mine', type: 'session', label: 'Mine', description: 'Current project · Claude' },
+      { id: 'theirs', type: 'session', label: 'Theirs', description: 'Other project · Codex' },
+    ]);
+    expect(pathByChatId.get('theirs')).toBe('/t/theirs.jsonl');
   });
 
   it('excludes a session resolved unavailable/never-started', () => {
@@ -142,7 +165,7 @@ describe('buildSessionMentionItems — exclusions', () => {
     expect(items).toEqual([]);
   });
 
-  it('returns an empty result when projectId is null', () => {
+  it('offers resolved sessions from a chat with no project', () => {
     const sessions = [session({ remoteId: 'c1', title: 'C1' })];
     const resolutions = new Map([['c1', resolved('c1', '/t/c1.jsonl')]]);
 
@@ -153,8 +176,8 @@ describe('buildSessionMentionItems — exclusions', () => {
       resolutions,
     });
 
-    expect(items).toEqual([]);
-    expect(pathByChatId).toEqual(new Map());
+    expect(items).toEqual([{ id: 'c1', type: 'session', label: 'C1', description: 'Current project · Claude' }]);
+    expect(pathByChatId).toEqual(new Map([['c1', '/t/c1.jsonl']]));
   });
 });
 
@@ -177,8 +200,8 @@ describe('buildSessionMentionItems — label disambiguation', () => {
     });
 
     expect(items).toEqual([
-      { id: 'c1', type: 'session', label: 'Fix foo handling' },
-      { id: 'c2', type: 'session', label: 'Fix foo handling (2)' },
+      { id: 'c1', type: 'session', label: 'Fix foo handling', description: 'Current project · Claude' },
+      { id: 'c2', type: 'session', label: 'Fix foo handling (2)', description: 'Current project · Claude' },
     ]);
     expect(pathByChatId).toEqual(
       new Map([
@@ -201,8 +224,8 @@ describe('buildSessionMentionItems — label disambiguation', () => {
     const { items } = buildSessionMentionItems({ sessions, projectId: PROJECT, activeChatId: null, resolutions });
 
     expect(items).toEqual([
-      { id: 'c1', type: 'session', label: 'Fix foo handling' },
-      { id: 'c2', type: 'session', label: 'Fix foo handling (2)' },
+      { id: 'c1', type: 'session', label: 'Fix foo handling', description: 'Current project · Claude' },
+      { id: 'c2', type: 'session', label: 'Fix foo handling (2)', description: 'Current project · Claude' },
     ]);
   });
 
@@ -212,17 +235,19 @@ describe('buildSessionMentionItems — label disambiguation', () => {
 
     const { items } = buildSessionMentionItems({ sessions, projectId: PROJECT, activeChatId: null, resolutions });
 
-    expect(items).toEqual([{ id: 'c1', type: 'session', label: 'Untitled session' }]);
+    expect(items).toEqual([
+      { id: 'c1', type: 'session', label: 'Untitled session', description: 'Current project · Claude' },
+    ]);
   });
 });
 
-describe('buildSessionMentionItems — no description field', () => {
-  it('carries no description on any item', () => {
+describe('buildSessionMentionItems — source description', () => {
+  it('identifies the project and provider', () => {
     const sessions = [session({ remoteId: 'c1', title: 'Has a title' })];
     const resolutions = new Map([['c1', resolved('c1', '/t/c1.jsonl')]]);
 
     const { items } = buildSessionMentionItems({ sessions, projectId: PROJECT, activeChatId: null, resolutions });
 
-    expect(items[0]).not.toHaveProperty('description');
+    expect(items[0]?.description).toBe('Current project · Claude');
   });
 });

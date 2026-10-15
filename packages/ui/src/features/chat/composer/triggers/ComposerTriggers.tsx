@@ -4,7 +4,7 @@
  * Wires our own trigger engine (`@/components/trigger-engine`) into the
  * composer:
  *   `/` — skills picker (sync, preloaded via SkillsProvider)
- *   `@` — desktop-parity mention picker (agents + project files fuzzy;
+ *   `@` — desktop-parity mention picker (agents + sessions + project files fuzzy;
  *         `@dir/` project-tree + `@/`,`@~` filesystem drill-down) via an
  *         async-over-sync cache.
  *

@@ -137,3 +137,31 @@ async fn search_files_returns_matching_files_in_envelope() {
         .collect();
     assert!(names.contains(&"hello.txt"));
 }
+
+#[tokio::test]
+async fn search_files_prefers_names_before_matching_parent_paths() {
+    let (server, id, dir) = project_server().await;
+    std::fs::create_dir_all(dir.path().join(".agents/skills/azure-devops-cli")).unwrap();
+    std::fs::write(
+        dir.path().join(".agents/skills/azure-devops-cli/SKILL.md"),
+        "skill",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("azure-devops.md"), "agent").unwrap();
+
+    let (status, body) = get(
+        &server,
+        &format!("/api/projects/{id}/search/files?q=azure-devops"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let paths: Vec<&str> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["path"].as_str().unwrap())
+        .collect();
+    assert_eq!(paths[0], "azure-devops.md");
+    assert!(paths.contains(&".agents/skills/azure-devops-cli/SKILL.md"));
+}

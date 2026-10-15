@@ -11,7 +11,13 @@ import type { ResolveTranscriptsResponse, TranscriptResolution } from '@qlan-ro/
 import { apiBase, request } from './http';
 
 export function resolveSessionTranscripts(port: number, chatIds: string[]): Promise<TranscriptResolution[]> {
-  return request<ResolveTranscriptsResponse>('POST', `${apiBase(port)}/api/session-transcripts/resolve`, {
-    chatIds,
-  }).then((r) => r.resolutions);
+  const batches: Promise<ResolveTranscriptsResponse>[] = [];
+  for (let start = 0; start < chatIds.length; start += 500) {
+    batches.push(
+      request<ResolveTranscriptsResponse>('POST', `${apiBase(port)}/api/session-transcripts/resolve`, {
+        chatIds: chatIds.slice(start, start + 500),
+      }),
+    );
+  }
+  return Promise.all(batches).then((responses) => responses.flatMap((response) => response.resolutions));
 }

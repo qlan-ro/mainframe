@@ -38,6 +38,7 @@ function makeEntry(overrides: {
   title?: string;
   vendorSessionId?: string | null;
   projectId?: string;
+  adapterId?: string;
   updatedAt?: number;
 }) {
   return {
@@ -47,7 +48,7 @@ function makeEntry(overrides: {
     status: 'regular',
     custom: {
       projectId: overrides.projectId ?? PROJECT,
-      adapterId: 'claude',
+      adapterId: overrides.adapterId ?? 'claude',
       vendorSessionId: overrides.vendorSessionId === null ? undefined : (overrides.vendorSessionId ?? 'sess'),
       tags: [],
       pinned: false,
@@ -71,12 +72,30 @@ describe('useSessionMentionSource — request on mount', () => {
     __threadItems = [
       makeEntry({ remoteId: 'c1', title: 'One' }),
       makeEntry({ remoteId: 'c2', title: 'Two', vendorSessionId: null }),
+      makeEntry({ remoteId: 'c3', title: 'Other project', projectId: 'proj-2', adapterId: 'codex' }),
     ];
-    resolveSessionTranscriptsSpy.mockResolvedValue([{ chatId: 'c1', state: 'resolved', path: '/t/c1.jsonl' }]);
+    resolveSessionTranscriptsSpy.mockResolvedValue([
+      { chatId: 'c1', state: 'resolved', path: '/t/c1.jsonl' },
+      { chatId: 'c3', state: 'resolved', path: '/t/c3.jsonl' },
+    ]);
 
-    renderHook(() => useSessionMentionSource({ port: 31415, projectId: PROJECT, activeChatId: null }));
+    const { result } = renderHook(() =>
+      useSessionMentionSource({ port: 31415, projectId: PROJECT, activeChatId: null }),
+    );
 
     await waitFor(() => expect(resolveSessionTranscriptsSpy).toHaveBeenCalledTimes(1));
+    expect(resolveSessionTranscriptsSpy).toHaveBeenCalledWith(31415, ['c1', 'c3']);
+    await waitFor(() => expect(result.current.items.map((item) => item.id)).toEqual(['c1', 'c3']));
+    expect(result.current.pathByChatId.get('c3')).toBe('/t/c3.jsonl');
+  });
+
+  it('offers resolved chats even when the active draft has no project', async () => {
+    __threadItems = [makeEntry({ remoteId: 'c1', title: 'Project chat' })];
+    resolveSessionTranscriptsSpy.mockResolvedValue([{ chatId: 'c1', state: 'resolved', path: '/t/c1.jsonl' }]);
+
+    const { result } = renderHook(() => useSessionMentionSource({ port: 31415, projectId: null, activeChatId: null }));
+
+    await waitFor(() => expect(result.current.items.map((item) => item.id)).toEqual(['c1']));
     expect(resolveSessionTranscriptsSpy).toHaveBeenCalledWith(31415, ['c1']);
   });
 });
