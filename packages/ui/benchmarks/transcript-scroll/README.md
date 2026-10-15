@@ -10,6 +10,8 @@ node packages/ui/benchmarks/transcript-scroll/run.mjs --table --check
 node packages/ui/benchmarks/transcript-scroll/run.mjs --table --webkit --check
 node packages/ui/benchmarks/transcript-scroll/run.mjs --windows --compact --complex --check
 node packages/ui/benchmarks/transcript-scroll/run.mjs --windows --compact --complex --webkit --check
+node packages/ui/benchmarks/transcript-scroll/run.mjs --windows --compact --check
+node packages/ui/benchmarks/transcript-scroll/run.mjs --windows --compact --webkit --check
 ```
 
 Each invocation runs three samples using a temporary Vite server on port 5198.
@@ -35,22 +37,22 @@ screenshots to an existing directory.
 Chromium measurements were identical across three samples unless noted.
 Each fix was measured before proceeding to the next.
 
-| Change | Measurement | Before | After |
-| --- | --- | --- | --- |
-| Remove disclosure scroll lock and delayed offset reset | Accepted movement from a 100 px scroll | 0 px | 100 px |
-| Recompute following state when disclosure interaction ends | Jump on next 100 px content growth, isolated hook | 700 px | 0 px |
-| Observe viewport dimensions | Bottom gap after reducing height by 150 px, isolated hook | 150 px | 0 px |
-| Skip resize animation frames while reading history | Scheduled frames for 30 growth events | 30 | 0 |
-| Disable duplicate assistant-ui automatic following | Jump on next growth after the hook fixes | 100 px | 0 px |
-| Observe composer dimensions | Bottom gap after 100 px footer growth | 100 px | 0 px |
-| Recognize arrival at the previous bottom before a delayed scroll event | Bottom gap when new content arrives immediately after jump-to-bottom | 100 px in 2/3 Chromium runs | 0 px in 3/3 runs |
-| Give Markdown tables fixed columns | Largest existing-column width change after adding a row | 296.8125 px | 0 px |
-| Ignore zero dimensions while hidden | Reading-position jump after hide/show | 17,748 px | 0 px |
-| Keep bottom-follow during automatic turn folding | Bottom gap switching short to long compact chat | 13,210 px | 0 px |
-| Ignore duplicate layout scroll notifications | Live window-resize bottom gap | 504 px | 0 px across 40 transitions |
-| Move size containment off the scroller | WebKit hide/show offset loss | 300 px | 0 px |
-| Preserve visible text during width changes | WebKit complex-transcript text shift | 190.125 px | 0.125 px |
-| Same table fix | Existing-row height change | 32.5 px | 0.5 px Chromium, 0 px WebKit |
+| Change                                                                 | Measurement                                                          | Before                      | After                        |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------- | ---------------------------- |
+| Remove disclosure scroll lock and delayed offset reset                 | Accepted movement from a 100 px scroll                               | 0 px                        | 100 px                       |
+| Recompute following state when disclosure interaction ends             | Jump on next 100 px content growth, isolated hook                    | 700 px                      | 0 px                         |
+| Observe viewport dimensions                                            | Bottom gap after reducing height by 150 px, isolated hook            | 150 px                      | 0 px                         |
+| Skip resize animation frames while reading history                     | Scheduled frames for 30 growth events                                | 30                          | 0                            |
+| Disable duplicate assistant-ui automatic following                     | Jump on next growth after the hook fixes                             | 100 px                      | 0 px                         |
+| Observe composer dimensions                                            | Bottom gap after 100 px footer growth                                | 100 px                      | 0 px                         |
+| Recognize arrival at the previous bottom before a delayed scroll event | Bottom gap when new content arrives immediately after jump-to-bottom | 100 px in 2/3 Chromium runs | 0 px in 3/3 runs             |
+| Give Markdown tables fixed columns                                     | Largest existing-column width change after adding a row              | 296.8125 px                 | 0 px                         |
+| Ignore zero dimensions while hidden                                    | Reading-position jump after hide/show                                | 17,748 px                   | 0 px                         |
+| Keep bottom-follow during automatic turn folding                       | Bottom gap switching short to long compact chat                      | 13,210 px                   | 0 px                         |
+| Ignore duplicate layout scroll notifications                           | Live window-resize bottom gap                                        | 504 px                      | 0 px across 40 transitions   |
+| Move size containment off the scroller                                 | WebKit hide/show offset loss                                         | 300 px                      | 0 px                         |
+| Preserve visible text during width changes                             | WebKit complex-transcript text shift                                 | 190.125 px                  | 0.125 px                     |
+| Same table fix                                                         | Existing-row height change                                           | 32.5 px                     | 0.5 px Chromium, 0 px WebKit |
 
 The table fixture reproduces the column redistribution visible in the supplied
 recording. It appends a row with a long evidence cell through the GFM parser and
@@ -72,6 +74,18 @@ original controller already handled that case in the combined viewport.
 The focused UI suite passed 343 tests across 53 files. UI typecheck passed after
 rebuilding the shared types package. The repeatable browser checks complement
 the unit tests because jsdom cannot establish layout or scroll behavior.
+
+## Follow-up measurements, 2026-10-15
+
+Both failures were WebKit-only, so the Chromium checks passed against them.
+
+| Change                                                                           | Measurement                                                                                     | Before    | After |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | --------- | ----- |
+| Treat a following scroll event with a changed height and no user input as layout | WebKit bottom gap when a shrink's clamp is reported after the content regrew (`lateClampGapPx`) | 480 px    | 0 px  |
+| Reset the pin before child layout effects on a session switch                    | WebKit compact switch after scrolling up (`longSwitchGapPx`, `wheelSwitchGapPx`)                | 13,210 px | 0 px  |
+
+Wheel, touch, scroll keys and scrollbar drags still stop following while content
+streams, and a programmatic jump such as find-in-chat still stops following.
 
 ## Long and nested transcripts
 

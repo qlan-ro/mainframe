@@ -61,7 +61,14 @@ async function measureSwitch(page) {
   await page.locator('#switch-long').click();
   await ready(page);
   const longSwitchGapPx = (await geometry(page)).gap;
-  return { shortGapPx, switchGapPx, longSwitchGapPx };
+  const box = await page.locator('#viewport').boundingBox();
+  await page.mouse.move(box.x + 100, box.y + 100);
+  await page.mouse.wheel(0, -1500);
+  await page.waitForTimeout(400);
+  await page.locator('#switch-long').click();
+  await ready(page);
+  const wheelSwitchGapPx = (await geometry(page)).gap;
+  return { shortGapPx, switchGapPx, longSwitchGapPx, wheelSwitchGapPx };
 }
 
 async function measureVisibility(page) {

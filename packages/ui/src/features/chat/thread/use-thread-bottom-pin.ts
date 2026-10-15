@@ -8,13 +8,37 @@ function createPinState() {
     bottom: Infinity,
     top: Infinity,
     locks: 0,
+    generation: 0,
+    userScrollUntil: 0,
+    dragging: false,
     frame: null as number | null,
     observer: null as ResizeObserver | null,
     footer: null as HTMLDivElement | null,
     removeScroll: null as (() => void) | null,
   };
 }
-function trackPosition(element: HTMLDivElement, state: ReturnType<typeof createPinState>, followGrowth = true) {
+type PinState = ReturnType<typeof createPinState>;
+
+function resetPin(state: PinState) {
+  state.pinned = true;
+  state.anchor = null;
+  state.bottom = Infinity;
+  state.top = Infinity;
+  state.locks = 0;
+  state.generation++;
+  state.userScrollUntil = 0;
+}
+
+function scheduleFollow(viewportElement: React.RefObject<HTMLDivElement | null>, state: PinState) {
+  if (state.frame !== null || state.locks || !state.pinned) return;
+  state.frame = requestAnimationFrame(() => {
+    state.frame = null;
+    const viewport = viewportElement.current;
+    if (viewport && state.pinned && !state.locks) viewport.scrollTop = viewport.scrollHeight;
+  });
+}
+
+function trackPosition(element: HTMLDivElement, state: PinState, followGrowth = true) {
   if (element.clientHeight === 0) return;
   const bottom = element.scrollHeight - element.clientHeight;
   // Content can grow before the final scroll-to-bottom event arrives.
@@ -27,15 +51,60 @@ function trackPosition(element: HTMLDivElement, state: ReturnType<typeof createP
   if (state.pinned) state.anchor = null;
 }
 
-function trackReadingPosition(element: HTMLDivElement, state: ReturnType<typeof createPinState>, followGrowth = true) {
+function trackReadingPosition(element: HTMLDivElement, state: PinState, followGrowth = true) {
   trackPosition(element, state, followGrowth);
   if (element.clientHeight && !state.pinned) state.anchor = captureReadingAnchor(element, state.anchor);
 }
 
-function usePinObservers(
+/** Marks wheel, touch, scroll-key and scrollbar-drag input so their scroll events may unpin. */
+function trackUserScroll(element: HTMLDivElement, state: PinState) {
+  const mark = (event: Event) => {
+    if (event.type === 'keydown' && (event.target as Element).closest('input, textarea, [contenteditable="true"]'))
+      return;
+    state.userScrollUntil = performance.now() + 300;
+  };
+  // Only the scrollbar itself targets the viewport; content clicks target content.
+  const startDrag = (event: PointerEvent) => {
+    if (event.target === element) state.dragging = true;
+  };
+  const endDrag = () => {
+    state.dragging = false;
+  };
+  element.addEventListener('wheel', mark, { passive: true });
+  element.addEventListener('touchmove', mark, { passive: true });
+  element.addEventListener('keydown', mark);
+  element.addEventListener('pointerdown', startDrag);
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+  return () => {
+    element.removeEventListener('wheel', mark);
+    element.removeEventListener('touchmove', mark);
+    element.removeEventListener('keydown', mark);
+    element.removeEventListener('pointerdown', startDrag);
+    window.removeEventListener('pointerup', endDrag);
+    window.removeEventListener('pointercancel', endDrag);
+  };
+}
+
+function trackScroll(
+  element: HTMLDivElement,
   viewportElement: React.RefObject<HTMLDivElement | null>,
-  state: React.RefObject<ReturnType<typeof createPinState>>,
+  state: PinState,
 ) {
+  const bottom = element.scrollHeight - element.clientHeight;
+  const userScrolling = state.dragging || performance.now() < state.userScrollUntil;
+  if (state.pinned && !userScrolling && element.clientHeight && bottom !== state.bottom) {
+    // Layout moved the offset, not the reader: WebKit can deliver a shrink's
+    // clamp after the content has grown again, which reads as scrolling up.
+    state.bottom = bottom;
+    state.top = element.scrollTop;
+    if (bottom - element.scrollTop > 2) scheduleFollow(viewportElement, state);
+    return;
+  }
+  trackReadingPosition(element, state);
+}
+
+function usePinObservers(viewportElement: React.RefObject<HTMLDivElement | null>, state: React.RefObject<PinState>) {
   const viewportRef: RefCallback<HTMLDivElement> = useCallback(
     (element) => {
       state.current.removeScroll?.();
@@ -44,11 +113,15 @@ function usePinObservers(
       if (!element) return;
       state.current.observer?.observe(element);
       const track = () => {
-        if (!state.current.locks) trackReadingPosition(element, state.current);
+        if (!state.current.locks) trackScroll(element, viewportElement, state.current);
       };
+      const stopUserScrollTracking = trackUserScroll(element, state.current);
       track();
       element.addEventListener('scroll', track, { passive: true });
-      state.current.removeScroll = () => element.removeEventListener('scroll', track);
+      state.current.removeScroll = () => {
+        element.removeEventListener('scroll', track);
+        stopUserScrollTracking();
+      };
     },
     [state, viewportElement],
   );
@@ -64,12 +137,7 @@ function usePinObservers(
           state.current.anchor = restoreReadingAnchor(viewport, state.current.anchor);
           trackPosition(viewport, state.current);
         }
-        if (state.current.frame !== null || state.current.locks || !state.current.pinned) return;
-        state.current.frame = requestAnimationFrame(() => {
-          state.current.frame = null;
-          const viewport = viewportElement.current;
-          if (viewport && state.current.pinned && !state.current.locks) viewport.scrollTop = viewport.scrollHeight;
-        });
+        scheduleFollow(viewportElement, state.current);
       });
       state.current.observer.observe(element);
       if (viewportElement.current) state.current.observer.observe(viewportElement.current);
@@ -80,7 +148,7 @@ function usePinObservers(
   return { viewportRef, contentRef };
 }
 
-function useFooterObserver(state: React.RefObject<ReturnType<typeof createPinState>>) {
+function useFooterObserver(state: React.RefObject<PinState>) {
   return useCallback(
     (element: HTMLDivElement | null) => {
       if (state.current.footer) state.current.observer?.unobserve(state.current.footer);
@@ -94,17 +162,25 @@ function useFooterObserver(state: React.RefObject<ReturnType<typeof createPinSta
 export function useThreadBottomPin(threadId: string | null) {
   const viewportElement = useRef<HTMLDivElement | null>(null);
   const state = useRef(createPinState());
+  const pinnedThread = useRef(threadId);
+  if (pinnedThread.current !== threadId) {
+    // Reset before children's layout effects: compact auto-folding asks
+    // isFollowing() there, ahead of this hook's own layout effect.
+    pinnedThread.current = threadId;
+    resetPin(state.current);
+  }
   const refs = usePinObservers(viewportElement, state);
   const footerRef = useFooterObserver(state);
   const isFollowing = useCallback(() => state.current.pinned && state.current.locks === 0, []);
   const beginInteraction = useCallback(() => {
     state.current.anchor = null;
     state.current.locks++;
+    const generation = state.current.generation;
     if (state.current.frame !== null) cancelAnimationFrame(state.current.frame);
     state.current.frame = null;
     let released = false;
     return () => {
-      if (!released) {
+      if (!released && generation === state.current.generation) {
         released = true;
         state.current.locks--;
         const viewport = viewportElement.current;
@@ -113,8 +189,6 @@ export function useThreadBottomPin(threadId: string | null) {
     };
   }, []);
   useLayoutEffect(() => {
-    state.current.anchor = null;
-    state.current.pinned = true;
     const viewport = viewportElement.current;
     if (viewport) viewport.scrollTop = viewport.scrollHeight;
   }, [threadId]);

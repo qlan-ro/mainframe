@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { useThreadBottomPin } from '../use-thread-bottom-pin';
+import type { TranscriptScrollController } from '../transcript-scroll-context';
 
 type ResizeCallback = ResizeObserverCallback;
 
@@ -278,4 +280,63 @@ it('keeps following through duplicate layout scroll events before the resize fra
     notifyResize();
   });
   expect(viewport.element.scrollTop).toBe(1_100);
+});
+
+it('keeps following when a shrink clamp is reported after the content regrew', () => {
+  const viewport = createViewport();
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
+  act(() => {
+    result.current.viewportRef(viewport.element);
+    result.current.contentRef(document.createElement('div'));
+    // WebKit delivers the clamp from the shrink only after the next growth.
+    viewport.resize(800);
+    viewport.resize(1_200);
+    viewport.element.dispatchEvent(new Event('scroll'));
+    flushFrame();
+  });
+  expect(viewport.element.scrollTop).toBe(1_100);
+  expect(result.current.isFollowing()).toBe(true);
+});
+
+it('stops following when the user scrolls up while content grows', () => {
+  const viewport = createViewport();
+  const { result } = renderHook(() => useThreadBottomPin('chat-1'));
+  act(() => {
+    result.current.viewportRef(viewport.element);
+    result.current.contentRef(document.createElement('div'));
+    viewport.element.dispatchEvent(new WheelEvent('wheel', { deltaY: -300 }));
+    viewport.resize(1_200);
+    viewport.scrollTo(600);
+    notifyResize();
+  });
+  expect(viewport.element.scrollTop).toBe(600);
+  expect(result.current.isFollowing()).toBe(false);
+});
+
+it('reports following to child layout effects on the commit that switches sessions', () => {
+  const viewport = createViewport();
+  const seen: boolean[] = [];
+  let controller: ReturnType<typeof useThreadBottomPin> | null = null;
+  function Child({ threadId, scroll }: { threadId: string; scroll: TranscriptScrollController }) {
+    useLayoutEffect(() => {
+      seen.push(scroll.isFollowing());
+    }, [threadId, scroll]);
+    return null;
+  }
+  function Thread({ threadId }: { threadId: string }) {
+    const pin = useThreadBottomPin(threadId);
+    controller = pin;
+    return <Child threadId={threadId} scroll={pin} />;
+  }
+  const { rerender } = render(<Thread threadId="chat-1" />);
+  act(() => {
+    controller!.viewportRef(viewport.element);
+    controller!.contentRef(document.createElement('div'));
+    viewport.scrollTo(250);
+  });
+  const staleRelease = controller!.beginInteraction();
+  rerender(<Thread threadId="chat-2" />);
+  expect(seen[seen.length - 1]).toBe(true);
+  staleRelease();
+  expect(controller!.isFollowing()).toBe(true);
 });
