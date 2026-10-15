@@ -36,7 +36,8 @@ export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   return (
     <div
       className={cn(
-        'flex items-center justify-between',
+        // select-none: a selection spanning the block must not copy the language label or "Copy".
+        'flex select-none items-center justify-between',
         'mt-3 bg-muted border border-border rounded-t-md',
         'px-3 py-1.5',
       )}
