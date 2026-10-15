@@ -81,91 +81,12 @@ processes and endpoints still exist after the launcher returns to your execution
 Set `MF_QA_PROJECT_PATH` to an existing directory. For native transcript checks,
 use the transcript's original canonical project path, which may differ from the
 checkout being tested. Seeding registers this path; it does not copy or edit it.
-Save this as `$MF_QA_RUN_DIR/project-fixture.py` and run
-`python3 "$MF_QA_RUN_DIR/project-fixture.py" seed` with both variables exported:
-
-```python
-import datetime
-import json
-import os
-from pathlib import Path
-import sqlite3
-import sys
-import uuid
-
-def require(condition, message):
-    if not condition:
-        raise RuntimeError(message)
-
-
-run = Path(os.environ["MF_QA_RUN_DIR"])
-require(run.is_absolute(),
-        "Run directory must be absolute")
-run = run.resolve(strict=True)
-root = Path("/tmp/live-qa").resolve(strict=True)
-require(root in run.parents,
-        "Use a dedicated /tmp/live-qa run directory")
-db = (run / "data/mainframe.db").resolve(strict=True)
-require(db.is_file() and db.parent == run / "data",
-        "Unexpected database path")
-marker = run / "project-fixture.json"
-action = sys.argv[1]
-require(action in ("seed", "restore"),
-        "Expected seed or restore")
-if action == "seed":
-    project = Path(os.environ["MF_QA_PROJECT_PATH"])
-    require(project.is_absolute() and project.is_dir(),
-            "Project path must be an existing absolute directory")
-    fixture = {"id": "qa-" + uuid.uuid4().hex,
-               "path": str(project.resolve(strict=True))}
-    with marker.open("x") as output:
-        json.dump(fixture, output)
-else:
-    fixture = json.loads(marker.read_text())
-require(fixture["id"].startswith("qa-"),
-        "Invalid fixture ID")
-with sqlite3.connect(db.as_uri() + "?mode=rw", uri=True) as conn:
-    conn.execute("PRAGMA foreign_keys=ON")
-    require(conn.execute("PRAGMA foreign_keys").fetchone() == (1,),
-            "Foreign-key enforcement is disabled")
-    conn.execute("BEGIN IMMEDIATE")
-    if action == "seed":
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        conn.execute("INSERT INTO projects "
-                     "(id, name, path, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?)",
-                     (fixture["id"], fixture["id"], fixture["path"], now, now))
-        row = conn.execute("SELECT id, path FROM projects WHERE id=?",
-                           (fixture["id"],)).fetchone()
-        require(row == (fixture["id"], fixture["path"]),
-                "Seed readback mismatch")
-        print(json.dumps(fixture))
-    else:
-        row = conn.execute("SELECT name, path FROM projects WHERE id=?",
-                           (fixture["id"],)).fetchone()
-        require(row is None or row == (fixture["id"], fixture["path"]),
-                "Project ownership mismatch")
-        chat_ids = set(sys.argv[2:])
-        actual = {r[0] for r in conn.execute(
-            "SELECT id FROM chats WHERE project_id=?", (fixture["id"],))}
-        require(actual <= chat_ids,
-                "Unrecorded chats: inspect before restoring")
-        for chat_id in actual:
-            conn.execute("DELETE FROM chats WHERE id=? AND project_id=?",
-                         (chat_id, fixture["id"]))
-            require(not conn.execute("SELECT 1 FROM chat_native_sessions WHERE chat_id=?",
-                                    (chat_id,)).fetchone(),
-                    "Native-session rows remain")
-        conn.execute("DELETE FROM projects WHERE id=?", (fixture["id"],))
-        require(not conn.execute("SELECT 1 FROM projects WHERE id=?",
-                                (fixture["id"],)).fetchone(),
-                "Project row remains")
-    require(not conn.execute("PRAGMA foreign_key_check").fetchall(),
-            "Foreign-key violations remain")
-```
+From the repository checkout, run `python3 .agents/seed-qa-project.py seed`
+with both variables exported. The helper writes its unique ID and canonical path
+to `$MF_QA_RUN_DIR/project-fixture.json` and prints them after the insert commits.
 
 Keep the marker even if insertion fails; inspect the database before retrying.
-Do not use `INSERT OR REPLACE` or reuse another run's marker. Guards raise explicit
-exceptions, including under `python -O`. The recipe refuses an absent database and
+Do not reuse another run's marker. The helper refuses an absent database and
 paths outside the isolated run, including symlinked data directories.
 
 Verify the marker's ID and canonical path in `GET /api/projects` on the recorded
@@ -180,11 +101,11 @@ rows manually. Check `GET /api/chats/{id}/messages` and the intended UI state.
 
 For restoration, finish evidence capture, stop the run-owned target with the
 explicit recorded ports described above, and verify the daemon has exited. Run
-`python3 "$MF_QA_RUN_DIR/project-fixture.py" restore <recorded-chat-id> ...`,
+`python3 .agents/seed-qa-project.py restore <recorded-chat-id> ...`,
 omitting IDs if none were imported. The transaction refuses unrecorded chats,
 deletes only this fixture's rows and checks native-session cleanup and foreign keys.
-Other dependencies cause rollback and require inspection. Keep the script and
-marker with the report; do not delete the project directory or native transcript.
+Other dependencies cause rollback and require inspection. Keep the marker with
+the report; do not delete the project directory or native transcript.
 Unless teardown was requested, restart the same isolated target through the harness
 with the same `MF_QA_RUN_DIR` and checkout, and verify readiness for interactive review.
 Record the checkout HEAD and build identity again; after HEAD or source changes,
