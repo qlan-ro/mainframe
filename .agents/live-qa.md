@@ -71,49 +71,22 @@ Killing a Tauri daemon port may also terminate its parent app; it is not a daemo
 
 ### Seed a project in an isolated database
 
-Launch with `MF_QA_RUN_DIR` set to a unique absolute directory under `/tmp/live-qa`
-and wait for harness readiness. Confirm its printed `DATA_DIR` is that run's `data`
-directory. The daemon must create and migrate `mainframe.db` before seeding.
-Use a Rust toolchain meeting `packages/core-rs/Cargo.toml`'s `rust-version`.
-The browser launcher prints process IDs and uses `nohup`; verify the recorded
-processes and endpoints still exist after the launcher returns to your execution host.
+For transcript QA, register the project directly in the isolated run's SQLite
+database instead of creating it through the UI. Start the harness first so the
+daemon creates and migrates the database. Use the `DATA_DIR` printed by that run,
+not the normal app database, and record a unique fixture ID for cleanup.
 
-Set `MF_QA_PROJECT_PATH` to an existing directory. For native transcript checks,
-use the transcript's original canonical project path, which may differ from the
-checkout being tested. Seeding registers this path; it does not copy or edit it.
-From the repository checkout, run `python3 .agents/seed-qa-project.py seed`
-with both variables exported. The helper writes its unique ID and canonical path
-to `$MF_QA_RUN_DIR/project-fixture.json` and prints them after the insert commits.
+Use the native transcript's original canonical project path. It may differ from
+the checkout being tested; registration does not copy or change that directory.
 
-Keep the marker even if insertion fails; inspect the database before retrying.
-Do not reuse another run's marker. The helper refuses an absent database and
-paths outside the isolated run, including symlinked data directories.
+Confirm the project through `GET /api/projects` and reload the project list.
+Direct database writes do not refresh app caches. Import existing native sessions
+through `POST /api/projects/{projectId}/external-sessions/import` rather than
+inserting chat records yourself. Record the imported chat IDs.
 
-Verify the marker's ID and canonical path in `GET /api/projects` on the recorded
-daemon port. This route reads SQLite; direct writes do not emit app events or
-refresh daemon caches. Reload the project list before selecting the fixture.
-For an existing native session, call
-`POST /api/projects/{projectId}/external-sessions/import` with
-`{"sessionId":"<native-session-id>","adapterId":"claude"}`.
-Record the returned `data.id` in the run checkpoint before further actions.
-The API creates the chat, native-session and segment records; do not seed those
-rows manually. Check `GET /api/chats/{id}/messages` and the intended UI state.
-
-For restoration, finish evidence capture, stop the run-owned target with the
-explicit recorded ports described above, and verify the daemon has exited. Run
-`python3 .agents/seed-qa-project.py restore <recorded-chat-id> ...`,
-omitting IDs if none were imported. The transaction refuses unrecorded chats,
-deletes only this fixture's rows and checks native-session cleanup and foreign keys.
-Other dependencies cause rollback and require inspection. Keep the marker with
-the report; do not delete the project directory or native transcript.
-Unless teardown was requested, restart the same isolated target through the harness
-with the same `MF_QA_RUN_DIR` and checkout, and verify readiness for interactive review.
-Record the checkout HEAD and build identity again; after HEAD or source changes,
-rebuild before review rather than reusing the earlier binary. Dev targets build on
-`up`; packaged QA needs the rebuild described under Targets and launch.
-After restoration, close and verify closure of the run's named automation browser
-unless the user requested it stay open. An explicit teardown request leaves the
-target stopped; otherwise leave the restarted app server or native app available.
+After capturing evidence, stop the run-owned daemon, remove only the fixture and
+its imported chats, and restart the same isolated target unless ending the run.
+Leave the project directory and native transcript untouched.
 
 ## UI targeting
 
