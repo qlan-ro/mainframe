@@ -2,7 +2,9 @@
  * SummarySection — unit tests.
  *
  * Behaviors covered:
- *  - the branch row shows the live branch, and the `wt` badge only for worktrees
+ *  - the worktree row names the worktree directory, or "Main checkout" outside
+ *    one, and is absent for a session with no project
+ *  - the branch row shows the live branch
  *  - the context row shows the percentage and carries the token detail as its
  *    accessible description; it disappears when the percentage is unknown
  *  - the changes row shows the file count and the +/− totals, and clicking it
@@ -35,11 +37,14 @@ let mockIdentity = {
   noProject: false,
 };
 let mockIsWorktree = false;
+let mockWorktreePath: string | undefined;
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({
     projectName: 'repo',
     branchName: 'feat/persisted',
     isWorktree: mockIsWorktree,
+    worktreePath: mockWorktreePath,
+    projectPath: '/Users/me/repo',
     ...mockIdentity,
   }),
 }));
@@ -117,6 +122,7 @@ const render = (ui: Parameters<typeof rtlRender>[0]) => rtlRender(ui, { wrapper:
 beforeEach(() => {
   mockIdentity = { projectId: 'proj-1', chatId: 'chat-9', noProject: false };
   mockIsWorktree = false;
+  mockWorktreePath = undefined;
   mockBranch = 'feat/session-panel';
   mockIsDraftWorktree = false;
   mockPercent = 42;
@@ -133,19 +139,41 @@ beforeEach(() => {
   useWorkingChangesSpy.mockReset();
 });
 
+describe('SummarySection — worktree', () => {
+  it('says "Main checkout" outside a worktree, with the project path in its tooltip', async () => {
+    const user = userEvent.setup();
+    render(<SummarySection port={31415} />);
+    const row = screen.getByTestId('session-panel-summary-worktree');
+    expect(row).toHaveTextContent('Main checkout');
+
+    await user.hover(row);
+    expect((await screen.findAllByRole('tooltip'))[0]).toHaveTextContent('Not in a worktree · /Users/me/repo');
+  });
+
+  it('names a worktree session by its directory', () => {
+    mockIsWorktree = true;
+    mockWorktreePath = '/Users/me/repo/.worktrees/fix-login';
+    render(<SummarySection port={31415} />);
+    expect(screen.getByTestId('session-panel-summary-worktree')).toHaveTextContent('fix-login');
+  });
+
+  it('leads the section, above the branch', () => {
+    render(<SummarySection port={31415} />);
+    const ids = screen.getAllByTestId(/^session-panel-summary-/).map((el) => el.dataset.testid);
+    expect(ids.slice(0, 2)).toEqual(['session-panel-summary-worktree', 'session-panel-summary-branch']);
+  });
+
+  it('omits the row for a session with no project', () => {
+    mockIdentity = { projectId: undefined, chatId: 'chat-9', noProject: true };
+    render(<SummarySection port={31415} />);
+    expect(screen.queryByTestId('session-panel-summary-worktree')).toBeNull();
+  });
+});
+
 describe('SummarySection — branch', () => {
   it('shows the live branch name', () => {
     render(<SummarySection port={31415} />);
     expect(screen.getByTestId('session-panel-summary-branch')).toHaveTextContent('feat/session-panel');
-  });
-
-  it('badges a worktree session, and only a worktree session', () => {
-    render(<SummarySection port={31415} />);
-    expect(screen.queryByTestId('session-panel-summary-branch-wt')).toBeNull();
-
-    mockIsWorktree = true;
-    render(<SummarySection port={31415} />);
-    expect(screen.getAllByTestId('session-panel-summary-branch-wt')[0]).toBeInTheDocument();
   });
 
   it('omits the row when no branch resolves', () => {

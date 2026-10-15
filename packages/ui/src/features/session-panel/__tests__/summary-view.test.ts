@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { deriveSummaryRows, type SummaryInput } from '../summary-view';
 
 const input = (over: Partial<SummaryInput> = {}): SummaryInput => ({
-  branch: { name: null, isWorktree: false },
+  worktree: null,
+  branch: { name: null },
   context: { percent: null },
   prs: [],
   changes: null,
@@ -14,45 +15,72 @@ describe('deriveSummaryRows', () => {
     expect(deriveSummaryRows(input())).toEqual([]);
   });
 
-  it('emits the rows in Branch · Context · PR · Changes order', () => {
+  it('emits the rows in Worktree · Branch · Context · PR · Changes order', () => {
     const rows = deriveSummaryRows(
       input({
-        branch: { name: 'main', isWorktree: false },
+        worktree: { isWorktree: false },
+        branch: { name: 'main' },
         context: { percent: 42 },
         prs: [{ url: 'https://github.com/a/b/pull/7', owner: 'a', repo: 'b', number: 7, source: 'created' }],
         changes: { fileCount: 3, additions: 12, deletions: 4 },
       }),
     );
-    expect(rows.map((r) => r.kind)).toEqual(['branch', 'context', 'pr', 'changes']);
+    expect(rows.map((r) => r.kind)).toEqual(['worktree', 'branch', 'context', 'pr', 'changes']);
+  });
+});
+
+describe('deriveSummaryRows — worktree', () => {
+  it('names the main checkout, with the project path in its tooltip', () => {
+    const [row] = deriveSummaryRows(input({ worktree: { isWorktree: false, projectPath: '/Users/me/repo' } }));
+    expect(row).toEqual({
+      kind: 'worktree',
+      label: 'Worktree',
+      value: 'Main checkout',
+      tooltip: 'Not in a worktree · /Users/me/repo',
+    });
+  });
+
+  it('names a worktree by its directory, with the full path in its tooltip', () => {
+    const [row] = deriveSummaryRows(
+      input({ worktree: { isWorktree: true, worktreePath: '/Users/me/repo/.worktrees/fix-login/' } }),
+    );
+    expect(row).toEqual({
+      kind: 'worktree',
+      label: 'Worktree',
+      value: 'fix-login',
+      tooltip: '/Users/me/repo/.worktrees/fix-login/',
+    });
+  });
+
+  it('names a Windows worktree path by its directory', () => {
+    const [row] = deriveSummaryRows(input({ worktree: { isWorktree: true, worktreePath: 'C:\\repo\\wt\\fix-login' } }));
+    expect(row?.value).toBe('fix-login');
+  });
+
+  it('says "New worktree" for a draft whose worktree is created on first send', () => {
+    const [row] = deriveSummaryRows(input({ worktree: { isWorktree: true } }));
+    expect(row).toEqual({
+      kind: 'worktree',
+      label: 'Worktree',
+      value: 'New worktree',
+      tooltip: 'Created on first send',
+    });
+  });
+
+  it('omits the row for a session with no project', () => {
+    expect(deriveSummaryRows(input({ worktree: null }))).toEqual([]);
   });
 });
 
 describe('deriveSummaryRows — branch', () => {
-  it('carries the branch name and no worktree marker on a plain checkout', () => {
-    const [row] = deriveSummaryRows(input({ branch: { name: 'main', isWorktree: false } }));
-    expect(row).toEqual({
-      kind: 'branch',
-      label: 'Branch',
-      value: 'main',
-      tooltip: 'main',
-      isWorktree: false,
-    });
-  });
-
-  it('marks a worktree session', () => {
-    const [row] = deriveSummaryRows(input({ branch: { name: 'design/panel', isWorktree: true } }));
-    expect(row).toEqual({
-      kind: 'branch',
-      label: 'Branch',
-      value: 'design/panel',
-      tooltip: 'design/panel · worktree',
-      isWorktree: true,
-    });
+  it('carries the branch name', () => {
+    const [row] = deriveSummaryRows(input({ branch: { name: 'main' } }));
+    expect(row).toEqual({ kind: 'branch', label: 'Branch', value: 'main', tooltip: 'main' });
   });
 
   it('omits the row when the branch is unknown', () => {
-    expect(deriveSummaryRows(input({ branch: { name: null, isWorktree: true } }))).toEqual([]);
-    expect(deriveSummaryRows(input({ branch: { name: '', isWorktree: false } }))).toEqual([]);
+    expect(deriveSummaryRows(input({ branch: { name: null } }))).toEqual([]);
+    expect(deriveSummaryRows(input({ branch: { name: '' } }))).toEqual([]);
   });
 });
 
