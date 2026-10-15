@@ -4,11 +4,15 @@ use mainframe_adapter_api::ContextFiles;
 use mainframe_types::context::{ContextFile, ContextFileSource};
 
 pub(crate) fn collect_codex_context_files(project_path: &str) -> ContextFiles {
-    let home = std::env::var_os("CODEX_HOME")
+    collect(Path::new(project_path), codex_home().as_deref())
+}
+
+/// The Codex CLI's home: `$CODEX_HOME` when set, else `~/.codex`.
+pub(crate) fn codex_home() -> Option<PathBuf> {
+    std::env::var_os("CODEX_HOME")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")));
-    collect(Path::new(project_path), home.as_deref())
+        .or_else(|| dirs::home_dir().map(|home| home.join(".codex")))
 }
 
 fn instruction_file(dir: &Path, source: ContextFileSource) -> Option<ContextFile> {

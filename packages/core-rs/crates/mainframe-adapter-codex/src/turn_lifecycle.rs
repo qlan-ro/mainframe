@@ -11,6 +11,7 @@ use crate::collab_card;
 use crate::context_window::known_context_window;
 use crate::event_mapper::{Owner, resolve_owner};
 use crate::session_state::{CodexSessionState, CurrentTurnPlan, LastUsage};
+use crate::turn_error::explain_turn_error;
 use crate::types::{
     PlanDeltaParams, TokenUsageUpdatedParams, TurnCompleted, TurnCompletedParams, TurnStartedParams,
 };
@@ -178,7 +179,7 @@ fn emit_parent_turn_result(
             None
         },
         is_error: Some(is_error),
-        result: turn.error.map(|e| e.message),
+        result: turn.error.map(|e| explain_turn_error(e.message)),
     });
     state.last_usage = None;
 }
