@@ -29,6 +29,8 @@ pub(crate) struct Group {
     /// dedup. Doubles as the id -> owning-group index for an O(1) timing
     /// patch (built by the caller from `claimed_tool_ids` + group index).
     pub(crate) claimed_tool_ids: Vec<String>,
+    // Preserve cross-group completions when a nested update reconverts only this group.
+    pub(crate) late_results: HashMap<String, mainframe_types::chat::MessageContent>,
     /// The `turnDurationMs` value a later system marker patched onto this
     /// group, if any — reapplied when this group is re-converted in place.
     pub(crate) duration_override: Option<Value>,
@@ -151,6 +153,7 @@ mod tests {
             display: None,
             ordinal: None,
             claimed_tool_ids: Vec::new(),
+            late_results: Default::default(),
             duration_override: None,
         }
     }

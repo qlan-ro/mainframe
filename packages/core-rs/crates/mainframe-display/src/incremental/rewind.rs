@@ -9,18 +9,30 @@ use crate::task_subject_backfill::SubjectScope;
 
 /// The baseline rewind point before any `Structural`/fallback lowers it
 /// further: the last group when anything was appended, or when the overlay
-/// is present now or was present last call. `groups.len()` (a past-the-end
+/// is present now or was present last call. An overlay-only group also rewinds
+/// its durable predecessor so appended unknown-turn messages can rejoin it.
+/// `groups.len()` (a past-the-end
 /// sentinel) means "no rewind at all".
 pub(crate) fn baseline_rewind_point(
     groups: &[Group],
     had_append: bool,
     overlay_now: bool,
     had_overlay_before: bool,
+    durable_len: usize,
 ) -> usize {
     if !(had_append || overlay_now || had_overlay_before) {
         return groups.len();
     }
-    groups.len().saturating_sub(1)
+    let last = groups.len().saturating_sub(1);
+    if had_overlay_before
+        && groups
+            .last()
+            .is_some_and(|g| g.raw_range.start >= durable_len)
+    {
+        last.saturating_sub(1)
+    } else {
+        last
+    }
 }
 
 /// Lower `r` for every `Structural(from)` entry: the group containing
@@ -115,6 +127,7 @@ mod tests {
             display: None,
             ordinal: None,
             claimed_tool_ids: Vec::new(),
+            late_results: Default::default(),
             duration_override: None,
         }
     }
@@ -122,19 +135,19 @@ mod tests {
     #[test]
     fn no_signal_means_no_rewind() {
         let groups = vec![group(true), group(false)];
-        assert_eq!(baseline_rewind_point(&groups, false, false, false), 2);
+        assert_eq!(baseline_rewind_point(&groups, false, false, false, 1), 2);
     }
 
     #[test]
     fn append_rewinds_to_the_last_group() {
         let groups = vec![group(true), group(false)];
-        assert_eq!(baseline_rewind_point(&groups, true, false, false), 1);
+        assert_eq!(baseline_rewind_point(&groups, true, false, false, 1), 1);
     }
 
     #[test]
     fn overlay_now_or_before_rewinds_to_the_last_group() {
         let groups = vec![group(true)];
-        assert_eq!(baseline_rewind_point(&groups, false, true, false), 0);
-        assert_eq!(baseline_rewind_point(&groups, false, false, true), 0);
+        assert_eq!(baseline_rewind_point(&groups, false, true, false, 1), 0);
+        assert_eq!(baseline_rewind_point(&groups, false, false, true, 1), 0);
     }
 }

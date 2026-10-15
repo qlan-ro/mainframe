@@ -26,6 +26,7 @@ pub(crate) fn fold_merge_group(
     duration_override: Option<&Value>,
     categories: Option<&ToolCategories>,
     decoders: &dyn crate::ToolResultDecoders,
+    results: &super::result_index::ResultIndex<'_>,
     frozen_tool_ids: &FrozenTracker<'_>,
 ) -> (
     Option<mainframe_types::display::DisplayMessage>,
@@ -39,6 +40,7 @@ pub(crate) fn fold_merge_group(
     // `presentation_grouping::retain`.
     let mut retained: Vec<usize> = Vec::new();
 
+    let range_end = raw_range.end;
     for idx in raw_range {
         let msg = &raw[idx];
         if msg.r#type == ChatMessageType::User && is_internal_user_message(&msg.content) {
@@ -75,6 +77,13 @@ pub(crate) fn fold_merge_group(
     keep_indices(&mut base.content, &retained);
     presentation_grouping::retain(&mut base, &retained);
     base.metadata = merge_duration(base.metadata.take(), duration_override);
+    for id in &local_seen {
+        if let Some(&(index, block)) = results.get(id.as_str())
+            && index >= range_end
+        {
+            tool_results.insert(id.clone(), block.clone());
+        }
+    }
     let grouped = GroupedMessage { base, tool_results };
     let display = convert_grouped_to_display(&grouped, categories, decoders);
     (display, local_seen.into_iter().collect())

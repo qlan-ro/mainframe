@@ -105,6 +105,10 @@
             "type": "tool_call"
           }
         ],
+        "result": {
+          "content": "Found it — `greeting` is exported from `index.ts` line 1.",
+          "isError": false
+        },
         "taskArgs": {
           "description": "Find the greeting export",
           "model": "claude-haiku-4-5-20251001",

@@ -118,3 +118,74 @@ fn the_turn_group_key_never_reaches_display_metadata() {
     assert_eq!(display.len(), 1);
     assert!(display[0].metadata.is_none());
 }
+
+#[test]
+fn overlay_boundary_allows_unknown_child_to_rejoin_durable_group() {
+    for keep_overlay in [false, true] {
+        let mut h = Harness::new();
+        h.raw
+            .push(keyed(assistant("parent", vec![text("one")]), "p1"));
+        let overlay = keyed(assistant("overlay", vec![text("two")]), "p2");
+        h.step(appended(), Some(&overlay));
+        h.raw.push(assistant("child", vec![text("child output")]));
+        h.step(appended(), keep_overlay.then_some(&overlay));
+        h.step(RawChanges::new(), None);
+        let display = prepare_messages_for_client(&h.raw, None);
+        assert_eq!(display.len(), 1);
+        assert_eq!(display[0].id, "parent");
+    }
+}
+
+#[test]
+fn late_results_update_earlier_turns_through_appends_and_nested_edits() {
+    let mut h = Harness::new();
+    h.raw
+        .push(keyed(assistant("a1", vec![tool_use("t1", "Bash")]), "p1"));
+    h.raw
+        .push(keyed(assistant("a2", vec![tool_use("t2", "Bash")]), "p2"));
+    h.step(appended(), None);
+    h.raw.push(tool_result_msg(
+        "r",
+        vec![tool_result("t1", "first"), tool_result("t2", "second")],
+    ));
+    h.step(appended(), None);
+    h.raw.push(user("u", "next"));
+    h.step(appended(), None);
+    h.raw[0].content.push(text("updated"));
+    let mut changes = RawChanges::new();
+    changes.push(RawChange::Nested(0));
+    h.step(changes, None);
+    h.raw[2].content[0] = tool_result("t1", "revised");
+    let mut changes = RawChanges::new();
+    changes.push(RawChange::Nested(2));
+    h.step(changes, None);
+}
+
+#[test]
+fn removing_late_result_clears_its_earlier_owner() {
+    let mut h = Harness::new();
+    h.raw
+        .push(keyed(assistant("a", vec![tool_use("t", "Bash")]), "p1"));
+    h.raw.push(user("u", "next"));
+    h.raw
+        .push(tool_result_msg("r", vec![tool_result("t", "done")]));
+    h.step(appended(), None);
+    h.raw.pop();
+    let mut changes = RawChanges::new();
+    changes.push(RawChange::Structural(2));
+    h.step(changes, None);
+}
+
+#[test]
+fn late_result_rewind_keeps_duration_on_nearest_assistant() {
+    let mut h = Harness::new();
+    h.raw.push(assistant("old", vec![text("old")]));
+    h.raw.push(user("u1", "next"));
+    h.raw.push(assistant("owner", vec![tool_use("t", "Bash")]));
+    h.raw.push(user("u2", "next"));
+    h.step(appended(), None);
+    h.raw
+        .push(tool_result_msg("r", vec![tool_result("t", "done")]));
+    h.raw.push(duration_marker("d", 123));
+    h.step(appended(), None);
+}

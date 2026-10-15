@@ -120,3 +120,15 @@ fn partial_stats_are_identical_regardless_of_settled_history_length() {
     assert_eq!(timing_step.groups_rebuilt, 0);
     assert_eq!(timing_step.containers_patched, 1);
 }
+
+#[test]
+fn settled_late_result_does_not_rewind_its_owner_on_every_partial() {
+    let mut raw = vec![assistant("owner", vec![tool_use("late", "Bash")])];
+    raw.extend(settled_history(100));
+    raw.push(tool_result_msg("result", vec![tool_result("late", "done")]));
+    let mut projector = IncrementalProjector::new();
+    project(&mut projector, &raw, RawChanges::new());
+    raw.push(assistant("active", vec![text("partial")]));
+    let stats = project(&mut projector, &raw, appended());
+    assert!(stats.raw_folded <= 3, "{stats:?}");
+}

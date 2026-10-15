@@ -28,6 +28,7 @@ mod patches;
 mod post_process;
 mod projector;
 mod refold;
+mod result_index;
 mod rewind;
 
 #[cfg(test)]

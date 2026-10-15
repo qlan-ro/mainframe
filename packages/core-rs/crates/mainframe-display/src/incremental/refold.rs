@@ -36,6 +36,7 @@ pub(crate) fn refold_range<'o>(
 ) -> RefoldOutcome {
     let mut walker = Walker {
         raw,
+        results: super::result_index::result_index(raw),
         categories,
         decoders,
         frozen_tool_ids,
@@ -60,6 +61,7 @@ pub(crate) fn refold_range<'o>(
 
 struct Walker<'a, 'o> {
     raw: &'a [ChatMessage],
+    results: super::result_index::ResultIndex<'a>,
     categories: Option<&'a ToolCategories>,
     decoders: &'a dyn crate::ToolResultDecoders,
     frozen_tool_ids: &'a mut FrozenTracker<'o>,
@@ -125,10 +127,8 @@ impl Walker<'_, '_> {
             self.pending_duration = Some(duration);
             return;
         }
-        if let Some(last) = self.new_groups.last_mut()
-            && last.mergeable
-        {
-            patch_duration_in_place(last, duration);
+        if let Some(idx) = last_mergeable_index(&self.new_groups) {
+            patch_duration_in_place(&mut self.new_groups[idx], duration);
             return;
         }
         if let Some(idx) = last_mergeable_index(existing) {
@@ -149,6 +149,7 @@ impl Walker<'_, '_> {
             display,
             ordinal: None,
             claimed_tool_ids: Vec::new(),
+            late_results: Default::default(),
             duration_override: None,
         });
         self.pending_start = idx + 1;
@@ -162,6 +163,7 @@ impl Walker<'_, '_> {
             duration.as_ref(),
             self.categories,
             self.decoders,
+            &self.results,
             self.frozen_tool_ids,
         );
         self.frozen_tool_ids.extend(claimed.iter().cloned());
@@ -171,6 +173,13 @@ impl Walker<'_, '_> {
             mergeable: true,
             display,
             ordinal: None,
+            late_results: claimed
+                .iter()
+                .filter_map(|id| {
+                    let &(index, block) = self.results.get(id.as_str())?;
+                    (index >= end).then(|| (id.clone(), block.clone()))
+                })
+                .collect(),
             claimed_tool_ids: claimed,
             duration_override: duration,
         });

@@ -79,6 +79,7 @@ mod tests {
             }),
             ordinal,
             claimed_tool_ids: Vec::new(),
+            late_results: Default::default(),
             duration_override: None,
         }
     }

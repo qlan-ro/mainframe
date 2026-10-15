@@ -224,3 +224,57 @@ fn codex_turn_ids_split_groups_but_child_and_claude_contexts_do_not() {
         .unwrap()["provider"] = json!("claude");
     assert_eq!(group_messages(vec![first, claude]).len(), 1);
 }
+
+#[test]
+fn late_parallel_results_follow_their_tool_owners() {
+    let out = group_messages(vec![
+        keyed(
+            msg("a1", ChatMessageType::Assistant, vec![tool_use("t1")]),
+            "p1",
+        ),
+        keyed(
+            msg("a2", ChatMessageType::Assistant, vec![tool_use("t2")]),
+            "p2",
+        ),
+        msg(
+            "r",
+            ChatMessageType::ToolResult,
+            vec![tool_result("t1"), tool_result("t2"), tool_result("orphan")],
+        ),
+    ]);
+    assert_eq!(out.len(), 2);
+    assert!(out[0].tool_results.contains_key("t1"));
+    assert!(!out[1].tool_results.contains_key("t1"));
+    assert!(out[1].tool_results.contains_key("t2"));
+    assert!(out[1].tool_results.contains_key("orphan"));
+}
+
+#[test]
+fn late_results_keep_first_tool_owner_and_orphan_grouping() {
+    let out = group_messages(vec![
+        msg(
+            "orphan",
+            ChatMessageType::ToolResult,
+            vec![tool_result("missing")],
+        ),
+        keyed(
+            msg("first", ChatMessageType::Assistant, vec![tool_use("t")]),
+            "p1",
+        ),
+        keyed(
+            msg("duplicate", ChatMessageType::Assistant, vec![tool_use("t")]),
+            "p2",
+        ),
+        msg("user", ChatMessageType::User, vec![text("next")]),
+        msg(
+            "result",
+            ChatMessageType::ToolResult,
+            vec![tool_result("t"), tool_result("missing")],
+        ),
+    ]);
+    assert_eq!(out.len(), 5);
+    assert!(out[1].tool_results.contains_key("t"));
+    assert!(out[2].base.content.is_empty());
+    assert!(out[2].tool_results.is_empty());
+    assert_eq!(out[4].base.content, vec![tool_result("missing")]);
+}
