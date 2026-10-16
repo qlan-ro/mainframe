@@ -57,6 +57,14 @@ describe('mentionDirectiveFormatter', () => {
       expect(fmt.serialize({ id: 'src/components', type: 'directory', label: 'components' })).toBe('@src/components/');
     });
 
+    it('file path with spaces → quoted @"<id>"', () => {
+      expect(fmt.serialize({ id: 'docs/my notes.md', type: 'file', label: 'my notes.md' })).toBe('@"docs/my notes.md"');
+    });
+
+    it('directory path with spaces → @"<id>/ with the quote left open for drill-down', () => {
+      expect(fmt.serialize({ id: 'My Drive/specs', type: 'directory', label: 'specs' })).toBe('@"My Drive/specs/');
+    });
+
     // A session token carries the reference LABEL, never the chat id: the label
     // is what the sent message's chip displays and what the reference line keys on.
     // The draft spells it bare — `expandSessionMentions` adds `session[…]` at submit.

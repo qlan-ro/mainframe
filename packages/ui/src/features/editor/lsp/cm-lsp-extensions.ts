@@ -19,6 +19,7 @@ import type { Extension } from '@codemirror/state';
 import type { LspProviders, LspPosition } from '@/lib/lsp';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { jumpHistory } from './navigation';
+import { fileUriToPath } from '@/lib/files/file-uri';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -150,7 +151,7 @@ function buildGoToDefExtension(providers: LspProviders, opts: LspExtensionOption
         // Push BOTH the from-position and the destination onto the jump history
         // so back() returns A and forward() returns B (standard editor semantics).
         jumpHistory.push(fromEntry);
-        const targetPath = target.uri.startsWith('file://') ? target.uri.slice('file://'.length) : target.uri;
+        const targetPath = fileUriToPath(target.uri);
         const targetLine = target.range.start.line;
         const targetCharacter = target.range.start.character;
         jumpHistory.push({ path: targetPath, line: targetLine, character: targetCharacter });

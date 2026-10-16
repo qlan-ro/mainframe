@@ -81,6 +81,12 @@ describe('file:// URI inputs', () => {
     expect(ref.relative).toBe('src/a.ts');
     expect(ref.isExternal).toBe(false);
   });
+
+  it('keeps a literal # in a folder name and does not throw on a stray %', () => {
+    const ref = toFileRef('file:///Users/dev/C#/100%/a.cs', { projectPath: '/Users/dev' });
+    expect(ref.relative).toBe('C#/100%/a.cs');
+    expect(ref.isExternal).toBe(false);
+  });
 });
 
 // ── already-relative ─────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { LspLocation } from '@/lib/lsp';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { fileUriToPath } from '@/lib/files/file-uri';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,10 +35,6 @@ export interface ReferencesPanelProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function uriToPath(uri: string): string {
-  return uri.startsWith('file://') ? uri.slice('file://'.length) : uri;
-}
-
 function basename(path: string): string {
   const parts = path.split('/');
   return parts[parts.length - 1] ?? path;
@@ -45,7 +42,7 @@ function basename(path: string): string {
 
 /** Stable row key: path:line:character. */
 function rowKey(loc: LspLocation): string {
-  return `${uriToPath(loc.uri)}:${loc.range.start.line}:${loc.range.start.character}`;
+  return `${fileUriToPath(loc.uri)}:${loc.range.start.line}:${loc.range.start.character}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,7 +52,7 @@ function rowKey(loc: LspLocation): string {
 export function ReferencesPanel({ locations, symbolName, onSelectRange, onClose }: ReferencesPanelProps) {
   const handleRowClick = useCallback(
     (loc: LspLocation) => {
-      const path = uriToPath(loc.uri);
+      const path = fileUriToPath(loc.uri);
       emitSurfaceIntent({ type: 'open-file', path });
       onSelectRange?.(loc);
     },
@@ -95,7 +92,7 @@ export function ReferencesPanel({ locations, symbolName, onSelectRange, onClose 
       ) : (
         <ul className="max-h-64 overflow-y-auto" role="list">
           {locations.map((loc) => {
-            const path = uriToPath(loc.uri);
+            const path = fileUriToPath(loc.uri);
             const line = loc.range.start.line + 1; // 1-based display
             const key = rowKey(loc);
             const testId = `editor-references-row-${path}:${loc.range.start.line}`;

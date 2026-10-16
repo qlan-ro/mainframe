@@ -12,6 +12,8 @@
  * the FileRef shape that the intent subscriber and the tab model need.
  */
 
+import { fileUriToPath } from './file-uri';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 /**
@@ -70,7 +72,7 @@ export function toFileRef(rawPath: string, bases: FileBases): FileRef {
 
   // file:// URI → decode to absolute then recurse.
   if (normalized.startsWith('file://')) {
-    const decoded = decodeFileUri(normalized);
+    const decoded = fileUriToPath(normalized);
     return toFileRef(decoded, bases);
   }
 
@@ -102,16 +104,6 @@ export function toFileRef(rawPath: string, bases: FileBases): FileRef {
 /** Replace backslashes with forward slashes (Windows paths or mixed paths). */
 function normalizeSeparators(p: string): string {
   return p.replace(/\\/g, '/');
-}
-
-/**
- * Decode a `file://` URI to an absolute POSIX path.
- * `new URL` handles percent-encoding and authority stripping correctly in all
- * browser/webview environments (V8, JSC). The pathname is always the POSIX
- * path after the optional `//localhost` or empty authority.
- */
-function decodeFileUri(uri: string): string {
-  return decodeURIComponent(new URL(uri).pathname);
 }
 
 /**

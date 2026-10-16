@@ -29,6 +29,21 @@ describe('detectTrigger', () => {
     expect(detectTrigger('foo@bar', '@', 7)).toBeNull();
   });
 
+  it('keeps an open-quoted token alive across spaces', () => {
+    const text = 'see @"My Drive/sp';
+    expect(detectTrigger(text, '@', text.length)).toEqual({ query: '"My Drive/sp', offset: 4 });
+  });
+
+  it('ends a quoted token at its closing quote', () => {
+    const text = 'see @"my notes.md" and';
+    expect(detectTrigger(text, '@', text.length)).toBeNull();
+  });
+
+  it('does not treat a mid-word @" as a quoted token', () => {
+    const text = 'foo@"bar baz';
+    expect(detectTrigger(text, '@', text.length)).toBeNull();
+  });
+
   it('does not match when the cursor sits before the trigger char', () => {
     expect(detectTrigger('hi @src', '@', 2)).toBeNull();
   });

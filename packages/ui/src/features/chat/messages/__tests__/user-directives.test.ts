@@ -61,6 +61,14 @@ describe('mainframeUserFormatter.parse — @mention', () => {
     expect(mentions[0]).toEqual({ kind: 'mention', type: 'mention', label: '@a.ts', id: 'a.ts' });
     expect(mentions[1]).toEqual({ kind: 'mention', type: 'mention', label: '@b.ts', id: 'b.ts' });
   });
+
+  it('reads a quoted @"path with spaces" as one mention', () => {
+    expect(mainframeUserFormatter.parse('fix @"src/my file.ts" now')).toEqual([
+      { kind: 'text', text: 'fix ' },
+      { kind: 'mention', type: 'mention', label: '@"src/my file.ts"', id: 'src/my file.ts' },
+      { kind: 'text', text: ' now' },
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------

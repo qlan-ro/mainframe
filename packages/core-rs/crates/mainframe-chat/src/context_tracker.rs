@@ -26,52 +26,6 @@ pub trait AttachmentLister: Send + Sync {
     fn list<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Vec<SessionAttachment>>;
 }
 
-pub fn extract_mentions_from_text(
-    chat_id: &str,
-    text: Option<&str>,
-    db: &dyn ContextDb,
-) -> Result<bool, SeamError> {
-    let Some(text) = text else {
-        return Ok(false);
-    };
-    if text.is_empty() {
-        return Ok(false);
-    }
-    let chars: Vec<char> = text.chars().collect();
-    let mut changed = false;
-    let mut i = 0;
-    while i < chars.len() {
-        // /(?:^|\s)@(\S+)/g — `@` at start or after whitespace, capture the run.
-        if chars[i] == '@' && (i == 0 || chars[i - 1].is_whitespace()) {
-            let mut j = i + 1;
-            while j < chars.len() && !chars[j].is_whitespace() {
-                j += 1;
-            }
-            let reference: String = chars[i + 1..j].iter().collect();
-            i = j;
-            if reference.is_empty() || (!reference.contains('/') && !reference.contains('.')) {
-                continue;
-            }
-            let cleaned = clean_reference(&reference);
-            let name = cleaned.rsplit('/').next().unwrap_or(&cleaned).to_string();
-            let mention = SessionMention {
-                id: nanoid::nanoid!(),
-                kind: MentionKind::File,
-                source: MentionSource::User,
-                name,
-                path: Some(cleaned),
-                timestamp: now_iso8601(),
-            };
-            if db.add_mention(chat_id, &mention)? {
-                changed = true;
-            }
-        } else {
-            i += 1;
-        }
-    }
-    Ok(changed)
-}
-
 pub async fn get_session_context(
     chat_id: &str,
     project_path: &str,
@@ -315,27 +269,6 @@ fn match_generic_plan(text: &str) -> Option<String> {
     None
 }
 
-/// `ref.replace(/<\/[^>]+>$/, '').replace(/[,;:!?)]+$/, '')`.
-fn clean_reference(reference: &str) -> String {
-    let without_tag = strip_trailing_close_tag(reference).unwrap_or_else(|| reference.to_string());
-    without_tag
-        .trim_end_matches([',', ';', ':', '!', '?', ')'])
-        .to_string()
-}
-
-/// Strip a trailing `</[^>]+>` closing tag.
-fn strip_trailing_close_tag(s: &str) -> Option<String> {
-    if !s.ends_with('>') {
-        return None;
-    }
-    let start = s.rfind("</")?;
-    let inner = &s[start + 2..s.len() - 1];
-    if inner.is_empty() || inner.contains('>') {
-        return None;
-    }
-    Some(s[..start].to_string())
-}
-
 /// POSIX `path.relative(from, to)` for the absolute paths this module handles.
 fn path_relative(from: &str, to: &str) -> String {
     let from_parts: Vec<&str> = from.split('/').filter(|s| !s.is_empty()).collect();
@@ -356,6 +289,8 @@ fn path_relative(from: &str, to: &str) -> String {
 
 mod files;
 use files::context_files;
+mod mentions;
+pub use mentions::extract_mentions_from_text;
 #[cfg(test)]
 #[path = "context_tracker_tests.rs"]
 mod tests;

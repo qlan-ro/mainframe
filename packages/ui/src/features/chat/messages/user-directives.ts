@@ -9,6 +9,7 @@
  *
  * Patterns recognised:
  *   @session[label]                              → type='session', label=token, id=label
+ *   @"path with spaces" (quoted, single line)    → type='mention', label=token, id=path
  *   @[\w./\-]+ preceded by whitespace or start   → type='mention', label=token, id=path
  *   /[\w-]+   at the start of the string (opt.)  → type='command', label=/name, id=name
  *
@@ -24,11 +25,11 @@ import type { Unstable_DirectiveFormatter, Unstable_DirectiveSegment } from '@as
 // ── Regex ─────────────────────────────────────────────────────────────────────
 
 /**
- * `@session[label]` and `@word/path` mentions, only when preceded by whitespace
- * or string start. The session alternative comes first so `@session[Foo]` is
- * never eaten as the bare mention `@session`.
+ * `@session[label]`, `@"quoted path"` and `@word/path` mentions, only when
+ * preceded by whitespace or string start. The session alternative comes first
+ * so `@session[Foo]` is never eaten as the bare mention `@session`.
  */
-const TOKEN_RE = /(?:^|(?<=\s))(@session\[[^\]\n]*\]|@[\w./\-]+)/g;
+const TOKEN_RE = /(?:^|(?<=\s))(@session\[[^\]\n]*\]|@"[^"\n]+"|@[\w./\-]+)/g;
 
 const SESSION_PREFIX = '@session[';
 
@@ -46,7 +47,8 @@ function mentionSegment(token: string): Unstable_DirectiveSegment {
   if (token.startsWith(SESSION_PREFIX)) {
     return { kind: 'mention', type: 'session', label: token, id: token.slice(SESSION_PREFIX.length, -1) };
   }
-  return { kind: 'mention', type: 'mention', label: token, id: token.slice(1) };
+  const path = token.slice(1);
+  return { kind: 'mention', type: 'mention', label: token, id: path.startsWith('"') ? path.slice(1, -1) : path };
 }
 
 /** Walks `text` for @tokens, appending text + mention segments to `segments`. */

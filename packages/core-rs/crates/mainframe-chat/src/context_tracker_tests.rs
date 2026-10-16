@@ -252,12 +252,3 @@ fn relative_below_project() {
     assert_eq!(path_relative("/a/b", "/a/b/c/d.md"), "c/d.md");
     assert_eq!(path_relative("/a/b/c", "/a/x/y.md"), "../../x/y.md");
 }
-
-#[test]
-fn clean_reference_strips_tag_and_punctuation() {
-    assert_eq!(clean_reference("src/foo.ts),"), "src/foo.ts");
-    assert_eq!(
-        clean_reference("src/foo.ts</command-message>"),
-        "src/foo.ts"
-    );
-}

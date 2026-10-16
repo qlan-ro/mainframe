@@ -17,6 +17,7 @@ use crate::git_exec::{GitExecError, GitExecOptions, exec_git};
 use crate::git_parse::{
     BranchList, PorcelainStatus, RemoteUrl, count_auto_merges, js_parse_int, parse_branch_list,
     parse_commit_hash, parse_diff_stat_summary, parse_remote_urls, parse_remotes, parse_status_z,
+    porcelain_z_entries,
 };
 use crate::project_lock::acquire_project_lock;
 
@@ -139,8 +140,9 @@ impl<E: GitExec> GitService<E> {
         Ok(self.branch_info(false).await?.current)
     }
 
+    /// Raw `git status --porcelain -z` output, for the `git_parse` status parsers.
     pub async fn status_raw(&self) -> Result<String, GitServiceError> {
-        Ok(self.git(argv!["status", "--porcelain"], None).await?)
+        Ok(self.git(argv!["status", "--porcelain", "-z"], None).await?)
     }
 
     pub async fn status(&self) -> Result<PorcelainStatus, GitServiceError> {
@@ -196,24 +198,22 @@ impl<E: GitExec> GitService<E> {
     pub async fn working_stat(&self) -> Result<WorkingStat, GitServiceError> {
         let mut files: Vec<WorkingStatFile> = Vec::new();
 
-        let numstat = self.git(argv!["diff", "--numstat", "HEAD"], None).await?;
+        let numstat = self
+            .git(argv!["diff", "--numstat", "-z", "HEAD"], None)
+            .await?;
         append_numstat(&numstat, &mut files);
 
         // Untracked files (`-uall` lists individual files inside new directories).
         let status = self
-            .git(argv!["status", "--porcelain", "-uall"], None)
+            .git(argv!["status", "--porcelain", "-z", "-uall"], None)
             .await?;
-        for line in status.split('\n').filter(|l| !l.is_empty()) {
-            if !line.starts_with("??") {
+        for entry in porcelain_z_entries(&status) {
+            if entry.index != '?' || entry.path.ends_with('/') {
                 continue;
             }
-            let path: String = line.chars().skip(3).collect();
-            if path.is_empty() || path.ends_with('/') {
-                continue;
-            }
-            let additions = self.count_untracked_additions(&path).await;
+            let additions = self.count_untracked_additions(entry.path).await;
             files.push(WorkingStatFile {
-                path,
+                path: entry.path.to_string(),
                 additions,
                 deletions: 0,
             });
@@ -497,31 +497,31 @@ mod mock_tests;
 #[path = "git_service_review_tests.rs"]
 mod review_tests;
 
+/// Appends `git diff --numstat -z` entries: `add\tdel\tpath\0`, or for a
+/// rename `add\tdel\t\0old\0new\0`. Paths are verbatim (no C-quoting).
 fn append_numstat(numstat: &str, files: &mut Vec<WorkingStatFile>) {
-    for line in numstat.split('\n').filter(|l| !l.is_empty()) {
-        let parts: Vec<&str> = line.split('\t').collect();
-        let add_str = parts.first().copied().unwrap_or("");
-        let del_str = parts.get(1).copied().unwrap_or("");
-        let path = if parts.len() > 2 {
-            parts[2..].join("\t")
+    let count = |s: &str| if s == "-" { 0 } else { js_parse_int(s) };
+    let mut tokens = numstat.split('\0');
+    while let Some(record) = tokens.next() {
+        let mut parts = record.splitn(3, '\t');
+        let (Some(add_str), Some(del_str), Some(path)) = (parts.next(), parts.next(), parts.next())
+        else {
+            continue;
+        };
+        let path = if path.is_empty() {
+            // Rename: the old path, then the new path, follow as separate tokens.
+            tokens.next();
+            tokens.next().unwrap_or("")
         } else {
-            String::new()
+            path
         };
         if path.is_empty() {
             continue;
         }
         files.push(WorkingStatFile {
-            path,
-            additions: if add_str == "-" {
-                0
-            } else {
-                js_parse_int(add_str)
-            },
-            deletions: if del_str == "-" {
-                0
-            } else {
-                js_parse_int(del_str)
-            },
+            path: path.to_string(),
+            additions: count(add_str),
+            deletions: count(del_str),
         });
     }
 }

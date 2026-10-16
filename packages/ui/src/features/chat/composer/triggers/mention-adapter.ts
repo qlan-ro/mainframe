@@ -31,7 +31,9 @@ type Classified =
   | { mode: 'tree'; dir: string; leaf: string }
   | { mode: 'fs'; dir: string; leaf: string };
 
-export function classifyMention(body: string): Classified {
+export function classifyMention(token: string): Classified {
+  // A quoted token (`@"my dir/fi`, see `mentionDirectiveFormatter`) searches its unquoted text.
+  const body = token.startsWith('"') ? token.slice(1).replace(/"$/u, '') : token;
   const lastSlash = body.lastIndexOf('/');
   if (lastSlash === -1) return { mode: 'fuzzy', query: body };
   const rawDir = body.slice(0, lastSlash);

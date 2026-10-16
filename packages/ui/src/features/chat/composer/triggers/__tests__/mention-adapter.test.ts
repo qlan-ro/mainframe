@@ -41,6 +41,11 @@ describe('classifyMention', () => {
   it("'a/b/c' → mode:'tree', dir:'a/b', leaf:'c'", () => {
     expect(classifyMention('a/b/c')).toEqual({ mode: 'tree', dir: 'a/b', leaf: 'c' });
   });
+
+  it('a quoted token classifies its unquoted text', () => {
+    expect(classifyMention('"My Drive/sp')).toEqual({ mode: 'tree', dir: 'My Drive', leaf: 'sp' });
+    expect(classifyMention('"my notes"')).toEqual({ mode: 'fuzzy', query: 'my notes' });
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -85,68 +85,6 @@ pub fn parse_diff_name_status(output: &str) -> Vec<DiffEntry> {
         .collect()
 }
 
-/// Parses `git status --porcelain` output into structured file entries.
-/// Each line's first two characters are the XY status code; the rest (after 3
-/// chars) is the path. Renamed (R) and copied (C) entries use " -> " to
-/// separate old and new paths. Directory entries (trailing slash) are filtered.
-pub fn parse_status_lines(output: &str) -> Vec<DiffEntry> {
-    output
-        .split('\n')
-        .filter(|line| !line.is_empty())
-        .map(|line| {
-            let code = line.chars().take(2).collect::<String>().trim().to_string();
-            let rest: String = line.chars().skip(3).collect();
-            if (code.starts_with('R') || code.starts_with('C'))
-                && let Some(arrow) = rest.find(" -> ")
-            {
-                return DiffEntry {
-                    status: code,
-                    path: rest[arrow + 4..].to_string(),
-                    old_path: Some(rest[..arrow].to_string()),
-                };
-            }
-            DiffEntry {
-                status: code,
-                path: rest,
-                old_path: None,
-            }
-        })
-        .filter(|f| !f.path.ends_with('/'))
-        .collect()
-}
-
-/// Parses `git status --porcelain` output into staged/unstaged/untracked
-/// buckets. Uses the two-character XY format: X = index status, Y = working-tree
-/// status.
-pub fn parse_status_buckets(output: &str) -> StatusBuckets {
-    let mut staged: Vec<String> = Vec::new();
-    let mut unstaged: Vec<String> = Vec::new();
-    let mut untracked: Vec<String> = Vec::new();
-
-    for line in output.split('\n').filter(|l| !l.is_empty()) {
-        let index_status = line.chars().next().unwrap_or(' ');
-        let working_status = line.chars().nth(1).unwrap_or(' ');
-        let filename: String = line.chars().skip(3).collect();
-
-        if index_status == '?' && working_status == '?' {
-            untracked.push(filename);
-            continue;
-        }
-        if index_status != ' ' {
-            staged.push(filename.clone());
-        }
-        if working_status != ' ' {
-            unstaged.push(filename);
-        }
-    }
-
-    StatusBuckets {
-        staged,
-        unstaged,
-        untracked,
-    }
-}
-
 /// Parses `git branch --no-color [-a]` output into the current branch and the
 /// full list of branch names. Remote branches keep their `remotes/<remote>/...`
 /// prefix; the `remotes/origin/HEAD -> origin/main` pointer keeps its name so
@@ -437,48 +375,6 @@ pub fn count_auto_merges(output: &str) -> usize {
         .count()
 }
 
-const CONFLICT_CODES: [&str; 7] = ["DD", "AU", "UD", "UA", "DU", "AA", "UU"];
-
-/// Parses NUL-separated `git status --porcelain -z` output into per-file entries
-/// (index/working-dir status chars) plus the conflicted-path list. Renamed and
-/// copied entries consume the following NUL-separated old-path token. The
-/// conflicted set is git's both-modified/unmerged XY codes.
-pub fn parse_status_z(output: &str) -> PorcelainStatus {
-    let mut files: Vec<StatusFile> = Vec::new();
-    let mut conflicted: Vec<String> = Vec::new();
-    let tokens: Vec<&str> = output.split('\0').collect();
-    let mut i = 0;
-    while i < tokens.len() {
-        let entry = tokens[i];
-        if entry.is_empty() {
-            i += 1;
-            continue;
-        }
-        let index = entry.chars().next().unwrap_or(' ');
-        let working = entry.chars().nth(1).unwrap_or(' ');
-        let path: String = entry.chars().skip(3).collect();
-        let code = format!("{index}{working}");
-        // Renamed/copied entries carry the source path in the next NUL token.
-        if index == 'R' || index == 'C' {
-            i += 1;
-        }
-        if code == "!!" {
-            i += 1;
-            continue;
-        }
-        files.push(StatusFile {
-            path: path.clone(),
-            index: index.to_string(),
-            working_dir: working.to_string(),
-        });
-        if CONFLICT_CODES.contains(&code.as_str()) {
-            conflicted.push(path);
-        }
-        i += 1;
-    }
-    PorcelainStatus { conflicted, files }
-}
-
 /// `parseInt(s, 10) || 0` — leading-digit parse with a NaN→0 fallback, matching
 /// JS. Handles an optional leading `-` and leading whitespace.
 pub(crate) fn js_parse_int(s: &str) -> i64 {
@@ -494,6 +390,10 @@ pub(crate) fn js_parse_int(s: &str) -> i64 {
     let n = digits.parse::<i64>().unwrap_or(0);
     if neg { -n } else { n }
 }
+
+mod status;
+pub(crate) use status::porcelain_z_entries;
+pub use status::{parse_status_buckets, parse_status_lines, parse_status_z};
 
 #[cfg(test)]
 #[path = "git_parse_tests.rs"]
