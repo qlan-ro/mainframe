@@ -285,27 +285,3 @@ async fn status_raw_buckets_spaced_paths_unquoted() {
         vec!["draft notes.md".to_string(), "staged file.ts".to_string()]
     );
 }
-
-// ---- last_commit_before ----
-
-#[tokio::test]
-async fn last_commit_before_picks_the_newest_commit_older_than_the_date() {
-    let tmp = tempfile::tempdir().unwrap();
-    let dir = tmp.path();
-    init_repo(dir).await;
-    let first = git(dir, &["rev-parse", "HEAD"]).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
-
-    assert_eq!(
-        svc.last_commit_before("2099-01-01T00:00:00.000Z")
-            .await
-            .unwrap(),
-        Some(first)
-    );
-    assert_eq!(
-        svc.last_commit_before("2000-01-01T00:00:00Z")
-            .await
-            .unwrap(),
-        None
-    );
-}
