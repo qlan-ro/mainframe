@@ -1,5 +1,6 @@
 export * from './acp/index.js';
 export * from './adapter.js';
+export * from './cli-update.js';
 export * from './content.js';
 export * from './tags.js';
 export * from './device.js';

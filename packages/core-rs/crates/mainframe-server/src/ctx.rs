@@ -134,6 +134,7 @@ pub struct ServicesCtx {
     pub watcher: Arc<FileWatcherService>,
     pub automations: Option<Arc<AutomationsEngine>>,
     pub quota: Arc<dyn QuotaService>,
+    pub cli_updates: Arc<crate::cli_update::CliUpdateManager>,
 }
 
 mod builder;

@@ -173,6 +173,9 @@ pub trait Adapter: Send + Sync {
     ) -> BoxFuture<'_, Result<Option<Vec<AdapterModel>>, AdapterError>> {
         Box::pin(async { Ok(Some(self.catalog())) })
     }
+    /// Drop any catalog cached for the daemon's lifetime so the next
+    /// `refresh_catalog` asks the CLI again (called after a CLI update).
+    fn invalidate_catalog(&self) {}
 
     fn configured_model(
         &self,

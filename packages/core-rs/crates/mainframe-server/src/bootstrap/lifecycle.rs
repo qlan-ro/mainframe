@@ -31,6 +31,9 @@ impl Daemon {
         self.ctx.chat.orchestration.reconcile_boot().await;
         spawn_worktree_backfill(self.ctx.core.db.clone());
         self.start_catalog_refresh();
+        if std::env::var_os("E2E_MODE").is_none() {
+            tokio::spawn(self.ctx.services.cli_updates.clone().run_periodic_checks());
+        }
         let quota_scheduler = self.start_quota_scheduler();
         self.start_tunnel().await;
         ReadyDaemon {

@@ -15,6 +15,7 @@ import { useTheme } from '@/store/theme';
 import { useUiPrefs, type SidebarView } from '@/store/ui-prefs';
 import { chordHint } from '@/features/shortcuts/chord-hint';
 import { selectPendingInteractionCount, useAutomationsStore } from '@/features/automations/data/use-automations-store';
+import { useAnyProviderCliUpdateAvailable } from '@/store/cli-update';
 import { NavRailButton } from './NavRailButton';
 import { RailUpdateButton } from './RailUpdateButton';
 import { DaemonSwitcher } from '@/features/daemon/DaemonSwitcher';
@@ -39,6 +40,7 @@ export function NavRail() {
   const setView = useUiPrefs((s) => s.setSidebarView);
   const setSidebarVisible = useUiPrefs((s) => s.setSidebarVisible);
   const pendingAutomations = useAutomationsStore(selectPendingInteractionCount);
+  const cliUpdateAvailable = useAnyProviderCliUpdateAvailable();
   const resolvedMode = useTheme((s) => s.resolvedMode);
   const toggleTheme = useTheme((s) => s.toggle);
   const settingsChord = chordHint('app.settings');
@@ -80,9 +82,17 @@ export function NavRail() {
         />
         <NavRailButton
           testId="shell-rail-settings"
-          label={settingsChord == null ? 'Settings' : `Settings · ${settingsChord}`}
+          label={
+            cliUpdateAvailable
+              ? 'Settings · a provider CLI update is available'
+              : settingsChord == null
+                ? 'Settings'
+                : `Settings · ${settingsChord}`
+          }
           icon={Settings}
           selected={view === 'settings'}
+          dot={cliUpdateAvailable}
+          dotTestId="shell-rail-settings-cli-update"
           onClick={() => select('settings')}
         />
       </div>

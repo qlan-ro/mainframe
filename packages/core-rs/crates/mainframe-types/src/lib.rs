@@ -24,6 +24,7 @@ pub mod base64_data;
 pub mod chat;
 pub mod chat_text;
 pub mod claude_workflow;
+pub mod cli_update;
 pub mod command;
 pub mod command_execution;
 pub mod content;

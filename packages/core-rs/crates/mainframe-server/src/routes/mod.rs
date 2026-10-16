@@ -26,6 +26,7 @@ pub mod chat_side_chat;
 pub mod chat_switch;
 pub mod chat_workflow_runs;
 pub mod chats;
+pub mod cli_update;
 pub mod commands;
 pub mod context;
 pub mod delegated_tasks;

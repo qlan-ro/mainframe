@@ -17,6 +17,8 @@ import { installAdapterModelsSubscriber } from '@/store/adapters';
 import { seedAdaptersFor } from '@/store/adapters-seed';
 import { installProviderQuotaSubscriber } from '@/store/quota';
 import { seedQuota } from '@/store/quota-seed';
+import { installProviderCliStatusSubscriber } from '@/store/cli-update';
+import { seedProviderCliStatusesFor } from '@/store/cli-update-seed';
 import { installPortTunnelSubscriber } from '@/store/port-tunnels';
 import { seedPortTunnels } from '@/store/port-tunnels-seed';
 import { initLspPort } from '../lib/lsp';
@@ -61,6 +63,7 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
     if (activePort <= 0) return;
     seedAdaptersFor(activePort);
     seedQuota(activePort);
+    seedProviderCliStatusesFor(activePort);
     seedPortTunnels(activePort);
   }, [activePort]);
 
@@ -74,6 +77,7 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
         if (daemonWs.connected && activePort > 0) {
           seedAdaptersFor(activePort);
           seedQuota(activePort);
+          seedProviderCliStatusesFor(activePort);
           seedPortTunnels(activePort);
         }
       }),
@@ -114,6 +118,10 @@ export function App() {
   // Always-on provider-quota subscriber (provider.quota.updated). Account-wide,
   // chatId-less — mounted once so a push is never missed by a late-mounting card.
   useEffect(() => installProviderQuotaSubscriber(), []);
+
+  // Always-on provider-CLI-update subscriber (provider.cli.updated). Mounted once so an
+  // update's progress lines are never missed by a late-mounting Settings pane.
+  useEffect(() => installProviderCliStatusSubscriber(), []);
 
   // Always-on port-tunnel subscriber (tunnel:status, `port:*` labels). Chips
   // mount and unmount with the messages that hold them, so the store — not a
