@@ -123,13 +123,29 @@ describe('useWorkingChanges — uncommitted scope', () => {
 });
 
 describe('useWorkingChanges — session scope', () => {
-  it('returns paths with no status and no counts', async () => {
+  it('narrows the uncommitted set to the files the session touched', async () => {
     const { result } = renderHook(() => useWorkingChanges(options({ scope: 'session' })));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(getSessionFiles).toHaveBeenCalledWith(PORT, CHAT);
-    expect(result.current.files).toEqual([{ path: 'src/a.ts' }, { path: 'docs/plan.md' }]);
-    expect(result.current.files[0]?.status).toBeUndefined();
-    expect(result.current.files[0]?.additions).toBeUndefined();
+    expect(getGitStatus).toHaveBeenCalledWith(PORT, PROJECT, CHAT);
+    // docs/plan.md was touched but has nothing uncommitted; src/b.ts is
+    // uncommitted but the session never touched it.
+    expect(result.current.files).toEqual([{ path: 'src/a.ts', status: 'modified', additions: 10, deletions: 2 }]);
+    expect(result.current.branch).toBe('design/right-sidebar-revamp');
+  });
+
+  it('totals only the touched files', async () => {
+    getSessionFiles.mockResolvedValue(['src/b.ts']);
+    const { result } = renderHook(() => useWorkingChanges(options({ scope: 'session' })));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.totalAdditions).toBe(0);
+    expect(result.current.totalDeletions).toBe(0);
+  });
+
+  it('keeps totals undefined when the working stat is unavailable', async () => {
+    getWorkingStat.mockRejectedValue(new Error('not a repo'));
+    const { result } = renderHook(() => useWorkingChanges(options({ scope: 'session' })));
+    await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.totalAdditions).toBeUndefined();
     expect(result.current.totalDeletions).toBeUndefined();
   });

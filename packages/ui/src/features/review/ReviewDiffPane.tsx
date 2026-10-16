@@ -12,8 +12,13 @@ interface ReviewDiffPaneProps {
   projectId: string;
   chatId?: string;
   file: string | null;
-  additions: number;
-  deletions: number;
+  /** Source path of a rename — where the diff reads the original from. */
+  oldPath?: string;
+  /** Revision the original side is read from; HEAD when absent. */
+  base?: string;
+  /** Absent for scopes with no per-file stat. */
+  additions?: number;
+  deletions?: number;
   viewed: boolean;
   onToggleViewed: () => void;
   onOpenInWorkspace: () => void;
@@ -25,6 +30,8 @@ export function ReviewDiffPane({
   projectId,
   chatId,
   file,
+  oldPath,
+  base,
   additions,
   deletions,
   viewed,
@@ -51,7 +58,15 @@ export function ReviewDiffPane({
         onOpenInWorkspace={onOpenInWorkspace}
       />
       <div className="min-h-0 flex-1">
-        <ReviewDiffView port={port} projectId={projectId} chatId={chatId} file={file} onAppend={onAppend} />
+        <ReviewDiffView
+          port={port}
+          projectId={projectId}
+          chatId={chatId}
+          file={file}
+          oldPath={oldPath}
+          base={base}
+          onAppend={onAppend}
+        />
       </div>
     </div>
   );

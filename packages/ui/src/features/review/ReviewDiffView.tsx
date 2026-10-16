@@ -1,8 +1,9 @@
 /**
  * ReviewDiffView — CmDiffEditor wrapper + inline-comment authoring.
  *
- * Fetches the working diff for a single file via getWorkingDiff, renders it
- * in the side-by-side CmDiffEditor, and provides a minimal comment form.
+ * Fetches the diff for a single file via getWorkingDiff — against `base` when
+ * the scope compares to one (the branch's merge base), HEAD otherwise — renders
+ * it in the side-by-side CmDiffEditor, and provides a minimal comment form.
  * Submitting the form calls `onAppend` with a string that satisfies the
  * parse-review-comment parser format:
  *
@@ -33,10 +34,12 @@ interface ReviewDiffViewProps {
   projectId: string;
   chatId?: string;
   file: string;
+  oldPath?: string;
+  base?: string;
   onAppend: (text: string) => void;
 }
 
-export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: ReviewDiffViewProps) {
+export function ReviewDiffView({ port, projectId, chatId, file, oldPath, base, onAppend }: ReviewDiffViewProps) {
   const [diff, setDiff] = useState<WorkingDiff | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,7 +52,7 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
     setDiff(null);
     setError(null);
     setSelectedLine(null);
-    getWorkingDiff(port, projectId, file, { chatId })
+    getWorkingDiff(port, projectId, file, { chatId, base, oldPath })
       .then((d) => {
         if (!cancelled) setDiff(d);
       })
@@ -62,7 +65,7 @@ export function ReviewDiffView({ port, projectId, chatId, file, onAppend }: Revi
     return () => {
       cancelled = true;
     };
-  }, [port, projectId, file, chatId]);
+  }, [port, projectId, file, chatId, base, oldPath]);
 
   const handleLineSelect = useCallback((sel: LineSelection) => {
     setSelectedLine(sel);

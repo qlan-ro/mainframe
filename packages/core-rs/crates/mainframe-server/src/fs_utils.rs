@@ -118,6 +118,19 @@ pub fn relative(from: &Path, to: &Path) -> String {
     out.to_string_lossy().into_owned()
 }
 
+/// `path` (absolute, or relative to `base`) re-based to a `base`-relative
+/// path, or `None` when it resolves to `base` itself or outside it. Lexical,
+/// like `path_resolve`.
+pub fn relative_within(base: &str, path: &str) -> Option<String> {
+    let resolved = path_resolve(base, path);
+    let base = Path::new(base);
+    let resolved = Path::new(&resolved);
+    if resolved == base || !resolved.starts_with(base) {
+        return None;
+    }
+    Some(relative(base, resolved))
+}
+
 /// Lexical path resolution of `requested` against `base` (no filesystem
 /// access): an absolute `requested` replaces `base`; otherwise they are joined;
 /// then `.`/`..` segments are collapsed. Used only as the best-effort fallback

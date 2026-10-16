@@ -10,6 +10,10 @@
  * Scopes report different fidelities and the shape says so: where the daemon has
  * no counts or no per-file status, the field is `undefined`. A fabricated `0`
  * would read as "no changes", which is a different claim.
+ *
+ * `session` is the uncommitted set narrowed to the files the session wrote or
+ * edited: its diffs read HEAD against the working tree, so a file the session
+ * already committed would show nothing to review.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getBranchDiffs, getGitBranch, getGitStatus, getWorkingStat } from '@/lib/api/git';
@@ -22,9 +26,10 @@ export type ChangeScope = 'session' | 'uncommitted' | 'branch';
 
 export interface WorkingChangeFile {
   path: string;
-  /** Absent for the `session` scope — the daemon reports paths only. */
   status?: ReviewFile['status'];
-  /** Absent for scopes with no per-file stat (`session`, `branch`). */
+  /** Source path of a rename — where the diff reads the original from. */
+  oldPath?: string;
+  /** Absent for scopes with no per-file stat (`branch`). */
   additions?: number;
   deletions?: number;
 }
@@ -55,9 +60,7 @@ export interface UseWorkingChangesOptions {
   enabled?: boolean;
   /**
    * A non-project chat has no git repo and no session-file cwd worth reading
-   * (todo #346) — set from `useActiveIdentity().noProject`. Blocks every
-   * scope, including `session`, which needs only `chatId` and would otherwise
-   * still fire against the chat's scratch directory.
+   * (todo #346) — set from `useActiveIdentity().noProject`. Blocks every scope.
    */
   noProject?: boolean;
 }
@@ -97,15 +100,30 @@ async function fetchUncommitted(port: number, projectId: string, chatId?: string
   };
 }
 
-async function fetchSession(port: number, chatId: string): Promise<ChangesPayload> {
-  const files = await getSessionFiles(port, chatId);
-  return { ...EMPTY, files: files.map((path) => ({ path })) };
+async function fetchSession(port: number, projectId: string, chatId: string): Promise<ChangesPayload> {
+  const [touched, uncommitted] = await Promise.all([
+    getSessionFiles(port, chatId),
+    fetchUncommitted(port, projectId, chatId),
+  ]);
+  const touchedPaths = new Set(touched);
+  const files = uncommitted.files.filter((file) => touchedPaths.has(file.path));
+  const hasStat = uncommitted.totalAdditions !== undefined;
+  return {
+    ...uncommitted,
+    files,
+    totalAdditions: hasStat ? files.reduce((sum, file) => sum + (file.additions ?? 0), 0) : undefined,
+    totalDeletions: hasStat ? files.reduce((sum, file) => sum + (file.deletions ?? 0), 0) : undefined,
+  };
 }
 
 async function fetchBranch(port: number, projectId: string, chatId?: string): Promise<ChangesPayload> {
   const data = await getBranchDiffs(port, projectId, chatId);
   return {
-    files: data.files.map((file) => ({ path: file.path, status: gitStatusKind(file.status) })),
+    files: data.files.map((file) => ({
+      path: file.path,
+      status: gitStatusKind(file.status),
+      ...(file.oldPath ? { oldPath: file.oldPath } : {}),
+    })),
     branch: data.branch,
     baseBranch: data.baseBranch,
     mergeBase: data.mergeBase,
@@ -127,8 +145,8 @@ export function useWorkingChanges({
 
   const refetch = useCallback(() => setRefreshKey((key) => key + 1), []);
 
-  // `session` resolves the worktree from the chat; the other two need a project.
-  const canFetch = enabled && !noProject && (scope === 'session' ? Boolean(chatId) : Boolean(projectId));
+  // Every scope reads git through the project; `session` also needs the chat.
+  const canFetch = enabled && !noProject && Boolean(projectId) && (scope !== 'session' || Boolean(chatId));
 
   useEffect(() => {
     if (!canFetch) {
@@ -142,7 +160,7 @@ export function useWorkingChanges({
     setError(false);
     const request =
       scope === 'session'
-        ? fetchSession(port, chatId!)
+        ? fetchSession(port, projectId!, chatId!)
         : scope === 'branch'
           ? fetchBranch(port, projectId!, chatId)
           : fetchUncommitted(port, projectId!, chatId);

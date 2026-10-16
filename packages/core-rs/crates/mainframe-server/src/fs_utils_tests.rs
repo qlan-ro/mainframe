@@ -19,6 +19,25 @@ fn relative_drops_shared_prefix_and_climbs() {
 }
 
 #[test]
+fn relative_within_keeps_only_paths_under_the_base() {
+    assert_eq!(
+        relative_within("/repo", "/repo/src/a.ts").as_deref(),
+        Some("src/a.ts")
+    );
+    assert_eq!(
+        relative_within("/repo", "src/a.ts").as_deref(),
+        Some("src/a.ts")
+    );
+    assert_eq!(
+        relative_within("/repo", "/repo/src/../b.ts").as_deref(),
+        Some("b.ts")
+    );
+    assert_eq!(relative_within("/repo", "/repo-other/a.ts"), None);
+    assert_eq!(relative_within("/repo", "../a.ts"), None);
+    assert_eq!(relative_within("/repo", "/repo"), None);
+}
+
+#[test]
 fn path_resolve_collapses_dot_segments() {
     assert_eq!(path_resolve("/a/b", "c/../d"), "/a/b/d");
     assert_eq!(path_resolve("/a/b", "../e"), "/a/e");

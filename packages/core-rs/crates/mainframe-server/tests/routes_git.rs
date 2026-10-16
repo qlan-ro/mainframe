@@ -58,6 +58,25 @@ async fn status_returns_changed_files() {
 }
 
 #[tokio::test]
+async fn status_lists_new_files_inside_an_untracked_directory() {
+    let server = spawn_test_server(None).await;
+    let repo = init_repo();
+    std::fs::create_dir_all(repo.path().join("src/new")).unwrap();
+    std::fs::write(repo.path().join("src/new/a.ts"), "a\n").unwrap();
+    std::fs::write(repo.path().join("src/new/b.ts"), "b\n").unwrap();
+    let id = server.create_project(repo.path().to_str().unwrap()).await;
+    let (_, body) = get_json(&server, &format!("/api/projects/{id}/git/status")).await;
+    let mut paths: Vec<&str> = body["data"]["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["path"].as_str().unwrap())
+        .collect();
+    paths.sort_unstable();
+    assert_eq!(paths, ["src/new/a.ts", "src/new/b.ts"]);
+}
+
+#[tokio::test]
 async fn status_soft_errors_for_a_non_git_directory() {
     let server = spawn_test_server(None).await;
     let plain = tempfile::tempdir().unwrap();

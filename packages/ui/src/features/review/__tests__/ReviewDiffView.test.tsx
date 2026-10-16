@@ -2,7 +2,7 @@
  * ReviewDiffView tests.
  *
  * Behaviors covered:
- *  - On mount with a file, calls getWorkingDiff(port, projectId, file, { chatId }).
+ *  - On mount with a file, calls getWorkingDiff(port, projectId, file, { chatId, base, oldPath }).
  *  - Renders a CmDiffEditor stub with the returned original/modified.
  *  - Submitting an inline comment calls onAppend with a body matching the
  *    parse-review-comment format using a REAL clicked line + its text (not empty).
@@ -79,7 +79,34 @@ describe('ReviewDiffView', () => {
     render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
 
     await waitFor(() => {
-      expect(mockGetWorkingDiff).toHaveBeenCalledWith(31415, 'proj-1', 'src/a.ts', { chatId: 'chat-1' });
+      expect(mockGetWorkingDiff).toHaveBeenCalledWith(31415, 'proj-1', 'src/a.ts', {
+        chatId: 'chat-1',
+        base: undefined,
+        oldPath: undefined,
+      });
+    });
+  });
+
+  it('reads the original side from base and oldPath when given', async () => {
+    mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/new.ts"
+        oldPath="src/old.ts"
+        base="abc1234"
+        onAppend={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockGetWorkingDiff).toHaveBeenCalledWith(31415, 'proj-1', 'src/new.ts', {
+        chatId: 'chat-1',
+        base: 'abc1234',
+        oldPath: 'src/old.ts',
+      });
     });
   });
 

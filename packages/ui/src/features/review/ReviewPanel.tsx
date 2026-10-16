@@ -171,8 +171,10 @@ export function ReviewPanel() {
               projectId={projectId ?? ''}
               chatId={chatId}
               file={selectedFile}
-              additions={selected?.additions ?? 0}
-              deletions={selected?.deletions ?? 0}
+              oldPath={selected?.oldPath}
+              base={scope === 'branch' ? (mergeBase ?? undefined) : undefined}
+              additions={selected?.additions}
+              deletions={selected?.deletions}
               viewed={selectedFile ? viewed.has(selectedFile) : false}
               onToggleViewed={() => selectedFile && toggleViewed(selectedFile)}
               onOpenInWorkspace={openInWorkspace}

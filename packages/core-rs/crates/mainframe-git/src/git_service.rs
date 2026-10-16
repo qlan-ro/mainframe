@@ -141,8 +141,12 @@ impl<E: GitExec> GitService<E> {
     }
 
     /// Raw `git status --porcelain -z` output, for the `git_parse` status parsers.
+    /// `-uall` lists each file inside a new directory; without it git reports
+    /// the bare `dir/`, which the status parsers drop as a directory entry.
     pub async fn status_raw(&self) -> Result<String, GitServiceError> {
-        Ok(self.git(argv!["status", "--porcelain", "-z"], None).await?)
+        Ok(self
+            .git(argv!["status", "--porcelain", "-z", "-uall"], None)
+            .await?)
     }
 
     pub async fn status(&self) -> Result<PorcelainStatus, GitServiceError> {
