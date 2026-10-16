@@ -32,6 +32,7 @@
 import { resolvePath } from '../api/files';
 import { apiBase } from '../api/http';
 import { getActiveDaemon } from '../daemon/active-daemon';
+import { fileUriToPath, pathToFileUri } from '@/lib/files/file-uri';
 
 // ---------------------------------------------------------------------------
 // Plain LSP types (no editor dependency)
@@ -171,12 +172,12 @@ async function discoverWorkspaceFolders(
       if (dir) dirs.add(dir);
     }
     if (dirs.size === 0) {
-      return [{ uri: `file://${resolvedBase}`, name: resolvedBase.split('/').pop() ?? '' }];
+      return [{ uri: pathToFileUri(resolvedBase), name: resolvedBase.split('/').pop() ?? '' }];
     }
-    return [...dirs].map((d) => ({ uri: `file://${resolvedBase}/${d}`, name: d.split('/').pop() ?? d }));
+    return [...dirs].map((d) => ({ uri: pathToFileUri(`${resolvedBase}/${d}`), name: d.split('/').pop() ?? d }));
   } catch (err) {
     console.warn('[lsp] discoverWorkspaceFolders failed', err);
-    return [{ uri: `file://${resolvedBase}`, name: resolvedBase.split('/').pop() ?? '' }];
+    return [{ uri: pathToFileUri(resolvedBase), name: resolvedBase.split('/').pop() ?? '' }];
   }
 }
 
@@ -302,7 +303,7 @@ export class LspClientManager implements LspProviders {
           },
           workspace: { workspaceFolders: true },
         },
-        rootUri: `file://${resolvedBase}`,
+        rootUri: pathToFileUri(resolvedBase),
         workspaceFolders,
       });
     } catch (err) {
@@ -480,15 +481,15 @@ export class LspClientManager implements LspProviders {
     if (filePath.startsWith('file://')) return filePath;
     // Relative path — prefix with the worktree-or-project resolved base
     const rel = filePath.startsWith('/') ? filePath.slice(1) : filePath;
-    return `file://${entry.resolvedBase}/${rel}`;
+    return pathToFileUri(`${entry.resolvedBase}/${rel}`);
   }
 
   private fromLspUri(entry: LspClientEntry, uri: string): string {
-    const prefix = `file://${entry.resolvedBase}/`;
-    if (uri.startsWith(prefix)) return uri.slice(prefix.length);
-    const bare = `file://${entry.resolvedBase}`;
-    if (uri.startsWith(bare)) return uri.slice(bare.length).replace(/^\/+/, '');
-    return uri.replace(/^file:\/\//, '');
+    const path = fileUriToPath(uri);
+    const base = entry.resolvedBase;
+    if (path.startsWith(`${base}/`)) return path.slice(base.length + 1);
+    if (path === base) return '';
+    return path;
   }
 
   private toLspSymbols(entry: LspClientEntry, result: unknown): LspSymbol[] {

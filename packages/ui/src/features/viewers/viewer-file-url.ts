@@ -13,6 +13,8 @@
  *  - Relative path + no projectPath: return null (caller must disable the action).
  */
 
+import { pathToFileUri } from '@/lib/files/file-uri';
+
 /**
  * Returns an absolute `file://` URL string, or `null` if the path is relative
  * and `projectPath` is unavailable (caller should disable the open-external action).
@@ -20,7 +22,5 @@
 export function toFileUrl(path: string, projectPath: string | undefined): string | null {
   const absPath = path.startsWith('/') ? path : projectPath ? `${projectPath}/${path}` : null;
   if (absPath === null) return null;
-  // Percent-encode each segment (spaces, '#', '?') while keeping '/' separators.
-  const encoded = absPath.split('/').map(encodeURIComponent).join('/');
-  return `file://${encoded}`;
+  return pathToFileUri(absPath);
 }

@@ -85,37 +85,60 @@ pub fn parse_diff_name_status(output: &str) -> Vec<DiffEntry> {
         .collect()
 }
 
-/// Parses `git status --porcelain` output into structured file entries.
-/// Each line's first two characters are the XY status code; the rest (after 3
-/// chars) is the path. Renamed (R) and copied (C) entries use " -> " to
-/// separate old and new paths. Directory entries (trailing slash) are filtered.
+/// One entry of `git status --porcelain -z` output. The NUL-separated format
+/// emits paths verbatim; the newline format C-quotes any path containing a
+/// space, so every status parser here consumes `-z`.
+pub(crate) struct PorcelainEntry<'a> {
+    pub index: char,
+    pub working: char,
+    pub path: &'a str,
+    /// Source path of a renamed (R) or copied (C) entry.
+    pub old_path: Option<&'a str>,
+}
+
+/// Splits `git status --porcelain -z` output into entries. A renamed or copied
+/// entry is `XY new\0old\0`, so it consumes the following token as its source.
+pub(crate) fn porcelain_z_entries(output: &str) -> Vec<PorcelainEntry<'_>> {
+    let mut entries = Vec::new();
+    let mut tokens = output.split('\0');
+    while let Some(entry) = tokens.next() {
+        if entry.len() < 3 || !entry.is_char_boundary(2) {
+            continue;
+        }
+        let mut code = entry[..2].chars();
+        let index = code.next().unwrap_or(' ');
+        let working = code.next().unwrap_or(' ');
+        let old_path = if index == 'R' || index == 'C' {
+            tokens.next()
+        } else {
+            None
+        };
+        entries.push(PorcelainEntry {
+            index,
+            working,
+            path: &entry[3..],
+            old_path,
+        });
+    }
+    entries
+}
+
+/// Parses `git status --porcelain -z` output into structured file entries.
+/// Renamed (R) and copied (C) entries carry an `old_path`. Directory entries
+/// (trailing slash) are filtered.
 pub fn parse_status_lines(output: &str) -> Vec<DiffEntry> {
-    output
-        .split('\n')
-        .filter(|line| !line.is_empty())
-        .map(|line| {
-            let code = line.chars().take(2).collect::<String>().trim().to_string();
-            let rest: String = line.chars().skip(3).collect();
-            if (code.starts_with('R') || code.starts_with('C'))
-                && let Some(arrow) = rest.find(" -> ")
-            {
-                return DiffEntry {
-                    status: code,
-                    path: rest[arrow + 4..].to_string(),
-                    old_path: Some(rest[..arrow].to_string()),
-                };
-            }
-            DiffEntry {
-                status: code,
-                path: rest,
-                old_path: None,
-            }
+    porcelain_z_entries(output)
+        .into_iter()
+        .filter(|e| !e.path.ends_with('/'))
+        .map(|e| DiffEntry {
+            status: format!("{}{}", e.index, e.working).trim().to_string(),
+            path: e.path.to_string(),
+            old_path: e.old_path.map(String::from),
         })
-        .filter(|f| !f.path.ends_with('/'))
         .collect()
 }
 
-/// Parses `git status --porcelain` output into staged/unstaged/untracked
+/// Parses `git status --porcelain -z` output into staged/unstaged/untracked
 /// buckets. Uses the two-character XY format: X = index status, Y = working-tree
 /// status.
 pub fn parse_status_buckets(output: &str) -> StatusBuckets {
@@ -123,20 +146,16 @@ pub fn parse_status_buckets(output: &str) -> StatusBuckets {
     let mut unstaged: Vec<String> = Vec::new();
     let mut untracked: Vec<String> = Vec::new();
 
-    for line in output.split('\n').filter(|l| !l.is_empty()) {
-        let index_status = line.chars().next().unwrap_or(' ');
-        let working_status = line.chars().nth(1).unwrap_or(' ');
-        let filename: String = line.chars().skip(3).collect();
-
-        if index_status == '?' && working_status == '?' {
-            untracked.push(filename);
+    for e in porcelain_z_entries(output) {
+        if e.index == '?' && e.working == '?' {
+            untracked.push(e.path.to_string());
             continue;
         }
-        if index_status != ' ' {
-            staged.push(filename.clone());
+        if e.index != ' ' {
+            staged.push(e.path.to_string());
         }
-        if working_status != ' ' {
-            unstaged.push(filename);
+        if e.working != ' ' {
+            unstaged.push(e.path.to_string());
         }
     }
 
@@ -446,35 +465,19 @@ const CONFLICT_CODES: [&str; 7] = ["DD", "AU", "UD", "UA", "DU", "AA", "UU"];
 pub fn parse_status_z(output: &str) -> PorcelainStatus {
     let mut files: Vec<StatusFile> = Vec::new();
     let mut conflicted: Vec<String> = Vec::new();
-    let tokens: Vec<&str> = output.split('\0').collect();
-    let mut i = 0;
-    while i < tokens.len() {
-        let entry = tokens[i];
-        if entry.is_empty() {
-            i += 1;
-            continue;
-        }
-        let index = entry.chars().next().unwrap_or(' ');
-        let working = entry.chars().nth(1).unwrap_or(' ');
-        let path: String = entry.chars().skip(3).collect();
-        let code = format!("{index}{working}");
-        // Renamed/copied entries carry the source path in the next NUL token.
-        if index == 'R' || index == 'C' {
-            i += 1;
-        }
+    for e in porcelain_z_entries(output) {
+        let code = format!("{}{}", e.index, e.working);
         if code == "!!" {
-            i += 1;
             continue;
         }
         files.push(StatusFile {
-            path: path.clone(),
-            index: index.to_string(),
-            working_dir: working.to_string(),
+            path: e.path.to_string(),
+            index: e.index.to_string(),
+            working_dir: e.working.to_string(),
         });
         if CONFLICT_CODES.contains(&code.as_str()) {
-            conflicted.push(path);
+            conflicted.push(e.path.to_string());
         }
-        i += 1;
     }
     PorcelainStatus { conflicted, files }
 }

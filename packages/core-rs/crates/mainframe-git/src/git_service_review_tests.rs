@@ -218,3 +218,70 @@ async fn working_stat_totals_across_files() {
     assert!(result.total_additions >= 3);
     assert!(result.files.len() >= 2);
 }
+
+// ---- paths with spaces (#399) ----
+
+#[tokio::test]
+async fn working_stat_reports_spaced_paths_verbatim() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    init_repo(dir).await;
+    tokio::fs::write(dir.join("old name.ts"), "const a = 1;\n")
+        .await
+        .unwrap();
+    git(dir, &["add", "old name.ts"]).await;
+    git(dir, &["commit", "-m", "add spaced file"]).await;
+    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+
+    git(dir, &["mv", "old name.ts", "new name.ts"]).await;
+    tokio::fs::write(dir.join("README.md"), "# Test\nmore\n")
+        .await
+        .unwrap();
+    tokio::fs::write(dir.join("my notes.md"), "one\ntwo\nthree\n")
+        .await
+        .unwrap();
+
+    let result = svc.working_stat().await.unwrap();
+    let mut files: Vec<(String, i64, i64)> = result
+        .files
+        .iter()
+        .map(|f| (f.path.clone(), f.additions, f.deletions))
+        .collect();
+    files.sort();
+    assert_eq!(
+        files,
+        vec![
+            ("README.md".to_string(), 1, 0),
+            ("my notes.md".to_string(), 3, 0),
+            ("new name.ts".to_string(), 0, 0),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn status_raw_buckets_spaced_paths_unquoted() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path();
+    init_repo(dir).await;
+    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+
+    tokio::fs::write(dir.join("staged file.ts"), "x\n")
+        .await
+        .unwrap();
+    git(dir, &["add", "staged file.ts"]).await;
+    tokio::fs::write(dir.join("draft notes.md"), "y\n")
+        .await
+        .unwrap();
+
+    let buckets = crate::git_parse::parse_status_buckets(&svc.status_raw().await.unwrap());
+    assert_eq!(buckets.staged, vec!["staged file.ts".to_string()]);
+    assert_eq!(buckets.untracked, vec!["draft notes.md".to_string()]);
+
+    // A path read back from status must be stageable as-is.
+    svc.stage(&buckets.untracked).await.unwrap();
+    let after = crate::git_parse::parse_status_buckets(&svc.status_raw().await.unwrap());
+    assert_eq!(
+        after.staged,
+        vec!["draft notes.md".to_string(), "staged file.ts".to_string()]
+    );
+}

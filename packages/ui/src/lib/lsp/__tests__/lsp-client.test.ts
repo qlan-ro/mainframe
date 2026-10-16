@@ -641,6 +641,32 @@ describe('LspClientManager — worktree-aware (R4)', () => {
     expect(notification.params.textDocument.uri).toBe('file:///project/worktrees/feat-branch/src/index.ts');
   });
 
+  it('percent-encodes a base path containing spaces in document URIs', async () => {
+    mockResolvePath.mockResolvedValue({
+      relative: '.',
+      absolute: '/Users/me/My Project',
+      baseKind: 'project',
+      basePath: '/Users/me/My Project',
+      contained: true,
+    });
+
+    const manager = new LspClientManager(31415);
+    const socket = await connectManager(manager, 'proj-1', 'typescript', '/Users/me/My Project');
+
+    socket.sendSpy.mockClear();
+    manager.ensureDocumentOpen('proj-1', 'typescript', {
+      filePath: 'src/my file.ts',
+      text: 'const x = 1;',
+      languageId: 'typescript',
+      version: 1,
+    });
+
+    const notification = JSON.parse(socket.sendSpy.mock.calls[0]![0]) as {
+      params: { textDocument: { uri: string } };
+    };
+    expect(notification.params.textDocument.uri).toBe('file:///Users/me/My%20Project/src/my%20file.ts');
+  });
+
   it('passes chatId in the /files preload fetch URL', async () => {
     const fetchSpy = vi.fn(() =>
       Promise.resolve({

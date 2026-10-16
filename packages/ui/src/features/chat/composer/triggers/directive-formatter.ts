@@ -16,6 +16,10 @@ export function literalDirectiveFormatter(prefix: string): DirectiveFormatter {
  * `shouldCloseTriggerOnInsert` below (`closeOnInsert: false` for it), which
  * keeps the `@` token open so the popover re-lists that directory.
  *
+ * A path containing whitespace is quoted, `@"my dir/a b.ts"` — the Claude
+ * CLI's form. A directory leaves the quote open (`@"my dir/`) so the trigger
+ * engine keeps the token alive across its spaces for drill-down.
+ *
  * A session serializes to the bare `@<label>` — the draft spelling. The
  * `session[…]` scaffolding the wire body needs would otherwise sit on screen
  * while typing, since the composer overlay shows a token verbatim;
@@ -28,7 +32,9 @@ export function mentionDirectiveFormatter(resolveSessionLabel?: (item: TriggerIt
   return {
     serialize: (item) => {
       if (item.type === 'session') return `@${resolveSessionLabel?.(item) ?? item.label}`;
-      return item.type === 'directory' ? `@${item.id}/` : `@${item.id}`;
+      const isDir = item.type === 'directory';
+      if (!/\s/u.test(item.id)) return isDir ? `@${item.id}/` : `@${item.id}`;
+      return isDir ? `@"${item.id}/` : `@"${item.id}"`;
     },
   };
 }
