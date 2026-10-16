@@ -123,8 +123,31 @@ async function measureStreaming() {
   return { idleFrames, idleAnchorHitTests, resumeBottomGapPx };
 }
 
+async function measureLateClamp() {
+  await reset();
+  // WebKit reports the shrink's clamp only after the content has grown again.
+  await page.evaluate(() => {
+    const tail = document.getElementById('tail');
+    tail.style.height = '20px';
+    void document.getElementById('viewport').scrollHeight;
+    tail.style.height = '400px';
+  });
+  await settle();
+  await grow();
+  await settle();
+  const lateClampGapPx = await page
+    .locator('#viewport')
+    .evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
+  return { lateClampGapPx };
+}
+
 async function measure() {
-  return { ...(await measureDisclosure()), ...(await measureResize()), ...(await measureStreaming()) };
+  return {
+    ...(await measureDisclosure()),
+    ...(await measureResize()),
+    ...(await measureStreaming()),
+    ...(await measureLateClamp()),
+  };
 }
 
 try {
@@ -159,7 +182,8 @@ try {
             s.footerBottomGapPx > 1 ||
             s.idleFrames !== 0 ||
             s.idleAnchorHitTests !== 0 ||
-            s.resumeBottomGapPx > 1,
+            s.resumeBottomGapPx > 1 ||
+            s.lateClampGapPx > 1,
     )
   )
     process.exitCode = 1;
