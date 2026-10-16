@@ -29,6 +29,9 @@ import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { CsvViewer } from '../CsvViewer';
 
+// ViewerShell's Reveal in Finder button reads the active daemon.
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => true }));
+
 // useFileTabNotes -> useReviewActions -> useSendReview reads these contexts
 // directly; neither provider is mounted here (fact 13 / plan Risks).
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({

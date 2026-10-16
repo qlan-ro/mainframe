@@ -134,6 +134,8 @@ export interface HostBridge {
     readFile(path: string): Promise<string | null>;
     readFileBase64(path: string): Promise<string | null>;
     showItemInFolder(path: string): Promise<void>;
+    /** Open a file with its default application (e.g. HTML in the browser). */
+    openPath(path: string): Promise<void>;
   };
   shell: {
     openExternal(url: string): Promise<void>;

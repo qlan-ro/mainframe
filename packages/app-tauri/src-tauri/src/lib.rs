@@ -19,8 +19,8 @@ use tauri::{Emitter, Manager};
 // Re-export commands at crate root so generate_handler! can find them.
 use commands::{
     daemon_token_get, daemon_token_set, daemons_list, daemons_remove, daemons_upsert,
-    get_app_info, get_auth_token, get_homedir, get_platform, read_file, read_file_base64,
-    show_item_in_folder,
+    get_app_info, get_auth_token, get_homedir, get_platform, open_path, read_file,
+    read_file_base64, show_item_in_folder,
 };
 use presence::{report_activity, DaemonPort};
 use terminal::{terminal_create, terminal_write, terminal_resize, terminal_kill, TerminalManager};
@@ -105,6 +105,7 @@ pub fn run() {
             get_daemon_port,
             get_daemon_status,
             show_item_in_folder,
+            open_path,
             read_file,
             read_file_base64,
             get_platform,

@@ -47,9 +47,10 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => activeIdentityState,
 }));
 vi.mock('@/lib/editor/file-types', () => ({
-  // Markdown paths route through MarkdownEditorTab; everything else stays on
-  // the plain CmEditorWithComments path exercised by the rest of this file.
-  inferLanguage: (path: string) => (path.endsWith('.md') ? 'markdown' : 'javascript'),
+  // Markdown and HTML paths route through their Preview/Source tabs; everything
+  // else stays on the plain CmEditorWithComments path exercised by the rest of
+  // this file.
+  inferLanguage: (path: string) => (path.endsWith('.md') ? 'markdown' : path.endsWith('.html') ? 'html' : 'javascript'),
 }));
 // Controls whether getBuffer returns a dirty buffer (for D4 dirty-buffer tests).
 let mockBufferDirty = false;
@@ -113,6 +114,16 @@ vi.mock('../MarkdownEditorTab', () => ({
   MarkdownEditorTab: (props: MarkdownEditorTabProps) => {
     capturedMarkdownProps.push(props);
     return <div data-testid="markdown-editor-mock" />;
+  },
+}));
+
+type HtmlEditorTabProps = ComponentProps<typeof import('../HtmlEditorTab').HtmlEditorTab>;
+const capturedHtmlProps: HtmlEditorTabProps[] = [];
+
+vi.mock('../HtmlEditorTab', () => ({
+  HtmlEditorTab: (props: HtmlEditorTabProps) => {
+    capturedHtmlProps.push(props);
+    return <div data-testid="html-editor-mock" />;
   },
 }));
 
@@ -225,6 +236,7 @@ beforeEach(async () => {
   setHostForTesting(new FakeHostBridge({ fs: { readFile: 'content' } }));
   capturedCmEditorProps.length = 0;
   capturedMarkdownProps.length = 0;
+  capturedHtmlProps.length = 0;
   mockBufferOverride = null;
   vi.mocked(saveProjectFile).mockClear();
   // Reset identity to no-project default so existing tests are unaffected.
@@ -468,6 +480,19 @@ describe('EditorTab — markdown Preview reflects live Source edits (bug fix)', 
 
     const lastProps = capturedMarkdownProps[capturedMarkdownProps.length - 1];
     expect(lastProps?.value).toBe('content');
+  });
+});
+
+describe('EditorTab — HTML files', () => {
+  it('routes an .html file to HtmlEditorTab with the live buffer value', async () => {
+    const { rerender } = render(<EditorTab tabId="tab-html" path="/project/site/index.html" />);
+    await screen.findByTestId('html-editor-mock');
+    expect(capturedHtmlProps[capturedHtmlProps.length - 1]?.value).toBe('content');
+
+    mockBufferOverride = { value: '<h1>edited</h1>', dirty: true };
+    rerender(<EditorTab tabId="tab-html" path="/project/site/index.html" />);
+    expect(capturedHtmlProps[capturedHtmlProps.length - 1]?.value).toBe('<h1>edited</h1>');
+    expect(screen.queryByTestId('cm-editor-mock')).toBeNull();
   });
 });
 

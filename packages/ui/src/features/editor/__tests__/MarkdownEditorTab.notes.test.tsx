@@ -22,6 +22,9 @@ import { render as rtlRender, screen, fireEvent, act } from '@testing-library/re
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { MarkdownEditorTab } from '../MarkdownEditorTab';
 
+// ViewerShell's Reveal in Finder button reads the active daemon.
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => true }));
+
 const zeroRect: DOMRect = {
   x: 0,
   y: 0,

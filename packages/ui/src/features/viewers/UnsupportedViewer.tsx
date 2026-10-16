@@ -13,7 +13,7 @@
  *     - "No preview available" heading.
  *     - Subtext with the filename.
  *     - Two action buttons:
- *         "Open externally" — primary CTA.
+ *         "Open externally" — opens the file with its default app.
  *         "Reveal in tree"  — outline secondary.
  *
  * data-testids:
@@ -24,38 +24,23 @@
  *   viewer-unsupported-reveal  — "Reveal in tree" button
  */
 import { File } from 'lucide-react';
-import { useHost } from '@/lib/host';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Hint } from '@/components/ui/hint';
-import { useActiveIdentity } from '@/features/sessions/use-active-identity';
-import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { ViewerShell } from './ViewerShell';
-import { toFileUrl } from './viewer-file-url';
+import { useNativeFileAction } from './viewer-file-path';
 
 interface UnsupportedViewerProps {
   path: string;
 }
 
 export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
-  const host = useHost();
   const basename = path.split('/').pop() ?? path;
   const ext = basename.includes('.') ? (basename.split('.').pop() ?? '') : '';
   const status = ext ? `${ext.toUpperCase()} · No preview` : 'No preview';
 
-  const { projectPath } = useActiveIdentity();
-  const fileUrl = toFileUrl(path, projectPath);
-  const isLocal = useDaemonIsLocal();
-
-  async function handleOpenExternal() {
-    if (!fileUrl) return;
-    try {
-      await host.shell.openExternal(fileUrl);
-    } catch (err) {
-      console.warn('[UnsupportedViewer] openExternal failed', err);
-    }
-  }
+  const openFile = useNativeFileAction(path, 'open');
 
   function handleReveal() {
     emitSurfaceIntent({ type: 'reveal-file', path });
@@ -83,21 +68,13 @@ export function UnsupportedViewer({ path }: UnsupportedViewerProps) {
           </div>
 
           <div className="flex gap-2">
-            <Hint
-              label={
-                !isLocal
-                  ? 'Cannot open: file lives on the remote server'
-                  : fileUrl === null
-                    ? 'Cannot open: project root is unknown for this relative path'
-                    : undefined
-              }
-            >
+            <Hint label={openFile.disabledReason ?? undefined}>
               <Button
                 data-testid="viewer-unsupported-open"
                 size="sm"
-                onClick={() => void handleOpenExternal()}
-                disabled={fileUrl === null || !isLocal}
-                aria-disabled={fileUrl === null || !isLocal}
+                onClick={() => void openFile.run()}
+                disabled={openFile.disabledReason !== null}
+                aria-disabled={openFile.disabledReason !== null}
               >
                 Open externally
               </Button>

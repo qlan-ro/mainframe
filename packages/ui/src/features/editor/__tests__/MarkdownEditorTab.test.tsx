@@ -5,6 +5,9 @@ import type { ComponentProps } from 'react';
 import { MarkdownEditorTab } from '../MarkdownEditorTab';
 import { MarkdownPreview } from '../MarkdownPreview';
 
+// ViewerShell's Reveal in Finder button reads the active daemon.
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => true }));
+
 /** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
 const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
   rtlRender(ui, { wrapper: TooltipProvider, ...options });

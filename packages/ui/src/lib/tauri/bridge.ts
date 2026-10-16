@@ -117,6 +117,16 @@ export async function showItemInFolder(path: string): Promise<void> {
 }
 
 /**
+ * Opens `path` with its default application (HTML in the default browser).
+ * Path must be a regular, non-executable file under the user home directory.
+ * No-op in browser dev mode.
+ */
+export async function openPath(path: string): Promise<void> {
+  if (!IS_TAURI) return;
+  await invoke<void>('open_path', { path });
+}
+
+/**
  * Reads a text file from disk. Path must be under the user home directory.
  * Returns null in browser dev mode or when the file is not found.
  */

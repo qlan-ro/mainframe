@@ -6,7 +6,7 @@
  * Layout:
  *   Header (28px, bg-muted) — folder icon, breadcrumb dir segments with
  *     chevron separators, basename; optional actions slot; separator;
- *     Reveal in file tree button.
+ *     Reveal in file tree and Reveal in Finder buttons.
  *   Body (flex-1 overflow-hidden) — viewer content via `children`.
  *   Footer (20px, bg-muted) — mono status string; optional right-aligned
  *     statusRight slot.
@@ -16,15 +16,19 @@
  *   status       — mono status string rendered left-aligned in the footer.
  *   statusRight  — optional right-aligned footer content (word count, etc.).
  *   actions      — optional React node inserted before the separator + Reveal
- *                  button in the header.
+ *                  buttons in the header.
  *   children     — viewer body content.
+ *
+ * Reveal in Finder needs the file on this machine: it is disabled under a
+ * remote daemon, and for a relative path when no workspace base is known.
  */
 import React from 'react';
-import { ChevronRight, Crosshair, Folder } from 'lucide-react';
+import { ChevronRight, Crosshair, Folder, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Separator } from '@/components/ui/separator';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { useNativeFileAction } from './viewer-file-path';
 
 interface ViewerShellProps {
   path: string;
@@ -32,6 +36,24 @@ interface ViewerShellProps {
   statusRight?: React.ReactNode;
   actions?: React.ReactNode;
   children: React.ReactNode;
+}
+
+function RevealInFinderButton({ path }: { path: string }) {
+  const { disabledReason, run } = useNativeFileAction(path, 'reveal');
+  return (
+    <Hint label={disabledReason ?? 'Reveal in Finder'}>
+      <Button
+        data-testid="viewer-shell-reveal-finder"
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Reveal in Finder"
+        disabled={disabledReason !== null}
+        onClick={() => void run()}
+      >
+        <FolderOpen />
+      </Button>
+    </Hint>
+  );
 }
 
 export function ViewerShell({ path, status, statusRight, actions, children }: ViewerShellProps) {
@@ -69,6 +91,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
             <Crosshair />
           </Button>
         </Hint>
+        <RevealInFinderButton path={path} />
       </div>
 
       {/* Body */}

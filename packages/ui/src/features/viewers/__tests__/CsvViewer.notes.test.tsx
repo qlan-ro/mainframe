@@ -24,6 +24,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { CsvViewer } from '../CsvViewer';
 import type { CmEditorWithComments as CmEditorWithCommentsType } from '@/features/editor/inline-comments/CmEditorWithComments';
 
+// ViewerShell's Reveal in Finder button reads the active daemon.
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => true }));
+
 const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
   rtlRender(ui, { wrapper: TooltipProvider, ...options });
 
