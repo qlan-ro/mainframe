@@ -17,8 +17,11 @@ Run pnpm commands from the repository root unless a directory is specified.
 | Check daemon workspace | `cargo check --manifest-path packages/core-rs/Cargo.toml --workspace` |
 | Check Tauri shell | `cargo check --manifest-path packages/app-tauri/src-tauri/Cargo.toml` |
 | Run daemon tests for a crate | `cargo test --manifest-path packages/core-rs/Cargo.toml -p <crate> <test-filter>` |
+| Check the daemon gate (forbidden patterns, file-length ratchet) | `bash packages/core-rs/tools/verify-gate.sh` |
 | Start desktop app | `pnpm tauri:dev` in `packages/app-tauri` |
 | Mock-adapter Playwright suite | `pnpm test:e2e` |
+
+The pre-commit hook runs the daemon gate whenever a commit touches `packages/core-rs` Rust files, and CI's Rust port check runs it on every pull request. A Rust file may have at most 300 lines, excluding test-only code, unless `packages/core-rs/tools/file_length_ratchet.json` lists it. A listed file must measure exactly its entry, and an entry can never grow. When a change grows a listed file, move code into a sibling module; when it shrinks one, lower the entry to the size the gate reports.
 
 Typecheck affected TypeScript packages after code changes. Prefer focused test files while iterating; large combined UI runs have encountered cross-file `React.act` failures. The types package has no `typecheck` script. A pnpm test run does not cover the Rust workspaces.
 

@@ -7,3 +7,20 @@
 # failure (--no-revert is not set); only the extra stash-based safety net
 # is skipped.
 npx lint-staged --no-stash
+
+# The core-rs gate (forbidden patterns and the file-length ratchet in
+# packages/core-rs/tools/file_length_ratchet.json) otherwise only runs in CI's
+# Rust port check, so its failures surfaced after every push. It reads the
+# working tree, not the index, and needs Python 3.11+; without one it exits 3
+# and the commit goes ahead, since CI still enforces the gate.
+if git diff --cached --name-only --diff-filter=ACMRD \
+  | grep -qE '^packages/core-rs/(.*\.rs|tools/file_length_ratchet\.json)$'; then
+  status=0
+  bash packages/core-rs/tools/verify-gate.sh || status=$?
+  if [ "$status" -eq 3 ]; then
+    echo "pre-commit: skipped the core-rs gate (needs Python 3.11+); CI will run it." >&2
+  elif [ "$status" -ne 0 ]; then
+    echo "pre-commit: the core-rs gate failed. A file over its ratchet needs code moved out; a file under it needs its entry lowered to the measured size." >&2
+    exit "$status"
+  fi
+fi
