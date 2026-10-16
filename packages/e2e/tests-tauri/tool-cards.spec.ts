@@ -427,7 +427,7 @@ test.describe('§tool-cards — Plan revision (plan-revision)', () => {
     await closeTauriApp(app);
   });
 
-  test('a rejected plan (keep-planning → feedback) echoes the feedback as a user message and leaves the first PlanCard resultless', async () => {
+  test('a rejected plan (keep-planning → feedback) echoes the feedback as a user message and renders the first PlanCard as an error', async () => {
     const { page } = app;
     await sendMessage(page, 'Add `export function multiply(a: number, b: number) { return a * b; }` to utils.ts');
     await page.getByTestId('chat-plan-gate').waitFor({ timeout: 45_000 });
@@ -437,15 +437,10 @@ test.describe('§tool-cards — Plan revision (plan-revision)', () => {
     await page.getByTestId('chat-plan-feedback-input').fill('Please also add a divide function');
     await page.getByTestId('chat-plan-send-feedback').click();
 
-    // Root-caused live (read packages/core/src/chat/permission-handler.ts:62-69 +
-    // .../plugins/builtin/claude/session.ts's respondToPermission): a deny-with-feedback response
-    // is asymmetric by design — `response.message` is (a) echoed into chat history as a brand-new
-    // TRANSIENT USER MESSAGE (createTransientMessage), and (b) forwarded to the CLI over stdin
-    // ONLY. It is NEVER attached as a `tool_result` for the rejected ExitPlanMode tool_use — the
-    // recording confirms no `tool_result` NDJSON event follows it, matching how the real CLI
-    // itself behaves (a rejected-with-feedback plan just starts a new turn, it doesn't emit a
-    // result for the old one). So the feedback text surfaces as a `chat-user-message` bubble, not
-    // inside the first PlanCard's body.
+    // A deny-with-feedback response is echoed into chat history as a transient user message,
+    // and the CLI answers the rejected ExitPlanMode with an isError `tool_result` quoting that
+    // feedback (frame 14 of the recording). The feedback therefore surfaces twice: as a
+    // `chat-user-message` bubble and inside the first PlanCard's error result.
     await expect(
       page.getByTestId('chat-user-message').filter({ hasText: 'Please also add a divide function' }),
     ).toBeVisible({
@@ -455,16 +450,20 @@ test.describe('§tool-cards — Plan revision (plan-revision)', () => {
     // A second plan gate appears for the revised plan (chat.spec.ts's existing assertion).
     await page.getByTestId('chat-plan-gate').waitFor({ timeout: 45_000 });
 
-    // The first (rejected) ExitPlanMode's display card is still in the transcript, but — per the
-    // above — permanently resultless: `hasResult` stays false, so its trigger stays disabled and
-    // no `chat-plan-body` ever mounts for it. (Only one `chat-plan-card` is visible at this point:
-    // the second, now-pending ExitPlanMode's own card is suppressed from the main stream while its
-    // gate is active, same as the first was before this reject.)
+    // The first (rejected) ExitPlanMode's display card stays in the transcript. Display grouping
+    // attaches its rejection result to the group that owns the tool_use, even though the echoed
+    // user message sits between them, so the card renders as an error with the rejection text.
+    // (Only one `chat-plan-card` is visible at this point: the second, now-pending ExitPlanMode's
+    // own card is suppressed from the main stream while its gate is active.)
     const planCard = page.getByTestId('chat-plan-card').first();
     await expect(planCard).toBeVisible({ timeout: 10_000 });
     await expect(planCard.getByTestId('chat-plan-label')).toHaveText('Updated plan');
-    await expect(planCard.getByTestId('chat-plan-trigger')).toBeDisabled();
-    await expect(planCard.getByTestId('chat-plan-body')).toHaveCount(0);
+    await expect(planCard.getByTestId('chat-plan-trigger')).toBeEnabled();
+    await expect(planCard.getByTestId('chat-plan-trigger').locator('..')).toHaveClass(/border-destructive/);
+    await expect(planCard.getByTestId('chat-plan-body')).toContainText(
+      "The user doesn't want to proceed with this tool use",
+    );
+    await expect(planCard.getByTestId('chat-plan-body')).toContainText('Please also add a divide function');
 
     // Clean up exactly as chat.spec.ts does: reject the revised plan so the mock session ends
     // cleanly. That reject sends the model another reply and starts a new turn, but the
