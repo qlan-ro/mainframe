@@ -9,6 +9,8 @@ vi.mock('@/lib/api/files', () => ({
 }));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 1 }));
 vi.mock('@/features/sessions/use-active-identity', () => ({ useActiveIdentity: () => identity }));
+// ViewerShell's Reveal in Finder button reads the active daemon.
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => true }));
 
 import { ViewerRouter } from '../viewer-router';
 
