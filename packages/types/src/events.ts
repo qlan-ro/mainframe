@@ -89,6 +89,7 @@ export type DaemonEvent =
       adapterId: string;
       quota: import('./adapter.js').ProviderQuota;
     }
+  | { type: 'provider.cli.updated'; status: import('./cli-update.js').ProviderCliStatus }
   | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] }
   | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr }
   | { type: 'worktree.offer.raised'; chatId: string; offer: WorktreeSwitchOffer }

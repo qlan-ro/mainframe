@@ -3,6 +3,26 @@ use crate::types::ReasoningEffortOption;
 use mainframe_types::adapter::EffortLevel;
 
 #[test]
+fn invalidate_catalog_drops_the_lifetime_model_cache() {
+    let adapter = CodexAdapter::default();
+    let m = ModelInfo {
+        id: "gpt-6.1-sol".to_string(),
+        display_name: None,
+        description: None,
+        hidden: None,
+        is_default: None,
+        supports_personality: None,
+        additional_speed_tiers: None,
+        default_reasoning_effort: None,
+        supported_reasoning_efforts: None,
+    };
+    *adapter.cached_models.lock_recover() = Some(vec![map_codex_model(&m)]);
+    assert_eq!(adapter.catalog().len(), 1);
+    adapter.invalidate_catalog();
+    assert!(adapter.catalog().is_empty());
+}
+
+#[test]
 fn has_no_initial_transcript_path() {
     assert_eq!(
         CodexAdapter::default().initial_transcript_path("thread-1", "/proj"),

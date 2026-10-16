@@ -16,20 +16,22 @@ impl AppCtxBuilder {
             };
         }
         let services = required!(services);
+        let core = CoreCtx {
+            db: self.db,
+            data_dir: self.data_dir,
+            git: required!(git),
+            broadcast: required!(broadcast),
+            resolved_path: required!(resolved_path),
+            adapter_registry: required!(adapter_registry),
+            background_tasks: required!(background_tasks),
+            claude_workflows: required!(claude_workflows),
+            version: required!(version),
+            port: required!(port),
+            auth_secret: required!(auth_secret),
+        };
+        let cli_updates = crate::cli_update::CliUpdateManager::for_daemon(&core);
         Ok(AppCtx {
-            core: CoreCtx {
-                db: self.db,
-                data_dir: self.data_dir,
-                git: required!(git),
-                broadcast: required!(broadcast),
-                resolved_path: required!(resolved_path),
-                adapter_registry: required!(adapter_registry),
-                background_tasks: required!(background_tasks),
-                claude_workflows: required!(claude_workflows),
-                version: required!(version),
-                port: required!(port),
-                auth_secret: required!(auth_secret),
-            },
+            core,
             infra: InfraCtx {
                 tunnel_manager: required!(tunnel_manager),
                 port_tunnels: required!(port_tunnels),
@@ -44,6 +46,7 @@ impl AppCtxBuilder {
                 push: services.push,
                 watcher: services.watcher,
                 quota: required!(quota),
+                cli_updates,
                 automations: required!(automations),
             },
             chat: ChatCtx {

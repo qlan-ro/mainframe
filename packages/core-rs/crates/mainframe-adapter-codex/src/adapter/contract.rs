@@ -113,6 +113,10 @@ impl Adapter for CodexAdapter {
             .unwrap_or_default()
     }
 
+    fn invalidate_catalog(&self) {
+        *self.cached_models.lock_recover() = None;
+    }
+
     /// `probeModels(executablePath?)` — probe with the configured Codex binary
     /// (#430). Delegates to `load_models`, which caches non-empty catalogs.
     fn refresh_catalog(

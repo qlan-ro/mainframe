@@ -4,8 +4,8 @@
  * Tasks, Automations, Setup Advisor, Settings — all five are view buttons
  * with the same selected/aria-pressed treatment; picking one shows that
  * view's list in the sidebar and its content in the body (D1). The bottom
- * cluster is the app's ambient chrome that ISN'T a view: the updater (null
- * while idle), the daemon switcher (device + connection dot, opens the picker),
+ * cluster is the app's ambient chrome that ISN'T a view: the updater (app and
+ * provider CLI updates; null while idle), the daemon switcher (device + connection dot, opens the picker),
  * and appearance — then Settings.
  *
  * Not `SidebarRail`, which is the sidebar primitive's resize handle.

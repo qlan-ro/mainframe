@@ -17,6 +17,7 @@ pub mod chat_deps;
 pub mod chat_seams;
 #[cfg(test)]
 pub(crate) mod chat_test_support;
+pub mod cli_update;
 pub mod cors_origin;
 pub mod ctx;
 pub mod db;

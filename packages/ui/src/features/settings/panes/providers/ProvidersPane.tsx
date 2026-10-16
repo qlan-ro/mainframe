@@ -5,6 +5,7 @@ import { useAdapters } from '../../../../store/adapters';
 import { updateGeneralSettings } from '../../../../lib/api/settings';
 import { providerDotColor } from '../../../shared/provider-avatar';
 import { ProviderConfigForm } from './ProviderConfigForm';
+import { ProviderCliVersion } from './ProviderCliVersion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ProvidersPaneProps {
@@ -92,6 +93,7 @@ export function ProvidersPane({ port }: ProvidersPaneProps) {
       {selectedProvider && adapter && (
         <>
           <ProviderHeader adapter={adapter} />
+          <ProviderCliVersion port={port} adapterId={selectedProvider} />
           <ProviderConfigForm port={port} adapterId={selectedProvider} label={adapter.name} adapter={adapter} />
         </>
       )}

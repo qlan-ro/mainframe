@@ -74,6 +74,7 @@ impl AppCtxBuilder {
                 push: services.push,
                 watcher: services.watcher,
                 quota: self.quota.take().unwrap_or_else(|| manager.clone()),
+                cli_updates: crate::cli_update::CliUpdateManager::for_daemon(core),
                 automations: self.automations.take().flatten(),
             },
             manager,

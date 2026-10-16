@@ -1,6 +1,6 @@
 {
   "mainframe-acp/src/resume.rs": 312,
-  "mainframe-adapter-api/src/lib.rs": 385,
+  "mainframe-adapter-api/src/lib.rs": 384,
   "mainframe-adapter-api/tests/pr_detection_sink.rs": 331,
   "mainframe-adapter-api/tests/registry.rs": 523,
   "mainframe-adapter-claude/src/task_events.rs": 319,
@@ -61,5 +61,5 @@
   "mainframe-services/src/quota/manager.rs": 485,
   "mainframe-types/src/acp/extensions.rs": 322,
   "mainframe-types/src/adapter.rs": 579,
-  "mainframe-types/src/events.rs": 407
+  "mainframe-types/src/events.rs": 353
 }

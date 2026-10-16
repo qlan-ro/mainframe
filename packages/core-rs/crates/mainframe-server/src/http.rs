@@ -167,6 +167,7 @@ fn http_routes() -> Router<Arc<AppCtx>> {
         .merge(routes::suggestions::router())
         .merge(routes::setup_advisor::router())
         .merge(routes::quota::router())
+        .merge(routes::cli_update::router())
         // Launch (per-project process control), tunnel and per-port tunnels
         // (cloudflared), and the LSP language-status endpoint.
         .merge(routes::launch::router())

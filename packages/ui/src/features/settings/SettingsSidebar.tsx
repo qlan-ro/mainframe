@@ -9,6 +9,7 @@
  */
 import { cn } from '@/lib/utils';
 import { useAdapters } from '@/store/adapters';
+import { useProviderCliStatus } from '@/store/cli-update';
 import { SidebarHeader } from '@/components/ui/sidebar';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
 import { useSettingsStore, type SettingsTab } from '../../store/settings';
@@ -47,40 +48,65 @@ function SettingsNavItem({ label, icon: Icon, active, onClick, testId }: NavItem
   );
 }
 
+function ProviderSubItem({
+  adapterId,
+  name,
+  active,
+  onClick,
+}: {
+  adapterId: string;
+  name: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const cliStatus = useProviderCliStatus(adapterId);
+
+  return (
+    <button
+      type="button"
+      data-testid={`settings-nav-provider-${adapterId}`}
+      onClick={onClick}
+      // Brand hue inline: it is a literal in provider-avatar.ts, not a token.
+      style={active ? { borderLeftColor: providerHue(adapterId) } : undefined}
+      className={cn(
+        'flex h-6.5 items-center gap-2 border-l-2 pl-2 pr-2 text-left text-xs transition-colors',
+        active
+          ? 'bg-sidebar-selection font-semibold text-foreground'
+          : 'border-l-transparent text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+      )}
+    >
+      <span
+        style={{ backgroundColor: providerHue(adapterId) }}
+        className="inline-flex size-[14px] shrink-0 items-center justify-center rounded-xs text-[10px] font-bold text-white ring-1 ring-inset ring-black/10"
+      >
+        {name.charAt(0).toUpperCase()}
+      </span>
+      <span className="truncate">{name}</span>
+      {cliStatus?.updateAvailable && (
+        <span
+          data-testid={`settings-nav-provider-${adapterId}-cli-update-dot`}
+          className="size-1.5 shrink-0 rounded-full bg-primary"
+        />
+      )}
+    </button>
+  );
+}
+
 function ProviderSubItems({ activeProvider }: { activeProvider: string | null }) {
   const adapters = useAdapters();
   const setSelectedProvider = useSettingsStore((s) => s.setSelectedProvider);
 
   return (
     <div className="flex flex-col gap-px py-px pl-5">
-      {adapters.map((adapter) => {
-        const active = activeProvider === adapter.id;
-        const name = adapter.name ?? adapter.id;
-        return (
-          <button
-            key={adapter.id}
-            type="button"
-            data-testid={`settings-nav-provider-${adapter.id}`}
-            onClick={() => setSelectedProvider(adapter.id)}
-            // Brand hue inline: it is a literal in provider-avatar.ts, not a token.
-            style={active ? { borderLeftColor: providerHue(adapter.id) } : undefined}
-            className={cn(
-              'flex h-6.5 items-center gap-2 border-l-2 pl-2 pr-2 text-left text-xs transition-colors',
-              active
-                ? 'bg-sidebar-selection font-semibold text-foreground'
-                : 'border-l-transparent text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
-            )}
-          >
-            <span
-              style={{ backgroundColor: providerHue(adapter.id) }}
-              className="inline-flex size-[14px] shrink-0 items-center justify-center rounded-xs text-[10px] font-bold text-white ring-1 ring-inset ring-black/10"
-            >
-              {name.charAt(0).toUpperCase()}
-            </span>
-            <span className="truncate">{name}</span>
-          </button>
-        );
-      })}
+      {adapters.map((adapter) => (
+        <ProviderSubItem
+          key={adapter.id}
+          adapterId={adapter.id}
+          name={adapter.name ?? adapter.id}
+          active={activeProvider === adapter.id}
+          onClick={() => setSelectedProvider(adapter.id)}
+        />
+      ))}
     </div>
   );
 }

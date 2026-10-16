@@ -373,15 +373,14 @@ impl AdapterRegistry {
 
 pub mod skills;
 pub use skills::SkillsProvider;
-
 pub mod quota;
 pub use quota::QuotaSource;
-
 mod external_sessions;
 pub use external_sessions::ExternalSessions;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 
+mod force_refresh;
 mod refresh_helpers;
 use refresh_helpers::{probe_installation, refresh_catalog, refresh_snapshot};
