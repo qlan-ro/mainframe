@@ -18,7 +18,6 @@ import {
   seedProviderCliStatuses,
   resetProviderCliStatuses,
   useProviderCliStatus,
-  useAnyProviderCliUpdateAvailable,
   installProviderCliStatusSubscriber,
 } from '../cli-update.js';
 
@@ -78,19 +77,8 @@ describe('ui cli-update store', () => {
     expect(Object.keys(useCliUpdateStore.getState().byId)).toHaveLength(0);
   });
 
-  it('useProviderCliStatus and useAnyProviderCliUpdateAvailable are selector hooks', () => {
+  it('useProviderCliStatus is a selector hook', () => {
     expect(useProviderCliStatus).toBeTypeOf('function');
-    expect(useAnyProviderCliUpdateAvailable).toBeTypeOf('function');
-  });
-
-  it('useAnyProviderCliUpdateAvailable-backing state is true exactly when some provider has an update', () => {
-    seedProviderCliStatuses([
-      status('claude', { updateAvailable: false }),
-      status('codex', { updateAvailable: false }),
-    ]);
-    expect(Object.values(useCliUpdateStore.getState().byId).some((s) => s.updateAvailable)).toBe(false);
-    applyProviderCliStatus(status('codex', { updateAvailable: true }));
-    expect(Object.values(useCliUpdateStore.getState().byId).some((s) => s.updateAvailable)).toBe(true);
   });
 
   it('the update-start reply never rolls back a push for the same run', () => {

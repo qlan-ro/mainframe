@@ -9,6 +9,7 @@
  * no freshness guard here (no `observedAt` to order by, and nothing to merge).
  */
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import type { ProviderCliStatus } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '@/lib/daemon/ws-client';
 
@@ -24,9 +25,16 @@ export function useProviderCliStatus(adapterId: string): ProviderCliStatus | und
   return useCliUpdateStore((s) => s.byId[adapterId]);
 }
 
-/** True when ANY known provider has an update available — drives the light chrome dot. */
-export function useAnyProviderCliUpdateAvailable(): boolean {
-  return useCliUpdateStore((s) => Object.values(s.byId).some((status) => status.updateAvailable));
+/** Providers with something to act on — an available update or a run in progress —
+ *  sorted by id. Drives the rail update button's menu. */
+export function useProviderCliUpdates(): ProviderCliStatus[] {
+  return useCliUpdateStore(
+    useShallow((s) =>
+      Object.values(s.byId)
+        .filter((status) => status.updateAvailable || status.update?.state === 'running')
+        .sort((a, b) => a.adapterId.localeCompare(b.adapterId)),
+    ),
+  );
 }
 
 /** Replace one provider's status wholesale (REST reply or WS push alike). */

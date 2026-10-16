@@ -4,8 +4,8 @@
  * Tasks, Automations, Setup Advisor, Settings — all five are view buttons
  * with the same selected/aria-pressed treatment; picking one shows that
  * view's list in the sidebar and its content in the body (D1). The bottom
- * cluster is the app's ambient chrome that ISN'T a view: the updater (null
- * while idle), the daemon switcher (device + connection dot, opens the picker),
+ * cluster is the app's ambient chrome that ISN'T a view: the updater (app and
+ * provider CLI updates; null while idle), the daemon switcher (device + connection dot, opens the picker),
  * and appearance — then Settings.
  *
  * Not `SidebarRail`, which is the sidebar primitive's resize handle.
@@ -15,7 +15,6 @@ import { useTheme } from '@/store/theme';
 import { useUiPrefs, type SidebarView } from '@/store/ui-prefs';
 import { chordHint } from '@/features/shortcuts/chord-hint';
 import { selectPendingInteractionCount, useAutomationsStore } from '@/features/automations/data/use-automations-store';
-import { useAnyProviderCliUpdateAvailable } from '@/store/cli-update';
 import { NavRailButton } from './NavRailButton';
 import { RailUpdateButton } from './RailUpdateButton';
 import { DaemonSwitcher } from '@/features/daemon/DaemonSwitcher';
@@ -40,7 +39,6 @@ export function NavRail() {
   const setView = useUiPrefs((s) => s.setSidebarView);
   const setSidebarVisible = useUiPrefs((s) => s.setSidebarVisible);
   const pendingAutomations = useAutomationsStore(selectPendingInteractionCount);
-  const cliUpdateAvailable = useAnyProviderCliUpdateAvailable();
   const resolvedMode = useTheme((s) => s.resolvedMode);
   const toggleTheme = useTheme((s) => s.toggle);
   const settingsChord = chordHint('app.settings');
@@ -82,17 +80,9 @@ export function NavRail() {
         />
         <NavRailButton
           testId="shell-rail-settings"
-          label={
-            cliUpdateAvailable
-              ? 'Settings · a provider CLI update is available'
-              : settingsChord == null
-                ? 'Settings'
-                : `Settings · ${settingsChord}`
-          }
+          label={settingsChord == null ? 'Settings' : `Settings · ${settingsChord}`}
           icon={Settings}
           selected={view === 'settings'}
-          dot={cliUpdateAvailable}
-          dotTestId="shell-rail-settings-cli-update"
           onClick={() => select('settings')}
         />
       </div>
