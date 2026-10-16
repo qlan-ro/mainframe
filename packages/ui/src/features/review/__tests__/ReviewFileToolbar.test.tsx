@@ -100,6 +100,14 @@ describe('ReviewFileToolbar — diff stat display', () => {
     expect(screen.getByText('+0')).toBeInTheDocument();
     expect(screen.getByText('−0')).toBeInTheDocument();
   });
+
+  it('omits the counts when the scope reports none', () => {
+    render(
+      <ReviewFileToolbar file="src/index.ts" viewed={false} onToggleViewed={vi.fn()} onOpenInWorkspace={vi.fn()} />,
+    );
+    expect(screen.queryByTestId('review-file-toolbar-stat')).toBeNull();
+    expect(screen.queryByText('+0')).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

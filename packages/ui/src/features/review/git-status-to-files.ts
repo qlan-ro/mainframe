@@ -13,6 +13,8 @@ import { gitStatusKind } from '@/lib/git-status-kind';
 export interface ReviewFile {
   path: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed';
+  /** Source path of a rename — where the diff reads the original from. */
+  oldPath?: string;
   additions: number;
   deletions: number;
 }
@@ -24,6 +26,7 @@ export function gitStatusToFiles(files: GitStatusFile[], stat?: WorkingStat): Re
     return {
       path: f.path,
       status: gitStatusKind(f.status),
+      ...(f.oldPath ? { oldPath: f.oldPath } : {}),
       additions: c?.additions ?? 0,
       deletions: c?.deletions ?? 0,
     };

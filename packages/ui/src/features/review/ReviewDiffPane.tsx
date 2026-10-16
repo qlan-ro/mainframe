@@ -5,15 +5,17 @@
  * orchestrator small.
  */
 import { ReviewFileToolbar } from './ReviewFileToolbar';
-import { ReviewDiffView } from './ReviewDiffView';
+import { ReviewDiffView, type DiffSource } from './ReviewDiffView';
 
 interface ReviewDiffPaneProps {
   port: number;
   projectId: string;
   chatId?: string;
   file: string | null;
-  additions: number;
-  deletions: number;
+  source: DiffSource;
+  /** Absent for scopes with no per-file stat. */
+  additions?: number;
+  deletions?: number;
   viewed: boolean;
   onToggleViewed: () => void;
   onOpenInWorkspace: () => void;
@@ -25,6 +27,7 @@ export function ReviewDiffPane({
   projectId,
   chatId,
   file,
+  source,
   additions,
   deletions,
   viewed,
@@ -51,7 +54,14 @@ export function ReviewDiffPane({
         onOpenInWorkspace={onOpenInWorkspace}
       />
       <div className="min-h-0 flex-1">
-        <ReviewDiffView port={port} projectId={projectId} chatId={chatId} file={file} onAppend={onAppend} />
+        <ReviewDiffView
+          port={port}
+          projectId={projectId}
+          chatId={chatId}
+          file={file}
+          source={source}
+          onAppend={onAppend}
+        />
       </div>
     </div>
   );

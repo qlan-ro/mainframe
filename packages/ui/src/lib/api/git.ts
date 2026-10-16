@@ -32,6 +32,8 @@ export interface GitStatusFile {
   path: string;
   /** Porcelain status code (e.g. 'M', 'A', 'D', '??', 'R'). */
   status: string;
+  /** Source path of a rename or copy. */
+  oldPath?: string;
 }
 
 interface GitStatusResponse {
@@ -59,19 +61,22 @@ export interface WorkingDiff {
 }
 
 /**
- * Working-tree diff for a single file. Returns the daemon's data as-is;
- * a soft-error (untracked/clean file) yields empty strings with success:true.
+ * Diff for a single file: `original` is the file at `base` (default HEAD), read
+ * from `oldPath` for a rename; `modified` is the working-tree file. Returns the
+ * daemon's data as-is; a soft-error (untracked/clean file) yields empty strings
+ * with success:true.
  */
 export async function getWorkingDiff(
   port: number,
   projectId: string,
   file: string,
-  opts?: { base?: string; chatId?: string },
+  opts?: { base?: string; oldPath?: string; chatId?: string },
 ): Promise<WorkingDiff> {
   const qs = new URLSearchParams();
   qs.set('file', file);
   qs.set('source', 'git');
   if (opts?.base) qs.set('base', opts.base);
+  if (opts?.oldPath) qs.set('oldPath', opts.oldPath);
   if (opts?.chatId) qs.set('chatId', opts.chatId);
   return request<WorkingDiff>('GET', `${apiBase(port)}/api/projects/${encodeURIComponent(projectId)}/git/diff?${qs}`);
 }

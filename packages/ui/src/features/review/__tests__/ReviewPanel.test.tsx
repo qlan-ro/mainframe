@@ -9,7 +9,7 @@
  *  - Empty git status renders "No changes to review".
  *  - Close button sets reviewOpen to false.
  *  - The change-scope switcher: default scope, per-scope data source, the branch
- *    comparison line, and the omitted +/− totals. These three scope cases came
+ *    comparison line, merge-base and session diffs, and the omitted +/− totals. These three scope cases came
  *    from the retired inspector `ChangesPanel`, the only surface that used to
  *    offer the scopes.
  */
@@ -27,6 +27,7 @@ const mockGetWorkingStat = vi.fn();
 const mockGetBranchDiffs = vi.fn();
 const mockGetSessionFiles = vi.fn();
 const mockGitCommit = vi.fn();
+const mockGetWorkingDiff = vi.fn();
 vi.mock('@/lib/api/git', () => ({
   getGitStatus: (...args: unknown[]) => mockGetGitStatus(...args),
   getWorkingStat: (...args: unknown[]) => mockGetWorkingStat(...args),
@@ -34,12 +35,14 @@ vi.mock('@/lib/api/git', () => ({
   getGitBranch: () => Promise.resolve({ branch: 'feat/rail-collapse' }),
   gitCommit: (...args: unknown[]) => mockGitCommit(...args),
   // getWorkingDiff is used by ReviewDiffView; mock it to prevent actual calls
-  getWorkingDiff: () => Promise.resolve({ original: '', modified: '', diff: '', source: 'git' }),
+  getWorkingDiff: (...args: unknown[]) => mockGetWorkingDiff(...args),
 }));
 
+const mockGetSessionDiff = vi.fn();
 vi.mock('@/lib/api/files', async (orig) => ({
   ...(await orig<typeof import('@/lib/api/files')>()),
   getSessionFiles: (...args: unknown[]) => mockGetSessionFiles(...args),
+  getSessionDiff: (...args: unknown[]) => mockGetSessionDiff(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -108,8 +111,12 @@ beforeEach(() => {
   mockGetWorkingStat.mockResolvedValue({ files: [], totalAdditions: 0, totalDeletions: 0 });
   mockGetBranchDiffs.mockReset();
   mockGetSessionFiles.mockReset();
+  mockGetSessionDiff.mockReset();
+  mockGetSessionDiff.mockResolvedValue({ original: '', modified: '', source: 'session' });
   mockGitCommit.mockReset();
   mockGitCommit.mockResolvedValue({ commit: 'abc123' });
+  mockGetWorkingDiff.mockReset();
+  mockGetWorkingDiff.mockResolvedValue({ original: '', modified: '', diff: '', source: 'git' });
   mockAppend.mockReset();
   mockIdentity = {
     projectId: 'proj-1',
@@ -306,22 +313,28 @@ describe('ReviewPanel — change-scope switcher', () => {
     expect(mockGetBranchDiffs).not.toHaveBeenCalled();
   });
 
-  it('Session reads the session files and renders rows with no status badge', async () => {
-    mockGetGitStatus.mockResolvedValue([]);
-    mockGetSessionFiles.mockResolvedValue(['src/touched.ts']);
+  it('Session lists every file the session edited, committed or not, and diffs its own edits', async () => {
+    mockGetGitStatus.mockResolvedValue([{ path: 'src/by-hand.ts', status: 'M' }]);
+    mockGetSessionFiles.mockResolvedValue([
+      { path: 'src/created.ts', status: 'added' },
+      { path: 'src/already-committed.ts', status: 'modified' },
+    ]);
 
     render(<ReviewPanel />);
     openReview();
-    await waitFor(() => expect(screen.queryByTestId('review-modal')).not.toBeNull());
+    await waitFor(() => expect(screen.queryByTestId('review-file-row-src/by-hand.ts')).not.toBeNull());
 
     chooseScope('session');
 
     await waitFor(() => {
-      expect(screen.queryByTestId('review-file-row-src/touched.ts')).not.toBeNull();
+      expect(screen.queryByTestId('review-file-row-src/already-committed.ts')).not.toBeNull();
     });
     expect(mockGetSessionFiles).toHaveBeenCalledWith(31415, 'chat-1');
-    // The daemon reports paths only for this scope — no per-file git status.
-    expect(screen.queryByTestId('review-file-status-src/touched.ts')).toBeNull();
+    expect(screen.queryByTestId('review-file-row-src/by-hand.ts')).toBeNull();
+    expect(screen.getByTestId('review-file-status-src/created.ts').textContent).toBe('A');
+    await waitFor(() => {
+      expect(mockGetSessionDiff).toHaveBeenCalledWith(31415, 'chat-1', 'src/created.ts');
+    });
   });
 
   it('Branch reads the branch diff and renders the comparison line', async () => {
@@ -348,14 +361,59 @@ describe('ReviewPanel — change-scope switcher', () => {
     expect(screen.queryByTestId('review-file-status-src/b.ts')).not.toBeNull();
   });
 
-  it('omits the +/− totals on session and branch rather than showing zeros', async () => {
+  it('Branch diffs each file against the merge base, reading a rename from its old path', async () => {
+    mockGetGitStatus.mockResolvedValue([]);
+    mockGetBranchDiffs.mockResolvedValue({
+      branch: 'feat/x',
+      baseBranch: 'main',
+      mergeBase: 'abc1234def',
+      files: [{ path: 'src/new-name.ts', status: 'R', oldPath: 'src/old-name.ts' }],
+    });
+
+    render(<ReviewPanel />);
+    openReview();
+    await waitFor(() => expect(screen.queryByTestId('review-modal')).not.toBeNull());
+
+    chooseScope('branch');
+
+    await waitFor(() => {
+      expect(mockGetWorkingDiff).toHaveBeenCalledWith(31415, 'proj-1', 'src/new-name.ts', {
+        chatId: 'chat-1',
+        base: 'abc1234def',
+        oldPath: 'src/old-name.ts',
+      });
+    });
+  });
+
+  it('Uncommitted diffs against HEAD — no base is sent', async () => {
+    mockGetGitStatus.mockResolvedValue([{ path: 'src/a.ts', status: 'M' }]);
+
+    render(<ReviewPanel />);
+    openReview();
+
+    await waitFor(() => {
+      expect(mockGetWorkingDiff).toHaveBeenCalledWith(31415, 'proj-1', 'src/a.ts', {
+        chatId: 'chat-1',
+        base: undefined,
+        oldPath: undefined,
+      });
+    });
+  });
+
+  it('omits the +/− totals and per-file counts on session and branch rather than showing zeros', async () => {
     mockGetGitStatus.mockResolvedValue([{ path: 'src/a.ts', status: 'M' }]);
     mockGetWorkingStat.mockResolvedValue({
       files: [{ path: 'src/a.ts', additions: 4, deletions: 1 }],
       totalAdditions: 4,
       totalDeletions: 1,
     });
-    mockGetSessionFiles.mockResolvedValue(['src/touched.ts']);
+    mockGetSessionFiles.mockResolvedValue([{ path: 'src/touched.ts', status: 'modified' }]);
+    mockGetBranchDiffs.mockResolvedValue({
+      branch: 'feat/x',
+      baseBranch: 'main',
+      mergeBase: 'abc1234def',
+      files: [{ path: 'src/b.ts', status: 'M' }],
+    });
 
     render(<ReviewPanel />);
     openReview();
@@ -369,6 +427,15 @@ describe('ReviewPanel — change-scope switcher', () => {
     await waitFor(() => {
       expect(screen.getByTestId('review-file-counts').textContent).toBe('1 file');
     });
+    await waitFor(() => expect(screen.queryByTestId('review-file-row-src/touched.ts')).not.toBeNull());
+    expect(screen.queryByTestId('review-file-toolbar-stat')).toBeNull();
+    expect(screen.queryByTestId('review-file-stat-src/touched.ts')).toBeNull();
+
+    chooseScope('branch');
+
+    await waitFor(() => expect(screen.queryByTestId('review-file-row-src/b.ts')).not.toBeNull());
+    expect(screen.getByTestId('review-file-counts').textContent).toBe('1 file');
+    expect(screen.queryByTestId('review-file-toolbar-stat')).toBeNull();
   });
 
   it('resets to Uncommitted on the next open — the scope is never persisted', async () => {

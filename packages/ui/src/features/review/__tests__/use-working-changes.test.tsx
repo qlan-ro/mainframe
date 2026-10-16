@@ -63,7 +63,10 @@ beforeEach(() => {
       { path: 'src/gone.ts', status: 'D' },
     ],
   });
-  getSessionFiles.mockResolvedValue(['src/a.ts', 'docs/plan.md']);
+  getSessionFiles.mockResolvedValue([
+    { path: 'src/a.ts', status: 'modified' },
+    { path: 'docs/plan.md', status: 'added' },
+  ]);
 });
 
 afterEach(() => {
@@ -123,15 +126,18 @@ describe('useWorkingChanges — uncommitted scope', () => {
 });
 
 describe('useWorkingChanges — session scope', () => {
-  it('returns paths with no status and no counts', async () => {
+  it('lists every file the session edited, with its status and no counts', async () => {
     const { result } = renderHook(() => useWorkingChanges(options({ scope: 'session' })));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(getSessionFiles).toHaveBeenCalledWith(PORT, CHAT);
-    expect(result.current.files).toEqual([{ path: 'src/a.ts' }, { path: 'docs/plan.md' }]);
-    expect(result.current.files[0]?.status).toBeUndefined();
-    expect(result.current.files[0]?.additions).toBeUndefined();
+    expect(getGitStatus).not.toHaveBeenCalled();
+    expect(result.current.files).toEqual([
+      { path: 'src/a.ts', status: 'modified' },
+      { path: 'docs/plan.md', status: 'added' },
+    ]);
     expect(result.current.totalAdditions).toBeUndefined();
     expect(result.current.totalDeletions).toBeUndefined();
+    expect(result.current.branch).toBe('design/right-sidebar-revamp');
   });
 
   it('fetches nothing without a chat', async () => {
@@ -161,6 +167,30 @@ describe('useWorkingChanges — branch scope', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.totalAdditions).toBeUndefined();
     expect(result.current.files[0]?.deletions).toBeUndefined();
+  });
+});
+
+describe('useWorkingChanges — scope switch', () => {
+  it("never reports the previous scope's files under the new scope", async () => {
+    let resolveBranch: (value: unknown) => void = () => {};
+    getBranchDiffs.mockReturnValue(new Promise((resolve) => (resolveBranch = resolve)));
+    const { result, rerender } = renderHook(({ scope }) => useWorkingChanges(options({ scope })), {
+      initialProps: { scope: 'uncommitted' as 'uncommitted' | 'branch' },
+    });
+    await waitFor(() => expect(result.current.files).toHaveLength(2));
+
+    rerender({ scope: 'branch' });
+    expect(result.current.files).toEqual([]);
+
+    await act(async () => {
+      resolveBranch({
+        branch: 'feat/x',
+        baseBranch: 'main',
+        mergeBase: 'abc',
+        files: [{ path: 'src/c.ts', status: 'A' }],
+      });
+    });
+    expect(result.current.files).toEqual([{ path: 'src/c.ts', status: 'added' }]);
   });
 });
 

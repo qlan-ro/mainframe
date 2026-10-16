@@ -30,6 +30,7 @@ pub mod path_utils;
 pub mod respond;
 pub mod ripgrep;
 pub mod routes;
+pub mod session_edits;
 mod session_kill_bridge;
 pub mod setup_advisor;
 pub mod skills_cli;

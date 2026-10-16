@@ -44,6 +44,7 @@ pub mod notifications;
 pub mod projects;
 pub mod quota;
 pub mod search;
+pub mod session_changes;
 pub mod session_transcripts;
 pub mod settings;
 pub mod setup_advisor;

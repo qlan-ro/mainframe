@@ -10,6 +10,10 @@
  * Scopes report different fidelities and the shape says so: where the daemon has
  * no counts or no per-file status, the field is `undefined`. A fabricated `0`
  * would read as "no changes", which is a different claim.
+ *
+ * `session` is every file the session wrote or edited, committed or not, read
+ * from its transcript; its diffs replay the session's own edits (see
+ * `getSessionDiff`) rather than reading git.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getBranchDiffs, getGitBranch, getGitStatus, getWorkingStat } from '@/lib/api/git';
@@ -22,8 +26,9 @@ export type ChangeScope = 'session' | 'uncommitted' | 'branch';
 
 export interface WorkingChangeFile {
   path: string;
-  /** Absent for the `session` scope — the daemon reports paths only. */
   status?: ReviewFile['status'];
+  /** Source path of a rename — where the diff reads the original from. */
+  oldPath?: string;
   /** Absent for scopes with no per-file stat (`session`, `branch`). */
   additions?: number;
   deletions?: number;
@@ -55,9 +60,7 @@ export interface UseWorkingChangesOptions {
   enabled?: boolean;
   /**
    * A non-project chat has no git repo and no session-file cwd worth reading
-   * (todo #346) — set from `useActiveIdentity().noProject`. Blocks every
-   * scope, including `session`, which needs only `chatId` and would otherwise
-   * still fire against the chat's scratch directory.
+   * (todo #346) — set from `useActiveIdentity().noProject`. Blocks every scope.
    */
   noProject?: boolean;
 }
@@ -97,15 +100,22 @@ async function fetchUncommitted(port: number, projectId: string, chatId?: string
   };
 }
 
-async function fetchSession(port: number, chatId: string): Promise<ChangesPayload> {
-  const files = await getSessionFiles(port, chatId);
-  return { ...EMPTY, files: files.map((path) => ({ path })) };
+async function fetchSession(port: number, projectId: string, chatId: string): Promise<ChangesPayload> {
+  const [files, branchRes] = await Promise.all([
+    getSessionFiles(port, chatId),
+    getGitBranch(port, projectId, chatId).catch(() => ({ branch: null })),
+  ]);
+  return { ...EMPTY, files, branch: branchRes.branch };
 }
 
 async function fetchBranch(port: number, projectId: string, chatId?: string): Promise<ChangesPayload> {
   const data = await getBranchDiffs(port, projectId, chatId);
   return {
-    files: data.files.map((file) => ({ path: file.path, status: gitStatusKind(file.status) })),
+    files: data.files.map((file) => ({
+      path: file.path,
+      status: gitStatusKind(file.status),
+      ...(file.oldPath ? { oldPath: file.oldPath } : {}),
+    })),
     branch: data.branch,
     baseBranch: data.baseBranch,
     mergeBase: data.mergeBase,
@@ -120,19 +130,22 @@ export function useWorkingChanges({
   enabled = true,
   noProject = false,
 }: UseWorkingChangesOptions): WorkingChanges {
-  const [payload, setPayload] = useState<ChangesPayload>(EMPTY);
+  // Tagged with the scope it was fetched for: right after a scope switch the
+  // previous scope's files must not be read as the new scope's.
+  const [loaded, setLoaded] = useState<{ scope: ChangeScope; payload: ChangesPayload }>({ scope, payload: EMPTY });
+  const payload = loaded.scope === scope ? loaded.payload : EMPTY;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refetch = useCallback(() => setRefreshKey((key) => key + 1), []);
 
-  // `session` resolves the worktree from the chat; the other two need a project.
-  const canFetch = enabled && !noProject && (scope === 'session' ? Boolean(chatId) : Boolean(projectId));
+  // Every scope reads git through the project; `session` also needs the chat.
+  const canFetch = enabled && !noProject && Boolean(projectId) && (scope !== 'session' || Boolean(chatId));
 
   useEffect(() => {
     if (!canFetch) {
-      setPayload(EMPTY);
+      setLoaded({ scope, payload: EMPTY });
       setLoading(false);
       setError(false);
       return;
@@ -142,20 +155,20 @@ export function useWorkingChanges({
     setError(false);
     const request =
       scope === 'session'
-        ? fetchSession(port, chatId!)
+        ? fetchSession(port, projectId!, chatId!)
         : scope === 'branch'
           ? fetchBranch(port, projectId!, chatId)
           : fetchUncommitted(port, projectId!, chatId);
     request
       .then((next) => {
         if (cancelled) return;
-        setPayload(next);
+        setLoaded({ scope, payload: next });
         setLoading(false);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         console.warn('[use-working-changes] failed to load changes', scope, projectId, err);
-        setPayload(EMPTY);
+        setLoaded({ scope, payload: EMPTY });
         setError(true);
         setLoading(false);
       });

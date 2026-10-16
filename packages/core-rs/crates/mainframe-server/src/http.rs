@@ -144,6 +144,7 @@ fn http_routes() -> Router<Arc<AppCtx>> {
         .merge(routes::git_chat::router())
         .merge(routes::attachments::router())
         .merge(routes::chats::router())
+        .merge(routes::session_changes::router())
         .merge(routes::chat_commands::router())
         .merge(routes::chat_fork::router())
         .merge(routes::chat_create::router())

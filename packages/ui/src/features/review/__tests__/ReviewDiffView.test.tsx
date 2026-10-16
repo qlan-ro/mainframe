@@ -2,7 +2,8 @@
  * ReviewDiffView tests.
  *
  * Behaviors covered:
- *  - On mount with a file, calls getWorkingDiff(port, projectId, file, { chatId }).
+ *  - On mount with a git source, calls getWorkingDiff(port, projectId, file, { chatId, base, oldPath });
+ *    a session source calls getSessionDiff instead and flags a git fallback.
  *  - Renders a CmDiffEditor stub with the returned original/modified.
  *  - Submitting an inline comment calls onAppend with a body matching the
  *    parse-review-comment format using a REAL clicked line + its text (not empty).
@@ -22,6 +23,11 @@ import userEvent from '@testing-library/user-event';
 const mockGetWorkingDiff = vi.fn();
 vi.mock('@/lib/api/git', () => ({
   getWorkingDiff: (...args: unknown[]) => mockGetWorkingDiff(...args),
+}));
+
+const mockGetSessionDiff = vi.fn();
+vi.mock('@/lib/api/files', () => ({
+  getSessionDiff: (...args: unknown[]) => mockGetSessionDiff(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -65,6 +71,7 @@ const { ReviewDiffView } = await import('../ReviewDiffView');
 
 beforeEach(() => {
   mockGetWorkingDiff.mockReset();
+  mockGetSessionDiff.mockReset();
   Object.keys(lastDiffEditorProps).forEach((k) => delete lastDiffEditorProps[k]);
   capturedOnLineSelect = undefined;
 });
@@ -76,11 +83,83 @@ beforeEach(() => {
 describe('ReviewDiffView', () => {
   it('calls getWorkingDiff on mount with the file and chatId', async () => {
     mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
-    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/a.ts"
+        source={{ kind: 'git' }}
+        onAppend={vi.fn()}
+      />,
+    );
 
     await waitFor(() => {
-      expect(mockGetWorkingDiff).toHaveBeenCalledWith(31415, 'proj-1', 'src/a.ts', { chatId: 'chat-1' });
+      expect(mockGetWorkingDiff).toHaveBeenCalledWith(31415, 'proj-1', 'src/a.ts', {
+        chatId: 'chat-1',
+        base: undefined,
+        oldPath: undefined,
+      });
     });
+  });
+
+  it('reads the original side from base and oldPath when given', async () => {
+    mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/new.ts"
+        source={{ kind: 'git', base: 'abc1234', oldPath: 'src/old.ts' }}
+        onAppend={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockGetWorkingDiff).toHaveBeenCalledWith(31415, 'proj-1', 'src/new.ts', {
+        chatId: 'chat-1',
+        base: 'abc1234',
+        oldPath: 'src/old.ts',
+      });
+    });
+  });
+
+  it("reads a session source from the session's own edits, not git", async () => {
+    mockGetSessionDiff.mockResolvedValue({ original: 'before', modified: 'after', source: 'session' });
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/a.ts"
+        source={{ kind: 'session' }}
+        onAppend={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(lastDiffEditorProps['original']).toBe('before'));
+    expect(mockGetSessionDiff).toHaveBeenCalledWith(31415, 'chat-1', 'src/a.ts');
+    expect(lastDiffEditorProps['modified']).toBe('after');
+    expect(mockGetWorkingDiff).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('review-session-diff-fallback')).toBeNull();
+  });
+
+  it("says so when the session's edits could not be replayed and git stands in", async () => {
+    mockGetSessionDiff.mockResolvedValue({ original: 'head', modified: 'working', source: 'git' });
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/a.ts"
+        source={{ kind: 'session' }}
+        onAppend={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByTestId('review-session-diff-fallback')).toBeInTheDocument();
+    expect(lastDiffEditorProps['original']).toBe('head');
   });
 
   it('passes original and modified to CmDiffEditor', async () => {
@@ -90,7 +169,16 @@ describe('ReviewDiffView', () => {
       diff: '',
       source: 'git',
     });
-    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/a.ts"
+        source={{ kind: 'git' }}
+        onAppend={vi.fn()}
+      />,
+    );
 
     await waitFor(() => {
       expect(screen.queryByTestId('cm-diff-editor-stub')).not.toBeNull();
@@ -102,7 +190,16 @@ describe('ReviewDiffView', () => {
 
   it('submit is disabled before a line is selected and a comment is typed', async () => {
     mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
-    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/a.ts"
+        source={{ kind: 'git' }}
+        onAppend={vi.fn()}
+      />,
+    );
 
     await screen.findByTestId('cm-diff-editor-stub');
 
@@ -112,7 +209,16 @@ describe('ReviewDiffView', () => {
 
   it('submit is disabled when a line is selected but no comment is typed', async () => {
     mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
-    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/a.ts"
+        source={{ kind: 'git' }}
+        onAppend={vi.fn()}
+      />,
+    );
 
     await screen.findByTestId('cm-diff-editor-stub');
 
@@ -125,7 +231,16 @@ describe('ReviewDiffView', () => {
 
   it('shows the selected line info in review-comment-selected-line after a click', async () => {
     mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
-    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/a.ts"
+        source={{ kind: 'git' }}
+        onAppend={vi.fn()}
+      />,
+    );
 
     await screen.findByTestId('cm-diff-editor-stub');
 
@@ -140,7 +255,16 @@ describe('ReviewDiffView', () => {
   it('appends a formatted comment with the REAL clicked line and text when submitted', async () => {
     mockGetWorkingDiff.mockResolvedValue({ original: 'old', modified: 'new', diff: '', source: 'git' });
     const onAppend = vi.fn();
-    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={onAppend} />);
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/a.ts"
+        source={{ kind: 'git' }}
+        onAppend={onAppend}
+      />,
+    );
 
     await screen.findByTestId('cm-diff-editor-stub');
 
@@ -161,7 +285,16 @@ describe('ReviewDiffView', () => {
 
   it('renders an error when getWorkingDiff rejects', async () => {
     mockGetWorkingDiff.mockRejectedValue(new Error('network error'));
-    render(<ReviewDiffView port={31415} projectId="proj-1" chatId="chat-1" file="src/a.ts" onAppend={vi.fn()} />);
+    render(
+      <ReviewDiffView
+        port={31415}
+        projectId="proj-1"
+        chatId="chat-1"
+        file="src/a.ts"
+        source={{ kind: 'git' }}
+        onAppend={vi.fn()}
+      />,
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/failed to load diff/i)).toBeTruthy();

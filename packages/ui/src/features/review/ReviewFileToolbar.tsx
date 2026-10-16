@@ -9,8 +9,9 @@ import { Toggle } from '@/components/ui/toggle';
 
 interface ReviewFileToolbarProps {
   file: string;
-  additions: number;
-  deletions: number;
+  /** Absent for scopes with no per-file stat; the counts are then omitted. */
+  additions?: number;
+  deletions?: number;
   viewed: boolean;
   onToggleViewed: () => void;
   onOpenInWorkspace: () => void;
@@ -31,10 +32,12 @@ export function ReviewFileToolbar({
     <div className="flex h-10 shrink-0 items-center gap-2.5 border-b bg-card px-3.5">
       <span className="shrink-0 font-mono text-xs font-semibold text-foreground">{name}</span>
       {dir && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{dir}/</span>}
-      <span className="inline-flex gap-2 font-mono text-xs">
-        <span className="font-semibold text-mf-diff-add-text">+{additions}</span>
-        <span className="font-semibold text-mf-diff-del-text">−{deletions}</span>
-      </span>
+      {additions !== undefined && deletions !== undefined && (
+        <span data-testid="review-file-toolbar-stat" className="inline-flex gap-2 font-mono text-xs">
+          <span className="font-semibold text-mf-diff-add-text">+{additions}</span>
+          <span className="font-semibold text-mf-diff-del-text">−{deletions}</span>
+        </span>
+      )}
 
       <div className="flex-1" />
 
