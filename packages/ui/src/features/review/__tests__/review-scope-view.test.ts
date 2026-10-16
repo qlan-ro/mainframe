@@ -29,8 +29,8 @@ describe('scopeHeaderView — totals', () => {
     expect(scopeHeaderView('uncommitted', NO_BRANCH_SOURCE).showTotals).toBe(true);
   });
 
-  it('shows them on session, which narrows the working stat to the touched files', () => {
-    expect(scopeHeaderView('session', NO_BRANCH_SOURCE).showTotals).toBe(true);
+  it('hides them on session, which reports paths only', () => {
+    expect(scopeHeaderView('session', NO_BRANCH_SOURCE).showTotals).toBe(false);
   });
 
   it('hides them on branch, which reports per-file status but no counts', () => {

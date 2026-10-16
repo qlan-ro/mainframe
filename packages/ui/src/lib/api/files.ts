@@ -37,13 +37,39 @@ interface FileContentResponse {
   content: string;
 }
 
-/** Repo-relative paths the agent touched during a chat session (Changes "Session" mode). */
-export async function getSessionFiles(port: number, chatId: string): Promise<string[]> {
-  const data = await request<{ files: string[] }>(
+/** A file the agent wrote or edited during a chat session. */
+export interface SessionFile {
+  /** Relative to the session's worktree (or project). */
+  path: string;
+  /** `added` when the session created it, `deleted` when it no longer exists. */
+  status: 'added' | 'modified' | 'deleted';
+}
+
+/** Every file the agent wrote or edited during a chat session, committed or not. */
+export async function getSessionFiles(port: number, chatId: string): Promise<SessionFile[]> {
+  const data = await request<{ files: SessionFile[] }>(
     'GET',
     `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/session-files`,
   );
   return data.files ?? [];
+}
+
+export interface SessionDiff {
+  original: string;
+  modified: string;
+  /**
+   * `session`: the file before the session's first edit and after its last,
+   * replayed from the transcript. `git`: the edits could not be replayed
+   * (later work changed the file), so this is the file at the last commit
+   * before the session started against the working tree.
+   */
+  source: 'session' | 'git';
+}
+
+/** One session file before and after the session's edits. */
+export async function getSessionDiff(port: number, chatId: string, file: string): Promise<SessionDiff> {
+  const qs = new URLSearchParams({ file });
+  return request<SessionDiff>('GET', `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/session-diff?${qs}`);
 }
 
 /**

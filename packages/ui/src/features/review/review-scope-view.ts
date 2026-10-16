@@ -3,8 +3,8 @@
  *
  * The three scopes report different fidelities (see `use-working-changes`), so
  * the header shows a different set of facts for each. That decision is here
- * rather than in the header's JSX: `branch` has no per-file stat, and rendering
- * `+0 −0` for it would claim there is nothing to review.
+ * rather than in the header's JSX: `session` and `branch` have no per-file stat,
+ * and rendering `+0 −0` for them would claim there is nothing to review.
  */
 import type { ChangeScope } from './use-working-changes';
 
@@ -33,7 +33,7 @@ export interface ScopeHeaderSource {
 }
 
 export interface ScopeHeaderView {
-  /** `branch` carries no working stat, so it cannot total anything. */
+  /** Only `uncommitted` carries a working stat, so only it can total anything. */
   showTotals: boolean;
   /** `branch` only, and only once both ends of the comparison are known. */
   compareLine: string | null;
@@ -48,5 +48,5 @@ function compareLine(scope: ChangeScope, { branch, baseBranch, mergeBase }: Scop
 }
 
 export function scopeHeaderView(scope: ChangeScope, source: ScopeHeaderSource): ScopeHeaderView {
-  return { showTotals: scope !== 'branch', compareLine: compareLine(scope, source) };
+  return { showTotals: scope === 'uncommitted', compareLine: compareLine(scope, source) };
 }

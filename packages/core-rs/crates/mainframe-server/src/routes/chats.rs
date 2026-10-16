@@ -11,15 +11,12 @@ use axum::response::Response;
 use axum::routing::{get, patch, post};
 use serde::Deserialize;
 
-use mainframe_adapter_claude::messages::session_files::extract_session_file_paths;
 use mainframe_types::adapter::EffortLevel;
 use mainframe_types::chat::Chat;
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::transcript::TranscriptLocation;
 
-use crate::async_err::internal_error;
 use crate::ctx::AppCtx;
-use crate::fs_utils::relative_within;
 use crate::respond::{ApiError, fail, ok};
 use crate::routes::body::parse_body;
 use crate::routes::chat_discard::refuse_if_temporary;
@@ -363,28 +360,6 @@ async fn unarchive(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
     }
 }
 
-/// Files the session wrote or edited, relative to the chat's effective path
-/// (its worktree when it has one). Tools record absolute paths; anything
-/// outside the project is dropped, since no git route can diff it.
-async fn session_files(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
-    let base = match crate::routes::git::resolve_chat_path(&ctx, &id).await {
-        Ok(Some(base)) => base,
-        Ok(None) => return ok(serde_json::json!({ "files": [] })),
-        Err(error) => return internal_error("Failed to resolve session path", &error),
-    };
-    let cm = &ctx.chat.chat_manager;
-    // Load from disk to include subagent file changes absent from the in-memory
-    // cache during an active session.
-    let messages = cm.get_messages_from_disk(&id).await;
-    let mut seen = std::collections::HashSet::new();
-    let files: Vec<String> = extract_session_file_paths(&messages)
-        .iter()
-        .filter_map(|path| relative_within(&base, path))
-        .filter(|path| seen.insert(path.clone()))
-        .collect();
-    ok(serde_json::json!({ "files": files }))
-}
-
 async fn tool_result(
     State(ctx): State<Arc<AppCtx>>,
     Path((id, tool_use_id)): Path<(String, String)>,
@@ -481,7 +456,6 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/chats/{id}/tuning", patch(set_tuning))
         .route("/api/chats/{id}/effort", patch(set_effort))
         .route("/api/chats/{id}/unarchive", post(unarchive))
-        .route("/api/chats/{id}/session-files", get(session_files))
         .route("/api/chats/{id}/tool-result/{toolUseId}", get(tool_result))
 }
 

@@ -11,9 +11,9 @@
  * no counts or no per-file status, the field is `undefined`. A fabricated `0`
  * would read as "no changes", which is a different claim.
  *
- * `session` is the uncommitted set narrowed to the files the session wrote or
- * edited: its diffs read HEAD against the working tree, so a file the session
- * already committed would show nothing to review.
+ * `session` is every file the session wrote or edited, committed or not, read
+ * from its transcript; its diffs replay the session's own edits (see
+ * `getSessionDiff`) rather than reading git.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getBranchDiffs, getGitBranch, getGitStatus, getWorkingStat } from '@/lib/api/git';
@@ -29,7 +29,7 @@ export interface WorkingChangeFile {
   status?: ReviewFile['status'];
   /** Source path of a rename — where the diff reads the original from. */
   oldPath?: string;
-  /** Absent for scopes with no per-file stat (`branch`). */
+  /** Absent for scopes with no per-file stat (`session`, `branch`). */
   additions?: number;
   deletions?: number;
 }
@@ -101,19 +101,11 @@ async function fetchUncommitted(port: number, projectId: string, chatId?: string
 }
 
 async function fetchSession(port: number, projectId: string, chatId: string): Promise<ChangesPayload> {
-  const [touched, uncommitted] = await Promise.all([
+  const [files, branchRes] = await Promise.all([
     getSessionFiles(port, chatId),
-    fetchUncommitted(port, projectId, chatId),
+    getGitBranch(port, projectId, chatId).catch(() => ({ branch: null })),
   ]);
-  const touchedPaths = new Set(touched);
-  const files = uncommitted.files.filter((file) => touchedPaths.has(file.path));
-  const hasStat = uncommitted.totalAdditions !== undefined;
-  return {
-    ...uncommitted,
-    files,
-    totalAdditions: hasStat ? files.reduce((sum, file) => sum + (file.additions ?? 0), 0) : undefined,
-    totalDeletions: hasStat ? files.reduce((sum, file) => sum + (file.deletions ?? 0), 0) : undefined,
-  };
+  return { ...EMPTY, files, branch: branchRes.branch };
 }
 
 async function fetchBranch(port: number, projectId: string, chatId?: string): Promise<ChangesPayload> {
@@ -138,7 +130,10 @@ export function useWorkingChanges({
   enabled = true,
   noProject = false,
 }: UseWorkingChangesOptions): WorkingChanges {
-  const [payload, setPayload] = useState<ChangesPayload>(EMPTY);
+  // Tagged with the scope it was fetched for: right after a scope switch the
+  // previous scope's files must not be read as the new scope's.
+  const [loaded, setLoaded] = useState<{ scope: ChangeScope; payload: ChangesPayload }>({ scope, payload: EMPTY });
+  const payload = loaded.scope === scope ? loaded.payload : EMPTY;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -150,7 +145,7 @@ export function useWorkingChanges({
 
   useEffect(() => {
     if (!canFetch) {
-      setPayload(EMPTY);
+      setLoaded({ scope, payload: EMPTY });
       setLoading(false);
       setError(false);
       return;
@@ -167,13 +162,13 @@ export function useWorkingChanges({
     request
       .then((next) => {
         if (cancelled) return;
-        setPayload(next);
+        setLoaded({ scope, payload: next });
         setLoading(false);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         console.warn('[use-working-changes] failed to load changes', scope, projectId, err);
-        setPayload(EMPTY);
+        setLoaded({ scope, payload: EMPTY });
         setError(true);
         setLoading(false);
       });

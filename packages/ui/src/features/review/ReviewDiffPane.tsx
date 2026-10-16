@@ -5,17 +5,14 @@
  * orchestrator small.
  */
 import { ReviewFileToolbar } from './ReviewFileToolbar';
-import { ReviewDiffView } from './ReviewDiffView';
+import { ReviewDiffView, type DiffSource } from './ReviewDiffView';
 
 interface ReviewDiffPaneProps {
   port: number;
   projectId: string;
   chatId?: string;
   file: string | null;
-  /** Source path of a rename — where the diff reads the original from. */
-  oldPath?: string;
-  /** Revision the original side is read from; HEAD when absent. */
-  base?: string;
+  source: DiffSource;
   /** Absent for scopes with no per-file stat. */
   additions?: number;
   deletions?: number;
@@ -30,8 +27,7 @@ export function ReviewDiffPane({
   projectId,
   chatId,
   file,
-  oldPath,
-  base,
+  source,
   additions,
   deletions,
   viewed,
@@ -63,8 +59,7 @@ export function ReviewDiffPane({
           projectId={projectId}
           chatId={chatId}
           file={file}
-          oldPath={oldPath}
-          base={base}
+          source={source}
           onAppend={onAppend}
         />
       </div>

@@ -63,7 +63,10 @@ beforeEach(() => {
       { path: 'src/gone.ts', status: 'D' },
     ],
   });
-  getSessionFiles.mockResolvedValue(['src/a.ts', 'docs/plan.md']);
+  getSessionFiles.mockResolvedValue([
+    { path: 'src/a.ts', status: 'modified' },
+    { path: 'docs/plan.md', status: 'added' },
+  ]);
 });
 
 afterEach(() => {
@@ -123,31 +126,18 @@ describe('useWorkingChanges — uncommitted scope', () => {
 });
 
 describe('useWorkingChanges — session scope', () => {
-  it('narrows the uncommitted set to the files the session touched', async () => {
+  it('lists every file the session edited, with its status and no counts', async () => {
     const { result } = renderHook(() => useWorkingChanges(options({ scope: 'session' })));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(getSessionFiles).toHaveBeenCalledWith(PORT, CHAT);
-    expect(getGitStatus).toHaveBeenCalledWith(PORT, PROJECT, CHAT);
-    // docs/plan.md was touched but has nothing uncommitted; src/b.ts is
-    // uncommitted but the session never touched it.
-    expect(result.current.files).toEqual([{ path: 'src/a.ts', status: 'modified', additions: 10, deletions: 2 }]);
-    expect(result.current.branch).toBe('design/right-sidebar-revamp');
-  });
-
-  it('totals only the touched files', async () => {
-    getSessionFiles.mockResolvedValue(['src/b.ts']);
-    const { result } = renderHook(() => useWorkingChanges(options({ scope: 'session' })));
-    await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.totalAdditions).toBe(0);
-    expect(result.current.totalDeletions).toBe(0);
-  });
-
-  it('keeps totals undefined when the working stat is unavailable', async () => {
-    getWorkingStat.mockRejectedValue(new Error('not a repo'));
-    const { result } = renderHook(() => useWorkingChanges(options({ scope: 'session' })));
-    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(getGitStatus).not.toHaveBeenCalled();
+    expect(result.current.files).toEqual([
+      { path: 'src/a.ts', status: 'modified' },
+      { path: 'docs/plan.md', status: 'added' },
+    ]);
     expect(result.current.totalAdditions).toBeUndefined();
     expect(result.current.totalDeletions).toBeUndefined();
+    expect(result.current.branch).toBe('design/right-sidebar-revamp');
   });
 
   it('fetches nothing without a chat', async () => {
@@ -177,6 +167,30 @@ describe('useWorkingChanges — branch scope', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.totalAdditions).toBeUndefined();
     expect(result.current.files[0]?.deletions).toBeUndefined();
+  });
+});
+
+describe('useWorkingChanges — scope switch', () => {
+  it("never reports the previous scope's files under the new scope", async () => {
+    let resolveBranch: (value: unknown) => void = () => {};
+    getBranchDiffs.mockReturnValue(new Promise((resolve) => (resolveBranch = resolve)));
+    const { result, rerender } = renderHook(({ scope }) => useWorkingChanges(options({ scope })), {
+      initialProps: { scope: 'uncommitted' as 'uncommitted' | 'branch' },
+    });
+    await waitFor(() => expect(result.current.files).toHaveLength(2));
+
+    rerender({ scope: 'branch' });
+    expect(result.current.files).toEqual([]);
+
+    await act(async () => {
+      resolveBranch({
+        branch: 'feat/x',
+        baseBranch: 'main',
+        mergeBase: 'abc',
+        files: [{ path: 'src/c.ts', status: 'A' }],
+      });
+    });
+    expect(result.current.files).toEqual([{ path: 'src/c.ts', status: 'added' }]);
   });
 });
 

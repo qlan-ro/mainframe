@@ -28,6 +28,16 @@ import { ReviewCommitRail } from './ReviewCommitRail';
 import { ReviewPanelHeader } from './ReviewPanelHeader';
 import { DEFAULT_SCOPE } from './review-scope-view';
 import { useWorkingChanges, type ChangeScope } from './use-working-changes';
+import type { DiffSource } from './ReviewDiffView';
+
+/**
+ * Session diffs replay the session's own edits; the git scopes read the
+ * working tree against HEAD, or against the merge base on `branch`.
+ */
+function diffSource(scope: ChangeScope, mergeBase: string | null, oldPath: string | undefined): DiffSource {
+  if (scope === 'session') return { kind: 'session' };
+  return { kind: 'git', base: scope === 'branch' ? (mergeBase ?? undefined) : undefined, oldPath };
+}
 
 export function ReviewPanel() {
   const reviewOpen = useOverlaysStore((s) => s.reviewOpen);
@@ -171,8 +181,7 @@ export function ReviewPanel() {
               projectId={projectId ?? ''}
               chatId={chatId}
               file={selectedFile}
-              oldPath={selected?.oldPath}
-              base={scope === 'branch' ? (mergeBase ?? undefined) : undefined}
+              source={diffSource(scope, mergeBase, selected?.oldPath)}
               additions={selected?.additions}
               deletions={selected?.deletions}
               viewed={selectedFile ? viewed.has(selectedFile) : false}

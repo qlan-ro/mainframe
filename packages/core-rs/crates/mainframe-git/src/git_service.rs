@@ -261,6 +261,19 @@ impl<E: GitExec> GitService<E> {
         Ok(self.git(argv!["show", git_ref], None).await?)
     }
 
+    /// The newest commit on HEAD made before `when` (any date git parses, e.g.
+    /// ISO 8601); `None` when HEAD has no commit that old.
+    pub async fn last_commit_before(&self, when: &str) -> Result<Option<String>, GitServiceError> {
+        let out = self
+            .git(
+                argv!["rev-list", "-1", format!("--before={when}"), "HEAD"],
+                None,
+            )
+            .await?;
+        let sha = out.trim();
+        Ok((!sha.is_empty()).then(|| sha.to_string()))
+    }
+
     pub async fn merge_base(
         &self,
         branch1: &str,
