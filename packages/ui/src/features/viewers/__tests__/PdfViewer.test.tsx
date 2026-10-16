@@ -16,6 +16,7 @@
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { render as rtlRender, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
@@ -41,18 +42,11 @@ vi.mock('@/store/surface-intents', () => ({
   emitSurfaceIntent: vi.fn(),
 }));
 
-// Mock the active-identity hook — default: no project.
-vi.mock('@/features/sessions/use-active-identity', () => ({
-  useActiveIdentity: vi.fn(() => ({ projectPath: undefined })),
-}));
-
-import { useActiveIdentity } from '@/features/sessions/use-active-identity';
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => true }));
 
 /** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
 const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
   rtlRender(ui, { wrapper: TooltipProvider, ...options });
-
-const mockUseActiveIdentity = useActiveIdentity as ReturnType<typeof vi.fn>;
 
 let fakeHost: FakeHostBridge;
 
@@ -66,8 +60,7 @@ function renderPdf(props: { base64: string | null; mimeType: string; path: strin
 
 beforeEach(() => {
   fakeHost = new FakeHostBridge();
-  vi.spyOn(fakeHost.shell, 'openExternal').mockResolvedValue(undefined);
-  mockUseActiveIdentity.mockReturnValue({ projectPath: undefined });
+  vi.spyOn(fakeHost.fs, 'openPath').mockResolvedValue(undefined);
 });
 
 describe('PdfViewer', () => {
@@ -107,7 +100,14 @@ describe('PdfViewer', () => {
     expect(status.textContent).toMatch(/PDF/);
   });
 
-  // toFileUrl path-resolution behavior (relative-path resolution, absolute
-  // passthrough, disabled without projectPath) is covered once in
-  // UnsupportedViewer.test.tsx — the logic is shared.
+  it('opens the PDF with its default app from the "Open externally" button', async () => {
+    const user = userEvent.setup();
+    renderPdf({ base64: FAKE_PDF_B64, mimeType: 'application/pdf', path: '/docs/spec.pdf' });
+    await user.click(screen.getByTestId('viewer-pdf-fallback'));
+    expect(fakeHost.fs.openPath).toHaveBeenCalledWith('/docs/spec.pdf');
+  });
+
+  // Path resolution (relative paths, worktree precedence, absolute passthrough,
+  // disabled without a base) is covered once in UnsupportedViewer.test.tsx —
+  // both viewers share useNativeFileAction.
 });

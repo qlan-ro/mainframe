@@ -1,4 +1,3 @@
-#[allow(unused_imports)]
 use std::path::Path;
 
 /// Validates that `path` canonicalizes to somewhere under the user home dir.
@@ -48,6 +47,54 @@ pub fn show_item_in_folder(path: String) -> Result<(), String> {
             .map_err(|e| format!("xdg-open failed: {e}"))?;
     }
 
+    Ok(())
+}
+
+/// Open the file at `path` with its default application (an `.html` file opens
+/// in the default browser, a `.pdf` in the PDF reader):
+///   macOS  → `open <path>`
+///   Windows → `explorer <path>`
+///   Linux   → `xdg-open <path>`
+///
+/// Only regular, non-executable files are opened: a directory (macOS `.app`
+/// bundles are directories) or a file with an exec bit would launch a program.
+#[tauri::command]
+pub fn open_path(path: String) -> Result<(), String> {
+    let canonical = validate_under_home(&path)?;
+    ensure_openable_file(&canonical)?;
+
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(target_os = "windows")]
+    let program = "explorer";
+    #[cfg(target_os = "linux")]
+    let program = "xdg-open";
+
+    std::process::Command::new(program)
+        .arg(&canonical)
+        .spawn()
+        .map_err(|e| format!("{program} failed: {e}"))?;
+    Ok(())
+}
+
+/// Rejects anything `open_path` must not hand to the OS launcher: directories
+/// and files with an exec bit.
+fn ensure_openable_file(path: &Path) -> Result<(), String> {
+    let meta =
+        std::fs::metadata(path).map_err(|e| format!("cannot stat '{}': {e}", path.display()))?;
+    if !meta.is_file() {
+        return Err(format!("'{}' is not a regular file", path.display()));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if meta.permissions().mode() & 0o111 != 0 {
+            return Err(format!(
+                "refusing to open executable file '{}'",
+                path.display()
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -106,4 +153,51 @@ fn base64_encode(input: &[u8]) -> String {
 #[tauri::command]
 pub fn get_platform() -> String {
     std::env::consts::OS.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_openable_file;
+
+    fn scratch_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("mf-open-path-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn accepts_a_regular_file() {
+        let dir = scratch_dir("regular");
+        let file = dir.join("page.html");
+        std::fs::write(&file, "<h1>hi</h1>").unwrap();
+        assert!(ensure_openable_file(&file).is_ok());
+    }
+
+    #[test]
+    fn rejects_a_directory() {
+        let dir = scratch_dir("dir");
+        let bundle = dir.join("Evil.app");
+        std::fs::create_dir_all(&bundle).unwrap();
+        let err = ensure_openable_file(&bundle).unwrap_err();
+        assert!(err.contains("not a regular file"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_an_executable_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch_dir("exec");
+        let script = dir.join("run.command");
+        std::fs::write(&script, "#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let err = ensure_openable_file(&script).unwrap_err();
+        assert!(err.contains("executable"));
+    }
+
+    #[test]
+    fn rejects_a_missing_path() {
+        let dir = scratch_dir("missing");
+        assert!(ensure_openable_file(&dir.join("nope.html")).is_err());
+    }
 }

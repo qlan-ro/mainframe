@@ -51,6 +51,7 @@ export class TauriAdapter implements HostBridge {
     readFile: (path: string): Promise<string | null> => bridge.readFile(path),
     readFileBase64: (path: string): Promise<string | null> => bridge.readFileBase64(path),
     showItemInFolder: (path: string): Promise<void> => bridge.showItemInFolder(path),
+    openPath: (path: string): Promise<void> => bridge.openPath(path),
   };
 
   shell = {

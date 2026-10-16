@@ -26,6 +26,7 @@ import { EditorContextMenu } from './context-menu/EditorContextMenu';
 import { DiskConflictBanner, ReadOnlyBanner, SaveErrorBanner } from './editor-banners';
 import { CmEditorWithComments } from './inline-comments/CmEditorWithComments';
 import { MarkdownEditorTab } from './MarkdownEditorTab';
+import { HtmlEditorTab } from './HtmlEditorTab';
 import { SaveStatusChip } from './SaveStatusChip';
 import { useFileWatchReload } from './use-file-watch-reload';
 import { useLspDocument } from './use-lsp-document';
@@ -232,7 +233,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   return (
     <div data-testid="editor-tab" className="flex h-full flex-col overflow-hidden">
-      {/* Above ViewerRouter so BOTH code branches (plain + markdown) show them. */}
+      {/* Above ViewerRouter so every code branch (plain, markdown, html) shows them. */}
       {saveError !== null && <SaveErrorBanner message={saveError} />}
       {diskConflict !== null && <DiskConflictBanner onReload={reloadFromDisk} onKeepMine={keepMine} />}
       <ViewerRouter
@@ -240,6 +241,15 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
         renderCode={() =>
           language === 'markdown' ? (
             <MarkdownEditorTab
+              value={liveBufferValue ?? loadState.value}
+              path={path}
+              onChange={handleChange}
+              onSave={handleSave}
+              readOnly={effectiveReadOnly}
+            />
+          ) : language === 'html' ? (
+            // .svg also infers 'html' but routes to SvgViewer before renderCode.
+            <HtmlEditorTab
               value={liveBufferValue ?? loadState.value}
               path={path}
               onChange={handleChange}

@@ -30,6 +30,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { SvgViewer } from '../SvgViewer';
 import type { CmEditorWithComments as CmEditorWithCommentsType } from '@/features/editor/inline-comments/CmEditorWithComments';
 
+// ViewerShell's Reveal in Finder button reads the active daemon.
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => true }));
+
 /** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
 const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>
   rtlRender(ui, { wrapper: TooltipProvider, ...options });

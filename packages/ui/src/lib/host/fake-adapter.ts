@@ -65,6 +65,7 @@ export class FakeHostBridge implements HostBridge {
     readFileBase64: (_path: string): Promise<string | null> =>
       Promise.resolve(this.overrides.fs?.readFileBase64 ?? null),
     showItemInFolder: (_path: string): Promise<void> => Promise.resolve(),
+    openPath: (_path: string): Promise<void> => Promise.resolve(),
   };
 
   shell = {

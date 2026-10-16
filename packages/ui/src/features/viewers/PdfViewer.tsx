@@ -18,13 +18,11 @@
  * data-testid="viewer-pdf-fallback" on the open-externally button.
  */
 import { useEffect, useState } from 'react';
-import { useHost } from '@/lib/host';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
-import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { ViewerShell } from './ViewerShell';
 import { formatBytes } from './viewer-status';
-import { toFileUrl } from './viewer-file-url';
+import { useNativeFileAction } from './viewer-file-path';
 
 interface PdfViewerProps {
   base64: string | null;
@@ -48,10 +46,8 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
 }
 
 export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
-  const host = useHost();
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const { projectPath } = useActiveIdentity();
-  const fileUrl = toFileUrl(path, projectPath);
+  const openFile = useNativeFileAction(path, 'open');
 
   useEffect(() => {
     if (base64 === null) {
@@ -69,26 +65,17 @@ export function PdfViewer({ base64, mimeType, path }: PdfViewerProps) {
     };
   }, [base64, mimeType]);
 
-  async function handleOpenExternal() {
-    if (!fileUrl) return;
-    try {
-      await host.shell.openExternal(fileUrl);
-    } catch (err) {
-      console.warn('[PdfViewer] openExternal failed', err);
-    }
-  }
-
   const bytes = base64 ? base64ByteLength(base64) : 0;
   const status = base64 ? `PDF · ${formatBytes(bytes)}` : 'PDF · Loading…';
 
   const actions = (
-    <Hint label={fileUrl === null ? 'Cannot open: project root is unknown for this relative path' : undefined}>
+    <Hint label={openFile.disabledReason ?? undefined}>
       <Button
         data-testid="viewer-pdf-fallback"
         variant="ghost"
         size="xs"
-        onClick={() => void handleOpenExternal()}
-        disabled={fileUrl === null}
+        onClick={() => void openFile.run()}
+        disabled={openFile.disabledReason !== null}
       >
         Open externally
       </Button>

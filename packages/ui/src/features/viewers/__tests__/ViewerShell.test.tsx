@@ -15,16 +15,27 @@
  *  8. Children render in the body area.
  *  9. Optional actions node renders in the header.
  * 10. Separator (bg-border w-px) is always present even with no actions.
+ * 11. Reveal in Finder (data-testid="viewer-shell-reveal-finder") calls
+ *     host.fs.showItemInFolder with the absolute path, resolving relative
+ *     paths against the active workspace base.
+ * 12. Reveal in Finder is disabled under a remote daemon, and for a relative
+ *     path with no known base.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import userEvent from '@testing-library/user-event';
+import { HostProvider } from '@/lib/host';
+import { FakeHostBridge } from '@/lib/host/fake-adapter';
+import { useActiveBasesStore } from '@/store/active-bases-store';
 import { ViewerShell } from '../ViewerShell';
 
 vi.mock('@/store/surface-intents', () => ({
   emitSurfaceIntent: vi.fn(),
 }));
+
+let daemonIsLocal = true;
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => daemonIsLocal }));
 
 // Import after mock so we get the mocked version.
 import { emitSurfaceIntent } from '@/store/surface-intents';
@@ -35,9 +46,25 @@ const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof
 
 const mockEmit = emitSurfaceIntent as ReturnType<typeof vi.fn>;
 
+let fakeHost: FakeHostBridge;
+
 beforeEach(() => {
   mockEmit.mockClear();
+  daemonIsLocal = true;
+  useActiveBasesStore.setState({ bases: {} });
+  fakeHost = new FakeHostBridge();
+  vi.spyOn(fakeHost.fs, 'showItemInFolder').mockResolvedValue(undefined);
 });
+
+function renderWithHost(path: string) {
+  return render(
+    <HostProvider host={fakeHost}>
+      <ViewerShell path={path} status="HTML">
+        <div>body</div>
+      </ViewerShell>
+    </HostProvider>,
+  );
+}
 
 describe('ViewerShell', () => {
   it('renders with data-testid="viewer-shell"', () => {
@@ -141,5 +168,37 @@ describe('ViewerShell', () => {
       </ViewerShell>,
     );
     expect(screen.getByTestId('custom-action')).toBeInTheDocument();
+  });
+
+  describe('Reveal in Finder', () => {
+    it('reveals an absolute path in Finder', async () => {
+      const user = userEvent.setup();
+      renderWithHost('/Users/me/Downloads/report.html');
+      await user.click(screen.getByTestId('viewer-shell-reveal-finder'));
+      expect(fakeHost.fs.showItemInFolder).toHaveBeenCalledWith('/Users/me/Downloads/report.html');
+    });
+
+    it('resolves a relative path against the active worktree', async () => {
+      useActiveBasesStore.setState({ bases: { worktreePath: '/Users/me/proj/.wt/a', projectPath: '/Users/me/proj' } });
+      const user = userEvent.setup();
+      renderWithHost('docs/index.html');
+      await user.click(screen.getByTestId('viewer-shell-reveal-finder'));
+      expect(fakeHost.fs.showItemInFolder).toHaveBeenCalledWith('/Users/me/proj/.wt/a/docs/index.html');
+    });
+
+    it('is disabled for a relative path when no workspace base is known', () => {
+      renderWithHost('docs/index.html');
+      expect(screen.getByTestId('viewer-shell-reveal-finder')).toBeDisabled();
+    });
+
+    it('is disabled when the daemon is remote', async () => {
+      daemonIsLocal = false;
+      const user = userEvent.setup();
+      renderWithHost('/Users/me/Downloads/report.html');
+      const btn = screen.getByTestId('viewer-shell-reveal-finder');
+      expect(btn).toBeDisabled();
+      await user.click(btn);
+      expect(fakeHost.fs.showItemInFolder).not.toHaveBeenCalled();
+    });
   });
 });
