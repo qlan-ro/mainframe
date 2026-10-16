@@ -24,7 +24,9 @@ pick_python() {
   echo "verify-gate: needs Python 3.11 or newer on PATH (for tomllib); found $(python3 --version 2>&1)" >&2
   return 1
 }
-PYTHON="$(pick_python)" || exit 1
+# Exit 3, not 1, so the pre-commit hook can tell "cannot run" from "found
+# violations" and skip with a warning; CI fails on either.
+PYTHON="$(pick_python)" || exit 3
 
 "$PYTHON" -m unittest discover -s "$SCRIPT_DIR" -p "test_verify_gate.py"
 "$PYTHON" "$SCRIPT_DIR/verify_gate.py" "$CRATES_DIR"
