@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.3.1
+
+### Patch Changes
+
+- [#844](https://github.com/qlan-ro/mainframe/pull/844) [`92d5b7c`](https://github.com/qlan-ro/mainframe/commit/92d5b7cf955acb5c18b5b6c98f816ea6b04bdd66) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Claude models show their names again (for example "Opus 5.5") in the model picker with Claude Code 2.1.302 and later, instead of their taglines.
+
+- Updated dependencies [[`9255a1a`](https://github.com/qlan-ro/mainframe/commit/9255a1a409e02822a50a5f96d7d411a9ac02efc6)]:
+  - @qlan-ro/mainframe-ui@2.11.1
+
 ## 2.3.0
 
 ### Minor Changes
