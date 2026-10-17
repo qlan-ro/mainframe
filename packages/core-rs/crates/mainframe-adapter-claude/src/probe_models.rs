@@ -64,7 +64,9 @@ pub fn map_model_info(info: &Value) -> AdapterModel {
         .and_then(Value::as_str)
         .unwrap_or("");
     let description = info.get("description").and_then(Value::as_str);
-    let identity = extract_identity(description);
+    // Since CLI 2.1.302 the name is in displayName ("Opus 5.5") and the
+    // description is a bare tagline, so only a "·" description names the model.
+    let identity = extract_identity(description.filter(|d| d.contains('·')));
 
     let label = if value == "default" {
         "Use CLI setting".to_string()
