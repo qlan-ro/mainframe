@@ -1,6 +1,7 @@
 import type { ChatStateEvent, ChatThreadState } from './chat-thread-state';
 import { reduceEnvironmentEvent, type EnvironmentEvent } from './chat-environment-state';
 import { reduceLocalMessageEvent, type LocalMessageEvent } from './chat-reconcile';
+import { pruneQueuedPreviews } from './local-attachments';
 
 type LifecycleEvent = Extract<
   ChatStateEvent,
@@ -72,7 +73,12 @@ function reduceInteraction(state: ChatThreadState, event: InteractionEvent): Cha
     }
     case 'queued.snapshot': {
       const queued = Object.fromEntries(event.refs.map((ref) => [ref.uuid, ref]));
-      return { ...state, interactions: { ...state.interactions, queued } };
+      const queuedAttachmentPreviews = pruneQueuedPreviews(
+        state.queuedAttachmentPreviews,
+        Object.values(state.interactions.queued),
+        event.refs,
+      );
+      return { ...state, interactions: { ...state.interactions, queued }, queuedAttachmentPreviews };
     }
   }
 }
@@ -83,6 +89,7 @@ function reduceDelegated(state: ChatThreadState, event: LocalMessageEvent | Envi
     case 'local.message.failed':
     case 'local.message.attachments_restored':
     case 'local.message.retrying':
+    case 'local.attachments.queued':
       return reduceLocalMessageEvent(state, event);
     default:
       return reduceEnvironmentEvent(state, event);

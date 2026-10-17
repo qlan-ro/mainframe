@@ -25,6 +25,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { ControlRequest, PermissionOption, PromptSendMeta, QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { createEnvironmentSlice, type ChatEnvironmentSlice, type EnvironmentEvent } from './chat-environment-state';
 import type { LocalMessageEvent } from './chat-reconcile';
+import type { LocalAttachmentPreview } from './local-attachments';
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -41,6 +42,8 @@ export interface PendingUserMessage {
   attachmentsRestored?: boolean;
   /** The send meta (e.g. a `/command` invocation) a retry must re-carry — text-only, attachmentIds are never re-added here. */
   sendMeta?: PromptSendMeta;
+  /** The composer's attachment bytes, previewed while the send is in flight. */
+  attachments?: LocalAttachmentPreview[];
 }
 
 export interface ChatPermissionEntry {
@@ -87,6 +90,12 @@ export interface ChatThreadState extends ChatEnvironmentSlice {
     readonly queued: Readonly<Record<string, QueuedMessageRef>>;
   };
   readonly pendingUserMessages: Readonly<Record<string, PendingUserMessage>>;
+  /**
+   * Local previews of this client's queued sends, keyed by daemon attachment
+   * id — a queue ref carries ids only, so its thumbnails come from here until
+   * the dequeued turn arrives with the daemon's own copy.
+   */
+  readonly queuedAttachmentPreviews: Readonly<Record<string, LocalAttachmentPreview>>;
   /**
    * CLI-reported context-window usage (facade `usage_update`). Null until
    * the first report; the session bar falls back to a token estimate from
@@ -146,6 +155,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
       queued: {} as Readonly<Record<string, QueuedMessageRef>>,
     },
     pendingUserMessages: {} as Readonly<Record<string, PendingUserMessage>>,
+    queuedAttachmentPreviews: {},
     contextUsage: null,
     compacting: false,
     ...createEnvironmentSlice(),

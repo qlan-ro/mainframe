@@ -19,6 +19,7 @@ import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { normalizeNativeRepository } from '../view-model/normalize-native-messages';
 import { describeSendError } from './describe-send-error';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
+import { projectLocalAttachments, type LocalAttachmentPreview } from './local-attachments';
 
 // ---------------------------------------------------------------------------
 // Pending message projection
@@ -36,14 +37,16 @@ function makeUserMessage(fields: Omit<ThreadUserMessage, 'role'>): ThreadUserMes
 }
 
 function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
+  const local = projectLocalAttachments(pending.attachments ?? []);
   return makeUserMessage({
     id: `local:${pending.clientId}`,
-    content: [{ type: 'text', text: pending.text }],
-    attachments: [],
+    content: [{ type: 'text', text: pending.text }, ...local.imageParts],
+    attachments: local.attachments,
     createdAt: new Date(pending.createdAt),
     metadata: {
       custom: {
         mainframe: {
+          ...(local.attachmentPreviews && { attachmentPreviews: local.attachmentPreviews }),
           pending: true,
           clientId: pending.clientId,
           ...(pending.status === 'failed'
@@ -63,13 +66,21 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
 // metadata, so queued turns render from `state.interactions.queued` alone.
 // ---------------------------------------------------------------------------
 
-function projectQueuedMessage(ref: QueuedMessageRef): ThreadUserMessage {
+function projectQueuedMessage(
+  ref: QueuedMessageRef,
+  previews: Readonly<Record<string, LocalAttachmentPreview>>,
+): ThreadUserMessage {
+  const local = projectLocalAttachments((ref.attachmentIds ?? []).flatMap((id) => previews[id] ?? []));
   return makeUserMessage({
     id: ref.messageId,
-    content: [{ type: 'text', text: ref.content }],
-    attachments: [],
+    content: [{ type: 'text', text: ref.content }, ...local.imageParts],
+    attachments: local.attachments,
     createdAt: new Date(ref.timestamp),
-    metadata: { custom: { mainframe: { queued: true } } },
+    metadata: {
+      custom: {
+        mainframe: { queued: true, ...(local.attachmentPreviews && { attachmentPreviews: local.attachmentPreviews }) },
+      },
+    },
   });
 }
 
@@ -83,7 +94,7 @@ function projectQueuedMessages(state: ChatThreadState, serverMessageIds: Readonl
   return Object.values(state.interactions.queued)
     .filter((ref) => !serverMessageIds.has(ref.messageId))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-    .map(projectQueuedMessage);
+    .map((ref) => projectQueuedMessage(ref, state.queuedAttachmentPreviews));
 }
 
 /**

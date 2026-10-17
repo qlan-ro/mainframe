@@ -12,6 +12,7 @@ import type { PromptSendMeta } from '@qlan-ro/mainframe-types';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 import { toUploadItems } from '../composer/attachment-adapter';
 import type { UploadAttachmentItem } from '../../../lib/api/attachments';
+import type { LocalAttachmentPreview } from './local-attachments';
 
 let localIdCounter = 0;
 
@@ -64,8 +65,17 @@ export function parseSendInput(message: AppendMessage): SendInput | null {
   return { text, uploadItems };
 }
 
-/** Build the optimistic pending user-message for a send. `sendMeta` is what a retry must re-carry (e.g. a `/command` invocation). */
-export function buildPendingMessage(chatId: string, text: string, sendMeta: PromptSendMeta = {}): PendingUserMessage {
+/**
+ * Build the optimistic pending user-message for a send. `sendMeta` is what a
+ * retry must re-carry (e.g. a `/command` invocation); `attachments` are the
+ * composer's bytes, previewed until the daemon's echo replaces the pending.
+ */
+export function buildPendingMessage(
+  chatId: string,
+  text: string,
+  sendMeta: PromptSendMeta = {},
+  attachments: readonly LocalAttachmentPreview[] = [],
+): PendingUserMessage {
   return {
     clientId: createLocalId('local'),
     chatId,
@@ -73,6 +83,7 @@ export function buildPendingMessage(chatId: string, text: string, sendMeta: Prom
     createdAt: Date.now(),
     status: 'pending',
     ...(Object.keys(sendMeta).length > 0 ? { sendMeta } : {}),
+    ...(attachments.length > 0 ? { attachments: [...attachments] } : {}),
   };
 }
 
@@ -116,7 +127,9 @@ export type LocalMessageEvent =
       pending?: PendingUserMessage;
     }
   | { type: 'local.message.attachments_restored'; clientId: string }
-  | { type: 'local.message.retrying'; clientId: string };
+  | { type: 'local.message.retrying'; clientId: string }
+  /** A queued send's previews, keyed by daemon attachment id, for its queue ref to render. */
+  | { type: 'local.attachments.queued'; previews: Record<string, LocalAttachmentPreview> };
 
 function removePending(state: ChatThreadState, clientId: string): ChatThreadState {
   if (!(clientId in state.pendingUserMessages)) return state;
@@ -142,11 +155,13 @@ export function reduceLocalMessageEvent(state: ChatThreadState, event: LocalMess
     case 'local.message.failed': {
       const current = state.pendingUserMessages[event.clientId] ?? event.pending;
       if (!current) return state;
+      // A retry is text-only, so the failed turn stops previewing attachments it won't resend.
+      const { attachments: _unsent, ...rest } = current;
       return {
         ...state,
         pendingUserMessages: {
           ...state.pendingUserMessages,
-          [event.clientId]: { ...current, status: 'failed', error: event.error, stage: event.stage },
+          [event.clientId]: { ...rest, status: 'failed', error: event.error, stage: event.stage },
         },
         runState: { type: 'error', error: event.error },
       };
@@ -163,6 +178,11 @@ export function reduceLocalMessageEvent(state: ChatThreadState, event: LocalMess
         },
       };
     }
+
+    case 'local.attachments.queued':
+      return Object.keys(event.previews).length === 0
+        ? state
+        : { ...state, queuedAttachmentPreviews: { ...state.queuedAttachmentPreviews, ...event.previews } };
 
     case 'local.message.retrying': {
       const current = state.pendingUserMessages[event.clientId];
