@@ -15,6 +15,7 @@ import {
 import { mfToast } from '@/lib/toast';
 import { matchCommandInvocation } from '../commands/command-registry';
 import { buildPendingMessage, parseSendInput } from './chat-reconcile';
+import { previewsById } from './local-attachments';
 import type { ChatStateEvent, ChatThreadState } from './chat-thread-state';
 
 export interface ChatActionHost {
@@ -53,7 +54,7 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   // it: a retry is text-only.
   const command = matchCommandInvocation(text);
   const sendMeta = command ? { command: { ...command } } : {};
-  const pending = buildPendingMessage(host.getDaemonId(), text, sendMeta);
+  const pending = buildPendingMessage(host.getDaemonId(), text, sendMeta, uploadItems);
   host.dispatch({ type: 'local.message.queued', pending });
   host.dispatch({ type: 'run.started' });
 
@@ -70,8 +71,14 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
     });
     // A queued acceptance renders as a queued turn from the queue snapshot
     // (D1, project-messages.ts) — reconcile the optimistic pending right
-    // away, or the same send would render twice, side by side.
-    if (queued) host.dispatch({ type: 'local.message.reconciled', clientId: pending.clientId });
+    // away, or the same send would render twice, side by side. The queue ref
+    // carries attachment ids only, so its previews move to an id-keyed map.
+    if (queued) {
+      if (attachmentIds) {
+        host.dispatch({ type: 'local.attachments.queued', previews: previewsById(attachmentIds, uploadItems) });
+      }
+      host.dispatch({ type: 'local.message.reconciled', clientId: pending.clientId });
+    }
   } catch (error) {
     const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
     host.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage, pending });
