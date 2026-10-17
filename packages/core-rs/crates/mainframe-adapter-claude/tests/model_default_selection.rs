@@ -76,3 +76,50 @@ fn matching_explicit_alias_keeps_its_identity_and_capabilities() {
     assert_ne!(explicit.is_default, Some(true));
     assert_eq!(models[2].label, "Opus 5.5 with 200K context");
 }
+
+#[test]
+fn tagline_descriptions_label_models_by_display_name() {
+    // CLI 2.1.302 shape: the name lives in displayName and the description is
+    // a tagline with no "·" identity prefix.
+    let event = json!({
+        "type": "control_response",
+        "response": { "response": { "models": [
+            {
+                "value": "default", "displayName": "Default (recommended)",
+                "description": "Fable 5.1", "resolvedModel": "claude-fable-5-1"
+            },
+            {
+                "value": "opus", "displayName": "Opus 5.5",
+                "description": "For complex work and everyday tasks",
+                "resolvedModel": "claude-opus-5-5"
+            },
+            {
+                "value": "fable", "displayName": "Fable 5.1",
+                "description": "For your toughest challenges",
+                "resolvedModel": "claude-fable-5-1"
+            },
+            {
+                "value": "claude-opus-4-8", "displayName": "Opus 4.8",
+                "description": "Best for everyday, complex tasks",
+                "resolvedModel": "claude-opus-4-8"
+            }
+        ]}}
+    });
+    let models = extract_probe_payload(&event).unwrap().models;
+    assert_eq!(
+        models
+            .iter()
+            .map(|m| (m.id.as_str(), m.label.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("default", "Use CLI setting"),
+            ("opus", "Opus 5.5"),
+            ("fable", "Fable 5.1"),
+            ("claude-opus-4-8", "Opus 4.8"),
+        ]
+    );
+    assert_eq!(
+        models[1].description.as_deref(),
+        Some("For complex work and everyday tasks")
+    );
+}
