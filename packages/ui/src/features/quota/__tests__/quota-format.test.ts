@@ -3,12 +3,13 @@ import type { ProviderQuota } from '@qlan-ro/mainframe-types';
 import {
   QUOTA_AMBER_THRESHOLD,
   QUOTA_RED_THRESHOLD,
-  deriveQuotaRow,
+  deriveCapsuleItems,
   deriveWindowList,
   formatAbsoluteReset,
   formatRelativeReset,
   formatUsedPercent,
   minutesAgo,
+  pinnedCapsuleIndex,
   severityOf,
   windowLabel,
   windowTag,
@@ -29,92 +30,126 @@ describe('severityOf', () => {
   });
 });
 
-describe('deriveQuotaRow — session-first headline, tightest-window fallback, & designed states', () => {
-  it('is unknown when there is no blob', () => {
-    expect(deriveQuotaRow(undefined, NOW)).toEqual({ state: 'unknown' });
-  });
-
-  it('headlines the session window even when weekly/model windows run higher — session is what actually blocks the user', () => {
-    const quota: ProviderQuota = {
+describe('deriveCapsuleItems — the capsule cycle', () => {
+  it('runs provider by provider, each provider smallest window first', () => {
+    const claude: ProviderQuota = {
       status: 'ok',
       observedAt: NOW - 40_000,
-      session: { kind: 'session', usedPercent: 1, resetsAt: NOW + 2 * HOUR },
-      weekly: { kind: 'weekly', usedPercent: 53, resetsAt: NOW + 6 * DAY },
+      session: { kind: 'session', usedPercent: 3, resetsAt: NOW + 2 * HOUR },
+      weekly: { kind: 'weekly', usedPercent: 41, resetsAt: NOW + 4 * DAY },
       modelWindows: [{ kind: 'weekly-model', usedPercent: 59, resetsAt: NOW + 6 * DAY, label: 'Fable' }],
     };
-    expect(deriveQuotaRow(quota, NOW)).toEqual({
-      state: 'ok',
-      kind: 'session',
-      usedPercent: 1,
-      severity: 'normal',
-      resetsAt: NOW + 2 * HOUR,
-      stale: false,
-    });
-  });
-
-  it('falls back to the tightest trusted window when there is no session window (Codex weekly-only)', () => {
-    const quota: ProviderQuota = {
+    const codex: ProviderQuota = {
       status: 'ok',
       observedAt: NOW,
-      weekly: { kind: 'weekly', usedPercent: 53, resetsAt: NOW + 6 * DAY },
-      modelWindows: [{ kind: 'weekly-model', usedPercent: 21, resetsAt: NOW + 6 * DAY, label: 'o1' }],
+      weekly: { kind: 'weekly', usedPercent: 17, resetsAt: NOW + 6 * DAY },
+      modelWindows: [],
     };
-    expect(deriveQuotaRow(quota, NOW)).toEqual({
-      state: 'ok',
-      kind: 'weekly',
-      usedPercent: 53,
-      severity: 'normal',
-      resetsAt: NOW + 6 * DAY,
-      stale: false,
-    });
+    expect(deriveCapsuleItems({ codex, claude }, NOW)).toEqual([
+      {
+        key: 'claude:5-hour',
+        providerId: 'claude',
+        providerLabel: 'Claude',
+        kind: 'session',
+        tag: '5h',
+        label: '5-hour',
+        usedPercent: 3,
+        severity: 'normal',
+        resetsAt: NOW + 2 * HOUR,
+        stale: false,
+      },
+      {
+        key: 'claude:Weekly',
+        providerId: 'claude',
+        providerLabel: 'Claude',
+        kind: 'weekly',
+        tag: 'wk',
+        label: 'Weekly',
+        usedPercent: 41,
+        severity: 'normal',
+        resetsAt: NOW + 4 * DAY,
+        stale: false,
+      },
+      {
+        key: 'claude:Weekly · Fable',
+        providerId: 'claude',
+        providerLabel: 'Claude',
+        kind: 'weekly-model',
+        tag: 'wk',
+        label: 'Weekly · Fable',
+        usedPercent: 59,
+        severity: 'normal',
+        resetsAt: NOW + 6 * DAY,
+        stale: false,
+      },
+      {
+        key: 'codex:Weekly',
+        providerId: 'codex',
+        providerLabel: 'Codex',
+        kind: 'weekly',
+        tag: 'wk',
+        label: 'Weekly',
+        usedPercent: 17,
+        severity: 'normal',
+        resetsAt: NOW + 6 * DAY,
+        stale: false,
+      },
+    ]);
   });
 
-  it('falls back to the tightest trusted window once the session window itself has expired', () => {
-    const quota: ProviderQuota = {
+  it('drops an expired window but keeps the provider while another window is trusted', () => {
+    const claude: ProviderQuota = {
       status: 'ok',
       observedAt: NOW,
       session: { kind: 'session', usedPercent: 1, resetsAt: NOW - HOUR },
       weekly: { kind: 'weekly', usedPercent: 53, resetsAt: NOW + 6 * DAY },
       modelWindows: [],
     };
-    expect(deriveQuotaRow(quota, NOW)).toEqual({
-      state: 'ok',
-      kind: 'weekly',
-      usedPercent: 53,
-      severity: 'normal',
-      resetsAt: NOW + 6 * DAY,
-      stale: false,
-    });
+    expect(deriveCapsuleItems({ claude }, NOW).map((i) => i.key)).toEqual(['claude:Weekly']);
   });
 
-  it('reddens when the tightest window is at/above the red threshold', () => {
-    const quota: ProviderQuota = {
-      status: 'ok',
-      observedAt: NOW,
-      modelWindows: [],
-      session: { kind: 'session', usedPercent: 92, resetsAt: NOW + HOUR },
-    };
-    expect(deriveQuotaRow(quota, NOW)).toMatchObject({ state: 'ok', usedPercent: 92, severity: 'red' });
-  });
-
-  it('flags stale past the 12-minute threshold while still showing last-known numbers', () => {
-    const quota: ProviderQuota = {
-      status: 'ok',
-      observedAt: NOW - 13 * 60 * 1000,
-      modelWindows: [],
-      session: { kind: 'session', usedPercent: 44, resetsAt: NOW + 2 * HOUR },
-    };
-    expect(deriveQuotaRow(quota, NOW)).toMatchObject({ state: 'ok', stale: true });
-  });
-
-  it('fails closed to unknown once every window has expired', () => {
-    const quota: ProviderQuota = {
+  it('leaves out a provider with no blob or with every window expired', () => {
+    const claude: ProviderQuota = {
       status: 'ok',
       observedAt: NOW - 6 * HOUR,
       modelWindows: [],
       session: { kind: 'session', usedPercent: 50, resetsAt: NOW - HOUR },
     };
-    expect(deriveQuotaRow(quota, NOW)).toEqual({ state: 'unknown' });
+    expect(deriveCapsuleItems({ claude, codex: undefined }, NOW)).toEqual([]);
+  });
+
+  it('flags stale past the 12-minute threshold while still showing last-known numbers', () => {
+    const claude: ProviderQuota = {
+      status: 'ok',
+      observedAt: NOW - 13 * 60 * 1000,
+      modelWindows: [],
+      session: { kind: 'session', usedPercent: 44, resetsAt: NOW + 2 * HOUR },
+    };
+    expect(deriveCapsuleItems({ claude }, NOW)).toMatchObject([{ usedPercent: 44, stale: true }]);
+  });
+});
+
+describe('pinnedCapsuleIndex', () => {
+  const quotaAt = (session: number, weekly: number): ProviderQuota => ({
+    status: 'ok',
+    observedAt: NOW,
+    session: { kind: 'session', usedPercent: session, resetsAt: NOW + HOUR },
+    weekly: { kind: 'weekly', usedPercent: weekly, resetsAt: NOW + DAY },
+    modelWindows: [],
+  });
+
+  it('keeps cycling while every window is under the amber threshold', () => {
+    expect(pinnedCapsuleIndex(deriveCapsuleItems({ claude: quotaAt(3, 74) }, NOW))).toBeNull();
+  });
+
+  it('pins the window at the amber threshold', () => {
+    expect(pinnedCapsuleIndex(deriveCapsuleItems({ claude: quotaAt(3, 75) }, NOW))).toBe(1);
+  });
+
+  it('pins the fullest window when several are past amber, across providers', () => {
+    const items = deriveCapsuleItems({ claude: quotaAt(84, 20), codex: quotaAt(10, 96) }, NOW);
+    expect(pinnedCapsuleIndex(items)).toBe(3);
+    expect(items[3]).toMatchObject({ key: 'codex:Weekly', severity: 'red' });
   });
 });
 
@@ -136,8 +171,8 @@ describe('deriveWindowList — expanded popover content', () => {
       modelWindows: [{ kind: 'weekly-model', usedPercent: 88, resetsAt: NOW + 6 * DAY, label: 'Fable' }],
     };
     expect(deriveWindowList(quota)).toEqual([
-      { kind: 'session', label: 'Session (5h)', usedPercent: 36, severity: 'normal', resetsAt: NOW + 2 * HOUR },
-      { kind: 'weekly', label: 'Weekly · all models', usedPercent: 21, severity: 'normal', resetsAt: NOW + 6 * DAY },
+      { kind: 'session', label: '5-hour', usedPercent: 36, severity: 'normal', resetsAt: NOW + 2 * HOUR },
+      { kind: 'weekly', label: 'Weekly', usedPercent: 21, severity: 'normal', resetsAt: NOW + 6 * DAY },
       { kind: 'weekly-model', label: 'Weekly · Fable', usedPercent: 88, severity: 'amber', resetsAt: NOW + 6 * DAY },
     ]);
   });
@@ -154,7 +189,7 @@ describe('deriveWindowList — expanded popover content', () => {
       session: { kind: 'session', usedPercent: 63, resetsAt: null },
     };
     expect(deriveWindowList(quota)).toEqual([
-      { kind: 'session', label: 'Session (5h)', usedPercent: 63, severity: 'normal', resetsAt: null },
+      { kind: 'session', label: '5-hour', usedPercent: 63, severity: 'normal', resetsAt: null },
     ]);
   });
 });

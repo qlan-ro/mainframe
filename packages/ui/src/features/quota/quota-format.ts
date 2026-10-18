@@ -4,15 +4,9 @@
  * components, so the render layer is pure wiring.
  */
 import type { ProviderQuota, QuotaWindow } from '@qlan-ro/mainframe-types';
-import {
-  collectQuotaWindows,
-  deriveProviderStatus,
-  isProviderStale,
-  isWindowTrusted,
-  selectTightestWindow,
-} from './quota-lifecycle';
+import { collectQuotaWindows, deriveProviderStatus, isProviderStale, isWindowTrusted } from './quota-lifecycle';
 
-/** Near-wall thresholds (tunable). At/above amber the ring warns; at/above red it alarms. */
+/** Near-wall thresholds (tunable). At/above amber the capsule pins and warns; at/above red it alarms. */
 export const QUOTA_AMBER_THRESHOLD = 75;
 export const QUOTA_RED_THRESHOLD = 90;
 
@@ -29,49 +23,74 @@ export function severityOf(usedPercent: number): QuotaSeverity {
   return 'normal';
 }
 
-/** Provider display metadata keyed by adapter id. Both are always shown on the card. */
+/** Provider display metadata keyed by adapter id. Both always get a section in the usage popover. */
 export const QUOTA_PROVIDERS: readonly { id: string; label: string }[] = [
   { id: 'claude', label: 'Claude' },
   { id: 'codex', label: 'Codex' },
 ];
 
-/**
- * Collapsed-row view: the SMALLEST window — the session window when it is
- * trusted (that is the one that blocks the user next), else the tightest
- * trusted window (Codex only reports weekly) — plus which window it is, so the
- * row can tag it `5h` / `wk`. Or a designed unknown.
- */
-export type QuotaRowVm =
-  | { state: 'unknown' }
-  | {
-      state: 'ok';
-      kind: QuotaWindow['kind'];
-      usedPercent: number;
-      severity: QuotaSeverity;
-      resetsAt: number | null;
-      stale: boolean;
-    };
-
-/** The two-letter window tag the usage row shows beside the provider name. */
+/** The two-letter window tag the capsule shows beside the provider dot. */
 export function windowTag(kind: QuotaWindow['kind']): string {
   return kind === 'session' ? '5h' : 'wk';
 }
 
-export function deriveQuotaRow(quota: ProviderQuota | undefined, now: number): QuotaRowVm {
-  if (!quota || deriveProviderStatus(quota, now) === 'unknown') return { state: 'unknown' };
-  const headline =
-    quota.session && isWindowTrusted(quota.session, quota.observedAt, now)
-      ? quota.session
-      : selectTightestWindow(quota, now);
-  if (!headline) return { state: 'unknown' };
-  return {
-    state: 'ok',
-    kind: headline.kind,
-    usedPercent: headline.usedPercent,
-    severity: severityOf(headline.usedPercent),
-    resetsAt: headline.resetsAt,
-    stale: isProviderStale(quota, now),
-  };
+/**
+ * One step of the title-bar capsule's cycle: a single trusted window of one
+ * provider. The cycle runs provider by provider, each provider's windows
+ * smallest first (session, weekly, then the per-model weeklies).
+ */
+export interface CapsuleItemVm {
+  /** Stable across re-derivations, so the cycle can stay on the same window when data updates. */
+  key: string;
+  providerId: string;
+  providerLabel: string;
+  kind: QuotaWindow['kind'];
+  tag: string;
+  label: string;
+  usedPercent: number;
+  severity: QuotaSeverity;
+  resetsAt: number | null;
+  stale: boolean;
+}
+
+export function deriveCapsuleItems(byId: Record<string, ProviderQuota | undefined>, now: number): CapsuleItemVm[] {
+  return QUOTA_PROVIDERS.flatMap((provider) => {
+    const quota = byId[provider.id];
+    if (!quota || deriveProviderStatus(quota, now) === 'unknown') return [];
+    const stale = isProviderStale(quota, now);
+    return collectQuotaWindows(quota)
+      .filter((window) => isWindowTrusted(window, quota.observedAt, now))
+      .map((window) => {
+        const label = windowLabel(window);
+        return {
+          key: `${provider.id}:${label}`,
+          providerId: provider.id,
+          providerLabel: provider.label,
+          kind: window.kind,
+          tag: windowTag(window.kind),
+          label,
+          usedPercent: window.usedPercent,
+          severity: severityOf(window.usedPercent),
+          resetsAt: window.resetsAt,
+          stale,
+        };
+      });
+  });
+}
+
+/**
+ * The window the capsule pins instead of cycling: the fullest one at or above
+ * the amber threshold. `null` while every window is below it.
+ */
+export function pinnedCapsuleIndex(items: readonly CapsuleItemVm[]): number | null {
+  let pinned: number | null = null;
+  let pinnedPercent = -Infinity;
+  items.forEach((item, i) => {
+    if (item.severity === 'normal' || item.usedPercent <= pinnedPercent) return;
+    pinned = i;
+    pinnedPercent = item.usedPercent;
+  });
+  return pinned;
 }
 
 /** One row per window for the expanded popover. */
@@ -86,9 +105,9 @@ export interface QuotaWindowVm {
 export function windowLabel(window: QuotaWindow): string {
   switch (window.kind) {
     case 'session':
-      return 'Session (5h)';
+      return '5-hour';
     case 'weekly':
-      return 'Weekly · all models';
+      return 'Weekly';
     case 'weekly-model':
       return window.label ? `Weekly · ${window.label}` : 'Weekly · model';
   }
@@ -108,7 +127,7 @@ const MIN_MS = 60 * 1000;
 const HOUR_MS = 60 * MIN_MS;
 const DAY_MS = 24 * HOUR_MS;
 
-/** Friendly relative reset for the ambient row ("resets in 2h 10m"); null when unknown. */
+/** Friendly relative reset for the capsule and popover ("2h 10m"); null when unknown. */
 export function formatRelativeReset(resetsAt: number | null, now: number): string | null {
   if (resetsAt == null) return null;
   const delta = resetsAt - now;

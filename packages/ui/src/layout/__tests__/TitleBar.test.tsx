@@ -2,10 +2,11 @@
  * TitleBar — unit tests.
  *
  * D1/D2/D6: the 48px strip spanning the window, the ONE drag region, in
- * normal flow (nothing `fixed`). Three sections: the 80px traffic-light
- * reserve, the sidebar section (`calc(56px + var(--sidebar-width) - 80px)`,
- * collapsing to 0), and the chat column (session tabs + right cluster). The
- * surface toggle pill lives in the chat column's right cluster.
+ * normal flow (nothing `fixed`). Four sections: the 80px traffic-light
+ * reserve, the usage capsule, the sidebar section
+ * (`calc(56px + var(--sidebar-width) - 80px - 176px)`, collapsing to 0), and
+ * the chat column (session tabs + right cluster). The surface toggle pill
+ * lives in the chat column's right cluster.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -36,10 +37,10 @@ describe('TitleBar — drag region', () => {
 });
 
 describe('TitleBar — sidebar section width', () => {
-  it('sizes the sidebar section to calc(56px + var(--sidebar-width) - 80px) while open', () => {
+  it('sizes the sidebar section to end on the sidebar edge, net of the lights and the capsule, while open', () => {
     renderBar(true);
     const section = screen.getByTestId('title-bar-sidebar-section');
-    expect(section.style.width).toBe('calc(56px + var(--sidebar-width) - 80px)');
+    expect(section.style.width).toBe('calc(56px + var(--sidebar-width) - 80px - 176px)');
     expect(section).not.toHaveAttribute('data-collapsed');
   });
 
@@ -48,6 +49,19 @@ describe('TitleBar — sidebar section width', () => {
     const section = screen.getByTestId('title-bar-sidebar-section');
     expect(section.style.width).toBe('0px');
     expect(section).toHaveAttribute('data-collapsed', '');
+  });
+});
+
+describe('TitleBar — usage capsule', () => {
+  it.each([
+    ['open', true],
+    ['collapsed', false],
+  ])('sits right after the traffic lights, ahead of the sidebar section, while %s', (_, open) => {
+    renderBar(open);
+    const capsule = screen.getByTestId('usage-capsule');
+    const section = screen.getByTestId('title-bar-sidebar-section');
+    expect(capsule.parentElement).toBe(screen.getByTestId('title-bar'));
+    expect(capsule.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
