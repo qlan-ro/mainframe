@@ -219,7 +219,11 @@ pub struct AccountRateLimitsUpdatedParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAccountRateLimitsResult {
+    /// The historical single-bucket view.
     pub rate_limits: RateLimitSnapshot,
+    /// Every metered bucket keyed by `limitId` (`codex`, `premium`, …), when sent.
+    #[serde(default)]
+    pub rate_limits_by_limit_id: Option<std::collections::HashMap<String, RateLimitSnapshot>>,
 }
 
 // --- Account identity ---

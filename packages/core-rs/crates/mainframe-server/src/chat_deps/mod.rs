@@ -30,7 +30,7 @@ use mainframe_services::attachment::attachment_store::AttachmentKind;
 use mainframe_services::notifications::should_notify_permission;
 use mainframe_services::push::PushService;
 use mainframe_services::push::push_service::{PushMessage, PushPriority};
-use mainframe_services::quota::{IngestMode, QuotaManager};
+use mainframe_services::quota::QuotaManager;
 use mainframe_types::adapter::{ExternalSessionPage, ProviderQuota, SessionOptions};
 use mainframe_types::background_task::BackgroundTask;
 use mainframe_types::chat::{

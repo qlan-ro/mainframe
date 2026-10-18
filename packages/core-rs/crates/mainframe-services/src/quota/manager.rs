@@ -12,14 +12,14 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
-use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus};
+use mainframe_types::adapter::ProviderQuota;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::seam_error::SeamError;
 use mainframe_types::settings_kv::SettingsKv;
 
 use super::backoff::handle_pull_failure;
 use super::keying::{compute_quota_key, resolve_account_identity};
-use super::merge::{ProviderQuotaUpdate, merge_provider_quota};
+use super::merge::{merge_provider_quota, replace_blob, to_sparse_update};
 use super::persist::QuotaPersister;
 use super::status::derive_provider_status;
 
@@ -32,11 +32,15 @@ const TRANSIENT_IDENTITY_PREFIX: &str = "transient:";
 /// long enough that a burst of pushes doesn't hammer the trust-store read.
 const IDENTITY_TTL_MS: i64 = 60_000;
 
-/// Whether a harvested quota fully replaces (`Pull`) or sparse-merges (`Push`).
+/// How a harvested quota folds in. `Pull` fully replaces; `Push` sparse-merges
+/// (an omitted window keeps the prior value); `Snapshot` is a push that carries
+/// the provider's whole window set, so it replaces like `Pull` while resolving
+/// identity like `Push`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IngestMode {
     Pull,
     Push,
+    Snapshot,
 }
 
 /// Harvests a fresh full-replacement blob for one adapter (e.g. Claude `/usage`).
@@ -105,6 +109,7 @@ struct CachedIdentity {
 pub struct QuotaManager {
     state: Mutex<QuotaState>,
     pullers: Mutex<HashMap<String, (IngestMode, QuotaPuller)>>,
+    push_modes: Mutex<HashMap<String, IngestMode>>,
     identity_resolvers: Mutex<HashMap<String, IdentityResolver>>,
     identity_cache: Arc<Mutex<HashMap<String, CachedIdentity>>>,
     settings: Arc<dyn SettingsKv>,
@@ -122,6 +127,7 @@ impl QuotaManager {
         Self {
             state: Mutex::new(QuotaState::default()),
             pullers: Mutex::new(HashMap::new()),
+            push_modes: Mutex::new(HashMap::new()),
             identity_resolvers: Mutex::new(HashMap::new()),
             identity_cache: Arc::new(Mutex::new(HashMap::new())),
             persister: QuotaPersister::new(Arc::clone(&deps.settings)),
@@ -131,13 +137,24 @@ impl QuotaManager {
         }
     }
 
-    /// Register an adapter's puller and how its pull result folds in: Claude
-    /// `/usage` is a full snapshot (`Pull`/replace); Codex reads the app-server
-    /// sparsely, so its pull merges like a push (#268 F5).
+    /// Register an adapter's puller and how its pull result folds in.
     pub fn register_puller(&self, adapter_id: &str, mode: IngestMode, puller: QuotaPuller) {
         self.pullers
             .lock_recover()
             .insert(adapter_id.to_string(), (mode, puller));
+    }
+
+    /// How an adapter's session pushes fold in; unregistered adapters `Push`.
+    pub fn register_push_mode(&self, adapter_id: &str, mode: IngestMode) {
+        self.push_modes
+            .lock_recover()
+            .insert(adapter_id.to_string(), mode);
+    }
+
+    /// Fold a session-pushed quota in with the adapter's registered push mode.
+    pub fn ingest_push(&self, adapter_id: &str, quota: ProviderQuota) -> ProviderQuota {
+        let mode = self.push_modes.lock_recover().get(adapter_id).copied();
+        self.ingest(adapter_id, quota, mode.unwrap_or(IngestMode::Push))
     }
 
     /// Register an adapter's account-identity resolver (#268 F2). Consulted through
@@ -222,9 +239,7 @@ impl QuotaManager {
         Some(out)
     }
 
-    /// Fold a harvested quota into state. `Pull` fully replaces the account's
-    /// blob; `Push` sparse-merges (an omitted window keeps the prior value).
-    /// Emits either way and queues the blob for persistence (written behind,
+    /// Fold a harvested quota into state per its `IngestMode`. Emits either way and queues the blob for persistence (written behind,
     /// in ingest order).
     pub fn ingest(
         &self,
@@ -239,13 +254,15 @@ impl QuotaManager {
                 IngestMode::Pull => {
                     self.resolve_identity(&st, adapter_id, quota.account_identity.as_deref())
                 }
-                IngestMode::Push => {
+                IngestMode::Push | IngestMode::Snapshot => {
                     self.resolve_push_identity(&st, adapter_id, quota.account_identity.as_deref())
                 }
             };
             let key = compute_quota_key(adapter_id, identity.as_deref());
             let next = match mode {
-                IngestMode::Pull => replace_blob(&quota, identity.clone(), now),
+                IngestMode::Pull | IngestMode::Snapshot => {
+                    replace_blob(&quota, identity.clone(), now)
+                }
                 IngestMode::Push => merge_provider_quota(
                     st.blobs.get(&key),
                     to_sparse_update(&quota, identity.clone()),
@@ -441,35 +458,6 @@ fn commit_state(
     {
         st.last_known_identity
             .insert(adapter_id.to_string(), identity.to_string());
-    }
-}
-
-/// A full-replacement pull: take exactly the harvested windows, re-deriving status.
-fn replace_blob(quota: &ProviderQuota, identity: Option<String>, now: i64) -> ProviderQuota {
-    let mut blob = ProviderQuota {
-        status: ProviderQuotaStatus::Unknown,
-        session: quota.session.clone(),
-        weekly: quota.weekly.clone(),
-        model_windows: quota.model_windows.clone(),
-        observed_at: quota.observed_at,
-        account_identity: identity,
-    };
-    blob.status = derive_provider_status(&blob, now);
-    blob
-}
-
-/// An empty `model_windows` is dropped so a push can't clear the prior model windows.
-fn to_sparse_update(quota: &ProviderQuota, identity: Option<String>) -> ProviderQuotaUpdate {
-    ProviderQuotaUpdate {
-        observed_at: quota.observed_at,
-        account_identity: identity,
-        session: quota.session.clone(),
-        weekly: quota.weekly.clone(),
-        model_windows: if quota.model_windows.is_empty() {
-            None
-        } else {
-            Some(quota.model_windows.clone())
-        },
     }
 }
 

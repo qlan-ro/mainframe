@@ -78,6 +78,29 @@ fn emits_a_normalized_provider_quota_via_on_provider_quota() {
 }
 
 #[test]
+fn ignores_a_snapshot_from_a_bucket_other_than_the_plan() {
+    let rec = Recorder::new();
+    let sink = rec.sink();
+    let mut state = state();
+
+    handle_notification(
+        "account/rateLimits/updated",
+        &json!({
+            "rateLimits": {
+                "limitId": "premium",
+                "limitName": null,
+                "primary": { "usedPercent": 100, "windowDurationMins": 300, "resetsAt": 1_784_845_911 },
+                "secondary": null,
+            }
+        }),
+        &sink,
+        &mut state,
+    );
+
+    assert!(rec.provider_quotas().is_empty());
+}
+
+#[test]
 fn no_ops_when_the_sink_does_not_override_on_provider_quota() {
     let sink: Arc<dyn SessionSink> = Arc::new(NullSink);
     let mut state = state();

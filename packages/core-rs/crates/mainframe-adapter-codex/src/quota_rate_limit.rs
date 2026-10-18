@@ -1,12 +1,29 @@
 //! Normalizes an `account/rateLimits/updated` (or `.../read`) snapshot into a
 //! `ProviderQuota`. Each window is keyed by `windowDurationMins` (300=session,
 //! 10080=weekly), never by its `primary`/`secondary` slot; an absent or
-//! unrecognized window is dropped, not zeroed, so a sparse snapshot only ever
-//! sets the fields it actually has data for (callers merge onto last-known).
+//! unrecognized window is dropped, not zeroed.
+//!
+//! Codex meters several buckets (`codex`, `premium`, …); only the `codex` bucket
+//! is the plan quota. Its snapshots always carry the plan's whole window set
+//! (5h + weekly, or weekly alone), so a recognized one replaces the stored
+//! windows: a window Codex stops reporting disappears instead of lingering.
 
 use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus, QuotaWindow, QuotaWindowKind};
 
 use crate::types::{RateLimitSnapshot, RateLimitWindow};
+
+/// The metered bucket that carries the plan quota.
+pub(crate) const PLAN_LIMIT_ID: &str = "codex";
+
+/// Whether a snapshot belongs to the plan bucket. An untagged snapshot predates
+/// multi-bucket metering and is the plan bucket.
+#[must_use]
+pub(crate) fn is_plan_bucket(snapshot: &RateLimitSnapshot) -> bool {
+    snapshot
+        .limit_id
+        .as_deref()
+        .is_none_or(|id| id == PLAN_LIMIT_ID)
+}
 
 fn kind_by_duration_mins(mins: i64) -> Option<QuotaWindowKind> {
     match mins {

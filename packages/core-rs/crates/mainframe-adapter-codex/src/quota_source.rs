@@ -3,7 +3,7 @@ use mainframe_types::adapter::ProviderQuota;
 
 pub struct Source;
 impl QuotaSource for Source {
-    fn merge_sparse(&self) -> bool {
+    fn push_is_snapshot(&self) -> bool {
         true
     }
     fn poll(&self) -> bool {

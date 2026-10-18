@@ -13,7 +13,9 @@ use mainframe_types::adapter::ProviderQuota;
 use crate::quota_identity::{
     ReadAccount, ReadCodexAccountIdentityDeps, read_codex_account_identity,
 };
-use crate::quota_rate_limit::normalize_rate_limit_snapshot;
+use crate::quota_rate_limit::{
+    PLAN_LIMIT_ID, has_recognized_window, normalize_rate_limit_snapshot,
+};
 use crate::session::spawn_temp_app_server;
 use crate::types::{GetAccountRateLimitsResult, GetAccountResult};
 
@@ -41,7 +43,19 @@ pub(crate) async fn pull_codex_quota(
         })
     );
     let result = result?;
-    let mut quota = normalize_rate_limit_snapshot(&result.rate_limits, deps.now);
+    let snapshot = result
+        .rate_limits_by_limit_id
+        .as_ref()
+        .and_then(|buckets| buckets.get(PLAN_LIMIT_ID))
+        .unwrap_or(&result.rate_limits);
+    let mut quota = normalize_rate_limit_snapshot(snapshot, deps.now);
+    // The pull replaces the stored windows, so a read with nothing recognized
+    // keeps last-known instead of wiping it.
+    if !has_recognized_window(&quota) {
+        return Err(AdapterError::Message(
+            "codex rate-limit read carried no recognized window".into(),
+        ));
+    }
     quota.account_identity = Some(account_identity);
     Ok(quota)
 }

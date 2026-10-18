@@ -1,3 +1,4 @@
+use mainframe_services::quota::IngestMode;
 use mainframe_types::{
     adapter::DetectedPr,
     chat_patch::ChatPatch,

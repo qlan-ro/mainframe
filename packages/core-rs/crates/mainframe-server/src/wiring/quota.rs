@@ -14,7 +14,7 @@ pub(crate) fn register_quota_sources(
     for registration in quota_sources(adapters) {
         let source = registration.source;
         let adapter_id = registration.id;
-        let mode = registration.mode;
+        quota.register_push_mode(&adapter_id, registration.push_mode);
         let identity = source.clone();
         quota.register_identity_resolver(
             &adapter_id,
@@ -26,9 +26,10 @@ pub(crate) fn register_quota_sources(
         let id = adapter_id.clone();
         let db = db.clone();
         let path = resolved_path.clone();
+        // Every puller harvests a full snapshot, so its result replaces.
         quota.register_puller(
             &adapter_id,
-            mode,
+            IngestMode::Pull,
             Arc::new(move || {
                 let (source, id, db, path) = (source.clone(), id.clone(), db.clone(), path.clone());
                 Box::pin(async move {
@@ -47,7 +48,7 @@ pub(crate) fn register_quota_sources(
 
 pub(crate) struct QuotaRegistration {
     pub(crate) id: String,
-    pub(crate) mode: IngestMode,
+    pub(crate) push_mode: IngestMode,
     pub(crate) poll: bool,
     source: Arc<dyn mainframe_adapter_api::QuotaSource>,
 }
@@ -60,10 +61,10 @@ pub(crate) fn quota_sources(adapters: &AdapterRegistry) -> Vec<QuotaRegistration
             let source = adapter.quota_source()?;
             Some(QuotaRegistration {
                 id: adapter.id().to_string(),
-                mode: if source.merge_sparse() {
-                    IngestMode::Push
+                push_mode: if source.push_is_snapshot() {
+                    IngestMode::Snapshot
                 } else {
-                    IngestMode::Pull
+                    IngestMode::Push
                 },
                 poll: source.poll(),
                 source,

@@ -73,17 +73,17 @@ fn daemon_decoders_match_base_bytes_on_full_and_incremental_paths() {
 }
 
 #[test]
-fn quota_registration_is_claude_pull_polled_and_codex_push_once() {
+fn quota_registration_is_claude_merge_polled_and_codex_snapshot_once() {
     let mut sources: Vec<_> = crate::wiring::quota::quota_sources(&builtin_registry())
         .into_iter()
-        .map(|source| (source.id, source.mode, source.poll))
+        .map(|source| (source.id, source.push_mode, source.poll))
         .collect();
     sources.sort_by(|a, b| a.0.cmp(&b.0));
     assert_eq!(
         sources,
         vec![
-            ("claude".into(), IngestMode::Pull, true),
-            ("codex".into(), IngestMode::Push, false)
+            ("claude".into(), IngestMode::Push, true),
+            ("codex".into(), IngestMode::Snapshot, false)
         ]
     );
 }

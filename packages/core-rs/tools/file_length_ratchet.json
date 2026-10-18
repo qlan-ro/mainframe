@@ -58,7 +58,7 @@
   "mainframe-server/tests/skills_cli_unit.rs": 961,
   "mainframe-server/tests/support/mod.rs": 423,
   "mainframe-server/tests/workflow_runs_history.rs": 392,
-  "mainframe-services/src/quota/manager.rs": 485,
+  "mainframe-services/src/quota/manager.rs": 473,
   "mainframe-types/src/acp/extensions.rs": 322,
   "mainframe-types/src/adapter.rs": 579,
   "mainframe-types/src/events.rs": 353
