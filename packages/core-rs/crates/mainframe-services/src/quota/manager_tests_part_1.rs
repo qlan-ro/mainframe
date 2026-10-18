@@ -1,5 +1,5 @@
 use super::*;
-use mainframe_types::adapter::{QuotaWindow, QuotaWindowKind};
+use mainframe_types::adapter::{ProviderQuotaStatus, QuotaWindow, QuotaWindowKind};
 use mainframe_types::settings_kv::MemorySettings;
 use std::sync::Mutex as StdMutex;
 

@@ -188,9 +188,9 @@ impl AdapterPort for DaemonChatDeps {
             .is_some_and(|adapter| adapter.capabilities().no_persistence)
     }
     fn on_provider_quota(&self, adapter_id: &str, quota: ProviderQuota) {
-        // Session-pushed quota sparse-merges (Push): a partial blob keeps prior
-        // windows. `ingest` persists + fans out `provider.quota.updated` itself.
-        self.quota.ingest(adapter_id, quota, IngestMode::Push);
+        // Folds in with the adapter's registered push mode: Claude sparse-merges,
+        // Codex replaces. `ingest` persists + fans out `provider.quota.updated` itself.
+        self.quota.ingest_push(adapter_id, quota);
     }
     fn adapter_fork_info(&self, adapter_id: &str) -> AdapterForkInfo {
         match self.adapters.get(adapter_id) {

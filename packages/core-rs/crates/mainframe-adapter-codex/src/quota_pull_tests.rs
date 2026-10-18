@@ -10,9 +10,22 @@ fn run_rate_limits_ok(snapshot: RateLimitSnapshot) -> Box<RunRateLimits> {
         Box::pin(async move {
             Ok(GetAccountRateLimitsResult {
                 rate_limits: snapshot,
+                rate_limits_by_limit_id: None,
             })
         })
     })
+}
+fn weekly_only(limit_id: &str, used_percent: f64) -> RateLimitSnapshot {
+    RateLimitSnapshot {
+        limit_id: Some(limit_id.into()),
+        limit_name: None,
+        primary: Some(crate::types::RateLimitWindow {
+            used_percent,
+            window_duration_mins: Some(10080),
+            resets_at: Some(1_784_845_911),
+        }),
+        secondary: None,
+    }
 }
 fn read_account_ok(account: crate::types::Account) -> Box<ReadAccount> {
     Box::new(move || {
@@ -67,12 +80,7 @@ async fn normalizes_the_injected_rate_limit_snapshot_and_stamps_the_resolved_acc
 #[tokio::test]
 async fn stamps_the_transient_identity_sentinel_when_account_read_fails_without_failing_the_whole_pull()
  {
-    let run_rate_limits = run_rate_limits_ok(RateLimitSnapshot {
-        limit_id: Some("codex".into()),
-        limit_name: None,
-        primary: None,
-        secondary: None,
-    });
+    let run_rate_limits = run_rate_limits_ok(weekly_only("codex", 22.0));
     let read_account = read_account_err();
 
     let quota = pull_codex_quota(PullCodexQuotaDeps {
@@ -88,4 +96,54 @@ async fn stamps_the_transient_identity_sentinel_when_account_read_fails_without_
         quota.account_identity.as_deref(),
         Some("transient:identity-read-failed")
     );
+}
+
+#[tokio::test]
+async fn reads_the_plan_bucket_from_the_multi_bucket_view_when_present() {
+    let run_rate_limits: Box<RunRateLimits> = Box::new(|| {
+        Box::pin(async {
+            Ok(GetAccountRateLimitsResult {
+                rate_limits: weekly_only("premium", 90.0),
+                rate_limits_by_limit_id: Some(
+                    [
+                        ("premium".to_string(), weekly_only("premium", 90.0)),
+                        ("codex".to_string(), weekly_only("codex", 17.0)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            })
+        })
+    });
+    let read_account = read_account_err();
+
+    let quota = pull_codex_quota(PullCodexQuotaDeps {
+        run_rate_limits: &run_rate_limits,
+        read_account: &read_account,
+        now: NOW,
+    })
+    .await
+    .unwrap();
+
+    assert_eq!(quota.weekly.unwrap().used_percent, 17.0);
+}
+
+#[tokio::test]
+async fn fails_a_read_with_no_recognized_window_so_last_known_survives() {
+    let run_rate_limits = run_rate_limits_ok(RateLimitSnapshot {
+        limit_id: Some("codex".into()),
+        limit_name: None,
+        primary: None,
+        secondary: None,
+    });
+    let read_account = read_account_err();
+
+    let result = pull_codex_quota(PullCodexQuotaDeps {
+        run_rate_limits: &run_rate_limits,
+        read_account: &read_account,
+        now: NOW,
+    })
+    .await;
+
+    assert!(result.is_err());
 }

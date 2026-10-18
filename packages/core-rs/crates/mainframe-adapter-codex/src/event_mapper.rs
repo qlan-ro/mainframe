@@ -9,7 +9,7 @@ use crate::collab_card;
 use crate::item_types::ThreadItem;
 pub(crate) use crate::parent_id_sink::ParentIdSink;
 use crate::quota_rate_limit::{
-    has_recognized_window, normalize_rate_limit_snapshot, snapshot_has_window,
+    has_recognized_window, is_plan_bucket, normalize_rate_limit_snapshot, snapshot_has_window,
 };
 pub use crate::session_state::{CodexSessionState, CurrentTurnPlan, LastUsage};
 use crate::thread_item_render::render_completed_item;
@@ -90,6 +90,11 @@ fn handle_account_rate_limits_updated(
     params: AccountRateLimitsUpdatedParams,
     sink: &Arc<dyn SessionSink>,
 ) {
+    // Another metered bucket's windows would overwrite the plan's, then linger
+    // once that bucket stops reporting.
+    if !is_plan_bucket(&params.rate_limits) {
+        return;
+    }
     let quota = normalize_rate_limit_snapshot(&params.rate_limits, mainframe_types::time::now_ms());
     // C2 (#268): a snapshot that recognizes zero windows must not ingest — it would
     // bump freshness with no data behind it. Warn only when slots were present but

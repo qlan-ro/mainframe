@@ -160,8 +160,8 @@ test.describe('§sidebar-chrome', () => {
 
   // The three per-status footer count chips (idle / working / waiting) are GONE, not
   // flagged off: `layout/SidebarFooter.tsx` and its SHOW_SESSION_COUNTS flag were deleted
-  // with the v2 shell integration, and the footer holds quota rows and the daemon
-  // switcher only now (QuotaFooter + DaemonSwitcher, AppSidebar.tsx). Per-session
+  // with the v2 shell integration. The panel has no footer now: plan usage moved to the
+  // title bar's usage capsule and the daemon switcher to the nav rail. Per-session
   // working/waiting state is covered on the row's status dot in sessions-rows.spec.ts.
 
   // The sidebar header carries no hide button of its own (SessionSidebar.tsx's

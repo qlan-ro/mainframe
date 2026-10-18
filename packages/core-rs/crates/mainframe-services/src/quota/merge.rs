@@ -1,4 +1,4 @@
-//! Merge sparse quota updates into the current snapshot.
+//! Fold harvested quota into the current snapshot: sparse merges and full replacements.
 
 use mainframe_types::adapter::{ProviderQuota, ProviderQuotaStatus, QuotaWindow};
 
@@ -62,6 +62,44 @@ fn merge_model_windows(
         }
     }
     merged
+}
+
+/// A full replacement: take exactly the harvested windows, re-deriving status.
+#[must_use]
+pub(crate) fn replace_blob(
+    quota: &ProviderQuota,
+    identity: Option<String>,
+    now: i64,
+) -> ProviderQuota {
+    let mut blob = ProviderQuota {
+        status: ProviderQuotaStatus::Unknown,
+        session: quota.session.clone(),
+        weekly: quota.weekly.clone(),
+        model_windows: quota.model_windows.clone(),
+        observed_at: quota.observed_at,
+        account_identity: identity,
+    };
+    blob.status = derive_provider_status(&blob, now);
+    blob
+}
+
+/// An empty `model_windows` is dropped so a push can't clear the prior model windows.
+#[must_use]
+pub(crate) fn to_sparse_update(
+    quota: &ProviderQuota,
+    identity: Option<String>,
+) -> ProviderQuotaUpdate {
+    ProviderQuotaUpdate {
+        observed_at: quota.observed_at,
+        account_identity: identity,
+        session: quota.session.clone(),
+        weekly: quota.weekly.clone(),
+        model_windows: if quota.model_windows.is_empty() {
+            None
+        } else {
+            Some(quota.model_windows.clone())
+        },
+    }
 }
 
 #[cfg(test)]
