@@ -8,6 +8,7 @@ export function useTurnDisclosureState(
   root: RefObject<HTMLDivElement | null>,
   backgroundAgent: boolean,
 ) {
+  'use no memo'; // `open` reads the mutable disclosure store; `revision` only marks that it changed
   const revision = useSyncExternalStore(turnDisclosureStore.subscribe, turnDisclosureStore.snapshot, () => 0);
   const guard = useTurnInteractionGuard(root, model.turns);
   const [automatic, setAutomatic] = useState<ReadonlySet<string>>(() => new Set());

@@ -1,9 +1,11 @@
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
 import { resolve } from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  // Same compiler as the app build, so tests exercise the compiled output.
+  plugins: [react(), babel({ presets: [reactCompilerPreset()] })],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),

@@ -6,6 +6,7 @@
  * trace (`run/RunTrace`) — this component only renders the list and reports
  * clicks; it owns no navigation state of its own.
  */
+import { useNow } from '@/lib/use-now';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
@@ -25,7 +26,17 @@ function RunGlyph({ status }: { status: AutomationRunSummary['status'] }) {
   return <span aria-hidden className={cn('size-[7px] shrink-0 rounded-full', RUN_STATUS_DOT_CLASS[status])} />;
 }
 
-function RunRow({ run, selected, onSelect }: { run: AutomationRunSummary; selected: boolean; onSelect: () => void }) {
+function RunRow({
+  run,
+  now,
+  selected,
+  onSelect,
+}: {
+  run: AutomationRunSummary;
+  now: number;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const duration = formatDuration(run.startedAt, run.finishedAt ?? undefined);
   return (
     <button
@@ -42,7 +53,7 @@ function RunRow({ run, selected, onSelect }: { run: AutomationRunSummary; select
         <RunGlyph status={run.status} />
       </Hint>
       <span className="min-w-0 flex-1">
-        <span className="block font-medium text-foreground">{formatRelativeTime(run.startedAt, Date.now())}</span>
+        <span className="block font-medium text-foreground">{formatRelativeTime(run.startedAt, now)}</span>
         {duration && <span className="block text-muted-foreground">{duration}</span>}
       </span>
     </button>
@@ -56,6 +67,7 @@ export interface RunsColumnProps {
 }
 
 export function RunsColumn({ runs, selectedRunId, onSelect }: RunsColumnProps) {
+  const now = useNow();
   return (
     <div
       data-testid="automations-runs-column"
@@ -79,7 +91,13 @@ export function RunsColumn({ runs, selectedRunId, onSelect }: RunsColumnProps) {
         </div>
       ) : (
         runs.map((run) => (
-          <RunRow key={run.id} run={run} selected={run.id === selectedRunId} onSelect={() => onSelect(run.id)} />
+          <RunRow
+            key={run.id}
+            run={run}
+            now={now}
+            selected={run.id === selectedRunId}
+            onSelect={() => onSelect(run.id)}
+          />
         ))
       )}
     </div>

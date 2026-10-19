@@ -96,6 +96,7 @@ export function createDirectiveText(
   const renderers = options?.renderers;
 
   const Component: TextMessagePartComponent = ({ text }) => {
+    'use no memo'; // compiler 1.0.0 hoists the map callback out of this factory's closure (ReferenceError)
     const segments = formatter.parse(text);
 
     if (segments.length === 1 && segments[0]!.kind === 'text') {

@@ -10,28 +10,17 @@
  * automation's details in the body; "needs you" rows sort first. The
  * pending dot lives on the rail.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Plus, Zap } from 'lucide-react';
 import { SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { SidebarScopeStrip } from '@/features/sessions/SidebarScopeStrip';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
+import { useNow } from '@/lib/use-now';
 import { useScopedAutomationsLibrary } from '../data/use-automations-scope';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { useAutomationsStore } from '../data/use-automations-store';
 import { AutomationSidebarRow } from './AutomationSidebarRow';
 import { deriveAutomationRows } from './automation-row-view';
-
-const TICK_MS = 30_000;
-
-/** Re-renders every 30s so the "last ran" column keeps counting while the list is idle. */
-function useTickingNow(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
-    return () => clearInterval(timer);
-  }, []);
-  return now;
-}
 
 /** The "New automation" row under the header — ONE CLICK, always, mirroring Chats' `NewSessionRow`. */
 function NewAutomationRow({ onClick }: { onClick: () => void }) {
@@ -57,7 +46,8 @@ export function AutomationsSidebarList() {
   const detailsAutomationId = useAutomationsNav((s) => s.detailsAutomationId);
   const openEditor = useAutomationsNav((s) => s.openEditor);
   const openDetails = useAutomationsNav((s) => s.openDetails);
-  const now = useTickingNow();
+  // Ticks so the "last ran" column keeps counting while the list is idle.
+  const now = useNow();
   const rows = useMemo(
     () => deriveAutomationRows(library.definitions, library.runs, interactions),
     [library.definitions, library.runs, interactions],

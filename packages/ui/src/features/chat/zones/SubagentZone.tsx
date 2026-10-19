@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
-import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
+import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useControllerState } from '../runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
@@ -49,7 +49,7 @@ export function SubagentZone({
   onClose: () => void;
 }) {
   const port = useDaemonPort();
-  const controller = chatControllerRegistry.getOrCreate(subagent.parentChatId, port);
+  const controller = useChatController(subagent.parentChatId, port);
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
   const transcript = findSubagentTranscript(messages, subagent.toolCallId);

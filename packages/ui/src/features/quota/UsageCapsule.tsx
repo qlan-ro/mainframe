@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
+import { useNow } from '@/lib/use-now';
 import { cn } from '@/lib/utils';
 import {
   deriveCapsuleItems,
@@ -27,20 +28,9 @@ import { QUOTA_BAR_FILL, QUOTA_PERCENT_TEXT } from './quota-severity';
 import { UsagePopover } from './UsagePopover';
 import { useHoverPin } from './use-hover-pin';
 
-const TICK_INTERVAL_MS = 30_000;
 const CYCLE_INTERVAL_MS = 4_000;
 /** One capsule row; the track slides by this much per step. */
 const ROW_PX = 20;
-
-/** Re-renders every 30s so an idle capsule still crosses resetsAt/staleness thresholds. */
-function useTickingNow(): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), TICK_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, []);
-  return now;
-}
 
 function useCycleIndex(count: number, paused: boolean): number {
   const [index, setIndex] = useState(0);
@@ -98,7 +88,8 @@ function CycleDots({ count, active }: { count: number; active: number }) {
 
 /** `now` is injectable so the derived staleness/expiry states are deterministic in tests. */
 export function UsageCapsule({ now }: { now?: number }) {
-  const ticking = useTickingNow();
+  // Ticks so an idle capsule still crosses resetsAt/staleness thresholds.
+  const ticking = useNow();
   const effectiveNow = now ?? ticking;
   const byId = useQuotaStore((s) => s.byId);
   const items = useMemo(() => deriveCapsuleItems(byId, effectiveNow), [byId, effectiveNow]);

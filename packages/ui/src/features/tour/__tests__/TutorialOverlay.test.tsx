@@ -31,19 +31,35 @@ const mockBack = vi.fn();
 const mockSkip = vi.fn();
 const mockComplete = vi.fn();
 
-vi.mock('@/store/tutorial', () => ({
-  useTutorialStore: vi.fn((selector?: (s: unknown) => unknown) => {
-    const state = {
-      completed: mockCompleted,
-      step: mockStep,
-      next: mockNext,
-      back: mockBack,
-      skip: mockSkip,
-      complete: mockComplete,
-    };
-    return selector ? selector(state) : state;
-  }),
-}));
+// Reactive like the real zustand store: a step change re-renders the
+// components that read it, not just the root a `rerender` would re-run.
+const storeListeners = new Set<() => void>();
+function setMockStep(step: number): void {
+  mockStep = step;
+  storeListeners.forEach((listener) => listener());
+}
+
+vi.mock('@/store/tutorial', async () => {
+  const { useSyncExternalStore } = await vi.importActual<typeof import('react')>('react');
+  const subscribe = (listener: () => void) => {
+    storeListeners.add(listener);
+    return () => storeListeners.delete(listener);
+  };
+  return {
+    useTutorialStore: vi.fn((selector?: (s: unknown) => unknown) => {
+      const step = useSyncExternalStore(subscribe, () => mockStep);
+      const state = {
+        completed: mockCompleted,
+        step,
+        next: mockNext,
+        back: mockBack,
+        skip: mockSkip,
+        complete: mockComplete,
+      };
+      return selector ? selector(state) : state;
+    }),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Imports — after mocks
@@ -267,15 +283,14 @@ describe('TutorialOverlay', () => {
     mockStep = 2;
     const user = userEvent.setup();
     const anchors = insertArmedAnchors();
-    const { rerender } = render(<TutorialOverlay />);
+    render(<TutorialOverlay />);
     await settle();
     await user.click(screen.getByTestId('tour-back-btn'));
     expect(mockBack).toHaveBeenCalledTimes(1);
     removeAnchor(anchors['new-session'] as HTMLElement);
 
     // Simulate the store having moved back onto the new-session step.
-    mockStep = 1;
-    rerender(<TutorialOverlay />);
+    act(() => setMockStep(1));
     await settle(80);
 
     // The user's own click plus the auto-skip's call: two back(), zero next().

@@ -9,11 +9,18 @@
 const failedIds = new Set<string>();
 const listeners = new Set<() => void>();
 let version = 0;
-let snapshot: { version: number } = { version };
+
+/** An immutable copy of the markers, replaced on every change. */
+export interface AuthFailureSnapshot {
+  version: number;
+  failedIds: ReadonlySet<string>;
+}
+
+let snapshot: AuthFailureSnapshot = { version, failedIds: new Set() };
 
 function notify(): void {
   version += 1;
-  snapshot = { version };
+  snapshot = { version, failedIds: new Set(failedIds) };
   for (const cb of listeners) cb();
 }
 
@@ -39,6 +46,6 @@ export function subscribeAuthFailures(cb: () => void): () => void {
 }
 
 /** Stable reference for `useSyncExternalStore` — bumps only when a marker actually changes. */
-export function getAuthFailureSnapshot(): { version: number } {
+export function getAuthFailureSnapshot(): AuthFailureSnapshot {
   return snapshot;
 }

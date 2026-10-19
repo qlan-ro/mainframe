@@ -12,6 +12,7 @@ import type { TagColor } from '@qlan-ro/mainframe-types';
 import { FadeLabel } from '@/components/ui/fade-label';
 import { useTabHintIndex } from '@/features/session-tabs/use-tab-hint-index';
 import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
+import { useNow } from '@/lib/use-now';
 import { formatCompactTime } from './compact-time';
 import type { SessionItem } from './view-model/chat-to-thread-custom';
 import type { SessionBadge } from './view-model/session-status';
@@ -46,6 +47,7 @@ export function RowBody({
 }: RowBodyProps) {
   const { custom } = item;
   const hintIndex = useTabHintIndex(item.id);
+  const now = useNow();
   return (
     <>
       <StatusDot badge={badge} />
@@ -84,7 +86,7 @@ export function RowBody({
               data-testid="sessions-row-relative-time"
               className="shrink-0 text-xs tabular-nums text-muted-foreground"
             >
-              {formatCompactTime(custom.updatedAt, Date.now())}
+              {formatCompactTime(custom.updatedAt, now)}
             </span>
           )}
         </span>
