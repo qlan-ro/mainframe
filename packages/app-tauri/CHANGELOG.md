@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.3.2
+
+### Patch Changes
+
+- [#847](https://github.com/qlan-ro/mainframe/pull/847) [`851d617`](https://github.com/qlan-ro/mainframe/commit/851d61787f5fb6915328e8f8a538bf28bc5c953a) Thanks [@doruchiulan](https://github.com/doruchiulan)! - A Codex usage limit that Codex stops reporting (for example the 5-hour window after a plan change) no longer stays on screen at its last value. Codex snapshots now replace the stored limits, Refresh clears a dropped one, and limits from Codex's other metered buckets no longer overwrite the plan's.
+
+- Updated dependencies [[`e35d109`](https://github.com/qlan-ro/mainframe/commit/e35d109ed9b9f46df6e105ca37eb6f5a2b96d859), [`851d617`](https://github.com/qlan-ro/mainframe/commit/851d61787f5fb6915328e8f8a538bf28bc5c953a)]:
+  - @qlan-ro/mainframe-ui@2.12.0
+
 ## 2.3.1
 
 ### Patch Changes
