@@ -15,7 +15,7 @@ import { CompactActivityGroup, CompactDetailRows } from './CompactActivityGroup'
 import { CompactTextSlice } from './CompactTextSlice';
 import { CompactTurnDisclosure, workSlotId } from './CompactTurnDisclosure';
 import { TranscriptScopeProvider, useTranscriptScope } from './transcript-scope';
-import { useTurnPresentation } from './turn-presentation-context';
+import { useTurnPresentationSelector } from './turn-presentation-context';
 
 const ToolLeaf: ToolCallMessagePartComponent = (part) => <MessageToolLeaf part={{ ...part, toolUI: null }} />;
 const nativeComponents = {
@@ -46,15 +46,11 @@ function SourceDetail() {
   );
 }
 const detailComponents = { AssistantMessage: SourceDetail, UserMessage: () => null };
-const ScopedDetail = memo(function ScopedDetail({
-  unit,
-  footer,
-  timing,
-}: {
-  unit: SourceUnit;
-  footer: boolean;
-  timing: boolean;
-}) {
+const ScopedDetail = memo(function ScopedDetail({ unit, last }: { unit: SourceUnit; last: boolean }) {
+  const footer = useTurnPresentationSelector(
+    (s) => last && s.model.messagesById.get(unit.messageId)?.footerInDetails === true,
+  );
+  const timing = useTurnPresentationSelector((s) => !!s.model.messagesById.get(unit.messageId)?.timingTurnKey);
   const value = useMemo(() => ({ unit, footer, timing }), [unit, footer, timing]);
   return (
     <Detail.Provider value={value}>
@@ -63,7 +59,6 @@ const ScopedDetail = memo(function ScopedDetail({
   );
 });
 function ActivityDetails({ members }: { members: readonly SourceUnit[] }) {
-  const { model } = useTurnPresentation();
   const { pendingToolIds } = useTranscriptScope();
   const visibleMembers = useMemo(
     () => members.filter((unit) => hasActivityDetail(unit.part, pendingToolIds)),
@@ -72,17 +67,9 @@ function ActivityDetails({ members }: { members: readonly SourceUnit[] }) {
   const lastSources = useMemo(() => new Map(visibleMembers.map((unit) => [unit.messageId, unit])), [visibleMembers]);
   return (
     <>
-      {visibleMembers.map((unit) => {
-        const source = model.messagesById.get(unit.messageId);
-        return (
-          <ScopedDetail
-            key={unit.key}
-            unit={unit}
-            footer={lastSources.get(unit.messageId) === unit && source?.footerInDetails === true}
-            timing={!!source?.timingTurnKey}
-          />
-        );
-      })}
+      {visibleMembers.map((unit) => (
+        <ScopedDetail key={unit.key} unit={unit} last={lastSources.get(unit.messageId) === unit} />
+      ))}
     </>
   );
 }
@@ -96,11 +83,12 @@ const Content = memo(function Content({ unit }: { unit: DisplayUnit }) {
     return <CompactDetailRows indices={[unit.index]} />;
   return <MessagePrimitive.PartByIndex index={unit.index} components={nativeComponents} />;
 });
+// Slices of the turn model, not the whole of it: a chunk re-renders only the
+// slots and messages whose turn, presentation or open flag actually moved.
 function Slot({ unit }: { unit: DisplayUnit }) {
-  const state = useTurnPresentation();
-  const turn = unit.turnKey && state.model.turns.get(unit.turnKey);
+  const turn = useTurnPresentationSelector((s) => (unit.turnKey ? s.model.turns.get(unit.turnKey) : undefined));
   const header = !!turn && turn.available && turn.firstWorkKey === unit.key;
-  const hidden = unit.work && !!turn && !state.open(turn.key);
+  const hidden = useTurnPresentationSelector((s) => unit.work && !!turn && !s.open(turn.key));
   return (
     <>
       {header && <CompactTurnDisclosure turn={turn} />}
@@ -111,13 +99,16 @@ function Slot({ unit }: { unit: DisplayUnit }) {
   );
 }
 function SliceBody({ presentation }: { presentation: MessagePresentation }) {
-  const state = useTurnPresentation();
   const nested = useIsNestedTranscript();
-  const visible = presentation.units.some((unit) => !unit.work || !unit.turnKey || state.open(unit.turnKey));
-  const header = presentation.units.some((unit) => {
-    const turn = unit.turnKey && state.model.turns.get(unit.turnKey);
-    return turn && turn.available && turn.firstWorkKey === unit.key;
-  });
+  const visible = useTurnPresentationSelector((s) =>
+    presentation.units.some((unit) => !unit.work || !unit.turnKey || s.open(unit.turnKey)),
+  );
+  const header = useTurnPresentationSelector((s) =>
+    presentation.units.some((unit) => {
+      const turn = unit.turnKey && s.model.turns.get(unit.turnKey);
+      return !!turn && turn.available && turn.firstWorkKey === unit.key;
+    }),
+  );
   const parts = presentation.units.map((unit) => <Slot key={unit.key} unit={unit} />);
   return (
     <MessagePrimitive.Root

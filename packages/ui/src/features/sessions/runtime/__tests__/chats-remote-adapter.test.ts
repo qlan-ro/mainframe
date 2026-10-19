@@ -150,6 +150,29 @@ describe('chats-remote-adapter — list maps chats via chatToThreadCustom', () =
 // chats-remote-adapter — list includes temporary chats (todo #346)
 // ---------------------------------------------------------------------------
 
+describe('chats-remote-adapter — list keeps an unchanged chat’s custom identity', () => {
+  it('reuses custom across reloads when only cost/token fields moved', async () => {
+    const adapter = makeChatsRemoteAdapter(3000);
+    mockListChats.mockResolvedValueOnce([FIXTURE]);
+    const first = await adapter.list();
+    mockListChats.mockResolvedValueOnce([{ ...FIXTURE, totalCost: 2.5, totalTokensInput: 1200 }]);
+    const second = await adapter.list();
+
+    expect(second.threads[0]!.custom).toBe(first.threads[0]!.custom);
+  });
+
+  it('hands out a fresh custom once a projected field moves', async () => {
+    const adapter = makeChatsRemoteAdapter(3000);
+    mockListChats.mockResolvedValueOnce([FIXTURE]);
+    const first = await adapter.list();
+    mockListChats.mockResolvedValueOnce([{ ...FIXTURE, tags: ['backend', 'ui'] }]);
+    const second = await adapter.list();
+
+    expect(second.threads[0]!.custom).not.toBe(first.threads[0]!.custom);
+    expect(custom(second.threads[0]!.custom).tags).toEqual(['backend', 'ui']);
+  });
+});
+
 describe('chats-remote-adapter — list requests temporary chats too (todo #346)', () => {
   it('calls listChats(port, { includeTemporary: true })', async () => {
     mockListChats.mockResolvedValueOnce([FIXTURE]);

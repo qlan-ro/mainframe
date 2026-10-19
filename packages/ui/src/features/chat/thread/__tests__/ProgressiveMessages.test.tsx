@@ -20,7 +20,10 @@ import {
 import { INITIAL_WINDOW, ProgressiveMessages, REVEAL_STEP } from '../ProgressiveMessages';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 
-vi.mock('../../runtime/chat-extras', () => ({ useChatExtras: () => ({ state: { chatId: 'chat-1' } }) }));
+vi.mock('../../runtime/chat-extras', () => {
+  const useChatExtras = () => ({ state: { chatId: 'chat-1' } });
+  return { useChatExtras, useChatExtrasSelector: (select: (extras: unknown) => unknown) => select(useChatExtras()) };
+});
 
 function Message() {
   const id = useAuiState((s) => s.message.id);

@@ -53,24 +53,34 @@ function resultRecord(value: unknown): Record<string, unknown> {
   }
 }
 
-export function transcriptTools(messages: readonly ThreadMessage[]): ToolRef[] {
+/**
+ * Tool refs per message. A settled message keeps its identity while the tail
+ * streams, so a chunk re-scans only the message that moved, not the transcript.
+ */
+const toolsByMessage = new WeakMap<ThreadMessage, readonly ToolRef[]>();
+
+function messageTools(message: ThreadMessage): readonly ToolRef[] {
+  const cached = toolsByMessage.get(message);
+  if (cached) return cached;
   const tools: ToolRef[] = [];
-  for (const message of messages) {
-    if (message.role !== 'assistant') continue;
-    for (const part of message.content) {
-      if (part.type !== 'tool-call') continue;
-      tools.push({
-        messageId: message.id,
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
-        args: record(part.args),
-        result: part.result,
-        isError: isErrorResult(part.result, part.isError),
-        createdAt: message.createdAt?.getTime() ?? 0,
-      });
-    }
+  for (const part of message.content) {
+    if (part.type !== 'tool-call') continue;
+    tools.push({
+      messageId: message.id,
+      toolCallId: part.toolCallId,
+      toolName: part.toolName,
+      args: record(part.args),
+      result: part.result,
+      isError: isErrorResult(part.result, part.isError),
+      createdAt: message.createdAt?.getTime() ?? 0,
+    });
   }
+  toolsByMessage.set(message, tools);
   return tools;
+}
+
+export function transcriptTools(messages: readonly ThreadMessage[]): ToolRef[] {
+  return messages.flatMap((message) => (message.role === 'assistant' ? messageTools(message) : []));
 }
 
 function taskKind(task: BackgroundTask): ActivityKind | null {

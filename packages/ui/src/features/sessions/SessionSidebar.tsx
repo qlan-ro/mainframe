@@ -10,7 +10,7 @@
  * rebuild, so every non-visual module is imported from `@/features/sessions`.
  */
 import { useMemo } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
 import { PenLine, Plus, SearchIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,12 +31,13 @@ import { arrangeSessions } from '@/features/sessions/view-model/group-sessions';
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
 import { applySessionFilters } from '@/features/sessions/filter/apply-session-filters';
 import { hasSynthetic, tagsInUse } from '@/features/sessions/filter/tags-in-use';
-import { SessionLineageProvider } from '@/features/sessions/SessionLineageContext';
+import { SessionLineageProvider, useSessionLineageValue } from '@/features/sessions/SessionLineageContext';
 import { useProjects } from '@/features/sessions/use-projects';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
+import { useStableList } from '@/lib/use-stable-list';
 import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
 import { SidebarScopeStrip } from './SidebarScopeStrip';
 import { SessionsSection } from './SessionsSection';
@@ -65,11 +66,15 @@ function NewSessionRow() {
 }
 
 export function SessionSidebar() {
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadItems = useThreadItems();
 
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   // Task chats have no row: each lives in its parent's `delegate_task` card.
-  const allItems = useMemo<SessionItem[]>(() => listedThreadItemsToSessionItems(threadItems), [threadItems]);
+  // A reload hands back the same SessionItems for unchanged chats, so the list
+  // keeps its identity — and every memo below — when nothing visible moved.
+  const allItems = useStableList(
+    useMemo<SessionItem[]>(() => listedThreadItemsToSessionItems(threadItems), [threadItems]),
+  );
 
   const { filterProjectIds, selectedTags, selectedSynthetic, sortMode } = useSessionFilters();
 
@@ -92,9 +97,7 @@ export function SessionSidebar() {
   // Fork lineage (todo #343): shared with every row via context rather than
   // per-row prop drilling. `unfilteredIds` distinguishes a parent hidden by a
   // filter from one absent from the loaded set entirely (archived/deleted).
-  const unfilteredIds = useMemo(() => new Set(allItems.map((i) => i.id)), [allItems]);
-  const listedIds = useMemo(() => new Set(groups.flatMap((g) => g.items.map((i) => i.id))), [groups]);
-  const lineage = useMemo(() => ({ allItems, listedIds, unfilteredIds }), [allItems, listedIds, unfilteredIds]);
+  const lineage = useSessionLineageValue(allItems, groups);
 
   const projectNames = useMemo(() => {
     const map: Record<string, string> = {};

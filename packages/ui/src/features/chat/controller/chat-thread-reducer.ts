@@ -118,11 +118,22 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
         : { ...state, authoritativeItemStreaming: event.authoritativeItemStreaming };
     case 'chat.id.adopted':
       return state.chatId === event.chatId ? state : { ...state, chatId: event.chatId };
-    case 'context.usage':
+    case 'context.usage': {
+      // The adapter repeats unchanged totals; a fresh slice would move `extras`
+      // and re-render every consumer for nothing.
+      const prev = state.contextUsage;
+      if (
+        prev != null &&
+        prev.percentage === event.percentage &&
+        prev.totalTokens === event.totalTokens &&
+        prev.maxTokens === event.maxTokens
+      )
+        return state;
       return {
         ...state,
         contextUsage: { percentage: event.percentage, totalTokens: event.totalTokens, maxTokens: event.maxTokens },
       };
+    }
     case 'compact.started':
       return state.compacting ? state : { ...state, compacting: true };
     case 'compact.done':

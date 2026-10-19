@@ -50,9 +50,10 @@ vi.mock('@assistant-ui/react', () => ({
 // useChatExtras() itself reads `s.thread.extras` through the same mocked
 // useAuiState above and brand-checks the result — a plain object never passes
 // that check, so chatConfig is stubbed here directly instead.
-vi.mock('@/features/chat/runtime/chat-extras', () => ({
-  useChatExtras: () => (fakeChatConfig === null ? undefined : { state: { chatConfig: fakeChatConfig } }),
-}));
+vi.mock('@/features/chat/runtime/chat-extras', () => {
+  const useChatExtras = () => (fakeChatConfig === null ? undefined : { state: { chatConfig: fakeChatConfig } });
+  return { useChatExtras, useChatExtrasSelector: (select: (extras: unknown) => unknown) => select(useChatExtras()) };
+});
 
 const PROJECTS: Project[] = [
   { id: 'proj-a', name: 'Alpha', path: '/repos/alpha' } as Project,
@@ -105,6 +106,19 @@ describe('useActiveIdentity — live session (unchanged behavior)', () => {
     expect(result.current.branchName).toBe('main');
     expect(result.current.chatId).toBe('chat-9');
     expect(result.current.projectPath).toBe('/repos/alpha');
+  });
+
+  it('returns the same object across renders while no field moved', () => {
+    const item: FakeItem = { id: 'chat-9', remoteId: 'chat-9', status: 'regular' };
+    fakeAuiState = { threadListItem: item, threads: { threadItems: [{ ...item, custom: LIVE_CUSTOM }] } };
+
+    const { result, rerender } = renderHook(() => useActiveIdentity());
+    const first = result.current;
+    // A reload that re-derives an equal custom (cost/token churn).
+    fakeAuiState = { threadListItem: item, threads: { threadItems: [{ ...item, custom: { ...LIVE_CUSTOM } }] } };
+    rerender();
+
+    expect(result.current).toBe(first);
   });
 });
 

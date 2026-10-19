@@ -16,14 +16,14 @@
  *   const agents = useChatAgents();
  */
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Skill, AgentConfig, CustomCommand } from '@qlan-ro/mainframe-types';
 import { getProjects } from '@/lib/api/projects';
 import { getSkills } from '@/lib/api/skills';
 import { getAgents } from '@/lib/api/agents';
 import { getCommands } from '@/lib/api/commands';
 import { publishCommands } from '../chat/commands/command-registry';
-import { useChatExtras } from '../chat/runtime/chat-extras';
+import { useChatExtrasSelector } from '../chat/runtime/chat-extras';
 import { useDraftConfig } from '../sessions/runtime/draft-config';
 import { resolveDraftChatContext } from '../chat/composer/triggers/resolve-draft-chat-context';
 import { useSkillsNonce } from './use-skills-revalidation';
@@ -61,10 +61,11 @@ async function loadList<T>(label: string, fetch: () => Promise<T[]>, apply: (ite
 }
 
 export function SkillsProvider({ children }: { children: ReactNode }) {
-  const extras = useChatExtras();
-  const port = extras?.port ?? null;
-  const chatId = extras?.state.chatId ?? null;
-  const chatConfig = extras?.state.chatConfig ?? null;
+  // Field selectors, not the whole extras: a run-state or usage move must not
+  // re-render the provider and, through its value, every picker below it.
+  const port = useChatExtrasSelector((extras) => extras?.port ?? null);
+  const chatId = useChatExtrasSelector((extras) => extras?.state.chatId ?? null);
+  const chatConfig = useChatExtrasSelector((extras) => extras?.state.chatConfig ?? null);
   // Draft-aware: a brand-new __LOCALID_* thread has no daemon chatConfig yet, so
   // fall back to the in-memory draft's project + adapter (see resolveDraftChatContext)
   // so the `/` skills and `@` agents pickers populate before the first send.
@@ -152,7 +153,8 @@ export function SkillsProvider({ children }: { children: ReactNode }) {
     };
   }, [port, adapterId, projectId, nonce]);
 
-  return <Ctx.Provider value={{ skills, agents, commands, loading }}>{children}</Ctx.Provider>;
+  const value = useMemo(() => ({ skills, agents, commands, loading }), [skills, agents, commands, loading]);
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 // ---------------------------------------------------------------------------

@@ -44,4 +44,15 @@ describe('useChatExtrasState', () => {
     rerender({ state: usage });
     expect(result.current).toBe(usage);
   });
+
+  it('keeps the held snapshot when a usage event repeats the same totals', () => {
+    const event = { type: 'context.usage', percentage: 50, totalTokens: 5, maxTokens: 10 } as const;
+    const usage = reduceChatThreadState(createChatThreadState('c1'), event);
+    const { result, rerender } = renderHook(({ state }: { state: ChatThreadState }) => useChatExtrasState(state), {
+      initialProps: { state: usage },
+    });
+
+    rerender({ state: reduceChatThreadState(usage, { ...event }) });
+    expect(result.current).toBe(usage);
+  });
 });

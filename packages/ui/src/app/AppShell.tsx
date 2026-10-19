@@ -82,7 +82,14 @@ function MainSurface({ port }: { port: number }) {
   }
 }
 
-function RuntimeBody({ port }: { port: number }) {
+/**
+ * The shell's subscribing hooks, hoisted out of RuntimeBody into a leaf that
+ * renders nothing: thread-list reloads, chat switches and active-chat churn
+ * re-render this alone, never the chrome RuntimeBody draws (title bar, rail,
+ * sidebar, the modal hosts). Mounted last so its effects still run after the
+ * chrome's, as they did from RuntimeBody.
+ */
+function ShellRuntime({ port }: { port: number }) {
   useSessionListRouter();
   // Idle whole-chat offload (#178): releases a chat's controller/thread subtree
   // on chat.offloaded, deferring while it's on screen. Beside useSessionListRouter
@@ -118,12 +125,6 @@ function RuntimeBody({ port }: { port: number }) {
   // active session's project → none) and opens the draft there.
   useAppShortcutActions({ onNewSession: useStartNewSession() });
 
-  // First-run coachmark tour — auto-opens only on an empty workspace.
-  const showTour = useFirstRunTour();
-  const sidebarVisible = useUiPrefs((s) => s.sidebarVisible);
-  const setSidebarVisible = useUiPrefs((s) => s.setSidebarVisible);
-  const sidebarWidth = useUiPrefs((s) => s.sidebarWidth);
-  const setSidebarWidth = useUiPrefs((s) => s.setSidebarWidth);
   const { worktreePath, projectPath, projectId } = useActiveIdentity();
 
   // Sync the active bases into the store so the intent subscriber (outside React)
@@ -132,6 +133,20 @@ function RuntimeBody({ port }: { port: number }) {
   useEffect(() => {
     setActiveBases({ worktreePath, projectPath }, activeLaunchScope(projectId, worktreePath, projectPath));
   }, [projectId, worktreePath, projectPath, setActiveBases]);
+
+  return null;
+}
+
+/** First-run coachmark tour — auto-opens only on an empty workspace. */
+function FirstRunTour() {
+  return useFirstRunTour() ? <TutorialOverlay /> : null;
+}
+
+function RuntimeBody({ port }: { port: number }) {
+  const sidebarVisible = useUiPrefs((s) => s.sidebarVisible);
+  const setSidebarVisible = useUiPrefs((s) => s.setSidebarVisible);
+  const sidebarWidth = useUiPrefs((s) => s.sidebarWidth);
+  const setSidebarWidth = useUiPrefs((s) => s.setSidebarWidth);
 
   return (
     <SidebarProvider
@@ -169,7 +184,8 @@ function RuntimeBody({ port }: { port: number }) {
       <AutomationsHost />
       <ConfirmDialogHost />
       <ShortcutsCheatSheet />
-      {showTour && <TutorialOverlay />}
+      <FirstRunTour />
+      <ShellRuntime port={port} />
     </SidebarProvider>
   );
 }

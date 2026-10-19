@@ -24,6 +24,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
+import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
 import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { useSessionListLoadState } from '../sessions/runtime/list-load-state';
 import { useSessionTabsStore } from './store';
@@ -72,7 +73,7 @@ function readPersisted(): PersistedTabs {
 }
 
 export function useSessionTabsSync(): void {
-  const items = useAuiState((s) => s.threads.threadItems);
+  const items = useThreadItems();
   const isListLoading = useAuiState((s) => s.threads.isLoading);
   const listLoaded = useSessionListLoadState((s) => s.loaded);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
