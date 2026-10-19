@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, type ReactNode, type RefCallback } from 'react';
+import { lazy, Suspense, useMemo, useRef, type CSSProperties, type ReactNode, type RefCallback } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -16,6 +16,7 @@ import { DegradedChatCard } from './DegradedChatCard';
 import { useThreadBottomPin } from './use-thread-bottom-pin';
 import { ProgressiveMessages } from './ProgressiveMessages';
 import { TranscriptScrollProvider } from './transcript-scroll-context';
+import { TRANSCRIPT_WIDTH_VAR, TranscriptWidthHandle } from './TranscriptWidthHandle';
 import {
   ChatThreadLoadingSpinner,
   LoadErrorBanner,
@@ -76,9 +77,13 @@ function ThreadFooter({
           <ArrowDownIcon />
         </Button>
       </ThreadPrimitive.ScrollToBottom>
-      {/* 680px, not `min(48rem, 100% − 116px)`: the 116 only ever cleared the
-          floating rail, which is gone; the panel takes real width now. */}
-      <div data-testid="chat-thread-footer" className="mx-auto flex w-full min-h-0 max-w-[680px] flex-col px-5 pb-4">
+      {/* The transcript column's width (ui-prefs, 680px by default), not
+          `min(48rem, 100% − 116px)`: the 116 only ever cleared the floating
+          rail, which is gone; the panel takes real width now. */}
+      <div
+        data-testid="chat-thread-footer"
+        className="mx-auto flex w-full min-h-0 max-w-(--mf-transcript-width) flex-col px-5 pb-4"
+      >
         {/* The ONE live timer (D18, reverses #214): the status line sits above
             the gate slot and the composer, not inside the transcript. */}
         <GeneratingIndicator />
@@ -111,10 +116,16 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
   );
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const chatId = useChatExtras()?.state.chatId;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const transcriptWidth = useUiPrefs((s) => s.transcriptWidth);
   return (
     <TranscriptScrollProvider value={scroll}>
       {/* WebKit loses scroll offsets when size containment is on the viewport itself. */}
-      <div className="relative flex min-h-0 flex-1 flex-col [container-type:size]">
+      <div
+        ref={rootRef}
+        style={{ [TRANSCRIPT_WIDTH_VAR]: `${transcriptWidth}px` } as CSSProperties}
+        className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
+      >
         <ThreadPrimitive.Viewport
           ref={viewportRef}
           autoScroll={false}
@@ -125,7 +136,9 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
           className="relative flex flex-1 flex-col overflow-y-auto"
         >
           <ChatThreadLoadingSpinner />
-          <div ref={contentRef} className="mx-auto w-full max-w-[680px] flex-1 px-5 py-4">
+          <div ref={contentRef} className="relative mx-auto w-full max-w-(--mf-transcript-width) flex-1 px-5 py-4">
+            <TranscriptWidthHandle side="left" rootRef={rootRef} />
+            <TranscriptWidthHandle side="right" rootRef={rootRef} />
             <LoadErrorBanner />
             {variant !== 'side' && <ContextNotPreservedNotice />}
             {messageCount === 0 && emptyState != null ? emptyState : null}

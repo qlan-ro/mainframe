@@ -67,9 +67,23 @@ const SIDE_CHAT_DEFAULT_FRAC = 0.4;
 
 export type TranscriptMode = 'verbose' | 'compact';
 
+/** The transcript column's un-dragged cap, its 2 × 20px padding included. */
+export const TRANSCRIPT_DEFAULT_WIDTH = 680;
+const TRANSCRIPT_MIN_WIDTH = 480;
+const TRANSCRIPT_MAX_WIDTH = 1600;
+
+export function clampTranscriptWidth(width: number): number {
+  if (!Number.isFinite(width)) return TRANSCRIPT_DEFAULT_WIDTH;
+  return Math.round(Math.min(TRANSCRIPT_MAX_WIDTH, Math.max(TRANSCRIPT_MIN_WIDTH, width)));
+}
+
 interface UiPrefsState {
   transcriptMode: TranscriptMode;
   setTranscriptMode: (mode: TranscriptMode) => void;
+  /** The transcript column's cap, dragged from its edge grips. A narrower
+   *  chat column still squeezes it — this is a max, not a fixed width. */
+  transcriptWidth: number;
+  setTranscriptWidth: (width: number) => void;
   sidebarVisible: boolean;
   sidebarWidth: number;
   sidebarView: SidebarView;
@@ -108,6 +122,7 @@ interface UiPrefsState {
 function partializeUiPrefs(s: UiPrefsState) {
   return {
     transcriptMode: s.transcriptMode,
+    transcriptWidth: s.transcriptWidth,
     sidebarVisible: s.sidebarVisible,
     sidebarWidth: s.sidebarWidth,
     sidebarView: s.sidebarView,
@@ -143,6 +158,10 @@ function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPr
   return {
     ...state,
     transcriptMode: state.transcriptMode === 'compact' ? 'compact' : 'verbose',
+    transcriptWidth:
+      typeof state.transcriptWidth === 'number'
+        ? clampTranscriptWidth(state.transcriptWidth)
+        : TRANSCRIPT_DEFAULT_WIDTH,
     sidebarView: sanitizeBootSidebarView(state.sidebarView),
   };
 }
@@ -178,6 +197,8 @@ export const useUiPrefs = create<UiPrefsState>()(
     (set) => ({
       transcriptMode: 'verbose',
       setTranscriptMode: (transcriptMode) => set({ transcriptMode }),
+      transcriptWidth: TRANSCRIPT_DEFAULT_WIDTH,
+      setTranscriptWidth: (width) => set({ transcriptWidth: clampTranscriptWidth(width) }),
       sidebarVisible: true,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
       sidebarView: 'chats',

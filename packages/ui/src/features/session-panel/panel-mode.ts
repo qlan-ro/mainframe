@@ -16,9 +16,11 @@
  *   unmeasured (width 0)          → `hidden`  — nothing flashes before the first measure
  */
 
-/** The transcript's capped message column (`max-w-[680px]`) plus the
- *  viewport's 2 × 20px padding. Conservative by the padding the capped boxes
- *  carry themselves; accepted in the plan's review. */
+/** The transcript's default message column (680px, `TRANSCRIPT_DEFAULT_WIDTH`)
+ *  plus the viewport's 2 × 20px padding. Conservative by the padding the capped
+ *  boxes carry themselves; accepted in the plan's review. Fixed on purpose: a
+ *  user-widened transcript is a cap that the docked panel may squeeze, not a
+ *  reason to float the panel sooner. */
 export const TRANSCRIPT_MIN = 720;
 /** The docked panel's width. */
 export const PANEL_WIDTH = 300;

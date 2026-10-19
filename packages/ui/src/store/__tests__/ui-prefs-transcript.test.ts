@@ -12,6 +12,7 @@ const savedPreferences = {
   sessionPanelSections: { plan: true, context: false },
   dialogSizes: { settings: { width: 920, height: 720 } },
   sideChatFrac: 0.6,
+  transcriptWidth: 900,
 };
 
 async function reloadStore() {
@@ -102,4 +103,32 @@ it('keeps older section migrations when adding the transcript default', async ()
     sessionPanelSections: { plan: true },
   });
   expect(store.getState()).not.toHaveProperty('bottomPanelTab');
+});
+
+it('defaults the transcript width to 680 and persists a dragged width', async () => {
+  const store = await reloadStore();
+  expect(store.getState().transcriptWidth).toBe(680);
+  store.getState().setTranscriptWidth(1000.4);
+  expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).state.transcriptWidth).toBe(1000);
+  expect((await reloadStore()).getState().transcriptWidth).toBe(1000);
+});
+
+it('clamps the transcript width to 480–1600', async () => {
+  const store = await reloadStore();
+  store.getState().setTranscriptWidth(100);
+  expect(store.getState().transcriptWidth).toBe(480);
+  store.getState().setTranscriptWidth(5000);
+  expect(store.getState().transcriptWidth).toBe(1600);
+});
+
+it.each([
+  ['missing', undefined, 680],
+  ['a string', '900', 680],
+  ['NaN', Number.NaN, 680],
+  ['too narrow', 10, 480],
+  ['too wide', 9000, 1600],
+])('sanitizes a %s persisted transcript width', async (_label, transcriptWidth, expected) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { ...savedPreferences, transcriptWidth }, version: 8 }));
+  const store = await reloadStore();
+  expect(store.getState().transcriptWidth).toBe(expected);
 });
