@@ -23,10 +23,10 @@
  * `if (!projectId) return` guards (launch, branch, working-changes) already
  * make git/launch/diff surfaces request-free for it.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useSideChatScope } from '@/features/side-chat/side-chat-scope';
-import { useChatExtras } from '@/features/chat/runtime/chat-extras';
+import { useChatExtrasSelector } from '@/features/chat/runtime/chat-extras';
 import { useProjects } from './use-projects';
 import { activeSessionCustom } from './view-model/chat-to-thread-custom';
 import { useActiveDraftConfig } from './use-active-draft-config';
@@ -79,20 +79,21 @@ export function useActiveIdentity(): ActiveIdentity {
   // A real chat's `noProject` comes off its own Chat object (the daemon's
   // `chat.updated` broadcast), never re-derived from the sentinel project id.
   // A draft has no Chat yet, so "No project" is whatever the picker chose.
-  const chatConfig = useChatExtras()?.state.chatConfig ?? null;
-  const noProject = chatId != null ? Boolean(chatConfig?.noProject) : draft !== undefined && draft.projectId === null;
+  // The one boolean, not the whole extras: this hook backs the app shell, which
+  // must not re-render on every run-state or usage move of the active chat.
+  const chatNoProject = useChatExtrasSelector((extras) => Boolean(extras?.state.chatConfig?.noProject));
+  const noProject = chatId != null ? chatNoProject : draft !== undefined && draft.projectId === null;
 
   const { projects } = useProjects();
   const project = scope.projectId ? projects.find((p) => p.id === scope.projectId) : undefined;
-  return {
-    projectName: project?.name ?? 'Mainframe',
-    branchName: scope.branchName,
-    projectId: noProject ? undefined : scope.projectId,
-    adapterId: scope.adapterId,
-    chatId,
-    worktreePath: scope.worktreePath,
-    projectPath: project?.path,
-    isWorktree: scope.isWorktree ?? false,
-    noProject,
-  };
+  const projectName = project?.name ?? 'Mainframe';
+  const projectId = noProject ? undefined : scope.projectId;
+  const { branchName, adapterId, worktreePath } = scope;
+  const projectPath = project?.path;
+  const isWorktree = scope.isWorktree ?? false;
+  // Field-stable: consumers pass it on and key effects off it.
+  return useMemo(
+    () => ({ projectName, branchName, projectId, adapterId, chatId, worktreePath, projectPath, isWorktree, noProject }),
+    [projectName, branchName, projectId, adapterId, chatId, worktreePath, projectPath, isWorktree, noProject],
+  );
 }

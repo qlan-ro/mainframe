@@ -11,6 +11,7 @@
  */
 import { useCallback } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
+import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
 import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useParentChat } from '@/features/sessions/use-parent-chat';
 import { findByChatId } from '@/features/chat/orchestration/use-session-items';
@@ -32,7 +33,7 @@ export interface ChatHeaderParentLink {
 export function useChatHeaderParentLink(): ChatHeaderParentLink | null {
   const aui = useAui();
   const custom = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems));
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadItems = useThreadItems();
   const parentChatId = custom?.parentChatId ?? null;
 
   const localParent = parentChatId == null ? undefined : findByChatId(threadItems, parentChatId);

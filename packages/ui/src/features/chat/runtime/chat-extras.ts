@@ -130,6 +130,18 @@ export function useChatExtras(): ChatRuntimeExtras | undefined {
   );
 }
 
+/**
+ * One slice of extras: the caller re-renders only when `select`'s result
+ * changes (Object.is), not on every extras move. For hosts that read a field
+ * or two — the active identity, the skills provider, the transcript. `select`
+ * must return a primitive or a reference already held in extras.
+ */
+export function useChatExtrasSelector<T>(select: (extras: ChatRuntimeExtras | undefined) => T): T {
+  return useAuiState((s: { thread: { extras: unknown } }) =>
+    select(isChatRuntimeExtras(s.thread.extras) ? s.thread.extras : undefined),
+  );
+}
+
 /** Queued messages (waiting to be sent to the CLI). */
 export function useChatQueuedMessages(): QueuedMessageRef[] {
   const extras = useChatExtras();

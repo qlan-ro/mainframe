@@ -8,7 +8,8 @@
  * keyboard navigation the v1 version hand-rolled.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useAui, useAuiState } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
+import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
 import { Badge } from '@/components/ui/badge';
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandList } from '@/components/ui/command';
 import { InputGroupAddon } from '@/components/ui/input-group';
@@ -53,7 +54,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const parsed = parseQuery(query);
 
   const aui = useAui();
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadItems = useThreadItems();
   // Task chats are found through their parent: search lists what the sidebar lists.
   const sessions = withoutTaskChats(threadItemsToSessionItems(threadItems));
   const port = useDaemonPort();

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { useChatExtras } from '../../runtime/chat-extras';
+import { useChatExtrasSelector } from '../../runtime/chat-extras';
 import { ProgressiveMessages } from '../../thread/ProgressiveMessages';
 import { TurnPresentationCache } from '../../view-model/compact/turn-presentation-cache';
 import { buildTurnDisclosures } from '../../view-model/compact/build-turn-disclosures';
@@ -9,7 +9,7 @@ import { MessageRenderBoundary } from '../MessageRenderBoundary';
 import { AssistantMessage } from '../AssistantMessage';
 import { CompactMessageSlice } from './CompactMessageSlice';
 import { useTranscriptScope } from './transcript-scope';
-import { TurnPresentationProvider, useTurnPresentation } from './turn-presentation-context';
+import { TurnPresentationProvider, useTurnPresentationSelector } from './turn-presentation-context';
 import { useTurnDisclosureState } from './use-turn-disclosure-state';
 import { turnDisclosureStore } from './turn-disclosure-store';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
@@ -17,8 +17,9 @@ import type { ActivitySource } from '@/features/session-panel/activity-model';
 
 function AssistantSlice() {
   const id = useAuiState((s) => s.message.id);
-  const { model } = useTurnPresentation();
-  const presentation = model.messagesById.get(id);
+  // The cache keeps an untouched message's presentation identical, so a chunk
+  // re-renders only the slice whose message moved.
+  const presentation = useTurnPresentationSelector((s) => s.model.messagesById.get(id));
   return (
     <MessageRenderBoundary>
       {!presentation || presentation.native ? (
@@ -34,8 +35,10 @@ export function CompactTranscript() {
   const messages = useAuiState((s) => s.thread.messages);
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const scope = useTranscriptScope();
-  const extras = useChatExtras();
-  const backgroundAgent = Object.values(extras?.state.backgroundTasks ?? {}).some((task) => task.kind === 'agent');
+  const chatId = useChatExtrasSelector((extras) => extras?.state.chatId);
+  const backgroundAgent = useChatExtrasSelector((extras) =>
+    Object.values(extras?.state.backgroundTasks ?? {}).some((task) => task.kind === 'agent'),
+  );
   const root = useRef<HTMLDivElement>(null);
   const cache = useMemo(() => new TurnPresentationCache(), []);
   const model = useMemo(
@@ -44,8 +47,8 @@ export function CompactTranscript() {
   );
   useEffect(() => {
     const onJump = (event: Event) => {
-      const { chatId, source } = (event as CustomEvent<{ chatId: string; source: ActivitySource }>).detail;
-      if (chatId !== extras?.state.chatId) return;
+      const { chatId: target, source } = (event as CustomEvent<{ chatId: string; source: ActivitySource }>).detail;
+      if (target !== chatId) return;
       const presentation = model.messagesById.get(source.messageId);
       for (const unit of presentation?.units ?? []) {
         if (unit.part.type !== 'tool-call' || unit.part.toolCallId !== source.toolCallId) continue;
@@ -54,7 +57,7 @@ export function CompactTranscript() {
     };
     window.addEventListener(ACTIVITY_JUMP_EVENT, onJump);
     return () => window.removeEventListener(ACTIVITY_JUMP_EVENT, onJump);
-  }, [model, extras?.state.chatId]);
+  }, [model, chatId]);
   const state = useTurnDisclosureState(model, root, backgroundAgent);
   return (
     <TurnPresentationProvider value={{ model, ...state }}>

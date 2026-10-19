@@ -5,9 +5,9 @@
  * (chat-compacting-pill); when it flips false the pill unmounts (the persisted
  * "Context compacted" system message takes over via the normal message list).
  * Mocks mirror ChatThread.test.tsx: assistant-ui primitives + heavy children
- * become identifiable stubs; `useChatExtras` is a mutable-state stub.
+ * become identifiable stubs; `useChatExtras` reads a tiny external store.
  */
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
@@ -47,34 +47,49 @@ vi.mock('@/features/skills/use-chat-skills', () => ({
 vi.mock('../../find/FindBar', () => ({ FindBar: () => null }));
 vi.mock('../../tools/register-cards', () => ({}));
 
-// Mutable extras state so a rerender can flip `compacting`.
-const extrasState = { compacting: true, loadState: { type: 'ready' }, runState: { type: 'idle' } };
-vi.mock('../../runtime/chat-extras', () => ({
-  useChatExtras: () => ({ state: extrasState, retry: () => Promise.resolve() }),
-}));
+// Extras state behind a tiny external store. The real hook is reactive: a flip
+// re-renders the components that read it, not their (memoized) parents.
+let extrasState = { compacting: true, loadState: { type: 'ready' }, runState: { type: 'idle' } };
+const extrasListeners = new Set<() => void>();
+function setCompacting(compacting: boolean): void {
+  extrasState = { ...extrasState, compacting };
+  extrasListeners.forEach((listener) => listener());
+}
+vi.mock('../../runtime/chat-extras', async () => {
+  const { useSyncExternalStore } = await vi.importActual<typeof import('react')>('react');
+  const subscribe = (listener: () => void) => {
+    extrasListeners.add(listener);
+    return () => extrasListeners.delete(listener);
+  };
+  return {
+    useChatExtras: () => ({
+      state: useSyncExternalStore(subscribe, () => extrasState),
+      retry: () => Promise.resolve(),
+    }),
+  };
+});
 
 import { ChatThread } from '../ChatThread';
 
 describe('ChatThread — transient "Compacting…" pill', () => {
   it('renders the pill with its label while compacting', () => {
-    extrasState.compacting = true;
+    setCompacting(true);
     render(<ChatThread />);
     expect(screen.getByTestId('chat-compacting-pill')).toBeInTheDocument();
     expect(screen.getByText('Compacting…')).toBeInTheDocument();
   });
 
   it('unmounts the pill when compacting flips false', () => {
-    extrasState.compacting = true;
-    const { rerender } = render(<ChatThread />);
+    setCompacting(true);
+    render(<ChatThread />);
     expect(screen.getByTestId('chat-compacting-pill')).toBeInTheDocument();
 
-    extrasState.compacting = false;
-    rerender(<ChatThread />);
+    act(() => setCompacting(false));
     expect(screen.queryByTestId('chat-compacting-pill')).toBeNull();
   });
 
   it('renders the pill in the messages column, not the sticky footer', () => {
-    extrasState.compacting = true;
+    setCompacting(true);
     render(<ChatThread />);
     const footer = screen.getByTestId('tp-viewport-footer');
     expect(within(footer).queryByTestId('chat-compacting-pill')).toBeNull();

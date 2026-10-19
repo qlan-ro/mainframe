@@ -21,9 +21,9 @@ export function statusLabel(status: TodoStatus): 'Open' | 'In progress' | 'Done'
   return STATUS_LABELS[status];
 }
 
-export function syncedAgo(iso: string | null): string {
+export function syncedAgo(iso: string | null, now: number = Date.now()): string {
   if (iso === null) return 'never synced';
-  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  const minutes = Math.floor((now - new Date(iso).getTime()) / 60_000);
   if (minutes < 1) return 'synced moments ago';
   if (minutes < 60) return `synced ${minutes}m ago`;
   const hours = Math.floor(minutes / 60);

@@ -63,7 +63,7 @@
  */
 import { useAuiState } from '@assistant-ui/react';
 import type { AssistantRuntime } from '@assistant-ui/react';
-import { chatControllerRegistry } from './chat-controller-registry';
+import { useChatController } from './use-chat-controller';
 import { useDaemonPort } from './daemon-port-context';
 import { useChatThreadRuntime } from '../../chat/runtime/use-chat-thread-runtime';
 import { isVisibleZone, useZonesStore } from '../../chat/zones/zones-store';
@@ -73,23 +73,24 @@ export function useChatRuntimeHook(): AssistantRuntime {
   // Subscribe to the DERIVED active boolean, not the raw mainThreadId. aui keeps
   // every visited thread's subtree mounted, so a raw `mainThreadId` subscription
   // re-runs this hook (and re-renders that subtree) in EVERY warm thread on each
-  // switch — cost grows with session count. Selecting the boolean means only the
-  // two threads whose active-ness actually flips re-render.
+  // switch — cost grows with session count. Note aui (0.15.13) still re-renders
+  // every warm thread once per switch on its own (a fresh client context), so
+  // the booleans keep this hook off the switch path rather than remove it.
+  const isMain = useAuiState((s) => s.threads.mainThreadId === s.threadListItem.id);
   const isActive = useAuiState(
     (s) => s.threads.mainThreadId === s.threadListItem.id && s.threadListItem.remoteId != null,
   );
-  const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const port = useDaemonPort();
 
-  const controller = chatControllerRegistry.getOrCreate(chatId, port);
+  const controller = useChatController(chatId, port);
 
-  const zones = useZonesStore((s) => s.zones);
-  const splitFits = useZonesStore((s) => s.splitFits);
-  const pendingPairTarget = useZonesStore((s) => s.pendingPair?.[1]);
-  const splitWillRender = splitFits && isVisibleZone(zones, mainThreadId);
-  const isDisplayedHere = mainThreadId === chatId && !splitWillRender;
-  const skipDraftRestore = pendingPairTarget === chatId || !isDisplayedHere;
-  const isVisibleSplitZone = isVisibleZone(zones, chatId) && splitFits;
+  // Booleans about THIS chat only, for the same reason as `isActive`.
+  const isVisibleSplitZone = useZonesStore((s) => s.splitFits && isVisibleZone(s.zones, chatId));
+  const pendingPairHere = useZonesStore((s) => s.pendingPair?.[1] === chatId);
+  // When this chat is main, "the split renders" reduces to "this chat is a
+  // visible zone", so the raw mainThreadId is never needed here.
+  const isDisplayedHere = isMain && !isVisibleSplitZone;
+  const skipDraftRestore = pendingPairHere || !isDisplayedHere;
 
   return useChatThreadRuntime(controller, port, { active: isActive, chatId, skipDraftRestore, isVisibleSplitZone });
 }

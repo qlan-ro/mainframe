@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
 import { zoneColumnId } from '@/features/session-panel/panel-control-store';
-import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
+import { useChatController } from '../../sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '../../sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat-thread-runtime';
 import { buildChatExtras, isRunningFromState, useChatExtrasState } from '../runtime/chat-extras';
@@ -89,7 +89,7 @@ export function ChatZone({
 }) {
   const aui = useAui();
   const port = useDaemonPort();
-  const controller = chatControllerRegistry.getOrCreate(chatId, port);
+  const controller = useChatController(chatId, port);
   const state = useControllerState(controller);
   const panelState = useSessionPanelState(zoneColumnId(chatId));
 

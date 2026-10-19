@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
-import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
+import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import type { ChatPermissionEntry, LoadState } from '../controller/chat-thread-state';
 import { selectPermissionFront } from '../gates/select-front';
@@ -35,7 +35,7 @@ export interface TaskChatView {
 
 export function useTaskChat(chatId: string): TaskChatView {
   const port = useDaemonPort();
-  const controller = chatControllerRegistry.getOrCreate(chatId, port);
+  const controller = useChatController(chatId, port);
   // The hold also loads a cold controller (ChatActivation.ensureFacadeActive).
   useEffect(() => controller.holdActive(), [controller]);
 

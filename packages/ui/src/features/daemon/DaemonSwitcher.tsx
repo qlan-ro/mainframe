@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 // ports with the window-states pass.
 import { ConnectionOverlay } from '@/app/ConnectionOverlay';
 import { useConnectionStatus } from '@/app/ConnectionStatusContext';
-import { getAuthFailureSnapshot, hasAuthFailure, subscribeAuthFailures } from '@/lib/daemon/auth-failure-store';
+import { getAuthFailureSnapshot, subscribeAuthFailures } from '@/lib/daemon/auth-failure-store';
 import { useActiveDaemon } from '@/features/daemon/active-daemon-context';
 import { parseRemoteUrl } from '@/features/daemon/pair-daemon';
 import { AddRemoteDialog, type DialogMode } from './AddRemoteDialog';
@@ -82,8 +82,8 @@ export function DaemonSwitcher() {
 
   const activeMeta = registry.daemons.find((d) => d.id === registry.activeId) ?? targetToMeta(target);
 
-  // Re-derive every status whenever an auth-failure marker flips; the snapshot
-  // itself carries no data, statusOf reads the marker per id.
+  // Re-derive every status whenever an auth-failure marker flips. statusOf reads
+  // the markers from the snapshot itself, so its memo is keyed on it.
   const authSnapshot = useSyncExternalStore(subscribeAuthFailures, getAuthFailureSnapshot);
 
   const statusOf = useCallback(
@@ -91,11 +91,10 @@ export function DaemonSwitcher() {
       const isActive = id === registry.activeId;
       // A dead socket outranks a stale token: re-pairing can't reach the daemon.
       if (isActive && connState === 'disconnected') return 'unreachable';
-      if (hasAuthFailure(id)) return 'needs-repair';
+      if (authSnapshot.failedIds.has(id)) return 'needs-repair';
       if (!isActive) return 'connected';
       return connState === 'connected' ? 'connected' : 'connecting';
     },
-    // authSnapshot invalidates the memo; hasAuthFailure reads live state.
     [registry.activeId, connState, authSnapshot],
   );
 

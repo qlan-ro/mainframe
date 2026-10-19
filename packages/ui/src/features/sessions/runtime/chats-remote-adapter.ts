@@ -27,6 +27,7 @@ import type { AssistantStreamChunk } from 'assistant-stream';
 import type { RemoteThreadListAdapter } from '@assistant-ui/react';
 import { listChats, getChat, renameChat, archiveChat, discardChat, unarchiveChat } from '../../../lib/api/chats';
 import { chatToThreadCustom } from '../view-model/chat-to-thread-custom';
+import { sameData } from '../view-model/same-data';
 import { isSideChat, recordSideChatsFromList } from '../../side-chat/side-chat-ids';
 import { takeArchiveChoice, takeDiscard, takeLocalOnlyRemoval } from './archive-confirm-bridge';
 import { useSessionListLoadState } from './list-load-state';
@@ -39,15 +40,36 @@ type RemoteThreadInitializeResponse = Awaited<ReturnType<RemoteThreadListAdapter
 
 type RemoteCustom = RemoteThreadMetadata['custom'];
 
-function toMetadata(chat: Parameters<typeof chatToThreadCustom>[0]): RemoteThreadMetadata {
-  const result = chatToThreadCustom(chat);
-  // SessionCustom is a closed interface (no index signature), so it does not
-  // structurally satisfy aui's `Record<string, unknown>` custom slot. The
-  // canonical mapper stays aui-free by contract; widen the field here at the
-  // single seam where the metadata leaves our domain. Spreading into an
-  // annotated literal widens without an `as unknown` double-cast.
-  const custom: RemoteCustom = { ...result.custom };
-  return { ...result, custom };
+/**
+ * Chat → metadata, reusing the previous `custom` when the chat's projection is
+ * structurally unchanged. `chat.updated` reloads the whole list on cost/token
+ * churn that never reaches `custom`; aui shallow-memoizes each item's state, so
+ * a reused `custom` keeps every untouched entry (and the sidebar row, the
+ * active identity and the shell above them) referentially stable.
+ */
+function makeToMetadata(): {
+  toMetadata: (chat: Parameters<typeof chatToThreadCustom>[0]) => RemoteThreadMetadata;
+  retain: (ids: ReadonlySet<string>) => void;
+} {
+  const customs = new Map<string, RemoteCustom>();
+  return {
+    toMetadata(chat) {
+      const result = chatToThreadCustom(chat);
+      // SessionCustom is a closed interface (no index signature), so it does not
+      // structurally satisfy aui's `Record<string, unknown>` custom slot. The
+      // canonical mapper stays aui-free by contract; widen the field here at the
+      // single seam where the metadata leaves our domain. Spreading into an
+      // annotated literal widens without an `as unknown` double-cast.
+      const fresh: RemoteCustom = { ...result.custom };
+      const previous = customs.get(chat.id);
+      const custom = previous != null && sameData(previous, fresh) ? previous : fresh;
+      customs.set(chat.id, custom);
+      return { ...result, custom };
+    },
+    retain(ids) {
+      for (const id of customs.keys()) if (!ids.has(id)) customs.delete(id);
+    },
+  };
 }
 
 async function archiveWithStagedChoice(port: number, remoteId: string): Promise<void> {
@@ -68,6 +90,7 @@ async function archiveWithStagedChoice(port: number, remoteId: string): Promise<
 }
 
 export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
+  const { toMetadata, retain } = makeToMetadata();
   return {
     async list(): Promise<RemoteThreadListResponse> {
       // includeTemporary: the sidebar shows temporary chats (Timer glyph,
@@ -80,7 +103,9 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
       // guards (tab store, zones, this adapter's own fetch below) recognize
       // it before anything tries to open it as a session (todo #344).
       recordSideChatsFromList(chats);
-      return { threads: chats.map(toMetadata) };
+      const threads = chats.map(toMetadata);
+      retain(new Set(chats.map((chat) => chat.id)));
+      return { threads };
     },
     async fetch(threadId: string): Promise<RemoteThreadMetadata> {
       const chat = await getChat(port, threadId);

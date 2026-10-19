@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { compactElapsedMs, formatCompactElapsed } from '../compact-timing';
+import { compactElapsedMs, compactElapsedTicks, formatCompactElapsed } from '../compact-timing';
 
 it('uses supplied intervals before reported duration and keeps subsecond completion', () => {
   expect(compactElapsedMs({ startedAt: 1000, completedAt: 1400 }, false, 5000, 9000)).toBe(400);
@@ -24,4 +24,13 @@ it.each([
 });
 it.each([-1, NaN, Infinity])('rejects invalid reported duration %s', (duration) => {
   expect(compactElapsedMs(undefined, false, 5000, duration)).toBeUndefined();
+});
+it('ticks only while the reading still moves with the clock', () => {
+  expect(compactElapsedTicks({ startedAt: 1000 }, true, 5000)).toBe(true);
+  expect(compactElapsedTicks({ startedAt: 1000 }, false, 5000)).toBe(false);
+  expect(compactElapsedTicks({ startedAt: 1000, completedAt: 4000 }, true, 5000)).toBe(false);
+  // A completion the clock has not reached yet resolves on a later tick.
+  expect(compactElapsedTicks({ startedAt: 1000, completedAt: 6000 }, false, 5000)).toBe(true);
+  expect(compactElapsedTicks({ startedAt: NaN }, true, 5000)).toBe(false);
+  expect(compactElapsedTicks(undefined, true, 5000)).toBe(false);
 });

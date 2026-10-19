@@ -6,10 +6,11 @@
  */
 import { useMemo } from 'react';
 import { useAuiState } from '@assistant-ui/react';
+import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
 import { threadItemsToSessionItems, type SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 
 export function useSessionItems(): SessionItem[] {
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadItems = useThreadItems();
   return useMemo(() => threadItemsToSessionItems(threadItems), [threadItems]);
 }
 

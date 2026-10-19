@@ -15,7 +15,7 @@
  */
 import { useRef } from 'react';
 import { ChevronDown, FolderOpen } from 'lucide-react';
-import { useAuiState } from '@assistant-ui/react';
+import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
 import { ProjectChip } from '@/components/ui/project-chip';
 import {
   DropdownMenu,
@@ -75,7 +75,7 @@ function WelcomeProjectTrigger({
 
 export function WelcomeProjectPicker({ projectId, onSelect }: WelcomeProjectPickerProps) {
   const { projects } = useProjects();
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadItems = useThreadItems();
   const sortedProjects = sortProjectsByRecentActivity(projects, listedThreadItemsToSessionItems(threadItems));
   const projectName = projectId == null ? null : (projects.find((p) => p.id === projectId)?.name ?? projectId);
   const resolvedDefaultId = useResolvedDefaultProjectId(projectId);

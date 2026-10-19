@@ -219,15 +219,36 @@ function hasSessionCustom(entry: ThreadListEntry): entry is SessionThreadEntry {
   return entry.custom != null;
 }
 
+/**
+ * The last SessionItem built per `custom`. The chats adapter keeps an
+ * unchanged chat's `custom` across list reloads, so keying on it hands the same
+ * SessionItem back until the entry really moves — memoized rows and every
+ * projection over the list stay put while a background chat churns.
+ */
+const sessionItemCache = new WeakMap<object, SessionItem>();
+
 /** Map one aui thread-list entry to a SessionItem (status + custom narrowed once). */
 function threadEntryToSessionItem(entry: SessionThreadEntry): SessionItem {
-  return {
+  const status = entry.status === 'archived' ? 'archived' : 'regular';
+  const title = entry.title ?? undefined;
+  const cached = sessionItemCache.get(entry.custom);
+  if (
+    cached != null &&
+    cached.id === entry.id &&
+    cached.remoteId === entry.remoteId &&
+    cached.title === title &&
+    cached.status === status
+  )
+    return cached;
+  const item: SessionItem = {
     id: entry.id,
     remoteId: entry.remoteId,
-    title: entry.title ?? undefined,
-    status: entry.status === 'archived' ? 'archived' : 'regular',
+    title,
+    status,
     custom: narrowSessionCustom(entry.custom),
   };
+  sessionItemCache.set(entry.custom, item);
+  return item;
 }
 
 /**

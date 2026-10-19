@@ -12,6 +12,7 @@
  */
 import { useEffect, useMemo } from 'react';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
+import { useNow } from '@/lib/use-now';
 import { useAutomationsNav } from '../data/use-automations-nav';
 import { selectAutomationById, useAutomationsStore } from '../data/use-automations-store';
 import { runsForAutomation } from '../data/library-cache';
@@ -29,6 +30,7 @@ export function AutomationDetails() {
   const automation = useAutomationsStore(selectAutomationById(automationId));
   const libraries = useAutomationsStore((s) => s.libraries);
   const catalog = useAutomationsStore((s) => s.catalog);
+  const now = useNow();
 
   const runs = useMemo(
     () => (automationId == null ? [] : runsForAutomation(libraries, automationId)),
@@ -68,8 +70,7 @@ export function AutomationDetails() {
           {automation.name}
           {selectedRun && (
             <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-              · {RUN_STATUS_LABEL[selectedRun.status].toLowerCase()}{' '}
-              {formatRelativeTime(selectedRun.startedAt, Date.now())}
+              · {RUN_STATUS_LABEL[selectedRun.status].toLowerCase()} {formatRelativeTime(selectedRun.startedAt, now)}
             </span>
           )}
         </span>

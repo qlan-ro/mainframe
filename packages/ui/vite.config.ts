@@ -1,12 +1,15 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
   base: './',
-  plugins: [tailwindcss(), react()],
+  // React Compiler (infer mode) memoizes every component and hook it can prove
+  // safe; opt one out with a `'use no memo'` directive plus a one-line reason.
+  plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),

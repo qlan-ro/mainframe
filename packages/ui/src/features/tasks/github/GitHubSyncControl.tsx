@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useNow } from '@/lib/use-now';
 import { syncedAgo } from './sync-format';
 import { runOrToast } from './run-or-toast';
 import { UnlinkRepoConfirm } from './UnlinkRepoConfirm';
@@ -42,6 +43,7 @@ function LinkButton({ onClick }: { onClick: () => void }): React.ReactElement {
 export function GitHubSyncControl(): React.ReactElement {
   const { link, running, lastRun, openDialog, sync } = useGitHubSyncStore();
   const [confirmUnlink, setConfirmUnlink] = React.useState(false);
+  const now = useNow();
 
   if (link === null) return <LinkButton onClick={() => openDialog({ kind: 'link' })} />;
 
@@ -61,7 +63,7 @@ export function GitHubSyncControl(): React.ReactElement {
                 ·
               </span>
               <span className="text-xs text-muted-foreground">
-                {running ? 'syncing…' : syncedAgo(link.lastSyncedAt)}
+                {running ? 'syncing…' : syncedAgo(link.lastSyncedAt, now)}
               </span>
               <ChevronDown size={11} className="shrink-0 text-muted-foreground" aria-hidden />
             </button>

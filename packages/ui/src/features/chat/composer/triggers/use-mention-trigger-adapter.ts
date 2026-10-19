@@ -24,7 +24,9 @@ export function useMentionTriggerAdapter(
   agents: AgentConfig[] = NO_AGENTS,
   sessions: readonly TriggerItem[] = NO_SESSIONS,
 ): TriggerAdapter {
+  'use no memo'; // `version` keys the memo without being read; the compiler would drop it
   const [version, bump] = useState(0);
   useEffect(() => cache.subscribe(() => bump((n) => n + 1)), [cache]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is the re-list signal (see above)
   return useMemo(() => buildMentionTriggerAdapter(cache, agents, sessions), [cache, agents, sessions, version]);
 }

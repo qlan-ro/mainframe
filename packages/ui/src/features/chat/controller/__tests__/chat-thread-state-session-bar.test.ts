@@ -67,6 +67,14 @@ describe('reduceChatThreadState — context.usage', () => {
     });
   });
 
+  it('returns the same state when the repeated usage values are unchanged', () => {
+    const usage = { type: 'context.usage', percentage: 42, totalTokens: 84_000, maxTokens: 200_000 } as const;
+    const first = reduceChatThreadState(createChatThreadState(CHAT_ID), usage);
+    const repeated = reduceChatThreadState(first, { ...usage });
+
+    expect(repeated).toBe(first);
+  });
+
   it('does not disturb other state slices', () => {
     const before = createChatThreadState(CHAT_ID);
     const after = reduceChatThreadState(before, {
