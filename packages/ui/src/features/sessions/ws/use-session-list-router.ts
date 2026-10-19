@@ -25,6 +25,7 @@
  */
 import { useEffect, useMemo, useRef } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
+import { useThreadItems } from '../runtime/use-thread-items';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '../../../lib/daemon/ws-client';
 import { getHost } from '../../../lib/host';
@@ -88,7 +89,7 @@ export function useSessionListRouter(): void {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   // Select the stable store-scope threadItems array; project to SessionItem[]
   // outside the selector (a fresh array would loop useAuiState's Object.is).
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadItems = useThreadItems();
   const items = useMemo(() => threadItemsToSessionItems(threadItems), [threadItems]);
   // A user-initiated New switch in flight (todo #375) — the automatic
   // selections below must yield to it rather than race and cancel it.

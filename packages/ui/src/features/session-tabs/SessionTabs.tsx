@@ -17,6 +17,7 @@
 import { useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useAui, useAuiState } from '@assistant-ui/react';
+import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useAdaptersStore } from '@/store/adapters';
@@ -37,7 +38,7 @@ import { useSessionTabsSync } from './use-session-tabs-sync';
 export function SessionTabs() {
   useSessionTabsSync();
   const aui = useAui();
-  const items = useAuiState((s) => s.threads.threadItems);
+  const items = useThreadItems();
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const tabIds = useSessionTabsStore((s) => s.tabIds);
   const previewId = useSessionTabsStore((s) => s.previewId);

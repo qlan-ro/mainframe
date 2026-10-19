@@ -24,9 +24,11 @@ vi.mock('@/lib/api/agents', () => ({
   getAgents: vi.fn(),
 }));
 
-vi.mock('../../chat/runtime/chat-extras', () => ({
-  useChatExtras: vi.fn(),
-}));
+vi.mock('../../chat/runtime/chat-extras', () => {
+  const useChatExtras = vi.fn();
+  // The provider reads field selectors; route them through the stubbed extras.
+  return { useChatExtras, useChatExtrasSelector: (select: (extras: unknown) => unknown) => select(useChatExtras()) };
+});
 
 import { SkillsProvider, useChatSkills } from '../use-chat-skills';
 import { getProjects } from '@/lib/api/projects';

@@ -9,7 +9,8 @@
  * snapshot would leave every checkbox stuck where it opened.
  */
 import { useMemo } from 'react';
-import { useAui, useAuiState } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
+import { useThreadItems } from './runtime/use-thread-items';
 import { setChatTags } from '@/lib/api/tags';
 import { threadItemsToSessionItems } from '@/features/sessions/view-model/chat-to-thread-custom';
 import type { TagCascadeUpdate } from '@/features/sessions/tags/build-tag-cascade';
@@ -24,7 +25,7 @@ export function TagPopoverHost({ port }: { port: number }) {
   const aui = useAui();
 
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadItems = useThreadItems();
   const items = useMemo(() => threadItemsToSessionItems(threadItems), [threadItems]);
 
   const threads = useMemo(() => items.map((item) => ({ id: item.id, custom: { tags: item.custom.tags } })), [items]);

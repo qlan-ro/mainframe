@@ -20,8 +20,8 @@
  * tail, not inherit the previous thread's window.
  */
 import { startTransition, useEffect, useState, type ComponentProps } from 'react';
-import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
-import { useChatExtras } from '../runtime/chat-extras';
+import { ThreadPrimitive, useAui, useAuiState } from '@assistant-ui/react';
+import { useChatExtrasSelector } from '../runtime/chat-extras';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 import type { ActivitySource } from '@/features/session-panel/activity-model';
 
@@ -47,9 +47,11 @@ function heldFor(count: number): number {
 }
 
 export function ProgressiveMessages({ components }: { components: MessageComponents }) {
-  const messages = useAuiState((s) => s.thread.messages);
-  const count = messages.length;
-  const chatId = useChatExtras()?.state.chatId;
+  // The count, not the array: a streamed chunk replaces `messages` without
+  // changing which indices are mounted, so it must not re-render the list.
+  const count = useAuiState((s) => s.thread.messages.length);
+  const chatId = useChatExtrasSelector((extras) => extras?.state.chatId);
+  const thread = useAui().thread;
   // `held` = how many of the OLDEST messages are not mounted yet. It only ever
   // shrinks, except when a bulk publish lands on an empty thread.
   const [held, setHeld] = useState(() => heldFor(count));
@@ -70,12 +72,12 @@ export function ProgressiveMessages({ components }: { components: MessageCompone
     const onJump = (event: Event) => {
       const detail = (event as CustomEvent<{ chatId: string; source: ActivitySource }>).detail;
       if (detail.chatId !== chatId) return;
-      const index = messages.findIndex((message) => message.id === detail.source.messageId);
+      const index = thread.getState().messages.findIndex((message) => message.id === detail.source.messageId);
       if (index >= 0) setHeld((current) => Math.min(current, index));
     };
     window.addEventListener(ACTIVITY_JUMP_EVENT, onJump);
     return () => window.removeEventListener(ACTIVITY_JUMP_EVENT, onJump);
-  }, [chatId, messages]);
+  }, [chatId, thread]);
 
   const start = Math.min(held, count);
   const items = [];

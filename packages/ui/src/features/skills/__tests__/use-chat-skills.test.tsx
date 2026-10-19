@@ -11,7 +11,7 @@
  *   1. `@/lib/api/projects`  → vi.fn() stub for getProjects
  *   2. `@/lib/api/skills`    → vi.fn() stub for getSkills
  *   3. `@/lib/api/agents`    → vi.fn() stub for getAgents
- *   4. `../chat/runtime/chat-extras` → stub useChatExtras
+ *   4. `../chat/runtime/chat-extras` → stub useChatExtras (selectors read it)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
@@ -33,9 +33,11 @@ vi.mock('@/lib/api/agents', () => ({
   getAgents: vi.fn(),
 }));
 
-vi.mock('../../chat/runtime/chat-extras', () => ({
-  useChatExtras: vi.fn(),
-}));
+vi.mock('../../chat/runtime/chat-extras', () => {
+  const useChatExtras = vi.fn();
+  // The provider reads field selectors; route them through the stubbed extras.
+  return { useChatExtras, useChatExtrasSelector: (select: (extras: unknown) => unknown) => select(useChatExtras()) };
+});
 
 // ---------------------------------------------------------------------------
 // Imports after mocks

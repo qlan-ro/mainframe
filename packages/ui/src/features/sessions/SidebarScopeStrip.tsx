@@ -6,7 +6,7 @@
  * used first, by their latest session activity.
  */
 import { useMemo } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useThreadItems } from './runtime/use-thread-items';
 import { useSessionFilters } from '@/store/session-filters';
 import { regularThreadItemsToSessionItems } from './view-model/chat-to-thread-custom';
 import { sortProjectsByRecentActivity } from './view-model/project-activity';
@@ -22,7 +22,7 @@ export function SidebarScopeStrip() {
   const { projects, removeProjectFromList, reloadProjects } = useProjects();
   const onRemoveProject = useRemoveProject(removeProjectFromList);
   const onAddProject = useAddProject(reloadProjects);
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadItems = useThreadItems();
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   const recentProjects = useMemo(
     () => sortProjectsByRecentActivity(projects, regularThreadItemsToSessionItems(threadItems)),

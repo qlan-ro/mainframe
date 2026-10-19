@@ -56,20 +56,17 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
   const lineage = useForkLineageRow(item, depth);
   const { allItems } = useSessionLineage();
   const childForkCount = forkCount(allItems, item.id);
-  const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
+  // Per-row booleans, never the raw mainThreadId or unread set: an unread mark
+  // re-renders only its own row. (A switch still renders every row once — aui
+  // hands each client consumer a fresh context — but adds nothing on top.)
   // Visible-but-unfocused zone chats get the dimmed selection tint — the
   // focused one keeps the native full data-active treatment. A parked pair is
   // off screen, so its rows carry no tint.
-  const zoneDimmed = useZonesStore(
-    (s) =>
-      s.zones != null &&
-      s.splitFits &&
-      mainThreadId != null &&
-      s.zones.includes(mainThreadId) &&
-      s.zones.includes(item.id) &&
-      mainThreadId !== item.id,
+  const zones = useZonesStore((s) => (s.splitFits && s.zones?.includes(item.id) ? s.zones : null));
+  const zoneDimmed = useAuiState(
+    (s) => zones != null && s.threads.mainThreadId !== item.id && zones.includes(s.threads.mainThreadId),
   );
-  const unreadIds = useUnreadStore((s) => s.unread);
+  const unread = useUnreadStore((s) => isSessionUnread(item, s.unread));
   const [isRenaming, setIsRenaming] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [metaOpen, setMetaOpen] = useState(false);
@@ -97,7 +94,6 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
     if (open) setMetaOpen(false);
   }, []);
 
-  const unread = isSessionUnread(item, unreadIds);
   const title = item.title ?? 'Untitled session';
 
   function openTagsFromMenu() {
@@ -122,7 +118,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
       onTags={openTagsFromMenu}
       onArchive={actions.onArchive}
       onOpenInSplit={() => {
-        if (!openInSplit(mainThreadId, item.id)) aui.threads.switchToThread(item.id);
+        if (!openInSplit(aui.threads.getState().mainThreadId, item.id)) aui.threads.switchToThread(item.id);
       }}
       forkAvailability={actions.forkAvailability}
       onFork={actions.onFork}
@@ -154,7 +150,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                   // trigger's switchToThread never fires for the absorbed case.
                   onClickCapture={(e) => {
                     if (!e.metaKey) return;
-                    if (openInSplit(mainThreadId, item.id)) {
+                    if (openInSplit(aui.threads.getState().mainThreadId, item.id)) {
                       e.preventDefault();
                       e.stopPropagation();
                     }

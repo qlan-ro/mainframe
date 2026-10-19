@@ -10,7 +10,7 @@
  * `refresh()` lets the composer re-ask when the popover opens.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
 import type { TranscriptResolution } from '@qlan-ro/mainframe-types';
 import type { TriggerItem } from '@/components/trigger-engine/types';
 import { listedThreadItemsToSessionItems } from '@/features/sessions/view-model/task-chats';
@@ -35,7 +35,7 @@ export function useSessionMentionSource(args: {
   const { port, projectId, activeChatId } = args;
   // Select the stable store array, derive outside the selector — a derived
   // array inside it returns a fresh reference every read and loops getSnapshot.
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadItems = useThreadItems();
   const sessions = useMemo(() => listedThreadItemsToSessionItems(threadItems), [threadItems]);
   const projects = useProjectsStore((s) => s.projects);
   const projectNames = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
