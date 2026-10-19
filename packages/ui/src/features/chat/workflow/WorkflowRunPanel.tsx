@@ -8,6 +8,7 @@
  * agent as live (A9).
  */
 import type { ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
+import { useNow } from '@/lib/use-now';
 import { neutralizedRun } from './workflow-agent-view';
 import { runKey } from './workflow-progress';
 import { WorkflowPhaseList } from './WorkflowPhaseList';
@@ -16,7 +17,7 @@ import { WorkflowRunUnavailable } from './WorkflowRunUnavailable';
 import { WorkflowStaleBanner } from './WorkflowStaleBanner';
 
 export function WorkflowRunPanel({ run }: { run: ClaudeWorkflowRun }) {
-  const now = Date.now();
+  const now = useNow();
   const view = neutralizedRun(run, now);
   const key = runKey(view);
 

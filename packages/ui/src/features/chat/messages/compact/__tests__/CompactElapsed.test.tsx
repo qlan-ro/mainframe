@@ -31,3 +31,12 @@ it('omits untimed calls instead of starting a mount clock', () => {
   const { container } = render(<CompactElapsed running />);
   expect(container).toBeEmptyDOMElement();
 });
+it('shows a completion stamped ahead of its clock once the clock reaches it', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(10000);
+  const view = render(<CompactElapsed timing={{ startedAt: 5000 }} running />);
+  expect(screen.getByText('0:05')).toBeInTheDocument();
+  view.rerender(<CompactElapsed timing={{ startedAt: 5000, completedAt: 10500 }} running={false} />);
+  act(() => vi.advanceTimersByTime(1000));
+  expect(screen.getByText('0:05')).toBeInTheDocument();
+});

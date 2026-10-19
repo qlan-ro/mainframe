@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { unarchiveChat } from '@/lib/api/chats';
+import { useNow } from '@/lib/use-now';
 import { DialogRowList } from './DialogRowList';
 import {
   archivedThreadItemsToSessionItems,
@@ -38,6 +39,7 @@ interface ArchivedRowProps {
 }
 
 function ArchivedSessionRow({ id, title, projectName, updatedAt, restoring, onRestore }: ArchivedRowProps) {
+  const now = useNow();
   return (
     <div data-testid="archived-session-item" className="flex items-start gap-2 rounded-md px-2 py-2 hover:bg-muted">
       <div className="min-w-0 flex-1">
@@ -65,7 +67,7 @@ function ArchivedSessionRow({ id, title, projectName, updatedAt, restoring, onRe
         </Button>
         <span className="flex items-center gap-1 text-xs whitespace-nowrap text-muted-foreground">
           <ClockIcon className="size-3 shrink-0" />
-          {formatRelativeTime(updatedAt, Date.now())}
+          {formatRelativeTime(updatedAt, now)}
         </span>
       </div>
     </div>

@@ -10,6 +10,7 @@
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ChevronRight, Workflow } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useNow } from '@/lib/use-now';
 import { cn } from '@/lib/utils';
 import { resolveResultText } from '../tools/shared';
 import { neutralizedRun } from './workflow-agent-view';
@@ -77,6 +78,7 @@ function InertRow({
 export const WorkflowLauncherRow: ToolCallMessagePartComponent = ({ toolCallId, result }) => {
   const launch = parseWorkflowLaunch(resolveResultText(result).text);
   const run = useWorkflowRun(launch.taskId);
+  const now = useNow();
   const name = launch.workflowName ?? run?.workflowName ?? 'Workflow';
 
   if (launch.error) {
@@ -103,7 +105,6 @@ export const WorkflowLauncherRow: ToolCallMessagePartComponent = ({ toolCallId, 
     );
   }
 
-  const now = Date.now();
   const effective = run ?? unavailableRun(launch);
   const view = neutralizedRun(effective, now);
 

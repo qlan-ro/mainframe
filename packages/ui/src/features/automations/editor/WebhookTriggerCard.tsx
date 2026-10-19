@@ -29,6 +29,7 @@ import type { ReactNode } from 'react';
 import { Copy, Globe, KeyRound } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { mfToast } from '@/lib/toast';
+import { useNow } from '@/lib/use-now';
 import { formatRelativeTime } from '@/features/sessions/view-model/relative-time';
 import type { WebhookRegistration, WebhookTrigger } from '../contract';
 import { selectAutomationById, useAutomationsStore } from '../data/use-automations-store';
@@ -39,11 +40,11 @@ function errorMessage(err: unknown): string | undefined {
   return err instanceof Error ? err.message : undefined;
 }
 
-function deliveryLine(lastDeliveryAt: string | null): string {
+function deliveryLine(lastDeliveryAt: string | null, now: number): string {
   if (!lastDeliveryAt) return 'No deliveries yet';
   const ts = Date.parse(lastDeliveryAt);
   // An unreadable stamp is still a delivery — showing it verbatim beats claiming none.
-  return Number.isNaN(ts) ? `Last delivery ${lastDeliveryAt}` : `Last delivery ${formatRelativeTime(ts, Date.now())}`;
+  return Number.isNaN(ts) ? `Last delivery ${lastDeliveryAt}` : `Last delivery ${formatRelativeTime(ts, now)}`;
 }
 
 /** Register alone answers with the secret; read it structurally rather than widen a type this file doesn't own. */
@@ -150,6 +151,7 @@ interface RegisteredWebhookProps {
 }
 
 function RegisteredWebhook({ testId, registration, secret, persisted, registering, onReveal }: RegisteredWebhookProps) {
+  const now = useNow();
   return (
     <div
       data-testid={`${testId}-webhook`}
@@ -194,7 +196,7 @@ function RegisteredWebhook({ testId, registration, secret, persisted, registerin
         </span>
       </Hint>
       <div data-testid={`${testId}-webhook-delivery`} className="text-xs text-muted-foreground">
-        {deliveryLine(registration.lastDeliveryAt)}
+        {deliveryLine(registration.lastDeliveryAt, now)}
       </div>
     </div>
   );

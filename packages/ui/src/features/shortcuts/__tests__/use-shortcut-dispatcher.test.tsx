@@ -28,6 +28,8 @@ function mountAllHandlers(exclude: readonly ShortcutId[] = []) {
   const { unmount } = renderHook(() => {
     useShortcutDispatcher();
     for (const entry of SHORTCUTS) {
+      // A fixed registry and a per-mount `exclude`: the hook order never changes between renders.
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       if (!exclude.includes(entry.id)) useShortcutAction(entry.id, spies[entry.id]!);
     }
   });

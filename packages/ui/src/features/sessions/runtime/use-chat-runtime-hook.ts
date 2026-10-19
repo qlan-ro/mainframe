@@ -63,7 +63,7 @@
  */
 import { useAuiState } from '@assistant-ui/react';
 import type { AssistantRuntime } from '@assistant-ui/react';
-import { chatControllerRegistry } from './chat-controller-registry';
+import { useChatController } from './use-chat-controller';
 import { useDaemonPort } from './daemon-port-context';
 import { useChatThreadRuntime } from '../../chat/runtime/use-chat-thread-runtime';
 import { isVisibleZone, useZonesStore } from '../../chat/zones/zones-store';
@@ -81,7 +81,7 @@ export function useChatRuntimeHook(): AssistantRuntime {
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const port = useDaemonPort();
 
-  const controller = chatControllerRegistry.getOrCreate(chatId, port);
+  const controller = useChatController(chatId, port);
 
   const zones = useZonesStore((s) => s.zones);
   const splitFits = useZonesStore((s) => s.splitFits);

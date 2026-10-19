@@ -9,7 +9,7 @@
  * state), so a parent referenced by several fork rows — or by both a sidebar
  * row and the chat header — makes exactly one request.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { getChat } from '@/lib/api/chats';
 import { ApiRequestError } from '@/lib/api/http';
 import { useDaemonPort } from './runtime/daemon-port-context';
@@ -44,26 +44,34 @@ function fetchOnce(port: number, id: string): void {
     });
 }
 
+function subscribe(id: string, onChange: () => void): () => void {
+  const entry = listeners.get(id) ?? new Set<() => void>();
+  listeners.set(id, entry);
+  entry.add(onChange);
+  return () => {
+    entry.delete(onChange);
+  };
+}
+
+const unsubscribeNothing = () => {};
+
 export function useParentChat(parentChatId: string | null | undefined): ExternalParentChat | undefined {
   const port = useDaemonPort();
-  const [, setTick] = useState(0);
+  // The module cache is external state: read it as a store snapshot, so a
+  // settled fetch re-renders the row (a plain render-time read would be cached).
+  const subscribeToParent = useCallback(
+    (onChange: () => void) => (parentChatId == null ? unsubscribeNothing : subscribe(parentChatId, onChange)),
+    [parentChatId],
+  );
+  const entry = useSyncExternalStore(subscribeToParent, () =>
+    parentChatId == null ? undefined : cache.get(parentChatId),
+  );
 
   useEffect(() => {
-    if (parentChatId == null) return;
-    let entry = listeners.get(parentChatId);
-    if (entry == null) {
-      entry = new Set();
-      listeners.set(parentChatId, entry);
-    }
-    const rerender = () => setTick((n) => n + 1);
-    entry.add(rerender);
-    fetchOnce(port, parentChatId);
-    return () => {
-      entry?.delete(rerender);
-    };
+    if (parentChatId != null) fetchOnce(port, parentChatId);
   }, [parentChatId, port]);
 
-  return parentChatId == null ? undefined : cache.get(parentChatId);
+  return entry;
 }
 
 /** Test-only: the cache is module-scoped, so suites that assert on fetch counts must reset it. */

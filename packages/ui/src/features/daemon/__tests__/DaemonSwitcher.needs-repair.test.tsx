@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import type { DaemonMeta, DaemonTarget } from '@qlan-ro/mainframe-types';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
@@ -50,6 +51,13 @@ const REMOTE_STUDIO: DaemonMeta = {
   kind: 'remote',
   label: 'Studio Mac',
   host: 'studio.example.com:443',
+};
+
+const REMOTE_OTHER: DaemonMeta = {
+  id: 'other-daemon',
+  kind: 'remote',
+  label: 'Other Mac',
+  host: 'other.example.com:443',
 };
 
 const REMOTE_STUDIO_TARGET: DaemonTarget = {
@@ -130,6 +138,23 @@ describe('DaemonSwitcher — needs-repair marker', () => {
     });
 
     expect(trigger().querySelector('[aria-label="Connected"]')).toBeTruthy();
+  });
+
+  it('an open menu re-reads a marker that flips on another daemon', async () => {
+    await fakeHost.daemons.upsert(REMOTE_OTHER);
+    const user = userEvent.setup();
+    render(<DaemonSwitcher />, { wrapper: makeWrapper(REMOTE_STUDIO_TARGET, 'connected') });
+    await user.click(trigger());
+    const otherDot = () => screen.getByTestId('daemon-row-other-daemon-dot');
+    expect(
+      (await screen.findByTestId('daemon-row-other-daemon-dot')).querySelector('[aria-label="Connected"]'),
+    ).toBeTruthy();
+
+    act(() => {
+      markAuthFailure('other-daemon');
+    });
+
+    expect(otherDot().querySelector('[aria-label="Re-pair needed"]')).toBeTruthy();
   });
 
   it('needs-repair wins over connecting', () => {
