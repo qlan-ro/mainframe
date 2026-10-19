@@ -118,7 +118,8 @@ up() {
   for p in "${PORTS[@]}"; do kill_port "$p"; done
   rm -rf "$DATA_DIR"; mkdir -p "$DATA_DIR"
 
-  cargo build --release --manifest-path packages/core-rs/Cargo.toml -p mainframe-daemon >/dev/null 2>&1 \
+  # From inside core-rs so rustup picks up its rust-toolchain.toml.
+  (cd packages/core-rs && cargo build --release -p mainframe-daemon) >/dev/null 2>&1 \
     || { echo "cargo build failed for mainframe-daemon" >&2; exit 1; }
 
   # E2E_MODE=mock registers the `mock-cli` adapter, which replays RECORDINGS_DIR instead
