@@ -1,2 +1,6 @@
 packages:
   - 'packages/*'
+  # The mobile app is a submodule with its own npm lockfile. As a member it
+  # entered the lockfile only where the submodule was checked out, so a plain
+  # install anywhere else (CI, fresh worktrees) stripped it again.
+  - '!packages/mobile'

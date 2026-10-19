@@ -21,7 +21,8 @@ rm -rf "$DIST_DIR"
 mkdir -p "${DIST_DIR}/bin"
 
 # 1. Build the Rust daemon (release profile) and stage it as bin/mainframe-daemon.
-cargo build --release -p mainframe-daemon --manifest-path "${ROOT}/packages/core-rs/Cargo.toml"
+#    From inside core-rs so rustup picks up its rust-toolchain.toml.
+(cd "${ROOT}/packages/core-rs" && cargo build --release -p mainframe-daemon)
 cp "${ROOT}/packages/core-rs/target/release/mainframe-daemon" "${DIST_DIR}/bin/mainframe-daemon"
 chmod +x "${DIST_DIR}/bin/mainframe-daemon"
 

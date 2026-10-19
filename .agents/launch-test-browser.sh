@@ -44,8 +44,11 @@ UI_LOG="/tmp/mf-ui-${DAEMON_PORT}.log"
 # (five consumers hardcode packages/core-rs/target), so a fresh worktree pays a
 # cold compile of several minutes and several GB here; a warm one links in
 # seconds. `cargo sweep`/`cargo clean --profile dev` reclaim it afterwards.
+# Build from inside core-rs: rustup reads rust-toolchain.toml from the working
+# directory, not from --manifest-path, so a root-level cargo gets the default
+# toolchain and fails the crates' rust-version.
 echo "Building mainframe-daemon (cold builds take several minutes)…"
-cargo build --manifest-path packages/core-rs/Cargo.toml -p mainframe-daemon
+(cd packages/core-rs && cargo build -p mainframe-daemon)
 
 if [ "$MODE" = prepare ]; then
   echo "PREPARED"
