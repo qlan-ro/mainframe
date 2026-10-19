@@ -190,6 +190,7 @@ describe('useUiPrefs persistence', () => {
         'sidebarWidth',
         'sidebarView',
         'transcriptMode',
+        'transcriptWidth',
       ].sort(),
     );
     // Actions are never serialized.

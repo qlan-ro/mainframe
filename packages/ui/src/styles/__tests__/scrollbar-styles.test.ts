@@ -36,6 +36,19 @@ describe('scrollbar styling paths', () => {
     expect(webkit).not.toMatch(/scrollbar-(?:color|width)\s*:/);
   });
 
+  it('insets the vertical thumb 6px from the right edge and leaves horizontal bars at 8px', () => {
+    const webkit = blockAfter(base, `@supports ${webkitQuery}`);
+    const bar = blockAfter(webkit, '*::-webkit-scrollbar ');
+    const vertical = blockAfter(webkit, '*::-webkit-scrollbar-thumb:vertical');
+
+    expect(bar).toMatch(/width:\s*14px/);
+    expect(bar).toMatch(/height:\s*8px/);
+    expect(vertical).toMatch(/border-width:\s*0 6px 0 0/);
+    expect(vertical).toMatch(/background-clip:\s*padding-box/);
+    // 4px round corners on the painted 8px: 4 left, 10 − 6 right, 4 vertically.
+    expect(vertical).toMatch(/border-radius:\s*4px 10px 10px 4px \/ 4px/);
+  });
+
   it('retains the standards path when WebKit scrollbar parts are unavailable', () => {
     const standards = blockAfter(base, `@supports not ${webkitQuery}`);
 

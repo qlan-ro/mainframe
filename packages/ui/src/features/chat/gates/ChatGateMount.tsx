@@ -25,8 +25,8 @@ import { GateCard } from './GateCard';
  * scroll container (`overflow-y-auto` computes the other axis to `auto` too)
  * while keeping the card's edges on the composer's.
  * `[scrollbar-width:none]` keeps that parity while the slot scrolls: app.css
- * styles `::-webkit-scrollbar` globally, which makes the 8px bar layout-consuming
- * and would take those 8px out of the card's width.
+ * styles `::-webkit-scrollbar` globally, which makes the 14px vertical bar
+ * layout-consuming and would take those 14px out of the card's width.
  *
  * An answered gate just unmounts: the daemon shifts the pending permission, so
  * the delivery re-read finds nothing to restore. An approved plan's durable

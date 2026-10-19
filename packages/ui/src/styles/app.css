@@ -67,9 +67,12 @@ code {
 
 /* WebKit needs direct track painting because its native track can ignore scrollbar-color. */
 @layer base {
+  /* A vertical thumb sits 6px in from the right edge, so a scroller that ends
+     on a border (the transcript beside the docked panel) doesn't touch it.
+     The 8px thumb plus that gap is why vertical bars are 14px wide. */
   @supports selector(*::-webkit-scrollbar) {
     *::-webkit-scrollbar {
-      width: 8px;
+      width: 14px;
       height: 8px;
     }
     *::-webkit-scrollbar-track {
@@ -78,6 +81,15 @@ code {
     *::-webkit-scrollbar-thumb {
       background: var(--border);
       border-radius: 999px;
+    }
+    /* The 999px pill radius clamps to half the 14px box (7px), leaving the
+       painted 8px only 1px of rounding beside the 6px border. Per-corner radii
+       give 4px circles on both sides: 4 on the left, 10 − 6 on the right. */
+    *::-webkit-scrollbar-thumb:vertical {
+      border: solid transparent;
+      border-width: 0 6px 0 0;
+      border-radius: 4px 10px 10px 4px / 4px;
+      background-clip: padding-box;
     }
   }
 
