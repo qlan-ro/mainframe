@@ -53,17 +53,31 @@ pub fn truncate_tool_content(content: &str) -> TruncateResult {
 /// The first `n` UTF-16 code units of `content`; a surrogate pair split at the
 /// boundary decodes to U+FFFD.
 fn slice_utf16_prefix(content: &str, n: usize) -> String {
-    let units: Vec<u16> = content.encode_utf16().collect();
-    let end = n.min(units.len());
-    String::from_utf16_lossy(&units[..end])
+    let end = n.min(content.len());
+    if content.as_bytes()[..end].is_ascii() {
+        return content[..end].to_string();
+    }
+    let units: Vec<u16> = content.encode_utf16().take(n).collect();
+    String::from_utf16_lossy(&units)
 }
 
-/// The last `n` UTF-16 code units of `content`; a surrogate pair split at the
-/// boundary decodes to U+FFFD.
+/// The last `n` UTF-16 code units, preserving a split surrogate as U+FFFD.
 fn slice_utf16_suffix(content: &str, n: usize) -> String {
-    let units: Vec<u16> = content.encode_utf16().collect();
-    let start = units.len().saturating_sub(n);
-    String::from_utf16_lossy(&units[start..])
+    let start = content.len().saturating_sub(n);
+    if content.as_bytes()[start..].is_ascii() {
+        return content[start..].to_string();
+    }
+    let mut units = 0;
+    for (offset, character) in content.char_indices().rev() {
+        units += character.len_utf16();
+        if units > n {
+            return format!("\u{fffd}{}", &content[offset + character.len_utf8()..]);
+        }
+        if units == n {
+            return content[offset..].to_string();
+        }
+    }
+    content.to_string()
 }
 
 #[cfg(test)]
@@ -107,5 +121,51 @@ mod tests {
     fn treats_a_string_exactly_at_the_threshold_as_untruncated() {
         let exact = "x".repeat(TRUNCATE_THRESHOLD_BYTES);
         assert!(!truncate_tool_content(&exact).truncated);
+    }
+
+    #[test]
+    fn edge_slices_match_utf16_at_every_unicode_boundary() {
+        for text in ["", "ascii", "é中", "a🦀b😀c", "🦀🦀", "éascii😀", "asciié"] {
+            let units: Vec<_> = text.encode_utf16().collect();
+            for n in 0..=units.len() + 2 {
+                assert_eq!(
+                    slice_utf16_prefix(text, n),
+                    String::from_utf16_lossy(&units[..n.min(units.len())]),
+                    "prefix {text:?} at {n}"
+                );
+                assert_eq!(
+                    slice_utf16_suffix(text, n),
+                    String::from_utf16_lossy(&units[units.len().saturating_sub(n)..]),
+                    "suffix {text:?} at {n}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn truncation_preserves_split_surrogates_and_ascii_edges_around_unicode() {
+        let half = TRUNCATE_THRESHOLD_BYTES / 2;
+        for text in [
+            format!(
+                "{}🦀{}😀{}",
+                "a".repeat(half - 1),
+                "中".repeat(half),
+                "z".repeat(half - 1)
+            ),
+            format!("{}😀{}", "a".repeat(half), "z".repeat(half)),
+        ] {
+            let units: Vec<_> = text.encode_utf16().collect();
+            let head = String::from_utf16_lossy(&units[..half]);
+            let tail = String::from_utf16_lossy(&units[units.len() - half..]);
+            let kb = (text.len() as f64 / 1024.0).round() as i64;
+            assert_eq!(
+                truncate_tool_content(&text),
+                TruncateResult {
+                    content: format!("{head}\n…[truncated · {kb} KB — expand]…\n{tail}"),
+                    truncated: true,
+                    full_bytes: Some(text.len() as i64),
+                }
+            );
+        }
     }
 }
