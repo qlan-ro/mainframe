@@ -776,9 +776,7 @@ impl ChatLifecycleManager {
             && !remapped.is_empty()
         {
             let mut messages = self.shared.messages.lock_recover();
-            let previous = messages.get(chat_id).cloned();
-            messages.set(chat_id, remapped);
-            let remapped = messages.get(chat_id).cloned().unwrap_or_default();
+            let (remapped, changed) = history::restore_history(&mut messages, chat_id, remapped);
             drop(messages);
             let active_slice = &remapped[active_from.min(remapped.len())..];
             self.shared
@@ -789,7 +787,7 @@ impl ChatLifecycleManager {
             // cached list — "no previous entry" counts as changed, but a
             // cold chat's identical re-read (the first send after
             // `session/resume`) must not force a full replay (finding 6).
-            cache_reloaded = previous.as_ref() != Some(&remapped);
+            cache_reloaded = changed;
         }
 
         // Mention extraction and the PR-URL scan are adapter-specific and out

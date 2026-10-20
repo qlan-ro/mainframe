@@ -101,15 +101,28 @@ function ThreadFooter({
     </ThreadPrimitive.ViewportFooter>
   );
 }
+function useViewportScroll(threadId: string | null) {
+  const {
+    viewportRef,
+    contentRef,
+    footerRef,
+    viewportElement,
+    viewport,
+    beginInteraction,
+    isFollowing,
+    isInteracting,
+  } = useThreadBottomPin(threadId);
+  const scroll = useMemo(
+    () => ({ viewportElement, viewport, beginInteraction, isFollowing, isInteracting }),
+    [viewportElement, viewport, beginInteraction, isFollowing, isInteracting],
+  );
+  return { viewportRef, contentRef, footerRef, scroll };
+}
+
 export function ChatThreadViewport({ emptyState, variant }: { emptyState?: ReactNode; variant: ChatThreadVariant }) {
   const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
   const threadId = useSideAwareThreadId();
-  const { viewportRef, contentRef, footerRef, viewportElement, viewport, beginInteraction, isFollowing } =
-    useThreadBottomPin(threadId);
-  const scroll = useMemo(
-    () => ({ viewportElement, viewport, beginInteraction, isFollowing }),
-    [viewportElement, viewport, beginInteraction, isFollowing],
-  );
+  const { viewportRef, contentRef, footerRef, scroll } = useViewportScroll(threadId);
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const chatId = useChatExtras()?.state.chatId;
   const rootRef = useRef<HTMLDivElement>(null);

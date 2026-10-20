@@ -178,6 +178,7 @@ export function useThreadBottomPin(threadId: string | null) {
   const refs = usePinObservers(viewportElement, state, setViewport);
   const footerRef = useFooterObserver(state);
   const isFollowing = useCallback(() => state.current.pinned && state.current.locks === 0, []);
+  const isInteracting = useCallback(() => state.current.locks > 0, []);
   const beginInteraction = useCallback(() => {
     state.current.anchor = null;
     state.current.locks++;
@@ -206,5 +207,5 @@ export function useThreadBottomPin(threadId: string | null) {
       if (current.frame !== null) cancelAnimationFrame(current.frame);
     };
   }, []);
-  return { ...refs, footerRef, viewportElement, viewport, beginInteraction, isFollowing };
+  return { ...refs, footerRef, viewportElement, viewport, beginInteraction, isFollowing, isInteracting };
 }

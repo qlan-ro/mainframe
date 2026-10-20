@@ -23,3 +23,22 @@ pub(super) async fn load_session_history(
         (remapped, 0)
     })
 }
+
+pub(super) fn restore_history(
+    cache: &mut crate::message_cache::MessageCache,
+    chat_id: &str,
+    incoming: Vec<ChatMessage>,
+) -> (Vec<ChatMessage>, bool) {
+    if cache.get(chat_id) == Some(&incoming) {
+        return (incoming, false);
+    }
+    let previous = cache.get(chat_id).cloned();
+    cache.set(chat_id, incoming);
+    let restored = cache.get(chat_id).cloned().unwrap_or_default();
+    let changed = previous.as_ref() != Some(&restored);
+    (restored, changed)
+}
+
+#[cfg(test)]
+#[path = "history_tests.rs"]
+mod tests;

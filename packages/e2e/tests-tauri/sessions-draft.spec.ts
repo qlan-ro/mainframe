@@ -421,17 +421,18 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
     await dismissPersistentToasts(page);
     await composer(page).submit('e2e first-message visibility regression');
 
-    const userMessage = page.getByTestId('chat-user-message');
-    await expect(userMessage).toHaveCount(1, { timeout: 20_000 });
-    await expect(userMessage).toContainText('e2e first-message visibility regression');
-    // The draft row retiring IS the handoff: the local draft has been replaced by
-    // the canonical remote row, which is when the second controller seeds itself
-    // from the (forced-empty) history read above.
+    const loaded = page.getByTestId('chat-message-list');
+    await expect(loaded).toHaveAttribute('data-loaded-user-count', '1', { timeout: 20_000 });
     await expect(page.getByTestId('sessions-draft-row')).toHaveCount(0, { timeout: 20_000 });
-    // Hold past it: the blank controller used to replace the transcript a beat
-    // AFTER the row switched, so the negative assertion needs a window.
     await page.waitForTimeout(2_000);
+    await expect(loaded).toHaveAttribute('data-loaded-user-count', '1');
+    const viewport = page.getByTestId('chat-thread-viewport');
+    await viewport.hover();
+    await page.mouse.wheel(0, -100_000);
+    const userMessage = page.getByTestId('chat-user-message');
     await expect(userMessage).toHaveCount(1);
+    await expect(userMessage).toContainText('e2e first-message visibility regression');
+    await expect(userMessage).toBeInViewport();
 
     await page.unrouteAll({ behavior: 'ignoreErrors' });
   });

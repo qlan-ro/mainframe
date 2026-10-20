@@ -6,6 +6,7 @@ import { useChatExtrasSelector } from '../runtime/chat-extras';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 import type { ActivitySource } from '@/features/session-panel/activity-model';
 import { DisclosureStateProvider } from '@/components/ui/disclosure-state';
+import { seekingComponents, useScrollSeek } from './use-scroll-seek';
 import { useFindInChatStore } from '../find/find-in-chat-store';
 import { waitForMessage } from '../find/daemon-highlights';
 
@@ -99,8 +100,14 @@ function useVirtualMessageState() {
   return { ids, userCount, scroll, viewport, list, range, overscan };
 }
 
+function VirtualMessage({ id, components }: { id: string; components: MessageComponents }) {
+  const index = useAuiState((state) => state.thread.messages.findIndex((message) => message.id === id));
+  return index < 0 ? null : <ThreadPrimitive.MessageByIndex index={index} components={components} />;
+}
+
 export function VirtualMessages({ components }: { components: MessageComponents }) {
   const { ids, userCount, scroll, viewport, list, range, overscan } = useVirtualMessageState();
+  const scrollSeek = useScrollSeek(scroll, viewport);
   const [ready, setReady] = useState(-1);
   const legacyFind = useFindInChatStore((s) => s.isOpen && !s.daemon);
   return (
@@ -120,18 +127,18 @@ export function VirtualMessages({ components }: { components: MessageComponents 
             customScrollParent={viewport}
             firstItemIndex={range.index}
             defaultItemHeight={220}
+            components={seekingComponents}
+            scrollSeekConfiguration={scrollSeek}
             itemsRendered={(items) => {
               if (items.some((item) => item.data === ids[ids.length - 1]) || !scroll?.isFollowing())
                 setReady(range.generation);
             }}
             computeItemKey={(_index, id) => id}
             increaseViewportBy={legacyFind ? { top: 1e9, bottom: 1e9 } : overscan}
-            itemContent={(index) => (
-              <ThreadPrimitive.MessageByIndex index={index - range.index} components={components} />
-            )}
+            itemContent={(_index, id) => <VirtualMessage id={id} components={components} />}
           />
         ) : (
-          ids.map((id, index) => <ThreadPrimitive.MessageByIndex key={id} index={index} components={components} />)
+          ids.map((id) => <VirtualMessage key={id} id={id} components={components} />)
         )}
       </div>
     </DisclosureStateProvider>

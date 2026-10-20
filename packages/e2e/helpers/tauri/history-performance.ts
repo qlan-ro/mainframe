@@ -88,6 +88,7 @@ async function responsiveness(page: Page): Promise<Pick<HistoryMeasurement, 'fps
         requestAnimationFrame(tick);
       }),
   );
+  await expect(page.locator('[data-virtual-placeholder]')).toHaveCount(0);
   await composer(page).input().focus();
   await armHistoryPaint(page, '[data-testid="chat-composer-input"]', 'key');
   await page.keyboard.type('a');

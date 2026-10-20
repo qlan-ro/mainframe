@@ -38,6 +38,27 @@ test.describe('virtual transcript rows', () => {
       await page.getByTestId('chat-load-earlier').click();
       await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', String(count));
     }
+    const viewport = page.getByTestId('chat-thread-viewport');
+    await viewport.hover();
+    await page.mouse.wheel(0, -500);
+    await expect(page.getByTestId('chat-scroll-to-bottom')).toBeVisible();
+    const sought = await viewport.evaluate(
+      (element) =>
+        new Promise<boolean>((resolve) => {
+          const start = performance.now();
+          let placeholders = false;
+          const tick = (now: number) => {
+            element.scrollTop =
+              (element.scrollHeight - element.clientHeight) * (0.1 + (((now - start) % 1500) / 1500) * 0.8);
+            placeholders ||= Boolean(element.querySelector('[data-virtual-placeholder]'));
+            if (now - start < 2000) requestAnimationFrame(tick);
+            else resolve(placeholders);
+          };
+          requestAnimationFrame(tick);
+        }),
+    );
+    expect(sought).toBe(true);
+    await expect(page.locator('[data-virtual-placeholder]')).toHaveCount(0);
     await page.getByTestId('chat-scroll-to-bottom').click();
     const tail = page.getByText('Needle turn 249', { exact: true });
     await expect(tail).toBeVisible();
