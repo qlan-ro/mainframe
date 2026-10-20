@@ -4,14 +4,26 @@ on:
   push:
     tags:
       - 'types-v*'
+  # Republishes an existing release commit without moving its tag, e.g. after
+  # a tag-triggered run failed on registry auth.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit, tag or branch to publish the types from'
+        required: true
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # npm trusted publishing exchanges this OIDC token for a publish
+      # credential; no NPM_TOKEN secret is involved.
+      id-token: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: pnpm/action-setup@v6
         with:
@@ -21,6 +33,10 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; Node 22 bundles npm 10.
+      - name: Upgrade npm
+        run: npm install -g npm@^11.5.1
 
       # Only builds/publishes the pure-TS types package; no native code.
       # Skip lifecycle scripts so node-pty/better-sqlite3 (no Linux prebuild)
@@ -33,7 +49,8 @@ jobs:
       - name: Build types
         run: pnpm --filter @qlan-ro/mainframe-types build
 
+      # npm itself publishes: the OIDC exchange lives in the npm CLI. The build
+      # already ran, so skip the prepublishOnly rebuild.
       - name: Publish
-        run: pnpm --filter @qlan-ro/mainframe-types publish --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        working-directory: packages/types
+        run: npm publish --access public --ignore-scripts
