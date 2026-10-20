@@ -128,6 +128,7 @@ async fn an_opted_in_full_replay_previews_old_results_and_keeps_the_newest_full(
         None,
         ResumeOptions {
             result_previews: true,
+            ..ResumeOptions::default()
         },
     )
     .await;
@@ -195,6 +196,7 @@ async fn a_cursor_replay_previews_nothing_new() {
         None,
         ResumeOptions {
             result_previews: true,
+            ..ResumeOptions::default()
         },
     )
     .await;

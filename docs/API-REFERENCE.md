@@ -873,6 +873,8 @@ compression lives.
 | `session/cancel` | client → daemon (notification) | End the turn with a cancelled stop reason; cancels open gates. |
 | `session/resume` | client → daemon | Replay from an opaque `replayFrom` cursor (`{type:"start"}`, `{type:"item",itemId}`, or — for an opted-in connection, todo #377 — `{type:"revision",epoch,revision}`); the response's `_meta["_mainframe.dev"].itemCount` is the size of the server's full snapshot (a client holding items refuses an `itemCount: 0` blanking re-seed — the "no history session yet" degenerate read); an unknown/pre-compaction cursor, an unknown epoch, or a revision outside the retained range falls back to a full replay adding `fullReplay: true`. An opted-in connection's reply also carries `_meta["_mainframe.dev"].cursor: {epoch, revision}` regardless of which cursor shape the request used — the boundary the reply's updates converge the client to. |
 | `_mainframe.dev/cursor` | daemon → client (notification) | `{sessionId, epoch, revision}` (todo #377) — sent only to a connection that opted into revision cursors, after the `session/update` frames of the display revision it describes (same per-session throttle FIFO, coalesced to the last cursor per flushed batch). Receiving it means the client now holds every change through `revision`; the client advances its durable cursor only then, never ahead of applied data. |
+| `_mainframe.dev/history_page` | client → daemon | On a `windowedHistory` connection: `{sessionId, before, containers?, untilItemId?}` returns `{updates? , batches?, hasMore, floorItemId?, stale?}`. `before` must be the attached session's current floor. Counts default to 40 and clamp to 1..200; pages snap backward to a user prompt within eight containers. `untilItemId` loads the whole gap through its container without a count limit. An unknown floor or target returns `stale:true` without changing the window. Compressed connections receive `batches` using the `replay_batch` payload. The page is seeded and replied before buffered live changes are delivered. |
+| `_mainframe.dev/history_search` | client → daemon | `{sessionId, query}` returns `{total, matches:[{containerId,itemId,occurrence}], truncated?}`. Case-insensitive substring search over top-level user/assistant text, with overlapping occurrences and capture/reference blocks removed. Excludes reasoning, tools, subagents, system/error notices and provider dividers. Counts the whole transcript, retaining the newest 2,000 matches in transcript order. Available without windowing; loads cold history first. |
 | `_mainframe.dev/session_detach` | client → daemon (notification) | `{sessionId}` — a connection that follows the active thread (D2) drops the session's stream and any pending gates on itself when the client navigates away; a no-op if the connection was never attached. Switching back re-attaches through the normal `session/prompt`/`session/resume` attach-on-send path. |
 | `session/request_permission` | daemon → client | Mid-turn blocking gate with an adapter-supplied ordered option list (`allow-once`/`allow-always`/`reject-once`); the request's `_meta["_mainframe.dev"].controlRequest` carries the raw `ControlRequest` (input, suggestions, decision reason) the rich desktop gate cards render. A plain `{outcome:"selected", optionId}` answer is always valid; a rich `_meta["_mainframe.dev"].controlResponse` answer carries today's `ControlResponse` semantics (input mutation, execution mode, clear-context) and is validated against the request it claims to resolve before being trusted. |
 | `session/update` | daemon → client (notification) | Item chunks/upserts/patches — `AgentMessage(Chunk)`, `UserMessage(Chunk)`, `AgentThought(Chunk)`, `ToolCallUpdate`, `ToolCallContentChunk`, `StateUpdate`, `UsageUpdate`. Diffed per session (`SessionState`) so no frame after an item's first repeats its full accumulated content. |
@@ -894,6 +896,17 @@ socket loop writes inline before continuing. A client must not infer run
 state from reply ordering — `sendPrompt` reads only the reply's
 `_meta["_mainframe.dev"].position` (queued vs. immediate), and run state
 comes from the `state_update` stream itself.
+
+Windowed history is advertised as `windowedHistory:true` and requires the client's
+`windowedHistory:true` and `revisionCursors:true` initialize opt-ins, plus the daemon's
+`replayComplete` and `itemCreationMarkers` capabilities. A start resume sends the newest
+40 containers, extended backward by at most eight to a user prompt. Request metadata
+`_meta["_mainframe.dev"].window` accepts `containers` or, for revision resumes,
+`floorItemId`. Replies add `history:{hasMore,floorItemId?}` and count only replayed items
+in `itemCount`. A missing or invalid revision floor falls back to the newest window
+with `fullReplay:true`. Item cursors retain their full-history behavior. REST history
+and MCP `chat_read` still return the whole transcript. Search support is advertised
+separately as `historySearch:true`.
 
 **Resume replay order.** A `session/resume` reply is followed, in order, by:
 the replayed item updates (each an upsert carrying the `created` marker,

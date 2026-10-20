@@ -45,6 +45,8 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         // resume replays as `_mainframe.dev/replay_batch` frames; one that does
         // not keeps the per-update replay.
         compressed_replay: Some(true),
+        windowed_history: Some(true),
+        history_search: Some(true),
     }
 }
 
@@ -73,6 +75,10 @@ pub fn client_opts_into_compressed_replay(params: Option<&Value>) -> bool {
 
 /// A boolean `_meta["_mainframe.dev"]` opt-in on an `initialize` request —
 /// absent, non-boolean, or `false` all read as not opted in.
+pub fn client_opts_into_windowed_history(params: Option<&Value>) -> bool {
+    client_opt_in(params, "windowedHistory") && client_opt_in(params, "revisionCursors")
+}
+
 fn client_opt_in(params: Option<&Value>, key: &str) -> bool {
     params
         .and_then(|params| params.get("_meta"))

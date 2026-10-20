@@ -24,10 +24,11 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use mainframe_types::acp::extensions::{
-    CompactionParams, CursorParams, GateResolvedParams, HeartbeatParams, ItemMeta,
-    MainframeCapabilities, PromptSendMeta, QueueStateParams, QueuedPromptState, ReplayBatchParams,
-    ReplayCompleteParams, ResyncParams, RetryMarker, RichPermissionAnswer, SessionDetachParams,
-    StructuredDiff, TranscriptClearedParams, TruncationMarker, UsageMeta,
+    CompactionParams, CursorParams, GateResolvedParams, HeartbeatParams, HistoryPageParams,
+    HistoryPageResult, HistorySearchParams, HistorySearchResult, HistoryState, HistoryWindow,
+    ItemMeta, MainframeCapabilities, PromptSendMeta, QueueStateParams, QueuedPromptState,
+    ReplayBatchParams, ReplayCompleteParams, ResyncParams, RetryMarker, RichPermissionAnswer,
+    SessionDetachParams, StructuredDiff, TranscriptClearedParams, TruncationMarker, UsageMeta,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::permission::{RequestPermissionRequest, RequestPermissionResponse};
@@ -156,6 +157,24 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     }
     if name == "cursor.params.json" {
         return roundtrip_as::<CursorParams>(body);
+    }
+    if name == "history-window.json" {
+        return roundtrip_as::<HistoryWindow>(body);
+    }
+    if name == "history-state.json" {
+        return roundtrip_as::<HistoryState>(body);
+    }
+    if name == "history-page.params.json" {
+        return roundtrip_as::<HistoryPageParams>(body);
+    }
+    if name.starts_with("history-page.") {
+        return roundtrip_as::<HistoryPageResult>(body);
+    }
+    if name == "history-search.params.json" {
+        return roundtrip_as::<HistorySearchParams>(body);
+    }
+    if name == "history-search.result.json" {
+        return roundtrip_as::<HistorySearchResult>(body);
     }
     if name.starts_with("extensions.capabilities") {
         return roundtrip_as::<MainframeCapabilities>(body);

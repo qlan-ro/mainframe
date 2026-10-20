@@ -114,16 +114,35 @@ impl MessageCache {
         categories: Option<&ToolCategories>,
         make_projector: impl FnOnce() -> Box<dyn DisplayProjector>,
     ) -> Vec<DisplayMessage> {
+        self.read_display_snapshot(
+            chat_id,
+            raw,
+            overlay,
+            categories,
+            make_projector,
+            |messages| messages.to_vec(),
+        )
+    }
+
+    pub fn read_display_snapshot<R>(
+        &mut self,
+        chat_id: &str,
+        raw: &[ChatMessage],
+        overlay: Option<&ChatMessage>,
+        categories: Option<&ToolCategories>,
+        make_projector: impl FnOnce() -> Box<dyn DisplayProjector>,
+        read: impl FnOnce(&[DisplayMessage]) -> R,
+    ) -> R {
         let delta =
             self.advance_projection(chat_id, Some(raw), overlay, categories, make_projector);
-        let materialized = delta.snapshot.materialize();
+        let result = delta.snapshot.read(read);
         if let Some(slot) = self.projections.get_mut(chat_id) {
             slot.pending = Some(match slot.pending.take() {
                 Some(pending) => pending.merge(delta),
                 None => delta,
             });
         }
-        materialized
+        result
     }
 }
 

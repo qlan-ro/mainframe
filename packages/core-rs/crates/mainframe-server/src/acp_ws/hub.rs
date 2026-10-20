@@ -29,6 +29,7 @@ mod fanout;
 mod handlers;
 mod revisions;
 pub use fanout::ResumeSeed;
+mod history;
 use fanout::drain_into;
 use revisions::RevisionRegistry;
 
@@ -99,7 +100,13 @@ impl FacadeHub {
         connection
             .locked_sessions()
             .entry(chat_id.to_string())
-            .or_insert_with(|| SessionSlot::Live(SessionStream::new(self.throttle_interval_ms)));
+            .or_insert_with(|| {
+                let mut stream = SessionStream::new(self.throttle_interval_ms);
+                if connection.is_windowed_history_opted_in() {
+                    stream.enable_window(chat_id);
+                }
+                SessionSlot::Live(stream)
+            });
     }
 
     /// Mark `chat_id` as awaiting a resume snapshot, before that snapshot is
@@ -189,6 +196,9 @@ impl FacadeHub {
         let mut stream = SessionStream::new(self.throttle_interval_ms);
         stream.set_previews(seed.preview_ids.clone());
         stream.seed_containers(seed.containers);
+        if connection.is_windowed_history_opted_in() {
+            stream.seed_window(chat_id, seed.containers);
+        }
         let catch_up = drain_into(&mut stream, previous, connection, seed.redelivered_gate);
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
         connection.send_json(seed.reply);

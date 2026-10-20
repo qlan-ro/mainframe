@@ -8,6 +8,33 @@ use crate::encoder::delta::EncodedDelta;
 pub(crate) struct ContainerIndex(Vec<Vec<String>>);
 
 impl ContainerIndex {
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub(crate) fn positions_changed(&self, delta: &EncodedDelta) -> bool {
+        delta.changes.iter().any(|(pos, items)| {
+            self.0.get(*pos).is_some_and(|old| {
+                old.first().map(String::as_str) != items.first().map(EncodedItem::id)
+            })
+        })
+    }
+
+    pub(crate) fn position(&self, id: &str) -> Option<usize> {
+        self.0
+            .iter()
+            .position(|items| items.iter().any(|item| item == id))
+    }
+
+    pub(crate) fn ids_from(&self, floor: usize) -> HashSet<&str> {
+        self.0
+            .iter()
+            .skip(floor)
+            .flatten()
+            .map(String::as_str)
+            .collect()
+    }
+
     pub(crate) fn old_ids_for(&self, delta: &EncodedDelta) -> HashSet<String> {
         let mut ids = HashSet::new();
         for (ordinal, _) in &delta.changes {

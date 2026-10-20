@@ -1,0 +1,16 @@
+{
+  "_provenance": "synthetic",
+  "total": 2,
+  "matches": [
+    {
+      "containerId": "message-1",
+      "itemId": "message-1",
+      "occurrence": 0
+    },
+    {
+      "containerId": "message-1",
+      "itemId": "message-1",
+      "occurrence": 1
+    }
+  ]
+}

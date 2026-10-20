@@ -16,6 +16,30 @@ use crate::encoder::EncodedItem;
 use crate::encoder::delta::EncodedDelta;
 
 impl SessionState {
+    pub fn prepend_containers(
+        &mut self,
+        start: usize,
+        containers: &[Vec<EncodedItem>],
+        previews: HashSet<String>,
+    ) {
+        self.previews.extend(previews);
+        for item in containers.iter().flatten() {
+            self.items
+                .insert(item.id().to_string(), self.previewed(item).into_owned());
+        }
+        let delta = EncodedDelta {
+            full: false,
+            len: self.containers.len().max(start + containers.len()),
+            changes: containers
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(pos, items)| (start + pos, items))
+                .collect(),
+        };
+        self.containers.update(&delta);
+    }
+
     /// Mark `containers` as the known baseline with no updates emitted —
     /// the resume-replay seed path (mirrors [`crate::revision_log::RevisionLog::seed`]).
     /// Only takes effect the first time, while the state is unseeded.

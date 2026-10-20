@@ -6,3 +6,6 @@
 
 include!("hub_tests_part_1.rs");
 include!("hub_tests_part_2.rs");
+
+#[path = "hub_tests_history.rs"]
+mod history;

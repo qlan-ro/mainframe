@@ -16,3 +16,4 @@ export * from './permission.js';
 export * from './session.js';
 export * from './tool-call.js';
 export * from './update.js';
+export * from './extensions-history.js';
