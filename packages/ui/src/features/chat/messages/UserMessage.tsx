@@ -204,11 +204,12 @@ function UserMessageImpl() {
     <MessagePrimitive.Root
       data-testid="chat-user-message"
       data-message-id={messageId}
+      data-search-item-id={messageId}
       className="pt-1 pb-4 has-data-[slot=message-footer]:pb-1"
     >
       <Message align="end">
         <MessageContent>
-          {reviewCard}
+          {reviewCard && <div data-text-part>{reviewCard}</div>}
 
           {isQueued ? (
             (body || hasExtras) && (
@@ -226,11 +227,13 @@ function UserMessageImpl() {
             // The gate shell's max-width cap should govern the record's width,
             // not MessageContent's end-alignment of its slotted children — an
             // explicit full-width wrapper escapes the shrink-to-fit sizing.
-            <div className="w-full">
+            <div className="w-full" data-text-part>
               <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
             </div>
           ) : agentText ? (
-            <AgentMessageCard parsed={agentText} messageId={messageId} />
+            <div data-text-part>
+              <AgentMessageCard parsed={agentText} messageId={messageId} />
+            </div>
           ) : (
             <>
               {body && <UserBubble>{body}</UserBubble>}

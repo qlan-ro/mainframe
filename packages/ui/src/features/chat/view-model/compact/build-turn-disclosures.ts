@@ -96,11 +96,11 @@ function timingKey(
   const duration = turnDuration(model.timing, false, now);
   return duration !== undefined && message.metadata?.timing?.totalStreamTime === duration ? key : undefined;
 }
-function boundaryUnit(index: number, scope: TurnScope): SourceUnit {
+function boundaryUnit(messageId: string, scope: TurnScope): SourceUnit {
   return {
     ...scope,
-    key: `boundary:${index}`,
-    messageId: `boundary:${index}`,
+    key: `boundary:${messageId}`,
+    messageId: `boundary:${messageId}`,
     index: 0,
     part: { type: 'text', text: '\n', status: { type: 'complete' } },
     work: false,
@@ -117,7 +117,7 @@ export function buildTurnDisclosures(
 ): TurnPresentation {
   cache.begin(scope);
   const byMessage = messages.map((message) => ({ message, units: cache.sourceUnits(message, scope) }));
-  const all = byMessage.flatMap(({ units }, index) => (units.length ? units : [boundaryUnit(index, scope)]));
+  const all = byMessage.flatMap(({ message, units }) => (units.length ? units : [boundaryUnit(message.id, scope)]));
   const sourceIndex = indexSourceTurns(all);
   const groups = groupUnits(all, scope, cache);
   const displayIndex = indexDisplayUnits(groups);

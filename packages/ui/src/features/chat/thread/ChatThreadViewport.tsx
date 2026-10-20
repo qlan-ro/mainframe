@@ -1,3 +1,4 @@
+import { EarlierMessages } from './EarlierMessages';
 import { lazy, Suspense, useMemo, useRef, type CSSProperties, type ReactNode, type RefCallback } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ArrowDownIcon } from 'lucide-react';
@@ -133,7 +134,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
           data-mf-chat-thread
           data-mf-chat-id={chatId}
           tabIndex={-1}
-          className="relative flex flex-1 flex-col overflow-y-auto"
+          className="relative flex flex-1 flex-col overflow-y-auto [overflow-anchor:none]"
         >
           <ChatThreadLoadingSpinner />
           <div ref={contentRef} className="relative mx-auto w-full max-w-(--mf-transcript-width) flex-1 px-5 py-4">
@@ -145,6 +146,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
             {/* Keyed by thread: the progressive window (and compact mode's caches)
               restart from the new thread's tail on a switch instead of
               inheriting the previous thread's state. */}
+            <EarlierMessages />
             <TranscriptMessages key={threadId ?? ''} />
             <CompactingIndicator />
           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
@@ -54,6 +54,7 @@ export function SubagentZone({
   const messages = useNativeThreadMessages(state);
   const transcript = findSubagentTranscript(messages, subagent.toolCallId);
   const root = useRef<HTMLDivElement>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   useEffect(() => {
     void controller.load();
@@ -65,6 +66,33 @@ export function SubagentZone({
     };
   }, [controller]);
   useEffect(() => root.current?.focus(), [subagent]);
+  useEffect(() => {
+    if (state.loadState?.type !== 'ready' || transcript) return;
+    if (!state.historyWindow?.hasMore || messages.some((message) => message.id === subagent.messageId)) {
+      setHistoryError('Not in this transcript');
+      return;
+    }
+    let cancelled = false;
+    void controller.loadEarlier(subagent.toolCallId).then(
+      (found) => {
+        if (!cancelled && !found) setHistoryError('Not in this transcript');
+      },
+      (error: unknown) => {
+        if (!cancelled) setHistoryError(error instanceof Error ? error.message : 'Could not load transcript');
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    controller,
+    subagent.messageId,
+    state.loadState?.type,
+    state.historyWindow?.hasMore,
+    transcript,
+    messages,
+    subagent.toolCallId,
+  ]);
 
   return (
     <div
@@ -86,7 +114,7 @@ export function SubagentZone({
             />
           </RootTranscriptScope>
         ) : (
-          <p className="text-sm text-muted-foreground">Loading subagent transcript…</p>
+          <p className="text-sm text-muted-foreground">{historyError ?? 'Loading subagent transcript...'}</p>
         )}
       </div>
       <p className="shrink-0 border-t border-border px-5 py-3 text-center text-xs text-muted-foreground">

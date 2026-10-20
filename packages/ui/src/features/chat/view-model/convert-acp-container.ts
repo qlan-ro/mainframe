@@ -54,10 +54,14 @@ function partStatus(parsed: ParsedItem): PartStreamStatus | undefined {
  * Ordered blocks → aui parts: text renders as a text part, image as a native
  * image part carrying the same data URL the legacy converter built.
  */
-function messageParts(content: readonly ContentBlock[], status: PartStreamStatus | undefined): ContentPart[] {
+function messageParts(
+  content: readonly ContentBlock[],
+  status: PartStreamStatus | undefined,
+  itemId: string,
+): ContentPart[] {
   return content.map((block) =>
     block.type === 'text'
-      ? { type: 'text', text: block.text, ...(status && { status }) }
+      ? { type: 'text', text: block.text, providerMetadata: { mainframe: { itemId } }, ...(status && { status }) }
       : { type: 'image', image: `data:${block.mimeType};base64,${block.data}` },
   );
 }
@@ -137,7 +141,7 @@ function assistantParts(
     if (item.kind === 'message') {
       const status = partStatus(parsed);
       if (status?.type === 'running') streaming = true;
-      parts.push(...messageParts(item.content, status));
+      parts.push(...messageParts(item.content, status, item.id));
       continue;
     }
     if (item.kind === 'thought') {

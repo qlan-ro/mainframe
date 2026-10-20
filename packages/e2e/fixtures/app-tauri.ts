@@ -50,13 +50,18 @@ const TOUR_SUPPRESS = JSON.stringify({ state: { completed: true, step: 4 }, vers
 
 export async function launchTauriApp(opts?: {
   recordingKey?: string;
+  recordingsDir?: string;
+  dataDir?: string;
   suppressTour?: boolean;
+  beforeNavigate?: (page: Page) => Promise<void>;
   mockMaxDelayMs?: number;
   mockFork?: boolean;
   mockSwitch?: boolean;
 }): Promise<TauriAppFixture> {
   const daemonHandle = await startDaemon({
     recordingKey: opts?.recordingKey,
+    recordingsDir: opts?.recordingsDir,
+    dataDir: opts?.dataDir,
     mockMaxDelayMs: opts?.mockMaxDelayMs,
     mockFork: opts?.mockFork,
     mockSwitch: opts?.mockSwitch,
@@ -77,6 +82,7 @@ export async function launchTauriApp(opts?: {
       console.log(`[browser:${message.type()}] ${message.text()}`);
     });
     page.on('pageerror', (error) => console.log(`[browser:pageerror] ${error.message}`));
+    await opts?.beforeNavigate?.(page);
     await page.goto(PREVIEW_BASE, { waitUntil: 'domcontentloaded' });
     await waitConnected(page);
 

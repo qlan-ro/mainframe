@@ -236,7 +236,11 @@ describe('convertAcpItems — subagent nesting', () => {
     expect(transcriptMsg!.role).toBe('assistant');
     expect(transcriptMsg!.id).toBe(`${taskId}:transcript`);
     const transcriptContent = transcriptMsg!.content as ContentPart[];
-    expect(transcriptContent[0]).toEqual({ type: 'text', text: 'still investigating' });
+    expect(transcriptContent[0]).toEqual({
+      type: 'text',
+      providerMetadata: { mainframe: { itemId: 'task-1-message' } },
+      text: 'still investigating',
+    });
     expect(transcriptContent[1]).toMatchObject({
       type: 'tool-call',
       toolCallId: `${taskId}-tool`,

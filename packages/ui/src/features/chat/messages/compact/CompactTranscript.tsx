@@ -51,7 +51,8 @@ export function CompactTranscript() {
       if (target !== chatId) return;
       const presentation = model.messagesById.get(source.messageId);
       for (const unit of presentation?.units ?? []) {
-        if (unit.part.type !== 'tool-call' || unit.part.toolCallId !== source.toolCallId) continue;
+        if (source.toolCallId && (unit.part.type !== 'tool-call' || unit.part.toolCallId !== source.toolCallId))
+          continue;
         if (unit.turnKey) turnDisclosureStore.set(unit.turnKey, 'open');
       }
     };

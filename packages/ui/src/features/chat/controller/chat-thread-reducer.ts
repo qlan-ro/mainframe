@@ -97,6 +97,8 @@ function reduceDelegated(state: ChatThreadState, event: LocalMessageEvent | Envi
 }
 export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEvent): ChatThreadState {
   switch (event.type) {
+    case 'history.window':
+      return { ...state, historyWindow: event.history };
     case 'history.loading':
     case 'history.refresh.refused':
     case 'history.ready':

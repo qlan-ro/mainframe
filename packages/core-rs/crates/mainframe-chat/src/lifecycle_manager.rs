@@ -25,6 +25,7 @@ use crate::title_generator::resolve_title_binary;
 use crate::types::ActiveChat;
 use crate::worktree_offer::WorktreeOfferRegistry;
 
+mod history;
 mod spawn_prep;
 
 /// True when no chat OTHER than `exclude_chat_id` is still active (non-archived)
@@ -761,16 +762,7 @@ impl ChatLifecycleManager {
 
         let history = match composed {
             Some(history) => Some(history),
-            None => session.load_history().await.ok().map(|history| {
-                let remapped: Vec<_> = history
-                    .into_iter()
-                    .map(|mut m| {
-                        m.chat_id = chat_id.to_string();
-                        m
-                    })
-                    .collect();
-                (remapped, 0)
-            }),
+            None => history::load_session_history(chat_id, session.as_ref()).await,
         };
         self.finish_load(chat_id, history).await
     }

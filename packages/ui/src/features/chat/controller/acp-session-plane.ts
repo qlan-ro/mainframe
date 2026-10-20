@@ -1,23 +1,7 @@
-/**
- * The controller's ACP facade plane — transcript, turn state, and gates for
- * ONE chat over the shared per-profile `AcpFacadeClient`. Replaces the four
- * legacy reconnect re-seed paths with `session/resume`:
- *  - `subscribe:ack` re-seed + REST history refresh → `attach()`'s full
- *    replay / `resumeFromGap()`'s cursor replay (both in `acp-session-attachment.ts`);
- *  - queue snapshot → acceptance `_meta` (spec decision 11) + the facade's
- *    `_mainframe.dev/queue_state` snapshots (live changes and post-resume);
- *  - pending-permission recovery → resume redelivery: a live mid-turn gate
- *    and a redelivered one are the same `session/request_permission`, under
- *    the same `gate-{requestId}` correlation id — which is also why the
- *    legacy PermissionReplyTracker died: a reply lost to a dead socket
- *    resurfaces as a redelivered gate on the post-reconnect resume.
- *
- * Owns NO reducer state: it dispatches `ChatStateEvent`s into the host
- * (transcript, run state, permission entries) exactly like the side-band
- * router does, so the reducer stays the single state store.
- */
+import { AcpHistory } from './acp-history';
+import type { HistoryPageResult } from '@qlan-ro/mainframe-types';
 import type { ControlResponse, PromptSendMeta, SessionUpdate } from '@qlan-ro/mainframe-types';
-import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
+import { ItemMetaSchema, MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
 import { TranscriptConverter } from '../view-model/convert-acp-item';
 import type { AccumulatedItem } from '../view-model/acp-item-accumulator';
 import type { ChatStateEvent } from './chat-thread-state';
@@ -30,7 +14,6 @@ import { ResumeCursorTracker } from './acp-resume-cursor';
 
 export type { AcpSessionClientPort } from './acp-session-attachment';
 
-/** The reconcile matcher's input shape (`chat-reconcile.ts`). */
 type ReconcilableUserMessage = { content: Array<{ type: 'text'; text: string }> };
 
 function asReconcilable(text: string): ReconcilableUserMessage {
@@ -49,12 +32,12 @@ export class AcpSessionPlane {
   private readonly store = new AcpTranscriptStore(() => ({
     strictCreation: this.attachment?.currentClient?.mainframeCapabilities?.itemCreationMarkers === true,
   }));
-  /** Owns both the legacy settled-item cursor and the durable revision cursor (todo #377) — see `acp-resume-cursor.ts`. */
   private readonly cursorTracker = new ResumeCursorTracker();
   /** Per-chat conversion cache: a frame re-converts only the container it touched, every other message keeps its identity. */
   private readonly converter = new TranscriptConverter();
   /** Item ids already fed to the reconcile matcher — see `takeUnreconciledUserMessages()`. */
   private readonly reconciledUserItemIds = new Set<string>();
+  readonly history: AcpHistory;
   private readonly attachment: AcpSessionAttachment;
   private readonly gates: AcpGateTracker;
   private readonly runStop: RunStopSettle;
@@ -65,15 +48,34 @@ export class AcpSessionPlane {
       dispatch: (event) => this.host.dispatch(event),
       requireClient: () => this.attachment.requireClient(),
     });
+    this.history = new AcpHistory({
+      chatId: () => this.host.getChatId(),
+      client: () => this.attachment.requireClient(),
+      active: () => this.attachment.canPageHistory && !this.host.isDisposed(),
+      changed: (history) => this.host.dispatch({ type: 'history.window', history }),
+      prepend: (page) => this.prependPage(page),
+      hasItem: (id) =>
+        this.store.accumulator.itemsInOrder.some(
+          (item) =>
+            item.id === id || ItemMetaSchema.safeParse(item.meta?.[MAINFRAME_META_NAMESPACE]).data?.containerId === id,
+        ),
+    });
     this.attachment = new AcpSessionAttachment({
       getChatId: () => this.host.getChatId(),
       dispatch: (event) => this.host.dispatch(event),
       isDisposed: () => this.host.isDisposed(),
       nextReplayFrom: (capabilities) => this.cursorTracker.nextReplayFrom(capabilities),
+      invalidateHistory: () => this.history.invalidate(),
+      historyWindow: (cursor) => this.history.window(cursor),
+      setHistory: (history) => this.history.reset(history),
       resetSettledCursor: () => this.cursorTracker.resetSettledCursor(),
-      clearDurableCursor: () => this.cursorTracker.clearDurableCursor(),
+      clearDurableCursor: () => {
+        this.history.invalidate();
+        this.cursorTracker.clearDurableCursor();
+      },
       advanceCursorFromNotification: (cursor) => this.cursorTracker.advanceFromNotification(cursor),
       resetAccumulator: () => {
+        this.history.invalidate();
         this.store.resetAll();
         // `reconciledUserItemIds` deliberately survives: the replay that
         // refills the accumulator carries the same stable ids, and those
@@ -148,15 +150,7 @@ export class AcpSessionPlane {
     return this.userItems().map(({ text }) => asReconcilable(text));
   }
 
-  /**
-   * The user messages never yet fed to the reconcile matcher, marking them
-   * fed (R3.3, T25). Feeding it the whole history on every
-   * `transcript.updated` let an already-loaded historical duplicate satisfy
-   * a brand-new pending before that pending's own echo arrived. Keyed by the
-   * item's stable id rather than a count, because a replay refills an
-   * emptied accumulator one frame at a time: every count baseline a reset
-   * could take is either stale or lands mid-replay.
-   */
+  // Stable IDs prevent historical duplicates from reconciling a new optimistic send.
   takeUnreconciledUserMessages(): ReconcilableUserMessage[] {
     const fresh: ReconcilableUserMessage[] = [];
     for (const { id, text } of this.userItems()) {
@@ -165,6 +159,21 @@ export class AcpSessionPlane {
       fresh.push(asReconcilable(text));
     }
     return fresh;
+  }
+
+  private prependPage(page: HistoryPageResult): void {
+    const items = this.store.prepend(page.updates ?? []);
+    for (const item of items) {
+      if (item.kind === 'message' && item.role === 'user') this.reconciledUserItemIds.add(item.id);
+    }
+    if (items.length) {
+      window.dispatchEvent(new CustomEvent('mainframe:history-prepend', { detail: this.host.getChatId() }));
+      this.refreshMessages();
+    }
+  }
+
+  get canSearchHistory(): boolean {
+    return this.attachment.currentClient?.mainframeCapabilities?.historySearch === true;
   }
 
   private userItems(): Array<{ id: string; text: string }> {
@@ -224,17 +233,7 @@ export class AcpSessionPlane {
     return this.store.openStage(opts.full);
   }
 
-  /**
-   * `AcpSessionAttachmentHost.completeReplay` — THIS window's own
-   * `replay_complete` arrived normally. A full stage publishes its staged
-   * items in one swap and dispatches `transcript.updated` exactly once, then
-   * reconciles run state and the settled cursor from whatever `state_update`
-   * it captured while staging — against the NOW-published items, never the
-   * pre-replay ones. `store.publish` is a no-op (returns `null`) for a
-   * cursor stage, or a stage that already published/discarded — a cursor
-   * window already dispatched live, frame by frame, and a stale/duplicate
-   * call dispatches nothing.
-   */
+  // A completed full stage publishes before reconciling the run state captured in that stage.
   private completeReplay(stage: ReplayStage): void {
     // Committed before the full-stage-only `publish` early return (todo
     // #377): a cursor stage's `completeReplay` call is otherwise a no-op

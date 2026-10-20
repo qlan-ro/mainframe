@@ -1,5 +1,7 @@
 import {
   MAINFRAME_META_NAMESPACE,
+  PINNED_PROTOCOL_VERSION,
+  type InitializeRequest,
   MainframeCapabilitiesSchema,
   type InitializeResponse,
   type MainframeCapabilities,
@@ -28,4 +30,19 @@ export class AcpCapabilityState {
       this.listeners.delete(listener);
     };
   }
+}
+
+export function initializeRequest(info: { name: string; version: string }): InitializeRequest {
+  return {
+    protocolVersion: PINNED_PROTOCOL_VERSION,
+    info,
+    _meta: {
+      [MAINFRAME_META_NAMESPACE]: {
+        revisionCursors: true,
+        replayResultPreviews: true,
+        compressedReplay: true,
+        windowedHistory: true,
+      },
+    },
+  };
 }

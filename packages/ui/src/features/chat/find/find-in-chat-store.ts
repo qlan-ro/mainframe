@@ -5,9 +5,18 @@ export interface FindMatch {
   partIndex: number;
   charStart: number;
   charEnd: number;
+  itemId?: string;
+  occurrence?: number;
 }
 
-interface FindInChatState {
+export interface FindInChatState {
+  serverTotal: number | null;
+  truncated: boolean;
+  loading: boolean;
+  error: string | null;
+  navigation: number;
+  refresh: number;
+  daemon: boolean;
   isOpen: boolean;
   query: string;
   /** All matches in message order. */
@@ -25,26 +34,43 @@ interface FindInChatState {
 }
 
 export const useFindInChatStore = create<FindInChatState>((set, get) => ({
+  serverTotal: null,
+  truncated: false,
+  loading: false,
+  error: null,
+  navigation: 0,
+  refresh: 0,
+  daemon: false,
   isOpen: false,
   query: '',
   matches: [],
   activeIndex: 0,
 
   open: () => set({ isOpen: true }),
-  close: () => set({ isOpen: false, query: '', matches: [], activeIndex: 0 }),
-  setQuery: (query) => set({ query, activeIndex: 0 }),
+  close: () =>
+    set({
+      isOpen: false,
+      query: '',
+      matches: [],
+      activeIndex: 0,
+      serverTotal: null,
+      truncated: false,
+      loading: false,
+      error: null,
+    }),
+  setQuery: (query) => set({ query, activeIndex: 0, matches: [], serverTotal: null, truncated: false }),
   setMatches: (matches) => set({ matches, activeIndex: 0 }),
   setActiveIndex: (activeIndex) => set({ activeIndex }),
 
   next: () => {
     const { matches, activeIndex } = get();
     if (matches.length === 0) return;
-    set({ activeIndex: (activeIndex + 1) % matches.length });
+    set({ activeIndex: (activeIndex + 1) % matches.length, navigation: get().navigation + 1 });
   },
 
   prev: () => {
     const { matches, activeIndex } = get();
     if (matches.length === 0) return;
-    set({ activeIndex: (activeIndex - 1 + matches.length) % matches.length });
+    set({ activeIndex: (activeIndex - 1 + matches.length) % matches.length, navigation: get().navigation + 1 });
   },
 }));

@@ -1,4 +1,9 @@
-import { MAINFRAME_META_NAMESPACE, RevisionCursorSchema, type RevisionCursor } from '@qlan-ro/mainframe-types';
+import {
+  HistoryStateSchema,
+  MAINFRAME_META_NAMESPACE,
+  RevisionCursorSchema,
+  type RevisionCursor,
+} from '@qlan-ro/mainframe-types';
 import { z } from 'zod';
 import type { ReplayCursor } from '../../../lib/daemon/acp-client';
 import { AcpSessionCapabilities } from './acp-session-capabilities';
@@ -17,26 +22,10 @@ const ResumeMetaSchema = z
     itemCount: z.number().int().optional(),
     fullReplay: z.boolean().optional(),
     cursor: RevisionCursorSchema.optional(),
+    history: HistoryStateSchema.optional(),
   })
   .loose();
 
-/**
- * Connect/replay half of `AcpSessionPlane`: attach, reattach, gap resume,
- * dormancy detach/reactivate, and the empty-refresh guard.
- *
- * Two independent bits of state (D2, todo #350 T33), plus `fullReplay`,
- * which serializes and bounds the re-replays resync/transcript_cleared ask
- * for (T40), and `replay` (the window coordinator, D4), which decides what
- * each resume reply means:
- *  - `client` — bound as soon as a session is loaded, active or not. Prompt/
- *    cancel/reply need only this, so they work from a dormant chat too
- *    (`requireClient()` never checks subscription).
- *  - `subscribed` — whether this session's listeners are wired and it has
- *    told the daemon it's observing (`session/resume`). Only the active
- *    thread stays subscribed; `detach()`/`reactivate()` toggle it without
- *    touching `client`, so a daemon-switch rebind (`bindClient`) survives a
- *    dormant period untouched.
- */
 export class AcpSessionAttachment {
   private client: AcpSessionClientPort | null = null;
   private readonly capabilities = new AcpSessionCapabilities({
@@ -79,6 +68,10 @@ export class AcpSessionAttachment {
     return this.subscribed;
   }
 
+  get canPageHistory(): boolean {
+    return this.subscribed && this.resumePendingCount === 0 && !this.replay.hasOpenWindow();
+  }
+
   /** Capability binding survives dormancy independently of transcript subscriptions. */
   bindClient(client: AcpSessionClientPort): void {
     if (this.client === client) {
@@ -89,6 +82,7 @@ export class AcpSessionAttachment {
       this.detachListeners();
       this.cancelAllReplays();
     }
+    this.host.invalidateHistory?.();
     this.client = client;
     this.capabilities.bind(client);
     this.generation += 1;
@@ -228,6 +222,7 @@ export class AcpSessionAttachment {
 
   /** A detach, dispose, client rebind, or a gap: nothing can close any still-open window again on this binding. */
   private cancelAllReplays(): void {
+    this.host.invalidateHistory?.();
     this.fullReplay.cancel();
     this.replay.cancelAll();
   }
@@ -258,11 +253,15 @@ export class AcpSessionAttachment {
     opts: { bypassGuard?: boolean; suppressBackoffReset?: boolean } = {},
   ): Promise<void> {
     const client = this.requireClient();
+    this.host.invalidateHistory?.();
     const requestGeneration = this.generation;
     const requestConnectionGeneration = client.connectionGeneration;
     this.resumePendingCount += 1;
     try {
-      const response = await client.resume(this.host.getChatId(), '', cursor);
+      const window = client.mainframeCapabilities?.windowedHistory ? this.host.historyWindow?.(cursor) : undefined;
+      const response = window
+        ? await client.resume(this.host.getChatId(), '', cursor, window)
+        : await client.resume(this.host.getChatId(), '', cursor);
       if (requestGeneration !== this.generation) {
         throw new ReplayCancelledError(
           `[acp-session] ${this.host.getChatId()} moved on before the resume reply arrived`,
@@ -284,6 +283,7 @@ export class AcpSessionAttachment {
       // mere reply (a daemon-aborted delivery must not look like success,
       // finding 3), and not a needs-replay-triggered run (closing fine
       // isn't proof the id it was chasing is now known, finding 6).
+      this.host.setHistory?.(meta.success ? meta.data.history : undefined);
       if (!opts.suppressBackoffReset) this.fullReplay.reset();
     } finally {
       this.resumePendingCount -= 1;

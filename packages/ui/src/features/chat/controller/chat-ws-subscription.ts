@@ -29,8 +29,17 @@ export interface ChatWsHost {
 export class ChatWsSubscription {
   private unsubscribeFromWs: (() => void) | null = null;
   private unsubscribeFromConn: (() => void) | null = null;
+  private warm: Promise<void> = Promise.resolve();
 
   constructor(private readonly host: ChatWsHost) {}
+
+  async whenWarm(): Promise<void> {
+    let current: Promise<void>;
+    do {
+      current = this.warm;
+      await current;
+    } while (current !== this.warm);
+  }
 
   attach(): void {
     if (this.unsubscribeFromWs) return;
@@ -61,7 +70,7 @@ export class ChatWsSubscription {
 
   private subscribeAndWarm(): void {
     this.host.ws.subscribe(this.host.chatId);
-    void resumeChat(this.host.port, this.host.chatId).catch((err: unknown) =>
+    this.warm = resumeChat(this.host.port, this.host.chatId).catch((err: unknown) =>
       console.warn('[chat-ws] resumeChat failed', err),
     );
   }
