@@ -217,13 +217,13 @@ test.describe('§transcript — thread turn', () => {
     await expect(input).toBeFocused();
 
     await input.fill('deliberately');
-    await expect(findBar).toContainText('1/12', { timeout: 3_000 });
+    await expect(findBar).toContainText('12/12', { timeout: 3_000 });
 
     await input.press('Enter');
-    await expect(findBar).toContainText('2/12');
+    await expect(findBar).toContainText('1/12');
 
     await input.press('Shift+Enter');
-    await expect(findBar).toContainText('1/12');
+    await expect(findBar).toContainText('12/12');
 
     await input.press('Escape');
     await expect(findBar).toBeHidden();

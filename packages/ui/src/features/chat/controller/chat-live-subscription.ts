@@ -26,6 +26,14 @@ export class ChatLiveSubscription {
 
   constructor(private readonly host: ChatLiveSubscriptionHost) {}
 
+  async whenWarm(): Promise<void> {
+    let current: ChatWsSubscription | null;
+    do {
+      current = this.wsSub;
+      await current?.whenWarm();
+    } while (current !== this.wsSub);
+  }
+
   subscribe(): () => void {
     if (this.host.isLocalOnly()) return () => {};
     this.liveRefs += 1;

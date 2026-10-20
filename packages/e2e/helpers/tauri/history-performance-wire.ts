@@ -3,6 +3,7 @@ import { inflateSync } from 'node:zlib';
 
 export class HistoryPerformanceWire {
   readonly replaysCompleted = new Map<string, number>();
+  readonly resumeRequests = new Map<string, number>();
   resumeBytes = 0;
 
   constructor(readonly legacy: false | 'full' | 'uncompressed') {}
@@ -32,6 +33,12 @@ export class HistoryPerformanceWire {
     const cdp = await page.context().newCDPSession(page);
     cdp.on('Network.webSocketFrameReceived', ({ response }) => {
       if (response.opcode === 1) this.receive(response.payloadData);
+    });
+    cdp.on('Network.webSocketFrameSent', ({ response }) => {
+      if (response.opcode !== 1) return;
+      const frame = JSON.parse(response.payloadData) as { method?: string; params?: { sessionId?: string } };
+      const id = frame.params?.sessionId;
+      if (frame.method === 'session/resume' && id) this.resumeRequests.set(id, (this.resumeRequests.get(id) ?? 0) + 1);
     });
     await cdp.send('Network.enable');
   }

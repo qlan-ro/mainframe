@@ -73,7 +73,7 @@ test.describe('windowed transcript history', () => {
 
   test('find counts the whole chat, loads through on step, and excludes tool output', async () => {
     const page = app.page;
-    await page.keyboard.press('Meta+f');
+    await page.keyboard.press('ControlOrMeta+f');
     await page.getByTestId('thread-find-input').fill('ancient landmark');
     await expect(page.getByTestId('find-bar')).toContainText('1/1');
     expect(wire.pageRequests).toBe(0);

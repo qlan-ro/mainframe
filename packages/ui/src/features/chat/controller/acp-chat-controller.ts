@@ -80,14 +80,14 @@ export class AcpChatController {
       dispatch: (event) => this.dispatch(event),
       resolveClient: (profile) => this.resolveClient(profile),
       bindPlane: (client) => this.plane.bindClient(client),
-      reactivatePlane: (client) => this.plane.reactivate(client),
+      reactivatePlane: (client) => this.reactivatePlane(client),
     });
     this.activation = new ChatActivation({
       isLocalOnly: () => this.isLocalOnly(),
       isReady: () => this.state.loadState.type === 'ready',
       getClient: () => this.loader.getClient(),
       load: () => this.load(),
-      reactivatePlane: (client) => this.plane.reactivate(client),
+      reactivatePlane: (client) => this.reactivatePlane(client),
       detachPlane: () => this.plane.detach(),
     });
     this.liveSub = new ChatLiveSubscription({
@@ -103,6 +103,13 @@ export class AcpChatController {
 
   loadEarlier(untilItemId?: string): Promise<boolean> {
     return this.plane.history.load(untilItemId);
+  }
+
+  private async reactivatePlane(client: AcpClientHandle): Promise<void> {
+    // Lifecycle restore can emit a resync; finish it before opening the replay.
+    await this.liveSub.whenWarm();
+    if (this.disposed || !this.activation.isActive || this.loader.getClient() !== client) return;
+    await this.plane.reactivate(client);
   }
   searchHistory(query: string) {
     return this.plane.history.search(query);

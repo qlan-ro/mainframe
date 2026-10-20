@@ -60,9 +60,9 @@ function historyLoadMs(dataDir: string, chatId: string): number {
 
 async function pageAndPopulate(page: Page): Promise<number> {
   const viewport = page.getByTestId('chat-thread-viewport');
-  await viewport.focus();
+  await viewport.hover();
   await armHistoryPaint(page, '[data-testid="chat-thread-viewport"]', 'page');
-  await page.keyboard.press('Home');
+  await page.mouse.wheel(0, -100_000);
   await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
   const duration = await historyPaintMs(page);
   for (let users = 60; users <= 200; users += 20) {
@@ -109,6 +109,14 @@ async function launchMeasurement(seed: Seed, dataDir: string, wire: HistoryPerfo
     recordingsDir: seed.recordingsDir,
     beforeNavigate: async (page) => {
       other = await createHeadlessChat(seed.project.projectId);
+      await page.addInitScript(
+        (id) =>
+          localStorage.setItem(
+            'mf:last-session::local',
+            JSON.stringify({ state: { lastSessionId: id, lastByProject: {} }, version: 2 }),
+          ),
+        other,
+      );
       await wire.install(page);
       await installHistoryPaintProbe(page);
       if (warm) {
@@ -138,8 +146,11 @@ export async function measureHistory(
     await expect(app.page.getByTestId('chat-user-message')).toHaveCount(0);
     await expect(app.page.getByTestId('chat-thread-loading')).toHaveCount(0);
     await painted(app.page);
+    expect(wire.resumeRequests.get(seed.chatId) ?? 0).toBe(0);
+    if (!warm) expect(() => historyLoadMs(dataDir, seed.chatId)).toThrow('Missing daemon history_load_ms');
     wire.resumeBytes = 0;
     const openMs = await openChat(app.page, seed.chatId, wire);
+    expect(wire.resumeRequests.get(seed.chatId)).toBe(1);
     const bytes = wire.resumeBytes;
     const otherCompleted = wire.replaysCompleted.get(other) ?? 0;
     await sessionsSidebar(app.page).row(other).click();

@@ -82,7 +82,7 @@ test.describe('windowed history lifecycle', () => {
     await page.getByTestId('chat-load-earlier').click();
     await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
     await expect(page.getByTestId(testId!)).toHaveAttribute('aria-expanded', 'true');
-    await page.keyboard.press('Meta+f');
+    await page.keyboard.press('ControlOrMeta+f');
     await page.getByTestId('thread-find-input').fill('Tool summary 2/0');
     await expect(page.getByTestId('find-bar')).toContainText('1/1');
     await page.getByTestId('thread-find-next').click();

@@ -108,11 +108,11 @@ export function useChatThreadRuntime(
   // actually detaches in the common case.
   const active = opts?.active ?? false;
   useEffect(() => {
+    const stopLive = active ? controller.subscribeLive() : undefined;
     controller.setActive(active);
     if (!active) return;
-    const stopLive = controller.subscribeLive();
     return () => {
-      stopLive();
+      stopLive?.();
       controller.setActive(false);
     };
   }, [controller, active]);

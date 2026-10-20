@@ -35,7 +35,7 @@ export async function installHistoryPaintProbe(page: Page): Promise<void> {
         );
       },
     };
-    for (const name of ['click', 'keydown'])
+    for (const name of ['click', 'keydown', 'wheel'])
       window.addEventListener(name, (event) => window.historyPaintProbe.begin?.(event), true);
     const NativeSocket = window.WebSocket;
     window.WebSocket = class extends NativeSocket {
@@ -59,7 +59,7 @@ export async function installHistoryPaintProbe(page: Page): Promise<void> {
 export async function armHistoryPaint(page: Page, selector: string, kind: PaintKind): Promise<void> {
   await page.locator(selector).evaluate((element, kind) => {
     const probe = window.historyPaintProbe;
-    const eventType = kind === 'open' ? 'click' : 'keydown';
+    const eventType = kind === 'open' ? 'click' : kind === 'page' ? 'wheel' : 'keydown';
     probe.measured = new Promise<number>((resolve, reject) => {
       const timeout = setTimeout(
         () => reject(new Error(`No painted ${kind} within 30 seconds`)),

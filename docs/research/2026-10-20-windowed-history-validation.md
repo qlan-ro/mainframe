@@ -21,6 +21,8 @@ Native WebKit QA used an isolated packaged app, data directory, mock adapter and
 
 QA found and fixed a 16 px jump when the Earlier button became a shorter Loading row. The boundary now keeps a 48 px minimum height. The browser regression checks the anchor before loading, during loading and after prepend. A real-component test verifies that find opens a closed provider work turn; the mock replay lacks the presentation metadata needed for that assertion.
 
+Cold opening also exposed concurrent REST lifecycle restore and ACP replay: the restore's resync requested a second replay. Both fresh and previously background-loaded controllers now finish lifecycle warm-up before attaching the facade, then recheck activation and client identity. The 370-test controller suite passes, including restore failure and deactivation during warm-up. The focused browser run passed 26 scenarios with four existing skips.
+
 Screenshots and the scenario report are retained under `/tmp/live-qa/windowed-history-20261020`. GitHub attachment upload requires Chrome extension file access, which was not expanded. No native live-stream reconnect is claimed: runtime reconnect used an idle chat; Rust tests cover in-flight page/live ordering. The run-owned native processes were stopped.
 
 ## Reference measurement
@@ -28,6 +30,8 @@ Screenshots and the scenario report are retained under `/tmp/live-qa/windowed-hi
 The release-mode protocol fixture has 500 containers, 2,500 items and a 33,417,541-byte full encoding. A local preparation measurement recorded 30.35 ms for the one-time revision seed and 2.12 ms for window preparation, producing 1,447,261 uncompressed window bytes. These are protocol preparation figures, not click-to-paint timings. The seed is below the 150 ms relocation threshold locally.
 
 The browser harness runs 10 fresh daemons per scenario for windowed, current full and uncompressed full replay. Memory rows warm history before the measured click; JSONL rows remove history snapshots. Each run clones the fixture database and removes copied logs.
+
+The initial session is a separate empty chat. Before the measured click, the harness asserts no resume request has targeted the reference chat and no cold history-load log exists; opening must issue exactly one resume.
 
 Input timing starts at window-capture keydown or row click, before application handlers. Completion requires the measured chat's replay marker, the visible tail, no loading spinner and two animation frames. Wire measurement observes native WebSocket delivery passively; only legacy initialization options are changed. Raw samples are attached to the Playwright report and printed in the job log.
 
