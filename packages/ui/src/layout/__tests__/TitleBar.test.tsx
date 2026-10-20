@@ -3,8 +3,8 @@
  *
  * D1/D2/D6: the 48px strip spanning the window, the ONE drag region, in
  * normal flow (nothing `fixed`). Four sections: the 80px traffic-light
- * reserve, the usage capsule, the sidebar section
- * (`calc(56px + var(--sidebar-width) - 80px - 176px)`, collapsing to 0), and
+ * reserve, the usage capsule (filling the sidebar's width while open, 176px
+ * collapsed), the 12px sidebar section (collapsing to 0), and
  * the chat column (session tabs + right cluster). The surface toggle pill
  * lives in the chat column's right cluster.
  */
@@ -36,17 +36,19 @@ describe('TitleBar — drag region', () => {
   });
 });
 
-describe('TitleBar — sidebar section width', () => {
-  it('sizes the sidebar section to end on the sidebar edge, net of the lights and the capsule, while open', () => {
+describe('TitleBar — capsule and sidebar section widths', () => {
+  it('sizes the capsule and the sidebar section to end on the sidebar edge while open', () => {
     renderBar(true);
     const section = screen.getByTestId('title-bar-sidebar-section');
-    expect(section.style.width).toBe('calc(56px + var(--sidebar-width) - 80px - 176px)');
+    expect(screen.getByTestId('usage-capsule').style.width).toBe('calc(56px + var(--sidebar-width) - 80px - 12px)');
+    expect(section.style.width).toBe('12px');
     expect(section).not.toHaveAttribute('data-collapsed');
   });
 
-  it('collapses the sidebar section to 0 while closed', () => {
+  it('collapses the sidebar section to 0 and the capsule to 176px while closed', () => {
     renderBar(false);
     const section = screen.getByTestId('title-bar-sidebar-section');
+    expect(screen.getByTestId('usage-capsule').style.width).toBe('176px');
     expect(section.style.width).toBe('0px');
     expect(section).toHaveAttribute('data-collapsed', '');
   });

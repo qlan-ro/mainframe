@@ -7,12 +7,12 @@
  * Four sections, left to right:
  *   [80px traffic lights] — the native cluster; `trafficLightPosition.y` is
  *     tuned to centre on this row (22 for SDK ≤ 15 builds, 26 patched for dev).
- *   [usage capsule] — the plan-quota capsule, 176px, in every view and
- *     whether or not the sidebar is open.
- *   [sidebar section] — `calc(56px + var(--sidebar-width) − 80px − 176px)`:
- *     the rail (56) and the sidebar sit under the lights and the capsule, so
- *     the 1px rule at the end of this section lands on the sidebar's right
- *     edge. Collapsed, it is 0 wide.
+ *   [usage capsule] — the plan-quota capsule, in every view. Open, it fills
+ *     `calc(56px + var(--sidebar-width) − 80px − 12px)`: the rail (56) and
+ *     the sidebar sit under the lights and the capsule, so it runs to the
+ *     sidebar's edge less the sidebar section. Collapsed, it is 176px.
+ *   [sidebar section] — 12px while open, ending in a 1px rule that lands on
+ *     the sidebar's right edge. Collapsed, it is 0 wide.
  *   [chat column] — the session tabs, then search and surface toggles.
  *     Collapsed, the show-sidebar button anchors to its left edge.
  *
@@ -23,7 +23,7 @@
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useSidebar } from '@/components/ui/sidebar';
-import { UsageCapsule } from '@/features/quota/UsageCapsule';
+import { USAGE_CAPSULE_WIDTH, UsageCapsule } from '@/features/quota/UsageCapsule';
 import { SessionTabs } from '@/features/session-tabs/SessionTabs';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { TitleBarActions } from './TitleBarActions';
@@ -33,11 +33,11 @@ import { SidebarLeftGlyph } from './surface-icons';
 export const TRAFFIC_LIGHTS_WIDTH = 80;
 /** `NavRail`'s width — the sidebar starts this far in. */
 export const NAV_RAIL_WIDTH = 56;
-/** The usage capsule's width (`w-44`); it fits the narrowest sidebar (208px) with room for the rule. */
-export const USAGE_CAPSULE_WIDTH = 176;
+/** The sidebar section's width while the sidebar is open: the gap between the capsule and the rule. */
+export const SIDEBAR_SECTION_WIDTH = 12;
 
-/** The sidebar section's width while the sidebar is open: it ends on the sidebar's right edge. */
-export const SIDEBAR_SECTION_WIDTH = `calc(${NAV_RAIL_WIDTH}px + var(--sidebar-width) - ${TRAFFIC_LIGHTS_WIDTH}px - ${USAGE_CAPSULE_WIDTH}px)`;
+/** The capsule's width while the sidebar is open: everything over the sidebar except the sidebar section. */
+export const OPEN_USAGE_CAPSULE_WIDTH = `calc(${NAV_RAIL_WIDTH}px + var(--sidebar-width) - ${TRAFFIC_LIGHTS_WIDTH}px - ${SIDEBAR_SECTION_WIDTH}px)`;
 
 export function TitleBar() {
   const { open, setOpen } = useSidebar();
@@ -48,7 +48,7 @@ export function TitleBar() {
   return (
     <div data-testid="title-bar" data-drag-region className="flex h-12 shrink-0 items-center bg-sidebar">
       <div aria-hidden className="shrink-0" style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
-      <UsageCapsule />
+      <UsageCapsule width={open ? OPEN_USAGE_CAPSULE_WIDTH : USAGE_CAPSULE_WIDTH} />
 
       <div
         data-testid="title-bar-sidebar-section"

@@ -29,9 +29,9 @@ export const QUOTA_PROVIDERS: readonly { id: string; label: string }[] = [
   { id: 'codex', label: 'Codex' },
 ];
 
-/** The two-letter window tag the capsule shows beside the provider dot. */
-export function windowTag(kind: QuotaWindow['kind']): string {
-  return kind === 'session' ? '5h' : 'wk';
+/** The window name the capsule shows after the provider name: the popover label without its `·`, since the capsule's own dot already sits before it. */
+export function capsuleWindowName(window: QuotaWindow): string {
+  return window.kind === 'weekly-model' ? `Weekly ${window.label ?? 'model'}` : windowLabel(window);
 }
 
 /**
@@ -45,7 +45,8 @@ export interface CapsuleItemVm {
   providerId: string;
   providerLabel: string;
   kind: QuotaWindow['kind'];
-  tag: string;
+  /** "Weekly Fable" — the label the capsule row shows. */
+  name: string;
   label: string;
   usedPercent: number;
   severity: QuotaSeverity;
@@ -67,7 +68,7 @@ export function deriveCapsuleItems(byId: Record<string, ProviderQuota | undefine
           providerId: provider.id,
           providerLabel: provider.label,
           kind: window.kind,
-          tag: windowTag(window.kind),
+          name: capsuleWindowName(window),
           label,
           usedPercent: window.usedPercent,
           severity: severityOf(window.usedPercent),
