@@ -134,7 +134,7 @@ fn convert_assistant_message(
     let (mut content, mut sources) =
         super::display_assistant::convert_assistant_with_sources(msg, categories, decoders);
     if let Some(cats) = categories {
-        let grouped = apply_tool_grouping(content.clone(), cats);
+        let grouped = apply_tool_grouping(&content, cats);
         sources = super::presentation_display::regroup(&content, &grouped, sources);
         content = grouped;
     }

@@ -7,15 +7,16 @@ use mainframe_types::display::{
 };
 
 pub fn apply_tool_grouping(
-    content: Vec<DisplayContent>,
+    content: impl AsRef<[DisplayContent]>,
     categories: &ToolCategories,
 ) -> Vec<DisplayContent> {
+    let content = content.as_ref();
     let parts: Vec<PartEntry> = content.iter().map(display_content_to_part).collect();
 
     let grouped = group_tool_call_parts(&parts, categories);
     let grouped = group_task_children(&grouped, categories);
 
-    convert_grouped_parts_to_display(&grouped, &content, categories)
+    convert_grouped_parts_to_display(&grouped, content, categories)
 }
 
 fn display_content_to_part(c: &DisplayContent) -> PartEntry {

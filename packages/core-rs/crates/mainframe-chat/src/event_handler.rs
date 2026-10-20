@@ -29,12 +29,12 @@ use crate::message_cache::MessageCache;
 use crate::permission_manager::{CancelOutcome, PermissionManager};
 use crate::types::ActiveChat;
 use crate::worktree_offer::WorktreeOfferRegistry;
-use display_projection::streaming_leaf_kind;
 use partial_overlay::PartialOverlays;
 use worktree_tool::{creates_worktree, moves_transcript};
 
 pub(crate) mod display_projection;
 mod partial_overlay;
+mod resume_snapshot;
 mod worktree_tool;
 
 const PUSH_BODY_MAX_LENGTH: usize = 200;
@@ -159,50 +159,6 @@ impl EventHandler {
     /// a snapshot taken mid-stream can project it through the identical step.
     pub fn current_overlay_message(&self, chat_id: &str) -> Option<ChatMessage> {
         self.partial_overlays.message_for(chat_id)
-    }
-
-    /// The resume-snapshot read: bring the chat's projection current the same
-    /// way a live emission does, but without notifying — any non-empty delta
-    /// this produces is stashed as the slot's pending delta and merged into the
-    /// next live emission (`MessageCache::display_snapshot`). Returns the
-    /// materialized container list and the overlay's streaming kind, if any.
-    ///
-    /// `raw` is the caller's own freshly-read history (`ChatManager::get_messages`'s
-    /// return), not re-derived from the cache: a cold load past `MAX_CHATS`
-    /// can evict its own cache entry again immediately
-    /// (`history_eviction.rs`), and the snapshot must still reflect what was
-    /// just loaded.
-    pub fn display_snapshot(
-        &self,
-        chat_id: &str,
-        raw: &[ChatMessage],
-    ) -> (Vec<DisplayMessage>, Option<StreamingLeafKind>) {
-        self.read_display_snapshot(chat_id, raw, |messages, streaming| {
-            (messages.to_vec(), streaming)
-        })
-    }
-
-    pub fn read_display_snapshot<R>(
-        &self,
-        chat_id: &str,
-        raw: &[ChatMessage],
-        read: impl FnOnce(&[DisplayMessage], Option<StreamingLeafKind>) -> R,
-    ) -> R {
-        let categories = self.shared.deps.get_tool_categories(chat_id);
-        let overlay = self.partial_overlays.message_for(chat_id);
-        self.messages.lock_recover().read_display_snapshot(
-            chat_id,
-            raw,
-            overlay.as_ref(),
-            categories.as_ref(),
-            || self.shared.deps.display_projector(chat_id),
-            |messages| {
-                let streaming = overlay
-                    .as_ref()
-                    .and_then(|overlay| streaming_leaf_kind(Some(overlay), messages.last()));
-                read(messages, streaming)
-            },
-        )
     }
 }
 

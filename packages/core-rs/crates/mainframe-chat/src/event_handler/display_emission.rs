@@ -1,3 +1,4 @@
+use super::display_projection::streaming_leaf_kind;
 use super::*;
 
 /// Shared `emitDisplay` used by both `EventHandler::emit_display` and the

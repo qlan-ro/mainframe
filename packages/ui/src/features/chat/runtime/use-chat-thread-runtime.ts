@@ -21,7 +21,7 @@ import { createAttachmentAdapter } from '../composer/attachment-adapter';
 export const CHAT_ATTACHMENT_ADAPTER = createAttachmentAdapter();
 const ATTACHMENT_ADAPTER = CHAT_ATTACHMENT_ADAPTER;
 import type { AppendMessage, AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { AcpChatController } from '../controller/acp-chat-controller';
 import type { ChatThreadState } from '../controller/chat-thread-state';
 import { TranscriptProjector } from '../controller/transcript-projector';
@@ -107,7 +107,7 @@ export function useChatThreadRuntime(
   // safety net); the cleanup path (deactivation, or unmount) is what
   // actually detaches in the common case.
   const active = opts?.active ?? false;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const stopLive = active ? controller.subscribeLive() : undefined;
     controller.setActive(active);
     if (!active) return;

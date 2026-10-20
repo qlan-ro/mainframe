@@ -85,16 +85,20 @@ pub(crate) fn refold_start(groups: &[Group], r: usize) -> usize {
 
 /// The raw slice an incremental call must (re)fold: `raw[start..]` plus a
 /// synthetic overlay tail, if present.
-pub(crate) fn combined_tail(
-    raw: &[mainframe_types::chat::ChatMessage],
+pub(crate) fn combined_tail<'a>(
+    raw: &'a [mainframe_types::chat::ChatMessage],
     start: usize,
     overlay: Option<&mainframe_types::chat::ChatMessage>,
-) -> Vec<mainframe_types::chat::ChatMessage> {
-    let mut combined = raw[start.min(raw.len())..].to_vec();
-    if let Some(overlay) = overlay {
-        combined.push(overlay.clone());
+) -> std::borrow::Cow<'a, [mainframe_types::chat::ChatMessage]> {
+    let tail = &raw[start.min(raw.len())..];
+    match overlay {
+        None => std::borrow::Cow::Borrowed(tail),
+        Some(overlay) => {
+            let mut combined = tail.to_vec();
+            combined.push(overlay.clone());
+            std::borrow::Cow::Owned(combined)
+        }
     }
-    combined
 }
 
 /// Tool ids owned by the groups about to be discarded (`groups[r..]`) —
