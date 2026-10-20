@@ -29,7 +29,12 @@ export function DaemonFind() {
     };
   }, [chatId, enabled]);
   useDaemonSearch(enabled, chatId, revision, extras?.searchHistory);
-  useDaemonStep(enabled, chatId, extras?.loadEarlier);
+  useDaemonStep(
+    enabled,
+    chatId,
+    extras?.loadEarlier,
+    messages.map((message) => message.id),
+  );
   return null;
 }
 
@@ -99,14 +104,17 @@ function useDaemonStep(
   enabled: boolean,
   chatId: string | undefined,
   load: ((target?: string) => Promise<boolean>) | undefined,
+  messageIds: string[],
 ) {
   const { isOpen, query, matches, activeIndex, navigation } = useFindInChatStore();
   const [paint, setPaint] = useState(0);
   const lastNavigation = useRef(navigation);
   const loadRef = useRef(load);
+  const heldIds = useRef(messageIds);
   useEffect(() => {
     loadRef.current = load;
-  }, [load]);
+    heldIds.current = messageIds;
+  }, [load, messageIds]);
   useEffect(() => {
     if (navigation === lastNavigation.current) return;
     lastNavigation.current = navigation;
@@ -116,6 +124,7 @@ function useDaemonStep(
     void revealMatch(
       chatId,
       match,
+      heldIds.current.includes(match.messageId),
       loadRef.current,
       () => cancelled,
       () => setPaint((value) => value + 1),
@@ -156,13 +165,14 @@ function applySearchResult(result: HistorySearchResult, chatId: string | undefin
 async function revealMatch(
   chatId: string,
   match: FindMatch,
+  loaded: boolean,
   load: ((target?: string) => Promise<boolean>) | undefined,
   isCancelled: () => boolean,
   paint: () => void,
 ) {
   useFindInChatStore.setState({ loading: true, error: null });
   try {
-    if (!messageElement(chatId, match.messageId) && !(await load?.(match.itemId))) {
+    if (!loaded && !messageElement(chatId, match.messageId) && !(await load?.(match.itemId))) {
       useFindInChatStore.setState((state) => ({ refresh: state.refresh + 1 }));
       return;
     }

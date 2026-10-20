@@ -11,7 +11,8 @@
  * pass the plain-text length source separately from the rendered `children`.
  * A `ui/` primitive — must not import from `features/`.
  */
-import { useState, type ReactNode, type CSSProperties, type HTMLAttributes } from 'react';
+import { type ReactNode, type CSSProperties, type HTMLAttributes } from 'react';
+import { useRetainedValue } from './disclosure-state';
 import { ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -48,7 +49,7 @@ export function ReadMore({
   testId,
   contentProps,
 }: ReadMoreProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useRetainedValue(`read-more:${testId}`, false);
   const needsToggle = measureText.length > threshold;
   const collapsed = needsToggle && !expanded;
 
@@ -71,22 +72,28 @@ export function ReadMore({
       )}
 
       {needsToggle && (
-        <button
-          data-testid={testId}
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="inline-flex items-center gap-2 text-xs font-semibold text-primary hover:underline"
-          aria-label={expanded ? 'Show less' : 'Read more'}
-          aria-expanded={expanded}
-        >
-          {expanded ? 'Show less' : 'Read more'}
-          {expanded ? (
-            <ChevronsUpDown size={12} className="text-primary" />
-          ) : (
-            <ChevronDown size={12} className="text-primary" />
-          )}
-        </button>
+        <ReadMoreToggle expanded={expanded} testId={testId} onToggle={() => setExpanded((value) => !value)} />
       )}
     </div>
+  );
+}
+
+function ReadMoreToggle({ expanded, testId, onToggle }: { expanded: boolean; testId: string; onToggle: () => void }) {
+  return (
+    <button
+      data-testid={testId}
+      type="button"
+      onClick={onToggle}
+      className="inline-flex items-center gap-2 text-xs font-semibold text-primary hover:underline"
+      aria-label={expanded ? 'Show less' : 'Read more'}
+      aria-expanded={expanded}
+    >
+      {expanded ? 'Show less' : 'Read more'}
+      {expanded ? (
+        <ChevronsUpDown size={12} className="text-primary" />
+      ) : (
+        <ChevronDown size={12} className="text-primary" />
+      )}
+    </button>
   );
 }

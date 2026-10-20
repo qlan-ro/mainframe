@@ -9,15 +9,22 @@
  * The adapter is memoized by port so a stable identity survives re-renders
  * (a fresh adapter each render would churn the remote-list machinery).
  */
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo } from 'react';
 import { useRemoteThreadListRuntime } from '@assistant-ui/react';
 import type { AssistantRuntime } from '@assistant-ui/react';
 import { makeChatsRemoteAdapter } from './chats-remote-adapter';
 import { useChatRuntimeHook } from './use-chat-runtime-hook';
 import { useDaemonPort } from './daemon-port-context';
+import { chatControllerRegistry } from './chat-controller-registry';
+import { subscribeSelectedChat } from './selected-chat-activation';
 
 export function useSessionsThreadList(): AssistantRuntime {
   const port = useDaemonPort();
   const adapter = useMemo(() => makeChatsRemoteAdapter(port), [port]);
-  return useRemoteThreadListRuntime({ runtimeHook: useChatRuntimeHook, adapter });
+  const runtime = useRemoteThreadListRuntime({ runtimeHook: useChatRuntimeHook, adapter });
+  useLayoutEffect(
+    () => subscribeSelectedChat(runtime.threads, (id) => chatControllerRegistry.get(id)),
+    [runtime.threads],
+  );
+  return runtime;
 }

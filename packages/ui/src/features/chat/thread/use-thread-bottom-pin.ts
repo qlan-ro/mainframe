@@ -1,5 +1,5 @@
 import { captureReadingAnchor, restoreReadingAnchor, type ReadingAnchor } from './reading-anchor';
-import { useCallback, useEffect, useLayoutEffect, useRef, type RefCallback } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefCallback } from 'react';
 
 function createPinState() {
   return {
@@ -56,12 +56,24 @@ function trackReadingPosition(element: HTMLDivElement, state: PinState, followGr
   if (element.clientHeight && !state.pinned) state.anchor = captureReadingAnchor(element, state.anchor);
 }
 
+function scrollToBoundary(element: HTMLDivElement, state: PinState, event: KeyboardEvent) {
+  if (event.defaultPrevented || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key !== 'Home' && event.key !== 'End') return;
+  event.preventDefault();
+  if (state.frame !== null) cancelAnimationFrame(state.frame);
+  state.frame = null;
+  state.pinned = event.key === 'End';
+  state.anchor = null;
+  element.scrollTop = state.pinned ? element.scrollHeight : 0;
+}
+
 /** Marks wheel, touch, scroll-key and scrollbar-drag input so their scroll events may unpin. */
 function trackUserScroll(element: HTMLDivElement, state: PinState) {
   const mark = (event: Event) => {
     if (event.type === 'keydown' && (event.target as Element).closest('input, textarea, [contenteditable="true"]'))
       return;
     state.userScrollUntil = performance.now() + 300;
+    if (event instanceof KeyboardEvent) scrollToBoundary(element, state, event);
   };
   // Only the scrollbar itself targets the viewport; content clicks target content.
   const startDrag = (event: PointerEvent) => {
@@ -104,12 +116,17 @@ function trackScroll(
   trackReadingPosition(element, state);
 }
 
-function usePinObservers(viewportElement: React.RefObject<HTMLDivElement | null>, state: React.RefObject<PinState>) {
+function usePinObservers(
+  viewportElement: React.RefObject<HTMLDivElement | null>,
+  state: React.RefObject<PinState>,
+  setViewport: (element: HTMLDivElement | null) => void,
+) {
   const viewportRef: RefCallback<HTMLDivElement> = useCallback(
     (element) => {
       state.current.removeScroll?.();
       if (viewportElement.current) state.current.observer?.unobserve(viewportElement.current);
       viewportElement.current = element;
+      setViewport(element);
       if (!element) return;
       state.current.observer?.observe(element);
       const track = () => {
@@ -123,7 +140,7 @@ function usePinObservers(viewportElement: React.RefObject<HTMLDivElement | null>
         stopUserScrollTracking();
       };
     },
-    [state, viewportElement],
+    [state, viewportElement, setViewport],
   );
   const contentRef: RefCallback<HTMLDivElement> = useCallback(
     (element) => {
@@ -161,6 +178,7 @@ function useFooterObserver(state: React.RefObject<PinState>) {
 
 export function useThreadBottomPin(threadId: string | null) {
   const viewportElement = useRef<HTMLDivElement | null>(null);
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
   const state = useRef(createPinState());
   const pinnedThread = useRef(threadId);
   if (pinnedThread.current !== threadId) {
@@ -169,9 +187,10 @@ export function useThreadBottomPin(threadId: string | null) {
     pinnedThread.current = threadId;
     resetPin(state.current);
   }
-  const refs = usePinObservers(viewportElement, state);
+  const refs = usePinObservers(viewportElement, state, setViewport);
   const footerRef = useFooterObserver(state);
   const isFollowing = useCallback(() => state.current.pinned && state.current.locks === 0, []);
+  const isInteracting = useCallback(() => state.current.locks > 0, []);
   const beginInteraction = useCallback(() => {
     state.current.anchor = null;
     state.current.locks++;
@@ -200,5 +219,5 @@ export function useThreadBottomPin(threadId: string | null) {
       if (current.frame !== null) cancelAnimationFrame(current.frame);
     };
   }, []);
-  return { ...refs, footerRef, viewportElement, beginInteraction, isFollowing };
+  return { ...refs, footerRef, viewportElement, viewport, beginInteraction, isFollowing, isInteracting };
 }

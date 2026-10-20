@@ -113,9 +113,11 @@ test.describe('§ADR stress matrix — combined run', () => {
 
     // Scroll up so we are NOT at-bottom, then sever mid-stream.
     const viewport = page.locator('[data-testid="chat-thread-viewport"]');
-    await viewport.evaluate((el) => {
-      el.scrollTop = 0;
-    });
+    await viewport.hover();
+    await page.mouse.wheel(0, -100_000);
+    await expect
+      .poll(() => viewport.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
+      .toBeGreaterThan(4);
     const midStream = ws.facadeConnectionCount();
     ws.drop();
     await waitForFacadeReconnect(page, ws, midStream);
@@ -172,11 +174,13 @@ test.describe('§ADR stress matrix — combined run', () => {
     // 6 top-level sends. The subagent's prompt also renders as a `chat-user-message` — but
     // NESTED inside the Task card (part of the subagent transcript), so it is excluded here
     // and asserted in its place explicitly.
-    await expect(page.locator('[data-testid="chat-user-message"]:not([data-testid="chat-task-card"] *)')).toHaveCount(
-      6,
-    );
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-user-count', '6');
     await expect(taskCard.locator('[data-testid="chat-user-message"]')).toHaveCount(1);
+    await page.keyboard.press('ControlOrMeta+f');
     for (const text of ['Reply one', 'Reply two', 'Reply three', 'SUBAGENT-DONE', 'STREAM-COMPLETE', 'DEDUP-ACK']) {
+      await page.getByTestId('thread-find-input').fill(text);
+      await expect(page.getByTestId('find-bar')).toContainText('1/1');
+      await page.getByTestId('thread-find-next').click();
       await expect(page.getByText(text, { exact: false })).toHaveCount(1);
     }
     // The four legacy re-seed paths collapsed into resume replay: history never rides

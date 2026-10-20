@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ReactNode } from 'react';
 
 // ── assistant-ui primitives → identifiable stub wrappers ─────────────────────
-vi.mock('../ProgressiveMessages', () => ({ ProgressiveMessages: () => <div data-testid="tp-messages" /> }));
+vi.mock('../VirtualMessages', () => ({ VirtualMessages: () => <div data-testid="tp-messages" /> }));
 vi.mock('@assistant-ui/react', () => {
   return {
     ThreadPrimitive: {

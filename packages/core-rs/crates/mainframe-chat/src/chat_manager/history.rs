@@ -227,6 +227,10 @@ impl ChatManager {
             Option<mainframe_types::adapter::ControlRequest>,
         ) -> R,
     ) -> R {
+        let read = match self.try_read_cached_resume(chat_id, read).await {
+            Ok(result) => return result,
+            Err(read) => read,
+        };
         let raw = self.get_messages(chat_id).await;
         if let Some(mut chat) = self.get_chat(chat_id) {
             self.reconcile_transcript(&mut chat).await;
@@ -236,6 +240,31 @@ impl ChatManager {
             .read_display_snapshot(chat_id, &raw, |messages, streaming| {
                 read(messages, streaming, pending)
             })
+    }
+
+    async fn try_read_cached_resume<R, F>(&self, chat_id: &str, read: F) -> Result<R, F>
+    where
+        F: FnOnce(
+            &[mainframe_types::display::DisplayMessage],
+            Option<mainframe_types::display::StreamingLeafKind>,
+            Option<mainframe_types::adapter::ControlRequest>,
+        ) -> R,
+    {
+        self.lifecycle.await_loading(chat_id).await;
+        self.lifecycle.await_offload(chat_id).await;
+        let present = self
+            .shared
+            .messages
+            .lock_recover()
+            .get(chat_id)
+            .is_some_and(|messages| !messages.is_empty());
+        if !present {
+            return Err(read);
+        }
+        if let Some(mut chat) = self.get_chat(chat_id) {
+            self.reconcile_transcript(&mut chat).await;
+        }
+        self.event_handler.try_read_cached_resume(chat_id, read)
     }
 
     pub async fn get_session_context(

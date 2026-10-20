@@ -16,7 +16,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Sentinels
 // ---------------------------------------------------------------------------
 
-const SENTINEL_RUNTIME = Symbol('sentinel-runtime');
+const SENTINEL_RUNTIME = {
+  threads: { getState: () => ({ mainThreadId: 'missing' }), subscribe: () => () => {} },
+};
 const SENTINEL_ADAPTER = Symbol('sentinel-adapter');
 
 // ---------------------------------------------------------------------------
@@ -29,6 +31,10 @@ vi.mock('@assistant-ui/react', () => ({
 
 vi.mock('../chats-remote-adapter', () => ({
   makeChatsRemoteAdapter: vi.fn(() => SENTINEL_ADAPTER),
+}));
+
+vi.mock('../chat-controller-registry', () => ({
+  chatControllerRegistry: { get: vi.fn(() => undefined) },
 }));
 
 vi.mock('../use-chat-runtime-hook', () => ({

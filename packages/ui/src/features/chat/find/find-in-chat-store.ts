@@ -33,6 +33,20 @@ export interface FindInChatState {
   prev: () => void;
 }
 
+function retainActiveMatch(state: FindInChatState, matches: FindMatch[]) {
+  const active = state.matches[state.activeIndex];
+  const index = active
+    ? matches.findIndex(
+        (match) =>
+          match.messageId === active.messageId &&
+          match.partIndex === active.partIndex &&
+          match.charStart === active.charStart &&
+          match.charEnd === active.charEnd,
+      )
+    : -1;
+  return { matches, activeIndex: Math.max(0, index) };
+}
+
 export const useFindInChatStore = create<FindInChatState>((set, get) => ({
   serverTotal: null,
   truncated: false,
@@ -59,7 +73,7 @@ export const useFindInChatStore = create<FindInChatState>((set, get) => ({
       error: null,
     }),
   setQuery: (query) => set({ query, activeIndex: 0, matches: [], serverTotal: null, truncated: false }),
-  setMatches: (matches) => set({ matches, activeIndex: 0 }),
+  setMatches: (matches) => set((state) => retainActiveMatch(state, matches)),
   setActiveIndex: (activeIndex) => set({ activeIndex }),
 
   next: () => {

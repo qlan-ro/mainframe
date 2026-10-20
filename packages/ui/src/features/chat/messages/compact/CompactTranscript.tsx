@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useChatExtrasSelector } from '../../runtime/chat-extras';
-import { ProgressiveMessages } from '../../thread/ProgressiveMessages';
+import { VirtualMessages } from '../../thread/VirtualMessages';
 import { TurnPresentationCache } from '../../view-model/compact/turn-presentation-cache';
 import { buildTurnDisclosures } from '../../view-model/compact/build-turn-disclosures';
 import { boundedMessageComponents } from '../bounded-messages';
@@ -14,6 +14,7 @@ import { useTurnDisclosureState } from './use-turn-disclosure-state';
 import { turnDisclosureStore } from './turn-disclosure-store';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 import type { ActivitySource } from '@/features/session-panel/activity-model';
+import { DisclosureScope } from '@/components/ui/disclosure-state';
 
 function AssistantSlice() {
   const id = useAuiState((s) => s.message.id);
@@ -22,11 +23,13 @@ function AssistantSlice() {
   const presentation = useTurnPresentationSelector((s) => s.model.messagesById.get(id));
   return (
     <MessageRenderBoundary>
-      {!presentation || presentation.native ? (
-        <AssistantMessage />
-      ) : (
-        <CompactMessageSlice presentation={presentation} />
-      )}
+      <DisclosureScope id={id}>
+        {!presentation || presentation.native ? (
+          <AssistantMessage />
+        ) : (
+          <CompactMessageSlice presentation={presentation} />
+        )}
+      </DisclosureScope>
     </MessageRenderBoundary>
   );
 }
@@ -63,7 +66,7 @@ export function CompactTranscript() {
   return (
     <TurnPresentationProvider value={{ model, ...state }}>
       <div ref={root} data-testid="chat-compact-transcript">
-        <ProgressiveMessages components={components} />
+        <VirtualMessages components={components} />
       </div>
     </TurnPresentationProvider>
   );

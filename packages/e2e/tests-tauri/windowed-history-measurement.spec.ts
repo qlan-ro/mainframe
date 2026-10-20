@@ -29,7 +29,8 @@ test('opening waits for the measured chat replay rather than another chat', asyn
   const http = createServer((_request, response) => {
     response.setHeader('Content-Type', 'text/html');
     response.end(
-      '<button data-testid="probe-row" data-chat-id="target">Open</button><p data-testid="chat-user-message">Needle turn 249</p>',
+      '<button data-testid="probe-row" data-chat-id="target">Open</button>' +
+        '<div data-testid="chat-thread-viewport"><p data-testid="chat-user-message">Needle turn 249</p></div>',
     );
   });
   const server = new WebSocketServer({ server: http });
@@ -72,3 +73,32 @@ test('opening waits for the measured chat replay rather than another chat', asyn
     await new Promise<void>((resolve) => http.close(() => resolve()));
   }
 });
+
+for (const state of ['hidden', 'clipped'] as const) {
+  test(`opening waits until a ${state} tail is visible inside the transcript viewport`, async ({ page }) => {
+    await installHistoryPaintProbe(page);
+    await page.goto(
+      `data:text/html,${encodeURIComponent(
+        '<button data-testid="probe-row" data-chat-id="target">Open</button>' +
+          '<div data-testid="chat-thread-viewport" style="height:80px;overflow:auto">' +
+          `<div style="height:${state === 'clipped' ? 200 : 0}px"></div>` +
+          `<p data-testid="chat-user-message" style="visibility:${state === 'hidden' ? 'hidden' : 'visible'}">` +
+          'Needle turn 249</p></div>',
+      )}`,
+    );
+    await page.evaluate(() => {
+      document.querySelector('button')!.addEventListener('click', () => {
+        window.historyPaintProbe.replays['target'] = 1;
+        setTimeout(() => {
+          const viewport = document.querySelector<HTMLElement>('[data-testid="chat-thread-viewport"]')!;
+          document.querySelector<HTMLElement>('p')!.style.visibility = 'visible';
+          viewport.scrollTop = viewport.scrollHeight;
+        }, 120);
+      });
+    });
+    await armHistoryPaint(page, '[data-testid="probe-row"]', 'open');
+    await page.getByTestId('probe-row').click();
+    expect(await historyPaintMs(page)).toBeGreaterThanOrEqual(120);
+    await expect(page.getByTestId('chat-user-message')).toBeVisible();
+  });
+}

@@ -4,13 +4,18 @@ import { FallbackToolCard } from '../../tools/cards/FallbackToolCard';
 import { SubagentTranscript } from '../../tools/cards/SubagentTranscript';
 import { CompactDetailProvider } from '../../tools/shared/compact-detail-context';
 import { toolKind } from '../../view-model/compact/tool-kind';
+import { DisclosureScope } from '@/components/ui/disclosure-state';
 
 const CompactToolOverride: ToolCallMessagePartComponent = (part) => {
   const messageId = useAuiState((s) => s.message.id);
   if (toolKind(part.toolName) === 'subagent')
     return <SubagentTranscript messages={part.messages ?? []} messageId={messageId} toolCallId={part.toolCallId} />;
   const Card = resolveToolCard(part.toolName) ?? FallbackToolCard;
-  return <Card {...part} />;
+  return (
+    <DisclosureScope id={part.toolCallId}>
+      <Card {...part} />
+    </DisclosureScope>
+  );
 };
 const components = { tools: { Override: CompactToolOverride } };
 export function CompactToolDetails({ indices }: { indices: readonly number[] }) {

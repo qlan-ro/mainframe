@@ -8,11 +8,21 @@ import { MessageRenderBoundary } from './MessageRenderBoundary';
 import { UserMessage } from './UserMessage';
 import { AssistantMessage } from './AssistantMessage';
 import { SystemMessage } from './SystemMessage';
+import { useAuiState } from '@assistant-ui/react';
+import type { ReactNode } from 'react';
+import { DisclosureScope } from '@/components/ui/disclosure-state';
+
+function MessageScope({ children }: { children: ReactNode }) {
+  const id = useAuiState((state) => state.message.id);
+  return <DisclosureScope id={id}>{children}</DisclosureScope>;
+}
 
 function BoundedUserMessage() {
   return (
     <MessageRenderBoundary>
-      <UserMessage />
+      <MessageScope>
+        <UserMessage />
+      </MessageScope>
     </MessageRenderBoundary>
   );
 }
@@ -20,7 +30,9 @@ function BoundedUserMessage() {
 function BoundedAssistantMessage() {
   return (
     <MessageRenderBoundary>
-      <AssistantMessage />
+      <MessageScope>
+        <AssistantMessage />
+      </MessageScope>
     </MessageRenderBoundary>
   );
 }
@@ -28,7 +40,9 @@ function BoundedAssistantMessage() {
 function BoundedSystemMessage() {
   return (
     <MessageRenderBoundary>
-      <SystemMessage />
+      <MessageScope>
+        <SystemMessage />
+      </MessageScope>
     </MessageRenderBoundary>
   );
 }

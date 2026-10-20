@@ -9,6 +9,7 @@
  * path calls it on the runtime the hook itself produced.
  */
 import { renderHook, act } from '@testing-library/react';
+import { StrictMode, useLayoutEffect } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AcpChatController } from '../../controller/acp-chat-controller';
 import type { AppendMessage } from '@assistant-ui/react';
@@ -72,6 +73,50 @@ const useChatThreadRuntime = _useChatThreadRuntime as (
 ) => AssistantRuntime;
 
 const PORT = 9999;
+
+it('activates before paint and balances StrictMode subscriptions across a controller switch', () => {
+  const order: string[] = [];
+  const makeTracked = (id: string) => {
+    const controller = makeController(async () => {});
+    vi.spyOn(controller, 'subscribeLive').mockImplementation(() => {
+      order.push(`${id}:subscribe`);
+      return () => order.push(`${id}:unsubscribe`);
+    });
+    vi.spyOn(controller, 'setActive').mockImplementation((active) => {
+      order.push(`${id}:${active ? 'activate' : 'deactivate'}`);
+    });
+    return controller;
+  };
+  const first = makeTracked('first');
+  const second = makeTracked('second');
+  const { rerender, unmount } = renderHook(
+    ({ controller, id }) => {
+      useChatThreadRuntime(controller, PORT, { active: true });
+      useLayoutEffect(() => {
+        expect(order[order.length - 1]).toBe(`${id}:activate`);
+      }, [controller, id]);
+    },
+    { initialProps: { controller: first, id: 'first' }, wrapper: StrictMode },
+  );
+  expect(order).toEqual([
+    'first:subscribe',
+    'first:activate',
+    'first:unsubscribe',
+    'first:deactivate',
+    'first:subscribe',
+    'first:activate',
+  ]);
+  rerender({ controller: second, id: 'second' });
+  unmount();
+  expect(order.slice(6)).toEqual([
+    'first:unsubscribe',
+    'first:deactivate',
+    'second:subscribe',
+    'second:activate',
+    'second:unsubscribe',
+    'second:deactivate',
+  ]);
+});
 
 function makeController(
   sendMessage: (msg: AppendMessage) => Promise<void>,

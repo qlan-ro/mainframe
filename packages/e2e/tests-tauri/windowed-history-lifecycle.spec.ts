@@ -37,33 +37,40 @@ test.describe('windowed history lifecycle', () => {
     await app.page.reload();
     await waitConnected(app.page);
     await sessionsSidebar(app.page).row(seed.chatId).click();
-    await expect(app.page.getByTestId('chat-user-message')).toHaveCount(20);
+    await expect(app.page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '40');
     await expect(app.page.getByTestId('chat-load-earlier')).toBeVisible();
+    await expect(app.page.getByText('Needle turn 249', { exact: true })).toBeInViewport();
   });
 
   test('keeps earlier pages across chat switches and a socket reconnect', async () => {
     const page = app.page;
     await page.getByTestId('chat-load-earlier').click();
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
     await sessionsSidebar(page).row(other).click();
     await expect(page.getByTestId('chat-user-message')).toHaveCount(0);
     await sessionsSidebar(page).row(seed.chatId).click();
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
     const completed = wire.replaysCompleted.get(seed.chatId)!;
     await wire.disconnect();
     await wire.waitForReplay(seed.chatId, completed);
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
-    await expect(page.getByText('Needle turn 210', { exact: true })).toHaveCount(1);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
+    const pages = wire.pageRequests;
+    await page.keyboard.press('ControlOrMeta+f');
+    await page.getByTestId('thread-find-input').fill('Needle turn 210');
+    await expect(page.getByTestId('find-bar')).toContainText('1/1');
+    await page.getByTestId('thread-find-next').click();
+    await expect(page.getByText('Needle turn 210', { exact: true })).toBeVisible();
+    expect(wire.pageRequests).toBe(pages);
   });
 
   test('returns to the newest window after daemon resync', async () => {
     const page = app.page;
     await page.getByTestId('chat-load-earlier').click();
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
     const completed = wire.replaysCompleted.get(seed.chatId)!;
     wire.resync(seed.chatId);
     await wire.waitForReplay(seed.chatId, completed);
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(20);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '40');
     await expect(page.getByText('Needle turn 249', { exact: true })).toBeVisible();
     await expect(page.getByText('Needle turn 210', { exact: true })).toHaveCount(0);
   });
@@ -80,14 +87,19 @@ test.describe('windowed history lifecycle', () => {
     await recent.click();
     await expect(page.getByTestId(testId!)).toHaveAttribute('aria-expanded', 'true');
     await page.getByTestId('chat-load-earlier').click();
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
-    await expect(page.getByTestId(testId!)).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
     await page.keyboard.press('ControlOrMeta+f');
     await page.getByTestId('thread-find-input').fill('Tool summary 2/0');
     await expect(page.getByTestId('find-bar')).toContainText('1/1');
     await page.getByTestId('thread-find-next').click();
     await expect(page.getByText('Tool summary 2/0', { exact: true })).toBeVisible();
+    await expect(page.getByTestId(testId!)).toHaveCount(0);
+    const pages = wire.pageRequests;
+    await page.getByTestId('thread-find-input').fill('Tool summary 249/0');
+    await expect(page.getByTestId('find-bar')).toContainText('1/1');
+    await page.getByTestId('thread-find-next').click();
     await expect(page.getByTestId(testId!)).toHaveAttribute('aria-expanded', 'true');
+    expect(wire.pageRequests).toBe(pages);
   });
 
   test('Activity loads one earlier page without losing the bottom pin', async () => {
@@ -101,7 +113,7 @@ test.describe('windowed history lifecycle', () => {
     await expect.poll(bottomDistance).toBeLessThan(2);
     const before = wire.pageRequests;
     await load.click();
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
     expect(wire.pageRequests).toBe(before + 1);
     await expect.poll(bottomDistance).toBeLessThan(2);
     await expect(load).toBeEnabled();

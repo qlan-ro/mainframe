@@ -133,8 +133,37 @@ impl MessageCache {
         make_projector: impl FnOnce() -> Box<dyn DisplayProjector>,
         read: impl FnOnce(&[DisplayMessage]) -> R,
     ) -> R {
-        let delta =
-            self.advance_projection(chat_id, Some(raw), overlay, categories, make_projector);
+        self.read_projection_snapshot(
+            chat_id,
+            Some(raw),
+            overlay,
+            categories,
+            make_projector,
+            read,
+        )
+    }
+
+    pub(crate) fn read_cached_display_snapshot<R>(
+        &mut self,
+        chat_id: &str,
+        overlay: Option<&ChatMessage>,
+        categories: Option<&ToolCategories>,
+        make_projector: impl FnOnce() -> Box<dyn DisplayProjector>,
+        read: impl FnOnce(&[DisplayMessage]) -> R,
+    ) -> R {
+        self.read_projection_snapshot(chat_id, None, overlay, categories, make_projector, read)
+    }
+
+    fn read_projection_snapshot<R>(
+        &mut self,
+        chat_id: &str,
+        raw: Option<&[ChatMessage]>,
+        overlay: Option<&ChatMessage>,
+        categories: Option<&ToolCategories>,
+        make_projector: impl FnOnce() -> Box<dyn DisplayProjector>,
+        read: impl FnOnce(&[DisplayMessage]) -> R,
+    ) -> R {
+        let delta = self.advance_projection(chat_id, raw, overlay, categories, make_projector);
         let result = delta.snapshot.read(read);
         if let Some(slot) = self.projections.get_mut(chat_id) {
             slot.pending = Some(match slot.pending.take() {

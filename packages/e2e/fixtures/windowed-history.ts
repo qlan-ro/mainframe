@@ -28,9 +28,8 @@ export function writeWindowedHistoryRecording(
     add('out', 'onToolResult', [results]);
     add('out', 'onResult', [{ subtype: 'success', is_error: false }]);
   }
-  writeFileSync(
-    path.join(directory, `${WINDOWED_RECORDING_KEY}.0.ndjson`),
-    events.map((event) => JSON.stringify(event)).join('\n') + '\n',
-  );
+  const recording = events.map((event) => JSON.stringify(event)).join('\n') + '\n';
+  for (const coldReader of [0, 1, 2])
+    writeFileSync(path.join(directory, `${WINDOWED_RECORDING_KEY}.${coldReader}.ndjson`), recording);
   return directory;
 }

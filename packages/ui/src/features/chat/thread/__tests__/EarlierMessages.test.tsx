@@ -23,7 +23,7 @@ beforeEach(() => {
   viewport.innerHTML = '<div data-message-id="old">Reading anchor</div>';
   Object.defineProperties(viewport, {
     clientHeight: { value: 500 },
-    scrollHeight: { value: 2000 },
+    scrollHeight: { value: 2000, configurable: true },
     scrollTop: { value: 100, writable: true },
   });
   document.body.append(viewport);
@@ -82,4 +82,47 @@ it('loads once per upward gesture and ignores content clicks and programmatic sc
   expect(f.load).toHaveBeenCalledTimes(1);
   fireEvent.click(view.getByTestId('chat-load-earlier'));
   expect(f.load).toHaveBeenCalledTimes(2);
+});
+
+it.each([false, true])('finishes virtual prepend anchoring while the tail grows (pinned=%s)', (pinned) => {
+  const list = document.createElement('div');
+  list.dataset.testid = 'chat-message-list';
+  list.dataset.virtualized = 'true';
+  viewport.append(list);
+  const frames: FrameRequestCallback[] = [];
+  let resize = () => {};
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
+  vi.stubGlobal('cancelAnimationFrame', () => {});
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      private active = true;
+      constructor(callback: () => void) {
+        resize = () => {
+          if (this.active) callback();
+        };
+      }
+      observe() {}
+      disconnect() {
+        this.active = false;
+      }
+    },
+  );
+  try {
+    let height = 2000;
+    Object.defineProperty(viewport, 'scrollHeight', { get: () => height });
+    const view = harness(pinned);
+    act(() => window.dispatchEvent(new CustomEvent(HISTORY_PREPEND_EVENT, { detail: 'chat' })));
+    view.prepend();
+    for (let frame = 0; frame < 10; frame++)
+      act(() => {
+        height += 20;
+        resize();
+        frames.shift()?.(frame * 16);
+      });
+    expect(view.release).toHaveBeenCalledTimes(1);
+    expect(view.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

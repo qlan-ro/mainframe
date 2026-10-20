@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { MessagePrimitive, type ReasoningMessagePartComponent } from '@assistant-ui/react';
+import { MessagePrimitive, type EnrichedPartState, type ReasoningMessagePartComponent } from '@assistant-ui/react';
 import { makeChatGroupBy, parseToolGroupKey } from '../tools/group-parts';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { MarkdownText } from '../parts/markdown-text';
@@ -35,7 +35,11 @@ export function VerboseParts() {
       {({ part, children }) => {
         if ('indices' in part) {
           if (part.type === 'group-reasoning') {
-            return <ReasoningGroup running={part.status?.type === 'running'}>{children}</ReasoningGroup>;
+            return (
+              <ReasoningGroup id={part.indices.join(',')} running={part.status?.type === 'running'}>
+                {children}
+              </ReasoningGroup>
+            );
           }
           const groupId = parseToolGroupKey(part.type) ?? '';
           return (
@@ -49,26 +53,29 @@ export function VerboseParts() {
           );
         }
 
-        switch (part.type) {
-          case 'text':
-            return <MarkdownText {...part} />;
-          case 'reasoning':
-            return <VerboseReasoning {...part} />;
-          case 'tool-call':
-            return <MessageToolLeaf part={part} />;
-          case 'image':
-            return (
-              <ZoomableImage
-                src={part.image}
-                className="max-h-80 max-w-full rounded-md border border-border object-contain"
-              />
-            );
-          case 'indicator':
-            return <RunningIndicator />;
-          default:
-            return null;
-        }
+        if (part.type === 'indicator') return <RunningIndicator />;
+        return <VerboseLeaf part={part} />;
       }}
     </MessagePrimitive.GroupedParts>
   );
+}
+
+function VerboseLeaf({ part }: { part: EnrichedPartState }) {
+  switch (part.type) {
+    case 'text':
+      return <MarkdownText {...part} />;
+    case 'reasoning':
+      return <VerboseReasoning {...part} />;
+    case 'tool-call':
+      return <MessageToolLeaf part={part} />;
+    case 'image':
+      return (
+        <ZoomableImage
+          src={part.image}
+          className="max-h-80 max-w-full rounded-md border border-border object-contain"
+        />
+      );
+    default:
+      return null;
+  }
 }

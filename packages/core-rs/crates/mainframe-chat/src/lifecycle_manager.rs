@@ -26,6 +26,7 @@ use crate::types::ActiveChat;
 use crate::worktree_offer::WorktreeOfferRegistry;
 
 mod history;
+mod load_history;
 mod spawn_prep;
 
 /// True when no chat OTHER than `exclude_chat_id` is still active (non-archived)
@@ -711,107 +712,6 @@ impl ChatLifecycleManager {
             chat: chat.clone(),
             reason: None,
         });
-    }
-
-    /// Returns whether this call actually changed the message cache —
-    /// `ChatManager::load_chat` uses it to decide whether an attached facade
-    /// session needs a `Resync` (a chat left on screen through an idle offload
-    /// keeps its facade session, which offload deliberately leaves un-notified
-    /// — see `idle_offload.rs`'s step 4 — so the NEXT `load_chat` is what
-    /// rebuilds the cache under the transcript's own ids and must tell that
-    /// attached session to re-replay rather than diff against the ids it cached
-    /// live). An identical reload of an already-warm cache — a cold chat's
-    /// first send after `session/resume` — raises no resync: "no previous
-    /// entry" counts as changed, an unchanged list does not.
-    async fn do_load_chat(&self, chat_id: &str) -> bool {
-        let Some((chat, effective_path)) = self.prepare_load(chat_id).await else {
-            return false;
-        };
-        // Compose earlier segments even when the active session has no transcript.
-        let composed = self.compose_history(chat_id).await;
-        let own_id = chat.vendor_session_id.clone();
-        // A pending fork snapshot can resume before the new session writes its own transcript.
-        let fork_source = storage_event!(
-            self.shared, Some(chat_id);
-            self.shared.deps.get_pending_fork(chat_id),
-            false
-        )
-        .map(|pending| pending.fork_source);
-        if own_id.is_none() && fork_source.is_none() {
-            return match composed {
-                Some(history) => self.finish_load(chat_id, Some(history)).await,
-                None => false,
-            };
-        }
-
-        let Some(session) = self.shared.deps.create_session(
-            &chat.adapter_id,
-            SessionOptions {
-                project_path: effective_path,
-                chat_id: own_id,
-                mainframe_chat_id: chat_id.to_string(),
-                session_file_path: chat.session_file_path.clone(),
-                fork_source,
-            },
-        ) else {
-            return false;
-        };
-        if let Some(cell) = self.get_active(chat_id) {
-            cell.lock_recover().session = Some(session.clone());
-        }
-
-        let history = match composed {
-            Some(history) => Some(history),
-            None => history::load_session_history(chat_id, session.as_ref()).await,
-        };
-        self.finish_load(chat_id, history).await
-    }
-
-    /// Settles a loaded history into the cache, restores a pending permission
-    /// from the active segment's slice only (`active_from`), runs the
-    /// post-load scan, and raises a resync when the cache changed.
-    async fn finish_load(&self, chat_id: &str, history: Option<(Vec<ChatMessage>, usize)>) -> bool {
-        let mut cache_reloaded = false;
-        if let Some((remapped, active_from)) = history
-            && !remapped.is_empty()
-        {
-            let mut messages = self.shared.messages.lock_recover();
-            let previous = messages.get(chat_id).cloned();
-            messages.set(chat_id, remapped);
-            let remapped = messages.get(chat_id).cloned().unwrap_or_default();
-            drop(messages);
-            let active_slice = &remapped[active_from.min(remapped.len())..];
-            self.shared
-                .permissions
-                .lock_recover()
-                .restore_pending_permission(chat_id, active_slice);
-            // Raise the resync only when the reload actually changed the
-            // cached list — "no previous entry" counts as changed, but a
-            // cold chat's identical re-read (the first send after
-            // `session/resume`) must not force a full replay (finding 6).
-            cache_reloaded = previous.as_ref() != Some(&remapped);
-        }
-
-        // Mention extraction and the PR-URL scan are adapter-specific and out
-        // of this crate's dep set, so the whole post-load scan is one injected
-        // seam; `mainframe-server`'s `chat_deps.rs` implements it over the
-        // session's own history.
-        self.shared.deps.scan_loaded_history(chat_id).await;
-        if cache_reloaded {
-            // Notify here, not just from the public `load_chat` wrapper: a
-            // resumed SEND also reaches this via `do_start_chat`'s own
-            // `self.load_chat(chat_id)` call, a path `ChatManager::load_chat`
-            // never sees (an on-screen chat that sends after an idle offload
-            // must resync through this branch too, not just an explicit
-            // reopen).
-            chat_surface::notify(
-                self.chat_surface.get(),
-                ChatSurfaceEvent::Resync {
-                    chat_id: chat_id.to_string(),
-                },
-            );
-        }
-        cache_reloaded
     }
 
     /// One `provider.<adapter>.<field>` setting; `None` when unset or unreadable.

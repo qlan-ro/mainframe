@@ -1,6 +1,49 @@
 use super::*;
 
 #[tokio::test]
+async fn an_empty_cached_entry_still_loads_history_before_calling_the_resume_reader() {
+    let mut chat = test_chat("c1");
+    chat.vendor_session_id = Some("sess-1".into());
+    let deps = FakeDeps::with_chats(vec![chat]);
+    *deps.adapters.history.lock().unwrap() = Some(vec![numbered_message(7)]);
+    *deps.adapters.transcript_present.lock().unwrap() = Some(true);
+    let manager = ChatManager::new(deps.clone());
+    manager.shared.messages.lock().unwrap().set("c1", vec![]);
+    let captured = Box::new(String::from("owned reader"));
+    let result = manager
+        .read_resume_snapshot("c1", move |messages, _, _| {
+            assert_eq!(messages.len(), 1);
+            (messages[0].content.clone(), captured)
+        })
+        .await;
+    assert_eq!(*result.1, "owned reader");
+    assert_eq!(
+        result.0,
+        vec![mainframe_types::display::DisplayContent::Leaf(
+            LeafContent::Text {
+                text: "7".into(),
+                parent_tool_use_id: None,
+            }
+        )]
+    );
+    assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn a_cache_miss_returns_the_unconsumed_resume_reader() {
+    let manager = ChatManager::new(FakeDeps::arc());
+    let captured = Box::new(String::from("not consumed"));
+    let read = move |_: &[DisplayMessage], _, _| captured;
+    let Err(recovered) = manager
+        .event_handler
+        .try_read_cached_resume("missing", read)
+    else {
+        panic!("a missing entry must preserve the reader for the cold fallback");
+    };
+    assert_eq!(*recovered(&[], None, None), "not consumed");
+}
+
+#[tokio::test]
 async fn a_warm_resume_reader_borrows_the_projection_and_copies_only_its_selected_range() {
     let mut chat = test_chat("c1");
     chat.vendor_session_id = Some("sess-1".into());

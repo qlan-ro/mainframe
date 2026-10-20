@@ -67,34 +67,12 @@ impl AdapterPort for DaemonChatDeps {
             .get(adapter_id)
             .and_then(|adapter| adapter.create_plan_mode_handler())
     }
-    fn scan_loaded_history<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            let Some(session) = self.session_for_scan(chat_id) else {
-                return;
-            };
-            // Mentions and PRs read different histories: `load_history` is the
-            // adapter's canonical transcript (what the user actually typed),
-            // while `load_scan_records` may reconstruct extra tool-output-only
-            // records `load_history` never returns (Codex's rollout — see
-            // `scan_and_persist_mentions`). Each scan gets its own source; a
-            // failure on one must not skip the other.
-            match session.load_history().await {
-                Ok(history) if !history.is_empty() => {
-                    self.scan_and_persist_mentions(chat_id, &history);
-                }
-                Ok(_) => {}
-                Err(err) => tracing::warn!(error = %err, chat_id, "load_history failed"),
-            }
-            match session.load_scan_records().await {
-                Ok(history) if !history.is_empty() => {
-                    self.scan_and_persist_prs(chat_id, &history);
-                }
-                Ok(_) => {}
-                Err(err) => tracing::warn!(error = %err, chat_id, "load_scan_records failed"),
-            }
-            self.persist_plan_and_skill_files(chat_id, session.as_ref())
-                .await;
-        })
+    fn scan_loaded_history<'a>(
+        &'a self,
+        chat_id: &'a str,
+        canonical: Option<&'a [ChatMessage]>,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(self.scan_history(chat_id, canonical))
     }
     fn resolve_tuning<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {
         Box::pin(async move {

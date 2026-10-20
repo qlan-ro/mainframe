@@ -44,21 +44,17 @@ pub(crate) fn backfill_from(
     messages: &[DisplayMessage],
     scope: &mut SubjectScope,
 ) -> Vec<DisplayMessage> {
-    messages
-        .iter()
-        .map(|msg| {
-            if msg.r#type != DisplayMessageType::Assistant {
-                return msg.clone();
-            }
-            match backfill_blocks(&msg.content, scope) {
-                None => msg.clone(),
-                Some(content) => DisplayMessage {
-                    content,
-                    ..msg.clone()
-                },
-            }
-        })
-        .collect()
+    let mut result = messages.to_vec();
+    backfill_in_place(&mut result, scope);
+    result
+}
+
+pub(crate) fn backfill_in_place(messages: &mut [DisplayMessage], scope: &mut SubjectScope) {
+    for message in messages {
+        if message.r#type == DisplayMessageType::Assistant {
+            backfill_blocks(&mut message.content, scope);
+        }
+    }
 }
 
 /// The scope after folding `messages` from a fresh namespace — used to seed
@@ -73,52 +69,21 @@ pub(crate) fn scope_after(messages: &[DisplayMessage]) -> SubjectScope {
     scope
 }
 
-/// Returns `None` when nothing changed.
-fn backfill_blocks(
-    blocks: &[DisplayContent],
-    scope: &mut SubjectScope,
-) -> Option<Vec<DisplayContent>> {
-    let mut changed = false;
-    let mut next: Vec<DisplayContent> = Vec::with_capacity(blocks.len());
+fn backfill_blocks(blocks: &mut [DisplayContent], scope: &mut SubjectScope) {
     for block in blocks {
         match block {
-            DisplayContent::Node(DisplayNode::TaskGroup {
-                agent_id,
-                task_args,
-                calls,
-                result,
-                timing,
-            }) => {
-                let mut inner = SubjectScope::new();
-                match backfill_blocks(calls, &mut inner) {
-                    None => next.push(block.clone()),
-                    Some(new_calls) => {
-                        changed = true;
-                        next.push(DisplayContent::Node(DisplayNode::TaskGroup {
-                            timing: *timing,
-                            agent_id: agent_id.clone(),
-                            task_args: task_args.clone(),
-                            calls: new_calls,
-                            result: result.clone(),
-                        }));
-                    }
-                }
+            DisplayContent::Node(DisplayNode::TaskGroup { calls, .. }) => {
+                backfill_blocks(calls, &mut SubjectScope::new());
             }
             DisplayContent::Node(DisplayNode::TaskProgress { items }) => {
-                let (new_items, items_changed) = backfill_items(items, scope);
-                if !items_changed {
-                    next.push(block.clone());
-                } else {
-                    changed = true;
-                    next.push(DisplayContent::Node(DisplayNode::TaskProgress {
-                        items: new_items,
-                    }));
+                let (updated, changed) = backfill_items(items, scope);
+                if changed {
+                    *items = updated;
                 }
             }
-            other => next.push(other.clone()),
+            _ => {}
         }
     }
-    if changed { Some(next) } else { None }
 }
 
 /// `String(x ?? '')` — coerce a non-string JSON value the way JS would.

@@ -21,7 +21,9 @@ fn dual_history_session() -> mainframe_adapter_api::test_support::FakeSession {
     }
 }
 
-struct DualAdapter;
+struct DualAdapter {
+    loads: Arc<std::sync::atomic::AtomicUsize>,
+}
 
 impl mainframe_adapter_api::Adapter for DualAdapter {
     fn id(&self) -> &str {
@@ -48,19 +50,15 @@ impl mainframe_adapter_api::Adapter for DualAdapter {
         Vec::new()
     }
     fn create_session(&self, _options: SessionOptions) -> Arc<dyn AdapterSession> {
-        Arc::new(dual_history_session())
+        Arc::new(mainframe_adapter_api::test_support::FakeSession {
+            history_loads: Some(self.loads.clone()),
+            ..dual_history_session()
+        })
     }
     fn kill_all(&self) {}
 }
 
-/// Cold-load @-mention scanning must stay pinned to `load_history` even
-/// when the PR scan needs `load_scan_records`'s wider reconstruction —
-/// otherwise Codex's injected rollout preamble leaks in as a bogus file
-/// mention.
-#[tokio::test]
-async fn scan_loaded_history_scans_mentions_from_load_history_and_prs_from_load_scan_records() {
-    let deps = test_deps();
-    deps.adapters.register(Arc::new(DualAdapter));
+fn create_dual_chat(deps: &DaemonChatDeps) -> Chat {
     let project = deps
         .db
         .call_blocking(|d| d.projects.create("/tmp/p1", None))
@@ -69,8 +67,8 @@ async fn scan_loaded_history_scans_mentions_from_load_history_and_prs_from_load_
         .db
         .call_blocking(move |d| {
             d.chats.create(&mainframe_types::chat::NewChat {
-                project_id: project.id.clone(),
-                adapter_id: "dual".to_string(),
+                project_id: project.id,
+                adapter_id: "dual".into(),
                 ..Default::default()
             })
         })
@@ -82,20 +80,42 @@ async fn scan_loaded_history_scans_mentions_from_load_history_and_prs_from_load_
                 d.chats.update(
                     &id,
                     &ChatPatch {
-                        vendor_session_id: Some("sess-1".to_string()),
+                        vendor_session_id: Some("sess-1".into()),
                         ..Default::default()
                     },
                 )
             }
         })
         .unwrap();
+    chat
+}
 
-    AdapterPort::scan_loaded_history(&deps, &chat.id).await;
+async fn assert_history_sources(reuse_canonical: bool) {
+    let deps = test_deps();
+    let loads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    deps.adapters.register(Arc::new(DualAdapter {
+        loads: loads.clone(),
+    }));
+    let chat = create_dual_chat(&deps);
+    let canonical = dual_history_session().history;
+    AdapterPort::scan_loaded_history(
+        &deps,
+        &chat.id,
+        reuse_canonical.then_some(canonical.as_slice()),
+    )
+    .await;
+    assert_eq!(
+        loads.load(std::sync::atomic::Ordering::SeqCst),
+        usize::from(!reuse_canonical)
+    );
+    assert_scanned_links(&deps, &chat.id);
+}
 
+fn assert_scanned_links(deps: &DaemonChatDeps, chat_id: &str) {
     let mentions = deps
         .db
         .call_blocking({
-            let id = chat.id.clone();
+            let id = chat_id.to_owned();
             move |d| d.chats.get_mentions(&id)
         })
         .unwrap();
@@ -104,26 +124,33 @@ async fn scan_loaded_history_scans_mentions_from_load_history_and_prs_from_load_
             .iter()
             .map(|m| m.path.as_deref())
             .collect::<Vec<_>>(),
-        vec![Some("src/real.ts")],
-        "mention scan must read load_history only, not the load_scan_records preamble"
+        vec![Some("src/real.ts")]
     );
-
     let prs = deps
         .db
         .call_blocking({
-            let id = chat.id.clone();
+            let id = chat_id.to_owned();
             move |d| d.chats.get_detected_prs(&id)
         })
         .unwrap();
     assert_eq!(
         prs,
         vec![DetectedPr {
-            url: "https://github.com/acme/repo/pull/9".to_string(),
-            owner: "acme".to_string(),
-            repo: "repo".to_string(),
+            url: "https://github.com/acme/repo/pull/9".into(),
+            owner: "acme".into(),
+            repo: "repo".into(),
             number: 9,
             source: DetectedPrSource::Created,
-        }],
-        "PR scan must still read load_scan_records, where the Codex tool pair lives"
+        }]
     );
+}
+
+#[tokio::test]
+async fn scans_canonical_mentions_and_distinct_pr_records_without_reloading_supplied_history() {
+    assert_history_sources(true).await;
+}
+
+#[tokio::test]
+async fn loads_canonical_history_when_a_composed_or_failed_load_cannot_supply_it() {
+    assert_history_sources(false).await;
 }

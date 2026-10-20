@@ -5,7 +5,7 @@
 use mainframe_types::chat::ChatMessage;
 
 use super::group::Group;
-use crate::task_subject_backfill::{SubjectScope, backfill_from};
+use crate::task_subject_backfill::{SubjectScope, backfill_in_place};
 
 /// Backfill task subjects across `groups[from..]`, continuing `scope` (already
 /// positioned at "before `from`"). Rewrites each group's display in place when
@@ -23,11 +23,10 @@ pub(crate) fn backfill_tail(
     scope_before.truncate(from);
     for group in &mut groups[from..] {
         scope_before.push(scope.clone());
-        let Some(display) = group.display.take() else {
+        let Some(display) = group.display.as_mut() else {
             continue;
         };
-        let backfilled = backfill_from(std::slice::from_ref(&display), scope);
-        group.display = backfilled.into_iter().next();
+        backfill_in_place(std::slice::from_mut(display), scope);
     }
     scope_before.push(scope.clone());
 }
