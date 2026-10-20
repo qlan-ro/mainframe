@@ -15,12 +15,17 @@ import type { EnrichedPartState } from '@assistant-ui/react';
 import { ToolGroupRoot, ToolGroupTrigger, ToolGroupContent } from '@/components/ui/assistant-ui/tool-group';
 import { resolveToolCard } from './registry';
 import { FallbackToolCard } from './cards/FallbackToolCard';
+import { DisclosureScope } from '@/components/ui/disclosure-state';
 
 type ToolCallPart = Extract<EnrichedPartState, { type: 'tool-call' }>;
 
 export function MessageToolLeaf({ part }: { part: ToolCallPart }) {
   const Card = resolveToolCard(part.toolName) ?? FallbackToolCard;
-  return <Card {...part} />;
+  return (
+    <DisclosureScope id={part.toolCallId}>
+      <Card {...part} />
+    </DisclosureScope>
+  );
 }
 
 export function MessageToolGroup({
@@ -35,9 +40,16 @@ export function MessageToolGroup({
   children: ReactNode;
 }) {
   return (
-    <ToolGroupRoot data-testid="chat-tool-group" defaultOpen>
-      <ToolGroupTrigger data-testid="chat-tool-group-toggle" count={indices.length} active={running} label={summary} />
-      <ToolGroupContent>{children}</ToolGroupContent>
-    </ToolGroupRoot>
+    <DisclosureScope id={`tools:${indices.join(',')}`}>
+      <ToolGroupRoot data-testid="chat-tool-group" defaultOpen>
+        <ToolGroupTrigger
+          data-testid="chat-tool-group-toggle"
+          count={indices.length}
+          active={running}
+          label={summary}
+        />
+        <ToolGroupContent>{children}</ToolGroupContent>
+      </ToolGroupRoot>
+    </DisclosureScope>
   );
 }

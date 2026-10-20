@@ -11,6 +11,7 @@
  * render-prop (rules-of-hooks).
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { DisclosureScope } from '@/components/ui/disclosure-state';
 import {
   ReasoningRoot,
   ReasoningTrigger,
@@ -43,14 +44,16 @@ export function useReasoningDuration(running: boolean): number | undefined {
   return duration;
 }
 
-export function ReasoningGroup({ running, children }: { running: boolean; children: ReactNode }) {
+export function ReasoningGroup({ running, children, id = '' }: { running: boolean; children: ReactNode; id?: string }) {
   const duration = useReasoningDuration(running);
   return (
-    <ReasoningRoot defaultOpen={running} variant="ghost">
-      <ReasoningTrigger active={running} duration={duration} />
-      <ReasoningContent aria-busy={running}>
-        <ReasoningText>{children}</ReasoningText>
-      </ReasoningContent>
-    </ReasoningRoot>
+    <DisclosureScope id={`reasoning:${id}`}>
+      <ReasoningRoot defaultOpen={running} variant="ghost">
+        <ReasoningTrigger active={running} duration={duration} />
+        <ReasoningContent aria-busy={running}>
+          <ReasoningText>{children}</ReasoningText>
+        </ReasoningContent>
+      </ReasoningRoot>
+    </DisclosureScope>
   );
 }

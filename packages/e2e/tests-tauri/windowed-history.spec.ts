@@ -37,11 +37,12 @@ test.describe('windowed transcript history', () => {
     await sessionsSidebar(app.page).row(seeded.chatId).click();
     await expect(app.page.getByTestId('chat-load-earlier')).toBeVisible();
     await expect(app.page.getByTestId('chat-thread-loading')).toHaveCount(0);
+    await expect(app.page.getByText('Needle turn 249', { exact: true })).toBeInViewport();
   });
 
   test('opens the newest window and keeps the full transcript off the wire', async () => {
     const page = app.page;
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(20);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '40');
     await expect(page.getByText('Needle turn 249', { exact: true })).toBeVisible();
     await expect(page.getByText('Needle turn 2 ancient landmark', { exact: true })).toHaveCount(0);
     expect(wire.pageRequests).toBe(0);
@@ -56,6 +57,8 @@ test.describe('windowed transcript history', () => {
     await viewport.focus();
     await page.keyboard.press('Home');
     await expect.poll(() => wire.pageRequests).toBe(1);
+    await expect.poll(() => viewport.evaluate((node) => node.scrollTop)).toBeLessThan(1);
+    await expect(page.getByText('Needle turn 230', { exact: true })).toBeInViewport();
     const anchor = await viewport.locator('[data-message-id]').evaluateAll((messages) => {
       const viewport = messages[0]!.closest('[data-mf-chat-thread]')!;
       const top = viewport.getBoundingClientRect().top;
@@ -63,7 +66,8 @@ test.describe('windowed transcript history', () => {
       return { id: node.dataset.messageId!, top: node.getBoundingClientRect().top };
     });
     wire.release();
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
+    await expect(page.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
     const after = await viewport
       .locator(`[data-message-id="${anchor.id}"]`)
       .evaluate((node) => node.getBoundingClientRect().top);
@@ -92,17 +96,22 @@ test.describe('windowed transcript history', () => {
     await viewport.evaluate((node) => {
       node.scrollTop = 0;
     });
-    const anchor = viewport.locator('[data-message-id]').first();
+    const earlier = page.getByTestId('chat-load-earlier');
+    await earlier.scrollIntoViewIfNeeded();
+    await expect(earlier).toBeInViewport({ ratio: 1 });
+    const anchor = page.getByTestId('chat-user-message').filter({ hasText: /^Needle turn 230$/ });
+    await expect(anchor).toBeVisible();
     const before = await anchor.boundingBox();
     expect(before).not.toBeNull();
     const id = await anchor.getAttribute('data-message-id');
     wire.holdPage = true;
-    await page.getByTestId('chat-load-earlier').click();
+    await earlier.click();
     await expect.poll(() => wire.pageRequests).toBe(1);
     const loading = await page.locator(`[data-message-id="${id}"]`).boundingBox();
     expect(Math.abs(loading!.y - before!.y)).toBeLessThan(2);
     wire.release();
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
+    await expect(page.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
     const after = await page.locator(`[data-message-id="${id}"]`).boundingBox();
     expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);
     expect(wire.pageRequests).toBe(1);

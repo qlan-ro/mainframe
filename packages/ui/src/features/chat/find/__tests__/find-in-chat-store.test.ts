@@ -53,3 +53,16 @@ describe('useFindInChatStore', () => {
     expect(useFindInChatStore.getState().activeIndex).toBe(0);
   });
 });
+
+it('retains the active occurrence across same-query rescans during streaming', () => {
+  const store = useFindInChatStore.getState();
+  store.setQuery('needle');
+  store.setMatches([m(0), m(5)]);
+  store.next();
+  store.setMatches([m(-5), m(0), m(5), m(10)]);
+  expect(useFindInChatStore.getState().activeIndex).toBe(2);
+  store.setMatches([m(0), m(10)]);
+  expect(useFindInChatStore.getState().activeIndex).toBe(0);
+  store.setQuery('different');
+  expect(useFindInChatStore.getState().matches).toEqual([]);
+});

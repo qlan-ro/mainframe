@@ -1,5 +1,5 @@
 import { captureReadingAnchor, restoreReadingAnchor, type ReadingAnchor } from './reading-anchor';
-import { useCallback, useEffect, useLayoutEffect, useRef, type RefCallback } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefCallback } from 'react';
 
 function createPinState() {
   return {
@@ -104,12 +104,17 @@ function trackScroll(
   trackReadingPosition(element, state);
 }
 
-function usePinObservers(viewportElement: React.RefObject<HTMLDivElement | null>, state: React.RefObject<PinState>) {
+function usePinObservers(
+  viewportElement: React.RefObject<HTMLDivElement | null>,
+  state: React.RefObject<PinState>,
+  setViewport: (element: HTMLDivElement | null) => void,
+) {
   const viewportRef: RefCallback<HTMLDivElement> = useCallback(
     (element) => {
       state.current.removeScroll?.();
       if (viewportElement.current) state.current.observer?.unobserve(viewportElement.current);
       viewportElement.current = element;
+      setViewport(element);
       if (!element) return;
       state.current.observer?.observe(element);
       const track = () => {
@@ -123,7 +128,7 @@ function usePinObservers(viewportElement: React.RefObject<HTMLDivElement | null>
         stopUserScrollTracking();
       };
     },
-    [state, viewportElement],
+    [state, viewportElement, setViewport],
   );
   const contentRef: RefCallback<HTMLDivElement> = useCallback(
     (element) => {
@@ -161,6 +166,7 @@ function useFooterObserver(state: React.RefObject<PinState>) {
 
 export function useThreadBottomPin(threadId: string | null) {
   const viewportElement = useRef<HTMLDivElement | null>(null);
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
   const state = useRef(createPinState());
   const pinnedThread = useRef(threadId);
   if (pinnedThread.current !== threadId) {
@@ -169,7 +175,7 @@ export function useThreadBottomPin(threadId: string | null) {
     pinnedThread.current = threadId;
     resetPin(state.current);
   }
-  const refs = usePinObservers(viewportElement, state);
+  const refs = usePinObservers(viewportElement, state, setViewport);
   const footerRef = useFooterObserver(state);
   const isFollowing = useCallback(() => state.current.pinned && state.current.locks === 0, []);
   const beginInteraction = useCallback(() => {
@@ -200,5 +206,5 @@ export function useThreadBottomPin(threadId: string | null) {
       if (current.frame !== null) cancelAnimationFrame(current.frame);
     };
   }, []);
-  return { ...refs, footerRef, viewportElement, beginInteraction, isFollowing };
+  return { ...refs, footerRef, viewportElement, viewport, beginInteraction, isFollowing };
 }

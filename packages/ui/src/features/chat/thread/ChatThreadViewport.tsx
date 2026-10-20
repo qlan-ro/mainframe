@@ -15,7 +15,7 @@ import { useChatExtras } from '../runtime/chat-extras';
 import { ContextNotPreservedNotice } from './ContextNotPreservedNotice';
 import { DegradedChatCard } from './DegradedChatCard';
 import { useThreadBottomPin } from './use-thread-bottom-pin';
-import { ProgressiveMessages } from './ProgressiveMessages';
+import { VirtualMessages } from './VirtualMessages';
 import { TranscriptScrollProvider } from './transcript-scroll-context';
 import { TRANSCRIPT_WIDTH_VAR, TranscriptWidthHandle } from './TranscriptWidthHandle';
 import {
@@ -37,7 +37,7 @@ function TranscriptMessages() {
       <CompactTranscript />
     </Suspense>
   ) : (
-    <ProgressiveMessages components={boundedMessageComponents} />
+    <VirtualMessages components={boundedMessageComponents} />
   );
 }
 function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
@@ -78,15 +78,10 @@ function ThreadFooter({
           <ArrowDownIcon />
         </Button>
       </ThreadPrimitive.ScrollToBottom>
-      {/* The transcript column's width (ui-prefs, 680px by default), not
-          `min(48rem, 100% − 116px)`: the 116 only ever cleared the floating
-          rail, which is gone; the panel takes real width now. */}
       <div
         data-testid="chat-thread-footer"
         className="mx-auto flex w-full min-h-0 max-w-(--mf-transcript-width) flex-col px-5 pb-4"
       >
-        {/* The ONE live timer (D18, reverses #214): the status line sits above
-            the gate slot and the composer, not inside the transcript. */}
         <GeneratingIndicator />
         <ChatGateMount />
         <div className="flex min-h-0 flex-col">
@@ -109,11 +104,11 @@ function ThreadFooter({
 export function ChatThreadViewport({ emptyState, variant }: { emptyState?: ReactNode; variant: ChatThreadVariant }) {
   const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
   const threadId = useSideAwareThreadId();
-  const { viewportRef, contentRef, footerRef, viewportElement, beginInteraction, isFollowing } =
+  const { viewportRef, contentRef, footerRef, viewportElement, viewport, beginInteraction, isFollowing } =
     useThreadBottomPin(threadId);
   const scroll = useMemo(
-    () => ({ viewportElement, beginInteraction, isFollowing }),
-    [viewportElement, beginInteraction, isFollowing],
+    () => ({ viewportElement, viewport, beginInteraction, isFollowing }),
+    [viewportElement, viewport, beginInteraction, isFollowing],
   );
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const chatId = useChatExtras()?.state.chatId;
@@ -143,9 +138,6 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
             <LoadErrorBanner />
             {variant !== 'side' && <ContextNotPreservedNotice />}
             {messageCount === 0 && emptyState != null ? emptyState : null}
-            {/* Keyed by thread: the progressive window (and compact mode's caches)
-              restart from the new thread's tail on a switch instead of
-              inheriting the previous thread's state. */}
             <EarlierMessages />
             <TranscriptMessages key={threadId ?? ''} />
             <CompactingIndicator />

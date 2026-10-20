@@ -17,6 +17,7 @@ import { useState, useEffect } from 'react';
 import { useHost } from '@/lib/host';
 import { getToolResultContent } from '@/lib/api/chats';
 import { cn } from '@/lib/utils';
+import { useRetainedValue } from '@/components/ui/disclosure-state';
 
 // ---------------------------------------------------------------------------
 // Byte formatter (shared with the collapse state)
@@ -42,17 +43,15 @@ type FetchState = 'idle' | 'loading' | 'error';
 
 export function ToolResultExpand({ chatId, toolUseId, truncatedContent, fullBytes }: ToolResultExpandProps) {
   const host = useHost();
-  const [full, setFull] = useState<string | null>(null);
+  const [full, setFull] = useRetainedValue<string | null>(`full-output:${chatId}:${toolUseId}`, null);
   const [fetchState, setFetchState] = useState<FetchState>('idle');
   const [port, setPort] = useState<number | null>(null);
 
-  // Resolve the daemon port once on mount via the host port.
   useEffect(() => {
     host.daemon
       .port()
       .then(setPort)
       .catch((err: unknown) => {
-        // Port is unavailable — expand will remain disabled until resolved.
         console.warn('[tool-result-expand] getDaemonPort failed', err);
       });
   }, [host]);
@@ -70,43 +69,61 @@ export function ToolResultExpand({ chatId, toolUseId, truncatedContent, fullByte
     }
   };
 
-  // A textual disclosure affordance, not a button-shaped control — same
-  // treatment ToolGroupTrigger uses one level up.
-  const buttonClass = cn(
-    'text-xs text-muted-foreground hover:text-foreground',
-    'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+  return full === null ? (
+    <ToolResultPreview
+      content={truncatedContent}
+      state={fetchState}
+      disabled={port === null}
+      fullBytes={fullBytes}
+      onExpand={expand}
+    />
+  ) : (
+    <ExpandedToolResult content={full} onCollapse={() => setFull(null)} />
   );
+}
 
-  if (full !== null) {
-    return (
-      <div className="flex flex-col gap-1">
-        <pre className="text-xs wrap-break-word whitespace-pre-wrap text-foreground">{full}</pre>
-        <button
-          data-testid="tool-result-expand-collapse"
-          type="button"
-          className={buttonClass}
-          onClick={() => setFull(null)}
-        >
-          Collapse
-        </button>
-      </div>
-    );
-  }
+const buttonClass = cn(
+  'text-xs text-muted-foreground hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+);
 
+function ExpandedToolResult({ content, onCollapse }: { content: string; onCollapse: () => void }) {
   return (
     <div className="flex flex-col gap-1">
-      <pre className="text-xs wrap-break-word whitespace-pre-wrap text-muted-foreground">{truncatedContent}</pre>
-      {fetchState === 'error' ? (
+      <pre className="text-xs wrap-break-word whitespace-pre-wrap text-foreground">{content}</pre>
+      <button data-testid="tool-result-expand-collapse" type="button" className={buttonClass} onClick={onCollapse}>
+        Collapse
+      </button>
+    </div>
+  );
+}
+
+function ToolResultPreview({
+  content,
+  state,
+  disabled,
+  fullBytes,
+  onExpand,
+}: {
+  content: string;
+  state: FetchState;
+  disabled: boolean;
+  fullBytes: number;
+  onExpand: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <pre className="text-xs wrap-break-word whitespace-pre-wrap text-muted-foreground">{content}</pre>
+      {state === 'error' ? (
         <span className="text-xs text-muted-foreground">full output no longer available</span>
       ) : (
         <button
           data-testid="tool-result-expand-toggle"
           type="button"
-          disabled={fetchState === 'loading' || port == null}
+          disabled={state === 'loading' || disabled}
           className={buttonClass}
-          onClick={expand}
+          onClick={onExpand}
         >
-          {fetchState === 'loading' ? 'Loading…' : `Show full output · ${fmtBytes(fullBytes)}`}
+          {state === 'loading' ? 'Loading…' : `Show full output · ${fmtBytes(fullBytes)}`}
         </button>
       )}
     </div>

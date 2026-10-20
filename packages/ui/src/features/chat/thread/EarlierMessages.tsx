@@ -1,59 +1,28 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useTranscriptScroll } from './transcript-scroll-context';
 
-export const HISTORY_PREPEND_EVENT = 'mainframe:history-prepend';
+import { usePrependAnchor } from './use-prepend-anchor';
+export { HISTORY_PREPEND_EVENT } from './use-prepend-anchor';
 
 export function EarlierMessages() {
   const extras = useChatExtras();
-  const scroll = useTranscriptScroll();
   const firstId = useAuiState((s) => s.thread.messages[0]?.id);
   const history = extras?.state.historyWindow;
-  const pending = useRef<null | (() => void)>(null);
-  useEffect(() => {
-    const beforePrepend = (event: Event) => {
-      if ((event as CustomEvent<string>).detail !== extras?.state.chatId) return;
-      const viewport = scroll?.viewportElement.current;
-      if (!viewport) return;
-      const pinned = scroll.isFollowing();
-      const release = scroll.beginInteraction();
-      const top = viewport.getBoundingClientRect().top;
-      const anchor = [...viewport.querySelectorAll<HTMLElement>('[data-message-id]')].find(
-        (node) => node.getBoundingClientRect().bottom > top,
-      );
-      const offset = anchor?.getBoundingClientRect().top;
-      const height = viewport.scrollHeight;
-      const oldTop = viewport.scrollTop;
-      pending.current = () => {
-        if (pinned) viewport.scrollTop = viewport.scrollHeight;
-        else if (anchor?.isConnected && offset !== undefined)
-          viewport.scrollTop += anchor.getBoundingClientRect().top - offset;
-        else viewport.scrollTop = oldTop + viewport.scrollHeight - height;
-        release();
-      };
-    };
-    window.addEventListener(HISTORY_PREPEND_EVENT, beforePrepend);
-    return () => {
-      window.removeEventListener(HISTORY_PREPEND_EVENT, beforePrepend);
-      pending.current?.();
-      pending.current = null;
-    };
-  }, [extras?.state.chatId, scroll]);
-  useLayoutEffect(() => {
-    pending.current?.();
-    pending.current = null;
-  }, [firstId]);
-  useOlderPageGesture(extras?.loadEarlier, history?.hasMore === true, history?.loading === true);
+  const anchoring = usePrependAnchor(firstId, extras?.state.chatId);
+  const loading = history?.loading === true || anchoring;
+  useOlderPageGesture(extras?.loadEarlier, history?.hasMore === true, loading);
   if (!firstId) return null;
   return (
     <div
       data-testid="chat-history-boundary"
       className="flex min-h-12 flex-col items-center py-2 text-xs text-muted-foreground"
       aria-live="polite"
+      aria-busy={loading}
     >
-      {history?.loading ? (
+      {loading ? (
         <span>Loading earlier messages...</span>
       ) : history?.hasMore ? (
         <Button

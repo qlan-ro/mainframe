@@ -58,69 +58,80 @@ function paintHighlights(matches: ReturnType<typeof searchMessages>, activeIndex
   };
 }
 
-export function FindBar(): React.ReactElement | null {
-  const isOpen = useFindInChatStore((s) => s.isOpen);
-  const daemon = useFindInChatStore((s) => s.daemon);
-  const total = useFindInChatStore((s) => s.serverTotal);
-  const loading = useFindInChatStore((s) => s.loading);
-  const error = useFindInChatStore((s) => s.error);
-  const truncated = useFindInChatStore((s) => s.truncated);
-  const query = useFindInChatStore((s) => s.query);
-  const matches = useFindInChatStore((s) => s.matches);
-  const activeIndex = useFindInChatStore((s) => s.activeIndex);
-  const close = useFindInChatStore((s) => s.close);
-  const setQuery = useFindInChatStore((s) => s.setQuery);
-  const setMatches = useFindInChatStore((s) => s.setMatches);
-  const next = useFindInChatStore((s) => s.next);
-  const prev = useFindInChatStore((s) => s.prev);
-
-  const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
+function useLegacyFind() {
+  const { query, isOpen, daemon, matches, activeIndex, setMatches } = useFindInChatStore();
   useEffect(() => {
-    if (isOpen) inputRef.current?.focus();
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!isOpen || daemon) return;
-    debounceRef.current = setTimeout(() => setMatches(searchMessages(query)), DEBOUNCE_MS);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        setMatches(searchMessages(query));
+      }, DEBOUNCE_MS);
+    };
+    schedule();
+    const observer = new MutationObserver(schedule);
+    const viewport = document.querySelector('[data-mf-chat-thread]');
+    if (viewport) observer.observe(viewport, { childList: true, subtree: true, characterData: true });
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
     };
   }, [query, isOpen, setMatches, daemon]);
-
   useEffect(() => {
-    if (!isOpen || daemon) return;
-    return paintHighlights(matches, activeIndex);
+    if (isOpen && !daemon) return paintHighlights(matches, activeIndex);
   }, [matches, activeIndex, isOpen, daemon]);
+}
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (e.shiftKey) prev();
-        else next();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        close();
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        next();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        prev();
-      }
+function useFindKeyboard() {
+  const { next, prev, close } = useFindInChatStore();
+  return useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!['Enter', 'Escape', 'ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      if (event.key === 'Escape') close();
+      else if (event.key === 'ArrowUp' || (event.key === 'Enter' && event.shiftKey)) prev();
+      else next();
     },
     [next, prev, close],
   );
+}
 
+function FindNavigation({ count }: { count: number }) {
+  const { prev, next, close } = useFindInChatStore();
+  const buttons = [
+    { id: 'prev', label: 'Previous match', action: prev, Icon: ChevronUp },
+    { id: 'next', label: 'Next match', action: next, Icon: ChevronDown },
+    { id: 'close', label: 'Close find bar', action: close, Icon: X },
+  ];
+  return buttons.map(({ id, label, action, Icon }) => (
+    <button
+      key={id}
+      data-testid={`thread-find-${id}`}
+      type="button"
+      onClick={action}
+      disabled={id !== 'close' && count === 0}
+      aria-label={label}
+      className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-30"
+    >
+      <Icon size={14} />
+    </button>
+  ));
+}
+
+export function FindBar(): React.ReactElement | null {
+  const { isOpen, serverTotal, loading, error, truncated, query, matches, activeIndex, setQuery } =
+    useFindInChatStore();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const handleKeyDown = useFindKeyboard();
+  useLegacyFind();
+  useEffect(() => {
+    if (isOpen) inputRef.current?.focus();
+  }, [isOpen]);
   if (!isOpen) return null;
-
-  const count = total ?? matches.length;
+  const count = serverTotal ?? matches.length;
   const current = matches.length > 0 ? activeIndex + 1 + Math.max(0, count - matches.length) : 0;
-  const btn = 'rounded p-1 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-30';
-
   return (
     <div
       data-testid="find-bar"
@@ -131,7 +142,7 @@ export function FindBar(): React.ReactElement | null {
         data-testid="thread-find-input"
         type="text"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(event) => setQuery(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Find in chat…"
         aria-label="Find in chat"
@@ -146,29 +157,7 @@ export function FindBar(): React.ReactElement | null {
       {loading && <span role="status">Searching...</span>}
       {truncated && <span data-testid="thread-find-limit">Stepping through the newest 2,000 matches</span>}
       {error && <span role="alert">{error}</span>}
-      <button
-        data-testid="thread-find-prev"
-        type="button"
-        onClick={prev}
-        disabled={count === 0}
-        aria-label="Previous match"
-        className={btn}
-      >
-        <ChevronUp size={14} />
-      </button>
-      <button
-        data-testid="thread-find-next"
-        type="button"
-        onClick={next}
-        disabled={count === 0}
-        aria-label="Next match"
-        className={btn}
-      >
-        <ChevronDown size={14} />
-      </button>
-      <button data-testid="thread-find-close" type="button" onClick={close} aria-label="Close find bar" className={btn}>
-        <X size={14} />
-      </button>
+      <FindNavigation count={count} />
     </div>
   );
 }

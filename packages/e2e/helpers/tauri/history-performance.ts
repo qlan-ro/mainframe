@@ -63,11 +63,11 @@ async function pageAndPopulate(page: Page): Promise<number> {
   await viewport.hover();
   await armHistoryPaint(page, '[data-testid="chat-thread-viewport"]', 'page');
   await page.mouse.wheel(0, -100_000);
-  await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
+  await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
   const duration = await historyPaintMs(page);
   for (let users = 60; users <= 200; users += 20) {
     await page.getByTestId('chat-load-earlier').click();
-    await expect(page.getByTestId('chat-user-message')).toHaveCount(users);
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', String(users * 2));
   }
   await painted(page);
   return duration;

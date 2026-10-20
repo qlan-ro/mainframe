@@ -21,7 +21,11 @@ export async function installHistoryPaintProbe(page: Page): Promise<void> {
       replays: {},
       ready(kind, chatId, replays, edited) {
         if (kind === 'key') return edited;
-        if (kind === 'page') return document.querySelectorAll('[data-testid="chat-user-message"]').length === 40;
+        if (kind === 'page')
+          return (
+            document.querySelector('[data-testid="chat-message-list"]')?.getAttribute('data-loaded-count') === '80' &&
+            document.querySelector('[data-testid="chat-history-boundary"]')?.getAttribute('aria-busy') === 'false'
+          );
         const tail = Array.from(document.querySelectorAll('[data-testid="chat-user-message"]')).find((node) =>
           node.textContent?.includes('Needle turn 249'),
         );
