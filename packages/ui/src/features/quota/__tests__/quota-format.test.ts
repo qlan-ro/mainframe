@@ -3,6 +3,7 @@ import type { ProviderQuota } from '@qlan-ro/mainframe-types';
 import {
   QUOTA_AMBER_THRESHOLD,
   QUOTA_RED_THRESHOLD,
+  capsuleWindowName,
   deriveCapsuleItems,
   deriveWindowList,
   formatAbsoluteReset,
@@ -12,7 +13,6 @@ import {
   pinnedCapsuleIndex,
   severityOf,
   windowLabel,
-  windowTag,
 } from '../quota-format';
 
 const NOW = 1_752_750_000_000; // fixed injected clock
@@ -51,7 +51,7 @@ describe('deriveCapsuleItems — the capsule cycle', () => {
         providerId: 'claude',
         providerLabel: 'Claude',
         kind: 'session',
-        tag: '5h',
+        name: '5-hour',
         label: '5-hour',
         usedPercent: 3,
         severity: 'normal',
@@ -63,7 +63,7 @@ describe('deriveCapsuleItems — the capsule cycle', () => {
         providerId: 'claude',
         providerLabel: 'Claude',
         kind: 'weekly',
-        tag: 'wk',
+        name: 'Weekly',
         label: 'Weekly',
         usedPercent: 41,
         severity: 'normal',
@@ -75,7 +75,7 @@ describe('deriveCapsuleItems — the capsule cycle', () => {
         providerId: 'claude',
         providerLabel: 'Claude',
         kind: 'weekly-model',
-        tag: 'wk',
+        name: 'Weekly Fable',
         label: 'Weekly · Fable',
         usedPercent: 59,
         severity: 'normal',
@@ -87,7 +87,7 @@ describe('deriveCapsuleItems — the capsule cycle', () => {
         providerId: 'codex',
         providerLabel: 'Codex',
         kind: 'weekly',
-        tag: 'wk',
+        name: 'Weekly',
         label: 'Weekly',
         usedPercent: 17,
         severity: 'normal',
@@ -153,11 +153,14 @@ describe('pinnedCapsuleIndex', () => {
   });
 });
 
-describe('windowTag', () => {
-  it('tags the session window 5h, and every other window kind wk', () => {
-    expect(windowTag('session')).toBe('5h');
-    expect(windowTag('weekly')).toBe('wk');
-    expect(windowTag('weekly-model')).toBe('wk');
+describe('capsuleWindowName', () => {
+  it('names each window kind, a per-model weekly by its model without the separator dot', () => {
+    expect(capsuleWindowName({ kind: 'session', usedPercent: 0, resetsAt: null })).toBe('5-hour');
+    expect(capsuleWindowName({ kind: 'weekly', usedPercent: 0, resetsAt: null })).toBe('Weekly');
+    expect(capsuleWindowName({ kind: 'weekly-model', usedPercent: 0, resetsAt: null, label: 'Fable' })).toBe(
+      'Weekly Fable',
+    );
+    expect(capsuleWindowName({ kind: 'weekly-model', usedPercent: 0, resetsAt: null })).toBe('Weekly model');
   });
 });
 

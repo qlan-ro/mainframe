@@ -1,16 +1,17 @@
 /**
  * The usage capsule — the ambient plan-quota surface, right after the traffic
- * lights in the title bar. One limit at a time (provider dot, window tag,
+ * lights in the title bar. One limit at a time (provider name, window name,
  * bar, percent, time to reset), cycling every 4s through each provider's
  * windows, smallest first; the dots on the right say where in the cycle it
  * is. A window at 75%+ stops the rotation and stays on screen in warning,
- * 90%+ in destructive.
+ * 90%+ in destructive. The title bar sizes it to its slot; a window name
+ * that doesn't fit fades out at its end.
  *
  * Hover pauses the cycle and opens every limit at once in a popover; a click
  * pins that popover until the user clicks away. Pure wiring: the cycle's
  * contents and the pinned window come from `quota-format`.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { useNow } from '@/lib/use-now';
@@ -23,12 +24,13 @@ import {
   type CapsuleItemVm,
 } from '@/features/quota/quota-format';
 import { useQuotaStore } from '@/store/quota';
-import { ProviderDot } from '../shared/ProviderDot';
 import { QUOTA_BAR_FILL, QUOTA_PERCENT_TEXT } from './quota-severity';
 import { UsagePopover } from './UsagePopover';
 import { useHoverPin } from './use-hover-pin';
 
 const CYCLE_INTERVAL_MS = 4_000;
+/** The capsule's width while the sidebar is collapsed; the narrowest open sidebar gives it about this much too. */
+export const USAGE_CAPSULE_WIDTH = 176;
 /** One capsule row; the track slides by this much per step. */
 const ROW_PX = 20;
 
@@ -56,8 +58,11 @@ function CapsuleRow({ item, now }: { item: CapsuleItemVm; now: number }) {
       data-testid={`usage-capsule-item-${item.key}`}
       className="flex h-5 items-center gap-1.5 text-xs whitespace-nowrap tabular-nums"
     >
-      <ProviderDot adapterId={item.providerId} className="size-1.75" />
-      <span className="w-4 shrink-0 text-muted-foreground">{item.tag}</span>
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate-fade">
+        <span className="shrink-0">{item.providerLabel}</span>
+        <span aria-hidden className="size-0.75 shrink-0 rounded-full bg-foreground" />
+        <span className="shrink-0 text-muted-foreground">{item.name}</span>
+      </span>
       <Progress
         value={item.usedPercent}
         className={cn('h-0.75 w-8 shrink-0 bg-foreground/10', QUOTA_BAR_FILL[item.severity])}
@@ -87,7 +92,7 @@ function CycleDots({ count, active }: { count: number; active: number }) {
 }
 
 /** `now` is injectable so the derived staleness/expiry states are deterministic in tests. */
-export function UsageCapsule({ now }: { now?: number }) {
+export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: number; width?: CSSProperties['width'] }) {
   // Ticks so an idle capsule still crosses resetsAt/staleness thresholds.
   const ticking = useNow();
   const effectiveNow = now ?? ticking;
@@ -120,8 +125,9 @@ export function UsageCapsule({ now }: { now?: number }) {
           onClick={hover.togglePin}
           onPointerEnter={hover.onPointerEnter}
           onPointerLeave={hover.onPointerLeave}
+          style={{ width }}
           className={cn(
-            'flex h-7 w-44 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg bg-sidebar-accent pr-1.5 pl-2.5 outline-none',
+            'flex h-7 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg bg-sidebar-accent pr-1.5 pl-2.5 outline-none',
             'hover:bg-foreground/15 focus-visible:ring-2 focus-visible:ring-ring',
             hover.open && 'bg-foreground/15',
           )}

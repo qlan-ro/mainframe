@@ -91,6 +91,23 @@ describe('UsageCapsule — cycle', () => {
   });
 });
 
+describe('UsageCapsule — row', () => {
+  it('names the provider and the window in full, a per-model weekly by its model', () => {
+    seed({
+      claude: {
+        ...claude(3),
+        modelWindows: [{ kind: 'weekly-model', usedPercent: 18, resetsAt: NOW + 6 * DAY, label: 'Fable' }],
+      },
+    });
+    render(<UsageCapsule now={NOW} />);
+
+    expect(screen.getByTestId('usage-capsule-item-claude:5-hour').textContent).toBe('Claude5-hour3%2h 36m');
+    expect(screen.getByTestId('usage-capsule-item-claude:Weekly · Fable').textContent).toBe(
+      'ClaudeWeekly Fable18%6d 0h',
+    );
+  });
+});
+
 describe('UsageCapsule — pinned', () => {
   it('stops on a window at 75%+ and drops the dots', () => {
     seed({ claude: claude(84), codex });
