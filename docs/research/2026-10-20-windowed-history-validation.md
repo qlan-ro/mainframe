@@ -11,6 +11,10 @@ The implementation follows the [windowed history spec](../specs/2026-10-19-windo
 - UI assertions pass across the full-suite run and retries of nine workers that timed out during startup. The initial metadata assertion failures were updated to check stable search item IDs. Separate regressions cover focused split-chat find ownership and paging during resume.
 - UI and e2e TypeScript checks pass. UI lint has existing compiler/advisory warnings and no errors.
 
+## Real-daemon integration
+
+On resumption, `windowed-history-protocol.spec.ts` passed three integration scenarios against a freshly rebuilt daemon and the isolated 33 MB mock recording. They verify a bounded newest window, one contiguous load-through to an old search match, whole-chat prose search excluding tool output, compressed pages, independent connection floors, revision reconnect with a lowered floor, and legacy full replay. These checks use direct WebSocket requests and do not verify renderer behavior.
+
 ## Local protocol measurement
 
 The release-mode `reference_transcript_measurement` test uses 500 containers, 2,500 items and a 33,417,541-byte full encoding. One local run measured a 30.35 ms revision seed and 2.12 ms window preparation, producing 1,447,261 uncompressed bytes for the window.
@@ -26,3 +30,7 @@ Run the standard e2e command with `MF_E2E_HISTORY_PERF=1` and the two `windowed-
 Local runtime verification was blocked: both headed and headless Chromium failed during macOS process bootstrap before opening a page. The native Tauri shell compiled and its bridge connected, but macOS never created its main window. No screenshots or WebKit prepend result were obtained. The computer-use service was also unavailable.
 
 Before release, run the browser specs, record the CI performance table, and check native WebKit prepend anchoring, compact disclosure stability, activity/subagent jumps, reconnect/resync, light/dark themes and a narrow viewport. Virtualization remains conditional on the measured 50 fps / 100 ms thresholds; no threshold result is claimed here.
+
+## Publication status
+
+Both implementation branches remain local. The shell runner has no DNS configuration. An alternate local runtime reaches public GitHub using the installed CA bundle, but authenticated API requests return 401 and git has no usable credentials. No certificate verification was disabled. Chromium launch still fails at macOS Mach bootstrap in both runtimes. Publication, visual QA and the CI performance run remain outstanding.
