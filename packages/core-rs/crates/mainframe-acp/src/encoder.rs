@@ -174,6 +174,9 @@ fn encode_messages(
         .collect()
 }
 
+#[cfg(test)]
+thread_local! { pub(crate) static ENCODED_CONTAINERS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+
 /// Encode one top-level container (a single `DisplayMessage`) into its items —
 /// empty for a queued message. `streaming`, when `Some`, marks whichever leaf
 /// accumulator segment is still open at `finish`, exactly as `encode_content`
@@ -183,6 +186,8 @@ pub fn encode_container(
     message: &DisplayMessage,
     streaming: Option<StreamingLeafKind>,
 ) -> Vec<EncodedItem> {
+    #[cfg(test)]
+    ENCODED_CONTAINERS.with(|count| count.set(count.get() + 1));
     if is_queued(message) {
         return Vec::new();
     }

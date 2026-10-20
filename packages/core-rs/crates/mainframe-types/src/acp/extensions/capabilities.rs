@@ -42,6 +42,10 @@ pub struct MainframeCapabilities {
     /// [`COMPRESSED_REPLAY_OPT_IN_KEY`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compressed_replay: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub windowed_history: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_search: Option<bool>,
 }
 
 /// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
@@ -111,6 +115,8 @@ mod tests {
             revision_cursors: None,
             replay_result_previews: None,
             compressed_replay: None,
+            windowed_history: None,
+            history_search: None,
         };
         assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));
     }

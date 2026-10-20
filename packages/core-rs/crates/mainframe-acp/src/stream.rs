@@ -29,7 +29,10 @@ use crate::encoder::delta::EncodedDelta;
 use crate::session_state::SessionState;
 use crate::throttle::{Throttle, ThrottledFrame};
 
+mod window;
+
 pub struct SessionStream {
+    window: Option<Box<window::WindowStream>>,
     state: SessionState,
     throttle: Throttle,
     /// Set by `api_retry`, attached to the next content-carrying upsert's
@@ -43,6 +46,7 @@ impl SessionStream {
     pub fn new(throttle_interval_ms: i64) -> Self {
         Self {
             state: SessionState::new(),
+            window: None,
             throttle: Throttle::new(throttle_interval_ms),
             pending_retry: None,
         }
@@ -105,6 +109,29 @@ impl SessionStream {
     /// marker, the throttle FIFO, the cursor placement — matches `on_revision`
     /// frame for frame.
     pub fn on_revision_delta(
+        &mut self,
+        delta: &EncodedDelta,
+        full: impl FnOnce() -> Vec<Vec<EncodedItem>>,
+        now_ms: i64,
+        cursor: Option<RevisionCursor>,
+    ) -> Vec<ThrottledFrame> {
+        let delta = if self.window.is_some() {
+            match self.window_delta(delta, full) {
+                Ok(delta) => delta,
+                Err(Some(resync)) => {
+                    let mut frames = self.throttle.flush(now_ms);
+                    frames.push(ThrottledFrame::Raw(resync));
+                    return frames;
+                }
+                Err(None) => return Vec::new(),
+            }
+        } else {
+            return self.apply_revision_delta(delta, full, now_ms, cursor);
+        };
+        self.apply_revision_delta(&delta, Vec::new, now_ms, cursor)
+    }
+
+    fn apply_revision_delta(
         &mut self,
         delta: &EncodedDelta,
         full: impl FnOnce() -> Vec<Vec<EncodedItem>>,
@@ -254,3 +281,7 @@ pub(crate) fn merge_namespace(existing: Option<Value>, value: Value) -> Value {
 #[cfg(test)]
 #[path = "stream_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "stream/window_tests.rs"]
+mod window_tests;

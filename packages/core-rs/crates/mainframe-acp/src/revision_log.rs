@@ -64,10 +64,11 @@ pub enum ReplayPlan {
 /// reinterpret an old revision against reconstructed state.
 pub struct RevisionLog {
     epoch: String,
+    structure_revision: u64,
     revision: u64,
     seeded: bool,
     items: HashMap<String, (u64, EncodedItem)>,
-    tombstones: VecDeque<(u64, EncodedItem)>,
+    tombstones: VecDeque<(u64, EncodedItem, Option<usize>)>,
     /// The highest revision evicted from `tombstones`. A cursor at or below
     /// this floor cannot be served incrementally — its retained tombstone
     /// range is gone.
@@ -89,6 +90,7 @@ impl RevisionLog {
     pub fn new(epoch: String) -> Self {
         Self {
             epoch,
+            structure_revision: 0,
             revision: 0,
             seeded: false,
             items: HashMap::new(),
@@ -175,6 +177,40 @@ impl RevisionLog {
     /// invariants this leans on (the resume-snapshot/display-emission lock
     /// race, and tool calls never clearing live).
     pub fn plan(&self, cursor: &RevisionCursor, snapshot_items: &[EncodedItem]) -> ReplayPlan {
+        self.plan_scoped(cursor, snapshot_items, None)
+    }
+
+    pub fn container_position(&self, id: &str) -> Option<usize> {
+        self.containers.position(id)
+    }
+
+    pub fn is_seeded(&self) -> bool {
+        self.seeded
+    }
+
+    pub fn plan_window(
+        &self,
+        cursor: &RevisionCursor,
+        items: &[EncodedItem],
+        floor: usize,
+        floor_id: &str,
+    ) -> ReplayPlan {
+        if cursor.revision < self.structure_revision
+            || self.containers.position(floor_id) != Some(floor)
+        {
+            return ReplayPlan::Full;
+        }
+        self.plan_scoped(cursor, items, Some(floor))
+    }
+
+    fn plan_scoped(
+        &self,
+        cursor: &RevisionCursor,
+        snapshot_items: &[EncodedItem],
+        floor: Option<usize>,
+    ) -> ReplayPlan {
+        let ids = floor.map(|floor| self.containers.ids_from(floor));
+        let held = |id: &str| ids.as_ref().is_none_or(|ids| ids.contains(id));
         if cursor.epoch != self.epoch
             || cursor.revision < self.floor
             || cursor.revision > self.revision
@@ -186,7 +222,9 @@ impl RevisionLog {
             .map(|item| (item.id(), item))
             .collect();
         let missing_tool_call = self.items.values().any(|(_, item)| {
-            matches!(item, EncodedItem::ToolCall { .. }) && !snapshot_ids.contains_key(item.id())
+            held(item.id())
+                && matches!(item, EncodedItem::ToolCall { .. })
+                && !snapshot_ids.contains_key(item.id())
         });
         if missing_tool_call {
             return ReplayPlan::Full;
@@ -196,15 +234,16 @@ impl RevisionLog {
         let mut cleared_ids: Vec<&String> = self
             .items
             .keys()
-            .filter(|id| !snapshot_ids.contains_key(id.as_str()))
+            .filter(|id| held(id) && !snapshot_ids.contains_key(id.as_str()))
             .collect();
         cleared_ids.sort();
         for id in cleared_ids {
             let (_, item) = &self.items[id];
             updates.push(clear_update(item));
         }
-        for (rev, item) in &self.tombstones {
-            if *rev > cursor.revision && !snapshot_ids.contains_key(item.id()) {
+        for (rev, item, position) in &self.tombstones {
+            let in_range = floor.is_none_or(|floor| position.is_some_and(|pos| pos >= floor));
+            if in_range && *rev > cursor.revision && !snapshot_ids.contains_key(item.id()) {
                 updates.push(clear_update(item));
             }
         }
@@ -221,9 +260,10 @@ impl RevisionLog {
     }
 
     fn push_tombstone(&mut self, rev: u64, item: EncodedItem) {
-        self.tombstones.push_back((rev, item));
+        let position = self.containers.position(item.id());
+        self.tombstones.push_back((rev, item, position));
         if self.tombstones.len() > MAX_TOMBSTONES
-            && let Some((evicted_rev, _)) = self.tombstones.pop_front()
+            && let Some((evicted_rev, _, _)) = self.tombstones.pop_front()
         {
             self.floor = self.floor.max(evicted_rev);
         }

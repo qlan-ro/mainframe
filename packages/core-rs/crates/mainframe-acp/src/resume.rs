@@ -1,11 +1,3 @@
-//! `session/resume`: replay from a cursor over the stable item sequence the
-//! canonical encoder produces from history reconstruction — the same ids a
-//! live-streamed turn would have used — plus redelivery of any still-open
-//! permission gate. `ResumePort` mirrors `prompt::PromptPort`'s narrow-seam
-//! rationale: `mainframe-chat` is this crate's prospective consumer, not a
-//! dependency, so the port stays a plain trait a hand-written fake can
-//! implement in tests.
-
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -28,6 +20,7 @@ use crate::rpc;
 use crate::session_state::SessionState;
 
 mod revision;
+mod windowed;
 
 pub use mainframe_types::BoxFuture;
 
@@ -53,17 +46,8 @@ pub enum ReplayCursor {
 /// Shared snapshot of history, streaming overlay, and an open permission gate.
 pub use mainframe_types::resume::ResumeSnapshot;
 
-/// The chat-manager surface `session/resume` needs: display history plus any
-/// still-open gate for `session_id`, gathered in one call — a production
-/// implementation wraps `ChatManager::get_resume_snapshot`.
-pub trait ResumePort: Send + Sync {
-    fn resume_snapshot<'a>(&'a self, session_id: &'a str) -> BoxFuture<'a, ResumeSnapshot>;
-
-    /// Whether `session_id` has a turn in flight right now — read after the
-    /// snapshot so a mid-turn reconnect's replay ends with the state the
-    /// client's own UI needs to keep streaming smoothly.
-    fn is_running(&self, session_id: &str) -> bool;
-}
+mod port;
+pub use port::{ResumePort, SnapshotReader};
 
 /// Everything besides the JSON-RPC response a `session/resume` call
 /// produces: the replay `session/update` notifications, and — when a gate
@@ -98,23 +82,9 @@ pub struct ResumeOptions {
     /// tool results older than the newest
     /// [`replay_previews::FULL_RESULT_CONTAINERS`] containers as previews.
     pub result_previews: bool,
+    pub windowed_history: bool,
 }
 
-/// `session/resume` dispatch. Malformed params get the same structured error as
-/// every other facade method; a resolved cursor always yields a success
-/// response, since "unknown cursor" is itself a defined outcome (full replay
-/// with the [`MAINFRAME_META_NAMESPACE`] `fullReplay` marker), not an error.
-///
-/// `revision_log` is the chat's revision log paired with the boundary the
-/// caller captured BEFORE awaiting the snapshot (`None` for a connection that
-/// did not opt into revision cursors, which gets the item-cursor behaviour with
-/// no `cursor` meta at all). The caller (`mainframe-server`'s hub, in
-/// `begin_resume`) owns the log's lifecycle and that capture; this function
-/// only locks the log, after its own snapshot read, to seed an unseeded log and
-/// plan against a revision cursor — but the reply's `cursor` always carries the
-/// caller's captured boundary, never a fresh `log.boundary` read here, so it
-/// never acknowledges a change recorded in the gap between that capture and
-/// this snapshot (`revision::resolve`'s doc has the full race argument).
 pub async fn dispatch_resume(
     request: JsonRpcRequest,
     port: &dyn ResumePort,
@@ -136,12 +106,11 @@ pub async fn dispatch_resume_with(
         Err(response) => return (response, empty_replay()),
     };
 
+    if options.windowed_history && !uses_item_cursor(&resume) {
+        return windowed::dispatch(id, resume, port, revision_log, options).await;
+    }
+
     let snapshot = port.resume_snapshot(&resume.session_id).await;
-    // `encode_containers`, not `encode`: a mid-stream snapshot carries the
-    // in-flight partial overlay's `StreamingLeafKind` — with `streaming: None`
-    // this equals `encode`'s output. Flattened, it is `encode_revision`'s
-    // output; `containers` keeps the per-container shape so `revision::resolve`
-    // can seed a log's container index too.
     let containers = encoder::encode_containers(&snapshot.messages, snapshot.streaming);
     let items: Vec<EncodedItem> = containers.iter().flatten().cloned().collect();
     // Only an opted-in connection previews old results, and the set is fixed
@@ -183,6 +152,15 @@ pub async fn dispatch_resume_with(
             preview_ids,
         },
     )
+}
+
+fn uses_item_cursor(resume: &ResumeSessionRequest) -> bool {
+    resume
+        .replay_from
+        .as_ref()
+        .and_then(|value| value.get("type"))
+        .and_then(Value::as_str)
+        == Some("item")
 }
 
 fn empty_replay() -> ResumeReplay {
@@ -243,14 +221,6 @@ fn success_response(
     rpc::success_response(id, result)
 }
 
-/// `itemCount` is the size of the server's full snapshot (not the post-cursor
-/// delta): a client holding items can tell an intentionally empty transcript
-/// apart from the "no history session yet" degenerate read and refuse the
-/// blanking re-seed (the legacy `refusesEmptyRefresh` guard, kept on the
-/// facade). `fullReplay` marks an unknown/pre-compaction cursor fallback.
-/// `cursor` is present only for a connection that opted into revision cursors —
-/// the new replay boundary this reply's updates converge a client to,
-/// regardless of which cursor shape the request itself used.
 fn resume_meta(item_count: usize, full_replay: bool, cursor: Option<&WireRevisionCursor>) -> Value {
     let mut ns = serde_json::Map::new();
     ns.insert("itemCount".into(), serde_json::json!(item_count));

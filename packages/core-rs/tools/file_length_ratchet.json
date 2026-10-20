@@ -1,5 +1,4 @@
 {
-  "mainframe-acp/src/resume.rs": 312,
   "mainframe-adapter-api/src/lib.rs": 384,
   "mainframe-adapter-api/tests/pr_detection_sink.rs": 331,
   "mainframe-adapter-api/tests/registry.rs": 523,
@@ -43,7 +42,6 @@
   "mainframe-orchestration/src/tools/delegate_task_tests.rs": 413,
   "mainframe-plugins/src/context.rs": 340,
   "mainframe-plugins/src/manager.rs": 311,
-  "mainframe-server/src/acp_ws/dispatch/resume.rs": 306,
   "mainframe-server/src/acp_ws/hub/fanout.rs": 326,
   "mainframe-server/src/routes/auth.rs": 356,
   "mainframe-server/src/routes/chats.rs": 461,
@@ -59,7 +57,6 @@
   "mainframe-server/tests/support/mod.rs": 423,
   "mainframe-server/tests/workflow_runs_history.rs": 392,
   "mainframe-services/src/quota/manager.rs": 473,
-  "mainframe-types/src/acp/extensions.rs": 322,
   "mainframe-types/src/adapter.rs": 579,
   "mainframe-types/src/events.rs": 353
 }

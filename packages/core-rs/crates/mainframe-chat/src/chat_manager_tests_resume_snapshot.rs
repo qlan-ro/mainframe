@@ -296,3 +296,5 @@ async fn tool_timing_resume_reads_preserve_running_completed_and_legacy_calls() 
     );
     assert_eq!(mgr.get_messages("c1").await.len(), 4);
 }
+#[path = "chat_manager_tests_resume_borrowed.rs"]
+mod borrowed;

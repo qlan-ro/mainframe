@@ -9,5 +9,7 @@
   "authoritativeItemStreaming": true,
   "revisionCursors": true,
   "replayResultPreviews": true,
-  "compressedReplay": true
+  "compressedReplay": true,
+  "windowedHistory": true,
+  "historySearch": true
 }

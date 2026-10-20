@@ -72,7 +72,7 @@ pub fn invalid_request() -> JsonRpcErrorObject {
     }
 }
 
-pub(crate) fn method_not_found(method: &str) -> JsonRpcErrorObject {
+pub fn method_not_found(method: &str) -> JsonRpcErrorObject {
     JsonRpcErrorObject {
         code: error_codes::METHOD_NOT_FOUND,
         message: format!("method not found: {method}"),
@@ -80,7 +80,7 @@ pub(crate) fn method_not_found(method: &str) -> JsonRpcErrorObject {
     }
 }
 
-pub(crate) fn invalid_params(reason: &str) -> JsonRpcErrorObject {
+pub fn invalid_params(reason: &str) -> JsonRpcErrorObject {
     JsonRpcErrorObject {
         code: error_codes::INVALID_PARAMS,
         message: format!("invalid params: {reason}"),

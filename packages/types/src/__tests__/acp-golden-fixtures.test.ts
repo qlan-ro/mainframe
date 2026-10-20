@@ -12,6 +12,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+  HistoryWindowSchema,
+  HistoryStateSchema,
+  HistoryPageParamsSchema,
+  HistoryPageResultSchema,
+  HistorySearchParamsSchema,
+  HistorySearchResultSchema,
   CursorParamsSchema,
   GateResolvedParamsSchema,
   HeartbeatParamsSchema,
@@ -64,6 +70,12 @@ function readFixture(name: string): Record<string, unknown> {
 
 /** Filename prefix → Zod schema. Mirrors `acp_golden_fixtures.rs`'s dispatch table. */
 function schemaFor(name: string): z.ZodType {
+  if (name === 'history-window.json') return HistoryWindowSchema;
+  if (name === 'history-state.json') return HistoryStateSchema;
+  if (name === 'history-page.params.json') return HistoryPageParamsSchema;
+  if (name.startsWith('history-page.')) return HistoryPageResultSchema;
+  if (name === 'history-search.params.json') return HistorySearchParamsSchema;
+  if (name === 'history-search.result.json') return HistorySearchResultSchema;
   if (name === 'queue-state.notification.json') return JsonRpcNotificationSchema;
   if (name === 'queue-state.params.json') return QueueStateParamsSchema;
   if (name === 'transcript-cleared.notification.json') return JsonRpcNotificationSchema;

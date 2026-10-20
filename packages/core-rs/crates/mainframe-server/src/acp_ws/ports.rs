@@ -81,6 +81,25 @@ impl PromptPort for ManagerPorts {
 }
 
 impl ResumePort for ManagerPorts {
+    fn read_snapshot<'a>(
+        &'a self,
+        session_id: &'a str,
+        read: mainframe_acp::resume::SnapshotReader<'a>,
+    ) -> mainframe_acp::resume::BoxFuture<
+        'a,
+        (
+            mainframe_types::acp::jsonrpc::JsonRpcResponse,
+            mainframe_acp::ResumeReplay,
+        ),
+    > {
+        Box::pin(async move {
+            match &self.manager {
+                Some(manager) => manager.read_resume_snapshot(session_id, read).await,
+                None => read(&[], None, None),
+            }
+        })
+    }
+
     fn resume_snapshot<'a>(
         &'a self,
         session_id: &'a str,

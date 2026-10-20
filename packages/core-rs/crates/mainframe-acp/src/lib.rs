@@ -21,6 +21,9 @@ mod container_index;
 pub mod encoder;
 pub mod gate_registry;
 pub mod gates;
+pub mod history_page;
+pub mod history_search;
+pub mod history_window;
 pub mod prompt;
 pub mod replay_batch;
 pub mod replay_previews;
@@ -31,6 +34,7 @@ pub mod session_state;
 pub mod stream;
 pub mod throttle;
 
+pub use capabilities::client_opts_into_windowed_history;
 pub use capabilities::{
     DEFAULT_HEARTBEAT_INTERVAL_MS, client_opts_into_compressed_replay,
     client_opts_into_replay_result_previews, client_opts_into_revision_cursors,
@@ -59,3 +63,6 @@ pub use revision_log::{RecordOutcome, ReplayPlan, RevisionLog};
 pub use session_state::SessionState;
 pub use stream::SessionStream;
 pub use throttle::{Throttle, ThrottledFrame};
+
+#[cfg(test)]
+mod reference_measurement_tests;

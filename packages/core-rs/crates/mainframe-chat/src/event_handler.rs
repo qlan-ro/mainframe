@@ -177,17 +177,32 @@ impl EventHandler {
         chat_id: &str,
         raw: &[ChatMessage],
     ) -> (Vec<DisplayMessage>, Option<StreamingLeafKind>) {
+        self.read_display_snapshot(chat_id, raw, |messages, streaming| {
+            (messages.to_vec(), streaming)
+        })
+    }
+
+    pub fn read_display_snapshot<R>(
+        &self,
+        chat_id: &str,
+        raw: &[ChatMessage],
+        read: impl FnOnce(&[DisplayMessage], Option<StreamingLeafKind>) -> R,
+    ) -> R {
         let categories = self.shared.deps.get_tool_categories(chat_id);
         let overlay = self.partial_overlays.message_for(chat_id);
-        let mut msgs = self.messages.lock_recover();
-        let materialized =
-            msgs.display_snapshot(chat_id, raw, overlay.as_ref(), categories.as_ref(), || {
-                self.shared.deps.display_projector(chat_id)
-            });
-        let streaming = overlay
-            .as_ref()
-            .and_then(|o| streaming_leaf_kind(Some(o), materialized.last()));
-        (materialized, streaming)
+        self.messages.lock_recover().read_display_snapshot(
+            chat_id,
+            raw,
+            overlay.as_ref(),
+            categories.as_ref(),
+            || self.shared.deps.display_projector(chat_id),
+            |messages| {
+                let streaming = overlay
+                    .as_ref()
+                    .and_then(|overlay| streaming_leaf_kind(Some(overlay), messages.last()));
+                read(messages, streaming)
+            },
+        )
     }
 }
 

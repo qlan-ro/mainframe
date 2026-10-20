@@ -41,11 +41,8 @@ pub struct FacadeConnection {
     /// and its seeded streams keep trimming those ids. Never set means every
     /// replayed result stays full, byte-identical to before.
     replay_result_previews_opted_in: AtomicBool,
-    /// Set once a successful `initialize` opted into compressed replay
-    /// batches (`COMPRESSED_REPLAY_OPT_IN_KEY`): this
-    /// connection's resume replays travel as `_mainframe.dev/replay_batch`
-    /// frames instead of one `session/update` per item.
     compressed_replay_opted_in: AtomicBool,
+    windowed_history_opted_in: AtomicBool,
     /// One `tokio::sync::Mutex` per session, held for the duration of a spawned
     /// `session/prompt`. Serializes concurrent prompts for the SAME session —
     /// queue position and the queue's tail ordering both depend on which of two
@@ -70,6 +67,7 @@ impl FacadeConnection {
             revision_cursors_opted_in: AtomicBool::new(false),
             replay_result_previews_opted_in: AtomicBool::new(false),
             compressed_replay_opted_in: AtomicBool::new(false),
+            windowed_history_opted_in: AtomicBool::new(false),
             prompt_locks: mainframe_runtime::sync::KeyedMutex::default(),
             resume_failures: Mutex::new(HashMap::new()),
         }
@@ -152,6 +150,15 @@ impl FacadeConnection {
 
     pub(crate) fn mark_compressed_replay_opted_in(&self) {
         self.compressed_replay_opted_in
+            .store(true, Ordering::Relaxed);
+    }
+
+    pub(crate) fn is_windowed_history_opted_in(&self) -> bool {
+        self.windowed_history_opted_in.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn mark_windowed_history_opted_in(&self) {
+        self.windowed_history_opted_in
             .store(true, Ordering::Relaxed);
     }
 

@@ -27,7 +27,13 @@ impl ChatManager {
         let Some(claim) = self.lifecycle.claim_history(chat_id).await else {
             return self.cached_messages(chat_id).unwrap_or_default();
         };
+        let started = std::time::Instant::now();
         let result = self.load_history_into_cache(chat_id).await;
+        tracing::info!(
+            chat_id,
+            history_load_ms = started.elapsed().as_secs_f64() * 1000.0,
+            "chat history loaded"
+        );
         self.lifecycle.touch(chat_id);
         drop(claim);
         result
@@ -204,23 +210,32 @@ impl ChatManager {
     /// catch-up restores it. The overlay never enters the settled cache: this
     /// read neither writes the cache nor persists the overlay anywhere.
     pub async fn get_resume_snapshot(&self, chat_id: &str) -> ResumeSnapshot {
+        self.read_resume_snapshot(chat_id, |messages, streaming, pending| ResumeSnapshot {
+            messages: messages.to_vec(),
+            streaming,
+            pending,
+        })
+        .await
+    }
+
+    pub async fn read_resume_snapshot<R>(
+        &self,
+        chat_id: &str,
+        read: impl FnOnce(
+            &[mainframe_types::display::DisplayMessage],
+            Option<mainframe_types::display::StreamingLeafKind>,
+            Option<mainframe_types::adapter::ControlRequest>,
+        ) -> R,
+    ) -> R {
         let raw = self.get_messages(chat_id).await;
-        let (messages, streaming) = self.event_handler.display_snapshot(chat_id, &raw);
-        // Reconcile the persisted `transcriptMissing` flag the same way
-        // `get_display_messages` did — the resume snapshot doesn't surface
-        // the flag itself, only the side effect (persist + broadcast).
         if let Some(mut chat) = self.get_chat(chat_id) {
             self.reconcile_transcript(&mut chat).await;
         }
-        // `get_messages` already loaded the transcript and restored any
-        // pending permission from it, so read the restored state rather than
-        // letting `get_pending_permission` load it a second time.
         let pending = self.permission_handler.pending_permission_as_known(chat_id);
-        ResumeSnapshot {
-            messages,
-            streaming,
-            pending,
-        }
+        self.event_handler
+            .read_display_snapshot(chat_id, &raw, |messages, streaming| {
+                read(messages, streaming, pending)
+            })
     }
 
     pub async fn get_session_context(

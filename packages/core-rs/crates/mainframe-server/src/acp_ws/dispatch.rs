@@ -21,6 +21,7 @@ use super::facade_conn::FacadeConnection;
 use super::ports::ManagerPorts;
 
 mod gate_answers;
+mod history;
 mod resume;
 use gate_answers::handle_gate_answer;
 use resume::start_resume;
@@ -50,6 +51,15 @@ pub async fn handle_inbound(
     match frame {
         InboundFrame::Response(response) => {
             handle_gate_answer(response, &ctx.chat.facade_hub, &ports, connection).await;
+            None
+        }
+        InboundFrame::Request(request)
+            if matches!(
+                request.method.as_str(),
+                "_mainframe.dev/history_page" | "_mainframe.dev/history_search"
+            ) =>
+        {
+            history::start(request, ctx, connection, Arc::new(ports));
             None
         }
         InboundFrame::Request(request) if request.method == "session/resume" => {
@@ -141,9 +151,14 @@ async fn dispatch_fallback(
         .is_some_and(|params| mainframe_acp::client_opts_into_replay_result_previews(Some(params)));
     let opted_into_compressed_replay = initialize_params(&frame)
         .is_some_and(|params| mainframe_acp::client_opts_into_compressed_replay(Some(params)));
+    let windowed = initialize_params(&frame)
+        .is_some_and(|params| mainframe_acp::client_opts_into_windowed_history(Some(params)));
     let outcome = dispatch_with_prompt(frame, daemon, ports, connection.is_negotiated()).await;
     if outcome.negotiated {
         connection.mark_negotiated();
+        if windowed {
+            connection.mark_windowed_history_opted_in();
+        }
         if opted_into_revision_cursors {
             connection.mark_revision_cursors_opted_in();
         }

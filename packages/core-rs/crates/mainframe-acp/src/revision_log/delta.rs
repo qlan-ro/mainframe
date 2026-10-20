@@ -47,12 +47,24 @@ impl RevisionLog {
     }
 
     fn record_full(&mut self, containers: &[Vec<EncodedItem>]) -> RecordOutcome {
+        let moved = self
+            .containers
+            .positions_changed(&EncodedDelta::full(containers.to_vec()));
         let flattened: Vec<EncodedItem> = containers.iter().flatten().cloned().collect();
         let outcome = self.record(&flattened);
+        if moved {
+            self.structure_revision = self.revision;
+        }
         if !matches!(outcome, RecordOutcome::ToolCallVanished) {
             self.containers.seed(containers);
         }
         outcome
+    }
+
+    fn note_structure_change(&mut self, delta: &EncodedDelta) {
+        if self.containers.positions_changed(delta) {
+            self.structure_revision = self.revision;
+        }
     }
 
     fn record_incremental(&mut self, delta: &EncodedDelta) -> RecordOutcome {
@@ -95,6 +107,7 @@ impl RevisionLog {
 
         self.revision += 1;
         let rev = self.revision;
+        self.note_structure_change(delta);
         self.seeded = true;
         for id in vanished_ids {
             if let Some((_, item)) = self.items.remove(&id) {

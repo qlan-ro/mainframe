@@ -26,6 +26,10 @@ impl DisplaySnapshot {
         self.lock_inner().clone()
     }
 
+    pub fn read<R>(&self, read: impl FnOnce(&[DisplayMessage]) -> R) -> R {
+        read(&self.lock_inner())
+    }
+
     /// Replace the whole list (a full rebuild).
     pub fn replace(&self, list: Vec<DisplayMessage>) {
         *self.lock_inner() = list;

@@ -1,9 +1,3 @@
-//! `session/resume`: the one method whose cost is unbounded — a cold chat's
-//! snapshot loads the whole transcript off disk — so it runs off the
-//! socket-loop task. Only the `AwaitingSeed` claim stays inline, because live
-//! frames racing the snapshot must be buffered from the moment the client
-//! asked, not from whenever the spawned task gets scheduled.
-
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,30 +7,37 @@ use mainframe_acp::revision_log::RevisionLog;
 use mainframe_acp::{ResumeOptions, dispatch_resume_with, rpc};
 use mainframe_types::acp::extensions::RevisionCursor;
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, RequestId};
-use tracing::error;
 
 use crate::ctx::AppCtx;
 
-use super::super::facade_conn::{FacadeConnection, SessionLockWait, rpc_id_string};
+use super::super::facade_conn::{FacadeConnection, SessionLockWait};
 use super::super::hub::ResumeSeed;
 use super::params_session_id;
+#[path = "resume_helpers.rs"]
+mod helpers;
+use helpers::{ResumeFailure, fail_resume, queued_for, redelivered_gate_id};
 
-/// Claim the session's slot inline, then run the snapshot behind the same
-/// per-session lock `session/prompt` and `session/cancel` take — a resume
-/// that overtook an in-flight prompt would replay a snapshot from the middle
-/// of that send.
 pub(super) fn start_resume(
     request: JsonRpcRequest,
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
     ports: Arc<dyn ResumePort>,
 ) {
+    if connection.is_windowed_history_opted_in()
+        && let Err(err) = mainframe_acp::history_window::parse_window(
+            request
+                .params
+                .as_ref()
+                .and_then(|params| params.get("_meta")),
+        )
+    {
+        connection.send_json(&rpc::error_response(
+            request.id,
+            rpc::invalid_params(&err.to_string()),
+        ));
+        return;
+    }
     let session_id = params_session_id(request.params.as_ref());
-    // Mark this session as awaiting its snapshot BEFORE anything awaits, so a
-    // live revision that races it is buffered rather than lost. `begin_resume`
-    // also hands back the chat's revision log paired with its pre-snapshot
-    // boundary, which the reply's `cursor` must carry (see `begin_resume`'s doc
-    // for the race argument).
     let (revision_log, resume_boundary) = session_id
         .as_deref()
         .and_then(|id| ctx.chat.facade_hub.begin_resume(connection, id))
@@ -58,9 +59,6 @@ pub(super) fn start_resume(
     tokio::spawn(task.run(wait));
 }
 
-/// The two settlement flags a resume delivery and its failure path share —
-/// bundled so `deliver_resume` stays under clippy's argument-count limit
-/// now that it also takes `revision_log`.
 struct DeliveryProgress {
     /// Set the moment the reply goes out, so the failure path below knows
     /// whether the client's promise has settled without asking the session
@@ -72,9 +70,6 @@ struct DeliveryProgress {
     completed: Arc<AtomicBool>,
 }
 
-/// One `session/resume` past the socket loop: everything the spawned task
-/// needs to deliver the snapshot, and to answer for it if the delivery never
-/// returns.
 struct ResumeTask {
     request: JsonRpcRequest,
     request_id: Option<RequestId>,
@@ -91,11 +86,29 @@ struct ResumeTask {
 }
 
 impl ResumeTask {
-    async fn run(self, wait: Option<SessionLockWait>) {
+    fn reclaim_window(&mut self) {
+        if !self.connection.is_windowed_history_opted_in()
+            || !self
+                .session_id
+                .as_deref()
+                .is_some_and(|id| self.connection.is_attached(id))
+        {
+            return;
+        }
+        let current = self
+            .session_id
+            .as_deref()
+            .and_then(|id| self.ctx.chat.facade_hub.begin_resume(&self.connection, id));
+        (self.revision_log, self.resume_boundary) =
+            current.map_or((None, None), |(log, boundary)| (Some(log), Some(boundary)));
+    }
+
+    async fn run(mut self, wait: Option<SessionLockWait>) {
         let _guard = match wait {
             Some(wait) => Some(wait.guard().await),
             None => None,
         };
+        self.reclaim_window();
         let ResumeTask {
             request,
             request_id,
@@ -146,86 +159,6 @@ impl ResumeTask {
     }
 }
 
-/// One `session/resume` delivery that never returned, as its failure path
-/// needs it.
-struct ResumeFailure<'a> {
-    connection: &'a FacadeConnection,
-    request_id: Option<RequestId>,
-    session_id: Option<&'a str>,
-    /// Whether the success reply already went out — `reset_session` sets it
-    /// as it sends, in whichever arm sends it.
-    replied: bool,
-    /// Whether `replay_complete` already went out — `reset_session` sets it
-    /// as it sends, in whichever arm sends it.
-    completed: bool,
-    cause: String,
-}
-
-/// Answer for a resume whose delivery never returned. The resync sends the
-/// client back for a fresh one, which nothing else would: heartbeats are
-/// connection-level, so its watchdog sees no gap, and a first attach has not
-/// attached yet, so its own gap resume returns early.
-///
-/// A claim whose reply never went out also owes the client one — its promise
-/// is still pending, and it has no other end. Once that reply is on the wire,
-/// a second response for that id could only be dropped, and the seeded stream
-/// it left behind is the one the client is reading.
-fn fail_resume(failure: ResumeFailure<'_>) {
-    let ResumeFailure {
-        connection,
-        request_id,
-        session_id,
-        replied,
-        completed,
-        cause,
-    } = failure;
-    if !replied {
-        connection.send_json(&rpc::error_response(
-            request_id,
-            rpc::internal_error("resume failed"),
-        ));
-    }
-    let Some(session_id) = session_id else {
-        error!(%cause, "resume delivery failed with no session to recover");
-        return;
-    };
-    // The reply reached the client, but the panic struck before
-    // `reset_session`'s own `replay_complete` send — this delivery still
-    // owes the client the closing marker for the reply it already has, with
-    // `aborted: true` so a staged client discards whatever partial replay it
-    // received.
-    if replied && !completed {
-        connection.send_json(&mainframe_acp::replay_complete_notification(
-            session_id, true,
-        ));
-    }
-    let failures = connection.record_resume_failure(session_id);
-    error!(
-        %cause,
-        session_id,
-        failures,
-        resync_suppressed = failures > 1,
-        "resume delivery failed"
-    );
-    // The client answers a resync with another resume, so a failure that
-    // repeats on the same transcript would loop at round-trip speed. After
-    // the first, recovery is left to its gap/reconnect path.
-    //
-    // Sent directly rather than through the hub's per-session throttle: an
-    // unseeded slot has no stream to queue against, and the buffer it does
-    // hold is about to be dropped.
-    if failures == 1 {
-        connection.send_json(&mainframe_acp::resync_notification(session_id));
-    }
-    if !replied {
-        connection.forget_chat(session_id);
-    }
-}
-
-/// Compute the snapshot, then — atomically with respect to live fan-out for
-/// this session — seed the stream state and push the reply, the replay
-/// updates, and any redelivered open gate through the connection channel in
-/// that order.
 async fn deliver_resume(
     request: JsonRpcRequest,
     session_id: Option<String>,
@@ -239,6 +172,7 @@ async fn deliver_resume(
 ) {
     let options = ResumeOptions {
         result_previews: connection.is_replay_result_previews_opted_in(),
+        windowed_history: connection.is_windowed_history_opted_in(),
     };
     let (response, replay) = dispatch_resume_with(request, ports, revision_log, options).await;
 
@@ -287,21 +221,6 @@ async fn deliver_resume(
         ));
     });
     connection.clear_resume_failures(&session_id);
-}
-
-/// The queued-prompt snapshot every resume replay closes with — empty when
-/// the harness runs without a `ChatManager`.
-fn queued_for(ctx: &Arc<AppCtx>, session_id: &str) -> Vec<mainframe_types::chat::QueuedMessageRef> {
-    ctx.chat.chat_manager.get_queued_for_chat(session_id)
-}
-
-/// The rpc id of the gate this replay redelivers itself, which the hub's
-/// buffered-frame drain must not raise a second time.
-fn redelivered_gate_id(replay: &mainframe_acp::ResumeReplay) -> Option<String> {
-    replay
-        .pending_gate
-        .as_ref()
-        .map(|gate| rpc_id_string(&gate.request_id))
 }
 
 #[cfg(test)]

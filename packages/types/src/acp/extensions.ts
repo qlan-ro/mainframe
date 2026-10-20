@@ -127,6 +127,8 @@ export const MainframeCapabilitiesSchema = z
      * `COMPRESSED_REPLAY_OPT_IN_KEY` (spec Decision 42).
      */
     compressedReplay: z.boolean().optional(),
+    windowedHistory: z.boolean().optional(),
+    historySearch: z.boolean().optional(),
   })
   .loose();
 export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;

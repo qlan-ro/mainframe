@@ -16,7 +16,9 @@
       "heartbeatIntervalMs": 15000,
       "itemCreationMarkers": true,
       "replayComplete": true,
-      "authoritativeItemStreaming": true
+      "authoritativeItemStreaming": true,
+      "windowedHistory": true,
+      "historySearch": true
     }
   }
 }
