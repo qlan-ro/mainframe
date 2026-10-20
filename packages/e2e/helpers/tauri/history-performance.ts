@@ -6,7 +6,8 @@ import { DAEMON_BASE } from '../../fixtures/daemon.js';
 import { launchTauriApp, closeTauriApp } from '../../fixtures/app-tauri.js';
 import { WINDOWED_RECORDING_KEY } from '../../fixtures/windowed-history.js';
 import { composer, sessionsSidebar } from './page-objects.js';
-import { HistoryWire, type seedWindowedHistory } from './windowed-history.js';
+import type { seedWindowedHistory } from './windowed-history.js';
+import { HistoryPerformanceWire } from './history-performance-wire.js';
 import { createHeadlessChat } from './headless-chat.js';
 import { armHistoryPaint, historyPaintMs, installHistoryPaintProbe } from './history-paint.js';
 
@@ -28,7 +29,7 @@ async function painted(page: Page): Promise<void> {
   );
 }
 
-async function openChat(page: Page, chatId: string, wire: HistoryWire): Promise<number> {
+async function openChat(page: Page, chatId: string, wire: HistoryPerformanceWire): Promise<number> {
   const completed = wire.replaysCompleted.get(chatId) ?? 0;
   await armHistoryPaint(page, `[data-testid="sessions-row"][data-chat-id="${chatId}"]`, 'open');
   await sessionsSidebar(page).row(chatId).click();
@@ -100,7 +101,7 @@ async function responsiveness(page: Page): Promise<Pick<HistoryMeasurement, 'fps
   }
 }
 
-async function launchMeasurement(seed: Seed, dataDir: string, wire: HistoryWire, warm: boolean) {
+async function launchMeasurement(seed: Seed, dataDir: string, wire: HistoryPerformanceWire, warm: boolean) {
   let other = '';
   const app = await launchTauriApp({
     dataDir,
@@ -129,9 +130,7 @@ export async function measureHistory(
   cpSync(seed.dataDir, dataDir, { recursive: true });
   rmSync(path.join(dataDir, 'cache', 'history'), { recursive: true, force: true });
   rmSync(path.join(dataDir, 'logs'), { recursive: true, force: true });
-  const wire = new HistoryWire();
-  wire.legacy = legacy !== false;
-  wire.uncompressedLegacy = legacy === 'uncompressed';
+  const wire = new HistoryPerformanceWire(legacy);
   const { app, other } = await launchMeasurement(seed, dataDir, wire, warm);
   try {
     await sessionsSidebar(app.page).row(other).click();
@@ -142,8 +141,11 @@ export async function measureHistory(
     wire.resumeBytes = 0;
     const openMs = await openChat(app.page, seed.chatId, wire);
     const bytes = wire.resumeBytes;
+    const otherCompleted = wire.replaysCompleted.get(other) ?? 0;
     await sessionsSidebar(app.page).row(other).click();
+    await wire.waitForReplay(other, otherCompleted);
     await expect(app.page.getByTestId('chat-user-message')).toHaveCount(0);
+    await expect(app.page.getByTestId('chat-thread-loading')).toHaveCount(0);
     const switchMs = await openChat(app.page, seed.chatId, wire);
     const result: HistoryMeasurement = { openMs, bytes, switchMs, historyLoadMs: historyLoadMs(dataDir, seed.chatId) };
     if (!legacy) {

@@ -1,36 +1,36 @@
 # Windowed history validation
 
-The implementation follows the [windowed history spec](../specs/2026-10-19-windowed-transcript-history.md). The daemon/protocol change can ship independently; the desktop opt-in needs the runtime checks below before release.
+The implementation follows the [windowed history spec](../specs/2026-10-19-windowed-transcript-history.md). [PR #855](https://github.com/qlan-ro/mainframe/pull/855) contains the independently shippable daemon change; [PR #856](https://github.com/qlan-ro/mainframe/pull/856) contains desktop adoption and the reference measurement. The client PR temporarily targets main so CI checks the combined stack. Merge the daemon first.
 
-## Completed checks
+## Protocol and static checks
 
-- ACP selection, revision replay, paging, search, preview and stream tests: 259 passed; the manual release measurement is ignored by default.
-- Server ACP hub/dispatch tests: 82 passed, including independent floors, detach, page ordering and racing deltas.
-- Borrowed display-snapshot regression: a warm read retains the projection's settled storage and copies 40 of 500 containers.
-- Rust golden fixtures and TypeScript protocol fixtures pass. Strict clippy and the Rust repository gate pass.
-- UI assertions pass across the full-suite run and retries of nine workers that timed out during startup. The initial metadata assertion failures were updated to check stable search item IDs. Separate regressions cover focused split-chat find ownership and paging during resume.
-- UI and e2e TypeScript checks pass. UI lint has existing compiler/advisory warnings and no errors.
+- ACP selection, revision replay, paging, search, preview and streaming: 259 tests passed; the manual release measurement is ignored by default.
+- Server ACP hub/dispatch: 82 tests passed, including independent floors, detach, page ordering and racing deltas.
+- Chat crate: 632 unit tests and 6 integration tests passed. Strict clippy, the Rust repository gate and golden protocol fixtures pass.
+- A warm display-snapshot read borrows settled projection storage and copies 40 of 500 containers.
+- UI assertions passed across the full local run and retries of nine workers that timed out during startup. UI/e2e TypeScript checks pass; UI lint has no errors and 226 existing compiler/advisory warnings.
+- CI on daemon head `95024f2c` and combined head `456795f6` passed Rust, UI/types/tools tests, typecheck and changeset checks.
 
-## Real-daemon integration
+## Runtime checks
 
-On resumption, `windowed-history-protocol.spec.ts` passed three integration scenarios against a freshly rebuilt daemon and the isolated 33 MB mock recording. They verify a bounded newest window, one contiguous load-through to an old search match, whole-chat prose search excluding tool output, compressed pages, independent connection floors, revision reconnect with a lowered floor, and legacy full replay. These checks use direct WebSocket requests and do not verify renderer behavior.
+Three direct-WebSocket scenarios pass against the real release daemon and generated 33 MB mock recording. They cover bounded replay, contiguous load-through, exact prose search excluding tool output, compressed pages, independent connection floors, revision reconnect and legacy replay.
 
-## Local protocol measurement
+Chromium checks cover the newest window, upward-gesture paging without chains, prepend compensation with native anchoring disabled, full-chat find, one-request load-through, chat return, idle socket reconnect, daemon resync, compact disclosure persistence and Activity paging while pinned. Measurement regressions separately check that keyboard-handler time is included and an unrelated chat's replay cannot complete the timer.
 
-The release-mode `reference_transcript_measurement` test uses 500 containers, 2,500 items and a 33,417,541-byte full encoding. One local run measured a 30.35 ms revision seed and 2.12 ms window preparation, producing 1,447,261 uncompressed bytes for the window.
+Native WebKit QA used an isolated packaged app, data directory, mock adapter and ports. The initial view had 20 recent user messages; an explicit page brought 40 while retaining the original message position with 0 px movement. Find reported 1/1 without loading history, then revealed and highlighted the early match. Tool-only text reported 0/0. Light/verbose and dark/compact views were inspected, including a 900×800 logical-pixel window at Compact UI scale.
 
-These are protocol preparation measurements, not click-to-paint latency or CI results. The seed is below the spec's 150 ms threshold in this local run. The warm-resume path borrows the display projection instead of cloning the complete snapshot.
+QA found and fixed a 16 px jump when the Earlier button became a shorter Loading row. The boundary now keeps a 48 px minimum height. The browser regression checks the anchor before loading, during loading and after prepend. A real-component test verifies that find opens a closed provider work turn; the mock replay lacks the presentation metadata needed for that assertion.
 
-## Runtime checks still required
+Screenshots and the scenario report are retained under `/tmp/live-qa/windowed-history-20261020`. GitHub attachment upload requires Chrome extension file access, which was not expanded. No native live-stream reconnect is claimed: runtime reconnect used an idle chat; Rust tests cover in-flight page/live ordering. The run-owned native processes were stopped.
 
-The new `windowed-history.spec.ts` exercises bounded opening, gesture-gated prepend anchoring with native anchoring disabled, whole-chat find, and one-request load-through. The performance spec runs ten fresh daemons per scenario for windowed, current full replay, and uncompressed full replay. It attaches raw measurements and checks p95 open/switch/page timing, uncompressed bytes, scroll rate, composer latency and heap at 400 containers.
+## Reference measurement
 
-Run the standard e2e command with `MF_E2E_HISTORY_PERF=1` and the two `windowed-history` specs on the e2e CI runner. Use the release daemon and rebuild the renderer for that run's dedicated daemon port. The JSONL row removes history snapshots; the memory row warms history before the measured click. Each run starts from a cloned fixture database with copied logs removed.
+The release-mode protocol fixture has 500 containers, 2,500 items and a 33,417,541-byte full encoding. A local preparation measurement recorded 30.35 ms for the one-time revision seed and 2.12 ms for window preparation, producing 1,447,261 uncompressed window bytes. These are protocol preparation figures, not click-to-paint timings. The seed is below the 150 ms relocation threshold locally.
 
-Local runtime verification was blocked: both headed and headless Chromium failed during macOS process bootstrap before opening a page. The native Tauri shell compiled and its bridge connected, but macOS never created its main window. No screenshots or WebKit prepend result were obtained. The computer-use service was also unavailable.
+The browser harness runs 10 fresh daemons per scenario for windowed, current full and uncompressed full replay. Memory rows warm history before the measured click; JSONL rows remove history snapshots. Each run clones the fixture database and removes copied logs.
 
-Before release, run the browser specs, record the CI performance table, and check native WebKit prepend anchoring, compact disclosure stability, activity/subagent jumps, reconnect/resync, light/dark themes and a narrow viewport. Virtualization remains conditional on the measured 50 fps / 100 ms thresholds; no threshold result is claimed here.
+Input timing starts at window-capture keydown or row click, before application handlers. Completion requires the measured chat's replay marker, the visible tail, no loading spinner and two animation frames. Wire measurement observes native WebSocket delivery passively; only legacy initialization options are changed. Raw samples are attached to the Playwright report and printed in the job log.
 
-## Publication status
+Run the existing manual `e2e-mock` workflow on the client branch to include the performance test. Locally, run the windowed-history specs with `E2E_MODE=mock MF_E2E_HISTORY_PERF=1`, the release daemon and a renderer built for the dedicated test port. Do not rebuild that shared renderer during the run.
 
-Both implementation branches remain local. The shell runner has no DNS configuration. An alternate local runtime reaches public GitHub using the installed CA bundle, but authenticated API requests return 401 and git has no usable credentials. No certificate verification was disabled. Chromium launch still fails at macOS Mach bootstrap in both runtimes. Publication, visual QA and the CI performance run remain outstanding.
+Record the CI run's exact head, p95 table and raw samples in PR #856 before marking it ready. The gates remain 400 ms warm open, 400 ms above logged cold history-load time, 150 ms switch-back, 300 ms prepend, under 3 MB and 10% of full replay, at least 50 fps and at most 100 ms keypress-to-paint at 400 loaded containers. Virtualization is conditional on the last two thresholds.

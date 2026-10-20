@@ -3,10 +3,10 @@ import type { Page } from '@playwright/test';
 type PaintKind = 'open' | 'page' | 'key';
 
 interface PaintProbe {
-  replays: number;
+  replays: Record<string, number>;
   measured?: Promise<number>;
   begin?: (event: Event) => void;
-  ready: (kind: PaintKind, replays: number, edited: boolean) => boolean;
+  ready: (kind: PaintKind, chatId: string, replays: number, edited: boolean) => boolean;
 }
 
 declare global {
@@ -18,8 +18,8 @@ declare global {
 export async function installHistoryPaintProbe(page: Page): Promise<void> {
   await page.addInitScript(() => {
     window.historyPaintProbe = {
-      replays: 0,
-      ready(kind, replays, edited) {
+      replays: {},
+      ready(kind, chatId, replays, edited) {
         if (kind === 'key') return edited;
         if (kind === 'page') return document.querySelectorAll('[data-testid="chat-user-message"]').length === 40;
         const tail = Array.from(document.querySelectorAll('[data-testid="chat-user-message"]')).find((node) =>
@@ -27,7 +27,7 @@ export async function installHistoryPaintProbe(page: Page): Promise<void> {
         );
         const rect = tail?.getBoundingClientRect();
         return Boolean(
-          window.historyPaintProbe.replays > replays &&
+          (window.historyPaintProbe.replays[chatId] ?? 0) > replays &&
           !document.querySelector('[data-testid="chat-thread-loading"]') &&
           rect &&
           rect.bottom > 0 &&
@@ -43,8 +43,13 @@ export async function installHistoryPaintProbe(page: Page): Promise<void> {
         super(url, protocols);
         this.addEventListener('message', (event: MessageEvent<unknown>) => {
           if (typeof event.data !== 'string') return;
-          const frame = JSON.parse(event.data) as { method?: string };
-          if (frame.method === '_mainframe.dev/replay_complete') window.historyPaintProbe.replays++;
+          const frame = JSON.parse(event.data) as {
+            method?: string;
+            params?: { sessionId?: string; aborted?: boolean };
+          };
+          const id = frame.params?.sessionId;
+          if (frame.method === '_mainframe.dev/replay_complete' && id && !frame.params?.aborted)
+            window.historyPaintProbe.replays[id] = (window.historyPaintProbe.replays[id] ?? 0) + 1;
         });
       }
     };
@@ -56,12 +61,16 @@ export async function armHistoryPaint(page: Page, selector: string, kind: PaintK
     const probe = window.historyPaintProbe;
     const eventType = kind === 'open' ? 'click' : 'keydown';
     probe.measured = new Promise<number>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error(`No painted ${kind} within 30 seconds`)), 30_000);
+      const timeout = setTimeout(
+        () => reject(new Error(`No painted ${kind} within 30 seconds`)),
+        kind === 'open' ? 120_000 : 30_000,
+      );
       probe.begin = (event) => {
         if (event.type !== eventType || !element.contains(event.target as Node)) return;
         probe.begin = undefined;
         const start = performance.now();
-        const replays = probe.replays;
+        const chatId = element.getAttribute('data-chat-id') ?? '';
+        const replays = probe.replays[chatId] ?? 0;
         let edited = kind !== 'key';
         if (!edited)
           element.addEventListener(
@@ -72,7 +81,7 @@ export async function armHistoryPaint(page: Page, selector: string, kind: PaintK
             { once: true },
           );
         const tick = () => {
-          if (!probe.ready(kind, replays, edited)) return void requestAnimationFrame(tick);
+          if (!probe.ready(kind, chatId, replays, edited)) return void requestAnimationFrame(tick);
           requestAnimationFrame(() => {
             clearTimeout(timeout);
             resolve(performance.now() - start);

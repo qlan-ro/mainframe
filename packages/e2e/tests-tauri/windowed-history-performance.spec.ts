@@ -35,6 +35,7 @@ test('windowed history meets the reference transcript performance gates', async 
     expect(Math.min(...memory.map((run) => run.fps!))).toBeGreaterThanOrEqual(50);
     expect(percentile95(memory.map((run) => run.keypressMs!))).toBeLessThanOrEqual(100);
   } finally {
+    console.log('history-performance', JSON.stringify(measurements));
     await info.attach('history-performance.json', {
       body: JSON.stringify(measurements, null, 2),
       contentType: 'application/json',
