@@ -56,12 +56,24 @@ function trackReadingPosition(element: HTMLDivElement, state: PinState, followGr
   if (element.clientHeight && !state.pinned) state.anchor = captureReadingAnchor(element, state.anchor);
 }
 
+function scrollToBoundary(element: HTMLDivElement, state: PinState, event: KeyboardEvent) {
+  if (event.defaultPrevented || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key !== 'Home' && event.key !== 'End') return;
+  event.preventDefault();
+  if (state.frame !== null) cancelAnimationFrame(state.frame);
+  state.frame = null;
+  state.pinned = event.key === 'End';
+  state.anchor = null;
+  element.scrollTop = state.pinned ? element.scrollHeight : 0;
+}
+
 /** Marks wheel, touch, scroll-key and scrollbar-drag input so their scroll events may unpin. */
 function trackUserScroll(element: HTMLDivElement, state: PinState) {
   const mark = (event: Event) => {
     if (event.type === 'keydown' && (event.target as Element).closest('input, textarea, [contenteditable="true"]'))
       return;
     state.userScrollUntil = performance.now() + 300;
+    if (event instanceof KeyboardEvent) scrollToBoundary(element, state, event);
   };
   // Only the scrollbar itself targets the viewport; content clicks target content.
   const startDrag = (event: PointerEvent) => {
