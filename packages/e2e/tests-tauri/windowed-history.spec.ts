@@ -85,4 +85,26 @@ test.describe('windowed transcript history', () => {
     await page.getByTestId('thread-find-input').fill('hidden-output-token');
     await expect(page.getByTestId('find-bar')).toContainText('0/0');
   });
+
+  test('keeps the anchor stable from the explicit page click through the loading state', async () => {
+    const page = app.page;
+    const viewport = page.getByTestId('chat-thread-viewport');
+    await viewport.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+    const anchor = viewport.locator('[data-message-id]').first();
+    const before = await anchor.boundingBox();
+    expect(before).not.toBeNull();
+    const id = await anchor.getAttribute('data-message-id');
+    wire.holdPage = true;
+    await page.getByTestId('chat-load-earlier').click();
+    await expect.poll(() => wire.pageRequests).toBe(1);
+    const loading = await page.locator(`[data-message-id="${id}"]`).boundingBox();
+    expect(Math.abs(loading!.y - before!.y)).toBeLessThan(2);
+    wire.release();
+    await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
+    const after = await page.locator(`[data-message-id="${id}"]`).boundingBox();
+    expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);
+    expect(wire.pageRequests).toBe(1);
+  });
 });

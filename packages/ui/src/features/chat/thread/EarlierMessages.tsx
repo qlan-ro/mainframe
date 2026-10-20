@@ -50,7 +50,7 @@ export function EarlierMessages() {
   return (
     <div
       data-testid="chat-history-boundary"
-      className="flex min-h-8 flex-col items-center py-2 text-xs text-muted-foreground"
+      className="flex min-h-12 flex-col items-center py-2 text-xs text-muted-foreground"
       aria-live="polite"
     >
       {history?.loading ? (

@@ -8,6 +8,7 @@ import { WINDOWED_RECORDING_KEY } from '../../fixtures/windowed-history.js';
 import { composer, sessionsSidebar } from './page-objects.js';
 import { HistoryWire, type seedWindowedHistory } from './windowed-history.js';
 import { createHeadlessChat } from './headless-chat.js';
+import { armHistoryPaint, historyPaintMs, installHistoryPaintProbe } from './history-paint.js';
 
 type Seed = Awaited<ReturnType<typeof seedWindowedHistory>>;
 export interface HistoryMeasurement {
@@ -29,13 +30,12 @@ async function painted(page: Page): Promise<void> {
 
 async function openChat(page: Page, chatId: string, wire: HistoryWire): Promise<number> {
   const completed = wire.replaysCompleted.get(chatId) ?? 0;
-  const start = await page.evaluate(() => performance.now());
+  await armHistoryPaint(page, `[data-testid="sessions-row"][data-chat-id="${chatId}"]`, 'open');
   await sessionsSidebar(page).row(chatId).click();
   await wire.waitForReplay(chatId, completed);
   await expect(page.getByText('Needle turn 249', { exact: true })).toBeVisible();
   await expect(page.getByTestId('chat-thread-loading')).toHaveCount(0);
-  await painted(page);
-  return (await page.evaluate(() => performance.now())) - start;
+  return historyPaintMs(page);
 }
 
 function historyLoadMs(dataDir: string, chatId: string): number {
@@ -60,11 +60,10 @@ function historyLoadMs(dataDir: string, chatId: string): number {
 async function pageAndPopulate(page: Page): Promise<number> {
   const viewport = page.getByTestId('chat-thread-viewport');
   await viewport.focus();
-  const start = await page.evaluate(() => performance.now());
+  await armHistoryPaint(page, '[data-testid="chat-thread-viewport"]', 'page');
   await page.keyboard.press('Home');
   await expect(page.getByTestId('chat-user-message')).toHaveCount(40);
-  await painted(page);
-  const duration = (await page.evaluate(() => performance.now())) - start;
+  const duration = await historyPaintMs(page);
   for (let users = 60; users <= 200; users += 20) {
     await page.getByTestId('chat-load-earlier').click();
     await expect(page.getByTestId('chat-user-message')).toHaveCount(users);
@@ -89,10 +88,9 @@ async function responsiveness(page: Page): Promise<Pick<HistoryMeasurement, 'fps
       }),
   );
   await composer(page).input().focus();
-  const start = await page.evaluate(() => performance.now());
+  await armHistoryPaint(page, '[data-testid="chat-composer-input"]', 'key');
   await page.keyboard.type('a');
-  await painted(page);
-  const keypressMs = (await page.evaluate(() => performance.now())) - start;
+  const keypressMs = await historyPaintMs(page);
   const cdp = await page.context().newCDPSession(page);
   try {
     const heap = await cdp.send('Runtime.getHeapUsage');
@@ -100,6 +98,26 @@ async function responsiveness(page: Page): Promise<Pick<HistoryMeasurement, 'fps
   } finally {
     await cdp.detach();
   }
+}
+
+async function launchMeasurement(seed: Seed, dataDir: string, wire: HistoryWire, warm: boolean) {
+  let other = '';
+  const app = await launchTauriApp({
+    dataDir,
+    recordingKey: WINDOWED_RECORDING_KEY,
+    recordingsDir: seed.recordingsDir,
+    beforeNavigate: async (page) => {
+      other = await createHeadlessChat(seed.project.projectId);
+      await wire.install(page);
+      await installHistoryPaintProbe(page);
+      if (warm) {
+        const response = await fetch(`${DAEMON_BASE}/api/chats/${seed.chatId}/messages`);
+        expect(response.ok).toBe(true);
+        await response.arrayBuffer();
+      }
+    },
+  });
+  return { app, other };
 }
 
 export async function measureHistory(
@@ -114,23 +132,13 @@ export async function measureHistory(
   const wire = new HistoryWire();
   wire.legacy = legacy !== false;
   wire.uncompressedLegacy = legacy === 'uncompressed';
-  let other = '';
-  const app = await launchTauriApp({
-    dataDir,
-    recordingKey: WINDOWED_RECORDING_KEY,
-    recordingsDir: seed.recordingsDir,
-    beforeNavigate: async (page) => {
-      other = await createHeadlessChat(seed.project.projectId);
-      await wire.install(page);
-      if (warm) {
-        const response = await fetch(`${DAEMON_BASE}/api/chats/${seed.chatId}/messages`);
-        expect(response.ok).toBe(true);
-        await response.arrayBuffer();
-      }
-    },
-  });
+  const { app, other } = await launchMeasurement(seed, dataDir, wire, warm);
   try {
+    await sessionsSidebar(app.page).row(other).click();
+    await wire.waitForReplay(other, 0);
     await expect(app.page.getByTestId('chat-user-message')).toHaveCount(0);
+    await expect(app.page.getByTestId('chat-thread-loading')).toHaveCount(0);
+    await painted(app.page);
     wire.resumeBytes = 0;
     const openMs = await openChat(app.page, seed.chatId, wire);
     const bytes = wire.resumeBytes;

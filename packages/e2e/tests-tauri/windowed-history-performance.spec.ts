@@ -5,7 +5,11 @@ import { cleanupHeadlessProject } from '../helpers/tauri/headless-chat.js';
 import { measureHistory, percentile95, type HistoryMeasurement } from '../helpers/tauri/history-performance.js';
 
 test('windowed history meets the reference transcript performance gates', async ({}, info) => {
-  test.skip(process.env['MF_E2E_HISTORY_PERF'] !== '1', 'Run on the e2e CI runner with MF_E2E_HISTORY_PERF=1');
+  const manualCi = process.env['CI'] === 'true' && process.env['GITHUB_EVENT_NAME'] === 'workflow_dispatch';
+  test.skip(
+    process.env['MF_E2E_HISTORY_PERF'] !== '1' && !manualCi,
+    'Run manually on CI or with MF_E2E_HISTORY_PERF=1',
+  );
   test.setTimeout(30 * 60_000);
   const seed = await seedWindowedHistory();
   const measurements: Record<string, HistoryMeasurement[]> = {};

@@ -45,6 +45,18 @@ export class HistoryWire {
   holdPage = false;
   private pageIds = new Set<unknown>();
   private held: Array<() => void> = [];
+  private readonly clients = new Set<WebSocketRoute>();
+
+  async disconnect(): Promise<void> {
+    await Promise.all([...this.clients].map((client) => client.close({ code: 4000, reason: 'QA reconnect' })));
+    this.clients.clear();
+  }
+
+  resync(chatId: string): void {
+    for (const client of this.clients) {
+      client.send(JSON.stringify({ jsonrpc: '2.0', method: '_mainframe.dev/resync', params: { sessionId: chatId } }));
+    }
+  }
 
   release(): void {
     this.holdPage = false;
@@ -73,7 +85,12 @@ export class HistoryWire {
   }
 
   private connect(client: WebSocketRoute): void {
+    this.clients.add(client);
     const server = client.connectToServer();
+    client.onClose((_code, reason) => {
+      this.clients.delete(client);
+      void server.close({ code: 1000, reason });
+    });
     client.onMessage((message) => {
       const frame = JSON.parse(message.toString()) as {
         id?: unknown;
@@ -96,31 +113,33 @@ export class HistoryWire {
       }
       server.send(this.legacy ? JSON.stringify(frame) : message);
     });
-    server.onMessage((message) => {
-      const frame = JSON.parse(message.toString()) as { id?: unknown; method?: string };
-      if (frame.method === '_mainframe.dev/replay_complete') {
-        const params = (frame as { params?: { sessionId?: string; aborted?: boolean } }).params;
-        if (params?.sessionId && !params.aborted) {
-          this.replaysCompleted.set(params.sessionId, (this.replaysCompleted.get(params.sessionId) ?? 0) + 1);
-          for (const listener of this.replayListeners) listener();
-        }
+    server.onMessage((message) => this.receive(client, message));
+  }
+
+  private receive(client: WebSocketRoute, message: string | Buffer): void {
+    const frame = JSON.parse(message.toString()) as { id?: unknown; method?: string };
+    if (frame.method === '_mainframe.dev/replay_complete') {
+      const params = (frame as { params?: { sessionId?: string; aborted?: boolean } }).params;
+      if (params?.sessionId && !params.aborted) {
+        this.replaysCompleted.set(params.sessionId, (this.replaysCompleted.get(params.sessionId) ?? 0) + 1);
+        for (const listener of this.replayListeners) listener();
       }
-      const batch = frame as { params?: { data?: string; encoding?: string } };
-      this.resumeBytes +=
-        frame.method === '_mainframe.dev/replay_batch' && batch.params?.data
-          ? inflateSync(Buffer.from(batch.params.data, 'base64')).byteLength
-          : Buffer.byteLength(message);
-      if (this.held.length || (this.holdPage && this.pageIds.has(frame.id))) {
-        this.held.push(() => client.send(message));
-      } else if (this.legacy && !frame.method) {
-        const reply = frame as { result?: { _meta?: Record<string, Record<string, unknown>> } };
-        const capabilities = reply.result?._meta?.['_mainframe.dev'];
-        if (capabilities) {
-          delete capabilities.windowedHistory;
-          delete capabilities.historySearch;
-        }
-        client.send(JSON.stringify(frame));
-      } else client.send(message);
-    });
+    }
+    const batch = frame as { params?: { data?: string; encoding?: string } };
+    this.resumeBytes +=
+      frame.method === '_mainframe.dev/replay_batch' && batch.params?.data
+        ? inflateSync(Buffer.from(batch.params.data, 'base64')).byteLength
+        : Buffer.byteLength(message);
+    if (this.held.length || (this.holdPage && this.pageIds.has(frame.id))) {
+      this.held.push(() => client.send(message));
+    } else if (this.legacy && !frame.method) {
+      const reply = frame as { result?: { _meta?: Record<string, Record<string, unknown>> } };
+      const capabilities = reply.result?._meta?.['_mainframe.dev'];
+      if (capabilities) {
+        delete capabilities.windowedHistory;
+        delete capabilities.historySearch;
+      }
+      client.send(JSON.stringify(frame));
+    } else client.send(message);
   }
 }
