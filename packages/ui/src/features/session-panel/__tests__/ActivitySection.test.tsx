@@ -18,6 +18,7 @@ vi.mock('@/lib/api/background-tasks', () => ({
   cancelDelegatedTask: state.cancel,
   readBackgroundTaskOutput: vi.fn(),
 }));
+vi.mock('@/features/chat/runtime/chat-extras', () => ({ useChatExtras: () => undefined }));
 vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ threads: { switchToThread: vi.fn() } }) }));
 vi.mock('@/features/side-chat/side-chat-scope', () => ({ useSideAwareThreadId: () => 'parent' }));
 vi.mock('@/features/chat/workflow/use-workflow-run', () => ({ useWorkflowRun: () => undefined }));

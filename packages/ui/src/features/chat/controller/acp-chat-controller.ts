@@ -1,23 +1,3 @@
-/**
- * Per-chat controller — the ONE desktop chat controller (the legacy
- * `chat-thread-controller.ts` is deleted). Two planes over one reducer:
- *  - `AcpSessionPlane` (transcript, run frames, gates) on the shared
- *    per-adapter `/acp/{profile}` facade client — SUBSCRIBED only while
- *    active or held by a split zone (D2 dormancy, todo #350 T33; gating in
- *    `chat-activation.ts`, load/bind in `chat-plane-loader.ts`). `load()`
- *    seeds config and binds the client unconditionally (prompt/cancel/reply
- *    work dormant too); a switch-back resumes from the last settled item.
- *  - `ChatWsSubscription` (side-band: config, background tasks, worktree
- *    offers, workflow runs) gated to the active thread exactly as before.
- *
- * Created once per thread id in the global registry and kept warm across
- * switches. A new (`__LOCALID_*`) thread adopts its daemon id via
- * `setRemoteId` once createChat resolves; that's also where the adapter
- * profile becomes known. A `__LOCALID_*` thread can be marked active before
- * it has a remote id (nothing to attach yet) — adoption re-checks
- * activation. Queued cancel/edit and attachment upload stay REST; sends go
- * through `session/prompt` with the `_mainframe.dev` send meta.
- */
 import type { AppendMessage } from '@assistant-ui/react';
 import type { ControlResponse } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
@@ -119,6 +99,16 @@ export class AcpChatController {
       dispatch: (event) => this.dispatch(event),
       isFacadeAttached: () => this.plane.isAttached,
     });
+  }
+
+  loadEarlier(untilItemId?: string): Promise<boolean> {
+    return this.plane.history.load(untilItemId);
+  }
+  searchHistory(query: string) {
+    return this.plane.history.search(query);
+  }
+  get canSearchHistory(): boolean {
+    return this.plane.canSearchHistory;
   }
 
   // useSyncExternalStore interface

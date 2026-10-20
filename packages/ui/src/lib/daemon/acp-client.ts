@@ -1,8 +1,8 @@
-/** Negotiation is shared across all chat sessions bound to this per-profile client. */
+import { requestHistoryPage, requestHistorySearch } from './acp-history-client';
+import type { HistoryPageParams, HistoryPageResult, HistoryWindow } from '@qlan-ro/mainframe-types';
 import {
   type CancelSessionNotification,
   InitializeResponseSchema,
-  type InitializeRequest,
   type InitializeResponse,
   type JsonRpcRequestId,
   MAINFRAME_META_NAMESPACE,
@@ -13,15 +13,17 @@ import {
   PromptResponseSchema,
   type ReplayCursor,
   type RequestPermissionResponse,
-  COMPRESSED_REPLAY_OPT_IN_KEY,
-  REPLAY_RESULT_PREVIEWS_OPT_IN_KEY,
-  REVISION_CURSORS_OPT_IN_KEY,
   type ResumeSessionRequest,
   type ResumeSessionResponse,
   ResumeSessionResponseSchema,
 } from '@qlan-ro/mainframe-types';
-import { getActiveDaemon } from './active-daemon';
-import { AcpCapabilityState, parseCapabilities, type CapabilitiesListener } from './acp-capability-state';
+import { defaultUrl, defaultSocketFactory } from './acp-client-defaults';
+import {
+  AcpCapabilityState,
+  initializeRequest,
+  parseCapabilities,
+  type CapabilitiesListener,
+} from './acp-capability-state';
 import { HeartbeatWatchdog } from './acp-heartbeat-watchdog';
 import {
   AcpNotificationRouter,
@@ -35,7 +37,7 @@ import {
   type SessionUpdateListener,
   type TranscriptClearedListener,
 } from './acp-notification-router';
-import { RpcConnection, type AcpSocketFactory, type AcpSocketLike } from './acp-rpc-connection';
+import { RpcConnection, type AcpSocketFactory } from './acp-rpc-connection';
 /** `mainframe_acp::resume::ReplayCursor`'s wire shape (todo #377 added the `revision` variant) — single-canonical-type in `@qlan-ro/mainframe-types`, re-exported for existing `from './acp-client'` imports. */
 export type { ReplayCursor };
 /** Production default; overridden per-connection by the daemon's advertised `heartbeatIntervalMs`. */
@@ -49,16 +51,6 @@ export interface AcpFacadeClientDeps {
   url?: () => string;
   createSocket?: AcpSocketFactory;
   clientInfo?: { name: string; version: string };
-}
-
-function defaultUrl(profile: string): string {
-  const target = getActiveDaemon();
-  const base = `${target.baseUrl.replace(/^http/, 'ws')}/acp/${encodeURIComponent(profile)}`;
-  return target.token ? `${base}?token=${encodeURIComponent(target.token)}` : base;
-}
-
-function defaultSocketFactory(url: string): AcpSocketLike {
-  return new WebSocket(url) as unknown as AcpSocketLike;
 }
 
 const RECONNECT_BASE_DELAY_MS = 1_000;
@@ -103,11 +95,6 @@ export class AcpFacadeClient {
     return this.connection !== null;
   }
 
-  /**
-   * Idempotent connect: concurrent callers share one in-flight handshake, and
-   * a client that already initialized resolves immediately. This is the entry
-   * the per-chat controllers use — the first attach dials, the rest join.
-   */
   ensureConnected(): Promise<InitializeResponse> {
     this.manuallyClosed = false;
     if (this.connectPromise) return this.connectPromise;
@@ -138,17 +125,7 @@ export class AcpFacadeClient {
       // result previews (spec Decision 41) and compressed replay batches
       // (Decision 42) — all ignored by a daemon that doesn't advertise the
       // matching capability back.
-      const request: InitializeRequest = {
-        protocolVersion: PINNED_PROTOCOL_VERSION,
-        info: this.deps.clientInfo ?? DEFAULT_CLIENT_INFO,
-        _meta: {
-          [MAINFRAME_META_NAMESPACE]: {
-            [REVISION_CURSORS_OPT_IN_KEY]: true,
-            [REPLAY_RESULT_PREVIEWS_OPT_IN_KEY]: true,
-            [COMPRESSED_REPLAY_OPT_IN_KEY]: true,
-          },
-        },
-      };
+      const request = initializeRequest(this.deps.clientInfo ?? DEFAULT_CLIENT_INFO);
       let response!: InitializeResponse;
       await connection.sendRequest('initialize', request, (result) => {
         if (attempt !== this.connectAttempt) throw new Error('[acp-client] initialization superseded');
@@ -196,10 +173,31 @@ export class AcpFacadeClient {
     this.requireConnection().sendNotification('_mainframe.dev/session_detach', { sessionId });
   }
 
-  async resume(sessionId: string, cwd: string, replayFrom?: ReplayCursor): Promise<ResumeSessionResponse> {
+  async resume(
+    sessionId: string,
+    cwd: string,
+    replayFrom?: ReplayCursor,
+    window?: HistoryWindow,
+  ): Promise<ResumeSessionResponse> {
     const request: ResumeSessionRequest = { sessionId, cwd, ...(replayFrom !== undefined ? { replayFrom } : {}) };
+    if (
+      this.mainframeCapabilities?.windowedHistory &&
+      this.mainframeCapabilities.revisionCursors &&
+      this.mainframeCapabilities.replayComplete &&
+      this.mainframeCapabilities.itemCreationMarkers
+    ) {
+      request._meta = { [MAINFRAME_META_NAMESPACE]: { window: window ?? { containers: 40 } } };
+    }
     const result = await this.requireConnection().sendRequest('session/resume', request);
     return ResumeSessionResponseSchema.parse(result);
+  }
+
+  historyPage(params: HistoryPageParams, apply: (page: HistoryPageResult) => void): Promise<unknown> {
+    return requestHistoryPage(this.requireConnection(), params, apply);
+  }
+
+  historySearch(sessionId: string, query: string) {
+    return requestHistorySearch(this.requireConnection(), sessionId, query);
   }
 
   respondPermission(id: JsonRpcRequestId, response: RequestPermissionResponse): void {
@@ -219,17 +217,14 @@ export class AcpFacadeClient {
     return this.router.onGateResolved(listener);
   }
 
-  /** Live compaction progress for a session (`_mainframe.dev/compaction`). */
   onCompaction(listener: CompactionListener): () => void {
     return this.router.onCompaction(listener);
   }
 
-  /** The server wiped a session's transcript (`_mainframe.dev/transcript_cleared`). */
   onTranscriptCleared(listener: TranscriptClearedListener): () => void {
     return this.router.onTranscriptCleared(listener);
   }
 
-  /** A session's full queued-prompt snapshot (`_mainframe.dev/queue_state`). */
   onQueueState(listener: QueueStateListener): () => void {
     return this.router.onQueueState(listener);
   }
@@ -239,17 +234,14 @@ export class AcpFacadeClient {
     return this.router.onResync(listener);
   }
 
-  /** Closes exactly one `session/resume` replay (`_mainframe.dev/replay_complete`, spec Decision 38). */
   onReplayComplete(listener: ReplayCompleteListener): () => void {
     return this.router.onReplayComplete(listener);
   }
 
-  /** Advances the durable revision cursor outside a resume round trip (`_mainframe.dev/cursor`, todo #377). */
   onCursor(listener: CursorListener): () => void {
     return this.router.onCursor(listener);
   }
 
-  /** Fires when the caller should call `resume()` to converge: a heartbeat gap, silence, or the socket closing. */
   onGap(listener: GapListener): () => void {
     this.gapListeners.add(listener);
     return () => this.gapListeners.delete(listener);
@@ -284,7 +276,6 @@ export class AcpFacadeClient {
     this.gapListeners.forEach((fn) => fn());
   }
 
-  /** Ignore stale socket closures; reconnect before asking sessions to resume. */
   private handleClose(connection: RpcConnection): void {
     if (this.connection !== connection) return;
     this.watchdog?.stop();

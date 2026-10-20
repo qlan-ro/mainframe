@@ -66,7 +66,7 @@ export type {
 
 export class AcpItemAccumulator {
   private readonly items = new Map<string, AccumulatedItem>();
-  private readonly order: string[] = [];
+  private order: string[] = [];
   private turnState: AcpTurnState | null = null;
   private usage: UsageUpdate | null = null;
   private readonly strictCreation: boolean;
@@ -92,6 +92,18 @@ export class AcpItemAccumulator {
   /** Set by the caller (U2's transcript store/window) before applying frames from a staged or visible replay target. */
   setReplaying(value: boolean): void {
     this.replaying = value;
+  }
+
+  prepend(updates: SessionUpdate[]): AccumulatedItem[] {
+    const page = new AcpItemAccumulator({ strictCreation: this.strictCreation });
+    page.setReplaying(true);
+    for (const update of updates) {
+      if (page.apply(update).kind === 'needs-replay') throw new Error('Incomplete history page');
+    }
+    const incoming = page.itemsInOrder.filter((item) => !this.items.has(item.id));
+    for (const item of incoming) this.items.set(item.id, item);
+    this.order = incoming.map((item) => item.id).concat(this.order);
+    return incoming;
   }
 
   reset(): void {

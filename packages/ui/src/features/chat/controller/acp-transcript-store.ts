@@ -100,6 +100,14 @@ export class AcpTranscriptStore {
     this.openFullStages.clear();
   }
 
+  prepend(updates: SessionUpdate[]): AccumulatedItem[] {
+    const items = this.visible.prepend(updates);
+    let oldest = 0;
+    for (const date of this.firstSeenAt.values()) oldest = Math.min(oldest, date.getTime());
+    for (const item of items) this.firstSeenAt.set(item.id, new Date(oldest));
+    return items;
+  }
+
   /** Stamps (and remembers) the first time this id was seen, for `convertAcpItems`'s per-item mount timestamp. */
   firstSeenAtOf(id: string, now: () => Date): Date {
     const existing = this.firstSeenAt.get(id);

@@ -1,3 +1,4 @@
+import { useChatExtrasSelector } from '../runtime/chat-extras';
 import { useAuiState } from '@assistant-ui/react';
 import { Split } from 'lucide-react';
 import type { AdapterInfo } from '@qlan-ro/mainframe-types';
@@ -52,6 +53,7 @@ export function AssistantForkAction() {
   const nested = useIsNestedTranscript();
   const messageId = useAuiState((s) => s.message.id);
   const messageStatus = useAuiState((s) => s.message.status?.type);
+  const hasMoreHistory = useChatExtrasSelector((extras) => extras?.state.historyWindow?.hasMore);
   const messages = useAuiState((s) => s.thread.messages);
   const threadRunning = useAuiState((s) => s.thread.isRunning);
   const chatId = useAuiState((s) => s.threadListItem.remoteId);
@@ -74,6 +76,7 @@ export function AssistantForkAction() {
   const reason = assistantForkAvailability(messages, messageId, point, forkBaseInput(custom, adapter), {
     isRunning: custom.isRunning ?? false,
     hasPending: custom.hasPending,
+    hasMoreHistory,
   });
   const tooltip = reason.enabled ? 'Fork from here' : reason.reason;
 

@@ -13,11 +13,7 @@
  * tail, and a bulk publish only re-engages the window when it lands on an
  * empty thread (a staged replay's single publish).
  *
- * Messages render through `ThreadPrimitive.MessageByIndex`, keyed by index
- * exactly as `ThreadPrimitive.Messages` keys them, so the already-mounted
- * tail keeps its instances while earlier indices are prepended. Mount this
- * keyed by thread id: a thread switch must restart from the new thread's
- * tail, not inherit the previous thread's window.
+ * Message ids keep the mounted tail stable when earlier pages prepend.
  */
 import { startTransition, useEffect, useState, type ComponentProps } from 'react';
 import { ThreadPrimitive, useAui, useAuiState } from '@assistant-ui/react';
@@ -49,7 +45,9 @@ function heldFor(count: number): number {
 export function ProgressiveMessages({ components }: { components: MessageComponents }) {
   // The count, not the array: a streamed chunk replaces `messages` without
   // changing which indices are mounted, so it must not re-render the list.
-  const count = useAuiState((s) => s.thread.messages.length);
+  const ids = useAuiState((s) => s.thread.messages.map((message) => message.id).join('\0'));
+  const messageIds = ids ? ids.split('\0') : [];
+  const count = messageIds.length;
   const chatId = useChatExtrasSelector((extras) => extras?.state.chatId);
   const thread = useAui().thread;
   // `held` = how many of the OLDEST messages are not mounted yet. It only ever
@@ -82,7 +80,7 @@ export function ProgressiveMessages({ components }: { components: MessageCompone
   const start = Math.min(held, count);
   const items = [];
   for (let index = start; index < count; index++) {
-    items.push(<ThreadPrimitive.MessageByIndex key={index} index={index} components={components} />);
+    items.push(<ThreadPrimitive.MessageByIndex key={messageIds[index]} index={index} components={components} />);
   }
   return <>{items}</>;
 }

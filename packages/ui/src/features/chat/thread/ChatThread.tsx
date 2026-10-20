@@ -1,5 +1,6 @@
+import { DaemonFind } from '../find/DaemonFind';
 import { useRef, type ReactNode } from 'react';
-import { ThreadPrimitive } from '@assistant-ui/react';
+import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ChatSelectionToolbar } from './ChatSelectionToolbar';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
@@ -15,7 +16,8 @@ export function ChatThread({
   emptyState,
   variant = 'main',
 }: { emptyState?: ReactNode; variant?: ChatThreadVariant } = {}) {
-  useShortcutAction('chat.find', () => useFindInChatStore.getState().open());
+  const focused = useAuiState((s) => s.threads?.mainThreadId === s.threadListItem?.id);
+  const findOwner = focused && variant === 'main';
   const rootRef = useRef<HTMLDivElement>(null);
   return (
     <ComposerEditProvider>
@@ -26,12 +28,22 @@ export function ChatThread({
             data-testid="chat-thread"
             className="flex h-full flex-col overflow-hidden bg-background text-foreground"
           >
-            <FindBar />
+            {findOwner && <ThreadFind />}
             <ChatThreadViewport emptyState={emptyState} variant={variant} />
             <ChatSelectionToolbar scopeRef={rootRef} />
           </ThreadPrimitive.Root>
         </RootTranscriptScope>
       </SkillsProvider>
     </ComposerEditProvider>
+  );
+}
+
+function ThreadFind() {
+  useShortcutAction('chat.find', () => useFindInChatStore.getState().open());
+  return (
+    <>
+      <FindBar />
+      <DaemonFind />
+    </>
   );
 }

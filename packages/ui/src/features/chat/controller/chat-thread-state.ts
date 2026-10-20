@@ -1,3 +1,4 @@
+import type { HistoryLoadState } from './acp-history';
 /**
  * Pure state shape + reducer for a single chat thread.
  *
@@ -79,6 +80,7 @@ export interface ChatThreadState extends ChatEnvironmentSlice {
    * reader (composer tuning PATCHes, the diff-expand fetch, the `@`-file search
    * scope) depends on this flip to stop targeting a dead local id after adopt.
    */
+  readonly historyWindow: HistoryLoadState;
   readonly chatId: string;
   readonly authoritativeItemStreaming: boolean;
   readonly loadState: LoadState;
@@ -113,6 +115,7 @@ export interface ChatThreadState extends ChatEnvironmentSlice {
 
 export type ChatStateEvent =
   | { type: 'capabilities.updated'; authoritativeItemStreaming: boolean }
+  | { type: 'history.window'; history: HistoryLoadState }
   | { type: 'history.loading' }
   | { type: 'history.refresh.refused' }
   | { type: 'history.ready' }
@@ -146,6 +149,7 @@ export type ChatStateEvent =
 export function createChatThreadState(chatId: string): ChatThreadState {
   return {
     chatId,
+    historyWindow: { hasMore: false, loading: false },
     authoritativeItemStreaming: false,
     loadState: { type: 'idle' },
     runState: { type: 'idle' },

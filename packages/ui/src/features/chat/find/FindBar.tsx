@@ -60,6 +60,11 @@ function paintHighlights(matches: ReturnType<typeof searchMessages>, activeIndex
 
 export function FindBar(): React.ReactElement | null {
   const isOpen = useFindInChatStore((s) => s.isOpen);
+  const daemon = useFindInChatStore((s) => s.daemon);
+  const total = useFindInChatStore((s) => s.serverTotal);
+  const loading = useFindInChatStore((s) => s.loading);
+  const error = useFindInChatStore((s) => s.error);
+  const truncated = useFindInChatStore((s) => s.truncated);
   const query = useFindInChatStore((s) => s.query);
   const matches = useFindInChatStore((s) => s.matches);
   const activeIndex = useFindInChatStore((s) => s.activeIndex);
@@ -78,17 +83,17 @@ export function FindBar(): React.ReactElement | null {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!isOpen) return;
+    if (!isOpen || daemon) return;
     debounceRef.current = setTimeout(() => setMatches(searchMessages(query)), DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, isOpen, setMatches]);
+  }, [query, isOpen, setMatches, daemon]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || daemon) return;
     return paintHighlights(matches, activeIndex);
-  }, [matches, activeIndex, isOpen]);
+  }, [matches, activeIndex, isOpen, daemon]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -112,8 +117,8 @@ export function FindBar(): React.ReactElement | null {
 
   if (!isOpen) return null;
 
-  const count = matches.length;
-  const current = count > 0 ? activeIndex + 1 : 0;
+  const count = total ?? matches.length;
+  const current = matches.length > 0 ? activeIndex + 1 + Math.max(0, count - matches.length) : 0;
   const btn = 'rounded p-1 text-muted-foreground transition-colors hover:bg-accent disabled:opacity-30';
 
   return (
@@ -138,6 +143,9 @@ export function FindBar(): React.ReactElement | null {
       <span className="min-w-[3rem] shrink-0 text-center text-muted-foreground">
         {query ? `${current}/${count}` : ''}
       </span>
+      {loading && <span role="status">Searching...</span>}
+      {truncated && <span data-testid="thread-find-limit">Stepping through the newest 2,000 matches</span>}
+      {error && <span role="alert">{error}</span>}
       <button
         data-testid="thread-find-prev"
         type="button"

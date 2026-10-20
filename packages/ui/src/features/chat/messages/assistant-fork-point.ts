@@ -29,7 +29,7 @@ export function assistantForkAvailability(
   assistantId: string,
   point: NonNullable<AssistantForkPoint>,
   base: ForkBaseInput,
-  current: { isRunning: boolean; hasPending: boolean },
+  current: { isRunning: boolean; hasPending: boolean; hasMoreHistory?: boolean },
 ): ForkAvailability {
   if (point.kind === 'current') {
     const segmentBlock = latestSegmentBlock(messages, assistantId);
@@ -46,7 +46,8 @@ export function assistantForkAvailability(
   return forkFromMessageAvailability({
     ...base,
     messageUnsent: nextMeta?.pending === true || nextMeta?.queued === true || nextMeta?.error != null,
-    isFirstUserMessage: messages.find((message) => message.role === 'user')?.id === point.messageId,
+    isFirstUserMessage:
+      !current.hasMoreHistory && messages.find((message) => message.role === 'user')?.id === point.messageId,
     beforeLatestSegment: latestSegmentBlock(messages, point.messageId),
   });
 }

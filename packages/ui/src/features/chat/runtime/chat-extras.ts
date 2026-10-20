@@ -1,5 +1,7 @@
 'use client';
 
+import type { HistorySearchResult } from '@qlan-ro/mainframe-types';
+
 /**
  * The chat runtime's `extras` contract and its consumer hooks — the surface
  * gates, markers, composer toolbar, session panel, and skills read through
@@ -31,6 +33,9 @@ export interface ChatRuntimeExtras {
   readonly permissions: Readonly<Record<string, ChatPermissionEntry>>;
   readonly queued: Readonly<Record<string, QueuedMessageRef>>;
   readonly port: number;
+  readonly loadEarlier?: (untilItemId?: string) => Promise<boolean>;
+  readonly searchHistory?: (query: string) => Promise<HistorySearchResult>;
+  readonly canSearchHistory?: boolean;
   readonly cancel: () => Promise<void>;
   readonly replyToPermission: (response: ControlResponse, selectedOptionId?: string) => Promise<void>;
   readonly cancelQueued: (messageId: string) => Promise<void>;
@@ -64,6 +69,9 @@ export function buildChatExtras(
     permissions: state.interactions.permissions,
     queued: state.interactions.queued,
     port,
+    loadEarlier: (target) => controller.loadEarlier(target),
+    searchHistory: (query) => controller.searchHistory(query),
+    canSearchHistory: controller.canSearchHistory,
     cancel: () => controller.cancel(),
     replyToPermission: (response, selectedOptionId) => controller.replyToPermission(response, selectedOptionId),
     cancelQueued: (messageId) => controller.cancelQueued(messageId),

@@ -1,3 +1,4 @@
+import { searchItemId } from '../find/search-item';
 /**
  * Markdown renderer for assistant text parts.
  *
@@ -182,14 +183,14 @@ export const MARKDOWN_ROOT_CLASS = 'aui-md';
 // `INTERNAL.useSmooth` use, plus the hold/freeze mechanism itself — see that
 // file's doc comment for the independent review findings it guards against.
 
-const MarkdownTextImpl: TextMessagePartComponent = () => {
+const MarkdownTextImpl: TextMessagePartComponent = (props) => {
   // `data-text-part` marks the searchable text container for in-chat Find
   // (FindBar walks [data-message-id] → [data-text-part]). The wrapper guarantees
   // the attribute lands on a real DOM node regardless of primitive prop-forwarding.
   const containerRef = useRef<HTMLDivElement>(null);
   const preprocess = useHeldDisplayedText(containerRef);
   return (
-    <div data-text-part ref={containerRef}>
+    <div data-text-part data-search-item-id={searchItemId(props)} ref={containerRef}>
       <SmartActionsProvider>
         <MarkdownTextPrimitive
           className={MARKDOWN_ROOT_CLASS}

@@ -22,6 +22,10 @@ import { daemonWs } from '../../../lib/daemon/ws-client';
 class ChatControllerRegistry {
   private readonly controllers = new Map<string, AcpChatController>();
 
+  get(chatId: string): AcpChatController | undefined {
+    return this.controllers.get(chatId);
+  }
+
   getOrCreate(chatId: string, port: number): AcpChatController {
     const existing = this.controllers.get(chatId);
     if (existing) return existing;

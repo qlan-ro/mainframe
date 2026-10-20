@@ -163,17 +163,19 @@ export interface DaemonHandle {
 
 export async function startDaemon(opts?: {
   recordingKey?: string;
+  recordingsDir?: string;
+  dataDir?: string;
   mockMaxDelayMs?: number;
   mockFork?: boolean;
   mockSwitch?: boolean;
 }): Promise<DaemonHandle> {
   await assertPortFree();
-  const testDataDir = mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
+  const testDataDir = opts?.dataDir ?? mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
 
   const e2eEnv: Record<string, string> = {};
   if (E2E_MODE) {
     e2eEnv['E2E_MODE'] = E2E_MODE;
-    e2eEnv['E2E_RECORDINGS_DIR'] = RECORDINGS_DIR;
+    e2eEnv['E2E_RECORDINGS_DIR'] = opts?.recordingsDir ?? RECORDINGS_DIR;
     if (opts?.recordingKey) e2eEnv['E2E_RECORDING_KEY'] = opts.recordingKey;
     // Widen the mock replay clamp for specs that must observe a transient state
     // (e.g. the sidebar 'working' dot) whose window the default ~120ms burst collapses.
@@ -262,7 +264,7 @@ async function preserveDaemonLog(handle: DaemonHandle): Promise<void> {
   if (kept.length > 0) console.log(`[e2e] kept ${kept.length} daemon log(s) for ${name} in daemon-logs/`);
 }
 
-export async function stopDaemon(handle: DaemonHandle | undefined): Promise<void> {
+export async function stopDaemon(handle: DaemonHandle | undefined, preserveData = false): Promise<void> {
   if (!handle) return;
   await new Promise<void>((resolve) => {
     if (handle.daemon.exitCode !== null) return resolve();
@@ -275,5 +277,5 @@ export async function stopDaemon(handle: DaemonHandle | undefined): Promise<void
     }, 3_000);
   });
   await preserveDaemonLog(handle);
-  rmSync(handle.testDataDir, { recursive: true, force: true });
+  if (!preserveData) rmSync(handle.testDataDir, { recursive: true, force: true });
 }

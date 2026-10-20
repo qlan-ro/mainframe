@@ -1,3 +1,10 @@
+import type {
+  HistoryPageParams,
+  HistoryPageResult,
+  HistorySearchResult,
+  HistoryState,
+  HistoryWindow,
+} from '@qlan-ro/mainframe-types';
 /**
  * `AcpSessionAttachment`'s two interfaces — the narrowed client port it
  * needs, and the host callbacks it drives — split out once the attachment
@@ -48,7 +55,14 @@ export interface AcpSessionClientPort {
   onGap(listener: GapListener): () => void;
   prompt(sessionId: string, text: string, extra?: Pick<PromptRequest, '_meta'>): Promise<PromptResponse>;
   cancel(sessionId: string): void;
-  resume(sessionId: string, cwd: string, replayFrom?: ReplayCursor): Promise<ResumeSessionResponse>;
+  resume(
+    sessionId: string,
+    cwd: string,
+    replayFrom?: ReplayCursor,
+    window?: HistoryWindow,
+  ): Promise<ResumeSessionResponse>;
+  historyPage?(params: HistoryPageParams, apply: (page: HistoryPageResult) => void): Promise<unknown>;
+  historySearch?(sessionId: string, query: string): Promise<HistorySearchResult>;
   respondPermission(id: JsonRpcRequestId, response: RequestPermissionResponse): void;
   /** Drop this session's live stream on the daemon (D2 dormancy) — `_mainframe.dev/session_detach`. */
   detach(sessionId: string): void;
@@ -64,6 +78,9 @@ export interface AcpSessionAttachmentHost {
   isDisposed(): boolean;
   /** The next `session/resume` cursor for this chat (todo #377) — collapses the revision-vs-item-vs-start choice `reactivate()`/`resumeFromGap()` used to each re-derive inline. */
   nextReplayFrom(capabilities: MainframeCapabilities | null | undefined): ReplayCursor;
+  invalidateHistory?(): void;
+  historyWindow?(cursor: ReplayCursor): HistoryWindow;
+  setHistory?(history: HistoryState | undefined): void;
   resetSettledCursor(): void;
   /** `needs-replay`, `transcript_cleared`, and a resync each invalidate the durable revision cursor outright (todo #377) — the next full replay's own reply seeds a fresh one via `completeReplay()`. */
   clearDurableCursor(): void;

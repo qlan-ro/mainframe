@@ -1,3 +1,5 @@
+import { useChatExtras } from '@/features/chat/runtime/chat-extras';
+import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { useAui } from '@assistant-ui/react';
 import { ChevronDown } from 'lucide-react';
@@ -24,6 +26,7 @@ function Entry({
   adapterId?: string;
   now: number;
 }) {
+  const [jumpState, setJumpState] = useState<string | null>(null);
   const aui = useAui();
   const parentThreadId = useSideAwareThreadId();
   const run = useWorkflowRun(row.kind === 'workflow' ? row.task?.id : undefined);
@@ -36,17 +39,29 @@ function Entry({
         }
       : undefined;
   return (
-    <ActivityRow
-      row={row}
-      chatId={chatId}
-      adapterId={adapterId}
-      now={now}
-      run={run}
-      onJump={() => {
-        if (row.source) jumpToActivitySource(chatId, row.source);
-      }}
-      onOpenChild={openChild}
-    />
+    <>
+      <ActivityRow
+        row={row}
+        chatId={chatId}
+        adapterId={adapterId}
+        now={now}
+        run={run}
+        onJump={() => {
+          if (!row.source) return;
+          setJumpState('Loading message...');
+          void Promise.resolve(jumpToActivitySource(chatId, row.source)).then(
+            (found) => setJumpState(found === false ? 'Not in this transcript' : null),
+            (error: unknown) => setJumpState(error instanceof Error ? error.message : 'Could not load message'),
+          );
+        }}
+        onOpenChild={openChild}
+      />
+      {jumpState && (
+        <p role="status" className="px-2 text-xs text-muted-foreground">
+          {jumpState}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -151,6 +166,7 @@ function ActivityBody({
 }
 
 export function ActivitySection() {
+  const extras = useChatExtras();
   const { entries, chatId, adapterId, loadError, now } = useActivityEntries();
   const [historyView, setHistoryView] = useState<HistoryView>('closed');
   useEffect(() => setHistoryView('closed'), [chatId]);
@@ -175,6 +191,23 @@ export function ActivitySection() {
           </span>
         }
       />
+      {extras?.state.historyWindow?.hasMore && (
+        <div className="px-4 text-xs text-muted-foreground">
+          Earlier activity may exist.
+          <Button
+            data-testid="session-panel-load-earlier"
+            variant="ghost"
+            size="sm"
+            disabled={extras.state.historyWindow.loading}
+            onClick={() => {
+              void extras.loadEarlier?.().catch(() => undefined);
+            }}
+          >
+            Load earlier messages
+          </Button>
+          {extras.state.historyWindow.error && <p role="alert">{extras.state.historyWindow.error}</p>}
+        </div>
+      )}
       <ActivityBody
         running={running}
         waiting={waiting}

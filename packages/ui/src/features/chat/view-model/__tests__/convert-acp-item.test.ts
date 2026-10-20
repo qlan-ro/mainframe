@@ -63,7 +63,7 @@ describe('convertAcpItems — reaggregation', () => {
       id: 'c1',
       createdAt: new Date('2026-08-28T00:00:05.000Z'),
       content: [
-        { type: 'text', text: 'Hello' },
+        { type: 'text', providerMetadata: { mainframe: { itemId: 'm1' } }, text: 'Hello' },
         {
           type: 'tool-call',
           toolCallId: 't1',
@@ -124,7 +124,7 @@ describe('convertAcpItems — reaggregation', () => {
     const converted = convertAcpItems(items, stampFor);
     expect(converted.map((m) => m.id)).toEqual(['c1', 'c2']);
     expect(converted[0]!.content).toEqual([
-      { type: 'text', text: 'first' },
+      { type: 'text', providerMetadata: { mainframe: { itemId: 'm1' } }, text: 'first' },
       {
         type: 'tool-call',
         toolCallId: 't1',
@@ -136,7 +136,7 @@ describe('convertAcpItems — reaggregation', () => {
       },
     ]);
     expect(converted[1]!.content).toEqual([
-      { type: 'text', text: 'second' },
+      { type: 'text', providerMetadata: { mainframe: { itemId: 'm2' } }, text: 'second' },
       {
         type: 'tool-call',
         toolCallId: 't2',
@@ -196,7 +196,7 @@ describe('convertAcpItems — reaggregation', () => {
         id: 'c1',
         createdAt,
         content: [
-          { type: 'text', text: 'first' },
+          { type: 'text', providerMetadata: { mainframe: { itemId: 'c1' } }, text: 'first' },
           {
             type: 'tool-call',
             toolCallId: 't1',
@@ -206,7 +206,7 @@ describe('convertAcpItems — reaggregation', () => {
             isError: undefined,
             providerMetadata: { mainframe: { acpStatus: 'completed' } },
           },
-          { type: 'text', text: 'second' },
+          { type: 'text', providerMetadata: { mainframe: { itemId: 'c1-1' } }, text: 'second' },
           {
             type: 'tool-call',
             toolCallId: 't2',
@@ -216,7 +216,7 @@ describe('convertAcpItems — reaggregation', () => {
             isError: undefined,
             providerMetadata: { mainframe: { acpStatus: 'completed' } },
           },
-          { type: 'text', text: 'third' },
+          { type: 'text', providerMetadata: { mainframe: { itemId: 'c1-2' } }, text: 'third' },
         ],
       },
     ]);

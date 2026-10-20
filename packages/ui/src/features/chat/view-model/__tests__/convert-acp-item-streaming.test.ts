@@ -34,7 +34,9 @@ describe('convertAcpItems — streaming status (D6)', () => {
 
     const container = convertAcpItems(items, stampFor)[0]!;
     expect(container.status).toEqual({ type: 'running' });
-    expect(container.content).toEqual([{ type: 'text', text: 'typing', status: { type: 'running' } }]);
+    expect(container.content).toEqual([
+      { type: 'text', providerMetadata: { mainframe: { itemId: 'm1' } }, text: 'typing', status: { type: 'running' } },
+    ]);
   });
 
   it('a replay-origin item yields complete parts and no running message status', () => {
@@ -51,7 +53,14 @@ describe('convertAcpItems — streaming status (D6)', () => {
 
     const container = convertAcpItems(items, stampFor)[0]!;
     expect(container.status).toBeUndefined();
-    expect(container.content).toEqual([{ type: 'text', text: 'replayed answer', status: { type: 'complete' } }]);
+    expect(container.content).toEqual([
+      {
+        type: 'text',
+        providerMetadata: { mainframe: { itemId: 'm1' } },
+        text: 'replayed answer',
+        status: { type: 'complete' },
+      },
+    ]);
   });
 
   it('a replay-origin item that is also streaming: true yields a running part — streaming wins', () => {
@@ -69,7 +78,12 @@ describe('convertAcpItems — streaming status (D6)', () => {
     const container = convertAcpItems(items, stampFor)[0]!;
     expect(container.status).toEqual({ type: 'running' });
     expect(container.content).toEqual([
-      { type: 'text', text: 'continuing after a mid-turn replay', status: { type: 'running' } },
+      {
+        type: 'text',
+        providerMetadata: { mainframe: { itemId: 'm1' } },
+        text: 'continuing after a mid-turn replay',
+        status: { type: 'running' },
+      },
     ]);
   });
 
@@ -87,7 +101,9 @@ describe('convertAcpItems — streaming status (D6)', () => {
 
     const container = convertAcpItems(items, stampFor)[0]!;
     expect(container.status).toBeUndefined();
-    expect(container.content).toEqual([{ type: 'text', text: 'plain' }]);
+    expect(container.content).toEqual([
+      { type: 'text', providerMetadata: { mainframe: { itemId: 'm1' } }, text: 'plain' },
+    ]);
   });
 
   it('[text, tool, text] gives parts [text, tool-call, text] — only the streaming last text is running', () => {
@@ -122,8 +138,17 @@ describe('convertAcpItems — streaming status (D6)', () => {
     const container = convertAcpItems(items, stampFor)[0]!;
     const content = container.content as ContentPart[];
     expect(content.map((p) => p.type)).toEqual(['text', 'tool-call', 'text']);
-    expect(content[0]).toEqual({ type: 'text', text: 'before the tool' });
-    expect(content[2]).toEqual({ type: 'text', text: 'after the tool', status: { type: 'running' } });
+    expect(content[0]).toEqual({
+      type: 'text',
+      providerMetadata: { mainframe: { itemId: 'c1' } },
+      text: 'before the tool',
+    });
+    expect(content[2]).toEqual({
+      type: 'text',
+      providerMetadata: { mainframe: { itemId: 'c1-1' } },
+      text: 'after the tool',
+      status: { type: 'running' },
+    });
     expect(container.status).toEqual({ type: 'running' });
   });
 });

@@ -158,7 +158,12 @@ it('retains native images and unrelated cost while mapping only exact whole imag
   };
   const converted = convert([item])[0]!;
   expect(converted.content).toEqual([
-    { type: 'text', text: 'caption', status: { type: 'complete' } },
+    {
+      type: 'text',
+      providerMetadata: { mainframe: { itemId: 'text-item' } },
+      text: 'caption',
+      status: { type: 'complete' },
+    },
     { type: 'image', image: 'data:image/png;base64,aGVsbG8=' },
   ]);
   expect(meta([item])).toMatchObject({ cost: 0.02, partSources: { 1: [{ sourceMessageId: 'image' }] } });
