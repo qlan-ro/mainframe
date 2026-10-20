@@ -32,12 +32,16 @@ export async function installHistoryPaintProbe(page: Page): Promise<void> {
           node.textContent?.includes('Needle turn 249'),
         );
         const rect = tail?.getBoundingClientRect();
+        const viewport = document.querySelector('[data-testid="chat-thread-viewport"]')?.getBoundingClientRect();
         return Boolean(
           (window.historyPaintProbe.replays[chatId] ?? 0) > replays &&
           !document.querySelector('[data-testid="chat-thread-loading"]') &&
+          tail &&
+          getComputedStyle(tail).visibility === 'visible' &&
           rect &&
-          rect.bottom > 0 &&
-          rect.top < innerHeight,
+          viewport &&
+          rect.bottom > Math.max(0, viewport.top) &&
+          rect.top < Math.min(innerHeight, viewport.bottom),
         );
       },
     };
