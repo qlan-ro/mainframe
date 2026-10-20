@@ -1,11 +1,10 @@
-use super::command_metadata::source_command_metadata;
+use super::command_metadata::{source_command_metadata, source_tool_result};
 use super::display_helpers::{categorize_tool_call, category_str, with_parent_id};
 use crate::{PartEntry, group_task_children, group_tool_call_parts};
 use mainframe_types::content::LeafContent;
 use mainframe_types::display::{
-    DisplayContent, DisplayNode, TaskProgressItem, ToolCallResult, ToolCategories, ToolCategory,
+    DisplayContent, DisplayNode, TaskProgressItem, ToolCategories, ToolCategory,
 };
-use serde_json::Value;
 
 pub fn apply_tool_grouping(
     content: Vec<DisplayContent>,
@@ -33,9 +32,7 @@ fn display_content_to_part(c: &DisplayContent) -> PartEntry {
             tool_call_id: id.clone(),
             tool_name: name.clone(),
             args: input.clone(),
-            result: result
-                .as_ref()
-                .map(|r| serde_json::to_value(r).unwrap_or(Value::Null)),
+            result: None,
             is_error: result.as_ref().map(|r| r.is_error),
             category: Some(category_str(*category).to_string()),
             parent_tool_use_id: with_parent_id(parent_tool_use_id),
@@ -83,13 +80,6 @@ fn display_content_parent_id(c: &DisplayContent) -> Option<String> {
         ) => parent_tool_use_id.clone(),
         _ => None,
     }
-}
-
-fn part_result_to_tool_call_result(result: &Option<Value>) -> Option<ToolCallResult> {
-    result
-        .as_ref()
-        .filter(|v| !v.is_null())
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
 }
 
 fn convert_grouped_parts_to_display(
@@ -149,7 +139,7 @@ fn tool_group(
                 name: item.tool_name.clone(),
                 input: item.args.clone(),
                 category: categorize_tool_call(&item.tool_name, Some(categories)),
-                result: part_result_to_tool_call_result(&item.result),
+                result: source_tool_result(original_content, &item.tool_call_id),
                 parent_tool_use_id: with_parent_id(&item.parent_tool_use_id),
             })
         })
@@ -172,13 +162,13 @@ fn task_group(
         agent_id: entry.tool_call_id.clone(),
         task_args: entry.task_args.clone(),
         calls,
-        result: part_result_to_tool_call_result(&entry.result),
+        result: source_tool_result(original_content, &entry.tool_call_id),
     })
 }
 
 fn task_progress(
     entry: &crate::tool_grouping::TaskProgressEntry,
-    _original_content: &[DisplayContent],
+    original_content: &[DisplayContent],
     _categories: &ToolCategories,
 ) -> DisplayContent {
     let items: Vec<TaskProgressItem> = entry
@@ -190,7 +180,7 @@ fn task_progress(
             name: item.tool_name.clone(),
             input: item.args.clone(),
             category: ToolCategory::Progress,
-            result: part_result_to_tool_call_result(&item.result),
+            result: source_tool_result(original_content, &item.tool_call_id),
         })
         .collect();
     DisplayContent::Node(DisplayNode::TaskProgress { items })
@@ -255,7 +245,6 @@ fn convert_task_child(
             tool_call_id,
             tool_name,
             args,
-            result,
             parent_tool_use_id,
             ..
         } => DisplayContent::Node(DisplayNode::ToolCall {
@@ -265,7 +254,7 @@ fn convert_task_child(
             name: tool_name.clone(),
             input: args.clone(),
             category: categorize_tool_call(tool_name, Some(categories)),
-            result: part_result_to_tool_call_result(result),
+            result: source_tool_result(original_content, tool_call_id),
             parent_tool_use_id: with_parent_id(parent_tool_use_id),
         }),
         nested => {

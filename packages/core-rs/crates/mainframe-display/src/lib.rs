@@ -37,6 +37,8 @@ pub use projection::{
 pub mod command_metadata;
 pub mod decoders;
 pub mod display_assistant;
+#[cfg(test)]
+mod display_grouping_results_tests;
 pub mod display_pipeline_markers;
 pub mod display_tool_groups;
 pub mod display_user;
