@@ -112,8 +112,9 @@ async fn load_scan_records_reconstructs_a_pr_create_pair_from_the_rollout() {
         },
     });
 
+    let canonical = Vec::new();
     let history = session
-        .load_scan_records()
+        .load_scan_records(Some(&canonical))
         .await
         .expect("load_scan_records should not error");
 
@@ -181,7 +182,7 @@ async fn load_scan_records_falls_back_to_load_history_without_a_registry_row() {
     });
 
     let history = session
-        .load_scan_records()
+        .load_scan_records(None)
         .await
         .expect("falling back to load_history must not error even with no registry row");
     assert!(

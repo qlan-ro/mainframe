@@ -165,7 +165,11 @@ impl AdapterPort for FakeDeps {
     ) -> Option<Arc<dyn PlanModeActionHandler>> {
         self.adapters.plan_handler.lock_recover().clone()
     }
-    fn scan_loaded_history<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, ()> {
+    fn scan_loaded_history<'a>(
+        &'a self,
+        _chat_id: &'a str,
+        _canonical: Option<&'a [ChatMessage]>,
+    ) -> BoxFuture<'a, ()> {
         Box::pin(async {})
     }
     fn resolve_tuning<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {

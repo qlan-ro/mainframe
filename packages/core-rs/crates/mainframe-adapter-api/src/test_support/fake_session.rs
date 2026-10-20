@@ -240,14 +240,17 @@ impl AdapterSession for FakeSession {
         let sources = self.history_sources.clone();
         Box::pin(async move { sources })
     }
-    fn load_scan_records(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        match &self.scan_records {
-            Some(records) => {
-                let records = records.clone();
-                Box::pin(async move { Ok(records) })
+    fn load_scan_records<'a>(
+        &'a self,
+        canonical: Option<&'a [ChatMessage]>,
+    ) -> BoxFuture<'a, Result<std::borrow::Cow<'a, [ChatMessage]>, AdapterError>> {
+        Box::pin(async move {
+            match (&self.scan_records, canonical) {
+                (Some(records), _) => Ok(std::borrow::Cow::Borrowed(records.as_slice())),
+                (None, Some(history)) => Ok(std::borrow::Cow::Borrowed(history)),
+                (None, None) => self.load_history().await.map(std::borrow::Cow::Owned),
             }
-            None => self.load_history(),
-        }
+        })
     }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         let paths = self.plan_paths.clone();

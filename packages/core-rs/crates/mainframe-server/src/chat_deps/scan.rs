@@ -1,16 +1,35 @@
 use super::*;
 
 impl DaemonChatDeps {
-    /// `scan_loaded_history` only receives the chatId (trait contract), so it
-    /// re-derives a session from the same chat row `doLoadChat` already read
-    /// rather than reusing the live one — both are stateless reads over the
-    /// on-disk transcript, so results match. `scan_loaded_history` then reads
-    /// this session twice, once via `load_history` (mentions) and once via
-    /// `load_scan_records` (PRs) — for Claude, where `load_scan_records`
-    /// defaults to `load_history`, that is the same file read twice; for
-    /// Codex it is `thread/read` plus a rollout reconstruction (no app-server
-    /// spawn). Correctness (the rollout's injected preamble
-    /// must never feed the mention scan) outweighs the extra I/O here.
+    pub(super) async fn scan_history(&self, chat_id: &str, canonical: Option<&[ChatMessage]>) {
+        let Some(session) = self.session_for_scan(chat_id) else {
+            return;
+        };
+        let loaded;
+        let canonical = match canonical {
+            Some(history) => Some(history),
+            None => match session.load_history().await {
+                Ok(history) => {
+                    loaded = history;
+                    Some(loaded.as_slice())
+                }
+                Err(err) => {
+                    tracing::warn!(error = %err, chat_id, "load_history failed");
+                    None
+                }
+            },
+        };
+        if let Some(history) = canonical {
+            self.scan_and_persist_mentions(chat_id, history);
+        }
+        match session.load_scan_records(canonical).await {
+            Ok(history) => self.scan_and_persist_prs(chat_id, &history),
+            Err(err) => tracing::warn!(error = %err, chat_id, "load_scan_records failed"),
+        }
+        self.persist_plan_and_skill_files(chat_id, session.as_ref())
+            .await;
+    }
+
     pub(super) fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = match self.chats_get(chat_id) {
             Ok(chat) => chat?,

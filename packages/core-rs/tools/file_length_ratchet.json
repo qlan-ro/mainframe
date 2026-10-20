@@ -28,7 +28,7 @@
   "mainframe-background-tasks/src/tracker.rs": 317,
   "mainframe-chat/src/chat_manager/send.rs": 311,
   "mainframe-chat/src/event_handler/partial_overlay_tests.rs": 376,
-  "mainframe-chat/src/lifecycle_manager.rs": 989,
+  "mainframe-chat/src/lifecycle_manager.rs": 891,
   "mainframe-claude-workflows/tests/store_lifecycle.rs": 482,
   "mainframe-db/src/chats.rs": 692,
   "mainframe-db/tests/chat_segments.rs": 318,

@@ -29,7 +29,11 @@ pub trait AdapterPort: Send + Sync {
 
     fn create_plan_mode_handler(&self, adapter_id: &str) -> Option<Arc<dyn PlanModeActionHandler>>;
 
-    fn scan_loaded_history<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, ()>;
+    fn scan_loaded_history<'a>(
+        &'a self,
+        chat_id: &'a str,
+        canonical: Option<&'a [ChatMessage]>,
+    ) -> BoxFuture<'a, ()>;
 
     fn resolve_tuning<'a>(
         &'a self,

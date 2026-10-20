@@ -165,8 +165,18 @@ impl AdapterSession for CodexSession {
         Box::pin((self.history_sources_inner()).instrument(self.span.clone()))
     }
 
-    fn load_scan_records(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        Box::pin((self.load_scan_records_inner()).instrument(self.span.clone()))
+    fn load_scan_records<'a>(
+        &'a self,
+        _canonical: Option<&'a [ChatMessage]>,
+    ) -> BoxFuture<'a, Result<std::borrow::Cow<'a, [ChatMessage]>, AdapterError>> {
+        Box::pin(
+            async {
+                self.load_scan_records_inner()
+                    .await
+                    .map(std::borrow::Cow::Owned)
+            }
+            .instrument(self.span.clone()),
+        )
     }
 
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
