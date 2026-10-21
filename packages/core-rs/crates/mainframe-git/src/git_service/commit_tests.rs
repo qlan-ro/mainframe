@@ -1,40 +1,15 @@
-use super::*;
-use tokio::process::Command;
+use mainframe_types::git::WorkingStatFile;
 
-async fn git(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .await
-        .unwrap();
-    String::from_utf8_lossy(&out.stdout).trim().to_string()
-}
-
-async fn init_repo(dir: &Path) {
-    git(dir, &["init"]).await;
-    git(dir, &["config", "user.email", "test@test.com"]).await;
-    git(dir, &["config", "user.name", "Test"]).await;
-    // Hermetic against the developer's global git config: signing (if enabled
-    // globally) shells out to gpg, which fails non-deterministically under the
-    // parallel test load. Repo-local override applies to GitService's commits
-    // too (they inherit repo config).
-    git(dir, &["config", "commit.gpgsign", "false"]).await;
-    tokio::fs::write(dir.join("README.md"), "# Test\n")
-        .await
-        .unwrap();
-    git(dir, &["add", "README.md"]).await;
-    git(dir, &["commit", "-m", "init"]).await;
-}
-
-// ---- commitAll ----
+use crate::git_parse::parse_status_buckets;
+use crate::git_service::GitServiceError;
+use crate::git_service::test_support::{git, init_repo, real_service};
 
 #[tokio::test]
 async fn commit_all_stages_all_and_returns_sha() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::write(dir.join("new-file.ts"), "export const x = 1;\n")
         .await
@@ -54,7 +29,7 @@ async fn commit_all_includes_untracked_files() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::write(dir.join("untracked.ts"), "const y = 2;\n")
         .await
@@ -70,7 +45,7 @@ async fn commit_all_includes_deleted_files() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::write(dir.join("to-delete.ts"), "const z = 3;\n")
         .await
@@ -88,22 +63,22 @@ async fn commit_all_includes_deleted_files() {
 }
 
 #[tokio::test]
-async fn commit_all_throws_when_nothing_to_commit() {
+async fn commit_all_fails_when_nothing_to_commit() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
-    assert!(svc.commit_all("empty commit").await.is_err());
+    let svc = real_service(dir);
+    let err = svc.commit_all("empty commit").await.unwrap_err();
+    assert!(matches!(err, GitServiceError::NothingToCommit));
+    assert_eq!(err.to_string(), "Nothing to commit");
 }
-
-// ---- workingStat ----
 
 #[tokio::test]
 async fn working_stat_empty_when_clean() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
     let result = svc.working_stat().await.unwrap();
     assert_eq!(result.files, Vec::<WorkingStatFile>::new());
     assert_eq!(result.total_additions, 0);
@@ -115,7 +90,7 @@ async fn working_stat_counts_modified_tracked() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::write(dir.join("README.md"), "# Updated\nline2\nline3\n")
         .await
@@ -131,7 +106,7 @@ async fn working_stat_counts_new_untracked() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::write(dir.join("new-file.ts"), "const a = 1;\nconst b = 2;\n")
         .await
@@ -152,7 +127,7 @@ async fn working_stat_counts_untracked_in_subdir() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::create_dir_all(dir.join("src")).await.unwrap();
     tokio::fs::write(dir.join("src").join("index.ts"), "export {};\n")
@@ -172,7 +147,7 @@ async fn working_stat_counts_deletions() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::write(dir.join("README.md"), "").await.unwrap();
     let result = svc.working_stat().await.unwrap();
@@ -186,7 +161,7 @@ async fn working_stat_binary_files_zero() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::write(dir.join("data.bin"), [0x00u8, 0x01, 0x02, 0x03])
         .await
@@ -202,7 +177,7 @@ async fn working_stat_totals_across_files() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::write(dir.join("a.ts"), "const a = 1;\nconst b = 2;\n")
         .await
@@ -219,8 +194,6 @@ async fn working_stat_totals_across_files() {
     assert!(result.files.len() >= 2);
 }
 
-// ---- paths with spaces (#399) ----
-
 #[tokio::test]
 async fn working_stat_reports_spaced_paths_verbatim() {
     let tmp = tempfile::tempdir().unwrap();
@@ -231,7 +204,7 @@ async fn working_stat_reports_spaced_paths_verbatim() {
         .unwrap();
     git(dir, &["add", "old name.ts"]).await;
     git(dir, &["commit", "-m", "add spaced file"]).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     git(dir, &["mv", "old name.ts", "new name.ts"]).await;
     tokio::fs::write(dir.join("README.md"), "# Test\nmore\n")
@@ -263,7 +236,7 @@ async fn status_raw_buckets_spaced_paths_unquoted() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     init_repo(dir).await;
-    let svc = GitService::for_project(dir.to_string_lossy().into_owned());
+    let svc = real_service(dir);
 
     tokio::fs::write(dir.join("staged file.ts"), "x\n")
         .await
@@ -273,13 +246,13 @@ async fn status_raw_buckets_spaced_paths_unquoted() {
         .await
         .unwrap();
 
-    let buckets = crate::git_parse::parse_status_buckets(&svc.status_raw().await.unwrap());
+    let buckets = parse_status_buckets(&svc.status_raw().await.unwrap());
     assert_eq!(buckets.staged, vec!["staged file.ts".to_string()]);
     assert_eq!(buckets.untracked, vec!["draft notes.md".to_string()]);
 
     // A path read back from status must be stageable as-is.
     svc.stage(&buckets.untracked).await.unwrap();
-    let after = crate::git_parse::parse_status_buckets(&svc.status_raw().await.unwrap());
+    let after = parse_status_buckets(&svc.status_raw().await.unwrap());
     assert_eq!(
         after.staged,
         vec!["draft notes.md".to_string(), "staged file.ts".to_string()]

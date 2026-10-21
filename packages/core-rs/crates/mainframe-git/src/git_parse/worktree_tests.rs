@@ -1,4 +1,4 @@
-use super::{WorktreeEntry, parse_worktree_list};
+use super::*;
 
 #[test]
 fn parses_branch_and_detached_records() {

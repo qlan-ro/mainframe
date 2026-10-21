@@ -2,6 +2,8 @@ use mainframe_runtime::sync::KeyedMutex;
 use std::sync::OnceLock;
 use tokio::sync::OwnedMutexGuard;
 
+/// Serializes git mutations on one project. Different paths never block each
+/// other; the guard releases the lock when dropped.
 pub async fn acquire_project_lock(project_path: &str) -> OwnedMutexGuard<()> {
     static LOCKS: OnceLock<KeyedMutex> = OnceLock::new();
     LOCKS

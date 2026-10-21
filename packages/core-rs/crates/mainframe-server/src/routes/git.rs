@@ -45,7 +45,7 @@ struct GitDiffQuery {
 // ── shared helpers (crate-local; used by git_write + git_chat) ────────────────
 
 /// Whether a `GitServiceError` means "not a git repository": only a wrapped
-/// `exec_git` rejection whose message names "not a git repository" qualifies.
+/// `exec_git` failure whose stderr names "not a git repository" qualifies.
 pub(crate) fn is_not_git_repo_err(err: &GitServiceError) -> bool {
     matches!(err, GitServiceError::Exec(e) if is_not_git_repo(e))
 }

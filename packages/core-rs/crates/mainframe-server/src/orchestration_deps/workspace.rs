@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use mainframe_git::exec_git;
+use mainframe_git::{GitTimeout, exec_git};
 use mainframe_orchestration::errors::{ErrorCode, PortError, ToolError};
 use mainframe_services::workspace::{get_worktrees, short_branch};
 
@@ -42,13 +42,9 @@ pub(super) async fn check_new_worktree(
     if !branch_name_ok(base_branch) {
         return Err(invalid(format!("Invalid base branch: {base_branch}")));
     }
-    let args = vec![
-        "rev-parse".to_string(),
-        "--verify".to_string(),
-        "--quiet".to_string(),
-        format!("{base_branch}^{{commit}}"),
-    ];
-    exec_git(&args, project_path, None)
+    let commit = format!("{base_branch}^{{commit}}");
+    let args = ["rev-parse", "--verify", "--quiet", &commit];
+    exec_git(&args, project_path, GitTimeout::Default)
         .await
         .map(|_| ())
         .map_err(|_| invalid(format!("Base branch {base_branch} does not exist")))

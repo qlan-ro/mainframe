@@ -1,16 +1,13 @@
 //! Revision queries: merge bases, the base branch, and commits by date.
 
-use super::*;
+use super::{DetectedBaseBranch, END_OF_OPTIONS, GitExec, GitService, GitServiceError};
 
 impl<E: GitExec> GitService<E> {
     /// The newest commit on HEAD made before `when` (any date git parses, e.g.
     /// ISO 8601); `None` when HEAD has no commit that old.
     pub async fn last_commit_before(&self, when: &str) -> Result<Option<String>, GitServiceError> {
         let out = self
-            .git(
-                argv!["rev-list", "-1", format!("--before={when}"), "HEAD"],
-                None,
-            )
+            .git(argv!["rev-list", "-1", format!("--before={when}"), "HEAD"])
             .await?;
         let sha = out.trim();
         Ok((!sha.is_empty()).then(|| sha.to_string()))
@@ -21,9 +18,12 @@ impl<E: GitExec> GitService<E> {
         branch1: &str,
         branch2: &str,
     ) -> Result<Option<String>, GitServiceError> {
-        match self.git(argv!["merge-base", branch1, branch2], None).await {
+        match self
+            .git(argv!["merge-base", END_OF_OPTIONS, branch1, branch2])
+            .await
+        {
             Ok(out) => Ok(Some(out.trim().to_string())),
-            // expected — branches may share no common ancestor
+            // expected — either ref may not exist, or the two share no ancestor
             Err(_) => Ok(None),
         }
     }
@@ -43,5 +43,5 @@ impl<E: GitExec> GitService<E> {
 }
 
 #[cfg(test)]
-#[path = "git_service_revs_tests.rs"]
+#[path = "revs_tests.rs"]
 mod tests;

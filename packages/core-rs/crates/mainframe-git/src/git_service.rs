@@ -1,34 +1,34 @@
-//! `GitService`: git operations over `exec_git` + explicit porcelain parsing
-//! (no `simple-git`). Error strings are kept stable for callers that classify
-//! them.
+//! `GitService`: the git operations the daemon exposes, built on `exec_git`
+//! and the `git_parse` parsers. Mutating operations hold the per-project lock.
+//!
+//! Every user-supplied ref or name follows `--end-of-options`, so a value such
+//! as `--upload-pack=<cmd>` reaches git as a ref, never as an option.
 
-use crate::git_parse::parse_worktree_list;
 use std::future::Future;
-use std::path::Path;
+use std::path::PathBuf;
 
-use mainframe_types::git::{
-    ActiveOperation, BranchInfo, BranchListResult, BranchUpdateStatus, BranchUpdateStatusKind,
-    DeleteBranchResult, FetchResult, MergeResult, MergeSummary, PullResult, PullSummary,
-    PushResult, RebaseResult, UpdateAllResult, WorkingStat, WorkingStatFile,
-};
 use serde::{Deserialize, Serialize};
 
-use crate::git_exec::{GitExecError, GitExecOptions, exec_git};
-use crate::git_parse::{
-    BranchList, PorcelainStatus, RemoteUrl, count_auto_merges, js_parse_int, parse_branch_list,
-    parse_commit_hash, parse_diff_stat_summary, parse_remote_urls, parse_remotes, parse_status_z,
-    porcelain_z_entries,
-};
-use crate::project_lock::acquire_project_lock;
+use crate::git_exec::{GitExecError, GitTimeout, exec_git};
+use crate::git_parse::{BranchList, RemoteUrl, parse_branch_list, parse_remote_urls};
 
-/// Build a `Vec<String>` from string literals.
+/// Builds a `Vec<String>` git argv from string-like values.
 macro_rules! argv {
     ($($x:expr),* $(,)?) => { vec![$($x.to_string()),*] };
 }
 
-/// Network/mutation ops may run past the read-command default timeout; leave
-/// uncapped (`{ timeout: 0 }`).
-const NO_TIMEOUT: Option<GitExecOptions> = Some(GitExecOptions { timeout: Some(0) });
+mod branches;
+mod commit;
+mod operation;
+mod revs;
+mod sync;
+mod update;
+
+#[cfg(test)]
+mod test_support;
+
+/// Separates git options from the user-supplied refs that follow.
+const END_OF_OPTIONS: &str = "--end-of-options";
 
 /// `detect_base_branch()`'s result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,24 +44,25 @@ pub struct AbortResult {
     pub aborted: bool,
 }
 
-/// Errors from `GitService` methods: a wrapped `exec_git` failure, or a
-/// service-level error message (e.g. "Nothing to commit").
+/// Errors from `GitService` methods. The `Display` text reaches API clients.
 #[derive(Debug, thiserror::Error)]
 pub enum GitServiceError {
     #[error(transparent)]
     Exec(#[from] GitExecError),
-    #[error("{0}")]
-    Other(String),
+    #[error("Nothing to commit")]
+    NothingToCommit,
+    #[error("Invalid remote branch name: {0}")]
+    InvalidRemoteBranch(String),
 }
 
 /// The single subprocess seam. Production uses [`RealGitExec`] (→ [`exec_git`]);
-/// tests inject a recording/dispatching fake to assert the exact git argv.
+/// tests inject a recording fake to assert the exact git argv.
 pub trait GitExec: Send + Sync {
     fn exec(
         &self,
-        args: Vec<String>,
-        cwd: String,
-        opts: Option<GitExecOptions>,
+        args: &[String],
+        cwd: &str,
+        timeout: GitTimeout,
     ) -> impl Future<Output = Result<String, GitExecError>> + Send;
 }
 
@@ -69,23 +70,14 @@ pub trait GitExec: Send + Sync {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RealGitExec;
 
-#[path = "git_service_branches.rs"]
-mod branches;
-#[path = "git_service_revs.rs"]
-mod revs;
-#[path = "git_service_sync.rs"]
-mod sync;
-#[path = "git_service_update.rs"]
-mod update;
-
 impl GitExec for RealGitExec {
     async fn exec(
         &self,
-        args: Vec<String>,
-        cwd: String,
-        opts: Option<GitExecOptions>,
+        args: &[String],
+        cwd: &str,
+        timeout: GitTimeout,
     ) -> Result<String, GitExecError> {
-        exec_git(&args, &cwd, opts).await
+        exec_git(args, cwd, timeout).await
     }
 }
 
@@ -104,38 +96,38 @@ impl GitService<RealGitExec> {
 }
 
 impl<E: GitExec> GitService<E> {
-    /// Test-only constructor injecting a custom executor.
     #[cfg(test)]
     fn with_exec(project_path: String, exec: E) -> Self {
         Self { project_path, exec }
     }
 
-    async fn git(
-        &self,
-        args: Vec<String>,
-        opts: Option<GitExecOptions>,
-    ) -> Result<String, GitExecError> {
-        self.exec.exec(args, self.project_path.clone(), opts).await
+    async fn git(&self, args: Vec<String>) -> Result<String, GitExecError> {
+        self.exec
+            .exec(&args, &self.project_path, GitTimeout::Default)
+            .await
+    }
+
+    /// Runs a network operation, which may outlast the default timeout.
+    async fn git_unbounded(&self, args: Vec<String>) -> Result<String, GitExecError> {
+        self.exec
+            .exec(&args, &self.project_path, GitTimeout::Unbounded)
+            .await
+    }
+
+    /// The repository's git directory as an absolute path. Plain `--git-dir`
+    /// prints `.git` relative to the project, which would resolve against the
+    /// daemon's own working directory.
+    async fn git_dir(&self) -> Result<PathBuf, GitExecError> {
+        let out = self.git(argv!["rev-parse", "--absolute-git-dir"]).await?;
+        Ok(PathBuf::from(out.trim()))
     }
 
     async fn branch_info(&self, all: bool) -> Result<BranchList, GitExecError> {
-        let args = if all {
-            argv!["branch", "--no-color", "-a"]
-        } else {
-            argv!["branch", "--no-color"]
-        };
-        Ok(parse_branch_list(&self.git(args, None).await?))
-    }
-
-    /// Unmerged (conflicted) paths in the working tree, used to classify failures.
-    async fn unmerged_paths(&self) -> Result<Vec<String>, GitExecError> {
-        Ok(self
-            .git(argv!["diff", "--name-only", "--diff-filter=U"], None)
-            .await?
-            .split('\n')
-            .filter(|l| !l.is_empty())
-            .map(String::from)
-            .collect())
+        let mut args = argv!["branch", "--no-color"];
+        if all {
+            args.push("-a".to_string());
+        }
+        Ok(parse_branch_list(&self.git(args).await?))
     }
 
     pub async fn current_branch(&self) -> Result<String, GitServiceError> {
@@ -147,362 +139,26 @@ impl<E: GitExec> GitService<E> {
     /// the bare `dir/`, which the status parsers drop as a directory entry.
     pub async fn status_raw(&self) -> Result<String, GitServiceError> {
         Ok(self
-            .git(argv!["status", "--porcelain", "-z", "-uall"], None)
+            .git(argv!["status", "--porcelain", "-z", "-uall"])
             .await?)
     }
 
-    pub async fn status(&self) -> Result<PorcelainStatus, GitServiceError> {
-        Ok(parse_status_z(
-            &self.git(argv!["status", "--porcelain", "-z"], None).await?,
-        ))
-    }
-
-    pub async fn stage(&self, files: &[String]) -> Result<(), GitServiceError> {
-        let mut args = argv!["add"];
-        args.extend(files.iter().cloned());
-        self.git(args, None).await?;
-        Ok(())
-    }
-
-    pub async fn unstage(&self, files: &[String]) -> Result<(), GitServiceError> {
-        if files.is_empty() {
-            return Ok(());
-        }
-        let mut args = argv!["reset", "HEAD", "--"];
-        args.extend(files.iter().cloned());
-        self.git(args, None).await?;
-        Ok(())
-    }
-
-    // `-c core.abbrev=40` forces the full 40-char SHA in `git commit`'s output.
-    pub async fn commit(&self, message: &str) -> Result<String, GitServiceError> {
-        Ok(parse_commit_hash(
-            &self
-                .git(argv!["-c", "core.abbrev=40", "commit", "-m", message], None)
-                .await?,
-        ))
-    }
-
-    /// Stage every change (tracked edits, new files, and deletions) and commit.
-    /// Throws when there is nothing to commit.
-    pub async fn commit_all(&self, message: &str) -> Result<String, GitServiceError> {
-        self.git(argv!["add", "-A"], None).await?;
-        let commit = parse_commit_hash(
-            &self
-                .git(argv!["-c", "core.abbrev=40", "commit", "-m", message], None)
-                .await?,
-        );
-        if commit.is_empty() {
-            return Err(GitServiceError::Other("Nothing to commit".to_string()));
-        }
-        Ok(commit)
-    }
-
-    /// Per-file addition/deletion counts for the working tree (vs HEAD), plus
-    /// totals. Tracked changes come from `git diff --numstat HEAD`; untracked
-    /// files are line-counted directly. Binary files report 0/0.
-    pub async fn working_stat(&self) -> Result<WorkingStat, GitServiceError> {
-        let mut files: Vec<WorkingStatFile> = Vec::new();
-
-        let numstat = self
-            .git(argv!["diff", "--numstat", "-z", "HEAD"], None)
-            .await?;
-        append_numstat(&numstat, &mut files);
-
-        // Untracked files (`-uall` lists individual files inside new directories).
-        let status = self
-            .git(argv!["status", "--porcelain", "-z", "-uall"], None)
-            .await?;
-        for entry in porcelain_z_entries(&status) {
-            if entry.index != '?' || entry.path.ends_with('/') {
-                continue;
-            }
-            let additions = self.count_untracked_additions(entry.path).await;
-            files.push(WorkingStatFile {
-                path: entry.path.to_string(),
-                additions,
-                deletions: 0,
-            });
-        }
-
-        let total_additions = files.iter().map(|f| f.additions).sum();
-        let total_deletions = files.iter().map(|f| f.deletions).sum();
-        Ok(WorkingStat {
-            files,
-            total_additions,
-            total_deletions,
-        })
-    }
-
-    /// Lines in an untracked file; 0 for binary (null-byte) or empty files.
-    async fn count_untracked_additions(&self, rel_path: &str) -> i64 {
-        match tokio::fs::read(Path::new(&self.project_path).join(rel_path)).await {
-            Ok(buf) => {
-                if buf.contains(&0) {
-                    return 0;
-                }
-                let text = String::from_utf8_lossy(&buf);
-                if text.is_empty() {
-                    return 0;
-                }
-                let lines = text.split('\n').count() as i64;
-                lines - if text.ends_with('\n') { 1 } else { 0 }
-            }
-            // expected — file may have vanished between status and read
-            Err(_) => 0,
-        }
-    }
-
+    /// `git diff <args>`. The caller owns `args`, options included, so it must
+    /// keep untrusted values out of option position.
     pub async fn diff(&self, args: &[String]) -> Result<String, GitServiceError> {
         let mut a = argv!["diff"];
-        a.extend(args.iter().cloned());
-        Ok(self.git(a, None).await?)
+        a.extend_from_slice(args);
+        Ok(self.git(a).await?)
     }
 
     pub async fn show(&self, git_ref: &str) -> Result<String, GitServiceError> {
-        Ok(self.git(argv!["show", git_ref], None).await?)
+        Ok(self.git(argv!["show", END_OF_OPTIONS, git_ref]).await?)
     }
 
     /// Every remote's name and URL, deduped across the fetch/push pair `git
     /// remote -v` prints for each. No filtering — callers derive `owner/repo`
     /// (e.g. `github_repo_from_url`) themselves.
     pub async fn remotes_with_urls(&self) -> Result<Vec<RemoteUrl>, GitServiceError> {
-        Ok(parse_remote_urls(
-            &self.git(argv!["remote", "-v"], None).await?,
-        ))
-    }
-
-    pub async fn checkout(&self, branch: &str) -> Result<(), GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        // If it looks like a remote ref (e.g. "origin/feat/foo"), strip the
-        // remote name and checkout the local name so git creates a tracking
-        // branch. Verify the prefix is an actual remote to avoid false positives.
-        if let Some((remote, local_name)) = branch.split_once('/')
-            && !remote.is_empty()
-            && !local_name.is_empty()
-        {
-            let remotes = parse_remotes(&self.git(argv!["remote"], None).await?);
-            if remotes.iter().any(|r| r == remote) {
-                match self
-                    .git(argv!["checkout", "-b", local_name, branch, "--track"], None)
-                    .await
-                {
-                    Ok(_) => return Ok(()),
-                    Err(err) => {
-                        if err.message.contains("already exists") {
-                            self.git(argv!["checkout", local_name], None).await?;
-                            return Ok(());
-                        } else {
-                            return Err(err.into());
-                        }
-                    }
-                }
-            }
-        }
-        self.git(argv!["checkout", branch], None).await?;
-        Ok(())
-    }
-
-    pub async fn create_branch(
-        &self,
-        name: &str,
-        start_point: Option<&str>,
-    ) -> Result<(), GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        if let Some(start) = start_point {
-            self.git(argv!["checkout", "-b", name, start], None).await?;
-        } else {
-            self.git(argv!["checkout", "-b", name], None).await?;
-        }
-        Ok(())
-    }
-
-    pub async fn fetch(&self, remote: Option<&str>) -> Result<FetchResult, GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        if let Some(r) = remote {
-            self.git(argv!["fetch", r, "--prune"], NO_TIMEOUT).await?;
-        } else {
-            self.git(argv!["fetch", "--all", "--prune"], NO_TIMEOUT)
-                .await?;
-        }
-        Ok(FetchResult::Success {
-            remote: remote.unwrap_or("all").to_string(),
-        })
-    }
-
-    pub async fn merge(&self, branch: &str) -> Result<MergeResult, GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        match self.git(argv!["merge", branch], NO_TIMEOUT).await {
-            Ok(output) => {
-                let summary = parse_diff_stat_summary(&output);
-                Ok(MergeResult::Success {
-                    summary: MergeSummary {
-                        commits: count_auto_merges(&output) as i64,
-                        insertions: summary.insertions,
-                        deletions: summary.deletions,
-                    },
-                })
-            }
-            Err(err) => {
-                let conflicts = self.unmerged_paths().await?;
-                if !conflicts.is_empty() {
-                    Ok(MergeResult::Conflict {
-                        conflicts,
-                        message: err.message.clone(),
-                    })
-                } else {
-                    Err(err.into())
-                }
-            }
-        }
-    }
-
-    pub async fn rebase(&self, branch: &str) -> Result<RebaseResult, GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        match self.git(argv!["rebase", branch], NO_TIMEOUT).await {
-            Ok(_) => Ok(RebaseResult::Success),
-            Err(err) => match self.git(argv!["rev-parse", "--git-dir"], None).await {
-                Ok(git_dir_raw) => {
-                    let git_dir = git_dir_raw.trim();
-                    if fs_exists(&Path::new(git_dir).join("rebase-merge")).await {
-                        match self.status().await {
-                            Ok(status_result) => Ok(RebaseResult::Conflict {
-                                conflicts: status_result.conflicted,
-                                message: err.message.clone(),
-                            }),
-                            // inner catch → throw the original err
-                            Err(_) => Err(err.into()),
-                        }
-                    } else {
-                        Err(err.into())
-                    }
-                }
-                Err(_) => Err(err.into()),
-            },
-        }
-    }
-
-    pub async fn abort(&self) -> Result<AbortResult, GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        // `git rev-parse --git-dir` works in worktrees where .git is a file.
-        let git_dir_raw = self.git(argv!["rev-parse", "--git-dir"], None).await?;
-        let git_dir = git_dir_raw.trim();
-        if fs_exists(&Path::new(git_dir).join("MERGE_HEAD")).await
-            && self.git(argv!["merge", "--abort"], None).await.is_ok()
-        {
-            return Ok(AbortResult { aborted: true });
-        }
-        if fs_exists(&Path::new(git_dir).join("rebase-merge")).await
-            && self.git(argv!["rebase", "--abort"], None).await.is_ok()
-        {
-            return Ok(AbortResult { aborted: true });
-        }
-        if fs_exists(&Path::new(git_dir).join("rebase-apply")).await
-            && self.git(argv!["rebase", "--abort"], None).await.is_ok()
-        {
-            return Ok(AbortResult { aborted: true });
-        }
-        Ok(AbortResult { aborted: false })
-    }
-
-    pub async fn rename_branch(
-        &self,
-        old_name: &str,
-        new_name: &str,
-    ) -> Result<(), GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        self.git(argv!["branch", "-m", old_name, new_name], None)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn delete_branch(
-        &self,
-        name: &str,
-        force: bool,
-        is_remote: bool,
-    ) -> Result<DeleteBranchResult, GitServiceError> {
-        let _guard = acquire_project_lock(&self.project_path).await;
-        if is_remote {
-            match name.split_once('/') {
-                Some((remote, branch_name)) if !remote.is_empty() && !branch_name.is_empty() => {
-                    self.git(argv!["push", remote, "--delete", branch_name], NO_TIMEOUT)
-                        .await?;
-                    Ok(DeleteBranchResult::Success)
-                }
-                _ => Err(GitServiceError::Other(format!(
-                    "Invalid remote branch name: {name}"
-                ))),
-            }
-        } else {
-            let flag = if force { "-D" } else { "-d" };
-            match self.git(argv!["branch", flag, name], None).await {
-                Ok(_) => Ok(DeleteBranchResult::Success),
-                Err(err) => {
-                    if err.message.contains("not fully merged") {
-                        Ok(DeleteBranchResult::NotMerged {
-                            message: err.message,
-                        })
-                    } else if err.message.contains("used by worktree") {
-                        Ok(DeleteBranchResult::IsCurrent {
-                            message: "Cannot delete the currently checked-out branch".to_string(),
-                        })
-                    } else {
-                        Err(err.into())
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// `path.basename` — the final component of a path.
-fn basename(p: &str) -> String {
-    Path::new(p)
-        .file_name()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
-
-/// `await access(path)` — true when the path exists / is reachable.
-async fn fs_exists(path: &Path) -> bool {
-    tokio::fs::metadata(path).await.is_ok()
-}
-
-#[cfg(test)]
-#[path = "git_service_mock_tests.rs"]
-mod mock_tests;
-
-// Real-git temp-repo integration tests.
-#[cfg(test)]
-#[path = "git_service_review_tests.rs"]
-mod review_tests;
-
-/// Appends `git diff --numstat -z` entries: `add\tdel\tpath\0`, or for a
-/// rename `add\tdel\t\0old\0new\0`. Paths are verbatim (no C-quoting).
-fn append_numstat(numstat: &str, files: &mut Vec<WorkingStatFile>) {
-    let count = |s: &str| if s == "-" { 0 } else { js_parse_int(s) };
-    let mut tokens = numstat.split('\0');
-    while let Some(record) = tokens.next() {
-        let mut parts = record.splitn(3, '\t');
-        let (Some(add_str), Some(del_str), Some(path)) = (parts.next(), parts.next(), parts.next())
-        else {
-            continue;
-        };
-        let path = if path.is_empty() {
-            // Rename: the old path, then the new path, follow as separate tokens.
-            tokens.next();
-            tokens.next().unwrap_or("")
-        } else {
-            path
-        };
-        if path.is_empty() {
-            continue;
-        }
-        files.push(WorkingStatFile {
-            path: path.to_string(),
-            additions: count(add_str),
-            deletions: count(del_str),
-        });
+        Ok(parse_remote_urls(&self.git(argv!["remote", "-v"]).await?))
     }
 }
