@@ -1618,7 +1618,6 @@ dependencies = [
 name = "mainframe-git"
 version = "0.0.0"
 dependencies = [
- "dashmap",
  "mainframe-runtime",
  "mainframe-types",
  "serde",

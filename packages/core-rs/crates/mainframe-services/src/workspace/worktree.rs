@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+use mainframe_git::git_exec::{GitExecError, GitTimeout, exec_git};
 use mainframe_git::git_parse::{WorktreeEntry, parse_worktree_list};
 use mainframe_types::chat::Project;
-
-/// Default `execGit` timeout (30s). `0` means no timeout — for genuinely
-/// long-running operations such as `worktree add`.
-const DEFAULT_GIT_TIMEOUT_MS: u64 = 30_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorktreeError {
@@ -19,32 +16,20 @@ pub enum WorktreeError {
 async fn run_worktree_git(
     args: &[&str],
     cwd: &str,
-    timeout_ms: u64,
+    timeout: GitTimeout,
 ) -> Result<String, WorktreeError> {
-    use mainframe_git::git_exec::{GitExecCode, GitExecOptions, exec_git};
-    let args = args
-        .iter()
-        .map(|value| (*value).to_string())
-        .collect::<Vec<_>>();
-    exec_git(
-        &args,
-        cwd,
-        Some(GitExecOptions {
-            timeout: Some(timeout_ms),
-        }),
-    )
-    .await
-    .map_err(|error| {
-        if error.code == Some(GitExecCode::Text("ETIMEDOUT".to_string())) {
-            WorktreeError::Git("git command timed out".to_string())
-        } else if let Some(stderr) = error.stderr {
-            WorktreeError::Git(stderr)
-        } else if error.code.is_none() {
-            WorktreeError::Io(std::io::Error::other(error.message))
-        } else {
-            WorktreeError::Git(error.message)
-        }
-    })
+    exec_git(args, cwd, timeout)
+        .await
+        .map_err(|error| match error {
+            GitExecError::TimedOut { .. } => {
+                WorktreeError::Git("git command timed out".to_string())
+            }
+            GitExecError::Failed { stderr, .. } => WorktreeError::Git(stderr),
+            GitExecError::Spawn(message) => WorktreeError::Io(std::io::Error::other(message)),
+            error @ GitExecError::DirectoryNotAccessible { .. } => {
+                WorktreeError::Git(error.to_string())
+            }
+        })
 }
 
 /// True when `worktreePath` is a usable git worktree: the directory exists AND
@@ -74,7 +59,7 @@ pub async fn get_worktrees(project_path: &str) -> Vec<WorktreeEntry> {
     match run_worktree_git(
         &["worktree", "list", "--porcelain"],
         project_path,
-        DEFAULT_GIT_TIMEOUT_MS,
+        GitTimeout::Default,
     )
     .await
     {
@@ -113,7 +98,7 @@ pub async fn create_worktree(
             base_branch,
         ],
         project_path,
-        0,
+        GitTimeout::Unbounded,
     )
     .await?;
     Ok(WorktreeInfo {
@@ -165,7 +150,7 @@ pub async fn branch_exists(project_path: &str, branch_name: &str) -> bool {
     run_worktree_git(
         &["rev-parse", "--verify", "--quiet", &ref_arg],
         project_path,
-        DEFAULT_GIT_TIMEOUT_MS,
+        GitTimeout::Default,
     )
     .await
     // expected: branch missing → non-zero exit → Err
@@ -182,7 +167,7 @@ pub async fn add_worktree_for_branch(
     // Drop the stale registration git still holds for the deleted directory.
     // best-effort
     if let Err(error) =
-        run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await
+        run_worktree_git(&["worktree", "prune"], project_path, GitTimeout::Default).await
     {
         tracing::warn!(%error, path = %project_path, operation = "worktree_prune", "failed to prune stale worktree references");
     }
@@ -190,7 +175,7 @@ pub async fn add_worktree_for_branch(
     run_worktree_git(
         &["worktree", "add", worktree_path, branch_name],
         project_path,
-        0,
+        GitTimeout::Unbounded,
     )
     .await?;
     Ok(())
@@ -200,7 +185,7 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
     if run_worktree_git(
         &["worktree", "remove", worktree_path, "--force"],
         project_path,
-        DEFAULT_GIT_TIMEOUT_MS,
+        GitTimeout::Default,
     )
     .await
     .is_err()
@@ -211,7 +196,7 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
         }
         // best-effort
         if let Err(error) =
-            run_worktree_git(&["worktree", "prune"], project_path, DEFAULT_GIT_TIMEOUT_MS).await
+            run_worktree_git(&["worktree", "prune"], project_path, GitTimeout::Default).await
         {
             tracing::warn!(%error, path = %project_path, operation = "worktree_prune", "failed to prune removed worktree references");
         }
@@ -220,7 +205,7 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
     if let Err(error) = run_worktree_git(
         &["branch", "-D", branch_name],
         project_path,
-        DEFAULT_GIT_TIMEOUT_MS,
+        GitTimeout::Default,
     )
     .await
     {

@@ -1,6 +1,15 @@
 //! `git status --porcelain -z` parsers.
 
-use super::{DiffEntry, PorcelainStatus, StatusBuckets, StatusFile};
+use serde::{Deserialize, Serialize};
+
+use super::DiffEntry;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StatusBuckets {
+    pub staged: Vec<String>,
+    pub unstaged: Vec<String>,
+    pub untracked: Vec<String>,
+}
 
 /// One entry of `git status --porcelain -z` output. The NUL-separated format
 /// emits paths verbatim; the newline format C-quotes any path containing a
@@ -83,28 +92,6 @@ pub fn parse_status_buckets(output: &str) -> StatusBuckets {
     }
 }
 
-const CONFLICT_CODES: [&str; 7] = ["DD", "AU", "UD", "UA", "DU", "AA", "UU"];
-
-/// Parses NUL-separated `git status --porcelain -z` output into per-file entries
-/// (index/working-dir status chars) plus the conflicted-path list. Renamed and
-/// copied entries consume the following NUL-separated old-path token. The
-/// conflicted set is git's both-modified/unmerged XY codes.
-pub fn parse_status_z(output: &str) -> PorcelainStatus {
-    let mut files: Vec<StatusFile> = Vec::new();
-    let mut conflicted: Vec<String> = Vec::new();
-    for e in porcelain_z_entries(output) {
-        let code = format!("{}{}", e.index, e.working);
-        if code == "!!" {
-            continue;
-        }
-        files.push(StatusFile {
-            path: e.path.to_string(),
-            index: e.index.to_string(),
-            working_dir: e.working.to_string(),
-        });
-        if CONFLICT_CODES.contains(&code.as_str()) {
-            conflicted.push(e.path.to_string());
-        }
-    }
-    PorcelainStatus { conflicted, files }
-}
+#[cfg(test)]
+#[path = "status_tests.rs"]
+mod tests;
