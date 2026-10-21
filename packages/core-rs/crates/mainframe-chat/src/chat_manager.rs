@@ -75,6 +75,7 @@ mod side_chat;
 mod state;
 mod steer;
 mod switch_api;
+mod tool_image;
 mod transcript_refresh;
 mod update;
 

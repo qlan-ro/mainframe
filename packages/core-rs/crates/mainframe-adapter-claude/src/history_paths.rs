@@ -1,4 +1,25 @@
 use super::*;
+
+#[derive(serde::Deserialize)]
+struct EntryKind {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlanEntry {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    tool_use_result: Option<PlanResult>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlanResult {
+    plan: Option<String>,
+    file_path: Option<String>,
+}
 pub(crate) async fn extract_plan_file_paths(
     session_id: &str,
     project_path: &str,
@@ -29,21 +50,19 @@ async fn plan_file_paths_from(discovered: &DiscoveredFiles, project_dir: &str) -
             if line.trim().is_empty() {
                 continue;
             }
-            let entry: Value = match serde_json::from_str(&line) {
+            let entry: PlanEntry = match serde_json::from_str(&line) {
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            if entry.get("type").and_then(Value::as_str) != Some("user") {
+            if entry.kind.as_deref() != Some("user") {
                 continue;
             }
-            let tur = entry.get("toolUseResult");
-            let plan_is_string = tur
-                .and_then(|t| t.get("plan"))
-                .map(Value::is_string)
-                .unwrap_or(false);
-            let file_path = tur.and_then(|t| t.get("filePath")).and_then(Value::as_str);
-            if plan_is_string && let Some(fp) = file_path {
-                plan_files.push(path_resolve(project_dir, fp));
+            if let Some(PlanResult {
+                plan: Some(_),
+                file_path: Some(path),
+            }) = entry.tool_use_result
+            {
+                plan_files.push(path_resolve(project_dir, &path));
             }
         }
     }
@@ -81,40 +100,50 @@ async fn skill_file_paths_from(
             continue;
         };
         while let Ok(Some(line)) = lines.next_line().await {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let entry: Value = match serde_json::from_str(&line) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            if entry.get("type").and_then(Value::as_str) != Some("assistant") {
-                continue;
-            }
-            let content = match entry
-                .get("message")
-                .and_then(|m| m.get("content"))
-                .and_then(Value::as_array)
-            {
-                Some(c) => c,
-                None => continue,
-            };
-            for block in content {
-                if block.get("type").and_then(Value::as_str) == Some("tool_use")
-                    && block.get("name").and_then(Value::as_str) == Some("Skill")
-                    && let Some(skill) = block
-                        .get("input")
-                        .and_then(|i| i.get("skill"))
-                        .and_then(Value::as_str)
-                        .filter(|s| !s.is_empty())
-                {
-                    push_skill_file(skill, project_path, &mut seen, &mut cache, &mut skill_files);
-                }
+            for skill in skill_names(&line) {
+                push_skill_file(
+                    &skill,
+                    project_path,
+                    &mut seen,
+                    &mut cache,
+                    &mut skill_files,
+                );
             }
         }
     }
     skill_files
 }
+fn skill_names(line: &str) -> Vec<String> {
+    let Ok(header) = serde_json::from_str::<EntryKind>(line) else {
+        return Vec::new();
+    };
+    if header.kind.as_deref() != Some("assistant") {
+        return Vec::new();
+    }
+    let Ok(entry) = serde_json::from_str::<Value>(line) else {
+        return Vec::new();
+    };
+    entry
+        .get("message")
+        .and_then(|message| message.get("content"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|block| {
+            block.get("type").and_then(Value::as_str) == Some("tool_use")
+                && block.get("name").and_then(Value::as_str) == Some("Skill")
+        })
+        .filter_map(|block| {
+            block
+                .get("input")
+                .and_then(|input| input.get("skill"))
+                .and_then(Value::as_str)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+        })
+        .collect()
+}
+
 fn push_skill_file(
     name: &str,
     project_path: &str,
@@ -149,4 +178,45 @@ pub(super) fn path_resolve(base: &str, p: &str) -> String {
         }
     }
     format!("/{}", stack.join("/"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn metadata_scans_preserve_plans_and_skills_around_large_image_results() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("session.jsonl");
+        let entries = [
+            json!({"type":"user","message":{"content":[{"type":"tool_result",
+                "content":[{"type":"image","source":{"data":"A".repeat(2_000_000)}}]}]}}),
+            json!({"type":"user","toolUseResult":{"plan":"the plan","filePath":"plans/p.md"}}),
+            json!({"type":"assistant","message":{"content":[{"type":"tool_use",
+                "name":"Skill","input":{"skill":"tdd"}}]}}),
+            json!({"type":"user","toolUseResult":{"plan":false,"filePath":"ignored.md"}}),
+        ];
+        std::fs::write(
+            &path,
+            entries
+                .iter()
+                .map(Value::to_string)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+        .unwrap();
+        let discovered = DiscoveredFiles {
+            primary_path: path.to_string_lossy().into_owned(),
+            all_files: vec![path.to_string_lossy().into_owned()],
+            subagent_files: HashSet::new(),
+        };
+        assert_eq!(
+            plan_file_paths_from(&discovered, "/project").await,
+            vec!["/project/plans/p.md"]
+        );
+        let skills = skill_file_paths_from(&discovered, "/project").await;
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].display_name, "tdd");
+    }
 }

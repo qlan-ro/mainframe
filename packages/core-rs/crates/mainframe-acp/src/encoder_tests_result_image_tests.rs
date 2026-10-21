@@ -27,10 +27,12 @@ fn image_result(images: Vec<mainframe_types::content::ToolResultImage>) -> ToolC
 fn a_result_with_images_encodes_one_image_entry_per_image_after_the_text_entry() {
     let images = vec![
         mainframe_types::content::ToolResultImage {
+            uri: None,
             media_type: "image/png".to_string(),
             data: "AAAA".to_string(),
         },
         mainframe_types::content::ToolResultImage {
+            uri: None,
             media_type: "image/jpeg".to_string(),
             data: "BBBB".to_string(),
         },

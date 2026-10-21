@@ -18,6 +18,7 @@ fn image_only_content_yields_one_image_and_empty_text() {
     assert_eq!(
         images,
         vec![ToolResultImage {
+            uri: None,
             media_type: "image/png".to_string(),
             data: "AAAA".to_string(),
         }]
@@ -39,10 +40,12 @@ fn mixed_text_and_images_keeps_text_and_collects_both_images_in_order() {
         extract_tool_result_images(Some(&content)),
         vec![
             ToolResultImage {
+                uri: None,
                 media_type: "image/png".to_string(),
                 data: "FIRST".to_string(),
             },
             ToolResultImage {
+                uri: None,
                 media_type: "image/jpeg".to_string(),
                 data: "SECOND".to_string(),
             },

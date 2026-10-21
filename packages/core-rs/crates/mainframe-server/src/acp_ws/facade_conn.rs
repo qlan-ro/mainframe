@@ -5,7 +5,7 @@
 use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use mainframe_acp::{ThrottledFrame, gate_request_id};
@@ -15,6 +15,8 @@ use mainframe_types::adapter::ControlRequest;
 use tokio::sync::mpsc;
 use tracing::warn;
 
+mod capabilities;
+mod delivery;
 mod slots;
 pub(super) use slots::{LazyFullEncoding, SessionSlot, StreamOp};
 pub use slots::{PendingGate, SessionLockWait};
@@ -43,6 +45,7 @@ pub struct FacadeConnection {
     replay_result_previews_opted_in: AtomicBool,
     compressed_replay_opted_in: AtomicBool,
     windowed_history_opted_in: AtomicBool,
+    lazy_tool_images_opted_in: AtomicBool,
     /// One `tokio::sync::Mutex` per session, held for the duration of a spawned
     /// `session/prompt`. Serializes concurrent prompts for the SAME session —
     /// queue position and the queue's tail ordering both depend on which of two
@@ -68,6 +71,7 @@ impl FacadeConnection {
             replay_result_previews_opted_in: AtomicBool::new(false),
             compressed_replay_opted_in: AtomicBool::new(false),
             windowed_history_opted_in: AtomicBool::new(false),
+            lazy_tool_images_opted_in: AtomicBool::new(false),
             prompt_locks: mainframe_runtime::sync::KeyedMutex::default(),
             resume_failures: Mutex::new(HashMap::new()),
         }
@@ -116,50 +120,6 @@ impl FacadeConnection {
 
     fn locked_resume_failures(&self) -> std::sync::MutexGuard<'_, HashMap<String, u32>> {
         self.resume_failures.lock_recover()
-    }
-
-    pub(crate) fn is_negotiated(&self) -> bool {
-        self.negotiated.load(Ordering::Relaxed)
-    }
-
-    pub(crate) fn mark_negotiated(&self) {
-        self.negotiated.store(true, Ordering::Relaxed);
-    }
-
-    pub(crate) fn is_revision_cursors_opted_in(&self) -> bool {
-        self.revision_cursors_opted_in.load(Ordering::Relaxed)
-    }
-
-    pub fn mark_revision_cursors_opted_in(&self) {
-        self.revision_cursors_opted_in
-            .store(true, Ordering::Relaxed);
-    }
-
-    pub(crate) fn is_replay_result_previews_opted_in(&self) -> bool {
-        self.replay_result_previews_opted_in.load(Ordering::Relaxed)
-    }
-
-    pub(crate) fn mark_replay_result_previews_opted_in(&self) {
-        self.replay_result_previews_opted_in
-            .store(true, Ordering::Relaxed);
-    }
-
-    pub(crate) fn is_compressed_replay_opted_in(&self) -> bool {
-        self.compressed_replay_opted_in.load(Ordering::Relaxed)
-    }
-
-    pub(crate) fn mark_compressed_replay_opted_in(&self) {
-        self.compressed_replay_opted_in
-            .store(true, Ordering::Relaxed);
-    }
-
-    pub(crate) fn is_windowed_history_opted_in(&self) -> bool {
-        self.windowed_history_opted_in.load(Ordering::Relaxed)
-    }
-
-    pub(crate) fn mark_windowed_history_opted_in(&self) {
-        self.windowed_history_opted_in
-            .store(true, Ordering::Relaxed);
     }
 
     pub(super) fn locked_sessions(
@@ -215,7 +175,10 @@ impl FacadeConnection {
         let _ = self.tx.send(payload);
     }
 
-    pub fn send_update(&self, chat_id: &str, update: SessionUpdate) {
+    pub fn send_update(&self, chat_id: &str, mut update: SessionUpdate) {
+        if self.is_lazy_tool_images_opted_in() {
+            mainframe_acp::tool_images::reference_images(chat_id, &mut update);
+        }
         let note = JsonRpcNotification {
             jsonrpc: "2.0".into(),
             method: "session/update".into(),

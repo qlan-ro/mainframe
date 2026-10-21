@@ -42,7 +42,7 @@ fn a_page_reply_precedes_racing_deltas_and_connections_keep_independent_floors()
     receive(&mut rx);
     receive(&mut other_rx);
     let stream = hub.begin_history_page(&conn, "chat-1", "m80").unwrap();
-    let page = mainframe_acp::history_page::prepare(&messages, &params(), false, false);
+    let page = mainframe_acp::history_page::prepare(&messages, &params(), Default::default());
     messages[60].content = vec![DisplayContent::Leaf(LeafContent::Text {
         text: "text more".into(),
         parent_tool_use_id: None,
@@ -78,7 +78,7 @@ fn a_detached_session_is_not_resurrected_by_a_page() {
     hub.reset_session(&conn, "chat-1", seed(&containers, &reply(1)), |_| {});
     receive(&mut rx);
     let stream = hub.begin_history_page(&conn, "chat-1", "m80").unwrap();
-    let page = mainframe_acp::history_page::prepare(&messages, &params(), false, false);
+    let page = mainframe_acp::history_page::prepare(&messages, &params(), Default::default());
     conn.forget_chat("chat-1");
     hub.finish_history_page(&conn, "chat-1", Some(RequestId::Number(2)), stream, page);
     let frames = receive(&mut rx);

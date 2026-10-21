@@ -1,24 +1,15 @@
 'use client';
 
-/**
- * ImageLightbox — a controlled multi-image gallery lightbox.
- *
- * The parent owns the open index (`null` = closed); this renders the current
- * image plus prev/next controls, a counter, and ArrowLeft/ArrowRight keyboard
- * nav (wrapping at the ends). Restores the desktop multi-image gallery
- * affordance that the single-image `ZoomableImage` didn't cover. The dialog
- * shell, image, and click-to-dismiss behavior live in `LightboxSurface`.
- *
- * For a single image the nav chrome is omitted (it degrades to a plain zoom).
- */
 import { useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { LightboxSurface } from './LightboxSurface';
 
 export interface LightboxImage {
-  src: string;
+  src?: string;
   alt?: string;
+  error?: boolean;
+  onRetry?: () => void;
 }
 
 interface ImageLightboxProps {
@@ -42,24 +33,9 @@ export function ImageLightbox({ images, index, onIndexChange }: ImageLightboxPro
     onIndexChange(wrap(index + delta, images.length));
   };
 
-  useEffect(() => {
-    if (!open || !hasNav) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        go(1);
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        go(-1);
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // `index` drives `go`; re-bind when it (or the set) changes.
-  }, [open, hasNav, index, images.length]);
+  useGalleryKeys(index, images.length, onIndexChange);
 
-  // Rendered closed rather than early-returning null: unmounting a Radix
-  // modal while it is still open leaves `pointer-events: none` on <body>.
+  // Keep the closed dialog mounted so Radix can restore body pointer events.
   const current = index !== null ? images[index] : undefined;
 
   return (
@@ -69,39 +45,58 @@ export function ImageLightbox({ images, index, onIndexChange }: ImageLightboxPro
           testId="image-lightbox-dialog"
           imageTestId="image-lightbox-current"
           src={current.src}
+          error={current.error}
+          onRetry={current.onRetry}
           alt={current.alt}
           onDismiss={() => onIndexChange(null)}
         >
-          {hasNav && (
-            <>
-              <button
-                type="button"
-                data-testid="image-lightbox-prev"
-                aria-label="Previous image"
-                onClick={() => go(-1)}
-                className="absolute left-2 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <ChevronLeft size={20} aria-hidden />
-              </button>
-              <button
-                type="button"
-                data-testid="image-lightbox-next"
-                aria-label="Next image"
-                onClick={() => go(1)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <ChevronRight size={20} aria-hidden />
-              </button>
-              <div
-                data-testid="image-lightbox-counter"
-                className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white"
-              >
-                {(index ?? 0) + 1} / {images.length}
-              </div>
-            </>
-          )}
+          {hasNav && <GalleryNavigation index={index ?? 0} length={images.length} go={go} />}
         </LightboxSurface>
       )}
     </Dialog>
+  );
+}
+
+function useGalleryKeys(index: number | null, length: number, onIndexChange: (index: number) => void) {
+  useEffect(() => {
+    if (index === null || length < 2) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      event.preventDefault();
+      onIndexChange(wrap(index + (event.key === 'ArrowRight' ? 1 : -1), length));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [index, length, onIndexChange]);
+}
+
+function GalleryNavigation({ index, length, go }: { index: number; length: number; go: (delta: number) => void }) {
+  return (
+    <>
+      <GalleryArrow direction="prev" onClick={() => go(-1)} />
+      <GalleryArrow direction="next" onClick={() => go(1)} />
+      <div
+        data-testid="image-lightbox-counter"
+        className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white"
+      >
+        {index + 1} / {length}
+      </div>
+    </>
+  );
+}
+
+function GalleryArrow({ direction, onClick }: { direction: 'prev' | 'next'; onClick: () => void }) {
+  const previous = direction === 'prev';
+  const Icon = previous ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      type="button"
+      data-testid={`image-lightbox-${direction}`}
+      aria-label={previous ? 'Previous image' : 'Next image'}
+      onClick={onClick}
+      className={`absolute ${previous ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+    >
+      <Icon size={20} aria-hidden />
+    </button>
   );
 }

@@ -16,7 +16,13 @@ type ToolCallContentList = Extract<AccumulatedItem, { kind: 'tool-call' }>['cont
 export function resultImageBlocks(content: ToolCallContentList): ToolResultImage[] {
   return content.flatMap((entry) =>
     entry.type === 'content' && entry.content.type === 'image'
-      ? [{ mediaType: entry.content.mimeType, data: entry.content.data }]
+      ? [
+          {
+            mediaType: entry.content.mimeType,
+            data: entry.content.data,
+            ...(entry.content.uri ? { uri: entry.content.uri } : {}),
+          },
+        ]
       : [],
   );
 }

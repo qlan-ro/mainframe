@@ -47,6 +47,7 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         compressed_replay: Some(true),
         windowed_history: Some(true),
         history_search: Some(true),
+        lazy_tool_images: Some(true),
     }
 }
 

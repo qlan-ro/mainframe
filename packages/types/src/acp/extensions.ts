@@ -129,6 +129,7 @@ export const MainframeCapabilitiesSchema = z
     compressedReplay: z.boolean().optional(),
     windowedHistory: z.boolean().optional(),
     historySearch: z.boolean().optional(),
+    lazyToolImages: z.boolean().optional(),
   })
   .loose();
 export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;
