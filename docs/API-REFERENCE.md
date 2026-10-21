@@ -777,9 +777,8 @@ facade](#acp-chat-facade-acpprofile) below. This socket carries the
 remaining side-band domains: sessions list (`chat.*`), processes, context
 files, launch/run, worktree offers, background tasks, workflows,
 automations, plugins, tunnels, file watches, quota, and notifications.
-`packages/mobile` still speaks the removed dialect and is broken until its
-own facade migration lands (accepted 2026-08-28: "there are no legacy
-clients").
+`packages/mobile` rides the facade too (mobile PR #30); no client speaks the
+removed dialect.
 
 ### ACP Chat Facade (`/acp/{profile}`)
 
@@ -1023,8 +1022,9 @@ plus the CLI's own occupancy percentage under `_meta["_mainframe.dev"]`
 CLI accounts for its usable-window buffer.
 
 **Migration.** The legacy chat dialect was removed with todo #350 (spec
-Decision 24); `packages/mobile` migrates to this facade in its own PR
-against the same pinned `protocolVersion: 2` and is broken until then.
+Decision 24); `packages/mobile` speaks this facade against the same pinned
+`protocolVersion: 2` and opts into revision cursors, compressed replay,
+result previews and windowed history when the daemon advertises them.
 
 ### LSP WebSocket
 
