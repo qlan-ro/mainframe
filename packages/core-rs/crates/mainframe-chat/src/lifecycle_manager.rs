@@ -28,6 +28,7 @@ use crate::worktree_offer::WorktreeOfferRegistry;
 mod history;
 mod load_history;
 mod spawn_prep;
+mod transcript_ready;
 
 /// True when no chat OTHER than `exclude_chat_id` is still active (non-archived)
 /// and resolves to the same launch scope (`worktreePath ?? projectPath`).
@@ -85,13 +86,13 @@ impl HttpStatus for LifecycleError {
 enum Flight {
     Await(FlightWaiter),
     Claimed(FlightClaim),
-    Skip,
 }
 
 /// Flight families share an outer lock for cross-operation exclusion.
 #[derive(Default)]
 struct Guards {
     loading: SingleFlight,
+    restoring: SingleFlight,
     starting: SingleFlight,
     interrupting: SingleFlight,
     /// In-flight idle offload per chat (`flight_claims.rs`). An offload claims
@@ -281,69 +282,7 @@ impl ChatLifecycleManager {
             }
         }
 
-        self.shared.emit(DaemonEvent::ChatUpdated {
-            chat: chat.clone(),
-            reason: None,
-        });
-
-        if let Some(todos) = chat.todos {
-            self.shared.emit(DaemonEvent::TodosUpdated {
-                chat_id: chat_id.to_string(),
-                todos,
-            });
-        }
-    }
-
-    /// Returns whether this call actually reloaded the message cache from
-    /// history (`do_load_chat`'s doc) — `false` for both the single-flight
-    /// `Skip` (already active — untouched) and `Await` (another in-flight
-    /// call owns the reload and, if it happened, that caller is the one
-    /// responsible for notifying) branches.
-    pub async fn load_chat(&self, chat_id: &str) -> bool {
-        // Wait out an in-flight offload FIRST: it may be about to remove this
-        // chat's registry cell, and this call must see the post-offload state
-        // (empty registry → fresh load) rather than a half-torn-down cell.
-        self.await_offload(chat_id).await;
-        // Single-flight: await an in-flight load, else claim the slot (guard is
-        // dropped before any `.await` — std MutexGuard is not Send).
-        let action = {
-            let g = self.guards.lock_recover();
-            if let Some(existing) = g.loading.get(chat_id) {
-                Flight::Await(existing)
-            } else if self.shared.active_chats.contains_key(chat_id) {
-                Flight::Skip
-            } else {
-                match g.loading.claim(chat_id) {
-                    Ok(claim) => Flight::Claimed(claim),
-                    Err(waiter) => Flight::Await(waiter),
-                }
-            }
-        };
-        let notify = match action {
-            Flight::Await(existing) => {
-                existing.wait().await;
-                return false;
-            }
-            // The cell already exists: no reload needed, but this is still a
-            // use — touch its clock so an unspawned cell left on screen doesn't
-            // look idle just because it was never reloaded.
-            Flight::Skip => {
-                self.touch(chat_id);
-                return false;
-            }
-            Flight::Claimed(n) => n,
-        };
-        let reloaded = self.do_load_chat(chat_id).await;
-        drop(notify);
-        reloaded
-    }
-
-    /// Await any in-flight load (chat_manager's `getMessages` inflight check).
-    pub(crate) async fn await_loading(&self, chat_id: &str) {
-        let n = self.guards.lock_recover().loading.get(chat_id);
-        if let Some(n) = n {
-            n.wait().await;
-        }
+        self.publish_resume_state(chat_id);
     }
 
     /// Await any in-flight spawn (config_manager's `startingChats` check).
@@ -399,7 +338,6 @@ impl ChatLifecycleManager {
                 existing.wait().await;
                 return;
             }
-            Flight::Skip => return, // start_chat never claims Skip
             Flight::Claimed(n) => n,
         };
         let result = self.do_start_chat(chat_id).await;
@@ -860,16 +798,6 @@ impl ChatLifecycleManager {
             chat.scratch_path.as_deref(),
             project_path.clone(),
         )?;
-        // Before the early returns below: a chat with no session still needs a
-        // baseline, and it must be re-seeded on every activation after a restart.
-        // A non-project chat has no worktrees to baseline (`project_path` is
-        // `None` for the hidden scratch row).
-        if let Some(project_path) = &project_path {
-            self.worktree_offers
-                .seed_baseline(chat_id, project_path)
-                .await;
-        }
-
         if let Some(wt) = &chat.worktree_path
             && !self.shared.deps.path_exists(wt)
         {

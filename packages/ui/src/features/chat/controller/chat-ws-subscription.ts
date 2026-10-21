@@ -9,8 +9,8 @@
  *
  * What remains: subscribe on attach (the daemon replays the worktree-offer
  * snapshot to a new subscriber), re-subscribe on socket reconnect, and the
- * `POST /chats/:id/resume` warm-up that keeps the CLI process lifecycle
- * behavior of the attach path.
+ * `POST /chats/:id/resume?waitFor=transcript` restores the transcript before
+ * attachment while the daemon continues the CLI lifecycle work.
  */
 import type { DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
@@ -33,7 +33,7 @@ export class ChatWsSubscription {
 
   constructor(private readonly host: ChatWsHost) {}
 
-  async whenWarm(): Promise<void> {
+  async whenTranscriptReady(): Promise<void> {
     let current: Promise<void>;
     do {
       current = this.warm;
@@ -70,7 +70,7 @@ export class ChatWsSubscription {
 
   private subscribeAndWarm(): void {
     this.host.ws.subscribe(this.host.chatId);
-    this.warm = resumeChat(this.host.port, this.host.chatId).catch((err: unknown) =>
+    this.warm = resumeChat(this.host.port, this.host.chatId, { waitFor: 'transcript' }).catch((err: unknown) =>
       console.warn('[chat-ws] resumeChat failed', err),
     );
   }

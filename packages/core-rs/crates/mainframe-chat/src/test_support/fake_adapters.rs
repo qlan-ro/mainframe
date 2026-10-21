@@ -30,6 +30,8 @@ pub(crate) enum PinFailure {
 
 #[derive(Default)]
 pub(crate) struct FakeAdapterPort {
+    pub(crate) scan_gate: Mutex<Option<Arc<tokio::sync::Notify>>>,
+    pub(crate) scan_started: tokio::sync::Notify,
     /// `locate_transcript`'s answer (`None` = cannot determine).
     pub(crate) transcript_present: Mutex<Option<bool>>,
     pub(crate) transcript_location: Mutex<Option<TranscriptLocation>>,
@@ -170,7 +172,13 @@ impl AdapterPort for FakeDeps {
         _chat_id: &'a str,
         _canonical: Option<&'a [ChatMessage]>,
     ) -> BoxFuture<'a, ()> {
-        Box::pin(async {})
+        let gate = self.adapters.scan_gate.lock_recover().clone();
+        Box::pin(async move {
+            self.adapters.scan_started.notify_one();
+            if let Some(gate) = gate {
+                gate.notified().await;
+            }
+        })
     }
     fn resolve_tuning<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {
         let resolved = self.adapters.resolved_tuning.lock_recover().clone();

@@ -26,11 +26,11 @@ export class ChatLiveSubscription {
 
   constructor(private readonly host: ChatLiveSubscriptionHost) {}
 
-  async whenWarm(): Promise<void> {
+  async whenTranscriptReady(): Promise<void> {
     let current: ChatWsSubscription | null;
     do {
       current = this.wsSub;
-      await current?.whenWarm();
+      await current?.whenTranscriptReady();
     } while (current !== this.wsSub);
   }
 

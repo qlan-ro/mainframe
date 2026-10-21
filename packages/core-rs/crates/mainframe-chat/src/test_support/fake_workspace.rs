@@ -54,6 +54,7 @@ pub(crate) struct FakeWorkspacePort {
     pub(crate) removed_worktrees: Mutex<Vec<(String, String, String)>>,
     /// What `list_worktrees` answers.
     pub(crate) listing: Mutex<Vec<WorktreeEntry>>,
+    pub(crate) listing_gate: Mutex<Option<Arc<(tokio::sync::Notify, tokio::sync::Notify)>>>,
     /// How often `list_worktrees` ran.
     pub(crate) list_calls: AtomicUsize,
 }
@@ -242,6 +243,13 @@ impl WorkspacePort for FakeDeps {
     fn list_worktrees<'a>(&'a self, _project_path: &'a str) -> BoxFuture<'a, Vec<WorktreeEntry>> {
         self.workspace.list_calls.fetch_add(1, Ordering::SeqCst);
         let entries = self.workspace.listing.lock_recover().clone();
-        Box::pin(async move { entries })
+        let gate = self.workspace.listing_gate.lock_recover().clone();
+        Box::pin(async move {
+            if let Some(gate) = gate {
+                gate.0.notify_one();
+                gate.1.notified().await;
+            }
+            entries
+        })
     }
 }

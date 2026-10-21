@@ -26,6 +26,11 @@ impl ChatManager {
         self.lifecycle.resume_chat(chat_id).await;
     }
 
+    pub async fn resume_transcript(&self, chat_id: &str) {
+        self.lifecycle.load_transcript(chat_id).await;
+        self.lifecycle.finish_resume_in_background(chat_id);
+    }
+
     /// Trust the chat's workspace in `~/.claude.json` (path derived server-side
     /// from the chat). Backs `POST /api/chats/:id/trust-workspace`.
     pub async fn trust_workspace(&self, chat_id: &str) -> Result<(), TrustWorkspaceError> {

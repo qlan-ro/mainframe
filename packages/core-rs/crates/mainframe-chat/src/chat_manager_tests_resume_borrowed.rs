@@ -1,6 +1,34 @@
 use super::*;
 
 #[tokio::test]
+async fn resume_reader_does_not_wait_for_metadata_after_restoration() {
+    let mut chat = test_chat("c1");
+    chat.vendor_session_id = Some("sess-1".into());
+    let deps = FakeDeps::with_chats(vec![chat]);
+    *deps.adapters.history.lock().unwrap() = Some(vec![numbered_message(7)]);
+    *deps.adapters.transcript_present.lock().unwrap() = Some(true);
+    let gate = Arc::new(tokio::sync::Notify::new());
+    *deps.adapters.scan_gate.lock().unwrap() = Some(gate.clone());
+    let manager = Arc::new(ChatManager::new(deps.clone()));
+    let loading = tokio::spawn({
+        let manager = manager.clone();
+        async move { manager.load_chat("c1").await }
+    });
+    deps.adapters.scan_started.notified().await;
+    let result = tokio::time::timeout(
+        std::time::Duration::from_millis(100),
+        manager.read_resume_snapshot("c1", |messages, _, _| messages.len()),
+    )
+    .await;
+    gate.notify_one();
+    loading.await.unwrap();
+    assert_eq!(
+        result.expect("metadata scanning must not gate transcript reads"),
+        1
+    );
+}
+
+#[tokio::test]
 async fn an_empty_cached_entry_still_loads_history_before_calling_the_resume_reader() {
     let mut chat = test_chat("c1");
     chat.vendor_session_id = Some("sess-1".into());
@@ -92,3 +120,6 @@ async fn a_warm_resume_reader_borrows_the_projection_and_copies_only_its_selecte
         )]
     );
 }
+
+#[path = "chat_manager_tests_resume_ready.rs"]
+mod readiness;

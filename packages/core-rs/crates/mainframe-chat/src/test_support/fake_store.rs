@@ -86,6 +86,9 @@ impl FakeChatStore {
         let Some(c) = chats.get_mut(chat_id) else {
             return;
         };
+        if let Some(status) = patch.status {
+            c.status = status;
+        }
         if let Some(ps) = patch.process_state {
             c.process_state = Some(ps);
         }

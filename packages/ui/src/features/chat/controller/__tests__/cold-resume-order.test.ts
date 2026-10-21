@@ -14,7 +14,23 @@ import { AcpChatController } from '../acp-chat-controller';
 import { CHAT_ID, PORT, makeFakeWs, makeFakeAcpClient } from './acp-test-kit';
 
 beforeEach(() => vi.clearAllMocks());
-it.each([true, false])('waits for lifecycle warm-up before attaching (still active: %s)', async (active) => {
+
+it('requests transcript readiness while the session continues warming', async () => {
+  const client = makeFakeAcpClient();
+  const ctrl = new AcpChatController(CHAT_ID, PORT, makeFakeWs().fakeClient, () => client);
+  ctrl.setActive(true);
+  const stop = ctrl.subscribeLive();
+  try {
+    await ctrl.load();
+    expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID, { waitFor: 'transcript' });
+    expect(client.resumeCalls).toHaveLength(1);
+  } finally {
+    stop();
+    ctrl.dispose();
+  }
+});
+
+it.each([true, false])('waits for transcript readiness before attaching (still active: %s)', async (active) => {
   let warmed!: () => void;
   vi.mocked(resumeChat).mockReturnValueOnce(
     new Promise<void>((resolve) => {
@@ -41,7 +57,7 @@ it.each([true, false])('waits for lifecycle warm-up before attaching (still acti
   }
 });
 
-it('still reads facade history when the lifecycle warm-up fails', async () => {
+it('still reads facade history when the transcript readiness fails', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.mocked(resumeChat).mockRejectedValueOnce(new Error('warm-up failed'));
   const client = makeFakeAcpClient();
@@ -60,28 +76,31 @@ it('still reads facade history when the lifecycle warm-up fails', async () => {
   }
 });
 
-it.each([true, false])('coordinates warm-up for a preloaded inactive controller (still active: %s)', async (active) => {
-  let warmed!: () => void;
-  const client = makeFakeAcpClient();
-  const ctrl = new AcpChatController(CHAT_ID, PORT, makeFakeWs().fakeClient, () => client);
-  await ctrl.load();
-  vi.mocked(resumeChat).mockReturnValueOnce(
-    new Promise<void>((resolve) => {
-      warmed = resolve;
-    }),
-  );
-  const stop = ctrl.subscribeLive();
-  ctrl.setActive(true);
-  try {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(client.resumeCalls).toHaveLength(0);
-    if (!active) ctrl.setActive(false);
-    warmed();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(client.resumeCalls).toHaveLength(active ? 1 : 0);
-  } finally {
-    warmed();
-    stop();
-    ctrl.dispose();
-  }
-});
+it.each([true, false])(
+  'coordinates readiness for a preloaded inactive controller (still active: %s)',
+  async (active) => {
+    let warmed!: () => void;
+    const client = makeFakeAcpClient();
+    const ctrl = new AcpChatController(CHAT_ID, PORT, makeFakeWs().fakeClient, () => client);
+    await ctrl.load();
+    vi.mocked(resumeChat).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        warmed = resolve;
+      }),
+    );
+    const stop = ctrl.subscribeLive();
+    ctrl.setActive(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(client.resumeCalls).toHaveLength(0);
+      if (!active) ctrl.setActive(false);
+      warmed();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(client.resumeCalls).toHaveLength(active ? 1 : 0);
+    } finally {
+      warmed();
+      stop();
+      ctrl.dispose();
+    }
+  },
+);
