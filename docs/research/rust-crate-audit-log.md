@@ -7,4 +7,4 @@ the run left open because they cross a crate or wire boundary.
 
 | Date | Crate | PR | Follow-ups |
 |---|---|---|---|
-| 2026-10-21 | `mainframe-git` | — | `update_all` reports a failed pull of the current branch as `up-to-date` (`UpdateAllResult` has no failure variant; needs a types + UI change). The git diff route builds `{base}..HEAD` from a query value without an option guard (`mainframe-server/src/routes/git.rs`). Merge results report the auto-merged file count as `commits`. |
+| 2026-10-21 | `mainframe-git` | #861 | `update_all` reports a failed pull of the current branch as `up-to-date` (`UpdateAllResult` has no failure variant; needs a types + UI change). The git diff route builds `{base}..HEAD` from a query value without an option guard (`mainframe-server/src/routes/git.rs`). Merge results report the auto-merged file count as `commits`. |
