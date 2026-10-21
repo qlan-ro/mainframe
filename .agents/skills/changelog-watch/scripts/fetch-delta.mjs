@@ -71,14 +71,17 @@ const MAX_RELEASE_PAGES = 20;
 // truncates it into a parse error.
 const GH_MAX_BUFFER = 64 * 1024 * 1024;
 
+// The raw media type, not the default JSON body: for files over 1MB the
+// contents API returns an empty `content` field (encoding "none"), which
+// parses to zero sections and masquerades as an unknown anchor.
 async function fetchChangelogText(repo, changelogPath) {
   try {
     const { stdout } = await execFileAsync(
       'gh',
-      ['api', `repos/${repo}/contents/${changelogPath}`, '--jq', '.content'],
+      ['api', '-H', 'Accept: application/vnd.github.raw', `repos/${repo}/contents/${changelogPath}`],
       { maxBuffer: GH_MAX_BUFFER },
     );
-    return Buffer.from(stdout.trim(), 'base64').toString('utf8');
+    return stdout;
   } catch (err) {
     if (err.code !== 'ENOENT') throw err;
     const res = await fetch(`https://raw.githubusercontent.com/${repo}/HEAD/${changelogPath}`);
@@ -120,6 +123,9 @@ async function fetchReleasesUntil(repo, anchor) {
 async function buildDelta(toolState, since, max) {
   if (toolState.mode === 'changelog') {
     const sections = parseChangelogSections(await fetchChangelogText(toolState.repo, toolState.changelogPath));
+    if (sections.length === 0) {
+      throw new Error(`${toolState.repo}/${toolState.changelogPath} fetched with no "## " sections; refusing to slice`);
+    }
     return { ...sectionsSince(sections, since, { max }), complete: true, fetched: sections.length };
   }
   const { releases, complete } = await fetchReleasesUntil(toolState.repo, since);
