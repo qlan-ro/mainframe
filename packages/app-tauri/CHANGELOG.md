@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.3.4
+
+### Patch Changes
+
+- [#861](https://github.com/qlan-ro/mainframe/pull/861) [`459500d`](https://github.com/qlan-ro/mainframe/commit/459500de39267ebff81765500ecc379cee17e0cf) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Aborting a merge or rebase from the branch menu now works in a project's main checkout, the branch list shows the merge or rebase in progress there, and a rebase that stops on conflicts reports them instead of failing. Committing with no changes now says "Nothing to commit". Branch and remote names that look like git options are passed to git as names, never as options.
+
+- Updated dependencies [[`02a46d9`](https://github.com/qlan-ro/mainframe/commit/02a46d9a23f1535dae0a983f1c54f76b0e676a86)]:
+  - @qlan-ro/mainframe-ui@2.12.2
+
 ## 2.3.3
 
 ### Patch Changes
