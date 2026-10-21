@@ -104,7 +104,11 @@ pub(crate) fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolRes
                 .and_then(Value::as_str)?
                 .to_string();
             let data = source.get("data").and_then(Value::as_str)?.to_string();
-            Some(ToolResultImage { media_type, data })
+            Some(ToolResultImage {
+                media_type,
+                data,
+                uri: None,
+            })
         })
         .collect()
 }

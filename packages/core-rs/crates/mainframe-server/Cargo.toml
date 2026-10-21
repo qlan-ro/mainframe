@@ -51,6 +51,7 @@ grep-regex = { workspace = true }
 grep-matcher = { workspace = true }
 
 [dev-dependencies]
+base64 = { workspace = true }
 mainframe-adapter-api = { workspace = true, features = ["test-support"] }
 mainframe-chat = { workspace = true, features = ["test-support"] }
 mainframe-server = { path = ".", features = ["test-support"] }

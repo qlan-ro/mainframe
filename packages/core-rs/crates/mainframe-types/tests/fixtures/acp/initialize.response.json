@@ -18,7 +18,8 @@
       "replayComplete": true,
       "authoritativeItemStreaming": true,
       "windowedHistory": true,
-      "historySearch": true
+      "historySearch": true,
+      "lazyToolImages": true
     }
   }
 }

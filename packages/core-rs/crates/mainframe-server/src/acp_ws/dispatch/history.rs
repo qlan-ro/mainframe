@@ -97,11 +97,15 @@ async fn page(
     };
     let chat_id = params.session_id.clone();
     let previews = connection.is_replay_result_previews_opted_in();
-    let compressed = connection.is_compressed_replay_opted_in();
+    let options = mainframe_acp::history_page::PageOptions {
+        previews,
+        compressed: connection.is_compressed_replay_opted_in(),
+        lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
+    };
     let result = tokio::spawn(async move {
         let snapshot = port.resume_snapshot(&params.session_id).await;
         tokio::task::spawn_blocking(move || {
-            mainframe_acp::history_page::prepare(&snapshot.messages, &params, previews, compressed)
+            mainframe_acp::history_page::prepare(&snapshot.messages, &params, options)
         })
         .await
     })

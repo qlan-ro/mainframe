@@ -53,6 +53,7 @@ pub mod skills_cli;
 pub mod skills_registry;
 pub mod suggestions;
 pub mod tags;
+pub mod tool_images;
 pub mod tunnel;
 pub mod tunnel_ports;
 pub mod worktree;

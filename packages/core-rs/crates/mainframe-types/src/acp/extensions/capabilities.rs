@@ -46,6 +46,8 @@ pub struct MainframeCapabilities {
     pub windowed_history: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_search: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lazy_tool_images: Option<bool>,
 }
 
 /// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
@@ -117,6 +119,7 @@ mod tests {
             compressed_replay: None,
             windowed_history: None,
             history_search: None,
+            lazy_tool_images: None,
         };
         assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));
     }

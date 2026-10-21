@@ -120,20 +120,34 @@ fn pages_are_contiguous_load_through_is_unbounded_and_unknown_targets_are_stale(
         containers: Some(1),
         until_item_id: Some("m128".into()),
     };
-    let page = crate::history_page::prepare(&port.messages, &params, true, false);
+    let page = crate::history_page::prepare(
+        &port.messages,
+        &params,
+        crate::history_page::PageOptions {
+            previews: true,
+            ..Default::default()
+        },
+    );
     assert_eq!(page.start, 120);
     assert_eq!(page.containers.len(), 340);
     assert_eq!(page.result.updates.unwrap().len(), 340);
     let mut params = params;
     params.until_item_id = Some("missing".into());
     assert_eq!(
-        crate::history_page::prepare(&port.messages, &params, true, false)
-            .result
-            .stale,
+        crate::history_page::prepare(
+            &port.messages,
+            &params,
+            crate::history_page::PageOptions {
+                previews: true,
+                ..Default::default()
+            }
+        )
+        .result
+        .stale,
         Some(true)
     );
     params.until_item_id = Some("m490".into());
-    let page = crate::history_page::prepare(&port.messages, &params, false, false);
+    let page = crate::history_page::prepare(&port.messages, &params, Default::default());
     assert!(page.containers.is_empty());
     assert_eq!(page.result.stale, None);
     assert_eq!(page.result.history.floor_item_id.as_deref(), Some("m460"));

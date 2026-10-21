@@ -42,6 +42,7 @@ export function initializeRequest(info: { name: string; version: string }): Init
         replayResultPreviews: true,
         compressedReplay: true,
         windowedHistory: true,
+        lazyToolImages: true,
       },
     },
   };

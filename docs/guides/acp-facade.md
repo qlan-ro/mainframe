@@ -302,7 +302,7 @@ On every full replay (`start`, an unknown cursor, a revision fallback) an opted-
   "_meta": { "_mainframe.dev": { "truncated": true, "fullBytes": 48213 } } } }
 ```
 
-Render the preview, and fetch the full text with `GET /api/chats/{chatId}/tool-result/{toolCallId}` when the user asks for it. Raw input, diffs, images and message text are never trimmed; the newest 20 containers always replay in full; a cursor replay previews nothing new. The daemon keeps trimming those ids on every later revision of this connection, so a live re-encode of a settled container never pushes you the full text you did not ask for. Without the opt-in the wire is byte-identical to before, even against a daemon that advertises `replayResultPreviews`.
+Render the preview, and fetch the full text with `GET /api/chats/{chatId}/tool-result/{toolCallId}` when the user asks for it. Raw input, diffs, images and message text are never trimmed by result previews (see [deferred tool images](lazy-tool-images.md) for image loading); the newest 20 containers always replay in full; a cursor replay previews nothing new. The daemon keeps trimming those ids on every later revision of this connection, so a live re-encode of a settled container never pushes you the full text you did not ask for. Without the opt-in the wire is byte-identical to before, even against a daemon that advertises `replayResultPreviews`.
 
 ### Compressed replay batches
 

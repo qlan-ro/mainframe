@@ -69,6 +69,7 @@ fn attach_subagent_tool_results_appends_after_tool_use_with_parent() {
             original_file: None,
             modified_file: None,
             images: vec![mainframe_types::content::ToolResultImage {
+                uri: None,
                 media_type: "image/png".to_string(),
                 data: "AAAA".to_string(),
             }],

@@ -51,6 +51,8 @@ pub enum LeafContent {
 pub struct ToolResultImage {
     pub media_type: String,
     pub data: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uri: Option<String>,
 }
 
 #[cfg(test)]

@@ -185,15 +185,11 @@ export interface DiffHunk {
   lines: string[];
 }
 
-/**
- * An image block carried inside a `tool_result` (todo #363) — a Claude tool
- * such as `Read` returning a PNG. Mirrors the Rust
- * `mainframe_types::content::ToolResultImage`. `data` is base64, never
- * transformed; there is no downscaling or caching (out of scope).
- */
+/** Original base64 pixels, or empty data with a daemon-relative URI for deferred loading. */
 export interface ToolResultImage {
   mediaType: string;
   data: string;
+  uri?: string;
 }
 
 /**
