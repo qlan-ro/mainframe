@@ -9,6 +9,7 @@ use std::sync::Mutex;
 pub(super) struct Selection {
     pub start: usize,
     pub containers: Vec<Vec<EncodedItem>>,
+    pub history: mainframe_types::acp::extensions::HistoryState,
     pub plan: ReplayPlan,
     pub fallback: bool,
 }
@@ -30,39 +31,34 @@ impl Selection {
             .filter(|&position| position < snapshot.messages.len());
         let start =
             if revision { floor } else { None }.unwrap_or_else(|| newest_start(snapshot, window));
-        let mut containers = history_window::encode_range(
-            snapshot.messages,
-            snapshot.streaming,
+        let mut selected = select(
+            snapshot,
             start,
-            snapshot.messages.len(),
+            window,
+            revision
+                .then_some(window.floor_item_id.as_deref())
+                .flatten(),
         );
-        let plan = resolve(
-            &containers,
-            start,
+        let mut plan = resolve(
+            &selected,
             cursor.as_ref(),
             window.floor_item_id.as_deref(),
             log,
         );
         let fallback = revision && matches!(plan, ReplayPlan::Full);
-        let start = if fallback {
-            let newest = newest_start(snapshot, window);
-            if newest != start {
-                containers = history_window::encode_range(
-                    snapshot.messages,
-                    snapshot.streaming,
-                    newest,
-                    snapshot.messages.len(),
-                );
-            }
-            newest
-        } else {
-            start
-        };
+        if fallback {
+            selected = select(snapshot, newest_start(snapshot, window), window, None);
+        }
+        let context_changed = context_changed(&selected, window, &plan);
+        if context_changed {
+            plan = ReplayPlan::Full;
+        }
         Self {
-            start,
-            containers,
+            start: selected.start,
+            containers: selected.containers,
+            history: selected.history,
             plan,
-            fallback,
+            fallback: fallback || context_changed,
         }
     }
 }
@@ -77,9 +73,40 @@ fn newest_start(snapshot: &SnapshotView<'_>, window: &HistoryWindow) -> usize {
     )
 }
 
-fn resolve(
-    containers: &[Vec<EncodedItem>],
+fn select(
+    snapshot: &SnapshotView<'_>,
     start: usize,
+    window: &HistoryWindow,
+    floor: Option<&str>,
+) -> crate::item_window::ItemWindow {
+    let mut containers = history_window::encode_range(
+        snapshot.messages,
+        snapshot.streaming,
+        start,
+        snapshot.messages.len(),
+    );
+    if window.items.is_some()
+        && let Some(floor) = floor
+    {
+        match crate::item_window::ItemWindow::from_floor(containers, start, floor) {
+            Ok(selected) => return selected.track_context(),
+            Err(original) => containers = original,
+        }
+    }
+    let selected = crate::item_window::ItemWindow::newest(
+        containers,
+        start,
+        window.items.map(crate::item_window::budget),
+    );
+    if window.items.is_some() {
+        selected.track_context()
+    } else {
+        selected
+    }
+}
+
+fn resolve(
+    selection: &crate::item_window::ItemWindow,
     cursor: Option<&ReplayCursor>,
     floor: Option<&str>,
     log: Option<&Mutex<RevisionLog>>,
@@ -89,17 +116,32 @@ fn resolve(
     else {
         return ReplayPlan::Full;
     };
-    let items: Vec<_> = containers.iter().flatten().cloned().collect();
-    if items.first().map(EncodedItem::id) != Some(floor) {
+    if selection.history.floor_item_id.as_deref() != Some(floor) {
         return ReplayPlan::Full;
     }
+    let items: Vec<_> = selection.containers.iter().flatten().cloned().collect();
     log.lock_recover().plan_window(
         &RevisionCursor {
             epoch: epoch.clone(),
             revision: *revision,
         },
         &items,
-        start,
+        selection.start,
         floor,
     )
+}
+
+fn context_changed(
+    selected: &crate::item_window::ItemWindow,
+    window: &HistoryWindow,
+    plan: &ReplayPlan,
+) -> bool {
+    matches!(plan, ReplayPlan::Incremental(_))
+        && window.items.is_some()
+        && selected
+            .history
+            .context_item_ids
+            .as_deref()
+            .unwrap_or_default()
+            != window.context_item_ids.as_deref().unwrap_or_default()
 }

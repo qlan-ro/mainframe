@@ -98,3 +98,27 @@ describe('whole-transcript find', () => {
     await waitFor(() => expect(f.search).toHaveBeenCalledTimes(2));
   });
 });
+
+it('loads a missing item even when its partial container is already visible', async () => {
+  f.messages = [{ id: 'partial' }];
+  f.search.mockResolvedValue({
+    total: 1,
+    matches: [{ containerId: 'partial', itemId: 'earlier-prose', occurrence: 0 }],
+  });
+  const thread = document.createElement('div');
+  thread.dataset.mfChatThread = '';
+  thread.dataset.mfChatId = 'chat';
+  thread.innerHTML = '<div data-message-id="partial"><div data-text-part>tail</div></div>';
+  thread.querySelector('div')!.scrollIntoView = vi.fn();
+  document.body.append(thread);
+  f.load.mockResolvedValue(true);
+  const view = render(
+    <>
+      <FindBar />
+      <DaemonFind />
+    </>,
+  );
+  await waitFor(() => expect(useFindInChatStore.getState().serverTotal).toBe(1));
+  fireEvent.click(view.getByTestId('thread-find-next'));
+  await waitFor(() => expect(f.load).toHaveBeenCalledWith('earlier-prose'));
+});

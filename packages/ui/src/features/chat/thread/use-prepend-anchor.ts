@@ -4,21 +4,39 @@ import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 
 export const HISTORY_PREPEND_EVENT = 'mainframe:history-prepend';
 
+const ITEM_ANCHORS = '[data-history-item-id], [data-search-item-id]';
+
+function readingAnchor(viewport: HTMLElement, top: number) {
+  const visible = [...viewport.querySelectorAll<HTMLElement>(ITEM_ANCHORS)].filter((node) => {
+    const box = node.getBoundingClientRect();
+    return box.bottom > top && box.top < top + viewport.clientHeight && box.height > 0;
+  });
+  return (
+    visible.find((node) => !visible.some((other) => other !== node && node.contains(other))) ??
+    [...viewport.querySelectorAll<HTMLElement>('[data-message-id]')].find(
+      (node) => node.getBoundingClientRect().bottom > top,
+    )
+  );
+}
+
 function captureRestore(viewport: HTMLElement, pinned: boolean, chatId: string | undefined, virtual: boolean) {
   const top = viewport.getBoundingClientRect().top;
-  const anchor = [...viewport.querySelectorAll<HTMLElement>('[data-message-id]')].find(
-    (node) => node.getBoundingClientRect().bottom > top,
-  );
+  const anchor = readingAnchor(viewport, top);
   const offset = anchor?.getBoundingClientRect().top;
-  const anchorId = anchor?.dataset.messageId;
+  const attribute = anchor?.hasAttribute('data-history-item-id')
+    ? 'data-history-item-id'
+    : anchor?.hasAttribute('data-search-item-id')
+      ? 'data-search-item-id'
+      : 'data-message-id';
+  const anchorId = anchor?.getAttribute(attribute);
   const height = viewport.scrollHeight;
   const oldTop = viewport.scrollTop;
   return () => {
     if (viewport.dataset.mfChatId && viewport.dataset.mfChatId !== chatId) return;
     const current = anchor?.isConnected
       ? anchor
-      : [...viewport.querySelectorAll<HTMLElement>('[data-message-id]')].find(
-          (node) => node.dataset.messageId === anchorId,
+      : [...viewport.querySelectorAll<HTMLElement>(`[${attribute}]`)].find(
+          (node) => node.getAttribute(attribute) === anchorId,
         );
     if (pinned) viewport.scrollTop = viewport.scrollHeight;
     else if (current && offset !== undefined) viewport.scrollTop += current.getBoundingClientRect().top - offset;
@@ -77,7 +95,7 @@ function prepareRestore(viewport: HTMLElement, pinned: boolean, chatId: string |
   };
 }
 
-export function usePrependAnchor(firstId: string | undefined, chatId: string | undefined) {
+export function usePrependAnchor(firstId: string | undefined, chatId: string | undefined, floorItemId?: string) {
   const scroll = useTranscriptScroll();
   const [anchoring, setAnchoring] = useState(false);
   const pending = useRef<null | { apply: () => (() => void) | undefined; cancel: () => void }>(null);
@@ -116,6 +134,6 @@ export function usePrependAnchor(firstId: string | undefined, chatId: string | u
     settling.current?.();
     settling.current = pending.current?.apply() ?? null;
     pending.current = null;
-  }, [firstId]);
+  }, [firstId, floorItemId]);
   return anchoring;
 }

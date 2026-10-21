@@ -3,13 +3,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EarlierMessages, HISTORY_PREPEND_EVENT } from '../EarlierMessages';
 import { TranscriptScrollProvider } from '../transcript-scroll-context';
 
-const f = vi.hoisted(() => ({ first: 'old', load: vi.fn() }));
+const f = vi.hoisted(() => ({ first: 'old', floor: 'old-item', load: vi.fn() }));
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (select: (state: unknown) => unknown) => select({ thread: { messages: [{ id: f.first }] } }),
 }));
 vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({
-    state: { chatId: 'chat', historyWindow: { hasMore: true, loading: false } },
+    state: { chatId: 'chat', historyWindow: { hasMore: true, loading: false, floorItemId: f.floor } },
     loadEarlier: f.load,
   }),
 }));
@@ -17,6 +17,7 @@ vi.mock('../../runtime/chat-extras', () => ({
 let viewport: HTMLDivElement;
 beforeEach(() => {
   f.first = 'old';
+  f.floor = 'old-item';
   f.load.mockReset().mockResolvedValue(true);
   viewport = document.createElement('div');
   viewport.style.overflowAnchor = 'none';
@@ -42,8 +43,9 @@ function harness(pinned = false) {
   return {
     ...view,
     release,
-    prepend: () => {
-      f.first = 'earlier';
+    prepend: (sameContainer = false) => {
+      if (!sameContainer) f.first = 'earlier';
+      f.floor = 'earlier-item';
       view.rerender(
         <TranscriptScrollProvider value={controller}>
           <EarlierMessages />
@@ -125,4 +127,20 @@ it.each([false, true])('finishes virtual prepend anchoring while the tail grows 
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+it('holds a visible item when an earlier page extends the same container', () => {
+  let itemTop = 20;
+  const container = viewport.querySelector<HTMLElement>('[data-message-id]')!;
+  container.getBoundingClientRect = () => ({ top: -200, bottom: 900 }) as DOMRect;
+  container.innerHTML = '<div data-history-item-id="held-tool">Reading tool</div>';
+  const item = container.firstElementChild as HTMLElement;
+  item.getBoundingClientRect = () => ({ top: itemTop, bottom: itemTop + 40, height: 40 }) as DOMRect;
+  const view = harness();
+  act(() => window.dispatchEvent(new CustomEvent(HISTORY_PREPEND_EVENT, { detail: 'chat' })));
+  itemTop += 300;
+  view.prepend(true);
+  expect(viewport.scrollTop).toBe(400);
+  expect(view.release).toHaveBeenCalledTimes(1);
+  expect(view.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
 });

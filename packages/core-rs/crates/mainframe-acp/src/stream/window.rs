@@ -28,6 +28,14 @@ impl SessionStream {
         }
     }
 
+    pub fn set_history_floor(&mut self, id: &str) {
+        if let Some(window) = &mut self.window
+            && let Some(pos) = self.state.container_position(id)
+        {
+            window.floor = Some((pos, id.to_owned()));
+        }
+    }
+
     pub fn history_floor(&self) -> Option<&str> {
         self.window
             .as_ref()
@@ -69,42 +77,33 @@ impl SessionStream {
         }
         let mut delta = delta.clone();
         if window.floor.is_none() {
-            let containers = if delta.full {
-                delta
-                    .changes
-                    .iter()
-                    .map(|(_, items)| items.clone())
-                    .collect()
-            } else {
-                full()
-            };
-            let start = history_window::snap_encoded(
-                &containers,
-                containers
-                    .len()
-                    .saturating_sub(history_window::DEFAULT_CONTAINERS),
-            );
-            window.floor = containers
-                .iter()
-                .enumerate()
-                .skip(start)
-                .find_map(|(pos, items)| items.first().map(|item| (pos, item.id().to_string())));
-            delta = EncodedDelta::full(containers);
+            initialize_floor(window, &mut delta, full);
         }
         let Some((floor, id)) = &window.floor else {
             return Ok(delta);
         };
         let mismatched = delta.len <= *floor
-            || delta.changes.iter().any(|(pos, items)| {
-                pos == floor && items.first().map(EncodedItem::id) != Some(id.as_str())
-            });
-        if mismatched {
+            || delta
+                .changes
+                .iter()
+                .any(|(pos, items)| pos == floor && !items.iter().any(|item| item.id() == id));
+        delta.changes.retain(|(pos, _)| pos >= floor);
+        let mut new_context = false;
+        for (pos, items) in &mut delta.changes {
+            if pos == floor {
+                crate::item_window::retain_floor(items, id);
+                new_context |= items
+                    .iter()
+                    .take_while(|item| item.id() != id)
+                    .any(|item| !self.state.holds_item(item.id()));
+            }
+        }
+        if mismatched || new_context {
             window.blocked = true;
             return Err(Some(
                 serde_json::json!(crate::resync_notification(&window.chat_id)).to_string(),
             ));
         }
-        delta.changes.retain(|(pos, _)| pos >= floor);
         // Preserve absolute ordinals when a full delta becomes a sparse window.
         if delta.full {
             delta.full = false;
@@ -112,4 +111,32 @@ impl SessionStream {
         }
         Ok(delta)
     }
+}
+
+fn initialize_floor(
+    window: &mut WindowStream,
+    delta: &mut EncodedDelta,
+    full: impl FnOnce() -> Vec<Vec<EncodedItem>>,
+) {
+    let containers = if delta.full {
+        delta
+            .changes
+            .iter()
+            .map(|(_, items)| items.clone())
+            .collect()
+    } else {
+        full()
+    };
+    let start = history_window::snap_encoded(
+        &containers,
+        containers
+            .len()
+            .saturating_sub(history_window::DEFAULT_CONTAINERS),
+    );
+    window.floor = containers
+        .iter()
+        .enumerate()
+        .skip(start)
+        .find_map(|(pos, items)| items.first().map(|item| (pos, item.id().to_string())));
+    *delta = EncodedDelta::full(containers);
 }

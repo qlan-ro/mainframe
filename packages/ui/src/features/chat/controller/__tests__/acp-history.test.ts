@@ -38,16 +38,21 @@ describe('windowed history loading', () => {
   it('applies the whole load-through synchronously and retains the lowered floor', async () => {
     const f = fixture();
     f.client.historyPage = vi.fn(async (params, apply) => {
-      expect(params).toEqual({ sessionId: 'chat', before: 'new', containers: 40, untilItemId: 'old' });
+      expect(params).toEqual({ sessionId: 'chat', before: 'new', containers: 40, items: 80, untilItemId: 'old' });
       apply({
         hasMore: true,
         floorItemId: 'old',
+        contextItemIds: ['context-parent'],
         updates: [{ sessionUpdate: 'agent_message', messageId: 'old', content: [{ type: 'text', text: 'earlier' }] }],
       });
       expect(f.held.has('old')).toBe(true);
     });
     expect(await f.history.load('old')).toBe(true);
-    expect(f.history.window({ type: 'revision', epoch: 'e', revision: 2 })).toEqual({ floorItemId: 'old' });
+    expect(f.history.window({ type: 'revision', epoch: 'e', revision: 2 })).toEqual({
+      floorItemId: 'old',
+      contextItemIds: ['context-parent'],
+      items: 80,
+    });
     expect(f.state()?.loading).toBe(false);
     await f.history.load('old');
     expect(f.client.historyPage).toHaveBeenCalledTimes(1);

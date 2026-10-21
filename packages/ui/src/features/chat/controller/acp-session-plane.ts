@@ -1,7 +1,8 @@
 import { AcpHistory } from './acp-history';
+import { isHeldHistoryItem } from './acp-history-items';
 import type { HistoryPageResult } from '@qlan-ro/mainframe-types';
 import type { ControlResponse, PromptSendMeta, SessionUpdate } from '@qlan-ro/mainframe-types';
-import { ItemMetaSchema, MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
+import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
 import { TranscriptConverter } from '../view-model/convert-acp-item';
 import type { AccumulatedItem } from '../view-model/acp-item-accumulator';
 import type { ChatStateEvent } from './chat-thread-state';
@@ -54,11 +55,7 @@ export class AcpSessionPlane {
       active: () => this.attachment.canPageHistory && !this.host.isDisposed(),
       changed: (history) => this.host.dispatch({ type: 'history.window', history }),
       prepend: (page) => this.prependPage(page),
-      hasItem: (id) =>
-        this.store.accumulator.itemsInOrder.some(
-          (item) =>
-            item.id === id || ItemMetaSchema.safeParse(item.meta?.[MAINFRAME_META_NAMESPACE]).data?.containerId === id,
-        ),
+      hasItem: (id, floor) => isHeldHistoryItem(this.store.accumulator.itemsInOrder, id, floor),
     });
     this.attachment = new AcpSessionAttachment({
       getChatId: () => this.host.getChatId(),

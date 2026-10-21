@@ -16,7 +16,7 @@ it('stepping to a daemon match opens a closed compact work turn', async () => {
   useUiPrefs.getState().setTranscriptMode('compact');
   useFindInChatStore.getState().open();
   useFindInChatStore.getState().setQuery('Hidden work');
-  const loadEarlier = vi.fn().mockResolvedValue(false);
+  const loadEarlier = vi.fn().mockResolvedValue(true);
   const searchHistory = vi.fn().mockResolvedValue({
     total: 1,
     matches: [{ containerId: 'work', itemId: 'work-item', occurrence: 0 }],
@@ -45,6 +45,6 @@ it('stepping to a daemon match opens a closed compact work turn', async () => {
   fireEvent.click(screen.getByTestId('thread-find-next'));
   expect(await screen.findByText('Hidden work')).toBeVisible();
   await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'true'));
-  expect(loadEarlier).not.toHaveBeenCalled();
+  expect(loadEarlier).toHaveBeenCalledWith('work-item');
   await act(async () => useFindInChatStore.getState().close());
 });

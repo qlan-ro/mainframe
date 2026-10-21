@@ -101,6 +101,8 @@ export class AcpChatController {
     });
   }
 
+  isHistoryContext = (itemId: string) => this.plane.history.isContextItem(itemId);
+
   loadEarlier(untilItemId?: string): Promise<boolean> {
     return this.plane.history.load(untilItemId);
   }

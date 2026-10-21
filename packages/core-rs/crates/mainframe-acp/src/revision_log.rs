@@ -200,27 +200,29 @@ impl RevisionLog {
         {
             return ReplayPlan::Full;
         }
-        self.plan_scoped(cursor, items, Some(floor))
+        self.plan_scoped(cursor, items, Some((floor, floor_id)))
     }
 
     fn plan_scoped(
         &self,
         cursor: &RevisionCursor,
         snapshot_items: &[EncodedItem],
-        floor: Option<usize>,
+        floor: Option<(usize, &str)>,
     ) -> ReplayPlan {
-        let ids = floor.map(|floor| self.containers.ids_from(floor));
-        let held = |id: &str| ids.as_ref().is_none_or(|ids| ids.contains(id));
+        let snapshot_ids: HashMap<&str, &EncodedItem> = snapshot_items
+            .iter()
+            .map(|item| (item.id(), item))
+            .collect();
+        let ids = floor.map(|(floor, id)| self.containers.ids_after(floor, id));
+        let held = |id: &str| {
+            ids.as_ref().is_none_or(|ids| ids.contains(id)) || snapshot_ids.contains_key(id)
+        };
         if cursor.epoch != self.epoch
             || cursor.revision < self.floor
             || cursor.revision > self.revision
         {
             return ReplayPlan::Full;
         }
-        let snapshot_ids: HashMap<&str, &EncodedItem> = snapshot_items
-            .iter()
-            .map(|item| (item.id(), item))
-            .collect();
         let missing_tool_call = self.items.values().any(|(_, item)| {
             held(item.id())
                 && matches!(item, EncodedItem::ToolCall { .. })
@@ -242,7 +244,7 @@ impl RevisionLog {
             updates.push(clear_update(item));
         }
         for (rev, item, position) in &self.tombstones {
-            let in_range = floor.is_none_or(|floor| position.is_some_and(|pos| pos >= floor));
+            let in_range = floor.is_none_or(|(floor, _)| position.is_some_and(|pos| pos >= floor));
             if in_range && *rev > cursor.revision && !snapshot_ids.contains_key(item.id()) {
                 updates.push(clear_update(item));
             }

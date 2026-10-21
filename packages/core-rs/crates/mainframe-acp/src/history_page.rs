@@ -7,6 +7,9 @@ use mainframe_types::display::DisplayMessage;
 
 use crate::{EncodedItem, SessionState, history_window, replay_previews};
 
+#[path = "history_page_items.rs"]
+mod items;
+
 pub struct PreparedPage {
     pub result: HistoryPageResult,
     pub containers: Vec<Vec<EncodedItem>>,
@@ -34,6 +37,13 @@ pub fn prepare(
         len: messages.len(),
         previews: HashSet::new(),
     };
+    if params.items.is_some() {
+        items::prepare(messages, params, &mut page);
+        if !page.containers.is_empty() {
+            prepare_content(messages, params, options, &mut page);
+        }
+        return page;
+    }
     let Some(before) = history_window::find_item(messages, &params.before) else {
         page.result.stale = Some(true);
         return page;
@@ -42,6 +52,7 @@ pub fn prepare(
     page.result.history = HistoryState {
         has_more: before > 0,
         floor_item_id: Some(params.before.clone()),
+        context_item_ids: None,
     };
     let Some(start) = page_start(messages, params, before) else {
         page.result.stale = Some(true);
@@ -91,7 +102,9 @@ fn prepare_content(
             crate::tool_images::reference_images(&params.session_id, update);
         }
     }
-    page.result.history = history_window::state(page.start, &page.containers);
+    if params.items.is_none() {
+        page.result.history = history_window::state(page.start, &page.containers);
+    }
     if options.compressed {
         page.result.batches = Some(batch_params(&params.session_id, &updates));
     } else {
@@ -138,6 +151,7 @@ mod tests {
             session_id: "chat".into(),
             before: "m1".into(),
             containers: Some(1),
+            items: None,
             until_item_id: None,
         };
         for compressed in [false, true] {

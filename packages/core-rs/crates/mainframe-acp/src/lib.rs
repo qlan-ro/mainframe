@@ -24,6 +24,7 @@ pub mod gates;
 pub mod history_page;
 pub mod history_search;
 pub mod history_window;
+pub mod item_window;
 pub mod prompt;
 pub mod replay_batch;
 pub mod replay_previews;

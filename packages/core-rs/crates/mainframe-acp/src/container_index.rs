@@ -8,10 +8,6 @@ use crate::encoder::delta::EncodedDelta;
 pub(crate) struct ContainerIndex(Vec<Vec<String>>);
 
 impl ContainerIndex {
-    pub(crate) fn len(&self) -> usize {
-        self.0.len()
-    }
-
     pub(crate) fn positions_changed(&self, delta: &EncodedDelta) -> bool {
         delta.changes.iter().any(|(pos, items)| {
             self.0.get(*pos).is_some_and(|old| {
@@ -33,6 +29,32 @@ impl ContainerIndex {
             .flatten()
             .map(String::as_str)
             .collect()
+    }
+
+    pub(crate) fn ids_after(&self, floor: usize, floor_id: &str) -> HashSet<&str> {
+        let mut ids = self.ids_from(floor + 1);
+        if let Some(items) = self.0.get(floor)
+            && let Some(offset) = items.iter().position(|id| id == floor_id)
+        {
+            ids.extend(items[offset..].iter().map(String::as_str));
+        }
+        ids
+    }
+
+    pub(crate) fn prepend(&mut self, start: usize, containers: &[Vec<EncodedItem>]) {
+        self.0
+            .resize_with(self.0.len().max(start + containers.len()), Vec::new);
+        for (pos, items) in containers.iter().enumerate() {
+            let mut merged: Vec<String> = items.iter().map(|item| item.id().to_owned()).collect();
+            let incoming: HashSet<&str> = items.iter().map(EncodedItem::id).collect();
+            merged.extend(
+                self.0[start + pos]
+                    .iter()
+                    .filter(|id| !incoming.contains(id.as_str()))
+                    .cloned(),
+            );
+            self.0[start + pos] = merged;
+        }
     }
 
     pub(crate) fn old_ids_for(&self, delta: &EncodedDelta) -> HashSet<String> {
