@@ -121,8 +121,36 @@ test.describe('windowed transcript history', () => {
       String(WINDOWED_PAGE_CONTAINERS * 2),
     );
     await expect(page.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
-    const after = await page.locator(`[data-message-id="${id}"]`).boundingBox();
-    expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);
+    await expect
+      .poll(async () => {
+        const after = await page.locator(`[data-message-id="${id}"]`).boundingBox();
+        return after ? Math.abs(after.y - before!.y) : Infinity;
+      })
+      .toBeLessThan(2);
     expect(wire.pageRequests).toBe(1);
+  });
+
+  test('respects upward wheel input while a prepended page settles', async () => {
+    const page = app.page;
+    const viewport = page.getByTestId('chat-thread-viewport');
+    await viewport.hover();
+    await viewport.focus();
+    wire.holdPage = true;
+    await page.keyboard.press('Home');
+    await expect.poll(() => wire.pageRequests).toBe(1);
+    wire.release();
+    await page.waitForFunction(
+      (count) =>
+        document.querySelector('[data-testid="chat-message-list"]')?.getAttribute('data-loaded-count') === count &&
+        document.querySelector('[data-testid="chat-history-boundary"]')?.getAttribute('aria-busy') === 'true',
+      String(WINDOWED_PAGE_CONTAINERS * 2),
+      { timeout: 5_000 },
+    );
+    const anchor = page.getByText('Needle turn 242', { exact: true });
+    const before = await anchor.boundingBox();
+    expect(before).not.toBeNull();
+    await page.mouse.wheel(0, -20);
+    await expect(page.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
+    await expect.poll(async () => (await anchor.boundingBox())!.y - before!.y).toBeCloseTo(20, 0);
   });
 });
