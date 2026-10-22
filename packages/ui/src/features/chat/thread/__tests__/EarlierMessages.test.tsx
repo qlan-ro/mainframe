@@ -144,3 +144,45 @@ it('holds a visible item when an earlier page extends the same container', () =>
   expect(view.release).toHaveBeenCalledTimes(1);
   expect(view.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
 });
+
+it.each([
+  ['wheel', 1],
+  ['wheel', 20],
+  ['touchmove', 20],
+  ['keydown', 20],
+] as const)('preserves %s input moving %s pixels while a prepended page settles', (input, distance) => {
+  const list = document.createElement('div');
+  list.dataset.testid = 'chat-message-list';
+  list.dataset.virtualized = 'true';
+  viewport.append(list);
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
+  vi.stubGlobal('cancelAnimationFrame', () => {});
+  try {
+    let contentTop = 120;
+    viewport.querySelector<HTMLElement>('[data-message-id]')!.getBoundingClientRect = () => {
+      const top = contentTop - viewport.scrollTop;
+      return { top, bottom: top + 40, height: 40 } as DOMRect;
+    };
+    const view = harness();
+    act(() => window.dispatchEvent(new CustomEvent(HISTORY_PREPEND_EVENT, { detail: 'chat' })));
+    contentTop += 300;
+    view.prepend();
+    expect(viewport.scrollTop).toBe(400);
+    if (input === 'wheel') fireEvent.wheel(viewport, { deltaY: -distance });
+    else if (input === 'touchmove') fireEvent.touchMove(viewport);
+    else {
+      const event = new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true });
+      event.preventDefault();
+      fireEvent(viewport, event);
+    }
+    viewport.scrollTop -= distance;
+    fireEvent.scroll(viewport);
+    act(() => frames.shift()?.(16));
+    expect(viewport.scrollTop).toBe(400 - distance);
+    expect(view.release).toHaveBeenCalledTimes(1);
+    view.unmount();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

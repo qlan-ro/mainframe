@@ -46,7 +46,9 @@ function captureRestore(viewport: HTMLElement, pinned: boolean, chatId: string |
 
 function settleVirtual(viewport: HTMLElement, restore: () => void, release: () => void, pinned: boolean) {
   let revision = 0;
+  let finished = false;
   const changed = () => {
+    if (finished) return;
     const top = viewport.scrollTop;
     restore();
     if (!pinned && Math.abs(viewport.scrollTop - top) > 0.5) revision++;
@@ -59,19 +61,21 @@ function settleVirtual(viewport: HTMLElement, restore: () => void, release: () =
     mutations.observe(content, { childList: true, subtree: true });
   }
   let frame = 0;
-  let finished = false;
   const finish = () => {
     if (finished) return;
     finished = true;
     observer?.disconnect();
     mutations.disconnect();
     cancelAnimationFrame(frame);
+    stopListening();
     release();
   };
+  const stopListening = stopOnScrollInput(viewport, finish);
   restore();
   let lastRevision = -1;
   let stable = 0;
   const tick = () => {
+    if (finished) return;
     changed();
     stable = revision === lastRevision ? stable + 1 : 0;
     lastRevision = revision;
@@ -80,6 +84,31 @@ function settleVirtual(viewport: HTMLElement, restore: () => void, release: () =
   };
   frame = requestAnimationFrame(tick);
   return finish;
+}
+
+function stopOnScrollInput(viewport: HTMLElement, stop: () => void) {
+  const input = (event: Event) => {
+    if ((event.target as Element).closest('input, textarea, [contenteditable="true"]')) return;
+    if (
+      event instanceof KeyboardEvent &&
+      !['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)
+    )
+      return;
+    if (event instanceof WheelEvent && event.deltaY === 0) return;
+    if (
+      event instanceof PointerEvent &&
+      (event.target !== viewport ||
+        viewport.offsetWidth <= viewport.clientWidth ||
+        event.clientX < viewport.getBoundingClientRect().left + viewport.clientWidth)
+    )
+      return;
+    stop();
+  };
+  const events = ['wheel', 'touchmove', 'keydown', 'pointerdown'];
+  for (const name of events) viewport.addEventListener(name, input, { passive: true });
+  return () => {
+    for (const name of events) viewport.removeEventListener(name, input);
+  };
 }
 
 function prepareRestore(viewport: HTMLElement, pinned: boolean, chatId: string | undefined, release: () => void) {
