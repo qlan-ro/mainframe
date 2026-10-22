@@ -62,6 +62,7 @@ impl HttpStatus for OfferError {
 
 #[derive(Default)]
 struct ChatOffers {
+    seed_generation: Arc<()>,
     /// The worktrees a scan has already seen, by path and identity. `None` until
     /// the chat's first scan, which seeds it defensively.
     baseline: Option<rescan::Identities>,
@@ -182,6 +183,9 @@ impl WorktreeOfferRegistry {
     /// The single source of `resolved{accepted}` — a rebind counts as an accept
     /// however it was initiated, and a rebind nobody offered stays silent.
     pub(crate) fn on_binding_changed(&self, chat_id: &str, worktree_path: Option<&str>) {
+        if let Some(chat) = self.lock().get_mut(chat_id) {
+            chat.seed_generation = Arc::new(());
+        }
         if let Some(worktree_path) = worktree_path {
             self.resolve(chat_id, worktree_path, WorktreeOfferOutcome::Accepted);
         }

@@ -44,6 +44,7 @@ pub struct FakeSession {
     pub set_plan_mode_ok: bool,
     /// Configurable history returned by `load_history` (empty by default).
     pub history: Vec<ChatMessage>,
+    pub history_gate: Option<Arc<(tokio::sync::Notify, tokio::sync::Notify)>>,
     /// When set, every `load_history` call bumps it — how a test proves a
     /// path loads the transcript once rather than twice.
     pub history_loads: Option<Arc<AtomicUsize>>,
@@ -234,7 +235,14 @@ impl AdapterSession for FakeSession {
             loads.fetch_add(1, Ordering::SeqCst);
         }
         let history = self.history.clone();
-        Box::pin(async move { Ok(history) })
+        let gate = self.history_gate.clone();
+        Box::pin(async move {
+            if let Some(gate) = gate {
+                gate.0.notify_one();
+                gate.1.notified().await;
+            }
+            Ok(history)
+        })
     }
     fn history_sources(&self) -> BoxFuture<'_, Vec<PathBuf>> {
         let sources = self.history_sources.clone();

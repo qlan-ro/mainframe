@@ -47,6 +47,12 @@ pub struct FlightClaim {
     done: watch::Sender<bool>,
 }
 
+impl FlightClaim {
+    pub fn waiter(&self) -> FlightWaiter {
+        FlightWaiter(self.done.subscribe())
+    }
+}
+
 impl Drop for FlightClaim {
     fn drop(&mut self) {
         let mut flights = self.flights.lock_recover();

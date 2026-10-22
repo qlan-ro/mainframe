@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{patch, post};
@@ -104,14 +104,38 @@ async fn interrupt(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
     ok_empty()
 }
 
-async fn resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResumeQuery {
+    wait_for: Option<ResumeWaitFor>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ResumeWaitFor {
+    Transcript,
+}
+
+#[cfg(test)]
+#[path = "chat_commands_resume_tests.rs"]
+mod resume_tests;
+
+async fn resume(
+    State(ctx): State<Arc<AppCtx>>,
+    Path(id): Path<String>,
+    Query(query): Query<ResumeQuery>,
+) -> Response {
     match chat_exists(&ctx, &id).await {
         Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
         Ok(true) => {}
         Err(resp) => return resp.into_response(),
     }
     let cm = &ctx.chat.chat_manager;
-    cm.resume_chat(&id).await;
+    if query.wait_for.is_some() {
+        cm.resume_transcript(&id).await;
+    } else {
+        cm.resume_chat(&id).await;
+    }
     ok_empty()
 }
 

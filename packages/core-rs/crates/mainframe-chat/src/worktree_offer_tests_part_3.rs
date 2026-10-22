@@ -115,3 +115,19 @@ async fn forget_drops_the_chats_baseline_and_pending_so_the_next_rescan_reseeds(
         vec![raised(offer("/repo/.worktrees/b", Some("feat/b"), T2))]
     );
 }
+
+#[tokio::test]
+async fn a_chat_forgotten_during_seed_is_not_recreated_by_the_late_listing() {
+    let h = Harness::new();
+    let gate = Arc::new((tokio::sync::Notify::new(), tokio::sync::Notify::new()));
+    *h.deps.workspace.listing_gate.lock().unwrap() = Some(gate.clone());
+    let seed = tokio::spawn({
+        let registry = h.registry.clone();
+        async move { registry.seed_baseline(CHAT, PROJECT_PATH).await }
+    });
+    gate.0.notified().await;
+    h.registry.forget(CHAT);
+    gate.1.notify_one();
+    seed.await.unwrap();
+    assert!(!h.registry.lock().contains_key(CHAT));
+}

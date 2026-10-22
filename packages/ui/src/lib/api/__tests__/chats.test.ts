@@ -1,6 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as http from '../http';
-import { discardChat, listChats, trustWorkspace } from '../chats';
+import { discardChat, listChats, resumeChat, trustWorkspace } from '../chats';
+
+describe('resumeChat readiness contract', () => {
+  beforeEach(() => vi.restoreAllMocks());
+  it('keeps the full lifecycle wait as the default for existing callers', async () => {
+    const spy = vi.spyOn(http, 'requestEmpty').mockResolvedValue(undefined);
+    vi.spyOn(http, 'apiBase').mockReturnValue('http://d');
+    await resumeChat(0, 'chat-1');
+    expect(spy).toHaveBeenCalledWith('POST', 'http://d/api/chats/chat-1/resume');
+  });
+  it('opts viewing clients into the transcript-ready response', async () => {
+    const spy = vi.spyOn(http, 'requestEmpty').mockResolvedValue(undefined);
+    vi.spyOn(http, 'apiBase').mockReturnValue('http://d');
+    await resumeChat(0, 'chat-1', { waitFor: 'transcript' });
+    expect(spy).toHaveBeenCalledWith('POST', 'http://d/api/chats/chat-1/resume?waitFor=transcript');
+  });
+});
 
 describe('trustWorkspace', () => {
   beforeEach(() => vi.restoreAllMocks());

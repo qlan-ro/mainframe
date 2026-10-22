@@ -109,7 +109,7 @@ describe('ChatWsSubscription.attach — subscribes and warms immediately', () =>
     sub.attach();
 
     expect(ws.subscribeCalls).toEqual([CHAT_ID]);
-    expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID);
+    expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID, { waitFor: 'transcript' });
   });
 
   it('is idempotent — a second attach() does not re-subscribe', () => {
@@ -178,7 +178,7 @@ describe('ChatWsSubscription — reconnect', () => {
     ws.fireConnectionListener();
 
     expect(ws.subscribeCalls).toEqual([CHAT_ID]);
-    expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID);
+    expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID, { waitFor: 'transcript' });
   });
 });
 

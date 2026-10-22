@@ -57,7 +57,7 @@ The `_mainframe.dev` capabilities tell you which extensions this daemon has. Rea
 
 ## Sessions are chats
 
-There is no `session/new` on this socket (it returns `-32601`). A session id is a chat id from `POST /api/chats`. A connection starts observing a session the moment it sends `session/prompt` or `session/resume` for it, and from then on receives that session's `session/update` stream and permission gates. One connection can observe any number of sessions.
+There is no `session/new` on this socket (it returns `-32601`). A session id is a chat id from `POST /api/chats`. A connection starts observing a session the moment it sends `session/prompt` or `session/resume` for it, and from then on receives that session's `session/update` stream and permission gates. One connection can observe any number of sessions. The desktop first waits for [transcript readiness](transcript-readiness.md), allowing metadata scans and provider warmup to continue while ACP replay loads.
 
 ## Send a prompt
 

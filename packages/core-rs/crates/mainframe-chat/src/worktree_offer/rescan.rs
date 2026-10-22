@@ -22,10 +22,21 @@ impl WorktreeOfferRegistry {
     /// Records what is registered right now and drops any pending offers, so a
     /// re-activated chat never re-offers a worktree the user already lived with.
     pub(crate) async fn seed_baseline(&self, chat_id: &str, project_path: &str) {
+        let generation = self
+            .lock()
+            .entry(chat_id.to_owned())
+            .or_default()
+            .seed_generation
+            .clone();
         let listing = self.canonical_listing(project_path).await;
         let seen = identities(&listing).await;
         let mut state = self.lock();
-        let chat = state.entry(chat_id.to_string()).or_default();
+        let Some(chat) = state.get_mut(chat_id) else {
+            return;
+        };
+        if !Arc::ptr_eq(&generation, &chat.seed_generation) {
+            return;
+        }
         chat.baseline = Some(seen);
         chat.pending.clear();
     }

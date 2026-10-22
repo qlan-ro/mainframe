@@ -9,7 +9,7 @@ impl ChatManager {
     /// `--resume` JSONL). The load remaps the embedded Claude sessionId back to the
     /// Mainframe chatId and restores any pending permission from history.
     pub async fn get_messages(&self, chat_id: &str) -> Vec<ChatMessage> {
-        self.lifecycle.await_loading(chat_id).await;
+        self.lifecycle.await_restoring(chat_id).await;
         // Wait out an in-flight offload before reading the cache/registry: an
         // offload that just cleared the cache must not race a reader that would
         // otherwise see a half-cleared cache and skip straight to disk
@@ -250,7 +250,7 @@ impl ChatManager {
             Option<mainframe_types::adapter::ControlRequest>,
         ) -> R,
     {
-        self.lifecycle.await_loading(chat_id).await;
+        self.lifecycle.await_restoring(chat_id).await;
         self.lifecycle.await_offload(chat_id).await;
         let present = self
             .shared
