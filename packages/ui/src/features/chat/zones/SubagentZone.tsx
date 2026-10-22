@@ -53,6 +53,7 @@ export function SubagentZone({
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
   const transcript = findSubagentTranscript(messages, subagent.toolCallId);
+  const partial = controller.isHistoryContext(subagent.toolCallId);
   const root = useRef<HTMLDivElement>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
@@ -67,8 +68,8 @@ export function SubagentZone({
   }, [controller]);
   useEffect(() => root.current?.focus(), [subagent]);
   useEffect(() => {
-    if (state.loadState?.type !== 'ready' || transcript) return;
-    if (!state.historyWindow?.hasMore || messages.some((message) => message.id === subagent.messageId)) {
+    if (state.loadState?.type !== 'ready' || (transcript && !partial)) return;
+    if (!state.historyWindow?.hasMore || (!partial && messages.some((message) => message.id === subagent.messageId))) {
       setHistoryError('Not in this transcript');
       return;
     }
@@ -86,6 +87,7 @@ export function SubagentZone({
     };
   }, [
     controller,
+    partial,
     subagent.messageId,
     state.loadState?.type,
     state.historyWindow?.hasMore,

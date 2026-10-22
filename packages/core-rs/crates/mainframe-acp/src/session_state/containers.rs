@@ -16,6 +16,14 @@ use crate::encoder::EncodedItem;
 use crate::encoder::delta::EncodedDelta;
 
 impl SessionState {
+    pub(crate) fn holds_item(&self, id: &str) -> bool {
+        self.items.contains_key(id)
+    }
+
+    pub(crate) fn container_position(&self, id: &str) -> Option<usize> {
+        self.containers.position(id)
+    }
+
     pub fn prepend_containers(
         &mut self,
         start: usize,
@@ -24,20 +32,12 @@ impl SessionState {
     ) {
         self.previews.extend(previews);
         for item in containers.iter().flatten() {
-            self.items
-                .insert(item.id().to_string(), self.previewed(item).into_owned());
+            if !self.items.contains_key(item.id()) {
+                self.items
+                    .insert(item.id().to_string(), self.previewed(item).into_owned());
+            }
         }
-        let delta = EncodedDelta {
-            full: false,
-            len: self.containers.len().max(start + containers.len()),
-            changes: containers
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(pos, items)| (start + pos, items))
-                .collect(),
-        };
-        self.containers.update(&delta);
+        self.containers.prepend(start, containers);
     }
 
     /// Mark `containers` as the known baseline with no updates emitted —

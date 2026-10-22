@@ -13,6 +13,7 @@ fn params() -> HistoryPageParams {
         session_id: "chat-1".into(),
         before: "m80".into(),
         containers: Some(40),
+        items: None,
         until_item_id: None,
     }
 }

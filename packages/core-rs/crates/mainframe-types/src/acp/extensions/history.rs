@@ -11,7 +11,11 @@ pub struct HistoryWindow {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub containers: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor_item_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_item_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,6 +24,8 @@ pub struct HistoryState {
     pub has_more: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor_item_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_item_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,6 +35,8 @@ pub struct HistoryPageParams {
     pub before: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub containers: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub until_item_id: Option<String>,
 }

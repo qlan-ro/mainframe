@@ -75,6 +75,7 @@ pub fn state(start: usize, containers: &[Vec<EncodedItem>]) -> HistoryState {
             .flatten()
             .next()
             .map(|item| item.id().to_string()),
+        context_item_ids: None,
     }
 }
 

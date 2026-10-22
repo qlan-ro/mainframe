@@ -23,7 +23,9 @@ export function MessageToolLeaf({ part }: { part: ToolCallPart }) {
   const Card = resolveToolCard(part.toolName) ?? FallbackToolCard;
   return (
     <DisclosureScope id={part.toolCallId}>
-      <Card {...part} />
+      <div data-history-item-id={part.toolCallId}>
+        <Card {...part} />
+      </div>
     </DisclosureScope>
   );
 }

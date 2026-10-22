@@ -118,6 +118,7 @@ fn pages_are_contiguous_load_through_is_unbounded_and_unknown_targets_are_stale(
         session_id: "chat_1".into(),
         before: "m460".into(),
         containers: Some(1),
+        items: None,
         until_item_id: Some("m128".into()),
     };
     let page = crate::history_page::prepare(
@@ -269,3 +270,6 @@ async fn reconnect_keeps_changed_older_results_previewed() {
     assert!(wire.contains("65536"));
     assert!(replay.preview_ids.contains("tool-result"));
 }
+
+#[path = "resume_tests_item_window.rs"]
+mod item_window;

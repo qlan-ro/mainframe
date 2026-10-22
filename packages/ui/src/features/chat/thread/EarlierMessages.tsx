@@ -11,7 +11,7 @@ export function EarlierMessages() {
   const extras = useChatExtras();
   const firstId = useAuiState((s) => s.thread.messages[0]?.id);
   const history = extras?.state.historyWindow;
-  const anchoring = usePrependAnchor(firstId, extras?.state.chatId);
+  const anchoring = usePrependAnchor(firstId, extras?.state.chatId, history?.floorItemId);
   const loading = history?.loading === true || anchoring;
   useOlderPageGesture(extras?.loadEarlier, history?.hasMore === true, loading);
   if (!firstId) return null;

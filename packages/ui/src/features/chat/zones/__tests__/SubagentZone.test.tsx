@@ -1,10 +1,12 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ThreadMessage } from '@assistant-ui/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { controller, childMessages } = vi.hoisted(() => ({
   controller: {
     load: vi.fn(async () => undefined),
+    loadEarlier: vi.fn(async () => true),
+    isHistoryContext: vi.fn(() => false),
     subscribeLive: vi.fn(() => vi.fn()),
     holdActive: vi.fn(() => vi.fn()),
   },
@@ -15,7 +17,9 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPor
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
   chatControllerRegistry: { getOrCreate: () => controller },
 }));
-vi.mock('../../runtime/use-chat-thread-runtime', () => ({ useControllerState: () => ({}) }));
+vi.mock('../../runtime/use-chat-thread-runtime', () => ({
+  useControllerState: () => ({ loadState: { type: 'ready' }, historyWindow: { hasMore: true, floorItemId: 'child' } }),
+}));
 vi.mock('../../runtime/use-native-thread-messages', () => ({
   useNativeThreadMessages: () => [
     {
@@ -62,4 +66,16 @@ describe('SubagentZone', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close subagent transcript' }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+});
+
+afterEach(() => {
+  controller.isHistoryContext.mockReturnValue(false);
+  controller.loadEarlier.mockClear();
+});
+
+it('loads the complete subagent transcript when its card was supplied as context', async () => {
+  controller.isHistoryContext.mockReturnValue(true);
+  childMessages.current = [{ id: 'later-child' } as ThreadMessage];
+  render(<SubagentZone subagent={subagent} grow={0.5} onClose={vi.fn()} />);
+  await waitFor(() => expect(controller.loadEarlier).toHaveBeenCalledWith('task-1'));
 });

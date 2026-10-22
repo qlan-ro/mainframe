@@ -6,7 +6,9 @@ export const WINDOWED_HISTORY_OPT_IN_KEY = 'windowedHistory';
 export const HistoryWindowSchema = z
   .object({
     containers: z.number().int().optional(),
+    items: z.number().int().optional(),
     floorItemId: z.string().optional(),
+    contextItemIds: z.array(z.string()).optional(),
   })
   .loose();
 export type HistoryWindow = z.infer<typeof HistoryWindowSchema>;
@@ -15,6 +17,7 @@ export const HistoryStateSchema = z
   .object({
     hasMore: z.boolean(),
     floorItemId: z.string().optional(),
+    contextItemIds: z.array(z.string()).optional(),
   })
   .loose();
 export type HistoryState = z.infer<typeof HistoryStateSchema>;
@@ -24,6 +27,7 @@ export const HistoryPageParamsSchema = z
     sessionId: z.string(),
     before: z.string(),
     containers: z.number().int().optional(),
+    items: z.number().int().optional(),
     untilItemId: z.string().optional(),
   })
   .loose();

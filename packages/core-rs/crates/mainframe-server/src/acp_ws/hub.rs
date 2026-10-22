@@ -198,6 +198,9 @@ impl FacadeHub {
         stream.seed_containers(seed.containers);
         if connection.is_windowed_history_opted_in() {
             stream.seed_window(chat_id, seed.containers);
+            if let Some(floor) = history::resume_floor(seed.reply) {
+                stream.set_history_floor(floor);
+            }
         }
         let catch_up = drain_into(&mut stream, previous, connection, seed.redelivered_gate);
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));

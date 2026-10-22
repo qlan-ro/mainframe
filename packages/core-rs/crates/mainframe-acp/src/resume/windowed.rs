@@ -81,7 +81,7 @@ fn prepare(
         &window,
         log.as_ref().map(|(log, _)| *log),
     );
-    let history = history_window::state(selection.start, &selection.containers);
+    let history = selection.history.clone();
     let fallback = selection.fallback;
     let floor_position = selection.start;
     let mut replay = prepare_replay(selection, pending, options);

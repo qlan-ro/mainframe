@@ -102,7 +102,9 @@ export class AcpItemAccumulator {
     }
     const incoming = page.itemsInOrder.filter((item) => !this.items.has(item.id));
     for (const item of incoming) this.items.set(item.id, item);
-    this.order = incoming.map((item) => item.id).concat(this.order);
+    const pageIds = page.itemsInOrder.map((item) => item.id);
+    const shared = new Set(pageIds);
+    this.order = pageIds.concat(this.order.filter((id) => !shared.has(id)));
     return incoming;
   }
 

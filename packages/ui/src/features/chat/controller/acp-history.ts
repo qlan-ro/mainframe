@@ -19,7 +19,7 @@ interface HistoryHost {
   active(): boolean;
   changed(state: HistoryLoadState): void;
   prepend(page: HistoryPageResult): void;
-  hasItem(id: string): boolean;
+  hasItem(id: string, floor?: string): boolean;
 }
 
 export class AcpHistory {
@@ -42,7 +42,13 @@ export class AcpHistory {
   }
 
   window(cursor: ReplayCursor): HistoryWindow {
-    return cursor.type === 'revision' ? { floorItemId: this.state.floorItemId } : { containers: 40 };
+    return cursor.type === 'revision'
+      ? { floorItemId: this.state.floorItemId, contextItemIds: this.state.contextItemIds, items: 80 }
+      : { containers: 40, items: 80 };
+  }
+
+  isContextItem(id: string): boolean {
+    return this.host.hasItem(id) && !this.host.hasItem(id, this.state.floorItemId);
   }
 
   async search(query: string): Promise<HistorySearchResult> {
@@ -52,7 +58,7 @@ export class AcpHistory {
   }
 
   async load(untilItemId?: string): Promise<boolean> {
-    if (untilItemId && this.host.hasItem(untilItemId)) return true;
+    if (untilItemId && this.host.hasItem(untilItemId, this.state.floorItemId)) return true;
     if (this.inFlight) {
       await this.inFlight;
       return untilItemId ? this.load(untilItemId) : false;
@@ -79,6 +85,7 @@ export class AcpHistory {
           sessionId: this.host.chatId(),
           before: this.state.floorItemId!,
           containers: 40,
+          items: 80,
           ...(untilItemId ? { untilItemId } : {}),
         };
         let stale = false;
@@ -93,7 +100,12 @@ export class AcpHistory {
           stale = page.stale === true;
           if (stale) return;
           this.host.prepend(page);
-          this.update({ hasMore: page.hasMore, floorItemId: page.floorItemId, loading: false });
+          this.update({
+            hasMore: page.hasMore,
+            floorItemId: page.floorItemId,
+            contextItemIds: page.contextItemIds ?? this.state.contextItemIds,
+            loading: false,
+          });
         });
         if (
           generation !== this.generation ||
@@ -101,7 +113,7 @@ export class AcpHistory {
           connection !== client.connectionGeneration
         )
           return false;
-        if (!stale) return !untilItemId || this.host.hasItem(untilItemId);
+        if (!stale) return true;
       }
       return false;
     } catch (error) {

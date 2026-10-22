@@ -55,6 +55,9 @@ impl FacadeHub {
         };
         if page.result.stale != Some(true) && !page.containers.is_empty() {
             stream.prepend_history(page.start, &page.containers, page.len, page.previews);
+            if let Some(floor) = page.result.history.floor_item_id.as_deref() {
+                stream.set_history_floor(floor);
+            }
         }
         let catch_up = drain_into(&mut stream, buffered, connection, None);
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
@@ -80,11 +83,24 @@ impl FacadeHub {
             serde_json::json!(HistoryPageResult {
                 history: HistoryState {
                     has_more: floor_item_id.is_some(),
-                    floor_item_id
+                    floor_item_id,
+                    context_item_ids: None,
                 },
                 stale: Some(true),
                 ..HistoryPageResult::default()
             }),
         ));
     }
+}
+
+pub(super) fn resume_floor(reply: &mainframe_types::acp::jsonrpc::JsonRpcResponse) -> Option<&str> {
+    let mainframe_types::acp::jsonrpc::JsonRpcOutcome::Result { result } = &reply.outcome else {
+        return None;
+    };
+    result
+        .get("_meta")?
+        .get(mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE)?
+        .get("history")?
+        .get("floorItemId")?
+        .as_str()
 }
