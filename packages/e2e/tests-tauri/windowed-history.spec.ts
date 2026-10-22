@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { rmSync } from 'node:fs';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
-import { WINDOWED_RECORDING_KEY } from '../fixtures/windowed-history.js';
+import { WINDOWED_RECORDING_KEY, WINDOWED_PAGE_CONTAINERS } from '../fixtures/windowed-history.js';
 import { seedWindowedHistory, HistoryWire } from '../helpers/tauri/windowed-history.js';
 import { cleanupHeadlessProject } from '../helpers/tauri/headless-chat.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
@@ -42,7 +42,10 @@ test.describe('windowed transcript history', () => {
 
   test('opens the newest window and keeps the full transcript off the wire', async () => {
     const page = app.page;
-    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '40');
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute(
+      'data-loaded-count',
+      String(WINDOWED_PAGE_CONTAINERS),
+    );
     await expect(page.getByText('Needle turn 249', { exact: true })).toBeVisible();
     await expect(page.getByText('Needle turn 2 ancient landmark', { exact: true })).toHaveCount(0);
     expect(wire.pageRequests).toBe(0);
@@ -58,7 +61,7 @@ test.describe('windowed transcript history', () => {
     await page.keyboard.press('Home');
     await expect.poll(() => wire.pageRequests).toBe(1);
     await expect.poll(() => viewport.evaluate((node) => node.scrollTop)).toBeLessThan(1);
-    await expect(page.getByText('Needle turn 230', { exact: true })).toBeInViewport();
+    await expect(page.getByText('Needle turn 242', { exact: true })).toBeInViewport();
     const anchor = await viewport.locator('[data-message-id]').evaluateAll((messages) => {
       const viewport = messages[0]!.closest('[data-mf-chat-thread]')!;
       const top = viewport.getBoundingClientRect().top;
@@ -66,7 +69,10 @@ test.describe('windowed transcript history', () => {
       return { id: node.dataset.messageId!, top: node.getBoundingClientRect().top };
     });
     wire.release();
-    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute(
+      'data-loaded-count',
+      String(WINDOWED_PAGE_CONTAINERS * 2),
+    );
     await expect(page.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
     const after = await viewport
       .locator(`[data-message-id="${anchor.id}"]`)
@@ -99,7 +105,7 @@ test.describe('windowed transcript history', () => {
     const earlier = page.getByTestId('chat-load-earlier');
     await earlier.scrollIntoViewIfNeeded();
     await expect(earlier).toBeInViewport({ ratio: 1 });
-    const anchor = page.getByTestId('chat-user-message').filter({ hasText: /^Needle turn 230$/ });
+    const anchor = page.getByTestId('chat-user-message').filter({ hasText: /^Needle turn 242$/ });
     await expect(anchor).toBeVisible();
     const before = await anchor.boundingBox();
     expect(before).not.toBeNull();
@@ -110,7 +116,10 @@ test.describe('windowed transcript history', () => {
     const loading = await page.locator(`[data-message-id="${id}"]`).boundingBox();
     expect(Math.abs(loading!.y - before!.y)).toBeLessThan(2);
     wire.release();
-    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute(
+      'data-loaded-count',
+      String(WINDOWED_PAGE_CONTAINERS * 2),
+    );
     await expect(page.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
     const after = await page.locator(`[data-message-id="${id}"]`).boundingBox();
     expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);

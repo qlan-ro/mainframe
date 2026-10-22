@@ -3,6 +3,20 @@ import { WebSocketServer } from 'ws';
 import { createServer } from 'node:http';
 import { armHistoryPaint, historyPaintMs, installHistoryPaintProbe } from '../helpers/tauri/history-paint.js';
 
+test('page paint accepts the item-bounded window after loading finishes', async ({ page }) => {
+  await installHistoryPaintProbe(page);
+  await page.goto(
+    'data:text/html,<div data-testid="chat-message-list" data-loaded-count="16"><p data-message-id="tail">Tail</p></div>' +
+      '<div data-testid="chat-history-boundary" aria-busy="true"></div>',
+  );
+  const ready = () => page.evaluate(() => window.historyPaintProbe.ready('page', '', 0, true));
+  expect(await ready()).toBe(false);
+  await page.getByTestId('chat-message-list').evaluate((node) => node.setAttribute('data-loaded-count', '32'));
+  expect(await ready()).toBe(false);
+  await page.getByTestId('chat-history-boundary').evaluate((node) => node.setAttribute('aria-busy', 'false'));
+  expect(await ready()).toBe(true);
+});
+
 test('keypress-to-paint includes synchronous keyboard handlers before the input update', async ({ page }) => {
   await installHistoryPaintProbe(page);
   await page.goto('data:text/html,<input data-testid="probe-input">');

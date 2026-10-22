@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { rmSync } from 'node:fs';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
-import { WINDOWED_RECORDING_KEY } from '../fixtures/windowed-history.js';
+import { WINDOWED_RECORDING_KEY, WINDOWED_PAGE_CONTAINERS } from '../fixtures/windowed-history.js';
 import { HistoryWire, seedWindowedHistory } from '../helpers/tauri/windowed-history.js';
 import { cleanupHeadlessProject } from '../helpers/tauri/headless-chat.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
@@ -34,7 +34,7 @@ test.describe('virtual transcript rows', () => {
 
   test('keeps selection and Quote usable while most of 400 loaded containers are unmounted', async () => {
     const page = app.page;
-    for (let count = 80; count <= 400; count += 40) {
+    for (let count = WINDOWED_PAGE_CONTAINERS * 2; count <= 400; count += WINDOWED_PAGE_CONTAINERS) {
       await page.getByTestId('chat-load-earlier').click();
       await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', String(count));
     }
