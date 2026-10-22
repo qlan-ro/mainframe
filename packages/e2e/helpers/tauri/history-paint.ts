@@ -1,4 +1,7 @@
 import type { Page } from '@playwright/test';
+import { WINDOWED_PAGE_CONTAINERS } from '../../fixtures/windowed-history.js';
+
+const PAGED_COUNT = String(WINDOWED_PAGE_CONTAINERS * 2);
 
 type PaintKind = 'open' | 'page' | 'key';
 
@@ -16,14 +19,14 @@ declare global {
 }
 
 export async function installHistoryPaintProbe(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+  await page.addInitScript((count) => {
     window.historyPaintProbe = {
       replays: {},
       ready(kind, chatId, replays, edited) {
         if (kind === 'key') return edited;
         if (kind === 'page')
           return (
-            document.querySelector('[data-testid="chat-message-list"]')?.getAttribute('data-loaded-count') === '80' &&
+            document.querySelector('[data-testid="chat-message-list"]')?.getAttribute('data-loaded-count') === count &&
             document.querySelector('[data-testid="chat-history-boundary"]')?.getAttribute('aria-busy') === 'false' &&
             !document.querySelector('[data-virtual-placeholder]') &&
             Boolean(document.querySelector('[data-testid="chat-message-list"] [data-message-id]'))
@@ -63,7 +66,7 @@ export async function installHistoryPaintProbe(page: Page): Promise<void> {
         });
       }
     };
-  });
+  }, PAGED_COUNT);
 }
 
 export async function armHistoryPaint(page: Page, selector: string, kind: PaintKind): Promise<void> {

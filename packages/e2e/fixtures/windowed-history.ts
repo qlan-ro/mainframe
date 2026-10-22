@@ -4,6 +4,8 @@ import path from 'node:path';
 
 export const WINDOWED_RECORDING_KEY = 'windowed-history';
 export const WINDOWED_TURNS = 250;
+// Eight turns fit the 80-item budget; each has one user and one assistant container.
+export const WINDOWED_PAGE_CONTAINERS = 16;
 
 export function writeWindowedHistoryRecording(
   directory = mkdtempSync(path.join(tmpdir(), 'mf-windowed-recording-')),

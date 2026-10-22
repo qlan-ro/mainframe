@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DAEMON_BASE } from '../../fixtures/daemon.js';
 import { launchTauriApp, closeTauriApp } from '../../fixtures/app-tauri.js';
-import { WINDOWED_RECORDING_KEY } from '../../fixtures/windowed-history.js';
+import { WINDOWED_RECORDING_KEY, WINDOWED_PAGE_CONTAINERS } from '../../fixtures/windowed-history.js';
 import { composer, sessionsSidebar } from './page-objects.js';
 import type { seedWindowedHistory } from './windowed-history.js';
 import { HistoryPerformanceWire } from './history-performance-wire.js';
@@ -63,11 +63,14 @@ async function pageAndPopulate(page: Page): Promise<number> {
   await viewport.hover();
   await armHistoryPaint(page, '[data-testid="chat-thread-viewport"]', 'page');
   await page.mouse.wheel(0, -100_000);
-  await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '80');
+  await expect(page.getByTestId('chat-message-list')).toHaveAttribute(
+    'data-loaded-count',
+    String(WINDOWED_PAGE_CONTAINERS * 2),
+  );
   const duration = await historyPaintMs(page);
-  for (let users = 60; users <= 200; users += 20) {
+  for (let count = WINDOWED_PAGE_CONTAINERS * 3; count <= 400; count += WINDOWED_PAGE_CONTAINERS) {
     await page.getByTestId('chat-load-earlier').click();
-    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', String(users * 2));
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', String(count));
   }
   await painted(page);
   return duration;
