@@ -114,11 +114,14 @@ fn adapters(
     let resolved_path = &bound.input.resolved_path;
     let db = &bound.db;
     let adapters = Arc::new(AdapterRegistry::new());
-    adapters.register(Arc::new(ClaudeAdapter::new(
-        Arc::clone(background_tasks),
-        Arc::clone(claude_workflows),
-        resolved_path.clone(),
-    )));
+    adapters.register(Arc::new(
+        ClaudeAdapter::new(
+            Arc::clone(background_tasks),
+            Arc::clone(claude_workflows),
+            resolved_path.clone(),
+        )
+        .with_history_cache_dir(bound.input.paths.data_dir.join("cache/history-sources")),
+    ));
     adapters.register(Arc::new(CodexAdapter::new(
         Arc::clone(background_tasks),
         resolved_path.clone(),

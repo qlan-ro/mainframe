@@ -34,6 +34,7 @@ pub struct DiscoveredFiles {
     pub primary_path: String,
     pub all_files: Vec<String>,
     pub subagent_files: HashSet<String>,
+    pub complete: bool,
 }
 
 impl DiscoveredFiles {
@@ -42,6 +43,7 @@ impl DiscoveredFiles {
             primary_path,
             all_files: Vec::new(),
             subagent_files: HashSet::new(),
+            complete: false,
         }
     }
 }
@@ -51,12 +53,35 @@ pub async fn load_history(
     project_path: &str,
     session_file_path: Option<&str>,
 ) -> Vec<ChatMessage> {
-    let discovered =
-        discover_session_jsonl_files(session_id, project_path, session_file_path).await;
+    load_history_with_index(session_id, project_path, session_file_path, None).await
+}
+
+pub(crate) async fn load_history_with_index(
+    session_id: &str,
+    project_path: &str,
+    session_file_path: Option<&str>,
+    index: Option<&crate::history_source_index::HistorySourceIndex>,
+) -> Vec<ChatMessage> {
+    let discovered = history_discovery::discover_indexed_session_files(
+        session_id,
+        project_path,
+        session_file_path,
+        index,
+    )
+    .await;
     load_discovered_history(session_id, &discovered).await
 }
 pub async fn load_history_in_dir(session_id: &str, project_dir: &str) -> Vec<ChatMessage> {
-    let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
+    load_history_in_dir_with_index(session_id, project_dir, None).await
+}
+
+pub(crate) async fn load_history_in_dir_with_index(
+    session_id: &str,
+    project_dir: &str,
+    index: Option<&crate::history_source_index::HistorySourceIndex>,
+) -> Vec<ChatMessage> {
+    let discovered =
+        history_discovery::discover_indexed_files_in_dir(session_id, project_dir, index).await;
     load_discovered_history(session_id, &discovered).await
 }
 
@@ -93,7 +118,7 @@ async fn load_discovered_history(
 }
 
 #[path = "history_discovery.rs"]
-mod history_discovery;
+pub(crate) mod history_discovery;
 #[cfg(test)]
 #[path = "history_tests.rs"]
 mod tests;

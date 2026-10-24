@@ -33,6 +33,7 @@ mod fork_cut;
 pub mod frontmatter;
 pub mod history;
 pub mod history_converters;
+mod history_source_index;
 pub mod history_subagents;
 pub mod history_tool_result;
 pub mod messages;

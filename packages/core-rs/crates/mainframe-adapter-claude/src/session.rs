@@ -47,9 +47,18 @@ pub struct ClaudeSession {
     stdin_tx: Mutex<Option<StdinTx>>,
     weak_self: OnceLock<Weak<ClaudeSession>>,
     resolved_path: ResolvedPath,
+    history_index: Option<Arc<crate::history_source_index::HistorySourceIndex>>,
 }
 
 impl ClaudeSession {
+    pub(crate) fn with_history_index(
+        mut self,
+        index: Option<Arc<crate::history_source_index::HistorySourceIndex>>,
+    ) -> Self {
+        self.history_index = index;
+        self
+    }
+
     pub fn new(
         options: SessionOptions,
         on_exit: Option<Box<dyn Fn() + Send + Sync>>,
@@ -96,6 +105,7 @@ impl ClaudeSession {
             stdin_tx: Mutex::new(None),
             weak_self: OnceLock::new(),
             resolved_path,
+            history_index: None,
         }
     }
     pub fn init_weak(self: &Arc<Self>) {

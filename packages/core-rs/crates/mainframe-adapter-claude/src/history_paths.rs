@@ -207,6 +207,7 @@ mod tests {
         )
         .unwrap();
         let discovered = DiscoveredFiles {
+            complete: true,
             primary_path: path.to_string_lossy().into_owned(),
             all_files: vec![path.to_string_lossy().into_owned()],
             subagent_files: HashSet::new(),

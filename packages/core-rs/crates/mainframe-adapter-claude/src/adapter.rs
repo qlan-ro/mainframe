@@ -54,6 +54,7 @@ pub struct ClaudeAdapter {
     /// Boot-resolved login-shell `PATH`, applied to every spawned `claude` CLI so
     /// packaged builds find it outside the bare launchd `PATH`.
     resolved_path: ResolvedPath,
+    history_index: Option<Arc<crate::history_source_index::HistorySourceIndex>>,
 }
 
 impl ClaudeAdapter {
@@ -70,7 +71,14 @@ impl ClaudeAdapter {
             dynamic_models: Arc::new(Mutex::new(None)),
             proxy_models: Arc::new(Mutex::new(Vec::new())),
             resolved_path,
+            history_index: None,
         }
+    }
+    pub fn with_history_cache_dir(mut self, directory: std::path::PathBuf) -> Self {
+        self.history_index = Some(Arc::new(
+            crate::history_source_index::HistorySourceIndex::new(directory),
+        ));
+        self
     }
 }
 
