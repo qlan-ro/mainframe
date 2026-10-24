@@ -211,12 +211,10 @@ async fn deliver_resume(
         progress,
     );
     connection.clear_resume_failures(&session_id);
-    if from_cache {
-        let manager = Arc::clone(&ctx.chat.chat_manager);
-        tokio::spawn(async move {
-            manager.resume_transcript(&session_id).await;
-        });
-    } else {
+    if options.windowed_history {
+        prepare::complete_history(Arc::clone(&ctx.chat.chat_manager), session_id);
+    }
+    if !from_cache {
         ctx.chat.facade_hub.persist_resume(
             Arc::clone(&ctx.chat.chat_manager),
             cache_request,

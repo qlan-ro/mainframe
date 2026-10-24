@@ -244,3 +244,54 @@ async fn store_rejects_mixed_generations_invalid_ids_and_oversized_files() {
     assert!(store.tail(&manifest).await.is_none());
     fixture.ctx.chat.chat_manager.dispose();
 }
+
+#[tokio::test]
+async fn a_cold_tail_miss_without_rest_delivers_one_replay_without_a_resync() {
+    let fixture = fixture().await;
+    let ctx = &fixture.ctx;
+    let (_, conn, mut rx) = ctx.chat.facade_hub.register("claude".into());
+    conn.mark_negotiated();
+    conn.mark_revision_cursors_opted_in();
+    conn.mark_windowed_history_opted_in();
+    let daemon = mainframe_acp::DaemonInfo {
+        version: "test".into(),
+        heartbeat_interval_ms: 15000,
+    };
+    let text = serde_json::to_string(&request(&fixture.chat_id)).unwrap();
+    assert!(
+        crate::acp_ws::dispatch::handle_inbound(&text, &daemon, ctx, &conn)
+            .await
+            .is_none()
+    );
+    let mut frames = Vec::new();
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        while let Some(text) = rx.recv().await {
+            let frame: Value = serde_json::from_str(&text).unwrap();
+            let complete = frame["method"] == "_mainframe.dev/replay_complete";
+            frames.push(frame);
+            if complete {
+                break;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    ctx.chat.chat_manager.load_chat(&fixture.chat_id).await;
+    while let Ok(text) = rx.try_recv() {
+        frames.push(serde_json::from_str(&text).unwrap());
+    }
+    assert_eq!(frames.iter().filter(|frame| frame["id"] == 1).count(), 1);
+    assert_eq!(
+        frames
+            .iter()
+            .filter(|frame| frame["method"] == "_mainframe.dev/replay_complete")
+            .count(),
+        1
+    );
+    assert!(
+        !frames
+            .iter()
+            .any(|frame| frame["method"] == "_mainframe.dev/resync")
+    );
+    ctx.chat.chat_manager.dispose();
+}

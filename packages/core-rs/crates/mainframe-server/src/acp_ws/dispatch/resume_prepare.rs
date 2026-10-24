@@ -37,14 +37,7 @@ pub(super) async fn prepare_resume(
     let from_cache = cached.is_some();
     let (response, replay) = match cached {
         Some(cached) => cached,
-        None => {
-            if options.windowed_history
-                && let Some(id) = session_id
-            {
-                ctx.chat.chat_manager.resume_transcript(id).await;
-            }
-            dispatch_resume_with(request, ports, revision_log, options).await
-        }
+        None => dispatch_resume_with(request, ports, revision_log, options).await,
     };
 
     PreparedResume {
@@ -54,4 +47,14 @@ pub(super) async fn prepare_resume(
         response,
         replay,
     }
+}
+
+pub(super) fn complete_history(
+    manager: std::sync::Arc<mainframe_chat::chat_manager::ChatManager>,
+    chat_id: String,
+) {
+    tokio::spawn(async move {
+        manager.load_chat(&chat_id).await;
+        manager.publish_initial_history_state(&chat_id);
+    });
 }

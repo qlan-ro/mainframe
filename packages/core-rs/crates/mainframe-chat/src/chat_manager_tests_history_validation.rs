@@ -131,3 +131,24 @@ async fn a_tail_open_publishes_stored_todos_without_loading_history() {
     assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 0);
     manager.dispose();
 }
+
+#[tokio::test]
+async fn an_unvalidated_reload_cannot_reuse_an_old_served_proof() {
+    let dir = tempfile::tempdir().unwrap();
+    let (deps, manager, _) = cold_manager(&dir).await;
+    manager.load_chat("c1").await;
+    let proof = manager.history_validation("c1").unwrap();
+    manager.mark_initial_history_served("c1", proof);
+    deps.set_history_sources(Vec::new());
+    let chat = manager.get_chat("c1").unwrap();
+    let session =
+        crate::chat_manager::build_history_session(&manager.shared.deps, &chat, "c1").unwrap();
+    manager
+        .shared
+        .load_cached_history("c1", session.as_ref())
+        .await
+        .unwrap();
+    assert!(manager.shared.history_cache.validation("c1").is_none());
+    assert!(!manager.shared.history_cache.consume_served("c1"));
+    manager.dispose();
+}

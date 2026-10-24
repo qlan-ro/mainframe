@@ -1,5 +1,6 @@
 use super::*;
 use mainframe_adapter_api::{AdapterError, AdapterSession};
+use mainframe_types::sync::LockExt as _;
 
 impl HistorySnapshotCache {
     pub(crate) async fn fingerprint(
@@ -18,6 +19,7 @@ impl HistorySnapshotCache {
         session: &dyn AdapterSession,
         context: Option<&str>,
     ) -> Result<Vec<ChatMessage>, AdapterError> {
+        self.validated.lock_recover().remove(chat_id);
         let before = Self::fingerprint(session, context).await;
         if let Some(fingerprint) = &before
             && let Some(snapshot) = self.read_candidate(chat_id, fingerprint).await
