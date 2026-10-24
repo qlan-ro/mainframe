@@ -1,5 +1,5 @@
 {
-  "mainframe-adapter-api/src/lib.rs": 384,
+  "mainframe-adapter-api/src/lib.rs": 375,
   "mainframe-adapter-api/tests/pr_detection_sink.rs": 331,
   "mainframe-adapter-api/tests/registry.rs": 523,
   "mainframe-adapter-claude/src/task_events.rs": 319,

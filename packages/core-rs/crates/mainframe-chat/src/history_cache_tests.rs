@@ -131,10 +131,47 @@ async fn write_in_background_eventually_lands_a_hit() {
     let fp = HistoryFingerprint::compute(&[source_file(&dir, "a.jsonl", "x").await])
         .await
         .unwrap();
-    cache.write_in_background("c1".to_string(), fp.clone(), vec![msg("m1")]);
+    cache.write_in_background(
+        "c1".to_string(),
+        fp.clone(),
+        vec![msg("m1")],
+        Vec::new(),
+        serde_json::Value::Null,
+    );
 
     cache.flush().await;
     assert_eq!(cache.read("c1", &fp).await, Some(vec![msg("m1")]));
+}
+
+#[tokio::test]
+async fn child_only_edits_and_deletions_invalidate_a_history_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache = HistorySnapshotCache::new(dir.path().join("cache"));
+    let parent = source_file(&dir, "parent.jsonl", "parent").await;
+    let child = source_file(&dir, "child.jsonl", "child").await;
+    let fp = HistoryFingerprint::compute(&[parent]).await.unwrap();
+    let dependency = mainframe_adapter_api::HistoryDependency::capture(child.clone())
+        .await
+        .unwrap();
+    cache
+        .write_snapshot(
+            "c1",
+            Snapshot {
+                fingerprint: fp.clone(),
+                messages: vec![msg("m1")],
+                dependencies: vec![dependency],
+                adapter_state: serde_json::Value::Null,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(cache.read("c1", &fp).await.is_some());
+    tokio::fs::write(&child, "child changed independently")
+        .await
+        .unwrap();
+    assert!(cache.read("c1", &fp).await.is_none());
+    tokio::fs::remove_file(&child).await.unwrap();
+    assert!(cache.read("c1", &fp).await.is_none());
 }
 
 // ── pruning ───────────────────────────────────────────────────────────────

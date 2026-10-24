@@ -36,7 +36,7 @@ use crate::degraded_recovery::DegradedRecoveryError;
 use crate::event_handler::{EventHandler, PushOut};
 use crate::external_session_service::{ExternalSessionDeps, ExternalSessionService};
 use crate::fork::{PendingForkState, fork_title};
-use crate::history_cache::{HistoryFingerprint, HistorySnapshotCache};
+use crate::history_cache::HistorySnapshotCache;
 use crate::lifecycle_manager::{ChatLifecycleManager, LifecycleError};
 use crate::message_cache::MessageCache;
 use crate::message_markers::visible_message_text;
@@ -120,11 +120,6 @@ pub struct ChatManager {
     external_sessions: Option<Arc<dyn ExternalSessionFacade>>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
     self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
-    /// Persistent cold-load shortcut for `load_history_into_cache`
-    /// (`history.rs`, `history_cache.rs`) — distinct from `messages` (the
-    /// in-memory per-chat cache above), which stays the source of truth for
-    /// any chat that's actually hot.
-    history_cache: Arc<HistorySnapshotCache>,
     /// One lock per chat, held across `prepare_handoff`'s check-then-insert
     /// (`handoff_send.rs`), so two sends racing for the same chat cannot
     /// both build and record a handoff.

@@ -70,10 +70,6 @@ impl ChatManager {
             crate::idle_scanner::IdleSessionScanner::new(shared.active_chats.clone(), offloader);
         idle_scanner.start();
 
-        let history_cache = Arc::new(HistorySnapshotCache::new(std::path::PathBuf::from(
-            shared.deps.history_cache_dir(),
-        )));
-
         Self {
             shared,
             event_handler: collab.event_handler,
@@ -84,7 +80,6 @@ impl ChatManager {
             external_sessions: None,
             worktree_offers: collab.worktree_offers,
             self_ref,
-            history_cache,
             handoff_locks: mainframe_runtime::sync::KeyedMutex::default(),
             teardown,
         }

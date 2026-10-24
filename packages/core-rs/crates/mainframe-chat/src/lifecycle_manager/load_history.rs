@@ -62,7 +62,7 @@ impl ChatLifecycleManager {
 
         let history = match composed {
             Some(history) => Some(history),
-            None => history::load_session_history(chat_id, session.as_ref()).await,
+            None => history::load_session_history(chat_id, session.as_ref(), &self.shared).await,
         };
         Some(self.restore_snapshot(chat_id, history, canonical))
     }

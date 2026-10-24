@@ -9,6 +9,7 @@ pub(crate) struct ChatShared {
     pub(crate) permissions: Arc<Mutex<PermissionManager>>,
     pub(crate) queued_refs: QueuedRefs,
     pub(crate) orchestration: OrchestrationSlot,
+    pub(crate) history_cache: Arc<HistorySnapshotCache>,
     storage_errors: Mutex<HashMap<String, std::time::Instant>>,
 }
 
@@ -22,8 +23,10 @@ impl ChatShared {
         deps: Arc<dyn ChatManagerDeps>,
         messages: Arc<Mutex<MessageCache>>,
     ) -> Arc<Self> {
+        let history_cache = Arc::new(HistorySnapshotCache::new(deps.history_cache_dir().into()));
         Arc::new(Self {
             deps,
+            history_cache,
             active_chats: Arc::new(DashMap::new()),
             messages,
             permissions: Arc::new(Mutex::new(PermissionManager::new())),

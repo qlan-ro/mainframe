@@ -103,6 +103,19 @@ pub trait AdapterSession: Send + Sync {
         Box::pin(async { Vec::new() })
     }
 
+    /// Dependencies observed during the last load; `None` disables snapshot writes.
+    fn history_dependencies(&self) -> Option<Vec<crate::HistoryDependency>> {
+        Some(Vec::new())
+    }
+
+    fn history_state(&self) -> serde_json::Value {
+        serde_json::Value::Null
+    }
+
+    fn validate_history_state<'a>(&'a self, state: &'a serde_json::Value) -> BoxFuture<'a, bool> {
+        Box::pin(async move { state.is_null() })
+    }
+
     /// Stop a running background task by id. Adapters without bg-task support
     /// resolve `{ ok: false, error: "unsupported" }`.
     fn stop_background_task(
