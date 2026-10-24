@@ -1,81 +1,139 @@
 use super::*;
+use crate::history_source_index::HistorySourceIndex;
+
 pub(crate) async fn discover_session_jsonl_files(
     session_id: &str,
     project_path: &str,
     session_file_path: Option<&str>,
 ) -> DiscoveredFiles {
+    discover_indexed_session_files(session_id, project_path, session_file_path, None).await
+}
+
+pub(crate) async fn discover_indexed_session_files(
+    session_id: &str,
+    project_path: &str,
+    session_file_path: Option<&str>,
+    index: Option<&HistorySourceIndex>,
+) -> DiscoveredFiles {
     let SessionJsonlPath {
-        jsonl_path: derived_jsonl_path,
-        project_dir: derived_project_dir,
+        jsonl_path: derived,
+        project_dir,
     } = get_session_jsonl_path(session_id, project_path);
     let jsonl_path =
         match locate_claude_transcript(session_id, project_path, session_file_path).await {
             Some(TranscriptLocation::Present(path)) => path,
-            _ => return DiscoveredFiles::missing(derived_jsonl_path),
+            _ => return DiscoveredFiles::missing(derived),
         };
-    let project_dir = Path::new(&jsonl_path)
+    let directory = Path::new(&jsonl_path)
         .parent()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or(derived_project_dir);
-    discover_alongside(session_id, jsonl_path, &project_dir).await
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or(project_dir);
+    discover_alongside(session_id, jsonl_path, &directory, index).await
 }
+
 pub(crate) async fn discover_session_jsonl_files_in_dir(
     session_id: &str,
     project_dir: &str,
 ) -> DiscoveredFiles {
-    let jsonl_path = Path::new(project_dir)
+    discover_indexed_files_in_dir(session_id, project_dir, None).await
+}
+
+pub(crate) async fn discover_indexed_files_in_dir(
+    session_id: &str,
+    project_dir: &str,
+    index: Option<&HistorySourceIndex>,
+) -> DiscoveredFiles {
+    let path = Path::new(project_dir)
         .join(format!("{session_id}.jsonl"))
         .to_string_lossy()
-        .to_string();
-    if tokio::fs::metadata(&jsonl_path).await.is_err() {
-        return DiscoveredFiles::missing(jsonl_path);
+        .into_owned();
+    if tokio::fs::metadata(&path).await.is_err() {
+        return DiscoveredFiles::missing(path);
     }
-    discover_alongside(session_id, jsonl_path, project_dir).await
+    discover_alongside(session_id, path, project_dir, index).await
 }
+
 async fn discover_alongside(
-    session_id: &str,
-    jsonl_path: String,
-    project_dir: &str,
+    session: &str,
+    primary: String,
+    directory: &str,
+    index: Option<&HistorySourceIndex>,
 ) -> DiscoveredFiles {
-    let mut jsonl_files = vec![jsonl_path.clone()];
-    let mut subagent_files: HashSet<String> = HashSet::new();
-    let self_name = format!("{session_id}.jsonl");
-    if let Ok(mut entries) = tokio::fs::read_dir(project_dir).await {
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if !name.ends_with(".jsonl") || name == self_name {
-                continue;
-            }
-            let file_path = Path::new(project_dir)
-                .join(&name)
-                .to_string_lossy()
-                .to_string();
-            if belongs_to_session(&file_path, session_id).await {
-                jsonl_files.push(file_path);
-            }
-        }
-    }
-    let subagent_dir = Path::new(project_dir).join(session_id).join("subagents");
-    if let Ok(mut sub_entries) = tokio::fs::read_dir(&subagent_dir).await {
-        while let Ok(Some(entry)) = sub_entries.next_entry().await {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if !name.ends_with(".jsonl") {
-                continue;
-            }
-            let file_path = subagent_dir.join(&name).to_string_lossy().to_string();
-            jsonl_files.push(file_path.clone());
-            subagent_files.insert(file_path);
-        }
-    }
+    let mut all_files = vec![primary.clone()];
+    let (siblings, mut complete) = match index {
+        Some(index) => match index.related_files(Path::new(directory), session).await {
+            Some(files) => (files, true),
+            None => (scan_siblings(directory, session).await.0, false),
+        },
+        None => scan_siblings(directory, session).await,
+    };
+    let self_name = format!("{session}.jsonl");
+    all_files.extend(siblings.into_iter().filter(|path| {
+        Path::new(path)
+            .file_name()
+            .is_none_or(|name| name != self_name.as_str())
+    }));
+    let (subagents, children_complete) = subagent_files(directory, session).await;
+    complete &= children_complete;
+    all_files.extend(subagents.iter().cloned());
     DiscoveredFiles {
-        primary_path: jsonl_path,
-        all_files: jsonl_files,
-        subagent_files,
+        primary_path: primary,
+        all_files,
+        subagent_files: subagents.into_iter().collect(),
+        complete,
     }
 }
 
-async fn belongs_to_session(file_path: &str, session_id: &str) -> bool {
-    if let Some(mut lines) = open_lines(file_path).await {
+async fn scan_siblings(directory: &str, session: &str) -> (Vec<String>, bool) {
+    let Ok(mut entries) = tokio::fs::read_dir(directory).await else {
+        return (Vec::new(), false);
+    };
+    let mut files = Vec::new();
+    loop {
+        let entry = match entries.next_entry().await {
+            Ok(Some(entry)) => entry,
+            Ok(None) => return (files, true),
+            Err(_) => return (files, false),
+        };
+        let path = entry.path();
+        if path
+            .extension()
+            .is_some_and(|extension| extension == "jsonl")
+        {
+            let path = path.to_string_lossy().into_owned();
+            if belongs_to_session(&path, session).await {
+                files.push(path);
+            }
+        }
+    }
+}
+
+async fn subagent_files(directory: &str, session: &str) -> (Vec<String>, bool) {
+    let directory = Path::new(directory).join(session).join("subagents");
+    let mut entries = match tokio::fs::read_dir(directory).await {
+        Ok(entries) => entries,
+        Err(error) => return (Vec::new(), error.kind() == std::io::ErrorKind::NotFound),
+    };
+    let mut files = Vec::new();
+    loop {
+        match entries.next_entry().await {
+            Ok(Some(entry))
+                if entry
+                    .path()
+                    .extension()
+                    .is_some_and(|extension| extension == "jsonl") =>
+            {
+                files.push(entry.path().to_string_lossy().into_owned())
+            }
+            Ok(Some(_)) => {}
+            Ok(None) => return (files, true),
+            Err(_) => return (files, false),
+        }
+    }
+}
+
+async fn belongs_to_session(path: &str, session: &str) -> bool {
+    if let Some(mut lines) = open_lines(path).await {
         while let Ok(Some(line)) = lines.next_line().await {
             if line.trim().is_empty() {
                 continue;
@@ -83,7 +141,7 @@ async fn belongs_to_session(file_path: &str, session_id: &str) -> bool {
             return serde_json::from_str::<Value>(&line)
                 .ok()
                 .is_some_and(|first| {
-                    first.get("sessionId").and_then(Value::as_str) == Some(session_id)
+                    first.get("sessionId").and_then(Value::as_str) == Some(session)
                 });
         }
     }

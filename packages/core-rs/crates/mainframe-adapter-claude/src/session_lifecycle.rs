@@ -111,15 +111,21 @@ impl ClaudeSession {
     }
     pub async fn load_history(&self) -> Result<Vec<ChatMessage>, AdapterError> {
         match self.resume_target().await {
-            crate::fork::ResumeTarget::Own(id) => Ok(crate::history::load_history(
+            crate::fork::ResumeTarget::Own(id) => Ok(crate::history::load_history_with_index(
                 &id,
                 &self.project_path,
                 self.session_file_path.as_deref(),
+                self.history_index.as_deref(),
             )
             .await),
             crate::fork::ResumeTarget::Fork(path) => {
                 let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
-                Ok(crate::history::load_history_in_dir(&session_id, &dir).await)
+                Ok(crate::history::load_history_in_dir_with_index(
+                    &session_id,
+                    &dir,
+                    self.history_index.as_deref(),
+                )
+                .await)
             }
             crate::fork::ResumeTarget::Fresh => Ok(vec![]),
         }
@@ -132,19 +138,28 @@ impl ClaudeSession {
     pub async fn history_sources(&self) -> Vec<std::path::PathBuf> {
         let discovered = match self.resume_target().await {
             crate::fork::ResumeTarget::Own(id) => {
-                crate::history::discover_session_jsonl_files(
+                crate::history::history_discovery::discover_indexed_session_files(
                     &id,
                     &self.project_path,
                     self.session_file_path.as_deref(),
+                    self.history_index.as_deref(),
                 )
                 .await
             }
             crate::fork::ResumeTarget::Fork(path) => {
                 let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
-                crate::history::discover_session_jsonl_files_in_dir(&session_id, &dir).await
+                crate::history::history_discovery::discover_indexed_files_in_dir(
+                    &session_id,
+                    &dir,
+                    self.history_index.as_deref(),
+                )
+                .await
             }
             crate::fork::ResumeTarget::Fresh => return Vec::new(),
         };
+        if !discovered.complete {
+            return Vec::new();
+        }
         discovered
             .all_files
             .into_iter()

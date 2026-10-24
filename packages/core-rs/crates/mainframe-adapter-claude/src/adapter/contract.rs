@@ -147,13 +147,16 @@ impl Adapter for ClaudeAdapter {
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
-        let session = Arc::new(ClaudeSession::new(
-            options,
-            None,
-            self.background_tasks.clone(),
-            self.workflow_store.clone(),
-            self.resolved_path.clone(),
-        ));
+        let session = Arc::new(
+            ClaudeSession::new(
+                options,
+                None,
+                self.background_tasks.clone(),
+                self.workflow_store.clone(),
+                self.resolved_path.clone(),
+            )
+            .with_history_index(self.history_index.clone()),
+        );
         session.init_weak();
         let id = session.id.clone();
         let sessions = self.sessions.clone();
