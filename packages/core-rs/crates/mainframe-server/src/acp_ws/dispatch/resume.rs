@@ -4,9 +4,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use mainframe_acp::resume::ResumePort;
 use mainframe_acp::revision_log::RevisionLog;
-use mainframe_acp::{ResumeOptions, dispatch_resume_with, rpc};
+use mainframe_acp::{ResumeOptions, ResumeReplay, rpc};
 use mainframe_types::acp::extensions::RevisionCursor;
-use mainframe_types::acp::jsonrpc::{JsonRpcRequest, RequestId};
+use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse, RequestId};
 
 use crate::ctx::AppCtx;
 
@@ -15,7 +15,10 @@ use super::super::hub::ResumeSeed;
 use super::params_session_id;
 #[path = "resume_helpers.rs"]
 mod helpers;
+#[path = "resume_prepare.rs"]
+mod prepare;
 use helpers::{ResumeFailure, fail_resume, queued_for, redelivered_gate_id};
+use prepare::{PreparedResume, prepare_resume};
 
 pub(super) fn start_resume(
     request: JsonRpcRequest,
@@ -174,7 +177,21 @@ async fn deliver_resume(
         result_previews: connection.is_replay_result_previews_opted_in(),
         windowed_history: connection.is_windowed_history_opted_in(),
     };
-    let (response, replay) = dispatch_resume_with(request, ports, revision_log, options).await;
+    let PreparedResume {
+        cache_request,
+        cache_validation,
+        from_cache,
+        response,
+        mut replay,
+    } = prepare_resume(
+        request,
+        session_id.as_deref(),
+        ctx,
+        ports,
+        revision_log,
+        options,
+    )
+    .await;
 
     let Some(session_id) = session_id else {
         // Malformed params: dispatch_resume already produced the structured
@@ -185,32 +202,60 @@ async fn deliver_resume(
         return;
     };
 
-    let queued = queued_for(ctx, &session_id);
-    let redelivered_gate = redelivered_gate_id(&replay);
+    deliver_seed(
+        ctx,
+        connection,
+        &session_id,
+        &response,
+        &mut replay,
+        progress,
+    );
+    connection.clear_resume_failures(&session_id);
+    if options.windowed_history {
+        prepare::complete_history(Arc::clone(&ctx.chat.chat_manager), session_id);
+    }
+    if !from_cache {
+        ctx.chat.facade_hub.persist_resume(
+            Arc::clone(&ctx.chat.chat_manager),
+            cache_request,
+            response,
+            replay,
+            options,
+            cache_validation,
+        );
+    }
+}
+
+fn deliver_seed(
+    ctx: &Arc<AppCtx>,
+    connection: &FacadeConnection,
+    session_id: &str,
+    response: &JsonRpcResponse,
+    replay: &mut ResumeReplay,
+    progress: DeliveryProgress,
+) {
+    let queued = queued_for(ctx, session_id);
+    let redelivered_gate = redelivered_gate_id(replay);
     let seed = ResumeSeed {
         containers: &replay.containers,
-        reply: &response,
+        reply: response,
         replied: progress.replied,
         completed: progress.completed,
         redelivered_gate: redelivered_gate.as_deref(),
         preview_ids: &replay.preview_ids,
     };
     let hub = &ctx.chat.facade_hub;
-    hub.reset_session(connection, &session_id, seed, |conn| {
-        conn.send_replay(&session_id, replay.updates);
+    hub.reset_session(connection, session_id, seed, |conn| {
+        conn.send_replay(session_id, std::mem::take(&mut replay.updates));
         if let (Some(frame), Some(control)) =
             (&replay.pending_permission_request, &replay.pending_gate)
         {
-            hub.redeliver_gate(conn, &session_id, control, frame);
+            hub.redeliver_gate(conn, session_id, control, frame);
         }
         // Queue snapshot LAST, and even when empty: resume is the
         // reconnecting client's only stale-queued-turn eviction.
-        conn.send_json(&mainframe_acp::queue_state_notification(
-            &session_id,
-            queued,
-        ));
+        conn.send_json(&mainframe_acp::queue_state_notification(session_id, queued));
     });
-    connection.clear_resume_failures(&session_id);
 }
 
 #[cfg(test)]

@@ -5,16 +5,11 @@ use mainframe_types::time::now_iso8601;
 
 const MAX_CHATS: usize = 50;
 
-/// In-memory message store keyed by chat id, with no per-chat message cap: a
-/// chat the lifecycle registry still holds is pinned whole, so retention is
-/// never visible on the wire (no resync, no dropped history). `MAX_CHATS`
-/// bounds only unpinned entries — cold reads for a chat with no registry cell
-/// (`get_messages`); see `evict_if_needed`.
-///
-/// `order` records insertion order so `evict_if_needed` drops the oldest
-/// unpinned chat.
+/// Registry-pinned histories stay whole; unpinned histories are bounded by `MAX_CHATS`.
 pub struct MessageCache {
     cache: HashMap<String, Vec<ChatMessage>>,
+    pub(super) generations: HashMap<String, u64>,
+    pub(super) next_generation: u64,
     order: Vec<String>,
     pinned: HashSet<String>,
     tool_timings: HashMap<String, crate::tool_call_timing::ToolTimingStore>,
@@ -39,6 +34,7 @@ impl MessageCache {
     pub fn delete(&mut self, chat_id: &str) {
         self.tool_timings.remove(chat_id);
         self.drop_projection(chat_id);
+        self.generations.remove(chat_id);
         if self.cache.remove(chat_id).is_some() {
             self.order.retain(|k| k != chat_id);
         }

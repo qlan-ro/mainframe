@@ -10,6 +10,12 @@ describe('resumeChat readiness contract', () => {
     await resumeChat(0, 'chat-1');
     expect(spy).toHaveBeenCalledWith('POST', 'http://d/api/chats/chat-1/resume');
   });
+  it('explicitly opts viewing clients into a persisted initial window', async () => {
+    const spy = vi.spyOn(http, 'requestEmpty').mockResolvedValue(undefined);
+    vi.spyOn(http, 'apiBase').mockReturnValue('http://d');
+    await resumeChat(0, 'chat-1', { waitFor: 'transcript', initialWindow: true });
+    expect(spy).toHaveBeenCalledWith('POST', 'http://d/api/chats/chat-1/resume?waitFor=transcript&initialWindow=true');
+  });
   it('opts viewing clients into the transcript-ready response', async () => {
     const spy = vi.spyOn(http, 'requestEmpty').mockResolvedValue(undefined);
     vi.spyOn(http, 'apiBase').mockReturnValue('http://d');

@@ -92,13 +92,19 @@ struct Snapshot {
 pub(crate) struct HistorySnapshotCache {
     #[cfg(test)]
     writes: std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    pub(crate) validated:
+        std::sync::Mutex<std::collections::BTreeMap<String, crate::HistoryValidation>>,
+    pub(crate) served:
+        std::sync::Mutex<std::collections::BTreeMap<String, crate::HistoryValidation>>,
     dir: PathBuf,
-    max_snapshots: usize,
+    pub(crate) max_snapshots: usize,
 }
 
 impl HistorySnapshotCache {
     pub(crate) fn new(dir: PathBuf) -> Self {
         Self {
+            validated: std::sync::Mutex::default(),
+            served: std::sync::Mutex::default(),
             dir,
             max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             #[cfg(test)]
@@ -109,6 +115,8 @@ impl HistorySnapshotCache {
     #[cfg(test)]
     fn with_max_snapshots(dir: PathBuf, max_snapshots: usize) -> Self {
         Self {
+            validated: std::sync::Mutex::default(),
+            served: std::sync::Mutex::default(),
             dir,
             max_snapshots,
             writes: std::sync::Mutex::default(),

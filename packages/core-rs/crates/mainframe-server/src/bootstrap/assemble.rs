@@ -8,7 +8,10 @@ pub(super) async fn assemble(
     resources: Resources,
 ) -> Result<Daemon, BootError> {
     let quota = quota(&bound, &resources).await;
-    let facade = Arc::new(crate::FacadeHub::default());
+    let facade = Arc::new(
+        crate::FacadeHub::default()
+            .with_history_tails(bound.input.paths.data_dir.join("cache/transcript-tails")),
+    );
     let chats = chats(&bound, &resources, &quota, &facade);
     chats.recover_stale_working_state();
     chats.sweep_unreferenced_fork_snapshots().await;

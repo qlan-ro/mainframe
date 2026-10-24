@@ -48,7 +48,7 @@ use content::encode_content;
 use result_content::result_content;
 use tool_call::{encode_tool_group, task_group_item, tool_call_item};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ItemRole {
     User,
     Agent,
@@ -57,7 +57,7 @@ pub enum ItemRole {
 /// One encoded item, addressed by [`EncodedItem::id`]. The diff engine compares
 /// two `Vec<EncodedItem>` snapshots by id to decide chunk-append vs.
 /// full-revision vs. patch.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum EncodedItem {
     Message {
         id: String,

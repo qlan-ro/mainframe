@@ -15,7 +15,7 @@ impl ChatShared {
             .map(|messages| remap_history_for(messages, chat_id))
     }
 
-    fn history_context(&self, chat_id: &str) -> Option<String> {
+    pub(crate) fn history_context(&self, chat_id: &str) -> Option<String> {
         let chat = storage_event!(self, Some(chat_id); self.deps.chats_get(chat_id), None)?;
         let fork = storage_event!(self, Some(chat_id); self.deps.get_pending_fork(chat_id), None);
         serde_json::to_string(&(

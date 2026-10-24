@@ -84,6 +84,7 @@ impl ChatManager {
             .permissions
             .lock_recover()
             .restore_pending_permission(chat_id, &remapped);
+        self.shared.mark_history_restored(chat_id);
         remapped
     }
 

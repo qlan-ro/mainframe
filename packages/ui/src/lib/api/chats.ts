@@ -62,8 +62,15 @@ export const getChat = (port: number, chatId: string): Promise<Chat> =>
 export const setChatTuning = (port: number, chatId: string, tuning: SessionTuning): Promise<Chat> =>
   request<Chat>('PATCH', `${apiBase(port)}/api/chats/${chatId}/tuning`, tuning);
 
-export const resumeChat = (port: number, chatId: string, options?: { waitFor: 'transcript' }): Promise<void> =>
-  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/resume${options ? '?waitFor=transcript' : ''}`);
+export const resumeChat = (
+  port: number,
+  chatId: string,
+  options?: { waitFor: 'transcript'; initialWindow?: boolean },
+): Promise<void> =>
+  requestEmpty(
+    'POST',
+    `${apiBase(port)}/api/chats/${chatId}/resume${options ? `?waitFor=transcript${options.initialWindow ? '&initialWindow=true' : ''}` : ''}`,
+  );
 
 /** Mark the chat's workspace trusted in ~/.claude.json (silences the untrusted-workspace advisory). */
 export const trustWorkspace = (port: number, chatId: string): Promise<void> =>

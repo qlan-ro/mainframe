@@ -80,7 +80,7 @@ describe('dormancy — subscribeLive is ref-counted, idempotent, and warms immed
 
     ctrl.subscribeLive();
 
-    expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID, { waitFor: 'transcript' });
+    expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID, { waitFor: 'transcript', initialWindow: true });
   });
 
   it('does not open a second sub on a second subscribeLive call', () => {

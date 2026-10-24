@@ -26,6 +26,7 @@ impl MessageCache {
     /// just dropped) has nothing to journal — its next projection call starts
     /// fresh and rebuilds from the raw cache directly.
     pub(crate) fn record_change(&mut self, chat_id: &str, change: RawChange) {
+        self.mark_mutated(chat_id);
         if let Some(slot) = self.projections.get_mut(chat_id) {
             slot.journal.push(change);
         }
@@ -35,6 +36,7 @@ impl MessageCache {
     /// plan's table marks as a full-rebuild trigger (`set`, `set_and_snapshot`,
     /// `delete`, `release`, eviction).
     pub(crate) fn drop_projection(&mut self, chat_id: &str) {
+        self.mark_mutated(chat_id);
         self.projections.remove(chat_id);
     }
 

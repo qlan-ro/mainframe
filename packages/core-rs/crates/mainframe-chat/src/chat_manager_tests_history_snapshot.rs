@@ -118,7 +118,9 @@ async fn lifecycle_restoration_reloads_a_changed_source_after_restart() {
     first.load_chat("c1").await;
     first.shared.history_cache.flush().await;
     first.dispose();
-    tokio::fs::write(transcript, "changed source contents").await.unwrap();
+    tokio::fs::write(transcript, "changed source contents")
+        .await
+        .unwrap();
     let mut replacement = history();
     replacement.id = "replacement".into();
     *deps.adapters.history.lock().unwrap() = Some(vec![replacement.clone()]);
@@ -137,7 +139,9 @@ async fn lifecycle_restoration_recovers_from_corrupt_persisted_history() {
     first.load_chat("c1").await;
     first.shared.history_cache.flush().await;
     first.dispose();
-    tokio::fs::write(dir.path().join("cache/c1.json"), "broken").await.unwrap();
+    tokio::fs::write(dir.path().join("cache/c1.json"), "broken")
+        .await
+        .unwrap();
 
     let second = ChatManager::new(deps.clone());
     second.resume_transcript("c1").await;
@@ -145,3 +149,6 @@ async fn lifecycle_restoration_recovers_from_corrupt_persisted_history() {
     assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 2);
     second.dispose();
 }
+
+#[path = "chat_manager_tests_history_validation.rs"]
+mod validation;

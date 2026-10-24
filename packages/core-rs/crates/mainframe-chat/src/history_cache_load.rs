@@ -1,5 +1,6 @@
 use super::*;
 use mainframe_adapter_api::{AdapterError, AdapterSession};
+use mainframe_types::sync::LockExt as _;
 
 impl HistorySnapshotCache {
     pub(crate) async fn fingerprint(
@@ -18,6 +19,7 @@ impl HistorySnapshotCache {
         session: &dyn AdapterSession,
         context: Option<&str>,
     ) -> Result<Vec<ChatMessage>, AdapterError> {
+        self.validated.lock_recover().remove(chat_id);
         let before = Self::fingerprint(session, context).await;
         if let Some(fingerprint) = &before
             && let Some(snapshot) = self.read_candidate(chat_id, fingerprint).await
@@ -26,6 +28,14 @@ impl HistorySnapshotCache {
                 .await
             && Self::fingerprint(session, context).await.as_ref() == Some(fingerprint)
         {
+            self.remember(
+                chat_id,
+                crate::HistoryValidation::new(
+                    snapshot.fingerprint,
+                    snapshot.dependencies,
+                    snapshot.adapter_state,
+                ),
+            );
             tracing::debug!(chat_id, "restored history snapshot");
             return Ok(snapshot.messages);
         }
@@ -39,12 +49,21 @@ impl HistorySnapshotCache {
                 .validate_history_state(&session.history_state())
                 .await
         {
+            let adapter_state = session.history_state();
+            self.remember(
+                chat_id,
+                crate::HistoryValidation::new(
+                    fingerprint.clone(),
+                    dependencies.clone(),
+                    adapter_state.clone(),
+                ),
+            );
             self.write_in_background(
                 chat_id.to_owned(),
                 fingerprint,
                 messages.clone(),
                 dependencies,
-                session.history_state(),
+                adapter_state,
             );
         }
         Ok(messages)

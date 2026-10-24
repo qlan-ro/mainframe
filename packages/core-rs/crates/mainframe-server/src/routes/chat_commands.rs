@@ -108,6 +108,8 @@ async fn interrupt(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
 #[serde(rename_all = "camelCase")]
 struct ResumeQuery {
     wait_for: Option<ResumeWaitFor>,
+    #[serde(default)]
+    initial_window: bool,
 }
 
 #[derive(Deserialize)]
@@ -132,6 +134,10 @@ async fn resume(
     }
     let cm = &ctx.chat.chat_manager;
     if query.wait_for.is_some() {
+        if query.initial_window && ctx.chat.facade_hub.initial_history_ready(cm, &id).await {
+            cm.publish_initial_history_state(&id);
+            return ok_empty();
+        }
         cm.resume_transcript(&id).await;
     } else {
         cm.resume_chat(&id).await;
