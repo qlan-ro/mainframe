@@ -68,6 +68,7 @@ pub mod worktree_offer;
 pub mod worktree_offer_scan;
 
 mod history_cache;
+mod history_restore;
 
 #[cfg(any(test, feature = "test-support"))]
 #[expect(dead_code, reason = "Shared test helpers")]

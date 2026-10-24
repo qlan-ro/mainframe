@@ -1,15 +1,4 @@
-//! `mainframe-adapter-api` — the adapter contract crate.
-//!
-//! - `adapter` holds the behavioral half of the adapter contract (the
-//!   `Adapter` / `AdapterSession` / `SessionSink` traits). The data half lives
-//!   in `mainframe-types::adapter`.
-//! - this `lib.rs` holds the `AdapterRegistry`, plus the shared support types
-//!   (`BoxFuture`, `RunResult`, `AdapterError`) and the `RefreshDeps` injection
-//!   trait.
-//! - `resolve_executable` resolves and persists each adapter's CLI executable path.
-//!
-//! The `AdapterRegistry` tests live in `tests/registry.rs` (they exercise only
-//! the public surface) so this file stays focused on the registry.
+//! Adapter contracts, registry, executable resolution and shared support types.
 #![forbid(unsafe_code)]
 #![cfg_attr(
     test,
@@ -31,6 +20,8 @@ use mainframe_types::adapter::{AdapterInfo, AdapterModel, CatalogSource};
 use mainframe_types::events::DaemonEvent;
 
 pub mod adapter;
+pub mod history_dependency;
+pub use history_dependency::HistoryDependency;
 pub mod plan_mode_actions;
 pub mod pr_detection;
 pub mod resolve_executable;

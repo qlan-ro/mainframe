@@ -1,35 +1,4 @@
-//! A persistent on-disk cache of a cold chat's already-parsed transcript.
-//!
-//! `ChatManager::get_messages`'s cold path (`load_history_into_cache`, in
-//! `chat_manager/history.rs`) re-parses an adapter's whole transcript from
-//! disk every time a chat's in-memory cache is empty — on first open, and
-//! again every time the idle scanner offloads it. For a large transcript
-//! (tens of MB, thousands of lines) that reparse dominates a cold
-//! `session/resume` reply. This module lets a cold load skip the reparse
-//! when the transcript hasn't changed since the last time this chat loaded,
-//! by persisting the already-converted `Vec<ChatMessage>` next to a
-//! [`HistoryFingerprint`] of the files it was built from.
-//!
-//! ## Correctness
-//!
-//! - The snapshot is consulted **only** on a cold load (an empty in-memory
-//!   cache): `load_history_into_cache` checks `cached_messages` first, same
-//!   as before this module existed. While a chat is hot, the in-memory
-//!   `MessageCache` stays the single source of truth — this cache is never
-//!   read or written on that path.
-//! - A fingerprint is the sorted `(path, byte length, mtime)` of every file
-//!   [`AdapterSession::history_sources`] reports, plus [`FORMAT_VERSION`] and
-//!   this crate's own version. The instant any of those files changes —
-//!   append, truncate, or an unrelated edit that merely touches mtime — the
-//!   stored fingerprint no longer matches and `read` reports a miss, so the
-//!   chat reloads from the transcript exactly as it did before this cache
-//!   existed. A fingerprint that cannot be computed (a source stat fails, or
-//!   `history_sources` returns nothing) is treated the same as "do not
-//!   cache" — the load falls through to a normal parse, neither consulting
-//!   nor writing a snapshot.
-//! - A snapshot that fails to deserialize, or whose stored fingerprint
-//!   doesn't match the freshly computed one, is a miss, not an error: the
-//!   caller reparses and (on success) overwrites the stale file.
+//! Persist converted history only while its source and dependency stamps remain current.
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -42,7 +11,7 @@ use serde::{Deserialize, Serialize};
 /// prompt-group `turnGroup` metadata) — included in the fingerprint so an
 /// old snapshot is always a miss rather than a failed (or, worse, silently
 /// wrong) decode.
-const FORMAT_VERSION: u32 = 2;
+const FORMAT_VERSION: u32 = 3;
 
 /// How many chats' snapshots the cache directory keeps. Bounds disk use for
 /// installs with a long chat history; newest-by-mtime wins a prune.
@@ -53,12 +22,15 @@ struct SourceFingerprint {
     path: String,
     len: u64,
     mtime_ns: u64,
+    identity: Option<[u64; 4]>,
 }
 
 /// What a cached load is pinned to: the exact files `load_history` would
 /// read, at the size/mtime they had when the snapshot was written.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct HistoryFingerprint {
+    #[serde(default)]
+    context: String,
     format_version: u32,
     daemon_version: String,
     /// Sorted by `path` — `history_sources`' own order isn't guaranteed
@@ -83,6 +55,7 @@ impl HistoryFingerprint {
         }
         stats.sort_by(|a, b| a.path.cmp(&b.path));
         Some(Self {
+            context: String::new(),
             format_version: FORMAT_VERSION,
             daemon_version: env!("CARGO_PKG_VERSION").to_string(),
             sources: stats,
@@ -91,21 +64,24 @@ impl HistoryFingerprint {
 }
 
 async fn stat(path: &Path) -> Option<SourceFingerprint> {
-    let meta = tokio::fs::metadata(path).await.ok()?;
-    let modified = meta.modified().ok()?;
-    let mtime_ns = modified
+    let source = mainframe_adapter_api::HistoryDependency::capture(path.to_path_buf()).await?;
+    let mtime_ns = source
+        .modified
         .duration_since(SystemTime::UNIX_EPOCH)
         .ok()?
         .as_nanos() as u64;
     Some(SourceFingerprint {
         path: path.to_string_lossy().into_owned(),
-        len: meta.len(),
+        len: source.len,
         mtime_ns,
+        identity: source.identity,
     })
 }
 
 #[derive(Serialize, Deserialize)]
 struct Snapshot {
+    adapter_state: serde_json::Value,
+    dependencies: Vec<mainframe_adapter_api::HistoryDependency>,
     fingerprint: HistoryFingerprint,
     messages: Vec<ChatMessage>,
 }
@@ -139,33 +115,53 @@ impl HistorySnapshotCache {
         }
     }
 
-    fn snapshot_path(&self, chat_id: &str) -> PathBuf {
+    pub(super) fn snapshot_path(&self, chat_id: &str) -> PathBuf {
         self.dir.join(format!("{chat_id}.json"))
     }
 
     /// `None` on a missing file, a corrupt/unreadable file, or a fingerprint
     /// mismatch — every one of those is "reparse", never an error the caller
     /// has to handle specially.
+    #[cfg(test)]
     pub(crate) async fn read(
         &self,
         chat_id: &str,
         expected: &HistoryFingerprint,
     ) -> Option<Vec<ChatMessage>> {
+        self.read_candidate(chat_id, expected)
+            .await
+            .map(|snapshot| snapshot.messages)
+    }
+
+    async fn read_candidate(
+        &self,
+        chat_id: &str,
+        expected: &HistoryFingerprint,
+    ) -> Option<Snapshot> {
         let bytes = tokio::fs::read(self.snapshot_path(chat_id)).await.ok()?;
-        let snapshot: Snapshot = match serde_json::from_slice(&bytes) {
-            Ok(s) => s,
-            Err(err) => {
-                tracing::warn!(error = ?err,
-                    chat_id,
-                    "corrupt snapshot, reparsing"
-                );
-                return None;
-            }
-        };
+        let snapshot: Snapshot =
+            match tokio::task::spawn_blocking(move || serde_json::from_slice(&bytes))
+                .await
+                .ok()?
+            {
+                Ok(s) => s,
+                Err(err) => {
+                    tracing::warn!(error = ?err,
+                        chat_id,
+                        "corrupt snapshot, reparsing"
+                    );
+                    return None;
+                }
+            };
         if &snapshot.fingerprint != expected {
             return None;
         }
-        Some(snapshot.messages)
+        for source in &snapshot.dependencies {
+            if !source.is_current().await {
+                return None;
+            }
+        }
+        Some(snapshot)
     }
 
     /// Fire-and-forget: spawns the write (+ prune) so a cold load's caller
@@ -176,10 +172,23 @@ impl HistorySnapshotCache {
         chat_id: String,
         fingerprint: HistoryFingerprint,
         messages: Vec<ChatMessage>,
+        dependencies: Vec<mainframe_adapter_api::HistoryDependency>,
+        adapter_state: serde_json::Value,
     ) {
         let cache = Arc::clone(self);
         let handle = tokio::spawn(async move {
-            if let Err(err) = cache.write(&chat_id, fingerprint, messages).await {
+            if let Err(err) = cache
+                .write_snapshot(
+                    &chat_id,
+                    Snapshot {
+                        fingerprint,
+                        messages,
+                        dependencies,
+                        adapter_state,
+                    },
+                )
+                .await
+            {
                 tracing::warn!(error = %err, chat_id, "write failed");
             }
         });
@@ -197,17 +206,34 @@ impl HistorySnapshotCache {
         }
     }
 
+    #[cfg(test)]
     async fn write(
         &self,
         chat_id: &str,
         fingerprint: HistoryFingerprint,
         messages: Vec<ChatMessage>,
     ) -> Result<(), SnapshotWriteError> {
+        self.write_snapshot(
+            chat_id,
+            Snapshot {
+                fingerprint,
+                messages,
+                dependencies: Vec::new(),
+                adapter_state: serde_json::Value::Null,
+            },
+        )
+        .await
+    }
+
+    async fn write_snapshot(
+        &self,
+        chat_id: &str,
+        snapshot: Snapshot,
+    ) -> Result<(), SnapshotWriteError> {
         tokio::fs::create_dir_all(&self.dir).await?;
-        let json = serde_json::to_vec(&Snapshot {
-            fingerprint,
-            messages,
-        })?;
+        let json = tokio::task::spawn_blocking(move || serde_json::to_vec(&snapshot))
+            .await
+            .map_err(|error| std::io::Error::other(error.to_string()))??;
         mainframe_runtime::fs::write_atomic(&self.snapshot_path(chat_id), &json, false).await?;
         self.prune().await;
         Ok(())
@@ -261,3 +287,6 @@ enum SnapshotWriteError {
     #[error(transparent)]
     Write(#[from] mainframe_runtime::fs::AtomicWriteError),
 }
+
+#[path = "history_cache_load.rs"]
+mod load;

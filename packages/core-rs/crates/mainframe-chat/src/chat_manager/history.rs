@@ -58,26 +58,12 @@ impl ChatManager {
         let Some(session) = self.history_session(chat_id) else {
             return Vec::new();
         };
-        let sources = session.history_sources().await;
-        let fingerprint = HistoryFingerprint::compute(&sources).await;
-        if let Some(fp) = &fingerprint
-            && let Some(cached) = self.history_cache.read(chat_id, fp).await
+        match self
+            .shared
+            .load_cached_history(chat_id, session.as_ref())
+            .await
         {
-            return self.finish_history_load(chat_id, cached);
-        }
-
-        match session.load_history().await {
-            Ok(history) => {
-                let remapped = remap_history(history, chat_id);
-                if let Some(fp) = fingerprint {
-                    self.history_cache.write_in_background(
-                        chat_id.to_string(),
-                        fp,
-                        remapped.clone(),
-                    );
-                }
-                self.finish_history_load(chat_id, remapped)
-            }
+            Ok(history) => self.finish_history_load(chat_id, history),
             Err(_) => Vec::new(),
         }
     }

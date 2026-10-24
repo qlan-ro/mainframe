@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use rusqlite::{Connection, OpenFlags};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AgentMetadata {
     pub nickname: Option<String>,
     pub role: Option<String>,
@@ -101,6 +101,26 @@ fn read_metadata(
     Ok(out)
 }
 
+pub(crate) async fn metadata_matches(state: &serde_json::Value) -> bool {
+    metadata_matches_with(state, None).await
+}
+
+async fn metadata_matches_with(
+    state: &serde_json::Value,
+    deps: Option<ThreadRegistryDeps>,
+) -> bool {
+    let Ok(expected) = serde_json::from_value::<HashMap<String, AgentMetadata>>(state.clone())
+    else {
+        return false;
+    };
+    tokio::task::spawn_blocking(move || {
+        let ids: Vec<String> = expected.keys().cloned().collect();
+        lookup_agent_metadata_with(&ids, deps.as_ref()) == expected
+    })
+    .await
+    .unwrap_or(false)
+}
+
 /// The agent's role (e.g. "explorer") — best for the card subtitle.
 pub(crate) fn describe_agent(meta: Option<&AgentMetadata>) -> Option<String> {
     let meta = meta?;
@@ -150,5 +170,39 @@ mod tests {
     fn lookup_agent_metadata_with_defaults_to_none_deps() {
         let result = lookup_agent_metadata_with(&[], None);
         assert!(result.is_empty());
+    }
+    fn setup_registry_for_metadata_test() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("registry.sqlite");
+        let db = Connection::open(&path).unwrap();
+        db.execute_batch("CREATE TABLE threads (id TEXT, agent_nickname TEXT, agent_role TEXT, rollout_path TEXT); INSERT INTO threads VALUES ('t1', 'One', 'worker', '/child.jsonl');").unwrap();
+        (dir, path)
+    }
+
+    #[tokio::test]
+    async fn metadata_freshness_ignores_unrelated_threads_but_catches_child_changes() {
+        let (dir, db) = setup_registry_for_metadata_test();
+        let deps = ThreadRegistryDeps {
+            db_path: Some(db.clone()),
+        };
+        let ids = vec!["t1".to_string()];
+        let saved = serde_json::to_value(lookup_agent_metadata_with(&ids, Some(&deps))).unwrap();
+        assert!(metadata_matches_with(&saved, Some(deps.clone())).await);
+        let connection = Connection::open(&db).unwrap();
+        connection
+            .execute(
+                "INSERT INTO threads VALUES ('other', 'Other', 'worker', '/other.jsonl')",
+                [],
+            )
+            .unwrap();
+        assert!(metadata_matches_with(&saved, Some(deps.clone())).await);
+        connection
+            .execute(
+                "UPDATE threads SET rollout_path='/relocated.jsonl' WHERE id='t1'",
+                [],
+            )
+            .unwrap();
+        assert!(!metadata_matches_with(&saved, Some(deps)).await);
+        drop(dir);
     }
 }

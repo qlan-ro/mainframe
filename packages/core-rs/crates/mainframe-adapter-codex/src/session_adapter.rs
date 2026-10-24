@@ -161,6 +161,18 @@ impl AdapterSession for CodexSession {
         Box::pin((self.load_history_inner()).instrument(self.span.clone()))
     }
 
+    fn history_dependencies(&self) -> Option<Vec<mainframe_adapter_api::HistoryDependency>> {
+        self.history_dependencies.lock_recover().clone()
+    }
+
+    fn history_state(&self) -> serde_json::Value {
+        self.history_state.lock_recover().clone()
+    }
+
+    fn validate_history_state<'a>(&'a self, state: &'a serde_json::Value) -> BoxFuture<'a, bool> {
+        Box::pin(crate::thread_registry::metadata_matches(state))
+    }
+
     fn history_sources(&self) -> BoxFuture<'_, Vec<std::path::PathBuf>> {
         Box::pin((self.history_sources_inner()).instrument(self.span.clone()))
     }

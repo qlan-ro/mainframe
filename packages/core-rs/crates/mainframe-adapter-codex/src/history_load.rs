@@ -10,10 +10,13 @@ use serde_json::json;
 
 use crate::jsonrpc::JsonRpcClient;
 use crate::presentation_history::convert_turns;
-use crate::rollout_reader::read_rollout_items;
+#[path = "history_children.rs"]
+mod children;
 use crate::session::de;
 use crate::thread_registry::{AgentMetadata, lookup_agent_metadata};
 use crate::types::{ThreadItem, ThreadReadResult, ThreadReadTurn};
+use children::load_children;
+use mainframe_adapter_api::HistoryDependency;
 
 /// An unsent fork's `load_history` reads the *source* thread through its pinned
 /// `last_turn_id`, inclusive — everything after stays invisible until the
@@ -42,12 +45,18 @@ pub(crate) fn truncate_at_turn_cap(
     turns
 }
 
+pub(crate) struct LoadedHistory {
+    pub messages: Vec<ChatMessage>,
+    pub dependencies: Option<Vec<HistoryDependency>>,
+    pub state: serde_json::Value,
+}
+
 pub(crate) async fn load_history_inner(
     temp: &Arc<JsonRpcClient>,
     resume_thread_id: &str,
     project_path: &str,
     turn_cap: Option<&str>,
-) -> Result<Vec<ChatMessage>, AdapterError> {
+) -> Result<LoadedHistory, AdapterError> {
     let _ = project_path;
     let read: ThreadReadResult = de(temp
         .request(
@@ -73,60 +82,18 @@ pub(crate) async fn load_history_inner(
         lookup_agent_metadata(&child_thread_ids)
     };
 
-    let child_items_by_thread =
+    let (child_items_by_thread, dependencies) =
         load_children(temp, &child_thread_ids, &agent_meta_by_thread).await?;
-    Ok(convert_turns(
-        &turns,
-        resume_thread_id,
-        &child_items_by_thread,
-        &agent_meta_by_thread,
-    ))
-}
-
-async fn load_children(
-    temp: &Arc<JsonRpcClient>,
-    child_thread_ids: &[String],
-    agent_meta_by_thread: &HashMap<String, AgentMetadata>,
-) -> Result<HashMap<String, Vec<ThreadItem>>, AdapterError> {
-    let mut child_items_by_thread: HashMap<String, Vec<ThreadItem>> = HashMap::new();
-    for child_id in child_thread_ids {
-        // Prefer the raw rollout JSONL — it has function_call records (bash) that
-        // thread/read strips. Fall back to thread/read if unavailable.
-        let rollout_path = agent_meta_by_thread
-            .get(child_id)
-            .and_then(|m| m.rollout_path.clone());
-        if let Some(rollout_path) = rollout_path {
-            let items = read_rollout_items(&rollout_path, Some(child_id), None).await;
-            if !items.is_empty() {
-                child_items_by_thread.insert(child_id.clone(), items);
-                continue;
-            }
-        }
-        match temp
-            .request(
-                "thread/read",
-                Some(json!({ "threadId": child_id, "includeTurns": true })),
-            )
-            .await
-        {
-            Ok(v) => {
-                let child_result: ThreadReadResult = de(v)?;
-                let items: Vec<ThreadItem> = child_result
-                    .thread
-                    .turns
-                    .unwrap_or_default()
-                    .into_iter()
-                    .flat_map(|t| t.items)
-                    .collect();
-                child_items_by_thread.insert(child_id.clone(), items);
-            }
-            Err(err) => {
-                tracing::warn!(error = %err.0, child_id, "failed to read child thread, nesting will be skipped");
-            }
-        }
-    }
-
-    Ok(child_items_by_thread)
+    Ok(LoadedHistory {
+        dependencies,
+        state: json!(agent_meta_by_thread),
+        messages: convert_turns(
+            &turns,
+            resume_thread_id,
+            &child_items_by_thread,
+            &agent_meta_by_thread,
+        ),
+    })
 }
 
 /// Child thread ids to fetch and nest, from both naming routes: a

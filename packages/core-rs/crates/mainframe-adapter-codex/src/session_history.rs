@@ -4,14 +4,6 @@ use mainframe_types::transcript::TranscriptLocation;
 use std::path::PathBuf;
 
 impl CodexSession {
-    /// `load_history`'s own rollout file, resolved the same way (`resolve_target`
-    /// plus the registry lookup `load_history_inner` never needs because it talks to
-    /// the CLI's own app-server instead). Does not report sub-agent child rollouts:
-    /// discovering them requires the `thread/read` this method exists to avoid, so
-    /// a child-only edit between a chat's own appends can go unnoticed by the
-    /// history-cache fingerprint until the parent's own rollout is next appended
-    /// to (practically coincident — the parent rollout records the activity ping
-    /// that starts/ends a sub-agent turn).
     pub(super) async fn history_sources_inner(&self) -> Vec<PathBuf> {
         let thread_id = match self.resolve_target(false).await {
             ThreadTarget::Resume(id) => id,
@@ -24,6 +16,8 @@ impl CodexSession {
         }
     }
     pub(super) async fn load_history_inner(&self) -> Result<Vec<ChatMessage>, AdapterError> {
+        *self.history_dependencies.lock_recover() = None;
+        *self.history_state.lock_recover() = serde_json::Value::Null;
         let (read_thread_id, turn_cap) = match self.resolve_target(false).await {
             ThreadTarget::Resume(id) => (id, None),
             ThreadTarget::Fork {
@@ -58,7 +52,11 @@ impl CodexSession {
         .await;
         temp.close();
         match result {
-            Ok(msgs) => Ok(msgs),
+            Ok(loaded) => {
+                *self.history_dependencies.lock_recover() = loaded.dependencies;
+                *self.history_state.lock_recover() = loaded.state;
+                Ok(loaded.messages)
+            }
             Err(err) => {
                 tracing::warn!(error = %err, thread_id = %read_thread_id, "failed to load history");
                 Ok(Vec::new())

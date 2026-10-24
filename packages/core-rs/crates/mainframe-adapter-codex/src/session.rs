@@ -98,6 +98,8 @@ pub struct CodexSession {
     scan_deps: Arc<Mutex<Option<CodexScanDeps>>>,
     transcript_present_override: Arc<Mutex<Option<bool>>>,
     history_executable: Arc<Mutex<String>>,
+    history_dependencies: Mutex<Option<Vec<mainframe_adapter_api::HistoryDependency>>>,
+    history_state: Mutex<serde_json::Value>,
 }
 
 impl CodexSession {
@@ -131,6 +133,8 @@ impl CodexSession {
             scan_deps: Arc::new(Mutex::new(None)),
             transcript_present_override: Arc::new(Mutex::new(None)),
             history_executable: Arc::new(Mutex::new("codex".to_string())),
+            history_dependencies: Mutex::new(None),
+            history_state: Mutex::new(serde_json::Value::Null),
         }
     }
     pub fn set_scan_deps(&self, deps: CodexScanDeps) {
