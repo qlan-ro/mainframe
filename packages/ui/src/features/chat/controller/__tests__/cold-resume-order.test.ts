@@ -22,7 +22,7 @@ it('requests transcript readiness while the session continues warming', async ()
   const stop = ctrl.subscribeLive();
   try {
     await ctrl.load();
-    expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID, { waitFor: 'transcript' });
+    expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID, { waitFor: 'transcript', initialWindow: true });
     expect(client.resumeCalls).toHaveLength(1);
   } finally {
     stop();

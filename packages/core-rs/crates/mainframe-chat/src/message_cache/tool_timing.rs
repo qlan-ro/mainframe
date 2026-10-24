@@ -17,6 +17,8 @@ impl MessageCache {
     pub fn with_clock(now_epoch_ms: Arc<dyn Fn() -> u64 + Send + Sync>) -> Self {
         Self {
             cache: HashMap::new(),
+            generations: HashMap::new(),
+            next_generation: 0,
             order: Vec::new(),
             pinned: HashSet::new(),
             tool_timings: HashMap::new(),

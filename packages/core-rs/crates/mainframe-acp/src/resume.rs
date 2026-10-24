@@ -19,6 +19,7 @@ use crate::revision_log::RevisionLog;
 use crate::rpc;
 use crate::session_state::SessionState;
 
+pub mod persisted;
 mod revision;
 mod windowed;
 

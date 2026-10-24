@@ -26,6 +26,14 @@ impl HistorySnapshotCache {
                 .await
             && Self::fingerprint(session, context).await.as_ref() == Some(fingerprint)
         {
+            self.remember(
+                chat_id,
+                crate::HistoryValidation::new(
+                    snapshot.fingerprint,
+                    snapshot.dependencies,
+                    snapshot.adapter_state,
+                ),
+            );
             tracing::debug!(chat_id, "restored history snapshot");
             return Ok(snapshot.messages);
         }
@@ -39,12 +47,21 @@ impl HistorySnapshotCache {
                 .validate_history_state(&session.history_state())
                 .await
         {
+            let adapter_state = session.history_state();
+            self.remember(
+                chat_id,
+                crate::HistoryValidation::new(
+                    fingerprint.clone(),
+                    dependencies.clone(),
+                    adapter_state.clone(),
+                ),
+            );
             self.write_in_background(
                 chat_id.to_owned(),
                 fingerprint,
                 messages.clone(),
                 dependencies,
-                session.history_state(),
+                adapter_state,
             );
         }
         Ok(messages)

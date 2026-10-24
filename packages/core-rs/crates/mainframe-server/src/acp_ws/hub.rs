@@ -30,6 +30,7 @@ mod handlers;
 mod revisions;
 pub use fanout::ResumeSeed;
 mod history;
+mod history_tail;
 use fanout::drain_into;
 use revisions::RevisionRegistry;
 
@@ -44,6 +45,7 @@ pub struct FacadeHub {
     throttle_interval_ms: i64,
     /// Per-chat revision logs — see `revisions.rs`.
     revisions: RevisionRegistry,
+    history_tails: Option<Arc<history_tail::TailStore>>,
 }
 
 impl Default for FacadeHub {
@@ -59,6 +61,7 @@ impl FacadeHub {
             gates: Mutex::new(GateRegistry::new()),
             throttle_interval_ms,
             revisions: RevisionRegistry::default(),
+            history_tails: None,
         }
     }
 

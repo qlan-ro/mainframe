@@ -95,6 +95,7 @@ impl ChatLifecycleManager {
         history: Option<(Vec<ChatMessage>, usize)>,
         canonical: bool,
     ) -> RestoredHistory {
+        let cold = self.shared.messages.lock_recover().get(chat_id).is_none();
         let (scan_history, cache_reloaded) = match history {
             Some((messages, active_from)) => {
                 let (messages, changed) =
@@ -103,7 +104,8 @@ impl ChatLifecycleManager {
             }
             None => (None, false),
         };
-        if cache_reloaded {
+        let served = self.shared.history_cache.consume_served(chat_id);
+        if cache_reloaded && !(cold && served) {
             chat_surface::notify(
                 self.chat_surface.get(),
                 ChatSurfaceEvent::Resync {
@@ -132,6 +134,7 @@ impl ChatLifecycleManager {
             .permissions
             .lock_recover()
             .restore_pending_permission(chat_id, &messages[active_from.min(messages.len())..]);
+        self.shared.mark_history_restored(chat_id);
         (messages, changed)
     }
 }

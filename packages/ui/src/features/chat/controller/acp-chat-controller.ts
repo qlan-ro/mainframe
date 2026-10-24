@@ -108,7 +108,7 @@ export class AcpChatController {
   }
 
   private async reactivatePlane(client: AcpClientHandle): Promise<void> {
-    // Lifecycle restore can emit a resync; finish it before opening the replay.
+    // Wait for a validated initial transcript before opening the replay.
     await this.liveSub.whenTranscriptReady();
     if (this.disposed || !this.activation.isActive || this.loader.getClient() !== client) return;
     await this.plane.reactivate(client);

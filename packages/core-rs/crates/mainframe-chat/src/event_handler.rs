@@ -103,6 +103,14 @@ impl EventHandler {
     /// `ChatManager`'s send path (turn accepted/started, outside the sink)
     /// can drive the same observer the sink drives.
     pub(crate) fn notify_chat_surface(&self, event: ChatSurfaceEvent) {
+        match &event {
+            ChatSurfaceEvent::Resync { chat_id }
+            | ChatSurfaceEvent::TranscriptCleared { chat_id }
+            | ChatSurfaceEvent::ChatEnded { chat_id } => {
+                self.shared.history_cache.forget_served(chat_id)
+            }
+            _ => {}
+        }
         chat_surface::notify(self.chat_surface.get(), event);
     }
 

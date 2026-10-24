@@ -102,9 +102,11 @@ async fn page(
         compressed: connection.is_compressed_replay_opted_in(),
         lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
     };
+    let seed_hub = Arc::clone(&ctx.chat.facade_hub);
     let result = tokio::spawn(async move {
         let snapshot = port.resume_snapshot(&params.session_id).await;
         tokio::task::spawn_blocking(move || {
+            seed_hub.seed_history_snapshot(&params.session_id, &snapshot.messages);
             mainframe_acp::history_page::prepare(&snapshot.messages, &params, options)
         })
         .await
