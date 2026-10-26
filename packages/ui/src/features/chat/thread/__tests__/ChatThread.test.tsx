@@ -1,15 +1,12 @@
 /**
- * ChatThread — placement test for the "Working" status line.
+ * ChatThread — footer composition and the ⌘F registration.
  *
- * D18 reverses #214: the indicator now renders INSIDE the sticky
- * `ThreadPrimitive.ViewportFooter`, inside `chat-thread-footer`, above the
- * gate slot and the composer — the one live timer, on the status line, not
- * inline in the scrolling transcript. We mock the assistant-ui primitives +
- * heavy children down to identifiable stubs so we can assert the DOM region
- * the indicator lands in.
+ * The turn status row lives at the end of the transcript (`TurnStatusRow`, its
+ * own tests), not in the sticky footer. We mock the assistant-ui primitives and
+ * heavy children down to identifiable stubs to assert what the footer holds.
  */
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ReactNode } from 'react';
 
 // ── assistant-ui primitives → identifiable stub wrappers ─────────────────────
@@ -65,10 +62,6 @@ let delegated = false;
 let running = true;
 // Subscribable, like the real context: a test can change extras after mount.
 const extrasListeners = vi.hoisted(() => new Set<() => void>());
-function setExtras(next: typeof __extras) {
-  __extras = next;
-  for (const listener of extrasListeners) listener();
-}
 vi.mock('../../runtime/chat-extras', async () => {
   const { useSyncExternalStore } = await import('react');
   const subscribe = (listener: () => void) => {
@@ -90,7 +83,6 @@ vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => true }));
 import { ChatThread } from '../ChatThread';
 import { useFindInChatStore } from '../../find/find-in-chat-store';
 import { useShortcutDispatcher } from '@/features/shortcuts/use-shortcut-dispatcher';
-import { PanelColumnContext, usePanelControl } from '@/features/session-panel/panel-control-store';
 
 beforeEach(() => {
   __extras = undefined;
@@ -98,7 +90,7 @@ beforeEach(() => {
   running = true;
 });
 
-describe('ChatThread — status-line placement (D18 reverses #214)', () => {
+describe('ChatThread — footer', () => {
   it('keeps the approval gate and removes the composer in a delegated task split', () => {
     delegated = true;
     render(<ChatThread />);
@@ -106,65 +98,11 @@ describe('ChatThread — status-line placement (D18 reverses #214)', () => {
     expect(screen.queryByTestId('composer-stub')).toBeNull();
     expect(screen.getByTestId('chat-read-only-note')).toHaveTextContent('read-only');
   });
-  it('renders the running indicator while a run is active', () => {
-    render(<ChatThread />);
-    expect(screen.getByTestId('chat-thread-running')).toBeInTheDocument();
-  });
-
-  it('D18: places the running indicator INSIDE the sticky ViewportFooter, not inline in the transcript', () => {
-    render(<ChatThread />);
-    const footer = screen.getByTestId('tp-viewport-footer');
-    expect(within(footer).getByTestId('chat-thread-running')).toBeInTheDocument();
-    // ...and not beside the messages column, which is the OLD (#214) placement.
-    const messages = screen.getByTestId('tp-messages');
-    expect(within(footer).queryByTestId('tp-messages')).toBeNull();
-    expect(messages.parentElement).not.toBe(screen.getByTestId('chat-thread-running').parentElement);
-  });
-
-  it('D18: places the running indicator above the gate slot, inside chat-thread-footer', () => {
+  it('keeps no turn status in the footer — it lives at the end of the transcript', () => {
     render(<ChatThread />);
     const footer = screen.getByTestId('chat-thread-footer');
-    const running = within(footer).getByTestId('chat-thread-running');
-    const gateSlot = within(footer).getByTestId('chat-thread-gate-slot');
-    expect(running.compareDocumentPosition(gateSlot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it('falls back to "Working" with no live step, and carries no Stop (that is the composer\'s send slot)', () => {
-    render(<ChatThread />);
-    expect(screen.getByTestId('chat-thread-running-text')).toHaveTextContent('Working');
-    expect(screen.queryByTestId('chat-composer-cancel')).toBeNull();
-  });
-
-  it('reads "Stopping" once Stop was clicked and the run is cancelling', () => {
-    __extras = { state: { runState: { type: 'cancelling' }, loadState: { type: 'ready' } } };
-    render(<ChatThread />);
-    expect(screen.getByTestId('chat-thread-running-text')).toHaveTextContent('Stopping');
-  });
-});
-
-describe('ChatThread — running indicator elapsed readout', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.setSystemTime(0);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('shows no elapsed readout during the first second of a run', () => {
-    render(<ChatThread />);
-    expect(screen.queryByTestId('chat-thread-running-elapsed')).toBeNull();
-  });
-
-  it('reveals the elapsed readout once the run passes a second, and keeps it ticking', () => {
-    render(<ChatThread />);
-
-    act(() => void vi.advanceTimersByTime(1000));
-    expect(screen.getByTestId('chat-thread-running-elapsed')).toHaveTextContent('1s');
-
-    act(() => void vi.advanceTimersByTime(64_000));
-    expect(screen.getByTestId('chat-thread-running-elapsed')).toHaveTextContent('1m 05s');
+    expect(within(footer).queryByTestId('chat-thread-running')).toBeNull();
+    expect(within(footer).queryByTestId('chat-turn-status')).toBeNull();
   });
 });
 
@@ -202,65 +140,5 @@ describe('ChatThread — the ⌘F Find registration', () => {
     fireEvent.keyDown(window, { key: 'f', code: 'KeyF', metaKey: true });
 
     expect(useFindInChatStore.getState().isOpen).toBe(false);
-  });
-});
-
-describe('ChatThread — working line', () => {
-  const task = { id: 't1', kind: 'command', description: 'dev server', startedAt: 0 };
-  const ready = { type: 'ready' };
-
-  it('reads "Needs your input" in the warning tone while a permission is pending', () => {
-    __extras = {
-      state: { runState: { type: 'running' }, loadState: ready },
-      permissions: { request: { request: { toolUseId: 'call' } } },
-    };
-    render(<ChatThread />);
-    const text = screen.getByTestId('chat-thread-running-text');
-    expect(text).toHaveTextContent('Needs your input');
-    expect(text).toHaveClass('text-warning');
-  });
-
-  it('outlives the turn while background tasks run and reveals them in Activity', () => {
-    running = false;
-    __extras = { state: { runState: { type: 'idle' }, loadState: ready, backgroundTasks: { t1: task } } };
-    usePanelControl.setState({ activityReveals: {} });
-    render(
-      <PanelColumnContext.Provider value="main">
-        <ChatThread />
-      </PanelColumnContext.Provider>,
-    );
-    expect(screen.queryByTestId('chat-thread-running')).toBeNull();
-    const tasks = screen.getByTestId('chat-thread-running-tasks');
-    expect(tasks).toHaveTextContent('1 running task');
-    fireEvent.click(tasks);
-    expect(usePanelControl.getState().activityReveals.main).toBe(1);
-  });
-
-  it('shows the task count as plain text outside a panel column', () => {
-    running = false;
-    __extras = { state: { runState: { type: 'idle' }, loadState: ready, backgroundTasks: { t1: task } } };
-    render(<ChatThread />);
-    expect(screen.getByTestId('chat-thread-running-tasks').tagName).toBe('SPAN');
-  });
-
-  it('flashes "N tasks finished" when the last background task ends, then disappears', () => {
-    vi.useFakeTimers();
-    running = false;
-    __extras = { state: { runState: { type: 'idle' }, loadState: ready, backgroundTasks: { t1: task, t2: task } } };
-    render(<ChatThread />);
-    act(() => setExtras({ state: { runState: { type: 'idle' }, loadState: ready, backgroundTasks: {} } }));
-    expect(screen.getByTestId('chat-thread-tasks-finished')).toHaveTextContent('2 tasks finished');
-    act(() => void vi.advanceTimersByTime(1500));
-    expect(screen.queryByTestId('chat-thread-working-line')).toBeNull();
-    vi.useRealTimers();
-  });
-
-  it('counts the timer from the daemon turn start', () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.setSystemTime(125_000);
-    __extras = { state: { runState: { type: 'running', startedAtMs: 0 }, loadState: ready } };
-    render(<ChatThread />);
-    expect(screen.getByTestId('chat-thread-running-elapsed')).toHaveTextContent('2m 05s');
-    vi.useRealTimers();
   });
 });

@@ -20,6 +20,8 @@ import type { CompactToolRow as ToolRow, ToolKind, ToolStatus } from '../../view
 import { CompactDisclosure } from './CompactDisclosure';
 import { CompactElapsed } from './CompactElapsed';
 import { CompactToolDetails } from './CompactToolDetails';
+import { TurnStatusTrailing } from '../../thread/TurnStatusRow';
+import { useTurnStatusHost } from '../../thread/turn-status-host';
 
 // A finished call shows what it was (the matching tool card's icon); only other states get a status glyph.
 export const kindIcons: Record<ToolKind, LucideIcon> = {
@@ -59,7 +61,12 @@ function StatusIcon({ status, kind }: { status: ToolStatus; kind: ToolKind }) {
   );
 }
 export function CompactToolRow({ row, memberKeys }: { row: ToolRow; memberKeys: readonly string[] }) {
-  const trailing = (
+  // A running row ending the transcript hosts the turn's status: the turn clock replaces its own.
+  const host = useTurnStatusHost();
+  const hostsTurnStatus = host !== null && memberKeys.includes(host);
+  const trailing = hostsTurnStatus ? (
+    <TurnStatusTrailing />
+  ) : (
     <>
       {row.diff && (
         <span className="shrink-0 font-mono text-xs">
@@ -77,6 +84,7 @@ export function CompactToolRow({ row, memberKeys }: { row: ToolRow; memberKeys: 
     <CompactDisclosure
       memberKeys={memberKeys}
       label={row.label}
+      live={hostsTurnStatus}
       icon={<StatusIcon status={row.status} kind={row.kind} />}
       trailing={trailing}
     >

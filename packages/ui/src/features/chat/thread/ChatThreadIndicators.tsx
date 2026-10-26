@@ -4,7 +4,6 @@ import { AlertTriangleIcon, Loader2Icon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/chat-extras';
-import { CompactingPill } from '../messages/SystemMessage';
 export function LoadErrorBanner() {
   const extras = useChatExtras();
   if (extras?.state.loadState.type !== 'error') return null;
@@ -40,9 +39,4 @@ export function ChatThreadLoadingSpinner() {
       <Loader2Icon className="size-6 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
     </div>
   );
-}
-export function CompactingIndicator() {
-  const extras = useChatExtras();
-  if (!extras?.state.compacting) return null;
-  return <CompactingPill />;
 }
