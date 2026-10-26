@@ -48,7 +48,7 @@ it('keeps mixed routine kinds and interleaved reasoning together without droppin
   ];
   expect(groups(members)).toEqual([{ type: 'activity', members, active: false }]);
 });
-it.each(['ExitPlanMode', 'AskUserQuestion', 'Workflow', 'RunWorkflow', 'Task', 'UnknownDynamic'])(
+it.each(['ExitPlanMode', 'AskUserQuestion', 'Workflow', 'RunWorkflow', 'Task'])(
   'keeps %s standalone and closes the preceding group',
   (name) => {
     const entries = groups([active(0), member(1, name), active(2)]);
@@ -57,6 +57,10 @@ it.each(['ExitPlanMode', 'AskUserQuestion', 'Workflow', 'RunWorkflow', 'Task', '
     expect(entries[2]).toMatchObject({ active: true });
   },
 );
+it.each(['UnknownDynamic', 'TodoWrite', 'Skill'])('rolls unrecognised %s calls into the surrounding group', (name) => {
+  const entries = groups([active(0), member(1, name), active(2)]);
+  expect(entries.map((entry) => entry.type)).toEqual(['activity']);
+});
 it.each(['cancelled', 'pending-approval', 'declined', 'unknown'])('keeps %s tools outside routine groups', (status) => {
   const part = tool({
     result: status === 'unknown' ? undefined : '',
