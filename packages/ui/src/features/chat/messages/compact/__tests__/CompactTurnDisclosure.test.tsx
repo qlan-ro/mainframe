@@ -55,15 +55,29 @@ it('defers automatic folding for selection and resumes after it clears', async (
   await waitFor(() => expect(screen.queryByText('Selected work')).toBeNull());
 });
 it('defers folding for explicitly expanded activity and collapses after that activity closes', async () => {
-  const work = turnTool('tool', {}, { state: 'running' });
-  const view = render(<TurnFixture rootId="inner-open" messages={[work]} />);
+  const first = turnTool('tool', {}, { state: 'running' });
+  const second = turnTool('tool-b', { args: { file_path: '/src/b.ts' } }, { state: 'running' });
+  const view = render(<TurnFixture rootId="inner-open" messages={[first, second]} />);
   fireEvent.click(screen.getByRole('button', { name: 'Thinking' }));
-  view.rerender(<TurnFixture rootId="inner-open" messages={[work, finalMessage()]} />);
+  view.rerender(<TurnFixture rootId="inner-open" messages={[first, second, finalMessage()]} />);
   expect(await screen.findByRole('button', { name: 'Work details' })).toHaveAttribute('aria-expanded', 'true');
-  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Read 2 files' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Work details' })).toHaveAttribute('aria-expanded', 'false'),
   );
+});
+it('defers folding while a lone settled call row is expanded', async () => {
+  const running = [turnTool('tool', {}, { state: 'running' }), turnMessage('more', 'More work', { state: 'running' })];
+  const view = render(<TurnFixture rootId="lone-row-open" messages={running} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Read /src/a.ts' }));
+  view.rerender(
+    <TurnFixture
+      rootId="lone-row-open"
+      messages={[turnTool('tool'), turnMessage('more', 'More work'), finalMessage()]}
+    />,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  expect(screen.getByRole('button', { name: 'Work details' })).toHaveAttribute('aria-expanded', 'true');
 });
 it('defers folding while a native scoped agent is active', async () => {
   const agent = turnTool('agent', {

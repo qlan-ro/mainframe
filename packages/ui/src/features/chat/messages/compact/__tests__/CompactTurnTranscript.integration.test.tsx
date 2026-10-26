@@ -49,7 +49,7 @@ it('hides fully consumed work-only frames and restores cross-message native deta
   expect(second).toHaveAttribute('hidden');
   expect(second.querySelector('[data-testid="chat-message-copy"]')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Work details' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Read a file' }));
   for (const row of screen.getAllByRole('button', { name: 'Read /src/a.ts' })) fireEvent.click(row);
   expect(await screen.findAllByTestId('read-card-root')).toHaveLength(2);
   for (const id of ['a', 'b']) {

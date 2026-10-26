@@ -15,13 +15,13 @@ it('keeps the latest live activity visible through tool gaps without marking old
     <CompactFixture rootId="live-gaps" messages={[first, fixtureMessage([command], 'latest', true)]} />,
   );
   expect(await screen.findByText('Running tests')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Read files' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Read /src/a.ts' })).toBeVisible();
   const completed = { ...command, result: 'passed', providerMetadata: { mainframe: { acpStatus: 'completed' } } };
   view.rerender(<CompactFixture rootId="live-gaps" messages={[first, fixtureMessage([completed], 'latest', true)]} />);
   expect(await screen.findByText('Thinking', {}, { timeout: 2000 })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Read files' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Read /src/a.ts' })).toBeVisible();
   view.rerender(<CompactFixture rootId="live-gaps" messages={[first, fixtureMessage([completed], 'latest')]} />);
-  expect(await screen.findByRole('button', { name: 'Ran a command' })).toBeVisible();
+  expect(await screen.findByRole('button', { name: 'Tests passed' })).toBeVisible();
 });
 
 it('keeps live exploration visible without exposing unfinished details or grouped reasoning', async () => {

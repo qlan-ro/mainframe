@@ -9,11 +9,8 @@ function routine(member: ActivityMember, pending: ReadonlySet<string>): boolean 
   if (presentation?.phase && presentation.phase !== 'work') return false;
   if (part.type !== 'tool-call' || isFullCard(part.toolName)) return false;
   const kind = toolKind(part.toolName);
-  return (
-    kind !== 'unknown' &&
-    kind !== 'subagent' &&
-    ['running', 'success', 'failed'].includes(resolveToolStatus(part, pending))
-  );
+  // Unrecognised tools roll up like any routine call; only full cards and subagents stand alone.
+  return kind !== 'subagent' && ['running', 'success', 'failed'].includes(resolveToolStatus(part, pending));
 }
 function compatible(a: ActivityMember, b: ActivityMember): boolean {
   if (a.rootThreadId !== b.rootThreadId || JSON.stringify(a.ancestors) !== JSON.stringify(b.ancestors)) return false;

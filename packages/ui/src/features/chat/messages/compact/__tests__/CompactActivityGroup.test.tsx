@@ -28,7 +28,7 @@ it('shows ordered tool summaries before mounting individual details and omits gr
       ]}
     />,
   );
-  const toggle = screen.getByRole('button', { name: 'Edited a file, read files, ran a command' });
+  const toggle = screen.getByRole('button', { name: /^Edited a file, read (a file|\d+ files), ran a command$/ });
   expect(screen.getAllByRole('button')).toHaveLength(1);
   expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByText('Compare the implementation')).toBeNull();
@@ -46,28 +46,29 @@ it('shows ordered tool summaries before mounting individual details and omits gr
 
 it('keeps expanded members open through growth, reclassification and splitting', async () => {
   const read = fixtureTool();
+  const readB = fixtureTool({ toolCallId: 'read-b', args: { file_path: '/src/b.ts' }, result: 'const b = 2;' });
   const shell = fixtureTool({ toolCallId: 'shell', toolName: 'Bash', args: { command: 'echo done' }, result: 'done' });
-  const view = render(<CompactFixture rootId="activity-growth" messages={[fixtureMessage([read])]} />);
-  const toggle = screen.getByRole('button', { name: 'Read files' });
+  const view = render(<CompactFixture rootId="activity-growth" messages={[fixtureMessage([read, readB])]} />);
+  const toggle = screen.getByRole('button', { name: 'Read 2 files' });
   const identity = toggle.dataset.testid;
   fireEvent.click(toggle);
-  view.rerender(<CompactFixture rootId="activity-growth" messages={[fixtureMessage([read, shell])]} />);
-  expect(await screen.findByRole('button', { name: 'Read files, ran a command' })).toHaveAttribute(
+  view.rerender(<CompactFixture rootId="activity-growth" messages={[fixtureMessage([read, readB, shell])]} />);
+  expect(await screen.findByRole('button', { name: 'Read 2 files, ran a command' })).toHaveAttribute(
     'aria-expanded',
     'true',
   );
-  expect(screen.getByRole('button', { name: 'Read files, ran a command' }).dataset.testid).toBe(identity);
+  expect(screen.getByRole('button', { name: 'Read 2 files, ran a command' }).dataset.testid).toBe(identity);
   fireEvent.click(screen.getByRole('button', { name: 'echo done' }));
   expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('done');
   const failed = { ...read, isError: true };
-  view.rerender(<CompactFixture rootId="activity-growth" messages={[fixtureMessage([failed, shell])]} />);
-  expect(await screen.findByRole('button', { name: 'Read files, ran a command' })).toHaveAttribute(
+  view.rerender(<CompactFixture rootId="activity-growth" messages={[fixtureMessage([failed, readB, shell])]} />);
+  expect(await screen.findByRole('button', { name: 'Read 2 files (1 failed), ran a command' })).toHaveAttribute(
     'aria-expanded',
     'true',
   );
-  expect(screen.getByRole('button', { name: /Failed to read/ })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Failed to read /src/a.ts' })).toBeVisible();
 });
-it('keeps pending and unknown tools standalone while ordinary failures stay grouped', () => {
+it('keeps pending tools standalone while ordinary failures and unknown tools stay grouped', () => {
   render(
     <CompactFixture
       rootId="activity-controls"
@@ -87,10 +88,12 @@ it('keeps pending and unknown tools standalone while ordinary failures stay grou
       ]}
     />,
   );
-  expect(screen.getAllByRole('button', { name: 'Read files' })).toHaveLength(2);
+  expect(screen.getByRole('button', { name: 'Read a file (1 failed)' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Failed to read/ })).toBeNull();
   expect(screen.getByRole('button', { name: /Waiting for approval/ })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'CustomAnalytics' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Called a tool, read a file' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'CustomAnalytics' })).toBeNull();
+  expect(screen.getAllByRole('button')).toHaveLength(3);
   expect(screen.queryByTestId('read-card-root')).toBeNull();
 });
 it.each([false, true])('renders cross-message references through their original native scopes (split=%s)', (split) => {
@@ -117,7 +120,7 @@ it.each([false, true])('renders cross-message references through their original 
       group={{ type: 'activity', members, active: false }}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Read 2 files' }));
   fireEvent.click(screen.getByRole('button', { name: 'Read /src/a.ts' }));
   fireEvent.click(screen.getByRole('button', { name: 'Read /src/b.ts' }));
   expect(screen.getAllByTestId('read-card-code-preview').map((node) => node.textContent)).toEqual([
@@ -131,7 +134,8 @@ it.each([false, true])('renders cross-message references through their original 
   expect(screen.queryByText('not in this group')).toBeNull();
 });
 it('keeps main and real split native disclosures independent with identical message and call IDs', () => {
-  const messages = [fixtureMessage([fixtureTool()])];
+  const shell = fixtureTool({ toolCallId: 'shell', toolName: 'Bash', args: { command: 'echo done' }, result: 'done' });
+  const messages = [fixtureMessage([fixtureTool(), shell])];
   render(
     <>
       <div data-testid="main">
@@ -142,8 +146,8 @@ it('keeps main and real split native disclosures independent with identical mess
       </div>
     </>,
   );
-  const main = within(screen.getByTestId('main')).getByRole('button', { name: 'Read files' });
-  const side = within(screen.getByTestId('side')).getByRole('button', { name: 'Read files' });
+  const main = within(screen.getByTestId('main')).getByRole('button', { name: 'Read a file, ran a command' });
+  const side = within(screen.getByTestId('side')).getByRole('button', { name: 'Read a file, ran a command' });
   fireEvent.click(main);
   expect(main).toHaveAttribute('aria-expanded', 'true');
   expect(side).toHaveAttribute('aria-expanded', 'false');
@@ -197,5 +201,6 @@ it('shows a running member on the header, nested under it, even when the group i
     />,
   );
   const summary = screen.getByRole('button', { name: 'Edited a file, ran a command' });
-  expect(within(summary).getByLabelText('completed')).toBeInTheDocument();
+  expect(within(summary).queryByLabelText('completed')).toBeNull();
+  expect(within(summary).queryByLabelText('running')).toBeNull();
 });

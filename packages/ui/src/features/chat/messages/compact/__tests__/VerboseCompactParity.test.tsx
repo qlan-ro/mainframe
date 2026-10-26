@@ -78,7 +78,7 @@ it('preserves a manually collapsed work choice when a tool reports failure', asy
   expect(toggle).toBeEnabled();
   expect(screen.queryByLabelText('failed')).toBeNull();
   fireEvent.click(toggle);
-  fireEvent.click(await screen.findByRole('button', { name: 'Read files' }));
+  expect(await screen.findByRole('button', { name: 'Failed to read /src/a.ts' })).toBeVisible();
   expect(await screen.findByLabelText('failed')).toBeVisible();
 });
 it('D18: no live clock while running; shows "Worked for X" only once the turn settles', async () => {

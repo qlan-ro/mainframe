@@ -17,22 +17,39 @@ function member(
     part: tool({ toolName: name, args, result: '', ...overrides }),
   };
 }
-it('summarizes categories in fixed order, sorts integrations and deduplicates changed paths', () => {
+it('counts distinct targets per category in fixed order and sorts integrations first', () => {
   const members = [
-    member('WebSearch'),
-    member('Bash', { command: 'echo a' }),
     member('mcp__zeta__query'),
     member('Write', { file_path: 'src/a.ts' }),
     member('Edit', { file_path: 'src/a.ts' }),
+    member('Edit', { file_path: 'src/b.ts' }),
+    member('Bash', { command: 'echo a' }),
+    member('Bash', { command: 'custom task' }),
+  ];
+  expect(activitySummary(members)).toBe('Used zeta, edited 2 files, ran 2 commands');
+  expect(activitySummary([member('Read', { file_path: 'a.ts' }), member('Read', { file_path: 'a.ts' })])).toBe(
+    'Read a file',
+  );
+});
+it('folds the tail into a remaining-count phrase past four categories', () => {
+  const members = [
+    member('WebSearch'),
     member('mcp__alpha__query'),
     member('mcp____query'),
-    member('Read'),
-    member('Bash', { command: 'custom task' }),
-    member('mcp__alpha__list'),
+    member('Edit', { file_path: 'src/a.ts' }),
+    member('Read', { file_path: 'src/b.ts' }),
+    member('Bash', { command: 'echo a' }),
   ];
-  expect(activitySummary(members)).toBe(
-    'Used alpha, used zeta, called a tool, edited a file, read files, ran commands, searched the web',
+  expect(activitySummary(members)).toBe('Used alpha, called a tool, edited a file, and 3 more');
+});
+it('suffixes failed calls on the category they belong to', () => {
+  const failed = member('Bash', { command: 'npm test' }, { isError: true, toolCallId: 'failed' });
+  expect(activitySummary([member('Bash', { command: 'echo a' }), failed, member('Read', { file_path: 'a.ts' })])).toBe(
+    'Read a file, ran 2 commands (1 failed)',
   );
+});
+it('rolls unrecognised tools into the generic tool count', () => {
+  expect(activitySummary([member('TodoWrite'), member('Skill', {}, { toolCallId: 'skill' })])).toBe('Called 2 tools');
 });
 it('reuses structured exploration semantics before conservative command parsing', () => {
   const command = member(
@@ -44,7 +61,7 @@ it('reuses structured exploration semantics before conservative command parsing'
       },
     },
   );
-  expect(activitySummary([command, member('Bash', { command: 'rg --files src' })])).toBe('Read files');
+  expect(activitySummary([command, member('Bash', { command: 'rg --files src' })])).toBe('Read a file, listed files');
   expect(activitySummary([member('Bash', { command: 'cat a.ts && npm test' })])).toBe('Ran a command');
   expect(activitySummary([member('Bash', { command: 'unknown', description: 'read all files' })])).toBe(
     'Ran a command',

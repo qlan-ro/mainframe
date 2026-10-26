@@ -116,7 +116,7 @@ it('does not rebuild historical rows when only the active message streams with n
   const state = createChatThreadState('scope-chat');
   const view = render(<ScopeFixture messages={[history, active('first chunk')]} state={state} />);
   await screen.findByText('first chunk');
-  fireEvent.click(screen.getAllByRole('button', { name: 'Read files' })[0]!);
+  fireEvent.click(screen.getByRole('button', { name: 'Read /src/a.ts' }));
   const historicalDetails = () =>
     detailBuild.mock.calls.filter(([parts]) =>
       parts.some(({ part }) => part.type === 'tool-call' && part.toolCallId === 'historical-read'),

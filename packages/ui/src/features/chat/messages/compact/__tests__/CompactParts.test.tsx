@@ -8,7 +8,7 @@ it('merges adjacent reads and opens original native details in order', () => {
     fixtureTool({ toolCallId: 'read-b', args: { file_path: '/src/b.ts' }, result: 'const b = 2;' }),
   ]);
   render(<CompactFixture messages={[message]} rootId="merge" />);
-  const toggle = screen.getByRole('button', { name: 'Read files' });
+  const toggle = screen.getByRole('button', { name: 'Read 2 files' });
   expect(toggle).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByTestId('read-card-root')).toBeNull();
   fireEvent.click(toggle);
@@ -32,12 +32,12 @@ it('retains prose boundaries and omits internal reasoning from mixed activity de
       ]}
     />,
   );
-  expect(screen.getAllByRole('button', { name: 'Read files' })).toHaveLength(1);
-  expect(screen.getByRole('button', { name: 'Read files' })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getAllByRole('button', { name: 'Read a file' })).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Read a file' })).toHaveAttribute('aria-expanded', 'false');
   expect(screen.queryByText('A private thought')).toBeNull();
   expect(screen.getByText('Before tools')).toBeInTheDocument();
   expect(screen.getByText('After tools')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Read a file' }));
   expect(screen.queryByText('A private thought')).toBeNull();
   expect(screen.getByRole('button', { name: 'Read /src/a.ts (2 reads)' })).toBeInTheDocument();
 });
@@ -66,8 +66,7 @@ it('keeps failed rows collapsed and pending permission status explicit', () => {
       ]}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Read files' }));
-  expect(screen.getByRole('button', { name: /Failed to read/ })).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getByRole('button', { name: 'Failed to read /src/a.ts' })).toHaveAttribute('aria-expanded', 'false');
   expect(screen.getByRole('button', { name: /Waiting for approval/ })).toBeInTheDocument();
   expect(screen.queryByTestId('read-card-root')).toBeNull();
 });
@@ -90,7 +89,8 @@ it('keeps images and prose in their original positions between activity groups',
   const before = screen.getByText('Before');
   const after = screen.getByText('After');
   const image = container.querySelector('img')!;
-  const tools = screen.getAllByRole('button', { name: 'Read files' });
+  const tools = screen.getAllByRole('button', { name: 'Read /src/a.ts' });
+  expect(tools).toHaveLength(2);
   expect(before.compareDocumentPosition(tools[0]!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   expect(tools[0]!.compareDocumentPosition(image)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   expect(image.compareDocumentPosition(tools[1]!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
