@@ -15,6 +15,8 @@ import { CompactReasoningRow } from './CompactReasoningRow';
 import { disclosureKey } from './disclosure-store';
 import { TranscriptScopeProvider, useTranscriptScope } from './transcript-scope';
 import { useStableActivityLabel } from './use-stable-activity-label';
+import { TurnStatusTrailing } from '../../thread/TurnStatusRow';
+import { useTurnStatusHost } from '../../thread/turn-status-host';
 
 const reasoningComponents = { Reasoning: ReasoningText };
 // A settled lone call renders without its group, so its row takes the group's own disclosure key:
@@ -105,6 +107,8 @@ export function CompactActivityGroup({ group, details }: { group: ActivityGroup;
     ? activityLabel(group, scope.pendingToolIds)
     : { identity: 'completed', text: activitySummary(group.members) };
   const label = useStableActivityLabel(candidate, active);
+  // The live group ending a running turn hosts the turn's clock and tasks; the status row steps aside.
+  const hostsTurnStatus = useTurnStatusHost() === activityMemberIdentity(group.members[0]!);
   const body = details ?? <ActivityDetails group={group} />;
   // A settled lone call is just that call: its own row, without a summary wrapped around it.
   if (!active && group.members.length === 1 && group.members[0]!.part.type === 'tool-call')
@@ -116,6 +120,7 @@ export function CompactActivityGroup({ group, details }: { group: ActivityGroup;
       maxDetailHeight="min(224px, 50cqh)"
       label={label}
       live={active}
+      trailing={hostsTurnStatus ? <TurnStatusTrailing /> : undefined}
       icon={
         active ? (
           <Loader2Icon aria-label="running" className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />

@@ -18,8 +18,7 @@ import { useThreadBottomPin } from './use-thread-bottom-pin';
 import { VirtualMessages } from './VirtualMessages';
 import { TranscriptScrollProvider } from './transcript-scroll-context';
 import { TRANSCRIPT_WIDTH_VAR, TranscriptWidthHandle } from './TranscriptWidthHandle';
-import { ChatThreadLoadingSpinner, LoadErrorBanner, CompactingIndicator } from './ChatThreadIndicators';
-import { WorkingLine } from './WorkingLine';
+import { ChatThreadLoadingSpinner, LoadErrorBanner } from './ChatThreadIndicators';
 import type { ChatThreadVariant } from './ChatThread';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 
@@ -78,7 +77,6 @@ function ThreadFooter({
         data-testid="chat-thread-footer"
         className="mx-auto flex w-full min-h-0 max-w-(--mf-transcript-width) flex-col px-5 pb-4"
       >
-        <WorkingLine interactive={variant !== 'side'} />
         <ChatGateMount />
         <div className="flex min-h-0 flex-col">
           {readOnly ? (
@@ -149,7 +147,6 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
             {messageCount === 0 && emptyState != null ? emptyState : null}
             <EarlierMessages />
             <TranscriptMessages key={threadId ?? ''} />
-            <CompactingIndicator />
           </div>
           <ThreadFooter variant={variant} readOnly={readOnly} footerRef={footerRef} />
         </ThreadPrimitive.Viewport>
