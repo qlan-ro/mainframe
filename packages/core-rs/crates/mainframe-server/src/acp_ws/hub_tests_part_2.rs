@@ -8,6 +8,7 @@ fn assert_next_turn_streaming(kind: mainframe_types::display::StreamingLeafKind,
     assert!(previous[0]["params"]["update"]["_meta"]["_mainframe.dev"]["streaming"].is_null());
     hub.on_chat_surface_event(ChatSurfaceEvent::TurnStarted {
         chat_id: "chat-1".into(),
+        started_at_ms: None,
     });
     hub.on_chat_surface_event(revision("chat-1", "completed answer"));
     let waiting = drain(&mut rx);

@@ -15,6 +15,8 @@ import { columnFitsPanel, derivePanelMode, type PanelMode } from './panel-mode';
 import { selectOverlayOpen, usePanelControl, usePanelOpen, type PanelColumnId } from './panel-control-store';
 
 export interface SessionPanelState {
+  /** The chat column this panel belongs to. */
+  columnId: PanelColumnId;
   /** Goes on the chat column's horizontal row — the FULL width, before the
    *  docked panel takes its 300, since the mode decides whether that width can
    *  be shared. Explicit, rather than the panel root's `parentElement`, so a
@@ -148,6 +150,7 @@ export function useSessionPanelState(columnId: PanelColumnId = 'main'): SessionP
   );
 
   return {
+    columnId,
     hostRef,
     rootRef,
     surfaceWidth,

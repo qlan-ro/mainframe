@@ -292,7 +292,7 @@ pub(super) fn run_op(
             cursor,
         } => stream.on_revision_delta(&delta, || full(), now, cursor.filter(|_| opted_in)),
         StreamOp::Raw { payload, .. } => stream.push_raw(payload, now),
-        StreamOp::TurnStarted => stream.on_turn_started(now),
+        StreamOp::TurnStarted { started_at_ms } => stream.on_turn_started(now, started_at_ms),
         StreamOp::TurnFinished(reason) => stream.on_turn_finished(reason, now),
         StreamOp::Usage(usage) => stream.on_usage(usage, now),
         StreamOp::Retry(marker) => {

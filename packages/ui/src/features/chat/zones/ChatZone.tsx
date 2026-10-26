@@ -22,7 +22,7 @@ import { Derived } from '@assistant-ui/store';
 import { cn } from '@/lib/utils';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
-import { zoneColumnId } from '@/features/session-panel/panel-control-store';
+import { PanelColumnContext, zoneColumnId } from '@/features/session-panel/panel-control-store';
 import { useChatController } from '../../sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '../../sessions/runtime/daemon-port-context';
 import { CHAT_ATTACHMENT_ADAPTER, useControllerState } from '../runtime/use-chat-thread-runtime';
@@ -175,9 +175,11 @@ export function ChatZone({
               toggleTestId={`session-panel-toggle-${chatId}`}
               zone={{ chatId, onClose }}
             />
-            <div className="min-h-0 flex-1">
-              <ChatThread />
-            </div>
+            <PanelColumnContext.Provider value={zoneColumnId(chatId)}>
+              <div className="min-h-0 flex-1">
+                <ChatThread />
+              </div>
+            </PanelColumnContext.Provider>
           </SideChatHost>
           <SessionPanel state={panelState} />
         </div>

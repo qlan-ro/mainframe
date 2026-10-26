@@ -202,11 +202,8 @@ impl ChatManager {
         // immediately, but that turn already started, so re-announcing it
         // would be a spurious running transition.
         if !was_working {
-            self.event_handler.notify_chat_surface(
-                crate::chat_surface::ChatSurfaceEvent::TurnStarted {
-                    chat_id: chat_id.to_string(),
-                },
-            );
+            self.event_handler
+                .notify_chat_surface(self.shared.turn_started_event(chat_id));
         }
         Ok(())
     }
@@ -281,11 +278,8 @@ impl ChatManager {
         // Queued: `TurnStarted` waits for the CLI to dequeue it
         // (event_handler.rs's `on_queued_processed`).
         } else {
-            self.event_handler.notify_chat_surface(
-                crate::chat_surface::ChatSurfaceEvent::TurnStarted {
-                    chat_id: chat_id.to_string(),
-                },
-            );
+            self.event_handler
+                .notify_chat_surface(self.shared.turn_started_event(chat_id));
         }
         Ok(())
     }

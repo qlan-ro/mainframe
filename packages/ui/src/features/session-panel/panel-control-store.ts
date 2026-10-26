@@ -14,6 +14,7 @@
  * the old rail had: on a column that does not fit, a click on an open-but-
  * hidden panel floats it rather than closing it, and opening also floats.
  */
+import { createContext } from 'react';
 import { create } from 'zustand';
 import { useUiPrefs } from '@/store/ui-prefs';
 
@@ -41,6 +42,10 @@ interface PanelControlState {
    * float when the column does not fit.
    */
   togglePanel: (columnId: PanelColumnId, fits: boolean) => void;
+  /** Bumped per column by `revealActivity`; the column's Activity section scrolls into view on change. */
+  activityReveals: Partial<Record<PanelColumnId, number>>;
+  /** Shows the column's panel (floating it when the column does not fit) and asks it to bring Activity into view. */
+  revealActivity: (columnId: PanelColumnId) => void;
 }
 
 /** The column's open bit, read outside React (the toggle's rule). */
@@ -61,6 +66,7 @@ export const usePanelControl = create<PanelControlState>((set, get) => ({
   open: {},
   overlayOpen: {},
   fits: {},
+  activityReveals: {},
 
   setFits: (columnId, fits) =>
     set((s) => {
@@ -94,7 +100,16 @@ export const usePanelControl = create<PanelControlState>((set, get) => ({
     get().setPanelOpen(columnId, !open);
     get().setOverlayOpen(columnId, !open && !fits);
   },
+
+  revealActivity: (columnId) => {
+    get().setPanelOpen(columnId, true);
+    if (!(get().fits[columnId] ?? true)) get().setOverlayOpen(columnId, true);
+    set((s) => ({ activityReveals: { ...s.activityReveals, [columnId]: (s.activityReveals[columnId] ?? 0) + 1 } }));
+  },
 }));
+
+/** The chat column a thread renders in, so its footer can reveal that column's panel. Absent in side chats. */
+export const PanelColumnContext = createContext<PanelColumnId | null>(null);
 
 export const selectFits =
   (columnId: PanelColumnId) =>

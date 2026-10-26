@@ -57,7 +57,11 @@ pub(crate) enum StreamOp {
         payload: String,
         gate_rpc_id: Option<String>,
     },
-    TurnStarted,
+    /// `started_at_ms` is the start the chat recorded when it announced the
+    /// turn, so a buffered op replays the exact value the live frame carried.
+    TurnStarted {
+        started_at_ms: Option<i64>,
+    },
     TurnFinished(mainframe_types::acp::update::StopReason),
     Usage(mainframe_types::acp::update::UsageUpdate),
     Retry(mainframe_types::acp::extensions::RetryMarker),

@@ -156,6 +156,7 @@ impl SessionSinkImpl {
             "emitting chat.updated with processState=idle"
         );
         update.emit(chat, Some(reason));
+        self.shared.clear_turn_running(&self.chat_id);
         self.notify_surface(ChatSurfaceEvent::TurnFinished {
             chat_id: self.chat_id.clone(),
             stop_reason: match reason {
