@@ -1,6 +1,7 @@
 import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { Button } from '@/components/ui/button';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { usePanelControl, type PanelColumnId } from './panel-control-store';
 import { useAui } from '@assistant-ui/react';
 import { ChevronDown } from 'lucide-react';
 import type { ActivityEntry } from './activity-model';
@@ -165,8 +166,19 @@ function ActivityBody({
   );
 }
 
-export function ActivitySection() {
+/** Scrolls the section into view each time the column's footer asks to reveal Activity. */
+function useActivityReveal(columnId: PanelColumnId) {
+  const ref = useRef<HTMLElement>(null);
+  const reveals = usePanelControl((s) => s.activityReveals[columnId] ?? 0);
+  useEffect(() => {
+    if (reveals) ref.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [reveals]);
+  return ref;
+}
+
+export function ActivitySection({ columnId }: { columnId: PanelColumnId }) {
   const extras = useChatExtras();
+  const sectionRef = useActivityReveal(columnId);
   const { entries, chatId, adapterId, loadError, now } = useActivityEntries();
   const [historyView, setHistoryView] = useState<HistoryView>('closed');
   useEffect(() => setHistoryView('closed'), [chatId]);
@@ -180,7 +192,7 @@ export function ActivitySection() {
       ? `${running.length} running${waiting.length ? ` · ${waiting.length} waiting` : ''}`
       : 'Nothing running';
   return (
-    <section data-testid="session-panel-card-activity" className="shrink-0">
+    <section ref={sectionRef} data-testid="session-panel-card-activity" className="shrink-0 scroll-mt-1">
       <PanelEyebrow
         label="Activity"
         live={running.length > 0}

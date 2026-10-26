@@ -54,9 +54,7 @@ pub(super) async fn dispatch(
             }),
         )
         .await;
-    replay
-        .updates
-        .push(super::turn_state_update(port.is_running(&session_id)));
+    replay.updates.push(super::running_state(port, &session_id));
     (response, replay)
 }
 

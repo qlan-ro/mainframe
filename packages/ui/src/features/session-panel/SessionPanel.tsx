@@ -43,7 +43,7 @@ function PanelSections({ state, port }: { state: SessionPanelState; port: number
       </section>
       <PullRequestsSection />
       <ContextSection port={port} />
-      <ActivitySection />
+      <ActivitySection columnId={state.columnId} />
       <LaunchSection port={port} />
       <PlanSection open={isSectionOpen('plan')} onToggle={() => toggleSection('plan')} />
       <TasksSection />

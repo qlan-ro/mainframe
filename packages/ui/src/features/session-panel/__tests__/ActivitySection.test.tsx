@@ -42,10 +42,10 @@ beforeEach(() => {
 
 describe('ActivitySection', () => {
   it('shows running and waiting counts and retains the empty section', () => {
-    const view = render(<ActivitySection />);
+    const view = render(<ActivitySection columnId="main" />);
     expect(screen.getByTestId('session-panel-activity-empty')).toHaveTextContent('Nothing running');
     state.entries = [row('agent'), row('schedule', { kind: 'scheduled', state: 'waiting' })];
-    view.rerender(<ActivitySection />);
+    view.rerender(<ActivitySection columnId="main" />);
     expect(screen.getByTestId('session-panel-activity-counts')).toHaveTextContent('1 running · 1 waiting');
     expect(screen.getByText('Waiting')).toBeInTheDocument();
   });
@@ -54,7 +54,7 @@ describe('ActivitySection', () => {
     state.entries = Array.from({ length: 8 }, (_, index) =>
       row(`done-${index}`, { state: 'completed', endedAt: index * 60_000 }),
     );
-    render(<ActivitySection />);
+    render(<ActivitySection columnId="main" />);
     const earlier = screen.getByRole('button', { name: 'Earlier, 8 items' });
     expect(earlier).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('session-panel-activity-empty')).toBeNull();
@@ -72,7 +72,7 @@ describe('ActivitySection', () => {
 
   it('jumps from an Activity row to its tool call in the transcript', () => {
     state.entries = [row('agent', { source: { messageId: 'message-1', toolCallId: 'call-1' } })];
-    render(<ActivitySection />);
+    render(<ActivitySection columnId="main" />);
     fireEvent.click(screen.getByRole('button', { name: 'Go to agent in transcript' }));
     expect(state.jump).toHaveBeenCalledWith('chat-1', { messageId: 'message-1', toolCallId: 'call-1' });
   });

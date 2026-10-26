@@ -5,8 +5,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/chat-extras';
 import { CompactingPill } from '../messages/SystemMessage';
-import { formatElapsedSeconds } from '../format-duration';
-import { useRunElapsed } from './use-run-elapsed';
 export function LoadErrorBanner() {
   const extras = useChatExtras();
   if (extras?.state.loadState.type !== 'error') return null;
@@ -43,37 +41,6 @@ export function ChatThreadLoadingSpinner() {
     </div>
   );
 }
-/**
- * The status line above the composer while a turn runs: a pulsing `primary`
- * dot, "Working" (or "Stopping" once Stop was clicked), and the one live
- * clock. Stop itself is the composer's send slot.
- */
-export function GeneratingIndicator() {
-  const isRunning = useAuiState((s: { thread: { isRunning: boolean } }) => s.thread.isRunning);
-  const stopping = useChatExtras()?.state.runState.type === 'cancelling';
-  const elapsed = useRunElapsed(isRunning);
-  if (!isRunning) return null;
-  return (
-    <div data-testid="chat-thread-running" className="flex h-7 items-center gap-2 px-1">
-      <span
-        aria-hidden
-        className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary motion-reduce:animate-none"
-      />
-      <span data-testid="chat-thread-running-text" className="text-xs font-medium text-muted-foreground">
-        {stopping ? 'Stopping' : 'Working'}
-      </span>
-      {elapsed !== undefined && (
-        <span
-          data-testid="chat-thread-running-elapsed"
-          className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
-        >
-          {formatElapsedSeconds(elapsed)}
-        </span>
-      )}
-    </div>
-  );
-}
-
 export function CompactingIndicator() {
   const extras = useChatExtras();
   if (!extras?.state.compacting) return null;

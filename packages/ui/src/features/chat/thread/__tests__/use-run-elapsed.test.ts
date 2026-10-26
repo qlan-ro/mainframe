@@ -75,4 +75,19 @@ describe('useRunElapsed', () => {
     act(() => void vi.advanceTimersByTime(2000));
     expect(result.current).toBe(2);
   });
+
+  it('counts from a supplied turn start and shows it at once', () => {
+    vi.setSystemTime(95_000);
+    const { result } = renderHook(() => useRunElapsed(true, 5_000));
+    expect(result.current).toBe(90);
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(result.current).toBe(91);
+  });
+
+  it('ignores a supplied start in the future and counts from now', () => {
+    const { result } = renderHook(() => useRunElapsed(true, 60_000));
+    expect(result.current).toBeUndefined();
+    act(() => void vi.advanceTimersByTime(2000));
+    expect(result.current).toBe(2);
+  });
 });

@@ -143,6 +143,14 @@ impl ChatManager {
             .is_some_and(|cell| is_working(&cell.lock_recover().chat))
     }
 
+    /// Epoch ms at which the chat's current turn was first observed running,
+    /// as recorded once per turn in the live cell; `None` when no turn start
+    /// is known. Every client and every resume replay reads this one value.
+    pub fn turn_started_at_ms(&self, chat_id: &str) -> Option<i64> {
+        self.get_active(chat_id)
+            .and_then(|cell| cell.lock_recover().running_since_ms)
+    }
+
     /// On boot: reset orphaned `processState: 'working'` chats to idle.
     pub fn recover_stale_working_state(&self) {
         let count = storage_event!(self.shared, self.shared.deps.chats_reset_working_to_idle());

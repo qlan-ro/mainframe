@@ -13,6 +13,7 @@ fn insert(reg: &Registry, id: &str, session: Arc<FakeSession>, last_used_at: i64
             chat: test_chat(id),
             session: Some(session),
             turn_started_at: None,
+            running_since_ms: None,
             last_used_at,
         })),
     );
@@ -25,6 +26,7 @@ fn insert_sessionless(reg: &Registry, id: &str, last_used_at: i64) {
             chat: test_chat(id),
             session: None,
             turn_started_at: None,
+            running_since_ms: None,
             last_used_at,
         })),
     );

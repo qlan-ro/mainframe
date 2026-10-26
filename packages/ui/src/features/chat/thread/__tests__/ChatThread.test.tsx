@@ -33,7 +33,7 @@ vi.mock('@assistant-ui/react', () => {
       }) => unknown,
     ) =>
       sel({
-        thread: { isRunning: true, messages: [{}] },
+        thread: { isRunning: running, messages: [{}] },
         threadListItem: delegated ? { custom: { delegation: {} } } : undefined,
       }),
   };
@@ -51,9 +51,32 @@ vi.mock('../../composer/edit/composer-edit-context', () => ({
 vi.mock('../../gates/ChatGateMount', () => ({ ChatGateMount: () => <div data-testid="chat-thread-gate-slot" /> }));
 vi.mock('../DegradedChatCard', () => ({ DegradedChatCard: () => null }));
 // `undefined` (no extras) by default; a test sets a run state to drive "Stopping".
-let __extras: { state: { runState: { type: string }; loadState: { type: string } } } | undefined;
+let __extras:
+  | {
+      state: {
+        runState: { type: string; startedAtMs?: number };
+        loadState: { type: string };
+        backgroundTasks?: Record<string, unknown>;
+      };
+      permissions?: Record<string, unknown>;
+    }
+  | undefined;
 let delegated = false;
-vi.mock('../../runtime/chat-extras', () => ({ useChatExtras: () => __extras }));
+let running = true;
+// Subscribable, like the real context: a test can change extras after mount.
+const extrasListeners = vi.hoisted(() => new Set<() => void>());
+function setExtras(next: typeof __extras) {
+  __extras = next;
+  for (const listener of extrasListeners) listener();
+}
+vi.mock('../../runtime/chat-extras', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const subscribe = (listener: () => void) => {
+    extrasListeners.add(listener);
+    return () => void extrasListeners.delete(listener);
+  };
+  return { useChatExtras: () => useSyncExternalStore(subscribe, () => __extras) };
+});
 vi.mock('@/features/skills/use-chat-skills', () => ({
   SkillsProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
@@ -67,10 +90,12 @@ vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => true }));
 import { ChatThread } from '../ChatThread';
 import { useFindInChatStore } from '../../find/find-in-chat-store';
 import { useShortcutDispatcher } from '@/features/shortcuts/use-shortcut-dispatcher';
+import { PanelColumnContext, usePanelControl } from '@/features/session-panel/panel-control-store';
 
 beforeEach(() => {
   __extras = undefined;
   delegated = false;
+  running = true;
 });
 
 describe('ChatThread — status-line placement (D18 reverses #214)', () => {
@@ -104,7 +129,7 @@ describe('ChatThread — status-line placement (D18 reverses #214)', () => {
     expect(running.compareDocumentPosition(gateSlot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('carries the fixed "Working" text, not a rotating phrase, and no Stop (that is the composer\'s send slot)', () => {
+  it('falls back to "Working" with no live step, and carries no Stop (that is the composer\'s send slot)', () => {
     render(<ChatThread />);
     expect(screen.getByTestId('chat-thread-running-text')).toHaveTextContent('Working');
     expect(screen.queryByTestId('chat-composer-cancel')).toBeNull();
@@ -177,5 +202,65 @@ describe('ChatThread — the ⌘F Find registration', () => {
     fireEvent.keyDown(window, { key: 'f', code: 'KeyF', metaKey: true });
 
     expect(useFindInChatStore.getState().isOpen).toBe(false);
+  });
+});
+
+describe('ChatThread — working line', () => {
+  const task = { id: 't1', kind: 'command', description: 'dev server', startedAt: 0 };
+  const ready = { type: 'ready' };
+
+  it('reads "Needs your input" in the warning tone while a permission is pending', () => {
+    __extras = {
+      state: { runState: { type: 'running' }, loadState: ready },
+      permissions: { request: { request: { toolUseId: 'call' } } },
+    };
+    render(<ChatThread />);
+    const text = screen.getByTestId('chat-thread-running-text');
+    expect(text).toHaveTextContent('Needs your input');
+    expect(text).toHaveClass('text-warning');
+  });
+
+  it('outlives the turn while background tasks run and reveals them in Activity', () => {
+    running = false;
+    __extras = { state: { runState: { type: 'idle' }, loadState: ready, backgroundTasks: { t1: task } } };
+    usePanelControl.setState({ activityReveals: {} });
+    render(
+      <PanelColumnContext.Provider value="main">
+        <ChatThread />
+      </PanelColumnContext.Provider>,
+    );
+    expect(screen.queryByTestId('chat-thread-running')).toBeNull();
+    const tasks = screen.getByTestId('chat-thread-running-tasks');
+    expect(tasks).toHaveTextContent('1 running task');
+    fireEvent.click(tasks);
+    expect(usePanelControl.getState().activityReveals.main).toBe(1);
+  });
+
+  it('shows the task count as plain text outside a panel column', () => {
+    running = false;
+    __extras = { state: { runState: { type: 'idle' }, loadState: ready, backgroundTasks: { t1: task } } };
+    render(<ChatThread />);
+    expect(screen.getByTestId('chat-thread-running-tasks').tagName).toBe('SPAN');
+  });
+
+  it('flashes "N tasks finished" when the last background task ends, then disappears', () => {
+    vi.useFakeTimers();
+    running = false;
+    __extras = { state: { runState: { type: 'idle' }, loadState: ready, backgroundTasks: { t1: task, t2: task } } };
+    render(<ChatThread />);
+    act(() => setExtras({ state: { runState: { type: 'idle' }, loadState: ready, backgroundTasks: {} } }));
+    expect(screen.getByTestId('chat-thread-tasks-finished')).toHaveTextContent('2 tasks finished');
+    act(() => void vi.advanceTimersByTime(1500));
+    expect(screen.queryByTestId('chat-thread-working-line')).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('counts the timer from the daemon turn start', () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(125_000);
+    __extras = { state: { runState: { type: 'running', startedAtMs: 0 }, loadState: ready } };
+    render(<ChatThread />);
+    expect(screen.getByTestId('chat-thread-running-elapsed')).toHaveTextContent('2m 05s');
+    vi.useRealTimers();
   });
 });

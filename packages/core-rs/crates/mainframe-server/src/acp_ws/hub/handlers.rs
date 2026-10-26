@@ -45,8 +45,8 @@ fn usage_update(usage: &ContextUsage) -> UsageUpdate {
 }
 
 impl FacadeHub {
-    pub(super) fn handle_turn_started(&self, chat_id: &str) {
-        self.apply_stream_op(chat_id, StreamOp::TurnStarted);
+    pub(super) fn handle_turn_started(&self, chat_id: &str, started_at_ms: Option<i64>) {
+        self.apply_stream_op(chat_id, StreamOp::TurnStarted { started_at_ms });
     }
 
     pub(super) fn handle_turn_finished(&self, chat_id: &str, reason: TurnStopReason) {
@@ -193,7 +193,10 @@ impl ChatSurface for FacadeHub {
             // Acceptance already rides the `session/prompt` response
             // (`PromptResponse` + queued `_meta`), not a stream frame.
             ChatSurfaceEvent::TurnAccepted { .. } => {}
-            ChatSurfaceEvent::TurnStarted { chat_id } => self.handle_turn_started(&chat_id),
+            ChatSurfaceEvent::TurnStarted {
+                chat_id,
+                started_at_ms,
+            } => self.handle_turn_started(&chat_id, started_at_ms),
             ChatSurfaceEvent::TurnFinished {
                 chat_id,
                 stop_reason: reason,

@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::content::{ContentBlock, ContentChunk, MessageId};
+use super::extensions::MAINFRAME_META_NAMESPACE;
 use super::patch;
 use super::session::SessionId;
 use super::tool_call::{ToolCallContentChunk, ToolCallUpdate};
@@ -69,14 +70,43 @@ pub struct IdleStateUpdate {
     pub meta: Option<Value>,
 }
 
+/// `state_update` `running`. Carries an optional `_meta`; when the daemon knows
+/// when the current turn began it is
+/// `{ "_mainframe.dev": { "startedAtMs": <epoch ms> } }`, identical on every
+/// connection and every emission of that turn (live frame and resume replay).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RunningStateUpdate {
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "_meta")]
+    pub meta: Option<Value>,
+}
+
+impl RunningStateUpdate {
+    /// A running update stamped with the turn's start; `None` omits `_meta`
+    /// entirely rather than inventing a value.
+    pub fn started_at(started_at_ms: Option<i64>) -> Self {
+        let meta = started_at_ms
+            .map(|ms| serde_json::json!({ MAINFRAME_META_NAMESPACE: { "startedAtMs": ms } }));
+        Self { meta }
+    }
+
+    /// The `startedAtMs` this update carries, if any.
+    pub fn started_at_ms(&self) -> Option<i64> {
+        self.meta
+            .as_ref()?
+            .get(MAINFRAME_META_NAMESPACE)?
+            .get("startedAtMs")?
+            .as_i64()
+    }
+}
+
 /// Foreground-work state transition (schema `StateUpdate`). `Running` and
-/// `RequiresAction` carry only an optional `_meta` upstream; this vendored
-/// subset omits it on those two variants (nothing in the facade grammar needs
-/// it there) and keeps it only on `Idle`, where `stopReason` lives.
+/// `Idle` carry their own `_meta` (`Idle` also `stopReason`); `RequiresAction`
+/// is the one variant this vendored subset leaves without it, since nothing in
+/// the facade grammar needs it there.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SessionState {
-    Running,
+    Running(RunningStateUpdate),
     Idle(IdleStateUpdate),
     RequiresAction,
 }

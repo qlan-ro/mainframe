@@ -273,7 +273,8 @@ export class AcpSessionPlane {
   ): void {
     if (update.state === 'running') {
       this.runStop.cancel();
-      this.host.dispatch({ type: 'run.started' });
+      const startedAtMs = update._meta?.['_mainframe.dev']?.startedAtMs;
+      this.host.dispatch(startedAtMs === undefined ? { type: 'run.started' } : { type: 'run.started', startedAtMs });
       return;
     }
     if (update.state === 'idle') {

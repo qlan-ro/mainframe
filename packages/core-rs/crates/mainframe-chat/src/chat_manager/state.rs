@@ -83,6 +83,37 @@ impl ChatShared {
         self.active_chats.get(chat_id).map(|e| e.value().clone())
     }
 
+    /// Record that `chat_id`'s turn is running and return its start: the
+    /// existing stamp when the turn was already recorded (a re-announcement
+    /// never moves it), else now. `None` when the chat has no live cell.
+    pub(crate) fn stamp_turn_running(&self, chat_id: &str) -> Option<i64> {
+        let cell = self.active(chat_id)?;
+        let mut guard = cell.lock_recover();
+        Some(
+            *guard
+                .running_since_ms
+                .get_or_insert_with(mainframe_types::time::now_ms),
+        )
+    }
+
+    /// A `TurnStarted` surface event carrying the stamped start.
+    pub(crate) fn turn_started_event(
+        &self,
+        chat_id: &str,
+    ) -> crate::chat_surface::ChatSurfaceEvent {
+        crate::chat_surface::ChatSurfaceEvent::TurnStarted {
+            chat_id: chat_id.to_string(),
+            started_at_ms: self.stamp_turn_running(chat_id),
+        }
+    }
+
+    /// The turn went idle: drop its start so the next turn gets its own.
+    pub(crate) fn clear_turn_running(&self, chat_id: &str) {
+        if let Some(cell) = self.active(chat_id) {
+            cell.lock_recover().running_since_ms = None;
+        }
+    }
+
     /// The chat as the live cell knows it, else as the store has it.
     pub(crate) fn chat_or_db(&self, chat_id: &str) -> Option<Chat> {
         self.active(chat_id)
