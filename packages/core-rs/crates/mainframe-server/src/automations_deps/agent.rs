@@ -162,7 +162,7 @@ impl AgentPort for DaemonAgentPort {
                     .resolve_base_branch(&project_id, worktree.base_branch.as_deref())
                     .await?;
                 self.chats
-                    .enable_worktree(&chat_id, &base, &worktree.branch_name)
+                    .enable_or_reuse_worktree(&chat_id, &base, &worktree.branch_name)
                     .await
                     .map_err(step_error)?;
             }
