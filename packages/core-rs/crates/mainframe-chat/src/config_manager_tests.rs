@@ -187,6 +187,8 @@ mod config;
 
 #[path = "config_manager_tests_worktree.rs"]
 mod worktree;
+#[path = "config_manager_tests_worktree_reuse.rs"]
+mod worktree_reuse;
 
 #[path = "config_manager_tests_storage_failures.rs"]
 mod storage_failures;

@@ -90,18 +90,27 @@ pub struct WorktreeInfo {
     pub branch_name: String,
 }
 
+/// `<project>/<dir_name>/<branch with / as ->`, after creating its parent dir.
+async fn prepare_worktree_path(
+    project_path: &str,
+    dir_name: &str,
+    branch_name: &str,
+) -> Result<String, WorktreeError> {
+    let worktree_dir = Path::new(project_path).join(dir_name);
+    tokio::fs::create_dir_all(&worktree_dir).await?;
+    Ok(worktree_dir
+        .join(branch_name.replace('/', "-"))
+        .to_string_lossy()
+        .into_owned())
+}
+
 pub async fn create_worktree(
     project_path: &str,
     dir_name: &str,
     base_branch: &str,
     branch_name: &str,
 ) -> Result<WorktreeInfo, WorktreeError> {
-    let sanitized_branch = branch_name.replace('/', "-");
-    let worktree_dir = Path::new(project_path).join(dir_name);
-    let worktree_path = worktree_dir.join(&sanitized_branch);
-    let worktree_path_str = worktree_path.to_string_lossy().into_owned();
-
-    tokio::fs::create_dir_all(&worktree_dir).await?;
+    let worktree_path_str = prepare_worktree_path(project_path, dir_name, branch_name).await?;
     // No timeout: `worktree add` can clone/checkout a large tree and run hooks.
     run_worktree_git(
         &[
@@ -120,6 +129,33 @@ pub async fn create_worktree(
         worktree_path: worktree_path_str,
         branch_name: branch_name.to_string(),
     })
+}
+
+/// Check an existing branch out into a new worktree at `create_worktree`'s path.
+pub async fn checkout_worktree(
+    project_path: &str,
+    dir_name: &str,
+    branch_name: &str,
+) -> Result<WorktreeInfo, WorktreeError> {
+    let worktree_path = prepare_worktree_path(project_path, dir_name, branch_name).await?;
+    add_worktree_for_branch(project_path, &worktree_path, branch_name).await?;
+    Ok(WorktreeInfo {
+        worktree_path,
+        branch_name: branch_name.to_string(),
+    })
+}
+
+/// The linked worktree that has `branch_name` checked out, if its directory is
+/// still there. Never the main checkout: the first entry `git worktree list`
+/// prints, or `project_path` itself.
+pub async fn find_branch_worktree(project_path: &str, branch_name: &str) -> Option<String> {
+    get_worktrees(project_path)
+        .await
+        .into_iter()
+        .skip(1)
+        .filter(|wt| wt.path != project_path && is_worktree_present(&wt.path))
+        .find(|wt| wt.branch.as_deref().map(short_branch) == Some(branch_name))
+        .map(|wt| wt.path)
 }
 
 /// Git-only phase of the worktree backfill: over a snapshot of every project,
