@@ -5,8 +5,8 @@
       "repo": "anthropics/claude-code",
       "mode": "changelog",
       "changelogPath": "CHANGELOG.md",
-      "lastReviewedRef": "2.1.316",
-      "lastReviewedAt": "2026-11-01",
+      "lastReviewedRef": "2.1.317",
+      "lastReviewedAt": "2026-11-03",
       "checklist": "docs/research/adapters/claude/CONSUMED-SURFACE.md"
     },
     "codex": {
