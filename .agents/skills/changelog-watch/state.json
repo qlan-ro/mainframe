@@ -14,7 +14,7 @@
       "mode": "releases",
       "includePrerelease": false,
       "lastReviewedRef": "rust-v0.166.0",
-      "lastReviewedAt": "2026-11-01",
+      "lastReviewedAt": "2026-11-03",
       "checklist": "docs/research/adapters/codex/CONSUMED-SURFACE.md"
     }
   }

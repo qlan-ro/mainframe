@@ -63,11 +63,13 @@ function parseArgs(argv) {
   return args;
 }
 
-const RELEASES_PER_PAGE = 100;
-// 2000 releases deep. openai/codex tags several alphas a day, so this is
+// Not 100: a 100-release page of openai/codex (~13MB) times out with HTTP 504
+// or a cancelled stream more often than it succeeds.
+const RELEASES_PER_PAGE = 30;
+// ~2000 releases deep. openai/codex tags several alphas a day, so this is
 // roughly a year of history — far past any anchor a live state.json holds.
-const MAX_RELEASE_PAGES = 20;
-// One page of openai/codex releases is ~13MB of JSON; execFile's 1MB default
+const MAX_RELEASE_PAGES = 67;
+// One page of openai/codex releases is ~4MB of JSON; execFile's 1MB default
 // truncates it into a parse error.
 const GH_MAX_BUFFER = 64 * 1024 * 1024;
 
