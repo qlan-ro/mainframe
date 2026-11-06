@@ -83,6 +83,40 @@ describe('PermissionGate', () => {
     reply = vi.fn<ReplyFn>();
   });
 
+  describe('an Artifact request', () => {
+    const ARTIFACT = 'https://claude.ai/artifact/V1LAdjrXoKC7jVLpHnV1D2';
+
+    function artifactEntry(input: Record<string, unknown>): ChatPermissionEntry {
+      const entry = makeEntry();
+      return { ...entry, request: { ...entry.request, toolName: 'Artifact', input } };
+    }
+
+    it('says what is being published, with its title', () => {
+      wrap(
+        <PermissionGate entry={artifactEntry({ type_url: `${ARTIFACT}x`, title: 'Coffee Pricing' })} reply={reply} />,
+      );
+      expect(screen.getByText('Create artifact: Coffee Pricing')).toBeInTheDocument();
+    });
+
+    it('hides the internal fields from the details', () => {
+      wrap(
+        <PermissionGate
+          entry={artifactEntry({
+            url: ARTIFACT,
+            __artifactPublishTarget: ARTIFACT,
+            __artifactRoomJoinDisclosed: false,
+          })}
+          reply={reply}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('chat-permission-details-toggle'));
+
+      const details = screen.getByTestId('chat-permission-details-pre');
+      expect(details).toHaveTextContent(ARTIFACT);
+      expect(details).not.toHaveTextContent('__artifact');
+    });
+  });
+
   // --- Behavior 1: root renders and shows tool name ---
 
   it('renders the root chat-permission-gate and shows the tool name "Bash"', () => {

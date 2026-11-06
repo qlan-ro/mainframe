@@ -18,11 +18,11 @@ import { useLayoutStore } from './layout';
 export function subscribeToUrlTabIntents(): () => void {
   return onSurfaceIntent((intent) => {
     if (intent.type !== 'open-url-tab') return;
-    openUrlTab(intent.url, intent.paneId);
+    openUrlTab(intent.url, intent.paneId, intent.title);
   });
 }
 
-function openUrlTab(raw: string | undefined, paneId: string | undefined): void {
+function openUrlTab(raw: string | undefined, paneId: string | undefined, title: string | undefined): void {
   // A blank tab is a first-class outcome, not a failed one: an empty address
   // resolves to `invalid`, whose body renders the always-enabled address bar.
   // That is exactly what ⌘T wants, so it skips normalization rather than
@@ -43,7 +43,7 @@ function openUrlTab(raw: string | undefined, paneId: string | undefined): void {
     {
       id: urlTabId(url),
       kind: 'url',
-      title: blank ? 'New tab' : urlTabTitle(url),
+      title: blank ? 'New tab' : title || urlTabTitle(url),
       url,
       scopeKey: scopeKey ?? undefined,
     },

@@ -8,6 +8,7 @@ pub mod adapter_catalog;
 mod adapter_model;
 pub mod adapters;
 pub mod agent_outbox;
+pub mod artifact_preview;
 pub mod attachments;
 pub mod auth;
 pub mod automation_admin;

@@ -18,6 +18,7 @@
 
 pub mod adapter;
 pub mod agent_description;
+pub mod artifact_client;
 pub mod assistant_event;
 pub mod cliproxy;
 pub mod constants;

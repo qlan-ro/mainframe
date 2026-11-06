@@ -4,6 +4,7 @@ import type { VariantProps } from 'class-variance-authority';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { PermissionOption, PermissionOptionKind } from '@qlan-ro/mainframe-types';
+import { artifactPermissionInput, describeArtifactCall } from '@/features/chat/tools/cards/artifact-call';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import { GateCardShell, GateHead, GATE_BODY_INSET } from './shared/GateShell';
 import { buildOptionResponse } from './build-control-response';
@@ -102,8 +103,19 @@ export interface PermissionGateProps {
   reply: ReplyFn;
 }
 
+const ARTIFACT_TOOL = 'Artifact';
+
+/** The row and details a request shows; only `Artifact` needs translating. */
+function requestSummary(toolName: string, input: Record<string, unknown>) {
+  if (toolName !== ARTIFACT_TOOL) return { name: toolName, details: input };
+  const details = artifactPermissionInput(input);
+  const { verb, label } = describeArtifactCall(details, '');
+  return { name: label ? `${verb}: ${label}` : verb, details };
+}
+
 export function PermissionGate({ entry, reply }: PermissionGateProps) {
   const { request } = entry;
+  const { name, details } = requestSummary(request.toolName, request.input);
 
   // The clicked option's own id travels with the answer (spec decision 12 —
   // the daemon sees which offered option was actually selected, not a
@@ -119,8 +131,8 @@ export function PermissionGate({ entry, reply }: PermissionGateProps) {
           eyebrow="Permission required"
           title="Permission Required"
         />
-        <ToolNameRow toolName={request.toolName} />
-        <DetailsDisclosure input={request.input} />
+        <ToolNameRow toolName={name} />
+        <DetailsDisclosure input={details} />
         <OptionsFooter options={entry.options} onSelect={onSelect} />
       </GateCardShell>
     </div>
