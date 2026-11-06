@@ -41,6 +41,24 @@ impl ChatManager {
             .await
     }
 
+    /// `enable_worktree` that reuses `branch_name` when it already exists; see
+    /// `ChatConfigManager::enable_or_reuse_worktree`.
+    pub async fn enable_or_reuse_worktree(
+        &self,
+        chat_id: &str,
+        base_branch: &str,
+        branch_name: &str,
+    ) -> Result<(), ConfigError> {
+        // See `update_chat_config`'s matching call.
+        self.lifecycle.load_chat(chat_id).await;
+        if self.is_chat_working(chat_id) {
+            return Err(ConfigError::ChatBusy);
+        }
+        self.config
+            .enable_or_reuse_worktree(chat_id, base_branch, branch_name)
+            .await
+    }
+
     pub async fn attach_worktree(
         &self,
         chat_id: &str,

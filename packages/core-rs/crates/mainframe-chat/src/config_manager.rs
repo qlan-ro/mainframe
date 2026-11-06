@@ -5,7 +5,9 @@ use crate::config_transcripts::RelocateError;
 use mainframe_adapter_api::{AdapterError, AdapterSession};
 use mainframe_services::settings::read_setting;
 use mainframe_services::workspace::worktree::WorktreeError;
-use mainframe_services::workspace::{create_worktree, remove_worktree};
+use mainframe_services::workspace::{
+    branch_exists, checkout_worktree, create_worktree, find_branch_worktree, remove_worktree,
+};
 use mainframe_types::adapter::model_endpoint;
 use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::http_status::{HttpStatus, NotFound, StatusKind};
