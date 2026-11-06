@@ -13,8 +13,8 @@
       "repo": "openai/codex",
       "mode": "releases",
       "includePrerelease": false,
-      "lastReviewedRef": "rust-v0.166.0",
-      "lastReviewedAt": "2026-11-03",
+      "lastReviewedRef": "rust-v0.167.0",
+      "lastReviewedAt": "2026-11-06",
       "checklist": "docs/research/adapters/codex/CONSUMED-SURFACE.md"
     }
   }
