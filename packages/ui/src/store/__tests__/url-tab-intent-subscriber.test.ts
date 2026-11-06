@@ -66,6 +66,16 @@ describe('subscribeToUrlTabIntents — creation', () => {
     unsub();
   });
 
+  it('labels the tab with the title the opener supplies, else by host', () => {
+    const unsub = subscribeToUrlTabIntents();
+    emitSurfaceIntent({ type: 'open-url-tab', url: 'https://claude.ai/artifact/abc', title: 'Coffee Pricing' });
+    emitSurfaceIntent({ type: 'open-url-tab', url: 'http://localhost:5173/' });
+
+    const tabs = useLayoutStore.getState().run!.panes[0]!.tabs;
+    expect(tabs.map((tab) => tab.title)).toEqual(['Coffee Pricing', 'localhost:5173']);
+    unsub();
+  });
+
   it('emitting the same URL twice yields one tab, active both times', () => {
     const unsub = subscribeToUrlTabIntents();
     emitSurfaceIntent({ type: 'open-url-tab', url: 'http://localhost:5173/' });

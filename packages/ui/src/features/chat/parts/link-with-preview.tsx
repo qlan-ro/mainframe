@@ -16,6 +16,8 @@ import {
   ContextMenuItem,
   ContextMenuGroup,
 } from '@/components/ui/context-menu';
+import { isArtifactUrl } from '@/features/artifacts/artifact-url';
+import { useOpenArtifact } from '@/features/artifacts/use-open-artifact';
 import { useHost } from '@/lib/host';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
@@ -37,25 +39,35 @@ export function LinkWithPreview({
   const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
   const menuStatus = statusFor('copy-link');
   const inAppHref = httpLinkHref(href);
+  const { open: openArtifact } = useOpenArtifact();
   const { onMouseDown, endedDrag } = useLinkDragSelect();
 
-  const handleOpen = useCallback(
-    (e?: React.MouseEvent) => {
-      if (!href) return;
-      e?.preventDefault();
-      if (e && endedDrag()) return;
-      host.shell.openExternal(href).catch(() => {
-        console.warn('[link-with-preview] openExternal failed', href);
-      });
+  const openInBrowser = useCallback(() => {
+    if (!href) return;
+    host.shell.openExternal(href).catch(() => {
+      console.warn('[link-with-preview] openExternal failed', href);
+    });
+  }, [href, host]);
+
+  // A plain click on an artifact link shows it in the workspace, like its card's Open.
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (endedDrag()) return;
+      if (isArtifactUrl(href)) void openArtifact(href);
+      else openInBrowser();
     },
-    [href, host, endedDrag],
+    [href, endedDrag, openArtifact, openInBrowser],
   );
 
   const handleMenuCopy = onCopySelect('copy-link', copy);
 
   const rowHandlers: Record<LinkMenuRowKey, () => void> = {
-    'open-in-app': () => inAppHref && openInMainframe(inAppHref),
-    'open-browser': () => handleOpen(),
+    'open-in-app': () => {
+      if (isArtifactUrl(href)) void openArtifact(href);
+      else if (inAppHref) openInMainframe(inAppHref);
+    },
+    'open-browser': openInBrowser,
   };
 
   // Design: a faint border-bottom rule (not a solid text-decoration underline).
@@ -75,7 +87,7 @@ export function LinkWithPreview({
             <a
               className={cn(LINK_RULE_CLASS, 'hover:opacity-80 transition-opacity cursor-pointer', className)}
               href={href}
-              onClick={handleOpen}
+              onClick={handleClick}
               {...props}
               // stopPropagation only — never preventDefault: Radix composes a
               // nested trigger's own onContextMenu with checkForDefaultPrevented,

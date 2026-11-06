@@ -36,7 +36,7 @@ pub const BODY_LIMIT_BYTES: usize = 30 * 1024 * 1024;
 /// the auth middleware; the WS upgrade at `/` authenticates itself; CORS and the
 /// body limit wrap everything.
 pub fn build_app(ctx: Arc<AppCtx>) -> Router {
-    let mut http = http_routes();
+    let mut http = http_routes().merge(routes::artifact_preview::router());
 
     // Plugin routes — the PluginManager owns a parent router (listing + per-plugin
     // sub-routers) mounted under `/api/plugins`, behind the auth layer. Its state

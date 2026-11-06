@@ -136,6 +136,8 @@ pub(super) fn build_spawn_command(
     let mut cmd = mainframe_runtime::process::cli_command(executable, &path);
     cmd.args(args)
         .current_dir(project_path)
+        // Artifacts are off for SDK entrypoints by default; Mainframe renders them.
+        .env("CLAUDE_CODE_ARTIFACT", "1")
         .env_remove("CLAUDECODE");
     if let Some(proxy) = proxy {
         cmd.env("ANTHROPIC_BASE_URL", &proxy.base_url)

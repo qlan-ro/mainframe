@@ -20,6 +20,8 @@ const emitSurfaceIntent = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (intent: unknown) => emitSurfaceIntent(intent) }));
 
 const startPortTunnel = vi.fn();
+const prepareArtifactPreview = vi.fn();
+vi.mock('@/lib/api/artifacts', () => ({ prepareArtifactPreview: (url: string) => prepareArtifactPreview(url) }));
 vi.mock('@/lib/api/tunnel-ports', () => ({
   startPortTunnel: (port: number, body: unknown) => startPortTunnel(port, body),
   stopPortTunnel: vi.fn(),
@@ -32,7 +34,7 @@ const A = markdownComponents.a as React.ComponentType<React.AnchorHTMLAttributes
 
 let fake: FakeHostBridge;
 
-function renderLink(href: string) {
+function mountLink(href: string) {
   fake = new FakeHostBridge();
   vi.spyOn(fake.shell, 'openExternal').mockResolvedValue(undefined);
   render(
@@ -42,12 +44,51 @@ function renderLink(href: string) {
       </TooltipProvider>
     </HostProvider>,
   );
+}
+
+function renderLink(href: string) {
+  mountLink(href);
   fireEvent.contextMenu(screen.getByRole('link', { name: 'link text' }));
 }
 
 beforeEach(() => {
   emitSurfaceIntent.mockReset();
   startPortTunnel.mockReset();
+});
+
+describe('LinkWithPreview artifact links', () => {
+  const ARTIFACT = 'https://claude.ai/artifact/V1LAdjrXoKC7jVLpHnV1D2';
+  const READY = { status: 'ready', path: '/api/artifact-preview/V1/179/index', title: 'Coffee Pricing' };
+
+  beforeEach(() => {
+    prepareArtifactPreview.mockReset();
+    prepareArtifactPreview.mockResolvedValue(READY);
+  });
+
+  it('opens the local preview, not claude.ai, on a plain click', async () => {
+    mountLink(ARTIFACT);
+    fireEvent.click(screen.getByRole('link', { name: 'link text' }));
+
+    // The fake host has no webview, so the preview opens as a browser tab.
+    await vi.waitFor(() => expect(fake.shell.openExternal).toHaveBeenCalledWith(expect.stringContaining(READY.path)));
+    expect(prepareArtifactPreview).toHaveBeenCalledWith(ARTIFACT);
+  });
+
+  it('keeps Open in browser pointing at claude.ai', () => {
+    renderLink(ARTIFACT);
+    fireEvent.click(screen.getByTestId('chat-link-open'));
+
+    expect(fake.shell.openExternal).toHaveBeenCalledWith(ARTIFACT);
+    expect(prepareArtifactPreview).not.toHaveBeenCalled();
+  });
+
+  it('leaves other links going to the browser', () => {
+    mountLink('https://example.com');
+    fireEvent.click(screen.getByRole('link', { name: 'link text' }));
+
+    expect(fake.shell.openExternal).toHaveBeenCalledWith('https://example.com');
+    expect(prepareArtifactPreview).not.toHaveBeenCalled();
+  });
 });
 
 describe('httpLinkHref', () => {

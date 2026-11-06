@@ -35,7 +35,8 @@ Path parameters use axum's `{param}` syntax (the old Express docs wrote
   - [Chats — Recovery](#chats--recovery)
   - [Context and Mentions](#context-and-mentions)
   - [Attachments](#attachments)
-  - [Worktrees](#worktrees)
+  - [Artifacts](#artifacts)
+- [Worktrees](#worktrees)
   - [Worktree Switch Offers](#worktree-switch-offers)
   - [Background Tasks](#background-tasks)
   - [External Sessions](#external-sessions)
@@ -374,6 +375,15 @@ Source: `routes/attachments.rs`.
 
 `data` is base64; count/size/media-type limits are enforced server-side (over
 the 30 MB body cap, see [Transport](#transport)).
+
+### Artifacts
+
+Source: `routes/artifact_preview.rs`. See [the adapter note](research/adapters/claude/artifacts.md).
+
+| Method & Path | Purpose | Request | Response |
+|---|---|---|---|
+| `POST /api/artifacts/preview` | Download an artifact's current version if needed | `{ url }` (`https://claude.ai/artifact/<slug>`) | `{ status: "ready", path, title }`, or `{ status: "unsupported" }` when only claude.ai can show it |
+| `GET /api/artifact-preview/{slug}/{version}/{*path}` | Serve a cached version; `index` is its entry page | — | Sandboxed page content (not the JSON envelope) |
 
 ### Worktrees
 
