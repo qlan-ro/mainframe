@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.3.8
+
+### Patch Changes
+
+- [#880](https://github.com/qlan-ro/mainframe/pull/880) [`764e4b8`](https://github.com/qlan-ro/mainframe/commit/764e4b81173dca2bb85cea52f2d61d6244c85fed) Thanks [@doruchiulan](https://github.com/doruchiulan)! - An automation's Ask agent step with a fixed worktree branch now runs again after its first run instead of failing with "a branch named … already exists". It continues in the worktree that has the branch checked out, or checks the existing branch out into a new worktree.
+
+- Updated dependencies [[`b433082`](https://github.com/qlan-ro/mainframe/commit/b43308210a2e190c191d063a97e9583d03613af7)]:
+  - @qlan-ro/mainframe-ui@2.13.0
+
 ## 2.3.7
 
 ### Patch Changes
