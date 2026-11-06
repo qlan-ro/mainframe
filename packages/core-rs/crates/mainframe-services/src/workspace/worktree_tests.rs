@@ -183,3 +183,6 @@ async fn branch_exists_true_for_existing_false_for_missing() {
     assert!(branch_exists(repo, "feat-x").await);
     assert!(!branch_exists(repo, "does-not-exist").await);
 }
+
+#[path = "worktree_checkout_tests.rs"]
+mod checkout;

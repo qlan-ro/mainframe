@@ -56,7 +56,7 @@ impl AgentChatPort for FakeChatPort {
         Box::pin(async { Ok("chat_1".to_string()) })
     }
 
-    fn enable_worktree<'a>(
+    fn enable_or_reuse_worktree<'a>(
         &'a self,
         chat_id: &'a str,
         base_branch: &'a str,

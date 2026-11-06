@@ -23,7 +23,9 @@ pub trait AgentChatPort: Send + Sync {
         branch_name: Option<&'a str>,
         automation_run_id: &'a str,
     ) -> BoxFuture<'a, Result<String, mainframe_chat::lifecycle_manager::LifecycleError>>;
-    fn enable_worktree<'a>(
+    /// Put the chat in a worktree on `branch_name`, reusing the branch (and the
+    /// worktree that has it checked out) when an earlier run created it.
+    fn enable_or_reuse_worktree<'a>(
         &'a self,
         chat_id: &'a str,
         base_branch: &'a str,
@@ -85,7 +87,7 @@ impl AgentChatPort for ChatManagerPort {
         })
     }
 
-    fn enable_worktree<'a>(
+    fn enable_or_reuse_worktree<'a>(
         &'a self,
         chat_id: &'a str,
         base_branch: &'a str,
@@ -93,7 +95,7 @@ impl AgentChatPort for ChatManagerPort {
     ) -> BoxFuture<'a, Result<(), ConfigError>> {
         Box::pin(async move {
             self.chats
-                .enable_worktree(chat_id, base_branch, branch_name)
+                .enable_or_reuse_worktree(chat_id, base_branch, branch_name)
                 .await
         })
     }
