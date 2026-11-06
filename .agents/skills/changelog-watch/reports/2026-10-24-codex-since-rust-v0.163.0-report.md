@@ -1,0 +1,68 @@
+# changelog-watch: codex rust-v0.163.0 → rust-v0.164.0 (2026-10-24)
+
+Entries seen: 314 · risks: 1 · opportunities: 5 · relevant, no action: 39 · dropped as irrelevant: 269
+
+**How the entries were counted.** The delta has 343 bullets: 14 curated bullets (New Features / Bug Fixes / Chores) and 329 per-PR Changelog lines. 29 PR lines are cited by number in a curated bullet and are counted with that bullet. That leaves 314 distinct entries: 14 curated and 300 standalone PR lines. Each curated bullet is classified once, together with the PRs it cites. The five opportunity entries are shown as one line, and the seven compression entries as one line.
+
+Main points: generated images move to an attachment store (`fileId`). That breaks the assumption Mainframe's image-generation path relies on, that an `imageGeneration` item carries inline `result` bytes or a readable `savedPath`. Rollout compression keeps maturing but is still off by default (`local_thread_store_compression`, `default_enabled: false`, checked in `codex-rs/features/src/lib.rs` at `rust-v0.164.0`). The 2026-10-17 medium finding on `CODEX-FILE-01` is unchanged. The state DB is still `state_5.sqlite`. The rest touches surfaces Mainframe consumes without changing any field it reads.
+
+## Compatibility risks
+
+### high — #54398 Store generated image items as attachment references @kchainani-oai (rust-v0.164.0)
+
+- Checklist row: `CODEX-ITEM-01` (the `ImageGeneration` variant). Consumers: `src/thread_item_variants.rs::ImageGenerationItem` (fields `result`, `saved_path`, `revised_prompt`, `status`), `src/image_generation_render.rs::handle_image_generation` (live), and `src/image_generation_history.rs::image_generation_message` (reload).
+- Why it threatens the row: the PR uploads generated images to the attachment store and exposes `fileId`. Inline `result` is kept only as a fallback when the upload or decoding fails. The v2 schema at `rust-v0.164.0` (`ItemCompletedNotification.json`, `ImageGenerationThreadItem`) makes the item `anyOf` `{fileId}` / `{result}`, with `savedPath` optional and nullable. Its doc comment says rollouts written during the migration "contain both an empty `result` and a `fileId`". This breaks Mainframe in three ways, and none of them raises an error:
+  1. **Reload:** `image_generation_message` handles only inline `result` and skips savedPath-only items (`tests/history.rs::skips_image_generation_reload_when_only_a_saved_path_is_present`). Every image that uploaded successfully disappears from history.
+  2. **Live, fileId only:** `handle_image_generation` falls back to reading `savedPath` from disk. If `savedPath` is null, it logs `imageGeneration missing both result and savedPath` at warn and renders nothing.
+  3. **Migration-era rollouts, `result: ""` plus `fileId`:** `img.result` is `Some("")`, so both paths emit an image block with empty data, which shows as a broken image.
+
+  The struct has no `fileId` field, so serde ignores it and parsing still succeeds. This is the silent case. It is rated high rather than medium because the history path loses data. The upload depends on the attachment store being available, which presumably means ChatGPT-authenticated accounts, so API-key users may keep getting inline `result` and see no change.
+- Recommended regression test: in `tests/history.rs`, add `#[test] image_generation_with_a_file_id_and_empty_result_emits_no_empty_image_block`. Pin `{"type":"imageGeneration","id":"ig_1","status":"completed","result":"","fileId":"file_abc","savedPath":null,"revisedPrompt":"a cat"}` and assert that no `image` block with empty `data` is produced. Then add a sibling pinning `{"type":"imageGeneration","id":"ig_2","status":"completed","fileId":"file_abc","savedPath":"<tmp png>"}` and assert the reload result once a policy is chosen (read `savedPath` on reload, or show a placeholder). For the live path, add the same two payloads as an `item/completed` case in `tests/event_mapper.rs` and assert what `on_message` receives, not only that parsing returned `Ok`.
+- Verify live: .claude/skills/codex-protocol-debugger/. Generate an image on 0.164.0 with a ChatGPT login and capture the `item/completed` `imageGeneration` payload. Check whether `savedPath` is still set when `fileId` is present, whether a transitional `result: ""` appears on the wire, and whether `thread/read` returns `fileId` only.
+
+## Adoption opportunities
+
+- **`thread/sample`** (experimental): collects one model response on an ephemeral fork that inherits a loaded, idle thread's context and configuration, and returns the assistant text and token usage without changing the source conversation. It needs `expectedTurnId` to equal the latest completed turn. The entries are #55339 (add), #55441 (cancellation), #56020 (allowed after failed or interrupted turns), #56031 (Responses API client metadata), and #55463 (optional MCP disablement for samples). This could replace the `codex exec --ephemeral` title one-shot (`CODEX-FLAG-04`, `src/title_generator.rs::generate_codex_title`) with a call on the chat's own app-server once the first turn completes. That saves a process spawn and gives the title the thread's own context. Size: medium.
+
+## Relevant, no action
+
+**Curated bullets**
+
+- Authenticate enterprise MCP connections using eligible Codex account grants or dedicated sign-in, including OAuth clients requiring secrets. (#55334, #55859, #56001) — `CODEX-FLAG-05`: only enterprise-managed servers are affected. The `mainframe` server authenticates with `bearer_token_env_var` and is not touched.
+- Failed compaction no longer leaves partial summaries in conversation history, and background compaction failures fall back without panicking. (#53932, #55581) — `CODEX-EVT-01`: a fix to what `thread/compacted` follows. The notification shape is unchanged.
+- Resuming sessions now finds compressed histories and restores saved thread settings instead of replacing them with global defaults. (#54008, #55923) — `CODEX-FILE-01`/`CODEX-RPC-08`: #54008 fixes only upstream's own readers. Mainframe's scanner still skips `.jsonl.zst`, and that remains the 2026-10-17 medium, with compression still off by default. For #55923, Mainframe sends an explicit model on inherited resume and on every `turn/start` (`collaborationMode.settings.model` is required), so restored saved settings never override what Mainframe sends.
+- CLI configuration overrides are preserved when `-c` or `--config` appears at multiple subcommand levels. (#56022) — `CODEX-FLAG-05`: Mainframe passes its three `-c mcp_servers.mainframe.*` overrides at a single level, after `app-server`, so this fix does not apply.
+- Queued prompts now wait for pending permission selections to resolve before continuing. (#55682) — `CODEX-CTRL-01`: the PR is titled "Fix TUI permission selection". Over app-server, the client owns its own queue.
+- Hardened sandbox checks for case-variant metadata paths on macOS and replaceable symlinks used to locate executables. (#54273, #55384) — `CODEX-RPC-02b`/`CODEX-FLAG-01`: this tightens the sandbox for the modes Mainframe sends. The app-server spawn and its login-shell `PATH` are outside the sandbox.
+
+**Standalone PR lines**
+
+- Rollout compression, 7 entries: #53732 compiled search patterns across compressed rollouts, #53794 rollout migration locks across cancellation, #53997 filter rollout filenames before checking compressed siblings, #54003 compressed rollouts in doctor stats, #55252 access metadata across compression and restoration, #55545 diagnostics for compressed read failures, #55652 concurrent compressed search — `CODEX-FILE-01`: all of these are upstream reader and maintenance work. The feature is still `UnderDevelopment` and `default_enabled: false`, so the earlier medium finding stays as it is.
+- #53800 Wire background compaction into the turn lifecycle — `CODEX-EVT-01`: gated on the `AsyncCompaction` feature. The PR keeps compaction events paired.
+- #53879 Preserve running turn recovery across thread settings updates — `CODEX-RPC-08`: Mainframe does not depend on `thread/settings/update`.
+- #54053 Add Responses API client metadata patches for turn start and steer — `CODEX-RPC-03`/`CODEX-RPC-09`: adds the optional experimental `responsesapiClientMetadataPatch` field, which Mainframe does not send.
+- #54169 Reload the model catalog after account changes — `CODEX-RPC-05`: `model/list` gets fresher results. The shape is unchanged.
+- #55958 Preserve provider model catalogs when refreshes fail — `CODEX-RPC-05`: `model/list` stops returning an empty catalog after a failed refresh.
+- #54351 Use the turn index for turn-scoped item pagination — `CODEX-RPC-04`: internal to paging. `thread/read {includeTurns: true}` shape is unchanged.
+- #54639 Stream rollout records during thread history materialization — `CODEX-RPC-04`: changes how the server reads rollouts internally. The response is unchanged.
+- #55244 Batch thread history materialization into SQLite — `CODEX-FILE-02`/`CODEX-RPC-04`: the DB file name is still `state_5.sqlite`, and Mainframe reads only `threads` columns.
+- #55396 Prefetch sibling rollout paths when reading history pages — `CODEX-RPC-04`: performance only.
+- #55627 Reserve a sibling rollout candidate slot for the first ancestor — `CODEX-RPC-07`: fork-lineage history resolution inside `thread/read`, which Mainframe relies on and does not reimplement.
+- #54365 Prevent duplicate assistant messages around interleaved commands — `CODEX-ITEM-01`: a fix that means fewer duplicate `agentMessage` items. The shape is unchanged.
+- #54369 Retry SQLite operations on transient writer contention — `CODEX-FILE-02`: on the writer side. Mainframe's read-only `SELECT` is unaffected.
+- #54389 Preserve existing SQLite journal modes on startup — `CODEX-FILE-02`: existing journal modes are kept, so the read-only open sees the same mode as before.
+- #54420 Record local image inputs on completed image-generation items — `CODEX-ITEM-01`: adds an `inputImages` array that serde ignores. Image handling is covered by the #54398 risk above.
+- #54654 Allow dynamic tool calls to execute in parallel — `CODEX-ITEM-01`: overlapping `DynamicToolCall` items are already keyed by item id.
+- #54656 Honor MCP tool-list changes within a turn — `CODEX-FLAG-05`: the `mainframe` server's tool list is static.
+- #54679 Distinguish MCP approval cancellation reasons — `CODEX-RPC-10`: telemetry and error tagging on cancellation. The elicitation request and answer shapes are unchanged.
+- #54776 Support typed content in contextual prompt fragments — `CODEX-RPC-11`: an internal `ContentItem` refactor in `context-fragments` (including `additional_context.rs`). The `{kind, value: string}` `turn/start.additionalContext` shape Mainframe sends is not changed.
+- #55270 Honor per-thread unload delays in app-server — `CODEX-RPC-02`: adds a per-thread `thread_unload_delay_secs` config, and the default delay is unchanged for threads that don't set it. A later option would be to keep long-idle chats loaded.
+- #55380 Preserve thread metadata before rollout files are materialized — `CODEX-FILE-02`: a `threads` row can exist before its rollout file. `lookup_agent_metadata` reads nickname and role, so a path that doesn't exist yet affects only the rollout reader, which already handles a missing file.
+- #55387 Add support for Academic Researchers plans — `CODEX-RPC-05`/`CODEX-FILE-03`: `plan_type` is `Option<String>` (`src/types.rs`, `src/chatgpt_subscription.rs`), so a new value cannot fail to parse.
+- #55644 Make pending injections interrupt agent waits and sleep — `CODEX-RPC-09`: a steer now reaches an agent blocked in `wait` or `Sleep` sooner. The request shape is unchanged.
+- #55646 Guard auth persistence and reloads against concurrent login changes — `CODEX-FILE-03`: on the writer side. `tokens.account_id` is unchanged.
+- #55733 Box session metadata and compaction payloads in `RolloutItem` — `CODEX-FILE-01`: Rust `Box`ing does not change serde output.
+- #55991 Avoid double-counting retained reasoning in token usage — `CODEX-EVT-04`: the `tokenUsage` values are now more accurate and slightly lower, so the context gauge gets better. The shape is unchanged.
+- #55355 Remove the long-thread accuracy warning after compaction — `CODEX-EVT-03`: the warning arrived on the raw-event and warning path that Mainframe drops.
+
+Dropped (269): 8 curated bullets (`/presets`; inline `/model` and `/permissions`; TUI image previews; remote credential masking; the Bedrock setup wizard; the Windows proxy NTLM fix; disk and daemon-log pruning; the V8 upgrade) and 261 standalone PR lines. By category: TUI (keymap, Markdown, Mermaid, presets, `/title`/`/statusline`, transcript and fork-lineage display such as #54044, the agent dashboard, terminal status OSC states in #54114); Guardian and auto-review internals and metrics (the `auto_review` path Mainframe does not enable); multi-agent v2 internals, including #55548 (`preserve_fork_prefix` for sub-agent forks, which is not `thread/fork`), #54414 root-turn suspension, sub-agent environment inheritance, and message boards; the managed daemon, updater, and remote-control relay (Noise); exec-server and remote execution, credential masking, and MITM scoping; enterprise MCP OAuth and gateway, proxy, and Responses-proxy auth; plugins, skills, and cloud catalogs; memory v2 and Chronicle; Windows, MXC, Linux, and macOS sandbox internals; app-server WebSocket zstd compression (Mainframe uses stdio); feature-flag retirements (`transcript_v2`, worktree, voice); `codex_app` and Claude-session import (#55365); diagnostics ZIP export; rollout traces; telemetry and metrics; Bazel, CI, release packaging, dependency bumps; and test-only changes.

@@ -119,8 +119,8 @@ checks for success.
 
 ## Report template
 
-Write to `reports/<ISO-date>-<tool>-since-<anchor>-report.md` (gitignored;
-the anchor keeps two passes on the same day from colliding):
+Write to `reports/<ISO-date>-<tool>-since-<anchor>-report.md` (committed with
+the state advance; the anchor keeps two passes on the same day from colliding):
 
 ```markdown
 # changelog-watch: <tool> <from> → <to> (<date>)

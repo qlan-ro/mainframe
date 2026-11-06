@@ -53,7 +53,8 @@ root. Analysis only — never fix drift in the same run; findings become todos.
 
 6. **Advance state — only after the report exists.** Rerun the same fetch,
    adding `--commit-state <newest entry reviewed>` and the `--out` path the
-   pass wrote, then commit `state.json`:
+   pass wrote, then commit `state.json` together with the pass's report. The report
+   is the only record of its findings:
 
    ```bash
    node .claude/skills/changelog-watch/scripts/fetch-delta.mjs --tool claude \
@@ -84,7 +85,7 @@ the pass, report, `--commit-state` the pass's newest version, repeat. Each
 pass leaves state consistent, so an interrupted walk never skips entries.
 
 Give every pass its own `--out`: the default path carries the pass's anchor
-for that reason, and `reports/` is gitignored, so a delta overwritten by the
+for that reason, and deltas are gitignored, so a delta overwritten by the
 next pass is gone.
 
 ## Verifying a suspected change

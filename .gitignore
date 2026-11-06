@@ -60,9 +60,9 @@ docs/qa/
 # Codex-review local session state (per-branch, not shared)
 .claude/codex-review/
 
-# changelog-watch run artifacts (fetched deltas + reports are triage input, not history).
+# changelog-watch fetched deltas are raw upstream text. Reports are not ignored: they are the record of each pass.
 # Must be spelled .agents/: .claude/skills/* are symlinks, which git does not traverse.
-.agents/skills/changelog-watch/reports/
+.agents/skills/changelog-watch/reports/*-delta.md
 
 /packages/e2e/playwright-report/
 packages/e2e/logs/
