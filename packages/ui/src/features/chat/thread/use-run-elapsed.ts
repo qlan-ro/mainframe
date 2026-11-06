@@ -11,23 +11,27 @@ import { useEffect, useState } from 'react';
 const TICK_MS = 1000;
 
 /**
- * Seconds elapsed since `active` last turned true, ticking every second.
+ * Seconds elapsed since the run started, ticking every second. The start is the
+ * daemon's `startedAtMs` when known, else the moment `active` last turned true.
  * `undefined` while inactive and for the first second of a run — a turn that
- * resolves in 300 ms must not flash "0s". Each run restarts the count.
+ * resolves in 300 ms must not flash "0s".
  */
-export function useRunElapsed(active: boolean): number | undefined {
+export function useRunElapsed(active: boolean, startedAtMs?: number): number | undefined {
   const [seconds, setSeconds] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     setSeconds(undefined);
     if (!active) return;
-    const startedAt = Date.now();
-    const id = setInterval(() => {
+    const startedAt = startedAtMs !== undefined && startedAtMs <= Date.now() ? startedAtMs : Date.now();
+    const tick = () => {
       const elapsed = Math.floor((Date.now() - startedAt) / 1000);
       setSeconds(elapsed >= 1 ? elapsed : undefined);
-    }, TICK_MS);
+    };
+    // A known start can already be minutes old (a reopened chat): show it now, not a tick later.
+    if (startedAtMs !== undefined) tick();
+    const id = setInterval(tick, TICK_MS);
     return () => clearInterval(id);
-  }, [active]);
+  }, [active, startedAtMs]);
 
   return seconds;
 }

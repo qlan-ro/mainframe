@@ -142,11 +142,11 @@ fn lifecycle_frames_share_the_throttle_fifo_so_idle_never_overtakes_content() {
 fn turn_started_and_usage_emit_their_wire_frames() {
     let mut stream = stream();
 
-    let started = stream.on_turn_started(0);
+    let started = stream.on_turn_started(0, None);
     assert_eq!(started.len(), 1);
     assert!(matches!(
         as_update(&started[0]),
-        SessionUpdate::StateUpdate(WireSessionState::Running)
+        SessionUpdate::StateUpdate(WireSessionState::Running(running)) if running.meta.is_none()
     ));
 
     let usage = stream.on_usage(
@@ -223,4 +223,33 @@ fn a_gate_cannot_precede_the_tool_call_it_belongs_to() {
         SessionUpdate::ToolCallUpdate(_)
     ));
     assert!(matches!(drained[1], ThrottledFrame::Raw(_)));
+}
+
+#[test]
+fn turn_started_carries_the_recorded_start_in_meta_and_omits_it_when_unknown() {
+    let mut stream = stream();
+
+    let known = stream.on_turn_started(5, Some(1_700_000_123_456));
+    let SessionUpdate::StateUpdate(WireSessionState::Running(running)) = as_update(&known[0])
+    else {
+        panic!("expected a running state update, got {:?}", known[0]);
+    };
+    assert_eq!(running.started_at_ms(), Some(1_700_000_123_456));
+    let wire = serde_json::to_value(as_update(&known[0])).unwrap();
+    assert_eq!(
+        wire,
+        serde_json::json!({
+            "sessionUpdate": "state_update",
+            "state": "running",
+            "_meta": { "_mainframe.dev": { "startedAtMs": 1_700_000_123_456_i64 } },
+        })
+    );
+
+    let mut other = self::stream();
+    let unknown = other.on_turn_started(5, None);
+    let wire = serde_json::to_value(as_update(&unknown[0])).unwrap();
+    assert_eq!(
+        wire,
+        serde_json::json!({ "sessionUpdate": "state_update", "state": "running" })
+    );
 }

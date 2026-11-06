@@ -100,3 +100,22 @@ describe('togglePanel — the four-branch rule', () => {
     expect(selectOverlayOpen('main')(usePanelControl.getState())).toBe(false);
   });
 });
+
+describe('revealActivity', () => {
+  it('opens a fitting column docked and bumps its reveal counter', () => {
+    useUiPrefs.setState({ sessionPanelOpen: false });
+    usePanelControl.setState({ fits: { main: true }, activityReveals: {} });
+    usePanelControl.getState().revealActivity('main');
+    expect(useUiPrefs.getState().sessionPanelOpen).toBe(true);
+    expect(selectOverlayOpen('main')(usePanelControl.getState())).toBe(false);
+    expect(usePanelControl.getState().activityReveals.main).toBe(1);
+  });
+  it('floats the panel on a column too narrow to dock it', () => {
+    const zone = zoneColumnId('z');
+    usePanelControl.setState({ fits: { [zone]: false }, activityReveals: {} });
+    usePanelControl.getState().revealActivity(zone);
+    usePanelControl.getState().revealActivity(zone);
+    expect(selectOverlayOpen(zone)(usePanelControl.getState())).toBe(true);
+    expect(usePanelControl.getState().activityReveals[zone]).toBe(2);
+  });
+});

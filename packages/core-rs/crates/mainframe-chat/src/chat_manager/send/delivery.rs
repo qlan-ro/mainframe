@@ -41,11 +41,8 @@ impl ChatManager {
         }
         self.record_message_context(post, chat_id, content);
         if !is_queued {
-            self.event_handler.notify_chat_surface(
-                crate::chat_surface::ChatSurfaceEvent::TurnStarted {
-                    chat_id: chat_id.to_string(),
-                },
-            );
+            self.event_handler
+                .notify_chat_surface(self.shared.turn_started_event(chat_id));
         }
         Ok(())
     }

@@ -8,15 +8,22 @@ import { record } from './values';
 import { activityMemberIdentity } from './build-activity-groups';
 import type { ActivityGroup, ActivityLabel, ActivityMember, CompactToolPart } from './types';
 
-export function isExploration(part: CompactToolPart): boolean {
+export type ExplorationKind = 'read' | 'grep' | 'list';
+export function explorationKind(part: CompactToolPart): ExplorationKind | undefined {
   const kind = toolKind(part.toolName);
-  if (['read', 'grep', 'glob', 'list'].includes(kind)) return true;
-  if (kind !== 'shell') return false;
+  if (kind === 'read' || kind === 'list') return kind;
+  if (kind === 'grep' || kind === 'glob') return 'grep';
+  if (kind !== 'shell') return undefined;
   const tokens = parseShellCommand(record(part.args)?.command);
   const action =
     summarizeCommandActions(record(part.providerMetadata?.codex)?.commandActions) ??
     (tokens ? classifyCommand(tokens) : undefined);
-  return !!action && ['read', 'grep', 'list'].includes(action.kind);
+  return action && (action.kind === 'read' || action.kind === 'grep' || action.kind === 'list')
+    ? action.kind
+    : undefined;
+}
+export function isExploration(part: CompactToolPart): boolean {
+  return explorationKind(part) !== undefined;
 }
 function label(member: ActivityMember): ActivityLabel {
   const part = member.part;

@@ -38,10 +38,19 @@ function reduceLifecycle(state: ChatThreadState, event: LifecycleEvent): ChatThr
       return { ...state, messages: event.messages };
     case 'transcript.cleared':
       return state.messages.length === 0 ? state : { ...state, messages: [] };
-    case 'run.started':
-      return { ...state, runState: { type: 'running' } };
-    case 'run.cancelling':
-      return { ...state, runState: { type: 'cancelling' } };
+    case 'run.started': {
+      // A later start frame without a time (a local send, a reconnect) keeps the known start of the same run.
+      const known = state.runState.type === 'running' ? state.runState.startedAtMs : undefined;
+      const startedAtMs = event.startedAtMs ?? known;
+      return { ...state, runState: startedAtMs === undefined ? { type: 'running' } : { type: 'running', startedAtMs } };
+    }
+    case 'run.cancelling': {
+      const startedAtMs = state.runState.type === 'running' ? state.runState.startedAtMs : undefined;
+      return {
+        ...state,
+        runState: startedAtMs === undefined ? { type: 'cancelling' } : { type: 'cancelling', startedAtMs },
+      };
+    }
     case 'run.stopped':
       return { ...state, runState: { type: 'idle' }, compacting: false };
     case 'run.failed':

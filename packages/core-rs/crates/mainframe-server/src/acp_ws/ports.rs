@@ -128,6 +128,12 @@ impl ResumePort for ManagerPorts {
             .as_ref()
             .is_some_and(|manager| manager.is_chat_working(session_id))
     }
+
+    fn turn_started_at_ms(&self, session_id: &str) -> Option<i64> {
+        self.manager
+            .as_ref()
+            .and_then(|manager| manager.turn_started_at_ms(session_id))
+    }
 }
 
 /// The gate-apply seam: kept a plain trait, not a direct `ChatManager` call,

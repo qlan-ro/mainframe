@@ -278,6 +278,26 @@
   }
 }
 
+/* The turn status row's phase word breathes once it has been up for a while, so a
+   short phase never flickers (the desktop apps' 2s pulse after a 3s delay). */
+@keyframes mf-phase-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+.mf-phase-pulse {
+  animation: mf-phase-pulse 2s ease-in-out 3s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-phase-pulse {
+    animation: none;
+  }
+}
+
 /* Carried over verbatim — the working-session spin the provider logo animates
    with. A keyframe has no theme dimension, so it is not a token. */
 @keyframes mf-claude-logo-working {

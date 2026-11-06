@@ -20,7 +20,8 @@ use std::collections::HashSet;
 
 use mainframe_types::acp::extensions::{MAINFRAME_META_NAMESPACE, RetryMarker, RevisionCursor};
 use mainframe_types::acp::update::{
-    IdleStateUpdate, SessionState as WireSessionState, SessionUpdate, StopReason, UsageUpdate,
+    IdleStateUpdate, RunningStateUpdate, SessionState as WireSessionState, SessionUpdate,
+    StopReason, UsageUpdate,
 };
 use serde_json::{Map, Value};
 
@@ -153,10 +154,19 @@ impl SessionStream {
         self.pending_retry = Some(marker);
     }
 
-    pub fn on_turn_started(&mut self, now_ms: i64) -> Vec<ThrottledFrame> {
+    /// `started_at_ms` is the daemon's recorded start of this turn (the same
+    /// value every attached stream and every resume replay carries); `None`
+    /// when the daemon does not know it.
+    pub fn on_turn_started(
+        &mut self,
+        now_ms: i64,
+        started_at_ms: Option<i64>,
+    ) -> Vec<ThrottledFrame> {
         self.throttle.push(
             now_ms,
-            SessionUpdate::StateUpdate(WireSessionState::Running),
+            SessionUpdate::StateUpdate(WireSessionState::Running(RunningStateUpdate::started_at(
+                started_at_ms,
+            ))),
         )
     }
 

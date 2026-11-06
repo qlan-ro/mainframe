@@ -6,7 +6,7 @@ use mainframe_types::acp::extensions::RevisionCursor as WireRevisionCursor;
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::session::{ResumeSessionRequest, ResumeSessionResponse};
 use mainframe_types::acp::update::{
-    IdleStateUpdate, SessionState as WireSessionState, SessionUpdate,
+    IdleStateUpdate, RunningStateUpdate, SessionState as WireSessionState, SessionUpdate,
 };
 use mainframe_types::adapter::ControlRequest;
 use serde::{Deserialize, Serialize};
@@ -130,7 +130,7 @@ pub async fn dispatch_resume_with(
         &preview_ids,
     );
     let mut updates = resolved.updates;
-    updates.push(turn_state_update(port.is_running(&resume.session_id)));
+    updates.push(running_state(port, &resume.session_id));
 
     let pending_permission_request = snapshot
         .pending
@@ -189,9 +189,18 @@ fn parse_resume_params(request: JsonRpcRequest) -> Result<ResumeSessionRequest, 
         .map_err(|err| rpc::error_response(id, rpc::invalid_params(&err.to_string())))
 }
 
-fn turn_state_update(running: bool) -> SessionUpdate {
-    SessionUpdate::StateUpdate(if running {
-        WireSessionState::Running
+/// The replay's closing `state_update`: `running` carries the daemon's
+/// recorded turn start (never a per-connection `now`), `idle` clears it.
+fn running_state(port: &dyn ResumePort, session_id: &str) -> SessionUpdate {
+    turn_state_update(
+        port.is_running(session_id)
+            .then(|| RunningStateUpdate::started_at(port.turn_started_at_ms(session_id))),
+    )
+}
+
+fn turn_state_update(running: Option<RunningStateUpdate>) -> SessionUpdate {
+    SessionUpdate::StateUpdate(if let Some(running) = running {
+        WireSessionState::Running(running)
     } else {
         WireSessionState::Idle(IdleStateUpdate {
             stop_reason: None,

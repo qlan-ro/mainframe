@@ -51,6 +51,7 @@ struct FakePort {
     messages: Vec<DisplayMessage>,
     pending: Option<ControlRequest>,
     running: bool,
+    started_at_ms: Option<i64>,
     streaming: Option<StreamingLeafKind>,
 }
 
@@ -67,6 +68,10 @@ impl ResumePort for FakePort {
 
     fn is_running(&self, _session_id: &str) -> bool {
         self.running
+    }
+
+    fn turn_started_at_ms(&self, _session_id: &str) -> Option<i64> {
+        self.started_at_ms
     }
 }
 

@@ -236,6 +236,15 @@ fn spawn_command_carries_the_resolved_path() {
 }
 
 #[test]
+fn a_session_turns_on_the_artifact_tool() {
+    let env = spawn_env(None);
+    assert_eq!(
+        env.get("CLAUDE_CODE_ARTIFACT"),
+        Some(&Some("1".to_string()))
+    );
+}
+
+#[test]
 fn default_mode_passes_permission_mode_default() {
     let (args, _) = build_args(
         &spawn_opts(Some(ExecutionMode::Default)),

@@ -25,7 +25,7 @@ it('folds a recovered command failure and still permits manual opening and closi
   expect(screen.getByText('Final answer')).toBeVisible();
   fireEvent.click(toggle);
   expect(screen.getByText('Checking the build')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Ran commands' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Ran 2 commands (1 failed)' })).toBeVisible();
   fireEvent.click(toggle);
   expect(screen.queryByText('Checking the build')).toBeNull();
   expect(screen.getByText('Final answer')).toBeVisible();

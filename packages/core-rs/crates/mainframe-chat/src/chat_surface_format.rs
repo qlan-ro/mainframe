@@ -13,7 +13,16 @@ impl PartialEq for ChatSurfaceEvent {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::TurnAccepted { chat_id: a }, Self::TurnAccepted { chat_id: b }) => a == b,
-            (Self::TurnStarted { chat_id: a }, Self::TurnStarted { chat_id: b }) => a == b,
+            (
+                Self::TurnStarted {
+                    chat_id: a,
+                    started_at_ms: sa,
+                },
+                Self::TurnStarted {
+                    chat_id: b,
+                    started_at_ms: sb,
+                },
+            ) => a == b && sa == sb,
             (
                 Self::TurnFinished {
                     chat_id: a,
@@ -129,9 +138,13 @@ impl std::fmt::Debug for ChatSurfaceEvent {
                 .debug_struct("TurnAccepted")
                 .field("chat_id", chat_id)
                 .finish(),
-            Self::TurnStarted { chat_id } => f
+            Self::TurnStarted {
+                chat_id,
+                started_at_ms,
+            } => f
                 .debug_struct("TurnStarted")
                 .field("chat_id", chat_id)
+                .field("started_at_ms", started_at_ms)
                 .finish(),
             Self::TurnFinished {
                 chat_id,

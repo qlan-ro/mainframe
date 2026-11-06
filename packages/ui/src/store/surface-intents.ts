@@ -13,9 +13,9 @@ export type SurfaceIntent =
   /**
    * Open (or focus) a URL tab in the workspace (optionally targeting a pane).
    * Omit `url` for a blank tab — it renders the address bar with nothing loaded,
-   * which is what ⌘T opens.
+   * which is what ⌘T opens. `title` names the tab; omit it to label it by host.
    */
-  | { type: 'open-url-tab'; url?: string; paneId?: string }
+  | { type: 'open-url-tab'; url?: string; paneId?: string; title?: string }
   /** Open the global search / command palette overlay. */
   | { type: 'open-search-palette' }
   /** Open the find-in-path overlay scoped to a file or directory. */

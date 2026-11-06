@@ -15,7 +15,7 @@ async fn reset_session_seeds_replayed_state_so_live_updates_continue_as_deltas()
         c.send_update(
             "chat-1",
             mainframe_types::acp::update::SessionUpdate::StateUpdate(
-                mainframe_types::acp::update::SessionState::Running,
+                mainframe_types::acp::update::SessionState::Running(Default::default()),
             ),
         );
     });

@@ -59,7 +59,7 @@ impl PreparedHistoryTail {
         state.set_previews(self.preview_ids.clone());
         let mut updates = state.diff(&items);
         let item_count = updates.len();
-        updates.push(super::turn_state_update(false));
+        updates.push(super::turn_state_update(None));
         let mut meta = super::resume_meta(item_count, true, cursor);
         meta[MAINFRAME_META_NAMESPACE]["history"] = json!(self.history);
         let response = rpc::success_response(id, json!({ "_meta": meta }));

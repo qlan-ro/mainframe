@@ -36,17 +36,6 @@ export function CompactionPill() {
 
 /** Transient "Compacting…" marker — shown at the transcript tail while a
  *  compaction runs, replaced by CompactionPill when it completes. */
-export function CompactingPill() {
-  return (
-    <Marker variant="separator" data-testid="chat-compacting-pill" className="my-2 select-none">
-      <MarkerIcon>
-        <span className="block size-3 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
-      </MarkerIcon>
-      <MarkerContent>Compacting…</MarkerContent>
-    </Marker>
-  );
-}
-
 const CLI_ERROR_RE = /^Unknown (?:command|skill):/i;
 
 function SystemTextMarker({ text }: { text: string }) {

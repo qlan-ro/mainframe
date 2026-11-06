@@ -1,6 +1,7 @@
 import { useLayoutEffect } from 'react';
 import { ChevronRightIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { TurnDisclosure } from '../../view-model/compact/turn-types';
 import { useTurnPresentationActions, useTurnPresentationSelector } from './turn-presentation-context';
 import { useCompactScrollAnchor } from './use-compact-scroll-anchor';
@@ -25,11 +26,20 @@ export function CompactTurnDisclosure({ turn }: { turn: TurnDisclosure }) {
         aria-controls={turn.workKeys.map(workSlotId).join(' ')}
         disabled={turn.unsafe || turnDisclosureStore.isInvalid(turn.key)}
         onClick={() => toggle(turn.key)}
-        className="gap-2 text-muted-foreground"
+        className="gap-1.5 text-muted-foreground"
       >
-        <ChevronRightIcon aria-hidden className={`size-3 shrink-0 ${open ? 'rotate-90' : ''}`} />
         <CompactTurnElapsed turn={turn} />
+        <ChevronRightIcon
+          aria-hidden
+          data-icon="inline-end"
+          className={cn(
+            'size-3 shrink-0 transition-transform duration-150 motion-reduce:transition-none',
+            open && 'rotate-90',
+          )}
+        />
       </Button>
+      {/* Separates the folded work from the answer below it, open or closed. */}
+      <div aria-hidden className="mt-1 border-t border-border" />
     </div>
   );
 }

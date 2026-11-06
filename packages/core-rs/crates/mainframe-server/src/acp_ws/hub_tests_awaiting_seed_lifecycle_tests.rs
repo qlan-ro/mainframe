@@ -51,6 +51,7 @@ async fn a_turn_that_starts_during_the_await_reaches_the_client_after_the_replay
     hub.begin_resume(&conn, "chat-1");
     hub.on_chat_surface_event(ChatSurfaceEvent::TurnStarted {
         chat_id: "chat-1".to_string(),
+        started_at_ms: None,
     });
 
     let items = mainframe_acp::encoder::encode_containers(&[display_message("m1", "Hello")], None);

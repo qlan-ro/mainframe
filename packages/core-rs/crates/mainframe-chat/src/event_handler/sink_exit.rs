@@ -59,6 +59,7 @@ impl SessionSinkImpl {
                 let mut guard = cell.lock_recover();
                 let was_working = guard.chat.process_state == Some(Some(ProcessState::Working));
                 guard.chat.process_state = Some(None);
+                guard.running_since_ms = None;
                 (guard.chat.clone(), was_working)
             };
             self.shared

@@ -48,7 +48,8 @@ test.describe('compact transcript preference and disclosure', () => {
     await waitForIdle(page, 60_000);
     await expect(page.getByTestId('chat-bash-card').first()).toBeVisible();
     await selectTranscript(page, 'compact');
-    const row = page.getByRole('button', { name: 'Read files', exact: true });
+    // The listing and its reasoning group under a counted summary (#414 wording).
+    const row = page.getByRole('button', { name: 'Listed files', exact: true });
     await expect(row).toHaveAttribute('aria-expanded', 'false');
     await row.focus();
     await row.press('Enter');
@@ -100,12 +101,12 @@ test.describe('compact transcript subagents', () => {
     await expect(agent).toHaveAttribute('aria-expanded', 'false');
     await agent.click();
     await expect(page.getByTestId('chat-task-toggle')).toHaveCount(0);
-    const nested = page.locator('[data-testid^="chat-compact-details-"] [data-testid^="chat-compact-toggle-"]').first();
-    await expect(nested).toHaveAttribute('aria-expanded', 'false');
-    await nested.click();
-    await expect(page.getByTestId('chat-bash-output')).toHaveCount(0);
-    const search = page.getByRole('button', { name: /Searched for "export const greeting"/ });
+    // The subagent's single search is its own nested row, collapsed until opened (#414).
+    const search = page.locator('[data-testid^="chat-compact-details-"]').getByRole('button', {
+      name: /Searched for "export const greeting"/,
+    });
     await expect(search).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('chat-bash-output')).toHaveCount(0);
     await search.click();
     await expect(page.getByTestId('chat-bash-command').first()).toContainText('export const greeting');
     await expect(page.getByTestId('chat-bash-output').first()).toBeVisible();

@@ -1,5 +1,12 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.3.7
+
+### Patch Changes
+
+- Updated dependencies [[`208ca81`](https://github.com/qlan-ro/mainframe/commit/208ca81bf1a0f3d0955d3e27f34aa524ba2836d1), [`b9f32b3`](https://github.com/qlan-ro/mainframe/commit/b9f32b3581f9e15dd4be8af5e6aca6124b20f4c7), [`6ea55df`](https://github.com/qlan-ro/mainframe/commit/6ea55dfeb584a181fc7ac0dd5970e7f14fae9e6d)]:
+  - @qlan-ro/mainframe-ui@2.12.5
+
 ## 2.3.6
 
 ### Patch Changes

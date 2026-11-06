@@ -111,7 +111,7 @@ async fn no_streaming_snapshot_replays_identically_to_the_pre_382_encode_based_p
     let items = crate::encoder::encode(&messages);
     let mut state = crate::session_state::SessionState::new();
     let mut expected_updates = state.diff(&items);
-    expected_updates.push(turn_state_update(false));
+    expected_updates.push(turn_state_update(None));
 
     assert_eq!(streaming_replay.updates, expected_updates);
     let mainframe_types::acp::jsonrpc::JsonRpcOutcome::Result { result } =
@@ -132,6 +132,7 @@ async fn an_open_gate_still_redelivers_alongside_a_streaming_snapshot() {
         messages: vec![dmsg("dmsg_1", vec![text("hello")])],
         pending: Some(control_request("req_1")),
         running: true,
+        started_at_ms: None,
         streaming: Some(StreamingLeafKind::Text),
     };
     let (_response, replay) = dispatch_resume(resume_request(None), &port, None).await;

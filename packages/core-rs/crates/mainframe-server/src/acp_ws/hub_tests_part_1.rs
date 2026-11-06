@@ -116,7 +116,7 @@ fn replay_marker(conn: &crate::acp_ws::facade_conn::FacadeConnection) {
     conn.send_update(
         "chat-1",
         mainframe_types::acp::update::SessionUpdate::StateUpdate(
-            mainframe_types::acp::update::SessionState::Running,
+            mainframe_types::acp::update::SessionState::Running(Default::default()),
         ),
     );
 }
@@ -207,6 +207,7 @@ async fn turn_lifecycle_maps_to_state_updates_with_stop_reasons() {
 
     hub.on_chat_surface_event(ChatSurfaceEvent::TurnStarted {
         chat_id: "chat-1".to_string(),
+        started_at_ms: None,
     });
     hub.on_chat_surface_event(ChatSurfaceEvent::TurnFinished {
         chat_id: "chat-1".to_string(),

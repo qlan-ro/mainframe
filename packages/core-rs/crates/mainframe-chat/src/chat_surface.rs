@@ -51,8 +51,11 @@ pub enum ChatSurfaceEvent {
         chat_id: String,
     },
     /// The turn this prompt belongs to began running against the adapter.
+    /// `started_at_ms` is the daemon's recorded start of the turn (epoch ms),
+    /// stable across re-announcements; `None` when the chat has no live cell.
     TurnStarted {
         chat_id: String,
+        started_at_ms: Option<i64>,
     },
     TurnFinished {
         chat_id: String,

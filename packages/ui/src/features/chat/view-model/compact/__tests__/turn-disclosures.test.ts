@@ -127,7 +127,7 @@ it('folds completed unfamiliar tools but protects unfamiliar lifecycle states', 
   });
   const complete = buildTurnDisclosures([custom('done'), message('final', 'Answer', 'final_answer')], scope);
   expect(complete.messages[0]!.units[0]).toMatchObject({ work: true, protected: false });
-  expect(complete.messages[0]!.units[0]!.activity).toBeUndefined();
+  expect(complete.messages[0]!.units[0]!.activity?.members).toHaveLength(1);
   expect([...complete.turns.values()][0]!.available).toBe(true);
   const unknown = buildTurnDisclosures([custom(undefined), message('final', 'Answer', 'final_answer')], scope);
   expect(unknown.messages[0]!.units[0]).toMatchObject({ work: false, protected: true });

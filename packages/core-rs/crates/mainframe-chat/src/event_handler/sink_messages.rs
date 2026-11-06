@@ -39,6 +39,9 @@ impl SessionSinkImpl {
             self.transient_with_id(ChatMessageType::Assistant, cleaned, Some(meta), vendor_id);
         self.append_timed_and_display(message);
     }
+    /// An assistant message while the chat is not `Working` means the CLI began
+    /// a turn without a user send (e.g. after a background-task notification):
+    /// the daemon observes the turn running here, so this is its start.
     fn promote_working(&self) {
         if let Some(cell) = self.shared.active(&self.chat_id) {
             let updated = {
@@ -60,6 +63,7 @@ impl SessionSinkImpl {
                         },
                     )
                     .emit(chat, None);
+                self.notify_surface(self.shared.turn_started_event(&self.chat_id));
             }
         }
     }

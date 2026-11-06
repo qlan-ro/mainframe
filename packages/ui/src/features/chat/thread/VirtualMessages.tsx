@@ -9,6 +9,8 @@ import { DisclosureStateProvider } from '@/components/ui/disclosure-state';
 import { seekingComponents, useScrollSeek } from './use-scroll-seek';
 import { useFindInChatStore } from '../find/find-in-chat-store';
 import { waitForMessage } from '../find/daemon-highlights';
+import { TurnStatusRow } from './TurnStatusRow';
+import { statusAnchorId } from './turn-phase';
 
 type MessageComponents = ComponentProps<typeof ThreadPrimitive.MessageByIndex>['components'];
 const FIRST_INDEX = 1_000_000_000;
@@ -102,7 +104,15 @@ function useVirtualMessageState() {
 
 function VirtualMessage({ id, components }: { id: string; components: MessageComponents }) {
   const index = useAuiState((state) => state.thread.messages.findIndex((message) => message.id === id));
-  return index < 0 ? null : <ThreadPrimitive.MessageByIndex index={index} components={components} />;
+  // The turn status row follows the newest sent message, above any queued prompts.
+  const anchor = useAuiState((state) => statusAnchorId(state.thread.messages) === id);
+  if (index < 0) return null;
+  return (
+    <>
+      <ThreadPrimitive.MessageByIndex index={index} components={components} />
+      {anchor && <TurnStatusRow />}
+    </>
+  );
 }
 
 export function VirtualMessages({ components }: { components: MessageComponents }) {

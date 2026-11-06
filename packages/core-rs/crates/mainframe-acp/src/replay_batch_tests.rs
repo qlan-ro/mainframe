@@ -35,7 +35,7 @@ fn a_replay_round_trips_through_batches_in_order() {
     let updates: Vec<SessionUpdate> = (0..REPLAY_BATCH_MAX_UPDATES + 3)
         .map(chunk)
         .chain(std::iter::once(SessionUpdate::StateUpdate(
-            SessionState::Running,
+            SessionState::Running(Default::default()),
         )))
         .collect();
 

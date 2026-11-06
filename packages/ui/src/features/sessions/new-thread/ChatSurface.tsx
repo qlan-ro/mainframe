@@ -32,6 +32,7 @@ import { useAui, useAuiState } from '@assistant-ui/react';
 import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { SessionPanel } from '@/features/session-panel/SessionPanel';
 import { useSessionPanelState } from '@/features/session-panel/use-session-panel-state';
+import { PanelColumnContext } from '@/features/session-panel/panel-control-store';
 import { ChatZone } from '@/features/chat/zones/ChatZone';
 import { SubagentZone } from '@/features/chat/zones/SubagentZone';
 import { SplitDivider } from '@/features/shared/SplitDivider';
@@ -162,9 +163,11 @@ export function ChatSurface() {
           >
             <SideChatHost parentChatId={mainThreadId}>
               <ChatColumnHeader columnId="main" toggleTestId="session-panel-toggle" tourAnchor />
-              <div className="min-h-0 flex-1">
-                <ChatThread />
-              </div>
+              <PanelColumnContext.Provider value="main">
+                <div className="min-h-0 flex-1">
+                  <ChatThread />
+                </div>
+              </PanelColumnContext.Provider>
             </SideChatHost>
             <SessionPanel state={panelState} />
           </div>
@@ -233,9 +236,11 @@ export function ChatSurface() {
         <SideChatHost parentChatId={mainThreadId}>
           <ChatColumnHeader columnId="main" toggleTestId="session-panel-toggle" tourAnchor />
           {/* The thread is h-full: it needs a box that is "the rest", not the column. */}
-          <div className="min-h-0 flex-1">
-            <ChatThread emptyState={welcome} />
-          </div>
+          <PanelColumnContext.Provider value="main">
+            <div className="min-h-0 flex-1">
+              <ChatThread emptyState={welcome} />
+            </div>
+          </PanelColumnContext.Provider>
         </SideChatHost>
         <SessionPanel state={panelState} />
         <ZoneDropLayer canSplit={splitFits} />

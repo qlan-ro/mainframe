@@ -117,7 +117,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `chat-compact-elapsed`
 - `chat-compact-row-${…}`
 - `chat-compact-transcript`
-- `chat-compacting-pill`
 - `chat-composer-cancel`
 - `chat-composer-edit-cancel`
 - `chat-composer-edit-save`

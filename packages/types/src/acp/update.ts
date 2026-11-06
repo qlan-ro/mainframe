@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 import { ContentChunkSchema } from './content.js';
+import { MAINFRAME_META_NAMESPACE } from './extensions.js';
 import { ToolCallContentChunkSchema, ToolCallUpdateSchema } from './tool-call.js';
 
 /**
@@ -51,16 +52,40 @@ export const IdleStateUpdateSchema = z
 export type IdleStateUpdate = z.infer<typeof IdleStateUpdateSchema>;
 
 /**
- * Foreground-work state transition. `running`/`requires_action` carry only
- * an optional `_meta` upstream; this vendored subset omits it there (nothing
- * in the facade grammar needs it) and keeps it only on `idle`, where
- * `stopReason` lives. The wire tag is `state`, flattened onto the same
+ * The daemon-recorded start of the current turn, riding a `running`
+ * `state_update`'s `_meta["_mainframe.dev"]` (spec decision 43). Epoch
+ * milliseconds, identical on every connection and every emission of the same
+ * turn (live frame and `session/resume` replay); absent when the daemon does
+ * not know it. A malformed value (negative, fractional, non-numeric) is
+ * dropped to `undefined` rather than failing the whole update.
+ */
+export const TurnStartMetaSchema = z
+  .object({
+    startedAtMs: z.number().int().nonnegative().optional().catch(undefined),
+  })
+  .loose();
+export type TurnStartMeta = z.infer<typeof TurnStartMetaSchema>;
+
+/** `running`'s `_meta`: a malformed namespace value is dropped, not rejected. */
+const RunningMetaSchema = z
+  .object({
+    [MAINFRAME_META_NAMESPACE]: TurnStartMetaSchema.optional().catch(undefined),
+  })
+  .loose()
+  .optional()
+  .catch(undefined);
+
+/**
+ * Foreground-work state transition. `running` and `idle` carry their own
+ * `_meta` (`idle` also `stopReason`); `requires_action` is the one variant
+ * this vendored subset leaves without it (nothing in the facade grammar needs
+ * it there). The wire tag is `state`, flattened onto the same
  * object as `session/update`'s own `sessionUpdate` tag — Rust's internally
  * tagged newtype-variant encoding does the same flattening (`update.rs`), so
  * `SessionUpdateSchema` below extends each of these three shapes directly
  * rather than nesting a `state` sub-object.
  */
-const StateRunningSchema = z.object({ state: z.literal('running') }).loose();
+const StateRunningSchema = z.object({ state: z.literal('running'), _meta: RunningMetaSchema }).loose();
 const StateIdleSchema = IdleStateUpdateSchema.extend({ state: z.literal('idle') });
 const StateRequiresActionSchema = z.object({ state: z.literal('requires_action') }).loose();
 

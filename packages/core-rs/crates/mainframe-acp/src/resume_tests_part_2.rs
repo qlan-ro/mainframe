@@ -32,7 +32,7 @@ async fn resume_replay_ends_with_the_current_turn_state() {
     let (_response, replay) = dispatch_resume(resume_request(None), &running_port, None).await;
     assert!(matches!(
         replay.updates.last(),
-        Some(SessionUpdate::StateUpdate(WireSessionState::Running))
+        Some(SessionUpdate::StateUpdate(WireSessionState::Running(_)))
     ));
 
     let idle_port = FakePort {

@@ -245,3 +245,6 @@ async fn interrupt_ends_the_turn_cancelled_and_leaves_no_answerable_gate() {
 
 #[path = "chat_manager_tests_chat_surface_wiring_lifecycle_tests.rs"]
 mod lifecycle_tests;
+
+#[path = "chat_manager_tests_turn_start.rs"]
+mod turn_start_tests;

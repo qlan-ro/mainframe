@@ -62,6 +62,13 @@ export function useTurnPresentationSelector<T>(select: (value: TurnPresentationC
   return useSyncExternalStore(store.subscribe, () => select(store.value));
 }
 
+const noSubscription = () => () => undefined;
+/** Like `useTurnPresentationSelector`, but `fallback` outside the compact transcript (verbose mode). */
+export function useOptionalTurnPresentationSelector<T>(select: (value: TurnPresentationContext) => T, fallback: T): T {
+  const store = useContext(Context);
+  return useSyncExternalStore(store?.subscribe ?? noSubscription, () => (store ? select(store.value) : fallback));
+}
+
 /** Stable `toggle` / `register` — never re-render a consumer on their own. */
 export function useTurnPresentationActions(): Pick<TurnPresentationContext, 'toggle' | 'register'> {
   return useStore();

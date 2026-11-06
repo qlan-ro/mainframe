@@ -73,6 +73,22 @@ describe('AcpSessionPlane.attach', () => {
 });
 
 describe('AcpSessionPlane — state_update → run frames', () => {
+  it('carries the daemon turn start on run.started', async () => {
+    const client = makeFakeAcpClient();
+    const host = makeHost();
+    const plane = new AcpSessionPlane(host);
+    await plane.attach(client);
+    host.dispatch.mockClear();
+
+    client.emitUpdate(CHAT_ID, {
+      sessionUpdate: 'state_update',
+      state: 'running',
+      _meta: { '_mainframe.dev': { startedAtMs: 1_790_000_000_000 } },
+    });
+
+    expect(eventsOf(host)).toEqual([{ type: 'run.started', startedAtMs: 1_790_000_000_000 }]);
+  });
+
   it('dispatches run.started on running and run.stopped on idle, after the 50ms settle delay (D7)', async () => {
     vi.useFakeTimers();
     try {

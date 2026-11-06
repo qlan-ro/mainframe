@@ -69,8 +69,12 @@ export interface ChatPermissionEntry {
 
 export type LoadState = { type: 'idle' } | { type: 'loading' } | { type: 'ready' } | { type: 'error'; error: unknown };
 
+/** `startedAtMs` is the daemon's start of the current turn, when it reports one (survives reload and reopen). */
 export type RunState =
-  { type: 'idle' } | { type: 'running' } | { type: 'cancelling' } | { type: 'error'; error: unknown };
+  | { type: 'idle' }
+  | { type: 'running'; startedAtMs?: number }
+  | { type: 'cancelling'; startedAtMs?: number }
+  | { type: 'error'; error: unknown };
 
 export interface ChatThreadState extends ChatEnvironmentSlice {
   /**
@@ -122,7 +126,7 @@ export type ChatStateEvent =
   | { type: 'history.failed'; error: unknown }
   | { type: 'transcript.updated'; messages: readonly ThreadMessageLike[] }
   | { type: 'transcript.cleared' }
-  | { type: 'run.started' }
+  | { type: 'run.started'; startedAtMs?: number }
   | { type: 'run.cancelling' }
   | { type: 'run.stopped' }
   | { type: 'run.failed'; error: unknown }
