@@ -62,7 +62,7 @@ jobs:
         # Cross-platform (macOS + Linux) even while the Tauri release leg is
         # macOS-only — the standalone daemon has no signing dependency.
         include:
-          - os: macos-14
+          - os: macos-15
             target_os: darwin
             target_arch: arm64
           - os: ubuntu-latest
@@ -145,7 +145,7 @@ jobs:
         # runner across every release run, indefinitely blocking the pipeline. Ship
         # Apple Silicon only; re-add an Intel leg via a self-hosted runner if needed.
         include:
-          - os: macos-14 # Apple Silicon (arm64)
+          - os: macos-15 # Apple Silicon (arm64)
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
