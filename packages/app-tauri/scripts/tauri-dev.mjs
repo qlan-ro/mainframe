@@ -51,7 +51,7 @@ const devUrl = `http://localhost:${port}`;
 /**
  * Dev builds also override the traffic-light y. macOS 26 gates the button
  * metrics on the SDK a binary links: the packaged app (release runner is
- * macos-14, SDK 14.x) gets the classic buttons, whose cluster centre lands at
+ * macos-15, SDK 15.x) gets the classic buttons, whose cluster centre lands at
  * y + 2 from the window top; a local dev build links the current SDK (26+)
  * and gets the new metrics, centre = y − 2. tauri.conf.json carries the
  * packaged value (22 → centre 24, the sidebar header's midline); dev patches
