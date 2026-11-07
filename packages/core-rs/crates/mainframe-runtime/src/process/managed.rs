@@ -6,14 +6,17 @@ use tokio::{
     task::JoinHandle,
 };
 
+/// `None` when a signal ended the child or its status could not be read.
+type ExitCode = Option<i32>;
+
 /// Resolves once the child has been reaped AND its output pumps have finished
 /// (each bounded by [`super::PUMP_DRAIN_GRACE`]), so an exit handler never
 /// runs ahead of the child's last stdout/stderr chunk.
 #[derive(Clone)]
-pub struct ExitLatch(watch::Receiver<Option<Option<i32>>>);
+pub struct ExitLatch(watch::Receiver<Option<ExitCode>>);
 
 impl ExitLatch {
-    pub async fn wait(&self) -> Option<i32> {
+    pub async fn wait(&self) -> ExitCode {
         let mut receiver = self.0.clone();
         match receiver.wait_for(Option::is_some).await {
             Ok(value) => (*value).flatten(),
@@ -65,7 +68,7 @@ impl ManagedProcess {
 async fn watch_child(
     mut child: Child,
     mut signals: mpsc::UnboundedReceiver<Signal>,
-    exit: watch::Sender<Option<Option<i32>>>,
+    exit: watch::Sender<Option<ExitCode>>,
     pumps: Vec<JoinHandle<()>>,
 ) {
     let status = loop {

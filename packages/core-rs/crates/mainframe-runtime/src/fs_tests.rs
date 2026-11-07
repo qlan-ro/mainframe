@@ -24,14 +24,11 @@ async fn confinement_rejects_traversal_absolute_and_symlink_escapes() {
         resolve_and_validate_path(base_str, "inside").await,
         Some(expected.to_string_lossy().into_owned())
     );
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(&sibling, base.join("escape")).unwrap();
-        assert_eq!(
-            resolve_and_validate_path(base_str, "escape/outside").await,
-            None
-        );
-    }
+    std::os::unix::fs::symlink(&sibling, base.join("escape")).unwrap();
+    assert_eq!(
+        resolve_and_validate_path(base_str, "escape/outside").await,
+        None
+    );
 }
 
 #[test]
@@ -70,10 +67,8 @@ async fn failed_rename_cleans_temporary_file() {
     assert_eq!(std::fs::read(&path).unwrap(), b"recovered");
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn credentials_are_owner_only_on_creation_and_replacement() {
-    use std::os::unix::fs::PermissionsExt;
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("credentials");
     for contents in [b"first".as_slice(), b"second".as_slice()] {
@@ -84,4 +79,18 @@ async fn credentials_are_owner_only_on_creation_and_replacement() {
         );
     }
     assert_eq!(std::fs::read(&path).unwrap(), b"second");
+}
+
+#[tokio::test]
+async fn replacing_a_file_keeps_its_permissions() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("private.json");
+    std::fs::write(&path, "{}").unwrap();
+    std::fs::set_permissions(&path, Permissions::from_mode(0o640)).unwrap();
+    write_atomic(&path, b"[]", false).await.unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), b"[]");
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o640
+    );
 }

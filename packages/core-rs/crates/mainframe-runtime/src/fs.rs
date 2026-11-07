@@ -1,4 +1,6 @@
+use std::fs::Permissions;
 use std::io::{self, Write};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -47,7 +49,8 @@ impl AtomicWriteError {
 
 /// Writes a unique sibling, syncs its contents and metadata, then renames it.
 /// The directory is not fsynced: replacement is atomic, not crash-durable.
-/// `owner_only` sets Unix mode 0600 before any bytes are written.
+/// `owner_only` sets mode 0600 before any bytes are written; otherwise a file
+/// being replaced keeps its permissions.
 /// Submitted writes stay serialized through publication after caller cancellation.
 pub async fn write_atomic(
     path: &Path,
@@ -77,17 +80,22 @@ async fn write_ordered(
     .map_err(|error| AtomicWriteError::write(&error_path, io::Error::other(error)))?
 }
 
-fn write_atomic_blocking(
+pub(crate) fn write_atomic_blocking(
     path: &Path,
     contents: &[u8],
     owner_only: bool,
     before_rename: impl FnOnce(),
 ) -> Result<(), AtomicWriteError> {
     let (temporary, mut file) = create_sibling(path, owner_only)?;
-    #[cfg(unix)]
-    if owner_only {
-        use std::os::unix::fs::PermissionsExt;
-        file.set_permissions(std::fs::Permissions::from_mode(0o600))
+    let permissions = if owner_only {
+        Some(Permissions::from_mode(0o600))
+    } else {
+        std::fs::metadata(path)
+            .ok()
+            .map(|target| target.permissions())
+    };
+    if let Some(permissions) = permissions {
+        file.set_permissions(permissions)
             .map_err(|error| AtomicWriteError::write(&temporary.0, error))?;
     }
     file.write_all(contents)
@@ -117,16 +125,12 @@ fn create_sibling(
         let temporary = PathBuf::from(name);
         let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
-        #[cfg(unix)]
         if owner_only {
-            use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
-        #[cfg(not(unix))]
-        let _ = owner_only;
         match options.open(&temporary) {
             Ok(file) => return Ok((Temporary(temporary), file)),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
             Err(error) => return Err(AtomicWriteError::write(&temporary, error)),
         }
     }
