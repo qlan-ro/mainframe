@@ -132,3 +132,92 @@ async fn async_stdin_write_waits_for_room_and_reports_a_closed_queue() {
         Err(StdinWriteError::Closed)
     );
 }
+
+#[tokio::test]
+async fn a_background_job_holding_the_pipes_does_not_hold_the_result() {
+    let output = tokio::time::timeout(
+        Duration::from_secs(5),
+        run_captured(script("printf done; sleep 30 &"), None),
+    )
+    .await
+    .expect("the run must end with the shell, not with the background job")
+    .unwrap();
+    assert_eq!(output.stdout, b"done");
+    assert_eq!(output.status.code(), Some(0));
+}
+
+#[tokio::test]
+async fn a_background_job_survives_writing_after_the_run_ended() {
+    let dir = tempfile::tempdir().unwrap();
+    let marker = dir.path().join("survived");
+    let mut command = script("(sleep 1; echo late; echo ok > \"$MARKER\") & printf started");
+    command.env("MARKER", &marker);
+    let output = run_captured(command, None).await.unwrap();
+    assert_eq!(output.stdout, b"started");
+    crate::test_support::poll_until(
+        Duration::from_secs(5),
+        Duration::from_millis(20),
+        async || marker.exists(),
+    )
+    .await
+    .expect("the job must not die on a closed pipe");
+}
+
+#[tokio::test]
+async fn an_exit_before_the_deadline_is_not_a_timeout_when_a_job_holds_the_pipes() {
+    let command = script("sleep 30 & exit 3");
+    let output = run_captured_prefix(command, Duration::from_millis(200), 1024)
+        .await
+        .unwrap();
+    assert!(!output.timed_out);
+    assert_eq!(output.exit_code, Some(3));
+}
+
+#[tokio::test]
+async fn prefix_capture_lets_a_chatty_child_finish_and_keeps_exactly_the_limit() {
+    let command = script("exec head -c 1000000 /dev/zero");
+    let output = run_captured_prefix(command, TIMEOUT_MARGIN, 1024)
+        .await
+        .unwrap();
+    assert_eq!(output.exit_code, Some(0), "the child must not die on EPIPE");
+    assert_eq!(output.stdout.len(), 1024);
+    assert!(!output.timed_out);
+}
+
+#[tokio::test]
+async fn prefix_capture_keeps_output_read_before_the_deadline() {
+    let command = script("printf partial; exec sleep 60");
+    let output = run_captured_prefix(command, Duration::from_millis(500), 1024)
+        .await
+        .unwrap();
+    assert_eq!(output.stdout, b"partial");
+    assert!(output.timed_out);
+    assert_eq!(output.exit_code, None);
+}
+
+async fn pumped_lines(input: &'static [u8]) -> Vec<String> {
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    spawn_line_pump(input, move |line| {
+        sender.send(line).unwrap();
+    })
+    .await
+    .unwrap();
+    let mut lines = Vec::new();
+    while let Some(line) = receiver.recv().await {
+        lines.push(line);
+    }
+    lines
+}
+
+#[tokio::test]
+async fn line_pump_survives_invalid_utf8() {
+    assert_eq!(
+        pumped_lines(b"ok\n\xff\nafter\n").await,
+        ["ok", "\u{fffd}", "after"]
+    );
+}
+
+#[tokio::test]
+async fn line_pump_strips_line_endings_and_keeps_an_unterminated_last_line() {
+    assert_eq!(pumped_lines(b"a\r\nb\n\nc").await, ["a", "b", "", "c"]);
+}

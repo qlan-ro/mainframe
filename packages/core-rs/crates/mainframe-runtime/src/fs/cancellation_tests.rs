@@ -92,10 +92,9 @@ async fn independent_destinations_do_not_wait_and_idle_keys_are_pruned() {
     assert!(weak.upgrade().is_none());
     let _next = ordering::for_path(&tmp.path().join("third")).await.unwrap();
     let key = std::fs::canonicalize(tmp.path()).unwrap().join("first");
-    assert!(!ordering::WRITERS.lock().await.contains_key(&key));
+    assert!(!ordering::WRITERS.contains(&key.to_string_lossy()));
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn directory_aliases_share_ordering_but_leaf_symlinks_are_replaced() {
     let tmp = tempfile::tempdir().unwrap();

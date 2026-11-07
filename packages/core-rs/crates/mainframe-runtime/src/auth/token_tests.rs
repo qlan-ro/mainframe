@@ -5,7 +5,7 @@ const SECRET: &str = "test-secret-key-at-least-32-chars-long!!";
 // --- generate/validate behaviour ---
 
 #[test]
-fn generates_a_valid_jwt_that_can_be_validated() {
+fn generated_token_validates() {
     let token = generate_token(SECRET, "mobile-device-1", None);
     let payload = validate_token(SECRET, &token);
     assert!(payload.is_some());
@@ -94,30 +94,22 @@ fn payload_serialization_matches_node_json_stringify() {
 }
 
 #[test]
-fn base64url_matches_node_buffer_output() {
-    // Buffer.from('hello world').toString('base64url')
-    assert_eq!(base64url::encode(b"hello world"), "aGVsbG8gd29ybGQ");
-    // Buffer.from(JSON.stringify(payloadA)).toString('base64url')
-    let payload_json = r#"{"deviceId":"mobile-1","iat":1700000000000,"epoch":7}"#;
-    assert_eq!(
-        base64url::encode(payload_json.as_bytes()),
-        "eyJkZXZpY2VJZCI6Im1vYmlsZS0xIiwiaWF0IjoxNzAwMDAwMDAwMDAwLCJlcG9jaCI6N30"
-    );
+fn a_token_with_a_trailing_segment_is_rejected() {
+    assert!(validate_token("test-secret", &format!("{NODE_TOKEN_A}.extra")).is_none());
 }
 
 #[test]
-fn base64url_round_trips() {
-    for input in [
-        b"".as_slice(),
-        b"a",
-        b"ab",
-        b"abc",
-        b"abcd",
-        &[0u8, 255, 128, 1],
-    ] {
-        let encoded = base64url::encode(input);
-        assert_eq!(base64url::decode(&encoded).unwrap(), input);
-    }
+fn a_token_with_an_empty_signature_is_rejected() {
+    let (payload, _) = NODE_TOKEN_A.split_once('.').unwrap();
+    assert!(validate_token("test-secret", &format!("{payload}.")).is_none());
+}
+
+#[test]
+fn a_signature_respelled_with_trailing_bits_is_rejected() {
+    // The last of 43 base64 characters carries 4 bits and 2 unused ones, so
+    // '8' (111100) and '9' (111101) decode to the same 32 bytes.
+    let respelled = NODE_TOKEN_A.strip_suffix('8').unwrap();
+    assert!(validate_token("test-secret", &format!("{respelled}9")).is_none());
 }
 
 #[test]

@@ -24,6 +24,11 @@ impl KeyedMutex {
         self.get(key).lock_owned().await
     }
 
+    #[cfg(test)]
+    pub(crate) fn contains(&self, key: &str) -> bool {
+        self.0.lock_recover().contains_key(key)
+    }
+
     pub fn prune(&self) {
         self.0
             .lock_recover()

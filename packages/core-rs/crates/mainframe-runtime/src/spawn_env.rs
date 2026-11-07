@@ -12,6 +12,15 @@
 //! and threaded explicitly into every spawn site as an `env("PATH", …)` override.
 
 use std::sync::Arc;
+use std::time::Duration;
+
+/// Bounds a login shell that hangs at start-up. Well past a healthy shell, which
+/// takes about 1.5s, or a slow one on a cold boot, which gets no second probe.
+const SHELL_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Interactive start-up files may print anything, so the value is fenced.
+const SHELL_PROBE_OPEN: &str = "<mf-path>";
+const SHELL_PROBE_CLOSE: &str = "</mf-path>";
 
 /// The login-shell-resolved `PATH`, captured once at boot and threaded into
 /// child-process spawns. Cheap to clone (`Arc<str>` inside).
@@ -34,48 +43,26 @@ impl ResolvedPath {
             })
     }
 
-    /// Resolve the interactive-shell `PATH`: probe the
-    /// login shell for its `PATH`, falling back to the current `PATH` plus the
-    /// common user/toolchain bin dirs when the shell probe fails or is empty.
-    ///
-    /// The blocking `SHELL -lic 'echo "$PATH"'` probe is the sanctioned boot-time
-    /// exception to the daemon's async-only I/O rule (it runs once, before the
-    /// tokio runtime spawns any work).
+    /// Resolve the interactive-shell `PATH`, falling back to the current
+    /// `PATH` plus the common user/toolchain bin dirs when the probe fails.
     ///
     /// Under `E2E_MODE` the probe is skipped: the e2e harness spawns the daemon
     /// with a full inherited `PATH` and re-spawns it once per describe (100+ a
     /// run), where a ~1.5s interactive-shell probe would dominate every boot. The
     /// [`fallback`](Self::fallback) already prepends the toolchain bin dirs to that
     /// inherited `PATH`, so child spawns still resolve.
-    #[must_use]
-    pub fn resolve() -> Self {
+    pub async fn resolve() -> Self {
         if std::env::var_os("E2E_MODE").is_some() {
             return Self::fallback();
         }
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        match std::process::Command::new(&shell)
-            .args(["-lic", "echo \"$PATH\""])
-            .output()
-        {
-            Ok(out) => {
-                let resolved = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !resolved.is_empty() {
-                    tracing::debug!(
-                        shell,
-                        path_length = resolved.split(':').count(),
-                        "resolved from login shell"
-                    );
-                    return Self(Arc::from(resolved.as_str()));
-                }
-            }
-            Err(err) => {
-                tracing::warn!(error = %err, "login shell failed, using fallback");
-            }
+        match probe_login_shell(&shell, SHELL_PROBE_TIMEOUT).await {
+            Some(path) => Self(Arc::from(path)),
+            None => Self::fallback(),
         }
-        Self::fallback()
     }
 
-    /// The `enrichPath` fallback: prepend `~/.local/bin`, `/usr/local/bin`, and
+    /// Prepend `~/.local/bin`, `/usr/local/bin`, and
     /// `/opt/homebrew/bin` (those not already present) to the current `PATH`.
     fn fallback() -> Self {
         let current =
@@ -127,9 +114,44 @@ impl std::ops::Deref for ResolvedPath {
     }
 }
 
+async fn probe_login_shell(shell: &str, timeout: Duration) -> Option<String> {
+    let mut command = tokio::process::Command::new(shell);
+    command.args([
+        "-lic",
+        &format!("echo \"{SHELL_PROBE_OPEN}$PATH{SHELL_PROBE_CLOSE}\""),
+    ]);
+    let output = match crate::process::run_captured(command, Some(timeout)).await {
+        Ok(output) => output,
+        Err(error) => {
+            tracing::warn!(shell, %error, "login shell probe failed, using fallback");
+            return None;
+        }
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let path = fenced_path(&stdout);
+    match path {
+        Some(path) => tracing::debug!(
+            shell,
+            entries = path.split(':').count(),
+            "resolved from login shell"
+        ),
+        None => tracing::warn!(shell, "login shell reported no PATH, using fallback"),
+    }
+    path.map(str::to_string)
+}
+
+fn fenced_path(stdout: &str) -> Option<&str> {
+    let (_, rest) = stdout.split_once(SHELL_PROBE_OPEN)?;
+    let (path, _) = rest.split_once(SHELL_PROBE_CLOSE)?;
+    let path = path.trim();
+    (!path.is_empty()).then_some(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::test_support::write_shell_script;
 
     #[test]
     fn from_value_exposes_the_path_via_as_str_and_deref() {
@@ -143,5 +165,40 @@ mod tests {
         let a = ResolvedPath::from_value("/x:/y");
         let b = a.clone();
         assert_eq!(a.as_str(), b.as_str());
+    }
+
+    #[tokio::test]
+    async fn the_probe_ignores_what_start_up_files_print() {
+        let dir = tempfile::tempdir().unwrap();
+        let shell = dir.path().join("chatty-shell");
+        write_shell_script(
+            &shell,
+            "echo 'Welcome back'\nPATH=/probed/bin:/usr/bin\neval \"$2\"\necho 'Goodbye'\n",
+        )
+        .unwrap();
+        assert_eq!(
+            probe_login_shell(shell.to_str().unwrap(), Duration::from_secs(5))
+                .await
+                .as_deref(),
+            Some("/probed/bin:/usr/bin")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_shell_that_hangs_is_abandoned_at_the_deadline() {
+        let dir = tempfile::tempdir().unwrap();
+        let shell = dir.path().join("hung-shell");
+        write_shell_script(&shell, "exec sleep 60\n").unwrap();
+        assert_eq!(
+            probe_login_shell(shell.to_str().unwrap(), Duration::from_millis(200)).await,
+            None
+        );
+    }
+
+    #[test]
+    fn output_without_a_fenced_value_yields_nothing() {
+        assert_eq!(fenced_path("no markers here"), None);
+        assert_eq!(fenced_path("<mf-path>unterminated"), None);
+        assert_eq!(fenced_path("<mf-path>  </mf-path>"), None);
     }
 }

@@ -70,17 +70,12 @@ pub fn parse_pids(stdout: &str, accept: impl Fn(&str) -> bool) -> Vec<u32> {
     let mut pids: Vec<u32> = Vec::new();
     let mut pending_pid: Option<u32> = None;
     for line in stdout.split('\n') {
-        if line.is_empty() {
+        let Some(tag) = line.chars().next() else {
             continue;
-        }
-        let mut chars = line.chars();
-        let tag = chars.next().unwrap_or('\0');
+        };
         let rest = &line[tag.len_utf8()..];
         if tag == 'p' {
-            pending_pid = match rest.parse::<i64>() {
-                Ok(n) if n > 0 => u32::try_from(n).ok(),
-                _ => None,
-            };
+            pending_pid = rest.parse::<u32>().ok().filter(|pid| *pid > 0);
         } else if tag == 'a'
             && let Some(pid) = pending_pid
         {

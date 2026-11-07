@@ -12,7 +12,9 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::{get, post};
-use mainframe_runtime::config::{PartialMainframeConfig, get_config, save_config};
+use mainframe_runtime::config::{
+    PartialMainframeConfig, clear_tunnel_credentials, get_config, save_config,
+};
 use serde_json::{Value, json};
 
 use crate::ctx::AppCtx;
@@ -109,10 +111,6 @@ async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Resp
     manager.stop("daemon").await;
     ctx.set_tunnel_url(None);
 
-    // TODO: `clearConfig` should also clear the persisted token/url. `save_config`
-    // merges a `PartialMainframeConfig` where `None` means "leave unchanged", so
-    // it cannot force-clear a field without a change to `mainframe-runtime::config`.
-    // The tunnel is still disabled (`tunnel: false`), but stale credentials persist.
     let partial = PartialMainframeConfig {
         tunnel: Some(false),
         ..PartialMainframeConfig::default()
@@ -120,7 +118,9 @@ async fn stop(State(ctx): State<Arc<AppCtx>>, body: Option<Json<Value>>) -> Resp
     if let Err(err) = save_config(partial) {
         tracing::warn!(error = %err, "save_config failed");
     }
-    let _ = clear_config;
+    if clear_config && let Err(err) = clear_tunnel_credentials() {
+        tracing::warn!(error = %err, "clearing tunnel credentials failed");
+    }
     ok_empty()
 }
 

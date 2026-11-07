@@ -39,7 +39,7 @@ async fn run_daemon() {
     // spawn (adapters, title generation, LSP, launch, background-task probes).
     // Mutating the process env is `unsafe` under edition 2024 and this crate is
     // `#![forbid(unsafe_code)]`, so the value is passed explicitly instead.
-    let resolved_path = mainframe_runtime::ResolvedPath::resolve();
+    let resolved_path = mainframe_runtime::ResolvedPath::resolve().await;
 
     // ensure_auth_secret(): generates + persists a secret if none exists. Env
     // mutation is `unsafe` under edition 2024, so the secret is threaded through

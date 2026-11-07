@@ -1716,6 +1716,7 @@ dependencies = [
 name = "mainframe-runtime"
 version = "0.0.0"
 dependencies = [
+ "base64",
  "dirs",
  "hex",
  "hmac",

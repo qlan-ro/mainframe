@@ -5,7 +5,7 @@
 //! never consumed by clients), so the tracing text/field format is used.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::{Duration, SystemTime};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
@@ -15,30 +15,20 @@ use tracing_subscriber::prelude::*;
 /// Days a `server.*` log file is kept before the boot purge deletes it.
 const RETENTION_DAYS: u64 = 7;
 
-/// Level names accepted from `LOG_LEVEL`.
-const VALID_LEVELS: [&str; 6] = ["trace", "debug", "info", "warn", "error", "fatal"];
-
-/// Resolves a raw `LOG_LEVEL` value, falling back to `info` for anything outside
-/// `VALID_LEVELS`.
-///
-/// Pure by construction (takes the raw env value as an argument) so it's testable
-/// without `std::env::set_var`, which edition 2024 makes `unsafe`.
-fn resolve_level_from(raw: Option<&str>) -> String {
-    let raw = raw.unwrap_or_default().trim().to_lowercase();
-    // tracing has no "fatal" level, so "fatal" maps to tracing's ERROR.
-    let normalized = if raw == "fatal" {
-        "error"
-    } else {
-        raw.as_str()
-    };
-    if VALID_LEVELS.contains(&raw.as_str()) {
-        normalized.to_string()
-    } else {
-        "info".to_string()
+/// Resolves a raw `LOG_LEVEL` value, falling back to `info` for anything else.
+/// Takes the value as an argument so tests need no `std::env::set_var`.
+fn resolve_level_from(raw: Option<&str>) -> &'static str {
+    match raw.unwrap_or_default().trim().to_lowercase().as_str() {
+        "trace" => "trace",
+        "debug" => "debug",
+        "warn" => "warn",
+        // tracing has no "fatal" level.
+        "error" | "fatal" => "error",
+        _ => "info",
     }
 }
 
-fn resolve_level() -> String {
+fn resolve_level() -> &'static str {
     resolve_level_from(std::env::var("LOG_LEVEL").ok().as_deref())
 }
 
@@ -50,7 +40,7 @@ fn is_stale_server_log(file_name: &str, modified: SystemTime, cutoff: SystemTime
 
 /// Deletes `server.*` files older than `RETENTION_DAYS`,
 /// ignoring per-file and missing-dir errors.
-fn purge_old_logs(dir: &PathBuf) {
+fn purge_old_logs(dir: &Path) {
     let cutoff = SystemTime::now() - Duration::from_secs(RETENTION_DAYS * 86_400);
     let Ok(entries) = fs::read_dir(dir) else {
         return; // ignore if dir doesn't exist yet
@@ -80,7 +70,7 @@ fn is_test_env() -> bool {
 /// for the process lifetime or buffered log lines are lost on exit. Returns
 /// `None` under tests (silent, no subscriber) or if the file appender cannot be
 /// built (graceful stdout-only fallback).
-pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
+pub fn init(log_dir: &Path) -> Option<WorkerGuard> {
     if is_test_env() {
         return None;
     }
@@ -93,30 +83,27 @@ pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
     let is_prod = std::env::var("NODE_ENV").as_deref() == Ok("production");
     let force_stdout = std::env::var("LOG_TO_STDOUT").as_deref() == Ok("true");
 
-    let dir = log_dir.to_path_buf();
-    if let Err(err) = fs::create_dir_all(&dir) {
+    if let Err(err) = fs::create_dir_all(log_dir) {
         boot_error(
-            &format!("could not create log directory {}", dir.display()),
+            &format!("could not create log directory {}", log_dir.display()),
             &err,
         );
     }
-    purge_old_logs(&dir);
-
-    let filter = EnvFilter::try_new(&level).unwrap_or_else(|_| EnvFilter::new("info"));
+    purge_old_logs(log_dir);
 
     // Daily `server.<date>.log` files, append-only.
     let appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
         .filename_prefix("server")
         .filename_suffix("log")
-        .build(&dir);
+        .build(log_dir);
     let appender = match appender {
         Ok(appender) => appender,
-        Err(_) => {
-            // Graceful fallback: stdout-only when the file appender can't be built.
+        Err(error) => {
             tracing_subscriber::fmt()
                 .with_env_filter(EnvFilter::new(level))
                 .init();
+            tracing::warn!(%error, "file logging unavailable, using stdout only");
             return None;
         }
     };
@@ -128,14 +115,11 @@ pub fn init(log_dir: &std::path::Path) -> Option<WorkerGuard> {
     let file_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
         .with_writer(non_blocking);
-    let stdout_layer = if !is_prod || force_stdout {
-        Some(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
-    } else {
-        None
-    };
+    let stdout_layer = (!is_prod || force_stdout)
+        .then(|| tracing_subscriber::fmt::layer().with_writer(std::io::stdout));
 
     tracing_subscriber::registry()
-        .with(filter)
+        .with(EnvFilter::new(level))
         .with(file_layer)
         .with(stdout_layer)
         .init();
@@ -197,6 +181,6 @@ mod tests {
     #[test]
     fn purge_ignores_missing_dir() {
         // Missing dir must not panic.
-        purge_old_logs(&PathBuf::from("/nonexistent/mainframe/logs/xyz"));
+        purge_old_logs(Path::new("/nonexistent/mainframe/logs/xyz"));
     }
 }
