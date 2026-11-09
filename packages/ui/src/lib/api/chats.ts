@@ -168,6 +168,13 @@ export const unarchiveChat = (port: number, chatId: string): Promise<Chat> =>
   request<Chat>('POST', `${apiBase(port)}/api/chats/${chatId}/unarchive`);
 
 /**
+ * Unarchive the chat's provider session (a Codex thread archived in the Codex
+ * app) so a send can continue it. The remedy a refused prompt offers.
+ */
+export const unarchiveNativeSession = (port: number, chatId: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${encodeURIComponent(chatId)}/native-session/unarchive`);
+
+/**
  * Delete a temporary chat and its scratch working directory. 409s for a
  * non-temporary chat — always route by the chat's `temporary` flag before
  * calling this instead of `archiveChat` (todo #346).

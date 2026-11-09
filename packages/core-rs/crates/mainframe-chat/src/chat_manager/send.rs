@@ -264,14 +264,17 @@ impl ChatManager {
 
         self.record_message_context(post, chat_id, content);
 
-        let now = now_iso8601();
-        self.set_working(post, &now);
+        let prior_state = post.lock_recover().chat.process_state.flatten();
+        self.set_working(post, &now_iso8601());
 
         let uuid = Some(message_uuid.clone());
         // The provider gets the handoff block; the stored message keeps
         // only the user's own text, so live and cold history match.
         let text = with_handoff(handoff, outgoing.text);
-        session.send_message(text, outgoing.images, uuid).await?;
+        if let Err(err) = session.send_message(text, outgoing.images, uuid).await {
+            self.roll_back_refused_turn(post, chat_id, &message, prior_state, &err);
+            return Err(err.into());
+        }
 
         if is_queued {
             self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);
@@ -292,14 +295,5 @@ fn with_handoff(handoff: Option<&str>, text: String) -> String {
     }
 }
 
-struct SteerMessage<'a> {
-    chat_id: &'a str,
-    content: &'a str,
-    attachment_ids: Option<&'a [String]>,
-    message: ChatMessage,
-    message_uuid: String,
-    is_queued: bool,
-    text: String,
-}
-
 mod delivery;
+use delivery::SteerMessage;

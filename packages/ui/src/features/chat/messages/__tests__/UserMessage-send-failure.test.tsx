@@ -23,6 +23,7 @@ interface SyntheticMainframeMeta {
   pending?: boolean;
   clientId?: string;
   error?: string;
+  remedy?: 'unarchive_native_session';
   attachmentsRestored?: boolean;
 }
 
@@ -120,5 +121,36 @@ describe('UserMessage — send-failure copy and retry suppression', () => {
     renderUserMessage();
     expect(screen.queryByTestId('chat-user-message-send-failed')).not.toBeInTheDocument();
     expect(screen.queryByTestId('chat-user-message-send-error')).not.toBeInTheDocument();
+  });
+
+  it('offers Unarchive for an archived-thread refusal, retrying with that remedy', () => {
+    __messageFixture = makeFixture({
+      pending: true,
+      clientId: 'c1',
+      error: "This chat's Codex thread is archived in Codex, so it can't continue.",
+      remedy: 'unarchive_native_session',
+    });
+    renderUserMessage();
+    fireEvent.click(screen.getByTestId('chat-user-message-unarchive'));
+    expect(retryMessageSpy).toHaveBeenCalledWith('c1', 'unarchive_native_session');
+    expect(screen.getByTestId('chat-user-message-retry')).toBeInTheDocument();
+  });
+
+  it('offers no Unarchive for a failure without a remedy', () => {
+    __messageFixture = makeFixture({ pending: true, clientId: 'c1', error: AUTH_SENTENCE });
+    renderUserMessage();
+    expect(screen.queryByTestId('chat-user-message-unarchive')).not.toBeInTheDocument();
+  });
+
+  it('hides Unarchive too when attachmentsRestored is true', () => {
+    __messageFixture = makeFixture({
+      pending: true,
+      clientId: 'c1',
+      error: 'archived',
+      remedy: 'unarchive_native_session',
+      attachmentsRestored: true,
+    });
+    renderUserMessage();
+    expect(screen.queryByTestId('chat-user-message-unarchive')).not.toBeInTheDocument();
   });
 });

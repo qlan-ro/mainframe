@@ -1,5 +1,5 @@
 import type { AppendMessage } from '@assistant-ui/react';
-import type { ControlResponse } from '@qlan-ro/mainframe-types';
+import type { ControlResponse, PromptRemedy } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import { getAcpFacadeClient } from '../../../lib/daemon/acp-clients';
 import type { AcpSessionClientPort } from './acp-session-plane';
@@ -222,9 +222,9 @@ export class AcpChatController {
     markAttachmentsRestoredForFailure(this.actionHost, error);
   }
 
-  /** Re-send a failed optimistic user message (the "Failed to send" indicator). */
-  public retryMessage(clientId: string): Promise<void> {
-    return retryChatMessage(this.actionHost, clientId);
+  /** Re-send a failed optimistic user message, applying its `remedy` first. */
+  public retryMessage(clientId: string, remedy?: PromptRemedy): Promise<void> {
+    return retryChatMessage(this.actionHost, clientId, remedy);
   }
 
   public async cancel(): Promise<void> {

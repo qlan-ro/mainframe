@@ -17,7 +17,7 @@ import type {
 } from '@assistant-ui/react';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { normalizeNativeRepository } from '../view-model/normalize-native-messages';
-import { describeSendError } from './describe-send-error';
+import { describeSendError, sendRemedyOf } from './describe-send-error';
 import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 import { projectLocalAttachments, type LocalAttachmentPreview } from './local-attachments';
 
@@ -52,6 +52,7 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
           ...(pending.status === 'failed'
             ? {
                 error: describeSendError(pending.error, { attachmentsRestored: pending.attachmentsRestored === true }),
+                remedy: sendRemedyOf(pending.error),
                 attachmentsRestored: pending.attachmentsRestored === true,
               }
             : {}),

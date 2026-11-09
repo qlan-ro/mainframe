@@ -80,6 +80,18 @@ impl Adapter for CodexAdapter {
         Box::pin(async move { pin_fork_point(request, &executable, path.as_str()).await })
     }
 
+    fn unarchive_native_session(
+        &self,
+        session_id: String,
+        cwd: String,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        let path = self.resolved_path.clone();
+        let executable = self.pin_executable.lock_recover().clone();
+        Box::pin(async move {
+            crate::unarchive::unarchive_thread(&session_id, &cwd, &executable, path.as_str()).await
+        })
+    }
+
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {
         let path = self.resolved_path.clone();
         Box::pin(async move {

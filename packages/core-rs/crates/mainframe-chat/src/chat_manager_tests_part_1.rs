@@ -46,6 +46,8 @@ mod segment_fake;
 mod side_chat;
 #[path = "chat_manager_tests_teardown.rs"]
 mod teardown;
+#[path = "chat_manager_tests_unarchive.rs"]
+mod unarchive;
 #[path = "chat_manager_tests_wire_golden.rs"]
 mod wire_golden;
 
@@ -74,6 +76,9 @@ struct RecSession {
     /// When set, `steer` fails with this message instead of recording the
     /// call (a Codex `turn/steer` rejected because the turn already ended).
     steer_err: Mutex<Option<String>>,
+    /// When set, `send_message` fails with this message instead of recording
+    /// the call (Codex refusing `thread/resume` for an archived thread).
+    send_err: Mutex<Option<String>>,
 }
 
 impl RecSession {
@@ -92,6 +97,7 @@ impl RecSession {
             permission_mode_calls: Mutex::new(Vec::new()),
             steer_calls: Mutex::new(Vec::new()),
             steer_err: Mutex::new(None),
+            send_err: Mutex::new(None),
         })
     }
     fn with_order(label: &str, order: Arc<Mutex<Vec<String>>>) -> Arc<Self> {
@@ -109,6 +115,7 @@ impl RecSession {
             permission_mode_calls: Mutex::new(Vec::new()),
             steer_calls: Mutex::new(Vec::new()),
             steer_err: Mutex::new(None),
+            send_err: Mutex::new(None),
         })
     }
 }
@@ -157,6 +164,9 @@ impl AdapterSession for RecSession {
         images: Vec<ImageInput>,
         uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        if let Some(msg) = self.send_err.lock().unwrap().clone() {
+            return Box::pin(async move { Err(AdapterError::Message(msg)) });
+        }
         self.images_calls.lock().unwrap().push(images.len());
         self.send_message_calls
             .lock()

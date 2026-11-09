@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 mod capabilities;
 mod history;
+mod prompt;
 mod replay;
 use crate::adapter::ControlResponse;
 use crate::chat::{DiffHunk, QueuedMessageRef};
@@ -12,6 +13,7 @@ pub use capabilities::{
     REPLAY_RESULT_PREVIEWS_OPT_IN_KEY, REVISION_CURSORS_OPT_IN_KEY, RevisionCursor,
 };
 pub use history::*;
+pub use prompt::*;
 pub use replay::*;
 
 /// The `_meta` key every extension value below is namespaced under.

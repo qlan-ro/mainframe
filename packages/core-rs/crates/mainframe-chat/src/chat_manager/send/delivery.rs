@@ -1,6 +1,53 @@
 use super::*;
 
+/// A steer's stored message plus everything `deliver_steer` needs to deliver
+/// it or roll it back.
+pub(super) struct SteerMessage<'a> {
+    pub(super) chat_id: &'a str,
+    pub(super) content: &'a str,
+    pub(super) attachment_ids: Option<&'a [String]>,
+    pub(super) message: ChatMessage,
+    pub(super) message_uuid: String,
+    pub(super) is_queued: bool,
+    pub(super) text: String,
+}
+
 impl ChatManager {
+    /// The adapter refused a turn before it started (for example Codex
+    /// rejecting `thread/resume` for a thread archived outside Mainframe).
+    /// No result will ever arrive to clear the working state `set_working`
+    /// stamped, so restore the state the chat had before the send. Drop the
+    /// stored message too: the caller's error is what the client shows, as a
+    /// failed optimistic send it can retry, and a stored copy would duplicate it.
+    pub(super) fn roll_back_refused_turn(
+        &self,
+        post: &Arc<Mutex<ActiveChat>>,
+        chat_id: &str,
+        message: &ChatMessage,
+        prior_state: Option<ProcessState>,
+        err: &mainframe_adapter_api::AdapterError,
+    ) {
+        tracing::warn!(chat_id, error = %err, "adapter refused the turn");
+        self.shared
+            .messages
+            .lock_recover()
+            .remove_by_id(chat_id, &message.id);
+        self.event_handler.emit_display(chat_id);
+        let update = self.shared.prepare_live_update(
+            chat_id,
+            &ChatPatch {
+                process_state: Some(prior_state),
+                ..Default::default()
+            },
+        );
+        let chat = {
+            let mut guard = post.lock_recover();
+            guard.chat.process_state = Some(prior_state);
+            guard.chat.clone()
+        };
+        update.emit(chat, None);
+    }
+
     pub(super) async fn deliver_steer(
         &self,
         post: &Arc<Mutex<ActiveChat>>,

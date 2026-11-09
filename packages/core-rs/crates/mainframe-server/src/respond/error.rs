@@ -143,6 +143,7 @@ macro_rules! domain_errors {
 domain_errors!(
     crate::input_error::InputError,
     mainframe_chat::chat_manager::DiscardError,
+    mainframe_chat::chat_manager::UnarchiveNativeSessionError,
 );
 
 impl From<mainframe_services::workspace::ScopeError> for ApiError {
