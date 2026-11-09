@@ -52,6 +52,31 @@ fn a_design_system_is_left_to_claude_ai() {
 }
 
 #[test]
+fn a_migrated_design_downloads_its_pages_and_their_code() {
+    let migrated = listing(
+        true,
+        &[
+            ("index.html", 1),
+            ("artifact-type/app.js", 1),
+            ("project/Chat redesign.html", 1),
+            ("project/chat-app.jsx", 1),
+            ("project/.design-canvas.state.json", 1),
+            ("project/notes.md", 1),
+        ],
+    );
+    assert_eq!(
+        files_to_download(&migrated),
+        Some(vec![
+            "project/Chat redesign.html".to_string(),
+            "project/chat-app.jsx".to_string(),
+            "project/.design-canvas.state.json".to_string(),
+        ])
+    );
+    let paths = ["project/A.html", "project/sub/B.html", "project/app.jsx"].map(str::to_string);
+    assert_eq!(migrated_pages(&paths), vec!["project/A.html"]);
+}
+
+#[test]
 fn docs_and_dashboards_keep_their_content_in_the_database() {
     let docs = listing(
         true,

@@ -180,4 +180,10 @@ impl SessionSink for SessionSinkImpl {
     fn on_attention_request(&self, message: &str) {
         self.handle_attention_request(message);
     }
+    fn on_artifact_published(&self, url: &str) {
+        // Global, not chat-scoped: a preview tab can belong to any chat's workspace.
+        self.shared.emit(DaemonEvent::ArtifactPublished {
+            url: url.to_string(),
+        });
+    }
 }

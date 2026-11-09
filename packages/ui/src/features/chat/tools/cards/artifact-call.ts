@@ -20,8 +20,6 @@ export interface ArtifactCall {
   label: string;
   /** Set once the call names a specific artifact the user can open. */
   url: string | null;
-  /** Whether this call changes the artifact, so views of it go stale. */
-  publishes: boolean;
   /** Whether the result text is meant for the user, not only for the model. */
   showResult: boolean;
 }
@@ -59,7 +57,6 @@ export function describeArtifactCall(args: Record<string, unknown>, resultText: 
     verb,
     label: stringArg(args, 'title') ?? slugOf(url),
     url,
-    publishes: isPublish,
     showResult: !isPublish && action !== 'quickstart',
   };
 }

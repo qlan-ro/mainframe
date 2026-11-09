@@ -8,6 +8,7 @@
 
 mod cache;
 mod compose;
+mod recover;
 mod retention;
 
 use std::path::{Path as FsPath, PathBuf};
@@ -23,23 +24,25 @@ use serde_json::{Value, json};
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, fail_internal, ok};
-use crate::wiring::refresh::resolve_adapter_path;
 
 const ARTIFACT_URL_PREFIX: &str = "https://claude.ai/artifact/";
-const ADAPTER_ID: &str = "claude";
-const DEFAULT_BINARY: &str = "claude";
 const INDEX_PAGE: &str = "index";
 const RUNTIME_ENTRY: &str = "support.js";
 const PICKER_ENTRY: &str = "picker.js";
 const PICKER_JS: &str = include_str!("artifact_preview/picker.js");
+const CANVAS_ENTRY: &str = "mf-canvas.js";
+const CANVAS_JS: &str = include_str!("artifact_preview/canvas.js");
 const CANVAS_INDEX: &str = "project/canvas.json";
 const DECK_INDEX: &str = "project/deck.json";
 const ROOT_PAGE: &str = "index.html";
+/// The script hosts claude.ai lets an artifact load from. A page can already run
+/// any inline code here, so these only add fetching what they publish.
+const CDNS: &str = "https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com https://code.jquery.com";
 const HTML_TYPE: &str = "text/html; charset=utf-8";
 const JS_TYPE: &str = "text/javascript; charset=utf-8";
-const NOT_FOUND_PAGE: &str = "<!doctype html><meta charset=\"utf-8\"><title>Preview unavailable</title>\
-<body style=\"font:14px system-ui,sans-serif;padding:24px\">This preview is no longer available. \
-Open the artifact again from the chat.</body>";
+/// A file missing from a version that is here: a broken reference inside the artifact.
+const NOT_FOUND_PAGE: &str = "<!doctype html><meta charset=\"utf-8\"><title>Not found</title>\
+<body style=\"font:14px system-ui,sans-serif;padding:24px\">This part of the artifact isn't available.</body>";
 
 #[derive(Debug, Deserialize)]
 struct PrepareBody {
@@ -71,20 +74,7 @@ async fn prepare(
     let Some(slug) = slug_of(&body.url) else {
         return fail(StatusCode::BAD_REQUEST, "Not a claude.ai artifact URL");
     };
-    let binary = resolve_adapter_path(&ctx.core.db, &ctx.core.resolved_path, ADAPTER_ID)
-        .await
-        .unwrap_or_else(|| DEFAULT_BINARY.to_string());
-    let prepared = cache::prepare(
-        &binary,
-        &ctx.core.resolved_path,
-        &ctx.core.data_dir,
-        slug,
-        &body.url,
-    )
-    .await;
-    let cache = cache::cache_root(&ctx.core.data_dir);
-    retention::tidy(&cache, &cache.join(slug)).await;
-    match prepared {
+    match recover::download(&ctx, slug).await {
         Ok(Some(ready)) => ok(json!({
             "status": "ready",
             "path": format!("/api/artifact-preview/{slug}/{}/{INDEX_PAGE}", ready.version),
@@ -106,8 +96,8 @@ fn sandbox_policy(slug: &str, version: &str) -> String {
         "http://127.0.0.1:*/api/artifact-preview/{slug}/{version}/ http://localhost:*/api/artifact-preview/{slug}/{version}/"
     );
     format!(
-        "sandbox allow-scripts; default-src 'none'; script-src {own} blob: 'unsafe-inline' 'unsafe-eval'; worker-src {own} blob:; \
-style-src {own} 'unsafe-inline' https://fonts.googleapis.com; font-src {own} data: blob: https://fonts.gstatic.com; \
+        "sandbox allow-scripts; default-src 'none'; script-src {own} {CDNS} blob: 'unsafe-inline' 'unsafe-eval'; worker-src {own} blob:; \
+style-src {own} {CDNS} 'unsafe-inline' https://fonts.googleapis.com; font-src {own} data: blob: https://fonts.gstatic.com; \
 img-src {own} data: blob:; media-src {own} data: blob:; connect-src {own} data: blob:; frame-src {own}; base-uri 'none'; form-action 'none'"
     )
 }
@@ -151,7 +141,8 @@ fn content_type(path: &FsPath) -> Option<&'static str> {
     Some(match extension.as_str() {
         "html" => HTML_TYPE,
         "css" => "text/css; charset=utf-8",
-        "js" => JS_TYPE,
+        // In-page compilers such as Babel fetch these and run them as scripts.
+        "js" | "mjs" | "jsx" | "tsx" => JS_TYPE,
         "json" => "application/json",
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
@@ -170,7 +161,9 @@ fn content_type(path: &FsPath) -> Option<&'static str> {
 /// can't leave `root`.
 async fn read_inside(root: &FsPath, relative: &str) -> Option<(PathBuf, Vec<u8>)> {
     let safe = cache::safe_relative(relative)?;
-    if relative.split('/').any(|part| part.starts_with('.')) {
+    // Mainframe's own bookkeeping; the artifact's dotfiles, like a migrated design's
+    // `.design-canvas.state.json`, are its content.
+    if relative == cache::META_FILE {
         return None;
     }
     let path = tokio::fs::canonicalize(root.join(safe)).await.ok()?;
@@ -231,12 +224,17 @@ impl Preview<'_> {
 
     async fn index(&self) -> Response {
         if let Some(canvas) = read_json(self.root, CANVAS_INDEX).await {
-            return self.html(&compose::design_index(&canvas));
+            return self.html(&compose::design_index(&canvas, CANVAS_ENTRY));
         }
         if let Some(deck) = read_json(self.root, DECK_INDEX).await {
             return self.html(&compose::deck_index(&deck));
         }
-        self.file(ROOT_PAGE).await
+        match cache::read_meta(self.root).await {
+            Some(meta) if !meta.pages.is_empty() => {
+                self.html(&compose::pages_index(&meta.title, &meta.pages))
+            }
+            _ => self.file(ROOT_PAGE).await,
+        }
     }
 
     async fn slide(&self, id: &str) -> Response {
@@ -263,7 +261,17 @@ async fn serve(
     let policy = sandbox_policy(&slug, &version);
     let dir = cache::version_dir(&ctx.core.data_dir, &slug, &version);
     let Ok(root) = tokio::fs::canonicalize(dir).await else {
-        return page(&policy, StatusCode::NOT_FOUND, HTML_TYPE, NOT_FOUND_PAGE);
+        let unavailable = || {
+            page(
+                &policy,
+                StatusCode::NOT_FOUND,
+                HTML_TYPE,
+                recover::unavailable_page(&slug),
+            )
+        };
+        let download = || recover::download(&ctx, &slug);
+        return recover::missing_version(&ctx.core.data_dir, &slug, &path, download, unavailable)
+            .await;
     };
     let picker =
         format!(r#"<script src="/api/artifact-preview/{slug}/{version}/{PICKER_ENTRY}"></script>"#);
@@ -274,6 +282,9 @@ async fn serve(
     };
     if path == PICKER_ENTRY {
         return page(&policy, StatusCode::OK, JS_TYPE, PICKER_JS);
+    }
+    if path == CANVAS_ENTRY {
+        return page(&policy, StatusCode::OK, JS_TYPE, CANVAS_JS);
     }
     if path == INDEX_PAGE {
         return preview.index().await;

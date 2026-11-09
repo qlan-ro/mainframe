@@ -40,6 +40,7 @@ impl DaemonEvent {
             | Self::SessionsExternalCount { .. }
             | Self::AdapterModelsUpdated { .. }
             | Self::ProviderQuotaUpdated { .. }
+            | Self::ArtifactPublished { .. }
             | Self::ProviderCliUpdated { .. }
             | Self::TunnelStatus { .. }
             | Self::FileChanged { .. }

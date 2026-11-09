@@ -77,6 +77,13 @@ async fn traversal_and_internal_files_are_not_served() {
     .expect("write");
 
     assert!(read_inside(&fx.root, ".preview.json").await.is_none());
+    fx.write("project/.design-canvas.state.json", "{}");
+    assert!(
+        read_inside(&fx.root, "project/.design-canvas.state.json")
+            .await
+            .is_some(),
+        "an artifact's own dotfile is content"
+    );
     assert!(read_inside(&fx.root, "../secret.html").await.is_none());
     assert!(read_inside(&fx.root, "/etc/passwd").await.is_none());
 }
@@ -159,6 +166,15 @@ async fn every_html_page_carries_the_picker_and_other_files_do_not() {
 }
 
 #[tokio::test]
+async fn jsx_is_served_as_script_for_in_page_compilers() {
+    let fx = fixture();
+    fx.write("project/app.jsx", "function App() {}");
+    let response = fx.preview().file("project/app.jsx").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(header_of(&response, header::CONTENT_TYPE), JS_TYPE);
+}
+
+#[tokio::test]
 async fn an_unknown_file_type_is_not_served() {
     let fx = fixture();
     fx.write("notes.txt", "text");
@@ -169,21 +185,43 @@ async fn an_unknown_file_type_is_not_served() {
 }
 
 #[tokio::test]
-async fn a_design_index_lists_its_boards_in_order() {
+async fn a_design_index_hands_its_layout_to_the_canvas_script() {
     let fx = fixture();
     fx.write(
         CANVAS_INDEX,
         r#"{"title":"A <b>","order":["Two.dc.html","One.dc.html"],"boards":{
-        "One.dc.html":{"w":100,"h":50,"title":"First"},"Two.dc.html":{"w":200,"h":60,"title":"Second"}}}"#,
+        "One.dc.html":{"x":0,"y":0,"w":100,"h":50},"Two.dc.html":{"x":180,"y":0,"w":200,"h":60}}}"#,
     );
 
     let page = body(fx.preview().index().await).await;
-    assert!(page.contains("A &lt;b&gt;"));
-    assert!(
-        page.find("project/Two.dc.html").expect("two")
-            < page.find("project/One.dc.html").expect("one")
+    assert!(page.contains("<title>A &lt;b&gt;</title>"));
+    assert!(page.contains(&format!(r#"<script src="{CANVAS_ENTRY}"></script>"#)));
+    let data_start = page.find(r#"id="mf-canvas-data">"#).expect("data block") + 20;
+    let data_end = data_start + page[data_start..].find("</script>").expect("data end");
+    let data: serde_json::Value =
+        serde_json::from_str(&page[data_start..data_end]).expect("layout is JSON");
+    assert_eq!(
+        data["order"],
+        serde_json::json!(["Two.dc.html", "One.dc.html"])
     );
-    assert!(page.contains(r#"data-w="200" data-h="60""#));
+    assert_eq!(data["boards"]["Two.dc.html"]["x"], 180);
+}
+
+#[tokio::test]
+async fn a_hostile_canvas_cannot_break_out_of_the_data_block() {
+    let fx = fixture();
+    fx.write(
+        CANVAS_INDEX,
+        r#"{"title":"</script><script>alert(1)</script>","order":[],"boards":{}}"#,
+    );
+
+    let page = body(fx.preview().index().await).await;
+    assert_eq!(
+        page.matches("</script>").count(),
+        3,
+        "data, canvas and picker only"
+    );
+    assert!(!page.contains("<script>alert"));
 }
 
 #[tokio::test]
@@ -207,6 +245,27 @@ async fn a_slide_gets_the_deck_fonts_and_hides_speaker_notes() {
     assert!(page.contains(r#"href="https://fonts.googleapis.com/x""#));
     assert!(page.contains("aside{display:none}"));
     assert!(page.contains(r#"<section id="cover">"#));
+}
+
+#[tokio::test]
+async fn a_migrated_design_opens_on_a_page_picker() {
+    let fx = fixture();
+    fx.write(
+        ".preview.json",
+        r#"{"title":"KickOff","pages":["project/Chat redesign.html","project/Home.html"]}"#,
+    );
+
+    let page = body(fx.preview().index().await).await;
+    assert!(page.contains("<title>KickOff</title>"));
+    assert!(page.contains(r#""project/Chat redesign.html""#));
+    assert!(page.contains(r#"<label id="pages">"#));
+}
+
+#[test]
+fn artifact_cdns_may_serve_scripts() {
+    let policy = sandbox_policy("abc", "1");
+    assert!(policy.contains("https://unpkg.com"));
+    assert!(policy.contains("connect-src http://127.0.0.1:*/api/artifact-preview/abc/1/ "));
 }
 
 #[tokio::test]

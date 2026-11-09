@@ -89,6 +89,8 @@ export type DaemonEvent =
       adapterId: string;
       quota: import('./adapter.js').ProviderQuota;
     }
+  /** An artifact was published from some session; open previews of it are stale. */
+  | { type: 'artifact.published'; url: string }
   | { type: 'provider.cli.updated'; status: import('./cli-update.js').ProviderCliStatus }
   | { type: 'todos.updated'; chatId: string; todos: import('./chat.js').TodoItem[] }
   | { type: 'chat.prDetected'; chatId: string; pr: import('./adapter.js').DetectedPr }

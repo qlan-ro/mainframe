@@ -80,6 +80,10 @@ pub trait SessionSink: Send + Sync {
     /// taxonomy. Default no-op: adapters with no retry-reporting event need not
     /// implement it.
     fn on_api_retry(&self, _attempt: i64, _reason: Option<String>) {}
+    /// A tool call finished publishing the artifact at `url` (a claude.ai artifact
+    /// link), from the session or one of its subagents. Default no-op: adapters
+    /// without artifacts need not implement it.
+    fn on_artifact_published(&self, _url: &str) {}
     /// The in-flight assistant message's partial content, re-sent accumulated
     /// on every call (Claude's `--include-partial-messages` stream deltas).
     /// `api_message_id` is the provider

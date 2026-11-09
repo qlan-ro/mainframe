@@ -275,3 +275,19 @@ fn automation_notification_wire_shape() {
         }),
     );
 }
+
+#[test]
+fn artifact_published_wire_shape_is_global() {
+    let event = DaemonEvent::ArtifactPublished {
+        url: "https://claude.ai/artifact/abc".to_string(),
+    };
+    assert_eq!(
+        event.chat_id(),
+        None,
+        "every client hears it, whatever chat is open"
+    );
+    assert_daemon_wire(
+        event,
+        serde_json::json!({ "type": "artifact.published", "url": "https://claude.ai/artifact/abc" }),
+    );
+}

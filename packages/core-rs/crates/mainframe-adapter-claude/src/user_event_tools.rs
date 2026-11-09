@@ -23,7 +23,12 @@ pub(super) fn handle_subagent_user_event(
         let tur = event
             .get("tool_use_result")
             .or_else(|| event.get("toolUseResult"));
-        for r in build_tool_result_blocks(message, tur) {
+        let results = build_tool_result_blocks(message, tur);
+        // A subagent's publish changes the artifact just as the session's own would.
+        for url in crate::artifact_publish::published_artifacts(&results) {
+            sink.on_artifact_published(&url);
+        }
+        for r in results {
             let mut v = serde_json::to_value(&r).unwrap_or(Value::Null);
             if let Value::Object(map) = &mut v {
                 map.insert(
