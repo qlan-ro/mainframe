@@ -95,3 +95,39 @@ async fn get_messages_is_empty_without_a_claude_session() {
     let mgr = ChatManager::new(deps);
     assert!(mgr.get_messages("c1").await.is_empty());
 }
+
+/// The adapter refuses the turn before it starts (Codex rejecting
+/// `thread/resume` for a thread archived in Codex). No result will ever
+/// arrive, so the chat must not stay Working, and the never-delivered message
+/// must not sit in the transcript beside the client's failed-send bubble.
+#[tokio::test]
+async fn a_send_the_adapter_refuses_restores_idle_and_drops_the_message() {
+    let deps = FakeDeps::arc();
+    let mgr = ChatManager::new(deps.clone());
+    let session = RecSession::new("c1", false, true);
+    *session.send_err.lock().unwrap() = Some("session t1 is archived".to_string());
+    seed_active(&mgr, "c1", working_chat("c1", Some("t"), false), session.clone());
+
+    let err = mgr.send_message("c1", "continue", None, None).await;
+
+    assert_eq!(
+        err.unwrap_err().to_string(),
+        "session t1 is archived"
+    );
+    let chat = mgr.get_active("c1").unwrap().lock().unwrap().chat.clone();
+    assert_eq!(chat.process_state, Some(Some(ProcessState::Idle)));
+    let last_patch = deps
+        .store
+        .updates
+        .lock()
+        .unwrap()
+        .iter()
+        .rev()
+        .find_map(|(_, patch)| patch.process_state)
+        .expect("the rollback persists a process state");
+    assert_eq!(last_patch, Some(ProcessState::Idle));
+    assert!(
+        mgr.get_messages("c1").await.is_empty(),
+        "a refused send must not leave the undelivered message in the transcript"
+    );
+}

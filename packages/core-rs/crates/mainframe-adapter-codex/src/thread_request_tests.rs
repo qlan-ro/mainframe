@@ -122,3 +122,21 @@ fn fork_request_omits_every_override_field() {
         assert!(!p.contains_key(key), "fork request must omit {key}");
     }
 }
+
+#[test]
+fn archived_thread_refusal_explains_it_and_keeps_codex_text() {
+    let raw = "session 01a17a31-64d5-7bc1-a2dd-59063dcadd4e is archived. Run `codex unarchive 01a17a31-64d5-7bc1-a2dd-59063dcadd4e` to unarchive it first.";
+    assert_eq!(
+        explain_thread_request_error(raw.to_string()),
+        "This chat's Codex thread is archived in Codex, so it can't continue. \
+         Unarchive the thread in Codex, then send again.\n\n\
+         Codex: session 01a17a31-64d5-7bc1-a2dd-59063dcadd4e is archived. Run \
+         `codex unarchive 01a17a31-64d5-7bc1-a2dd-59063dcadd4e` to unarchive it first."
+    );
+}
+
+#[test]
+fn other_thread_request_errors_pass_through_unchanged() {
+    let raw = "thread not found: 01a17a31-64d5-7bc1-a2dd-59063dcadd4e";
+    assert_eq!(explain_thread_request_error(raw.to_string()), raw);
+}

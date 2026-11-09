@@ -120,6 +120,20 @@ pub(crate) fn build_thread_request(
     ThreadRequest::Start(p)
 }
 
+/// Codex refuses to resume or fork a thread that was archived in Codex (the
+/// Codex app, or `codex archive`), replying "session <id> is archived. Run
+/// `codex unarchive <id>` to unarchive it first." Lead with what that means
+/// for the chat, and keep Codex's own text: it names the thread id to unarchive.
+pub(crate) fn explain_thread_request_error(raw: String) -> String {
+    if raw.contains(" is archived") && raw.contains("codex unarchive") {
+        return format!(
+            "This chat's Codex thread is archived in Codex, so it can't continue. \
+             Unarchive the thread in Codex, then send again.\n\nCodex: {raw}"
+        );
+    }
+    raw
+}
+
 #[cfg(test)]
 #[path = "thread_request_tests.rs"]
 mod tests;
