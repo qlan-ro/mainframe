@@ -1,23 +1,28 @@
 //! `config.json` load/merge/persist under `$MAINFRAME_DATA_DIR` (default
 //! `~/.mainframe`), env overrides, and the 32-byte random-hex auth secret.
 //!
-//! - `port` is `u16` (the whole daemon binds a `u16`). Ports outside
-//!   `1..=65535` are rejected here rather than stored, matching how the daemon
-//!   would ultimately fail to bind them.
-//! - Reading the process env is safe in Rust (only `set_var` is `unsafe` under
-//!   edition 2024). `ensure_auth_secret` never mutates env — it persists to
-//!   `config.json` — so no env-state threading is required.
+//! The file holds the auth secret and tunnel token, so it is only ever written
+//! atomically and owner-only. A save edits the file's own keys: env overrides
+//! and defaults stay out of it, and keys this version does not know survive.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
-/// Config errors: `get_data_dir`/`save_config` fail on I/O errors, while a
-/// malformed `config.json` is not an error (`get_config` falls back to defaults).
+mod persist;
+
+use persist::restrict_config_file;
+pub use persist::{clear_tunnel_credentials, save_config};
+
+const CONFIG_FILE: &str = "config.json";
+
+/// A malformed `config.json` is not an error: `get_config` logs it and falls
+/// back to defaults.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("config I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] io::Error),
     #[error("config serialize error: {0}")]
     Serialize(#[from] serde_json::Error),
 }
@@ -38,10 +43,10 @@ pub struct MainframeConfig {
     pub auth_secret: Option<String>,
 }
 
-/// `Partial<MainframeConfig>` — a `config.json` file (or env overrides) may carry
-/// any subset of the fields. Unknown fields are tolerated (no
-/// `deny_unknown_fields`).
-#[derive(Debug, Clone, Default, Deserialize)]
+/// Any subset of [`MainframeConfig`], from `config.json`, env overrides, or a
+/// save. Unknown fields are tolerated. A file with a field of the wrong type,
+/// such as an out-of-range `port`, does not parse.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PartialMainframeConfig {
     pub port: Option<u16>,
@@ -140,14 +145,23 @@ fn merge_config(file: PartialMainframeConfig, env: PartialMainframeConfig) -> Ma
     config
 }
 
-/// Reads and parses `<dir>/config.json`. On any read/parse error, returns an
-/// empty partial, so a missing or malformed file yields the defaults.
+/// The `config.json` overlay in `dir`; a missing, unreadable, or malformed file
+/// contributes nothing.
 fn read_file_config(dir: &Path) -> PartialMainframeConfig {
-    let config_path = dir.join("config.json");
-    match fs::read_to_string(&config_path) {
-        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-        Err(_) => PartialMainframeConfig::default(),
-    }
+    let path = dir.join(CONFIG_FILE);
+    let content = match fs::read(&path) {
+        Ok(content) => content,
+        Err(error) => {
+            if error.kind() != io::ErrorKind::NotFound {
+                tracing::warn!(%error, path = %path.display(), "config file unreadable, using defaults");
+            }
+            return PartialMainframeConfig::default();
+        }
+    };
+    serde_json::from_slice(&content).unwrap_or_else(|error| {
+        tracing::warn!(%error, path = %path.display(), "config file malformed, using defaults");
+        PartialMainframeConfig::default()
+    })
 }
 
 /// Returns `$MAINFRAME_DATA_DIR` or `~/.mainframe`, created recursively if
@@ -158,9 +172,7 @@ pub fn get_data_dir() -> Result<PathBuf, ConfigError> {
         .filter(|d| !d.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(default_data_dir);
-    if !dir.exists() {
-        fs::create_dir_all(&dir)?;
-    }
+    fs::create_dir_all(&dir)?;
     Ok(dir)
 }
 
@@ -196,45 +208,17 @@ pub fn boot_paths(config: &MainframeConfig, config_dir: &Path) -> BootPaths {
     }
 }
 
-/// Merges the partial onto the current config and
-/// writes `config.json` pretty-printed with two-space indent.
-pub fn save_config(config: PartialMainframeConfig) -> Result<(), ConfigError> {
-    let dir = get_data_dir()?;
-    let current = merge_config(read_file_config(&dir), env_overrides());
-    save_config_in(&dir, current, config)
-}
-
-/// The `save_config` write path, factored to accept an explicit dir + current
-/// config so it is testable without mutating process env.
-fn save_config_in(
-    dir: &Path,
-    current: MainframeConfig,
-    overrides: PartialMainframeConfig,
-) -> Result<(), ConfigError> {
-    let merged = merge_config(
-        PartialMainframeConfig {
-            port: Some(current.port),
-            data_dir: Some(current.data_dir),
-            tunnel: current.tunnel,
-            tunnel_url: current.tunnel_url,
-            tunnel_token: current.tunnel_token,
-            auth_secret: current.auth_secret,
-        },
-        overrides,
-    );
-    let json = serde_json::to_string_pretty(&merged)?;
-    fs::write(dir.join("config.json"), json)?;
-    Ok(())
-}
-
 /// The auth secret: `AUTH_TOKEN_SECRET` env, else `config.authSecret`.
 fn get_auth_secret() -> Result<Option<String>, ConfigError> {
-    if let Ok(secret) = std::env::var("AUTH_TOKEN_SECRET")
-        && !secret.is_empty()
-    {
-        return Ok(Some(secret));
-    }
-    Ok(get_config()?.auth_secret)
+    let env = std::env::var("AUTH_TOKEN_SECRET").ok();
+    Ok(pick_auth_secret(env, get_config()?.auth_secret))
+}
+
+/// An empty value counts as unset: HMAC accepts an empty key, and anyone could
+/// then forge a device token.
+fn pick_auth_secret(env: Option<String>, configured: Option<String>) -> Option<String> {
+    let usable = |secret: &String| !secret.is_empty();
+    env.filter(usable).or(configured.filter(usable))
 }
 
 /// 32 random bytes as 64 lowercase hex chars.
@@ -246,6 +230,7 @@ fn generate_auth_secret() -> String {
 /// Returns the existing secret, or mints a new 32-byte hex secret, persists it
 /// via `save_config`, and returns it.
 pub fn ensure_auth_secret() -> Result<String, ConfigError> {
+    restrict_config_file(&get_data_dir()?);
     if let Some(existing) = get_auth_secret()? {
         return Ok(existing);
     }

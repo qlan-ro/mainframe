@@ -7,16 +7,16 @@ mod capture;
 pub mod inspect;
 mod managed;
 mod pumps;
-mod retained;
 mod signal;
 
-pub use capture::{ExecCode, ExecError, run_captured, run_captured_limited};
+pub use capture::{
+    ExecCode, ExecError, RetainedOutput, run_captured, run_captured_limited, run_captured_prefix,
+};
 pub use managed::{ExitLatch, ManagedProcess, TailBuffer};
 pub use pumps::{
     PUMP_DRAIN_GRACE, PumpTasks, STDIN_QUEUE_CAPACITY, StdinWriteError, StdinWriter, finish_pumps,
     spawn_chunk_pump, spawn_line_pump, spawn_stdin_writer,
 };
-pub use retained::{RetainedOutput, run_captured_prefix};
 pub use signal::{Signal, Target, Terminated, is_alive, signal, terminate, terminate_with};
 
 /// A CLI child the way every adapter spawns one: the resolved `PATH`, colour

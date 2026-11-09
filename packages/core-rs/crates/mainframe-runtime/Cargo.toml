@@ -15,6 +15,7 @@ workspace = true
 test-support = []
 
 [dependencies]
+base64 = { workspace = true }
 mainframe-types = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

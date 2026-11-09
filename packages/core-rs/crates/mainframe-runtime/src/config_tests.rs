@@ -1,4 +1,7 @@
+use super::persist::{clear_tunnel_credentials_in, save_config_in, update_file};
 use super::*;
+use serde_json::Value;
+use std::os::unix::fs::PermissionsExt;
 use tempfile::tempdir;
 
 #[test]
@@ -114,40 +117,156 @@ fn read_file_config_parses_camelcase_fields() {
     assert_eq!(parsed.tunnel_url.as_deref(), Some("https://x"));
 }
 
+fn tunnel_token(token: &str) -> PartialMainframeConfig {
+    PartialMainframeConfig {
+        tunnel_token: Some(token.into()),
+        ..Default::default()
+    }
+}
+
+fn stored(dir: &Path) -> Value {
+    serde_json::from_str(&fs::read_to_string(dir.join(CONFIG_FILE)).unwrap()).unwrap()
+}
+
 #[test]
-fn save_config_in_round_trips_auth_secret() {
+fn save_round_trips_and_pretty_prints() {
     let dir = tempdir().unwrap();
-    let current = default_config();
     save_config_in(
         dir.path(),
-        current,
         PartialMainframeConfig {
             auth_secret: Some("deadbeef".into()),
             ..Default::default()
         },
     )
     .unwrap();
-    let reloaded = read_file_config(dir.path());
-    assert_eq!(reloaded.auth_secret.as_deref(), Some("deadbeef"));
-    assert_eq!(reloaded.port, Some(DEFAULT_PORT));
+    assert_eq!(
+        read_file_config(dir.path()).auth_secret.as_deref(),
+        Some("deadbeef")
+    );
+    let written = fs::read_to_string(dir.path().join(CONFIG_FILE)).unwrap();
+    assert_eq!(written, "{\n  \"authSecret\": \"deadbeef\"\n}");
 }
 
 #[test]
-fn save_config_pretty_prints_two_space_indent() {
+fn save_touches_only_the_changed_keys() {
     let dir = tempdir().unwrap();
-    save_config_in(
-        dir.path(),
-        default_config(),
-        PartialMainframeConfig::default(),
+    fs::write(
+        dir.path().join(CONFIG_FILE),
+        r#"{"port":40000,"authSecret":"kept","futureKey":{"nested":true}}"#,
     )
     .unwrap();
-    let written = fs::read_to_string(dir.path().join("config.json")).unwrap();
-    assert!(
-        written.contains("\n  \"port\""),
-        "two-space indent: {written}"
+    save_config_in(dir.path(), tunnel_token("new")).unwrap();
+    assert_eq!(
+        stored(dir.path()),
+        serde_json::json!({
+            "port": 40000,
+            "authSecret": "kept",
+            "futureKey": { "nested": true },
+            "tunnelToken": "new",
+        })
     );
-    // Optional fields (None) are omitted, matching JSON.stringify.
-    assert!(!written.contains("authSecret"));
+}
+
+#[test]
+fn clearing_tunnel_credentials_keeps_everything_else() {
+    let dir = tempdir().unwrap();
+    fs::write(
+        dir.path().join(CONFIG_FILE),
+        r#"{"tunnel":false,"tunnelToken":"t","tunnelUrl":"https://x","authSecret":"kept"}"#,
+    )
+    .unwrap();
+    clear_tunnel_credentials_in(dir.path()).unwrap();
+    assert_eq!(
+        stored(dir.path()),
+        serde_json::json!({ "tunnel": false, "authSecret": "kept" })
+    );
+}
+
+#[test]
+fn saved_file_is_owner_only_even_when_it_was_not() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join(CONFIG_FILE);
+    fs::write(&path, "{}").unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+    save_config_in(dir.path(), tunnel_token("t")).unwrap();
+    assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+}
+
+#[test]
+fn restricting_an_existing_file_keeps_its_contents_and_tolerates_a_missing_one() {
+    let dir = tempdir().unwrap();
+    restrict_config_file(dir.path());
+    let path = dir.path().join(CONFIG_FILE);
+    fs::write(&path, r#"{"authSecret":"s"}"#).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+    restrict_config_file(dir.path());
+    assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert_eq!(fs::read_to_string(&path).unwrap(), r#"{"authSecret":"s"}"#);
+}
+
+fn moved_aside(dir: &Path) -> Vec<Vec<u8>> {
+    fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.to_string_lossy().contains("config.json.invalid."))
+        .map(|path| fs::read(path).unwrap())
+        .collect()
+}
+
+#[test]
+fn save_moves_an_unparseable_file_aside_instead_of_destroying_it() {
+    for content in [
+        b"{not json".as_slice(),
+        br#"{"port":70000,"authSecret":"only-copy"}"#,
+        b"[]",
+        b"{\"authSecret\":\"\xff\"}",
+    ] {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join(CONFIG_FILE), content).unwrap();
+        assert!(read_file_config(dir.path()).auth_secret.is_none());
+        save_config_in(dir.path(), tunnel_token("new")).unwrap();
+        assert_eq!(moved_aside(dir.path()), [content]);
+        assert_eq!(
+            stored(dir.path()),
+            serde_json::json!({ "tunnelToken": "new" })
+        );
+    }
+}
+
+#[test]
+fn concurrent_saves_keep_every_change() {
+    let dir = tempdir().unwrap();
+    std::thread::scope(|scope| {
+        for index in 0..16 {
+            let dir = dir.path();
+            scope.spawn(move || {
+                update_file(dir, |file| {
+                    file.insert(format!("key{index}"), index.into());
+                })
+                .unwrap();
+            });
+        }
+    });
+    assert_eq!(stored(dir.path()).as_object().unwrap().len(), 16);
+}
+
+#[test]
+fn an_empty_secret_counts_as_unset() {
+    let secret = |value: &str| Some(value.to_string());
+    assert_eq!(
+        pick_auth_secret(secret("env"), secret("file")),
+        secret("env")
+    );
+    assert_eq!(pick_auth_secret(secret(""), secret("file")), secret("file"));
+    assert_eq!(pick_auth_secret(None, secret("file")), secret("file"));
+    assert_eq!(pick_auth_secret(secret(""), secret("")), None);
+    assert_eq!(pick_auth_secret(None, secret("")), None);
 }
 
 #[test]

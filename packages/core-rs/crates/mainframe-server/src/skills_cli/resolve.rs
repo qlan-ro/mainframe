@@ -16,8 +16,7 @@ pub struct CliBinary {
 
 /// Sync by design: a bounded stat-walk over `PATH`'s handful of entries,
 /// called once per operation — not the daemon's per-request I/O path that
-/// the "no sync I/O" rule targets (mirrors `ResolvedPath::resolve`'s
-/// documented boot-time exception).
+/// the "no sync I/O" rule targets.
 pub fn resolve_cli(path: &ResolvedPath) -> Option<CliBinary> {
     if is_on_path(path, "skills") {
         return Some(CliBinary {

@@ -5,6 +5,10 @@ use tokio::{
     task::JoinHandle,
 };
 
+/// How long an output pump may keep reading after its child exited before it
+/// is abandoned: a grandchild that inherited the pipe must not hold the exit.
+pub const PUMP_DRAIN_GRACE: std::time::Duration = std::time::Duration::from_millis(500);
+
 /// Queued stdin writes a child may fall behind on before the daemon stops
 /// buffering. Generous for line-oriented protocols (one entry per message);
 /// bounded so a stalled child cannot grow the queue without limit.
@@ -75,17 +79,22 @@ pub fn spawn_stdin_writer(stdin: Option<ChildStdin>) -> StdinWriter {
     writer
 }
 
+/// Delivers each line without its `\n` or `\r\n`. Children write arbitrary
+/// bytes, so invalid UTF-8 is replaced rather than ending the pump: a stopped
+/// reader would close the pipe under a child that is still running.
 pub fn spawn_line_pump<R, F>(reader: R, mut on_line: F) -> JoinHandle<()>
 where
     R: AsyncRead + Unpin + Send + 'static,
     F: FnMut(String) + Send + 'static,
 {
     tokio::spawn(async move {
-        let mut lines = BufReader::new(reader).lines();
+        let mut reader = BufReader::new(reader);
+        let mut line = Vec::new();
         loop {
-            match lines.next_line().await {
-                Ok(Some(line)) => on_line(line),
-                Ok(None) => break,
+            line.clear();
+            match reader.read_until(b'\n', &mut line).await {
+                Ok(0) => break,
+                Ok(_) => on_line(decode_line(&line)),
                 Err(error) => {
                     tracing::debug!(%error, "child line reader closed");
                     break;
@@ -93,6 +102,12 @@ where
             }
         }
     })
+}
+
+fn decode_line(line: &[u8]) -> String {
+    let line = line.strip_suffix(b"\n").unwrap_or(line);
+    let line = line.strip_suffix(b"\r").unwrap_or(line);
+    String::from_utf8_lossy(line).into_owned()
 }
 
 pub fn spawn_chunk_pump<R, F>(mut reader: R, mut on_chunk: F) -> JoinHandle<()>
@@ -115,10 +130,6 @@ where
         }
     })
 }
-
-/// How long an output pump may keep reading after its child exited before it
-/// is abandoned: a grandchild that inherited the pipe must not hold the exit.
-pub const PUMP_DRAIN_GRACE: std::time::Duration = std::time::Duration::from_millis(500);
 
 pub async fn finish_pumps(pumps: Vec<JoinHandle<()>>) {
     for mut pump in pumps {
