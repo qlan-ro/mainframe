@@ -1,5 +1,16 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.3.9
+
+### Patch Changes
+
+- [#888](https://github.com/qlan-ro/mainframe/pull/888) [`86fd1b5`](https://github.com/qlan-ro/mainframe/commit/86fd1b515e10a957f1554cfb4fac1c42892a4972) Thanks [@doruchiulan](https://github.com/doruchiulan)! - If a message can't start a turn, the chat no longer stays stuck as working. The message shows as failed, with the actual reason and a Retry option. When the cause is a Codex thread that was archived in Codex, the failed message also has an Unarchive button: it unarchives the thread and sends the message again, so you don't need to open the Codex app.
+
+- [#886](https://github.com/qlan-ro/mainframe/pull/886) [`11de55e`](https://github.com/qlan-ro/mainframe/commit/11de55e654791debe38bd8117a20272b1baa36b4) Thanks [@doruchiulan](https://github.com/doruchiulan)! - `~/.mainframe/config.json`, which holds the device auth secret and tunnel token, is now readable only by your user, and existing files are tightened at the next daemon start. Removing a named tunnel in Settings now deletes its saved token and URL. Saving settings no longer writes environment overrides such as `TUNNEL_TOKEN` to disk, keeps keys it does not recognise, and moves an unreadable config aside as `config.json.invalid.<timestamp>` instead of overwriting it. Trusting a workspace no longer widens the permissions of `~/.claude.json`. The daemon finds your `PATH` when shell start-up files print a banner and no longer hangs at start-up on a stuck shell. Automation `run_command` steps finish when a background job outlives the script, and the job keeps running, and Codex and CLI updates keep running after a non-UTF-8 output line.
+
+- Updated dependencies [[`024caae`](https://github.com/qlan-ro/mainframe/commit/024caae520817cdb220816f6e972ba192bc17a9a)]:
+  - @qlan-ro/mainframe-ui@2.14.0
+
 ## 2.3.8
 
 ### Patch Changes
