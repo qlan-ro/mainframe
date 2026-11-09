@@ -13,7 +13,7 @@
  * own shape, not ours.)
  */
 import { useAuiState } from '@assistant-ui/react';
-import type { ProviderSwitchMarker } from '@qlan-ro/mainframe-types';
+import type { PromptRemedy, ProviderSwitchMarker } from '@qlan-ro/mainframe-types';
 import type { PartSources } from './transcript-presentation';
 import type { CaptureRow } from './parse-captures';
 import type { ReviewComment } from './parse-review-comment';
@@ -52,6 +52,8 @@ export interface MainframeMessageMeta {
   readonly pending?: boolean;
   readonly clientId?: string;
   readonly error?: string;
+  /** The action the failed send offers before retrying (Unarchive). */
+  readonly remedy?: PromptRemedy;
   /** The failed send's attachments went back into the composer — Retry is
    *  text-only, so it is hidden rather than silently dropping them. */
   readonly attachmentsRestored?: boolean;

@@ -76,6 +76,17 @@ pub trait AdapterPort: Send + Sync {
         Box::pin(async { Err(ForkPinError::Unsupported) })
     }
 
+    /// `Adapter::unarchive_native_session` on `adapter_id`'s adapter.
+    fn unarchive_native_session<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        session_id: &'a str,
+        cwd: &'a str,
+    ) -> BoxFuture<'a, Result<(), AdapterError>> {
+        let _ = (adapter_id, session_id, cwd);
+        Box::pin(async { Err(AdapterError::Unsupported("unarchive a session")) })
+    }
+
     fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
         let _ = adapter_id;
         None

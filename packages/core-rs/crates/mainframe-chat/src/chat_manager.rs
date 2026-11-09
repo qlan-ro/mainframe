@@ -78,6 +78,7 @@ mod steer;
 mod switch_api;
 mod tool_image;
 mod transcript_refresh;
+mod unarchive;
 mod update;
 
 pub use capabilities::{AdapterPort, ChatStore, EventEmitter, ProjectPaths, Pusher, WorkspacePort};
@@ -90,6 +91,7 @@ pub use history::ResumeSnapshot;
 pub(crate) use shared::remap_history as remap_history_for;
 pub(crate) use shared::{build_history_session, compose_if_multi};
 pub use side_chat::OpenSideChatError;
+pub use unarchive::UnarchiveNativeSessionError;
 pub use update::ProcessedAttachments;
 
 // `ForkChatError` (the fork-a-chat action, `fork_api.rs`) is distinct from

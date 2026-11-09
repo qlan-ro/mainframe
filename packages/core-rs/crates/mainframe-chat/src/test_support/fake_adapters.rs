@@ -69,6 +69,8 @@ pub(crate) struct FakeAdapterPort {
     pub(crate) pin_failure: Mutex<Option<PinFailure>>,
     /// Every `pin_fork_point` request, in order.
     pub(crate) pin_requests: Mutex<Vec<ForkPinRequest>>,
+    /// Every `(adapter_id, session_id, cwd)` `unarchive_native_session` saw.
+    pub(crate) unarchive_requests: Mutex<Vec<(String, String, String)>>,
     /// `adapter_info(adapter_id)` answers, keyed by adapter id.
     pub(crate) adapter_infos: Mutex<HashMap<String, AdapterInfo>>,
     /// What `initial_transcript_path` answers.
@@ -246,6 +248,19 @@ impl AdapterPort for FakeDeps {
             fork: *self.adapters.fork_capable.lock_recover(),
             unavailable_reason: self.adapters.fork_unavailable_reason.lock_recover().clone(),
         }
+    }
+    fn unarchive_native_session<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        session_id: &'a str,
+        cwd: &'a str,
+    ) -> BoxFuture<'a, Result<(), mainframe_adapter_api::AdapterError>> {
+        self.adapters.unarchive_requests.lock_recover().push((
+            adapter_id.to_string(),
+            session_id.to_string(),
+            cwd.to_string(),
+        ));
+        Box::pin(async { Ok(()) })
     }
     fn pin_fork_point<'a>(
         &'a self,
