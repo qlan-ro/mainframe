@@ -29,6 +29,7 @@ fn a_proxy_session_is_pointed_at_the_endpoint_and_stripped_of_the_real_api_key()
         );
     }
     assert_eq!(env.get("ANTHROPIC_API_KEY"), Some(&None));
+    assert!(!env.contains_key("CLAUDE_CODE_ENTRYPOINT"));
 }
 
 #[test]
@@ -92,6 +93,10 @@ fn own_target_resumes_plainly_without_fork_session() {
 #[test]
 fn a_native_session_carries_no_endpoint_env() {
     let env = spawn_env(None);
+    assert_eq!(
+        env.get("CLAUDE_CODE_ENTRYPOINT").cloned().flatten().as_deref(),
+        Some("mainframe")
+    );
     assert!(!env.contains_key("ANTHROPIC_BASE_URL"));
     assert!(!env.contains_key("ANTHROPIC_AUTH_TOKEN"));
     assert!(!env.contains_key("ANTHROPIC_API_KEY"));

@@ -13,3 +13,5 @@ pub const MAINFRAME_SYSTEM_PROMPT_APPEND: &str = concat!(
     " ",
     "questions in plain text.",
 );
+
+pub const CLAUDE_ENTRYPOINT: &str = "mainframe";

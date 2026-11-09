@@ -139,6 +139,12 @@ pub(super) fn build_spawn_command(
         // Artifacts are off for SDK entrypoints by default; Mainframe renders them.
         .env("CLAUDE_CODE_ARTIFACT", "1")
         .env_remove("CLAUDECODE");
+    if proxy.is_none() {
+        cmd.env(
+            "CLAUDE_CODE_ENTRYPOINT",
+            crate::constants::CLAUDE_ENTRYPOINT,
+        );
+    }
     if let Some(proxy) = proxy {
         cmd.env("ANTHROPIC_BASE_URL", &proxy.base_url)
             .env("ANTHROPIC_AUTH_TOKEN", &proxy.auth_token)
