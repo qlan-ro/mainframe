@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { ApiRequestError } from '../../../../lib/api/http';
-import { describeSendError } from '../describe-send-error';
+import { describeSendError, sendRemedyOf } from '../describe-send-error';
 
 function withStatus(message: string, status: number): ApiRequestError {
   return Object.assign(new ApiRequestError(message), { status });
@@ -58,5 +58,33 @@ describe('describeSendError', () => {
 
   it('an undefined error falls back to a generic sentence', () => {
     expect(describeSendError(undefined, { attachmentsRestored: false })).toBe('Failed to send');
+  });
+
+  it('a refused prompt reads as its reason, without the facade prefix', () => {
+    const refusal = {
+      code: -32002,
+      message: "session unavailable: This chat's Codex thread is archived in Codex.",
+      data: {
+        '_mainframe.dev': {
+          reason: "This chat's Codex thread is archived in Codex.",
+          remedy: 'unarchive_native_session',
+        },
+      },
+    };
+    expect(describeSendError(refusal, { attachmentsRestored: false })).toBe(
+      "This chat's Codex thread is archived in Codex.",
+    );
+    expect(sendRemedyOf(refusal)).toBe('unarchive_native_session');
+  });
+
+  it('a refused prompt without a remedy offers none', () => {
+    const refusal = {
+      code: -32002,
+      message: 'session unavailable: boom',
+      data: { '_mainframe.dev': { reason: 'boom' } },
+    };
+    expect(describeSendError(refusal, { attachmentsRestored: false })).toBe('boom');
+    expect(sendRemedyOf(refusal)).toBeUndefined();
+    expect(sendRemedyOf(new Error('boom'))).toBeUndefined();
   });
 });

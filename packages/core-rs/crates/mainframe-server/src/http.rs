@@ -127,6 +127,19 @@ fn apply_cors_headers(headers: &mut HeaderMap, origin: Option<&str>) {
     );
 }
 
+/// The per-chat lifecycle and action routes under `/api/chats`.
+fn chat_routes() -> Router<Arc<AppCtx>> {
+    Router::new()
+        .merge(routes::chats::router())
+        .merge(routes::chat_commands::router())
+        .merge(routes::chat_fork::router())
+        .merge(routes::chat_create::router())
+        .merge(routes::chat_discard::router())
+        .merge(routes::chat_native_session::router())
+        .merge(routes::chat_side_chat::router())
+        .merge(routes::chat_switch::router())
+}
+
 fn http_routes() -> Router<Arc<AppCtx>> {
     Router::new()
         .route("/health", get(routes::health::get_health))
@@ -143,15 +156,9 @@ fn http_routes() -> Router<Arc<AppCtx>> {
         .merge(routes::git_write::router())
         .merge(routes::git_chat::router())
         .merge(routes::attachments::router())
-        .merge(routes::chats::router())
+        .merge(chat_routes())
         .merge(routes::tool_images::router())
         .merge(routes::session_changes::router())
-        .merge(routes::chat_commands::router())
-        .merge(routes::chat_fork::router())
-        .merge(routes::chat_create::router())
-        .merge(routes::chat_discard::router())
-        .merge(routes::chat_side_chat::router())
-        .merge(routes::chat_switch::router())
         .merge(routes::agent_outbox::router())
         .merge(routes::context::router())
         .merge(routes::worktree::router())

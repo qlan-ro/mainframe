@@ -1,5 +1,5 @@
 {
-  "mainframe-adapter-api/src/lib.rs": 375,
+  "mainframe-adapter-api/src/lib.rs": 321,
   "mainframe-adapter-api/tests/pr_detection_sink.rs": 331,
   "mainframe-adapter-api/tests/registry.rs": 523,
   "mainframe-adapter-claude/src/task_events.rs": 319,
@@ -26,7 +26,7 @@
   "mainframe-automations/src/tokens/variables_tests.rs": 331,
   "mainframe-automations/src/triggers/router_tests.rs": 476,
   "mainframe-background-tasks/src/tracker.rs": 317,
-  "mainframe-chat/src/chat_manager/send.rs": 305,
+  "mainframe-chat/src/chat_manager/send.rs": 299,
   "mainframe-chat/src/event_handler/partial_overlay_tests.rs": 376,
   "mainframe-chat/src/lifecycle_manager.rs": 819,
   "mainframe-claude-workflows/tests/store_lifecycle.rs": 482,

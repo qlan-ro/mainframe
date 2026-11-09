@@ -15,7 +15,7 @@
 //! hand-written [`PromptPort`] fake.
 
 use mainframe_types::acp::extensions::{
-    MAINFRAME_META_NAMESPACE, PromptSendMeta, QueuedPromptState,
+    MAINFRAME_META_NAMESPACE, PromptFailure, PromptRemedy, PromptSendMeta, QueuedPromptState,
 };
 use mainframe_types::acp::jsonrpc::{
     JsonRpcErrorObject, JsonRpcRequest, JsonRpcResponse, error_codes,
@@ -37,10 +37,21 @@ pub struct PromptAcceptance {
 }
 
 /// A session the port could not act on (edge case: prompt/cancel to a dead or
-/// degraded session).
+/// degraded session), or a prompt the adapter refused. `remedy` names an
+/// action the client can offer before retrying.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptError {
     pub message: String,
+    pub remedy: Option<PromptRemedy>,
+}
+
+impl PromptError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            remedy: None,
+        }
+    }
 }
 
 /// The chat-manager surface `session/prompt`/`session/cancel` dispatch needs.
@@ -86,7 +97,7 @@ pub async fn dispatch_prompt(request: JsonRpcRequest, port: &dyn PromptPort) -> 
             let response = PromptResponse { meta };
             rpc::success_response(id, serde_json::to_value(response).unwrap_or(Value::Null))
         }
-        Err(err) => rpc::error_response(id, session_unavailable(&err.message)),
+        Err(err) => rpc::error_response(id, session_unavailable(err)),
     }
 }
 
@@ -154,11 +165,17 @@ fn extract_text(prompt: &[mainframe_types::acp::content::ContentBlock]) -> Strin
         .join("\n")
 }
 
-fn session_unavailable(message: &str) -> JsonRpcErrorObject {
+/// Generic ACP clients read `message`; Mainframe's client reads the refusal
+/// and its remedy from `data["_mainframe.dev"]` ([`PromptFailure`]).
+fn session_unavailable(err: PromptError) -> JsonRpcErrorObject {
+    let failure = PromptFailure {
+        reason: err.message,
+        remedy: err.remedy,
+    };
     JsonRpcErrorObject {
         code: error_codes::RESOURCE_NOT_FOUND,
-        message: format!("session unavailable: {message}"),
-        data: None,
+        message: format!("session unavailable: {}", failure.reason),
+        data: Some(json!({ MAINFRAME_META_NAMESPACE: failure })),
     }
 }
 

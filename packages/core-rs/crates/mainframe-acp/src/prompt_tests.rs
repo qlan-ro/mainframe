@@ -13,6 +13,8 @@ struct FakePort {
     queue_next_at: Option<i64>,
     /// When set, every call fails with this message (dead/degraded session).
     fails_with: Option<String>,
+    /// The remedy a `fails_with` prompt refusal carries.
+    remedy: Option<PromptRemedy>,
 }
 
 impl PromptPort for FakePort {
@@ -26,6 +28,7 @@ impl PromptPort for FakePort {
             if let Some(message) = &self.fails_with {
                 return Err(PromptError {
                     message: message.clone(),
+                    remedy: self.remedy,
                 });
             }
             self.sent
@@ -41,9 +44,7 @@ impl PromptPort for FakePort {
     fn cancel<'a>(&'a self, session_id: &'a str) -> BoxFuture<'a, Result<(), PromptError>> {
         Box::pin(async move {
             if let Some(message) = &self.fails_with {
-                return Err(PromptError {
-                    message: message.clone(),
-                });
+                return Err(PromptError::new(message.clone()));
             }
             self.cancelled.lock().unwrap().push(session_id.to_string());
             Ok(())
@@ -111,6 +112,31 @@ async fn a_dead_session_prompt_gets_a_structured_error() {
     };
     assert_eq!(error.code, error_codes::RESOURCE_NOT_FOUND);
     assert!(error.message.contains("chat not running"));
+    assert_eq!(
+        error.data,
+        Some(json!({ "_mainframe.dev": { "reason": "chat not running" } }))
+    );
+}
+
+#[tokio::test]
+async fn a_refusal_with_a_remedy_carries_it_in_the_error_data() {
+    let port = FakePort {
+        fails_with: Some("This chat's Codex thread is archived in Codex".to_string()),
+        remedy: Some(PromptRemedy::UnarchiveNativeSession),
+        ..Default::default()
+    };
+    let response = dispatch_prompt(prompt_request("chat_1", "hi"), &port).await;
+
+    let JsonRpcOutcome::Error { error } = response.outcome else {
+        panic!("expected an error, got {:?}", response.outcome);
+    };
+    assert_eq!(
+        error.data,
+        Some(json!({ "_mainframe.dev": {
+            "reason": "This chat's Codex thread is archived in Codex",
+            "remedy": "unarchive_native_session",
+        } }))
+    );
 }
 
 #[tokio::test]

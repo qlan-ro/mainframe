@@ -259,6 +259,20 @@ pub trait Adapter: Send + Sync {
         Box::pin(async { Err(ForkPinError::Unsupported) })
     }
 
+    /// Unarchive `session_id`, a native session the provider archived outside
+    /// Mainframe, so the chat can continue it (the remedy for
+    /// [`crate::AdapterError::NativeSessionArchived`]). `cwd` is the chat's
+    /// working directory. Default `Unsupported`: only an adapter that can report
+    /// that error needs to override this.
+    fn unarchive_native_session(
+        &self,
+        session_id: String,
+        cwd: String,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        let _ = (session_id, cwd);
+        Box::pin(async { Err(AdapterError::Unsupported("unarchive a session")) })
+    }
+
     /// Report the CLI version the registry's refresh observed, so a
     /// capability that depends on the installed version (Codex's `fork`, gated
     /// on a minimum CLI release) can be computed synchronously from

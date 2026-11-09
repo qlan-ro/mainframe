@@ -8,9 +8,10 @@ use std::sync::Arc;
 
 use mainframe_acp::prompt::{BoxFuture, PromptAcceptance, PromptError, PromptPort};
 use mainframe_acp::resume::{ResumePort, ResumeSnapshot};
-use mainframe_chat::chat_manager::{ChatManager, CommandMeta};
+use mainframe_adapter_api::AdapterError;
+use mainframe_chat::chat_manager::{ChatManager, CommandMeta, SendError};
 use mainframe_chat::permission_handler::PermissionError;
-use mainframe_types::acp::extensions::PromptSendMeta;
+use mainframe_types::acp::extensions::{PromptRemedy, PromptSendMeta};
 use mainframe_types::adapter::ControlResponse;
 
 #[derive(Clone)]
@@ -24,9 +25,9 @@ impl ManagerPorts {
     }
 
     fn require(&self) -> Result<&Arc<ChatManager>, PromptError> {
-        self.manager.as_ref().ok_or_else(|| PromptError {
-            message: "chat manager unavailable".to_string(),
-        })
+        self.manager
+            .as_ref()
+            .ok_or_else(|| PromptError::new("chat manager unavailable"))
     }
 }
 
@@ -53,9 +54,7 @@ impl PromptPort for ManagerPorts {
                     command,
                 )
                 .await
-                .map_err(|err| PromptError {
-                    message: err.to_string(),
-                })?;
+                .map_err(prompt_error)?;
             // A command bypasses the queue and always dispatches immediately —
             // it never adds itself to `queued_message_count`, so that count
             // (when non-zero) belongs entirely to OTHER, unrelated queued
@@ -159,5 +158,18 @@ impl GatePort for ManagerPorts {
                 None => Err(PermissionError::ManagerUnavailable),
             }
         })
+    }
+}
+
+/// A refused send's text, plus the remedy the client can offer for it.
+fn prompt_error(err: SendError) -> PromptError {
+    let remedy = matches!(
+        err,
+        SendError::Adapter(AdapterError::NativeSessionArchived(_))
+    )
+    .then_some(PromptRemedy::UnarchiveNativeSession);
+    PromptError {
+        message: err.to_string(),
+        remedy,
     }
 }
