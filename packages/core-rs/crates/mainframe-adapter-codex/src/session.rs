@@ -32,7 +32,7 @@ use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
 use crate::rollout_reader::{RolloutReaderDeps, read_rollout_items};
 use crate::thread_registry::{ThreadRegistryDeps, lookup_agent_metadata_with};
-use crate::thread_request::thread_request_for;
+use crate::thread_request::{thread_request_error, thread_request_for};
 use crate::turn_config::{CodexProviderTuning, build_turn_config};
 use crate::turn_model::{non_empty, resolve_turn_model};
 use crate::types::{ThreadStartResult, TurnStartResult};

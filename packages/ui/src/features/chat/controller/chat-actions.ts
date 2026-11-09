@@ -6,7 +6,8 @@
  * imperative flows; the controller's public methods delegate here unchanged.
  */
 import type { AppendMessage } from '@assistant-ui/react';
-import type { PromptSendMeta } from '@qlan-ro/mainframe-types';
+import type { PromptRemedy, PromptSendMeta } from '@qlan-ro/mainframe-types';
+import { unarchiveNativeSession } from '../../../lib/api/chats';
 import { uploadAttachments } from '../../../lib/api/attachments';
 import {
   acceptWorktreeOffer as postAcceptWorktreeOffer,
@@ -90,8 +91,10 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
  * Re-send a failed optimistic user message (the "Failed to send" indicator).
  * Text-only: attachments are not re-uploaded — the common failure is the live
  * send, and re-deriving the original upload items isn't tracked on the pending.
+ * `remedy` (the failed send's own) runs first: `unarchive_native_session`
+ * unarchives the chat's provider session before the resend.
  */
-export async function retryChatMessage(host: ChatActionHost, clientId: string): Promise<void> {
+export async function retryChatMessage(host: ChatActionHost, clientId: string, remedy?: PromptRemedy): Promise<void> {
   const pending = host.getState().pendingUserMessages[clientId];
   if (!pending) return;
   if (refuseIfDirectoryMissing(host)) return;
@@ -100,6 +103,7 @@ export async function retryChatMessage(host: ChatActionHost, clientId: string): 
   host.dispatch({ type: 'run.started' });
 
   try {
+    if (remedy === 'unarchive_native_session') await unarchiveNativeSession(host.getPort(), host.getDaemonId());
     await host.load();
     await host.sendPrompt(pending.text, pending.sendMeta ?? {});
   } catch (error) {

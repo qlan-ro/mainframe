@@ -42,10 +42,17 @@ impl RolloutOutput {
     }
 }
 
-/// Only paths inside `~/.codex/sessions` are allowed — `rollout_path` comes from an
-/// externally-owned SQLite DB so we treat it as untrusted input.
+/// Only paths inside `~/.codex/sessions` (or its sibling `archived_sessions`)
+/// are allowed — `rollout_path` comes from an externally-owned SQLite DB so we
+/// treat it as untrusted input.
 fn default_sessions_root() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".codex").join("sessions"))
+}
+
+/// Codex moves an archived thread's rollout from `sessions/` to the sibling
+/// `archived_sessions/` and repoints the state DB at it.
+fn archived_sessions_root(sessions_root: &std::path::Path) -> Option<PathBuf> {
+    Some(sessions_root.parent()?.join("archived_sessions"))
 }
 
 /// Injectable containment root — mirrors `transcript::CodexTranscriptDeps`, letting
@@ -121,7 +128,8 @@ pub async fn read_rollout_items(
 
 /// Resolves symlinks, then enforces two invariants before we trust `rollout_path`
 /// (untrusted input from an externally-owned SQLite DB): it must live inside
-/// `~/.codex/sessions/`, and its filename must embed `expected_thread_id`.
+/// `~/.codex/sessions/` or `~/.codex/archived_sessions/`, and its filename must
+/// embed `expected_thread_id`.
 async fn resolve_rollout_path(
     rollout_path: &str,
     expected_thread_id: Option<&str>,
@@ -141,12 +149,15 @@ async fn resolve_rollout_path(
     // `/var` -> `/private/var` symlink, so comparing it as-is against the already
     // resolved file path would spuriously fail containment. Fall back to the raw
     // root if it doesn't exist yet (e.g. tests asserting containment on `nope/`).
-    let root = tokio::fs::canonicalize(&root).await.unwrap_or(root);
-    if !resolved.starts_with(&root) {
+    let mut allowed = vec![tokio::fs::canonicalize(&root).await.unwrap_or(root.clone())];
+    if let Some(archived) = archived_sessions_root(&root) {
+        allowed.push(tokio::fs::canonicalize(&archived).await.unwrap_or(archived));
+    }
+    if !allowed.iter().any(|root| resolved.starts_with(root)) {
         tracing::warn!(
             rollout_path,
             resolved = %resolved.display(),
-            "rollout path outside ~/.codex/sessions, refusing to read"
+            "rollout path outside ~/.codex sessions directories, refusing to read"
         );
         return None;
     }
