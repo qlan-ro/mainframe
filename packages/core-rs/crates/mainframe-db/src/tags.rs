@@ -5,7 +5,7 @@ use mainframe_types::time::now_iso8601;
 use rusqlite::Connection;
 
 use crate::tag_color::hash_tag_color;
-use crate::validate_tag_name::{ValidateResult, validate_tag_name};
+use crate::validate_tag_name::{normalize_tag_name, validate_tag_name};
 use crate::{
     DbError,
     sql_types::{FromRow, SqlEnum, query_all, query_opt},
@@ -20,10 +20,6 @@ impl TagsRepository {
         Self { db }
     }
 
-    fn normalize(&self, name: &str) -> String {
-        name.trim().to_lowercase()
-    }
-
     pub fn list(&self) -> Result<Vec<Tag>, DbError> {
         query_all(
             &self.db,
@@ -36,16 +32,13 @@ impl TagsRepository {
         query_opt(
             &self.db,
             "SELECT name, color, created_at FROM tags WHERE name = ?",
-            [self.normalize(name)],
+            [normalize_tag_name(name)],
         )
     }
 
     /// Idempotent upsert. Returns the existing row if present, else creates with auto color.
     pub fn upsert(&self, raw_name: &str, color: Option<TagColor>) -> Result<Tag, DbError> {
-        let normalized = match validate_tag_name(raw_name) {
-            ValidateResult::Ok { normalized } => normalized,
-            ValidateResult::Err { error } => return Err(DbError::Invalid(error)),
-        };
+        let normalized = validate_tag_name(raw_name)?;
         if let Some(existing) = self.get(&normalized)? {
             return Ok(existing);
         }
@@ -63,7 +56,7 @@ impl TagsRepository {
     }
 
     pub fn set_color(&self, name: &str, color: TagColor) -> Result<(), DbError> {
-        let normalized = self.normalize(name);
+        let normalized = normalize_tag_name(name);
         let changes = self.db.execute(
             "UPDATE tags SET color = ? WHERE name = ?",
             rusqlite::params![crate::enum_to_db_string(&color)?, normalized],
@@ -79,11 +72,8 @@ impl TagsRepository {
 
     /// Atomic rename. If `to` already exists, merges associations and drops `from`.
     pub fn rename(&self, from_raw: &str, to_raw: &str) -> Result<(), DbError> {
-        let from = self.normalize(from_raw);
-        let to = match validate_tag_name(to_raw) {
-            ValidateResult::Ok { normalized } => normalized,
-            ValidateResult::Err { error } => return Err(DbError::Invalid(error)),
-        };
+        let from = normalize_tag_name(from_raw);
+        let to = validate_tag_name(to_raw)?;
         if from == to {
             return Ok(());
         }
@@ -109,7 +99,7 @@ impl TagsRepository {
     }
 
     pub fn remove(&self, name: &str) -> Result<(), DbError> {
-        let normalized = self.normalize(name);
+        let normalized = normalize_tag_name(name);
         let tx = self.db.unchecked_transaction()?;
         tx.execute("DELETE FROM chat_tags WHERE tag = ?", [&normalized])?;
         let changes = tx.execute("DELETE FROM tags WHERE name = ?", [&normalized])?;

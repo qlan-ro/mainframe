@@ -21,7 +21,7 @@ fn setup() -> (ChatsRepository, ProjectsRepository, Rc<Connection>) {
     initialize_schema(&conn).unwrap();
     let conn = Rc::new(conn);
     (
-        ChatsRepository::new(Rc::clone(&conn), None),
+        ChatsRepository::new(Rc::clone(&conn)),
         ProjectsRepository::new(Rc::clone(&conn)),
         conn,
     )
@@ -49,6 +49,9 @@ fn find_or_create_side_chat_returns_the_same_row_on_the_second_call() {
     let (second, created_second) = chats.find_or_create_side_chat(&parent).unwrap();
     assert!(!created_second);
     assert_eq!(second.id, first.id);
+    // The found row carries the same keys as the created one.
+    assert_eq!(second.tags, Some(vec![]));
+    assert_eq!(second.tags, first.tags);
 }
 
 #[test]

@@ -1,12 +1,9 @@
 //! Side chats: a parent chat has at most one side chat at a time.
-//! Kept in its own file so `chats.rs` (996 lines) grows only by the
-//! `CHAT_SELECT_FIELDS` subquery, the row mapping, and the `list_filtered`
-//! exclusion clause.
 
 use mainframe_types::chat::Chat;
 use mainframe_types::time::now_iso8601;
 
-use crate::chats::{CHAT_SELECT_FIELDS, ChatsRepository};
+use crate::chats::ChatsRepository;
 use crate::{DbError, enum_to_db_string};
 
 impl ChatsRepository {
@@ -14,8 +11,8 @@ impl ChatsRepository {
     /// a new one seeded from the parent's resolved config (`created = true`).
     /// The select-then-insert here, combined with the partial unique index
     /// (migration 30) and the DB worker running one closure at a time, makes
-    /// two concurrent opens on the same parent converge on a single row (see
-    /// the plan's `## Established facts`). The insert, the segment seed and
+    /// two concurrent opens on the same parent converge on a single row. The
+    /// insert, the segment seed and
     /// the read-back share one transaction, like `create`, so a failure in any
     /// of them leaves no half-made side chat behind.
     pub fn find_or_create_side_chat(&self, parent: &Chat) -> Result<(Chat, bool), DbError> {
@@ -54,7 +51,7 @@ impl ChatsRepository {
                 now,
             ],
         )?;
-        crate::chat_segments::ensure_seeded(&self.db, &id)?;
+        crate::chat_segments::ensure_seeded(&tx, &id)?;
 
         let chat = self.get_inserted(&id)?;
         tx.commit()?;
@@ -62,9 +59,9 @@ impl ChatsRepository {
     }
 
     fn find_side_chat(&self, parent_id: &str) -> Result<Option<Chat>, DbError> {
-        let sql = format!(
-            "SELECT {CHAT_SELECT_FIELDS} FROM chats WHERE parent_chat_id = ? AND temporary = 1"
-        );
-        Ok(self.query_chats(&sql, rusqlite::params![parent_id])?.pop())
+        self.query_chat(
+            "parent_chat_id = ? AND temporary = 1",
+            rusqlite::params![parent_id],
+        )
     }
 }

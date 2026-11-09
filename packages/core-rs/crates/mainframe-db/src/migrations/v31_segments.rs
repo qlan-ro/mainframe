@@ -1,7 +1,6 @@
 //! Migration 31: provider segments. A chat owns an ordered list of segments,
 //! each running on one provider-native session; `chats` keeps the active
-//! segment's session columns as a mirror. Its own file because `migrations.rs`
-//! is already past the 300-line limit.
+//! segment's session columns as a mirror.
 
 use rusqlite::Connection;
 

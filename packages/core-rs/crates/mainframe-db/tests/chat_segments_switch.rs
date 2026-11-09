@@ -151,9 +151,8 @@ fn handoff_rows_supersede_deliver_and_stamp_the_marker() {
     db.handoffs
         .insert_pending(&record("ho_2"), "other")
         .unwrap();
-    let live = db.handoffs.live_for_segment("seg_new").unwrap().unwrap();
-    assert_eq!(live.id, "ho_2");
     let layout = db.segments.layout(&chat.id).unwrap();
+    assert_eq!(layout.handoff_for("seg_new").unwrap().id, "ho_2");
     assert_eq!(
         layout.active().unwrap().start_marker.as_deref(),
         Some("seg_new")

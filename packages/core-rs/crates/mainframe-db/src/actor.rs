@@ -56,7 +56,6 @@ impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
     pub fn spawn<F>(open: F) -> Result<Self, E>
     where
         F: FnOnce() -> Result<S, E> + Send + 'static,
-        E: From<ActorError> + Send + 'static,
     {
         Self::spawn_named("mainframe-db", open)
     }
@@ -65,7 +64,6 @@ impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
     pub fn spawn_named<F>(name: &str, open: F) -> Result<Self, E>
     where
         F: FnOnce() -> Result<S, E> + Send + 'static,
-        E: From<ActorError> + Send + 'static,
     {
         let (tx, mut rx) = mpsc::unbounded_channel::<Job<S>>();
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
@@ -114,7 +112,6 @@ impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
     where
         F: FnOnce(&mut S) -> Result<R, E> + Send + 'static,
         R: Send + 'static,
-        E: From<ActorError> + Send + 'static,
     {
         let (tx, rx) = oneshot::channel();
         self.submit(Box::new(move |state| {
@@ -140,7 +137,6 @@ impl<S: 'static, E: From<ActorError> + Send + 'static> SqliteActor<S, E> {
     where
         F: FnOnce(&S) -> Result<R, E> + Send + 'static,
         R: Send + 'static,
-        E: From<ActorError> + Send + 'static,
     {
         let (tx, rx) = std::sync::mpsc::channel();
         self.submit(Box::new(move |state| {

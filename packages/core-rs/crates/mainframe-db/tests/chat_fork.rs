@@ -28,7 +28,7 @@ fn setup() -> (ChatsRepository, ProjectsRepository) {
     initialize_schema(&conn).unwrap();
     let conn = std::rc::Rc::new(conn);
     (
-        ChatsRepository::new(std::rc::Rc::clone(&conn), None),
+        ChatsRepository::new(std::rc::Rc::clone(&conn)),
         ProjectsRepository::new(conn),
     )
 }
@@ -95,7 +95,7 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
     assert_eq!(fork.total_tokens_input, 0);
     assert_eq!(fork.total_tokens_output, 0);
     assert_eq!(fork.pinned, Some(false));
-    assert_eq!(fork.tags, None);
+    assert_eq!(fork.tags, Some(vec![]));
     assert_eq!(fork.automation_run_id, None);
 
     // Round-trips through get() (the map_row path) too.

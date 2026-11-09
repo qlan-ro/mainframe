@@ -78,35 +78,6 @@ fn set_for_chat_auto_creates_missing_tags() {
 }
 
 #[test]
-fn list_in_use_returns_distinct_tags_currently_associated() {
-    let s = setup();
-    s.chat_tags
-        .set_for_chat("c1", &v(&["feature"]), &s.tags)
-        .unwrap();
-    s.chat_tags
-        .set_for_chat("c2", &v(&["feature", "bug"]), &s.tags)
-        .unwrap();
-    let mut got = s.chat_tags.list_in_use(None).unwrap();
-    got.sort();
-    assert_eq!(got, v(&["bug", "feature"]));
-}
-
-#[test]
-fn list_in_use_with_project_id_filters() {
-    let s = setup();
-    s.chat_tags
-        .set_for_chat("c1", &v(&["feature"]), &s.tags)
-        .unwrap();
-    let mut got = s.chat_tags.list_in_use(Some("p1")).unwrap();
-    got.sort();
-    assert_eq!(got, v(&["feature"]));
-    assert_eq!(
-        s.chat_tags.list_in_use(Some("p-other")).unwrap(),
-        Vec::<String>::new()
-    );
-}
-
-#[test]
 fn filter_chat_ids_and_intersects_user_tags() {
     let s = setup();
     s.chat_tags

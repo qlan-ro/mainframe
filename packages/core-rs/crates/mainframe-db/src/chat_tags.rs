@@ -48,7 +48,7 @@ impl ChatTagsRepository {
         }
         let placeholders = vec!["?"; chat_ids.len()].join(",");
         let sql = format!(
-            "SELECT chat_id as chatId, tag FROM chat_tags \
+            "SELECT chat_id, tag FROM chat_tags \
              WHERE source = 'user' AND chat_id IN ({placeholders}) \
              ORDER BY chat_id, tag"
         );
@@ -79,7 +79,8 @@ impl ChatTagsRepository {
         )?;
         let now = now_iso8601();
         for raw in &unique {
-            let tag = registry.upsert(raw, None)?; // throws on invalid input
+            // An invalid name fails here and the dropped transaction rolls back.
+            let tag = registry.upsert(raw, None)?;
             tx.execute(
                 "INSERT OR IGNORE INTO chat_tags (chat_id, tag, source, created_at) VALUES (?, ?, 'user', ?)",
                 rusqlite::params![chat_id, tag.name, now],
@@ -87,29 +88,6 @@ impl ChatTagsRepository {
         }
         tx.commit()?;
         Ok(())
-    }
-
-    /// Distinct user tags currently in use, optionally restricted to a project.
-    /// Drives the filter bar's tag chip list.
-    pub fn list_in_use(&self, project_id: Option<&str>) -> Result<Vec<String>, DbError> {
-        if let Some(project_id) = project_id {
-            let mut stmt = self.db.prepare(
-                "SELECT DISTINCT ct.tag FROM chat_tags ct \
-                 JOIN chats c ON c.id = ct.chat_id \
-                 WHERE ct.source = 'user' AND c.project_id = ? AND c.status != 'archived' \
-                 ORDER BY ct.tag",
-            )?;
-            let rows = stmt.query_map([project_id], |row| row.get::<_, String>(0))?;
-            return Ok(rows.collect::<Result<Vec<_>, _>>()?);
-        }
-        let mut stmt = self.db.prepare(
-            "SELECT DISTINCT ct.tag FROM chat_tags ct \
-             JOIN chats c ON c.id = ct.chat_id \
-             WHERE ct.source = 'user' AND c.status != 'archived' \
-             ORDER BY ct.tag",
-        )?;
-        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
     /// Returns chat ids that have ALL of the supplied tags.
