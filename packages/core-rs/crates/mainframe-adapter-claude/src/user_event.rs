@@ -157,7 +157,11 @@ fn handle_user_blocks(
             .and_then(Value::as_str)
             .filter(|s| !s.is_empty())
             .map(str::to_string);
+        let published = crate::artifact_publish::published_artifacts(&tool_result_content);
         sink.on_tool_result(tool_result_content, vendor_id);
+        for url in published {
+            sink.on_artifact_published(&url);
+        }
     }
 
     let Some(blocks) = content.and_then(Value::as_array) else {

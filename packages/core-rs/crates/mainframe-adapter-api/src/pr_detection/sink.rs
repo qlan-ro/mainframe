@@ -190,6 +190,10 @@ impl SessionSink for PrDetectionSink {
         self.inner.on_api_retry(attempt, reason);
     }
 
+    fn on_artifact_published(&self, url: &str) {
+        self.inner.on_artifact_published(url);
+    }
+
     fn on_message_partial(&self, api_message_id: &str, content: Vec<MessageContent>) {
         // Pass through unscanned: partial text is a prefix of the completed
         // block `on_message` will scan — detecting on both would double-count.

@@ -19,6 +19,8 @@ vi.mock('@/lib/daemon/active-daemon', () => ({ getActiveDaemon: () => ({ kind: m
 vi.mock('@/lib/host', () => ({
   useHost: () => ({ app: { platform: mockPlatform }, shell: { openExternal: mockOpenExternal } }),
 }));
+const mockToast = vi.fn();
+vi.mock('@/lib/toast', () => ({ mfToast: { info: (title: string) => mockToast(title) } }));
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (intent: unknown) => mockEmit(intent) }));
 
 import { useOpenArtifact } from '../use-open-artifact';
@@ -55,17 +57,24 @@ describe('useOpenArtifact', () => {
     expect(mockEmit).not.toHaveBeenCalled();
   });
 
-  it('sends Docs and Dashboards to claude.ai', async () => {
+  it('sends Docs and Dashboards to claude.ai and says why', async () => {
     mockPrepare.mockResolvedValue({ status: 'unsupported' });
     await openArtifact();
     expect(mockOpenExternal).toHaveBeenCalledWith(URL);
     expect(mockEmit).not.toHaveBeenCalled();
+    expect(mockToast).toHaveBeenCalledWith(expect.stringContaining('can’t show this kind of artifact'));
   });
 
-  it('falls back to claude.ai when the download fails', async () => {
+  it('falls back to claude.ai when the download fails, and says so', async () => {
     mockPrepare.mockRejectedValue(new Error('offline'));
     await openArtifact();
     expect(mockOpenExternal).toHaveBeenCalledWith(URL);
+    expect(mockToast).toHaveBeenCalledWith(expect.stringContaining('couldn’t load this artifact'));
+  });
+
+  it('stays quiet when the artifact opens in Mainframe', async () => {
+    await openArtifact();
+    expect(mockToast).not.toHaveBeenCalled();
   });
 
   it('goes straight to claude.ai on a remote daemon', async () => {

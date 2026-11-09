@@ -25,8 +25,11 @@ const READ_BATCH: usize = 50;
 static NEXT_DOWNLOAD: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Serialize, Deserialize)]
-struct PreviewMeta {
-    title: String,
+pub(super) struct PreviewMeta {
+    pub title: String,
+    /// A migrated design's pages: each is a whole page with its own canvas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pages: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -43,10 +46,23 @@ pub(super) fn version_dir(data_dir: &FsPath, slug: &str, version: &str) -> PathB
     cache_root(data_dir).join(slug).join(version)
 }
 
+/// A migrated design's pages: HTML files directly in `project/`.
+pub(super) fn migrated_pages(paths: &[String]) -> Vec<String> {
+    paths
+        .iter()
+        .filter(|path| {
+            path.strip_prefix(PROJECT_PREFIX)
+                .is_some_and(|name| name.ends_with(".html") && !name.contains('/'))
+        })
+        .cloned()
+        .collect()
+}
+
 /// Which files make `listing` viewable, or `None` when only claude.ai can show it.
-/// Docs and Dashboards keep their content in its database, and a Design System's
-/// previews are fragments that claude.ai's page assembles. An untyped artifact is
-/// its own page, and lists no files for it.
+/// A design (canvas) or deck has its index; a design migrated from standalone
+/// Claude Design has whole pages in `project/`. Docs and Dashboards keep their
+/// content in claude.ai's database, and a Design System's previews are fragments
+/// its page assembles. An untyped artifact is its own page, and lists no files for it.
 pub(super) fn files_to_download(listing: &ArtifactListing) -> Option<Vec<String>> {
     let total: u64 = listing.files.iter().map(|file| file.size_bytes).sum();
     if total > MAX_ARTIFACT_BYTES {
@@ -64,10 +80,10 @@ pub(super) fn files_to_download(listing: &ArtifactListing) -> Option<Vec<String>
         .map(|file| file.path.clone())
         .filter(|path| path.starts_with(PROJECT_PREFIX) && !path.ends_with(".md"))
         .collect();
-    if !paths
+    let indexed = paths
         .iter()
-        .any(|path| INDEX_FILES.contains(&path.as_str()))
-    {
+        .any(|path| INDEX_FILES.contains(&path.as_str()));
+    if !indexed && migrated_pages(&paths).is_empty() {
         return None;
     }
     if listing.files.iter().any(|file| file.path == RUNTIME_FILE) {
@@ -138,7 +154,7 @@ async fn remove_scratch_copy(saved_dir: &FsPath, spool: &FsPath) {
     }
 }
 
-async fn read_meta(dir: &FsPath) -> Option<PreviewMeta> {
+pub(super) async fn read_meta(dir: &FsPath) -> Option<PreviewMeta> {
     let bytes = tokio::fs::read(dir.join(META_FILE)).await.ok()?;
     serde_json::from_slice(&bytes).ok()
 }
@@ -257,6 +273,7 @@ async fn fill_temp(
     let title = download(client, url, paths, temp).await?;
     let meta = PreviewMeta {
         title: title.clone(),
+        pages: migrated_pages(paths),
     };
     tokio::fs::write(temp.join(META_FILE), serde_json::to_vec(&meta)?).await?;
     Ok(title)

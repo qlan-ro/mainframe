@@ -151,12 +151,17 @@
     let awaitingFrame = false;
     const endFramePick = () => {
       awaitingFrame = false;
+      setPicking(false);
       tellFrames('stop');
     };
+
+    // The canvas covers boards with shields while navigating; a pick needs them gone.
+    const setPicking = (on) => document.documentElement.classList.toggle('mf-picking', on);
 
     window.__mfInspectInstall = function (tabId) {
       window.__mfPreviewTabId = tabId;
       stop();
+      setPicking(true);
       if (frames().length === 0) {
         start();
         return;
@@ -185,6 +190,11 @@
       reportToHost(result);
     };
   } else {
+    // Keys typed in a board stay in its frame, so the canvas would never see the
+    // Escape that ends using a board. Pass it up; the canvas only stops interacting.
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') window.parent.postMessage({ mfCanvasEscape: true }, '*');
+    });
     finish = (result) => window.parent.postMessage({ [MARK]: result }, '*');
     window.addEventListener('message', (event) => {
       if (event.source !== window.parent || !event.data) return;

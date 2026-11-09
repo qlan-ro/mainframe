@@ -27,6 +27,7 @@ Cached artifacts are plain private files, so `retention.rs` limits them: a new v
 | Design | `project/canvas.json`, `project/*.dc.html` | One frame per board |
 | Slides | `project/deck.json`, `project/slides/<id>.html` | One frame per slide, 1920×1080 |
 | Untyped page | `list` returns no files; `read` with `paths: ["index.html"]` returns the page | The page |
+| Migrated design (from standalone Claude Design) | Whole pages in `project/*.html`, each loading React and Babel from unpkg and its own `.jsx` files, plus `project/.design-canvas.state.json` | A page picker, one page at a time; each page draws its own canvas |
 | Docs, Dashboard | Only the type's viewer; content is in claude.ai's database | claude.ai |
 | Design System | `preview.html` fragments that claude.ai's page completes with React and the bundle | claude.ai |
 
@@ -38,10 +39,15 @@ Cached artifacts are plain private files, so `retention.rs` limits them: a new v
 
 The route adds `picker.js` to every page it serves. Inspect's own picker runs only in the top document, so `picker.js` takes over its install hooks there, picks inside the board frames, and reports through the usual `inspect_result` command. The selector names the artifact, board, element path and text, so an agent can find the source: `artifact <url> | board <page> | <path> | text "<text>"`.
 
-When a publish finishes in a live chat, `ArtifactCard` asks for the newest version and moves any open tab to it.
+Every successful publish, from any chat or subagent, makes the daemon emit a global `artifact.published` event, read from the result's first line. The UI then moves open tabs to the newest version. A tab the UI can't reach then, such as one in another chat's workspace, recovers when it next loads: a request for a version that is gone redirects to the newest cached one, or downloads it.
+
+## Canvas
+
+A design opens as a canvas (`mf-canvas.js`): boards at their `canvas.json` frames in `order`, `title1` and sticky notes, a page picker when there are pages, and the `launch` view. Scroll or drag pans and pinch or Cmd/Ctrl+scroll zooms. Boards sit under shields so gestures over them move the canvas; double-click one to use it, and Escape returns. Drawn shapes (`rect`, `oval`, `pen` and the like) aren't shown.
 
 ## Limits
 
 - The CLI refuses a public artifact from outside the user's organization until a person agrees, so `list` fails and the UI falls back to the browser.
 - Designs may reference `/_blob/<id>` uploads, which aren't downloaded. None of the artifacts surveyed used them.
-- Design content is untrusted. The route's CSP `sandbox` gives it an opaque origin and limits it to its own version's files and Google Fonts.
+- Design content is untrusted. The route's CSP `sandbox` gives it an opaque origin and limits it to its own version's files, Google Fonts, and scripts from the CDNs claude.ai allows artifacts (cdnjs, jsDelivr, unpkg, Tailwind, jQuery).
+- Mainframe can't show Docs, Dashboards, Design Systems, or an artifact it fails to download; Open then goes to claude.ai and says why.

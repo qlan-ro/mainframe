@@ -34,6 +34,7 @@ pub(super) struct Rec {
     pub(super) provider_quota: Vec<(String, mainframe_types::adapter::ProviderQuota)>,
     pub(super) attention_requests: Vec<String>,
     pub(super) api_retries: Vec<(i64, Option<String>)>,
+    pub(super) artifacts_published: Vec<String>,
 }
 
 #[derive(Default)]
@@ -122,6 +123,9 @@ impl SessionSink for RecordingSink {
     fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
         self.r().api_retries.push((attempt, reason));
     }
+    fn on_artifact_published(&self, url: &str) {
+        self.r().artifacts_published.push(url.to_string());
+    }
 }
 
 pub(super) fn session_at(path: &str, tracker: Arc<BackgroundTaskTracker>) -> Arc<ClaudeSession> {
@@ -170,6 +174,8 @@ mod notifications;
 #[path = "events_tests_stderr.rs"]
 mod stderr;
 
+#[path = "events_tests_artifacts.rs"]
+mod artifacts;
 #[path = "events_tests_skills.rs"]
 mod skills;
 #[path = "events_tests_subagents.rs"]

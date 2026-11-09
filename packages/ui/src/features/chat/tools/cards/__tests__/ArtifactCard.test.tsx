@@ -12,11 +12,7 @@ import { describeArtifactCall } from '../artifact-call';
 const mockOpenExternal = vi.fn().mockResolvedValue(undefined);
 const mockOpen = vi.fn().mockResolvedValue(undefined);
 const mockOpening = vi.fn();
-const mockRefresh = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@/features/artifacts/refresh-artifact-tabs', () => ({
-  refreshArtifactTabs: (url: string) => mockRefresh(url),
-}));
 vi.mock('@/lib/host', () => ({ useHost: () => ({ shell: { openExternal: mockOpenExternal } }) }));
 vi.mock('@/features/artifacts/use-open-artifact', () => ({
   useOpenArtifact: () => ({ open: mockOpen, opening: mockOpening() }),
@@ -67,7 +63,6 @@ describe('describeArtifactCall', () => {
       verb: 'Create artifact',
       label: 'Coffee Pricing',
       url: ARTIFACT,
-      publishes: true,
       showResult: false,
     });
   });
@@ -87,7 +82,6 @@ describe('describeArtifactCall', () => {
       verb: 'Artifact quickstart',
       label: '',
       url: null,
-      publishes: false,
       showResult: false,
     });
   });
@@ -151,28 +145,6 @@ describe('ArtifactCard', () => {
     renderCard({ url: ARTIFACT }, undefined);
     expect(screen.queryByTestId('artifact-card-open')).toBeNull();
     expect(screen.queryByTestId('artifact-card-open-browser')).toBeNull();
-  });
-
-  it('refreshes open tabs when a publish finishes while the card is mounted', () => {
-    const view = renderCard({ url: ARTIFACT }, undefined);
-    expect(mockRefresh).not.toHaveBeenCalled();
-
-    view.rerender(cardElement({ url: ARTIFACT }, UPDATED));
-    expect(mockRefresh).toHaveBeenCalledTimes(1);
-    expect(mockRefresh).toHaveBeenCalledWith(ARTIFACT);
-  });
-
-  it('leaves tabs alone for a finished publish loaded from history', () => {
-    renderCard({ url: ARTIFACT }, UPDATED);
-    expect(mockRefresh).not.toHaveBeenCalled();
-  });
-
-  it('leaves tabs alone after a failed publish or a read', () => {
-    const failed = renderCard({ url: ARTIFACT }, undefined);
-    failed.rerender(cardElement({ url: ARTIFACT }, 'Publish refused', true));
-    const read = renderCard({ action: 'read', url: ARTIFACT }, undefined);
-    read.rerender(cardElement({ action: 'read', url: ARTIFACT }, 'details'));
-    expect(mockRefresh).not.toHaveBeenCalled();
   });
 
   it('shows the error and no actions when the call failed', () => {

@@ -16,6 +16,7 @@ import { installSessionTodosSubscriber } from '@/store/session-todos';
 import { installAdapterModelsSubscriber } from '@/store/adapters';
 import { seedAdaptersFor } from '@/store/adapters-seed';
 import { installProviderQuotaSubscriber } from '@/store/quota';
+import { installArtifactPublishSubscriber } from '@/features/artifacts/artifact-publish-subscriber';
 import { seedQuota } from '@/store/quota-seed';
 import { installProviderCliStatusSubscriber } from '@/store/cli-update';
 import { seedProviderCliStatusesFor } from '@/store/cli-update-seed';
@@ -118,6 +119,7 @@ export function App() {
   // Always-on provider-quota subscriber (provider.quota.updated). Account-wide,
   // chatId-less — mounted once so a push is never missed by a late-mounting card.
   useEffect(() => installProviderQuotaSubscriber(), []);
+  useEffect(() => installArtifactPublishSubscriber(), []);
 
   // Always-on provider-CLI-update subscriber (provider.cli.updated). Mounted once so an
   // update's progress lines are never missed by a late-mounting Settings pane.

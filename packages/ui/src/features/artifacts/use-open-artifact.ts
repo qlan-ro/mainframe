@@ -12,7 +12,11 @@ import { prepareArtifactPreview } from '@/lib/api/artifacts';
 import { apiBase } from '@/lib/api/http';
 import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { useHost } from '@/lib/host';
+import { mfToast } from '@/lib/toast';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+
+const UNSUPPORTED_NOTE = 'Mainframe can’t show this kind of artifact yet, so it opened on claude.ai.';
+const FAILED_NOTE = 'Mainframe couldn’t load this artifact, so it opened on claude.ai.';
 
 export interface OpenArtifact {
   open: (url: string) => Promise<void>;
@@ -37,6 +41,7 @@ export function useOpenArtifact(): OpenArtifact {
       const preview = await prepareArtifactPreview(url);
       if (preview.status !== 'ready') {
         openExternal(url);
+        mfToast.info(UNSUPPORTED_NOTE);
         return;
       }
       const target = `${apiBase()}${preview.path}`;
@@ -59,6 +64,7 @@ export function useOpenArtifact(): OpenArtifact {
       } catch (error) {
         console.warn('[artifacts] preview failed, opening claude.ai', error);
         openExternal(url);
+        mfToast.info(FAILED_NOTE);
       } finally {
         setOpening(false);
       }

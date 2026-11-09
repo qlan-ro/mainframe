@@ -6,16 +6,15 @@
  *
  * Family: publish. Header: glyph + verb + title + StatusDot; the actions sit in the
  * header accessory so their clicks never toggle the card. Open shows the artifact
- * in the workspace; the arrow always goes to claude.ai. A publish that finishes
- * while the card is mounted updates any tab already showing that artifact.
+ * in the workspace; the arrow always goes to claude.ai. Keeping open tabs current
+ * is the daemon's `artifact.published` event, not this card: a publish from a
+ * subagent or another chat never mounts one here.
  * Body: errors, and the listing actions' text. Publish results stay hidden; see
  * artifact-call.ts.
  */
-import { useEffect, useRef } from 'react';
 import type { ToolCallMessagePartComponent } from '@assistant-ui/react';
 import { ExternalLinkIcon, LayersIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { refreshArtifactTabs } from '@/features/artifacts/refresh-artifact-tabs';
 import { useOpenArtifact } from '@/features/artifacts/use-open-artifact';
 import { useHost } from '@/lib/host';
 import { StatusDot, CollapsibleCardShell, ErrorBody, resolveResultText } from '../shared';
@@ -62,14 +61,6 @@ export const ArtifactCard: ToolCallMessagePartComponent = ({ args, result, isErr
   const call = describeArtifactCall(args, resultText);
   const url = result !== undefined && !isError ? call.url : null;
 
-  // Only a call seen in flight refreshes: reloading a transcript mounts finished
-  // cards, and those publishes are old news.
-  const wasRunning = useRef(result === undefined);
-  useEffect(() => {
-    if (result === undefined) return;
-    if (wasRunning.current && call.publishes && url !== null) void refreshArtifactTabs(url);
-    wasRunning.current = false;
-  }, [result, call.publishes, url]);
   const showBody = Boolean(resultText) && (Boolean(isError) || call.showResult);
 
   return (
