@@ -40,6 +40,10 @@ pub async fn generate_claude_title(
         // PATH is threaded explicitly (edition-2024 forbids mutating process env)
         // so packaged builds find `claude`.
         .env("PATH", path)
+        .env(
+            "CLAUDE_CODE_ENTRYPOINT",
+            crate::constants::CLAUDE_ENTRYPOINT,
+        )
         .env("NO_COLOR", "1");
 
     let output = mainframe_runtime::process::run_captured(
