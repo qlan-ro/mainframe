@@ -1,5 +1,4 @@
-//! Default tag color assignment. Lives in `mainframe-db` because its sole
-//! consumer is `tags.rs`.
+//! Default tag color assignment for `tags.rs`.
 
 use mainframe_types::tags::{TAG_PALETTE, TagColor};
 

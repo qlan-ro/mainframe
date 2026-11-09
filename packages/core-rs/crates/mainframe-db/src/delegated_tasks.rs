@@ -10,6 +10,16 @@ use rusqlite::{Connection, Row};
 
 use crate::DbError;
 
+/// The SQL list of task statuses that can still change (`queued`, `running`,
+/// `waiting`): the complement of `TaskStatus::is_terminal`, which a test keeps
+/// it equal to. A macro so `concat!` can splice it into constant queries.
+macro_rules! open_task_statuses {
+    () => {
+        "('queued', 'running', 'waiting')"
+    };
+}
+pub(crate) use open_task_statuses;
+
 const SELECT: &str = "SELECT id, parent_chat_id, child_chat_id, client_request_id, title, role, \
      status, depth, summary, error, cancel_reason, delivery, created_at, updated_at, completed_at \
      FROM delegated_tasks";
@@ -19,10 +29,11 @@ pub struct DelegatedTasksRepository {
     db: Rc<Connection>,
 }
 
-fn parse<T>(raw: String, f: fn(&str) -> Option<T>) -> rusqlite::Result<T> {
+fn parse<T>(row: &Row<'_>, index: usize, f: fn(&str) -> Option<T>) -> rusqlite::Result<T> {
+    let raw: String = row.get(index)?;
     f(&raw).ok_or_else(|| {
         rusqlite::Error::FromSqlConversionFailure(
-            0,
+            index,
             rusqlite::types::Type::Text,
             format!("unknown delegated task value {raw}").into(),
         )
@@ -36,13 +47,13 @@ fn row_to_task(row: &Row<'_>) -> rusqlite::Result<DelegatedTask> {
         child_chat_id: row.get(2)?,
         client_request_id: row.get(3)?,
         title: row.get(4)?,
-        role: parse(row.get(5)?, TaskRole::parse)?,
-        status: parse(row.get(6)?, TaskStatus::parse)?,
+        role: parse(row, 5, TaskRole::parse)?,
+        status: parse(row, 6, TaskStatus::parse)?,
         depth: row.get(7)?,
         summary: row.get(8)?,
         error: row.get(9)?,
         cancel_reason: row.get(10)?,
-        delivery: parse(row.get(11)?, TaskDelivery::parse)?,
+        delivery: parse(row, 11, TaskDelivery::parse)?,
         created_at: row.get(12)?,
         updated_at: row.get(13)?,
         completed_at: row.get(14)?,
@@ -148,7 +159,7 @@ impl DelegatedTasksRepository {
     }
 
     pub fn list_nonterminal(&self) -> Result<Vec<DelegatedTask>, DbError> {
-        self.query("WHERE status IN ('queued', 'running', 'waiting')", &[])
+        self.query(concat!("WHERE status IN ", open_task_statuses!()), &[])
     }
 
     pub fn list_owed(&self) -> Result<Vec<DelegatedTask>, DbError> {
@@ -159,11 +170,37 @@ impl DelegatedTasksRepository {
     /// still finish. Returns how many were interrupted.
     pub fn interrupt_unfinished(&self, now: &str) -> Result<usize, DbError> {
         Ok(self.db.execute(
-            "UPDATE delegated_tasks SET status = 'interrupted', delivery = 'dropped', \
-             error = COALESCE(error, 'The daemon restarted before the task finished.'), \
-             updated_at = ?1, completed_at = ?1 \
-             WHERE status IN ('queued', 'running', 'waiting')",
+            concat!(
+                "UPDATE delegated_tasks SET status = 'interrupted', delivery = 'dropped', \
+                 error = COALESCE(error, 'The daemon restarted before the task finished.'), \
+                 updated_at = ?1, completed_at = ?1 WHERE status IN ",
+                open_task_statuses!()
+            ),
             [now],
         )?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mainframe_types::orchestration::TaskStatus;
+
+    #[test]
+    fn open_task_statuses_are_exactly_the_non_terminal_ones() {
+        let all = [
+            TaskStatus::Queued,
+            TaskStatus::Running,
+            TaskStatus::Waiting,
+            TaskStatus::Completed,
+            TaskStatus::Failed,
+            TaskStatus::Cancelled,
+            TaskStatus::Interrupted,
+        ];
+        let open: Vec<String> = all
+            .into_iter()
+            .filter(|status| !status.is_terminal())
+            .map(|status| format!("'{}'", status.as_str()))
+            .collect();
+        assert_eq!(open_task_statuses!(), format!("({})", open.join(", ")));
     }
 }

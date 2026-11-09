@@ -140,13 +140,12 @@ impl SegmentsRepository {
     /// Whether any owned native row of the chat has a provider id — the point
     /// after which `PATCH /config` no longer changes the adapter.
     pub fn has_native_id(&self, chat_id: &str) -> Result<bool, DbError> {
-        let count: i64 = self.db.query_row(
-            "SELECT COUNT(*) FROM chat_native_sessions WHERE chat_id = ? \
-             AND native_session_id IS NOT NULL AND borrowed_from_chat_id IS NULL",
+        Ok(self.db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM chat_native_sessions WHERE chat_id = ? \
+             AND native_session_id IS NOT NULL AND borrowed_from_chat_id IS NULL)",
             [chat_id],
             |row| row.get(0),
-        )?;
-        Ok(count > 0)
+        )?)
     }
 }
 

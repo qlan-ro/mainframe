@@ -43,9 +43,9 @@ pub mod schema;
 pub mod settings;
 mod settings_kv;
 mod side_chats;
-pub mod tag_color;
+mod tag_color;
 pub mod tags;
-pub mod validate_tag_name;
+mod validate_tag_name;
 
 pub use chat_handoffs::HandoffsRepository;
 pub use chat_segments::{RecordOutcome, SegmentResultDelta, SegmentsRepository};
@@ -149,8 +149,7 @@ impl DatabaseManager {
         let projects = ProjectsRepository::new(Rc::clone(&db));
         let tags = TagsRepository::new(Rc::clone(&db));
         let chat_tags = ChatTagsRepository::new(Rc::clone(&db));
-        // Pass chatTags into ChatsRepository so list/get can populate Chat.tags.
-        let chats = ChatsRepository::new(Rc::clone(&db), Some(chat_tags.clone()));
+        let chats = ChatsRepository::new(Rc::clone(&db));
         let settings = SettingsRepository::new(Rc::clone(&db));
         let devices = DevicesRepository::new(Rc::clone(&db));
         let segments = SegmentsRepository::new(Rc::clone(&db));
@@ -171,17 +170,12 @@ impl DatabaseManager {
         })
     }
 
-    /// Closes the connection. It drops when the last `Rc` is released, so this
-    /// consumes `self` to make the intent visible.
-    pub fn close(self) {
-        drop(self);
-    }
-
-    /// Escape hatch for tests / lower-level callers that need the raw handle.
-    pub fn connection(&self) -> &Rc<Connection> {
+    /// The raw connection, for tests that corrupt or inspect the schema.
+    pub fn connection(&self) -> &Connection {
         &self.db
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,7 +187,7 @@ mod tests {
         let db_path = root.path().join("configured").join("mainframe.db");
         let legacy_db = root.path().join("legacy").join("mainframe.db");
 
-        DatabaseManager::new(&db_path, &legacy_db).unwrap().close();
+        drop(DatabaseManager::new(&db_path, &legacy_db).unwrap());
 
         assert!(db_path.exists());
         assert!(!root.path().join("legacy").exists());

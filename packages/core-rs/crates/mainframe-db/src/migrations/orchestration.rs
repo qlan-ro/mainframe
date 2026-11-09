@@ -1,8 +1,4 @@
-//! Migration 32: agent orchestration (spec
-//! `docs/specs/2026-10-06-mcp-orchestration-server.md`). Version 31 is reserved
-//! for the in-place provider-switch migration landing in parallel; the runner
-//! applies any version above the stamped one, so the gap is safe as long as 31
-//! merges before a build stamped 32 ships.
+//! Migration 32: agent orchestration.
 //!
 //! `created_by_chat_id` records which chat's agent started a chat (launch and
 //! delegate alike). `delegated_tasks` is the one row per delegated child.

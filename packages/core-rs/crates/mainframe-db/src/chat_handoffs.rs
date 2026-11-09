@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use mainframe_types::segment::{HandoffRecord, HandoffStatus, HandoffStrategy};
 use mainframe_types::time::now_iso8601;
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 
 use crate::DbError;
 
@@ -62,8 +62,8 @@ pub(crate) fn insert(db: &Connection, record: &HandoffRecord) -> Result<(), DbEr
             record.covered_to_ordinal,
             record.item_count,
             record.omitted_count,
-            record.budget_bytes as i64,
-            record.used_bytes as i64,
+            record.budget_bytes,
+            record.used_bytes,
             i64::from(record.fell_back_to_fresh),
             record.status.as_db_str(),
             record.created_at,
@@ -82,21 +82,10 @@ impl HandoffsRepository {
         Self { db }
     }
 
-    /// The segment's non-superseded handoff, if any.
-    pub fn live_for_segment(&self, segment_id: &str) -> Result<Option<HandoffRecord>, DbError> {
-        let sql = format!(
-            "SELECT {HANDOFF_FIELDS} FROM chat_handoffs WHERE target_segment_id = ? \
-             AND status != 'superseded'"
-        );
-        Ok(self
-            .db
-            .query_row(&sql, [segment_id], map_handoff)
-            .optional()?)
-    }
-
     /// Supersedes the segment's older pending row, inserts `record` as
-    /// pending, and stamps `segment.start_marker` (if unset) with the value the
-    /// block's `segment="…"` attribute carries — all in one transaction.
+    /// pending (its own status and delivery time are ignored), and stamps
+    /// `segment.start_marker` (if unset) with the value the block's
+    /// `segment="…"` attribute carries, all in one transaction.
     pub fn insert_pending(
         &self,
         record: &HandoffRecord,
@@ -108,25 +97,13 @@ impl HandoffsRepository {
              AND status = 'pending'",
             [&record.target_segment_id],
         )?;
-        tx.execute(
-            "INSERT INTO chat_handoffs (id, chat_id, target_segment_id, strategy, \
-             covered_from_ordinal, covered_to_ordinal, item_count, omitted_count, budget_bytes, \
-             used_bytes, fell_back_to_fresh, status, created_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
-            rusqlite::params![
-                record.id,
-                record.chat_id,
-                record.target_segment_id,
-                record.strategy.as_db_str(),
-                record.covered_from_ordinal,
-                record.covered_to_ordinal,
-                record.item_count,
-                record.omitted_count,
-                record.budget_bytes as i64,
-                record.used_bytes as i64,
-                i64::from(record.fell_back_to_fresh),
-                record.created_at,
-            ],
+        insert(
+            &tx,
+            &HandoffRecord {
+                status: HandoffStatus::Pending,
+                delivered_at: None,
+                ..record.clone()
+            },
         )?;
         tx.execute(
             "UPDATE chat_segments SET start_marker = COALESCE(start_marker, ?) WHERE id = ?",

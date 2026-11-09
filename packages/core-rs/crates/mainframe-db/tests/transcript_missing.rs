@@ -21,7 +21,7 @@ fn setup() -> (ChatsRepository, ProjectsRepository, String) {
     let conn = Connection::open_in_memory().unwrap();
     initialize_schema(&conn).unwrap();
     let conn = Rc::new(conn);
-    let chats = ChatsRepository::new(Rc::clone(&conn), None);
+    let chats = ChatsRepository::new(Rc::clone(&conn));
     let projects = ProjectsRepository::new(Rc::clone(&conn));
     let project_id = projects.create("/project/transcripts", None).unwrap().id;
     (chats, projects, project_id)

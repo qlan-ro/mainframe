@@ -202,17 +202,17 @@ const MIGRATIONS: &[Migration] = &[
     },
 ];
 
-pub fn migrations() -> Vec<Migration> {
-    MIGRATIONS.to_vec()
+pub fn migrations() -> &'static [Migration] {
+    MIGRATIONS
 }
 
 /// Highest migration version: the target a fresh DB stamps to.
-pub const LATEST_VERSION: i64 = 32;
+pub const LATEST_VERSION: i64 = MIGRATIONS[MIGRATIONS.len() - 1].version;
 
 /// Applies every migration whose version is greater than the DB's current
 /// `PRAGMA user_version`, each in its own transaction that also stamps the
 /// version. Legacy DBs report version 0 and re-run the whole idempotent
 /// chain; fresh DBs build from scratch.
 pub fn run_migrations(db: &Connection, target: i64) -> Result<(), DbError> {
-    run_versioned(db, &migrations(), target)
+    run_versioned(db, MIGRATIONS, target)
 }

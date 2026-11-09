@@ -1,178 +1,108 @@
+//! `ChatPatch` → the `SET` clause of a `chats` UPDATE.
+
 use crate::{DbError, enum_to_db_string};
 use mainframe_types::chat_patch::ChatPatch;
 use rusqlite::types::Value as SqlValue;
+use serde::Serialize;
 
-type Column = (
-    &'static str,
-    fn(&ChatPatch) -> Result<Option<SqlValue>, DbError>,
-);
-const COLUMNS: &[Column] = &[
-    ("adapter_id = ?", |patch| match &patch.adapter_id {
-        Some(v) => Ok(Some(SqlValue::Text(v.clone()))),
-        None => Ok(None),
-    }),
-    ("model = ?", |patch| match &patch.model {
-        Some(v) => Ok(Some(SqlValue::Text(v.clone()))),
-        None => Ok(None),
-    }),
-    ("claude_session_id = ?", |patch| {
-        match &patch.vendor_session_id {
-            Some(v) => Ok(Some(SqlValue::Text(v.clone()))),
-            None => Ok(None),
-        }
-    }),
-    ("session_file_path = ?", |patch| {
-        match &patch.session_file_path {
-            Some(v) => Ok(Some(SqlValue::Text(v.clone()))),
-            None => Ok(None),
-        }
-    }),
-    ("status = ?", |patch| match &patch.status {
-        Some(v) => Ok(Some(SqlValue::Text(enum_to_db_string(v)?))),
-        None => Ok(None),
-    }),
-    ("total_cost = ?", |patch| match patch.total_cost {
-        Some(v) => Ok(Some(SqlValue::Real(v))),
-        None => Ok(None),
-    }),
-    ("total_tokens_input = ?", |patch| {
-        match patch.total_tokens_input {
-            Some(v) => Ok(Some(SqlValue::Integer(v))),
-            None => Ok(None),
-        }
-    }),
-    ("total_tokens_output = ?", |patch| {
-        match patch.total_tokens_output {
-            Some(v) => Ok(Some(SqlValue::Integer(v))),
-            None => Ok(None),
-        }
-    }),
-    ("last_context_tokens_input = ?", |patch| {
-        match patch.last_context_tokens_input {
-            Some(v) => Ok(Some(SqlValue::Integer(v))),
-            None => Ok(None),
-        }
-    }),
-    ("last_context_total_tokens = ?", |patch| {
-        match patch.last_context_total_tokens {
-            Some(v) => Ok(Some(SqlValue::Integer(v as i64))),
-            None => Ok(None),
-        }
-    }),
-    ("last_context_max_tokens = ?", |patch| {
-        match patch.last_context_max_tokens {
-            Some(v) => Ok(Some(SqlValue::Integer(v as i64))),
-            None => Ok(None),
-        }
-    }),
-    ("title = ?", |patch| match &patch.title {
-        Some(v) => Ok(Some(SqlValue::Text(v.clone()))),
-        None => Ok(None),
-    }),
-    ("permission_mode = ?", |patch| {
-        match &patch.permission_mode {
-            Some(v) => Ok(Some(SqlValue::Text(enum_to_db_string(v)?))),
-            None => Ok(None),
-        }
-    }),
-    ("worktree_path = ?", |patch| match &patch.worktree_path {
-        Some(v) => Ok(Some(opt_text(v))),
-        None => Ok(None),
-    }),
-    ("branch_name = ?", |patch| match &patch.branch_name {
-        Some(v) => Ok(Some(opt_text(v))),
-        None => Ok(None),
-    }),
-    ("mentions = ?", |patch| match &patch.mentions {
-        Some(v) => Ok(Some(SqlValue::Text(serde_json::to_string(v)?))),
-        None => Ok(None),
-    }),
-    ("process_state = ?", |patch| match &patch.process_state {
-        Some(v) => Ok(Some(match v {
-            Some(ps) => SqlValue::Text(enum_to_db_string(ps)?),
-            None => SqlValue::Null,
-        })),
-        None => Ok(None),
-    }),
-    ("created_at = ?", |patch| match &patch.created_at {
-        Some(v) => Ok(Some(SqlValue::Text(v.clone()))),
-        None => Ok(None),
-    }),
-    ("updated_at = ?", |patch| match &patch.updated_at {
-        Some(v) => Ok(Some(SqlValue::Text(v.clone()))),
-        None => Ok(None),
-    }),
-    ("pinned = ?", |patch| match patch.pinned {
-        Some(v) => Ok(Some(SqlValue::Integer(i64::from(v)))),
-        None => Ok(None),
-    }),
-    ("effort = ?", |patch| match &patch.tuning.effort {
-        Some(v) => Ok(Some(match v {
-            Some(e) => SqlValue::Text(enum_to_db_string(e)?),
-            None => SqlValue::Null,
-        })),
-        None => Ok(None),
-    }),
-    ("fast = ?", |patch| match &patch.tuning.fast {
-        Some(v) => Ok(Some(nullable_bool_value(v))),
-        None => Ok(None),
-    }),
-    ("ultracode = ?", |patch| match &patch.tuning.ultracode {
-        Some(v) => Ok(Some(nullable_bool_value(v))),
-        None => Ok(None),
-    }),
-    ("adaptive_thinking = ?", |patch| {
-        match &patch.tuning.adaptive_thinking {
-            Some(v) => Ok(Some(nullable_bool_value(v))),
-            None => Ok(None),
-        }
-    }),
-    ("plan_mode = ?", |patch| match patch.plan_mode {
-        Some(v) => Ok(Some(SqlValue::Integer(i64::from(v)))),
-        None => Ok(None),
-    }),
-    ("transcript_missing = ?", |patch| {
-        match patch.transcript_missing {
-            Some(v) => Ok(Some(SqlValue::Integer(i64::from(v)))),
-            None => Ok(None),
-        }
-    }),
-    ("vendor_session_ephemeral = ?", |patch| {
-        match patch.vendor_session_ephemeral {
-            Some(v) => Ok(Some(SqlValue::Integer(i64::from(v)))),
-            None => Ok(None),
-        }
-    }),
-    ("context_lost_at = ?", |patch| {
-        match &patch.context_lost_at {
-            Some(v) => Ok(Some(SqlValue::Text(v.clone()))),
-            None => Ok(None),
-        }
-    }),
-];
-
-pub(crate) trait ChatAssignments {
-    fn into_assignments(self) -> Result<(Vec<&'static str>, Vec<SqlValue>), DbError>;
+/// The column of every field `patch` sets, with its value at the same index.
+/// A `Some(None)` field writes NULL.
+pub(crate) fn assignments(
+    patch: &ChatPatch,
+) -> Result<(Vec<&'static str>, Vec<SqlValue>), DbError> {
+    let tuning = &patch.tuning;
+    let mut set = Assignments::default();
+    set.text("adapter_id", patch.adapter_id.as_deref());
+    set.text("model", patch.model.as_deref());
+    set.text("claude_session_id", patch.vendor_session_id.as_deref());
+    set.text("session_file_path", patch.session_file_path.as_deref());
+    set.enumeration("status", patch.status.as_ref().map(Some))?;
+    set.push("total_cost", patch.total_cost.map(SqlValue::Real));
+    set.integer("total_tokens_input", patch.total_tokens_input);
+    set.integer("total_tokens_output", patch.total_tokens_output);
+    set.integer("last_context_tokens_input", patch.last_context_tokens_input);
+    set.unsigned("last_context_total_tokens", patch.last_context_total_tokens);
+    set.unsigned("last_context_max_tokens", patch.last_context_max_tokens);
+    set.text("title", patch.title.as_deref());
+    set.enumeration("permission_mode", patch.permission_mode.as_ref().map(Some))?;
+    set.nullable_text("worktree_path", patch.worktree_path.as_ref());
+    set.nullable_text("branch_name", patch.branch_name.as_ref());
+    let mentions = patch.mentions.as_ref().map(serde_json::to_string);
+    set.push("mentions", mentions.transpose()?.map(SqlValue::Text));
+    set.enumeration(
+        "process_state",
+        patch.process_state.as_ref().map(Option::as_ref),
+    )?;
+    set.text("created_at", patch.created_at.as_deref());
+    set.text("updated_at", patch.updated_at.as_deref());
+    set.flag("pinned", patch.pinned.map(Some));
+    set.enumeration("effort", tuning.effort.as_ref().map(Option::as_ref))?;
+    set.flag("fast", tuning.fast);
+    set.flag("ultracode", tuning.ultracode);
+    set.flag("adaptive_thinking", tuning.adaptive_thinking);
+    set.flag("plan_mode", patch.plan_mode.map(Some));
+    set.flag("transcript_missing", patch.transcript_missing.map(Some));
+    set.flag(
+        "vendor_session_ephemeral",
+        patch.vendor_session_ephemeral.map(Some),
+    );
+    set.text("context_lost_at", patch.context_lost_at.as_deref());
+    Ok((set.columns, set.values))
 }
 
-impl ChatAssignments for &ChatPatch {
-    fn into_assignments(self) -> Result<(Vec<&'static str>, Vec<SqlValue>), DbError> {
-        let mut columns = Vec::new();
-        let mut values = Vec::new();
-        for (column, encode) in COLUMNS {
-            if let Some(value) = encode(self)? {
-                columns.push(*column);
-                values.push(value);
-            }
+/// Collects assignments. Each typed helper skips a `None` field; for the
+/// nullable ones an inner `None` writes NULL.
+#[derive(Default)]
+struct Assignments {
+    columns: Vec<&'static str>,
+    values: Vec<SqlValue>,
+}
+
+impl Assignments {
+    fn push(&mut self, column: &'static str, value: Option<SqlValue>) {
+        if let Some(value) = value {
+            self.columns.push(column);
+            self.values.push(value);
         }
-        Ok((columns, values))
     }
-}
 
-fn opt_text(value: &Option<String>) -> SqlValue {
-    value.clone().map_or(SqlValue::Null, SqlValue::Text)
-}
+    fn text(&mut self, column: &'static str, value: Option<&str>) {
+        self.push(column, value.map(|v| SqlValue::Text(v.to_string())));
+    }
 
-fn nullable_bool_value(value: &Option<bool>) -> SqlValue {
-    value.map_or(SqlValue::Null, |value| SqlValue::Integer(i64::from(value)))
+    fn nullable_text(&mut self, column: &'static str, value: Option<&Option<String>>) {
+        let value = value.map(|v| v.clone().map_or(SqlValue::Null, SqlValue::Text));
+        self.push(column, value);
+    }
+
+    fn integer(&mut self, column: &'static str, value: Option<i64>) {
+        self.push(column, value.map(SqlValue::Integer));
+    }
+
+    /// Token counts never approach `i64::MAX`; saturate rather than wrap.
+    fn unsigned(&mut self, column: &'static str, value: Option<u64>) {
+        let value = value.map(|v| SqlValue::Integer(i64::try_from(v).unwrap_or(i64::MAX)));
+        self.push(column, value);
+    }
+
+    fn flag(&mut self, column: &'static str, value: Option<Option<bool>>) {
+        let value = value.map(|v| v.map_or(SqlValue::Null, |v| SqlValue::Integer(i64::from(v))));
+        self.push(column, value);
+    }
+
+    fn enumeration<T: Serialize>(
+        &mut self,
+        column: &'static str,
+        value: Option<Option<&T>>,
+    ) -> Result<(), DbError> {
+        let value = value
+            .map(|v| {
+                v.map_or(Ok(SqlValue::Null), |v| {
+                    enum_to_db_string(v).map(SqlValue::Text)
+                })
+            })
+            .transpose()?;
+        self.push(column, value);
+        Ok(())
+    }
 }
