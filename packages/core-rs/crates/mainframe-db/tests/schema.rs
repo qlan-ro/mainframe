@@ -6,6 +6,7 @@
 
 use rusqlite::Connection;
 
+use mainframe_db::migrations::LATEST_VERSION;
 use mainframe_db::schema::initialize_schema;
 
 const NOW: &str = "2026-01-01T00:00:00.000Z";
@@ -115,4 +116,19 @@ fn rejects_deleting_a_tag_that_is_still_applied() {
         .execute("DELETE FROM tags WHERE name = ?", ["feature"])
         .unwrap_err();
     assert!(err.to_string().to_lowercase().contains("foreign key"));
+}
+
+#[test]
+fn a_schema_from_a_newer_release_opens_unchanged() {
+    let db = Connection::open_in_memory().unwrap();
+    initialize_schema(&db).unwrap();
+    db.pragma_update(None, "user_version", LATEST_VERSION + 1)
+        .unwrap();
+
+    initialize_schema(&db).unwrap();
+
+    let version: i64 = db
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .unwrap();
+    assert_eq!(version, LATEST_VERSION + 1);
 }

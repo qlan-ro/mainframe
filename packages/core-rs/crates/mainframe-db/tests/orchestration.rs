@@ -20,7 +20,7 @@ fn setup() -> (ChatsRepository, ProjectsRepository, Rc<Connection>) {
     initialize_schema(&conn).unwrap();
     let conn = Rc::new(conn);
     (
-        ChatsRepository::new(Rc::clone(&conn), None),
+        ChatsRepository::new(Rc::clone(&conn)),
         ProjectsRepository::new(Rc::clone(&conn)),
         conn,
     )

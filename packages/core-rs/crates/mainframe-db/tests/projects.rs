@@ -9,7 +9,7 @@ use std::rc::Rc;
 use rusqlite::Connection;
 
 use mainframe_db::schema::initialize_schema;
-use mainframe_db::{ChatTagsRepository, ChatsRepository, ProjectsRepository};
+use mainframe_db::{ChatsRepository, ProjectsRepository};
 use mainframe_types::chat::{NO_PROJECT_ID, NewChat};
 
 fn mem() -> Rc<Connection> {
@@ -57,13 +57,13 @@ fn sets_parent_project_id_on_a_project() {
 }
 
 #[test]
-fn clears_parent_project_id_when_clear_parent_project_is_called() {
+fn removing_a_parent_project_clears_its_worktree_link() {
     let repo = ProjectsRepository::new(mem());
     let parent = repo.create("/main/repo", None).unwrap();
     let worktree = repo.create("/main/repo/.worktrees/feat", None).unwrap();
 
     repo.set_parent_project(&worktree.id, &parent.id).unwrap();
-    repo.clear_parent_project(&parent.id).unwrap();
+    repo.remove(&parent.id).unwrap();
 
     let fetched = repo.get(&worktree.id).unwrap().unwrap();
     assert_eq!(fetched.parent_project_id, Some(None));
@@ -73,8 +73,7 @@ fn clears_parent_project_id_when_clear_parent_project_is_called() {
 fn deleting_a_project_also_deletes_its_chats() {
     let conn = mem();
     let repo = ProjectsRepository::new(Rc::clone(&conn));
-    let chat_tags = ChatTagsRepository::new(Rc::clone(&conn));
-    let chats = ChatsRepository::new(Rc::clone(&conn), Some(chat_tags));
+    let chats = ChatsRepository::new(Rc::clone(&conn));
 
     let project = repo.create("/some/path", None).unwrap();
     chats
@@ -121,8 +120,7 @@ fn deleting_a_parent_project_nulls_children_parent_project_id() {
 fn delete_is_atomic() {
     let conn = mem();
     let repo = ProjectsRepository::new(Rc::clone(&conn));
-    let chat_tags = ChatTagsRepository::new(Rc::clone(&conn));
-    let chats = ChatsRepository::new(Rc::clone(&conn), Some(chat_tags));
+    let chats = ChatsRepository::new(Rc::clone(&conn));
 
     let project = repo.create("/atomic/path", None).unwrap();
     chats

@@ -1,9 +1,9 @@
-use super::{
-    parse_chat_status, parse_effort, parse_execution_mode, parse_json_array, parse_nullable_bool,
-    parse_process_state, parse_todos,
-};
-use crate::{DbError, sql_types::FromRow};
-use mainframe_types::chat::{Chat, NO_PROJECT_ID};
+use crate::DbError;
+use crate::sql_types::{FromRow, JsonCol, SqlEnum};
+use mainframe_types::adapter::EffortLevel;
+use mainframe_types::chat::{Chat, ChatStatus, NO_PROJECT_ID, ProcessState, TodoItem};
+use mainframe_types::settings::ExecutionMode;
+use serde::de::DeserializeOwned;
 
 /// The `chats` columns `CHAT_SELECT_FIELDS` reads, as stored (snake_case,
 /// integers for booleans, JSON text for arrays). `into_chat` is the one
@@ -141,4 +141,36 @@ impl ChatRow {
             ..Chat::default()
         }
     }
+}
+
+fn parse_effort(value: Option<String>) -> Option<EffortLevel> {
+    SqlEnum::or_default(value, None)
+}
+
+fn parse_nullable_bool(value: Option<i64>) -> Option<Option<bool>> {
+    Some(value.map(|value| value != 0))
+}
+
+fn parse_execution_mode(value: Option<String>) -> Option<ExecutionMode> {
+    SqlEnum::or_default(value, None)
+}
+
+fn parse_process_state(value: Option<String>) -> Option<ProcessState> {
+    SqlEnum::or_default(value, None)
+}
+
+fn parse_chat_status(value: String) -> ChatStatus {
+    SqlEnum::or_default(Some(value), ChatStatus::Active)
+}
+
+fn parse_json_column<T: DeserializeOwned>(value: Option<String>, fallback: T) -> T {
+    JsonCol::or_default(value, fallback)
+}
+
+pub(super) fn parse_json_array<T: DeserializeOwned>(value: Option<String>) -> Vec<T> {
+    parse_json_column(value, Vec::new())
+}
+
+fn parse_todos(value: Option<String>) -> Option<Vec<TodoItem>> {
+    parse_json_column(value, None)
 }

@@ -27,7 +27,7 @@ fn setup() -> Repos {
     initialize_schema(&conn).unwrap();
     let conn = Rc::new(conn);
     Repos {
-        chats: ChatsRepository::new(Rc::clone(&conn), None),
+        chats: ChatsRepository::new(Rc::clone(&conn)),
         projects: ProjectsRepository::new(Rc::clone(&conn)),
         tasks: DelegatedTasksRepository::new(conn),
     }

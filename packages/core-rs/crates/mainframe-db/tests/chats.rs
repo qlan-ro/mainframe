@@ -27,7 +27,7 @@ fn setup_with_conn() -> (ChatsRepository, ProjectsRepository, Rc<Connection>) {
     let conn = Connection::open_in_memory().unwrap();
     initialize_schema(&conn).unwrap();
     let conn = Rc::new(conn);
-    let chats = ChatsRepository::new(Rc::clone(&conn), None);
+    let chats = ChatsRepository::new(Rc::clone(&conn));
     let projects = ProjectsRepository::new(Rc::clone(&conn));
     (chats, projects, conn)
 }
@@ -50,7 +50,7 @@ fn returns_null_when_no_todos_have_been_set() {
     let (chats, projects) = setup();
     let p = projects.create("/project/todos", None).unwrap();
     let chat = chats.create(&new_chat(&p.id)).unwrap();
-    assert!(chats.get_todos(&chat.id).unwrap().is_none());
+    assert!(chats.get(&chat.id).unwrap().unwrap().todos.is_none());
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn stores_and_retrieves_todos() {
         todo("Review code", TodoStatus::Pending, "Reviewing code"),
     ];
     chats.update_todos(&chat.id, &todos).unwrap();
-    assert_eq!(chats.get_todos(&chat.id).unwrap(), Some(todos));
+    assert_eq!(chats.get(&chat.id).unwrap().unwrap().todos, Some(todos));
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn replaces_todos_on_subsequent_calls() {
         .unwrap();
     let new_todos = vec![todo("New task", TodoStatus::InProgress, "New task")];
     chats.update_todos(&chat.id, &new_todos).unwrap();
-    assert_eq!(chats.get_todos(&chat.id).unwrap(), Some(new_todos));
+    assert_eq!(chats.get(&chat.id).unwrap().unwrap().todos, Some(new_todos));
 }
 
 #[test]
@@ -367,7 +367,7 @@ fn permission_mode_auto_survives_a_reopen() {
 
     // A second repository over the same connection stands in for a daemon
     // restart re-opening the same on-disk database.
-    let reopened = ChatsRepository::new(Rc::clone(&conn), None);
+    let reopened = ChatsRepository::new(Rc::clone(&conn));
     let fetched = reopened.get(&chat.id).unwrap().unwrap();
     assert_eq!(fetched.permission_mode, Some(ExecutionMode::Auto));
 }
@@ -525,7 +525,7 @@ fn delete_cascades_chat_tags_via_the_foreign_key() {
     initialize_schema(&conn).unwrap();
     let conn = Rc::new(conn);
     let chat_tags = mainframe_db::ChatTagsRepository::new(Rc::clone(&conn));
-    let chats = ChatsRepository::new(Rc::clone(&conn), Some(chat_tags.clone()));
+    let chats = ChatsRepository::new(Rc::clone(&conn));
     let projects = ProjectsRepository::new(Rc::clone(&conn));
     let tags = mainframe_db::TagsRepository::new(Rc::clone(&conn));
 

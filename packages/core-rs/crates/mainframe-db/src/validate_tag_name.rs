@@ -1,17 +1,11 @@
-//! Tag name validation. Lives in `mainframe-db` because its sole consumer is
-//! `tags.rs`.
+//! Tag name validation for `tags.rs`.
 
 use mainframe_types::tags::RESERVED_TAG_PREFIX;
 
+use crate::DbError;
+
 const MIN_LEN: usize = 2;
 const MAX_LEN: usize = 24;
-
-/// Validation outcome: the normalized name, or the error message.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ValidateResult {
-    Ok { normalized: String },
-    Err { error: String },
-}
 
 fn is_valid_pattern(s: &str) -> bool {
     // /^[a-z0-9-]+$/ — non-empty run of lowercase ascii, digits, or hyphen.
@@ -20,29 +14,27 @@ fn is_valid_pattern(s: &str) -> bool {
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
-pub fn validate_tag_name(input: &str) -> ValidateResult {
-    let normalized = input.trim().to_lowercase();
-    if normalized.chars().count() < MIN_LEN {
-        return ValidateResult::Err {
-            error: "Tag name too short (min 2 chars).".to_string(),
-        };
-    }
-    if normalized.chars().count() > MAX_LEN {
-        return ValidateResult::Err {
-            error: "Tag name too long (max 24 chars).".to_string(),
-        };
-    }
-    if normalized.starts_with(RESERVED_TAG_PREFIX) {
-        return ValidateResult::Err {
-            error: format!("Names starting with \"{RESERVED_TAG_PREFIX}\" are reserved."),
-        };
-    }
-    if !is_valid_pattern(&normalized) {
-        return ValidateResult::Err {
-            error: "Tag name must use lowercase letters, numbers, or hyphens only.".to_string(),
-        };
-    }
-    ValidateResult::Ok { normalized }
+/// The normalized (trimmed, lowercased) name, or `DbError::Invalid` with the
+/// message the tags API returns.
+pub(crate) fn validate_tag_name(input: &str) -> Result<String, DbError> {
+    let normalized = normalize_tag_name(input);
+    let length = normalized.chars().count();
+    let error = if length < MIN_LEN {
+        format!("Tag name too short (min {MIN_LEN} chars).")
+    } else if length > MAX_LEN {
+        format!("Tag name too long (max {MAX_LEN} chars).")
+    } else if normalized.starts_with(RESERVED_TAG_PREFIX) {
+        format!("Names starting with \"{RESERVED_TAG_PREFIX}\" are reserved.")
+    } else if !is_valid_pattern(&normalized) {
+        "Tag name must use lowercase letters, numbers, or hyphens only.".to_string()
+    } else {
+        return Ok(normalized);
+    };
+    Err(DbError::Invalid(error))
+}
+
+pub(crate) fn normalize_tag_name(input: &str) -> String {
+    input.trim().to_lowercase()
 }
 
 #[cfg(test)]
@@ -57,12 +49,7 @@ mod tests {
             ("ui-bug", "ui-bug"),
             ("perf-2", "perf-2"),
         ] {
-            assert_eq!(
-                validate_tag_name(input),
-                ValidateResult::Ok {
-                    normalized: expected.to_string()
-                }
-            );
+            assert_eq!(validate_tag_name(input).unwrap(), expected);
         }
     }
 
@@ -77,10 +64,7 @@ mod tests {
             "feature!",
             "white space",
         ] {
-            assert!(matches!(
-                validate_tag_name(input),
-                ValidateResult::Err { .. }
-            ));
+            assert!(matches!(validate_tag_name(input), Err(DbError::Invalid(_))));
         }
     }
 }

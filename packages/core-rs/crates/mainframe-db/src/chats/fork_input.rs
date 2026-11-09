@@ -1,4 +1,8 @@
-use super::*;
+use mainframe_types::adapter::EffortLevel;
+use mainframe_types::segment::ForkPlan;
+use mainframe_types::settings::ExecutionMode;
+
+use super::{ForkInsert, PendingFork};
 
 #[derive(Debug, Clone)]
 pub struct ForkCreateInput {
@@ -18,7 +22,7 @@ pub struct ForkCreateInput {
     pub pending_fork: PendingFork,
     /// A multi-segment parent's segments, as the fork copies them. `None`
     /// gives the fork one initial segment.
-    pub segments: Option<mainframe_types::segment::ForkPlan>,
+    pub segments: Option<ForkPlan>,
 }
 
 impl ForkCreateInput {

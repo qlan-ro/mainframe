@@ -125,12 +125,4 @@ impl ProjectsRepository {
         )?;
         Ok(())
     }
-
-    pub fn clear_parent_project(&self, parent_id: &str) -> Result<(), DbError> {
-        self.db.execute(
-            "UPDATE projects SET parent_project_id = NULL WHERE parent_project_id = ?",
-            [parent_id],
-        )?;
-        Ok(())
-    }
 }

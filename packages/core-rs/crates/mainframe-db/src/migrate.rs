@@ -34,12 +34,23 @@ pub fn add_column_if_missing(
 /// Applies each migration with `current < version <= target` in order, each
 /// in its own transaction that also stamps `PRAGMA user_version`, so a failed
 /// step leaves the database at the previous version with none of its changes.
+///
+/// A database stamped above `target` was written by a newer build. It is
+/// opened as is, with a warning: columns this build does not know about are
+/// ignored, but writes may fail on constraints it cannot satisfy.
 pub fn run_versioned(
     db: &Connection,
     migrations: &[Migration],
     target: i64,
 ) -> Result<(), DbError> {
     let current: i64 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if current > target {
+        tracing::warn!(
+            schema_version = current,
+            supported_version = target,
+            "database schema is newer than this build supports; it was written by a newer release"
+        );
+    }
     for migration in migrations {
         if migration.version > current && migration.version <= target {
             let transaction = db.unchecked_transaction()?;

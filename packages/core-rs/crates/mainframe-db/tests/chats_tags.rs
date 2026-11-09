@@ -30,7 +30,7 @@ fn setup() -> Setup {
     let projects = ProjectsRepository::new(Rc::clone(&conn));
     let tags = TagsRepository::new(Rc::clone(&conn));
     let chat_tags = ChatTagsRepository::new(Rc::clone(&conn));
-    let chats = ChatsRepository::new(Rc::clone(&conn), Some(chat_tags.clone()));
+    let chats = ChatsRepository::new(Rc::clone(&conn));
     Setup {
         projects,
         tags,
@@ -81,27 +81,6 @@ fn list_returns_empty_tags_array_for_chats_with_no_tags() {
 }
 
 #[test]
-fn list_does_not_run_extra_queries_when_chat_tags_is_omitted() {
-    let conn = Connection::open_in_memory().unwrap();
-    conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
-    initialize_schema(&conn).unwrap();
-    let conn = Rc::new(conn);
-    let projects = ProjectsRepository::new(Rc::clone(&conn));
-    let chats_no_tags = ChatsRepository::new(Rc::clone(&conn), None);
-    let p = projects.create("/tmp/p", None).unwrap();
-    chats_no_tags
-        .create(&NewChat {
-            project_id: p.id.to_string(),
-            adapter_id: "claude".to_string(),
-            ..Default::default()
-        })
-        .unwrap();
-    let result = chats_no_tags.list(&p.id).unwrap();
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].tags, None);
-}
-
-#[test]
 fn get_populates_chat_tags_for_a_single_chat() {
     let s = setup();
     let p = s.projects.create("/tmp/p", None).unwrap();
@@ -135,21 +114,6 @@ fn get_returns_empty_tags_array_for_a_chat_with_no_tags() {
         .unwrap();
     let result = s.chats.get(&chat.id).unwrap();
     assert_eq!(result.unwrap().tags, Some(vec![]));
-}
-
-#[test]
-fn list_filtered_throws_when_tags_all_given_but_chat_tags_is_absent() {
-    let conn = Connection::open_in_memory().unwrap();
-    conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
-    initialize_schema(&conn).unwrap();
-    let chats = ChatsRepository::new(Rc::new(conn), None); // no chatTags
-    let err = chats
-        .list_filtered(&ChatListFilters {
-            tags_all: Some(v(&["feature"])),
-            ..Default::default()
-        })
-        .unwrap_err();
-    assert!(err.to_string().contains("ChatTagsRepository"));
 }
 
 #[test]

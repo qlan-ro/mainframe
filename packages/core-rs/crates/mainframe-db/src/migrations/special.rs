@@ -24,14 +24,7 @@ pub(super) fn v19(db: &Connection) -> Result<(), DbError> {
 }
 
 pub(super) fn v21(db: &Connection) -> Result<(), DbError> {
-    let n: i64 = db.query_row(
-        "SELECT COUNT(*) as n FROM chats WHERE adapter_id = 'claude-sdk'",
-        [],
-        |row| row.get(0),
-    )?;
-    if n > 0 {
-        db.execute_batch("UPDATE chats SET adapter_id = 'claude' WHERE adapter_id = 'claude-sdk'")?;
-    }
+    db.execute_batch("UPDATE chats SET adapter_id = 'claude' WHERE adapter_id = 'claude-sdk'")?;
     Ok(())
 }
 
@@ -138,8 +131,8 @@ pub(super) fn v29(db: &Connection) -> Result<(), DbError> {
     )?;
     db.execute(
         "INSERT OR IGNORE INTO projects (id, name, path, created_at, last_opened_at) \
-         VALUES (?, 'No project', 'mainframe:no-project', ?, ?)",
-        rusqlite::params![NO_PROJECT_ID, now_iso8601(), now_iso8601()],
+         VALUES (?1, 'No project', 'mainframe:no-project', ?2, ?2)",
+        rusqlite::params![NO_PROJECT_ID, now_iso8601()],
     )?;
     Ok(())
 }

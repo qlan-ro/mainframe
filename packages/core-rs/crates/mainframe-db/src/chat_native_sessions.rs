@@ -131,12 +131,12 @@ pub(crate) fn insert_borrowed(
 /// Whether any closed segment still runs on `native_ref` — its native id is
 /// then pinned: overwriting it would point that history at the wrong transcript.
 pub(crate) fn backs_closed_segment(db: &Connection, native_ref: &str) -> Result<bool, DbError> {
-    let count: i64 = db.query_row(
-        "SELECT COUNT(*) FROM chat_segments WHERE native_session_ref = ? AND closed_at IS NOT NULL",
+    Ok(db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM chat_segments WHERE native_session_ref = ? \
+         AND closed_at IS NOT NULL)",
         [native_ref],
         |row| row.get(0),
-    )?;
-    Ok(count > 0)
+    )?)
 }
 
 /// Columns a `chats` update may carry that belong to the active native row.
