@@ -57,7 +57,7 @@ impl CodexSession {
         let res: ThreadStartResult = de(client
             .request(method, Some(Value::Object(params)))
             .await
-            .map_err(|err| AdapterError::Message(explain_thread_request_error(err.0)))?)?;
+            .map_err(|err| thread_request_error(err.0))?)?;
         self.check_fork_source(&res, expected_fork_source.as_deref());
         let (new_thread_id, reported_model) = (res.thread.id, res.model);
 

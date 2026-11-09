@@ -3,6 +3,7 @@
 //! instead of carrying this pure decision + its params builder and tests
 //! inline.
 
+use mainframe_adapter_api::AdapterError;
 use serde_json::{Map, Value, json};
 
 use crate::fork::ThreadTarget;
@@ -122,16 +123,18 @@ pub(crate) fn build_thread_request(
 
 /// Codex refuses to resume or fork a thread that was archived in Codex (the
 /// Codex app, or `codex archive`), replying "session <id> is archived. Run
-/// `codex unarchive <id>` to unarchive it first." Lead with what that means
-/// for the chat, and keep Codex's own text: it names the thread id to unarchive.
-pub(crate) fn explain_thread_request_error(raw: String) -> String {
+/// `codex unarchive <id>` to unarchive it first." That refusal becomes
+/// [`AdapterError::NativeSessionArchived`], which lets the client offer an
+/// Unarchive action, with an explanation that keeps Codex's own text (it names
+/// the thread). Any other JSON-RPC error passes through as its text.
+pub(crate) fn thread_request_error(raw: String) -> AdapterError {
     if raw.contains(" is archived") && raw.contains("codex unarchive") {
-        return format!(
+        return AdapterError::NativeSessionArchived(format!(
             "This chat's Codex thread is archived in Codex, so it can't continue. \
-             Unarchive the thread in Codex, then send again.\n\nCodex: {raw}"
-        );
+             Unarchive it, then send again.\n\nCodex: {raw}"
+        ));
     }
-    raw
+    AdapterError::Message(raw)
 }
 
 #[cfg(test)]

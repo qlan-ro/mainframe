@@ -2,4 +2,4 @@
 "@qlan-ro/mainframe-app-tauri": patch
 ---
 
-If a message can't start a turn, the chat no longer stays stuck as working. One example is a Codex chat whose thread was archived in Codex. The message shows as failed with a Retry option instead. For an archived Codex thread, the error says the thread is archived in Codex and needs to be unarchived there before you send again.
+If a message can't start a turn, the chat no longer stays stuck as working. The message shows as failed, with the actual reason and a Retry option. When the cause is a Codex thread that was archived in Codex, the failed message also has an Unarchive button: it unarchives the thread and sends the message again, so you don't need to open the Codex app.

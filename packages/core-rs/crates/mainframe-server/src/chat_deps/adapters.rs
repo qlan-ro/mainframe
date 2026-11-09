@@ -197,6 +197,24 @@ impl AdapterPort for DaemonChatDeps {
             adapter.pin_fork_point(request).await
         })
     }
+    fn unarchive_native_session<'a>(
+        &'a self,
+        adapter_id: &'a str,
+        session_id: &'a str,
+        cwd: &'a str,
+    ) -> BoxFuture<'a, Result<(), mainframe_adapter_api::AdapterError>> {
+        let adapter = self.adapters.get(adapter_id);
+        Box::pin(async move {
+            let Some(adapter) = adapter else {
+                return Err(mainframe_adapter_api::AdapterError::Unsupported(
+                    "unarchive a session",
+                ));
+            };
+            adapter
+                .unarchive_native_session(session_id.to_string(), cwd.to_string())
+                .await
+        })
+    }
     fn adapter_info(&self, adapter_id: &str) -> Option<mainframe_types::adapter::AdapterInfo> {
         self.adapters
             .get_snapshots()

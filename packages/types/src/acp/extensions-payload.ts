@@ -50,6 +50,25 @@ export const QueuedPromptStateSchema = z
   .loose();
 export type QueuedPromptState = z.infer<typeof QueuedPromptStateSchema>;
 
+/**
+ * A refused `session/prompt`'s error `data["_mainframe.dev"]`: the refusal in
+ * the user's words (the JSON-RPC `message` adds a "session unavailable:"
+ * prefix for generic clients) and, when there is one, an action the client can
+ * offer before retrying. `unarchive_native_session`: the provider archived the
+ * chat's session outside Mainframe (a Codex thread archived in the Codex app);
+ * `POST /api/chats/:id/native-session/unarchive`, then retry.
+ */
+export const PromptRemedySchema = z.enum(['unarchive_native_session']);
+export type PromptRemedy = z.infer<typeof PromptRemedySchema>;
+
+export const PromptFailureSchema = z
+  .object({
+    reason: z.string(),
+    remedy: PromptRemedySchema.optional().catch(undefined),
+  })
+  .loose();
+export type PromptFailure = z.infer<typeof PromptFailureSchema>;
+
 // `chat.ts` has no Zod schema for `DiffHunk` to import — same mirror
 // rationale as `ControlResponseSchema` in `extensions.ts`.
 const DiffHunkSchema = z

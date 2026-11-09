@@ -124,19 +124,25 @@ fn fork_request_omits_every_override_field() {
 }
 
 #[test]
-fn archived_thread_refusal_explains_it_and_keeps_codex_text() {
+fn archived_thread_refusal_becomes_native_session_archived_with_codex_text() {
     let raw = "session 01a17a31-64d5-7bc1-a2dd-59063dcadd4e is archived. Run `codex unarchive 01a17a31-64d5-7bc1-a2dd-59063dcadd4e` to unarchive it first.";
+    let AdapterError::NativeSessionArchived(text) = thread_request_error(raw.to_string()) else {
+        panic!("an archived refusal must map to NativeSessionArchived");
+    };
     assert_eq!(
-        explain_thread_request_error(raw.to_string()),
+        text,
         "This chat's Codex thread is archived in Codex, so it can't continue. \
-         Unarchive the thread in Codex, then send again.\n\n\
+         Unarchive it, then send again.\n\n\
          Codex: session 01a17a31-64d5-7bc1-a2dd-59063dcadd4e is archived. Run \
          `codex unarchive 01a17a31-64d5-7bc1-a2dd-59063dcadd4e` to unarchive it first."
     );
 }
 
 #[test]
-fn other_thread_request_errors_pass_through_unchanged() {
+fn other_thread_request_errors_pass_through_as_their_text() {
     let raw = "thread not found: 01a17a31-64d5-7bc1-a2dd-59063dcadd4e";
-    assert_eq!(explain_thread_request_error(raw.to_string()), raw);
+    let AdapterError::Message(text) = thread_request_error(raw.to_string()) else {
+        panic!("any other refusal stays a plain message");
+    };
+    assert_eq!(text, raw);
 }

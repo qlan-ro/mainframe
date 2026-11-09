@@ -46,6 +46,8 @@ mod segment_fake;
 mod side_chat;
 #[path = "chat_manager_tests_teardown.rs"]
 mod teardown;
+#[path = "chat_manager_tests_unarchive.rs"]
+mod unarchive;
 #[path = "chat_manager_tests_wire_golden.rs"]
 mod wire_golden;
 

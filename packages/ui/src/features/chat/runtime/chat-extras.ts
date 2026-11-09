@@ -14,7 +14,7 @@ import type { HistorySearchResult } from '@qlan-ro/mainframe-types';
  */
 import { useAuiState } from '@assistant-ui/react';
 import { useMemo, useRef } from 'react';
-import type { ControlResponse, QueuedMessageRef, WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
+import type { ControlResponse, PromptRemedy, QueuedMessageRef, WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
 import type { AcpChatController } from '../controller/acp-chat-controller';
 import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-thread-state';
 import { selectPermissionFront } from '../gates/select-front';
@@ -40,8 +40,9 @@ export interface ChatRuntimeExtras {
   readonly replyToPermission: (response: ControlResponse, selectedOptionId?: string) => Promise<void>;
   readonly cancelQueued: (messageId: string) => Promise<void>;
   readonly editQueued: (messageId: string, content: string) => Promise<void>;
-  /** Re-send a failed optimistic user message (the "Failed to send" indicator). */
-  readonly retryMessage: (clientId: string) => Promise<void>;
+  /** Re-send a failed optimistic user message (the "Failed to send" indicator),
+   *  applying the failure's `remedy` (Unarchive) first when given. */
+  readonly retryMessage: (clientId: string, remedy?: PromptRemedy) => Promise<void>;
   /** Re-run the history load — used to retry after `state.loadState.type === 'error'`. */
   readonly retry: () => Promise<void>;
   readonly acceptWorktreeOffer: (worktreePath: string) => Promise<void>;
@@ -76,7 +77,7 @@ export function buildChatExtras(
     replyToPermission: (response, selectedOptionId) => controller.replyToPermission(response, selectedOptionId),
     cancelQueued: (messageId) => controller.cancelQueued(messageId),
     editQueued: (messageId, content) => controller.editQueued(messageId, content),
-    retryMessage: (clientId) => controller.retryMessage(clientId),
+    retryMessage: (clientId, remedy) => controller.retryMessage(clientId, remedy),
     retry: () => controller.refresh(),
     acceptWorktreeOffer: (worktreePath) => controller.acceptWorktreeOffer(worktreePath),
     dismissWorktreeOffer: (worktreePath) => controller.dismissWorktreeOffer(worktreePath),
