@@ -111,6 +111,8 @@ export interface ChatThreadState extends ChatEnvironmentSlice {
   /** True between the compaction `started` and `done` phases (also cleared on
    *  run end) — drives the transcript "Compacting…" pill. */
   readonly compacting: boolean;
+  /** A provider call is being retried (`_mainframe.dev/retry_status`) — transient, scoped to the running turn. `maxAttempts` is absent when the provider gave none. */
+  readonly retry: { readonly attempt: number; readonly maxAttempts?: number } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +145,8 @@ export type ChatStateEvent =
   | { type: 'context.usage'; percentage: number; totalTokens: number; maxTokens: number }
   | { type: 'compact.started' }
   | { type: 'compact.done' }
+  | { type: 'retry.status'; attempt: number; maxAttempts?: number }
+  | { type: 'retry.cleared' }
   | LocalMessageEvent
   | EnvironmentEvent;
 
@@ -166,6 +170,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     queuedAttachmentPreviews: {},
     contextUsage: null,
     compacting: false,
+    retry: null,
     ...createEnvironmentSlice(),
   };
 }

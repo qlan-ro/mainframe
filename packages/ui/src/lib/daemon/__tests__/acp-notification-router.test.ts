@@ -87,6 +87,10 @@ const CASES: Record<NotificationMethod, { params: unknown; args: unknown[] }> = 
   },
   '_mainframe.dev/transcript_cleared': { params: { sessionId: 'chat_1' }, args: ['chat_1'] },
   '_mainframe.dev/compaction': { params: { sessionId: 'chat_1', phase: 'started' }, args: ['chat_1', 'started'] },
+  '_mainframe.dev/retry_status': {
+    params: { sessionId: 'chat_1', attempt: 2, maxAttempts: 5, reason: 'Reconnecting... 2/5' },
+    args: ['chat_1', { attempt: 2, maxAttempts: 5 }],
+  },
   '_mainframe.dev/gate_resolved': {
     params: { sessionId: 'chat_1', requestId: 'gate-req_001' },
     args: ['chat_1', 'gate-req_001'],
@@ -108,6 +112,7 @@ const SUBSCRIBE: Record<
   '_mainframe.dev/queue_state': (router, listener) => router.onQueueState(listener),
   '_mainframe.dev/transcript_cleared': (router, listener) => router.onTranscriptCleared(listener),
   '_mainframe.dev/compaction': (router, listener) => router.onCompaction(listener),
+  '_mainframe.dev/retry_status': (router, listener) => router.onRetryStatus(listener),
   '_mainframe.dev/gate_resolved': (router, listener) => router.onGateResolved(listener),
   '_mainframe.dev/resync': (router, listener) => router.onResync(listener),
   '_mainframe.dev/replay_complete': (router, listener) => router.onReplayComplete(listener),
@@ -166,6 +171,22 @@ describe('AcpNotificationRouter.handleNotification — table routing', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('compaction'), expect.anything());
     expect(listeners['_mainframe.dev/compaction']).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it('_mainframe.dev/retry_status passes only the attempt when the wire carries no maximum', () => {
+    const { router } = makeRouter();
+    const listener = vi.fn();
+    router.onRetryStatus(listener);
+
+    router.handleNotification({
+      jsonrpc: '2.0',
+      method: '_mainframe.dev/retry_status',
+      params: { sessionId: 'chat_1', attempt: 0 },
+    } as JsonRpcNotification);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0]).toEqual(['chat_1', { attempt: 0 }]);
+    expect(Object.keys(listener.mock.calls[0]![1])).toEqual(['attempt']);
   });
 
   it('_mainframe.dev/replay_complete normalizes a present aborted:true', () => {

@@ -6,6 +6,7 @@ mod capabilities;
 mod history;
 mod prompt;
 mod replay;
+mod retry;
 use crate::adapter::ControlResponse;
 use crate::chat::{DiffHunk, QueuedMessageRef};
 pub use capabilities::{
@@ -15,6 +16,7 @@ pub use capabilities::{
 pub use history::*;
 pub use prompt::*;
 pub use replay::*;
+pub use retry::*;
 
 /// The `_meta` key every extension value below is namespaced under.
 pub const MAINFRAME_META_NAMESPACE: &str = "_mainframe.dev";

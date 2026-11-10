@@ -39,7 +39,7 @@
   "mainframe-orchestration/src/tools/delegate_task_tests.rs": 413,
   "mainframe-plugins/src/context.rs": 340,
   "mainframe-plugins/src/manager.rs": 311,
-  "mainframe-server/src/acp_ws/hub/fanout.rs": 326,
+  "mainframe-server/src/acp_ws/hub/fanout.rs": 299,
   "mainframe-server/src/routes/auth.rs": 356,
   "mainframe-server/src/routes/chats.rs": 461,
   "mainframe-server/src/routes/files.rs": 591,

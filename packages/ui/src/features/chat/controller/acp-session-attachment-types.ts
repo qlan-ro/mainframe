@@ -30,6 +30,7 @@ import type {
   QueueStateListener,
   ReplayCompleteListener,
   ResyncListener,
+  RetryStatusListener,
   SessionUpdateListener,
   TranscriptClearedListener,
 } from '../../../lib/daemon/acp-notification-router';
@@ -45,6 +46,8 @@ export interface AcpSessionClientPort {
   onPermissionRequest(listener: PermissionRequestListener): () => void;
   onGateResolved(listener: GateResolvedListener): () => void;
   onCompaction(listener: CompactionListener): () => void;
+  /** The provider call is being retried (todo #406) — absent on a client or daemon that predates the notification. */
+  onRetryStatus?(listener: RetryStatusListener): () => void;
   onTranscriptCleared(listener: TranscriptClearedListener): () => void;
   onQueueState(listener: QueueStateListener): () => void;
   onResync(listener: ResyncListener): () => void;

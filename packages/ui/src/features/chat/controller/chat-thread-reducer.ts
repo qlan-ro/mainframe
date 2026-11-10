@@ -37,24 +37,31 @@ function reduceLifecycle(state: ChatThreadState, event: LifecycleEvent): ChatThr
     case 'transcript.updated':
       return { ...state, messages: event.messages };
     case 'transcript.cleared':
-      return state.messages.length === 0 ? state : { ...state, messages: [] };
+      return state.messages.length === 0 && state.retry === null ? state : { ...state, messages: [], retry: null };
     case 'run.started': {
       // A later start frame without a time (a local send, a reconnect) keeps the known start of the same run.
       const known = state.runState.type === 'running' ? state.runState.startedAtMs : undefined;
       const startedAtMs = event.startedAtMs ?? known;
-      return { ...state, runState: startedAtMs === undefined ? { type: 'running' } : { type: 'running', startedAtMs } };
+      // A retry belongs to its turn: only a start that continues a running turn keeps it.
+      const retry = state.runState.type === 'running' ? state.retry : null;
+      return {
+        ...state,
+        retry,
+        runState: startedAtMs === undefined ? { type: 'running' } : { type: 'running', startedAtMs },
+      };
     }
     case 'run.cancelling': {
       const startedAtMs = state.runState.type === 'running' ? state.runState.startedAtMs : undefined;
       return {
         ...state,
+        retry: null,
         runState: startedAtMs === undefined ? { type: 'cancelling' } : { type: 'cancelling', startedAtMs },
       };
     }
     case 'run.stopped':
-      return { ...state, runState: { type: 'idle' }, compacting: false };
+      return { ...state, runState: { type: 'idle' }, compacting: false, retry: null };
     case 'run.failed':
-      return { ...state, runState: { type: 'error', error: event.error }, compacting: false };
+      return { ...state, runState: { type: 'error', error: event.error }, compacting: false, retry: null };
   }
 }
 function reduceInteraction(state: ChatThreadState, event: InteractionEvent): ChatThreadState {
@@ -104,6 +111,30 @@ function reduceDelegated(state: ChatThreadState, event: LocalMessageEvent | Envi
       return reduceEnvironmentEvent(state, event);
   }
 }
+type RetryEvent = Extract<ChatStateEvent, { type: 'retry.status' }>;
+/** Keeps `maxAttempts` off the object when the provider gave none. */
+const retryOf = ({ attempt, maxAttempts }: RetryEvent): NonNullable<ChatThreadState['retry']> =>
+  maxAttempts === undefined ? { attempt } : { attempt, maxAttempts };
+const sameRetry = (current: ChatThreadState['retry'], next: RetryEvent): boolean =>
+  current !== null && current.attempt === next.attempt && current.maxAttempts === next.maxAttempts;
+
+/** Compaction and reconnect state: transient flags of the running turn. */
+function reduceTransient(
+  state: ChatThreadState,
+  event: Extract<ChatStateEvent, { type: 'compact.started' | 'compact.done' | 'retry.status' | 'retry.cleared' }>,
+): ChatThreadState {
+  switch (event.type) {
+    case 'compact.started':
+      return state.compacting ? state : { ...state, compacting: true };
+    case 'compact.done':
+      return state.compacting ? { ...state, compacting: false } : state;
+    case 'retry.status':
+      return sameRetry(state.retry, event) ? state : { ...state, retry: retryOf(event) };
+    case 'retry.cleared':
+      return state.retry === null ? state : { ...state, retry: null };
+  }
+}
+
 export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEvent): ChatThreadState {
   switch (event.type) {
     case 'history.window':
@@ -146,9 +177,10 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
       };
     }
     case 'compact.started':
-      return state.compacting ? state : { ...state, compacting: true };
     case 'compact.done':
-      return state.compacting ? { ...state, compacting: false } : state;
+    case 'retry.status':
+    case 'retry.cleared':
+      return reduceTransient(state, event);
     default:
       return reduceDelegated(state, event);
   }

@@ -179,7 +179,7 @@ fn emit_parent_turn_result(
             None
         },
         is_error: Some(is_error),
-        result: turn.error.map(|e| explain_turn_error(e.message)),
+        result: turn.error.as_ref().map(explain_turn_error),
     });
     state.last_usage = None;
 }
