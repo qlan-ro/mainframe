@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 export function ClampedDescription({ text, onOverflow }: { text: string; onOverflow?: () => void }) {
   const ref = React.useRef<HTMLSpanElement>(null);
   const reported = React.useRef(false);
+  // No deps on purpose: re-measure each render until overflow is reported.
   React.useLayoutEffect(() => {
     const el = ref.current;
     if (!onOverflow || reported.current || !el) return;
@@ -22,7 +23,7 @@ export function ClampedDescription({ text, onOverflow }: { text: string; onOverf
     }
   });
   return (
-    <span ref={ref} data-testid="toast-description" className="block line-clamp-3 break-words whitespace-pre-wrap">
+    <span ref={ref} data-testid="toast-description" className="line-clamp-3 break-words whitespace-pre-wrap">
       {text}
     </span>
   );

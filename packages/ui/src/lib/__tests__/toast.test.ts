@@ -5,7 +5,7 @@
  * Slots are React elements (footer + in-card close), so tests render them.
  * Pins the type→policy table (errors/permission persist with a close button,
  * the rest auto-dismiss), the chatId→Open-session CTA, and the details
- * affordance (a Details cancel-slot button that parks the payload for
+ * affordance (a Details action-slot button that parks the payload for
  * ToastDetailsHost).
  */
 import { render, screen, fireEvent } from '@testing-library/react';

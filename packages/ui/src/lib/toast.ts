@@ -8,7 +8,7 @@
  * `details` is the escape hatch for abstract failures ("Agent Error"): pass
  * the raw payload (stack, stderr, response body) and the toast grows a
  * Details button that opens the ToastDetailsHost dialog — the toast itself
- * stays one line.
+ * clamps to three lines.
  *
  * Usage:
  *   mfToast.success('Branch pushed')

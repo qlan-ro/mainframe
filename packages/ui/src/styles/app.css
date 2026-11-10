@@ -140,8 +140,16 @@ code {
   row-gap: 8px;
   padding: 12px;
   border: 0;
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent),
+    0 4px 12px rgb(0 0 0 / 0.1);
   background: var(--popover);
   color: var(--popover-foreground);
+}
+/* Unlayered sonner rules beat Tailwind utilities, so the muted colour lives here. */
+[data-sonner-toaster] [data-sonner-toast] [data-description] {
+  color: var(--muted-foreground);
 }
 [data-sonner-toaster] [data-sonner-toast] [data-icon] {
   grid-column: 1;
