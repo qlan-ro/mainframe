@@ -18,6 +18,7 @@ pub struct Recorded {
     pub messages: Vec<Vec<MessageContent>>,
     pub tool_results: Vec<Vec<MessageContent>>,
     pub permissions: Vec<ControlRequest>,
+    pub cancellations: Vec<String>,
     pub results: Vec<SessionResult>,
     pub todos: Vec<Vec<TodoItem>>,
     pub inits: Vec<String>,
@@ -152,6 +153,13 @@ impl SessionSink for RecordingSink {
     }
     fn on_permission(&self, request: ControlRequest) {
         self.0.lock().unwrap().permissions.push(request);
+    }
+    fn on_permission_cancelled(&self, request_id: &str) {
+        self.0
+            .lock()
+            .unwrap()
+            .cancellations
+            .push(request_id.to_string());
     }
     fn on_result(&self, data: SessionResult) {
         self.0.lock().unwrap().results.push(data);
