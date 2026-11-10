@@ -10,6 +10,7 @@ import type { EditorView } from '@codemirror/view';
 import type { FileNote } from './use-file-notes';
 import { deleteCommentEffect } from './comment-gutter';
 import { useSendReview } from './use-send-review';
+import { mfToast } from '@/lib/toast';
 import type { LineCommentInput } from '@/lib/editor/format-line-comment';
 
 interface ReviewActionsModel {
@@ -58,6 +59,27 @@ export function useReviewActions({ filePath, model, viewRef, closePortal }: UseR
     [model, viewRef, closePortal],
   );
 
+  /** True only when the review was actually sent; toasts on skip or failure. */
+  const trySend = useCallback(
+    async (path: string, items: LineCommentInput[]): Promise<boolean> => {
+      try {
+        const outcome = await sendReview(path, items);
+        if (outcome === 'no-session') {
+          mfToast.warning('Open a session first', {
+            description: 'Review comments need an active session to be sent.',
+          });
+          return false;
+        }
+        return outcome === 'sent';
+      } catch (err) {
+        console.warn('[editor] review send failed', err);
+        mfToast.error('Failed to send review', { description: err instanceof Error ? err.message : String(err) });
+        return false;
+      }
+    },
+    [sendReview],
+  );
+
   const handleSubmitReview = useCallback(async () => {
     if (!filePath) {
       console.warn('[editor] no file path, skipping review send');
@@ -69,19 +91,13 @@ export function useReviewActions({ filePath, model, viewRef, closePortal }: UseR
       .sort((a, b) => a.startLine - b.startLine || a.endLine - b.endLine);
     if (items.length === 0) return;
 
-    let outcome;
-    try {
-      outcome = await sendReview(filePath, items);
-    } catch (err) {
-      console.warn('[editor] review send failed', err);
-    }
-    // A skipped send (no active session) must leave every note and draft in place.
-    if (outcome === 'no-session') return;
+    // Only a confirmed send clears notes; a skip or failure keeps every note and draft.
+    if (!(await trySend(filePath, items))) return;
 
     for (const note of model.notes) {
       removeComment(note.id);
     }
-  }, [filePath, model.notes, buildItem, sendReview, removeComment]);
+  }, [filePath, model.notes, buildItem, trySend, removeComment]);
 
   const handleSendOne = useCallback(
     async (noteId: string) => {
@@ -94,17 +110,11 @@ export function useReviewActions({ filePath, model, viewRef, closePortal }: UseR
       const item = buildItem(note);
       if (!item) return;
 
-      let outcome;
-      try {
-        outcome = await sendReview(filePath, [item]);
-      } catch (err) {
-        console.warn('[editor] review send failed', err);
-      }
-      if (outcome === 'no-session') return;
+      if (!(await trySend(filePath, [item]))) return;
 
       removeComment(noteId);
     },
-    [filePath, model.notes, buildItem, sendReview, removeComment],
+    [filePath, model.notes, buildItem, trySend, removeComment],
   );
 
   return { handleSubmitReview, handleSendOne, removeComment };
