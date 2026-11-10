@@ -45,12 +45,17 @@ impl CodexSession {
         let sink_x = self.sink.clone();
         let on_exit_cb = self.on_exit_callback.clone();
 
+        let approval_n = approval.clone();
         let notification_span = self.span.clone();
         let error_span = self.span.clone();
         let exit_span = self.span.clone();
         JsonRpcHandlers {
             on_notification: Box::new(move |method, params| {
                 let _span = notification_span.enter();
+                if method == "serverRequest/resolved" {
+                    approval_n.handle_resolved(&params);
+                    return;
+                }
                 let s = sink_n.lock_recover().clone();
                 handle_notification(&method, &params, &s, &mut state_n.lock_recover());
             }),

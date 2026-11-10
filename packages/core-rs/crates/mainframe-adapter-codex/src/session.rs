@@ -216,3 +216,6 @@ use spawn::build_app_server_command;
 pub(crate) use spawn::spawn_temp_app_server;
 #[cfg(test)]
 use thread::permission_mode_policy;
+
+#[cfg(test)]
+mod request_resolved_tests;
