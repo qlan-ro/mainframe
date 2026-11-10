@@ -70,7 +70,13 @@ The daemon already has a provider-neutral retry signal: `SessionSink::on_api_ret
 
    The original message has no `OpenAI:` prefix, because the text comes from Codex and not from OpenAI.
 4. **`serverOverloaded`.** Codex always sends `serverOverloaded` with `Selected model is at capacity. Please try a different model.` That message is already actionable, so it passes through unchanged as a single paragraph. If `serverOverloaded` ever arrives with different text, the capacity sentence becomes the headline, followed by a blank line and the original text. The capacity sentence is never reworded.
-5. **`other`.** This is Codex's catch-all, used for hook failures, internal errors and stream errors alike. On its own it is not a stream failure. With stream text in the message, rule 2 applies and the headline shows. With any other text, the raw message passes through unchanged.
+5. **`other`.** This is Codex's catch-all, used for hook failures, internal errors and stream errors alike, so it always gets a headline:
+   - With stream text in the message, rule 2 applies and the stream headline from rule 3 shows.
+   - With any other text, the message renders as this generic headline, a blank line, then Codex's original message verbatim:
+
+     > Codex hit an error and could not finish this turn. If this keeps happening in this chat, start a new chat or switch provider.
+
+     The generic headline does not say the response stream dropped, because `other` covers errors that have nothing to do with the stream.
 6. Every other case, including unknown metadata, passes the raw message through unchanged, exactly as today.
 
 ### 5. Failed-turn card
@@ -95,7 +101,7 @@ The daemon already has a provider-neutral retry signal: `SessionSink::on_api_ret
 ## Acceptance criteria
 
 - [ ] A `turn/completed` with status `failed`, message `stream disconnected before completion: stream closed before response.completed` and `codexErrorInfo: {"responseTooManyFailedAttempts":{"httpStatusCode":null}}` produces text that starts with the headline in Behavior 4.3, followed by a blank line and the original message verbatim.
-- [ ] `codexErrorInfo` values `"serverOverloaded"`, `"other"`, an unknown string, an unknown object and `null` each decode without dropping the notification. The capacity message passes through unchanged under `"serverOverloaded"`, and `serverOverloaded` with other text gets the capacity headline. `"other"` with stream text gets the stream headline, `"other"` with unrelated text stays raw, and unknown values stay raw.
+- [ ] `codexErrorInfo` values `"serverOverloaded"`, `"other"`, an unknown string, an unknown object and `null` each decode without dropping the notification. The capacity message passes through unchanged under `"serverOverloaded"`, and `serverOverloaded` with other text gets the capacity headline. `"other"` with stream text gets the stream headline. `"other"` with unrelated text, for example a hook failure, gets the generic headline in Behavior 4.5, followed by a blank line and the original message verbatim. Unknown values stay raw.
 - [ ] A stream-text message with no `codexErrorInfo` gets the stream headline.
 - [ ] The existing `turn_error` envelope tests pass unchanged. An envelope message that also carries `codexErrorInfo` produces the same text as without it.
 - [ ] The `error` notification `{"threadId":"t","turnId":"u","willRetry":true,"error":{"message":"Reconnecting... 2/5","codexErrorInfo":{"responseStreamDisconnected":{"httpStatusCode":null}}}}` makes a recording sink receive `on_api_retry(2, Some(reason))` with a reason that contains `5`. The same notification with `willRetry: false` reaches no sink method. `Reconnecting... waiting for network` with `willRetry: true` reports a retry with an unknown attempt. A foreign-thread `error` notification reaches no sink method.
@@ -112,7 +118,7 @@ The daemon already has a provider-neutral retry signal: `SessionSink::on_api_ret
 
 ## Decisions
 
-1. **`other` needs stream text to get the stream headline.** The brief listed `other` among the stream-failure triggers. Codex maps every unclassified error to `Other`, including hook failures, so this deviates from that list on purpose: a headline claiming OpenAI dropped the response would be wrong for those. The final stream failure the brief describes already carries the stream text, so it still gets the headline.
+1. **`other` always gets a headline. Only stream text earns the stream headline.** The brief requires a headline for every known variant, including `other`. Codex maps every unclassified error to `Other`, including hook failures, so a headline claiming OpenAI dropped the response would be wrong for most of them. `other` with stream text gets the stream headline. Any other `other` message gets a generic headline that says the turn failed and gives the same next step, with Codex's original text kept below it.
 2. **`serverOverloaded` keeps the capacity sentence.** This follows the brief's out-of-scope line and the design direction. In practice the sentence is always Codex's text for this variant, so nothing changes. The headline form only covers unexpected text.
 3. **Codex's original text has no `OpenAI:` prefix.** The format is still headline, blank line, original. The text is Codex's own, so labelling it as OpenAI's would misattribute it.
 4. **Count-less reconnects still show a status.** `Reconnecting... waiting for network` shows as `Reconnecting…`. Dropping it would bring back the frozen look this todo fixes.
