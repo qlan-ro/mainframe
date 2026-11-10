@@ -39,9 +39,11 @@ export const TOAST = {
   title: '[data-title]',
   description: '[data-description]',
   /** Only rendered for the persistent types. */
-  close: '[data-close-button]',
+  close: '[data-testid="toast-close"]',
   /** The action row ("Open session", "Details"). */
-  action: '[data-button]',
+  action: '[data-testid="toast-action"]',
+  /** Footer Details button (explicit or auto when the description clamps). */
+  details: '[data-testid="toast-details"]',
 } as const;
 
 /**
