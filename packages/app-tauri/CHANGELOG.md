@@ -1,5 +1,14 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.3.10
+
+### Patch Changes
+
+- [#898](https://github.com/qlan-ro/mainframe/pull/898) [`0a18c70`](https://github.com/qlan-ro/mainframe/commit/0a18c70253784973268f63b6711f641fcef143dd) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Close pending Codex approval and question cards when the server withdraws their requests, without sending a stale reply.
+
+- Updated dependencies [[`17b6701`](https://github.com/qlan-ro/mainframe/commit/17b6701512fc0de0bb7afd2d7489b540ceab3cc1), [`5ccc00f`](https://github.com/qlan-ro/mainframe/commit/5ccc00fbc49f0fa76f339e8aaa2e5885f3f6d83d), [`3b56cda`](https://github.com/qlan-ro/mainframe/commit/3b56cda55305bc431f970a6d4b753f96b02b64b3), [`9df004a`](https://github.com/qlan-ro/mainframe/commit/9df004adb8c3eda727f6b60f764be905da3f764e), [`49be5bb`](https://github.com/qlan-ro/mainframe/commit/49be5bb914500206ad90d3cb81caf40ebb0a1e7a), [`3cbdb43`](https://github.com/qlan-ro/mainframe/commit/3cbdb4340d14160e26fe962b7268fbf813439722), [`b20f932`](https://github.com/qlan-ro/mainframe/commit/b20f932f77dab33b74637c0e01a19c8640475baa), [`b9b257c`](https://github.com/qlan-ro/mainframe/commit/b9b257cf3dd2db3e454050e88e8bb9a9838f285d), [`57dd00a`](https://github.com/qlan-ro/mainframe/commit/57dd00a8f81f991acf562e41e0e437cf316f940d), [`3921ca1`](https://github.com/qlan-ro/mainframe/commit/3921ca159f1392a5a0070e3be23e81878490c8a5), [`fdac402`](https://github.com/qlan-ro/mainframe/commit/fdac402ee425172f8b074af9c35948972ee72acb)]:
+  - @qlan-ro/mainframe-ui@2.15.0
+
 ## 2.3.9
 
 ### Patch Changes
