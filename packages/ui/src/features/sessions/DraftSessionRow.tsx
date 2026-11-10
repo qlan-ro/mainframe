@@ -16,6 +16,7 @@ import { SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '@/compone
 import { cn } from '@/lib/utils';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { ProjectAvatar } from './ProjectAvatar';
+import { FadeLabel } from '@/components/ui/fade-label';
 
 /** Level 2 — the same rung as the session rows it sits above. */
 const ROW_INDENT = 'pl-2';
@@ -65,15 +66,15 @@ export function DraftSessionRow({
               )}
             />
           </span>
-          <span
+          <FadeLabel
             data-testid="sessions-draft-row-title"
             className={cn(
-              'min-w-0 flex-1 truncate group-data-active/menu-item:text-primary',
+              'flex-1 group-data-active/menu-item:text-primary',
               selected ? 'font-semibold text-foreground' : 'text-muted-foreground',
             )}
           >
             New Session
-          </span>
+          </FadeLabel>
           <span className="flex shrink-0 items-center gap-1.5 transition-opacity group-hover/menu-item:opacity-0">
             {showProject &&
               (projectId != null ? (
