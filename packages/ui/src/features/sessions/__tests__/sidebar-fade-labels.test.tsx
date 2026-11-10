@@ -13,6 +13,7 @@ import { SidebarProvider, SidebarMenu } from '@/components/ui/sidebar';
 import { SessionGroupHeader } from '../SessionGroupHeader';
 import { DraftSessionRow } from '../DraftSessionRow';
 import { NoProjectLabel } from '../NoProjectLabel';
+import { SidebarJumpSection } from '@/features/shared/SidebarJumpSection';
 import { NewSessionRow } from '../SessionSidebar';
 
 function overflow(over: boolean) {
@@ -37,6 +38,9 @@ function mount() {
       </SidebarMenu>
       <NewSessionRow />
       <NoProjectLabel data-testid="np" />
+      <SidebarJumpSection label="A very long project name" testId="sessions-section" sticky="top-0">
+        <div />
+      </SidebarJumpSection>
     </SidebarProvider>,
   );
 }
@@ -47,6 +51,7 @@ function labels(c: HTMLElement) {
     screen.getByTestId('sessions-draft-row-title'),
     screen.getByTestId('sidebar-action-new-thread').querySelector('[data-slot="fade-label"]'),
     screen.getByTestId('np').querySelector('[data-slot="fade-label"]'),
+    screen.getByTestId('sessions-section-jump').querySelector('[data-slot="fade-label"]'),
   ].map((el) => {
     expect(el, c.innerHTML).not.toBeNull();
     return el as HTMLElement;
