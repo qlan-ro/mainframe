@@ -182,8 +182,8 @@ impl ChatManager {
         crate::degraded_recovery::recreate_chat_worktree(&self.shared, chat_id).await
     }
 
-    /// Build a stateless history-load session for `chat_id`, or `None` when the chat
-    /// has no Claude session / adapter / project. Mirrors `getMessages`'s guard chain.
+    /// Build a stateless history-load session using the chat's worktree,
+    /// scratch directory, or project path.
     fn history_session(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.get_chat(chat_id)?;
         build_history_session(&self.shared.deps, &chat, chat_id)
