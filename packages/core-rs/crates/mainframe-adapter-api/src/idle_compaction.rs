@@ -3,7 +3,7 @@ pub use mainframe_types::compaction::*;
 pub const CLAUDE_CACHE_TTL_MS: u64 = 60 * 60 * 1000;
 pub const CODEX_CACHE_TTL_MS: u64 = 30 * 60 * 1000;
 pub const IDLE_COMPACTION_SWEEP_MS: u64 = 60_000;
-pub const CLAUDE_COMPACTION_TIMEOUT_MS: u64 = 5_000;
+pub const CLAUDE_COMPACTION_TIMEOUT_MS: u64 = 120_000;
 pub const CODEX_COMPACTION_TIMEOUT_MS: u64 = 30_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

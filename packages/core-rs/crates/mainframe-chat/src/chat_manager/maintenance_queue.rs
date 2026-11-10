@@ -71,8 +71,51 @@ impl ChatManager {
     }
 
     pub(super) async fn drain_maintenance_queue(&self, chat_id: &str) -> Result<(), SendError> {
+        self.drain_maintenance_queue_with_wait(chat_id, std::time::Duration::from_secs(120))
+            .await
+    }
+
+    pub(super) async fn drain_maintenance_queue_with_wait(
+        &self,
+        chat_id: &str,
+        wait: std::time::Duration,
+    ) -> Result<(), SendError> {
+        let Ok(owner) = self
+            .handoff_locks
+            .get(&format!("drain:{chat_id}"))
+            .try_lock_owned()
+        else {
+            return Ok(());
+        };
+        let result = self.drain_maintenance_queue_owned(chat_id, wait).await;
+        drop(owner);
+        if result.is_ok()
+            && !self.shared.maintenance.active(chat_id)
+            && self
+                .get_session_for_chat(chat_id)
+                .is_some_and(|s| s.ready_for_input())
+            && self
+                .shared
+                .deps
+                .idle_queue_list(chat_id)?
+                .first()
+                .is_some_and(|input| input.delivery == DeliveryState::Pending)
+        {
+            self.shared.schedule_maintenance_drain(chat_id);
+        }
+        result
+    }
+
+    async fn drain_maintenance_queue_owned(
+        &self,
+        chat_id: &str,
+        wait: std::time::Duration,
+    ) -> Result<(), SendError> {
+        let deadline = tokio::time::Instant::now() + wait;
         loop {
-            self.lifecycle.wait_for_interrupt(chat_id).await;
+            tokio::time::timeout_at(deadline, self.lifecycle.wait_for_interrupt(chat_id))
+                .await
+                .map_err(|_| queue_wait_expired())?;
             let lock = self
                 .handoff_locks
                 .acquire(&format!("maintenance:{chat_id}"))
@@ -92,6 +135,9 @@ impl ChatManager {
             let (post, session) = self.require_live_session(chat_id)?;
             if !session.ready_for_input() {
                 drop(lock);
+                if tokio::time::Instant::now() >= deadline {
+                    return Err(queue_wait_expired());
+                }
                 tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                 continue;
             }
@@ -134,3 +180,14 @@ impl ChatManager {
         Ok(())
     }
 }
+
+fn queue_wait_expired() -> SendError {
+    AdapterError::Unavailable(
+        "Provider readiness timed out. Prompts remain queued; retry after checking provider state.",
+    )
+    .into()
+}
+
+#[cfg(test)]
+#[path = "maintenance_queue_wait_tests.rs"]
+mod wait_tests;

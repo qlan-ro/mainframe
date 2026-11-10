@@ -111,6 +111,12 @@ mod tests {
             assert_eq!(payload["uuid"], req.command_uuid);
             assert_eq!(payload["message"]["content"][0]["text"], "/compact");
         }}
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(5_100), &mut future)
+                .await
+                .is_err(),
+            "compaction must outlive the control-request timeout"
+        );
         emit(
             &session,
             json!({"type":"user","uuid":req.command_uuid,"message":{"content":"internal echo"}}),
