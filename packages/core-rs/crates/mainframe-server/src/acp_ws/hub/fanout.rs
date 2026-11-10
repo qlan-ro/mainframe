@@ -1,9 +1,4 @@
-//! Per-event fan-out: who receives a chat-surface event, and the critical
-//! section it is delivered in. Every event becomes one [`StreamOp`], applied
-//! inside the SAME `locked_sessions()` guard it was computed under — so a diff
-//! can never be computed under the lock and enqueued after it, where a second
-//! diff for the same session could interleave ahead of it — or buffered there
-//! for a resume in flight.
+//! Keep diff computation and enqueue under one lock so concurrent revisions cannot reorder.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
