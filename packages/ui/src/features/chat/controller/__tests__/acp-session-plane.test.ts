@@ -101,12 +101,12 @@ describe('AcpSessionPlane — state_update → run frames', () => {
       client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'running' });
       client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'idle', stopReason: 'end_turn' });
 
-      // Not yet — the stop is deferred so a content frame in the same
-      // throttle flush gets a chance to mount its part first.
-      expect(eventsOf(host)).toEqual([{ type: 'run.started' }]);
+      // Not yet — the stop is deferred so a content frame in the same throttle flush can mount
+      // its part first; the idle frame still ends a reconnect status at once (todo #406).
+      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'retry.cleared' }]);
 
       await vi.advanceTimersByTimeAsync(50);
-      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'run.stopped' }]);
+      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'retry.cleared' }, { type: 'run.stopped' }]);
     } finally {
       vi.useRealTimers();
     }
