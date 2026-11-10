@@ -13,8 +13,16 @@ describe('urlTransform — file: hrefs', () => {
     expect(urlTransform('file:///a/b.ts', 'href')).toBe('file:///a/b.ts');
   });
 
-  it('still strips a file:// value on a non-href key (e.g. img src)', () => {
-    expect(urlTransform('file:///a/b.ts', 'src')).toBe('');
+  it('keeps local image sources (file://, absolute paths) on src', () => {
+    expect(urlTransform('file:///a/b.png', 'src')).toBe('file:///a/b.png');
+    expect(urlTransform('/abs/x.png', 'src')).toBe('/abs/x.png');
+    expect(urlTransform('C:/x.png', 'src')).toBe('C:/x.png');
+  });
+
+  it('leaves relative and ~/ src to the default sanitiser, and strips unsafe schemes', () => {
+    expect(urlTransform('a/x.png', 'src')).toBe('a/x.png');
+    expect(urlTransform('~/x.png', 'src')).toBe('~/x.png');
+    expect(urlTransform('javascript:alert(1)', 'src')).toBe('');
   });
 });
 

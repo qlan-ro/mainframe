@@ -39,6 +39,7 @@ import { INSTRUCTION_ATTR, remarkSmartActions } from '../smart-actions/remark-sm
 import { SmartActionsProvider } from '../smart-actions/smart-actions-context';
 import { useInstructionChipForLine, useInstructionChipForToken } from '../smart-actions/use-instruction-chip';
 import { SmartLink } from '../smart-actions/SmartLink';
+import { MarkdownImage } from './MarkdownImage';
 import { urlTransform, remarkAppLinks } from './markdown-url-transform';
 import { SyntaxHighlighter } from './syntax-highlight';
 import { CodeHeader } from './CodeHeader';
@@ -127,6 +128,7 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
     <p className={cn('aui-md-p my-2.5 leading-relaxed first:mt-0 last:mb-0', className)} {...props} />
   ),
   a: SmartLink as FC<React.AnchorHTMLAttributes<HTMLAnchorElement>>,
+  img: MarkdownImage,
   blockquote: ({ className, ...props }) => (
     <blockquote
       className={cn(
