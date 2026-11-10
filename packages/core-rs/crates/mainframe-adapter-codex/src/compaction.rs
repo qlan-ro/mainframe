@@ -40,6 +40,7 @@ pub(crate) fn handle_compaction_completed(
     }
     if state.maintenance.suppressing() {
         state.unmatched_legacy_completion = vendor_id.is_none();
+        state.pending_idle_legacy = vendor_id.is_some();
         if let Some(request) = state.maintenance.request() {
             let mut metadata = request.metadata(vendor_id);
             metadata.command_uuid = None;
@@ -80,6 +81,11 @@ pub(crate) fn handle_idle_notification(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) -> bool {
+    // Legacy notifications omit turn identity, so quarantine one retired counterpart.
+    if method == "thread/compacted" && is_parent(params, state) && state.pending_idle_legacy {
+        state.pending_idle_legacy = false;
+        return true;
+    }
     let turn = params
         .pointer("/turn/id")
         .and_then(serde_json::Value::as_str);
@@ -96,9 +102,7 @@ pub(crate) fn handle_idle_notification(
     }
     match method {
         "item/started" | "item/completed" => idle_item(method, params, sink, state),
-        "thread/compacted"
-            if state.maintenance_item_id.is_none() && state.compact_item_ids.is_empty() =>
-        {
+        "thread/compacted" if state.maintenance_item_id.is_none() => {
             handle_compaction_completed(sink, state, None)
         }
         "turn/started" => {

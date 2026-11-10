@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueuedInput {
+    #[serde(default)]
+    pub delivery: DeliveryState,
     pub uuid: String,
     pub content: String,
     pub prepared_text: String,
@@ -13,6 +15,43 @@ pub struct QueuedInput {
     pub attachment_ids: Option<Vec<String>>,
     pub command: Option<QueuedCommand>,
     pub message: ChatMessage,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeliveryState {
+    #[default]
+    Pending,
+    Unconfirmed,
+    Rejected,
+}
+impl DeliveryState {
+    pub fn recovery_label(self) -> Option<String> {
+        match self {
+            Self::Pending => None,
+            Self::Unconfirmed => Some("unconfirmed".into()),
+            Self::Rejected => Some("rejected".into()),
+        }
+    }
+}
+impl QueuedInput {
+    pub fn queued_ref(&self, chat_id: &str) -> mainframe_types::chat::QueuedMessageRef {
+        mainframe_types::chat::QueuedMessageRef {
+            delivery: self.delivery.recovery_label(),
+            message_id: self.message.id.clone(),
+            chat_id: chat_id.to_owned(),
+            uuid: self.uuid.clone(),
+            content: self.content.clone(),
+            attachment_ids: self.attachment_ids.clone(),
+            timestamp: self.message.timestamp.clone(),
+        }
+    }
+
+    pub fn set_delivery(&mut self, state: DeliveryState) {
+        self.delivery = state;
+        let metadata = self.message.metadata.get_or_insert_default();
+        metadata.insert("queueDelivery".into(), serde_json::json!(state));
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +99,7 @@ mod tests {
     use mainframe_types::chat::ChatMessageType;
     fn input(uuid: &str) -> QueuedInput {
         QueuedInput {
+            delivery: DeliveryState::Pending,
             uuid: uuid.into(),
             content: "text".into(),
             prepared_text: "attachment\n\ntext".into(),
@@ -94,11 +134,25 @@ mod tests {
         db.connection().execute("INSERT INTO chats(id,project_id,adapter_id,status,created_at,updated_at) VALUES ('c','p','claude','active','','')",[]).unwrap();
         put(db.connection(), "c", &input("one")).unwrap();
         put(db.connection(), "c", &input("two")).unwrap();
+        let mut unresolved = input("one");
+        unresolved.set_delivery(DeliveryState::Unconfirmed);
+        put(db.connection(), "c", &unresolved).unwrap();
         drop(db);
         let db = DatabaseManager::open(&path).unwrap();
+        assert_eq!(
+            list(db.connection(), "c").unwrap()[0].delivery,
+            DeliveryState::Unconfirmed
+        );
         let mut first = list(db.connection(), "c").unwrap().remove(0);
         first.content = "edited".into();
+        first.set_delivery(DeliveryState::Rejected);
         put(db.connection(), "c", &first).unwrap();
+        drop(db);
+        let db = DatabaseManager::open(&path).unwrap();
+        assert_eq!(
+            list(db.connection(), "c").unwrap()[0].delivery,
+            DeliveryState::Rejected
+        );
         let items = list(db.connection(), "c").unwrap();
         assert_eq!(
             items.iter().map(|i| i.uuid.as_str()).collect::<Vec<_>>(),

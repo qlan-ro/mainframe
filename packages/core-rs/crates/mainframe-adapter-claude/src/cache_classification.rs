@@ -79,36 +79,41 @@ fn init_classification(identity: &CacheIdentity) -> CacheClassification {
     }
     Unknown
 }
-fn usage_evidence(value: &Value) -> (bool, bool) {
-    let mut evidence = (false, false);
-    match value {
-        Value::Object(map) => {
-            if let Some(cache) = map.get("cache_creation") {
-                evidence.0 |= cache
-                    .get("ephemeral_1h_input_tokens")
-                    .and_then(Value::as_u64)
-                    .is_some_and(|n| n > 0);
-                evidence.1 |= cache
-                    .get("ephemeral_5m_input_tokens")
-                    .and_then(Value::as_u64)
-                    .is_some_and(|n| n > 0);
-            }
-            for child in map.values() {
-                let e = usage_evidence(child);
-                evidence.0 |= e.0;
-                evidence.1 |= e.1;
-            }
+fn usage_evidence(event: &Value) -> (bool, bool) {
+    let usage = match event.get("type").and_then(Value::as_str) {
+        Some("assistant") => event.pointer("/message/usage"),
+        Some("result") => event.get("usage"),
+        Some("stream_event") => match event.pointer("/event/type").and_then(Value::as_str) {
+            Some("message_start") => event.pointer("/event/message/usage"),
+            Some("message_delta") => event.pointer("/event/usage"),
+            _ => None,
+        },
+        _ => None,
+    };
+    let mut evidence = counters(usage);
+    if event.get("type").and_then(Value::as_str) == Some("result")
+        && let Some(models) = event.get("modelUsage").and_then(Value::as_object)
+    {
+        for usage in models.values() {
+            let next = counters(Some(usage));
+            evidence.0 |= next.0;
+            evidence.1 |= next.1;
         }
-        Value::Array(values) => {
-            for child in values {
-                let e = usage_evidence(child);
-                evidence.0 |= e.0;
-                evidence.1 |= e.1;
-            }
-        }
-        _ => {}
     }
     evidence
+}
+fn counters(usage: Option<&Value>) -> (bool, bool) {
+    let cache = usage.and_then(|u| u.get("cache_creation"));
+    let positive = |key| {
+        cache
+            .and_then(|c| c.get(key))
+            .and_then(Value::as_u64)
+            .is_some_and(|n| n > 0)
+    };
+    (
+        positive("ephemeral_1h_input_tokens"),
+        positive("ephemeral_5m_input_tokens"),
+    )
 }
 #[cfg(test)]
 mod tests {
@@ -123,12 +128,12 @@ mod tests {
         );
         assert_eq!(c.classification, CacheClassification::Claude1h);
         c.observe(
-            &json!({"message":{"usage":{"cache_creation":{"ephemeral_5m_input_tokens":1}}}}),
+            &json!({"type":"assistant","message":{"usage":{"cache_creation":{"ephemeral_5m_input_tokens":1}}}}),
             false,
         );
         assert_eq!(c.classification, CacheClassification::Claude5m);
         c.observe(
-            &json!({"usage":{"cache_creation":{"ephemeral_1h_input_tokens":0}}}),
+            &json!({"type":"result","usage":{"cache_creation":{"ephemeral_1h_input_tokens":0}}}),
             false,
         );
         assert_eq!(c.classification, CacheClassification::Claude5m);
@@ -138,7 +143,7 @@ mod tests {
         );
         assert_eq!(c.classification, CacheClassification::Unknown);
         c.observe(
-            &json!({"usage":{"cache_creation":{"ephemeral_1h_input_tokens":2}}}),
+            &json!({"type":"result","usage":{"cache_creation":{"ephemeral_1h_input_tokens":2}}}),
             true,
         );
         assert_eq!(c.classification, CacheClassification::Claude1h);
@@ -151,7 +156,7 @@ mod tests {
             false,
         );
         assert_eq!(c.classification, CacheClassification::Claude5m);
-        c.observe(&json!({"usage":{"cache_creation":{"ephemeral_1h_input_tokens":2,"ephemeral_5m_input_tokens":1}}}),false);
+        c.observe(&json!({"type":"result","usage":{"cache_creation":{"ephemeral_1h_input_tokens":2,"ephemeral_5m_input_tokens":1}}}),false);
         assert_eq!(c.classification, CacheClassification::Claude5m);
     }
 }
@@ -166,12 +171,12 @@ mod fallback_tests {
         c.observe(&json!({"subtype":"init","apiKeySource":"unrecognized","account":{"subscriptionType":"max"}}),false);
         assert_eq!(c.classification, CacheClassification::Unknown);
         c.observe(
-            &json!({"usage":{"cache_creation":{"ephemeral_1h_input_tokens":1}}}),
+            &json!({"type":"result","usage":{"cache_creation":{"ephemeral_1h_input_tokens":1}}}),
             false,
         );
-        c.observe(&json!({"usage":{"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0}}}),false);
+        c.observe(&json!({"type":"result","usage":{"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0}}}),false);
         c.observe(
-            &json!({"usage":{"input_tokens":0,"cache_read_input_tokens":100}}),
+            &json!({"type":"result","usage":{"input_tokens":0,"cache_read_input_tokens":100}}),
             false,
         );
         assert_eq!(c.classification, CacheClassification::Claude1h);
@@ -200,5 +205,50 @@ mod account_tests {
         assert_eq!(c.classification, CacheClassification::Claude1h);
         c.observe(&json!({"subtype":"init","apiKeySource":"none"}), false);
         assert_eq!(c.classification, CacheClassification::Claude1h);
+    }
+}
+
+#[cfg(test)]
+mod envelope_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn only_recognized_usage_envelopes_classify_cache() {
+        let usage = json!({"cache_creation":{"ephemeral_1h_input_tokens":1}});
+        let invalid = [
+            json!({"type":"assistant","message":{"content":[{"type":"tool_use","input":usage}]}}),
+            json!({"type":"user","message":{"content":[{"type":"tool_result","content":usage}]}}),
+            json!({"type":"control_response","response":{"usage":usage}}),
+            json!({"type":"system","usage":usage}),
+            json!({"type":"result","content":usage}),
+        ];
+        for event in invalid {
+            for routed in [false, true] {
+                let mut c = CacheEvidence::default();
+                c.observe(
+                    &json!({"type":"system","subtype":"init","apiKeySource":"user"}),
+                    routed,
+                );
+                let before = c.classification;
+                c.observe(&event, routed);
+                c.observe(
+                    &json!({"type":"result","usage":{"input_tokens":10}}),
+                    routed,
+                );
+                assert_eq!(c.classification, before, "{event}");
+            }
+        }
+        let valid = [
+            json!({"type":"assistant","message":{"usage":usage}}),
+            json!({"type":"result","usage":usage}),
+            json!({"type":"result","modelUsage":{"model":usage}}),
+            json!({"type":"stream_event","event":{"type":"message_start","message":{"usage":usage}}}),
+            json!({"type":"stream_event","event":{"type":"message_delta","usage":usage}}),
+        ];
+        for event in valid {
+            let mut c = CacheEvidence::default();
+            c.observe(&event, true);
+            assert_eq!(c.classification, CacheClassification::Claude1h, "{event}");
+        }
     }
 }

@@ -29,6 +29,7 @@ export interface MainframeMessageMeta {
   readonly errorText?: string;
   // user turn
   readonly queued?: boolean;
+  readonly queueDelivery?: string;
   readonly cleanText?: string;
   readonly command?: {
     readonly name: string;

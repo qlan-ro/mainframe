@@ -38,14 +38,7 @@ impl ChatShared {
         })? {
             let mut refs = self.queued_refs.lock_recover();
             if !refs.iter().any(|r| r.uuid == input.uuid) {
-                refs.push(mainframe_types::chat::QueuedMessageRef {
-                    message_id: input.message.id.clone(),
-                    chat_id: chat_id.to_owned(),
-                    uuid: input.uuid,
-                    content: input.content,
-                    attachment_ids: input.attachment_ids,
-                    timestamp: input.message.timestamp.clone(),
-                });
+                refs.push(input.queued_ref(chat_id));
             }
             if !history.iter().any(|m| m.id == input.message.id) {
                 history.push(input.message);

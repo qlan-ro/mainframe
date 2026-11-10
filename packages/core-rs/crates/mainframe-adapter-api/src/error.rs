@@ -10,6 +10,8 @@ pub enum AdapterError {
     /// which has no richer channel through this crate.
     #[error("{0}")]
     Message(String),
+    #[error("{0}")]
+    DeliveryRejected(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

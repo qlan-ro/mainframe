@@ -26,6 +26,7 @@ impl ChatManager {
                 Some(uuid.clone()),
             );
         QueuedInput {
+            delivery: Default::default(),
             uuid,
             content: content.to_owned(),
             text_prefix: if content.is_empty() {
@@ -73,8 +74,17 @@ fn metadata(uuid: &str, previews: &[serde_json::Value]) -> HashMap<String, serde
 pub(super) async fn dispatch(
     session: &Arc<dyn AdapterSession>,
     input: &QueuedInput,
-    images: Vec<ImageInput>,
 ) -> Result<(), AdapterError> {
+    let images = input
+        .images
+        .iter()
+        .cloned()
+        .map(|image| ImageInput {
+            media_type: image.media_type,
+            data: image.data,
+            path: image.path,
+        })
+        .collect();
     match &input.command {
         Some(cmd) if cmd.source != "mainframe" => {
             session

@@ -1,5 +1,5 @@
 use super::*;
-use mainframe_db::idle_compaction_queue::QueuedInput;
+use mainframe_db::idle_compaction_queue::{DeliveryState, QueuedInput};
 use mainframe_types::sync::LockExt as _;
 
 impl ChatShared {
@@ -86,7 +86,7 @@ impl ChatManager {
             else {
                 return Ok(());
             };
-            if self.shared.maintenance.active(chat_id) {
+            if input.delivery != DeliveryState::Pending || self.shared.maintenance.active(chat_id) {
                 return Ok(());
             }
             let (post, session) = self.require_live_session(chat_id)?;
@@ -109,36 +109,26 @@ impl ChatManager {
         chat_id: &str,
         post: &Arc<Mutex<ActiveChat>>,
         session: &Arc<dyn AdapterSession>,
-        input: QueuedInput,
+        mut input: QueuedInput,
     ) -> Result<(), SendError> {
-        let images: Vec<_> = input
-            .images
-            .iter()
-            .cloned()
-            .map(|i| ImageInput {
-                media_type: i.media_type,
-                data: i.data,
-                path: i.path,
-            })
-            .collect();
         self.mark_turn_accepted(post, chat_id)?;
-        if !self.shared.deps.idle_queue_remove(chat_id, &input.uuid)? {
-            return Ok(());
-        }
-        self.remove_queued_ref(chat_id, &input.uuid);
+        input.set_delivery(DeliveryState::Unconfirmed);
+        self.shared.deps.idle_queue_put(chat_id, &input)?;
         self.record_message_context(post, chat_id, &input.content);
         let prior = post.lock_recover().chat.process_state.flatten();
         self.set_working(post, &now_iso8601());
+        let result = super::maintenance_queue_payload::dispatch(session, &input).await;
+        if let Err(error) = result {
+            self.retain_failed_delivery(chat_id, post, &mut input, prior, &error)?;
+            return Err(error.into());
+        }
+        self.shared.deps.idle_queue_remove(chat_id, &input.uuid)?;
+        self.remove_queued_ref(chat_id, &input.uuid);
         self.shared
             .messages
             .lock_recover()
             .strip_queued_and_move_to_end(chat_id, &input.message.id);
         self.event_handler.emit_display(chat_id);
-        let result = super::maintenance_queue_payload::dispatch(session, &input, images).await;
-        if let Err(error) = result {
-            self.roll_back_refused_turn(post, chat_id, &input.message, prior, &error);
-            return Err(error.into());
-        }
         self.event_handler
             .notify_chat_surface(self.shared.turn_started_event(chat_id));
         Ok(())

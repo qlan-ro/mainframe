@@ -50,6 +50,8 @@ use crate::worktree_offer::{OfferError, WorktreeOfferRegistry};
 use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
 mod capabilities;
+#[cfg(test)]
+mod codex_idle_mapping_tests;
 mod config_api;
 pub(crate) mod construct;
 mod delivery;
@@ -66,9 +68,12 @@ mod history;
 mod idle_maintenance;
 mod initial_history;
 mod lifecycle_api;
+#[cfg(test)]
+mod maintenance_delivery_tests;
 mod maintenance_queue;
 mod maintenance_queue_edit;
 mod maintenance_queue_payload;
+mod maintenance_queue_recovery;
 pub(crate) mod notifications;
 mod plan_host;
 mod queued_message_actions;

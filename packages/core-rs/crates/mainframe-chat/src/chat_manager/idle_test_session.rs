@@ -20,6 +20,9 @@ pub(super) struct IdleTestSession {
     pub finish: tokio::sync::Notify,
     pub fail: bool,
     pub legacy: bool,
+    pub send_failure: Mutex<Option<AdapterError>>,
+    pub hold_send: AtomicBool,
+    pub send_started: tokio::sync::Notify,
 }
 impl IdleTestSession {
     pub fn new() -> Self {
@@ -39,6 +42,9 @@ impl IdleTestSession {
             finish: tokio::sync::Notify::new(),
             fail: false,
             legacy: false,
+            send_failure: Mutex::new(None),
+            hold_send: AtomicBool::new(false),
+            send_started: tokio::sync::Notify::new(),
         }
     }
 }
@@ -119,7 +125,14 @@ impl AdapterSession for IdleTestSession {
         uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         self.sent.lock_recover().push((message, uuid));
-        Box::pin(async { Ok(()) })
+        let failure = self.send_failure.lock_recover().take();
+        Box::pin(async move {
+            self.send_started.notify_one();
+            if self.hold_send.load(Ordering::SeqCst) {
+                std::future::pending::<()>().await;
+            }
+            failure.map_or(Ok(()), Err)
+        })
     }
     fn respond_to_permission(
         &self,
@@ -144,7 +157,11 @@ impl AdapterSession for IdleTestSession {
         command: String,
         args: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        self.inner.send_command(command, args)
+        self.send_message(
+            format!("/{command} {}", args.unwrap_or_default()),
+            Vec::new(),
+            None,
+        )
     }
     fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
         self.inner.cancel_queued_message(uuid)

@@ -151,3 +151,25 @@ async fn definitive_rpc_rejection_releases_readiness_without_success() {
     assert!(future.await.is_err());
     assert!(session.ready_for_input());
 }
+
+#[tokio::test]
+async fn prompt_rpc_preserves_rejected_versus_unconfirmed_acceptance() {
+    for rejected in [true, false] {
+        let session = session();
+        let (client, mut writes) = JsonRpcClient::test_transport();
+        let client = Arc::new(client);
+        *session.client.lock().unwrap() = Some(client.clone());
+        session.state.lock().unwrap().thread_id = Some("thread".into());
+        session.config.lock().unwrap().model = Some("gpt-5.5".into());
+        let future =
+            session.send_message_inner("queued input".into(), Vec::new(), Some("original".into()));
+        tokio::pin!(future);
+        tokio::select! { result=&mut future=>panic!("premature result {result:?}"), bytes=writes.recv()=> {
+            let rpc:Value=serde_json::from_slice(&bytes.unwrap()).unwrap();
+            assert_eq!(rpc["method"], "turn/start");
+            if rejected { client.test_reject(rpc["id"].as_i64().unwrap()); }
+        }}
+        let error = future.await.unwrap_err();
+        assert_eq!(matches!(error, AdapterError::DeliveryRejected(_)), rejected);
+    }
+}

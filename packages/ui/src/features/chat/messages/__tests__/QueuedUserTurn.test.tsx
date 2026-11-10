@@ -29,10 +29,12 @@ import type { ReactNode } from 'react';
 
 const cancelQueued = vi.fn().mockResolvedValue(undefined);
 const startEdit = vi.fn();
+const editQueued = vi.fn().mockResolvedValue(undefined);
 
 beforeEach(() => {
   cancelQueued.mockClear();
   startEdit.mockClear();
+  editQueued.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -40,7 +42,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 vi.mock('../../runtime/chat-extras', () => ({
-  useChatExtras: () => ({ cancelQueued }),
+  useChatExtras: () => ({ cancelQueued, editQueued }),
 }));
 
 vi.mock('../../composer/edit/composer-edit-context', () => ({
@@ -195,5 +197,32 @@ describe('QueuedUserTurn — C2: text queued message still shows both actions', 
     renderQueued({ content: 'hello world' });
     fireEvent.click(screen.getByTestId('chat-queued-edit'));
     expect(startEdit).toHaveBeenCalledWith({ messageId: 'm1', content: 'hello world' });
+  });
+});
+
+describe('durable delivery recovery', () => {
+  it('retries a rejected prompt with its original message identity and text', () => {
+    render(
+      <QueuedUserTurn messageId="original" content="keep me" delivery="rejected">
+        keep me
+      </QueuedUserTurn>,
+    );
+    expect(screen.getByText(/Queue paused/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('chat-queued-retry'));
+    expect(editQueued).toHaveBeenCalledWith('original', 'keep me');
+    fireEvent.click(screen.getByTestId('chat-queued-cancel'));
+    expect(cancelQueued).toHaveBeenCalledWith('original');
+  });
+  it('shows uncertain acceptance without offering a blind retry', () => {
+    render(
+      <QueuedUserTurn messageId="uncertain" content="maybe sent" delivery="unconfirmed">
+        maybe sent
+      </QueuedUserTurn>,
+    );
+    expect(screen.getByText(/Check provider history/)).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-queued-retry')).toBeNull();
+    expect(screen.queryByTestId('chat-queued-edit')).toBeNull();
+    fireEvent.click(screen.getByTestId('chat-queued-cancel'));
+    expect(cancelQueued).toHaveBeenCalledWith('uncertain');
   });
 });

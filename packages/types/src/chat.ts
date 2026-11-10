@@ -234,6 +234,7 @@ export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_res
 
 /** Tracks a message that was sent to stdin while the CLI was busy. */
 export interface QueuedMessageRef {
+  delivery?: string;
   /** The display message ID (from MessageCache) */
   messageId: string;
   chatId: string;

@@ -11,6 +11,7 @@ impl ChatManager {
             .filter(|r| r.uuid == uuid)
         {
             r.content = content.to_owned();
+            r.delivery = None;
         }
     }
 
@@ -34,7 +35,7 @@ impl ChatManager {
             return Ok(false);
         };
         if let Some(content) = content {
-            edit_input(&mut input, content);
+            edit_input(&mut input, content)?;
             self.shared.deps.idle_queue_put(chat_id, &input)?;
             self.shared
                 .messages
@@ -59,11 +60,22 @@ impl ChatManager {
         }
         self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
+        self.shared.schedule_maintenance_drain(chat_id);
         Ok(true)
     }
 }
 
-fn edit_input(input: &mut mainframe_db::idle_compaction_queue::QueuedInput, content: &str) {
+fn edit_input(
+    input: &mut mainframe_db::idle_compaction_queue::QueuedInput,
+    content: &str,
+) -> Result<(), SendError> {
+    if input.delivery == mainframe_db::idle_compaction_queue::DeliveryState::Unconfirmed {
+        return Err(AdapterError::Unavailable(
+            "Delivery is uncertain. Check provider history before dismissing this queued prompt.",
+        )
+        .into());
+    }
+    input.set_delivery(mainframe_db::idle_compaction_queue::DeliveryState::Pending);
     if !input.content.is_empty()
         && input.message.content.last().is_some_and(|c| {
             matches!(c,
@@ -87,4 +99,5 @@ fn edit_input(input: &mut mainframe_db::idle_compaction_queue::QueuedInput, cont
         (false, false) => format!("{}\n\n{content}", input.text_prefix),
     };
     input.content = content.to_owned();
+    Ok(())
 }
