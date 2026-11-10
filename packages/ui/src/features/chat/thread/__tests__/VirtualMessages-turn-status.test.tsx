@@ -15,6 +15,10 @@ vi.mock('@assistant-ui/react', () => ({
 vi.mock('../transcript-scroll-context', () => ({ useTranscriptScroll: () => null }));
 vi.mock('../../runtime/chat-extras', () => ({ useChatExtrasSelector: () => undefined }));
 vi.mock('../TurnStatusRow', () => ({ TurnStatusRow: () => <div data-testid="message">status</div> }));
+vi.mock('../turn-status-tail', () => ({
+  TurnStatusTailProvider: ({ children }: { children: React.ReactNode }) => children,
+  TurnStatusClock: () => null,
+}));
 
 const queued = { custom: { mainframe: { queued: true } } };
 

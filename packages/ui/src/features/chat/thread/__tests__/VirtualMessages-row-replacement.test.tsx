@@ -57,6 +57,10 @@ vi.mock('react-virtuoso', () => ({
   },
 }));
 vi.mock('../TurnStatusRow', () => ({ TurnStatusRow: () => null }));
+vi.mock('../turn-status-tail', () => ({
+  TurnStatusTailProvider: ({ children }: { children: React.ReactNode }) => children,
+  TurnStatusClock: () => null,
+}));
 vi.mock('../transcript-scroll-context', () => ({
   useTranscriptScroll: () => ({ viewport: document.body, isFollowing: () => false }),
 }));

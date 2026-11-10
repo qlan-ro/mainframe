@@ -10,6 +10,7 @@ import { seekingComponents, useScrollSeek } from './use-scroll-seek';
 import { useFindInChatStore } from '../find/find-in-chat-store';
 import { waitForMessage } from '../find/daemon-highlights';
 import { TurnStatusRow } from './TurnStatusRow';
+import { TurnStatusClock, TurnStatusTailProvider } from './turn-status-tail';
 import { statusAnchorId } from './turn-phase';
 
 type MessageComponents = ComponentProps<typeof ThreadPrimitive.MessageByIndex>['components'];
@@ -110,7 +111,12 @@ function VirtualMessage({ id, components }: { id: string; components: MessageCom
   return (
     <>
       <ThreadPrimitive.MessageByIndex index={index} components={components} />
-      {anchor && <TurnStatusRow />}
+      {anchor && (
+        <>
+          <TurnStatusRow />
+          <TurnStatusClock />
+        </>
+      )}
     </>
   );
 }
@@ -122,35 +128,37 @@ export function VirtualMessages({ components }: { components: MessageComponents 
   const legacyFind = useFindInChatStore((s) => s.isOpen && !s.daemon);
   return (
     <DisclosureStateProvider>
-      <div
-        data-testid="chat-message-list"
-        data-loaded-count={ids.length}
-        data-loaded-user-count={userCount}
-        data-virtualized={Boolean(viewport)}
-        style={viewport && ready !== range.generation ? { visibility: 'hidden' } : undefined}
-      >
-        {!viewport && scroll?.viewport === null ? null : viewport && ids.length > 0 ? (
-          <Virtuoso
-            key={range.generation}
-            ref={list}
-            data={ids}
-            customScrollParent={viewport}
-            firstItemIndex={range.index}
-            defaultItemHeight={220}
-            components={seekingComponents}
-            scrollSeekConfiguration={scrollSeek}
-            itemsRendered={(items) => {
-              if (items.some((item) => item.data === ids[ids.length - 1]) || !scroll?.isFollowing())
-                setReady(range.generation);
-            }}
-            computeItemKey={(_index, id) => id}
-            increaseViewportBy={legacyFind ? { top: 1e9, bottom: 1e9 } : overscan}
-            itemContent={(_index, id) => <VirtualMessage id={id} components={components} />}
-          />
-        ) : (
-          ids.map((id) => <VirtualMessage key={id} id={id} components={components} />)
-        )}
-      </div>
+      <TurnStatusTailProvider>
+        <div
+          data-testid="chat-message-list"
+          data-loaded-count={ids.length}
+          data-loaded-user-count={userCount}
+          data-virtualized={Boolean(viewport)}
+          style={viewport && ready !== range.generation ? { visibility: 'hidden' } : undefined}
+        >
+          {!viewport && scroll?.viewport === null ? null : viewport && ids.length > 0 ? (
+            <Virtuoso
+              key={range.generation}
+              ref={list}
+              data={ids}
+              customScrollParent={viewport}
+              firstItemIndex={range.index}
+              defaultItemHeight={220}
+              components={seekingComponents}
+              scrollSeekConfiguration={scrollSeek}
+              itemsRendered={(items) => {
+                if (items.some((item) => item.data === ids[ids.length - 1]) || !scroll?.isFollowing())
+                  setReady(range.generation);
+              }}
+              computeItemKey={(_index, id) => id}
+              increaseViewportBy={legacyFind ? { top: 1e9, bottom: 1e9 } : overscan}
+              itemContent={(_index, id) => <VirtualMessage id={id} components={components} />}
+            />
+          ) : (
+            ids.map((id) => <VirtualMessage key={id} id={id} components={components} />)
+          )}
+        </div>
+      </TurnStatusTailProvider>
     </DisclosureStateProvider>
   );
 }
