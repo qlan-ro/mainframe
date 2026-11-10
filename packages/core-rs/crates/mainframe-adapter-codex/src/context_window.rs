@@ -1,5 +1,5 @@
 //! Codex model context windows. `model/list` carries no window,
-//! so this is a snapshot of codex-cli 0.153.4's packaged `modelCatalogJson`,
+//! so this is a snapshot of codex-cli rust-v0.167.0's `models.json`,
 //! consulted only when the wire's own `tokenUsage.modelContextWindow` is
 //! absent.
 
@@ -8,6 +8,10 @@
 pub(crate) const DEFAULT_CODEX_CONTEXT_WINDOW: i64 = 272_000;
 
 const KNOWN_WINDOWS: &[(&str, i64)] = &[
+    ("gpt-6.1-terra", 500_000),
+    ("gpt-6.1-sol", 272_000),
+    ("gpt-6-sol", 272_000),
+    ("gpt-6-luna", 272_000),
     ("gpt-6-astra", 272_000),
     ("gpt-5.6-sol", 272_000),
     ("gpt-5.6-terra", 272_000),
@@ -40,6 +44,18 @@ pub(crate) fn catalog_context_window(id: &str) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn known_context_window_returns_the_terra_6_1_window() {
+        assert_eq!(known_context_window(Some("gpt-6.1-terra")), Some(500_000));
+    }
+
+    #[test]
+    fn known_context_window_returns_the_272k_windows_for_current_models() {
+        for id in ["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna"] {
+            assert_eq!(known_context_window(Some(id)), Some(272_000), "{id}");
+        }
+    }
 
     #[test]
     fn known_context_window_returns_the_table_value_for_a_known_id() {
