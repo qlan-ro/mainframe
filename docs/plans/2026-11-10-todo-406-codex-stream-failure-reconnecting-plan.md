@@ -104,9 +104,11 @@ Verified against source while planning. Downstream stages trust these instead of
   - `handle_retry` pushes it through `push_notification` (same FIFO, F14) *before* applying the existing `StreamOp::Retry`, which is kept unchanged.
   - It is not persisted or replayed (spec 2.9).
 - D3. **The client takes retry state only from `retry_status`.** It never reads the upsert marker, so a later marked upsert cannot re-enable the status after content has arrived.
-- D4. **Rule for clearing on content.** In `wireAcpSessionListeners`, any content-kind update (F20) or an idle `state_update` dispatches `retry.cleared`.
-  - Exception: an upsert whose `_meta["_mainframe.dev"]` parses as a `RetryMarker`. That frame is the retry's own content-replacing patch (F13), so it does not clear the status.
-  - Cost: when no partial existed, the marker rides the first post-reconnect content upsert, so the status clears one content frame later. Turn end clears it in every case.
+- D4. **Rule for clearing on content.** In `wireAcpSessionListeners`, the first update that carries actual content dispatches `retry.cleared` (spec 2.8). An idle `state_update` also clears. The rule reads content only, never `_meta`:
+  - `agent_message` / `agent_thought` upserts clear only when `content` is a non-empty array. This includes an upsert that carries a `RetryMarker`. In `stream.rs::retry_marker_carrier` the marker rides only non-empty content, so a marked frame is the first new content after the retry.
+  - `agent_message_chunk`, `agent_thought_chunk`, `tool_call`, `tool_call_update` and `tool_call_content_chunk` always clear, as content or tool progress.
+  - Upserts whose `content` is `[]`, `null` or omitted do not clear. These are the overlay removal that `handle_api_retry` emits right after the retry (F13), and metadata-only updates.
+  - Non-content kinds (F20) never clear. Turn end clears in every case (D5).
 - D5. **Lifecycle cleanup is redundant on purpose.** The reducer clears retry state on each of these:
   - `run.stopped`, `run.failed`, `run.cancelling`, `transcript.cleared`
   - `run.started` when the previous `runState` was not `running` (a new turn)
@@ -184,7 +186,7 @@ Verified against source while planning. Downstream stages trust these instead of
   - `packages/ui/src/lib/daemon/acp-notification-router.ts`: add `RetryStatusListener = (sessionId, status: {attempt, maxAttempts?}) => void`, a `NOTIFICATIONS` row, a `ListenerSignatures` entry and `onRetryStatus`.
   - `packages/ui/src/lib/daemon/acp-client.ts` and `acp-client-defaults.ts`: add `onRetryStatus` and move the constants (D11).
   - `packages/ui/src/features/chat/controller/acp-session-attachment-types.ts`: an optional `onRetryStatus?` on the port.
-  - `.../controller/retry-status-events.ts` (new): `clearsRetryStatus(update)` (D4).
+  - `.../controller/retry-status-events.ts` (new): `clearsRetryStatus(update)` (D4). It decides from `sessionUpdate` and `content` alone, with no `_meta` parsing.
   - `.../controller/acp-session-listeners.ts`: wire `onRetryStatus` → `retry.status`, and dispatch `retry.cleared` on clearing updates before forwarding.
   - `.../controller/chat-thread-state.ts`:
     - `retry: { attempt: number; maxAttempts?: number } | null`, initialized to null.
@@ -217,7 +219,9 @@ Verified against source while planning. Downstream stages trust these instead of
   - Red-before-green for the spec UI ACs:
     - the `(2/5)`, `(2)` and plain labels
     - the status clears on turn complete, turn fail, new content and stop
-    - a marked upsert does not clear and does not re-enable the status
+    - after a retry, the overlay-removal upsert (`content: []`), a `null`-content upsert and an omitted-content (metadata-only) upsert leave the status at Reconnecting
+    - the first non-empty `agent_message` upsert that carries a `RetryMarker` clears the status at once; chunks and tool updates clear too
+    - a later marked upsert does not re-enable the status (D3)
     - `Needs your input`, `Stopping` and `Compacting` win
     - a hosted group or tool row shows the text and testid once, in the trailing slot
     - a warning dot with normal-colour text
@@ -236,6 +240,6 @@ Verified against source while planning. Downstream stages trust these instead of
 
 ## Risks
 
-- D4's one-frame-late clear when no partial existed: covered by a unit test and accepted.
+- A future daemon frame that removes content with a non-empty array would clear early. D4 keys on non-empty content, and the unit tests pin the current removal shapes (`[]`, `null`, omitted).
 - A future Codex retry message without an `N/M` token shows `Reconnecting…`. This is the intended fallback.
 - PR #898 merging first: G1 touches only appended regions of `tests/common/mod.rs` and `CONSUMED-SURFACE.md`. Expect at most a trivial rebase.
