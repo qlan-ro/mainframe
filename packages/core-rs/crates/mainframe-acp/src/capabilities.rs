@@ -8,7 +8,8 @@ use mainframe_types::acp::extensions::{
     COMPRESSED_REPLAY_OPT_IN_KEY, CompactionParams, CompactionWirePhase, CursorParams,
     GateResolvedParams, HeartbeatParams, MAINFRAME_META_NAMESPACE, MainframeCapabilities,
     QueueStateParams, REPLAY_RESULT_PREVIEWS_OPT_IN_KEY, REVISION_CURSORS_OPT_IN_KEY,
-    ReplayCompleteParams, ResyncParams, RevisionCursor, TranscriptClearedParams,
+    ReplayCompleteParams, ResyncParams, RetryStatusParams, RevisionCursor, TranscriptClearedParams,
+    attempt_fraction,
 };
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 use mainframe_types::chat::QueuedMessageRef;
@@ -146,6 +147,31 @@ pub fn compaction_notification(
         params: Some(serde_json::json!(CompactionParams {
             session_id: session_id.to_string(),
             phase,
+        })),
+    }
+}
+
+/// The `_mainframe.dev/retry_status` notification: a provider call is being
+/// retried. `maxAttempts` is set only when the reason's first `N/M` names this
+/// very attempt (Codex's `Reconnecting... 2/5`), so a reason that merely
+/// contains an unrelated fraction never invents a maximum.
+pub fn retry_status_notification(
+    session_id: &str,
+    attempt: i64,
+    reason: Option<&str>,
+) -> JsonRpcNotification {
+    let max_attempts = reason
+        .and_then(attempt_fraction)
+        .filter(|(n, _)| *n == attempt)
+        .map(|(_, m)| m);
+    JsonRpcNotification {
+        jsonrpc: "2.0".into(),
+        method: "_mainframe.dev/retry_status".into(),
+        params: Some(serde_json::json!(RetryStatusParams {
+            session_id: session_id.to_string(),
+            attempt,
+            max_attempts,
+            reason: reason.map(str::to_string),
         })),
     }
 }

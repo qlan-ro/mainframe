@@ -22,12 +22,42 @@ async fn a_retry_marker_lands_on_the_next_upsert_for_attached_sessions() {
     hub.on_chat_surface_event(revision("chat-1", "Retried once and completed."));
 
     let frames = drain(&mut rx);
-    assert_eq!(frames.len(), 1);
+    assert_eq!(frames.len(), 2, "{frames:?}");
+    // The status notification leaves first; the marker still rides the upsert.
+    assert_eq!(frames[0]["method"], json!("_mainframe.dev/retry_status"));
     // The marker shares the namespace object with the encoder's ItemMeta
     // (timestamp/containerId/…), so assert its keys rather than the whole map.
-    let ns = &frames[0]["params"]["update"]["_meta"]["_mainframe.dev"];
+    let ns = &frames[1]["params"]["update"]["_meta"]["_mainframe.dev"];
     assert_eq!(ns["attempt"], json!(1));
     assert_eq!(ns["reason"], json!("overloaded_error"));
+}
+
+#[tokio::test]
+async fn a_retry_with_no_following_upsert_still_reaches_the_client() {
+    let hub = hub();
+    let (_id, conn, mut rx) = hub.register("mock-cli".to_string());
+    hub.attach(&conn, "chat-1");
+    hub.on_chat_surface_event(ChatSurfaceEvent::Retry {
+        chat_id: "chat-2".to_string(),
+        attempt: 1,
+        reason: None,
+    });
+
+    hub.on_chat_surface_event(ChatSurfaceEvent::Retry {
+        chat_id: "chat-1".to_string(),
+        attempt: 2,
+        reason: Some("Reconnecting... 2/5".to_string()),
+    });
+
+    let frames = drain(&mut rx);
+    assert_eq!(frames.len(), 1, "only the attached chat is told: {frames:?}");
+    assert_eq!(frames[0]["method"], json!("_mainframe.dev/retry_status"));
+    assert_eq!(
+        frames[0]["params"],
+        json!({
+            "sessionId": "chat-1", "attempt": 2, "maxAttempts": 5, "reason": "Reconnecting... 2/5"
+        })
+    );
 }
 
 #[tokio::test]

@@ -22,7 +22,7 @@ use tracing::{debug, warn};
 
 use super::super::facade_conn::{LazyFullEncoding, StreamOp};
 use super::FacadeHub;
-use super::fanout::RawFrameKind;
+use super::raw_frame_kind::RawFrameKind;
 
 fn stop_reason(reason: TurnStopReason) -> StopReason {
     match reason {
@@ -120,7 +120,12 @@ impl FacadeHub {
         }
     }
 
+    /// The status notification rides the session FIFO ahead of the marker: the
+    /// marker only travels on the next content upsert, which never comes while
+    /// a reconnect is pending. It is transient, never replayed.
     pub(super) fn handle_retry(&self, chat_id: &str, attempt: i64, reason: Option<String>) {
+        let note = mainframe_acp::retry_status_notification(chat_id, attempt, reason.as_deref());
+        self.push_notification(chat_id, &note, RawFrameKind::RetryStatus);
         self.apply_stream_op(chat_id, StreamOp::Retry(RetryMarker { attempt, reason }));
     }
 

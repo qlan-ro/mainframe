@@ -59,6 +59,21 @@ export const CompactionParamsSchema = z
 export type CompactionParams = z.infer<typeof CompactionParamsSchema>;
 
 /**
+ * `_mainframe.dev/retry_status`'s params: a provider call is being retried.
+ * Transient (never persisted or replayed). `maxAttempts` is present only when
+ * the provider's own text carried the maximum for this attempt.
+ */
+export const RetryStatusParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    attempt: z.number(),
+    maxAttempts: z.number().optional(),
+    reason: z.string().optional(),
+  })
+  .loose();
+export type RetryStatusParams = z.infer<typeof RetryStatusParamsSchema>;
+
+/**
  * `_mainframe.dev/session_detach`'s params: the client is dropping this
  * session's live stream (D2 — façade attachment follows the active
  * thread). The daemon forgets the session's stream state and any pending

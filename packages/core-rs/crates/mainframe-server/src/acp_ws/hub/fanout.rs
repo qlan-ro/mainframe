@@ -19,6 +19,7 @@ use serde::Serialize;
 use tracing::warn;
 
 use super::super::facade_conn::{FacadeConnection, LazyFullEncoding, SessionSlot, StreamOp};
+use super::raw_frame_kind::RawFrameKind;
 use super::{FacadeHub, now_ms};
 
 /// What a completing `session/resume` hands [`FacadeHub::reset_session`].
@@ -298,29 +299,6 @@ pub(super) fn run_op(
         StreamOp::Retry(marker) => {
             stream.on_retry(marker);
             Vec::new()
-        }
-    }
-}
-
-/// Which out-of-band notification [`FacadeHub::push_notification`] is
-/// carrying, for logs. A gate raise is not here: it serializes its own frame,
-/// because registration has to run between the serialize and the send.
-#[derive(Clone, Copy)]
-pub(super) enum RawFrameKind {
-    QueueState,
-    TranscriptCleared,
-    Resync,
-    Compaction,
-}
-
-impl RawFrameKind {
-    /// The frame family, for logs.
-    fn label(self) -> &'static str {
-        match self {
-            RawFrameKind::QueueState => "queue_state",
-            RawFrameKind::TranscriptCleared => "transcript_cleared",
-            RawFrameKind::Resync => "resync",
-            RawFrameKind::Compaction => "compaction",
         }
     }
 }

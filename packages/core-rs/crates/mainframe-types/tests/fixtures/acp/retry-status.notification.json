@@ -1,0 +1,11 @@
+{
+  "_provenance": "synthetic",
+  "jsonrpc": "2.0",
+  "method": "_mainframe.dev/retry_status",
+  "params": {
+    "sessionId": "chat_1",
+    "attempt": 2,
+    "maxAttempts": 5,
+    "reason": "Reconnecting... 2/5"
+  }
+}

@@ -97,3 +97,31 @@ fn gate_resolved_notification_matches_the_pinned_fixture_shape() {
     value["_provenance"] = fixture["_provenance"].clone();
     assert_eq!(value, fixture);
 }
+
+#[test]
+fn retry_status_carries_the_maximum_when_the_reason_names_this_attempt() {
+    let note = retry_status_notification("chat_1", 2, Some("Reconnecting... 2/5"));
+    assert_eq!(note.method, "_mainframe.dev/retry_status");
+    assert_eq!(
+        note.params.unwrap(),
+        serde_json::json!({
+            "sessionId": "chat_1", "attempt": 2, "maxAttempts": 5, "reason": "Reconnecting... 2/5"
+        })
+    );
+}
+
+#[test]
+fn retry_status_has_no_maximum_for_a_mismatched_or_missing_fraction() {
+    for (attempt, reason) in [
+        (1, Some("overloaded_error")),
+        (3, Some("Reconnecting... 2/5")),
+        (0, Some("Reconnecting... waiting for network")),
+        (4, None),
+    ] {
+        let params = retry_status_notification("c", attempt, reason)
+            .params
+            .unwrap();
+        assert!(params.get("maxAttempts").is_none(), "{reason:?}: {params}");
+        assert_eq!(params["attempt"], attempt);
+    }
+}

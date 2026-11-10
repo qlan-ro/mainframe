@@ -27,8 +27,9 @@ use mainframe_types::acp::extensions::{
     CompactionParams, CursorParams, GateResolvedParams, HeartbeatParams, HistoryPageParams,
     HistoryPageResult, HistorySearchParams, HistorySearchResult, HistoryState, HistoryWindow,
     ItemMeta, MainframeCapabilities, PromptSendMeta, QueueStateParams, QueuedPromptState,
-    ReplayBatchParams, ReplayCompleteParams, ResyncParams, RetryMarker, RichPermissionAnswer,
-    SessionDetachParams, StructuredDiff, TranscriptClearedParams, TruncationMarker, UsageMeta,
+    ReplayBatchParams, ReplayCompleteParams, ResyncParams, RetryMarker, RetryStatusParams,
+    RichPermissionAnswer, SessionDetachParams, StructuredDiff, TranscriptClearedParams,
+    TruncationMarker, UsageMeta,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::permission::{RequestPermissionRequest, RequestPermissionResponse};
@@ -139,6 +140,12 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     }
     if name == "compaction.params.json" {
         return roundtrip_as::<CompactionParams>(body);
+    }
+    if name == "retry-status.notification.json" {
+        return roundtrip_as::<JsonRpcNotification>(body);
+    }
+    if name == "retry-status.params.json" {
+        return roundtrip_as::<RetryStatusParams>(body);
     }
     if name == "heartbeat.notification.json" {
         return roundtrip_as::<JsonRpcNotification>(body);

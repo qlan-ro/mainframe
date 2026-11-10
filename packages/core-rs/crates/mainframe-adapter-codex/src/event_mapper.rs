@@ -53,6 +53,7 @@ pub fn handle_notification(
         "item/agentMessage/delta" => {
             crate::agent_message_partial::handle_agent_message_delta(params, sink, state)
         }
+        "error" => crate::error_notification::handle_error_notification(params, sink, state),
         _ => handle_unmapped(method),
     }
 }
