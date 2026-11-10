@@ -1,6 +1,8 @@
 use super::*;
 impl ClaudeSession {
     pub(crate) fn process_exited(&self, sink: &dyn SessionSink) {
+        self.maintenance.finish(false);
+        *self.cache_evidence.lock_recover() = Default::default();
         let mut state = self.state();
         state.presentation.invalidate(sink);
         state.child = None;
@@ -8,6 +10,8 @@ impl ClaudeSession {
         *self.stdin_tx.lock_recover() = None;
     }
     pub async fn kill(&self) -> Result<(), AdapterError> {
+        self.maintenance.finish(false);
+        *self.cache_evidence.lock_recover() = Default::default();
         self.state().presentation.invalidate(&NullSink);
         let child = self.state().child.clone();
         let Some(child) = child else { return Ok(()) };
@@ -27,6 +31,9 @@ impl ClaudeSession {
         Ok(())
     }
     pub async fn interrupt(&self) -> Result<(), AdapterError> {
+        if self.maintenance.suppressing() {
+            self.maintenance.timeout();
+        }
         self.state().presentation.invalidate(&NullSink);
         let child = self.state().child.clone();
         let Some(child) = child else { return Ok(()) };

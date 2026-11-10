@@ -5,6 +5,7 @@ impl SessionSinkImpl {
         let message = self.transient_with_id(
             ChatMessageType::System,
             vec![MessageContent::Node(MessageContentNode::Compaction {
+                compaction: None,
                 parent_tool_use_id: None,
             })],
             None,

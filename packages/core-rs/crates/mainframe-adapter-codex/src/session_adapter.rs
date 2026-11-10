@@ -1,6 +1,21 @@
 use super::*;
 use tracing::Instrument as _;
 impl AdapterSession for CodexSession {
+    fn supports_native_compaction(&self) -> bool {
+        true
+    }
+    fn ready_for_input(&self) -> bool {
+        self.state.lock_recover().maintenance.ready()
+    }
+    fn native_compact(
+        &self,
+        request: mainframe_adapter_api::idle_compaction::NativeCompactionRequest,
+    ) -> BoxFuture<
+        '_,
+        Result<mainframe_adapter_api::idle_compaction::CompactionMetadata, AdapterError>,
+    > {
+        Box::pin(self.compact_idle(request))
+    }
     fn id(&self) -> &str {
         &self.id
     }

@@ -5,6 +5,7 @@
 use mainframe_types::display::{StreamingLeafKind, has_attachment_evidence};
 
 use super::accum::{Accum, AccumKind};
+use super::idle_marker::idle_marker;
 use super::*;
 
 /// Append text to a block list, coalescing into a trailing text block — the
@@ -192,7 +193,15 @@ fn handle_node(
             }
             push_text(&mut accum.blocks, m);
         }
-        DisplayNode::Compaction { .. } => {
+        DisplayNode::Compaction {
+            compaction: Some(metadata),
+            ..
+        } => {
+            idle_marker(metadata, container, out);
+        }
+        DisplayNode::Compaction {
+            compaction: None, ..
+        } => {
             message.claim_marker(out, container).is_compacted = true;
         }
         DisplayNode::ProviderSwitch { marker } => {

@@ -139,6 +139,8 @@ pub enum DisplayNode {
         message: String,
     },
     Compaction {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        compaction: Option<crate::compaction::CompactionMetadata>,
         #[serde(skip_serializing_if = "Option::is_none")]
         parent_tool_use_id: Option<String>,
     },

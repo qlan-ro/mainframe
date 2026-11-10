@@ -146,6 +146,7 @@ pub fn convert_thread_items(
                     chat_id,
                     ChatMessageType::System,
                     vec![MessageContent::Node(MessageContentNode::Compaction {
+                        compaction: None,
                         parent_tool_use_id: None,
                     })],
                 ));

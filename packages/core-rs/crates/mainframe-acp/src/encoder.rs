@@ -41,6 +41,7 @@ use serde_json::{Value, json};
 mod accum;
 mod content;
 pub mod delta;
+mod idle_marker;
 mod presentation;
 mod result_content;
 mod tool_call;

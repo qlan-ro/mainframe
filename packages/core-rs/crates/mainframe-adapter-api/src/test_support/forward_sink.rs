@@ -1,5 +1,15 @@
 #[macro_export]
 macro_rules! forward_session_sink {
+    (@forward $this:ident => $target:expr; on_compact_with_metadata) => {
+        fn on_compact_with_metadata(&$this, metadata: mainframe_types::compaction::CompactionMetadata) {
+            $crate::SessionSink::on_compact_with_metadata($target, metadata);
+        }
+    };
+    (@forward $this:ident => $target:expr; on_maintenance_result) => {
+        fn on_maintenance_result(&$this, request: mainframe_types::compaction::NativeCompactionRequest, result: mainframe_types::adapter::SessionResult) {
+            $crate::SessionSink::on_maintenance_result($target, request, result);
+        }
+    };
     ($($method:ident),* $(,)?) => {
         $($crate::forward_session_sink!(@forward self => &$crate::test_support::NullSink; $method);)*
     };

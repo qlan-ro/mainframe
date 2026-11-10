@@ -227,7 +227,7 @@ export type MessageContent =
     }
   | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }
   | { type: 'error'; message: string; parentToolUseId?: string }
-  | { type: 'compaction'; parentToolUseId?: string }
+  | { type: 'compaction'; parentToolUseId?: string; compaction?: import('./compaction.js').CompactionMetadata }
   | { type: 'provider_switch'; marker: ProviderSwitchMarker };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;

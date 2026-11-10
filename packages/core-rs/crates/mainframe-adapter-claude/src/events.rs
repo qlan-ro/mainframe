@@ -32,9 +32,11 @@ pub fn handle_stdout(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSi
         if line.trim().is_empty() {
             continue;
         }
-        session.bump_last_activity();
         tracing::trace!(session_id = %session.id, line = %line, "stream-json line");
         if let Ok(event) = serde_json::from_str::<Value>(line.trim()) {
+            if !session.maintenance.suppressing() && !session.is_retired_maintenance_event(&event) {
+                session.bump_last_activity();
+            }
             handle_event(session, &event, sink);
         }
     }
@@ -64,6 +66,9 @@ fn is_trust_permissions(lower: &str) -> bool {
 }
 
 pub(crate) fn handle_stderr(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
+    if session.maintenance.suppressing() {
+        return;
+    }
     let message = String::from_utf8_lossy(chunk).trim().to_string();
     if message.is_empty() {
         return;
@@ -91,6 +96,13 @@ fn handle_rate_limit_event(session: &ClaudeSession, event: &Value, sink: &dyn Se
 }
 
 fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
+    session
+        .cache_evidence
+        .lock_recover()
+        .observe(event, session.is_endpoint_session());
+    if session.handle_maintenance_event(event, sink) {
+        return;
+    }
     let ty = event.get("type").and_then(Value::as_str);
     tracing::debug!(
         session_id = %session.id,
