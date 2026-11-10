@@ -86,6 +86,7 @@ export function useSessionTabsSync(): void {
   const reconcile = useSessionTabsStore((s) => s.reconcile);
   const zonesPair = useZonesStore((s) => s.zones);
   const zoneFrac = useZonesStore((s) => s.frac);
+  const prevRef = useRef<{ main: string | null; zones: readonly string[] | null }>({ main: null, zones: null });
 
   useEffect(() => {
     if (hydrated || !canRestoreTabs(items, isListLoading, listLoaded)) return;
@@ -115,7 +116,19 @@ export function useSessionTabsSync(): void {
   }, [hydrated, items, isListLoading, listLoaded, hydrate, closeTab]);
 
   useEffect(() => {
+    const prev = prevRef.current;
+    prevRef.current = { main: mainThreadId, zones: zonesPair };
     if (!mainThreadId) return;
+    const activated = prev.main !== mainThreadId;
+    if (activated) useZonesStore.setState({ leaving: null });
+    // Zones-only change: re-slot only when the pair dissolved AROUND the active
+    // session and focus is not on its way out. A dissolve that moves focus
+    // (`leaving`) must not re-preview the chat being left — `switchToThread`
+    // lands later, and the destination gets its slot from that activation.
+    if (!activated) {
+      const dissolvedAround = prev.zones?.includes(mainThreadId) === true && zonesPair === null;
+      if (!dissolvedAround || useZonesStore.getState().leaving === mainThreadId) return;
+    }
     // The runtime's transient boot draft and the user's "+" draft are the same
     // state; only WHEN they are activated tells them apart. A draft active
     // before `list()` ever returned is the boot one — it peeks, so auto-select

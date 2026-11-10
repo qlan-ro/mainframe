@@ -213,6 +213,46 @@ describe('a preview tab entering the split', () => {
     expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a']);
   });
 
+  it('a dissolve that moves focus away does not re-preview the chat being left or evict the preview', () => {
+    const SESSION_C = { id: 'chat-c', status: 'regular', custom: {}, title: 'Third' };
+    settledList([SESSION_A, SESSION_B, SESSION_C]);
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-b'], previewId: 'chat-c', hydrated: true });
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    const { rerender } = renderHook(() => useSessionTabsSync());
+
+    // Close a's tab: closeSplit lands first, mainThreadId only moves later.
+    act(() => {
+      useZonesStore.getState().closeSplit('chat-a');
+      useSessionTabsStore.getState().closeTab('chat-a');
+    });
+    rerender();
+    let s = useSessionTabsStore.getState();
+    expect(s.previewId).toBe('chat-c');
+    expect(s.tabIds).toEqual(['chat-b']);
+
+    mainThreadIdValue = 'chat-b';
+    rerender();
+    s = useSessionTabsStore.getState();
+    expect(s.previewId).toBe('chat-c');
+    expect(s.tabIds).toEqual(['chat-b']);
+  });
+
+  it('a dissolve that keeps focus still gives the active session its slot back', () => {
+    settledList([SESSION_A, SESSION_B]);
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: [], previewId: null, hydrated: true });
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    const { rerender } = renderHook(() => useSessionTabsSync());
+
+    act(() => {
+      useZonesStore.getState().closeSplit();
+    });
+    rerender();
+
+    expect(useSessionTabsStore.getState().previewId).toBe('chat-a');
+  });
+
   it('stays a preview when it is not a zone member', () => {
     settledList([SESSION_A, SESSION_B, { id: 'chat-c', status: 'regular', custom: {}, title: 'Third' }]);
     mainThreadIdValue = 'chat-a';

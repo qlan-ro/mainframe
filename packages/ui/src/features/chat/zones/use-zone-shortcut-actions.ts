@@ -26,7 +26,7 @@ export function useZoneShortcutActions(aui: AssistantClient): void {
     }
     if (!splitVisible(store.zones, mainThreadId, store.splitFits) || store.zones == null) return;
     const survivor = store.zones[store.focusedIndex === 0 ? 1 : 0];
-    store.closeSplit();
+    store.closeSplit(mainThreadId ?? undefined);
     aui.threads.switchToThread(survivor);
   });
 
