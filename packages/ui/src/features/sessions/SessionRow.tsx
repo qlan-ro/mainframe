@@ -96,11 +96,23 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
 
   const title = item.title ?? 'Untitled session';
 
+  // Rename opens from the menu's close auto-focus, not from onSelect. The modal
+  // menu traps focus until its FocusScope unmounts (after the ~100 ms exit
+  // animation), so an input mounted earlier is pulled back out, blurs and
+  // cancels. Radix then restores focus to the previously focused element from
+  // that same unmount; preventing it leaves the input in charge of focus.
+  const renameChosen = useRef(false);
+
   function openRenameFromMenu() {
-    // Same focus-restore race as the tags popover below: a macrotask lands after
-    // the menu hands focus back to the trigger, so the input keeps focus.
-    setTimeout(() => setIsRenaming(true), 0);
+    renameChosen.current = true;
   }
+
+  const handleCloseAutoFocus = useCallback(() => {
+    const chosen = renameChosen.current;
+    renameChosen.current = false;
+    if (chosen) setIsRenaming(true);
+    return chosen;
+  }, []);
 
   function openTagsFromMenu() {
     // Radix's context menu is modal: on select it hands focus back to the
@@ -121,6 +133,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
       onPin={actions.onPin}
       onUnpin={actions.onUnpin}
       onRename={openRenameFromMenu}
+      onCloseAutoFocus={handleCloseAutoFocus}
       onTags={openTagsFromMenu}
       onArchive={actions.onArchive}
       onOpenInSplit={() => {

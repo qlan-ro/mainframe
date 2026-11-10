@@ -18,7 +18,7 @@
  *     paints `data-active` when it is the main thread. Nothing else in the
  *     suite mounts the primitives under that scope.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FC } from 'react';
@@ -187,12 +187,63 @@ describe('SessionRow — Rename from the context menu', () => {
     await user.click(await screen.findByTestId('sessions-ctx-rename'));
 
     const input = (await screen.findByTestId('sessions-rename-input')) as HTMLInputElement;
-    // Radix hands focus back to the trigger from a rAF after the menu closes.
     await new Promise((r) => setTimeout(r, 50));
 
     expect(screen.getByTestId('sessions-rename-input')).toBe(input);
     expect(document.activeElement).toBe(input);
     expect(input.selectionStart).toBe(0);
     expect(input.selectionEnd).toBe('Alpha'.length);
+  });
+
+  it('keeps focus on the input when the menu unmounts after its exit animation', async () => {
+    // jsdom runs no CSS animations, so fake one on the menu: Presence then keeps
+    // it mounted until `animationend`, as in the app (duration-100). Focus
+    // another element first; the delayed FocusScope restore would send focus
+    // back to it and blur (so cancel) the input unless it is prevented.
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    const realGcs = window.getComputedStyle.bind(window);
+    const gcs = vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+      const style = realGcs(el, pseudo);
+      // Presence caches this live style object at mount, so key off the
+      // element's state at read time rather than when the object is built.
+      if (el instanceof HTMLElement && el.dataset.slot === 'context-menu-content') {
+        return new Proxy(style, {
+          get: (t, k) =>
+            k === 'animationName' ? (el.dataset.state === 'closed' ? 'exit' : 'none') : Reflect.get(t, k),
+        });
+      }
+      return style;
+    });
+    try {
+      const user = userEvent.setup();
+      const { rowFor } = await mountRows();
+
+      outside.focus();
+      await user.pointer({ keys: '[MouseRight]', target: rowFor('Alpha')! });
+      const rename = await screen.findByTestId('sessions-ctx-rename');
+      const menu = rename.closest('[data-slot="context-menu-content"]')!;
+      await user.click(rename);
+      await new Promise((r) => setTimeout(r, 100));
+      expect(menu.isConnected).toBe(true);
+      // The input must not mount while the menu's focus scope is alive: its
+      // trap and delayed restore would blur the input and cancel the rename.
+      expect(screen.queryByTestId('sessions-rename-input')).toBeNull();
+      act(() => {
+        const end = new Event('animationend', { bubbles: true });
+        Object.defineProperty(end, 'animationName', { value: 'exit' });
+        menu.dispatchEvent(end);
+      });
+
+      const input = (await screen.findByTestId('sessions-rename-input')) as HTMLInputElement;
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(menu.isConnected).toBe(false);
+      expect(screen.getByTestId('sessions-rename-input')).toBe(input);
+      expect(document.activeElement).toBe(input);
+    } finally {
+      gcs.mockRestore();
+      outside.remove();
+    }
   });
 });
