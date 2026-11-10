@@ -11,20 +11,18 @@
  * `chat-thread-running` exists only while the turn runs, on whichever element
  * hosts the status (e2e waits read its removal as the turn's end).
  */
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useMemo } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { PanelColumnContext, usePanelControl } from '@/features/session-panel/panel-control-store';
-import { runningCount } from '@/features/session-panel/activity-view';
 import { useChatExtras } from '../runtime/chat-extras';
 import { formatElapsedSeconds } from '../format-duration';
 import { useStableActivityLabel } from '../messages/compact/use-stable-activity-label';
 import { useRunElapsed } from './use-run-elapsed';
-import { useTurnStatusHost } from './turn-status-host';
+import { useRunningTasks, useTurnStatusTail, useTurnStatusTailState, type TurnStatusTail } from './turn-status-tail';
 import { runningTasksLabel, turnPhase } from './turn-phase';
 
-const FINISHED_FLASH_MS = 1500;
 /** Each segment and phase change fades in, rising 3px (the desktop apps' 180ms morph). */
 const ENTER =
   'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-[3px] duration-180 ease-[cubic-bezier(0.2,0,0,1)]';
@@ -53,10 +51,6 @@ function useTurnClock() {
   const runState = useChatExtras()?.state.runState;
   const startedAtMs = runState && 'startedAtMs' in runState ? runState.startedAtMs : undefined;
   return useRunElapsed(true, startedAtMs);
-}
-
-function useRunningTasks() {
-  return runningCount(Object.values(useChatExtras()?.state.backgroundTasks ?? {}));
 }
 
 function Separator() {
@@ -123,21 +117,6 @@ function RunningStatus() {
   );
 }
 
-/** "N tasks finished" for a moment after the last background task ends. */
-function useFinishedFlash(count: number): number {
-  const previous = useRef(count);
-  const [finished, setFinished] = useState(0);
-  useEffect(() => {
-    const before = previous.current;
-    previous.current = count;
-    if (count > 0 || before === 0) return;
-    setFinished(before);
-    const timer = setTimeout(() => setFinished(0), FINISHED_FLASH_MS);
-    return () => clearTimeout(timer);
-  }, [count]);
-  return count > 0 ? 0 : finished;
-}
-
 function BackgroundTasks({ count, finished }: { count: number; finished: number }) {
   const columnId = useContext(PanelColumnContext);
   const revealActivity = usePanelControl((s) => s.revealActivity);
@@ -171,15 +150,8 @@ function BackgroundTasks({ count, finished }: { count: number; finished: number 
   );
 }
 
-export function TurnStatusRow() {
-  const isRunning = useAuiState((s) => s.thread.isRunning);
-  const count = useRunningTasks();
-  const finished = useFinishedFlash(count);
-  // A live group header carries the running status, its clock and task count included.
-  const hosted = useTurnStatusHost() !== null;
-  const running = isRunning && !hosted;
-  const tasks = hosted ? 0 : count;
-  if (!running && !tasks && !finished) return null;
+function StatusRow({ tail: { running, tasks, finished, visible } }: { tail: TurnStatusTail }) {
+  if (!visible) return null;
   return (
     <div data-testid="chat-turn-status" className="flex h-7 min-w-0 items-center gap-2 text-xs">
       {running && <RunningStatus />}
@@ -187,4 +159,14 @@ export function TurnStatusRow() {
       <BackgroundTasks count={tasks} finished={finished} />
     </div>
   );
+}
+
+function StandaloneStatusRow() {
+  return <StatusRow tail={useTurnStatusTailState()} />;
+}
+
+/** Reads the thread-level tail when mounted under its provider; otherwise decides for itself. */
+export function TurnStatusRow() {
+  const tail = useTurnStatusTail();
+  return tail ? <StatusRow tail={tail} /> : <StandaloneStatusRow />;
 }
