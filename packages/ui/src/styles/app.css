@@ -148,7 +148,7 @@ code {
   color: var(--popover-foreground);
 }
 /* Unlayered sonner rules beat Tailwind utilities, so the muted colour lives here. */
-[data-sonner-toaster] [data-sonner-toast] [data-description] {
+[data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled='true'] [data-description] {
   color: var(--muted-foreground);
 }
 [data-sonner-toaster] [data-sonner-toast] [data-icon] {
