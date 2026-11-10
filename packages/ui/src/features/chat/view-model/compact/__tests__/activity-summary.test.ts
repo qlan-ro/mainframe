@@ -82,3 +82,16 @@ it('chooses the latest running command over an earlier search', () => {
     'Running tests',
   );
 });
+it('never labels a running shell member with the bare word "command"', () => {
+  const label = (args: CompactToolPart['args']) =>
+    activityLabel(
+      { type: 'activity', members: [member('Bash', args, { status: { type: 'running' } })], active: true },
+      new Set(),
+    ).text;
+  expect(label({ command: 'cat a && echo b' })).toBe('cat a && echo b');
+  expect(label({})).toBe('Running command');
+  expect(label({ command: '' })).toBe('Running command');
+  for (const args of [{ command: 'cat a && echo b' }, {}, { command: '' }] as CompactToolPart['args'][]) {
+    expect(label(args)).not.toBe('command');
+  }
+});
