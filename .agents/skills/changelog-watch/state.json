@@ -5,8 +5,8 @@
       "repo": "anthropics/claude-code",
       "mode": "changelog",
       "changelogPath": "CHANGELOG.md",
-      "lastReviewedRef": "2.1.319",
-      "lastReviewedAt": "2026-11-07",
+      "lastReviewedRef": "2.1.321",
+      "lastReviewedAt": "2026-11-10",
       "checklist": "docs/research/adapters/claude/CONSUMED-SURFACE.md"
     },
     "codex": {
@@ -14,7 +14,7 @@
       "mode": "releases",
       "includePrerelease": false,
       "lastReviewedRef": "rust-v0.167.0",
-      "lastReviewedAt": "2026-11-07",
+      "lastReviewedAt": "2026-11-10",
       "checklist": "docs/research/adapters/codex/CONSUMED-SURFACE.md"
     }
   }
