@@ -103,10 +103,15 @@ it.each([
 it.each([
   ['custom --option', 'custom'],
   ['/usr/local/bin/custom arg', 'custom'],
-  ['cat a && echo b', 'command'],
-  ['', 'command'],
+  ['cat a && echo b', 'cat a && echo b'],
+  ['a | b\nc', 'a | b c'],
+  ['', 'Running command'],
 ])('labels an unknown running command %s', (command, expected) => {
   expect(commandLabel(tool({ args: { command } }), 'running')).toBe(expected);
+});
+
+it('labels a running tool with no command text yet', () => {
+  expect(commandLabel(tool({ args: {} }), 'running')).toBe('Running command');
 });
 
 it('keeps the complete sanitized raw label for disclosure tooltips', () => {
@@ -125,7 +130,7 @@ it.each(['npm run constructor', 'git toString', 'pnpm build --fix', 'tsc --write
 it.each(['if true', 'for item in files', '! npm test'])(
   'does not treat shell control words as programs: %s',
   (command) => {
-    expect(commandLabel(tool({ args: { command } }), 'running')).toBe('command');
+    expect(commandLabel(tool({ args: { command } }), 'running')).toBe(command);
   },
 );
 it.each(['head --lines invalid src/a.ts', "sed -n '1p' --unknown a"])(
