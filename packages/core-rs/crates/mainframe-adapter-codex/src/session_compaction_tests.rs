@@ -127,6 +127,7 @@ async fn late_canonical_after_legacy_timeout_is_quarantined() {
         &mut session.state.lock().unwrap(),
     );
     assert!(maintenance.ready());
+    session.remember_compaction_boundary("old-canonical");
     let rx = maintenance.begin(request(&session, "new")).unwrap();
     completed(&session, &sink, "old-canonical");
     assert!(recording.compactions.lock().unwrap().is_empty());
@@ -172,4 +173,70 @@ async fn prompt_rpc_preserves_rejected_versus_unconfirmed_acceptance() {
         let error = future.await.unwrap_err();
         assert_eq!(matches!(error, AdapterError::DeliveryRejected(_)), rejected);
     }
+}
+
+#[tokio::test]
+async fn legacy_only_idle_does_not_consume_a_new_canonical_compaction() {
+    let session = session();
+    let recording = Arc::new(RecordingSink::default());
+    let sink: Arc<dyn SessionSink> = recording.clone();
+    let maintenance = session.state.lock().unwrap().maintenance.clone();
+    let rx = maintenance.begin(request(&session, "legacy")).unwrap();
+    handle_notification(
+        "thread/compacted",
+        &json!({}),
+        &sink,
+        &mut session.state.lock().unwrap(),
+    );
+    maintenance.wait(rx, 10).await.unwrap();
+    session.remember_compaction_boundary("old-item");
+    session.state.lock().unwrap().thread_id = Some("thread".into());
+    handle_notification(
+        "turn/started",
+        &json!({"threadId":"thread","turn":{"id":"real-turn"}}),
+        &sink,
+        &mut session.state.lock().unwrap(),
+    );
+    completed(&session, &sink, "old-item");
+    assert!(!session.state.lock().unwrap().compaction_emitted);
+    completed(&session, &sink, "new-item");
+    assert!(session.state.lock().unwrap().compaction_emitted);
+    assert!(
+        session
+            .state
+            .lock()
+            .unwrap()
+            .compact_item_ids
+            .contains("new-item")
+    );
+    assert_eq!(recording.compactions.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn canonical_only_idle_does_not_consume_newer_legacy_request() {
+    let session = session();
+    let recording = Arc::new(RecordingSink::default());
+    let sink: Arc<dyn SessionSink> = recording.clone();
+    let maintenance = session.state.lock().unwrap().maintenance.clone();
+    let rx = maintenance.begin(request(&session, "canonical")).unwrap();
+    completed(&session, &sink, "old-item");
+    maintenance.wait(rx, 10).await.unwrap();
+    let (client, mut writes) = JsonRpcClient::test_transport();
+    let client = Arc::new(client);
+    *session.client.lock().unwrap() = Some(client.clone());
+    session.state.lock().unwrap().thread_id = Some("thread".into());
+    let future = session.compact_idle(request(&session, "new-legacy"));
+    tokio::pin!(future);
+    tokio::select! { result=&mut future=>panic!("premature result {result:?}"), bytes=writes.recv()=> {
+        let rpc:Value=serde_json::from_slice(&bytes.unwrap()).unwrap();
+        client.test_acknowledge(rpc["id"].as_i64().unwrap());
+    }}
+    handle_notification(
+        "thread/compacted",
+        &json!({"threadId":"thread"}),
+        &sink,
+        &mut session.state.lock().unwrap(),
+    );
+    assert_eq!(future.await.unwrap().request_id, "new-legacy");
+    assert_eq!(recording.compactions.lock().unwrap().len(), 2);
 }

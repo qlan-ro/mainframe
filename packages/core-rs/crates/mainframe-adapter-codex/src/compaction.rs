@@ -15,7 +15,11 @@ use mainframe_adapter_api::SessionSink;
 use crate::event_mapper::CodexSessionState;
 
 /// `item/started(contextCompaction)` → the transient "Compacting…" pill.
-pub(crate) fn handle_compaction_started(sink: &Arc<dyn SessionSink>) {
+pub(crate) fn handle_compaction_started(
+    sink: &Arc<dyn SessionSink>,
+    state: &mut CodexSessionState,
+) {
+    state.pending_idle_legacy = false;
     sink.on_compact_start();
 }
 
@@ -28,18 +32,12 @@ pub(crate) fn handle_compaction_completed(
     state: &mut CodexSessionState,
     vendor_id: Option<&str>,
 ) {
-    if let Some(id) = vendor_id {
-        if state.unmatched_legacy_completion {
-            state.unmatched_legacy_completion = false;
-            state.compact_item_ids.insert(id.to_owned());
-            return;
-        }
-        if !state.compact_item_ids.insert(id.to_owned()) {
-            return;
-        }
+    if let Some(id) = vendor_id
+        && !state.compact_item_ids.insert(id.to_owned())
+    {
+        return;
     }
     if state.maintenance.suppressing() {
-        state.unmatched_legacy_completion = vendor_id.is_none();
         state.pending_idle_legacy = vendor_id.is_some();
         if let Some(request) = state.maintenance.request() {
             let mut metadata = request.metadata(vendor_id);
@@ -81,9 +79,21 @@ pub(crate) fn handle_idle_notification(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) -> bool {
-    // Legacy notifications omit turn identity, so quarantine one retired counterpart.
-    if method == "thread/compacted" && is_parent(params, state) && state.pending_idle_legacy {
+    // A newer explicit request owns its completion, including legacy-only providers.
+    if method == "thread/compacted"
+        && is_parent(params, state)
+        && state.pending_idle_legacy
+        && !state.maintenance.suppressing()
+    {
         state.pending_idle_legacy = false;
+        return true;
+    }
+    if method.starts_with("item/")
+        && params
+            .pointer("/item/id")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|id| state.compact_item_ids.contains(id))
+    {
         return true;
     }
     let turn = params
@@ -145,13 +155,6 @@ fn idle_item(
         .pointer("/item/id")
         .and_then(serde_json::Value::as_str);
     if method == "item/started" {
-        if state.unmatched_legacy_completion {
-            state.unmatched_legacy_completion = false;
-            if let Some(id) = id {
-                state.compact_item_ids.insert(id.to_owned());
-            }
-            return;
-        }
         if let Some(id) = id.filter(|id| !state.compact_item_ids.contains(*id)) {
             state.maintenance_item_id = Some(id.to_owned());
         }

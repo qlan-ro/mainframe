@@ -40,7 +40,6 @@ pub struct SubAgentCard {
 #[derive(Debug, Default)]
 pub struct CodexSessionState {
     pub maintenance: Arc<mainframe_adapter_api::compaction_state::CompactionState>,
-    pub unmatched_legacy_completion: bool,
     pub pending_idle_legacy: bool,
     pub maintenance_item_id: Option<String>,
     pub maintenance_turn_ids: std::collections::HashSet<String>,

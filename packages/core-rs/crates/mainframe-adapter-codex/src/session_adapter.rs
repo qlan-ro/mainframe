@@ -4,6 +4,12 @@ impl AdapterSession for CodexSession {
     fn supports_native_compaction(&self) -> bool {
         true
     }
+    fn remember_compaction_boundary(&self, vendor_id: &str) {
+        self.state
+            .lock_recover()
+            .compact_item_ids
+            .insert(vendor_id.to_owned());
+    }
     fn ready_for_input(&self) -> bool {
         self.state.lock_recover().maintenance.ready()
     }

@@ -165,7 +165,7 @@ fn handle_item_started(
         }
         Ok(ThreadItem::ContextCompaction(_)) => {
             if !state.maintenance.suppressing() {
-                crate::compaction::handle_compaction_started(sink);
+                crate::compaction::handle_compaction_started(sink, state);
             }
         }
         Ok(ThreadItem::CollabAgentToolCall(item)) => {

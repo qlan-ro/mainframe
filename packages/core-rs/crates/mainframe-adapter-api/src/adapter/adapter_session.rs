@@ -11,6 +11,7 @@ pub trait AdapterSession: Send + Sync {
     fn cache_classification(&self) -> crate::idle_compaction::CacheClassification {
         crate::idle_compaction::CacheClassification::Unknown
     }
+    fn remember_compaction_boundary(&self, _vendor_id: &str) {}
     fn ready_for_input(&self) -> bool {
         true
     }

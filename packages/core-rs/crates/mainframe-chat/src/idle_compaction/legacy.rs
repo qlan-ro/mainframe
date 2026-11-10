@@ -34,6 +34,9 @@ impl IdleCompactor {
             return;
         }
         metadata.vendor_id = native.last().map(|m| m.id.clone());
+        if let Some(id) = &metadata.vendor_id {
+            session.remember_compaction_boundary(id);
+        }
         if self.shared.deps.idle_record(chat_id, &metadata).is_err() {
             tracing::warn!(chat_id, "idle boundary correlation persistence failed");
         }

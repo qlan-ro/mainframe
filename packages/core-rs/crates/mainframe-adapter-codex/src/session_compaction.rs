@@ -21,6 +21,7 @@ impl CodexSession {
                 .ok_or_else(|| AdapterError::NotSpawned(self.id.clone()))?;
             let receiver = state.maintenance.begin(request)?;
             state.compaction_emitted = false;
+            state.pending_idle_legacy = false;
             state.maintenance_item_id = None;
             (thread_id, state.maintenance.clone(), receiver)
         };
