@@ -96,6 +96,12 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
 
   const title = item.title ?? 'Untitled session';
 
+  function openRenameFromMenu() {
+    // Same focus-restore race as the tags popover below: a macrotask lands after
+    // the menu hands focus back to the trigger, so the input keeps focus.
+    setTimeout(() => setIsRenaming(true), 0);
+  }
+
   function openTagsFromMenu() {
     // Radix's context menu is modal: on select it hands focus back to the
     // trigger from a rAF callback, which always runs after the microtask queue.
@@ -114,7 +120,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
       onOpenChange={handleMenuOpenChange}
       onPin={actions.onPin}
       onUnpin={actions.onUnpin}
-      onRename={() => queueMicrotask(() => setIsRenaming(true))}
+      onRename={openRenameFromMenu}
       onTags={openTagsFromMenu}
       onArchive={actions.onArchive}
       onOpenInSplit={() => {

@@ -19,6 +19,7 @@
  *     suite mounts the primitives under that scope.
  */
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FC } from 'react';
 import {
@@ -174,5 +175,24 @@ describe('SessionRow — the thread-list-item primitives resolve through the row
 
     expect(rowFor('Beta')!.dataset.active).toBe('true');
     expect(rowFor('Alpha')!.dataset.active).toBeUndefined();
+  });
+});
+
+describe('SessionRow — Rename from the context menu', () => {
+  it('leaves focus in the rename input with the whole title selected', async () => {
+    const user = userEvent.setup();
+    const { rowFor } = await mountRows();
+
+    await user.pointer({ keys: '[MouseRight]', target: rowFor('Alpha')! });
+    await user.click(await screen.findByTestId('sessions-ctx-rename'));
+
+    const input = (await screen.findByTestId('sessions-rename-input')) as HTMLInputElement;
+    // Radix hands focus back to the trigger from a rAF after the menu closes.
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(screen.getByTestId('sessions-rename-input')).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe('Alpha'.length);
   });
 });

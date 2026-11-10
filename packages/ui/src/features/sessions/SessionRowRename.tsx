@@ -16,8 +16,17 @@ export function SessionRowRename({ initialTitle, onCommit, onCancel }: SessionRo
   const [value, setValue] = useState(initialTitle);
   const ref = useRef<HTMLInputElement>(null);
 
+  // Select the title once, on the first focus; later renders must not reset the caret.
+  const selected = useRef(false);
+
   useLayoutEffect(() => {
-    ref.current?.focus();
+    const el = ref.current;
+    if (el == null) return;
+    el.focus();
+    if (!selected.current) {
+      el.select();
+      selected.current = true;
+    }
   });
 
   function commit() {
