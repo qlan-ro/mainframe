@@ -120,7 +120,16 @@ impl ChatManager {
             return Vec::new();
         };
         match session.load_history().await {
-            Ok(history) => remap_history(history, chat_id),
+            Ok(history) => match self
+                .shared
+                .merge_idle_history(chat_id, remap_history(history, chat_id))
+            {
+                Ok(history) => history,
+                Err(_) => {
+                    tracing::warn!(chat_id, "idle history provenance unavailable");
+                    Vec::new()
+                }
+            },
             Err(err) => {
                 tracing::warn!(error = ?err, chat_id, "getMessagesFromDisk failed");
                 Vec::new()
@@ -173,8 +182,8 @@ impl ChatManager {
         crate::degraded_recovery::recreate_chat_worktree(&self.shared, chat_id).await
     }
 
-    /// Build a stateless history-load session for `chat_id`, or `None` when the chat
-    /// has no Claude session / adapter / project. Mirrors `getMessages`'s guard chain.
+    /// Build a stateless history-load session using the chat's worktree,
+    /// scratch directory, or project path.
     fn history_session(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.get_chat(chat_id)?;
         build_history_session(&self.shared.deps, &chat, chat_id)

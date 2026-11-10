@@ -135,6 +135,18 @@ export const ItemMetaSchema = z
     errorText: z.string().optional(),
     skillLoaded: SkillLoadedMetaSchema.optional(),
     isCompacted: z.boolean().optional(),
+    compaction: z
+      .object({
+        origin: z.literal('idle'),
+        requestId: z.string(),
+        sessionGeneration: z.string(),
+        commandUuid: z.string().optional(),
+        vendorId: z.string().optional(),
+        beforeTokens: z.number().int().nonnegative().optional(),
+        afterTokens: z.number().int().nonnegative().optional(),
+      })
+      .optional(),
+    actionable: z.boolean().optional(),
     /** The divider a provider switch (or context reset) opens a segment with. */
     providerSwitch: ProviderSwitchMarkerSchema.optional().catch(undefined),
     messageMeta: z.record(z.string(), z.unknown()).optional(),

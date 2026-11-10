@@ -213,6 +213,7 @@ function UserMessageImpl() {
           {isQueued ? (
             (body || hasExtras) && (
               <QueuedUserTurn
+                delivery={meta.queueDelivery}
                 messageId={messageId}
                 content={cleanText}
                 extrasSlot={extras}

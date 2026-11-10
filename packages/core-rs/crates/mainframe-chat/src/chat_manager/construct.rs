@@ -77,6 +77,7 @@ impl ChatManager {
             permission_handler: collab.permission_handler,
             config: collab.config,
             idle_scanner: Mutex::new(idle_scanner),
+            compaction_scanner: Mutex::new(None),
             external_sessions: None,
             worktree_offers: collab.worktree_offers,
             self_ref,
@@ -116,6 +117,11 @@ impl ChatManager {
     pub fn attach_self(self: &Arc<Self>) {
         /* expected */
         let _ = self.self_ref.set(Arc::downgrade(self)); // First attachment wins.
+        if self.shared.manager.get().is_none() {
+            /* expected */
+            let _ = self.shared.manager.set(Arc::downgrade(self));
+        }
+        self.start_compaction_scanner();
     }
 
     /// `ctx.chats.getExternalSessionService()` — `None` when the manager was
@@ -160,6 +166,9 @@ impl ChatManager {
     /// Stop background timers. Idempotent.
     pub fn dispose(&self) {
         self.idle_scanner.lock_recover().stop();
+        if let Some(handle) = self.compaction_scanner.lock_recover().take() {
+            handle.abort();
+        }
     }
 
     /// Exposed for tests — runs one idle-eviction pass immediately. The scanner

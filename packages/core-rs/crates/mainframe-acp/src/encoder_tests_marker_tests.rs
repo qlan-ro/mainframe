@@ -10,6 +10,7 @@ use super::*;
 
 fn compaction() -> DisplayContent {
     DisplayContent::Node(DisplayNode::Compaction {
+        compaction: None,
         parent_tool_use_id: None,
     })
 }
@@ -172,4 +173,53 @@ fn text_then_tool_then_error_segments_and_carries_error_text_on_the_later_segmen
             },
         ]
     );
+}
+
+#[test]
+fn idle_compaction_is_a_separate_stable_non_actionable_item() {
+    let request = mainframe_types::compaction::NativeCompactionRequest {
+        id: "idle-compact:chat:run".into(),
+        session_generation: "session".into(),
+        origin: mainframe_types::compaction::CompactionOrigin::Idle,
+        command_uuid: "command".into(),
+    };
+    let mut metadata = request.metadata(Some("boundary"));
+    metadata.before_tokens = Some(22000);
+    metadata.after_tokens = Some(2000);
+    let messages = vec![dmsg(
+        "assistant",
+        DisplayMessageType::Assistant,
+        vec![
+            text("before"),
+            DisplayContent::Node(DisplayNode::Compaction {
+                compaction: Some(metadata),
+                parent_tool_use_id: None,
+            }),
+            text("after"),
+        ],
+    )];
+    let items = encode(&messages);
+    assert_eq!(items.len(), 3);
+    let EncodedItem::Message {
+        id,
+        meta: Some(meta),
+        ..
+    } = &items[1]
+    else {
+        panic!("idle message expected")
+    };
+    assert_eq!(id, "boundary");
+    let ns = &meta[MAINFRAME_META_NAMESPACE];
+    assert_eq!(ns["containerId"], "boundary");
+    assert_eq!(ns["actionable"], false);
+    assert_eq!(ns["compaction"]["origin"], "idle");
+    assert_eq!(ns["compaction"]["beforeTokens"], 22000);
+    let EncodedItem::Message {
+        meta: Some(meta), ..
+    } = &items[0]
+    else {
+        panic!("assistant expected")
+    };
+    assert!(meta[MAINFRAME_META_NAMESPACE].get("isCompacted").is_none());
+    assert_eq!(encode(&messages), items);
 }

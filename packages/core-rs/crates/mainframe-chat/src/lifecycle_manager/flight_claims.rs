@@ -11,6 +11,31 @@
 use super::*;
 
 impl ChatLifecycleManager {
+    pub(crate) fn try_claim_maintenance(&self, chat_id: &str) -> Option<MaintenanceClaim> {
+        let g = self.guards.lock_recover();
+        if g.restoring.contains_key(chat_id)
+            || g.loading.contains_key(chat_id)
+            || g.starting.contains_key(chat_id)
+            || g.interrupting.contains_key(chat_id)
+            || g.history.contains_key(chat_id)
+            || g.offloading.contains_key(chat_id)
+            || g.sending.get(chat_id).copied().unwrap_or(0) > 0
+        {
+            return None;
+        }
+        let claim = g.maintenance.claim(chat_id).ok()?;
+        self.shared
+            .maintenance
+            .reserved
+            .lock_recover()
+            .insert(chat_id.to_owned());
+        Some(MaintenanceClaim {
+            claim: Some(claim),
+            shared: self.shared.clone(),
+            chat_id: chat_id.to_owned(),
+        })
+    }
+
     /// Step 1 of the offload sequence (plan "Design"): claim the offload slot
     /// for `chat_id`, or refuse when the chat has any loading, starting,
     /// interrupting, history, or send activity, or an offload already claimed
@@ -18,7 +43,8 @@ impl ChatLifecycleManager {
     /// concurrent `begin_send`/`load_chat`/etc. can't slip in between them.
     pub(crate) fn try_claim_offload(&self, chat_id: &str) -> Option<FlightClaim> {
         let g = self.guards.lock_recover();
-        let busy = g.loading.contains_key(chat_id)
+        let busy = g.maintenance.contains_key(chat_id)
+            || g.loading.contains_key(chat_id)
             || g.starting.contains_key(chat_id)
             || g.interrupting.contains_key(chat_id)
             || g.history.contains_key(chat_id)
@@ -32,9 +58,17 @@ impl ChatLifecycleManager {
     /// Wait out an in-flight offload before reading registry/cache state
     /// (`load_chat`, `start_chat`, `get_messages`).
     pub(crate) async fn await_offload(&self, chat_id: &str) {
-        let n = self.guards.lock_recover().offloading.get(chat_id);
-        if let Some(n) = n {
-            n.wait().await;
+        loop {
+            let waiting = {
+                let g = self.guards.lock_recover();
+                g.offloading
+                    .get(chat_id)
+                    .or_else(|| g.maintenance.get(chat_id))
+            };
+            let Some(waiting) = waiting else {
+                return;
+            };
+            waiting.wait().await;
         }
     }
 
@@ -85,12 +119,25 @@ impl ChatLifecycleManager {
 
     /// The owner holds the claim through the disk read; followers recheck cache.
     pub(crate) async fn claim_history(&self, chat_id: &str) -> Option<FlightClaim> {
-        let claim = self.guards.lock_recover().history.claim(chat_id);
-        match claim {
-            Ok(claim) => Some(claim),
-            Err(waiter) => {
+        loop {
+            let (maintenance, claim) = {
+                let g = self.guards.lock_recover();
+                match g.maintenance.get(chat_id) {
+                    Some(waiter) => (Some(waiter), None),
+                    None => (None, Some(g.history.claim(chat_id))),
+                }
+            };
+            if let Some(waiter) = maintenance {
                 waiter.wait().await;
-                None
+                continue;
+            }
+            match claim {
+                Some(Ok(claim)) => return Some(claim),
+                Some(Err(waiter)) => {
+                    waiter.wait().await;
+                    return None;
+                }
+                None => continue,
             }
         }
     }
@@ -122,3 +169,26 @@ impl Drop for SendGuard {
 #[cfg(test)]
 #[path = "flight_claims_tests.rs"]
 mod tests;
+
+pub(crate) struct MaintenanceClaim {
+    claim: Option<FlightClaim>,
+    shared: Arc<ChatShared>,
+    chat_id: String,
+}
+
+impl Drop for MaintenanceClaim {
+    fn drop(&mut self) {
+        self.shared
+            .maintenance
+            .requests
+            .lock_recover()
+            .remove(&self.chat_id);
+        self.shared
+            .maintenance
+            .reserved
+            .lock_recover()
+            .remove(&self.chat_id);
+        self.claim.take();
+        self.shared.schedule_maintenance_drain(&self.chat_id);
+    }
+}

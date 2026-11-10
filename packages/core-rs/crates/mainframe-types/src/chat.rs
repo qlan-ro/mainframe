@@ -238,6 +238,8 @@ pub enum MessageContentNode {
         parent_tool_use_id: Option<String>,
     },
     Compaction {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        compaction: Option<crate::compaction::CompactionMetadata>,
         #[serde(skip_serializing_if = "Option::is_none")]
         parent_tool_use_id: Option<String>,
     },
@@ -252,6 +254,8 @@ pub enum MessageContentNode {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueuedMessageRef {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<String>,
     /// The display message ID (from `MessageCache`).
     pub message_id: String,
     pub chat_id: String,

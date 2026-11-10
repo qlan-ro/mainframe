@@ -2,9 +2,13 @@ use super::*;
 
 impl SessionSinkImpl {
     pub(super) fn handle_compact(&self, vendor_id: Option<&str>) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         let message = self.transient_with_id(
             ChatMessageType::System,
             vec![MessageContent::Node(MessageContentNode::Compaction {
+                compaction: None,
                 parent_tool_use_id: None,
             })],
             None,
@@ -19,6 +23,9 @@ impl SessionSinkImpl {
     }
 
     pub(super) fn handle_compact_start(&self) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         self.notify_surface(ChatSurfaceEvent::Compaction {
             chat_id: self.chat_id.clone(),
             phase: CompactionPhase::Started,
@@ -26,6 +33,9 @@ impl SessionSinkImpl {
     }
 
     pub(super) fn handle_context_usage(&self, usage: ContextUsage) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         // Persist the CLI's own totals so the meter survives reloads and
         // dormant-chat turns instead of regressing to a catalog-window guess
         // (#197). `chat.updated` is broadcast ungated (unlike chat.contextUsage,

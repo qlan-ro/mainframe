@@ -24,7 +24,7 @@ pub(super) fn dispatch(
                 .and_then(|m| m.as_str())
                 .unwrap_or("")
                 .to_string();
-            let _ = tx.send(Err(JsonRpcError(message)));
+            let _ = tx.send(Err(RpcFailure::Rejected(JsonRpcError(message))));
         }
         return;
     }

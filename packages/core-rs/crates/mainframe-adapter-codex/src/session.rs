@@ -200,6 +200,8 @@ mod presentation_exit_tests;
 
 #[path = "session_adapter.rs"]
 mod adapter;
+#[path = "session_compaction.rs"]
+mod compaction;
 #[path = "session_history.rs"]
 mod history;
 #[path = "session_lifecycle.rs"]

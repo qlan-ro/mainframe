@@ -130,6 +130,16 @@ impl SessionSink for PrDetectionSink {
         self.inner.on_error(error);
     }
 
+    fn on_compact_with_metadata(&self, metadata: mainframe_types::compaction::CompactionMetadata) {
+        self.inner.on_compact_with_metadata(metadata);
+    }
+    fn on_maintenance_result(
+        &self,
+        request: mainframe_types::compaction::NativeCompactionRequest,
+        result: mainframe_types::adapter::SessionResult,
+    ) {
+        self.inner.on_maintenance_result(request, result);
+    }
     fn on_compact(&self, vendor_id: Option<&str>) {
         self.inner.on_compact(vendor_id);
     }

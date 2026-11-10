@@ -32,6 +32,9 @@ use crate::task_events::ClaudeTaskEvents;
 use crate::tuning::tuning_to_flag_settings;
 
 pub struct ClaudeSession {
+    pub(crate) maintenance_ids: Mutex<std::collections::HashSet<String>>,
+    pub(crate) maintenance: mainframe_adapter_api::compaction_state::CompactionState,
+    pub(crate) cache_evidence: Mutex<crate::cache_classification::CacheEvidence>,
     span: tracing::Span,
     pub id: String,
     pub project_path: String,
@@ -70,6 +73,9 @@ impl ClaudeSession {
         let control = Arc::new(ControlRequestChannel::new(id.clone()));
         let chat_id = options.chat_id.clone().unwrap_or_default();
         ClaudeSession {
+            maintenance_ids: Default::default(),
+            maintenance: Default::default(),
+            cache_evidence: Default::default(),
             span: tracing::info_span!("adapter_session", adapter = "claude", session_id = %id, chat_id = ?options.mainframe_chat_id),
             id,
             project_path: options.project_path.clone(),
@@ -195,6 +201,8 @@ mod tests;
 
 #[path = "session_adapter.rs"]
 mod adapter;
+#[path = "session_compaction.rs"]
+mod compaction;
 #[path = "session_controls.rs"]
 mod controls;
 #[path = "session_lifecycle.rs"]

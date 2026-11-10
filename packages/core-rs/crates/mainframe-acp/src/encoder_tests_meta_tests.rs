@@ -21,6 +21,7 @@ fn a_system_message_carries_skill_and_compaction_markers_in_meta() {
                 parent_tool_use_id: None,
             }),
             DisplayContent::Node(DisplayNode::Compaction {
+                compaction: None,
                 parent_tool_use_id: None,
             }),
         ],

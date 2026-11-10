@@ -80,6 +80,10 @@ pub struct ItemMeta {
     /// True when the system container carries a compaction marker.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_compacted: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compaction: Option<crate::compaction::CompactionMetadata>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actionable: Option<bool>,
     /// The divider a provider switch (or context reset) opens a segment with.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_switch: Option<crate::segment::ProviderSwitchMarker>,

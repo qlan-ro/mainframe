@@ -207,6 +207,8 @@ function systemContainer(items: readonly ParsedItem[], base: { id: string; creat
   );
   const mf: MainframeMessageMeta = {
     ...(message?.meta.isCompacted && { isCompacted: true }),
+    ...(message?.meta.compaction && { compaction: message.meta.compaction, actionable: false }),
+    ...(message?.meta.actionable === false && { actionable: false }),
     ...(message?.meta.skillLoaded && { skillLoaded: message.meta.skillLoaded }),
     ...(message?.meta.providerSwitch && { providerSwitch: message.meta.providerSwitch }),
   };

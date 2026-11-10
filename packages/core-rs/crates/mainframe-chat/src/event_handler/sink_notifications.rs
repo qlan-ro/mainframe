@@ -2,6 +2,9 @@ use super::*;
 
 impl SessionSinkImpl {
     pub(super) fn handle_cli_message(&self, text: &str) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         let message = self.transient(
             ChatMessageType::System,
             vec![MessageContent::Leaf(LeafContent::Text {
@@ -47,6 +50,9 @@ impl SessionSinkImpl {
     }
 
     pub(super) fn handle_api_retry(&self, attempt: i64, reason: Option<String>) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         // The marker must be recorded before the clearing revision it
         // precedes: the hub attaches a pending marker to the
         // first eligible upsert on the NEXT revision, and the display
@@ -70,6 +76,9 @@ impl SessionSinkImpl {
         api_message_id: &str,
         content: Vec<MessageContent>,
     ) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         let stripped = self.clean_content(content);
         self.partial_overlays
             .insert(&self.chat_id, self.session_key(), api_message_id, stripped);
@@ -77,6 +86,9 @@ impl SessionSinkImpl {
     }
 
     pub(super) fn handle_attention_request(&self, message: &str) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         let Some(attention) = normalize_attention_body(message) else {
             return;
         };

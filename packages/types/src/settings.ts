@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { EffortLevel } from './adapter.js';
 
 export const EXECUTION_MODES = ['default', 'acceptEdits', 'auto', 'yolo'] as const;
@@ -57,6 +58,7 @@ export const UPDATE_CHANNELS = ['stable', 'prerelease'] as const;
 export type UpdateChannel = (typeof UPDATE_CHANNELS)[number];
 
 export interface GeneralConfig {
+  idleCompaction: { enabled: boolean };
   worktreeDir: string;
   notifications: NotificationConfig;
   updateChannel: UpdateChannel;
@@ -71,8 +73,53 @@ export const NOTIFICATION_DEFAULTS: NotificationConfig = {
 };
 
 export const GENERAL_DEFAULTS: GeneralConfig = {
+  idleCompaction: { enabled: false },
   worktreeDir: '.worktrees',
   notifications: NOTIFICATION_DEFAULTS,
   updateChannel: 'stable',
   defaultAdapterId: null,
 };
+
+const notificationPatchSchema = z.object({
+  chat: z
+    .object({
+      taskComplete: z.boolean().optional(),
+      sessionError: z.boolean().optional(),
+      attentionRequest: z.boolean().optional(),
+    })
+    .optional(),
+  permission: z
+    .object({
+      toolRequest: z.boolean().optional(),
+      userQuestion: z.boolean().optional(),
+      planApproval: z.boolean().optional(),
+    })
+    .optional(),
+  other: z.object({ plugin: z.boolean().optional() }).optional(),
+});
+export const IdleCompactionConfigSchema = z.object({ enabled: z.boolean() });
+export const GeneralConfigSchema = z
+  .object({
+    worktreeDir: z.string(),
+    notifications: z.object({
+      chat: z.object({ taskComplete: z.boolean(), sessionError: z.boolean(), attentionRequest: z.boolean() }),
+      permission: z.object({ toolRequest: z.boolean(), userQuestion: z.boolean(), planApproval: z.boolean() }),
+      other: z.object({ plugin: z.boolean() }),
+    }),
+    updateChannel: z.enum(UPDATE_CHANNELS),
+    defaultAdapterId: z.string().nullable(),
+    idleCompaction: IdleCompactionConfigSchema.default({ enabled: false }),
+  })
+  .passthrough();
+export const GeneralConfigPatchSchema = z.object({
+  worktreeDir: z
+    .string()
+    .min(1)
+    .regex(/^[a-zA-Z0-9._-]+$/)
+    .optional(),
+  notifications: notificationPatchSchema.optional(),
+  updateChannel: z.enum(UPDATE_CHANNELS).optional(),
+  defaultAdapterId: z.string().nullable().optional(),
+  idleCompaction: IdleCompactionConfigSchema.optional(),
+});
+export type GeneralConfigPatch = z.infer<typeof GeneralConfigPatchSchema>;

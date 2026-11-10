@@ -13,7 +13,7 @@
  * own shape, not ours.)
  */
 import { useAuiState } from '@assistant-ui/react';
-import type { PromptRemedy, ProviderSwitchMarker } from '@qlan-ro/mainframe-types';
+import type { CompactionMetadata, PromptRemedy, ProviderSwitchMarker } from '@qlan-ro/mainframe-types';
 import type { PartSources } from './transcript-presentation';
 import type { CaptureRow } from './parse-captures';
 import type { ReviewComment } from './parse-review-comment';
@@ -29,6 +29,7 @@ export interface MainframeMessageMeta {
   readonly errorText?: string;
   // user turn
   readonly queued?: boolean;
+  readonly queueDelivery?: string;
   readonly cleanText?: string;
   readonly command?: {
     readonly name: string;
@@ -59,6 +60,8 @@ export interface MainframeMessageMeta {
   readonly attachmentsRestored?: boolean;
   // system turn
   readonly isCompacted?: boolean;
+  readonly compaction?: CompactionMetadata;
+  readonly actionable?: boolean;
   /** The divider a provider switch (or a fresh session) opens a segment with. */
   readonly providerSwitch?: ProviderSwitchMarker;
   readonly skillLoaded?: { readonly skillName: string; readonly path: string; readonly content: string };

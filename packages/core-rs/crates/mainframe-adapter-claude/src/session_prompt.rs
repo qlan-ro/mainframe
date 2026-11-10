@@ -29,17 +29,43 @@ impl ClaudeSession {
         if !self.is_spawned() {
             return Err(AdapterError::NotSpawned(self.id.clone()));
         }
+        self.write_command(&command, &args, None, false)
+    }
+    pub(super) fn write_command(
+        &self,
+        command: &str,
+        args: &str,
+        uuid: Option<&str>,
+        maintenance: bool,
+    ) -> Result<(), AdapterError> {
         let chat_id = self.state().chat_id.clone();
-        let text = format!(
-            "<command-name>/{command}</command-name>\n<command-message>{command}</command-message>\n<command-args>{args}</command-args>"
-        );
-        let payload = json!({
+        let text = if maintenance {
+            format!("/{command} {args}").trim_end().to_owned()
+        } else {
+            format!(
+                "<command-name>/{command}</command-name>\n<command-message>{command}</command-message>\n<command-args>{args}</command-args>"
+            )
+        };
+        let mut payload = json!({
             "type": "user",
             "session_id": chat_id,
             "message": { "role": "user", "content": [{ "type": "text", "text": text }] },
             "parent_tool_use_id": null,
         });
-        self.write_stdin(payload.to_string())
+        if let Some(uuid) = uuid {
+            payload["uuid"] = json!(uuid);
+        }
+        if maintenance {
+            let tx = self
+                .available_stdin()
+                .ok_or_else(|| AdapterError::NotSpawned(self.id.clone()))?;
+            let mut bytes = payload.to_string().into_bytes();
+            bytes.push(b'\n');
+            tx.try_write(bytes)
+                .map_err(|_| AdapterError::Message("native compaction stdin unavailable".into()))
+        } else {
+            self.write_stdin(payload.to_string())
+        }
     }
     pub async fn send_message(
         &self,

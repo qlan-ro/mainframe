@@ -69,6 +69,7 @@ async fn queue_changes_notify_attached_connections_with_the_full_snapshot() {
     hub.on_chat_surface_event(ChatSurfaceEvent::QueueChanged {
         chat_id: "chat-1".to_string(),
         refs: vec![mainframe_types::chat::QueuedMessageRef {
+            delivery: None,
             message_id: "m1".to_string(),
             chat_id: "chat-1".to_string(),
             uuid: "u1".to_string(),

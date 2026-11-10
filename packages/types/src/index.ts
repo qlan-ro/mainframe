@@ -65,3 +65,5 @@ export type {
 export * from './tool-call-timing.js';
 export * from './transcript-presentation.js';
 export * from './orchestration.js';
+
+export * from './compaction.js';

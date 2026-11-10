@@ -175,6 +175,8 @@ fn emit_parent_turn_result(
         context_tokens: state.last_usage.as_ref().map(|lu| lu.input_tokens),
         subtype: if is_error {
             Some("error_during_execution".to_string())
+        } else if turn.status == "completed" {
+            Some("success".to_owned())
         } else {
             None
         },

@@ -93,13 +93,7 @@ pub(crate) async fn compose_if_multi(
     Some(crate::segments::compose::compose(deps, &chat, &layout).await)
 }
 
-/// Build a stateless history-load session for `chat` (shared by the facade's
-/// `get_messages`/`get_messages_from_disk` and the permission handler's history
-/// restore). `None` when the chat has no Claude session / pending fork / adapter
-/// / project — an unsent fork has no `vendor_session_id` yet, so it resumes from
-/// `chats.pending_fork`'s `fork_source` instead; this is the path a freshly
-/// forked chat's pre-first-message history takes (still in `active_chats`, so
-/// `load_chat` never runs `do_load_chat` for it).
+// Unsent forks use their persisted source because they have no provider session yet.
 pub(crate) fn build_history_session(
     deps: &Arc<dyn ChatManagerDeps>,
     chat: &Chat,
@@ -121,8 +115,11 @@ pub(crate) fn build_history_session(
     if own_id.is_none() && fork_source.is_none() {
         return None;
     }
-    let project_path = deps.projects_get_path(&chat.project_id)?;
-    let cwd = chat.worktree_path.clone().unwrap_or(project_path);
+    let cwd = crate::chat_cwd::chat_cwd(
+        chat.worktree_path.as_deref(),
+        chat.scratch_path.as_deref(),
+        deps.projects_get_path(&chat.project_id),
+    )?;
     deps.create_session(
         &chat.adapter_id,
         SessionOptions {
@@ -148,3 +145,7 @@ pub(crate) fn remap_history(history: Vec<ChatMessage>, chat_id: &str) -> Vec<Cha
 }
 
 pub(super) use mainframe_types::time::now_ms;
+
+#[cfg(test)]
+#[path = "shared_history_tests.rs"]
+mod history_tests;

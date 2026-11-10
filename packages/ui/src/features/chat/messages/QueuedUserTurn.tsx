@@ -16,7 +16,7 @@
  *   position>1           → "Queued · {ordinal(position)} in line"
  */
 import { useCallback, type ReactNode } from 'react';
-import { PencilIcon, XIcon } from 'lucide-react';
+import { PencilIcon, XIcon, RotateCcwIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import { Button } from '@/components/ui/button';
@@ -85,6 +85,7 @@ function QueuedMeta({ position = 1, total = 1 }: { position?: number; total?: nu
 
 export function QueuedUserTurn({
   messageId,
+  delivery,
   content,
   children,
   extrasSlot,
@@ -92,6 +93,7 @@ export function QueuedUserTurn({
   total,
 }: {
   messageId: string;
+  delivery?: string;
   content: string;
   children: ReactNode;
   /** Attachments / capture context rows — rendered with the bubble, above the
@@ -112,6 +114,12 @@ export function QueuedUserTurn({
     });
   }, [extras, messageId]);
 
+  const handleRetry = useCallback(() => {
+    extras?.editQueued(messageId, content).catch(() => {
+      console.warn('Queued retry failed', { messageId });
+    });
+  }, [extras, messageId, content]);
+
   const handleEdit = useCallback(() => startEdit({ messageId, content }), [startEdit, messageId, content]);
 
   return (
@@ -131,7 +139,13 @@ export function QueuedUserTurn({
         >
           {/* Edit loads the content into the composer; for capture-only messages
               it opens the composer so the user can add text while keeping the capture. */}
-          <QueuedAction icon={PencilIcon} label="Edit" onClick={handleEdit} testid="chat-queued-edit" />
+          {delivery === 'rejected' ? (
+            <QueuedAction icon={RotateCcwIcon} label="Retry" onClick={handleRetry} testid="chat-queued-retry" />
+          ) : (
+            delivery !== 'unconfirmed' && (
+              <QueuedAction icon={PencilIcon} label="Edit" onClick={handleEdit} testid="chat-queued-edit" />
+            )
+          )}
           <QueuedAction icon={XIcon} label="Cancel" onClick={handleCancel} danger testid="chat-queued-cancel" />
         </div>
         {/* Skip the dashed bubble entirely for an attachment/image/capture-only
@@ -148,7 +162,18 @@ export function QueuedUserTurn({
         )}
       </div>
       {extrasSlot && <div className="flex flex-col items-end gap-2 opacity-90">{extrasSlot}</div>}
-      <QueuedMeta position={position} total={total} />
+      {delivery === 'rejected' ? (
+        <span className="text-xs text-muted-foreground">
+          Delivery rejected. Queue paused. Retry or cancel to continue.
+        </span>
+      ) : delivery === 'unconfirmed' ? (
+        <span className="text-xs text-muted-foreground">
+          Delivery uncertain. Queue paused. Check provider history before dismissing. Cancel removes this local entry
+          only.
+        </span>
+      ) : (
+        <QueuedMeta position={position} total={total} />
+      )}
     </div>
   );
 }

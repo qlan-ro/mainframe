@@ -9,6 +9,132 @@ use mainframe_types::{
 };
 
 impl ChatStore for DaemonChatDeps {
+    fn idle_markers(&self, chat_id: &str) -> Result<Vec<ChatMessage>, SeamError> {
+        let chat_id = chat_id.to_owned();
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction::markers(d.connection(), &chat_id)
+            })
+            .map_err(SeamError::new)
+    }
+
+    fn idle_commands(
+        &self,
+        chat_id: &str,
+    ) -> Result<Vec<mainframe_types::compaction::NativeCompactionRequest>, SeamError> {
+        let chat_id = chat_id.to_owned();
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction::commands(d.connection(), &chat_id)
+            })
+            .map_err(SeamError::new)
+    }
+
+    fn idle_queue_put(
+        &self,
+        chat_id: &str,
+        input: &mainframe_db::idle_compaction_queue::QueuedInput,
+    ) -> Result<(), SeamError> {
+        let (chat_id, input) = (chat_id.to_owned(), input.clone());
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction_queue::put(d.connection(), &chat_id, &input)
+            })
+            .map_err(SeamError::new)
+    }
+    fn idle_queue_list(
+        &self,
+        chat_id: &str,
+    ) -> Result<Vec<mainframe_db::idle_compaction_queue::QueuedInput>, SeamError> {
+        let chat_id = chat_id.to_owned();
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction_queue::list(d.connection(), &chat_id)
+            })
+            .map_err(SeamError::new)
+    }
+    fn idle_queue_remove(&self, chat_id: &str, uuid: &str) -> Result<bool, SeamError> {
+        let (chat_id, uuid) = (chat_id.to_owned(), uuid.to_owned());
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction_queue::remove(d.connection(), &chat_id, &uuid)
+            })
+            .map_err(SeamError::new)
+    }
+
+    fn idle_run_begin(&self, chat_id: &str, generation: &str) -> Result<(), SeamError> {
+        let (chat_id, generation) = (chat_id.to_owned(), generation.to_owned());
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction::begin(d.connection(), &chat_id, &generation)
+            })
+            .map_err(SeamError::new)
+    }
+    fn idle_run_complete(
+        &self,
+        chat_id: &str,
+        generation: &str,
+        at: Option<i64>,
+    ) -> Result<(), SeamError> {
+        let (chat_id, generation) = (chat_id.to_owned(), generation.to_owned());
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction::complete(d.connection(), &chat_id, &generation, at)
+            })
+            .map_err(SeamError::new)
+    }
+    fn idle_run_get(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<mainframe_db::idle_compaction::RealRun>, SeamError> {
+        let chat_id = chat_id.to_owned();
+        self.db
+            .call_blocking(move |d| mainframe_db::idle_compaction::get(d.connection(), &chat_id))
+            .map_err(SeamError::new)
+    }
+    fn idle_run_claim(
+        &self,
+        chat_id: &str,
+        generation: &str,
+        request: &mainframe_types::compaction::NativeCompactionRequest,
+    ) -> Result<bool, SeamError> {
+        let (chat_id, generation, request) =
+            (chat_id.to_owned(), generation.to_owned(), request.clone());
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction::claim(
+                    d.connection(),
+                    &chat_id,
+                    &generation,
+                    &request,
+                )
+            })
+            .map_err(SeamError::new)
+    }
+    fn idle_record(
+        &self,
+        chat_id: &str,
+        metadata: &mainframe_types::compaction::CompactionMetadata,
+    ) -> Result<bool, SeamError> {
+        let (chat_id, metadata) = (chat_id.to_owned(), metadata.clone());
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction::record(d.connection(), &chat_id, &metadata)
+            })
+            .map_err(SeamError::new)
+    }
+    fn idle_provenance(
+        &self,
+        chat_id: &str,
+    ) -> Result<Vec<mainframe_types::compaction::CompactionMetadata>, SeamError> {
+        let chat_id = chat_id.to_owned();
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction::provenance(d.connection(), &chat_id)
+            })
+            .map_err(SeamError::new)
+    }
+
     fn chats_create(&self, new_chat: &NewChat) -> Result<Chat, SeamError> {
         self.db.chats_create(&NewChat {
             scratch_root: Some(self.data_dir.join("scratch").to_string_lossy().into_owned()),

@@ -227,13 +227,14 @@ export type MessageContent =
     }
   | { type: 'permission_request'; request: ControlRequest; parentToolUseId?: string }
   | { type: 'error'; message: string; parentToolUseId?: string }
-  | { type: 'compaction'; parentToolUseId?: string }
+  | { type: 'compaction'; parentToolUseId?: string; compaction?: import('./compaction.js').CompactionMetadata }
   | { type: 'provider_switch'; marker: ProviderSwitchMarker };
 
 export type ToolResultMessageContent = Extract<MessageContent, { type: 'tool_result' }>;
 
 /** Tracks a message that was sent to stdin while the CLI was busy. */
 export interface QueuedMessageRef {
+  delivery?: string;
   /** The display message ID (from MessageCache) */
   messageId: string;
   chatId: string;

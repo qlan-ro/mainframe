@@ -19,7 +19,7 @@ impl ChatManager {
     /// stamped, so restore the state the chat had before the send. Drop the
     /// stored message too: the caller's error is what the client shows, as a
     /// failed optimistic send it can retry, and a stored copy would duplicate it.
-    pub(super) fn roll_back_refused_turn(
+    pub(in crate::chat_manager) fn roll_back_refused_turn(
         &self,
         post: &Arc<Mutex<ActiveChat>>,
         chat_id: &str,
@@ -94,7 +94,7 @@ impl ChatManager {
         Ok(())
     }
 
-    pub(super) fn record_message_context(
+    pub(in crate::chat_manager) fn record_message_context(
         &self,
         post: &Arc<Mutex<ActiveChat>>,
         chat_id: &str,

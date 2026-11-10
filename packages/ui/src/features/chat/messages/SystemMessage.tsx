@@ -1,28 +1,14 @@
 'use client';
 
-/**
- * SystemMessage — centered marker for system-level chat events.
- *
- * Priority (highest wins):
- *   1. providerSwitch → ProviderSwitchMarker (the segment divider; its text
- *      part is the fallback label older clients show, so it is not rendered)
- *   2. isCompacted  → CompactionMarker ("Context compacted")
- *   3. skillLoaded  → the rich SkillLoadedCard ("Using skill: X", expandable)
- *   4. plain text   → quiet marker (AlertTriangle for CLI errors, else Zap)
- *
- * All three are the v2 `Marker variant="separator"` recipe: a centered label
- * between two hairlines. Metadata via the one `useMainframeMeta()` contract.
- * The `*-pill` testids predate the recipe and are kept — e2e keys off them.
- */
 import { AlertTriangleIcon, LayersIcon, ZapIcon } from 'lucide-react';
-import { MessagePrimitive } from '@assistant-ui/react';
+import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { SkillLoadedCard } from '../tools/cards/SkillLoadedCard';
+import { IdleCompactionMarker } from './IdleCompactionMarker';
 import { ProviderSwitchMarker } from './ProviderSwitchMarker';
 
-/** "Context compacted" centered marker. */
 export function CompactionPill() {
   return (
     <Marker variant="separator" data-testid="chat-compaction-pill" className="my-2 select-none">
@@ -34,8 +20,6 @@ export function CompactionPill() {
   );
 }
 
-/** Transient "Compacting…" marker — shown at the transcript tail while a
- *  compaction runs, replaced by CompactionPill when it completes. */
 const CLI_ERROR_RE = /^Unknown (?:command|skill):/i;
 
 function SystemTextMarker({ text }: { text: string }) {
@@ -52,12 +36,14 @@ function SystemTextMarker({ text }: { text: string }) {
 }
 
 export function SystemMessage() {
-  const { isCompacted, skillLoaded, providerSwitch } = useMainframeMeta();
+  const messageId = useAuiState((s) => s.message.id);
+  const { isCompacted, compaction, skillLoaded, providerSwitch } = useMainframeMeta();
 
   let body = (
     <MessagePrimitive.Parts components={{ Text: ({ text }) => (text ? <SystemTextMarker text={text} /> : null) }} />
   );
   if (providerSwitch) body = <ProviderSwitchMarker marker={providerSwitch} />;
+  else if (compaction?.origin === 'idle') body = <IdleCompactionMarker messageId={messageId} compaction={compaction} />;
   else if (isCompacted) body = <CompactionPill />;
   else if (skillLoaded) {
     body = <SkillLoadedCard skillName={skillLoaded.skillName} path={skillLoaded.path} content={skillLoaded.content} />;

@@ -237,3 +237,5 @@ mod presentation;
 mod presentation_tests;
 
 mod sink_result_notifications;
+
+mod idle_maintenance;

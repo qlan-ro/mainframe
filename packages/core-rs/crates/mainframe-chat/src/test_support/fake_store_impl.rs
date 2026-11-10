@@ -1,6 +1,7 @@
 use super::*;
 
 impl ChatStore for FakeDeps {
+    crate::test_support::fake_idle_store::idle_store_methods!();
     fn get_imported_session_ids(&self, project: &str) -> Result<Vec<String>, SeamError> {
         Ok(self
             .chats_list(project)?
