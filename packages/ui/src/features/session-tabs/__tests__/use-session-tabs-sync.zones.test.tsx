@@ -94,11 +94,10 @@ describe('writing the open split', () => {
 
     renderHook(() => useSessionTabsSync());
 
-    // `ids` gains chat-b too: zones ⊆ pinned tabs, so the membership effect
-    // pinned the tab-less zone member — both persist remote-keyed.
+    // The zone persists remote-keyed, but being held by the pair writes no pin.
     expect(readPersisted()).toEqual({
       v: 3,
-      ids: ['chat-a', 'chat-b'],
+      ids: ['chat-a'],
       preview: null,
       zones: ['chat-a', 'chat-b'],
       zonesFrac: 0.5,
@@ -139,7 +138,7 @@ describe('writing the open split', () => {
 });
 
 describe('a preview tab entering the split', () => {
-  it('is promoted to pinned — a split member is never temporary', () => {
+  it('stays unpinned — membership holds a tab open, only a gesture pins it', () => {
     settledList([SESSION_A, SESSION_B]);
     mainThreadIdValue = 'chat-a';
     useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: 'chat-b', hydrated: true });
@@ -150,8 +149,68 @@ describe('a preview tab entering the split', () => {
     });
     rerender();
 
+    expect(useSessionTabsStore.getState().previewId).toBe('chat-b');
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a']);
+  });
+
+  it('a fork from a preview parent pins neither tab', () => {
+    settledList([SESSION_A, SESSION_B]);
+    mainThreadIdValue = 'chat-a';
+    const { rerender } = renderHook(() => useSessionTabsSync());
+    act(() => {
+      useZonesStore.getState().openSplit('chat-a', 'chat-b');
+    });
+    mainThreadIdValue = 'chat-b';
+    rerender();
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual([]);
+  });
+
+  it('activating a parked member neither pins it nor replaces the preview', () => {
+    settledList([SESSION_A, SESSION_B, { id: 'chat-c', status: 'regular', custom: {}, title: 'Third' }]);
+    mainThreadIdValue = 'chat-c';
+    useSessionTabsStore.setState({ tabIds: [], previewId: 'chat-c', hydrated: true });
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
+    const { rerender } = renderHook(() => useSessionTabsSync());
+
+    mainThreadIdValue = 'chat-a';
+    rerender();
+
+    expect(useSessionTabsStore.getState().previewId).toBe('chat-c');
+    expect(useSessionTabsStore.getState().tabIds).toEqual([]);
+  });
+
+  it('dissolving leaves the active member as the preview and drops the other', () => {
+    settledList([SESSION_A, SESSION_B]);
+    mainThreadIdValue = 'chat-b';
+    useSessionTabsStore.setState({ tabIds: [], previewId: null, hydrated: true });
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 1 });
+    const { rerender } = renderHook(() => useSessionTabsSync());
     expect(useSessionTabsStore.getState().previewId).toBeNull();
-    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-b']);
+
+    act(() => {
+      useZonesStore.getState().closeSplit();
+    });
+    rerender();
+
+    const s = useSessionTabsStore.getState();
+    expect(s.tabIds).toEqual([]);
+    expect(s.previewId).toBe('chat-b');
+  });
+
+  it('an explicit pin survives the dissolve', () => {
+    settledList([SESSION_A, SESSION_B]);
+    mainThreadIdValue = 'chat-b';
+    useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: null, hydrated: true });
+    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 1 });
+    const { rerender } = renderHook(() => useSessionTabsSync());
+
+    act(() => {
+      useZonesStore.getState().closeSplit();
+    });
+    rerender();
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a']);
   });
 
   it('stays a preview when it is not a zone member', () => {
@@ -241,6 +300,20 @@ describe('restoring the split across a boot', () => {
     expect(switchToThread).not.toHaveBeenCalled();
     expect(zones()).toBeNull();
     expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-b']);
+  });
+
+  it('a restored pair adds no members to the persisted ids', () => {
+    localStorage.setItem(
+      SESSION_TABS_STORAGE_KEY,
+      JSON.stringify({ v: 3, ids: [], preview: null, zones: ['chat-a', 'chat-b'] }),
+    );
+    settledList([SESSION_A, SESSION_B]);
+    mainThreadIdValue = 'chat-a';
+
+    renderHook(() => useSessionTabsSync());
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual([]);
+    expect(readPersisted()).toMatchObject({ ids: [], zones: ['chat-a', 'chat-b'] });
   });
 
   it('maps a persisted pair onto this boot runtime ids', () => {

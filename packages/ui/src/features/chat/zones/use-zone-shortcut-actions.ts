@@ -12,7 +12,7 @@
 import type { AssistantClient } from '@assistant-ui/react';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { useSessionTabsStore } from '@/features/session-tabs/store';
-import { canonicalTabId, displayedTabIds, nextSplitPartner } from '@/features/session-tabs/tabs-model';
+import { canonicalTabId, displayedTabIds, heldTabIds, nextSplitPartner } from '@/features/session-tabs/tabs-model';
 import { openInSplit } from './open-in-split';
 import { isSubagentParentActive, splitVisible, useZonesStore } from './zones-store';
 
@@ -38,7 +38,9 @@ export function useZoneShortcutActions(aui: AssistantClient): void {
     // lookup would find no partner where the menu offers one.
     const activeId = canonicalTabId(mainThreadId, threadItems);
     const { zones } = useZonesStore.getState();
-    const displayed = displayedTabIds(useSessionTabsStore.getState(), zones, activeId);
+    const tabs = useSessionTabsStore.getState();
+    const heldIds = heldTabIds(tabs, zones, threadItems);
+    const displayed = displayedTabIds({ ...tabs, heldIds }, zones, activeId);
     const partner = nextSplitPartner(displayed, activeId, zones);
     if (partner == null) return;
     openInSplit(activeId, partner);
