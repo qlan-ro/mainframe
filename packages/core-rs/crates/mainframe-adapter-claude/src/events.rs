@@ -17,10 +17,15 @@ use crate::user_event::handle_user_event;
 pub fn handle_stdout(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
     let lines: Vec<String> = {
         let mut st = session.state.lock_recover();
-        st.buffer.push_str(&String::from_utf8_lossy(chunk));
-        let mut parts: Vec<String> = st.buffer.split('\n').map(str::to_string).collect();
-        st.buffer = parts.pop().unwrap_or_default();
-        parts
+        st.buffer.extend_from_slice(chunk);
+        let mut parts = st.buffer.split(|byte| *byte == b'\n').collect::<Vec<_>>();
+        let pending = parts.pop().unwrap_or_default().to_vec();
+        let lines = parts
+            .into_iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .collect();
+        st.buffer = pending;
+        lines
     };
 
     for line in lines {

@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 pub(super) struct Rec {
     pub(super) init: Vec<String>,
     pub(super) messages: usize,
+    pub(super) message_content: Vec<Vec<MessageContent>>,
     pub(super) last_message_metadata: Option<MessageMetadata>,
     pub(super) tool_results: usize,
     pub(super) last_tool_result_vendor_id: Option<String>,
@@ -52,9 +53,10 @@ impl SessionSink for RecordingSink {
     fn on_init(&self, session_id: &str) {
         self.r().init.push(session_id.to_string());
     }
-    fn on_message(&self, _content: Vec<MessageContent>, metadata: Option<MessageMetadata>) {
+    fn on_message(&self, content: Vec<MessageContent>, metadata: Option<MessageMetadata>) {
         let mut r = self.r();
         r.messages += 1;
+        r.message_content.push(content);
         r.last_message_metadata = metadata;
     }
     fn on_tool_result(&self, _content: Vec<MessageContent>, vendor_id: Option<String>) {
@@ -180,3 +182,6 @@ mod artifacts;
 mod skills;
 #[path = "events_tests_subagents.rs"]
 mod subagents;
+
+#[path = "events_tests_stdout.rs"]
+mod stdout;

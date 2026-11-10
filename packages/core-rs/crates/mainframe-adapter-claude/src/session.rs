@@ -90,7 +90,7 @@ impl ClaudeSession {
                 chat_id,
                 mainframe_chat_id: options.mainframe_chat_id,
                 real_project_path: options.project_path,
-                buffer: String::new(),
+                buffer: Vec::new(),
                 last_assistant_usage: None,
                 child: None,
                 active_tasks: HashMap::new(),
