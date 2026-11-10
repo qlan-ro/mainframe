@@ -8,6 +8,7 @@
 import type { ComponentPropsWithoutRef } from 'react';
 import { SquareDashedBottom } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FadeLabel } from '@/components/ui/fade-label';
 
 interface NoProjectLabelProps extends ComponentPropsWithoutRef<'span'> {
   /** Glyph size in px (default 14). */
@@ -18,7 +19,7 @@ export function NoProjectLabel({ size = 14, className, ...props }: NoProjectLabe
   return (
     <span className={cn('inline-flex min-w-0 items-center gap-1.5 italic text-muted-foreground', className)} {...props}>
       <SquareDashedBottom size={size} className="shrink-0" aria-hidden />
-      <span className="truncate">No project</span>
+      <FadeLabel className="flex-1">No project</FadeLabel>
     </span>
   );
 }

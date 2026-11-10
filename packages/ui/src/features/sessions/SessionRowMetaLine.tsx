@@ -138,9 +138,9 @@ export function SessionRowMetaLine({
   return (
     <span data-testid="sessions-row-meta" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
       {waiting ? (
-        <span data-testid="sessions-row-your-turn" className="min-w-0 flex-1 truncate font-medium text-warning">
+        <FadeLabel data-testid="sessions-row-your-turn" className="flex-1 font-medium text-warning">
           your turn
-        </span>
+        </FadeLabel>
       ) : noProject ? (
         <NoProjectLabel data-testid="sessions-row-no-project" className="flex-1" />
       ) : (
