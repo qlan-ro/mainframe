@@ -43,6 +43,11 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => mockActiveIdentity,
 }));
+vi.mock('@/features/sessions/use-active-draft-config', () => ({ useActiveDraftConfig: () => undefined }));
+vi.mock('@assistant-ui/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@assistant-ui/react')>()),
+  useAui: () => ({ threadListItem: () => ({ initialize: vi.fn() }) }),
+}));
 
 const mockSendMessage = vi.fn().mockResolvedValue(undefined);
 const mockGetOrCreate = vi.fn().mockReturnValue({ sendMessage: mockSendMessage });

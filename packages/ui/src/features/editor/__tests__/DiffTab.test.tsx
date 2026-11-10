@@ -27,6 +27,11 @@ const activeIdentity = {
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => activeIdentity,
 }));
+vi.mock('@/features/sessions/use-active-draft-config', () => ({ useActiveDraftConfig: () => undefined }));
+vi.mock('@assistant-ui/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@assistant-ui/react')>()),
+  useAui: () => ({ threadListItem: () => ({ initialize: vi.fn() }) }),
+}));
 
 // ── Mock getWorkingDiff ───────────────────────────────────────────────────────
 vi.mock('@/lib/api/git', () => ({
