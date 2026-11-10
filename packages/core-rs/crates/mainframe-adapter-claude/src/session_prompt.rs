@@ -39,9 +39,13 @@ impl ClaudeSession {
         maintenance: bool,
     ) -> Result<(), AdapterError> {
         let chat_id = self.state().chat_id.clone();
-        let text = format!(
-            "<command-name>/{command}</command-name>\n<command-message>{command}</command-message>\n<command-args>{args}</command-args>"
-        );
+        let text = if maintenance {
+            format!("/{command} {args}").trim_end().to_owned()
+        } else {
+            format!(
+                "<command-name>/{command}</command-name>\n<command-message>{command}</command-message>\n<command-args>{args}</command-args>"
+            )
+        };
         let mut payload = json!({
             "type": "user",
             "session_id": chat_id,

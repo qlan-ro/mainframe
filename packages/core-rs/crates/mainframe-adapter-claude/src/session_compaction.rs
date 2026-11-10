@@ -109,7 +109,7 @@ mod tests {
         tokio::select! { result=&mut future => panic!("premature result {result:?}"), bytes=stdin.recv() => {
             let payload:Value=serde_json::from_slice(&bytes.unwrap()).unwrap();
             assert_eq!(payload["uuid"], req.command_uuid);
-            assert!(payload["message"]["content"][0]["text"].as_str().unwrap().contains("<command-name>/compact</command-name>"));
+            assert_eq!(payload["message"]["content"][0]["text"], "/compact");
         }}
         emit(
             &session,
@@ -136,6 +136,18 @@ mod tests {
         assert_eq!(sink.maintenance_results.lock().unwrap().len(), 1);
         assert!(session.maintenance.ready());
         assert_eq!(session.last_activity_at(), before);
+    }
+    #[tokio::test]
+    async fn qa408_ordinary_turn_without_boundary_is_not_compaction() {
+        let session = session();
+        let sink = RecordingSink::default();
+        let receiver = session.maintenance.begin(request(&session)).unwrap();
+        for line in include_str!("__fixtures__/qa408-non-compaction.jsonl").lines() {
+            emit(&session, serde_json::from_str(line).unwrap(), &sink);
+        }
+        assert!(session.maintenance.wait(receiver, 10).await.is_err());
+        assert!(sink.compactions.lock().unwrap().is_empty());
+        assert!(session.maintenance.ready());
     }
     #[tokio::test]
     async fn real_stdin_activity_is_retained_during_maintenance() {

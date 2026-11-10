@@ -103,7 +103,8 @@ Do not infer origin from `/compact` text or timestamps.
    counts, cache classification and provider readiness. Forward added sink
    metadata through wrappers, recording/null sinks and mock compatibility.
 2. Implement Claude internal `/compact` through the existing command writer,
-   preserving command UUID provenance. Scope stdin, stdout and event activity
+   encoding maintenance input as literal slash-command text and preserving
+   command UUID provenance. Scope stdin, stdout and event activity
    suppression to that maintenance request. Classify init/account/routing and
    nested usage evidence per spec, retain classification on missing/zero usage,
    prefer decisive usage, and reset on replacement or routing/account change.
@@ -241,3 +242,24 @@ SHA and PASS/FAIL/BLOCKED per scenario. Do not run Playwright/Tauri e2e suites.
 Never touch production app, 31415 or `~/.mainframe`; stop only owned processes.
 Stop below 15 GB free disk or critical memory pressure; at most one owned Cargo
 build. QA belongs to the lane after implementation, not this authoring task.
+
+## QA correction, 2026-11-10
+
+The one permitted Claude attempt submitted XML command markup as user text.
+The native transcript recorded an ordinary assistant turn without a compact
+boundary, and the daemon rejected completion before the five-second timeout.
+Idle maintenance now sends literal `/compact` text with the same command UUID.
+The existing boundary-plus-successful-result gate and timeout remain unchanged.
+This corrects command encoding without changing the approved completion policy.
+
+The `qa408-non-compaction.jsonl` adapter fixture preserves the observed event
+kinds and command text with identifiers and assistant content replaced. Its
+terminal success result is synthetic: native history does not persist stream
+results. It tests that an ordinary successful turn cannot fabricate compaction.
+The command-dispatch regression separately requires literal `/compact` and tests
+boundary-plus-result completion. It failed on the original XML encoding.
+
+Original live S3 remains FAIL. Regression coverage passes after the fix, but fresh
+live Claude success coverage is BLOCKED because the one-attempt limit is spent.
+No paid provider may be invoked for rechecking this correction. Q2 overlapping
+queue-drain polling remains separate.
