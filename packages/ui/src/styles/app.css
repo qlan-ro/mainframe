@@ -127,3 +127,53 @@ code {
 [data-drag-region] label {
   -webkit-app-region: no-drag;
 }
+
+/* Toasts: a themed grid card. Header row `icon | content | close`, then a
+   full-width footer for buttons. Selectors out-rank sonner's injected
+   `[data-sonner-toast][data-styled='true']` rules; its `--gray*` palette is
+   bypassed by painting from app tokens. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 8px;
+  row-gap: 8px;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent),
+    0 4px 12px rgb(0 0 0 / 0.1);
+  background: var(--popover);
+  color: var(--popover-foreground);
+}
+/* Unlayered sonner rules beat Tailwind utilities, so the muted colour lives here. */
+[data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled='true'] [data-description] {
+  color: var(--muted-foreground);
+}
+[data-sonner-toaster] [data-sonner-toast] [data-icon] {
+  grid-column: 1;
+  grid-row: 1;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+}
+[data-sonner-toaster] [data-sonner-toast] [data-content] {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  gap: 2px;
+}
+[data-sonner-toaster] [data-sonner-toast] [data-toast-close] {
+  grid-column: 3;
+  grid-row: 1;
+  margin: -4px -4px 0 0;
+}
+[data-sonner-toaster] [data-sonner-toast] [data-toast-footer] {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+/* No icon (e.g. default type): content takes the first column. */
+[data-sonner-toaster] [data-sonner-toast]:not(:has([data-icon])) [data-content] {
+  grid-column: 1 / 3;
+}
