@@ -20,6 +20,8 @@ use mainframe_types::http_status::{HttpStatus, StatusKind};
 use rusqlite::Connection;
 
 pub mod actor;
+pub mod idle_compaction;
+pub mod idle_compaction_queue;
 pub mod sql_types;
 mod sqlite;
 pub use sqlite::{OpenOptions, open_sqlite};

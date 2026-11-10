@@ -86,6 +86,17 @@ impl SessionSinkImpl {
 }
 
 impl SessionSink for SessionSinkImpl {
+    fn on_compact_with_metadata(&self, metadata: mainframe_types::compaction::CompactionMetadata) {
+        self.handle_idle_compact(metadata);
+    }
+    fn on_maintenance_result(
+        &self,
+        request: mainframe_types::compaction::NativeCompactionRequest,
+        _result: SessionResult,
+    ) {
+        self.shared.maintenance.finish(&self.chat_id, &request);
+    }
+
     fn on_message_with_presentation(
         &self,
         content: Vec<MessageContent>,

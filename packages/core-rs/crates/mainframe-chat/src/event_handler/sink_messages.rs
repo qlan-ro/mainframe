@@ -7,6 +7,9 @@ impl SessionSinkImpl {
         metadata: Option<MessageMetadata>,
         presentation: Option<mainframe_types::transcript_presentation::TranscriptPresentation>,
     ) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         debug!(
             chat_id = self.chat_id,
             block_count = content.len(),

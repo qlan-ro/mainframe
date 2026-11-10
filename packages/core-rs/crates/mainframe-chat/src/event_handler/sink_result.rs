@@ -2,6 +2,9 @@ use super::*;
 
 impl SessionSinkImpl {
     pub(super) fn handle_result(&self, data: SessionResult) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         if self.take_partial_overlay() {
             self.emit_display();
         }
@@ -16,9 +19,28 @@ impl SessionSinkImpl {
         let update = self.persist_result(&cell, &data, totals, refs_after.len(), now);
         self.record_segment_result(&data);
         let (reason, was_interrupted, is_error) = self.result_reason(&data);
+        if let Some(generation) = cell.lock_recover().real_run_generation.take() {
+            let completed = (!was_interrupted
+                && !is_error
+                && data.is_error != Some(true)
+                && data.subtype.as_deref() == Some("success"))
+            .then(now_ms);
+            if self
+                .shared
+                .deps
+                .idle_run_complete(&self.chat_id, &generation, completed)
+                .is_err()
+            {
+                warn!(
+                    chat_id = self.chat_id,
+                    "idle run completion persistence failed"
+                );
+            }
+        }
         self.emit_result_state(update, &cell, reason, was_interrupted, is_error);
         self.emit_turn_duration(&cell);
         self.result_notifications(&data, cost, was_interrupted, is_error);
+        self.shared.schedule_idle_evaluation(&self.chat_id);
     }
 
     fn retire_fork(&self) {

@@ -5,6 +5,7 @@ pub use crate::test_support_chat::{ChatBuilder, test_chat};
 mod fake_adapters;
 mod fake_deps;
 mod fake_events;
+mod fake_idle_store;
 mod fake_paths;
 mod fake_projection;
 mod fake_push;

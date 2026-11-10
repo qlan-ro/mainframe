@@ -60,6 +60,9 @@ impl SessionSinkImpl {
         content: Vec<MessageContent>,
         presentation: TranscriptPresentation,
     ) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         // Child completions remain available; the existing overlay slot belongs to the parent.
         if presentation.parent_tool_use_id.is_some() {
             return;

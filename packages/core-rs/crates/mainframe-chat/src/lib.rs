@@ -47,6 +47,8 @@ pub mod external_session_service;
 pub mod fork;
 pub mod fork_cut;
 pub mod handoff;
+mod idle_compaction;
+mod idle_compaction_history;
 pub mod idle_offload;
 pub mod idle_scanner;
 pub mod lifecycle_manager;

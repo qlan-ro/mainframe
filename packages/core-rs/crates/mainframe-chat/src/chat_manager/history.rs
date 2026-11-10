@@ -120,7 +120,16 @@ impl ChatManager {
             return Vec::new();
         };
         match session.load_history().await {
-            Ok(history) => remap_history(history, chat_id),
+            Ok(history) => match self
+                .shared
+                .merge_idle_history(chat_id, remap_history(history, chat_id))
+            {
+                Ok(history) => history,
+                Err(_) => {
+                    tracing::warn!(chat_id, "idle history provenance unavailable");
+                    Vec::new()
+                }
+            },
             Err(err) => {
                 tracing::warn!(error = ?err, chat_id, "getMessagesFromDisk failed");
                 Vec::new()
