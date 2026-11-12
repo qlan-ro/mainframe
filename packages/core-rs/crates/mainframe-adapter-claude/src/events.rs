@@ -73,6 +73,16 @@ pub(crate) fn handle_stderr(session: &ClaudeSession, chunk: &[u8], sink: &dyn Se
     if message.is_empty() {
         return;
     }
+    if message.starts_with("[claude-code:unrecognized_model] ") {
+        return;
+    }
+    let notice = message.trim_start_matches(['⚠', '\u{fe0f}', ' ']);
+    if notice.starts_with("claude.ai connectors are disabled because ") {
+        sink.on_cli_message(
+            "Claude account connectors are unavailable while using API or proxy authentication.",
+        );
+        return;
+    }
     if is_informational(&message) {
         return;
     }
