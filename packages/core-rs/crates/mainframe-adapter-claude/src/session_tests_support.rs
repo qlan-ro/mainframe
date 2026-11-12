@@ -112,3 +112,6 @@ mod controls;
 
 #[path = "session_tests_lifecycle.rs"]
 mod lifecycle;
+
+#[path = "session_tests_stderr.rs"]
+mod stderr;
