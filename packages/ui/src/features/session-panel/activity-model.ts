@@ -156,7 +156,8 @@ export function delegatedEntries(rows: readonly DelegatedTaskRow[], tools: reado
     const tool = sources.get(row.taskId);
     const source = tool && { messageId: tool.messageId, toolCallId: tool.toolCallId };
     const state =
-      row.status === 'completed'
+      row.resumedState ??
+      (row.status === 'completed'
         ? 'completed'
         : row.status === 'failed'
           ? 'failed'
@@ -166,12 +167,14 @@ export function delegatedEntries(rows: readonly DelegatedTaskRow[], tools: reado
               ? 'stopped'
               : row.status === 'queued' || row.waiting
                 ? 'waiting'
-                : 'running';
+                : 'running');
     return {
       id: `delegated:${row.taskId}`,
       kind: 'delegated',
       title: row.title,
-      detail: ['Child chat', row.adapterId, row.model].filter(Boolean).join(' · '),
+      detail: [row.resumedState ? `Resumed chat · task ${row.status}` : 'Child chat', row.adapterId, row.model]
+        .filter(Boolean)
+        .join(' · '),
       state,
       startedAt: tool?.createdAt ?? row.updatedAt,
       endedAt: state === 'running' || state === 'waiting' ? undefined : row.updatedAt,

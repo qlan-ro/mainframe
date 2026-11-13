@@ -29,6 +29,7 @@ const ICONS: Record<ActivityKind, LucideIcon> = {
 };
 
 function timeLabel(row: ActivityEntry, now: number): string {
+  if (row.delegated?.resumedState) return row.delegated.resumedState;
   if (row.state === 'waiting' && row.nextAt) {
     const remaining = row.nextAt - now;
     return remaining > 0 ? `in ${formatElapsed(now - remaining, now)}` : 'due';
@@ -167,7 +168,7 @@ function controlActions(row: ActivityEntry, adapterId: string | undefined, contr
       disabled: controls.busy,
       onClick: () => void controls.stop(),
     });
-  if (live && row.delegated)
+  if (live && row.delegated && !row.delegated.resumedState)
     actions.push({
       key: 'cancel',
       icon: X,
