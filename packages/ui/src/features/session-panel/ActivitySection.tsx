@@ -120,6 +120,7 @@ interface ActivityBodyProps {
   onToggleHistory: () => void;
   onShowAll: () => void;
   loadError: string | null;
+  sessionActive: boolean;
 }
 
 function ActivityBody({
@@ -133,12 +134,13 @@ function ActivityBody({
   onToggleHistory,
   onShowAll,
   loadError,
+  sessionActive,
 }: ActivityBodyProps) {
   return (
     <div className="flex flex-col gap-0.5 px-2 pb-2">
-      {running.length === 0 && waiting.length === 0 && history.length === 0 && (
+      {!sessionActive && running.length === 0 && waiting.length === 0 && history.length === 0 && (
         <p data-testid="session-panel-activity-empty" className="px-2 py-1 text-sm text-muted-foreground">
-          Nothing running
+          No background activity
         </p>
       )}
       {running.map((row) => (
@@ -179,7 +181,7 @@ function useActivityReveal(columnId: PanelColumnId) {
 export function ActivitySection({ columnId }: { columnId: PanelColumnId }) {
   const extras = useChatExtras();
   const sectionRef = useActivityReveal(columnId);
-  const { entries, chatId, adapterId, loadError, now } = useActivityEntries();
+  const { entries, chatId, adapterId, loadError, now, sessionRunning, sessionWaiting } = useActivityEntries();
   const [historyView, setHistoryView] = useState<HistoryView>('closed');
   useEffect(() => setHistoryView('closed'), [chatId]);
   const running = entries.filter((row) => row.state === 'running');
@@ -190,12 +192,16 @@ export function ActivitySection({ columnId }: { columnId: PanelColumnId }) {
   const summary =
     running.length || waiting.length
       ? `${running.length} running${waiting.length ? ` · ${waiting.length} waiting` : ''}`
-      : 'Nothing running';
+      : sessionRunning
+        ? 'Session running'
+        : sessionWaiting
+          ? 'Session waiting'
+          : 'No background activity';
   return (
     <section ref={sectionRef} data-testid="session-panel-card-activity" className="shrink-0 scroll-mt-1">
       <PanelEyebrow
         label="Activity"
-        live={running.length > 0}
+        live={sessionRunning || running.length > 0}
         liveTestId="session-panel-activity-live"
         action={
           <span data-testid="session-panel-activity-counts" className="text-xs text-muted-foreground">
@@ -231,6 +237,7 @@ export function ActivitySection({ columnId }: { columnId: PanelColumnId }) {
         onToggleHistory={() => setHistoryView(historyView === 'closed' ? 'preview' : 'closed')}
         onShowAll={() => setHistoryView('all')}
         loadError={loadError}
+        sessionActive={sessionRunning || sessionWaiting}
       />
     </section>
   );

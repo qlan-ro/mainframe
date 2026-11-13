@@ -2,10 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ActivityEntry } from '../activity-model';
 
-const state = vi.hoisted(() => ({ entries: [] as ActivityEntry[], jump: vi.fn(), stop: vi.fn(), cancel: vi.fn() }));
+const state = vi.hoisted(() => ({
+  entries: [] as ActivityEntry[],
+  sessionRunning: false,
+  sessionWaiting: false,
+  jump: vi.fn(),
+  stop: vi.fn(),
+  cancel: vi.fn(),
+}));
 vi.mock('../use-activity-entries', () => ({
   useActivityEntries: () => ({
     entries: state.entries,
+    sessionRunning: state.sessionRunning,
+    sessionWaiting: state.sessionWaiting,
     chatId: 'chat-1',
     adapterId: 'claude',
     now: 600_000,
@@ -37,13 +46,15 @@ const row = (id: string, overrides: Partial<ActivityEntry> = {}): ActivityEntry 
 
 beforeEach(() => {
   state.entries = [];
+  state.sessionRunning = false;
+  state.sessionWaiting = false;
   vi.clearAllMocks();
 });
 
 describe('ActivitySection', () => {
   it('shows running and waiting counts and retains the empty section', () => {
     const view = render(<ActivitySection columnId="main" />);
-    expect(screen.getByTestId('session-panel-activity-empty')).toHaveTextContent('Nothing running');
+    expect(screen.getByTestId('session-panel-activity-empty')).toHaveTextContent('No background activity');
     state.entries = [row('agent'), row('schedule', { kind: 'scheduled', state: 'waiting' })];
     view.rerender(<ActivitySection columnId="main" />);
     expect(screen.getByTestId('session-panel-activity-counts')).toHaveTextContent('1 running · 1 waiting');
@@ -76,4 +87,19 @@ describe('ActivitySection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Go to agent in transcript' }));
     expect(state.jump).toHaveBeenCalledWith('chat-1', { messageId: 'message-1', toolCallId: 'call-1' });
   });
+});
+
+it('shows the current turn running even without background activity', () => {
+  state.sessionRunning = true;
+  render(<ActivitySection columnId="main" />);
+  expect(screen.getByTestId('session-panel-activity-counts')).toHaveTextContent('Session running');
+  expect(screen.queryByText('Nothing running')).toBeNull();
+  expect(screen.getByTestId('session-panel-activity-live')).toBeInTheDocument();
+});
+
+it('shows a session waiting at a gate without claiming nothing is running', () => {
+  state.sessionWaiting = true;
+  render(<ActivitySection columnId="main" />);
+  expect(screen.getByTestId('session-panel-activity-counts')).toHaveTextContent('Session waiting');
+  expect(screen.queryByTestId('session-panel-activity-empty')).toBeNull();
 });
