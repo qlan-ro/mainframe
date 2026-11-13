@@ -1,5 +1,11 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.3.11
+
+### Patch Changes
+
+- [#909](https://github.com/qlan-ro/mainframe/pull/909) [`223a96f`](https://github.com/qlan-ro/mainframe/commit/223a96f3fb13ff6ef9bc7ef94836178f36ef8bba) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Keep Claude proxy model diagnostics and connector warnings from marking an active chat as failed or hiding compaction progress. Show connector availability as a short transcript notice.
+
 ## 2.3.10
 
 ### Patch Changes
