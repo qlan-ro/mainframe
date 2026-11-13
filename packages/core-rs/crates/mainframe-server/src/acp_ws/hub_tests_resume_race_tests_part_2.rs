@@ -41,7 +41,7 @@ async fn a_live_re_encode_after_a_previewed_seed_emits_nothing_for_the_previewed
         .collect();
     let containers = mainframe_acp::encoder::encode_containers(&messages, None);
     let previews = mainframe_acp::preview_ids(&containers);
-    assert_eq!(previews, HashSet::from(["m0-tool".to_string()]));
+    assert_eq!(previews, HashSet::from(["tool:m0-tool".to_string()]));
 
     hub.begin_resume(&conn, "chat-1");
     let reply = reply(1);

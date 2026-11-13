@@ -52,12 +52,12 @@ async fn newest_window_snaps_and_counts_only_replayed_items() {
     let log = Mutex::new(RevisionLog::new("epoch".into()));
     let (reply, replay) = window(&port, json!({"type":"start"}), json!({}), &log).await;
     assert_eq!(replay.items.len(), 43);
-    assert_eq!(replay.items[0].id(), "m80");
+    assert_eq!(replay.items[0].id(), "message:0:top:m80");
     assert_eq!(replay.containers.len(), 123);
     assert!(replay.containers[..80].iter().all(Vec::is_empty));
     assert_eq!(
         meta(reply)["history"],
-        json!({"hasMore":true,"floorItemId":"m80"})
+        json!({"hasMore":true,"floorItemId":"message:0:top:m80"})
     );
     let (reply, _) = window(
         &port,
@@ -100,11 +100,17 @@ async fn revision_resume_filters_changes_before_floor_and_falls_back_on_unknown_
         Vec::new,
     );
     let cursor = json!({"type":"revision", "epoch":cursor["epoch"], "revision":cursor["revision"]});
-    let (reply, replay) = window(&port, cursor.clone(), json!({"floorItemId":"m80"}), &log).await;
+    let (reply, replay) = window(
+        &port,
+        cursor.clone(),
+        json!({"floorItemId":"message:0:top:m80"}),
+        &log,
+    )
+    .await;
     assert_eq!(meta(reply)["itemCount"], 1);
     assert_eq!(replay.updates.len(), 2);
     assert!(
-        matches!(&replay.updates[0], SessionUpdate::AgentMessage(upsert) if upsert.message_id == "m99")
+        matches!(&replay.updates[0], SessionUpdate::AgentMessage(upsert) if upsert.message_id == "message:0:top:m99")
     );
     let (reply, replay) = window(&port, cursor, json!({"floorItemId":"missing"}), &log).await;
     assert_eq!(meta(reply)["fullReplay"], true);
@@ -116,10 +122,10 @@ fn pages_are_contiguous_load_through_is_unbounded_and_unknown_targets_are_stale(
     let port = fixture(500);
     let params = HistoryPageParams {
         session_id: "chat_1".into(),
-        before: "m460".into(),
+        before: "message:0:top:m460".into(),
         containers: Some(1),
         items: None,
-        until_item_id: Some("m128".into()),
+        until_item_id: Some("message:0:top:m128".into()),
     };
     let page = crate::history_page::prepare(
         &port.messages,
@@ -147,11 +153,14 @@ fn pages_are_contiguous_load_through_is_unbounded_and_unknown_targets_are_stale(
         .stale,
         Some(true)
     );
-    params.until_item_id = Some("m490".into());
+    params.until_item_id = Some("message:0:top:m490".into());
     let page = crate::history_page::prepare(&port.messages, &params, Default::default());
     assert!(page.containers.is_empty());
     assert_eq!(page.result.stale, None);
-    assert_eq!(page.result.history.floor_item_id.as_deref(), Some("m460"));
+    assert_eq!(
+        page.result.history.floor_item_id.as_deref(),
+        Some("message:0:top:m460")
+    );
 }
 
 #[test]
@@ -207,7 +216,7 @@ async fn reconnect_after_container_positions_shift_returns_to_the_newest_window(
     let (reply, _) = window(
         &port,
         json!({"type":"revision","epoch":cursor["epoch"],"revision":cursor["revision"]}),
-        json!({"floorItemId":"m80"}),
+        json!({"floorItemId":"message:0:top:m80"}),
         &log,
     )
     .await;
@@ -226,11 +235,11 @@ async fn tool_floor_lookup_encodes_only_the_held_window() {
     let (reply, _) = window(
         &port,
         json!({"type":"revision","epoch":cursor["epoch"],"revision":cursor["revision"]}),
-        json!({"floorItemId":"m80-thought"}),
+        json!({"floorItemId":"thought:0:top:m80"}),
         &log,
     )
     .await;
-    assert_eq!(meta(reply)["history"]["floorItemId"], "m80-thought");
+    assert_eq!(meta(reply)["history"]["floorItemId"], "thought:0:top:m80");
     encoder::ENCODED_CONTAINERS.with(|count| assert_eq!(count.get(), 40));
 }
 
@@ -261,14 +270,14 @@ async fn reconnect_keeps_changed_older_results_previewed() {
     let (_, replay) = window(
         &port,
         json!({"type":"revision","epoch":cursor["epoch"],"revision":cursor["revision"]}),
-        json!({"floorItemId":"m80"}),
+        json!({"floorItemId":"message:0:top:m80"}),
         &log,
     )
     .await;
     let wire = serde_json::to_string(&replay.updates).unwrap();
     assert!(wire.len() < 4096);
     assert!(wire.contains("65536"));
-    assert!(replay.preview_ids.contains("tool-result"));
+    assert!(replay.preview_ids.contains("tool:tool-result"));
 }
 
 #[path = "resume_tests_item_window.rs"]

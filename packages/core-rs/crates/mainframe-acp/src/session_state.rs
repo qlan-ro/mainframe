@@ -172,10 +172,13 @@ fn revise_update(prev: &EncodedItem, new: &EncodedItem) -> Vec<SessionUpdate> {
         (EncodedItem::ToolCall { .. }, EncodedItem::ToolCall { .. }) => {
             vec![tool_call_patch(prev, new)]
         }
-        // An item's kind never changes post-creation in this pipeline; a
-        // mismatch here would be an encoder bug, not a wire case to model.
-        _ => Vec::new(),
+        _ => replace_changed_kind(new),
     }
+}
+
+fn replace_changed_kind(item: &EncodedItem) -> Vec<SessionUpdate> {
+    tracing::error!(item_id = item.id(), "ACP item kind changed");
+    vec![create_update(item)]
 }
 
 fn content_revision(

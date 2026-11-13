@@ -20,7 +20,12 @@ fn build_request_matches_the_pinned_option_vocabulary() {
     assert_eq!(params["options"], expected["options"]);
     assert_eq!(
         params["subject"]["toolCall"]["toolCallId"],
-        expected["subject"]["toolCall"]["toolCallId"]
+        format!(
+            "tool:{}",
+            expected["subject"]["toolCall"]["toolCallId"]
+                .as_str()
+                .unwrap()
+        )
     );
 }
 

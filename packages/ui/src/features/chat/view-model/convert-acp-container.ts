@@ -78,7 +78,7 @@ function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
   const lifecycle = projectToolLifecycle(item.status);
   return {
     type: 'tool-call',
-    toolCallId: item.id,
+    toolCallId: parsed.meta.sourceToolCallId ?? item.id,
     toolName,
     args: toJsonArgs((item.rawInput ?? {}) as object),
     result: toolCallResult(item),
@@ -153,7 +153,7 @@ function assistantParts(
     parts.push(toolPart(parsed, children));
     const groupId = parsed.meta.groupId;
     if (groupId) {
-      groups[item.id] = groupId;
+      groups[parsed.meta.sourceToolCallId ?? item.id] = groupId;
       (members[groupId] ??= []).push({ toolName: item.title ?? item.id });
     }
   }

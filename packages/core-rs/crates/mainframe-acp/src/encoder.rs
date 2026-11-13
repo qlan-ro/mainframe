@@ -104,23 +104,11 @@ struct Container<'a> {
 }
 
 impl Container<'_> {
-    /// The container's message-item id. Top-level containers use the
-    /// `DisplayMessage` id itself (the item id IS the message id); a task-group
-    /// child suffixes it — its container id is the parent Task tool call's id,
-    /// and an unsuffixed message item would collide with (and clobber) that
-    /// tool-call item in any id-keyed accumulator.
-    fn message_item_id(&self) -> String {
-        match self.parent_tool_call_id {
-            Some(_) => format!("{}-message", self.id),
-            None => self.id.to_string(),
-        }
-    }
-
     fn base_meta(&self) -> ItemMeta {
         ItemMeta {
             timestamp: Some(self.timestamp.to_string()),
             container_id: Some(self.id.to_string()),
-            parent_tool_call_id: self.parent_tool_call_id.map(str::to_string),
+            parent_tool_call_id: self.parent_tool_call_id.map(|id| format!("tool:{id}")),
             kind: self.kind,
             message_meta: presentation::legacy_meta(self.message_meta),
             ..ItemMeta::default()
@@ -209,6 +197,14 @@ pub fn encode_container(
         role_for(message.r#type),
         &mut out,
         streaming,
+    );
+    debug_assert_eq!(
+        out.iter()
+            .map(EncodedItem::id)
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        out.len(),
+        "duplicate ACP item IDs"
     );
     out
 }

@@ -109,7 +109,7 @@ fn an_attachment_only_user_container_still_encodes_a_message_item() {
     else {
         panic!("expected a message item");
     };
-    assert_eq!(id, "dmsg_att");
+    assert_eq!(id, "message:0:top:dmsg_att");
     assert_eq!(*role, ItemRole::User);
     assert!(content.is_empty());
     let ns = &meta.as_ref().unwrap()[MAINFRAME_META_NAMESPACE];

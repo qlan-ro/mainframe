@@ -45,7 +45,10 @@ async fn persisted_replay_keeps_window_items_and_replaces_request_and_epoch() {
     };
     let meta = &result["_meta"][MAINFRAME_META_NAMESPACE];
     assert_eq!(meta["cursor"], json!({"epoch":"fresh","revision":7}));
-    assert_eq!(meta["history"], json!({"hasMore":true,"floorItemId":"m4"}));
+    assert_eq!(
+        meta["history"],
+        json!({"hasMore":true,"floorItemId":"message:0:top:m4"})
+    );
     assert_eq!(
         serde_json::to_value(&restored.updates).unwrap(),
         serde_json::to_value(&replay.updates).unwrap()
@@ -87,7 +90,7 @@ async fn persisted_previews_do_not_retain_full_tool_output() {
     let (reply, replay) = prepared(&port, 40).await;
     let saved = PreparedHistoryTail::capture(&reply, &replay).unwrap();
     let bytes = serde_json::to_vec(&saved).unwrap();
-    assert!(replay.preview_ids.contains("tool-result"));
+    assert!(replay.preview_ids.contains("tool:tool-result"));
     assert!(bytes.len() < 32768);
     let (_, restored) = saved.replay(None, None);
     assert_eq!(
