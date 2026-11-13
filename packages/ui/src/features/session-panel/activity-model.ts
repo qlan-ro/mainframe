@@ -109,7 +109,7 @@ export function taskEntries(tasks: readonly BackgroundTask[], tools: readonly To
   return tasks.flatMap((task) => {
     const kind = taskKind(task);
     const tool = byCall.get(task.toolUseId);
-    if (kind === 'command' && tool?.args.run_in_background !== true) return [];
+    if (kind === 'command' && task.status !== 'running' && tool?.args.run_in_background !== true) return [];
     const args = tool?.args ?? {};
     const source = tool && { messageId: tool.messageId, toolCallId: tool.toolCallId };
     const command = kind === 'monitor' ? monitorTarget(args, task.command) : task.command;

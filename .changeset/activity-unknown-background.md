@@ -2,4 +2,4 @@
 '@qlan-ro/mainframe-ui': patch
 ---
 
-Show live background tasks with unknown CLI task types in the Activity panel so its running count agrees with the provider switch guard.
+Show every live task counted by the provider switch guard in Activity, including tracked Bash commands without a background flag and unknown CLI task types.

@@ -63,7 +63,7 @@ describe('Activity source and metadata', () => {
     });
   });
 
-  it('shows a command only when its Bash call explicitly requested background execution', () => {
+  it('shows a tracked live Bash command even without a background flag, then omits its history', () => {
     const foreground = transcriptTools([tool('call-1', 'Bash', { command: 'ls' }, undefined)]);
     const background = transcriptTools([
       tool(
@@ -77,7 +77,12 @@ describe('Activity source and metadata', () => {
       ),
     ]);
     const command = task({ kind: 'bash', command: 'pnpm build', description: 'Build' });
-    expect(taskEntries([command], foreground)).toEqual([]);
+    expect(taskEntries([command], foreground)[0]).toMatchObject({
+      kind: 'command',
+      title: 'Build',
+      state: 'running',
+    });
+    expect(taskEntries([task({ ...command, status: 'completed', endedAt: 120_000 })], foreground)).toEqual([]);
     expect(taskEntries([command], background)[0]).toMatchObject({
       kind: 'command',
       title: 'Build',
