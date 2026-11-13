@@ -4,7 +4,7 @@ import { parseDelegateResult } from '@/features/chat/orchestration/delegate-resu
 import { isErrorResult, resolveResultText } from '@/features/chat/tools/shared';
 import type { DelegatedTaskRow } from '@/features/sessions/view-model/agent-provenance';
 
-export type ActivityKind = 'workflow' | 'subagent' | 'delegated' | 'monitor' | 'scheduled' | 'command';
+export type ActivityKind = 'workflow' | 'subagent' | 'delegated' | 'monitor' | 'scheduled' | 'command' | 'background';
 export type ActivityState = 'running' | 'waiting' | 'completed' | 'failed' | 'stopped' | 'cancelled';
 export interface ActivitySource {
   messageId: string;
@@ -83,12 +83,12 @@ export function transcriptTools(messages: readonly ThreadMessage[]): ToolRef[] {
   return messages.flatMap((message) => (message.role === 'assistant' ? messageTools(message) : []));
 }
 
-function taskKind(task: BackgroundTask): ActivityKind | null {
+function taskKind(task: BackgroundTask): ActivityKind {
   if (task.kind === 'workflow') return 'workflow';
   if (task.kind === 'agent') return 'subagent';
   if (task.toolName === 'Monitor') return 'monitor';
   if (task.kind === 'bash') return 'command';
-  return null;
+  return 'background';
 }
 
 function monitorTarget(args: Record<string, unknown>, fallback: string): string {
@@ -108,7 +108,6 @@ export function taskEntries(tasks: readonly BackgroundTask[], tools: readonly To
   const byCall = new Map(tools.map((tool) => [tool.toolCallId, tool]));
   return tasks.flatMap((task) => {
     const kind = taskKind(task);
-    if (!kind) return [];
     const tool = byCall.get(task.toolUseId);
     if (kind === 'command' && tool?.args.run_in_background !== true) return [];
     const args = tool?.args ?? {};
@@ -124,12 +123,14 @@ export function taskEntries(tasks: readonly BackgroundTask[], tools: readonly To
           ? command
           : kind === 'command'
             ? command
-            : 'Workflow';
+            : kind === 'background'
+              ? 'Background task'
+              : 'Workflow';
     return [
       {
         id: `task:${task.id}`,
         kind,
-        title: title || kind,
+        title: title || (kind === 'background' ? 'Background task' : kind),
         detail,
         state: task.status,
         startedAt: task.startedAt,

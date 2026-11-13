@@ -106,6 +106,13 @@ describe('Activity source and metadata', () => {
     expect(taskEntries([monitor], mcp)[0]?.command).toBe('alerts / watch_incidents');
   });
 
+  it('shows an unknown live task counted by the provider switch gate', () => {
+    const unknown = task({ kind: 'other', toolName: 'Bash', description: 'Background work' });
+    expect(taskEntries([unknown], [])).toMatchObject([
+      { id: 'task:agent-1', kind: 'background', title: 'Background work', state: 'running' },
+    ]);
+  });
+
   it('keeps schedules waiting until a real delete, including after their due time', () => {
     const tools = transcriptTools([
       tool(
