@@ -68,3 +68,17 @@ describe('resolveGateControlRequest', () => {
     });
   });
 });
+
+it('uses the native tool identity from a namespaced permission subject', () => {
+  const request = bareRequest({
+    subject: {
+      type: 'tool_call',
+      toolCall: {
+        toolCallId: 'tool:exec',
+        title: 'Read',
+        _meta: { '_mainframe.dev': { sourceToolCallId: 'exec' } },
+      },
+    },
+  });
+  expect(resolveGateControlRequest('gate-request', request, undefined).control.toolUseId).toBe('exec');
+});

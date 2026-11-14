@@ -48,19 +48,17 @@ impl Accum {
         }
     }
 
-    /// Segment 0 keeps the unsuffixed id (a top-level container's message item
-    /// id IS the message id), so the overwhelmingly common single-segment turn
-    /// encodes exactly as it did before segments existed. Later segments suffix
-    /// the index.
     fn id(&self, container: &Container<'_>) -> String {
-        let base = match self.kind {
-            AccumKind::Message(_) => container.message_item_id(),
-            AccumKind::Thought => format!("{}-thought", container.id),
+        let kind = match self.kind {
+            AccumKind::Message(_) => "message",
+            AccumKind::Thought => "thought",
         };
-        match self.segment {
-            0 => base,
-            n => format!("{base}-{n}"),
-        }
+        let scope = if container.parent_tool_call_id.is_some() {
+            "task"
+        } else {
+            "top"
+        };
+        format!("{kind}:{}:{scope}:{}", self.segment, container.id)
     }
 
     fn placeholder(&self, container: &Container<'_>) -> EncodedItem {

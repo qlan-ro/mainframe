@@ -149,7 +149,7 @@ mod tests {
         .unwrap();
         let params = HistoryPageParams {
             session_id: "chat".into(),
-            before: "m1".into(),
+            before: "message:0:top:m1".into(),
             containers: Some(1),
             items: None,
             until_item_id: None,
@@ -180,7 +180,7 @@ mod tests {
                     .as_array()
                     .unwrap()
                     .iter()
-                    .find(|update| update["toolCallId"] == "tool")
+                    .find(|update| update["toolCallId"] == "tool:tool")
                     .unwrap()["content"][1]["content"]
                     .clone()
             };

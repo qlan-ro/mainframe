@@ -9,6 +9,8 @@
  */
 import type { JsonRpcRequestId, RequestPermissionRequest, ControlRequest } from '@qlan-ro/mainframe-types';
 
+import { ItemMetaSchema, MAINFRAME_META_NAMESPACE } from '@qlan-ro/mainframe-types';
+
 const GATE_ID_PREFIX = 'gate-';
 
 /** Strips the `gate-{requestId}` wrapper `gate_request_id` (Rust) applies — the same scheme `handleGateResolved` unwraps. */
@@ -20,10 +22,11 @@ function requestIdFromRpcId(rpcId: JsonRpcRequestId): string {
 function synthesizeControlRequest(rpcId: JsonRpcRequestId, request: RequestPermissionRequest): ControlRequest {
   const toolCall = request.subject?.type === 'tool_call' ? request.subject.toolCall : undefined;
   const requestId = requestIdFromRpcId(rpcId);
+  const meta = ItemMetaSchema.safeParse(toolCall?._meta?.[MAINFRAME_META_NAMESPACE]);
   return {
     requestId,
     toolName: toolCall?.title ?? '(unknown tool)',
-    toolUseId: toolCall?.toolCallId ?? requestId,
+    toolUseId: (meta.success ? meta.data.sourceToolCallId : undefined) ?? toolCall?.toolCallId ?? requestId,
     input: {},
     suggestions: [],
   };

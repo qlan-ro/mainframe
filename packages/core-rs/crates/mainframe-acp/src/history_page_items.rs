@@ -81,7 +81,11 @@ fn through_target(
     let floor = if id == container_id {
         containers.iter().flatten().next()?.id()
     } else {
-        id
+        containers
+            .iter()
+            .flatten()
+            .find(|item| history_window::matches_item(item, id))?
+            .id()
     }
     .to_owned();
     item_window::ItemWindow::from_floor(containers, start, &floor).ok()

@@ -123,7 +123,7 @@ fn encodes_a_user_text_message() {
     assert_eq!(
         items,
         vec![EncodedItem::Message {
-            id: "dmsg_1".to_string(),
+            id: "message:0:top:dmsg_1".to_string(),
             role: ItemRole::User,
             content: vec![text_block("hi")],
             meta: Some(base_meta("dmsg_1")),
@@ -150,7 +150,7 @@ fn interleaved_text_and_image_leaves_encode_as_an_ordered_block_list() {
     assert_eq!(
         items,
         vec![EncodedItem::Message {
-            id: "dmsg_img".to_string(),
+            id: "message:0:top:dmsg_img".to_string(),
             role: ItemRole::User,
             content: vec![
                 text_block("What does this show?"),
@@ -172,7 +172,7 @@ fn an_image_only_message_encodes_a_single_image_block() {
     assert_eq!(
         encode(&messages),
         vec![EncodedItem::Message {
-            id: "dmsg_img2".to_string(),
+            id: "message:0:top:dmsg_img2".to_string(),
             role: ItemRole::User,
             content: vec![image_block("aGk=", "image/jpeg")],
             meta: Some(base_meta("dmsg_img2")),
@@ -195,12 +195,12 @@ fn encodes_an_assistant_thinking_block_as_a_separate_thought_item() {
         items,
         vec![
             EncodedItem::Thought {
-                id: "dmsg_2-thought".to_string(),
+                id: "thought:0:top:dmsg_2".to_string(),
                 content: vec![text_block("hmm")],
                 meta: Some(base_meta("dmsg_2")),
             },
             EncodedItem::Message {
-                id: "dmsg_2".to_string(),
+                id: "message:0:top:dmsg_2".to_string(),
                 role: ItemRole::Agent,
                 content: vec![text_block("done")],
                 meta: Some(base_meta("dmsg_2")),
@@ -266,7 +266,7 @@ fn a_text_leaf_before_a_tool_call_keeps_its_position() {
 
     assert_eq!(items.len(), 2);
     assert!(matches!(&items[0], EncodedItem::Message { .. }));
-    assert_eq!(items[1].id(), "toolu_ord");
+    assert_eq!(items[1].id(), "tool:toolu_ord");
 }
 
 #[test]
@@ -281,7 +281,7 @@ fn queued_messages_are_not_encoded_as_items() {
 
     let items = encode(&messages);
     let ids: Vec<&str> = items.iter().map(EncodedItem::id).collect();
-    assert_eq!(ids, vec!["u1", "a1"]);
+    assert_eq!(ids, vec!["message:0:top:u1", "message:0:top:a1"]);
 }
 
 #[path = "encoder_tests_tool_timing_tests.rs"]
@@ -289,3 +289,12 @@ mod tool_timing_tests;
 
 #[path = "encoder_tests_presentation_tests.rs"]
 mod presentation_tests;
+
+#[path = "encoder_tests_identity.rs"]
+mod identity;
+
+fn tool_meta(container: &str, source: &str) -> Value {
+    let mut meta = base_meta(container);
+    meta[MAINFRAME_META_NAMESPACE]["sourceToolCallId"] = json!(source);
+    meta
+}

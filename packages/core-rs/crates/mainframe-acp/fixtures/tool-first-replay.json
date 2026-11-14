@@ -1,0 +1,110 @@
+[
+  {
+    "sessionUpdate": "agent_message",
+    "messageId": "message:0:top:compaction",
+    "content": [],
+    "_meta": {
+      "_mainframe.dev": {
+        "containerId": "compaction",
+        "created": true,
+        "isCompacted": true,
+        "kind": "system",
+        "timestamp": "2026-11-12T00:00:00Z"
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "tool:exec",
+    "title": "Read",
+    "kind": "search",
+    "status": "completed",
+    "content": [
+      {
+        "type": "content",
+        "content": {
+          "type": "text",
+          "text": "fixture"
+        }
+      }
+    ],
+    "rawInput": {},
+    "_meta": {
+      "_mainframe.dev": {
+        "containerId": "exec",
+        "created": true,
+        "messageMeta": {
+          "turnDurationMs": 1000
+        },
+        "presentationSources": {
+          "sources": [
+            {
+              "presentation": {
+                "finalEligible": false,
+                "phase": "work",
+                "provider": "codex",
+                "state": "completed",
+                "turnId": "synthetic-turn",
+                "version": 1
+              },
+              "sourceBlockIndex": 0,
+              "sourceMessageId": "source-0",
+              "streaming": false,
+              "target": {
+                "contentBlockIndex": 0,
+                "type": "block"
+              }
+            }
+          ],
+          "version": 1
+        },
+        "sourceToolCallId": "exec",
+        "timestamp": "2026-11-12T00:00:00Z"
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_message",
+    "messageId": "message:0:top:exec",
+    "content": [
+      {
+        "type": "text",
+        "text": "Final answer"
+      }
+    ],
+    "_meta": {
+      "_mainframe.dev": {
+        "containerId": "exec",
+        "created": true,
+        "messageMeta": {
+          "turnDurationMs": 1000
+        },
+        "presentationSources": {
+          "sources": [
+            {
+              "presentation": {
+                "finalEligible": true,
+                "phase": "final_answer",
+                "provider": "codex",
+                "state": "completed",
+                "turnId": "synthetic-turn",
+                "version": 1
+              },
+              "sourceBlockIndex": 0,
+              "sourceMessageId": "source-1",
+              "streaming": false,
+              "target": {
+                "contentBlockIndex": 0,
+                "endUtf16": 12,
+                "startUtf16": 0,
+                "type": "text"
+              }
+            }
+          ],
+          "version": 1
+        },
+        "timestamp": "2026-11-12T00:00:00Z"
+      }
+    }
+  }
+]

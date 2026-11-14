@@ -115,7 +115,7 @@ async fn a_start_cursor_replays_every_item_as_a_create() {
     );
     assert!(matches!(
         replay.updates[0],
-        SessionUpdate::AgentMessage(ref upsert) if upsert.message_id == "dmsg_1"
+        SessionUpdate::AgentMessage(ref upsert) if upsert.message_id == "message:0:top:dmsg_1"
     ));
     assert!(matches!(
         replay.updates[1],
@@ -210,7 +210,9 @@ async fn a_known_cursor_replays_only_items_after_it() {
         ..FakePort::default()
     };
     let (_response, replay) = dispatch_resume(
-        resume_request(Some(json!({ "type": "item", "itemId": "dmsg_1" }))),
+        resume_request(Some(
+            json!({ "type": "item", "itemId": "message:0:top:dmsg_1" }),
+        )),
         &port,
         None,
     )
@@ -219,7 +221,7 @@ async fn a_known_cursor_replays_only_items_after_it() {
     assert_eq!(replay.updates.len(), 2);
     assert!(matches!(
         replay.updates[0],
-        SessionUpdate::AgentMessage(ref upsert) if upsert.message_id == "dmsg_2"
+        SessionUpdate::AgentMessage(ref upsert) if upsert.message_id == "message:0:top:dmsg_2"
     ));
 }
 

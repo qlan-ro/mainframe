@@ -80,21 +80,42 @@ pub fn state(start: usize, containers: &[Vec<EncodedItem>]) -> HistoryState {
 }
 
 pub fn find_item(messages: &[DisplayMessage], id: &str) -> Option<usize> {
-    messages
-        .iter()
-        .position(|message| message.id == id)
-        .or_else(|| {
-            messages.iter().position(|message| {
-                let candidate = id
-                    .strip_prefix(&message.id)
-                    .is_some_and(|suffix| suffix.starts_with('-'))
-                    || contains_id(&message.content, id);
-                candidate
-                    && encoder::encode_container(message, None)
-                        .iter()
-                        .any(|item| item.id() == id)
-            })
-        })
+    if let Some(index) = messages.iter().position(|message| message.id == id) {
+        return Some(index);
+    }
+    let text_id = id
+        .strip_prefix("message:")
+        .or_else(|| id.strip_prefix("thought:"))
+        .and_then(|rest| {
+            let mut fields = rest.splitn(3, ':');
+            fields.next()?.parse::<usize>().ok()?;
+            Some((fields.next()?, fields.next()?))
+        });
+    let source_id = id
+        .strip_prefix("tool:")
+        .or_else(|| text_id.map(|(_, source)| source))
+        .unwrap_or(id);
+    messages.iter().position(|message| {
+        let top_text =
+            text_id.is_some_and(|(scope, source)| scope == "top" && message.id == source);
+        if top_text {
+            return true;
+        }
+        let candidate =
+            contains_id(&message.content, id) || contains_id(&message.content, source_id);
+        candidate
+            && encoder::encode_container(message, None)
+                .iter()
+                .any(|item| matches_item(item, id))
+    })
+}
+
+pub(super) fn matches_item(item: &EncodedItem, id: &str) -> bool {
+    item.id() == id
+        || matches!(item, EncodedItem::ToolCall { meta: Some(meta), .. }
+        if meta.get(MAINFRAME_META_NAMESPACE)
+            .and_then(|meta| meta.get("sourceToolCallId"))
+            .and_then(serde_json::Value::as_str) == Some(id))
 }
 
 fn contains_id(content: &[mainframe_types::display::DisplayContent], id: &str) -> bool {

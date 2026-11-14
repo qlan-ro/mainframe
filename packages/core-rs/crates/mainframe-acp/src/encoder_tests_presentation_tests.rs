@@ -180,8 +180,8 @@ fn nested_sources_must_match_the_encoded_ancestor() {
         child.identity.presentation.parent_tool_use_id = parent.map(str::to_string);
         stamp(&mut message, vec![child]);
         let encoded = encode(&[message]);
-        assert_eq!(encoded[1].id(), "task-message");
-        assert_eq!(item_meta(&encoded[1])["parentToolCallId"], "task");
+        assert_eq!(encoded[1].id(), "message:0:task:task");
+        assert_eq!(item_meta(&encoded[1])["parentToolCallId"], "tool:task");
         assert_eq!(
             item_meta(&encoded[1]).get("presentationSources").is_some(),
             parent.is_some()

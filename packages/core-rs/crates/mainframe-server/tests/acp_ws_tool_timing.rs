@@ -133,11 +133,15 @@ async fn complete(
         .sink()
         .on_tool_result(vec![result("a", false, None)], None);
     let frame = read_until(ws, |v| {
-        v["params"]["update"]["toolCallId"] == "a" && v["params"]["update"]["status"] == "completed"
+        v["params"]["update"]["toolCallId"] == "tool:a"
+            && v["params"]["update"]["status"] == "completed"
     })
     .await;
     let patch = &frame["params"]["update"];
-    assert_eq!(timing(patch)["startedAt"], timing(&items["a"])["startedAt"]);
+    assert_eq!(
+        timing(patch)["startedAt"],
+        timing(&items["tool:a"])["startedAt"]
+    );
     assert!(
         timing(patch)["completedAt"].as_u64().unwrap()
             >= timing(patch)["startedAt"].as_u64().unwrap()
@@ -147,7 +151,7 @@ async fn complete(
         json!([{"type":"content","content":{"type":"text","text":""}}])
     );
     for (key, value) in patch.as_object().unwrap() {
-        items.get_mut("a").unwrap()[key] = value.clone();
+        items.get_mut("tool:a").unwrap()[key] = value.clone();
     }
 }
 
@@ -169,8 +173,8 @@ async fn tool_timing_reconnect_retains_overlapping_and_nested_calls() {
         assert!(timing(item).get("completedAt").is_none());
     }
     assert_eq!(
-        started["child"]["_meta"]["_mainframe.dev"]["parentToolCallId"],
-        "parent"
+        started["tool:child"]["_meta"]["_mainframe.dev"]["parentToolCallId"],
+        "tool:parent"
     );
     let (mut resumed, snapshot) = reconnect(&facade, ws).await;
     assert_snapshot(&snapshot, &started);
@@ -181,20 +185,24 @@ async fn tool_timing_reconnect_retains_overlapping_and_nested_calls() {
         .sink()
         .on_subagent_child("parent", vec![result("child", true, Some("parent"))]);
     let failed = read_until(&mut completed_ws, |v| {
-        v["params"]["update"]["toolCallId"] == "child"
+        v["params"]["update"]["toolCallId"] == "tool:child"
             && v["params"]["update"]["status"] == "failed"
     })
     .await;
     let patch = &failed["params"]["update"];
     assert_eq!(
         timing(patch)["startedAt"],
-        timing(&started["child"])["startedAt"]
+        timing(&started["tool:child"])["startedAt"]
     );
     assert!(timing(patch)["completedAt"].is_u64());
     for (key, value) in patch.as_object().unwrap() {
-        started.get_mut("child").unwrap()[key] = value.clone();
+        started.get_mut("tool:child").unwrap()[key] = value.clone();
     }
     let (_final_ws, snapshot) = reconnect(&facade, completed_ws).await;
     assert_snapshot(&snapshot, &started);
-    assert!(timing(&snapshot["parent"]).get("completedAt").is_none());
+    assert!(
+        timing(&snapshot["tool:parent"])
+            .get("completedAt")
+            .is_none()
+    );
 }
