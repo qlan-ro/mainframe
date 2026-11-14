@@ -192,7 +192,7 @@ export function ChatSurface() {
   if (zones != null && mainThreadId != null && zones.includes(mainThreadId) && splitFits) {
     const closeZone = (closedId: string) => {
       const other = zones[0] === closedId ? zones[1] : zones[0];
-      closeSplit();
+      closeSplit(mainThreadId !== other ? (mainThreadId ?? undefined) : undefined);
       if (mainThreadId !== other) aui.threads.switchToThread(other);
     };
     return (

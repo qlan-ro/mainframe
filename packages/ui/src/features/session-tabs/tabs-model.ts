@@ -201,9 +201,34 @@ function reconcileDraftId(draftId: string | null, items: readonly ThreadListEntr
   return isDraftThread(draftId, items) ? draftId : null;
 }
 
+/** `TabsState` plus the ids the split pair holds open without pinning them. */
+export interface DisplayTabsState extends TabsState {
+  heldIds?: readonly string[];
+}
+
 /**
- * The strip's DISPLAYED order (fact 17): pinned tabs, then the preview, then
- * the draft, with a visible split pair regrouped adjacently at the first
+ * Split-pair members that stay in the strip without being pinned: listed
+ * sessions the pair holds that no slot already shows. Membership holds a tab
+ * open; only an explicit gesture writes `tabIds`.
+ */
+export function heldTabIds(
+  state: TabsState,
+  zones: readonly [string, string] | null,
+  items: readonly ThreadListEntry[],
+): string[] {
+  if (zones == null) return [];
+  return zones.filter(
+    (id) =>
+      !state.tabIds.includes(id) &&
+      state.previewId !== id &&
+      state.draftId !== id &&
+      items.some((t) => t.id === id && t.status === 'regular'),
+  );
+}
+
+/**
+ * The strip's DISPLAYED order (fact 17): pinned tabs, then held split members,
+ * then the preview, then the draft, with a visible split pair regrouped adjacently at the first
  * member's position — the same computation `SessionTabs.tsx` renders, moved
  * here so the shortcut helpers below and the strip read one function instead
  * of two copies. `_mainThreadId` mirrors the call site's `activeTabId` but
@@ -211,11 +236,13 @@ function reconcileDraftId(draftId: string | null, items: readonly ThreadListEntr
  * signature parity with Task 16's call site.
  */
 export function displayedTabIds(
-  state: TabsState,
+  state: DisplayTabsState,
   zones: [string, string] | null,
   _mainThreadId: string | null,
 ): string[] {
-  const displayed = [...state.tabIds, state.previewId, state.draftId].filter((id): id is string => id !== null);
+  const displayed = [...state.tabIds, ...(state.heldIds ?? []), state.previewId, state.draftId].filter(
+    (id): id is string => id !== null,
+  );
   const zoneMembers = zones == null ? [] : zones.filter((id) => displayed.includes(id));
   if (zoneMembers.length !== 2) return displayed;
   const firstAt = displayed.findIndex((id) => zoneMembers.includes(id));
@@ -242,7 +269,7 @@ export type StripEntry =
  * read `displayedTabIds`, not this.
  */
 export function stripEntries(
-  state: TabsState,
+  state: DisplayTabsState,
   zones: [string, string] | null,
   active: string | null,
   /** The surface fits two zones (`splitFits`); a pair that can't render reads as parked. */

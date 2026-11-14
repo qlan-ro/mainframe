@@ -49,6 +49,8 @@ interface ZonesState {
   focusedIndex: ZoneIndex;
   /** The left zone's share of the row (divider-dragged); 0.5 = even. */
   frac: number;
+  /** The active chat a dissolve is leaving (see `closeSplit`); cleared on the next activation. */
+  leaving: string | null;
   /** A pair waiting for its second chat to reach the thread list (a new
    *  fork): a zone resolves its row by id, so it can't render before then.
    *  `useZonesReconciler` opens it once listed. */
@@ -66,7 +68,9 @@ interface ZonesState {
   replaceZone: (index: ZoneIndex, id: string) => void;
   setFocusedIndex: (index: ZoneIndex) => void;
   setFrac: (frac: number) => void;
-  closeSplit: () => void;
+  /** Dissolves the pair. `leaving` names the active chat when focus is about to
+   *  MOVE to the other member, so the tab seam does not re-slot the chat being left. */
+  closeSplit: (leaving?: string) => void;
 }
 
 export const useZonesStore = create<ZonesState>((set) => ({
@@ -74,6 +78,7 @@ export const useZonesStore = create<ZonesState>((set) => ({
   subagent: null,
   focusedIndex: 0,
   frac: 0.5,
+  leaving: null,
   pendingPair: null,
   splitFits: true,
   setSplitFits: (splitFits) => set((s) => (s.splitFits === splitFits ? s : { splitFits })),
@@ -82,7 +87,7 @@ export const useZonesStore = create<ZonesState>((set) => ({
     // A side chat can never take a zone of its own — it lives inside its
     // parent's zone (todo #344, UI rule 2).
     if (isRegisteredSideChatId(first) || isRegisteredSideChatId(second)) return;
-    set({ zones: [first, second], subagent: null, focusedIndex: 0 });
+    set({ zones: [first, second], subagent: null, focusedIndex: 0, leaving: null });
   },
   openSubagent: (subagent) => set({ zones: null, subagent, focusedIndex: 0 }),
   closeSubagent: () => set({ subagent: null, frac: 0.5 }),
@@ -93,7 +98,7 @@ export const useZonesStore = create<ZonesState>((set) => ({
     }),
   setFocusedIndex: (index) => set({ focusedIndex: index }),
   setFrac: (frac) => set({ frac: Math.min(FRAC_MAX, Math.max(FRAC_MIN, frac)) }),
-  closeSplit: () => set({ zones: null, focusedIndex: 0, frac: 0.5 }),
+  closeSplit: (leaving) => set({ zones: null, focusedIndex: 0, frac: 0.5, leaving: leaving ?? null }),
 }));
 
 /** A chat holds one of the two slots. */

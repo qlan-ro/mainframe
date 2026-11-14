@@ -10,7 +10,8 @@ import { useMemo } from 'react';
 import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { useIndexHintsStore } from '@/features/shortcuts/index-hints';
 import { useSessionTabsStore } from './store';
-import { displayedTabIds, tabHintIndex } from './tabs-model';
+import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
+import { displayedTabIds, heldTabIds, tabHintIndex } from './tabs-model';
 
 /** The badge number for a session, or null when it has none to show. */
 export function useTabHintIndex(sessionId: string): number | null {
@@ -19,11 +20,19 @@ export function useTabHintIndex(sessionId: string): number | null {
   const previewId = useSessionTabsStore((s) => s.previewId);
   const draftId = useSessionTabsStore((s) => s.draftId);
   const zones = useZonesStore((s) => s.zones);
+  const items = useThreadItems();
 
   return useMemo(() => {
     if (!revealed) return null;
     // `displayedTabIds` ignores its third argument, so the sidebar resolves the
     // order without reaching for assistant-ui's active thread.
-    return tabHintIndex(displayedTabIds({ tabIds, previewId, draftId }, zones, null), sessionId);
-  }, [revealed, tabIds, previewId, draftId, zones, sessionId]);
+    return tabHintIndex(
+      displayedTabIds(
+        { tabIds, previewId, draftId, heldIds: heldTabIds({ tabIds, previewId, draftId }, zones, items) },
+        zones,
+        null,
+      ),
+      sessionId,
+    );
+  }, [revealed, tabIds, previewId, draftId, zones, items, sessionId]);
 }

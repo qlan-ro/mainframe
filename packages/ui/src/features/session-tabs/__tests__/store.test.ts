@@ -8,6 +8,7 @@
  * store.draft.test.ts.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { useSessionTabsStore } from '../store';
 import { __resetSideChatRegistryForTests, registerSideChat } from '@/features/side-chat/side-chat-ids';
 
@@ -131,6 +132,17 @@ describe('pinTab', () => {
 
     expect(pinned()).toEqual(['a']);
     expect(preview()).toBe('p');
+  });
+
+  it('pins a split member held without a slot, clearing nothing else', () => {
+    useSessionTabsStore.setState({ tabIds: ['a'], previewId: 'p' });
+    useZonesStore.setState({ zones: ['m', 'n'] });
+
+    useSessionTabsStore.getState().pinTab('m');
+
+    expect(pinned()).toEqual(['a', 'm']);
+    expect(preview()).toBe('p');
+    useZonesStore.setState({ zones: null });
   });
 
   it('refuses to pin a registered side-chat id, even if somehow previewed (todo #344)', () => {
