@@ -63,7 +63,7 @@ describe('Activity source and metadata', () => {
     });
   });
 
-  it('shows a command only when its Bash call explicitly requested background execution', () => {
+  it('shows a tracked live Bash command even without a background flag, then omits its history', () => {
     const foreground = transcriptTools([tool('call-1', 'Bash', { command: 'ls' }, undefined)]);
     const background = transcriptTools([
       tool(
@@ -77,7 +77,12 @@ describe('Activity source and metadata', () => {
       ),
     ]);
     const command = task({ kind: 'bash', command: 'pnpm build', description: 'Build' });
-    expect(taskEntries([command], foreground)).toEqual([]);
+    expect(taskEntries([command], foreground)[0]).toMatchObject({
+      kind: 'command',
+      title: 'Build',
+      state: 'running',
+    });
+    expect(taskEntries([task({ ...command, status: 'completed', endedAt: 120_000 })], foreground)).toEqual([]);
     expect(taskEntries([command], background)[0]).toMatchObject({
       kind: 'command',
       title: 'Build',
@@ -104,6 +109,13 @@ describe('Activity source and metadata', () => {
       command: 'wss://events.example',
     });
     expect(taskEntries([monitor], mcp)[0]?.command).toBe('alerts / watch_incidents');
+  });
+
+  it('shows an unknown live task counted by the provider switch gate', () => {
+    const unknown = task({ kind: 'other', toolName: 'Bash', description: 'Background work' });
+    expect(taskEntries([unknown], [])).toMatchObject([
+      { id: 'task:agent-1', kind: 'background', title: 'Background work', state: 'running' },
+    ]);
   });
 
   it('keeps schedules waiting until a real delete, including after their due time', () => {
