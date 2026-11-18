@@ -22,5 +22,6 @@ mainframe-types = { workspace = true }
 rustix = { workspace = true }
 
 [dev-dependencies]
+mainframe-runtime = { workspace = true, features = ["test-support"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

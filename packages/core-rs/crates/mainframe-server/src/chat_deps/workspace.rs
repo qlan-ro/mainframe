@@ -86,7 +86,6 @@ impl WorkspacePort for DaemonChatDeps {
                 worktree_path: worktree_path.as_deref(),
                 session: session_ref,
                 tracker: &self.background_tasks,
-                spool_root: None,
             })
             .await;
         })

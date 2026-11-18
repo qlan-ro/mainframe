@@ -3,12 +3,14 @@ use std::fs;
 use tempfile::tempdir;
 
 #[test]
-fn task_id_re_accepts_and_rejects() {
-    assert!(task_id_matches("tkid01"));
-    assert!(task_id_matches("abc123def456ghij")); // 16
-    assert!(!task_id_matches("short")); // 5
-    assert!(!task_id_matches("UPPER1")); // uppercase
-    assert!(!task_id_matches("has.dot")); // punctuation
+fn task_id_shape() {
+    assert!(is_task_id("tkid01"));
+    assert!(is_task_id("abc123def456ghij")); // 16
+    assert!(!is_task_id("abc123def456ghijk")); // 17
+    assert!(!is_task_id("short")); // 5
+    assert!(!is_task_id("UPPER1")); // uppercase
+    assert!(!is_task_id("has.dot")); // punctuation
+    assert!(!is_task_id("tâche1")); // non-ASCII
 }
 
 #[tokio::test]
@@ -21,11 +23,7 @@ async fn walks_output_files_and_skips_bad_ids() {
     fs::write(tasks.join("BAD..ID.output"), b"").unwrap();
     fs::write(tasks.join("ignore.txt"), b"").unwrap();
 
-    let entries = walk_spool_tasks(&WalkOpts {
-        root: root.to_string_lossy().into_owned(),
-        scoped_cwd_seg: None,
-    })
-    .await;
+    let entries = walk_spool_tasks(root, None).await;
 
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].task_id, "tkid01");
@@ -42,21 +40,13 @@ async fn scoped_cwd_seg_limits_traversal() {
         fs::create_dir_all(&tasks).unwrap();
         fs::write(tasks.join("tkid01.output"), b"").unwrap();
     }
-    let entries = walk_spool_tasks(&WalkOpts {
-        root: root.to_string_lossy().into_owned(),
-        scoped_cwd_seg: Some("-a".to_string()),
-    })
-    .await;
+    let entries = walk_spool_tasks(root, Some("-a")).await;
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].cwd_seg, "-a");
 }
 
 #[tokio::test]
 async fn missing_root_yields_empty() {
-    let entries = walk_spool_tasks(&WalkOpts {
-        root: "/no/such/spool/root/xyz".to_string(),
-        scoped_cwd_seg: None,
-    })
-    .await;
+    let entries = walk_spool_tasks(Path::new("/no/such/spool/root/xyz"), None).await;
     assert!(entries.is_empty());
 }

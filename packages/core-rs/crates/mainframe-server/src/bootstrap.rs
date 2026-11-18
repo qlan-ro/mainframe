@@ -11,7 +11,7 @@ use crate::{
 use mainframe_adapter_api::AdapterRegistry;
 use mainframe_adapter_claude::adapter::ClaudeAdapter;
 use mainframe_adapter_codex::CodexAdapter;
-use mainframe_background_tasks::liveness::{LivenessDeps, start_liveness_scheduler};
+use mainframe_background_tasks::liveness::start_liveness_scheduler;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::{bridge::spawn_workflow_run_bridge, store::ClaudeWorkflowStore};
 use mainframe_launch::{

@@ -1,197 +1,100 @@
-use mainframe_types::sync::LockExt as _;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, Mutex, MutexGuard};
+//! `lsof` probes: which processes hold a spool file open for writing.
+
+use std::process::Output;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use mainframe_runtime::ResolvedPath;
+use mainframe_runtime::process::inspect::parse_pids;
+use mainframe_runtime::process::{ExecError, run_captured};
+use mainframe_types::BoxFuture;
+use mainframe_types::sync::LockExt as _;
 use tokio::process::Command;
 
-/// An exec failure `code`: numeric or textual.
-pub use mainframe_runtime::process::ExecCode;
+use crate::process::ProcessDeps;
 
-fn code_display(code: &Option<ExecCode>) -> String {
-    match code {
-        Some(ExecCode::Number(n)) => n.to_string(),
-        Some(ExecCode::Text(t)) => t.clone(),
-        None => "undefined".to_string(),
-    }
-}
+const TIMEOUT: Duration = Duration::from_secs(2);
 
-/// A successful exec result (`{ stdout }`).
-#[derive(Debug, Clone)]
-pub struct ExecOk {
-    pub stdout: String,
-}
-
-/// An exec rejection carrying the fields runLsof inspects (`code`/`signal`/`stdout`).
-#[derive(Debug, Clone)]
-pub struct LsofExecError {
-    pub code: Option<ExecCode>,
-    pub signal: Option<String>,
-    pub stdout: Option<String>,
-}
-
-type ExecFuture = Pin<Box<dyn Future<Output = Result<ExecOk, LsofExecError>> + Send>>;
-/// Exec seam: `(cmd, args)` resolving to the captured stdout.
-pub type ExecFn = Arc<dyn Fn(String, Vec<String>) -> ExecFuture + Send + Sync>;
-pub type WarnFn = Arc<dyn Fn(&str) + Send + Sync>;
-
-const TIMEOUT_MS: u64 = 2000;
-
-pub(crate) struct Seam {
-    exec: ExecFn,
-    logger: WarnFn,
-    warned_missing: bool,
-}
-
-fn default_exec(path: mainframe_runtime::ResolvedPath) -> ExecFn {
-    Arc::new(move |cmd, args| Box::pin(real_exec(cmd, args, path.clone())))
-}
-
-fn default_logger() -> WarnFn {
-    Arc::new(|msg: &str| tracing::warn!("{msg}"))
-}
-
-pub(crate) fn new_seam(path: mainframe_runtime::ResolvedPath) -> Mutex<Seam> {
-    Mutex::new(Seam {
-        exec: default_exec(path),
-        logger: default_logger(),
-        warned_missing: false,
-    })
-}
-
-fn lock_seam(process: &crate::process::ProcessDeps) -> MutexGuard<'_, Seam> {
-    process.lsof.lock_recover()
-}
-
-/// Test-only seam (also resets the ENOENT warn-once latch).
-#[cfg(test)]
-pub(crate) fn set_exec_for_tests(process: &crate::process::ProcessDeps, fn_: ExecFn) {
-    let mut g = lock_seam(process);
-    g.exec = fn_;
-    g.warned_missing = false;
-}
-
-/// Test-only seam — swap the logger so warn calls are observable.
-#[cfg(test)]
-pub(crate) fn set_logger_for_tests(process: &crate::process::ProcessDeps, logger: WarnFn) {
-    let mut g = lock_seam(process);
-    g.logger = logger;
-    g.warned_missing = false;
-}
-
-/// The default `_exec` — run `lsof -F pan -- <path>` with a 2s timeout.
-async fn real_exec(
-    cmd: String,
-    args: Vec<String>,
-    path: mainframe_runtime::ResolvedPath,
-) -> Result<ExecOk, LsofExecError> {
-    use mainframe_runtime::process::{ExecError, run_captured};
-    let mut command = Command::new(&cmd);
-    command.args(&args);
-    path.apply(&mut command);
-    let output = run_captured(command, Some(Duration::from_millis(TIMEOUT_MS)))
-        .await
-        .map_err(|error| {
-            let (code, signal) = match error {
-                ExecError::Timeout => (None, Some("SIGTERM".to_string())),
-                ExecError::Spawn(error) => (
-                    (error.kind() == std::io::ErrorKind::NotFound)
-                        .then(|| ExecCode::Text("ENOENT".to_string())),
-                    None,
-                ),
-                error => (Some(ExecCode::Text(error.to_string())), None),
-            };
-            LsofExecError {
-                code,
-                signal,
-                stdout: None,
-            }
-        })?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    if output.status.success() {
-        Ok(ExecOk { stdout })
-    } else {
-        Err(LsofExecError {
-            code: output.status.code().map(|c| ExecCode::Number(c as i64)),
-            signal: None,
-            stdout: Some(stdout),
-        })
-    }
-}
-
-/// Why an `lsof` probe gave no answer. Only logged and skipped: a failed
-/// probe never marks a task stopped.
+/// Why an `lsof` probe gave no answer. Callers log and skip: a failed probe
+/// never marks a task stopped.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum LsofError {
     #[error("lsof not installed")]
     NotInstalled,
-    #[error("lsof killed by signal {0}")]
-    Signal(String),
-    /// `code` renders as the exit code, the error code text, or `undefined`.
-    #[error("lsof exited code={0}")]
-    Exited(String),
+    #[error("lsof timed out")]
+    TimedOut,
+    #[error("lsof exited with code {0}")]
+    Exited(i32),
+    #[error("lsof was killed by a signal")]
+    Killed,
+    #[error("lsof failed: {0}")]
+    Failed(String),
 }
 
-async fn run_lsof(process: &crate::process::ProcessDeps, path: &str) -> Result<String, LsofError> {
-    let exec = lock_seam(process).exec.clone();
-    let result = exec(
-        "lsof".to_string(),
-        vec![
-            "-F".to_string(),
-            "pan".to_string(),
-            "--".to_string(),
-            path.to_string(),
-        ],
-    )
-    .await;
-    match result {
-        Ok(ok) => Ok(ok.stdout),
-        Err(e) => {
-            // lsof returns 1 when there are no matches — a clean "empty", not a failure.
-            if e.code == Some(ExecCode::Number(1)) {
-                return Ok(e.stdout.unwrap_or_default());
-            }
-            if e.code == Some(ExecCode::Text("ENOENT".to_string())) {
-                // Share the missing-tool warning across this tracker's liveness ticks.
-                let mut g = lock_seam(process);
-                if !g.warned_missing {
-                    (g.logger)("lsof binary not found; background-task OS fallbacks disabled");
-                    g.warned_missing = true;
-                }
-                return Err(LsofError::NotInstalled);
-            }
-            if let Some(signal) = e.signal {
-                return Err(LsofError::Signal(signal));
-            }
-            Err(LsofError::Exited(code_display(&e.code)))
+/// Runs `lsof -F pan -- <path>` and returns its stdout.
+pub(crate) type LsofFn =
+    Arc<dyn Fn(String) -> BoxFuture<'static, Result<String, LsofError>> + Send + Sync>;
+
+pub(crate) fn real_lsof(path: ResolvedPath) -> LsofFn {
+    Arc::new(move |file| {
+        let mut command = Command::new("lsof");
+        command.args(["-F", "pan", "--"]).arg(file);
+        path.apply(&mut command);
+        Box::pin(async move { lsof_stdout(run_captured(command, Some(TIMEOUT)).await) })
+    })
+}
+
+/// lsof exits 1 when no process has the file open: an empty answer, not a
+/// failure.
+fn lsof_stdout(result: Result<Output, ExecError>) -> Result<String, LsofError> {
+    let output = result.map_err(|error| match error {
+        ExecError::Spawn(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            LsofError::NotInstalled
         }
+        ExecError::Timeout => LsofError::TimedOut,
+        error => LsofError::Failed(error.to_string()),
+    })?;
+    match output.status.code() {
+        Some(0 | 1) => Ok(String::from_utf8_lossy(&output.stdout).into_owned()),
+        Some(code) => Err(LsofError::Exited(code)),
+        None => Err(LsofError::Killed),
     }
-}
-
-use mainframe_runtime::process::inspect::parse_pids;
-
-pub(crate) async fn lsof_writers_detailed(
-    process: &crate::process::ProcessDeps,
-    path: &str,
-) -> Result<Vec<u32>, LsofError> {
-    let stdout = run_lsof(process, path).await?;
-    Ok(parse_pids(&stdout, |m| m == "w" || m == "u"))
-}
-
-pub(crate) async fn lsof_writers(process: &crate::process::ProcessDeps, path: &str) -> Vec<u32> {
-    lsof_writers_detailed(process, path)
-        .await
-        .unwrap_or_default()
 }
 
 #[cfg(test)]
-pub(crate) async fn lsof_any(process: &crate::process::ProcessDeps, path: &str) -> Vec<u32> {
-    match run_lsof(process, path).await {
-        Ok(stdout) => parse_pids(&stdout, |_| true),
-        Err(_) => Vec::new(),
+pub(crate) fn set_lsof_for_tests(process: &ProcessDeps, lsof: LsofFn) {
+    *process.lsof.lock_recover() = lsof;
+}
+
+async fn run_lsof(process: &ProcessDeps, path: &str) -> Result<String, LsofError> {
+    let lsof = process.lsof.lock_recover().clone();
+    let result = lsof(path.to_string()).await;
+    if result == Err(LsofError::NotInstalled)
+        && !process.lsof_missing_warned.swap(true, Ordering::Relaxed)
+    {
+        tracing::warn!(
+            reason = "lsof_missing",
+            "lsof binary not found; background-task OS fallbacks disabled"
+        );
     }
+    result
+}
+
+/// Pids holding `path` open for writing (`w`) or read-write (`u`).
+pub(crate) async fn lsof_writers_detailed(
+    process: &ProcessDeps,
+    path: &str,
+) -> Result<Vec<u32>, LsofError> {
+    let stdout = run_lsof(process, path).await?;
+    Ok(parse_pids(&stdout, |mode| mode == "w" || mode == "u"))
+}
+
+/// [`lsof_writers_detailed`], treating a failed probe as no writers.
+pub(crate) async fn lsof_writers(process: &ProcessDeps, path: &str) -> Vec<u32> {
+    lsof_writers_detailed(process, path)
+        .await
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

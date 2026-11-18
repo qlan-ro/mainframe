@@ -4,12 +4,11 @@ fn adopt_replaces_an_existing_entry() {
     tracker.adopt(
         "chat-a",
         recovered_task("rec-1", "/p1", 1, BackgroundTaskStatus::Running),
-        AdoptOptions::default(),
     );
     let mut replacement = recovered_task("rec-1", "/p2", 2, BackgroundTaskStatus::Stopped);
     replacement.ended_at = Some(3);
     replacement.summary = Some("gone".to_string());
-    tracker.adopt("chat-a", replacement, AdoptOptions::default());
+    tracker.adopt("chat-a", replacement);
     assert_eq!(
         tracker
             .get("chat-a", "rec-1")
@@ -215,9 +214,8 @@ fn end_all_running_stops_every_running_task_emits_ended_and_skips_terminal() {
     );
     drain(&mut rx);
 
-    let ended = tracker.end_all_running("chat-a");
+    tracker.end_all_running("chat-a");
 
-    assert_eq!(ended, 2);
     assert!(tracker.list_live("chat-a").is_empty());
     assert_eq!(
         tracker.get("chat-a", "r1").unwrap().status,
@@ -243,10 +241,10 @@ fn end_all_running_stops_every_running_task_emits_ended_and_skips_terminal() {
 }
 
 #[test]
-fn end_all_running_on_unknown_chat_is_a_no_op_returning_zero() {
+fn end_all_running_on_unknown_chat_is_a_no_op() {
     let tracker = BackgroundTaskTracker::new();
     let mut rx = tracker.subscribe();
-    assert_eq!(tracker.end_all_running("chat-ghost"), 0);
+    tracker.end_all_running("chat-ghost");
     assert!(drain(&mut rx).is_empty());
 }
 
