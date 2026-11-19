@@ -33,6 +33,23 @@ root. Analysis only — never fix drift in the same run; findings become todos.
    The fetcher refuses to overwrite an existing delta file — pass a different
    `--out`, or `--force` to replace it.
 
+   For a tool with a `binary` entry in `state.json` (Claude), also diff the
+   builds once per run, over the whole range, not per pass:
+
+   ```bash
+   node .claude/skills/changelog-watch/scripts/binary-diff.mjs --tool claude --from <anchor> --to <head>
+   ```
+
+   The changelog only lists what upstream chose to announce; claude.ai
+   Projects support shipped with no entry. The script reads the JavaScript
+   embedded in each build and lists added and removed slash commands, CLI
+   flags, protocol subtypes, env vars and described schema keys, marking any
+   removed item the checklist cites. It never runs a binary. A version comes
+   from the local install when `binary.localVersionsDir` has it, otherwise
+   from the platform npm package (about 100MB, deleted after the scan).
+   `--to` defaults to npm's latest; `--from-file`/`--to-file` take local
+   builds.
+
 3. **Load the tool's checklist** — `docs/research/adapters/claude/CONSUMED-SURFACE.md`
    or `docs/research/adapters/codex/CONSUMED-SURFACE.md` (schema in
    `docs/research/adapters/README.md`). Done when every checklist ID is in context.
@@ -42,14 +59,17 @@ root. Analysis only — never fix drift in the same run; findings become todos.
    first (drop by default), then risk vs opportunity, severity, and the
    routing table. Done when **every** entry is either mapped to a checklist
    ID or explicitly dropped, and the dropped count is recorded. An
-   unclassified entry means this step is not finished.
+   unclassified entry means this step is not finished. Then sort the binary
+   diff per "Binary surface diff" in the same file: items a changelog entry
+   already covers need nothing more; classify the unannounced rest.
 
 5. **Write the report** to
    `.claude/skills/changelog-watch/reports/<ISO-date>-<tool>-since-<anchor>-report.md`
    using the template in `classification.md` — the anchor in the name keeps a
    second pass on the same day from overwriting the first. Print the summary:
    risks (each naming its checklist ID, Rust consumer, and recommended
-   regression test), opportunities, relevant-no-action entries, dropped count.
+   regression test), opportunities, relevant-no-action entries, dropped count,
+   and the unannounced surface changes worth a look.
 
 6. **Advance state — only after the report exists.** Rerun the same fetch,
    adding `--commit-state <newest entry reviewed>` and the `--out` path the
@@ -101,6 +121,9 @@ A new `tools` entry in `state.json` (`repo`, `mode: changelog|releases`,
 `changelogPath` or `includePrerelease`, seed `lastReviewedRef`) plus a
 `docs/research/adapters/<tool>/CONSUMED-SURFACE.md` checklist. No code change,
 provided the repo publishes either a changelog file or GitHub releases.
+An optional `binary` object (`npmPackage` with a `{platform}` placeholder,
+optional `localVersionsDir`) turns on the binary diff; it fits CLIs shipped
+as bundled JavaScript, not compiled ones such as Codex.
 
 ## Failure modes
 

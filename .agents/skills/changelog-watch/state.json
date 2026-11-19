@@ -3,6 +3,10 @@
   "tools": {
     "claude": {
       "repo": "anthropics/claude-code",
+      "binary": {
+        "npmPackage": "@anthropic-ai/claude-code-{platform}",
+        "localVersionsDir": "~/.local/share/claude/versions"
+      },
       "mode": "changelog",
       "changelogPath": "CHANGELOG.md",
       "lastReviewedRef": "2.1.327",
