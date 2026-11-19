@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
-import { useChatExtras } from '@/features/chat/runtime/chat-extras';
+import { isRunningFromState, useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { useSessionItems } from '@/features/chat/orchestration/use-session-items';
 import { delegatedTasksOf } from '@/features/sessions/view-model/agent-provenance';
 import { listBackgroundTasks } from '@/lib/api/background-tasks';
@@ -79,5 +79,13 @@ export function useActivityEntries() {
     ).sort((a, b) => b.startedAt - a.startedAt);
   }, [messages, loaded, chatId, liveTasks, sessionItems]);
 
-  return { entries, chatId, adapterId: extras?.state.chatConfig?.adapterId, loadError, now };
+  return {
+    entries,
+    chatId,
+    adapterId: extras?.state.chatConfig?.adapterId,
+    loadError,
+    now,
+    sessionRunning: extras ? isRunningFromState(extras.state) : false,
+    sessionWaiting: extras ? Object.keys(extras.state.interactions.permissions).length > 0 : false,
+  };
 }
