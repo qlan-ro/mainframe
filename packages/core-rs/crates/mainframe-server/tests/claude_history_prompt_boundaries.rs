@@ -20,6 +20,7 @@ use mainframe_display::display_pipeline::prepare_messages_for_client;
 use mainframe_display::incremental::IncrementalProjector;
 use mainframe_display::{DisplayProjector, ProjectionInput, RawChange, RawChanges};
 use mainframe_types::acp::content::ContentBlock;
+use mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE;
 use mainframe_types::acp::tool_call::ToolCallStatus;
 use mainframe_types::chat::ChatMessage;
 
@@ -87,13 +88,17 @@ async fn hidden_prompt_replies_reload_as_separate_acp_messages() {
     let completed_tools: Vec<_> = items
         .iter()
         .filter_map(|item| match item {
-            EncodedItem::ToolCall { id, status, .. } if *status == ToolCallStatus::Completed => {
-                Some(id.as_str())
+            EncodedItem::ToolCall {
+                id, status, meta, ..
+            } if *status == ToolCallStatus::Completed => {
+                let source =
+                    meta.as_ref()?[MAINFRAME_META_NAMESPACE]["sourceToolCallId"].as_str()?;
+                Some((id.as_str(), source))
             }
             _ => None,
         })
         .collect();
-    assert_eq!(completed_tools, ["tu1", "tu2"]);
+    assert_eq!(completed_tools, [("tool:tu1", "tu1"), ("tool:tu2", "tu2")]);
 }
 
 #[tokio::test]
