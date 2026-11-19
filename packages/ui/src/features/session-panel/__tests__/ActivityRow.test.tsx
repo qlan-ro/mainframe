@@ -94,3 +94,28 @@ it('uses the same current phase in the workflow subtitle and rail', () => {
   expect(screen.getByText('Verify · phase 3 of 3 · 2 agents running')).toBeInTheDocument();
   expect(screen.getByLabelText('Workflow phase 3 of 3')).toBeInTheDocument();
 });
+
+it('opens a resumed child without offering cancellation of its terminal task', () => {
+  const onOpenChild = vi.fn();
+  const row: ActivityEntry = {
+    id: 'delegated:resumed',
+    kind: 'delegated',
+    title: 'Resumed review',
+    detail: 'Resumed chat · task interrupted',
+    state: 'running',
+    startedAt: 0,
+    delegated: {
+      taskId: 'resumed',
+      itemId: 'child',
+      title: 'Resumed review',
+      status: 'interrupted',
+      waiting: false,
+      resumedState: 'running',
+      updatedAt: 0,
+    },
+  };
+  render(<ActivityRow row={row} now={60_000} chatId="parent" onJump={() => {}} onOpenChild={onOpenChild} />);
+  expect(screen.queryByRole('button', { name: 'Cancel Resumed review' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Open Resumed review chat' }));
+  expect(onOpenChild).toHaveBeenCalledOnce();
+});
