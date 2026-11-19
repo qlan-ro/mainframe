@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Activity,
   Binoculars,
   Bot,
   ChevronDown,
@@ -26,6 +27,7 @@ const ICONS: Record<ActivityKind, LucideIcon> = {
   monitor: Binoculars,
   scheduled: Clock3,
   command: SquareTerminal,
+  background: Activity,
 };
 
 function timeLabel(row: ActivityEntry, now: number): string {
