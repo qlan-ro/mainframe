@@ -183,3 +183,21 @@ async fn skips_archived_chats() {
     .await;
     assert!(tracker.list("chat-sess1").is_empty());
 }
+
+#[tokio::test]
+async fn a_failed_writer_probe_does_not_adopt_a_stopped_task() {
+    let tracker = BackgroundTaskTracker::new();
+    set_lsof_for_tests(
+        &tracker.process,
+        Arc::new(|_| Box::pin(async { Err(crate::lsof::LsofError::TimedOut) })),
+    );
+    let sp = new_spool();
+    sp.place_file(&sp.encoded_project, "sess1", "tkid01.output");
+    reconcile_under(
+        &tracker,
+        snapshot(vec![make_chat("sess1", None, "p1")], &sp.project_path),
+        Path::new(&sp.root),
+    )
+    .await;
+    assert!(tracker.list("chat-sess1").is_empty());
+}

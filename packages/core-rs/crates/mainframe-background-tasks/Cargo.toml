@@ -19,7 +19,7 @@ dashmap = { workspace = true }
 mainframe-types = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true }
+rustix = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]
 mainframe-runtime = { workspace = true, features = ["test-support"] }

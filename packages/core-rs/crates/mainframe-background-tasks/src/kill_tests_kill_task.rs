@@ -220,3 +220,28 @@ async fn a_task_without_an_output_path_is_unreachable_once_the_session_refuses()
         })
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_probe_keeps_the_task_running_before_or_after_signalling() {
+    for responses in [
+        vec![Canned::Timeout],
+        vec![Canned::Writers(vec![42]), Canned::Timeout],
+    ] {
+        let tracker = BackgroundTaskTracker::new();
+        set_lsof_queue(&tracker, responses);
+        record_tree_kill(&tracker);
+        seed(&tracker, "c", "t1", "/p/t1.output");
+        let result = kill_background_task(KillArgs {
+            chat_id: "c",
+            task_id: "t1",
+            session: None,
+            tracker: &tracker,
+        })
+        .await;
+        assert_eq!(result, Err(KillError::ProbeFailed("lsof timed out".into())));
+        assert_eq!(
+            tracker.get("c", "t1").unwrap().status,
+            BackgroundTaskStatus::Running
+        );
+    }
+}

@@ -132,6 +132,7 @@ async fn real_command_for_pid(pid: u32, path: ResolvedPath) -> String {
 pub(super) enum SignalFailure {
     /// No process writes the file.
     NoWriter,
+    Probe(crate::lsof::LsofError),
     /// These pids still write the file after being signalled.
     Survivors(Vec<u32>),
 }
@@ -142,7 +143,9 @@ pub(super) async fn signal_writers(
     process: &ProcessDeps,
     output_path: &str,
 ) -> Result<(), SignalFailure> {
-    let writers = lsof_writers(process, output_path).await;
+    let writers = lsof_writers(process, output_path)
+        .await
+        .map_err(SignalFailure::Probe)?;
     if writers.is_empty() {
         return Err(SignalFailure::NoWriter);
     }
@@ -151,7 +154,9 @@ pub(super) async fn signal_writers(
             tracing::warn!(pid, %error, "signalling a spool writer failed");
         }
     }
-    let survivors = lsof_writers(process, output_path).await;
+    let survivors = lsof_writers(process, output_path)
+        .await
+        .map_err(SignalFailure::Probe)?;
     if survivors.is_empty() {
         Ok(())
     } else {

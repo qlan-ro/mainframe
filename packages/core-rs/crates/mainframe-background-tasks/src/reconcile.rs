@@ -70,7 +70,9 @@ async fn reconcile_under(
             continue;
         };
 
-        let writers = lsof_writers(&tracker.process, &entry.fp).await;
+        let Ok(writers) = lsof_writers(&tracker.process, &entry.fp).await else {
+            continue;
+        };
         tracker.adopt(
             &chat.id,
             recovered_task(&entry.task_id, &entry.fp, &metadata, !writers.is_empty()),

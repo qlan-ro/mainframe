@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 
 use mainframe_types::background_task::{BackgroundTaskStatus, BackgroundWorkKind};
 
-use crate::lsof::lsof_writers_detailed;
+use crate::lsof::lsof_writers;
 use crate::tracker::{BackgroundTaskTracker, TerminalUpdate};
 
 const TICK: Duration = Duration::from_secs(60);
@@ -71,7 +71,7 @@ async fn run_liveness_sweep(
             continue;
         };
         // A failed probe proves nothing; never stop a task on it.
-        let Ok(pids) = lsof_writers_detailed(&tracker.process, &output_path).await else {
+        let Ok(pids) = lsof_writers(&tracker.process, &output_path).await else {
             continue;
         };
         if let Some(&pid) = pids.first() {

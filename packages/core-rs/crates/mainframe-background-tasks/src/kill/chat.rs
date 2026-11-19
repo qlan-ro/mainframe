@@ -5,6 +5,7 @@ use std::path::Path;
 
 use mainframe_types::background_task::BackgroundTask;
 
+use super::sweep_output::SweepOutput;
 use super::{KillError, SessionLike, Via, mark_stopped, os, stop_task};
 use crate::encoding::encode_cwd_segment;
 use crate::lsof::lsof_writers;
@@ -111,22 +112,26 @@ async fn sweep_worktree(
     };
     let cwd_seg = encode_cwd_segment(&real_worktree.to_string_lossy());
     for entry in walk_spool_tasks(spool_root, Some(&cwd_seg)).await {
-        // Never follow a symlink out of the spool.
-        let is_regular_file = tokio::fs::symlink_metadata(&entry.fp)
-            .await
-            .is_ok_and(|metadata| metadata.is_file());
-        if is_regular_file {
-            sweep_file(args.tracker, &entry.fp, result).await;
+        let Some(output) = SweepOutput::open(spool_root, &entry) else {
+            continue;
+        };
+        match lsof_writers(&args.tracker.process, &output.probe_path).await {
+            Ok(writers) => sweep_writers(args.tracker, &entry.fp, writers, result).await,
+            Err(error) => result.failed.push(FailedEntry {
+                task_id: entry.task_id,
+                error: KillError::ProbeFailed(error.to_string()),
+            }),
         }
     }
 }
 
-async fn sweep_file(
+async fn sweep_writers(
     tracker: &BackgroundTaskTracker,
     file: &str,
+    writers: Vec<u32>,
     result: &mut KillTasksForChatResult,
 ) {
-    for pid in lsof_writers(&tracker.process, file).await {
+    for pid in writers {
         if pid == std::process::id() {
             continue;
         }

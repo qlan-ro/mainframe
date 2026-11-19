@@ -56,6 +56,7 @@ fn lsof_stdout(result: Result<Output, ExecError>) -> Result<String, LsofError> {
         error => LsofError::Failed(error.to_string()),
     })?;
     match output.status.code() {
+        Some(1) if !output.stderr.is_empty() => Err(LsofError::Exited(1)),
         Some(0 | 1) => Ok(String::from_utf8_lossy(&output.stdout).into_owned()),
         Some(code) => Err(LsofError::Exited(code)),
         None => Err(LsofError::Killed),
@@ -82,19 +83,9 @@ async fn run_lsof(process: &ProcessDeps, path: &str) -> Result<String, LsofError
 }
 
 /// Pids holding `path` open for writing (`w`) or read-write (`u`).
-pub(crate) async fn lsof_writers_detailed(
-    process: &ProcessDeps,
-    path: &str,
-) -> Result<Vec<u32>, LsofError> {
+pub(crate) async fn lsof_writers(process: &ProcessDeps, path: &str) -> Result<Vec<u32>, LsofError> {
     let stdout = run_lsof(process, path).await?;
     Ok(parse_pids(&stdout, |mode| mode == "w" || mode == "u"))
-}
-
-/// [`lsof_writers_detailed`], treating a failed probe as no writers.
-pub(crate) async fn lsof_writers(process: &ProcessDeps, path: &str) -> Vec<u32> {
-    lsof_writers_detailed(process, path)
-        .await
-        .unwrap_or_default()
 }
 
 #[cfg(test)]

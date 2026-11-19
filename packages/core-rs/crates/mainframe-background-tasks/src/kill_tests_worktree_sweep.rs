@@ -77,3 +77,52 @@ async fn worktree_sweep_does_not_count_a_writer_it_could_not_signal() {
     let out = sweep_with_tree_kill_failure(true).await;
     assert!(out.swept.is_empty());
 }
+
+#[tokio::test]
+async fn worktree_sweep_skips_a_linked_session_directory() {
+    let tracker = BackgroundTaskTracker::new();
+    set_lsof_for_tests(
+        &tracker.process,
+        Arc::new(|_| panic!("unexpected writer probe")),
+    );
+    let fx = build_sweep_fixture(false);
+    let encoded = encode_cwd_segment(
+        &fs::canonicalize(&fx.worktree_path)
+            .unwrap()
+            .to_string_lossy(),
+    );
+    let session = Path::new(&fx.spool_root).join(encoded).join("sess-a");
+    let sibling = Path::new(&fx.spool_root).join("another-worktree");
+    fs::rename(&session, &sibling).unwrap();
+    std::os::unix::fs::symlink(sibling, session).unwrap();
+    let result = kill_chat(&tracker, None, Some(&fx.worktree_path), &fx.spool_root).await;
+    assert!(result.swept.is_empty());
+}
+
+#[tokio::test]
+async fn worktree_sweep_probes_the_file_it_opened_even_after_a_rename() {
+    let tracker = BackgroundTaskTracker::new();
+    let fx = build_sweep_fixture(false);
+    let encoded = encode_cwd_segment(
+        &fs::canonicalize(&fx.worktree_path)
+            .unwrap()
+            .to_string_lossy(),
+    );
+    let file = Path::new(&fx.spool_root)
+        .join(encoded)
+        .join("sess-a/tasks/leftover.output");
+    let called = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let observed = called.clone();
+    set_lsof_for_tests(
+        &tracker.process,
+        Arc::new(move |probe| {
+            fs::rename(&file, file.with_extension("old")).unwrap();
+            fs::write(&file, b"replacement").unwrap();
+            assert_eq!(fs::read(probe).unwrap(), b"x");
+            observed.store(true, std::sync::atomic::Ordering::Relaxed);
+            Box::pin(async { Ok(String::new()) })
+        }),
+    );
+    kill_chat(&tracker, None, Some(&fx.worktree_path), &fx.spool_root).await;
+    assert!(called.load(std::sync::atomic::Ordering::Relaxed));
+}

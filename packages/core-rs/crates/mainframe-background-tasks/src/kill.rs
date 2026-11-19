@@ -8,6 +8,7 @@ use crate::tracker::{BackgroundTaskTracker, TerminalUpdate};
 
 mod chat;
 mod os;
+mod sweep_output;
 
 pub use chat::{
     FailedEntry, KillTasksForChatArgs, KillTasksForChatResult, KilledEntry, SweptEntry,
@@ -28,6 +29,8 @@ pub enum Via {
 pub enum KillError {
     #[error("task not found")]
     NotFound,
+    #[error("writer probe failed: {0}")]
+    ProbeFailed(String),
     /// No session stopped the task and there was nothing to signal: no
     /// process writes its spool file, or it has no spool file at all.
     /// Carries the session's error when one refused.
@@ -100,6 +103,7 @@ async fn stop_task(
             mark_stopped(tracker, chat_id, &task.id, "killed via signal");
             Ok(Via::Signal)
         }
+        Err(os::SignalFailure::Probe(error)) => Err(KillError::ProbeFailed(error.to_string())),
         Err(os::SignalFailure::NoWriter) => Err(KillError::Unreachable { stop_error }),
         Err(os::SignalFailure::Survivors(pids)) => Err(KillError::Survivors { pids }),
     }

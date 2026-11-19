@@ -15,6 +15,7 @@ use tempfile::tempdir;
 enum Canned {
     Writers(Vec<u32>),
     Empty,
+    Timeout,
 }
 
 fn writers_stdout(pids: &[u32]) -> String {
@@ -29,6 +30,9 @@ fn set_lsof_queue(tracker: &BackgroundTaskTracker, responses: Vec<Canned>) {
     let q = Arc::new(Mutex::new(VecDeque::from(responses)));
     let lsof: LsofFn = Arc::new(move |_path| {
         let stdout = match q.lock_recover().pop_front() {
+            Some(Canned::Timeout) => {
+                return Box::pin(async { Err(crate::lsof::LsofError::TimedOut) });
+            }
             Some(Canned::Writers(pids)) => writers_stdout(&pids),
             Some(Canned::Empty) | None => String::new(),
         };
