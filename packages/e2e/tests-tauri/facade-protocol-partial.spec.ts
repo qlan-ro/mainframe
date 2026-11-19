@@ -7,7 +7,7 @@
  * `msg_A`, then fires `onApiRetry(1, "overloaded_error")`, then delivers the
  * retried call's completed message. Two halves, one recording, one daemon each:
  *
- *   - wire half (raw `/acp/{profile}` socket, no browser `page`): `msg_A` is
+ *   - wire half (raw `/acp/{profile}` socket, no browser `page`): the partial item is
  *     created once and cleared once (`content: []`, T23/`session_state.rs::
  *     clear_update`) and never mentioned again, and the `attempt: 1` marker rides
  *     the retried call's own content frame, not the clearing one (T16).
@@ -46,6 +46,7 @@ import {
 /** Wide enough that the recording's 300 / 1500 / 2500ms marks stay distinct. */
 const MOCK_MAX_DELAY_MS = 3_000;
 const PROMPT = 'Start answering, then hit a provider retry';
+const PARTIAL_ITEM_ID = 'message:0:top:msg_A';
 const COMPLETED_TEXT = 'RETRY-PARTIAL-DONE: the retried call answered in full.';
 
 function textOf(content: unknown): string {
@@ -60,11 +61,16 @@ test.describe('§facade-protocol partial-retry (wire)', () => {
   let handle: DaemonHandle;
   let project: HeadlessProject;
   let chatId: string;
+  let liveFrames: SessionUpdateFrame[];
 
   test.beforeAll(async () => {
     handle = await startDaemon({ recordingKey: 'retry-partial', mockMaxDelayMs: MOCK_MAX_DELAY_MS });
     project = await createHeadlessProject();
     chatId = await createHeadlessChat(project.projectId);
+    const ws = await connectAndInitialize();
+    sendJson(ws, promptRequest(2, chatId, PROMPT));
+    liveFrames = updates(await collectUntilQuiet(ws, 1_800, 30_000));
+    await closeSocket(ws);
   });
 
   test.afterAll(async () => {
@@ -73,14 +79,7 @@ test.describe('§facade-protocol partial-retry (wire)', () => {
   });
 
   test('a retry-aborted partial is cleared once and never mentioned again; the retry marker rides the retried content', async () => {
-    const ws = await connectAndInitialize();
-    sendJson(ws, promptRequest(2, chatId, PROMPT));
-    const frames = updates(await collectUntilQuiet(ws, 1_800, 30_000));
-    await closeSocket(ws);
-
-    // The partial's item id is the recording's API message id verbatim
-    // (spec decision 23: the item id IS the message id).
-    const partialFrames = frames.filter((frame) => itemId(frame) === 'msg_A');
+    const partialFrames = liveFrames.filter((frame) => itemId(frame) === PARTIAL_ITEM_ID);
     expect(partialFrames.map((frame) => frame.params?.update?.sessionUpdate)).toEqual([
       'agent_message',
       'agent_message',
@@ -95,11 +94,11 @@ test.describe('§facade-protocol partial-retry (wire)', () => {
 
     // The retry marker never rides the clearing frame (T16) — it rides the
     // retried call's own content, which is a different item.
-    const marked = frames.filter((frame) => frame.params?.update?._meta?.['_mainframe.dev']?.attempt !== undefined);
+    const marked = liveFrames.filter((frame) => frame.params?.update?._meta?.['_mainframe.dev']?.attempt !== undefined);
     expect(marked).toHaveLength(1);
     expect(marked[0]?.params?.update?._meta?.['_mainframe.dev']?.attempt).toBe(1);
     expect(marked[0]?.params?.update?._meta?.['_mainframe.dev']?.reason).toBe('overloaded_error');
-    expect(itemId(marked[0] as SessionUpdateFrame)).not.toBe('msg_A');
+    expect(itemId(marked[0] as SessionUpdateFrame)).not.toBe(PARTIAL_ITEM_ID);
     expect(textOf(marked[0]?.params?.update?.content)).toBe(COMPLETED_TEXT);
     // The marker merges into the retried item's create: it keeps the creation
     // marker and the full item meta, not a namespace holding only attempt/reason.
@@ -119,7 +118,7 @@ test.describe('§facade-protocol partial-retry (wire)', () => {
 
     expectReplayClosedAfterQueueState(frames, chatId, 2);
     const replayed = updates(frames);
-    expect(replayed.filter((frame) => itemId(frame) === 'msg_A')).toHaveLength(0);
+    expect(replayed.filter((frame) => itemId(frame) === PARTIAL_ITEM_ID)).toHaveLength(0);
     const agentTexts = replayed
       .filter((frame) => frame.params?.update?.sessionUpdate === 'agent_message')
       .map((frame) => textOf(frame.params?.update?.content));

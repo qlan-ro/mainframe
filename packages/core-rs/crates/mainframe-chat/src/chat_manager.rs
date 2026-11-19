@@ -50,6 +50,8 @@ use crate::worktree_offer::{OfferError, WorktreeOfferRegistry};
 use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
 mod capabilities;
+#[cfg(test)]
+mod codex_idle_mapping_tests;
 mod config_api;
 pub(crate) mod construct;
 mod delivery;
@@ -63,13 +65,22 @@ mod fork_sweep;
 mod handoff_resolve;
 mod handoff_send;
 mod history;
+mod idle_maintenance;
 mod initial_history;
 mod lifecycle_api;
+#[cfg(test)]
+mod maintenance_delivery_tests;
+mod maintenance_queue;
+mod maintenance_queue_edit;
+mod maintenance_queue_payload;
+mod maintenance_queue_recovery;
 pub(crate) mod notifications;
 mod plan_host;
+mod queued_message_actions;
 mod reads;
 mod send;
 mod send_entry;
+mod send_outgoing;
 mod send_queue;
 pub(crate) mod shared;
 mod side_chat;
@@ -88,6 +99,7 @@ pub use errors::{
 };
 pub use external_facade::ExternalSessionFacade;
 pub use history::ResumeSnapshot;
+pub use idle_maintenance::validate_idle_compaction_config;
 pub(crate) use shared::remap_history as remap_history_for;
 pub(crate) use shared::{build_history_session, compose_if_multi};
 pub use side_chat::OpenSideChatError;
@@ -120,6 +132,7 @@ pub struct ChatManager {
     permission_handler: ChatPermissionHandler,
     config: ChatConfigManager,
     idle_scanner: Mutex<crate::idle_scanner::IdleSessionScanner>,
+    compaction_scanner: Mutex<Option<tokio::task::JoinHandle<()>>>,
     external_sessions: Option<Arc<dyn ExternalSessionFacade>>,
     worktree_offers: Arc<WorktreeOfferRegistry>,
     self_ref: Arc<std::sync::OnceLock<std::sync::Weak<ChatManager>>>,
@@ -133,3 +146,13 @@ pub struct ChatManager {
 #[cfg(test)]
 #[path = "chat_manager_tests.rs"]
 pub(crate) mod tests;
+
+#[cfg(test)]
+mod idle_compaction_tests;
+#[cfg(test)]
+mod idle_test_session;
+
+#[cfg(test)]
+mod idle_compaction_events;
+#[cfg(test)]
+mod idle_compaction_rejections;

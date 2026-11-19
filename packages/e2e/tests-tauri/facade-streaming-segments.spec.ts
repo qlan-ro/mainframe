@@ -11,7 +11,7 @@
  *
  * Harness note: the mock adapter cannot attach a vendor id to `onMessage`
  * (`MessageMetadata.vendor_id` is `#[serde(skip)]`), so a committed message gets
- * a minted id rather than `msg_S`. The overlay item `msg_S` is therefore cleared
+ * a minted id rather than `msg_S`. The overlay for `msg_S` is therefore cleared
  * at the commit, and the turn's container is the minted id `C`. With the Claude
  * adapter `C === msg_S`. The assertions below hold either way: they key the
  * segment order off the tool call's own `containerId`, and they check the final
@@ -20,7 +20,7 @@
  *   - wire half (raw `/acp/{profile}` socket): every item's first frame, and only
  *     that frame, carries `created: true` (D37); each overlay-backed create
  *     carries `streaming: true` and a later frame for that item drops it (D39);
- *     the surviving items are `C`, the Read call, `C-1` (D40); a resume from
+ *     the surviving items are two numbered text segments around the Read call; a resume from
  *     `start` replays that same list and closes with `replay_complete` right
  *     after `queue_state` (D38).
  *   - UI half: one assistant message renders text, the Read card, then text.
@@ -52,8 +52,8 @@ import {
 /** Wide enough that the recording's 300 / 800 / 1200 / 1600 / 2200ms marks stay distinct. */
 const MOCK_MAX_DELAY_MS = 3_000;
 const PROMPT = 'Read index.ts, then tell me what it exports';
-const READ_TOOL_ID = 'toolu_e2e_stream_read';
-const OVERLAY_ID = 'msg_S';
+const READ_TOOL_ID = 'tool:toolu_e2e_stream_read';
+const OVERLAY_ID = 'message:0:top:msg_S';
 const SEGMENT_ONE = 'SEGMENT-ONE: reading index.ts first.';
 const SEGMENT_TWO = 'SEGMENT-TWO: the file exports one greeting constant.';
 
@@ -86,13 +86,16 @@ test.describe('§facade-streaming-segments (wire)', () => {
   let handle: DaemonHandle;
   let project: HeadlessProject;
   let chatId: string;
-  /** Captured by the live test, compared against the resume replay. */
-  let liveIds: string[] = [];
+  let liveFrames: SessionUpdateFrame[];
 
   test.beforeAll(async () => {
     handle = await startDaemon({ recordingKey: 'text-tool-text-stream', mockMaxDelayMs: MOCK_MAX_DELAY_MS });
     project = await createHeadlessProject();
     chatId = await createHeadlessChat(project.projectId);
+    const ws = await connectAndInitialize();
+    sendJson(ws, promptRequest(2, chatId, PROMPT));
+    liveFrames = updates(await collectUntilQuiet(ws, 1_800, 30_000));
+    await closeSocket(ws);
   });
 
   test.afterAll(async () => {
@@ -101,14 +104,9 @@ test.describe('§facade-streaming-segments (wire)', () => {
   });
 
   test('creation markers, streaming status and text segments around a tool call', async () => {
-    const ws = await connectAndInitialize();
-    sendJson(ws, promptRequest(2, chatId, PROMPT));
-    const frames = updates(await collectUntilQuiet(ws, 1_800, 30_000));
-    await closeSocket(ws);
-
     // D37: an item's first frame carries `created: true`, and no other frame does.
     const seen = new Set<string>();
-    for (const frame of frames) {
+    for (const frame of liveFrames) {
       const id = itemId(frame);
       if (id === undefined) continue;
       const created = mainframeMeta(frame)?.created === true;
@@ -120,33 +118,33 @@ test.describe('§facade-streaming-segments (wire)', () => {
 
     // D39: the overlay item is created as streaming, and so is the second text
     // segment. Each loses the flag on a later frame (a meta change, or a clear).
-    const streamingCreates = frames.filter((f) => mainframeMeta(f)?.streaming === true);
+    const streamingCreates = liveFrames.filter((f) => mainframeMeta(f)?.streaming === true);
     expect(streamingCreates.map(itemId)).toContain(OVERLAY_ID);
     for (const create of streamingCreates) {
       const id = itemId(create)!;
       expect(mainframeMeta(create)?.created, `${id}: streaming rides the create`).toBe(true);
-      const later = frames.slice(frames.indexOf(create) + 1).filter((f) => itemId(f) === id);
+      const later = liveFrames.slice(liveFrames.indexOf(create) + 1).filter((f) => itemId(f) === id);
       const dropped = later.find((f) => isClear(f) || (mainframeMeta(f) !== undefined && !mainframeMeta(f)?.streaming));
       expect(dropped, `${id}: a later frame must drop streaming`).toBeDefined();
     }
 
-    // D40: the Read call closes the first text segment and the second text
-    // opens `{container}-1`. The container is the tool call's own containerId.
-    const toolCreate = frames.find((f) => itemId(f) === READ_TOOL_ID && mainframeMeta(f)?.created === true);
+    const toolCreate = liveFrames.find((f) => itemId(f) === READ_TOOL_ID && mainframeMeta(f)?.created === true);
     expect(toolCreate?.params?.update?.title).toBe('Read');
     const container = mainframeMeta(toolCreate!)?.containerId;
     expect(container, 'the Read call names its container').toBeTruthy();
 
     // The prompt's own user item leads; the assistant items follow in source order.
-    liveIds = liveItemIds(frames);
-    const userCreate = frames.find((f) => f.params?.update?.sessionUpdate === 'user_message');
+    const liveIds = liveItemIds(liveFrames);
+    const userCreate = liveFrames.find((f) => f.params?.update?.sessionUpdate === 'user_message');
     expect(liveIds[0]).toBe(itemId(userCreate!));
-    expect(liveIds.slice(1)).toEqual([container, READ_TOOL_ID, `${container}-1`]);
-    expect(streamingCreates.map(itemId)).toContain(`${container}-1`);
+    const secondSegmentId = `message:1:top:${container}`;
+    expect(liveIds.slice(1)).toEqual([`message:0:top:${container}`, READ_TOOL_ID, secondSegmentId]);
+    expect(streamingCreates.map(itemId)).toContain(secondSegmentId);
   });
 
   test('a resume from start replays the same items and closes with replay_complete after queue_state', async () => {
-    expect(liveIds.length, 'the live test must have captured the turn').toBe(4);
+    const liveIds = liveItemIds(liveFrames);
+    expect(liveIds).toHaveLength(4);
     const ws = await connectAndInitialize();
     const collected = collectUntilQuiet(ws, 1_500, 15_000);
     const replies = collectFrames(ws);

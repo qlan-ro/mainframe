@@ -15,6 +15,7 @@ export function commandLabel(part: CompactToolPart, status: ToolStatus): string 
   if (description) return actionLabel({ kind: 'command', target: description }, status);
   const program = tokens ? displayText(programName(tokens[0]!)) : '';
   const raw = displayText(args?.command);
-  const target = status === 'running' ? program || 'command' : raw || 'command';
+  if (status === 'running' && !program && !raw) return 'Running command';
+  const target = status === 'running' ? program || raw : raw || 'command';
   return actionLabel({ kind: 'command', target }, status);
 }

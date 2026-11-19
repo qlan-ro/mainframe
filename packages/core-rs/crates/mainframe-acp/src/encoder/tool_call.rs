@@ -91,13 +91,14 @@ pub(super) fn tool_call_item(
     }: ToolCallInput<'_>,
 ) -> EncodedItem {
     EncodedItem::ToolCall {
-        id: id.to_string(),
+        id: format!("tool:{id}"),
         title: name.to_string(),
         kind: category_to_kind(category),
         status: status_for(result),
         raw_input: json!(input),
         content: result_content(name, input, result),
         meta: wrap_meta(ItemMeta {
+            source_tool_call_id: Some(id.to_string()),
             group_id: group_id.map(str::to_string),
             tool_call_timing: timing,
             command_execution: command_execution.as_deref().cloned(),
@@ -124,13 +125,14 @@ pub(super) fn task_group_item(
         .unwrap_or("Subagent task")
         .to_string();
     EncodedItem::ToolCall {
-        id: agent_id.to_string(),
+        id: format!("tool:{agent_id}"),
         title,
         kind: ToolKind::Think,
         status: status_for(result),
         raw_input: json!(task_args),
         content: result_content("Task", task_args, result),
         meta: wrap_meta(ItemMeta {
+            source_tool_call_id: Some(agent_id.to_string()),
             subagent: Some(true),
             tool_call_timing: timing,
             presentation_sources: presentation::whole(container),

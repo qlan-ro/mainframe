@@ -11,12 +11,19 @@ import { resolveToolStatus } from '../view-model/compact/tool-status';
 import type { CompactToolPart } from '../view-model/compact/types';
 import type { MainframeMessageMeta } from '../view-model/message-meta';
 
-export type TurnPhase = 'Needs your input' | 'Stopping' | 'Compacting' | 'Thinking' | 'Writing' | 'Working';
+export type TurnPhase =
+  'Needs your input' | 'Stopping' | 'Compacting' | 'Reconnecting' | 'Thinking' | 'Writing' | 'Working';
 export interface TurnPhaseInputs {
   readonly stopping: boolean;
   readonly compacting: boolean;
   readonly awaitingInput: boolean;
+  /** A provider retry is pending (`state.retry`): replaces Thinking/Writing/Working, outranked by the three above. */
+  readonly reconnecting: boolean;
 }
+
+/** Stopping, Needs your input and Compacting outrank a pending reconnect. */
+export const outranksReconnect = (inputs: Omit<TurnPhaseInputs, 'reconnecting'>): boolean =>
+  inputs.stopping || inputs.awaitingInput || inputs.compacting;
 
 const isQueued = (message: ThreadMessage) =>
   (message.metadata?.custom?.mainframe as MainframeMessageMeta | undefined)?.queued === true;
@@ -54,6 +61,7 @@ export function turnPhase(
   if (inputs.stopping) return 'Stopping';
   if (inputs.awaitingInput) return 'Needs your input';
   if (inputs.compacting) return 'Compacting';
+  if (inputs.reconnecting) return 'Reconnecting';
   const anchor = statusAnchorId(messages);
   return streamPhase(
     messages.find((message) => message.id === anchor),

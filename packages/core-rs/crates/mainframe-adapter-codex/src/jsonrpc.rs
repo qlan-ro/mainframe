@@ -32,7 +32,20 @@ impl From<JsonRpcError> for mainframe_adapter_api::AdapterError {
     }
 }
 
-type PendingTx = oneshot::Sender<Result<Value, JsonRpcError>>;
+#[derive(Debug)]
+pub(crate) enum RpcFailure {
+    Rejected(JsonRpcError),
+    NotWritten(JsonRpcError),
+    Unconfirmed(JsonRpcError),
+}
+impl RpcFailure {
+    fn into_error(self) -> JsonRpcError {
+        match self {
+            Self::Rejected(error) | Self::NotWritten(error) | Self::Unconfirmed(error) => error,
+        }
+    }
+}
+type PendingTx = oneshot::Sender<Result<Value, RpcFailure>>;
 
 /// The four callbacks the client fans events out to (mirrors `JsonRpcHandlers`).
 pub struct JsonRpcHandlers {
@@ -59,8 +72,19 @@ impl JsonRpcClient {
         method: &str,
         params: Option<Value>,
     ) -> Result<Value, JsonRpcError> {
+        self.request_with_disposition(method, params)
+            .await
+            .map_err(RpcFailure::into_error)
+    }
+    pub(crate) async fn request_with_disposition(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, RpcFailure> {
         if self.closed.load(Ordering::SeqCst) {
-            return Err(JsonRpcError("Client closed".to_string()));
+            return Err(RpcFailure::NotWritten(JsonRpcError(
+                "Client closed".to_string(),
+            )));
         }
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let req_id = RequestId::Number(id);
@@ -69,20 +93,22 @@ impl JsonRpcClient {
         self.pending.lock_recover().insert(req_id.clone(), tx);
         if let Err(error) = self.write(&msg) {
             self.pending.lock_recover().remove(&req_id);
-            return Err(JsonRpcError(format!(
+            return Err(RpcFailure::NotWritten(JsonRpcError(format!(
                 "Request {method} (id={id}) not written: {error}"
-            )));
+            ))));
         }
 
         match tokio::time::timeout(Duration::from_millis(self.request_timeout_ms), rx).await {
             Ok(Ok(result)) => result,
-            Ok(Err(_recv)) => Err(JsonRpcError("Client closed".to_string())),
+            Ok(Err(_recv)) => Err(RpcFailure::Unconfirmed(JsonRpcError(
+                "Client closed".to_string(),
+            ))),
             Err(_elapsed) => {
                 self.pending.lock_recover().remove(&req_id);
-                Err(JsonRpcError(format!(
+                Err(RpcFailure::Unconfirmed(JsonRpcError(format!(
                     "Request {method} (id={id}) timed out after {}ms",
                     self.request_timeout_ms
-                )))
+                ))))
             }
         }
     }
@@ -155,7 +181,7 @@ impl JsonRpcClient {
 fn reject_all_pending(pending: &Arc<Mutex<HashMap<RequestId, PendingTx>>>, err: JsonRpcError) {
     let drained: Vec<PendingTx> = pending.lock_recover().drain().map(|(_, tx)| tx).collect();
     for tx in drained {
-        let _ = tx.send(Err(JsonRpcError(err.0.clone())));
+        let _ = tx.send(Err(RpcFailure::Unconfirmed(JsonRpcError(err.0.clone()))));
     }
 }
 
@@ -221,3 +247,33 @@ impl Drop for JsonRpcClient {
 
 #[cfg(test)]
 use parsing::find_json_object_end;
+
+#[cfg(test)]
+impl JsonRpcClient {
+    pub(crate) fn test_transport() -> (Self, tokio::sync::mpsc::Receiver<Vec<u8>>) {
+        let (write_tx, receiver) = mainframe_runtime::process::StdinWriter::channel(8);
+        (
+            Self {
+                next_id: AtomicI64::new(1),
+                pending: Arc::new(Mutex::new(HashMap::new())),
+                closed: Arc::new(AtomicBool::new(false)),
+                exited: Arc::new(AtomicBool::new(false)),
+                close_notify: Arc::new(Notify::new()),
+                kill_notify: Arc::new(Notify::new()),
+                write_tx,
+                request_timeout_ms: 100,
+            },
+            receiver,
+        )
+    }
+    pub(crate) fn test_reject(&self, id: i64) {
+        if let Some(sender) = self.pending.lock_recover().remove(&RequestId::Number(id)) {
+            let _ = sender.send(Err(RpcFailure::Rejected(JsonRpcError("rejected".into()))));
+        }
+    }
+    pub(crate) fn test_acknowledge(&self, id: i64) {
+        if let Some(sender) = self.pending.lock_recover().remove(&RequestId::Number(id)) {
+            let _ = sender.send(Ok(serde_json::json!({})));
+        }
+    }
+}

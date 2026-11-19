@@ -18,6 +18,7 @@ const NOTIF = {
 beforeEach(() => {
   useSettingsStore.setState({
     general: {
+      idleCompaction: { enabled: false },
       worktreeDir: '.worktrees',
       notifications: structuredClone(NOTIF),
       updateChannel: 'stable',

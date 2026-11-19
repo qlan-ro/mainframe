@@ -35,7 +35,7 @@ impl ClaudeSession {
         self.apply_spawn_tuning(&options);
         let pumps = [
             self.start_output(child.stdout.take(), active_sink.clone(), handle_stdout),
-            self.start_output(child.stderr.take(), active_sink.clone(), handle_stderr),
+            self.start_stderr(child.stderr.take(), active_sink.clone()),
         ]
         .into_iter()
         .flatten()

@@ -1,25 +1,30 @@
-use std::collections::{HashMap, HashSet};
+//! Periodic check that running bash tasks still have a process writing their
+//! spool file, so a task whose shell died without a CLI notification stops.
+
+use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use tokio::task::JoinHandle;
 
 use mainframe_types::background_task::{BackgroundTaskStatus, BackgroundWorkKind};
 
-use crate::lsof::lsof_writers_detailed;
+use crate::lsof::lsof_writers;
 use crate::tracker::{BackgroundTaskTracker, TerminalUpdate};
 
-pub const TICK_MS: u64 = 60_000;
-pub const GRACE_MS: i64 = 90_000;
-pub const WAKE_DELTA_MULT: i64 = 2;
+const TICK: Duration = Duration::from_secs(60);
+/// A task younger than this is never probed: its shell may not have opened
+/// the spool file yet.
+const GRACE_MS: i64 = 90_000;
+/// A wall-clock gap longer than this many tick periods means the machine
+/// slept, so one empty probe is enough to stop a task.
+const WAKE_DELTA_MULT: i64 = 2;
 
-/// chatId → taskId → miss count.
-pub type MissMap = HashMap<String, HashMap<String, i64>>;
+/// Tasks whose last probe found no writer, keyed by `(chat_id, task_id)`. A
+/// second empty probe in a row stops the task.
+type Suspects = HashSet<(String, String)>;
 
-pub struct LivenessDeps {
-    pub tracker: Arc<BackgroundTaskTracker>,
-    pub interval_ms: Option<u64>,
-}
-
+/// Aborts the sweep loop when stopped or dropped.
 pub struct LivenessSchedulerHandle {
     handle: JoinHandle<()>,
 }
@@ -30,81 +35,53 @@ impl LivenessSchedulerHandle {
     }
 }
 
-/// Read the current miss count for `(chatId, taskId)`. Exported for tests.
-pub(crate) fn get_miss_count(miss_map: &MissMap, chat_id: &str, task_id: &str) -> i64 {
-    miss_map
-        .get(chat_id)
-        .and_then(|inner| inner.get(task_id))
-        .copied()
-        .unwrap_or(0)
-}
-
-fn set_miss(miss_map: &mut MissMap, chat_id: &str, task_id: &str, count: i64) {
-    miss_map
-        .entry(chat_id.to_string())
-        .or_default()
-        .insert(task_id.to_string(), count);
-}
-
-fn delete_miss(miss_map: &mut MissMap, chat_id: &str, task_id: &str) {
-    if let Some(inner) = miss_map.get_mut(chat_id) {
-        inner.remove(task_id);
-        if inner.is_empty() {
-            miss_map.remove(chat_id);
-        }
+impl Drop for LivenessSchedulerHandle {
+    fn drop(&mut self) {
+        self.handle.abort();
     }
 }
 
-/// `delta > intervalMs * WAKE_DELTA_MULT` — the wallclock-jump wake heuristic.
-pub(crate) fn is_wake(delta: i64, interval_ms: u64) -> bool {
-    delta > interval_ms as i64 * WAKE_DELTA_MULT
+/// Whether the wall clock moved further than the tick period can explain.
+fn is_wake(delta_ms: i64, period: Duration) -> bool {
+    let period_ms = i64::try_from(period.as_millis()).unwrap_or(i64::MAX);
+    delta_ms > period_ms.saturating_mul(WAKE_DELTA_MULT)
 }
 
-/// One-shot sweep. Exported for direct testing.
-pub(crate) async fn run_liveness_sweep(
+/// One sweep over every running bash task.
+async fn run_liveness_sweep(
     tracker: &BackgroundTaskTracker,
-    miss_map: &mut MissMap,
+    suspects: &mut Suspects,
     now: i64,
     force_wake: bool,
 ) {
-    let mut live_by_chat: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut running = Suspects::new();
     for (chat_id, task) in tracker.list_all_running() {
-        live_by_chat
-            .entry(chat_id.clone())
-            .or_default()
-            .insert(task.id.clone());
+        let key = (chat_id, task.id.clone());
+        running.insert(key.clone());
 
-        // lsof-writer liveness only holds for bash tasks (the shell keeps the
-        // spool file open). Agents/workflows run inside the CLI and have no
-        // writer — probing them would false-stop live work. They close via
-        // task_notification bookends or endAllRunning on CLI exit.
-        if task.kind != BackgroundWorkKind::Bash {
+        // Only a bash task's shell keeps the spool file open. Agents and
+        // workflows run inside the CLI and have no writer, so probing them
+        // would stop live work; they end through task notifications or
+        // `end_all_running` when the CLI exits.
+        if task.kind != BackgroundWorkKind::Bash || now - task.started_at < GRACE_MS {
             continue;
         }
-        if now - task.started_at < GRACE_MS {
-            continue;
-        }
-        let Some(output_path) = task.output_path.clone() else {
-            tracing::warn!(chat_id = %chat_id, task_id = %task.id, "no outputPath");
+        let Some(output_path) = task.output_path else {
+            tracing::warn!(chat_id = %key.0, task_id = %key.1, "running bash task has no output path");
             continue;
         };
-        let pids = match lsof_writers_detailed(&tracker.process, &output_path).await {
-            // Skip: don't mass-mark stopped on lsof failure.
-            Err(_) => continue,
-            Ok(pids) => pids,
-        };
-        if !pids.is_empty() {
-            delete_miss(miss_map, &chat_id, &task.id);
-            tracker.set_pid(&chat_id, &task.id, pids[0]);
+        // A failed probe proves nothing; never stop a task on it.
+        let Ok(pids) = lsof_writers(&tracker.process, &output_path).await else {
             continue;
-        }
-        // Empty observation
-        let prev = get_miss_count(miss_map, &chat_id, &task.id);
-        if force_wake || prev >= 1 {
-            delete_miss(miss_map, &chat_id, &task.id);
+        };
+        if let Some(&pid) = pids.first() {
+            tracker.set_pid(&key.0, &key.1, pid);
+            suspects.remove(&key);
+        } else if force_wake || suspects.contains(&key) {
+            suspects.remove(&key);
             tracker.end(
-                &chat_id,
-                &task.id,
+                &key.0,
+                &key.1,
                 TerminalUpdate {
                     status: BackgroundTaskStatus::Stopped,
                     output_path,
@@ -113,44 +90,37 @@ pub(crate) async fn run_liveness_sweep(
                 },
             );
         } else {
-            set_miss(miss_map, &chat_id, &task.id, prev + 1);
+            suspects.insert(key);
         }
     }
-    prune_misses(miss_map, &live_by_chat);
+    suspects.retain(|key| running.contains(key));
 }
 
-type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
-
-pub fn start_liveness_scheduler(deps: LivenessDeps) -> LivenessSchedulerHandle {
-    let clock: Clock = Arc::new(mainframe_types::time::now_ms);
-    start_liveness_scheduler_with_clock(deps, clock)
+/// Sweep every minute until the returned handle is stopped or dropped.
+pub fn start_liveness_scheduler(tracker: Arc<BackgroundTaskTracker>) -> LivenessSchedulerHandle {
+    start_liveness_scheduler_every(tracker, TICK)
 }
 
-/// Clock-injectable variant — the wall-clock source (`Date.now()`) is a closure
-/// so wake-detection can be driven deterministically in tests.
-pub(crate) fn start_liveness_scheduler_with_clock(
-    deps: LivenessDeps,
-    clock: Clock,
+fn start_liveness_scheduler_every(
+    tracker: Arc<BackgroundTaskTracker>,
+    period: Duration,
 ) -> LivenessSchedulerHandle {
-    let interval_ms = deps.interval_ms.unwrap_or(TICK_MS);
-    let tracker = deps.tracker;
+    let clock = mainframe_types::time::now_ms;
     let handle = tokio::spawn(async move {
-        let mut miss_map: MissMap = HashMap::new();
+        let mut suspects = Suspects::new();
         let mut last_tick = clock();
-        let period = std::time::Duration::from_millis(interval_ms);
-        // `interval_at(now + period, ...)` so the first tick fires AFTER the
-        // interval, matching setInterval (tokio's plain `interval` fires at once).
+        // The first sweep runs one period after start, not immediately.
         let mut ticker = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
         loop {
             ticker.tick().await;
             let now = clock();
             let delta = now - last_tick;
-            let force_wake = is_wake(delta, interval_ms);
-            if force_wake {
-                tracing::info!(delta, "wake detected (wallclock jump)");
-            }
             last_tick = now;
-            run_liveness_sweep(&tracker, &mut miss_map, now, force_wake).await;
+            let force_wake = is_wake(delta, period);
+            if force_wake {
+                tracing::info!(delta, "wake detected (wall-clock jump)");
+            }
+            run_liveness_sweep(&tracker, &mut suspects, now, force_wake).await;
         }
     });
     LivenessSchedulerHandle { handle }
@@ -159,25 +129,3 @@ pub(crate) fn start_liveness_scheduler_with_clock(
 #[cfg(test)]
 #[path = "liveness_tests.rs"]
 mod tests;
-
-fn prune_misses(miss_map: &mut MissMap, live_by_chat: &HashMap<String, HashSet<String>>) {
-    // GC chats no longer tracked; tasks no longer running.
-    let chat_ids: Vec<String> = miss_map.keys().cloned().collect();
-    for chat_id in chat_ids {
-        let Some(live) = live_by_chat.get(&chat_id) else {
-            miss_map.remove(&chat_id);
-            continue;
-        };
-        if let Some(inner) = miss_map.get_mut(&chat_id) {
-            let task_ids: Vec<String> = inner.keys().cloned().collect();
-            for task_id in task_ids {
-                if !live.contains(&task_id) {
-                    inner.remove(&task_id);
-                }
-            }
-            if inner.is_empty() {
-                miss_map.remove(&chat_id);
-            }
-        }
-    }
-}

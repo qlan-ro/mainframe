@@ -33,7 +33,7 @@ pub(crate) fn mock_adapters(
 }
 
 struct WorkflowBridge(Arc<ClaudeWorkflowStore>);
-impl mainframe_background_tasks::workflow_sink::WorkflowSink for WorkflowBridge {
+impl mainframe_adapter_mock::WorkflowSink for WorkflowBridge {
     fn seed(&self, chat_id: &str, task_id: &str, name: Option<String>) {
         self.0.seed(chat_id, task_id, name);
     }

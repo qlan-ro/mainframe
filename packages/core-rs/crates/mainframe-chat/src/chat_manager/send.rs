@@ -6,15 +6,6 @@
 use super::*;
 use mainframe_types::sync::LockExt as _;
 
-/// Everything the plain-text tail needs from attachment processing, with the
-/// typed text already folded in.
-struct Outgoing {
-    images: Vec<ImageInput>,
-    attachment_previews: Vec<serde_json::Value>,
-    message_content: Vec<MessageContent>,
-    text: String,
-}
-
 impl ChatManager {
     /// First-message titling: the deterministic fallback, then LLM summarization.
     /// No-op once the chat has a title — EXCEPT a fork's provisional title, which
@@ -23,7 +14,12 @@ impl ChatManager {
     /// user rename before that first message (the title no longer equals the
     /// stored provisional title) still wins, and so does disabled generation
     /// (`do_generate_title`'s own no-op).
-    fn assign_initial_title(&self, cell: &Arc<Mutex<ActiveChat>>, chat_id: &str, content: &str) {
+    pub(super) fn assign_initial_title(
+        &self,
+        cell: &Arc<Mutex<ActiveChat>>,
+        chat_id: &str,
+        content: &str,
+    ) {
         let current_title = cell.lock_recover().chat.title.clone().unwrap_or_default();
         let title_empty = current_title.is_empty();
         let is_untouched_fork_title =
@@ -75,7 +71,7 @@ impl ChatManager {
     /// a minted nanoid — the same uuid handed to `send_message` below, so the
     /// CLI records this turn's transcript entry under the id the daemon already
     /// committed to live (live and cold-reloaded ids must match).
-    fn store_user_message(
+    pub(super) fn store_user_message(
         &self,
         chat_id: &str,
         message_content: Vec<MessageContent>,
@@ -110,46 +106,6 @@ impl ChatManager {
             });
         }
         message
-    }
-
-    async fn prepare_outgoing(
-        &self,
-        chat_id: &str,
-        content: &str,
-        attachment_ids: Option<&[String]>,
-    ) -> Outgoing {
-        let ProcessedAttachments {
-            images,
-            mut message_content,
-            text_prefix,
-            attachment_previews,
-        } = match attachment_ids {
-            Some(ids) if !ids.is_empty() => {
-                self.shared.deps.process_attachments(chat_id, ids).await
-            }
-            _ => ProcessedAttachments::default(),
-        };
-        if !content.is_empty() {
-            message_content.push(MessageContent::Leaf(LeafContent::Text {
-                text: content.to_string(),
-                parent_tool_use_id: None,
-            }));
-        }
-        let text = if !text_prefix.is_empty() {
-            if content.is_empty() {
-                text_prefix.join("\n")
-            } else {
-                format!("{}\n\n{}", text_prefix.join("\n"), content)
-            }
-        } else {
-            content.to_string()
-        };
-        Outgoing {
-            images,
-            attachment_previews,
-            message_content,
-            text,
-        }
     }
 
     /// Command dispatch: store and emit the user's text, title the chat, hand the
@@ -222,18 +178,8 @@ impl ChatManager {
         let outgoing = self
             .prepare_outgoing(chat_id, content, attachment_ids)
             .await;
-
         let (transient_metadata, message_uuid, is_queued) =
             self.queued_message_metadata(post, session, &outgoing.attachment_previews);
-
-        // Both the stored message AND (when queued) its `QueuedMessageRef`
-        // are recorded BEFORE the adapter call below: a fast-arriving replay
-        // ack (Claude's queued-send path, `is_queued` below) can land while
-        // that call is still in flight, and must find the message already
-        // in the transcript with its ref already registered, or it looks for
-        // state that does not exist yet. A steer that then fails never got
-        // the CLI's attention at all, so both are rolled back rather than
-        // left to look delivered/queued.
         let message = self.store_user_message(
             chat_id,
             outgoing.message_content,
@@ -261,25 +207,17 @@ impl ChatManager {
             }
             Delivery::Turn { handoff } => handoff,
         };
-
         self.record_message_context(post, chat_id, content);
-
         let prior_state = post.lock_recover().chat.process_state.flatten();
         self.set_working(post, &now_iso8601());
-
         let uuid = Some(message_uuid.clone());
-        // The provider gets the handoff block; the stored message keeps
-        // only the user's own text, so live and cold history match.
         let text = with_handoff(handoff, outgoing.text);
         if let Err(err) = session.send_message(text, outgoing.images, uuid).await {
             self.roll_back_refused_turn(post, chat_id, &message, prior_state, &err);
             return Err(err.into());
         }
-
         if is_queued {
             self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);
-        // Queued: `TurnStarted` waits for the CLI to dequeue it
-        // (event_handler.rs's `on_queued_processed`).
         } else {
             self.event_handler
                 .notify_chat_surface(self.shared.turn_started_event(chat_id));

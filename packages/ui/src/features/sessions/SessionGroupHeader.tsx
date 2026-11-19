@@ -16,6 +16,7 @@
  */
 import type { ReactNode } from 'react';
 import { SidebarGroupLabel } from '@/components/ui/sidebar';
+import { FadeLabel } from '@/components/ui/fade-label';
 
 interface SessionGroupHeaderProps {
   label: string;
@@ -29,7 +30,7 @@ export function SessionGroupHeader({ label, actions }: SessionGroupHeaderProps) 
       data-testid={`sessions-group-header-${label}`}
       className="h-7 bg-sidebar pr-1 pl-2 font-semibold"
     >
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <FadeLabel className="flex-1">{label}</FadeLabel>
       {actions != null && <span className="flex shrink-0 items-center gap-0.5">{actions}</span>}
     </SidebarGroupLabel>
   );

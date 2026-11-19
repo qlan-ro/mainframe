@@ -20,7 +20,7 @@ import React from 'react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockSendReview = vi.fn().mockResolvedValue(undefined);
+const mockSendReview = vi.fn().mockResolvedValue('sent');
 
 vi.mock('../use-send-review', () => ({
   useSendReview: () => mockSendReview,
@@ -130,7 +130,7 @@ async function openPortal(id: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockSendReview.mockResolvedValue(undefined);
+  mockSendReview.mockResolvedValue('sent');
   capturedOnOpen = null;
   // Detach any host elements from a previous test.
   for (const w of fakeWidgets.values()) {

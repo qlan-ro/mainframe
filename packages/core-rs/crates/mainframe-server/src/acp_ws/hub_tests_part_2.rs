@@ -43,8 +43,8 @@ fn assert_next_turn_streaming(kind: mainframe_types::display::StreamingLeafKind,
 async fn a_new_turn_does_not_remark_the_previous_answer_and_commit_drops_the_overlay() {
     use mainframe_types::display::StreamingLeafKind;
     for (kind, item_id) in [
-        (StreamingLeafKind::Text, "next"),
-        (StreamingLeafKind::Thinking, "next-thought"),
+        (StreamingLeafKind::Text, "message:0:top:next"),
+        (StreamingLeafKind::Thinking, "thought:0:top:next"),
     ] {
         assert_next_turn_streaming(kind, item_id);
     }

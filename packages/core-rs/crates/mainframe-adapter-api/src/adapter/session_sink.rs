@@ -4,6 +4,16 @@ use super::*;
 /// (see the module doc). `Send + Sync` so the session's stdout reader task can
 /// own an `Arc<dyn SessionSink>`.
 pub trait SessionSink: Send + Sync {
+    fn on_compact_with_metadata(&self, metadata: mainframe_types::compaction::CompactionMetadata) {
+        self.on_compact(metadata.vendor_id.as_deref());
+    }
+    fn on_maintenance_result(
+        &self,
+        _request: mainframe_types::compaction::NativeCompactionRequest,
+        _result: SessionResult,
+    ) {
+    }
+
     fn on_message_with_presentation(
         &self,
         content: Vec<MessageContent>,

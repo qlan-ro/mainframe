@@ -17,6 +17,11 @@ impl CodexSession {
         Ok(())
     }
     pub(super) async fn interrupt_inner(&self) -> Result<(), AdapterError> {
+        let maintenance = self.state.lock_recover().maintenance.clone();
+        if !maintenance.ready() {
+            maintenance.timeout();
+            return Ok(());
+        }
         let client = self.client.lock_recover().clone();
         let (thread_id, turn_id) = {
             let mut st = self.state.lock_recover();
@@ -40,23 +45,32 @@ impl CodexSession {
         let state_n = self.state.clone();
         let state_x = self.state.clone();
         let sink_e = self.sink.clone();
+        let state_e = self.state.clone();
         let status_x = self.status.clone();
         let client_slot_x = self.client.clone();
         let sink_x = self.sink.clone();
         let on_exit_cb = self.on_exit_callback.clone();
 
+        let approval_n = approval.clone();
         let notification_span = self.span.clone();
         let error_span = self.span.clone();
         let exit_span = self.span.clone();
         JsonRpcHandlers {
             on_notification: Box::new(move |method, params| {
                 let _span = notification_span.enter();
+                if method == "serverRequest/resolved" {
+                    approval_n.handle_resolved(&params);
+                    return;
+                }
                 let s = sink_n.lock_recover().clone();
                 handle_notification(&method, &params, &s, &mut state_n.lock_recover());
             }),
             on_request: self.request_handler(approval),
             on_error: Box::new(move |error| {
                 let _span = error_span.enter();
+                if state_e.lock_recover().maintenance.suppressing() {
+                    return;
+                }
                 let s = sink_e.lock_recover().clone();
                 s.on_error(AdapterError::Message(error));
             }),

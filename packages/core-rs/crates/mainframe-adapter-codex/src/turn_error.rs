@@ -8,6 +8,8 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use crate::chatgpt_subscription::{ChatgptSubscription, read_chatgpt_subscription};
+use crate::codex_error_info::{CodexErrorKind, classify, describe};
+use crate::notification_types::TurnError;
 
 /// Codex returns this for every model once the ChatGPT plan lapses, and for a
 /// model the plan does not include.
@@ -28,8 +30,32 @@ struct ApiError {
     message: Option<String>,
 }
 
-pub(crate) fn explain_turn_error(raw: String) -> String {
-    explain(raw, read_chatgpt_subscription, Utc::now())
+pub(crate) fn explain_turn_error(error: &TurnError) -> String {
+    let kind = classify(error.codex_error_info.as_ref());
+    explain_with_info(
+        error.message.clone(),
+        kind,
+        read_chatgpt_subscription,
+        Utc::now(),
+    )
+}
+
+/// An OpenAI envelope always takes the `explain` path, whatever Codex's own
+/// error metadata says; any other text is described from that metadata.
+pub(crate) fn explain_with_info(
+    raw: String,
+    kind: Option<CodexErrorKind>,
+    subscription: impl FnOnce() -> Option<ChatgptSubscription>,
+    now: DateTime<Utc>,
+) -> String {
+    if parse_envelope(&raw).is_some() {
+        return explain(raw, subscription, now);
+    }
+    describe(raw, kind)
+}
+
+fn parse_envelope(raw: &str) -> Option<Envelope> {
+    serde_json::from_str(raw.trim()).ok()
 }
 
 /// `subscription` is only called for a ChatGPT-account rejection.
@@ -38,7 +64,7 @@ pub(crate) fn explain(
     subscription: impl FnOnce() -> Option<ChatgptSubscription>,
     now: DateTime<Utc>,
 ) -> String {
-    let Ok(envelope) = serde_json::from_str::<Envelope>(raw.trim()) else {
+    let Some(envelope) = parse_envelope(&raw) else {
         return raw;
     };
     let message = envelope

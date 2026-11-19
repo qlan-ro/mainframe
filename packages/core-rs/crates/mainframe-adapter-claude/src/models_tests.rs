@@ -237,3 +237,6 @@ fn merge_keeps_the_probed_entries_untouched() {
     let merged = merge_older_models(vec![probed_entry.clone()]);
     assert_eq!(merged[0], probed_entry);
 }
+
+#[path = "models_catalog_tests.rs"]
+mod catalog;

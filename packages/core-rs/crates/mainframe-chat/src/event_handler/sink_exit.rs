@@ -35,6 +35,10 @@ impl SessionSinkImpl {
     }
 
     pub(super) fn handle_error(&self, error: mainframe_adapter_api::AdapterError) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            warn!(chat_id = self.chat_id, "idle compaction session error");
+            return;
+        }
         self.shared.emit(DaemonEvent::Error {
             chat_id: Some(self.chat_id.clone()),
             error: error.to_string(),

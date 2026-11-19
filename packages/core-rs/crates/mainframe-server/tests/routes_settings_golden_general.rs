@@ -25,7 +25,7 @@ async fn general_get_empty_body_is_the_defaults() {
     assert_eq!(
         body,
         concat!(
-            r#"{"data":{"defaultAdapterId":null,"#,
+            r#"{"data":{"defaultAdapterId":null,"idleCompaction":{"enabled":false},"#,
             r#""notifications":{"chat":{"attentionRequest":true,"sessionError":true,"taskComplete":true},"#,
             r#""other":{"plugin":true},"permission":{"planApproval":true,"toolRequest":true,"userQuestion":true}},"#,
             r#""updateChannel":"stable","worktreeDir":".worktrees"},"success":true}"#
@@ -52,7 +52,7 @@ async fn general_get_overlays_stored_values_and_passes_unknown_keys_through() {
     assert_eq!(
         body,
         concat!(
-            r#"{"data":{"defaultAdapterId":"codex","#,
+            r#"{"data":{"defaultAdapterId":"codex","idleCompaction":{"enabled":false},"#,
             r#""notifications":{"chat":{"attentionRequest":true,"sessionError":true,"taskComplete":false},"#,
             r#""other":{"plugin":false},"permission":{"planApproval":true,"toolRequest":true,"userQuestion":false}},"#,
             r#""titleGeneration.disabled":"true","updateChannel":"prerelease","worktreeDir":"trees"},"success":true}"#

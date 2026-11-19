@@ -26,6 +26,7 @@ use crate::types::ActiveChat;
 use crate::worktree_offer::WorktreeOfferRegistry;
 
 mod history;
+mod interrupt;
 mod load_history;
 mod spawn_prep;
 mod transcript_ready;
@@ -88,28 +89,8 @@ enum Flight {
     Claimed(FlightClaim),
 }
 
-/// Flight families share an outer lock for cross-operation exclusion.
-#[derive(Default)]
-struct Guards {
-    loading: SingleFlight,
-    restoring: SingleFlight,
-    starting: SingleFlight,
-    interrupting: SingleFlight,
-    /// In-flight idle offload per chat (`flight_claims.rs`). An offload claims
-    /// this slot only when every other map below is empty for the chat and no
-    /// send is registered;
-    /// `load_chat`/`start_chat`/`get_messages`/`send_message` all wait it out
-    /// before touching the registry or cache.
-    offloading: SingleFlight,
-    /// In-flight `send_message` calls per chat (`flight_claims.rs`).
-    /// A count, not a flag: nothing in this codebase serializes concurrent
-    /// sends to the same chat today, so offload must treat any of them as busy.
-    sending: HashMap<String, usize>,
-    /// In-flight on-disk transcript read behind `get_messages` per chat
-    /// (`flight_claims.rs`) — single-flights a read that would otherwise race
-    /// (two concurrent misses both hit disk).
-    history: SingleFlight,
-}
+mod guards;
+use guards::Guards;
 
 pub struct ChatLifecycleManager {
     shared: Arc<ChatShared>,
@@ -348,51 +329,6 @@ impl ChatLifecycleManager {
                 chat_id: Some(chat_id.to_string()),
                 error: err.to_string(),
             });
-        }
-    }
-
-    pub async fn interrupt_chat(&self, chat_id: &str) {
-        let Some(cell) = self.get_active(chat_id) else {
-            return;
-        };
-        let session = {
-            let guard = cell.lock_recover();
-            if !guard.session.as_ref().is_some_and(|s| s.is_spawned()) {
-                return;
-            }
-            guard.session.clone()
-        };
-
-        {
-            let mut perms = self.shared.permissions.lock_recover();
-            perms.clear(chat_id);
-            perms.mark_interrupted(chat_id);
-        }
-
-        // SIGINT causes the CLI to exit. Track the exit so sendMessage can wait.
-        let claim = self.guards.lock_recover().interrupting.claim(chat_id);
-        if let Ok(claim) = claim {
-            let cell_poll = cell.clone();
-            tokio::spawn(async move {
-                let _claim = claim;
-                let deadline = tokio::time::Instant::now() + Duration::from_millis(5000);
-                loop {
-                    let spawned = {
-                        let g = cell_poll.lock_recover();
-                        g.session.as_ref().is_some_and(|s| s.is_spawned())
-                    };
-                    if !spawned || tokio::time::Instant::now() >= deadline {
-                        return;
-                    }
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                }
-            });
-        }
-
-        if let Some(session) = session
-            && let Err(err) = session.interrupt().await
-        {
-            warn!(error = ?err, chat_id, "interrupt failed");
         }
     }
 

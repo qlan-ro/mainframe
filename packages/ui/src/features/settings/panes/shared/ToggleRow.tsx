@@ -6,11 +6,12 @@ interface ToggleRowProps {
   label: string;
   description?: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
   testId: string;
 }
 
-export function ToggleRow({ label, description, checked, onChange, testId }: ToggleRowProps) {
+export function ToggleRow({ label, description, checked, onChange, testId, disabled }: ToggleRowProps) {
   const id = useId();
   return (
     <div className="flex items-center justify-between gap-4 px-0.5 py-3">
@@ -18,9 +19,20 @@ export function ToggleRow({ label, description, checked, onChange, testId }: Tog
         <Label htmlFor={id} className="text-sm text-foreground">
           {label}
         </Label>
-        {description !== undefined && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+        {description !== undefined && (
+          <p id={`${id}-description`} className="text-xs text-muted-foreground mt-0.5">
+            {description}
+          </p>
+        )}
       </div>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} data-testid={testId} />
+      <Switch
+        id={id}
+        disabled={disabled}
+        aria-describedby={description ? `${id}-description` : undefined}
+        checked={checked}
+        onCheckedChange={onChange}
+        data-testid={testId}
+      />
     </div>
   );
 }

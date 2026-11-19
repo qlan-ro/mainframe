@@ -30,9 +30,15 @@ impl CodexSession {
         let (thread_id, resolved_model) = self.resolve_prompt_model(model.as_deref())?;
         let p = self.prompt_params(input, model.as_deref(), &cfg, &thread_id, &resolved_model)?;
         let _: TurnStartResult = de(client
-            .request("turn/start", Some(Value::Object(p)))
+            .request_with_disposition("turn/start", Some(Value::Object(p)))
             .await
-            .map_err(AdapterError::from)?)?;
+            .map_err(|failure| match failure {
+                crate::jsonrpc::RpcFailure::Rejected(error)
+                | crate::jsonrpc::RpcFailure::NotWritten(error) => {
+                    AdapterError::DeliveryRejected(error.0)
+                }
+                crate::jsonrpc::RpcFailure::Unconfirmed(error) => AdapterError::Message(error.0),
+            })?)?;
 
         self.report_undeliverable(&undeliverable);
         *self.status.lock_recover() = AdapterProcessStatus::Running;

@@ -7,6 +7,9 @@ impl SessionSinkImpl {
         metadata: Option<MessageMetadata>,
         presentation: Option<mainframe_types::transcript_presentation::TranscriptPresentation>,
     ) {
+        if self.shared.maintenance.active(&self.chat_id) {
+            return;
+        }
         debug!(
             chat_id = self.chat_id,
             block_count = content.len(),
@@ -204,7 +207,9 @@ fn has_child_owner(content: &MessageContent) -> bool {
             | MessageContentNode::Error {
                 parent_tool_use_id, ..
             }
-            | MessageContentNode::Compaction { parent_tool_use_id },
+            | MessageContentNode::Compaction {
+                parent_tool_use_id, ..
+            },
         ) => parent_tool_use_id,
         MessageContent::Node(MessageContentNode::ProviderSwitch { .. }) => return false,
     };

@@ -200,6 +200,8 @@ mod presentation_exit_tests;
 
 #[path = "session_adapter.rs"]
 mod adapter;
+#[path = "session_compaction.rs"]
+mod compaction;
 #[path = "session_history.rs"]
 mod history;
 #[path = "session_lifecycle.rs"]
@@ -216,3 +218,6 @@ use spawn::build_app_server_command;
 pub(crate) use spawn::spawn_temp_app_server;
 #[cfg(test)]
 use thread::permission_mode_policy;
+
+#[cfg(test)]
+mod request_resolved_tests;

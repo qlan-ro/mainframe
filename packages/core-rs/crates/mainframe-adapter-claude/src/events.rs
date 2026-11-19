@@ -17,19 +17,26 @@ use crate::user_event::handle_user_event;
 pub fn handle_stdout(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
     let lines: Vec<String> = {
         let mut st = session.state.lock_recover();
-        st.buffer.push_str(&String::from_utf8_lossy(chunk));
-        let mut parts: Vec<String> = st.buffer.split('\n').map(str::to_string).collect();
-        st.buffer = parts.pop().unwrap_or_default();
-        parts
+        st.buffer.extend_from_slice(chunk);
+        let mut parts = st.buffer.split(|byte| *byte == b'\n').collect::<Vec<_>>();
+        let pending = parts.pop().unwrap_or_default().to_vec();
+        let lines = parts
+            .into_iter()
+            .map(|line| String::from_utf8_lossy(line).into_owned())
+            .collect();
+        st.buffer = pending;
+        lines
     };
 
     for line in lines {
         if line.trim().is_empty() {
             continue;
         }
-        session.bump_last_activity();
         tracing::trace!(session_id = %session.id, line = %line, "stream-json line");
         if let Ok(event) = serde_json::from_str::<Value>(line.trim()) {
+            if !session.maintenance.suppressing() && !session.is_retired_maintenance_event(&event) {
+                session.bump_last_activity();
+            }
             handle_event(session, &event, sink);
         }
     }
@@ -59,8 +66,21 @@ fn is_trust_permissions(lower: &str) -> bool {
 }
 
 pub(crate) fn handle_stderr(session: &ClaudeSession, chunk: &[u8], sink: &dyn SessionSink) {
+    if session.maintenance.suppressing() {
+        return;
+    }
     let message = String::from_utf8_lossy(chunk).trim().to_string();
     if message.is_empty() {
+        return;
+    }
+    if message.starts_with("[claude-code:unrecognized_model] ") {
+        return;
+    }
+    let notice = message.trim_start_matches(['⚠', '\u{fe0f}', ' ']);
+    if notice.starts_with("claude.ai connectors are disabled because ") {
+        sink.on_cli_message(
+            "Claude account connectors are unavailable while using API or proxy authentication.",
+        );
         return;
     }
     if is_informational(&message) {
@@ -86,6 +106,13 @@ fn handle_rate_limit_event(session: &ClaudeSession, event: &Value, sink: &dyn Se
 }
 
 fn handle_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
+    session
+        .cache_evidence
+        .lock_recover()
+        .observe(event, session.is_endpoint_session());
+    if session.handle_maintenance_event(event, sink) {
+        return;
+    }
     let ty = event.get("type").and_then(Value::as_str);
     tracing::debug!(
         session_id = %session.id,

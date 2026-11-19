@@ -35,7 +35,7 @@ pub struct ClaudeSessionState {
     pub chat_id: String,
     pub mainframe_chat_id: String,
     pub real_project_path: String,
-    pub buffer: String,
+    pub buffer: Vec<u8>,
     pub last_assistant_usage: Option<MessageUsage>,
     pub child: Option<ChildHandle>,
     pub active_tasks: HashMap<String, ActiveTask>,

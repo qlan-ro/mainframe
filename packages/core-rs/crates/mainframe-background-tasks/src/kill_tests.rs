@@ -1,15 +1,21 @@
+use super::chat::kill_tasks_for_chat_under;
+use super::os::{Signal, set_ps_comm_for_tests, set_tree_kill_for_tests};
 use super::*;
-use crate::lsof::{ExecCode, ExecFn, ExecOk, LsofExecError, set_exec_for_tests};
+use crate::encoding::encode_cwd_segment;
+use crate::lsof::{LsofFn, set_lsof_for_tests};
 use crate::tracker::TaskSeed;
 use mainframe_types::background_task::{BackgroundTaskToolName, BackgroundWorkKind};
 use mainframe_types::sync::LockExt as _;
 use std::collections::VecDeque;
 use std::fs;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 use tempfile::tempdir;
 
 enum Canned {
     Writers(Vec<u32>),
     Empty,
+    Timeout,
 }
 
 fn writers_stdout(pids: &[u32]) -> String {
@@ -22,31 +28,26 @@ fn writers_stdout(pids: &[u32]) -> String {
 
 fn set_lsof_queue(tracker: &BackgroundTaskTracker, responses: Vec<Canned>) {
     let q = Arc::new(Mutex::new(VecDeque::from(responses)));
-    let exec: ExecFn = Arc::new(move |_c, _a| {
-        let item = q.lock_recover().pop_front();
-        Box::pin(async move {
-            match item {
-                Some(Canned::Writers(pids)) => Ok(ExecOk {
-                    stdout: writers_stdout(&pids),
-                }),
-                _ => Err(LsofExecError {
-                    code: Some(ExecCode::Number(1)),
-                    signal: None,
-                    stdout: Some(String::new()),
-                }),
+    let lsof: LsofFn = Arc::new(move |_path| {
+        let stdout = match q.lock_recover().pop_front() {
+            Some(Canned::Timeout) => {
+                return Box::pin(async { Err(crate::lsof::LsofError::TimedOut) });
             }
-        })
+            Some(Canned::Writers(pids)) => writers_stdout(&pids),
+            Some(Canned::Empty) | None => String::new(),
+        };
+        Box::pin(async move { Ok(stdout) })
     });
-    set_exec_for_tests(&tracker.process, exec);
+    set_lsof_for_tests(&tracker.process, lsof);
 }
 
 fn set_lsof_constant(tracker: &BackgroundTaskTracker, pids: Vec<u32>) {
     let stdout = writers_stdout(&pids);
-    set_exec_for_tests(
+    set_lsof_for_tests(
         &tracker.process,
-        Arc::new(move |_c, _a| {
+        Arc::new(move |_path| {
             let stdout = stdout.clone();
-            Box::pin(async move { Ok(ExecOk { stdout }) })
+            Box::pin(async move { Ok(stdout) })
         }),
     );
 }
@@ -74,10 +75,7 @@ struct MockSession {
     called: Arc<Mutex<bool>>,
 }
 impl SessionLike for MockSession {
-    fn stop_background_task<'a>(
-        &'a self,
-        _task_id: &'a str,
-    ) -> Pin<Box<dyn Future<Output = StopResult> + Send + 'a>> {
+    fn stop_background_task<'a>(&'a self, _task_id: &'a str) -> BoxFuture<'a, StopResult> {
         *self.called.lock_recover() = true;
         let r = self.result.clone();
         Box::pin(async move { r })
@@ -100,7 +98,8 @@ fn seed(tracker: &BackgroundTaskTracker, chat: &str, id: &str, output_path: &str
     );
 }
 
-/// The temp dirs (kept alive) + the spool-root / worktree paths for a sweep.
+/// The temp dirs (kept alive) and the spool-root and worktree paths for a
+/// sweep.
 struct SweepFixture {
     _spool: tempfile::TempDir,
     _worktree: tempfile::TempDir,
@@ -108,8 +107,27 @@ struct SweepFixture {
     worktree_path: String,
 }
 
-/// Build `${spoolRoot}/{encoded(realpath(worktree))}/sess-a/tasks/leftover.output`.
-/// `make_symlink` swaps the file for a symlink.
+/// Run `kill_tasks_for_chat` for chat `c1` against a test spool root.
+async fn kill_chat(
+    tracker: &BackgroundTaskTracker,
+    session: Option<&dyn SessionLike>,
+    worktree_path: Option<&str>,
+    spool_root: &str,
+) -> KillTasksForChatResult {
+    kill_tasks_for_chat_under(
+        KillTasksForChatArgs {
+            chat_id: "c1",
+            worktree_path,
+            session,
+            tracker,
+        },
+        Path::new(spool_root),
+    )
+    .await
+}
+
+/// Build `<spool_root>/<encoded real worktree>/sess-a/tasks/leftover.output`.
+/// `make_symlink` makes the output a symlink instead of a file.
 fn build_sweep_fixture(make_symlink: bool) -> SweepFixture {
     let spool = tempdir().unwrap();
     let worktree = tempdir().unwrap();

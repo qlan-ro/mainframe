@@ -1,10 +1,9 @@
 use crate::Db;
 use mainframe_background_tasks::{
-    reconcile::{ReconcileDb, ReconcileDeps, reconcile_background_tasks},
+    reconcile::{ReconcileSnapshot, reconcile_background_tasks},
     tracker::BackgroundTaskTracker,
 };
-use mainframe_types::chat::Chat;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 pub(crate) fn spawn_reconcile(db: Db, tracker: Arc<BackgroundTaskTracker>) {
     tokio::spawn(async move {
         let snapshot = match db
@@ -15,7 +14,7 @@ pub(crate) fn spawn_reconcile(db: Db, tracker: Arc<BackgroundTaskTracker>) {
             })
             .await
         {
-            Ok((chats, projects)) => SnapshotReconcileDb {
+            Ok((chats, projects)) => ReconcileSnapshot {
                 chats,
                 project_paths: projects.into_iter().map(|p| (p.id, p.path)).collect(),
             },
@@ -24,13 +23,7 @@ pub(crate) fn spawn_reconcile(db: Db, tracker: Arc<BackgroundTaskTracker>) {
                 return;
             }
         };
-        reconcile_background_tasks(ReconcileDeps {
-            tracker: &tracker,
-            db: &snapshot,
-            spool_root: None,
-            validator: None,
-        })
-        .await;
+        reconcile_background_tasks(&tracker, snapshot).await;
     });
 }
 
@@ -64,18 +57,4 @@ pub(crate) fn spawn_worktree_backfill(db: Db) {
             tracing::warn!(error = %err, "Worktree relationship backfill failed");
         }
     });
-}
-
-struct SnapshotReconcileDb {
-    chats: Vec<Chat>,
-    project_paths: HashMap<String, String>,
-}
-
-impl ReconcileDb for SnapshotReconcileDb {
-    fn chats_list_all(&self) -> Vec<Chat> {
-        self.chats.clone()
-    }
-    fn project_path(&self, id: &str) -> Option<String> {
-        self.project_paths.get(id).cloned()
-    }
 }

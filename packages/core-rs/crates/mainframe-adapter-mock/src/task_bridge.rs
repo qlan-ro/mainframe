@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use mainframe_background_tasks::tracker::{BackgroundTaskTracker, TaskSeed, TerminalUpdate};
-use mainframe_background_tasks::workflow_sink::WorkflowSink;
 use mainframe_types::background_task::{
     BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
 };
@@ -26,6 +25,14 @@ use mainframe_types::chat::{MessageContent, MessageContentNode};
 use mainframe_types::claude_workflow::{ClaudeWorkflowRun, ClaudeWorkflowRunStatus};
 
 use crate::fixture::RecordedEvent;
+
+/// Where replayed workflow runs go, so a `workflow` task row can open its run
+/// panel. The daemon implements it over the Claude workflow store.
+pub trait WorkflowSink: Send + Sync {
+    fn seed(&self, chat_id: &str, task_id: &str, name: Option<String>);
+    fn apply_record(&self, chat_id: &str, run: ClaudeWorkflowRun);
+    fn stamp_status(&self, chat_id: &str, task_id: &str, status: ClaudeWorkflowRunStatus);
+}
 
 /// Tool names that mean "a subagent is doing work", mirroring the `subagent`
 /// category the adapter already advertises in its tool classification.

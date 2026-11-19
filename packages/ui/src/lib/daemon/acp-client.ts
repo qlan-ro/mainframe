@@ -17,7 +17,7 @@ import {
   type ResumeSessionResponse,
   ResumeSessionResponseSchema,
 } from '@qlan-ro/mainframe-types';
-import { defaultUrl, defaultSocketFactory } from './acp-client-defaults';
+import { ACP_CLIENT_DEFAULTS as DEFAULTS, defaultUrl, defaultSocketFactory } from './acp-client-defaults';
 import {
   AcpCapabilityState,
   initializeRequest,
@@ -34,16 +34,13 @@ import {
   type QueueStateListener,
   type ReplayCompleteListener,
   type ResyncListener,
+  type RetryStatusListener,
   type SessionUpdateListener,
   type TranscriptClearedListener,
 } from './acp-notification-router';
 import { RpcConnection, type AcpSocketFactory } from './acp-rpc-connection';
 /** `mainframe_acp::resume::ReplayCursor`'s wire shape (todo #377 added the `revision` variant) — single-canonical-type in `@qlan-ro/mainframe-types`, re-exported for existing `from './acp-client'` imports. */
 export type { ReplayCursor };
-/** Production default; overridden per-connection by the daemon's advertised `heartbeatIntervalMs`. */
-const FALLBACK_HEARTBEAT_INTERVAL_MS = 15_000;
-const DEFAULT_CLIENT_INFO = { name: 'mainframe-ui', version: '0.0.0' };
-
 export type GapListener = () => void;
 
 export interface AcpFacadeClientDeps {
@@ -53,9 +50,6 @@ export interface AcpFacadeClientDeps {
   clientInfo?: { name: string; version: string };
 }
 
-const RECONNECT_BASE_DELAY_MS = 1_000;
-const RECONNECT_MAX_DELAY_MS = 15_000;
-
 export class AcpFacadeClient {
   private connection: RpcConnection | null = null;
   private watchdog: HeartbeatWatchdog | null = null;
@@ -63,7 +57,7 @@ export class AcpFacadeClient {
   private connectAttempt = 0;
   private connectPromise: Promise<InitializeResponse> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
+  private reconnectDelayMs = DEFAULTS.reconnectBaseDelayMs;
   private manuallyClosed = false;
   /** Bumped on every NEW underlying connection (first one included) — lets a consumer tell a live-socket `onGap` from a dead-socket reconnect, which `connected` can't (it's already `true` again by the time the gap fires). */
   private generation = 0;
@@ -125,7 +119,7 @@ export class AcpFacadeClient {
       // result previews (spec Decision 41) and compressed replay batches
       // (Decision 42) — all ignored by a daemon that doesn't advertise the
       // matching capability back.
-      const request = initializeRequest(this.deps.clientInfo ?? DEFAULT_CLIENT_INFO);
+      const request = initializeRequest(this.deps.clientInfo ?? DEFAULTS.clientInfo);
       let response!: InitializeResponse;
       await connection.sendRequest('initialize', request, (result) => {
         if (attempt !== this.connectAttempt) throw new Error('[acp-client] initialization superseded');
@@ -221,6 +215,11 @@ export class AcpFacadeClient {
     return this.router.onCompaction(listener);
   }
 
+  /** A provider call is being retried (`_mainframe.dev/retry_status`) — transient, never replayed. */
+  onRetryStatus(listener: RetryStatusListener): () => void {
+    return this.router.onRetryStatus(listener);
+  }
+
   onTranscriptCleared(listener: TranscriptClearedListener): () => void {
     return this.router.onTranscriptCleared(listener);
   }
@@ -255,9 +254,9 @@ export class AcpFacadeClient {
     const capabilities = parseCapabilities(response);
     this.connection = connection;
     this.generation += 1;
-    this.reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
+    this.reconnectDelayMs = DEFAULTS.reconnectBaseDelayMs;
     this.watchdog?.stop();
-    this.armWatchdog(capabilities?.heartbeatIntervalMs ?? FALLBACK_HEARTBEAT_INTERVAL_MS);
+    this.armWatchdog(capabilities?.heartbeatIntervalMs ?? DEFAULTS.heartbeatIntervalMs);
     this.capabilities.replace(capabilities);
     return response;
   }
@@ -289,7 +288,7 @@ export class AcpFacadeClient {
   private scheduleReconnect(): void {
     if (this.reconnectTimer !== null) return;
     const delay = this.reconnectDelayMs;
-    this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, RECONNECT_MAX_DELAY_MS);
+    this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, DEFAULTS.reconnectMaxDelayMs);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.ensureConnected()

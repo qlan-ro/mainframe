@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use dashmap::DashMap;
 use tokio::sync::broadcast;
@@ -8,6 +7,7 @@ use mainframe_types::background_task::{
     BackgroundTask, BackgroundTaskStatus, BackgroundTaskToolName, BackgroundTaskUsage,
     BackgroundWorkKind,
 };
+use mainframe_types::time::now_ms;
 
 /// Broadcast payload for the `background_task.started` / `.updated` / `.ended`
 /// events, each carrying the chat id and the task.
@@ -27,8 +27,7 @@ pub enum TaskEvent {
     },
 }
 
-/// The `Pick<BackgroundTask, 'id'|'kind'|'toolName'|'toolUseId'|'command'|'description'>`
-/// seed passed to [`BackgroundTaskTracker::start`].
+/// The fields of a [`BackgroundTask`] its producer knows when the task starts.
 #[derive(Debug, Clone)]
 pub struct TaskSeed {
     pub id: String,
@@ -43,7 +42,7 @@ pub struct TaskSeed {
 }
 
 /// The terminal-transition update passed to [`BackgroundTaskTracker::end`].
-/// `status` is a non-running terminal status.
+/// `status` is a terminal status (anything but `Running`).
 #[derive(Debug, Clone)]
 pub struct TerminalUpdate {
     pub status: BackgroundTaskStatus,
@@ -52,33 +51,16 @@ pub struct TerminalUpdate {
     pub usage: Option<BackgroundTaskUsage>,
 }
 
-/// Options for [`BackgroundTaskTracker::adopt`].
-#[derive(Debug, Clone, Default)]
-pub struct AdoptOptions {
-    pub emit: bool,
-}
-
-fn is_terminal(status: BackgroundTaskStatus) -> bool {
-    matches!(
-        status,
-        BackgroundTaskStatus::Completed
-            | BackgroundTaskStatus::Failed
-            | BackgroundTaskStatus::Stopped
-    )
-}
-
-use mainframe_types::time::now_ms;
-
 const EVENT_CHANNEL_CAPACITY: usize = 1024;
 
 #[derive(Debug)]
 pub struct BackgroundTaskTracker {
     pub(crate) process: crate::process::ProcessDeps,
     emitter: broadcast::Sender<TaskEvent>,
-    by_chat: Arc<DashMap<String, HashMap<String, BackgroundTask>>>,
-    /// Tracker-private: chatId → taskId → pid. Advisory only — every kill re-runs
-    /// lsofWriters.
-    pid_by_chat: Arc<DashMap<String, HashMap<String, u32>>>,
+    by_chat: DashMap<String, HashMap<String, BackgroundTask>>,
+    /// chat id → task id → last pid seen writing the spool file. Advisory only:
+    /// every kill probes the writers again.
+    pid_by_chat: DashMap<String, HashMap<String, u32>>,
 }
 
 impl Default for BackgroundTaskTracker {
@@ -98,30 +80,30 @@ impl BackgroundTaskTracker {
         BackgroundTaskTracker {
             process: crate::process::ProcessDeps::default(),
             emitter,
-            by_chat: Arc::new(DashMap::new()),
-            pid_by_chat: Arc::new(DashMap::new()),
+            by_chat: DashMap::new(),
+            pid_by_chat: DashMap::new(),
         }
     }
 
-    /// Subscribe to `background_task.started` / `.updated` / `.ended` events
-    /// (BROADCAST class).
+    /// Subscribe to `background_task.started` / `.updated` / `.ended` events.
     pub fn subscribe(&self) -> broadcast::Receiver<TaskEvent> {
         self.emitter.subscribe()
     }
 
+    /// Record a task as running. A second start of a task that is still
+    /// running (the CLI re-registers tasks on resume) keeps its original
+    /// `started_at` and last output line and emits `Updated` instead of
+    /// `Started`.
     pub fn start(&self, chat_id: &str, seed: TaskSeed, output_path: String) -> BackgroundTask {
-        let existing = self
-            .by_chat
-            .get(chat_id)
-            .and_then(|chat| chat.get(&seed.id).cloned());
-        // Duplicate start of a live task (CLI re-register on resume) → upsert, no
-        // double count: keep the original startedAt and emit updated, not started.
-        let (is_upsert, started_at, last_output_line) = match &existing {
-            Some(e) if e.status == BackgroundTaskStatus::Running => {
-                (true, e.started_at, e.last_output_line.clone())
-            }
-            _ => (false, now_ms(), None),
+        let mut chat = self.by_chat.entry(chat_id.to_string()).or_default();
+        let resumed = chat
+            .get(&seed.id)
+            .filter(|existing| existing.status == BackgroundTaskStatus::Running);
+        let (started_at, last_output_line) = match resumed {
+            Some(existing) => (existing.started_at, existing.last_output_line.clone()),
+            None => (now_ms(), None),
         };
+        let is_resume = resumed.is_some();
         let task = BackgroundTask {
             id: seed.id,
             kind: seed.kind,
@@ -140,58 +122,51 @@ impl BackgroundTaskTracker {
             workflow_name: seed.workflow_name,
             run_id: None,
         };
-        {
-            let mut chat = self.by_chat.entry(chat_id.to_string()).or_default();
-            chat.insert(task.id.clone(), task.clone());
-        }
-        let event = if is_upsert {
+        chat.insert(task.id.clone(), task.clone());
+        let chat_id = chat_id.to_string();
+        self.emit(if is_resume {
             TaskEvent::Updated {
-                chat_id: chat_id.to_string(),
+                chat_id,
                 task: task.clone(),
             }
         } else {
             TaskEvent::Started {
-                chat_id: chat_id.to_string(),
+                chat_id,
                 task: task.clone(),
             }
-        };
-        let _ = self.emitter.send(event);
+        });
         task
     }
 
+    /// Move a running task to a terminal status and emit `Ended`. Returns
+    /// `None` for an unknown task. A task that is already terminal is
+    /// returned unchanged and emits nothing, so concurrent ends (a CLI
+    /// notification racing the liveness sweep or a kill) produce one event.
     pub fn end(
         &self,
         chat_id: &str,
         task_id: &str,
         update: TerminalUpdate,
     ) -> Option<BackgroundTask> {
-        let existing = self.by_chat.get(chat_id)?.get(task_id).cloned();
-        let existing = existing?; // end without start — drop
-        if is_terminal(existing.status) {
-            return Some(existing); // dedup terminal status
+        let mut chat = self.by_chat.get_mut(chat_id)?;
+        let task = chat.get_mut(task_id)?;
+        if task.status != BackgroundTaskStatus::Running {
+            return Some(task.clone());
         }
-        // Prefer the outputPath we already have (set at start) over the late notification.
-        let output_path = if update.output_path.is_empty() {
-            existing.output_path.clone()
-        } else {
-            Some(update.output_path)
-        };
-        let next = BackgroundTask {
-            status: update.status,
-            output_path,
-            summary: Some(update.summary),
-            usage: update.usage,
-            ended_at: Some(now_ms()),
-            ..existing
-        };
-        if let Some(mut chat) = self.by_chat.get_mut(chat_id) {
-            chat.insert(task_id.to_string(), next.clone());
+        task.status = update.status;
+        // A late notification may omit the path; keep the one recorded at start.
+        if !update.output_path.is_empty() {
+            task.output_path = Some(update.output_path);
         }
-        let _ = self.emitter.send(TaskEvent::Ended {
+        task.summary = Some(update.summary);
+        task.usage = update.usage;
+        task.ended_at = Some(now_ms());
+        let ended = task.clone();
+        self.emit(TaskEvent::Ended {
             chat_id: chat_id.to_string(),
-            task: next.clone(),
+            task: ended.clone(),
         });
-        Some(next)
+        Some(ended)
     }
 
     /// Learned from the `Workflow` tool result, after `start` already seeded
@@ -220,34 +195,24 @@ impl BackgroundTaskTracker {
             task.workflow_name = workflow_name;
         }
         let updated = task.clone();
-        drop(chat);
-        let _ = self.emitter.send(TaskEvent::Updated {
+        self.emit(TaskEvent::Updated {
             chat_id: chat_id.to_string(),
             task: updated,
         });
     }
 
-    /// Insert a fully-formed task from reconciliation. Replaces any existing
-    /// entry with the same id.
-    pub fn adopt(&self, chat_id: &str, task: BackgroundTask, options: AdoptOptions) {
-        {
-            let mut chat = self.by_chat.entry(chat_id.to_string()).or_default();
-            chat.insert(task.id.clone(), task.clone());
-        }
-        if options.emit {
-            let event = if task.status == BackgroundTaskStatus::Running {
-                TaskEvent::Started {
-                    chat_id: chat_id.to_string(),
-                    task,
-                }
-            } else {
-                TaskEvent::Ended {
-                    chat_id: chat_id.to_string(),
-                    task,
-                }
-            };
-            let _ = self.emitter.send(event);
-        }
+    /// Insert a fully-formed task from reconciliation, replacing any entry
+    /// with the same id, and emit `Started` for a running task or `Ended` for
+    /// a terminal one.
+    pub fn adopt(&self, chat_id: &str, task: BackgroundTask) {
+        let mut chat = self.by_chat.entry(chat_id.to_string()).or_default();
+        chat.insert(task.id.clone(), task.clone());
+        let chat_id = chat_id.to_string();
+        self.emit(if task.status == BackgroundTaskStatus::Running {
+            TaskEvent::Started { chat_id, task }
+        } else {
+            TaskEvent::Ended { chat_id, task }
+        });
     }
 
     pub fn get(&self, chat_id: &str, task_id: &str) -> Option<BackgroundTask> {
@@ -255,10 +220,10 @@ impl BackgroundTaskTracker {
     }
 
     pub fn list(&self, chat_id: &str) -> Vec<BackgroundTask> {
-        match self.by_chat.get(chat_id) {
-            Some(chat) => chat.values().cloned().collect(),
-            None => Vec::new(),
-        }
+        self.by_chat
+            .get(chat_id)
+            .map(|chat| chat.values().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// Running tasks only — the chat's live background-activity set.
@@ -269,25 +234,22 @@ impl BackgroundTaskTracker {
             .collect()
     }
 
-    /// Terminal-stop every running task for a chat (CLI process ended — agents and
-    /// workflows die with it; orphaned entries must not pin the working indicator).
-    /// Emits `ended` per task; returns the number stopped.
-    pub fn end_all_running(&self, chat_id: &str) -> u32 {
-        let mut count = 0;
+    /// Stop every running task of a chat whose CLI process ended: its agents
+    /// and workflows die with it, and orphaned entries must not pin the
+    /// working indicator. Emits `Ended` per task.
+    pub fn end_all_running(&self, chat_id: &str) {
         for task in self.list_live(chat_id) {
             self.end(
                 chat_id,
                 &task.id,
                 TerminalUpdate {
                     status: BackgroundTaskStatus::Stopped,
-                    output_path: task.output_path.clone().unwrap_or_default(),
+                    output_path: String::new(),
                     summary: "session ended".to_string(),
                     usage: None,
                 },
             );
-            count += 1;
         }
-        count
     }
 
     /// Cross-chat iterator over running tasks.
@@ -309,8 +271,18 @@ impl BackgroundTaskTracker {
     }
 
     pub(crate) fn set_pid(&self, chat_id: &str, task_id: &str, pid: u32) {
-        let mut m = self.pid_by_chat.entry(chat_id.to_string()).or_default();
-        m.insert(task_id.to_string(), pid);
+        self.pid_by_chat
+            .entry(chat_id.to_string())
+            .or_default()
+            .insert(task_id.to_string(), pid);
+    }
+
+    /// Broadcast an event. Callers emit while still holding the chat's map
+    /// entry, so a chat's events go out in the order its state changed;
+    /// `send` never blocks and takes no map lock. A send fails only when
+    /// nobody is subscribed, which is not an error for a broadcast.
+    fn emit(&self, event: TaskEvent) {
+        let _ = self.emitter.send(event);
     }
 
     #[cfg(test)]

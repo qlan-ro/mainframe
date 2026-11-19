@@ -9,10 +9,12 @@ impl ChatShared {
         session: &dyn AdapterSession,
     ) -> Result<Vec<ChatMessage>, AdapterError> {
         let context = self.history_context(chat_id);
-        self.history_cache
+        let messages = self
+            .history_cache
             .load(chat_id, session, context.as_deref())
             .await
-            .map(|messages| remap_history_for(messages, chat_id))
+            .map(|messages| remap_history_for(messages, chat_id))?;
+        self.merge_idle_history(chat_id, messages)
     }
 
     pub(crate) fn history_context(&self, chat_id: &str) -> Option<String> {

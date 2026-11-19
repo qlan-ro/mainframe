@@ -292,7 +292,6 @@ async fn kill_worktree_tasks(
             worktree_path: Some(real_worktree_path),
             session: session_ref,
             tracker: &ctx.core.background_tasks,
-            spool_root: None,
         })
         .await;
     }

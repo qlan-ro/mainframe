@@ -27,6 +27,7 @@ use super::facade_conn::{FacadeConnection, SessionSlot, rpc_id_string};
 
 mod fanout;
 mod handlers;
+mod raw_frame_kind;
 mod revisions;
 pub use fanout::ResumeSeed;
 mod history;

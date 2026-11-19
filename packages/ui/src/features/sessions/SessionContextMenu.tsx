@@ -35,6 +35,11 @@ interface SessionContextMenuProps {
   onPin: () => void;
   onUnpin: () => void;
   onRename: () => void;
+  /**
+   * Called when the menu closes after Rename was chosen. Return true to keep
+   * the menu from handing focus back to the trigger (the rename input owns it).
+   */
+  onCloseAutoFocus?: () => boolean;
   onTags: () => void;
   onArchive: () => void;
   onOpenInSplit: () => void;
@@ -58,6 +63,7 @@ export function SessionContextMenu({
   onPin,
   onUnpin,
   onRename,
+  onCloseAutoFocus,
   onTags,
   onArchive,
   onOpenInSplit,
@@ -75,7 +81,12 @@ export function SessionContextMenu({
   return (
     <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-44">
+      <ContextMenuContent
+        className="w-44"
+        onCloseAutoFocus={(e) => {
+          if (onCloseAutoFocus?.()) e.preventDefault();
+        }}
+      >
         {!temporary && (
           <ContextMenuItem data-testid="sessions-ctx-pin" onSelect={pinned ? onUnpin : onPin}>
             {pinned ? <PinOffIcon /> : <PinIcon />}

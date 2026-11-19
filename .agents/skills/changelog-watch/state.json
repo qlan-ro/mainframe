@@ -3,18 +3,22 @@
   "tools": {
     "claude": {
       "repo": "anthropics/claude-code",
+      "binary": {
+        "npmPackage": "@anthropic-ai/claude-code-{platform}",
+        "localVersionsDir": "~/.local/share/claude/versions"
+      },
       "mode": "changelog",
       "changelogPath": "CHANGELOG.md",
-      "lastReviewedRef": "2.1.319",
-      "lastReviewedAt": "2026-11-07",
+      "lastReviewedRef": "2.1.327",
+      "lastReviewedAt": "2026-11-18",
       "checklist": "docs/research/adapters/claude/CONSUMED-SURFACE.md"
     },
     "codex": {
       "repo": "openai/codex",
       "mode": "releases",
       "includePrerelease": false,
-      "lastReviewedRef": "rust-v0.167.0",
-      "lastReviewedAt": "2026-11-07",
+      "lastReviewedRef": "rust-v0.169.1",
+      "lastReviewedAt": "2026-11-18",
       "checklist": "docs/research/adapters/codex/CONSUMED-SURFACE.md"
     }
   }

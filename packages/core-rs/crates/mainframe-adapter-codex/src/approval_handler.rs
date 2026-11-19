@@ -81,6 +81,29 @@ impl ApprovalHandler {
         }
     }
 
+    pub fn handle_resolved(&self, params: &Value) {
+        let Some(id) = params.get("requestId") else {
+            return;
+        };
+        let Ok(id) = serde_json::from_value::<RequestId>(id.clone()) else {
+            return;
+        };
+        let request_id = {
+            let mut pending = self.pending.lock_recover();
+            let request_id = pending
+                .iter()
+                .find(|(_, entry)| entry.json_rpc_id == id)
+                .map(|(request_id, _)| request_id.clone());
+            if let Some(request_id) = &request_id {
+                pending.remove(request_id);
+            }
+            request_id
+        };
+        if let Some(request_id) = request_id {
+            self.sink.on_permission_cancelled(&request_id);
+        }
+    }
+
     pub(crate) fn reject_all(&self) {
         let mut pending = self.pending.lock_recover();
         for (_, entry) in pending.drain() {

@@ -11,7 +11,7 @@ use crate::{
 use mainframe_adapter_api::AdapterRegistry;
 use mainframe_adapter_claude::adapter::ClaudeAdapter;
 use mainframe_adapter_codex::CodexAdapter;
-use mainframe_background_tasks::liveness::{LivenessDeps, start_liveness_scheduler};
+use mainframe_background_tasks::liveness::start_liveness_scheduler;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::{bridge::spawn_workflow_run_bridge, store::ClaudeWorkflowStore};
 use mainframe_launch::{
@@ -48,6 +48,8 @@ pub use lifecycle::ReadyDaemon;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BootError {
+    #[error("configuration: {0}")]
+    Configuration(String),
     #[error(transparent)]
     Context(#[from] crate::ctx::BuildError),
     #[error("listener: {0}")]
@@ -88,6 +90,8 @@ impl Bootstrap {
     }
 
     pub async fn bind(self) -> Result<BoundBootstrap, BootError> {
+        mainframe_chat::chat_manager::validate_idle_compaction_config()
+            .map_err(|e| BootError::Configuration(e.to_string()))?;
         info!(data_dir = %self.paths.data_dir.display(), "data directory");
         let paths = self.paths.clone();
         let (listener, db) =

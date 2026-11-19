@@ -15,6 +15,16 @@ impl SettingsRepository {
         Self { db }
     }
 
+    pub fn transaction<T>(
+        &self,
+        apply: impl FnOnce(&Self) -> Result<T, DbError>,
+    ) -> Result<T, DbError> {
+        let transaction = self.db.unchecked_transaction()?;
+        let result = apply(self)?;
+        transaction.commit()?;
+        Ok(result)
+    }
+
     pub fn get(&self, category: &str, key: &str) -> Result<Option<String>, DbError> {
         Ok(self
             .db
@@ -59,3 +69,7 @@ impl SettingsRepository {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "settings_transaction_tests.rs"]
+mod transaction_tests;

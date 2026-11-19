@@ -103,3 +103,79 @@ fn routes_to_ask_user_question_when_no_plan_captured() {
     );
     assert_eq!(rec.permissions()[0].tool_name, "AskUserQuestion");
 }
+
+fn network_params() -> Value {
+    json!({"itemId":"i1","threadId":"t1","turnId":"u1","startedAtMs":1,
+        "networkApprovalContext":{"host":"example.com","protocol":"https"}})
+}
+
+#[test]
+fn server_request_resolved_cancels_pending_kinds_without_reply() {
+    for (method, params, id) in [
+        (
+            "item/commandExecution/requestApproval",
+            network_params(),
+            RequestId::Number(7),
+        ),
+        (
+            "item/tool/requestUserInput",
+            request_user_input_params(),
+            RequestId::String("7".into()),
+        ),
+        (
+            "item/fileChange/requestApproval",
+            json!({"itemId":"file"}),
+            RequestId::Number(8),
+        ),
+    ] {
+        let rec = Recorder::new();
+        let handler = ApprovalHandler::new(rec.sink());
+        let (respond, calls) = recording_respond();
+        handler.handle_request(method, &params, id.clone(), respond);
+        let request = rec.permissions()[0].clone();
+        let notification = json!({"threadId":"other-thread","requestId":id});
+        handler.handle_resolved(&notification);
+        handler.handle_resolved(&notification);
+        assert_eq!(
+            rec.0.lock().unwrap().cancellations,
+            vec![request.request_id.clone()]
+        );
+        resolve(
+            &handler,
+            decision_for(&request, json!({"behavior":"allow"})),
+        );
+        assert!(calls.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn server_request_resolved_ignores_malformed_unknown_and_answered_ids() {
+    let rec = Recorder::new();
+    let handler = ApprovalHandler::new(rec.sink());
+    let (respond, calls) = recording_respond();
+    handler.handle_request(
+        "item/commandExecution/requestApproval",
+        &network_params(),
+        RequestId::Number(7),
+        respond,
+    );
+    for params in [
+        json!({}),
+        json!({"requestId":null}),
+        json!({"requestId":{}}),
+        json!({"requestId":true}),
+        json!({"requestId":7.5}),
+        json!({"requestId":"7"}),
+        json!({"requestId":99}),
+    ] {
+        handler.handle_resolved(&params);
+    }
+    assert!(rec.0.lock().unwrap().cancellations.is_empty());
+    resolve(
+        &handler,
+        decision_for(&rec.permissions()[0], json!({"behavior":"allow"})),
+    );
+    handler.handle_resolved(&json!({"requestId":7}));
+    assert!(rec.0.lock().unwrap().cancellations.is_empty());
+    assert_eq!(calls.lock().unwrap().len(), 1);
+}

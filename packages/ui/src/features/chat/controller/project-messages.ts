@@ -79,7 +79,11 @@ function projectQueuedMessage(
     createdAt: new Date(ref.timestamp),
     metadata: {
       custom: {
-        mainframe: { queued: true, ...(local.attachmentPreviews && { attachmentPreviews: local.attachmentPreviews }) },
+        mainframe: {
+          queued: true,
+          queueDelivery: ref.delivery,
+          ...(local.attachmentPreviews && { attachmentPreviews: local.attachmentPreviews }),
+        },
       },
     },
   });

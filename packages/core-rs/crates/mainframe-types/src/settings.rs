@@ -153,9 +153,17 @@ pub enum UpdateChannel {
     Prerelease,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdleCompactionConfig {
+    pub enabled: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneralConfig {
+    #[serde(default)]
+    pub idle_compaction: IdleCompactionConfig,
     pub worktree_dir: String,
     pub notifications: NotificationConfig,
     pub update_channel: UpdateChannel,
@@ -189,6 +197,7 @@ impl Default for GeneralConfig {
     fn default() -> Self {
         Self {
             worktree_dir: ".worktrees".to_string(),
+            idle_compaction: IdleCompactionConfig::default(),
             notifications: NotificationConfig::default(),
             update_channel: UpdateChannel::Stable,
             default_adapter_id: None,

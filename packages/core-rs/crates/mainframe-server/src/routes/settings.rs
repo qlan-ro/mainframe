@@ -30,6 +30,7 @@ use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
 use crate::routes::body::parse_body;
 
+mod idle_settings;
 mod providers;
 
 const GENERAL: &str = "general";
@@ -50,6 +51,7 @@ async fn get_general(State(ctx): State<Arc<AppCtx>>) -> Response {
 /// `GeneralConfig` over its defaults from the stored rows, plus every other
 /// stored `general` key verbatim (e.g. `titleGeneration.disabled`).
 fn general_body(mut raw: HashMap<String, String>) -> Result<Value, serde_json::Error> {
+    raw.remove("idleCompaction");
     let defaults = GeneralConfig::default();
     let update_channel = match raw.remove("updateChannel") {
         None => defaults.update_channel,
@@ -64,6 +66,9 @@ fn general_body(mut raw: HashMap<String, String>) -> Result<Value, serde_json::E
     let config = GeneralConfig {
         worktree_dir: raw.remove("worktreeDir").unwrap_or(defaults.worktree_dir),
         notifications: parse_notification_config(raw.remove("notifications").as_deref()),
+        idle_compaction: mainframe_types::settings::IdleCompactionConfig {
+            enabled: raw.remove("idleCompaction.enabled").as_deref() == Some("true"),
+        },
         update_channel,
         default_adapter_id: raw.remove("defaultAdapterId"),
     };
@@ -81,6 +86,8 @@ fn parse_update_channel(value: &str) -> Option<UpdateChannel> {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GeneralPatch {
+    #[serde(default, deserialize_with = "idle_settings::deserialize_patch")]
+    idle_compaction: Option<mainframe_types::settings::IdleCompactionConfig>,
     worktree_dir: Option<String>,
     notifications: Option<NotificationConfigPatch>,
     update_channel: Option<String>,
@@ -156,7 +163,7 @@ fn write_general_and_refresh(
     patch: GeneralPatch,
     refresh: impl FnOnce(mainframe_types::settings::NotificationConfig),
 ) -> Result<(), DbError> {
-    write_general(settings, patch)?;
+    settings.transaction(|settings| write_general(settings, patch))?;
     let raw = settings.get(GENERAL, "notifications")?;
     refresh(parse_notification_config(raw.as_deref()));
     Ok(())
@@ -166,6 +173,13 @@ fn write_general_and_refresh(
 /// does an explicit `defaultAdapterId: null`; an absent key leaves its row.
 fn write_general(settings: &SettingsRepository, patch: GeneralPatch) -> Result<(), DbError> {
     let defaults = GeneralConfig::default();
+    if let Some(config) = patch.idle_compaction {
+        settings.set(
+            GENERAL,
+            "idleCompaction.enabled",
+            if config.enabled { "true" } else { "false" },
+        )?;
+    }
     if let Some(wd) = patch.worktree_dir {
         let is_default = wd == defaults.worktree_dir;
         set_or_delete(settings, GENERAL, "worktreeDir", &wd, is_default)?;

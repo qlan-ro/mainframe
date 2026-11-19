@@ -46,9 +46,30 @@ pub struct ItemStartedParams {
     pub item: Value,
 }
 
+/// A turn's failure. `codexErrorInfo` mixes string and object variants (and a
+/// catch-all) and `additionalDetails` is free text, so both stay raw `Value`s
+/// read leniently: neither can ever fail the notification that carries them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TurnError {
     pub message: String,
+    #[serde(default)]
+    pub codex_error_info: Option<Value>,
+    #[serde(default)]
+    pub additional_details: Option<Value>,
+}
+
+/// The `error` notification. `willRetry: true` is Codex reconnecting after a
+/// dropped response stream; `false` repeats the failure `turn/completed`
+/// carries next.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorNotificationParams {
+    #[serde(default)]
+    pub thread_id: Option<String>,
+    #[serde(default)]
+    pub will_retry: bool,
+    pub error: TurnError,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

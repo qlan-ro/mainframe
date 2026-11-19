@@ -18,6 +18,7 @@ pub struct Recorded {
     pub messages: Vec<Vec<MessageContent>>,
     pub tool_results: Vec<Vec<MessageContent>>,
     pub permissions: Vec<ControlRequest>,
+    pub cancellations: Vec<String>,
     pub results: Vec<SessionResult>,
     pub todos: Vec<Vec<TodoItem>>,
     pub inits: Vec<String>,
@@ -36,6 +37,8 @@ pub struct Recorded {
     pub partials: Vec<(String, Vec<MessageContent>)>,
     /// Every `on_error` message, in order.
     pub errors: Vec<String>,
+    /// Every `on_api_retry(attempt, reason)` call, in order.
+    pub retries: Vec<(i64, Option<String>)>,
 }
 
 #[derive(Clone, Default)]
@@ -118,6 +121,9 @@ impl Recorder {
             .filter(|v| v.get("parentToolUseId").is_none())
             .collect()
     }
+    pub fn retries(&self) -> Vec<(i64, Option<String>)> {
+        self.0.lock().unwrap().retries.clone()
+    }
 }
 
 struct RecordingSink(Arc<Mutex<Recorded>>);
@@ -153,6 +159,13 @@ impl SessionSink for RecordingSink {
     fn on_permission(&self, request: ControlRequest) {
         self.0.lock().unwrap().permissions.push(request);
     }
+    fn on_permission_cancelled(&self, request_id: &str) {
+        self.0
+            .lock()
+            .unwrap()
+            .cancellations
+            .push(request_id.to_string());
+    }
     fn on_result(&self, data: SessionResult) {
         self.0.lock().unwrap().results.push(data);
     }
@@ -187,6 +200,9 @@ impl SessionSink for RecordingSink {
             .unwrap()
             .provider_quotas
             .push((adapter_id.to_string(), quota));
+    }
+    fn on_api_retry(&self, attempt: i64, reason: Option<String>) {
+        self.0.lock().unwrap().retries.push((attempt, reason));
     }
 }
 

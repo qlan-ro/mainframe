@@ -9,6 +9,8 @@ use serde_json::Value;
 use tokio::io::AsyncReadExt as _;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
+pub(super) const FORMAT_VERSION: u32 = 2;
+
 #[derive(Serialize, Deserialize)]
 pub(super) struct Manifest {
     pub version: u32,
@@ -45,7 +47,7 @@ impl TailStore {
             return None;
         }
         let manifest: Manifest = read_json(&self.path(chat_id, "meta"), 128 * 1024).await?;
-        (manifest.version == 1 && manifest.chat_id == chat_id).then_some(manifest)
+        (manifest.version == FORMAT_VERSION && manifest.chat_id == chat_id).then_some(manifest)
     }
 
     pub(super) async fn tail(&self, manifest: &Manifest) -> Option<PreparedHistoryTail> {

@@ -55,11 +55,13 @@ fn marker_content(kind: ChatMessageType, content: &MessageContent) -> DisplayCon
             content: content.clone(),
             parent_tool_use_id: with_parent_id(parent_tool_use_id),
         }),
-        (ChatMessageType::System, MessageContent::Node(MessageContentNode::Compaction { .. })) => {
-            DisplayContent::Node(DisplayNode::Compaction {
-                parent_tool_use_id: None,
-            })
-        }
+        (
+            ChatMessageType::System,
+            MessageContent::Node(MessageContentNode::Compaction { compaction, .. }),
+        ) => DisplayContent::Node(DisplayNode::Compaction {
+            compaction: compaction.clone(),
+            parent_tool_use_id: None,
+        }),
         (
             ChatMessageType::System,
             MessageContent::Node(MessageContentNode::ProviderSwitch { marker }),

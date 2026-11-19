@@ -1,5 +1,6 @@
-//! `mainframe-background-tasks` — background-task tracking, spool walking, and
-//! process-group kill/liveness reconciliation.
+//! Background-task tracking for CLI sessions: the in-memory tracker, the
+//! Claude CLI spool layout, recovery after a daemon restart, liveness sweeps,
+//! and killing a task's processes.
 #![forbid(unsafe_code)]
 #![cfg_attr(
     test,
@@ -14,12 +15,9 @@
 pub mod encoding;
 pub mod kill;
 pub mod liveness;
-pub mod lsof;
-pub mod process;
+mod lsof;
+mod process;
 pub mod reconcile;
 pub mod spool_root;
-pub mod spool_validator;
-pub mod spool_walker;
+mod spool_walker;
 pub mod tracker;
-
-pub mod workflow_sink;

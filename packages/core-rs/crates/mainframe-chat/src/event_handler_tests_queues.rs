@@ -10,6 +10,7 @@ fn moves_the_acked_message_to_the_end_strips_metadata_and_deletes_the_ref() {
         .unwrap()
         .append("c1", umsg("assistant-reply", None));
     let refs = vec![QueuedMessageRef {
+        delivery: None,
         message_id: "q".to_string(),
         chat_id: "c1".to_string(),
         uuid: "u1".to_string(),

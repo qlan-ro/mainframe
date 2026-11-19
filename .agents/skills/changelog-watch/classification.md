@@ -117,6 +117,31 @@ that asserts the deserialized *value*, not just that parsing returned `Ok`:
 a guard that discards a parse error hides the break from any test that only
 checks for success.
 
+## Binary surface diff
+
+`binary-diff.mjs` lists surfaces that appeared or disappeared between two
+builds. Most are internal (cloud, desktop, runner and telemetry env vars,
+bundled-dependency env reads), so the bar is the same relevance filter as
+for changelog entries, applied per item:
+
+- **Announced** — a changelog entry in the range names it. It was classified
+  with that entry; do not list it again.
+- **Removed and cited by the checklist** (the report marks these) — a risk
+  candidate, **high** until shown otherwise: a flag, subtype or variable
+  Mainframe passes or reads has left the bundle. Confirm against the live
+  CLI before filing, because a string can move out of the scanned shapes
+  without the behaviour going away.
+- **Unannounced and relevant** — a new slash command, flag, control or system
+  subtype, or env var that touches a checklist surface or a "Not consumed"
+  candidate. Classify it as risk, opportunity or no-action exactly as an
+  entry, quoting the item and naming the surface kind instead of entry text.
+- **Everything else** is dropped and counted separately from the changelog's
+  dropped total.
+
+The strings prove presence, not behaviour or reachability: a command can sit
+behind a feature gate (`/project` is gated on `tengu_gentle_cupcake`). Say
+"present in the bundle" rather than "shipped" unless a live check showed it.
+
 ## Report template
 
 Write to `reports/<ISO-date>-<tool>-since-<anchor>-report.md` (committed with
@@ -143,6 +168,13 @@ Entries seen: N · risks: N · opportunities: N · relevant, no action: N · dro
 ## Relevant, no action
 
 - <entry text, verbatim> — <ID>: <why it costs nothing to ignore>
+
+## Unannounced surface changes
+
+<From binary-diff.mjs, for tools with a binary entry. Removed items the
+checklist cites first; then relevant additions, each as `<item>` (<surface
+kind>) — <ID or "Not consumed">: <risk / opportunity / no action and why>.
+End with "Dropped from the binary diff: N".>
 
 ## No relevant changes
 

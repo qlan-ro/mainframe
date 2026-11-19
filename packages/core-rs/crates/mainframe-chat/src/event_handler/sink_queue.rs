@@ -26,6 +26,13 @@ impl SessionSinkImpl {
                 .strip_queued_and_move_to_end(&self.chat_id, id);
         }
         if found_id.is_some() {
+            if self.shared.deps.idle_run_begin(&self.chat_id, uuid).is_ok() {
+                if let Some(cell) = self.shared.active(&self.chat_id) {
+                    cell.lock_recover().real_run_generation = Some(uuid.to_owned());
+                }
+            } else {
+                warn!(chat_id = self.chat_id, "queued run persistence failed");
+            }
             self.emit_display();
             // A queued prompt's `TurnAccepted` (send_entry.rs) is not
             // `TurnStarted` until the CLI actually dequeues it — this is that

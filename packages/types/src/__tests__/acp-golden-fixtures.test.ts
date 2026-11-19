@@ -33,6 +33,7 @@ import {
   ReplayBatchParamsSchema,
   ReplayCompleteParamsSchema,
   ResyncParamsSchema,
+  RetryStatusParamsSchema,
   SessionDetachParamsSchema,
   TranscriptClearedParamsSchema,
   RetryMarkerSchema,
@@ -90,6 +91,8 @@ function schemaFor(name: string): z.ZodType {
   if (name.startsWith('replay-complete.params')) return ReplayCompleteParamsSchema;
   if (name === 'compaction.notification.json') return JsonRpcNotificationSchema;
   if (name === 'compaction.params.json') return CompactionParamsSchema;
+  if (name === 'retry-status.notification.json') return JsonRpcNotificationSchema;
+  if (name === 'retry-status.params.json') return RetryStatusParamsSchema;
   if (name === 'heartbeat.notification.json') return JsonRpcNotificationSchema;
   if (name === 'heartbeat.params.json') return HeartbeatParamsSchema;
   if (name === 'gate-resolved.notification.json') return JsonRpcNotificationSchema;

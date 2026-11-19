@@ -70,7 +70,7 @@ async fn a_revision_cursor_yields_incremental_updates_and_cursor_meta() {
     assert_eq!(replay.updates.len(), 2);
     assert!(matches!(
         replay.updates[0],
-        SessionUpdate::AgentMessage(ref upsert) if upsert.message_id == "dmsg_2"
+        SessionUpdate::AgentMessage(ref upsert) if upsert.message_id == "message:0:top:dmsg_2"
     ));
 }
 

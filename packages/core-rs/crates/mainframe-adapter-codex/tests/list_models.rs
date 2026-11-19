@@ -23,7 +23,7 @@ IFS= read -r _initialize
 printf '{"id":1,"result":{"userAgent":"codex/0.144.1","codexHome":"/tmp/.codex"}}\n'
 IFS= read -r _initialized
 IFS= read -r _model_list
-printf '{"id":2,"result":{"data":[{"id":"gpt-5.6-sol","displayName":"GPT-5.6-Sol","hidden":false,"isDefault":true},{"id":"hidden-model","displayName":"Hidden","hidden":true,"isDefault":false}],"nextCursor":null}}\n'
+printf '{"id":2,"result":{"data":[{"id":"gpt-5.6-sol","displayName":"GPT-5.6-Sol","hidden":false,"isDefault":true},{"id":"gpt-6.1-terra","model":"gpt-6.1-terra","displayName":"GPT-6.1 Terra","hidden":false,"isDefault":false},{"id":"hidden-model","displayName":"Hidden","hidden":true,"isDefault":false}],"nextCursor":null}}\n'
 cat >/dev/null
 "#;
 
@@ -43,8 +43,11 @@ async fn probes_models_with_the_configured_executable_path() {
         .unwrap()
         .expect("probe returns a catalog");
 
-    assert_eq!(models.len(), 1);
+    assert_eq!(models.len(), 2);
     assert_eq!(models[0].id, "gpt-5.6-sol");
     assert_eq!(models[0].label, "GPT-5.6-Sol");
     assert_eq!(models[0].is_default, Some(true));
+    assert_eq!(models[1].id, "gpt-6.1-terra");
+    assert_eq!(models[1].label, "GPT-6.1 Terra");
+    assert_eq!(models[1].context_window, Some(500_000));
 }
