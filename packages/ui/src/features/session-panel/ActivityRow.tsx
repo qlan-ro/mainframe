@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Activity,
   Binoculars,
   Bot,
   ChevronDown,
@@ -26,9 +27,11 @@ const ICONS: Record<ActivityKind, LucideIcon> = {
   monitor: Binoculars,
   scheduled: Clock3,
   command: SquareTerminal,
+  background: Activity,
 };
 
 function timeLabel(row: ActivityEntry, now: number): string {
+  if (row.delegated?.resumedState) return row.delegated.resumedState;
   if (row.state === 'waiting' && row.nextAt) {
     const remaining = row.nextAt - now;
     return remaining > 0 ? `in ${formatElapsed(now - remaining, now)}` : 'due';
@@ -167,7 +170,7 @@ function controlActions(row: ActivityEntry, adapterId: string | undefined, contr
       disabled: controls.busy,
       onClick: () => void controls.stop(),
     });
-  if (live && row.delegated)
+  if (live && row.delegated && !row.delegated.resumedState)
     actions.push({
       key: 'cancel',
       icon: X,
