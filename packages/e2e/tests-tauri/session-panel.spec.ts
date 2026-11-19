@@ -114,9 +114,9 @@
  *   session-panel-plan-toggle     — AgentPlan header ("{done} of {total}") + collapse trigger
  *   session-panel-plan-progress   — the progress track; its fill carries style="width: N%"
  *   session-panel-plan-step-<i>   — one plan step, keyed by position
- *   session-panel-activity-empty  — "Nothing running", only when there is no
+ *   session-panel-activity-empty  — "No background activity", only when there is no
  *                                    history either (finished rows move to Earlier)
- *   session-panel-activity-counts — the eyebrow summary ("1 running" / "Nothing running")
+ *   session-panel-activity-counts — the eyebrow summary ("1 running" / "No background activity")
  *   session-panel-activity-<entryId> — one row, keyed by the activity entry id
  *                                    (`task:<taskId>`, `delegated:<taskId>`, …); a
  *                                    subagent row is covered by the task-subagent
@@ -453,7 +453,7 @@ test.describe('§session-panel — sections', () => {
     await expect(page.getByTestId('session-panel-activity-live')).toHaveCount(0);
     const empty = page.getByTestId('session-panel-activity-empty');
     await expect(empty).toBeVisible();
-    await expect(empty).toHaveText('Nothing running');
+    await expect(empty).toHaveText('No background activity');
   });
 
   test('the Tasks section offers quick-add with a project active', async () => {
@@ -787,7 +787,7 @@ test.describe('§session-panel — Activity section (task-subagent)', () => {
 
     // The finished row leaves the running list for the collapsed Earlier group.
     await expect(row).toHaveCount(0, { timeout: 10_000 });
-    await expect(card.getByTestId('session-panel-activity-counts')).toHaveText('Nothing running');
+    await expect(card.getByTestId('session-panel-activity-counts')).toHaveText('No background activity');
     await expect(page.getByTestId('session-panel-activity-live')).toHaveCount(0);
     await card.getByRole('button', { name: 'Earlier, 1 item' }).click();
     await expect(row).toBeVisible();

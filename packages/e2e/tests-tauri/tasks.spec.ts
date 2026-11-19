@@ -249,7 +249,7 @@ test.describe('§tasks', () => {
     await openTasksCard(page);
     const cardEmpty = page.getByTestId('session-panel-tasks-empty');
     await expect(cardEmpty).toBeVisible({ timeout: 10_000 });
-    await expect(cardEmpty).toHaveText('No active tasks');
+    await expect(cardEmpty).toHaveText('No open project tasks');
     await expect(page.getByTestId('session-panel-tasks-no-project')).toHaveCount(0);
   });
 
