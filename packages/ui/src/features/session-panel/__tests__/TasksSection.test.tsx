@@ -1,28 +1,8 @@
-/**
- * TasksSection — unit tests.
- *
- * The project's active tasks as a section of the docked panel (todo item 4).
- * The section owns the project-scoped todos load now that the sidebar
- * section is gone, and the quick-add logic lives in the shared
- * `useQuickAddTodo` (also used by the sidebar Tasks list) — run for real here
- * against a mocked `lib/api/todos`.
- *
- * Behaviors covered:
- *  - without an active project: the "No active project" row, no New-task row,
- *    and no load at all — there is nothing to scope to
- *  - with a project but no active tasks: the New-task row plus the empty row
- *  - one row per ACTIVE todo; done todos never appear, and neither does the
- *    done count in the badge
- *  - a row opens the edit modal on that todo through `useTasksModal().openEdit`
- *    — there is no dialog mounted here to assert on
- *
- * Follows TasksModalHost.test.tsx: the REAL useTodosStore runs against a mocked
- * lib/api/todos, so the load the section fires is observable.
- */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { Todo } from '@/lib/api/todos';
+import { OPEN_TODO, IN_PROGRESS_TODO, DONE_TODO, OPEN_TODO_2, IN_PROGRESS_TODO_2 } from './tasks-section-fixtures';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
 
@@ -47,61 +27,6 @@ const { useTodosStore } = await import('@/features/tasks/use-todos-store');
 const { useTasksModal } = await import('@/features/tasks/use-tasks-modal');
 const todosApi = await import('@/lib/api/todos');
 const { mfToast } = await import('@/lib/toast');
-
-function makeTodo(overrides: Partial<Todo> & { id: string; number: number }): Todo {
-  return {
-    project_id: 'proj-1',
-    title: 'Default title',
-    body: '',
-    status: 'open',
-    type: 'feature',
-    priority: 'medium',
-    labels: [],
-    assignees: [],
-    milestone: null,
-    dependencies: [],
-    order_index: 0,
-    created_at: '2026-06-01T00:00:00.000Z',
-    updated_at: '2026-06-01T00:00:00.000Z',
-    ...overrides,
-  };
-}
-
-const OPEN_TODO = makeTodo({
-  id: 'todo-1',
-  number: 11,
-  title: 'Fix the rail',
-  status: 'open',
-  updated_at: '2026-06-01T00:00:10.000Z',
-});
-const IN_PROGRESS_TODO = makeTodo({
-  id: 'todo-2',
-  number: 12,
-  title: 'Ship the stack',
-  status: 'in_progress',
-  updated_at: '2026-06-01T00:00:20.000Z',
-});
-const DONE_TODO = makeTodo({
-  id: 'todo-3',
-  number: 13,
-  title: 'Old work',
-  status: 'done',
-  updated_at: '2026-06-01T00:00:00.000Z',
-});
-const OPEN_TODO_2 = makeTodo({
-  id: 'todo-4',
-  number: 14,
-  title: 'Polish the empty state',
-  status: 'open',
-  updated_at: '2026-06-01T00:00:30.000Z',
-});
-const IN_PROGRESS_TODO_2 = makeTodo({
-  id: 'todo-5',
-  number: 15,
-  title: 'Wire the daemon route',
-  status: 'in_progress',
-  updated_at: '2026-06-01T00:00:40.000Z',
-});
 
 function Wrapper({ children }: { children: ReactNode }) {
   return (
@@ -155,7 +80,9 @@ describe('TasksSection — no active project', () => {
 describe('TasksSection — empty project', () => {
   it('keeps the quick-add input and shows the empty row', async () => {
     await renderLoaded([]);
-    await waitFor(() => expect(screen.getByTestId('session-panel-tasks-empty')).toHaveTextContent('No active tasks'));
+    await waitFor(() =>
+      expect(screen.getByTestId('session-panel-tasks-empty')).toHaveTextContent('No open project tasks'),
+    );
     const input = screen.getByTestId('session-panel-tasks-new');
     expect(input.tagName).toBe('INPUT');
     expect(input).toHaveAttribute('placeholder', 'New task');
@@ -294,9 +221,9 @@ describe('TasksSection — editing', () => {
 });
 
 describe('TasksSection — header', () => {
-  it('labels the section Tasks', async () => {
+  it('labels the section Project tasks', async () => {
     await renderLoaded([]);
-    expect(screen.getByTestId('session-panel-card-tasks')).toHaveTextContent('Tasks');
+    expect(screen.getByTestId('session-panel-card-tasks')).toHaveTextContent('Project tasks');
   });
 });
 

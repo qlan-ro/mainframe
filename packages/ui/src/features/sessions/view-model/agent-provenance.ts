@@ -48,6 +48,7 @@ export interface DelegatedTaskRow {
   status: TaskStatus;
   /** The child, or a task below it, waits on a permission or question gate. */
   waiting: boolean;
+  resumedState?: 'running' | 'waiting';
   updatedAt: number;
 }
 
@@ -65,6 +66,13 @@ export function delegatedTasksOf(items: readonly SessionItem[], parentChatId: st
       model: it.custom.model,
       status: delegation.status,
       waiting: delegation.status === 'waiting' || it.custom.hasPending || it.custom.delegatedWaiting === true,
+      resumedState: isTerminalTaskStatus(delegation.status)
+        ? it.custom.hasPending || it.custom.delegatedWaiting
+          ? 'waiting'
+          : it.custom.isRunning
+            ? 'running'
+            : undefined
+        : undefined,
       updatedAt: it.custom.updatedAt,
     });
   }
