@@ -83,12 +83,6 @@ impl HttpStatus for LifecycleError {
     }
 }
 
-/// Single-flight decision computed under the guard, applied after the guard drops.
-enum Flight {
-    Await(FlightWaiter),
-    Claimed(FlightClaim),
-}
-
 mod guards;
 use guards::Guards;
 
@@ -301,25 +295,8 @@ impl ChatLifecycleManager {
             }
         }
 
-        // Claim the single-flight slot WITHOUT
-        // holding the guard across the `.await` (std MutexGuard is not Send).
-        let action = {
-            let g = self.guards.lock_recover();
-            if let Some(existing) = g.starting.get(chat_id) {
-                Flight::Await(existing)
-            } else {
-                match g.starting.claim(chat_id) {
-                    Ok(claim) => Flight::Claimed(claim),
-                    Err(waiter) => Flight::Await(waiter),
-                }
-            }
-        };
-        let notify = match action {
-            Flight::Await(existing) => {
-                existing.wait().await;
-                return;
-            }
-            Flight::Claimed(n) => n,
+        let Some(notify) = self.claim_start(chat_id).await else {
+            return;
         };
         let result = self.do_start_chat(chat_id).await;
         drop(notify);
@@ -745,7 +722,7 @@ impl ChatLifecycleManager {
 }
 
 /// Offload/send/history single-flight claims sharing the `Guards` above. A child
-/// module so it can see the private `Guards`/`Flight` without
+/// module so it can see the private `Guards` without
 /// widening their visibility.
 mod flight_claims;
 

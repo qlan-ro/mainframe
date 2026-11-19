@@ -27,7 +27,7 @@
   "mainframe-automations/src/triggers/router_tests.rs": 476,
   "mainframe-chat/src/chat_manager/send.rs": 237,
   "mainframe-chat/src/event_handler/partial_overlay_tests.rs": 376,
-  "mainframe-chat/src/lifecycle_manager.rs": 755,
+  "mainframe-chat/src/lifecycle_manager.rs": 732,
   "mainframe-claude-workflows/tests/store_lifecycle.rs": 482,
   "mainframe-db/tests/chat_segments.rs": 318,
   "mainframe-db/tests/chats.rs": 579,

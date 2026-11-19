@@ -71,4 +71,5 @@ pub mod chat_patch;
 
 pub mod todo_normalize;
 
+pub mod external_mcp;
 pub mod message_markers;

@@ -33,6 +33,19 @@ impl ChatManager {
         chat_id: &str,
         req: &SwitchProviderRequest,
     ) -> Result<Chat, SwitchError> {
+        self.switch_provider_checked(chat_id, req, &|_| Ok(()))
+            .await
+    }
+
+    pub async fn switch_provider_checked<F>(
+        &self,
+        chat_id: &str,
+        req: &SwitchProviderRequest,
+        guard: &F,
+    ) -> Result<Chat, SwitchError>
+    where
+        F: Fn(&Chat) -> Result<(), ConfigError> + Send + Sync,
+    {
         // An unsent fork's pre-send history bounds its borrowed pin. Read it
         // before the claim: a history read waits out the claim.
         let fork_history = match self.shared.deps.get_pending_fork(chat_id)? {
@@ -41,7 +54,7 @@ impl ChatManager {
         };
         let outcome = {
             let _config = self.config.lock_changes(chat_id).await;
-            self.check_switch(chat_id, req)?;
+            guard(&self.check_switch(chat_id, req)?)?;
             // Exclusive with sends, loads and spawns, like an idle offload;
             // a send that arrives meanwhile waits for the release.
             let Some(claim) = self.lifecycle.try_claim_offload(chat_id) else {
@@ -54,12 +67,15 @@ impl ChatManager {
         match outcome {
             SwitchOutcome::Done(chat) => Ok(*chat),
             SwitchOutcome::BeforeFirstMessage { plan_mode } => {
-                self.update_chat_config(
+                self.update_chat_config_checked(
                     chat_id,
-                    Some(req.adapter_id.clone()),
-                    req.model.clone(),
-                    None,
-                    Some(plan_mode),
+                    crate::config_manager::ConfigUpdate {
+                        adapter_id: Some(req.adapter_id.clone()),
+                        model: req.model.clone(),
+                        permission_mode: None,
+                        plan_mode: Some(plan_mode),
+                    },
+                    guard,
                 )
                 .await?;
                 self.get_chat(chat_id)

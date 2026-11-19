@@ -109,3 +109,25 @@ async fn claim_history_single_flights_concurrent_readers() {
         "second caller follows, not leads"
     );
 }
+
+#[tokio::test]
+async fn start_cannot_register_after_configuration_claims_offload() {
+    let mgr = claims_manager();
+    mgr.await_offload("c1").await;
+    let configuration = mgr.try_claim_offload("c1").unwrap();
+    let starter = mgr.clone();
+    let task = tokio::spawn(async move { starter.claim_start("c1").await });
+    tokio::task::yield_now().await;
+    assert!(!task.is_finished());
+    assert!(!mgr.guards.lock().unwrap().starting.contains_key("c1"));
+    assert!(!mgr.await_starting("c1").await);
+    drop(configuration);
+    let start = tokio::time::timeout(std::time::Duration::from_secs(1), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(mgr.try_claim_offload("c1").is_none());
+    drop(start);
+    assert!(mgr.try_claim_offload("c1").is_some());
+}

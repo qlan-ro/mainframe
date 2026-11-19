@@ -31,7 +31,7 @@ impl ChatState {
 /// First match wins: archived, ended, a pending gate, any work in flight
 /// (a live turn, CLI-queued prompts, or Mainframe-held outbox entries), idle.
 #[must_use]
-pub(crate) fn derive_state(chat: &ChatView, outbox_pending: bool) -> ChatState {
+pub fn derive_state(chat: &ChatView, outbox_pending: bool) -> ChatState {
     match chat.status {
         ChatStatus::Archived => ChatState::Archived,
         ChatStatus::Ended => ChatState::Ended,

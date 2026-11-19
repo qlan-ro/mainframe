@@ -21,6 +21,7 @@ pub mod cli_update;
 pub mod cors_origin;
 pub mod ctx;
 pub mod db;
+pub mod external_mcp;
 pub mod fs_utils;
 pub mod http;
 pub(crate) mod input_error;

@@ -12,6 +12,9 @@ workspace = true
 test-support = []
 
 [dependencies]
+base64 = { workspace = true }
+rand = { workspace = true }
+sha2 = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true }
 tokio = { workspace = true }

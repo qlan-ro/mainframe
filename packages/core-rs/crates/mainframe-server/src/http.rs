@@ -70,6 +70,7 @@ pub fn build_app(ctx: Arc<AppCtx>) -> Router {
         // bearer tokens; outside the auth layer (its loopback bypass would
         // admit any local process) and outside the compressor.
         .merge(routes::mcp::router())
+        .merge(crate::external_mcp::router())
         // axum's built-in 2 MB extractor limit shadows the layer below unless
         // disabled — without this, any body over ~2 MB (a ~1.5 MB attachment,
         // base64-inflated) gets an empty-bodied 413 before the handler runs.
@@ -148,6 +149,7 @@ fn http_routes() -> Router<Arc<AppCtx>> {
         .merge(routes::projects::router())
         .merge(routes::tags::router())
         .merge(routes::settings::router())
+        .merge(crate::external_mcp::clients::router())
         .merge(routes::commands::router())
         .merge(routes::files::router())
         .merge(routes::search::router())
