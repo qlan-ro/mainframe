@@ -31,11 +31,11 @@ fn command_metadata_duration_patch_keeps_actions_group_container_and_parent() {
             panic!("tool patch")
         };
         let value = serde_json::to_value(patch).unwrap();
-        assert_eq!(value["toolCallId"], "cmd");
+        assert_eq!(value["toolCallId"], "tool:cmd");
         assert_eq!(
             value["_meta"]["_mainframe.dev"],
             json!({
-                "timestamp":"2026-08-28T00:00:00.000Z", "containerId":"parent", "parentToolCallId":"parent", "groupId":"cmd",
+                "timestamp":"2026-08-28T00:00:00.000Z", "containerId":"parent", "parentToolCallId":"tool:parent", "sourceToolCallId":"cmd", "groupId":"cmd",
                 "commandExecution":{"commandActions":[{"type":"read","command":"cat a","name":"a","path":"a"}],"reportedDurationMs":duration}
             })
         );

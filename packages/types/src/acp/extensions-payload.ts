@@ -131,6 +131,7 @@ export const ItemMetaSchema = z
     containerId: z.string().optional(),
     commandExecution: CommandExecutionMetadataSchema.optional(),
     parentToolCallId: z.string().optional(),
+    sourceToolCallId: z.string().optional(),
     kind: z.enum(['system', 'error']).optional(),
     errorText: z.string().optional(),
     skillLoaded: SkillLoadedMetaSchema.optional(),

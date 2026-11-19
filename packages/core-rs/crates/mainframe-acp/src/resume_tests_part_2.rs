@@ -134,7 +134,10 @@ async fn an_opted_in_full_replay_previews_old_results_and_keeps_the_newest_full(
     .await;
 
     let lengths = replayed_result_lengths(&replay);
-    assert_eq!(lengths[0], ("old-tool".to_string(), PREVIEW_BYTES, true));
+    assert_eq!(
+        lengths[0],
+        ("tool:old-tool".to_string(), PREVIEW_BYTES, true)
+    );
     assert!(
         lengths[1..]
             .iter()
@@ -143,7 +146,7 @@ async fn an_opted_in_full_replay_previews_old_results_and_keeps_the_newest_full(
     );
     assert_eq!(
         replay.preview_ids,
-        std::collections::HashSet::from(["old-tool".to_string()])
+        std::collections::HashSet::from(["tool:old-tool".to_string()])
     );
 }
 
@@ -191,7 +194,7 @@ async fn a_cursor_replay_previews_nothing_new() {
     };
 
     let (_response, replay) = dispatch_resume_with(
-        resume_request(Some(json!({ "type": "item", "itemId": "old-tool" }))),
+        resume_request(Some(json!({ "type": "item", "itemId": "tool:old-tool" }))),
         &port,
         None,
         ResumeOptions {
@@ -207,6 +210,32 @@ async fn a_cursor_replay_previews_nothing_new() {
     assert!(
         lengths
             .iter()
-            .all(|(id, len, marked)| id != "old-tool" && *len == PREVIEW_BYTES * 3 && !marked)
+            .all(|(id, len, marked)| id != "tool:old-tool" && *len == PREVIEW_BYTES * 3 && !marked)
     );
+}
+
+#[tokio::test]
+async fn a_legacy_tool_item_cursor_forces_full_replay_with_final_answer_and_idle_state() {
+    let port = FakePort {
+        messages: serde_json::from_str(include_str!("../fixtures/tool-first-display.json"))
+            .unwrap(),
+        ..FakePort::default()
+    };
+    let (response, replay) = dispatch_resume(
+        resume_request(Some(json!({"type":"item","itemId":"exec"}))),
+        &port,
+        None,
+    )
+    .await;
+    let response = serde_json::to_value(response).unwrap();
+    assert_eq!(
+        response["result"]["_meta"][MAINFRAME_META_NAMESPACE]["fullReplay"],
+        true
+    );
+    assert!(replay.updates.iter().any(|update| matches!(update,
+        SessionUpdate::AgentMessage(message) if message.message_id == "message:0:top:exec")));
+    assert!(matches!(
+        replay.updates.last(),
+        Some(SessionUpdate::StateUpdate(WireSessionState::Idle(_)))
+    ));
 }

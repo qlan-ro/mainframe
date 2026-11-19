@@ -100,7 +100,7 @@ impl FacadeHub {
                 return;
             }
             let manifest = Manifest {
-                version: 1,
+                version: store::FORMAT_VERSION,
                 generation: nanoid::nanoid!(),
                 chat_id,
                 window,
