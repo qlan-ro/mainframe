@@ -52,7 +52,7 @@ fn hidden_boundary_and_provenance_share_the_transformed_utf16_text() {
     else {
         panic!("message")
     };
-    assert_eq!(id, "work");
+    assert_eq!(id, "message:0:top:work");
     assert_eq!(
         serde_json::to_value(content).unwrap(),
         json!([{"type":"text","text":"🦀work\n\ne\u{301}final"}])
