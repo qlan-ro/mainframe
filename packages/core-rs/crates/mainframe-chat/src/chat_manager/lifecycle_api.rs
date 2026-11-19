@@ -69,6 +69,7 @@ impl ChatManager {
 
     /// The user's Stop: delegated work is cancelled before the turn stops.
     pub async fn interrupt_chat(&self, chat_id: &str) {
+        storage_event!(self.shared, Some(chat_id); self.cancel_maintenance_queue(chat_id));
         self.lifecycle.orchestration().stopping(chat_id).await;
         self.lifecycle.interrupt_chat(chat_id).await;
     }
@@ -87,6 +88,7 @@ impl ChatManager {
     /// and discarding first keeps the side chat from referencing a worktree the
     /// archive is about to remove.
     pub async fn archive_chat(&self, chat_id: &str, delete_worktree: bool) {
+        storage_event!(self.shared, Some(chat_id); self.cancel_maintenance_queue(chat_id));
         self.lifecycle.orchestration().stopping(chat_id).await;
         if let Some(chat) =
             storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id))
@@ -105,6 +107,7 @@ impl ChatManager {
     }
 
     pub async fn end_chat(&self, chat_id: &str) {
+        storage_event!(self.shared, Some(chat_id); self.cancel_maintenance_queue(chat_id));
         self.lifecycle.end_chat(chat_id).await;
         self.teardown.clear(chat_id, TeardownMode::End);
         self.shared.deps.tracker_remove_chat(chat_id);
@@ -180,5 +183,22 @@ impl ChatManager {
 
     pub fn has_pending_permission(&self, chat_id: &str) -> bool {
         self.permission_handler.has_pending_permission(chat_id)
+    }
+}
+
+impl ChatManager {
+    pub(super) fn cancel_maintenance_queue(
+        &self,
+        chat_id: &str,
+    ) -> Result<(), mainframe_types::seam_error::SeamError> {
+        for input in self.shared.deps.idle_queue_list(chat_id)? {
+            self.shared.deps.idle_queue_remove(chat_id, &input.uuid)?;
+            self.remove_queued_ref(chat_id, &input.uuid);
+            self.shared
+                .messages
+                .lock_recover()
+                .remove_by_id(chat_id, &input.message.id);
+        }
+        Ok(())
     }
 }

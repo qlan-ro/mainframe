@@ -16,6 +16,7 @@
  */
 import { useRef, type ReactNode } from 'react';
 import { SidebarGroupLabel } from '@/components/ui/sidebar';
+import { FadeLabel } from '@/components/ui/fade-label';
 import { cn } from '@/lib/utils';
 
 /** The parked header's own height, in px — what a jump has to clear. */
@@ -47,12 +48,12 @@ export function SidebarJumpSection({ label, testId, sticky, actions, children }:
         <button
           type="button"
           data-testid={`${testId}-jump`}
-          className="min-w-0 flex-1 truncate text-left"
+          className="flex min-w-0 flex-1 text-left"
           // Scrolls the content, not the header: a parked header already counts
           // as in view, so asking the browser to reveal it does nothing.
           onClick={() => content.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
         >
-          {label}
+          <FadeLabel className="flex-1">{label}</FadeLabel>
         </button>
         {actions != null && <span className="flex shrink-0 items-center gap-0.5">{actions}</span>}
       </SidebarGroupLabel>

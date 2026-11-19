@@ -28,9 +28,9 @@ export function ScopeSummary({ projects, scoped }: { projects: Project[]; scoped
     <Tooltip delayDuration={TOOLTIP_DELAY_MS}>
       <TooltipTrigger asChild>
         <div data-testid="sessions-scope-summary" className="flex min-w-0 flex-1 flex-col justify-center leading-tight">
-          <span data-testid="sessions-scope-label" className="truncate text-sm font-medium text-foreground">
+          <FadeLabel data-testid="sessions-scope-label" className="text-sm font-medium text-foreground">
             {scopeTitle(scoped.length)}
-          </span>
+          </FadeLabel>
           <FadeLabel data-testid="sessions-scope-names" className="text-xs text-muted-foreground">
             {scoped.length === 0 ? `${projects.length} projects` : scoped.map((p) => p.name).join(', ')}
           </FadeLabel>

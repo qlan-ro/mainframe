@@ -34,6 +34,7 @@ import {
   ReplayCompleteParamsSchema,
   RequestPermissionRequestSchema,
   ResyncParamsSchema,
+  RetryStatusParamsSchema,
   TranscriptClearedParamsSchema,
   UpdateSessionNotificationSchema,
 } from '@qlan-ro/mainframe-types';
@@ -45,6 +46,8 @@ export type SessionUpdateListener = (sessionId: string, update: SessionUpdate) =
 export type PermissionRequestListener = (id: JsonRpcRequestId, request: RequestPermissionRequest) => void;
 export type GateResolvedListener = (sessionId: string, requestId: string) => void;
 export type CompactionListener = (sessionId: string, phase: 'started' | 'done') => void;
+/** `_mainframe.dev/retry_status` (todo #406): the provider call is being retried. `maxAttempts` is absent when the provider's text carried none. Transient — never replayed. */
+export type RetryStatusListener = (sessionId: string, status: { attempt: number; maxAttempts?: number }) => void;
 export type TranscriptClearedListener = (sessionId: string) => void;
 export type QueueStateListener = (sessionId: string, refs: QueuedMessageRef[]) => void;
 /** `_mainframe.dev/resync` (T20/T34): the chat's message cache evicted from the front — re-replay without wiping the reducer's transcript first. */
@@ -64,6 +67,7 @@ interface ListenerSignatures {
   '_mainframe.dev/queue_state': QueueStateListener;
   '_mainframe.dev/transcript_cleared': TranscriptClearedListener;
   '_mainframe.dev/compaction': CompactionListener;
+  '_mainframe.dev/retry_status': RetryStatusListener;
   '_mainframe.dev/gate_resolved': GateResolvedListener;
   '_mainframe.dev/resync': ResyncListener;
   '_mainframe.dev/replay_complete': ReplayCompleteListener;
@@ -105,6 +109,10 @@ const NOTIFICATIONS: readonly NotificationEntry[] = [
   ]),
   defineNotification('_mainframe.dev/transcript_cleared', TranscriptClearedParamsSchema, (p) => [p.sessionId]),
   defineNotification('_mainframe.dev/compaction', CompactionParamsSchema, (p) => [p.sessionId, p.phase]),
+  defineNotification('_mainframe.dev/retry_status', RetryStatusParamsSchema, (p) => [
+    p.sessionId,
+    p.maxAttempts === undefined ? { attempt: p.attempt } : { attempt: p.attempt, maxAttempts: p.maxAttempts },
+  ]),
   defineNotification('_mainframe.dev/gate_resolved', GateResolvedParamsSchema, (p) => [p.sessionId, p.requestId]),
   defineNotification('_mainframe.dev/resync', ResyncParamsSchema, (p) => [p.sessionId]),
   defineNotification('_mainframe.dev/replay_complete', ReplayCompleteParamsSchema, (p) => [
@@ -160,6 +168,10 @@ export class AcpNotificationRouter {
 
   onCompaction(listener: CompactionListener): () => void {
     return this.register('_mainframe.dev/compaction', listener);
+  }
+
+  onRetryStatus(listener: RetryStatusListener): () => void {
+    return this.register('_mainframe.dev/retry_status', listener);
   }
 
   onTranscriptCleared(listener: TranscriptClearedListener): () => void {

@@ -31,11 +31,11 @@ async fn a_single_large_container_has_an_item_floor_and_pages_without_gaps() {
         let mut history = meta(reply)["history"].clone();
         assert_eq!(
             history,
-            json!({"hasMore":true,"floorItemId":"tool-327","contextItemIds":if nested { vec!["task"] } else { vec![] }})
+            json!({"hasMore":true,"floorItemId":"tool:tool-327","contextItemIds":if nested { vec!["tool:task"] } else { vec![] }})
         );
         assert_eq!(replay.items.len(), 80 + usize::from(nested));
         if nested {
-            assert_eq!(replay.items[0].id(), "task");
+            assert_eq!(replay.items[0].id(), "tool:task");
         }
         let mut ids: HashSet<String> = replay.items.iter().map(|item| item.id().into()).collect();
         let mut requests = 0;
@@ -89,7 +89,7 @@ async fn reconnect_retains_the_partial_container_and_ignores_hidden_changes() {
     let (reply, replay) = window(
         &port,
         json!({"type":"revision","epoch":cursor["epoch"],"revision":cursor["revision"]}),
-        json!({"items":80,"floorItemId":"tool-327","contextItemIds":["task"]}),
+        json!({"items":80,"floorItemId":"tool:tool-327","contextItemIds":["tool:task"]}),
         &log,
     )
     .await;
@@ -102,7 +102,7 @@ async fn reconnect_retains_the_partial_container_and_ignores_hidden_changes() {
         .iter()
         .filter_map(|u| u["toolCallId"].as_str())
         .collect();
-    assert_eq!(tools, vec!["tool-400"]);
+    assert_eq!(tools, vec!["tool:tool-400"]);
 }
 
 #[test]
@@ -110,28 +110,28 @@ fn load_through_reaches_a_target_inside_the_same_container() {
     let port = large(true);
     let params = HistoryPageParams {
         session_id: "chat_1".into(),
-        before: "tool-327".into(),
+        before: "tool:tool-327".into(),
         containers: Some(40),
         items: Some(80),
-        until_item_id: Some("tool-10".into()),
+        until_item_id: Some("tool:tool-10".into()),
     };
     let page = crate::history_page::prepare(&port.messages, &params, Default::default());
     assert_eq!(
         page.result.history.floor_item_id.as_deref(),
-        Some("tool-10")
+        Some("tool:tool-10")
     );
     assert!(
         page.containers
             .iter()
             .flatten()
-            .any(|item| item.id() == "tool-10")
+            .any(|item| item.id() == "tool:tool-10")
     );
     assert!(
         !page
             .containers
             .iter()
             .flatten()
-            .any(|item| item.id() == "tool-327")
+            .any(|item| item.id() == "tool:tool-327")
     );
 }
 
@@ -148,7 +148,7 @@ async fn item_limits_clamp_and_reconnect_preserves_more_than_one_loaded_page() {
     let (reply, replay) = window(
         &port,
         json!({"type":"revision","epoch":boundary.epoch,"revision":boundary.revision}),
-        json!({"items":80,"floorItemId":"tool-87"}),
+        json!({"items":80,"floorItemId":"tool:tool-87"}),
         &log,
     )
     .await;
@@ -165,7 +165,7 @@ fn pages_skip_empty_encoded_containers_and_reach_the_beginning() {
     }
     let params = HistoryPageParams {
         session_id: "chat_1".into(),
-        before: "m119".into(),
+        before: "message:0:top:m119".into(),
         items: Some(80),
         containers: Some(40),
         until_item_id: None,
@@ -174,7 +174,10 @@ fn pages_skip_empty_encoded_containers_and_reach_the_beginning() {
     assert!(!page.result.history.has_more);
     port.messages[0].content = vec![text("old")];
     let page = crate::history_page::prepare(&port.messages, &params, Default::default());
-    assert_eq!(page.result.history.floor_item_id.as_deref(), Some("m0"));
+    assert_eq!(
+        page.result.history.floor_item_id.as_deref(),
+        Some("message:0:top:m0")
+    );
     assert!(!page.result.history.has_more);
 }
 
@@ -204,16 +207,16 @@ async fn changed_context_replays_the_loaded_floor_without_dropping_pages() {
     let (reply, replay) = window(
         &port,
         json!({"type":"revision","epoch":cursor["epoch"],"revision":cursor["revision"]}),
-        json!({"items":80,"floorItemId":"tool-310","contextItemIds":["task"]}),
+        json!({"items":80,"floorItemId":"tool:tool-310","contextItemIds":["tool:task"]}),
         &log,
     )
     .await;
     let meta = meta(reply);
     assert_eq!(meta["fullReplay"], true);
-    assert_eq!(meta["history"]["floorItemId"], "tool-310");
+    assert_eq!(meta["history"]["floorItemId"], "tool:tool-310");
     assert_eq!(
         meta["history"]["contextItemIds"],
-        json!(["task", "new-task"])
+        json!(["tool:task", "tool:new-task"])
     );
     assert_eq!(replay.items.len(), 99);
 }
@@ -229,19 +232,48 @@ async fn preorder_parallel_tasks_include_the_old_context_when_a_page_reaches_a_s
     };
     let log = Mutex::new(RevisionLog::new("epoch".into()));
     let (reply, _) = window(&port, json!({"type":"start"}), json!({"items":80}), &log).await;
-    assert_eq!(meta(reply)["history"]["contextItemIds"], json!(["b"]));
+    assert_eq!(meta(reply)["history"]["contextItemIds"], json!(["tool:b"]));
     let mut params = HistoryPageParams {
         session_id: "chat_1".into(),
-        before: "b-120".into(),
+        before: "tool:b-120".into(),
         containers: Some(40),
         items: Some(80),
         until_item_id: None,
     };
     let page = crate::history_page::prepare(&port.messages, &params, Default::default());
-    assert_eq!(page.result.history.floor_item_id.as_deref(), Some("b-40"));
-    assert!(page.containers[0].iter().any(|item| item.id() == "b"));
-    params.before = "b-40".into();
+    assert_eq!(
+        page.result.history.floor_item_id.as_deref(),
+        Some("tool:b-40")
+    );
+    assert!(page.containers[0].iter().any(|item| item.id() == "tool:b"));
+    params.before = "tool:b-40".into();
     let page = crate::history_page::prepare(&port.messages, &params, Default::default());
-    assert!(page.containers[0].iter().any(|item| item.id() == "b"));
-    assert_eq!(page.containers[0].first().unwrap().id(), "a");
+    assert!(page.containers[0].iter().any(|item| item.id() == "tool:b"));
+    assert_eq!(page.containers[0].first().unwrap().id(), "tool:a");
+}
+
+#[test]
+fn native_activity_and_task_targets_load_their_older_history() {
+    for (port, before, target, expected) in [
+        (fixture(120), "message:0:top:m119", "m0", "message:0:top:m0"),
+        (large(true), "tool:tool-327", "task", "tool:task"),
+        (large(true), "tool:tool-327", "tool-10", "tool:tool-10"),
+    ] {
+        let params = HistoryPageParams {
+            session_id: "chat_1".into(),
+            before: before.into(),
+            containers: Some(40),
+            items: Some(80),
+            until_item_id: Some(target.into()),
+        };
+        let page = crate::history_page::prepare(&port.messages, &params, Default::default());
+        assert_ne!(page.result.stale, Some(true));
+        assert_eq!(page.result.history.floor_item_id.as_deref(), Some(expected));
+        assert!(
+            page.containers
+                .iter()
+                .flatten()
+                .any(|item| item.id() == expected)
+        );
+    }
 }

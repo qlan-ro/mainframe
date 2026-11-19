@@ -241,7 +241,7 @@ fn adjacent_commentary_and_final_keep_the_same_native_text_container() {
     );
     let items = h.encoded();
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].id(), "comment");
+    assert_eq!(items[0].id(), "message:0:top:comment");
     let p = sources(&items);
     assert_eq!(p.len(), 2);
     assert_eq!(p[0]["sourceMessageId"], "comment");

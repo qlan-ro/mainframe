@@ -211,6 +211,7 @@ fn compaction_message(entry: &Value, chat_id: &str) -> ChatMessage {
         chat_id: chat_id.to_string(),
         r#type: ChatMessageType::System,
         content: vec![MessageContent::Node(MessageContentNode::Compaction {
+            compaction: None,
             parent_tool_use_id: None,
         })],
         timestamp: timestamp_or_now(entry),

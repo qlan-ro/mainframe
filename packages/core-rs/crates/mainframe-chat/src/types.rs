@@ -12,6 +12,7 @@ pub struct ActiveChat {
     /// Wall-clock ms at the moment the current turn was dispatched to the CLI;
     /// read back in `on_result` to compute `turnDurationMs`.
     pub turn_started_at: Option<i64>,
+    pub real_run_generation: Option<String>,
     /// Wall-clock ms at which the daemon first observed the current turn
     /// running: stamped once when the turn starts (a send, a dequeued prompt,
     /// or the CLI starting a turn by itself) and cleared when it goes idle.
@@ -42,6 +43,7 @@ impl ActiveChat {
             chat,
             session,
             turn_started_at: None,
+            real_run_generation: None,
             running_since_ms: None,
             last_used_at: now_ms(),
         }

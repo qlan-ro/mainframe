@@ -23,14 +23,7 @@ async fn cli_path_stop_task_succeeds_transitions_to_stopped() {
         },
         called: Arc::new(Mutex::new(false)),
     };
-    let out = kill_tasks_for_chat(KillTasksForChatArgs {
-        chat_id: "c1",
-        worktree_path: None,
-        session: Some(&session),
-        tracker: &tracker,
-        spool_root: Some("/tmp/claude-501".to_string()),
-    })
-    .await;
+    let out = kill_chat(&tracker, Some(&session), None, "/tmp/claude-501").await;
     let mut killed: Vec<String> = out.killed.iter().map(|k| k.task_id.clone()).collect();
     killed.sort();
     assert_eq!(killed, vec!["t1", "t2"]);
@@ -49,14 +42,7 @@ async fn os_path_no_session_lsof_writer_kill_succeeds() {
         "t1",
         "/tmp/claude-501/-x/sess/tasks/t1.output",
     );
-    let out = kill_tasks_for_chat(KillTasksForChatArgs {
-        chat_id: "c1",
-        worktree_path: None,
-        session: None,
-        tracker: &tracker,
-        spool_root: Some("/tmp/claude-501".to_string()),
-    })
-    .await;
+    let out = kill_chat(&tracker, None, None, "/tmp/claude-501").await;
     let calls = tk_calls(&tk);
     assert!(calls.iter().any(|(p, _)| *p == 321));
     assert_eq!(
@@ -83,19 +69,12 @@ async fn os_path_no_writer_no_session_stays_running_reported_failed() {
         "t1",
         "/tmp/claude-501/-x/sess/tasks/t1.output",
     );
-    let out = kill_tasks_for_chat(KillTasksForChatArgs {
-        chat_id: "c1",
-        worktree_path: None,
-        session: None,
-        tracker: &tracker,
-        spool_root: Some("/tmp/claude-501".to_string()),
-    })
-    .await;
+    let out = kill_chat(&tracker, None, None, "/tmp/claude-501").await;
     assert_eq!(
         out.failed,
         vec![FailedEntry {
             task_id: "t1".to_string(),
-            error: "no live writer".to_string()
+            error: KillError::Unreachable { stop_error: None },
         }]
     );
     assert_eq!(

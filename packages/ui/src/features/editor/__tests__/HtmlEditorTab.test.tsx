@@ -27,6 +27,11 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPor
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectId: undefined, chatId: undefined, projectPath: undefined }),
 }));
+vi.mock('@/features/sessions/use-active-draft-config', () => ({ useActiveDraftConfig: () => undefined }));
+vi.mock('@assistant-ui/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@assistant-ui/react')>()),
+  useAui: () => ({ threadListItem: () => ({ initialize: vi.fn() }) }),
+}));
 
 type CmProps = ComponentProps<typeof import('../inline-comments/CmEditorWithComments').CmEditorWithComments>;
 vi.mock('../inline-comments/CmEditorWithComments', () => ({

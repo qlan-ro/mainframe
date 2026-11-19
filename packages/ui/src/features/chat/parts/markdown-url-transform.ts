@@ -4,10 +4,10 @@
  * `urlTransform` extends react-markdown's default sanitiser to allow the same
  * app-protocol URLs that Tauri permits via plugin-opener (slack://, vscode://, etc.),
  * and — scoped to `href` only — a `file:` target, so a transcript file link
- * reaches `SmartLink` instead of being stripped to a dead anchor. The scoping
- * matters because react-markdown runs this transform over every URL-valued
- * property, `img src` included, and a live `file://` image source is out of
- * scope for this change.
+ * reaches `SmartLink` instead of being stripped to a dead anchor. An `img src`
+ * that is a local absolute path or `file://` URL is kept too, so `MarkdownImage`
+ * can load it through the daemon; other `src` values go through the default
+ * sanitiser.
  *
  * `remarkAppLinks` converts bare app-protocol URLs in plain text into clickable
  * links — remark-gfm only autolinks http(s) URLs.
@@ -17,6 +17,7 @@ import type { Root, Text, Link } from 'mdast';
 import type { Plugin } from 'unified';
 import { visit } from 'unist-util-visit';
 import { parseFileHref } from '@/lib/files/file-href';
+import { localImagePath } from '@/lib/files/local-image';
 
 /**
  * App protocols allowed by plugin-opener on Tauri.
@@ -42,6 +43,9 @@ export function urlTransform(url: string, key?: string): string {
     }
   }
   if (key === 'href' && parseFileHref(url) !== null) {
+    return url;
+  }
+  if (key === 'src' && localImagePath(url) !== null) {
     return url;
   }
   return defaultUrlTransform(url);

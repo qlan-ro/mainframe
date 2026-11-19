@@ -27,6 +27,9 @@ pub fn handle_notification(
     sink: &Arc<dyn SessionSink>,
     state: &mut CodexSessionState,
 ) {
+    if crate::compaction::handle_idle_notification(method, params, sink, state) {
+        return;
+    }
     tracing::debug!(method, "codex notification");
     match method {
         "thread/started" => decode(params, |p: ThreadStartedParams| {
@@ -46,13 +49,14 @@ pub fn handle_notification(
         "thread/tokenUsage/updated" => decode(params, |p: TokenUsageUpdatedParams| {
             handle_token_usage(p, sink, state)
         }),
-        "thread/compacted" => crate::compaction::handle_compaction_completed(sink, state, None),
+        "thread/compacted" => crate::compaction::handle_legacy_compacted(params, sink, state),
         "account/rateLimits/updated" => decode(params, |p: AccountRateLimitsUpdatedParams| {
             handle_account_rate_limits_updated(p, sink)
         }),
         "item/agentMessage/delta" => {
             crate::agent_message_partial::handle_agent_message_delta(params, sink, state)
         }
+        "error" => crate::error_notification::handle_error_notification(params, sink, state),
         _ => handle_unmapped(method),
     }
 }
@@ -161,7 +165,9 @@ fn handle_item_started(
                 .started(thread, params.turn_id.as_deref(), &item);
         }
         Ok(ThreadItem::ContextCompaction(_)) => {
-            crate::compaction::handle_compaction_started(sink);
+            if !state.maintenance.suppressing() {
+                crate::compaction::handle_compaction_started(sink, state);
+            }
         }
         Ok(ThreadItem::CollabAgentToolCall(item)) => {
             collab_card::on_collab_tool_call(&item, collab_card::Phase::Started, sink, state);

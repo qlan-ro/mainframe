@@ -41,9 +41,10 @@ import { useStableList } from '@/lib/use-stable-list';
 import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
 import { SidebarScopeStrip } from './SidebarScopeStrip';
 import { SessionsSection } from './SessionsSection';
+import { FadeLabel } from '@/components/ui/fade-label';
 
 /** The "New session" row under the header — ONE CLICK, always; the tour's primary anchor. */
-function NewSessionRow() {
+export function NewSessionRow() {
   const newThread = useStartNewSession();
   return (
     <SidebarMenu>
@@ -57,7 +58,7 @@ function NewSessionRow() {
           onClick={newThread}
         >
           <PenLine />
-          <span className="min-w-0 flex-1 truncate">New session</span>
+          <FadeLabel className="flex-1">New session</FadeLabel>
           <Plus aria-hidden className="shrink-0 text-muted-foreground" />
         </SidebarMenuButton>
       </SidebarMenuItem>

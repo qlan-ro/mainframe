@@ -1,6 +1,6 @@
 //! Pins that the Claude adapter's recorded task-output path, `spool_root()`,
-//! and the production-default spool validator all agree, asserted in one test
-//! rather than three independent constant checks.
+//! and `is_spool_task_output` all agree, asserted in one test rather than
+//! three independent constant checks.
 #![cfg(unix)]
 #![allow(
     clippy::unwrap_used,
@@ -14,10 +14,7 @@ use std::sync::Arc;
 
 use mainframe_adapter_claude::task_events::{ClaudeTaskEvents, TaskStartedCtx, TaskStartedPayload};
 use mainframe_background_tasks::encoding::encode_cwd_segment;
-use mainframe_background_tasks::spool_root::spool_root;
-use mainframe_background_tasks::spool_validator::{
-    Platform, SpoolValidator, SpoolValidatorDeps, make_spool_validator,
-};
+use mainframe_background_tasks::spool_root::{is_spool_task_output, spool_root};
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
 use mainframe_claude_workflows::store::ClaudeWorkflowStore;
 
@@ -46,7 +43,7 @@ impl Drop for RemoveDirOnDrop {
 }
 
 #[tokio::test]
-async fn recorded_task_output_path_is_accepted_by_the_default_validator() {
+async fn recorded_task_output_path_passes_the_spool_check() {
     let uid = oracle_uid();
     if uid == 0 {
         // Running as root: `claude-0` is the correct root and this test is meaningless.
@@ -92,14 +89,5 @@ async fn recorded_task_output_path_is_accepted_by_the_default_validator() {
     std::fs::create_dir_all(output_path_buf.parent().unwrap()).unwrap();
     std::fs::write(&output_path_buf, b"agreement").unwrap();
 
-    // Exactly the production default `routes/background_tasks.rs` builds — no
-    // injected uid, no spool-root override.
-    let validator = make_spool_validator(SpoolValidatorDeps {
-        platform: Platform::current(),
-        getuid: None,
-        env: std::env::vars().collect(),
-        realpath: None,
-        tmpdir: None,
-    });
-    assert!(validator.validate(&output_path, "task-agree").await);
+    assert!(is_spool_task_output(&output_path_buf, "task-agree").await);
 }

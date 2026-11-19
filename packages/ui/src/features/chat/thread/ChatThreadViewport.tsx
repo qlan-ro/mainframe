@@ -1,9 +1,17 @@
 import { EarlierMessages } from './EarlierMessages';
-import { lazy, Suspense, useMemo, useRef, type CSSProperties, type ReactNode, type RefCallback } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefCallback,
+} from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
-import { ArrowDownIcon } from 'lucide-react';
 import { useUiPrefs } from '@/store/ui-prefs';
-import { Button } from '@/components/ui/button';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { Composer } from '../composer/Composer';
@@ -15,6 +23,8 @@ import { useChatExtras } from '../runtime/chat-extras';
 import { ContextNotPreservedNotice } from './ContextNotPreservedNotice';
 import { DegradedChatCard } from './DegradedChatCard';
 import { useThreadBottomPin } from './use-thread-bottom-pin';
+import { useElementHeight } from './use-element-height';
+import { TranscriptScrollToBottom } from './TranscriptScrollToBottom';
 import { VirtualMessages } from './VirtualMessages';
 import { TranscriptScrollProvider } from './transcript-scroll-context';
 import { TRANSCRIPT_WIDTH_VAR, TranscriptWidthHandle } from './TranscriptWidthHandle';
@@ -62,17 +72,6 @@ function ThreadFooter({
       ref={footerRef}
       className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background"
     >
-      <ThreadPrimitive.ScrollToBottom asChild>
-        <Button
-          data-testid="chat-scroll-to-bottom"
-          aria-label="Scroll to bottom"
-          variant="outline"
-          size="icon-sm"
-          className="absolute -top-10 left-1/2 z-10 -translate-x-1/2 rounded-full text-muted-foreground shadow-md disabled:invisible"
-        >
-          <ArrowDownIcon />
-        </Button>
-      </ThreadPrimitive.ScrollToBottom>
       <div
         data-testid="chat-thread-footer"
         className="mx-auto flex w-full min-h-0 max-w-(--mf-transcript-width) flex-col px-5 pb-4"
@@ -117,6 +116,17 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
   const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
   const threadId = useSideAwareThreadId();
   const { viewportRef, contentRef, footerRef, scroll } = useViewportScroll(threadId);
+  // The footer's measured height is the opaque bottom band of the edge-fade mask.
+  const [footerEl, setFooterEl] = useState<HTMLDivElement | null>(null);
+  const footerHeight = useElementHeight(footerEl);
+  const [overlayHost, setOverlayHost] = useState<HTMLDivElement | null>(null);
+  const composedFooterRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      footerRef(node);
+      setFooterEl(node);
+    },
+    [footerRef],
+  );
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const chatId = useChatExtras()?.state.chatId;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -136,7 +146,8 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
           data-mf-chat-thread
           data-mf-chat-id={chatId}
           tabIndex={-1}
-          className="relative flex flex-1 flex-col overflow-y-auto [overflow-anchor:none]"
+          style={{ '--scroll-fade-inset-b': `${footerHeight}px` } as CSSProperties}
+          className="scroll-fade-y scroll-fade-sticky relative flex flex-1 flex-col overflow-y-auto [overflow-anchor:none]"
         >
           <ChatThreadLoadingSpinner />
           <div ref={contentRef} className="relative mx-auto w-full max-w-(--mf-transcript-width) flex-1 px-5 py-4">
@@ -148,8 +159,10 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
             <EarlierMessages />
             <TranscriptMessages key={threadId ?? ''} />
           </div>
-          <ThreadFooter variant={variant} readOnly={readOnly} footerRef={footerRef} />
+          <ThreadFooter variant={variant} readOnly={readOnly} footerRef={composedFooterRef} />
+          <TranscriptScrollToBottom host={overlayHost} footerHeight={footerHeight} />
         </ThreadPrimitive.Viewport>
+        <div ref={setOverlayHost} className="pointer-events-none absolute inset-0" />
       </div>
     </TranscriptScrollProvider>
   );

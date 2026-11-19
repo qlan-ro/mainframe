@@ -9,6 +9,11 @@ vi.mock('@/lib/api/files', () => ({
 }));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 1 }));
 vi.mock('@/features/sessions/use-active-identity', () => ({ useActiveIdentity: () => identity }));
+vi.mock('@/features/sessions/use-active-draft-config', () => ({ useActiveDraftConfig: () => undefined }));
+vi.mock('@assistant-ui/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@assistant-ui/react')>()),
+  useAui: () => ({ threadListItem: () => ({ initialize: vi.fn() }) }),
+}));
 // ViewerShell's Reveal in Finder button reads the active daemon.
 vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => true }));
 

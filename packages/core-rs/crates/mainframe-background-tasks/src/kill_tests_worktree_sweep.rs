@@ -5,27 +5,16 @@ async fn worktree_sweep_rejects_symlinked_spool_files() {
     let tracker = BackgroundTaskTracker::new();
     let lsof_calls = Arc::new(Mutex::new(0usize));
     let lsof_calls2 = lsof_calls.clone();
-    set_exec_for_tests(
+    set_lsof_for_tests(
         &tracker.process,
-        Arc::new(move |_c, _a| {
+        Arc::new(move |_path| {
             *lsof_calls2.lock_recover() += 1;
-            Box::pin(async {
-                Ok(ExecOk {
-                    stdout: String::new(),
-                })
-            })
+            Box::pin(async { Ok(String::new()) })
         }),
     );
     record_tree_kill(&tracker);
     let fx = build_sweep_fixture(true);
-    let out = kill_tasks_for_chat(KillTasksForChatArgs {
-        chat_id: "c1",
-        worktree_path: Some(&fx.worktree_path),
-        session: None,
-        tracker: &tracker,
-        spool_root: Some(fx.spool_root.clone()),
-    })
-    .await;
+    let out = kill_chat(&tracker, None, Some(&fx.worktree_path), &fx.spool_root).await;
     assert_eq!(*lsof_calls.lock_recover(), 0);
     assert!(out.swept.is_empty());
 }
@@ -41,14 +30,7 @@ async fn worktree_sweep_kills_writer_pids_filters_daemon_pid() {
         Arc::new(|_pid| Box::pin(async { "ps".to_string() })),
     );
     let fx = build_sweep_fixture(false);
-    let out = kill_tasks_for_chat(KillTasksForChatArgs {
-        chat_id: "c1",
-        worktree_path: Some(&fx.worktree_path),
-        session: None,
-        tracker: &tracker,
-        spool_root: Some(fx.spool_root.clone()),
-    })
-    .await;
+    let out = kill_chat(&tracker, None, Some(&fx.worktree_path), &fx.spool_root).await;
     let calls = tk_calls(&tk);
     assert!(calls.iter().any(|(p, _)| *p == 999));
     assert!(!calls.iter().any(|(p, _)| *p == daemon_pid));
@@ -76,14 +58,7 @@ async fn sweep_with_tree_kill_failure(root_failed: bool) -> KillTasksForChatResu
         Arc::new(|_pid| Box::pin(async { "node".to_string() })),
     );
     let fx = build_sweep_fixture(false);
-    kill_tasks_for_chat(KillTasksForChatArgs {
-        chat_id: "c1",
-        worktree_path: Some(&fx.worktree_path),
-        session: None,
-        tracker: &tracker,
-        spool_root: Some(fx.spool_root.clone()),
-    })
-    .await
+    kill_chat(&tracker, None, Some(&fx.worktree_path), &fx.spool_root).await
 }
 
 #[tokio::test(start_paused = true)]
@@ -101,4 +76,53 @@ async fn worktree_sweep_counts_a_killed_writer_whose_descendant_refused_the_sign
 async fn worktree_sweep_does_not_count_a_writer_it_could_not_signal() {
     let out = sweep_with_tree_kill_failure(true).await;
     assert!(out.swept.is_empty());
+}
+
+#[tokio::test]
+async fn worktree_sweep_skips_a_linked_session_directory() {
+    let tracker = BackgroundTaskTracker::new();
+    set_lsof_for_tests(
+        &tracker.process,
+        Arc::new(|_| panic!("unexpected writer probe")),
+    );
+    let fx = build_sweep_fixture(false);
+    let encoded = encode_cwd_segment(
+        &fs::canonicalize(&fx.worktree_path)
+            .unwrap()
+            .to_string_lossy(),
+    );
+    let session = Path::new(&fx.spool_root).join(encoded).join("sess-a");
+    let sibling = Path::new(&fx.spool_root).join("another-worktree");
+    fs::rename(&session, &sibling).unwrap();
+    std::os::unix::fs::symlink(sibling, session).unwrap();
+    let result = kill_chat(&tracker, None, Some(&fx.worktree_path), &fx.spool_root).await;
+    assert!(result.swept.is_empty());
+}
+
+#[tokio::test]
+async fn worktree_sweep_probes_the_file_it_opened_even_after_a_rename() {
+    let tracker = BackgroundTaskTracker::new();
+    let fx = build_sweep_fixture(false);
+    let encoded = encode_cwd_segment(
+        &fs::canonicalize(&fx.worktree_path)
+            .unwrap()
+            .to_string_lossy(),
+    );
+    let file = Path::new(&fx.spool_root)
+        .join(encoded)
+        .join("sess-a/tasks/leftover.output");
+    let called = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let observed = called.clone();
+    set_lsof_for_tests(
+        &tracker.process,
+        Arc::new(move |probe| {
+            fs::rename(&file, file.with_extension("old")).unwrap();
+            fs::write(&file, b"replacement").unwrap();
+            assert_eq!(fs::read(probe).unwrap(), b"x");
+            observed.store(true, std::sync::atomic::Ordering::Relaxed);
+            Box::pin(async { Ok(String::new()) })
+        }),
+    );
+    kill_chat(&tracker, None, Some(&fx.worktree_path), &fx.spool_root).await;
+    assert!(called.load(std::sync::atomic::Ordering::Relaxed));
 }

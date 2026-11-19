@@ -21,9 +21,11 @@ interface ZoomableImageProps {
   className?: string;
   /** Forwarded to the thumbnail `<img>` so callers can detect natural dimensions. */
   onLoad?: React.ReactEventHandler<HTMLImageElement>;
+  /** Forwarded to the thumbnail `<img>` so callers can fall back when decoding fails. */
+  onError?: React.ReactEventHandler<HTMLImageElement>;
 }
 
-export function ZoomableImage({ src, alt = '', className, onLoad }: ZoomableImageProps) {
+export function ZoomableImage({ src, alt = '', className, onLoad, onError }: ZoomableImageProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -35,7 +37,7 @@ export function ZoomableImage({ src, alt = '', className, onLoad }: ZoomableImag
           aria-label="View image full size"
           className="block cursor-zoom-in rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <img src={src} alt={alt} className={className} onLoad={onLoad} />
+          <img src={src} alt={alt} className={className} onLoad={onLoad} onError={onError} />
         </button>
       </DialogTrigger>
       <LightboxSurface

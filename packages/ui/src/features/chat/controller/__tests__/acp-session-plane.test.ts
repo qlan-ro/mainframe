@@ -1,16 +1,3 @@
-/**
- * AcpSessionPlane — behavior tests. Replaces `acp-facade-session.test.ts`
- * (the module it targeted, `acp-facade-session.ts`, was an interim stub
- * folded into this plane once the socket was wired to a live ChatManager).
- *
- * Covers what the legacy reconnect mechanisms collapsed into: full replay on
- * attach/reattach, refused when empty against a populated transcript (the
- * four-mechanism collapse the module doc describes), and gap-triggered
- * resume with the last-settled-item cursor. Gate request/resolve and
- * `userMessageContents()` are in the sibling acp-session-plane-gates.test.ts
- * (todo #350, plan task 37, R2.13 — split to keep each file under the
- * 300-line cap).
- */
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatStateEvent } from '../chat-thread-state';
 import { AcpSessionPlane, type AcpSessionPlaneHost } from '../acp-session-plane';
@@ -101,12 +88,12 @@ describe('AcpSessionPlane — state_update → run frames', () => {
       client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'running' });
       client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'idle', stopReason: 'end_turn' });
 
-      // Not yet — the stop is deferred so a content frame in the same
-      // throttle flush gets a chance to mount its part first.
-      expect(eventsOf(host)).toEqual([{ type: 'run.started' }]);
+      // Not yet — the stop is deferred so a content frame in the same throttle flush can mount
+      // its part first; the idle frame still ends a reconnect status at once (todo #406).
+      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'retry.cleared' }]);
 
       await vi.advanceTimersByTimeAsync(50);
-      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'run.stopped' }]);
+      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'retry.cleared' }, { type: 'run.stopped' }]);
     } finally {
       vi.useRealTimers();
     }

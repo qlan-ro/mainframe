@@ -78,3 +78,5 @@ mod quota_source;
 pub mod layout;
 
 mod external_sessions_provider;
+
+mod cache_classification;

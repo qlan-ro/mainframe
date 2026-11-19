@@ -2,6 +2,73 @@ use super::*;
 use crate::config_transcripts::OwnedNativeSession;
 
 pub trait ChatStore: Send + Sync {
+    fn idle_markers(&self, _chat_id: &str) -> Result<Vec<ChatMessage>, SeamError> {
+        Ok(Vec::new())
+    }
+
+    fn idle_commands(
+        &self,
+        _chat_id: &str,
+    ) -> Result<Vec<mainframe_types::compaction::NativeCompactionRequest>, SeamError> {
+        Ok(Vec::new())
+    }
+
+    fn idle_queue_put(
+        &self,
+        _chat_id: &str,
+        _input: &mainframe_db::idle_compaction_queue::QueuedInput,
+    ) -> Result<(), SeamError> {
+        Err(SeamError::msg("maintenance queue unavailable"))
+    }
+    fn idle_queue_list(
+        &self,
+        _chat_id: &str,
+    ) -> Result<Vec<mainframe_db::idle_compaction_queue::QueuedInput>, SeamError> {
+        Ok(Vec::new())
+    }
+    fn idle_queue_remove(&self, _chat_id: &str, _uuid: &str) -> Result<bool, SeamError> {
+        Ok(false)
+    }
+
+    fn idle_run_begin(&self, _chat_id: &str, _generation: &str) -> Result<(), SeamError> {
+        Ok(())
+    }
+    fn idle_run_complete(
+        &self,
+        _chat_id: &str,
+        _generation: &str,
+        _at: Option<i64>,
+    ) -> Result<(), SeamError> {
+        Ok(())
+    }
+    fn idle_run_get(
+        &self,
+        _chat_id: &str,
+    ) -> Result<Option<mainframe_db::idle_compaction::RealRun>, SeamError> {
+        Ok(None)
+    }
+    fn idle_run_claim(
+        &self,
+        _chat_id: &str,
+        _generation: &str,
+        _request: &mainframe_types::compaction::NativeCompactionRequest,
+    ) -> Result<bool, SeamError> {
+        Ok(false)
+    }
+    fn idle_record(
+        &self,
+        _chat_id: &str,
+        _metadata: &mainframe_types::compaction::CompactionMetadata,
+    ) -> Result<bool, SeamError> {
+        Ok(false)
+    }
+    fn idle_provenance(
+        &self,
+        _chat_id: &str,
+    ) -> Result<Vec<mainframe_types::compaction::CompactionMetadata>, SeamError> {
+        Ok(Vec::new())
+    }
+
     fn owned_native_sessions(&self, chat_id: &str) -> Result<Vec<OwnedNativeSession>, SeamError>;
 
     fn set_native_session_file_path(&self, native_ref: &str, path: &str) -> Result<(), SeamError>;

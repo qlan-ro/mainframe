@@ -1,15 +1,22 @@
-use mainframe_runtime::ResolvedPath;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 
-pub struct ProcessDeps {
-    pub(crate) lsof: Mutex<crate::lsof::Seam>,
+use mainframe_runtime::ResolvedPath;
+
+/// The OS probes and signals a tracker uses, each swappable in tests.
+pub(crate) struct ProcessDeps {
+    pub(crate) lsof: Mutex<crate::lsof::LsofFn>,
+    /// Set after the first "lsof not installed" warning, so liveness ticks
+    /// don't repeat it every minute.
+    pub(crate) lsof_missing_warned: AtomicBool,
     pub(crate) kill: Mutex<crate::kill::KillSeam>,
 }
 
 impl ProcessDeps {
-    pub fn new(path: ResolvedPath) -> Self {
+    pub(crate) fn new(path: ResolvedPath) -> Self {
         Self {
-            lsof: crate::lsof::new_seam(path.clone()),
+            lsof: Mutex::new(crate::lsof::real_lsof(path.clone())),
+            lsof_missing_warned: AtomicBool::new(false),
             kill: crate::kill::new_seam(path),
         }
     }

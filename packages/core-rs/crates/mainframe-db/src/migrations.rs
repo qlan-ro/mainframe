@@ -6,6 +6,7 @@ mod base;
 mod orchestration;
 mod special;
 pub(crate) mod v31_segments;
+mod v33_idle_compaction;
 
 macro_rules! column {
     ($version:expr, $table:literal, $column:literal, $ddl:literal) => {
@@ -199,6 +200,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: orchestration::VERSION,
         up: orchestration::up,
+    },
+    Migration {
+        version: 33,
+        up: v33_idle_compaction::up,
     },
 ];
 

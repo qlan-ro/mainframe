@@ -77,7 +77,7 @@ fn tool_timing_completion_only_patch_matches_a_fresh_snapshot() {
     let SessionUpdate::ToolCallUpdate(patch) = &updates[0] else {
         panic!("expected tool patch");
     };
-    assert_eq!(patch.tool_call_id, "a");
+    assert_eq!(patch.tool_call_id, "tool:a");
     assert_eq!(patch.status, None);
     assert_eq!(patch.content, None);
     assert_eq!(patch.title, None);
@@ -90,7 +90,7 @@ fn tool_timing_completion_only_patch_matches_a_fresh_snapshot() {
     assert_eq!(applied, completed);
     assert!(state.diff(&completed).is_empty());
     let meta = patch.meta.as_ref().unwrap().as_ref().unwrap();
-    assert_eq!(meta["_mainframe.dev"]["parentToolCallId"], "parent");
+    assert_eq!(meta["_mainframe.dev"]["parentToolCallId"], "tool:parent");
     assert_eq!(meta["_mainframe.dev"]["containerId"], "parent");
     assert_eq!(
         meta["_mainframe.dev"]["toolCallTiming"],

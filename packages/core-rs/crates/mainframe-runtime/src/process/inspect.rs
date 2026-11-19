@@ -77,12 +77,10 @@ pub fn parse_pids(stdout: &str, accept: impl Fn(&str) -> bool) -> Vec<u32> {
         if tag == 'p' {
             pending_pid = rest.parse::<u32>().ok().filter(|pid| *pid > 0);
         } else if tag == 'a'
-            && let Some(pid) = pending_pid
+            && accept(rest)
+            && let Some(pid) = pending_pid.take()
         {
-            if accept(rest) {
-                pids.push(pid);
-            }
-            pending_pid = None;
+            pids.push(pid);
         }
     }
     pids

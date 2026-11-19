@@ -42,7 +42,8 @@ pub use capabilities::{
     client_opts_into_replay_result_previews, client_opts_into_revision_cursors,
     compaction_notification, cursor_notification, gate_resolved_notification,
     heartbeat_notification, mainframe_capabilities, queue_state_notification,
-    replay_complete_notification, resync_notification, transcript_cleared_notification,
+    replay_complete_notification, resync_notification, retry_status_notification,
+    transcript_cleared_notification,
 };
 pub use connection::{
     DaemonInfo, DispatchOutcome, dispatch_with_prompt, handle_frame_with_prompt,

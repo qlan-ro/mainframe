@@ -6,6 +6,7 @@ import {
   updateGeneralSettings,
   getConfigConflicts,
 } from '../settings';
+import { GENERAL_DEFAULTS } from '@qlan-ro/mainframe-types';
 import { setActiveDaemon } from '../../daemon/active-daemon';
 
 const LOCAL_DAEMON = {
@@ -56,7 +57,7 @@ describe('settings api', () => {
   });
 
   it('getGeneralSettings GETs /api/settings/general', async () => {
-    mockFetchOk({ worktreeDir: '.worktrees', notifications: {} });
+    mockFetchOk(GENERAL_DEFAULTS);
     const out = await getGeneralSettings(PORT);
     expect(out.worktreeDir).toBe('.worktrees');
   });

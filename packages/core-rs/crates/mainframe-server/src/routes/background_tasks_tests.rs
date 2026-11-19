@@ -1,5 +1,5 @@
 use super::*;
-use mainframe_background_tasks::tracker::{AdoptOptions, TaskSeed};
+use mainframe_background_tasks::tracker::TaskSeed;
 use mainframe_types::background_task::{
     BackgroundTask, BackgroundTaskStatus, BackgroundTaskToolName, BackgroundWorkKind,
 };
@@ -44,9 +44,7 @@ fn seed_task_no_output(ctx: &Arc<AppCtx>, chat_id: &str) -> String {
         run_id: None,
     };
     let id = task.id.clone();
-    ctx.core
-        .background_tasks
-        .adopt(chat_id, task, AdoptOptions::default());
+    ctx.core.background_tasks.adopt(chat_id, task);
     id
 }
 

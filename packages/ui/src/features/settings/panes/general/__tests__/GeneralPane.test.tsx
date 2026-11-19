@@ -12,6 +12,7 @@ vi.mock('../../../../../lib/api/settings', () => ({
 beforeEach(() => {
   useSettingsStore.setState({
     general: {
+      idleCompaction: { enabled: false },
       worktreeDir: '.worktrees',
       notifications: useSettingsStore.getState().general.notifications,
       updateChannel: 'stable',

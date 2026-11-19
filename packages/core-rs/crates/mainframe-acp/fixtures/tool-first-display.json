@@ -1,0 +1,72 @@
+[
+  {
+    "chatId": "synthetic-chat",
+    "timestamp": "2026-11-12T00:00:00Z",
+    "id": "compaction",
+    "type": "system",
+    "content": [
+      {
+        "type": "compaction"
+      }
+    ]
+  },
+  {
+    "chatId": "synthetic-chat",
+    "timestamp": "2026-11-12T00:00:00Z",
+    "id": "exec",
+    "type": "assistant",
+    "content": [
+      {
+        "type": "tool_call",
+        "id": "exec",
+        "name": "Read",
+        "input": {},
+        "category": "explore",
+        "result": {
+          "content": "fixture",
+          "isError": false
+        }
+      },
+      {
+        "type": "text",
+        "text": "Final answer"
+      }
+    ],
+    "metadata": {
+      "presentationSources": {
+        "version": 1,
+        "sources": [
+          {
+            "path": [0],
+            "sourceMessageId": "source-0",
+            "sourceBlockIndex": 0,
+            "streaming": false,
+            "presentation": {
+              "version": 1,
+              "provider": "codex",
+              "turnId": "synthetic-turn",
+              "phase": "work",
+              "state": "completed",
+              "finalEligible": false
+            }
+          },
+          {
+            "path": [1],
+            "sourceMessageId": "source-1",
+            "sourceBlockIndex": 0,
+            "streaming": false,
+            "presentation": {
+              "version": 1,
+              "provider": "codex",
+              "turnId": "synthetic-turn",
+              "phase": "final_answer",
+              "state": "completed",
+              "finalEligible": true
+            }
+          }
+        ]
+      },
+      "turnDurationMs": 1000
+    }
+  }
+]

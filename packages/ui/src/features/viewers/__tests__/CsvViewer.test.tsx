@@ -40,6 +40,11 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectId: undefined, chatId: undefined, projectPath: undefined }),
 }));
+vi.mock('@/features/sessions/use-active-draft-config', () => ({ useActiveDraftConfig: () => undefined }));
+vi.mock('@assistant-ui/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@assistant-ui/react')>()),
+  useAui: () => ({ threadListItem: () => ({ initialize: vi.fn() }) }),
+}));
 
 /** Every viewer/preview surface here renders v2 `Hint`s, which need the v2 TooltipProvider. */
 const render = (ui: Parameters<typeof rtlRender>[0], options?: Parameters<typeof rtlRender>[1]) =>

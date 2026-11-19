@@ -6,8 +6,16 @@ pub fn reference_images(chat_id: &str, update: &mut SessionUpdate) {
     let SessionUpdate::ToolCallUpdate(tool) = update else {
         return;
     };
+    let source_id = tool
+        .meta
+        .as_ref()
+        .and_then(Option::as_ref)
+        .and_then(|meta| meta.get(mainframe_types::acp::extensions::MAINFRAME_META_NAMESPACE))
+        .and_then(|meta| meta.get("sourceToolCallId"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(&tool.tool_call_id);
     if !mainframe_types::ids::is_safe_identifier(chat_id)
-        || !mainframe_types::ids::is_safe_identifier(&tool.tool_call_id)
+        || !mainframe_types::ids::is_safe_identifier(source_id)
     {
         return;
     }
@@ -25,7 +33,7 @@ pub fn reference_images(chat_id: &str, update: &mut SessionUpdate) {
                 data.hash(&mut hash);
                 *uri = Some(format!(
                     "/api/chats/{chat_id}/tool-result/{}/images/{index}?v={:016x}",
-                    tool.tool_call_id,
+                    source_id,
                     hash.finish()
                 ));
                 data.clear();
@@ -86,5 +94,30 @@ mod tests {
         let original = value.clone();
         reference_images("../other-chat", &mut value);
         assert_eq!(value, original);
+    }
+    #[test]
+    fn incremental_result_images_keep_the_native_lookup_id() {
+        let mut message: mainframe_types::display::DisplayMessage = serde_json::from_value(json!({
+            "id":"exec", "chatId":"chat_1", "type":"assistant", "timestamp":"now",
+            "content":[{"type":"tool_call","id":"exec","name":"Read","input":{},"category":"default"}]
+        })).unwrap();
+        let mut state = crate::session_state::SessionState::new();
+        state.diff(&crate::encoder::encode(&[message.clone()]));
+        message.content = serde_json::from_value(json!([{
+            "type":"tool_call","id":"exec","name":"Read","input":{},"category":"default",
+            "result":{"content":"image","isError":false,"images":[{"mediaType":"image/png","data":"AAAA"}]}
+        }])).unwrap();
+        let mut updates = state.diff(&crate::encoder::encode(&[message]));
+        assert_eq!(updates.len(), 1);
+        reference_images("chat_1", &mut updates[0]);
+        let wire = serde_json::to_value(&updates[0]).unwrap();
+        assert_eq!(wire["toolCallId"], "tool:exec");
+        assert_eq!(wire["content"][1]["content"]["data"], "");
+        assert!(
+            wire["content"][1]["content"]["uri"]
+                .as_str()
+                .unwrap()
+                .starts_with("/api/chats/chat_1/tool-result/exec/images/0?v=")
+        );
     }
 }

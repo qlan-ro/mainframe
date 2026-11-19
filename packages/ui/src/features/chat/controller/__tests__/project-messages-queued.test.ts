@@ -65,3 +65,11 @@ describe('projectChatThreadMessages — queued turns (D1, T32)', () => {
     expect(messages.filter((m) => m.id === 'm1')).toHaveLength(1);
   });
 });
+
+describe('durable queue delivery projection', () => {
+  it.each(['rejected', 'unconfirmed'])('preserves %s after a queue snapshot reload', (delivery) => {
+    const messages = projectChatThreadMessages(stateWithQueued([queuedRef({ delivery })]));
+    expect(messages[0]?.metadata?.custom?.mainframe).toMatchObject({ queued: true, queueDelivery: delivery });
+    expect(messages[0]?.id).toBe('m1');
+  });
+});

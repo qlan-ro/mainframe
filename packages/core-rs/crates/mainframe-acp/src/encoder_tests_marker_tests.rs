@@ -10,6 +10,7 @@ use super::*;
 
 fn compaction() -> DisplayContent {
     DisplayContent::Node(DisplayNode::Compaction {
+        compaction: None,
         parent_tool_use_id: None,
     })
 }
@@ -83,7 +84,7 @@ fn text_then_tool_then_compaction_rides_the_open_segment_with_no_empty_message()
         encode(&messages),
         vec![
             EncodedItem::Message {
-                id: "dmsg_compact".to_string(),
+                id: "message:0:top:dmsg_compact".to_string(),
                 role: ItemRole::Agent,
                 content: vec![text_block("done")],
                 meta: Some(compacted_meta("dmsg_compact")),
@@ -109,7 +110,7 @@ fn text_then_tool_then_skill_loaded_rides_the_open_segment_with_no_empty_message
         encode(&messages),
         vec![
             EncodedItem::Message {
-                id: "dmsg_skill".to_string(),
+                id: "message:0:top:dmsg_skill".to_string(),
                 role: ItemRole::Agent,
                 content: vec![text_block("done")],
                 meta: Some(skill_loaded_meta(
@@ -136,40 +137,83 @@ fn text_then_tool_then_error_segments_and_carries_error_text_on_the_later_segmen
         ],
     )];
 
-    // `Error` still uses `claim` (it pushes real text), so it segments like
-    // any other text contribution: closing segment 0 without an error
-    // marker and landing `errorText` on the freshly opened `-1` segment.
-    // This shape is unreachable through the live display pipeline today —
-    // `ChatMessageType::Error` containers only ever produce `Error` nodes or
-    // empty text (display_pipeline.rs), never a tool call — so this pins
-    // real encoder behaviour on an input the adapter can't currently emit,
-    // not a live bug. The client no longer assumes segment 0 either way:
-    // The client scans every message segment for `errorText`, so a
-    // later-segment marker still renders.
     assert_eq!(
         encode(&messages),
         vec![
             EncodedItem::Message {
-                id: "dmsg_err_seg".to_string(),
+                id: "message:0:top:dmsg_err_seg".to_string(),
                 role: ItemRole::Agent,
                 content: vec![text_block("explaining ")],
                 meta: Some(error_meta("dmsg_err_seg", None)),
             },
             EncodedItem::ToolCall {
-                id: "toolu_err".to_string(),
+                id: "tool:toolu_err".to_string(),
                 title: "Read".to_string(),
                 kind: ToolKind::Search,
                 status: ToolCallStatus::InProgress,
                 raw_input: json!({}),
                 content: Vec::new(),
-                meta: Some(error_meta("dmsg_err_seg", None)),
+                meta: Some({
+                    let mut meta = error_meta("dmsg_err_seg", None);
+                    meta[MAINFRAME_META_NAMESPACE]["sourceToolCallId"] = json!("toolu_err");
+                    meta
+                }),
             },
             EncodedItem::Message {
-                id: "dmsg_err_seg-1".to_string(),
+                id: "message:1:top:dmsg_err_seg".to_string(),
                 role: ItemRole::Agent,
                 content: vec![text_block("boom")],
                 meta: Some(error_meta("dmsg_err_seg", Some("boom"))),
             },
         ]
     );
+}
+
+#[test]
+fn idle_compaction_is_a_separate_stable_non_actionable_item() {
+    let request = mainframe_types::compaction::NativeCompactionRequest {
+        id: "idle-compact:chat:run".into(),
+        session_generation: "session".into(),
+        origin: mainframe_types::compaction::CompactionOrigin::Idle,
+        command_uuid: "command".into(),
+    };
+    let mut metadata = request.metadata(Some("boundary"));
+    metadata.before_tokens = Some(22000);
+    metadata.after_tokens = Some(2000);
+    let messages = vec![dmsg(
+        "assistant",
+        DisplayMessageType::Assistant,
+        vec![
+            text("before"),
+            DisplayContent::Node(DisplayNode::Compaction {
+                compaction: Some(metadata),
+                parent_tool_use_id: None,
+            }),
+            text("after"),
+        ],
+    )];
+    let items = encode(&messages);
+    assert_eq!(items.len(), 3);
+    let EncodedItem::Message {
+        id,
+        meta: Some(meta),
+        ..
+    } = &items[1]
+    else {
+        panic!("idle message expected")
+    };
+    assert_eq!(id, "boundary");
+    let ns = &meta[MAINFRAME_META_NAMESPACE];
+    assert_eq!(ns["containerId"], "boundary");
+    assert_eq!(ns["actionable"], false);
+    assert_eq!(ns["compaction"]["origin"], "idle");
+    assert_eq!(ns["compaction"]["beforeTokens"], 22000);
+    let EncodedItem::Message {
+        meta: Some(meta), ..
+    } = &items[0]
+    else {
+        panic!("assistant expected")
+    };
+    assert!(meta[MAINFRAME_META_NAMESPACE].get("isCompacted").is_none());
+    assert_eq!(encode(&messages), items);
 }

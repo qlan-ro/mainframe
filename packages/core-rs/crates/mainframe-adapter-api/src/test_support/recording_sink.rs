@@ -7,6 +7,8 @@ use std::sync::Mutex;
 pub struct RecordingSink {
     pub prs: Mutex<Vec<DetectedPr>>,
     pub cancelled: Mutex<Vec<String>>,
+    pub compactions: Mutex<Vec<mainframe_types::compaction::CompactionMetadata>>,
+    pub maintenance_results: Mutex<Vec<mainframe_types::compaction::NativeCompactionRequest>>,
     changed: tokio::sync::Notify,
 }
 
@@ -29,6 +31,16 @@ impl RecordingSink {
 }
 
 impl SessionSink for RecordingSink {
+    fn on_compact_with_metadata(&self, metadata: mainframe_types::compaction::CompactionMetadata) {
+        self.compactions.lock_recover().push(metadata);
+    }
+    fn on_maintenance_result(
+        &self,
+        request: mainframe_types::compaction::NativeCompactionRequest,
+        _result: mainframe_types::adapter::SessionResult,
+    ) {
+        self.maintenance_results.lock_recover().push(request);
+    }
     crate::forward_session_sink!(
         on_init,
         on_message,

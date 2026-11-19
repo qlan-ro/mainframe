@@ -1,0 +1,4 @@
+{"type":"user","uuid":"qa-command","message":{"content":[{"type":"text","text":"<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args></command-args>"}]}}
+{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"redacted"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"redacted ordinary response"}]}}
+{"type":"result","subtype":"success","is_error":false}

@@ -11,8 +11,8 @@ use mainframe_types::adapter::{
 };
 use mainframe_types::display::ToolCategories;
 
+use crate::task_bridge::WorkflowSink;
 use mainframe_background_tasks::tracker::BackgroundTaskTracker;
-use mainframe_background_tasks::workflow_sink::WorkflowSink;
 
 use crate::plan_mode_handler::MockPlanModeHandler;
 use crate::session::{ReplayCache, ReplaySession};

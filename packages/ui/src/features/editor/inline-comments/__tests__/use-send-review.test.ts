@@ -21,6 +21,16 @@ vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => mockActiveIdentity,
 }));
 
+const mockDraft = { current: undefined as unknown };
+vi.mock('@/features/sessions/use-active-draft-config', () => ({
+  useActiveDraftConfig: () => mockDraft.current,
+}));
+
+const mockInitialize = vi.fn();
+vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({ threadListItem: () => ({ initialize: mockInitialize }) }),
+}));
+
 const mockSendMessage = vi.fn().mockResolvedValue(undefined);
 const mockGetOrCreate = vi.fn().mockReturnValue({ sendMessage: mockSendMessage });
 
@@ -75,6 +85,7 @@ describe('useSendReview — no chatId', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockActiveIdentity.chatId = undefined;
+    mockDraft.current = undefined;
     mockGetOrCreate.mockReturnValue({ sendMessage: mockSendMessage });
   });
 
@@ -98,5 +109,51 @@ describe('useSendReview — empty items', () => {
     const { result } = renderHook(() => useSendReview());
     await result.current('src/foo.ts', []);
     expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('useSendReview — draft session', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockActiveIdentity.chatId = undefined;
+    mockDraft.current = { projectId: 'proj-1' };
+    mockInitialize.mockResolvedValue({ remoteId: 'chat-new', externalId: undefined });
+    mockSendMessage.mockResolvedValue(undefined);
+    mockGetOrCreate.mockReturnValue({ sendMessage: mockSendMessage });
+  });
+
+  it('initializes the draft, sends to the adopted remote id and returns sent', async () => {
+    const { result } = renderHook(() => useSendReview());
+    await expect(result.current('src/foo.ts', mockItems)).resolves.toBe('sent');
+    expect(mockInitialize).toHaveBeenCalledTimes(1);
+    expect(mockGetOrCreate).toHaveBeenCalledWith('chat-new', mockPort);
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not initialize an empty review', async () => {
+    const { result } = renderHook(() => useSendReview());
+    await expect(result.current('src/foo.ts', [])).resolves.toBe('empty');
+    expect(mockInitialize).not.toHaveBeenCalled();
+  });
+
+  it('rejects and sends nothing when initialize fails', async () => {
+    mockInitialize.mockRejectedValue(new Error('create failed'));
+    const { result } = renderHook(() => useSendReview());
+    await expect(result.current('src/foo.ts', mockItems)).rejects.toThrow('create failed');
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('rejects when sendMessage fails', async () => {
+    mockSendMessage.mockRejectedValue(new Error('send failed'));
+    const { result } = renderHook(() => useSendReview());
+    await expect(result.current('src/foo.ts', mockItems)).rejects.toThrow('send failed');
+  });
+
+  it('does not initialize for an existing session', async () => {
+    mockActiveIdentity.chatId = mockChatId;
+    const { result } = renderHook(() => useSendReview());
+    await result.current('src/foo.ts', mockItems);
+    expect(mockInitialize).not.toHaveBeenCalled();
+    expect(mockGetOrCreate).toHaveBeenCalledWith(mockChatId, mockPort);
   });
 });

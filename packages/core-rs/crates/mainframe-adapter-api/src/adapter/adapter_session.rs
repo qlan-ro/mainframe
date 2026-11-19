@@ -5,6 +5,23 @@ use std::path::PathBuf;
 /// as `Arc<dyn AdapterSession>`; read-only props are getters, everything async is
 /// a hand-rolled `BoxFuture`.
 pub trait AdapterSession: Send + Sync {
+    fn supports_native_compaction(&self) -> bool {
+        false
+    }
+    fn cache_classification(&self) -> crate::idle_compaction::CacheClassification {
+        crate::idle_compaction::CacheClassification::Unknown
+    }
+    fn remember_compaction_boundary(&self, _vendor_id: &str) {}
+    fn ready_for_input(&self) -> bool {
+        true
+    }
+    fn native_compact(
+        &self,
+        _request: crate::idle_compaction::NativeCompactionRequest,
+    ) -> BoxFuture<'_, Result<crate::idle_compaction::CompactionMetadata, AdapterError>> {
+        Box::pin(async { Err(AdapterError::Unsupported("native compaction")) })
+    }
+
     fn id(&self) -> &str;
     fn adapter_id(&self) -> &str;
     fn project_path(&self) -> &str;

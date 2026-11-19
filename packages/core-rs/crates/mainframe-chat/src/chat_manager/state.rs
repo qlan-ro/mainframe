@@ -4,6 +4,8 @@ use mainframe_types::sync::LockExt as _;
 
 pub(crate) struct ChatShared {
     pub(crate) deps: Arc<dyn ChatManagerDeps>,
+    pub(crate) maintenance: crate::idle_compaction::MaintenanceState,
+    pub(crate) manager: std::sync::OnceLock<std::sync::Weak<ChatManager>>,
     pub(crate) active_chats: Registry,
     pub(crate) messages: Arc<Mutex<MessageCache>>,
     pub(crate) permissions: Arc<Mutex<PermissionManager>>,
@@ -26,6 +28,8 @@ impl ChatShared {
         let history_cache = Arc::new(HistorySnapshotCache::new(deps.history_cache_dir().into()));
         Arc::new(Self {
             deps,
+            maintenance: Default::default(),
+            manager: Default::default(),
             history_cache,
             active_chats: Arc::new(DashMap::new()),
             messages,

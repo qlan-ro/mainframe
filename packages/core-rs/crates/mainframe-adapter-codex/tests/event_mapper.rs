@@ -432,7 +432,7 @@ fn turn_started_resets_the_dedupe_so_a_later_compaction_emits_again() {
         &rec,
         &mut state,
         "item/completed",
-        json!({ "threadId": "parent_thread", "turnId": "turn_2", "item": compaction_item() }),
+        json!({ "threadId": "parent_thread", "turnId": "turn_2", "item": {"id":"comp_2","type":"contextCompaction"} }),
     );
     assert_eq!(rec.compacts(), 2);
 }

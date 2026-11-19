@@ -39,6 +39,11 @@ pub struct SubAgentCard {
 /// session actor). Set/map fields are always-present, possibly empty collections.
 #[derive(Debug, Default)]
 pub struct CodexSessionState {
+    pub maintenance: Arc<mainframe_adapter_api::compaction_state::CompactionState>,
+    pub pending_idle_legacy: bool,
+    pub maintenance_item_id: Option<String>,
+    pub maintenance_turn_ids: std::collections::HashSet<String>,
+    pub compact_item_ids: std::collections::HashSet<String>,
     pub thread_id: Option<String>,
     pub command_state: crate::command_state::CommandState,
     /// The model the app-server resolved on `thread/start`/`thread/resume` — the
@@ -88,6 +93,7 @@ impl CodexSessionState {
     /// early would let a late delta from the same turn restart the text
     /// mid-message.
     pub fn clear_transient(&mut self) {
+        self.maintenance.finish(false);
         self.presentation.clear();
         self.command_state.clear();
         self.agent_message_partial.clear();

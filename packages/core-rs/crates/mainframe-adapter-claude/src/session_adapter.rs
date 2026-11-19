@@ -1,6 +1,24 @@
 use super::*;
 use tracing::Instrument as _;
 impl AdapterSession for ClaudeSession {
+    fn supports_native_compaction(&self) -> bool {
+        true
+    }
+    fn cache_classification(&self) -> mainframe_adapter_api::idle_compaction::CacheClassification {
+        self.cache_evidence.lock_recover().classification
+    }
+    fn ready_for_input(&self) -> bool {
+        self.maintenance.ready()
+    }
+    fn native_compact(
+        &self,
+        request: mainframe_adapter_api::idle_compaction::NativeCompactionRequest,
+    ) -> BoxFuture<
+        '_,
+        Result<mainframe_adapter_api::idle_compaction::CompactionMetadata, AdapterError>,
+    > {
+        Box::pin(self.compact_idle(request))
+    }
     fn id(&self) -> &str {
         &self.id
     }

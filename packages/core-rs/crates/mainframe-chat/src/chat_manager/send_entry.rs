@@ -15,41 +15,20 @@ impl ChatManager {
         // Register before reading any registry/cache state; the guard drops on
         // every return path below, `?` included.
         let _send_guard = self.lifecycle.begin_send(chat_id).await;
-
-        let chat = self.get_chat(chat_id);
-        if let Some(chat) = &chat
-            && chat.worktree_missing == Some(true)
+        if self
+            .enqueue_when_reserved(chat_id, content, attachment_ids, command.as_ref())
+            .await?
         {
-            self.emit_worktree_missing_error(chat_id, chat).await;
             return Ok(());
         }
-
-        self.reset_transcript_if_orphaned(chat_id, chat.as_ref())
-            .await?;
-
-        self.lifecycle.wait_for_interrupt(chat_id).await;
-
-        // Before the spawn: a returning session too full for a delta moves
-        // the segment onto a fresh native session, which the spawn must see.
-        // A CLI-native slash command carries no handoff; it stays pending.
-        let handoff = match &command {
-            Some(cmd) if cmd.source != "mainframe" => None,
-            _ => {
-                let size = handoff_send::OutgoingSize {
-                    text_bytes: content.len() as u64,
-                    attachments: attachment_ids.map_or(0, |ids| ids.len() as u64),
-                };
-                self.prepare_handoff(chat_id, size).await?
-            }
+        let Some(((post, session), handoff)) = self
+            .prepare_send(chat_id, content, attachment_ids, command.as_ref())
+            .await?
+        else {
+            return Ok(());
         };
-
-        if !self.session_is_spawned(chat_id) {
-            self.lifecycle.start_chat(chat_id).await;
-        }
-
-        let (post, session) = self.require_live_session(chat_id)?;
         info!(chat_id, "user message sent");
-        self.mark_turn_accepted(&post, chat_id);
+        self.mark_turn_accepted(&post, chat_id)?;
 
         if let Some(cmd) = command {
             return self
@@ -69,17 +48,68 @@ impl ChatManager {
         .await
     }
 
+    async fn prepare_send(
+        &self,
+        chat_id: &str,
+        content: &str,
+        attachment_ids: Option<&[String]>,
+        command: Option<&CommandMeta>,
+    ) -> Result<Option<(LiveSession, Option<String>)>, SendError> {
+        let chat = self.get_chat(chat_id);
+        if let Some(chat) = &chat
+            && chat.worktree_missing == Some(true)
+        {
+            self.emit_worktree_missing_error(chat_id, chat).await;
+            return Ok(None);
+        }
+
+        self.reset_transcript_if_orphaned(chat_id, chat.as_ref())
+            .await?;
+
+        self.lifecycle.wait_for_interrupt(chat_id).await;
+
+        // Before the spawn: a returning session too full for a delta moves
+        // the segment onto a fresh native session, which the spawn must see.
+        // A CLI-native slash command carries no handoff; it stays pending.
+        let handoff = match command {
+            Some(cmd) if cmd.source != "mainframe" => None,
+            _ => {
+                let size = handoff_send::OutgoingSize {
+                    text_bytes: content.len() as u64,
+                    attachments: attachment_ids.map_or(0, |ids| ids.len() as u64),
+                };
+                self.prepare_handoff(chat_id, size).await?
+            }
+        };
+
+        if !self.session_is_spawned(chat_id) {
+            self.lifecycle.start_chat(chat_id).await;
+        }
+
+        Ok(Some((self.require_live_session(chat_id)?, handoff)))
+    }
+
     /// Stamp turn start (for `onResult`'s `turnDurationMs`) and tell the chat
     /// surface the manager has taken ownership of this prompt — accepted
     /// whether it dispatches immediately or lands behind a running turn
     /// (`send_plain_text`/`dispatch_command` fire the matching `TurnStarted`).
-    fn mark_turn_accepted(&self, post: &Arc<Mutex<ActiveChat>>, chat_id: &str) {
+    pub(super) fn mark_turn_accepted(
+        &self,
+        post: &Arc<Mutex<ActiveChat>>,
+        chat_id: &str,
+    ) -> Result<(), SendError> {
+        if !is_working(&post.lock_recover().chat) {
+            let generation = nanoid::nanoid!();
+            self.shared.deps.idle_run_begin(chat_id, &generation)?;
+            post.lock_recover().real_run_generation = Some(generation);
+        }
         post.lock_recover().turn_started_at = Some(now_ms());
         self.event_handler.notify_chat_surface(
             crate::chat_surface::ChatSurfaceEvent::TurnAccepted {
                 chat_id: chat_id.to_string(),
             },
         );
+        Ok(())
     }
 
     /// Loads any existing history into the cache FIRST: a cold or evicted
@@ -108,7 +138,7 @@ impl ChatManager {
         self.event_handler.emit_display(chat_id);
     }
 
-    fn session_is_spawned(&self, chat_id: &str) -> bool {
+    pub(super) fn session_is_spawned(&self, chat_id: &str) -> bool {
         self.get_active(chat_id)
             .map(|c| {
                 c.lock_recover()
@@ -166,82 +196,6 @@ impl ChatManager {
         update.emit(chat, None);
     }
 
-    pub async fn edit_queued_message(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-        content: &str,
-    ) -> Result<(), SendError> {
-        let r = self.find_ref(chat_id, message_id);
-        let Some(r) = r else {
-            return Ok(());
-        };
-        let Some(session) = self.get_session_for_chat(chat_id) else {
-            return Ok(());
-        };
-
-        let cancelled = session.cancel_queued_message(r.uuid.clone()).await?;
-        if !cancelled {
-            info!(
-                chat_id,
-                uuid = r.uuid,
-                "edit lost race: original already dequeued by CLI"
-            );
-            return Ok(());
-        }
-
-        self.shared
-            .queued_refs
-            .lock_recover()
-            .retain(|q| q.uuid != r.uuid);
-        self.notify_queue_changed(chat_id);
-        self.shared
-            .messages
-            .lock_recover()
-            .remove_by_id(chat_id, &r.message_id);
-        self.event_handler.emit_display(chat_id);
-
-        self.send_message(chat_id, content, r.attachment_ids.as_deref(), None)
-            .await
-    }
-
-    pub async fn cancel_queued_message(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-    ) -> Result<(), SendError> {
-        let r = self.find_ref(chat_id, message_id);
-        let Some(r) = r else {
-            return Ok(());
-        };
-        let Some(session) = self.get_session_for_chat(chat_id) else {
-            return Ok(());
-        };
-
-        let cancelled = session.cancel_queued_message(r.uuid.clone()).await?;
-        if !cancelled {
-            info!(
-                chat_id,
-                uuid = r.uuid,
-                "cancel lost race: message already dequeued by CLI"
-            );
-            return Ok(());
-        }
-
-        self.shared
-            .queued_refs
-            .lock_recover()
-            .retain(|q| q.uuid != r.uuid);
-        self.shared
-            .messages
-            .lock_recover()
-            .remove_by_id(chat_id, &r.message_id);
-        self.notify_queue_changed(chat_id);
-        self.event_handler.emit_display(chat_id);
-        info!(chat_id, uuid = r.uuid, "queued message cancelled in CLI");
-        Ok(())
-    }
-
     /// How many accepted prompts are queued behind this chat's running turn.
     /// The ACP facade's prompt port reads this right after `send_message` to
     /// fill the queued-state extension metadata.
@@ -254,7 +208,7 @@ impl ChatManager {
             .count()
     }
 
-    fn find_ref(&self, chat_id: &str, message_id: &str) -> Option<QueuedMessageRef> {
+    pub(super) fn find_ref(&self, chat_id: &str, message_id: &str) -> Option<QueuedMessageRef> {
         self.shared
             .queued_refs
             .lock_recover()

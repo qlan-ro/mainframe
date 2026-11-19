@@ -42,8 +42,8 @@ pub fn assert_and_remove_live_timing(live: &mut [EncodedItem], cold: &[EncodedIt
     assert_eq!(
         timed_ids,
         [
-            "toolu_01GbbKirv6FFfrAFLGXPje9V",
-            "toolu_01WDu7EhjnvvkaK4K9kb5DQs"
+            "tool:toolu_01GbbKirv6FFfrAFLGXPje9V",
+            "tool:toolu_01WDu7EhjnvvkaK4K9kb5DQs"
         ],
         "both fixture calls must be timed"
     );

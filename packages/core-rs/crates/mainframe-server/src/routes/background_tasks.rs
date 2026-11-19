@@ -1,9 +1,9 @@
 //! List / output / kill for a chat's background tasks.
 //!
-//! The dependencies come off `AppCtx`: the tracker is `ctx.core.background_tasks`,
-//! `ChatManager::get_session_for_chat` (an `Arc<dyn AdapterSession>`) is bridged
-//! into the `SessionLike` the kill helper expects, and the validator is the
-//! default platform spool-root validator.
+//! The tracker is `ctx.core.background_tasks`, and
+//! `ChatManager::get_session_for_chat` (an `Arc<dyn AdapterSession>`) is
+//! bridged into the `SessionLike` the kill helper expects. Output is read only
+//! from paths inside the CLI spool root.
 
 use std::sync::Arc;
 
@@ -14,26 +14,14 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::Deserialize;
 
-use mainframe_background_tasks::kill::{KillArgs, KillResult, SessionLike, kill_background_task};
-use mainframe_background_tasks::spool_validator::{
-    Platform, SpoolValidator, SpoolValidatorDeps, make_spool_validator,
-};
+use mainframe_background_tasks::kill::{KillArgs, KillError, SessionLike, kill_background_task};
+use mainframe_background_tasks::spool_root::is_spool_task_output;
 
 use crate::ctx::AppCtx;
 use crate::respond::{fail, ok, ok_empty};
 
 const MAX_READ_BYTES: u64 = 1024 * 1024;
 const DEFAULT_READ_BYTES: u64 = 8 * 1024;
-
-fn default_validator() -> impl SpoolValidator {
-    make_spool_validator(SpoolValidatorDeps {
-        platform: Platform::current(),
-        getuid: None,
-        env: std::env::vars().collect(),
-        realpath: None,
-        tmpdir: None,
-    })
-}
 
 async fn list(State(ctx): State<Arc<AppCtx>>, Path(chat_id): Path<String>) -> Response {
     if chat_id.is_empty() {
@@ -77,8 +65,7 @@ async fn output(
     let Some(output_path) = task.output_path.clone() else {
         return fail(StatusCode::CONFLICT, "no_output");
     };
-    let valid = default_validator().validate(&output_path, &task.id).await;
-    if !valid {
+    if !is_spool_task_output(std::path::Path::new(&output_path), &task.id).await {
         tracing::warn!(%chat_id, %task_id, %output_path, "spool-root validation failed");
         return fail(StatusCode::CONFLICT, "invalid_path");
     }
@@ -122,8 +109,9 @@ async fn kill(
     })
     .await;
     match result {
-        KillResult::Ok { .. } => ok_empty(),
-        KillResult::Err { error, .. } => fail(StatusCode::BAD_GATEWAY, error),
+        Ok(_) => ok_empty(),
+        Err(KillError::NotFound) => fail(StatusCode::NOT_FOUND, "task not found"),
+        Err(error) => fail(StatusCode::BAD_GATEWAY, error.to_string()),
     }
 }
 

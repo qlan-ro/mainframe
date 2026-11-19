@@ -107,7 +107,7 @@ fn updated_input_from_option(
 fn subject_for(request: &ControlRequest) -> RequestPermissionSubject {
     RequestPermissionSubject::ToolCall(ToolCallPermissionSubject {
         tool_call: ToolCallUpdate {
-            tool_call_id: request.tool_use_id.clone(),
+            tool_call_id: format!("tool:{}", request.tool_use_id),
             title: Some(Some(request.tool_name.clone())),
             kind: None,
             status: None,
@@ -115,7 +115,9 @@ fn subject_for(request: &ControlRequest) -> RequestPermissionSubject {
             locations: None,
             raw_input: None,
             raw_output: None,
-            meta: None,
+            meta: Some(Some(serde_json::json!({ MAINFRAME_META_NAMESPACE: {
+                "sourceToolCallId": request.tool_use_id,
+            } }))),
         },
     })
 }

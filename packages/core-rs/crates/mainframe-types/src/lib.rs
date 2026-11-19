@@ -27,6 +27,7 @@ pub mod claude_workflow;
 pub mod cli_update;
 pub mod command;
 pub mod command_execution;
+pub mod compaction;
 pub mod content;
 pub mod context;
 pub mod device;

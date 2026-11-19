@@ -22,6 +22,7 @@ import { formatElapsedSeconds } from '../format-duration';
 import { useStableActivityLabel } from '../messages/compact/use-stable-activity-label';
 import { useRunElapsed } from './use-run-elapsed';
 import { useTurnStatusHost } from './turn-status-host';
+import { isReconnectText, retryStatusTestId, useHostedRetryLabel, useRetryLabel } from './retry-status';
 import { runningTasksLabel, turnPhase } from './turn-phase';
 
 const FINISHED_FLASH_MS = 1500;
@@ -39,14 +40,20 @@ function usePhase() {
       ),
     [permissions],
   );
+  const retryLabel = useRetryLabel();
   const inputs = {
     stopping: extras?.state.runState.type === 'cancelling',
     compacting: extras?.state.compacting === true,
     awaitingInput: Object.keys(permissions ?? {}).length > 0,
+    reconnecting: retryLabel !== null,
   };
   const phase = useAuiState((s) => turnPhase(inputs, s.thread.messages, pending));
-  // A phase shows for at least a second, so tool gaps don't flicker Working/Thinking.
-  return useStableActivityLabel({ identity: phase, text: phase }, true);
+  // A phase shows for at least a second, so tool gaps don't flicker Working/Thinking. The reconnect
+  // phase carries its numbers as text: a new count under the same identity replaces the label at once.
+  return useStableActivityLabel(
+    { identity: phase, text: phase === 'Reconnecting' ? (retryLabel ?? phase) : phase },
+    true,
+  );
 }
 
 function useTurnClock() {
@@ -78,17 +85,32 @@ function Elapsed({ seconds, lead = true }: { seconds: number; lead?: boolean }) 
   );
 }
 
+/** The reconnect status in a host's trailing slot: a warning dot and the label in the phase-word style, ahead of the clock. */
+function ReconnectingSegment({ label, testId }: { label: string; testId: string }) {
+  return (
+    <span
+      data-testid={testId}
+      className={cn('flex shrink-0 items-center gap-2 font-medium text-muted-foreground', ENTER)}
+    >
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-warning" />
+      {label}
+    </span>
+  );
+}
+
 /** The clock and task count, hosted at the right edge of the live header that ends the transcript. */
 export function TurnStatusTrailing() {
   const elapsed = useTurnClock();
   const tasks = useRunningTasks();
+  const reconnecting = useHostedRetryLabel();
   return (
     // `min-w-px` keeps a box before the first second, so the running marker is visible from the start.
     <span data-testid="chat-thread-running" className="inline-flex h-4 min-w-px shrink-0 items-center gap-2 text-xs">
-      {elapsed !== undefined && <Elapsed seconds={elapsed} lead={false} />}
+      {reconnecting && <ReconnectingSegment {...reconnecting} />}
+      {elapsed !== undefined && <Elapsed seconds={elapsed} lead={reconnecting !== null} />}
       {tasks > 0 && (
         <span className={cn('flex items-center gap-2 text-muted-foreground', ENTER)}>
-          {elapsed !== undefined && <Separator />}
+          {(elapsed !== undefined || reconnecting) && <Separator />}
           <span data-testid="chat-thread-running-tasks">{runningTasksLabel(tasks)}</span>
         </span>
       )}
@@ -99,6 +121,9 @@ export function TurnStatusTrailing() {
 function RunningStatus() {
   const phase = usePhase();
   const attention = phase === 'Needs your input';
+  // The shown text decides: the label (and its test id) outlives the retry by at most the phase dwell.
+  const reconnecting = isReconnectText(phase);
+  const chatId = useChatExtras()?.state.chatId ?? '';
   const elapsed = useTurnClock();
   return (
     <div data-testid="chat-thread-running" className="flex min-w-0 items-center gap-2">
@@ -106,11 +131,15 @@ function RunningStatus() {
         aria-hidden
         className={cn(
           'size-1.5 shrink-0 animate-pulse rounded-full motion-reduce:animate-none',
-          attention ? 'bg-warning' : 'bg-primary',
+          attention || reconnecting ? 'bg-warning' : 'bg-primary',
         )}
       />
       {/* Two spans: the enter morph and the idle pulse both own `animation`. */}
-      <span key={phase} className={cn('min-w-0 truncate', ENTER)}>
+      <span
+        key={reconnecting ? 'Reconnecting' : phase}
+        data-testid={reconnecting ? retryStatusTestId(chatId) : undefined}
+        className={cn('min-w-0 truncate', ENTER)}
+      >
         <span
           data-testid="chat-thread-running-text"
           className={cn('mf-phase-pulse font-medium', attention ? 'text-warning' : 'text-muted-foreground')}

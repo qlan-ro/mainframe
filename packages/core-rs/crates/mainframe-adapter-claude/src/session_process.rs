@@ -107,6 +107,22 @@ impl ClaudeSession {
             })
         })
     }
+    pub(super) fn start_stderr<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
+        &self,
+        reader: Option<R>,
+        sink: Arc<dyn SessionSink>,
+    ) -> Option<tokio::task::JoinHandle<()>> {
+        let weak = self.weak_self.get().cloned();
+        reader.map(|reader| {
+            mainframe_runtime::process::spawn_line_pump(reader, move |line| {
+                if let Some(session) = weak.as_ref().and_then(Weak::upgrade) {
+                    session
+                        .span
+                        .in_scope(|| handle_stderr(&session, line.as_bytes(), &*sink));
+                }
+            })
+        })
+    }
     pub(super) fn wait_for_exit(
         &self,
         exit: mainframe_runtime::process::ExitLatch,

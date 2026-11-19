@@ -1,14 +1,12 @@
 use super::*;
-use crate::lsof::{ExecFn, ExecOk, set_exec_for_tests};
+use crate::lsof::{LsofFn, set_lsof_for_tests};
 use crate::tracker::TaskEvent;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Mutex;
+use std::sync::Arc;
 use tempfile::{TempDir, tempdir};
 use tokio::sync::broadcast;
 
-// Chat has ~30 fields (most serde-defaulted optionals); build from JSON with
-// only the required fields + the two reconcile reads.
+// Build from JSON so only the required fields and the ones reconcile reads
+// need spelling out.
 fn make_chat(vendor_session_id: &str, worktree_path: Option<&str>, project_id: &str) -> Chat {
     let mut v = serde_json::json!({
         "id": format!("chat-{vendor_session_id}"),
@@ -29,46 +27,11 @@ fn make_chat(vendor_session_id: &str, worktree_path: Option<&str>, project_id: &
     serde_json::from_value(v).unwrap()
 }
 
-struct MockDb {
-    chats: Vec<Chat>,
-    project_path: String,
-}
-impl ReconcileDb for MockDb {
-    fn chats_list_all(&self) -> Vec<Chat> {
-        self.chats.clone()
-    }
-    fn project_path(&self, _id: &str) -> Option<String> {
-        Some(self.project_path.clone())
-    }
-}
-
-struct AlwaysValid;
-impl SpoolValidator for AlwaysValid {
-    fn validate<'a>(
-        &'a self,
-        _output_path: &'a str,
-        _task_id: &'a str,
-    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
-        Box::pin(async { true })
-    }
-}
-
-struct RecordingValidator {
-    result: bool,
-    calls: Arc<Mutex<Vec<(String, String)>>>,
-}
-impl SpoolValidator for RecordingValidator {
-    fn validate<'a>(
-        &'a self,
-        output_path: &'a str,
-        task_id: &'a str,
-    ) -> Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((output_path.to_string(), task_id.to_string()));
-        let r = self.result;
-        Box::pin(async move { r })
+/// Every chat in `chats` lives in one project at `project_path`.
+fn snapshot(chats: Vec<Chat>, project_path: &str) -> ReconcileSnapshot {
+    ReconcileSnapshot {
+        chats,
+        project_paths: HashMap::from([("p1".to_string(), project_path.to_string())]),
     }
 }
 
@@ -96,7 +59,7 @@ fn new_spool() -> Spool {
 }
 
 impl Spool {
-    /// Place `${root}/<cwdSeg>/<sess>/tasks/<file>` as a real file, returning its path.
+    /// Write `<root>/<cwd_seg>/<sess>/tasks/<file>`, returning its path.
     fn place_file(&self, cwd_seg: &str, sess: &str, file: &str) -> String {
         let tasks = std::path::Path::new(&self.root)
             .join(cwd_seg)
@@ -122,39 +85,26 @@ impl Spool {
 }
 
 fn set_lsof_writers(tracker: &BackgroundTaskTracker, pids: &'static [u32]) {
-    set_exec_for_tests(&tracker.process, lsof_exec(pids));
+    set_lsof_writers_for_path(tracker, "", pids);
 }
 
-fn lsof_exec(pids: &'static [u32]) -> ExecFn {
-    Arc::new(move |_c, _a| {
-        let mut stdout = String::new();
-        for p in pids {
-            stdout.push_str(&format!("p{p}\naw\nn/p\n"));
-        }
-        Box::pin(async move { Ok(ExecOk { stdout }) })
-    })
-}
-
-/// lsof exec that returns `pids` as writers only when the queried path
-/// contains `needle` (so it's independent of nondeterministic walk order).
+/// Report `pids` as writers only for paths containing `needle`, so a test
+/// doesn't depend on the walk order.
 fn set_lsof_writers_for_path(
     tracker: &BackgroundTaskTracker,
     needle: &'static str,
     pids: &'static [u32],
 ) {
-    set_exec_for_tests(
-        &tracker.process,
-        Arc::new(move |_cmd, args: Vec<String>| {
-            let path = args.last().cloned().unwrap_or_default();
-            let mut stdout = String::new();
-            if path.contains(needle) {
-                for p in pids {
-                    stdout.push_str(&format!("p{p}\naw\nn/p\n"));
-                }
+    let lsof: LsofFn = Arc::new(move |path| {
+        let mut stdout = String::new();
+        if path.contains(needle) {
+            for p in pids {
+                stdout.push_str(&format!("p{p}\naw\nn/p\n"));
             }
-            Box::pin(async move { Ok(ExecOk { stdout }) })
-        }),
-    );
+        }
+        Box::pin(async move { Ok(stdout) })
+    });
+    set_lsof_for_tests(&tracker.process, lsof);
 }
 
 fn drain(rx: &mut broadcast::Receiver<TaskEvent>) -> Vec<(String, String, String)> {

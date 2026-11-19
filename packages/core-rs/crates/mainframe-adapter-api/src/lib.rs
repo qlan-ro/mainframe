@@ -20,7 +20,9 @@ use mainframe_types::adapter::{AdapterInfo, AdapterModel, CatalogSource};
 use mainframe_types::events::DaemonEvent;
 
 pub mod adapter;
+pub mod compaction_state;
 mod error;
+pub mod idle_compaction;
 pub use error::AdapterError;
 pub mod history_dependency;
 pub use history_dependency::HistoryDependency;
@@ -34,13 +36,11 @@ pub use adapter::{
     Adapter, AdapterSession, ContextFiles, FORK_CUT_NOT_FOUND_REASON, ForkCut, ForkPinError,
     ForkPinRequest, ImageInput, LoadedSkill, SessionSink, StopBackgroundTaskResult,
 };
+pub use mainframe_types::adapter::{ControlRequest, ControlResponse};
 pub use plan_mode_actions::{
     PlanActionContext, PlanChatUpdate, PlanModeActionHandler, clear_context_and_restart,
 };
 pub use title::finalize_title;
-// The control envelopes are DATA (they live in mainframe-types); re-exported here
-// so adapter consumers get them from the contract crate.
-pub use mainframe_types::adapter::{ControlRequest, ControlResponse};
 
 /// A boxed, `Send` future — the manual async-fn-in-trait building block used by
 /// every `dyn`-compatible async trait method in this crate.

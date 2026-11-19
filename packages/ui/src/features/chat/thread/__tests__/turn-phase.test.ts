@@ -12,7 +12,7 @@ function message(role: string, content: unknown[] = [], extra: Record<string, un
     ...extra,
   } as unknown as ThreadMessage;
 }
-const idle = { stopping: false, compacting: false, awaitingInput: false };
+const idle = { stopping: false, compacting: false, awaitingInput: false, reconnecting: false };
 const read = (result?: string) => ({
   type: 'tool-call',
   toolCallId: 'r',
@@ -35,9 +35,29 @@ describe('turnPhase', () => {
   });
   it('ranks stopping, then needed input, then compaction above the stream phase', () => {
     const working = [message('assistant', [read()])];
-    expect(turnPhase({ stopping: true, compacting: true, awaitingInput: true }, working, new Set())).toBe('Stopping');
+    expect(turnPhase({ ...idle, stopping: true, compacting: true, awaitingInput: true }, working, new Set())).toBe(
+      'Stopping',
+    );
     expect(turnPhase({ ...idle, compacting: true, awaitingInput: true }, working, new Set())).toBe('Needs your input');
     expect(turnPhase({ ...idle, compacting: true }, working, new Set())).toBe('Compacting');
+  });
+  it('reports Reconnecting in place of the stream phase while a retry is pending', () => {
+    const reconnecting = { ...idle, reconnecting: true };
+    expect(turnPhase(reconnecting, [message('user')], new Set())).toBe('Reconnecting');
+    expect(turnPhase(reconnecting, [message('assistant', [{ type: 'text', text: 'Hi' }])], new Set())).toBe(
+      'Reconnecting',
+    );
+    expect(turnPhase(reconnecting, [message('assistant', [read()])], new Set())).toBe('Reconnecting');
+  });
+  it('lets Stopping, Needs your input and Compacting outrank Reconnecting, which returns when they end', () => {
+    const working = [message('assistant', [read()])];
+    const all = { stopping: true, compacting: true, awaitingInput: true, reconnecting: true };
+    expect(turnPhase(all, working, new Set())).toBe('Stopping');
+    expect(turnPhase({ ...all, stopping: false }, working, new Set())).toBe('Needs your input');
+    expect(turnPhase({ ...all, stopping: false, awaitingInput: false }, working, new Set())).toBe('Compacting');
+    expect(turnPhase({ ...all, stopping: false, awaitingInput: false, compacting: false }, working, new Set())).toBe(
+      'Reconnecting',
+    );
   });
   it('ignores queued prompts when reading the phase', () => {
     const queued = message('user', [], { id: 'q', metadata: { custom: { mainframe: { queued: true } } } });

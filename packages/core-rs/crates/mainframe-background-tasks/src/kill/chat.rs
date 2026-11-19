@@ -1,15 +1,25 @@
-use super::*;
+//! Stopping every task of a chat, plus a sweep of stray writers in a
+//! worktree's spool directory before the worktree is removed.
 
-// --- killTasksForChat orchestrator ---
+use std::path::Path;
+
+use mainframe_types::background_task::BackgroundTask;
+
+use super::sweep_output::SweepOutput;
+use super::{KillError, SessionLike, Via, mark_stopped, os, stop_task};
+use crate::encoding::encode_cwd_segment;
+use crate::lsof::lsof_writers;
+use crate::spool_root::spool_root;
+use crate::spool_walker::walk_spool_tasks;
+use crate::tracker::BackgroundTaskTracker;
 
 pub struct KillTasksForChatArgs<'a> {
     pub chat_id: &'a str,
-    /// When set, the worktree sweep targets `${spoolRoot}/{encoded(worktreePath)}/…`.
+    /// When set, also signal every writer of a spool file under this
+    /// worktree's encoded directory, tracked or not.
     pub worktree_path: Option<&'a str>,
     pub session: Option<&'a dyn SessionLike>,
     pub tracker: &'a BackgroundTaskTracker,
-    /// Test-only override; production callers default to spoolRoot().
-    pub spool_root: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,7 +31,7 @@ pub struct KilledEntry {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FailedEntry {
     pub task_id: String,
-    pub error: String,
+    pub error: KillError,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,137 +47,106 @@ pub struct KillTasksForChatResult {
     pub swept: Vec<SweptEntry>,
 }
 
+/// Stop every running task of the chat and mark each stopped, then sweep the
+/// worktree's spool directory if one is given.
 pub async fn kill_tasks_for_chat(args: KillTasksForChatArgs<'_>) -> KillTasksForChatResult {
-    let mut result = KillTasksForChatResult::default();
-    let running: Vec<_> = args
-        .tracker
-        .list(args.chat_id)
-        .into_iter()
-        .filter(|t| t.status == BackgroundTaskStatus::Running)
-        .collect();
+    kill_tasks_for_chat_under(args, &spool_root()).await
+}
 
-    for task in running {
+pub(super) async fn kill_tasks_for_chat_under(
+    args: KillTasksForChatArgs<'_>,
+    spool_root: &Path,
+) -> KillTasksForChatResult {
+    let mut result = KillTasksForChatResult::default();
+    for task in args.tracker.list_live(args.chat_id) {
         kill_task(&args, &task, &mut result).await;
     }
-
-    sweep(&args, &mut result).await;
+    if let Some(worktree_path) = args.worktree_path {
+        sweep_worktree(&args, worktree_path, spool_root, &mut result).await;
+    }
 
     if !result.failed.is_empty() {
-        tracing::warn!(chat_id = %args.chat_id, failed = ?result.failed, "some failures");
+        tracing::warn!(chat_id = %args.chat_id, failed = ?result.failed, "some background tasks could not be stopped");
     }
     if !result.swept.is_empty() {
         tracing::info!(chat_id = %args.chat_id, swept = ?result.swept, "worktree sweep killed extras");
     }
-
     result
 }
 
 async fn kill_task(
     args: &KillTasksForChatArgs<'_>,
-    task: &mainframe_types::background_task::BackgroundTask,
+    task: &BackgroundTask,
     result: &mut KillTasksForChatResult,
 ) {
-    if let Some(session) = args.session {
-        let stop = session.stop_background_task(&task.id).await;
-        if stop.ok {
-            record_stopped(args, task, result, Via::StopTask, "killed via stop_task");
-            return;
-        }
-        tracing::warn!(chat_id = %args.chat_id, task_id = %task.id, error = ?stop.error, "stop_task failed; OS fallback");
-    }
-
-    let os = kill_one_task_os(&args.tracker.process, task.output_path.as_deref(), |pid| {
-        sigterm_then_kill(&args.tracker.process, pid)
-    })
-    .await;
-    match os {
-        OsKillOutcome::Ok => {
-            record_stopped(args, task, result, Via::Signal, "killed via signal");
-        }
-        OsKillOutcome::Err { error, .. } => {
-            result.failed.push(FailedEntry {
+    match stop_task(args.tracker, args.chat_id, task, args.session).await {
+        Ok(via) => {
+            // The chat is going away, so don't wait for the CLI's notification.
+            if via == Via::StopTask {
+                mark_stopped(args.tracker, args.chat_id, &task.id, "killed via stop_task");
+            }
+            result.killed.push(KilledEntry {
                 task_id: task.id.clone(),
-                error,
+                via,
             });
         }
+        Err(error) => result.failed.push(FailedEntry {
+            task_id: task.id.clone(),
+            error,
+        }),
     }
 }
 
-async fn sweep(args: &KillTasksForChatArgs<'_>, result: &mut KillTasksForChatResult) {
-    if let Some(worktree_path) = args.worktree_path {
-        match tokio::fs::canonicalize(worktree_path).await {
-            Err(err) => {
-                tracing::warn!(error = %err, worktree_path = %worktree_path, "worktree sweep aborted");
-            }
-            Ok(real_wt) => {
-                let scoped_cwd_seg = encode_cwd_segment(&real_wt.to_string_lossy());
-                let root = args
-                    .spool_root
-                    .clone()
-                    .unwrap_or_else(|| default_spool_root().to_string_lossy().into_owned());
-                let entries = walk_spool_tasks(&WalkOpts {
-                    root,
-                    scoped_cwd_seg: Some(scoped_cwd_seg),
-                })
-                .await;
-                for entry in entries {
-                    match tokio::fs::symlink_metadata(&entry.fp).await {
-                        Ok(md) if md.is_file() && !md.file_type().is_symlink() => {}
-                        _ => continue,
-                    }
-                    sweep_file(args, &entry.fp, result).await;
-                }
-            }
+async fn sweep_worktree(
+    args: &KillTasksForChatArgs<'_>,
+    worktree_path: &str,
+    spool_root: &Path,
+    result: &mut KillTasksForChatResult,
+) {
+    let real_worktree = match tokio::fs::canonicalize(worktree_path).await {
+        Ok(path) => path,
+        Err(error) => {
+            tracing::warn!(%error, worktree_path, "worktree sweep aborted");
+            return;
+        }
+    };
+    let cwd_seg = encode_cwd_segment(&real_worktree.to_string_lossy());
+    for entry in walk_spool_tasks(spool_root, Some(&cwd_seg)).await {
+        let Some(output) = SweepOutput::open(spool_root, &entry) else {
+            continue;
+        };
+        match lsof_writers(&args.tracker.process, &output.probe_path).await {
+            Ok(writers) => sweep_writers(args.tracker, &entry.fp, writers, result).await,
+            Err(error) => result.failed.push(FailedEntry {
+                task_id: entry.task_id,
+                error: KillError::ProbeFailed(error.to_string()),
+            }),
         }
     }
 }
 
-fn record_stopped(
-    args: &KillTasksForChatArgs<'_>,
-    task: &mainframe_types::background_task::BackgroundTask,
-    result: &mut KillTasksForChatResult,
-    via: Via,
-    summary: &str,
-) {
-    args.tracker.end(
-        args.chat_id,
-        &task.id,
-        TerminalUpdate {
-            status: BackgroundTaskStatus::Stopped,
-            output_path: task.output_path.clone().unwrap_or_default(),
-            summary: summary.to_string(),
-            usage: None,
-        },
-    );
-    result.killed.push(KilledEntry {
-        task_id: task.id.clone(),
-        via,
-    });
-}
-
-async fn sweep_file(
-    args: &KillTasksForChatArgs<'_>,
+async fn sweep_writers(
+    tracker: &BackgroundTaskTracker,
     file: &str,
+    writers: Vec<u32>,
     result: &mut KillTasksForChatResult,
 ) {
-    let writers = lsof_writers(&args.tracker.process, file).await;
     for pid in writers {
         if pid == std::process::id() {
             continue;
         }
-        let command = command_for_pid(&args.tracker.process, pid).await;
-        let r = sigterm_then_kill(&args.tracker.process, pid).await;
-        if r.ok {
-            result.swept.push(SweptEntry {
-                pid,
-                command: command.clone(),
-            });
-            tracing::info!(pid, command = %command, file = %file, "worktree sweep killed pid");
-            if let Some(error) = &r.error {
-                tracing::warn!(pid, command = %command, error = %error, "worktree sweep left descendants unsignalled");
+        let command = os::command_for_pid(&tracker.process, pid).await;
+        match os::sigterm_then_kill(&tracker.process, pid).await {
+            Err(error) if error.root_failed => {
+                tracing::error!(pid, command = %command, %error, "worktree sweep kill failed");
             }
-        } else {
-            tracing::error!(pid, command = %command, error = ?r.error, "worktree sweep kill failed");
+            outcome => {
+                tracing::info!(pid, command = %command, file, "worktree sweep killed pid");
+                if let Err(error) = outcome {
+                    tracing::warn!(pid, command = %command, %error, "worktree sweep left descendants unsignalled");
+                }
+                result.swept.push(SweptEntry { pid, command });
+            }
         }
     }
 }

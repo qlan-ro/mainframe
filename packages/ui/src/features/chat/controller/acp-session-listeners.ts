@@ -5,6 +5,7 @@
  * forwards straight to the host, `fullReplay`, or `replay` the attachment
  * already owns: this module holds no state of its own.
  */
+import { clearsRetryStatus } from './retry-status-events';
 import type { AcpSessionAttachmentHost, AcpSessionClientPort } from './acp-session-attachment-types';
 import type { FullReplayRetry } from './acp-full-replay';
 import type { ReplayWindowCoordinator } from './acp-replay-coordinator';
@@ -27,14 +28,25 @@ export interface AcpSessionListenerDeps {
  * calls back, so nothing is pushed for it).
  */
 export function wireAcpSessionListeners(client: AcpSessionClientPort, deps: AcpSessionListenerDeps): Array<() => void> {
-  const { getChatId: chatId, host, fullReplay, replay, syncConnectionGeneration, isResumeOrReplayPending } = deps;
-  const unsubscribe: Array<() => void> = [
+  return [
+    ...wireLiveListeners(client, deps),
+    ...wireTranscriptListeners(client, deps),
+    ...wireReplayListeners(client, deps),
+  ];
+}
+
+/** The frame stream for this chat: session updates, permission gates and their resolution. */
+function wireLiveListeners(client: AcpSessionClientPort, deps: AcpSessionListenerDeps): Array<() => void> {
+  const { getChatId: chatId, host, syncConnectionGeneration } = deps;
+  return [
     client.onSessionUpdate((sessionId, update) => {
       if (sessionId !== chatId()) return;
       // Reconcile a reconnect this attachment's own gap hasn't caught up to
       // YET — before this frame can land on a stale window's staging
       // (re-review LOW). A no-op once already reconciled.
       syncConnectionGeneration();
+      // The first streamed content ends a reconnect status; the host then sees the update.
+      if (clearsRetryStatus(update)) host.dispatch({ type: 'retry.cleared' });
       host.onSessionUpdate(update);
     }),
     client.onPermissionRequest((id, request) => {
@@ -43,6 +55,13 @@ export function wireAcpSessionListeners(client: AcpSessionClientPort, deps: AcpS
     client.onGateResolved((sessionId, requestId) => {
       if (sessionId === chatId()) host.onGateResolvedForSession(requestId);
     }),
+  ];
+}
+
+/** Notifications that change the transcript or the turn's transient status. */
+function wireTranscriptListeners(client: AcpSessionClientPort, deps: AcpSessionListenerDeps): Array<() => void> {
+  const { getChatId: chatId, host, fullReplay } = deps;
+  const unsubscribe: Array<() => void> = [
     client.onCompaction((sessionId, phase) => {
       if (sessionId !== chatId()) return;
       host.dispatch({ type: phase === 'started' ? 'compact.started' : 'compact.done' });
@@ -78,7 +97,18 @@ export function wireAcpSessionListeners(client: AcpSessionClientPort, deps: AcpS
       fullReplay.requestResync();
     }),
   ];
+  // Optional on the port — a client or daemon that predates the notification never calls back.
+  const unsubscribeRetryStatus = client.onRetryStatus?.((sessionId, { attempt, maxAttempts }) => {
+    if (sessionId === chatId()) host.dispatch({ type: 'retry.status', attempt, maxAttempts });
+  });
+  if (unsubscribeRetryStatus) unsubscribe.push(unsubscribeRetryStatus);
+  return unsubscribe;
+}
 
+/** Replay bookkeeping; both listeners are optional on the port. */
+function wireReplayListeners(client: AcpSessionClientPort, deps: AcpSessionListenerDeps): Array<() => void> {
+  const { getChatId: chatId, host, replay, isResumeOrReplayPending } = deps;
+  const unsubscribe: Array<() => void> = [];
   const unsubscribeReplayComplete = client.onReplayComplete?.((sessionId, aborted) => {
     if (sessionId === chatId()) replay.handleReplayComplete(aborted);
   });
@@ -93,6 +123,5 @@ export function wireAcpSessionListeners(client: AcpSessionClientPort, deps: AcpS
     host.advanceCursorFromNotification(cursor);
   });
   if (unsubscribeCursor) unsubscribe.push(unsubscribeCursor);
-
   return unsubscribe;
 }
