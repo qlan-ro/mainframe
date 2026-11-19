@@ -70,7 +70,14 @@ fn tool_timing_encoder_covers_grouped_nested_and_progress_calls() {
     let items = encoded(content.clone());
     assert_eq!(
         items.iter().map(EncodedItem::id).collect::<Vec<_>>(),
-        ["a", "b", "parent", "child", "untimed", "progress"]
+        [
+            "tool:a",
+            "tool:b",
+            "tool:parent",
+            "tool:child",
+            "tool:untimed",
+            "tool:progress"
+        ]
     );
     assert_eq!(metadata(&items[0])["groupId"], "a");
     assert_eq!(
@@ -85,7 +92,7 @@ fn tool_timing_encoder_covers_grouped_nested_and_progress_calls() {
         metadata(&items[3])["toolCallTiming"],
         json!({"startedAt":1300,"completedAt":1400})
     );
-    assert_eq!(metadata(&items[3])["parentToolCallId"], "parent");
+    assert_eq!(metadata(&items[3])["parentToolCallId"], "tool:parent");
     assert!(metadata(&items[4]).get("toolCallTiming").is_none());
     assert_eq!(
         metadata(&items[5])["toolCallTiming"],

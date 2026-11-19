@@ -92,7 +92,14 @@ fn encode_revision_marks_only_the_overlay_segment() {
     let items = encode_revision(&messages, Some(StreamingLeafKind::Text));
 
     let ids: Vec<&str> = items.iter().map(EncodedItem::id).collect();
-    assert_eq!(ids, vec!["dmsg_seg", "toolu_1", "dmsg_seg-1"]);
+    assert_eq!(
+        ids,
+        vec![
+            "message:0:top:dmsg_seg",
+            "tool:toolu_1",
+            "message:1:top:dmsg_seg"
+        ]
+    );
     assert!(
         !item_streaming(&items[0]),
         "the closed segment never streams"
@@ -161,7 +168,11 @@ fn commit_keeps_the_segment_id() {
 
     assert_eq!(
         ids(&partial_items),
-        vec!["dmsg_commit", "toolu_c", "dmsg_commit-1"]
+        vec![
+            "message:0:top:dmsg_commit",
+            "tool:toolu_c",
+            "message:1:top:dmsg_commit"
+        ]
     );
     assert_eq!(ids(&partial_items), ids(&committed_items));
 }
@@ -195,42 +206,60 @@ fn streaming_ids_match_history() {
 #[test]
 fn a_new_turn_wait_keeps_the_previous_answer_settled_until_its_own_overlay() {
     for (kind, content, expected_id) in [
-        (StreamingLeafKind::Text, text("new partial"), "next-answer"),
+        (
+            StreamingLeafKind::Text,
+            text("new partial"),
+            "message:0:top:next-answer",
+        ),
         (
             StreamingLeafKind::Thinking,
             thinking("new partial"),
-            "next-answer-thought",
+            "thought:0:top:next-answer",
         ),
     ] {
-        let mut messages = vec![
-            dmsg(
-                "previous",
-                DisplayMessageType::Assistant,
-                vec![text("done")],
-            ),
-            dmsg(
-                "next-user",
-                DisplayMessageType::User,
-                vec![text("continue")],
-            ),
-        ];
-        let waiting = encode_revision(&messages, None);
-        assert_eq!(ids(&waiting), vec!["previous", "next-user"]);
-        assert!(waiting.iter().all(|item| !item_streaming(item)));
-
-        messages.push(dmsg(
-            "next-answer",
-            DisplayMessageType::Assistant,
-            vec![content],
-        ));
-        let partial = encode_revision(&messages, Some(kind));
-        assert_eq!(ids(&partial), vec!["previous", "next-user", expected_id]);
-        assert_eq!(&partial[..2], &waiting);
-        assert!(item_streaming(&partial[2]));
-
-        let committed = encode_revision(&messages, None);
-        assert!(committed.iter().all(|item| !item_streaming(item)));
-        assert_eq!(without_streaming(partial), committed);
-        assert_eq!(committed, encode(&messages));
+        assert_new_turn_overlay(kind, content, expected_id);
     }
+}
+
+fn assert_new_turn_overlay(kind: StreamingLeafKind, content: DisplayContent, expected_id: &str) {
+    let mut messages = vec![
+        dmsg(
+            "previous",
+            DisplayMessageType::Assistant,
+            vec![text("done")],
+        ),
+        dmsg(
+            "next-user",
+            DisplayMessageType::User,
+            vec![text("continue")],
+        ),
+    ];
+    let waiting = encode_revision(&messages, None);
+    assert_eq!(
+        ids(&waiting),
+        vec!["message:0:top:previous", "message:0:top:next-user"]
+    );
+    assert!(waiting.iter().all(|item| !item_streaming(item)));
+
+    messages.push(dmsg(
+        "next-answer",
+        DisplayMessageType::Assistant,
+        vec![content],
+    ));
+    let partial = encode_revision(&messages, Some(kind));
+    assert_eq!(
+        ids(&partial),
+        vec![
+            "message:0:top:previous",
+            "message:0:top:next-user",
+            expected_id
+        ]
+    );
+    assert_eq!(&partial[..2], &waiting);
+    assert!(item_streaming(&partial[2]));
+
+    let committed = encode_revision(&messages, None);
+    assert!(committed.iter().all(|item| !item_streaming(item)));
+    assert_eq!(without_streaming(partial), committed);
+    assert_eq!(committed, encode(&messages));
 }

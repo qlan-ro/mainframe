@@ -140,7 +140,7 @@ fn todo_write_between_two_texts_keeps_a_paragraph_break() {
     // One message item — the hidden call left no item of its own — carrying
     // both paragraphs, separated by exactly one blank line.
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].id(), "m1");
+    assert_eq!(items[0].id(), "message:0:top:m1");
     assert!(matches!(
         &items[0],
         EncodedItem::Message {

@@ -19,13 +19,13 @@ fn encodes_a_tool_call_in_progress_and_completed() {
     assert_eq!(
         items,
         vec![EncodedItem::ToolCall {
-            id: "toolu_1".to_string(),
+            id: "tool:toolu_1".to_string(),
             title: "Read".to_string(),
             kind: ToolKind::Search,
             status: ToolCallStatus::InProgress,
             raw_input: json!({}),
             content: Vec::new(),
-            meta: Some(base_meta("dmsg_3")),
+            meta: Some(tool_meta("dmsg_3", "toolu_1")),
         }]
     );
 
@@ -43,7 +43,7 @@ fn encodes_a_tool_call_in_progress_and_completed() {
     assert_eq!(
         items,
         vec![EncodedItem::ToolCall {
-            id: "toolu_1".to_string(),
+            id: "tool:toolu_1".to_string(),
             title: "Read".to_string(),
             kind: ToolKind::Search,
             status: ToolCallStatus::Completed,
@@ -54,7 +54,7 @@ fn encodes_a_tool_call_in_progress_and_completed() {
                     meta: None,
                 }
             }],
-            meta: Some(base_meta("dmsg_3")),
+            meta: Some(tool_meta("dmsg_3", "toolu_1")),
         }]
     );
 }
@@ -100,7 +100,7 @@ fn a_flattened_task_group_produces_no_nesting_item_only_tool_calls() {
 fn the_flattened_parent_tool_call_carries_the_subagent_marker() {
     let items = flattened_task_group_items();
     let parent = &items[0];
-    assert_eq!(parent.id(), "toolu_task_1");
+    assert_eq!(parent.id(), "tool:toolu_task_1");
     assert!(
         matches!(parent, EncodedItem::ToolCall { kind: ToolKind::Think, title, .. } if title == "Investigate flake")
     );
@@ -125,15 +125,13 @@ fn the_flattened_subagent_message_and_tool_call_carry_the_parent_relation() {
         .iter()
         .find(|i| matches!(i, EncodedItem::Message { .. }))
         .expect("subagent text item");
-    // Suffixed: an unsuffixed child message item would collide with (and
-    // clobber) the Task tool-call item in any id-keyed accumulator.
-    assert_eq!(subagent_text.id(), "toolu_task_1-message");
+    assert_eq!(subagent_text.id(), "message:0:task:toolu_task_1");
     let EncodedItem::Message { meta, .. } = subagent_text else {
         unreachable!()
     };
     assert_eq!(
         meta.as_ref().unwrap()["_mainframe.dev"]["parentToolCallId"],
-        json!("toolu_task_1")
+        json!("tool:toolu_task_1")
     );
     assert_eq!(
         meta.as_ref().unwrap()["_mainframe.dev"]["containerId"],
@@ -142,14 +140,14 @@ fn the_flattened_subagent_message_and_tool_call_carry_the_parent_relation() {
 
     let sub_tool = items
         .iter()
-        .find(|i| i.id() == "toolu_sub_1")
+        .find(|i| i.id() == "tool:toolu_sub_1")
         .expect("subagent tool-call item");
     let EncodedItem::ToolCall { meta, .. } = sub_tool else {
         unreachable!()
     };
     assert_eq!(
         meta.as_ref().unwrap()["_mainframe.dev"]["parentToolCallId"],
-        json!("toolu_task_1")
+        json!("tool:toolu_task_1")
     );
 }
 
@@ -179,13 +177,13 @@ fn flattens_task_progress_items_to_tool_call_items() {
     assert_eq!(
         items,
         vec![EncodedItem::ToolCall {
-            id: "toolu_bg_1".to_string(),
+            id: "tool:toolu_bg_1".to_string(),
             title: "Bash".to_string(),
             kind: ToolKind::Execute,
             status: ToolCallStatus::InProgress,
             raw_input: json!({}),
             content: Vec::new(),
-            meta: Some(base_meta("dmsg_5")),
+            meta: Some(tool_meta("dmsg_5", "toolu_bg_1")),
         }]
     );
 }
@@ -207,7 +205,7 @@ fn hidden_category_tool_calls_are_not_encoded() {
     )]);
 
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0].id(), "toolu_shown");
+    assert_eq!(items[0].id(), "tool:toolu_shown");
 }
 
 #[test]

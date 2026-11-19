@@ -132,7 +132,7 @@ fn deltas_stream_then_converge_under_the_same_item_id_with_no_overlay_left_behin
         streaming_revisions.len()
     );
 
-    let item_id = "msg_09af3cd1fb9af459016ac02d5e043c87d295dc51cb4308f1b8";
+    let item_id = "message:0:top:msg_09af3cd1fb9af459016ac02d5e043c87d295dc51cb4308f1b8";
     let mut prev_len = 0;
     for items in &streaming_revisions {
         let item = &items[0];

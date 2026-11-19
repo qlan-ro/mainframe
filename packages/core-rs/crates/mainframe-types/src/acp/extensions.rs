@@ -51,6 +51,9 @@ pub struct MessageSendCommand {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemMeta {
+    /// Native tool identity for result lookup and transcript actions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_tool_call_id: Option<String>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -87,13 +90,10 @@ pub struct ItemMeta {
     /// The divider a provider switch (or context reset) opens a segment with.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_switch: Option<crate::segment::ProviderSwitchMarker>,
-    /// The containing `DisplayMessage.metadata` map, passed through verbatim
-    /// (attachments, command, cost_usd, turnDurationMs, …) — the same data
-    /// the legacy dialect already serializes on every display frame.
+    /// The containing display message's metadata, passed through verbatim.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_meta: Option<HashMap<String, Value>>,
-    /// The daemon's `tool_group` membership: members share the first
-    /// member's id as their group id (tool-call items only).
+    /// Tool-group membership uses the first member's native ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
     /// True on the tool-call item that represents a subagent task group —

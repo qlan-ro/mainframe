@@ -43,7 +43,11 @@ pub(super) fn tool_call_patch(prev: &EncodedItem, new: &EncodedItem) -> SessionU
         locations: None,
         raw_input: diff_field(pri, nri),
         raw_output: None,
-        meta: diff_meta(pm, nm),
+        meta: if pc != nc {
+            create_patch(nm.clone())
+        } else {
+            diff_meta(pm, nm)
+        },
     })
 }
 

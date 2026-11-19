@@ -49,7 +49,7 @@ fn divider_carries_the_marker_meta_and_its_label_as_text() {
     else {
         panic!("the divider must encode as a message item");
     };
-    assert_eq!(id, "segdiv-seg_1");
+    assert_eq!(id, "message:0:top:segdiv-seg_1");
     assert_eq!(
         content,
         &vec![text_block(

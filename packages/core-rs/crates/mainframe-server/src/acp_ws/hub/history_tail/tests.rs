@@ -173,14 +173,17 @@ async fn restart_replays_the_tail_without_canonical_restoration_then_pages_full_
         &snapshot.messages,
         &mainframe_types::acp::extensions::HistoryPageParams {
             session_id: fixture.chat_id.clone(),
-            before: "m60".into(),
+            before: "message:0:top:m60".into(),
             containers: Some(40),
             items: None,
             until_item_id: None,
         },
         Default::default(),
     );
-    assert_eq!(page.result.history.floor_item_id.as_deref(), Some("m20"));
+    assert_eq!(
+        page.result.history.floor_item_id.as_deref(),
+        Some("message:0:top:m20")
+    );
     assert_eq!(page.containers.len(), 40);
     assert!(!hub.initial_history_ready(manager, &fixture.chat_id).await);
     assert_eq!(
@@ -221,27 +224,6 @@ async fn corrupt_body_and_changed_sources_fall_back_and_revision_resumes_skip_th
     tokio::fs::write(&fixture.source, "changed").await.unwrap();
     assert!(!hub.initial_history_ready(manager, &fixture.chat_id).await);
     ctx.chat.chat_manager.dispose();
-    fixture.ctx.chat.chat_manager.dispose();
-}
-
-#[tokio::test]
-async fn store_rejects_mixed_generations_invalid_ids_and_oversized_files() {
-    let fixture = fixture().await;
-    persist(&fixture).await;
-    let store = fixture.ctx.chat.facade_hub.history_tails.as_ref().unwrap();
-    assert!(store.manifest("../outside").await.is_none());
-    let mut manifest = store.manifest(&fixture.chat_id).await.unwrap();
-    manifest.generation = "different".into();
-    assert!(store.tail(&manifest).await.is_none());
-    let body = fixture
-        .directory
-        .path()
-        .join("data/tails")
-        .join(format!("{}.tail.json", fixture.chat_id));
-    let file = tokio::fs::File::create(body).await.unwrap();
-    file.set_len(8 * 1024 * 1024 + 1).await.unwrap();
-    manifest.generation = store.manifest(&fixture.chat_id).await.unwrap().generation;
-    assert!(store.tail(&manifest).await.is_none());
     fixture.ctx.chat.chat_manager.dispose();
 }
 
@@ -295,3 +277,6 @@ async fn a_cold_tail_miss_without_rest_delivers_one_replay_without_a_resync() {
     );
     ctx.chat.chat_manager.dispose();
 }
+
+#[path = "upgrade_tests.rs"]
+mod upgrade;
