@@ -20,10 +20,7 @@ impl Daemon {
                 "stray child process sweep complete"
             );
         }
-        let liveness = start_liveness_scheduler(LivenessDeps {
-            tracker: self.ctx.core.background_tasks.clone(),
-            interval_ms: None,
-        });
+        let liveness = start_liveness_scheduler(self.ctx.core.background_tasks.clone());
         spawn_reconcile(
             self.ctx.core.db.clone(),
             self.ctx.core.background_tasks.clone(),

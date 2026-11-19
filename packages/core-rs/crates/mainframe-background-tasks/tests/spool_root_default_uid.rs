@@ -1,7 +1,6 @@
-//! Pins `spool_root()` and the un-injected
-//! production default validator to the daemon's *real* uid instead of the
-//! `unwrap_or(0)` stub. Every case here reads the expected uid from an
-//! independent oracle (`id -u`), never from the code under test.
+//! Pins `spool_root()` and `is_spool_task_output` to the daemon's real uid.
+//! Every case reads the expected uid from an independent oracle (`id -u`),
+//! never from the code under test.
 #![cfg(unix)]
 #![allow(
     clippy::unwrap_used,
@@ -13,10 +12,7 @@ use std::os::unix::fs::DirBuilderExt;
 use std::path::PathBuf;
 use std::process::Command;
 
-use mainframe_background_tasks::spool_root::spool_root;
-use mainframe_background_tasks::spool_validator::{
-    Platform, SpoolValidator, SpoolValidatorDeps, make_spool_validator,
-};
+use mainframe_background_tasks::spool_root::{is_spool_task_output, spool_root};
 use tempfile::TempDir;
 
 fn oracle_uid() -> u32 {
@@ -45,7 +41,7 @@ async fn spool_root_uses_the_real_uid() {
 }
 
 #[tokio::test]
-async fn default_validator_accepts_the_real_uid_root_and_rejects_claude_0() {
+async fn accepts_an_output_under_the_real_uid_root_and_rejects_claude_0() {
     let uid = oracle_uid();
     if uid == 0 {
         // Running as root: `claude-0` is the correct root and this test is meaningless.
@@ -65,24 +61,10 @@ async fn default_validator_accepts_the_real_uid_root_and_rejects_claude_0() {
     let output_path = tasks_dir.join("task-xyz.output");
     std::fs::write(&output_path, b"hello from the real spool root").unwrap();
 
-    // Exactly the production default `routes/background_tasks.rs` builds — no
-    // injected uid, no spool-root override.
-    let validator = make_spool_validator(SpoolValidatorDeps {
-        platform: Platform::current(),
-        getuid: None,
-        env: std::env::vars().collect(),
-        realpath: None,
-        tmpdir: None,
-    });
+    assert!(is_spool_task_output(&output_path, "task-xyz").await);
 
-    assert!(
-        validator
-            .validate(&output_path.to_string_lossy(), "task-xyz")
-            .await
-    );
-
-    // `<base>/claude-0` is never created by this suite, so this must reject
-    // both today (nonexistent path) and after the fix (wrong uid segment).
-    let rejected_path = format!("{base}/claude-0/p/sess-a/tasks/task-xyz.output");
-    assert!(!validator.validate(&rejected_path, "task-xyz").await);
+    // A `<base>/claude-0` path is outside this uid's root. The suite never
+    // creates it, so this also rejects because the file does not exist.
+    let rejected_path = PathBuf::from(format!("{base}/claude-0/p/sess-a/tasks/task-xyz.output"));
+    assert!(!is_spool_task_output(&rejected_path, "task-xyz").await);
 }

@@ -252,7 +252,7 @@ fn recovered_task(
 }
 
 #[test]
-fn adopt_inserts_without_emitting() {
+fn adopt_inserts_and_emits_started_for_a_running_task() {
     let tracker = BackgroundTaskTracker::new();
     let mut rx = tracker.subscribe();
     tracker.adopt(
@@ -263,13 +263,24 @@ fn adopt_inserts_without_emitting() {
             1000,
             BackgroundTaskStatus::Running,
         ),
-        AdoptOptions { emit: false },
     );
-    assert_eq!(tracker.list("chat-a").len(), 1);
-    assert_eq!(
-        tracker.get("chat-a", "rec-1").unwrap().recovered,
-        Some(true)
+    let adopted = tracker.get("chat-a", "rec-1").unwrap();
+    assert_eq!(adopted.recovered, Some(true));
+    assert_eq!(adopted.started_at, 1000);
+    let events = drain(&mut rx);
+    assert_eq!(events.len(), 1);
+    assert!(matches!(&events[0], TaskEvent::Started { task, .. } if task.id == "rec-1"));
+}
+
+#[test]
+fn adopt_emits_ended_for_a_terminal_task() {
+    let tracker = BackgroundTaskTracker::new();
+    let mut rx = tracker.subscribe();
+    tracker.adopt(
+        "chat-a",
+        recovered_task("rec-1", "/p", 1000, BackgroundTaskStatus::Stopped),
     );
-    assert_eq!(tracker.get("chat-a", "rec-1").unwrap().started_at, 1000);
-    assert!(drain(&mut rx).is_empty());
+    let events = drain(&mut rx);
+    assert_eq!(events.len(), 1);
+    assert!(matches!(&events[0], TaskEvent::Ended { task, .. } if task.id == "rec-1"));
 }

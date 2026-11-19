@@ -25,6 +25,7 @@ pub mod skills;
 pub use adapter::{MockCliAdapter, sanitize_key};
 pub use fixture::{RecordedEvent, parse_fixture};
 pub use session::ReplaySession;
+pub use task_bridge::WorkflowSink;
 
 mod skills_provider;
 
