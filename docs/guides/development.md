@@ -4,7 +4,7 @@ Use the relevant section when changing code, running checks, or preparing a PR. 
 
 ## Commands and validation
 
-Run pnpm commands from the repository root unless a directory is specified.
+Run pnpm commands from the repository root unless a directory is specified. The workspace provides TypeScript 7 as `tsc`. ESLint and the UI tooling that loads TypeScript config files use the TypeScript 6 JavaScript API.
 
 | Task | Command |
 |---|---|
