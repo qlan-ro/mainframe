@@ -9,16 +9,16 @@
       },
       "mode": "changelog",
       "changelogPath": "CHANGELOG.md",
-      "lastReviewedRef": "2.1.327",
-      "lastReviewedAt": "2026-11-18",
+      "lastReviewedRef": "2.1.329",
+      "lastReviewedAt": "2026-11-20",
       "checklist": "docs/research/adapters/claude/CONSUMED-SURFACE.md"
     },
     "codex": {
       "repo": "openai/codex",
       "mode": "releases",
       "includePrerelease": false,
-      "lastReviewedRef": "rust-v0.169.1",
-      "lastReviewedAt": "2026-11-18",
+      "lastReviewedRef": "rust-v0.171.0",
+      "lastReviewedAt": "2026-11-20",
       "checklist": "docs/research/adapters/codex/CONSUMED-SURFACE.md"
     }
   }
