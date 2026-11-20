@@ -81,7 +81,7 @@
  *   chat-user-review-comment-L<n>  — one comment section within that card
  *
  * LSP availability in this e2e environment (traced, not assumed): the Rust
- * daemon ships no bundled servers — `core-rs/crates/mainframe-lsp/lsp_registry`
+ * daemon ships no bundled servers — `core-rs/crates/mainframe-lsp/src/registry.rs`
  * resolves `typescript-language-server` from the ANALYZED PROJECT's
  * `node_modules/.bin`, a venv, or PATH — so a machine with it on PATH CAN
  * spawn a real server; "unavailable" would still be the wrong blanket
