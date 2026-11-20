@@ -19,4 +19,5 @@ dashmap = { workspace = true }
 mainframe-types = { workspace = true }
 
 [dev-dependencies]
+mainframe-runtime = { workspace = true, features = ["test-support"] }
 tempfile = { workspace = true }

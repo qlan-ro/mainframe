@@ -1,9 +1,8 @@
-//! The WS<->stdio LSP proxy.
-//!
-//! Re-exports: the registry (`LspRegistry`), the process
-//! manager (`LspManager` + `LspServerHandle`), the connection handler
-//! (`LspConnectionHandler` + `parse_lsp_upgrade_path`), and the framing bridge
-//! (`bridge_ws_to_process` + `encode_json_rpc`).
+//! Language servers behind the editor's `/lsp/{projectId}/{language}`
+//! WebSocket: command discovery ([`LspRegistry`]), one child per
+//! `(projectId, language)` with an idle reaper and a graceful shutdown
+//! ([`LspManager`]), and editor sessions over a running child ([`LspClient`]).
+//! The server crate owns the socket and pumps it through an [`LspClient`].
 #![forbid(unsafe_code)]
 #![cfg_attr(
     test,
@@ -15,15 +14,13 @@
     )
 )]
 
-pub mod lsp_connection;
-pub mod lsp_manager;
-pub mod lsp_proxy;
-pub mod lsp_registry;
+mod client;
+mod framing;
+mod manager;
+mod registry;
+#[cfg(test)]
+mod test_fixtures;
 
-pub use lsp_connection::{
-    LspConnectionHandler, ReattachAction, UpgradeOutcome, cached_initialize_reply,
-    capture_initialize_result, classify_reattach_first,
-};
-pub use lsp_manager::{ClientRef, CommandResolver, LspError, LspManager, LspServerHandle};
-pub use lsp_proxy::{BridgeHandle, LspFrameParser, bridge_ws_to_process, encode_json_rpc};
-pub use lsp_registry::{LspRegistry, ResolvedCommand};
+pub use client::{ClientEvent, LspClient};
+pub use manager::{LspError, LspManager, LspServerHandle};
+pub use registry::LspRegistry;

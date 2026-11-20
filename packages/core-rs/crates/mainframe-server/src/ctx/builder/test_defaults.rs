@@ -116,9 +116,10 @@ impl AppCtxBuilder {
             port_tunnels,
             launch_registry,
             plugin_manager,
-            lsp_manager: self.lsp_manager.take().unwrap_or_else(|| {
-                Arc::new(LspManager::new(Arc::new(mainframe_lsp::LspRegistry::new())))
-            }),
+            lsp_manager: self
+                .lsp_manager
+                .take()
+                .unwrap_or_else(|| Arc::new(LspManager::new(mainframe_lsp::LspRegistry::new()))),
             ws_clients: self
                 .ws_clients
                 .take()

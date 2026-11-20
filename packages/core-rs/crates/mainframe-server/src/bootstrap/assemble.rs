@@ -147,7 +147,7 @@ async fn plugins(
 
 fn context_builder(bound: &BoundBootstrap, r: &Resources) -> crate::ctx::AppCtxBuilder {
     let input = &bound.input;
-    let lsp = LspRegistry::new().with_resolved_path(input.resolved_path.as_str());
+    let lsp = LspRegistry::new().with_resolved_path(input.resolved_path.clone());
     AppCtx::builder(bound.db.clone(), input.paths.data_dir.clone())
         .git(GitFactory)
         .services(r.services.clone())
@@ -165,7 +165,7 @@ fn context_builder(bound: &BoundBootstrap, r: &Resources) -> crate::ctx::AppCtxB
         .launch_registry(r.launch_registry.clone())
         .tunnel_manager(r.tunnel_manager.clone())
         .port_tunnels(r.port_tunnels.clone())
-        .lsp_manager(Arc::new(LspManager::new(Arc::new(lsp))))
+        .lsp_manager(Arc::new(LspManager::new(lsp)))
 }
 
 async fn initialize_quota(
