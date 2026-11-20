@@ -1,5 +1,24 @@
 # @qlan-ro/mainframe-app-tauri
 
+## 2.4.0
+
+### Minor Changes
+
+- [#922](https://github.com/qlan-ro/mainframe/pull/922) [`0d9af35`](https://github.com/qlan-ro/mainframe/commit/0d9af357a7432986576b91ee9b3284ebf895e936) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Connect local MCP clients to selected projects with revocable credentials and read-only or chat-control access. Manage clients in Settings, choose a maximum permission level, and let external clients read, launch, message, stop, or configure chats.
+
+### Patch Changes
+
+- [#914](https://github.com/qlan-ro/mainframe/pull/914) [`c358e55`](https://github.com/qlan-ro/mainframe/commit/c358e55b54b6f17d22d4090bf0670215476d04ee) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Fix missing final answers after tool calls, including replay of existing chats after compaction. Give transcript items separate stable identities and preserve native tool references for result expansion.
+
+- [#919](https://github.com/qlan-ro/mainframe/pull/919) [`a68e751`](https://github.com/qlan-ro/mainframe/commit/a68e75129c2fb5b287d22283d5a7c0064096962d) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Stop a background task from being reported as ended twice when the CLI's notification races the liveness sweep or a kill.
+
+- [#909](https://github.com/qlan-ro/mainframe/pull/909) [`223a96f`](https://github.com/qlan-ro/mainframe/commit/223a96f3fb13ff6ef9bc7ef94836178f36ef8bba) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Keep Claude proxy model diagnostics and connector warnings from marking an active chat as failed or hiding compaction progress. Show connector availability as a short transcript notice.
+
+- [#925](https://github.com/qlan-ro/mainframe/pull/925) [`7f216cd`](https://github.com/qlan-ro/mainframe/commit/7f216cde73591601fbb8f0ebc0677b7841318b08) Thanks [@doruchiulan](https://github.com/doruchiulan)! - Keep editor language features working after the editor reconnects, and let idle language servers actually stop.
+
+- Updated dependencies [[`1879723`](https://github.com/qlan-ro/mainframe/commit/187972381c4d539fc88a07579126e498c0393355), [`d5b3207`](https://github.com/qlan-ro/mainframe/commit/d5b320755ad40d8bea65a03ff281290fd1c24d29)]:
+  - @qlan-ro/mainframe-ui@2.16.0
+
 ## 2.3.10
 
 ### Patch Changes
