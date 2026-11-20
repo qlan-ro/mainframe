@@ -84,6 +84,9 @@ export function useSessionTabsSync(): void {
   const ensureTab = useSessionTabsStore((s) => s.ensureTab);
   const closeTab = useSessionTabsStore((s) => s.closeTab);
   const reconcile = useSessionTabsStore((s) => s.reconcile);
+  const zonesPair = useZonesStore((s) => s.zones);
+  const zoneFrac = useZonesStore((s) => s.frac);
+  const prevRef = useRef<{ main: string | null; zones: readonly string[] | null }>({ main: null, zones: null });
 
   useEffect(() => {
     if (hydrated || !canRestoreTabs(items, isListLoading, listLoaded)) return;
@@ -113,32 +116,33 @@ export function useSessionTabsSync(): void {
   }, [hydrated, items, isListLoading, listLoaded, hydrate, closeTab]);
 
   useEffect(() => {
+    const prev = prevRef.current;
+    prevRef.current = { main: mainThreadId, zones: zonesPair };
     if (!mainThreadId) return;
+    const activated = prev.main !== mainThreadId;
+    if (activated) useZonesStore.setState({ leaving: null });
+    // Zones-only change: re-slot only when the pair dissolved AROUND the active
+    // session and focus is not on its way out. A dissolve that moves focus
+    // (`leaving`) must not re-preview the chat being left — `switchToThread`
+    // lands later, and the destination gets its slot from that activation.
+    if (!activated) {
+      const dissolvedAround = prev.zones?.includes(mainThreadId) === true && zonesPair === null;
+      if (!dissolvedAround || useZonesStore.getState().leaving === mainThreadId) return;
+    }
     // The runtime's transient boot draft and the user's "+" draft are the same
     // state; only WHEN they are activated tells them apart. A draft active
     // before `list()` ever returned is the boot one — it peeks, so auto-select
     // replaces it instead of leaving a "New Session" tab behind.
+    // A member of the split pair is held open by the pair itself: it needs no
+    // slot, and previewing it would evict an unrelated peek.
+    if (zonesPair?.includes(mainThreadId)) return;
     const protect = isDraftThread(mainThreadId, items) && listLoaded;
     ensureTab(mainThreadId, protect ? 'draft' : 'preview');
     // `items` and `listLoaded` are deliberately not deps: membership reacts to
     // ACTIVATION and reads both as of that moment, and re-running on list ticks
-    // would re-preview a session the user just closed.
-  }, [mainThreadId, ensureTab]);
-
-  // Zones ⊆ pinned tabs, always: splitting is a "keep this open" signal, so a
-  // zone member's preview tab is promoted, and a member with no tab at all (a
-  // restore whose tab was closed pre-reboot) gets one. Otherwise the strip and
-  // the split disagree about what is open.
-  const zonesPair = useZonesStore((s) => s.zones);
-  const zoneFrac = useZonesStore((s) => s.frac);
-  useEffect(() => {
-    if (zonesPair == null) return;
-    const store = useSessionTabsStore.getState();
-    for (const id of zonesPair) {
-      store.ensureTab(id, 'pinned');
-      store.pinTab(id); // ensureTab won't promote a tab that is already open
-    }
-  }, [zonesPair, previewId]);
+    // would re-preview a session the user just closed. The pair IS a dep: when
+    // it dissolves around the active session, that session needs its slot back.
+  }, [mainThreadId, ensureTab, zonesPair]);
 
   useEffect(() => {
     reconcile((state) => reconcileTabs(state, items, mainThreadId));
