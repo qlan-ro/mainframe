@@ -2,7 +2,7 @@
 use super::*;
 use mainframe_types::sync::LockExt as _;
 
-pub(super) fn is_working(chat: &Chat) -> bool {
+pub(crate) fn is_working(chat: &Chat) -> bool {
     chat.process_state == Some(Some(ProcessState::Working))
 }
 

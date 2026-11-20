@@ -5,6 +5,7 @@ import { AboutPane } from './panes/about/AboutPane';
 import { ProvidersPane } from './panes/providers/ProvidersPane';
 import { RemoteAccessPane } from './panes/remote-access/RemoteAccessPane';
 import { KeybindingsPane } from './panes/keybindings/KeybindingsPane';
+import { ExternalClientsPane } from './panes/external-clients/ExternalClientsPane';
 
 export function SettingsContent({ port }: { port: number }) {
   const activeTab = useSettingsStore((s) => s.activeTab);
@@ -19,6 +20,8 @@ export function SettingsContent({ port }: { port: number }) {
       return <NotificationsPane port={port} />;
     case 'remote-access':
       return <RemoteAccessPane port={port} />;
+    case 'external-clients':
+      return <ExternalClientsPane port={port} />;
     case 'about':
       return <AboutPane />;
   }

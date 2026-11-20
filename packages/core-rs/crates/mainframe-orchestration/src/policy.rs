@@ -149,7 +149,7 @@ pub struct Privileges {
 /// a Claude caller's rank and a Codex target's rank are both read through
 /// [`effective_mode_rank`] before comparing, so the same label on different
 /// providers does not compare as equal unless it really is.
-pub(crate) fn check_ceiling(caller: &Privileges, target: &Privileges) -> Result<(), ToolError> {
+pub fn check_ceiling(caller: &Privileges, target: &Privileges) -> Result<(), ToolError> {
     let caller_rank = effective_mode_rank(&caller.adapter_id, caller.mode);
     let target_rank = effective_mode_rank(&target.adapter_id, target.mode);
     if target_rank > caller_rank {

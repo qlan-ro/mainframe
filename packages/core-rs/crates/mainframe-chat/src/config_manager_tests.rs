@@ -192,3 +192,6 @@ mod worktree_reuse;
 
 #[path = "config_manager_tests_storage_failures.rs"]
 mod storage_failures;
+
+#[path = "config_manager_tests_guard.rs"]
+mod guard;

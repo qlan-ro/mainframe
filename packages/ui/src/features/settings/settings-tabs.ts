@@ -1,4 +1,4 @@
-import { SlidersHorizontal, Cpu, Keyboard, Bell, Globe, Info } from 'lucide-react';
+import { SlidersHorizontal, Cpu, Keyboard, Bell, Globe, Info, Plug } from 'lucide-react';
 import type React from 'react';
 import type { ProviderConfig } from '@qlan-ro/mainframe-types';
 import type { SettingsTab } from '../../store/settings';
@@ -9,6 +9,7 @@ export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.Elemen
   { id: 'keybindings', label: 'Keybindings', icon: Keyboard },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'remote-access', label: 'Remote Access', icon: Globe },
+  { id: 'external-clients', label: 'External Clients', icon: Plug },
   { id: 'about', label: 'About', icon: Info },
 ];
 

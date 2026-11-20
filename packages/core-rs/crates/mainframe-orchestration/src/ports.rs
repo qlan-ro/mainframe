@@ -60,7 +60,7 @@ impl ChatView {
     /// Side chats, temporary chats, and automation chats are the user's own
     /// scratch space; agents may not list, send to, or drive them.
     #[must_use]
-    pub(crate) fn is_agent_addressable(&self) -> bool {
+    pub fn is_agent_addressable(&self) -> bool {
         !self.temporary && !self.automation
     }
 }

@@ -36,6 +36,9 @@ pub mod chat_tags;
 pub mod chats;
 pub mod delegated_tasks;
 pub mod devices;
+pub mod external_mcp;
+#[cfg(test)]
+mod external_mcp_tests;
 pub mod migrate;
 pub mod migrations;
 mod orchestration;
@@ -121,6 +124,7 @@ pub struct DatabaseManager {
     pub chats: ChatsRepository,
     pub settings: SettingsRepository,
     pub devices: DevicesRepository,
+    pub external_mcp: external_mcp::ExternalMcpRepository,
     pub tags: TagsRepository,
     pub chat_tags: ChatTagsRepository,
     pub segments: SegmentsRepository,
@@ -154,6 +158,7 @@ impl DatabaseManager {
         let chats = ChatsRepository::new(Rc::clone(&db));
         let settings = SettingsRepository::new(Rc::clone(&db));
         let devices = DevicesRepository::new(Rc::clone(&db));
+        let external_mcp = external_mcp::ExternalMcpRepository::new(Rc::clone(&db));
         let segments = SegmentsRepository::new(Rc::clone(&db));
         let handoffs = HandoffsRepository::new(Rc::clone(&db));
         let delegated_tasks = DelegatedTasksRepository::new(Rc::clone(&db));
@@ -164,6 +169,7 @@ impl DatabaseManager {
             chats,
             settings,
             devices,
+            external_mcp,
             tags,
             chat_tags,
             segments,

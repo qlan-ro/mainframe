@@ -1,6 +1,6 @@
 //! Offload/send/history single-flight claims. A child module of
 //! `lifecycle_manager` so it can reach the private
-//! `Guards`/`Flight` machinery without making any of it
+//! `Guards` machinery without making any of it
 //! crate-visible.
 //!
 //! Every method here is `pub(crate)`: only `chat_manager` (this crate's other
@@ -11,6 +11,34 @@
 use super::*;
 
 impl ChatLifecycleManager {
+    pub(crate) async fn claim_start(&self, chat_id: &str) -> Option<FlightClaim> {
+        loop {
+            let (blocked, claim) = {
+                let g = self.guards.lock_recover();
+                match g
+                    .offloading
+                    .get(chat_id)
+                    .or_else(|| g.maintenance.get(chat_id))
+                {
+                    Some(waiter) => (Some(waiter), None),
+                    None => (None, Some(g.starting.claim(chat_id))),
+                }
+            };
+            if let Some(waiter) = blocked {
+                waiter.wait().await;
+                continue;
+            }
+            match claim {
+                Some(Ok(claim)) => return Some(claim),
+                Some(Err(waiter)) => {
+                    waiter.wait().await;
+                    return None;
+                }
+                None => continue,
+            }
+        }
+    }
+
     pub(crate) fn try_claim_maintenance(&self, chat_id: &str) -> Option<MaintenanceClaim> {
         let g = self.guards.lock_recover();
         if g.restoring.contains_key(chat_id)

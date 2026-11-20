@@ -12,7 +12,7 @@ use crate::state::is_agent_message;
 
 const TOOL_INPUT_SUMMARY_CHARS: usize = 200;
 
-pub(super) struct Item {
+pub struct Item {
     pub position: usize,
     pub message_id: String,
     pub role: &'static str,
@@ -24,7 +24,7 @@ pub(super) struct Item {
 
 /// The item for `messages[position]`, or `None` when the view skips it
 /// (`messages` keeps only user and assistant text).
-pub(super) fn to_item(position: usize, msg: &ChatMessage, activity: bool) -> Option<Item> {
+pub fn to_item(position: usize, msg: &ChatMessage, activity: bool) -> Option<Item> {
     let role = match msg.r#type {
         ChatMessageType::User => "user",
         ChatMessageType::Assistant => "assistant",
@@ -111,7 +111,7 @@ fn render_node(node: &MessageContentNode) -> Option<(String, Option<String>)> {
 }
 
 /// Renders `item` from char `offset`, cut to `max_chars`.
-pub(super) fn render(item: &Item, offset: usize, max_chars: usize) -> Value {
+pub fn render(item: &Item, offset: usize, max_chars: usize) -> Value {
     let total = item.text.chars().count();
     let start = offset.min(total);
     let slice: String = item.text.chars().skip(start).take(max_chars).collect();
@@ -130,11 +130,11 @@ pub(super) fn render(item: &Item, offset: usize, max_chars: usize) -> Value {
     })
 }
 
-pub(super) fn encode_cursor(position: usize, message_id: &str) -> String {
+pub fn encode_cursor(position: usize, message_id: &str) -> String {
     URL_SAFE_NO_PAD.encode(format!("{position}:{message_id}"))
 }
 
-pub(super) fn decode_cursor(cursor: &str) -> Option<(usize, String)> {
+pub fn decode_cursor(cursor: &str) -> Option<(usize, String)> {
     let raw = URL_SAFE_NO_PAD.decode(cursor).ok()?;
     let raw = String::from_utf8(raw).ok()?;
     let (position, id) = raw.split_once(':')?;
@@ -144,7 +144,7 @@ pub(super) fn decode_cursor(cursor: &str) -> Option<(usize, String)> {
 /// The position a cursor points at now: its recorded position when the id
 /// still sits there, else wherever the id moved (a cancelled queued message
 /// or a rewind shifts positions), else `None`.
-pub(super) fn locate(messages: &[ChatMessage], position: usize, id: &str) -> Option<usize> {
+pub fn locate(messages: &[ChatMessage], position: usize, id: &str) -> Option<usize> {
     if messages.get(position).is_some_and(|m| m.id == id) {
         return Some(position);
     }

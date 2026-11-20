@@ -45,12 +45,13 @@ async fn failed_respawn_write_restarts_with_the_previous_config() {
         .respawn_with_config(
             "c1",
             &cell,
-            RespawnChanges {
+            ConfigUpdate {
                 adapter_id: None,
                 model: Some("changed".into()),
                 permission_mode: None,
                 plan_mode: None,
             },
+            true,
         )
         .await;
     assert_eq!(result.unwrap_err().to_string(), "Internal server error");

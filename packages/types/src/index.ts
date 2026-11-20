@@ -67,3 +67,4 @@ export * from './transcript-presentation.js';
 export * from './orchestration.js';
 
 export * from './compaction.js';
+export * from './external-mcp.js';

@@ -13,7 +13,7 @@ mod chat_interrupt;
 mod chat_launch;
 mod chat_list;
 mod chat_read;
-mod chat_read_items;
+pub mod chat_read_items;
 mod chat_send;
 mod chat_wait;
 mod delegate_task;

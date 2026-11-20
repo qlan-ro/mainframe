@@ -107,7 +107,8 @@ impl ChatConfigManager {
         &self,
         chat_id: &str,
         cell: &Arc<Mutex<ActiveChat>>,
-        changes: RespawnChanges,
+        changes: ConfigUpdate,
+        restart: bool,
     ) -> Result<(), ConfigError> {
         self.lifecycle.await_starting(chat_id).await;
 
@@ -146,7 +147,7 @@ impl ChatConfigManager {
             cell.lock_recover().chat = chat.clone();
         }
         let result = result.map(|update| update.emit(chat, None));
-        if was_spawned {
+        if was_spawned && restart {
             self.lifecycle.start_chat(chat_id).await;
         }
         result.map_err(ConfigError::from)

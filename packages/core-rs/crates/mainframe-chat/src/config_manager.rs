@@ -96,11 +96,12 @@ struct LiveRebind<'a> {
     branch_name: Option<String>,
 }
 
-struct RespawnChanges {
-    adapter_id: Option<String>,
-    model: Option<String>,
-    permission_mode: Option<ExecutionMode>,
-    plan_mode: Option<bool>,
+#[derive(Default)]
+pub struct ConfigUpdate {
+    pub adapter_id: Option<String>,
+    pub model: Option<String>,
+    pub permission_mode: Option<ExecutionMode>,
+    pub plan_mode: Option<bool>,
 }
 
 pub struct ChatConfigManager {

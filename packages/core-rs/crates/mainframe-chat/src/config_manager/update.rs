@@ -1,6 +1,6 @@
 use super::*;
 type ConfigChanges = (
-    Option<RespawnChanges>,
+    Option<ConfigUpdate>,
     Option<Arc<dyn AdapterSession>>,
     String,
     bool,
@@ -17,17 +17,56 @@ impl ChatConfigManager {
     ) -> Result<(), ConfigError> {
         let _change = self.changes.acquire(chat_id).await;
         let cell = self.require_active_chat(chat_id)?;
-
-        let (changes, session, cur_adapter, endpoint_changed) = self.config_changes(
+        self.apply_changes(
             chat_id,
             &cell,
-            RespawnChanges {
+            ConfigUpdate {
                 adapter_id,
                 model,
                 permission_mode,
                 plan_mode,
             },
-        )?;
+            true,
+        )
+        .await
+    }
+
+    pub(crate) async fn update_checked<F>(
+        &self,
+        chat_id: &str,
+        changes: ConfigUpdate,
+        guard: &F,
+    ) -> Result<(), ConfigError>
+    where
+        F: Fn(&mainframe_types::chat::Chat) -> Result<(), ConfigError> + Send + Sync,
+    {
+        let _change = self.changes.acquire(chat_id).await;
+        let cell = self.require_active_chat(chat_id)?;
+        let _claim = self
+            .lifecycle
+            .try_claim_offload(chat_id)
+            .ok_or(ConfigError::ChatBusy)?;
+        let current = cell.lock_recover().chat.clone();
+        if crate::chat_manager::shared::is_working(&current)
+            || self.shared.permissions.lock_recover().has_pending(chat_id)
+            || !self.shared.queued_for_chat(chat_id).is_empty()
+        {
+            return Err(ConfigError::ChatBusy);
+        }
+        guard(&current)?;
+        // Respawning waits for this claim; the next send starts the updated session.
+        self.apply_changes(chat_id, &cell, changes, false).await
+    }
+
+    async fn apply_changes(
+        &self,
+        chat_id: &str,
+        cell: &Arc<Mutex<ActiveChat>>,
+        changes: ConfigUpdate,
+        restart: bool,
+    ) -> Result<(), ConfigError> {
+        let (changes, session, cur_adapter, endpoint_changed) =
+            self.config_changes(chat_id, cell, changes)?;
         let Some(changes) = changes else {
             return Ok(());
         };
@@ -38,7 +77,7 @@ impl ChatConfigManager {
                 return self
                     .apply_live_session_settings(
                         chat_id,
-                        &cell,
+                        cell,
                         &session,
                         LiveChanges {
                             model: changes.model,
@@ -56,15 +95,16 @@ impl ChatConfigManager {
         if let Some(refusal) = respawn_refusal(session_spawned, live, &name) {
             return Err(ConfigError::Refused(refusal));
         }
-        self.respawn_with_config(chat_id, &cell, changes).await
+        self.respawn_with_config(chat_id, cell, changes, restart)
+            .await
     }
     fn config_changes(
         &self,
         chat_id: &str,
         cell: &Arc<Mutex<ActiveChat>>,
-        changes: RespawnChanges,
+        changes: ConfigUpdate,
     ) -> Result<ConfigChanges, ConfigError> {
-        let RespawnChanges {
+        let ConfigUpdate {
             adapter_id,
             model,
             permission_mode,
@@ -101,7 +141,7 @@ impl ChatConfigManager {
                 }));
 
         Ok((
-            Some(RespawnChanges {
+            Some(ConfigUpdate {
                 adapter_id: if adapter_changed { adapter_id } else { None },
                 model: if model_changed { model } else { None },
                 permission_mode: if mode_changed { permission_mode } else { None },

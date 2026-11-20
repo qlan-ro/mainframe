@@ -2,6 +2,19 @@
 use super::*;
 
 impl ChatManager {
+    pub async fn update_chat_config_checked<F>(
+        &self,
+        chat_id: &str,
+        changes: crate::config_manager::ConfigUpdate,
+        guard: &F,
+    ) -> Result<(), ConfigError>
+    where
+        F: Fn(&Chat) -> Result<(), ConfigError> + Send + Sync,
+    {
+        self.lifecycle.load_chat(chat_id).await;
+        self.config.update_checked(chat_id, changes, guard).await
+    }
+
     pub async fn update_chat_config(
         &self,
         chat_id: &str,
