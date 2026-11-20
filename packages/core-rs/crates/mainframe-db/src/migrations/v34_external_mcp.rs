@@ -4,7 +4,7 @@ use crate::DbError;
 
 pub(super) fn up(db: &Connection) -> Result<(), DbError> {
     db.execute_batch(
-        "CREATE TABLE external_mcp_clients (
+        "CREATE TABLE IF NOT EXISTS external_mcp_clients (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             token_hash BLOB NOT NULL UNIQUE,
