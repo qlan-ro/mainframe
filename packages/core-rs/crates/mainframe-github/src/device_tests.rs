@@ -1,10 +1,10 @@
 //! GitHub device flow over wiremock: `start()` plus one `poll_once` test per
-//! outcome (`notion_ado_tests.rs`-style mock-server tests).
+//! outcome.
 
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use crate::github_device::{DeviceFlowError, GithubDeviceFlow, PollOutcome};
+use super::{DeviceFlowError, GithubDeviceFlow, PollOutcome};
 
 async fn flow(server: &MockServer, client_id: &'static str) -> GithubDeviceFlow {
     GithubDeviceFlow::with_urls(
@@ -12,6 +12,7 @@ async fn flow(server: &MockServer, client_id: &'static str) -> GithubDeviceFlow 
         format!("{}/login/oauth/access_token", server.uri()),
         client_id,
     )
+    .unwrap()
 }
 
 #[tokio::test]
@@ -224,4 +225,53 @@ async fn poll_without_a_configured_client_id_fails_without_a_request() {
     let err = flow(&server, "").await.poll_once("dc-1").await.unwrap_err();
 
     assert_eq!(err, DeviceFlowError::NotConfigured);
+}
+
+#[tokio::test]
+async fn start_reports_an_oauth_error_by_its_description() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/login/device/code"))
+        .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+            "error": "device_flow_disabled",
+            "error_description": "Device Flow must be explicitly enabled for this App",
+        })))
+        .mount(&server)
+        .await;
+
+    let err = flow(&server, "test-client")
+        .await
+        .start()
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        err,
+        DeviceFlowError::Rejected("Device Flow must be explicitly enabled for this App".into())
+    );
+}
+
+#[tokio::test]
+async fn an_undecodable_poll_names_the_status_but_never_quotes_the_body() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/login/oauth/access_token"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string(r#"{"access_token": "gho_secret", "expires_in": "soon"}"#),
+        )
+        .mount(&server)
+        .await;
+
+    let err = flow(&server, "test-client")
+        .await
+        .poll_once("dc-1")
+        .await
+        .unwrap_err();
+
+    let DeviceFlowError::UnexpectedResponse(message) = &err else {
+        panic!("expected UnexpectedResponse, got {err:?}");
+    };
+    assert!(message.starts_with("HTTP 200"), "{message}");
+    assert!(!message.contains("gho_secret"), "{message}");
 }

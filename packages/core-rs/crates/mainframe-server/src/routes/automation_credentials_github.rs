@@ -1,14 +1,9 @@
-//! GitHub App device flow routes (2026-08-19 provider-connections plan,
-//! Deliverable 3; token-refresh fields added by the GitHub-App-with-refresh
-//! plan) — the one connector that gets a real OAuth flow. `start` and `poll`
-//! each make exactly one call to GitHub; the client (the editor's connect
-//! UI) owns the interval-respecting retry loop. A successful poll persists
-//! the token (plus, for a GitHub App, its refresh token and expiry) under
-//! the well-known `github` credential label and never echoes it back — same
-//! rule as `PUT /api/automation-credentials`. `device/status` is a separate,
-//! no-op-cheap route the UI probes on mount to decide whether to offer the
-//! sign-in-with-GitHub button alongside the always-available token field
-//! (`GithubCredentialConnect.tsx`) — it never touches GitHub.
+//! GitHub App device flow routes. `start` and `poll` each make one call to
+//! GitHub; the editor's connect UI owns the polling loop. A successful poll
+//! stores the token (plus a GitHub App's refresh token and expiry) under the
+//! `github` credential label and never echoes it back, like
+//! `PUT /api/automation-credentials`. `device/status` tells the UI whether to
+//! offer sign-in-with-GitHub beside the token field; it never touches GitHub.
 
 use std::sync::Arc;
 
@@ -19,8 +14,8 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use axum::routing::{get, post};
 use mainframe_automations::AutomationsEngine;
-use mainframe_github::github_device::{
-    DeviceFlowError, DeviceStart, GithubDeviceFlow, PollOutcome,
+use mainframe_github::device::{
+    DeviceFlowError, DeviceStart, GITHUB_APP_CLIENT_ID, GithubDeviceFlow, PollOutcome,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -33,21 +28,24 @@ use crate::routes::body::parse_body;
 const GITHUB_CREDENTIAL_LABEL: &str = "github";
 
 async fn device_flow_status() -> Response {
-    device_flow_status_for(&GithubDeviceFlow::new()).await
+    device_flow_status_for(GITHUB_APP_CLIENT_ID)
 }
 
-/// Split from the handler so a test can pin the unconfigured contract with an
-/// injected client ID instead of depending on this repo's own app never being
-/// registered.
-async fn device_flow_status_for(flow: &GithubDeviceFlow) -> Response {
-    ok(json!({ "configured": flow.is_configured() }))
+/// Takes the client ID so a test can pin the unconfigured contract without
+/// depending on the shipped constant.
+fn device_flow_status_for(client_id: &str) -> Response {
+    ok(json!({ "configured": !client_id.is_empty() }))
 }
 
 async fn start_device_flow(State(ctx): State<Arc<AppCtx>>) -> Response {
     if engine(&ctx).is_none() {
         return unavailable();
     }
-    start_response(GithubDeviceFlow::new().start().await)
+    let result = match GithubDeviceFlow::new() {
+        Ok(flow) => flow.start().await,
+        Err(err) => Err(err),
+    };
+    start_response(result)
 }
 
 fn start_response(result: Result<DeviceStart, DeviceFlowError>) -> Response {
@@ -66,9 +64,9 @@ fn start_response(result: Result<DeviceStart, DeviceFlowError>) -> Response {
 fn device_flow_error_response(err: &DeviceFlowError) -> Response {
     match err {
         DeviceFlowError::NotConfigured => fail(StatusCode::NOT_IMPLEMENTED, err.to_string()),
-        DeviceFlowError::Network(_) | DeviceFlowError::UnexpectedResponse(_) => {
-            fail(StatusCode::BAD_GATEWAY, err.to_string())
-        }
+        DeviceFlowError::Network(_)
+        | DeviceFlowError::Rejected(_)
+        | DeviceFlowError::UnexpectedResponse(_) => fail(StatusCode::BAD_GATEWAY, err.to_string()),
     }
 }
 
@@ -88,11 +86,13 @@ async fn poll_device_flow(State(ctx): State<Arc<AppCtx>>, body: Bytes) -> Respon
             "body must be { deviceCode: string }",
         );
     };
-    poll_and_respond(&GithubDeviceFlow::new(), &parsed.device_code, engine).await
+    match GithubDeviceFlow::new() {
+        Ok(flow) => poll_and_respond(&flow, &parsed.device_code, engine).await,
+        Err(err) => device_flow_error_response(&err),
+    }
 }
 
-/// Shared by the real route and its tests — the real route drives a
-/// `GithubDeviceFlow` pointed at GitHub, tests point one at a mock server.
+/// Split from the handler so tests can point the flow at a mock server.
 async fn poll_and_respond(
     flow: &GithubDeviceFlow,
     device_code: &str,

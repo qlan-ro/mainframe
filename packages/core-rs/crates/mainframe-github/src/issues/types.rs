@@ -1,12 +1,9 @@
-//! DTOs for the GitHub Issues client (todos-plugin GitHub sync): the
-//! domain-shaped read model (`IssueSnapshot`, `IssueFieldTimes`), the write
-//! inputs (`CreateIssue`, `IssuePatch`), the wire-shaped `Raw*` structs GitHub
-//! actually returns, and the failure taxonomy (`GitHubError`) callers match on.
+//! The Issues client's read model, write inputs, the wire shapes GitHub
+//! returns, and the error taxonomy callers match on.
 
 use std::time::Duration;
 
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepoRef {
@@ -14,7 +11,8 @@ pub struct RepoRef {
     pub repo: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum IssueState {
     Open,
     Closed,
@@ -31,27 +29,33 @@ pub struct IssueSnapshot {
     pub updated_at: String,
 }
 
-/// Per-family timestamps read from the issue timeline — `None` when the
-/// family's event (a title rename, or a close/reopen) never happened.
+/// When the title and the open/closed state last changed, read from the
+/// issue timeline. `None` when that change never happened.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IssueFieldTimes {
     pub title_at: Option<String>,
     pub state_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct CreateIssue {
     pub title: String,
     pub body: String,
     pub labels: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+/// Fields to change; `None` leaves a field as it is on GitHub.
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct IssuePatch {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub labels: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<IssueState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub state_reason: Option<String>,
 }
 
@@ -69,102 +73,93 @@ pub enum GitHubError {
     Network(String),
     #[error("request failed ({status}): {message}")]
     Request { status: u16, message: String },
+    /// A successful status with a body or headers the client cannot use.
+    #[error("unexpected response from GitHub: {0}")]
+    UnexpectedResponse(String),
     #[error("{0}")]
     Unavailable(String),
 }
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct RawLabel {
+#[derive(Deserialize)]
+struct RawLabel {
     name: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct RawIssue {
+#[derive(Deserialize)]
+pub(super) struct RawIssue {
     number: u64,
     title: String,
     #[serde(default)]
     body: Option<String>,
     #[serde(default)]
     labels: Vec<RawLabel>,
-    state: String,
+    state: IssueState,
     html_url: String,
     updated_at: String,
-    // GitHub's issues endpoints return pull requests too, marked by this key.
+    /// The issues endpoints return pull requests too, marked by this key.
     #[serde(default)]
     pull_request: Option<serde::de::IgnoredAny>,
 }
 
 impl RawIssue {
-    pub(crate) fn is_pull_request(&self) -> bool {
+    pub(super) fn is_pull_request(&self) -> bool {
         self.pull_request.is_some()
     }
 }
 
 impl From<RawIssue> for IssueSnapshot {
     fn from(raw: RawIssue) -> Self {
-        IssueSnapshot {
+        Self {
             number: raw.number,
             title: raw.title,
             body: raw.body.unwrap_or_default(),
             labels: raw.labels.into_iter().map(|label| label.name).collect(),
-            state: if raw.state == "closed" {
-                IssueState::Closed
-            } else {
-                IssueState::Open
-            },
+            state: raw.state,
             html_url: raw.html_url,
             updated_at: raw.updated_at,
         }
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct TimelineEvent {
-    pub(crate) event: String,
+#[derive(Deserialize)]
+pub(super) struct TimelineEvent {
+    pub(super) event: String,
     #[serde(default)]
-    pub(crate) created_at: Option<String>,
-}
-
-pub(crate) fn patch_body(patch: IssuePatch) -> Value {
-    let mut body = serde_json::Map::new();
-    if let Some(title) = patch.title {
-        body.insert("title".to_string(), json!(title));
-    }
-    if let Some(text) = patch.body {
-        body.insert("body".to_string(), json!(text));
-    }
-    if let Some(labels) = patch.labels {
-        body.insert("labels".to_string(), json!(labels));
-    }
-    if let Some(state) = patch.state {
-        let state = match state {
-            IssueState::Open => "open",
-            IssueState::Closed => "closed",
-        };
-        body.insert("state".to_string(), json!(state));
-    }
-    if let Some(reason) = patch.state_reason {
-        body.insert("state_reason".to_string(), json!(reason));
-    }
-    Value::Object(body)
+    pub(super) created_at: Option<String>,
 }
 
 #[cfg(test)]
-mod golden_tests {
-    use super::{IssuePatch, IssueState, patch_body};
+mod tests {
+    use serde_json::json;
+
+    use super::{IssuePatch, IssueState};
 
     #[test]
-    fn issue_patch_serializes_the_github_wire_fields() {
-        let body = patch_body(IssuePatch {
+    fn issue_patch_serializes_only_the_given_github_fields() {
+        let full = IssuePatch {
             title: Some("Fix sync".into()),
             body: Some("Details".into()),
             labels: Some(vec!["bug".into()]),
             state: Some(IssueState::Closed),
             state_reason: Some("completed".into()),
-        });
+        };
         assert_eq!(
-            body.to_string(),
-            r#"{"body":"Details","labels":["bug"],"state":"closed","state_reason":"completed","title":"Fix sync"}"#
+            serde_json::to_value(full).unwrap(),
+            json!({
+                "title": "Fix sync",
+                "body": "Details",
+                "labels": ["bug"],
+                "state": "closed",
+                "state_reason": "completed",
+            })
+        );
+        let reopen = IssuePatch {
+            state: Some(IssueState::Open),
+            ..IssuePatch::default()
+        };
+        assert_eq!(
+            serde_json::to_value(reopen).unwrap(),
+            json!({ "state": "open" })
         );
     }
 }

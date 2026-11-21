@@ -2,7 +2,7 @@
 //! Every method takes a credential label, leaving tokens with the credential store.
 
 use mainframe_adapter_api::BoxFuture;
-pub use mainframe_github::github_issues::{
+pub use mainframe_github::issues::{
     CreateIssue, GitHubError as GitHubPortError, IssueFieldTimes, IssuePatch, IssueSnapshot,
     IssueState, RepoRef,
 };

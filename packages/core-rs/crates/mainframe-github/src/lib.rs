@@ -1,4 +1,5 @@
-//! GitHub device authorization and Issues REST client shared by daemon features.
+//! GitHub clients shared by daemon features: the GitHub App device flow and
+//! the Issues REST client.
 #![forbid(unsafe_code)]
 #![cfg_attr(
     test,
@@ -10,17 +11,9 @@
     )
 )]
 
-/// User agent for GitHub requests.
+pub mod device;
+pub mod issues;
+pub mod rest;
+
+/// User agent for GitHub requests. The API refuses requests without one.
 pub const USER_AGENT: &str = "mainframe";
-
-pub mod github_device;
-pub mod github_http;
-pub mod github_issues;
-mod github_issues_types;
-
-#[cfg(test)]
-mod github_device_tests;
-#[cfg(test)]
-mod github_issues_errors_tests;
-#[cfg(test)]
-mod github_issues_tests;
