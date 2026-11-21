@@ -9,8 +9,8 @@
       },
       "mode": "changelog",
       "changelogPath": "CHANGELOG.md",
-      "lastReviewedRef": "2.1.329",
-      "lastReviewedAt": "2026-11-20",
+      "lastReviewedRef": "2.1.330",
+      "lastReviewedAt": "2026-11-21",
       "checklist": "docs/research/adapters/claude/CONSUMED-SURFACE.md"
     },
     "codex": {
