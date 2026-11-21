@@ -1,6 +1,6 @@
 //! Token refresh for GitHub-App-issued credentials. GitHub App user tokens
 //! expire after 8h; a pasted PAT (or a plain OAuth App token) never carries
-//! `expires_at` and is passed through untouched — see `github_device.rs`'s
+//! `expires_at` and is passed through untouched — see `mainframe_github::device`'s
 //! module doc for why `client_id` alone is enough to refresh (device flow needs
 //! no secret).
 //!
@@ -18,7 +18,7 @@ use mainframe_runtime::sync::KeyedMutex;
 use serde::Deserialize;
 
 use crate::ports::Clock;
-use mainframe_github::github_device::{GITHUB_APP_CLIENT_ID, TOKEN_URL};
+use mainframe_github::device::{GITHUB_APP_CLIENT_ID, TOKEN_URL};
 
 use super::{CredentialError, CredentialStore, Credentials};
 

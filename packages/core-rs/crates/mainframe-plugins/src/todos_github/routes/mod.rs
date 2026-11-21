@@ -130,7 +130,8 @@ fn port_error_response(err: &GitHubPortError) -> Response {
         GitHubPortError::Auth(_) | GitHubPortError::Unavailable(_) => service_unavailable(err),
         GitHubPortError::RateLimited { .. }
         | GitHubPortError::Network(_)
-        | GitHubPortError::Request { .. } => bad_gateway(err),
+        | GitHubPortError::Request { .. }
+        | GitHubPortError::UnexpectedResponse(_) => bad_gateway(err),
     }
 }
 

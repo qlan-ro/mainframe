@@ -1,10 +1,10 @@
 //! Route-level device-flow tests. The HTTP semantics of `start`/`poll_once`
 //! itself (interval, slow_down, expired_token, access_denied...) are covered
-//! against a mock GitHub in `mainframe-github`'s `github_device_tests`;
+//! against a mock GitHub in `mainframe-github`'s `device_tests`;
 //! this file covers the route's own job: outcome→response mapping and that
 //! a `Connected` poll persists the token without echoing it back.
 
-use mainframe_github::github_device::GithubDeviceFlow;
+use mainframe_github::device::GithubDeviceFlow;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -26,12 +26,7 @@ async fn device_status_reports_unconfigured_when_no_client_id_is_set() {
     // this pins the UNCONFIGURED contract, which must keep holding after an
     // app is registered — a test that breaks the day the product is
     // configured is testing the constant, not the behaviour.
-    let flow = GithubDeviceFlow::with_urls("http://unused/code", "http://unused/token", "");
-
-    assert!(!flow.is_configured());
-    let (status, body) = body_json(device_flow_status_for(&flow).await)
-        .await
-        .unwrap();
+    let (status, body) = body_json(device_flow_status_for("")).await.unwrap();
 
     assert_eq!(status, axum::http::StatusCode::OK);
     assert_eq!(body["data"]["configured"], false);
@@ -39,14 +34,7 @@ async fn device_status_reports_unconfigured_when_no_client_id_is_set() {
 
 #[tokio::test]
 async fn device_status_reports_configured_once_a_client_id_ships() {
-    let flow = GithubDeviceFlow::with_urls(
-        "http://unused/code",
-        "http://unused/token",
-        "Iv23lixxxxxxxxxxxxxx",
-    );
-
-    assert!(flow.is_configured());
-    let (status, body) = body_json(device_flow_status_for(&flow).await)
+    let (status, body) = body_json(device_flow_status_for("Iv23lixxxxxxxxxxxxxx"))
         .await
         .unwrap();
 
@@ -59,7 +47,8 @@ async fn start_reports_not_configured_when_no_client_id_is_set() {
     // Injected, not the shipped constant — a build with no app registered
     // must read as "unavailable" rather than a generic failure, and that has
     // to stay true regardless of whether this repo's own app is configured.
-    let flow = GithubDeviceFlow::with_urls("http://unused/code", "http://unused/token", "");
+    let flow =
+        GithubDeviceFlow::with_urls("http://unused/code", "http://unused/token", "").unwrap();
     let (status, body) = body_json(start_response(flow.start().await)).await.unwrap();
 
     assert_eq!(status, axum::http::StatusCode::NOT_IMPLEMENTED);
@@ -82,7 +71,8 @@ async fn poll_connected_persists_the_token_and_never_echoes_it() {
         format!("{}/device", server.uri()),
         format!("{}/token", server.uri()),
         "test-client",
-    );
+    )
+    .unwrap();
 
     let (status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
         .await
@@ -123,7 +113,8 @@ async fn poll_connected_for_a_github_app_persists_the_refresh_token_and_expiry()
         format!("{}/device", server.uri()),
         format!("{}/token", server.uri()),
         "test-client",
-    );
+    )
+    .unwrap();
 
     let before = epoch_ms_now();
     let (status, _body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
@@ -158,7 +149,8 @@ async fn poll_pending_reports_status_without_touching_the_credential_store() {
         format!("{}/device", server.uri()),
         format!("{}/token", server.uri()),
         "test-client",
-    );
+    )
+    .unwrap();
 
     let (status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
         .await
@@ -185,7 +177,8 @@ async fn poll_slow_down_reports_the_new_interval() {
         format!("{}/device", server.uri()),
         format!("{}/token", server.uri()),
         "test-client",
-    );
+    )
+    .unwrap();
 
     let (_status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
         .await
@@ -214,7 +207,8 @@ async fn poll_expired_and_denied_report_distinct_statuses() {
             format!("{}/device", server.uri()),
             format!("{}/token", server.uri()),
             "test-client",
-        );
+        )
+        .unwrap();
 
         let (_status, body) = body_json(poll_and_respond(&flow, "dc-1", &harness.engine).await)
             .await
