@@ -32,10 +32,10 @@ async fn run_worktree_git(
         })
 }
 
-/// True when `worktreePath` is a usable git worktree: the directory exists AND
-/// carries a `.git` entry. Guards against orphaned stub dirs.
+/// True when `worktree_path` is a usable git worktree: the directory carries a
+/// `.git` entry. Guards against orphaned stub dirs.
 pub fn is_worktree_present(worktree_path: &str) -> bool {
-    Path::new(worktree_path).exists() && Path::new(worktree_path).join(".git").exists()
+    Path::new(worktree_path).join(".git").exists()
 }
 
 /// A project directory need not be a git checkout, so unlike `is_worktree_present`
@@ -103,6 +103,7 @@ pub async fn create_worktree(
             "add",
             "-b",
             branch_name,
+            "--",
             &worktree_path_str,
             base_branch,
         ],
@@ -148,35 +149,37 @@ pub async fn find_branch_worktree(project_path: &str, branch_name: &str) -> Opti
 /// DB access, so a caller whose DB lives behind an async actor (the daemon) can
 /// bridge the project read and the `set_parent_project` writes itself — a
 /// `&ProjectsRepository` can't be held across the async `git worktree list` calls.
+///
+/// Only a main checkout can be a parent. `git worktree list` prints the same
+/// set from every checkout of a repository, so without that rule a linked
+/// worktree registered as a project would claim the main checkout as its child
+/// and the two projects would parent each other.
 pub async fn compute_worktree_parent_links(all_projects: &[Project]) -> Vec<(String, String)> {
-    let path_to_id: HashMap<String, String> = all_projects
+    let parentless: HashMap<&str, &str> = all_projects
         .iter()
-        .map(|p| (p.path.clone(), p.id.clone()))
+        .filter(|p| !has_parent(p))
+        .map(|p| (p.path.as_str(), p.id.as_str()))
         .collect();
 
     let mut links = Vec::new();
-    for project in all_projects {
-        if has_parent(project) {
+    for project in all_projects.iter().filter(|p| !has_parent(p)) {
+        let worktrees = get_worktrees(&project.path).await;
+        let Some((main, linked)) = worktrees.split_first() else {
+            continue;
+        };
+        if main.path != project.path {
             continue;
         }
-        let worktrees = get_worktrees(&project.path).await;
-        for wt in worktrees {
-            if wt.path == project.path {
-                continue;
-            }
-            if let Some(child_id) = path_to_id.get(&wt.path)
-                && let Some(child) = all_projects.iter().find(|p| &p.id == child_id)
-                && !has_parent(child)
-            {
-                links.push((child_id.clone(), project.id.clone()));
+        for wt in linked {
+            if let Some(child_id) = parentless.get(wt.path.as_str()) {
+                links.push(((*child_id).to_string(), project.id.clone()));
             }
         }
     }
     links
 }
 
-/// Truthy check on `project.parentProjectId` (`string | null | undefined`):
-/// a non-null, non-empty string.
+/// A project has a parent when `parent_project_id` holds a non-empty id.
 fn has_parent(project: &Project) -> bool {
     matches!(&project.parent_project_id, Some(Some(p)) if !p.is_empty())
 }
@@ -209,7 +212,7 @@ pub async fn add_worktree_for_branch(
     }
     // No timeout: checkout of a large tree can exceed the default cap (see create_worktree).
     run_worktree_git(
-        &["worktree", "add", worktree_path, branch_name],
+        &["worktree", "add", "--", worktree_path, branch_name],
         project_path,
         GitTimeout::Unbounded,
     )
@@ -217,29 +220,28 @@ pub async fn add_worktree_for_branch(
     Ok(())
 }
 
+/// Remove a chat's worktree and delete its branch, best-effort.
+///
+/// When git refuses the removal, the directory is deleted by hand only if it
+/// is still marked as a linked worktree (a `.git` file pointing at a gitdir),
+/// for instance after its git metadata was pruned. Git also refuses the main
+/// checkout and any directory that is not a worktree; those, and the branch,
+/// are left alone, because `worktree_path` and `branch_name` arrive from a
+/// client through attach-worktree.
 pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_name: &str) {
-    if run_worktree_git(
-        &["worktree", "remove", worktree_path, "--force"],
+    if let Err(error) = run_worktree_git(
+        &["worktree", "remove", "--force", "--", worktree_path],
         project_path,
         GitTimeout::Default,
     )
     .await
-    .is_err()
+        && !remove_orphaned_worktree_dir(project_path, worktree_path, &error).await
     {
-        // best-effort: worktree dir may already be gone
-        if let Err(error) = tokio::fs::remove_dir_all(worktree_path).await {
-            tracing::warn!(%error, path = %worktree_path, "failed to remove worktree directory");
-        }
-        // best-effort
-        if let Err(error) =
-            run_worktree_git(&["worktree", "prune"], project_path, GitTimeout::Default).await
-        {
-            tracing::warn!(%error, path = %project_path, operation = "worktree_prune", "failed to prune removed worktree references");
-        }
+        return;
     }
     // best-effort: branch may not exist or may still be checked out elsewhere
     if let Err(error) = run_worktree_git(
-        &["branch", "-D", branch_name],
+        &["branch", "-D", "--", branch_name],
         project_path,
         GitTimeout::Default,
     )
@@ -247,6 +249,49 @@ pub async fn remove_worktree(project_path: &str, worktree_path: &str, branch_nam
     {
         tracing::warn!(%error, path = %project_path, operation = "branch_delete", "failed to delete worktree branch");
     }
+}
+
+/// Returns false when the directory is not a linked worktree and was kept.
+async fn remove_orphaned_worktree_dir(
+    project_path: &str,
+    worktree_path: &str,
+    git_error: &WorktreeError,
+) -> bool {
+    // expected: an unreadable path reads as present, so the guard below decides
+    let present = tokio::fs::try_exists(worktree_path).await.unwrap_or(true);
+    if present {
+        if Path::new(worktree_path) == Path::new(project_path)
+            || !is_linked_worktree_dir(worktree_path).await
+        {
+            tracing::warn!(error = %git_error, path = %worktree_path, "git refused to remove a directory that is not a linked worktree; leaving it in place");
+            return false;
+        }
+        if let Err(error) = tokio::fs::remove_dir_all(worktree_path).await {
+            tracing::warn!(%error, path = %worktree_path, "failed to remove worktree directory");
+        }
+    }
+    // Drop the registration git may still hold for the removed directory.
+    if let Err(error) =
+        run_worktree_git(&["worktree", "prune"], project_path, GitTimeout::Default).await
+    {
+        tracing::warn!(%error, path = %project_path, operation = "worktree_prune", "failed to prune removed worktree references");
+    }
+    true
+}
+
+/// A linked worktree's `.git` is a file holding `gitdir: <path>`; a main
+/// checkout's is a directory.
+async fn is_linked_worktree_dir(path: &str) -> bool {
+    let marker = Path::new(path).join(".git");
+    let Ok(meta) = tokio::fs::symlink_metadata(&marker).await else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    tokio::fs::read_to_string(&marker)
+        .await
+        .is_ok_and(|content| content.starts_with("gitdir:"))
 }
 
 #[cfg(test)]

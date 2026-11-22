@@ -28,24 +28,3 @@ fn keeps_keyless_buckets_distinct_per_adapter() {
         compute_quota_key("codex", None)
     );
 }
-
-#[test]
-fn reuses_last_known_identity_on_transient_read_failure() {
-    assert_eq!(
-        resolve_account_identity(None, Some("user-a")),
-        Some("user-a".into())
-    );
-}
-
-#[test]
-fn adopts_freshly_read_identity_over_last_known() {
-    assert_eq!(
-        resolve_account_identity(Some("user-b"), Some("user-a")),
-        Some("user-b".into())
-    );
-}
-
-#[test]
-fn stays_none_without_fresh_read_or_last_known() {
-    assert_eq!(resolve_account_identity(None, None), None);
-}

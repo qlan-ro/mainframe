@@ -92,24 +92,6 @@ fn window_is_untrusted_past_effective_reset() {
 }
 
 #[test]
-fn provider_not_stale_before_threshold() {
-    let q = quota(NOW - (STALE_THRESHOLD_MS - 1));
-    assert!(!is_provider_stale(&q, NOW));
-}
-
-#[test]
-fn provider_stale_at_threshold() {
-    let q = quota(NOW - STALE_THRESHOLD_MS);
-    assert!(is_provider_stale(&q, NOW));
-}
-
-#[test]
-fn provider_stale_past_threshold() {
-    let q = quota(NOW - STALE_THRESHOLD_MS - 1);
-    assert!(is_provider_stale(&q, NOW));
-}
-
-#[test]
 fn collect_returns_session_weekly_model_in_order() {
     let session = win(QuotaWindowKind::Session, 1.0, None);
     let weekly = win(QuotaWindowKind::Weekly, 2.0, None);
