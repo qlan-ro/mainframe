@@ -4,7 +4,7 @@ version = "2.0.0"
 description = "Mainframe Tauri shell — window lifecycle, sidecar supervision, and IPC bridge"
 authors = ["Mainframe Contributors"]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.90"
 
 [lib]
 name = "app_tauri_lib"
@@ -60,7 +60,7 @@ mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]
 mcp-bridge-qa = ["mcp-bridge"]
 
 # macOS-only deps for the preview child-webview native snapshot (Task 5).
-# Pin to the same major versions as tauri 2.11.2 itself to avoid duplicate
+# Pin to the same major versions as tauri 2.12.7 itself to avoid duplicate
 # crate copies and type-incompatibility when casting the WKWebView pointer.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
