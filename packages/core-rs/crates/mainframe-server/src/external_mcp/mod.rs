@@ -1,3 +1,4 @@
+mod answer;
 mod auth;
 #[cfg(test)]
 mod auth_tests;
@@ -9,9 +10,15 @@ mod input;
 mod mutations;
 #[cfg(test)]
 mod permission_tests;
+mod prompt;
+#[cfg(test)]
+mod prompt_tests;
 mod reads;
 #[cfg(test)]
 mod test_support;
+mod wait;
+#[cfg(test)]
+mod wait_tests;
 
 use std::{net::SocketAddr, sync::Arc};
 

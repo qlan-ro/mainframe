@@ -1,7 +1,10 @@
-use crate::{chat_test_support::StubAdapter, ctx::AppCtx};
-use mainframe_types::{chat::NewChat, settings::ExecutionMode};
+use crate::{
+    chat_test_support::{LiveStub, StubAdapter},
+    ctx::AppCtx,
+};
+use mainframe_types::{adapter::ControlRequest, chat::NewChat, settings::ExecutionMode};
 use serde_json::{Value, json};
-use std::{net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 pub struct Server {
     pub base: String,
@@ -10,16 +13,30 @@ pub struct Server {
     pub other_project: String,
     pub chat: String,
     pub other_chat: String,
+    live: Option<Arc<LiveStub>>,
     task: tokio::task::JoinHandle<()>,
     _dir: tempfile::TempDir,
 }
 
 impl Server {
     pub async fn start() -> Self {
+        Self::with_adapter(StubAdapter::new("claude", false)).await
+    }
+
+    /// A server whose chats really start: sends are accepted, and `live()`
+    /// raises session events and records the answers the session received.
+    pub async fn start_live() -> Self {
+        Self::with_adapter(StubAdapter::live("claude")).await
+    }
+
+    pub fn live(&self) -> &LiveStub {
+        self.live.as_deref().unwrap()
+    }
+
+    async fn with_adapter(adapter: Arc<StubAdapter>) -> Self {
+        let live = adapter.live.clone();
         let ctx = AppCtx::test_ctx();
-        ctx.core
-            .adapter_registry
-            .register(StubAdapter::new("claude", false));
+        ctx.core.adapter_registry.register(adapter);
         ctx.core
             .adapter_registry
             .configure_refresh(Arc::new(Refresh));
@@ -48,17 +65,41 @@ impl Server {
             other_project,
             chat,
             other_chat,
+            live,
             task,
             _dir: dir,
         }
     }
 
     pub async fn grant(&self, access: &str, ceiling: &str) -> Value {
-        let response = reqwest::Client::new().post(format!("{}/api/external-mcp/clients", self.base))
-            .json(&json!({"name":"Voice test","projectIds":[self.project],"access":access,"maxPermissionMode":ceiling}))
-            .send().await.unwrap();
+        let response = self.create_client(access, ceiling, false).await;
         assert_eq!(response.status(), 200);
         response.json::<Value>().await.unwrap()["data"].clone()
+    }
+
+    /// The key of a control client that may also answer prompts.
+    pub async fn answering_key(&self, ceiling: &str) -> String {
+        let response = self.create_client("control", ceiling, true).await;
+        assert_eq!(response.status(), 200);
+        let grant = response.json::<Value>().await.unwrap();
+        grant["data"]["token"].as_str().unwrap().to_owned()
+    }
+
+    pub async fn create_client(
+        &self,
+        access: &str,
+        ceiling: &str,
+        answers: bool,
+    ) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(format!("{}/api/external-mcp/clients", self.base))
+            .json(
+                &json!({"name":"Voice test","projectIds":[self.project],"access":access,
+                "maxPermissionMode":ceiling,"answerPrompts":answers}),
+            )
+            .send()
+            .await
+            .unwrap()
     }
 
     pub async fn rpc(&self, token: &str, method: &str, params: Value) -> Value {
@@ -147,4 +188,29 @@ impl mainframe_adapter_api::RefreshDeps for Refresh {
         })
     }
     fn emit_event(&self, _: mainframe_types::events::DaemonEvent) {}
+}
+
+pub fn request(id: &str, tool: &str, input: Value) -> ControlRequest {
+    ControlRequest {
+        request_id: id.into(),
+        tool_name: tool.into(),
+        tool_use_id: format!("toolu_{id}"),
+        input: serde_json::from_value::<HashMap<String, Value>>(input).unwrap(),
+        suggestions: Vec::new(),
+        decision_reason: None,
+        options: None,
+    }
+}
+
+/// Yields until `done`, for state another task on this runtime is about to
+/// reach; fails the test when it never does.
+pub async fn until(mut done: impl FnMut() -> bool) {
+    let reached = async {
+        while !done() {
+            tokio::task::yield_now().await;
+        }
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(5), reached)
+        .await
+        .unwrap();
 }

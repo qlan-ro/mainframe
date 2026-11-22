@@ -25,6 +25,7 @@ async fn external_client_initializes_without_a_running_parent_chat() {
             "project_list",
             "chat_list",
             "chat_read",
+            "chat_wait",
             "chat_launch",
             "chat_send",
             "chat_interrupt",

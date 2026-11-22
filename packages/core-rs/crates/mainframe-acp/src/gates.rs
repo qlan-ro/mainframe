@@ -39,7 +39,7 @@ pub const OPTION_REJECT_ONCE: &str = "reject-once";
 /// it knows them), so no selectable answer exists; Claude's triad here would
 /// make the gate approvable by an id the adapter never named, which Codex
 /// resolves as an empty answer string it accepts as a real choice.
-fn offered_options(request: &ControlRequest) -> Vec<PermissionOption> {
+pub fn offered_options(request: &ControlRequest) -> Vec<PermissionOption> {
     match &request.options {
         Some(options) if !options.is_empty() => options.clone(),
         Some(_) => vec![reject_option()],

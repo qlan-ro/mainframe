@@ -61,7 +61,7 @@ pub async fn capabilities(ctx: &AppCtx, client: &ExternalMcpClient) -> Result<Va
         .collect();
     Ok(
         json!({"client":client, "adapters":adapters, "localOnly":true,
-        "permissionPrompts":"Answer in Mainframe", "launchDefaultPermissionMode":"default"}),
+        "permissionPrompts": if super::definitions::allowed(client, super::definitions::ANSWER_TOOL) { "Answer with chat_answer, relaying the user's decision" } else { "Answer in Mainframe" }, "launchDefaultPermissionMode":"default"}),
     )
 }
 

@@ -14,6 +14,7 @@ fn credentials_survive_restart_and_revocation_removes_access() {
         project_ids: vec!["p".into()],
         access: ExternalMcpAccess::Control,
         max_permission_mode: ExecutionMode::AcceptEdits,
+        answer_prompts: true,
     };
     let client = db.external_mcp.create(&input, &[7; 32]).unwrap();
     drop(db);
@@ -21,6 +22,7 @@ fn credentials_survive_restart_and_revocation_removes_access() {
     let authenticated = db.external_mcp.authenticate(&[7; 32]).unwrap().unwrap();
     assert_eq!(authenticated.id, client.id);
     assert_eq!(authenticated.project_ids, vec!["p"]);
+    assert!(authenticated.answer_prompts);
     assert_eq!(
         authenticated.max_permission_mode,
         ExecutionMode::AcceptEdits
@@ -45,4 +47,24 @@ fn upgrades_an_existing_database_without_losing_projects() {
     let db = DatabaseManager::open(&path).unwrap();
     assert_eq!(db.projects.get("p").unwrap().unwrap().name, "Kept");
     assert!(db.external_mcp.list().unwrap().is_empty());
+}
+
+#[test]
+fn a_client_created_before_prompt_answering_existed_cannot_answer_prompts() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("test.db");
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    crate::migrations::run_migrations(&conn, 34).unwrap();
+    conn.execute(
+        "INSERT INTO external_mcp_clients
+         (id, name, token_hash, project_ids, access, max_permission_mode, created_at)
+         VALUES ('c', 'Old', x'0909', '[\"p\"]', 'control', 'yolo', 'now')",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+    let db = DatabaseManager::open(&path).unwrap();
+    let clients = db.external_mcp.list().unwrap();
+    assert_eq!(clients[0].name, "Old");
+    assert!(!clients[0].answer_prompts);
 }

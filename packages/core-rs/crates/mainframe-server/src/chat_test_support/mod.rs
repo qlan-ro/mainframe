@@ -5,11 +5,12 @@
 //! touching a real CLI process.
 #![cfg(test)]
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{
-    Adapter, AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput,
+    Adapter, AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput, SessionSink,
     StopBackgroundTaskResult,
 };
 use mainframe_types::adapter::{
@@ -40,6 +41,28 @@ pub(crate) struct StubAdapter {
     /// (shared across every session it hands out) — lets a caller prove a
     /// project/chat teardown actually stopped a live process.
     pub(crate) kills: Arc<AtomicUsize>,
+    /// Set by [`StubAdapter::live`]: sessions stay spawned, keep their sink so
+    /// a test can raise session events, and record permission answers.
+    pub(crate) live: Option<Arc<LiveStub>>,
+}
+
+/// What a live stub's sessions share with the test driving them.
+#[derive(Default)]
+pub(crate) struct LiveStub {
+    sinks: Mutex<HashMap<String, Arc<dyn SessionSink>>>,
+    answers: Mutex<Vec<ControlResponse>>,
+}
+
+impl LiveStub {
+    /// The sink of the session spawned for `chat_id`.
+    pub(crate) fn sink(&self, chat_id: &str) -> Arc<dyn SessionSink> {
+        self.sinks.lock().unwrap()[chat_id].clone()
+    }
+
+    /// Every permission answer the sessions received, oldest first.
+    pub(crate) fn answers(&self) -> Vec<ControlResponse> {
+        self.answers.lock().unwrap().clone()
+    }
 }
 
 impl StubAdapter {
@@ -51,6 +74,19 @@ impl StubAdapter {
             tool_reader: None,
             conflicts: Vec::new(),
             kills: Arc::new(AtomicUsize::new(0)),
+            live: None,
+        })
+    }
+
+    pub(crate) fn live(id: &str) -> Arc<Self> {
+        Arc::new(Self {
+            id: id.to_string(),
+            no_persistence: false,
+            transcript_location: None,
+            tool_reader: None,
+            conflicts: Vec::new(),
+            kills: Arc::new(AtomicUsize::new(0)),
+            live: Some(Arc::default()),
         })
     }
 }
@@ -107,20 +143,26 @@ impl Adapter for StubAdapter {
             format!("stub-sess-{n}")
         });
         Arc::new(StubSession {
+            chat_id: options.mainframe_chat_id,
             id,
             adapter_id: self.id.clone(),
             project_path: options.project_path,
             kills: self.kills.clone(),
+            live: self.live.clone(),
+            spawned: AtomicBool::new(false),
         })
     }
     fn kill_all(&self) {}
 }
 
 struct StubSession {
+    chat_id: String,
     id: String,
     adapter_id: String,
     project_path: String,
     kills: Arc<AtomicUsize>,
+    live: Option<Arc<LiveStub>>,
+    spawned: AtomicBool,
 }
 
 fn ok<'a>() -> BoxFuture<'a, Result<(), AdapterError>> {
@@ -138,7 +180,7 @@ impl AdapterSession for StubSession {
         &self.project_path
     }
     fn is_spawned(&self) -> bool {
-        false
+        self.spawned.load(Ordering::SeqCst)
     }
     fn spawn(
         &self,
@@ -148,6 +190,13 @@ impl AdapterSession for StubSession {
         Box::pin(async move {
             if let Some(sink) = sink {
                 sink.on_init(&self.id);
+                if let Some(live) = &self.live {
+                    live.sinks
+                        .lock()
+                        .unwrap()
+                        .insert(self.chat_id.clone(), sink);
+                    self.spawned.store(true, Ordering::SeqCst);
+                }
             }
             Ok(AdapterProcess {
                 id: self.id.clone(),
@@ -177,8 +226,11 @@ impl AdapterSession for StubSession {
     }
     fn respond_to_permission(
         &self,
-        _response: ControlResponse,
+        response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        if let Some(live) = &self.live {
+            live.answers.lock().unwrap().push(response);
+        }
         ok()
     }
     fn interrupt(&self) -> BoxFuture<'_, Result<(), AdapterError>> {

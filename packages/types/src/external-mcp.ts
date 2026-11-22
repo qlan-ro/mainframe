@@ -7,6 +7,8 @@ export interface CreateExternalMcpClient {
   projectIds: string[];
   access: ExternalMcpAccess;
   maxPermissionMode: ExecutionMode;
+  /** Lets a control client answer permission prompts, questions and plan approvals. */
+  answerPrompts: boolean;
 }
 
 export interface ExternalMcpClient extends CreateExternalMcpClient {

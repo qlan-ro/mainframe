@@ -7,12 +7,13 @@ async fn read_only_clients_cannot_invoke_control_tools_even_when_named_directly(
     let grant = s.grant("read", "default").await;
     let token = grant["token"].as_str().unwrap();
     let list = s.rpc(token, "tools/list", json!({})).await;
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 4);
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 5);
     for tool in [
         "chat_launch",
         "chat_send",
         "chat_interrupt",
         "chat_configure",
+        "chat_answer",
     ] {
         let result = s
             .call(
@@ -43,7 +44,7 @@ async fn project_scope_hides_other_projects_and_chats() {
         list["result"]["structuredContent"]["error"]["code"],
         "project_not_found"
     );
-    for tool in ["chat_read", "chat_interrupt", "chat_configure"] {
+    for tool in ["chat_read", "chat_wait", "chat_interrupt", "chat_configure"] {
         let result = s.call(token, tool, json!({"chatId":s.other_chat})).await;
         assert_eq!(
             result["result"]["structuredContent"]["error"]["code"],

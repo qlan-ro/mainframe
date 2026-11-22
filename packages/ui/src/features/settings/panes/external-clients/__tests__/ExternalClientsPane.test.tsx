@@ -14,6 +14,7 @@ const client = {
   projectIds: ['project-one'],
   access: 'read' as const,
   maxPermissionMode: 'default' as const,
+  answerPrompts: false,
   createdAt: '2026-11-19T12:00:00Z',
   lastUsedAt: null,
 };
@@ -42,10 +43,39 @@ it('requires a name and project, defaults to read-only, then dismisses the one-t
     projectIds: ['project-one'],
     access: 'read',
     maxPermissionMode: 'default',
+    answerPrompts: false,
   });
   fireEvent.click(screen.getByRole('button', { name: 'Done' }));
   expect(screen.queryByLabelText('Client key')).not.toBeInTheDocument();
   expect(screen.getByTestId('external-clients-row-client-one')).toHaveTextContent('Read only');
+});
+
+it('offers prompt answering only to control clients and sends the choice', async () => {
+  vi.mocked(createExternalMcpClient).mockResolvedValue({
+    client: { ...client, access: 'control', answerPrompts: true },
+    token: 'test-only-key',
+  });
+  render(<ExternalClientsPane port={32084} />);
+  fireEvent.change(await screen.findByLabelText('Client name'), { target: { value: 'Voice' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Demo' }));
+  expect(screen.queryByRole('checkbox', { name: 'Answer prompts' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('combobox', { name: 'Access' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'Control chats' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Answer prompts' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add client' }));
+  await waitFor(() =>
+    expect(createExternalMcpClient).toHaveBeenCalledWith(32084, {
+      name: 'Voice',
+      projectIds: ['project-one'],
+      access: 'control',
+      maxPermissionMode: 'default',
+      answerPrompts: true,
+    }),
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Done' }));
+  expect(screen.getByTestId('external-clients-row-client-one')).toHaveTextContent(
+    'Control up to Interactive · answers prompts',
+  );
 });
 
 it('revokes the selected client only after confirming', async () => {

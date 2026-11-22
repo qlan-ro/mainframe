@@ -27,13 +27,15 @@ impl ExternalMcpRepository {
             project_ids: input.project_ids.clone(),
             access: input.access,
             max_permission_mode: input.max_permission_mode,
+            answer_prompts: input.answer_prompts,
             created_at: now_iso8601(),
             last_used_at: None,
         };
         self.db.execute(
             "INSERT INTO external_mcp_clients
-             (id, name, token_hash, project_ids, access, max_permission_mode, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+             (id, name, token_hash, project_ids, access, max_permission_mode, answer_prompts,
+              created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             params![
                 client.id,
                 client.name,
@@ -41,6 +43,7 @@ impl ExternalMcpRepository {
                 serde_json::to_string(&client.project_ids)?,
                 enum_to_db_string(&client.access)?,
                 enum_to_db_string(&client.max_permission_mode)?,
+                client.answer_prompts,
                 client.created_at
             ],
         )?;
@@ -89,6 +92,7 @@ impl FromRow for ExternalMcpClient {
             project_ids: serde_json::from_str(&row.get::<_, String>("project_ids")?)?,
             access: serde_json::from_value(serde_json::Value::String(access))?,
             max_permission_mode: serde_json::from_value(serde_json::Value::String(mode))?,
+            answer_prompts: row.get::<_, i64>("answer_prompts")? != 0,
             created_at: row.get("created_at")?,
             last_used_at: row.get("last_used_at")?,
         })
