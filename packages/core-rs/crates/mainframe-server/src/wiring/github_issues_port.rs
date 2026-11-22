@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use mainframe_automations::credentials::CredentialStore;
-use mainframe_github::github_issues::GitHubIssuesClient;
+use mainframe_github::issues::GitHubIssuesClient;
 use mainframe_plugins::{
     BoxFuture, CreateIssue, GitHubIssues, GitHubPortError, IssueFieldTimes, IssuePatch,
     IssueSnapshot, RepoRef,

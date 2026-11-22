@@ -4,7 +4,7 @@
 //! action other than run_command. `github.create_pr` lives here;
 //! `github.list_prs` is `github_list_prs.rs`.
 
-use mainframe_github::github_http::{GITHUB_API, github_headers};
+use mainframe_github::rest::{GITHUB_API, github_request};
 use mainframe_types::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -173,7 +173,7 @@ impl Action for GithubCreatePrAction {
             let input: CreatePrInput = parse_input("github.create_pr", params)?;
             validate_repo("github.create_pr", &input.repo)?;
 
-            let mut request = github_headers(
+            let mut request = github_request(
                 self.client
                     .as_ref()
                     .map_err(|err| ActionError(format!("{OP} failed: {err}")))?

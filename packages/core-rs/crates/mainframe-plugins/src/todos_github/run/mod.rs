@@ -159,9 +159,10 @@ async fn reconcile_pair(
     Ok(true)
 }
 
-/// `NotFound`/`Moved` and `Request` are per-pair failures the run survives;
-/// everything else (auth, rate limiting, network, capability unavailable)
-/// stops the run so unreached pairs and already-written baselines stay put.
+/// `NotFound`/`Moved`, `Request` and `UnexpectedResponse` are per-pair
+/// failures the run survives; everything else (auth, rate limiting, network,
+/// capability unavailable) stops the run so unreached pairs and
+/// already-written baselines stay put.
 async fn handle_port_error(
     ctx: &PluginContext,
     pair: &store::Pair,
@@ -179,7 +180,7 @@ async fn handle_port_error(
             .map_err(internal)?;
             Ok(false)
         }
-        GitHubPortError::Request { .. } => {
+        GitHubPortError::Request { .. } | GitHubPortError::UnexpectedResponse(_) => {
             store::set_pair_state(ctx, &pair.todo_id, "errored", Some(&err.to_string()))
                 .await
                 .map_err(internal)?;

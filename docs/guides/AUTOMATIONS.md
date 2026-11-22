@@ -249,9 +249,9 @@ payloads, PR titles) can't inject shell commands.
 Sign-in with GitHub needs a registered **GitHub App** (not an OAuth App —
 only a GitHub App issues the expiring, refreshable user tokens this
 connector relies on) with device flow enabled and token expiration left
-**on**. Until one is registered, `GITHUB_APP_CLIENT_ID` in
-`packages/core-rs/crates/mainframe-automations/src/github_device.rs` is
-empty, `GET .../device/status` reports `{configured: false}`, and
+**on**. If `GITHUB_APP_CLIENT_ID` in
+`packages/core-rs/crates/mainframe-github/src/device.rs` is empty,
+`GET .../device/status` reports `{configured: false}`, and
 `POST .../device/start` answers 501 if reached directly — the editor shows
 only the pasted-token field rather than failing obscurely or offering a
 button that can't work. This degrades gracefully: nothing about GitHub

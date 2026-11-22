@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use mainframe_github::github_http::{GITHUB_API, github_headers};
+use mainframe_github::rest::{GITHUB_API, github_request};
 use mainframe_types::BoxFuture;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -109,7 +109,7 @@ impl Action for GithubListPrsAction {
             let input: ListPrsInput = parse_input("github.list_prs", params)?;
             let query = format!("is:pr state:open author:{}", input.author);
 
-            let mut request = github_headers(
+            let mut request = github_request(
                 self.client
                     .as_ref()
                     .map_err(|err| ActionError(format!("{OP} failed: {err}")))?

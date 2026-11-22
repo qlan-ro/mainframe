@@ -1,17 +1,13 @@
-//! GitHubIssuesClient over wiremock: list/get/timeline/create/update, the
-//! close-as-completed and reopen state transitions, and the failure
-//! taxonomy the todos-plugin sync engine depends on (404/301/401/403+429/
-//! network — AC25, AC29, AC30). Every call takes the token explicitly; the
-//! last test asserts no error's `Display`/`Debug` output ever carries it.
+//! GitHubIssuesClient over wiremock: list, get, timeline, create and update,
+//! including pagination and the close and reopen transitions. Failure
+//! mapping lives in `issues_errors_tests.rs`.
 
 use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::github_issues::{CreateIssue, GitHubIssuesClient, IssuePatch, IssueState, RepoRef};
+use super::{CreateIssue, GitHubIssuesClient, IssuePatch, IssueState, RepoRef};
 
-/// The client under test. `with_base_url` is fallible only on TLS backend
-/// init failure, which a test host that just started a mock server cannot hit.
 pub(super) fn client(base_url: impl Into<String>) -> GitHubIssuesClient {
     GitHubIssuesClient::with_base_url(base_url).expect("the test client must build")
 }
