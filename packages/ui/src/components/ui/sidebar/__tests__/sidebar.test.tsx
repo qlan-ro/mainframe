@@ -73,6 +73,7 @@ describe('Sidebar', () => {
 
     const panel = screen.getByTestId('panel');
     expect(panel).toHaveAttribute('data-state', 'expanded');
-    expect(panel).toHaveStyle({ width: 'var(--sidebar-width)' });
+    // The declared width, not the computed one: jsdom resolves var() in computed styles.
+    expect(panel.style.width).toBe('var(--sidebar-width)');
   });
 });
