@@ -5,8 +5,6 @@
 
 use mainframe_types::adapter::{ProviderQuota, QuotaWindow, QuotaWindowKind};
 
-#[cfg(test)]
-use super::constants::STALE_THRESHOLD_MS;
 use super::constants::{SESSION_WINDOW_DURATION_MS, WEEKLY_WINDOW_DURATION_MS};
 
 fn window_duration_ms(kind: QuotaWindowKind) -> i64 {
@@ -30,13 +28,6 @@ pub(crate) fn effective_reset_at(window: &QuotaWindow, observed_at: i64) -> i64 
 #[must_use]
 pub(crate) fn is_window_trusted(window: &QuotaWindow, observed_at: i64, now: i64) -> bool {
     now < effective_reset_at(window, observed_at)
-}
-
-/// Staleness is a separate signal from expiry: it can fire well before a window's ceiling.
-#[must_use]
-#[cfg(test)]
-pub(crate) fn is_provider_stale(quota: &ProviderQuota, now: i64) -> bool {
-    now - quota.observed_at >= STALE_THRESHOLD_MS
 }
 
 /// Session, weekly, then the model windows in order — omitting absent universal windows.

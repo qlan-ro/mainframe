@@ -13,7 +13,6 @@ async fn starts_a_watcher_when_first_client_subscribes() {
     let svc = FileWatcherService::new(|_| {});
     svc.subscribe(file.to_str().unwrap(), file.to_str().unwrap());
     assert!(svc.is_watching(file.to_str().unwrap()));
-    svc.stop_all();
 }
 
 #[tokio::test]
@@ -29,7 +28,6 @@ async fn does_not_start_a_second_watcher_for_the_same_path() {
     // Still watching after one unsubscribe (ref_count was 2).
     svc.unsubscribe(p);
     assert!(svc.is_watching(p));
-    svc.stop_all();
 }
 
 #[tokio::test]
@@ -57,17 +55,6 @@ async fn keeps_watcher_when_there_are_remaining_subscribers() {
     assert!(svc.is_watching(p));
     svc.unsubscribe(p);
     assert!(!svc.is_watching(p));
-}
-
-#[tokio::test]
-async fn stop_all_closes_all_watchers() {
-    let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("a.ts");
-    touch(&file);
-    let svc = FileWatcherService::new(|_| {});
-    svc.subscribe(file.to_str().unwrap(), file.to_str().unwrap());
-    svc.stop_all();
-    assert!(!svc.is_watching(file.to_str().unwrap()));
 }
 
 #[tokio::test]
@@ -118,7 +105,6 @@ async fn keeps_firing_after_atomic_rename_over() {
         Some(DaemonEvent::FileChanged { path: p }) => assert_eq!(p, path),
         other => panic!("expected file:changed after second atomic rename, got {other:?}"),
     }
-    svc.stop_all();
 }
 
 /// An atomic rename must not disturb ref-counting, so tear-down still
@@ -173,10 +159,83 @@ async fn broadcasts_file_changed_on_real_modify() {
     std::fs::write(&file, b"changed").unwrap();
 
     let got = wait_for_event(&mut rx).await;
-    svc.stop_all();
 
     match got {
         Some(DaemonEvent::FileChanged { path: p }) => assert_eq!(p, path),
         other => panic!("expected a file:changed event for the modified file, got {other:?}"),
     }
+}
+
+/// Subscribers racing on one path must each hold a reference: the watcher
+/// survives until every one of them has left.
+#[test]
+fn concurrent_subscribes_to_one_path_each_hold_a_reference() {
+    const SUBSCRIBERS: usize = 8;
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("shared.txt");
+    touch(&file);
+    let path = file.to_str().unwrap();
+    let svc = FileWatcherService::new(|_| {});
+    let barrier = std::sync::Barrier::new(SUBSCRIBERS);
+
+    std::thread::scope(|scope| {
+        for _ in 0..SUBSCRIBERS {
+            scope.spawn(|| {
+                barrier.wait();
+                svc.subscribe(path, path);
+            });
+        }
+    });
+
+    for _ in 1..SUBSCRIBERS {
+        svc.unsubscribe(path);
+    }
+    assert!(svc.is_watching(path), "one subscriber is still attached");
+    svc.unsubscribe(path);
+    assert!(!svc.is_watching(path));
+}
+
+/// Tearing a watch down while its file keeps changing must not hang: the
+/// watcher is dropped with the map lock released. Detached named threads let
+/// a regression fail on the deadline instead of hanging the test run.
+#[test]
+fn unsubscribing_while_the_file_changes_does_not_hang() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("busy.txt");
+    touch(&file);
+    let path = file.to_str().unwrap().to_string();
+    let svc = Arc::new(FileWatcherService::new(|_| {}));
+    let stop = Arc::new(AtomicBool::new(false));
+
+    let writer = {
+        let stop = Arc::clone(&stop);
+        std::thread::Builder::new()
+            .name("watch-test-writer".into())
+            .spawn(move || {
+                let mut n = 0u64;
+                while !stop.load(Ordering::Relaxed) {
+                    n += 1;
+                    std::fs::write(&file, n.to_string()).unwrap();
+                }
+            })
+            .unwrap()
+    };
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("watch-test-churn".into())
+        .spawn(move || {
+            for _ in 0..200 {
+                svc.subscribe(&path, &path);
+                std::thread::sleep(Duration::from_millis(2));
+                svc.unsubscribe(&path);
+            }
+            let _ = done_tx.send(());
+        })
+        .unwrap();
+
+    let finished = done_rx.recv_timeout(Duration::from_secs(30));
+    stop.store(true, Ordering::Relaxed);
+    writer.join().unwrap();
+    assert!(finished.is_ok(), "subscribe/unsubscribe hung");
 }

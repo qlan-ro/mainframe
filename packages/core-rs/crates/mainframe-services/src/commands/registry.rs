@@ -6,7 +6,8 @@ use mainframe_types::command::CustomCommand;
 /// stays self-contained.
 const LAUNCH_CONFIG_PROMPT: &str = include_str!("prompts/launch-config.md");
 
-fn mainframe_commands() -> Vec<CustomCommand> {
+/// The commands Mainframe itself provides, offered alongside the agent's own.
+pub fn get_mainframe_commands() -> Vec<CustomCommand> {
     vec![CustomCommand {
         name: "launch-config".to_string(),
         description: "Generate .mainframe/launch.json for this project".to_string(),
@@ -15,12 +16,10 @@ fn mainframe_commands() -> Vec<CustomCommand> {
     }]
 }
 
-pub fn get_mainframe_commands() -> Vec<CustomCommand> {
-    mainframe_commands()
-}
-
 pub fn find_mainframe_command(name: &str) -> Option<CustomCommand> {
-    mainframe_commands().into_iter().find(|c| c.name == name)
+    get_mainframe_commands()
+        .into_iter()
+        .find(|c| c.name == name)
 }
 
 #[cfg(test)]

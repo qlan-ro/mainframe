@@ -3,9 +3,14 @@
 //! of the file and avoids single-file watch failures on macOS FSEvents. A 200 ms
 //! debounce emits one trailing `file:changed` event per burst. Reference counts
 //! keep each watcher alive until its final subscriber leaves.
+//!
+//! A watcher is never dropped while the map lock is held. On macOS, dropping
+//! an FSEvents watcher waits for its run loop to go idle, and the run loop's
+//! event callback takes the map lock, so dropping under the lock can hang.
 
 use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
@@ -24,7 +29,7 @@ struct WatchEntry {
     // Held for its lifetime: dropping the watcher stops it (the field is never
     // read directly, but must outlive the subscription).
     _watcher: notify::RecommendedWatcher,
-    ref_count: i32,
+    ref_count: usize,
     debounce: Option<JoinHandle<()>>,
 }
 
@@ -78,11 +83,33 @@ impl FileWatcherService {
             }
         }
 
-        let weak = Arc::downgrade(&self.watchers);
-        let broadcast = self.broadcast.clone();
-        let rt = self.rt.clone();
-        let path_for_cb = key.to_string();
+        let Some(watcher) = self.start_watcher(key, watch_path) else {
+            return;
+        };
 
+        // Another subscriber may have registered the same key while the
+        // watcher was being set up; join it and drop ours outside the lock.
+        let redundant = match self.lock().entry(key.to_string()) {
+            Entry::Occupied(mut existing) => {
+                existing.get_mut().ref_count += 1;
+                Some(watcher)
+            }
+            Entry::Vacant(slot) => {
+                slot.insert(WatchEntry {
+                    _watcher: watcher,
+                    ref_count: 1,
+                    debounce: None,
+                });
+                None
+            }
+        };
+        if redundant.is_none() {
+            tracing::debug!(path = key, "file watch started");
+        }
+        drop(redundant);
+    }
+
+    fn start_watcher(&self, key: &str, watch_path: &str) -> Option<notify::RecommendedWatcher> {
         // macOS FSEvents delivers no events for a single-file watch (and none at
         // all for a directory under the canonicalized `/private/var` form), so we
         // watch the file's parent directory in its original (pre-realpath) form and
@@ -97,7 +124,13 @@ impl FileWatcherService {
             .map(Path::to_path_buf)
             .unwrap_or_else(|| Path::new(watch_path).to_path_buf());
 
-        let handler = watch_handler(weak, broadcast, rt, path_for_cb, target_name);
+        let handler = watch_handler(
+            Arc::downgrade(&self.watchers),
+            self.broadcast.clone(),
+            self.rt.clone(),
+            key.to_string(),
+            target_name,
+        );
 
         let mut watcher = match notify::recommended_watcher(handler) {
             Ok(watcher) => watcher,
@@ -106,7 +139,7 @@ impl FileWatcherService {
                     path = %key,
                     "failed to start file watcher"
                 );
-                return;
+                return None;
             }
         };
 
@@ -115,27 +148,20 @@ impl FileWatcherService {
                 path = %watch_path,
                 "failed to start file watcher"
             );
-            return;
+            return None;
         }
-
-        self.lock().insert(
-            key.to_string(),
-            WatchEntry {
-                _watcher: watcher,
-                ref_count: 1,
-                debounce: None,
-            },
-        );
-        tracing::debug!(path = key, "file watch started");
+        Some(watcher)
     }
 
     pub fn unsubscribe(&self, absolute_path: &str) {
-        {
+        // Decrement and remove under one lock, so a subscribe that arrives in
+        // between cannot join an entry that is about to be torn down.
+        let removed = {
             let mut map = self.lock();
             let Some(entry) = map.get_mut(absolute_path) else {
                 return;
             };
-            entry.ref_count -= 1;
+            entry.ref_count = entry.ref_count.saturating_sub(1);
             tracing::debug!(
                 path = absolute_path,
                 ref_count = entry.ref_count,
@@ -144,14 +170,11 @@ impl FileWatcherService {
             if entry.ref_count > 0 {
                 return;
             }
-        }
-        cleanup(&self.watchers, absolute_path);
-    }
-
-    pub fn stop_all(&self) {
-        let paths: Vec<String> = self.lock().keys().cloned().collect();
-        for path in paths {
-            cleanup(&self.watchers, &path);
+            map.remove(absolute_path)
+        };
+        if let Some(entry) = removed {
+            stop_entry(entry);
+            tracing::debug!(path = absolute_path, "file watch stopped");
         }
     }
 }
@@ -197,17 +220,13 @@ fn schedule_emit(map: &Arc<WatcherMap>, path: &str, broadcast: &BroadcastFn, rt:
     }
 }
 
-fn cleanup(map: &WatcherMap, path: &str) {
-    let mut guard = map.lock_recover();
-    let Some(mut entry) = guard.remove(path) else {
-        return;
-    };
+/// Cancel the pending emit and drop the watcher, which closes the
+/// subscription. Call with the map lock released.
+fn stop_entry(mut entry: WatchEntry) {
     if let Some(handle) = entry.debounce.take() {
         handle.abort();
     }
-    // Dropping the watcher closes the subscription.
     drop(entry);
-    tracing::debug!(path = path, "file watch stopped");
 }
 
 #[cfg(test)]
@@ -234,14 +253,13 @@ fn watch_handler(
                 schedule_emit(&map, &path_for_cb, &broadcast, rt.as_ref());
             }
         }
+        // The entry stays: its subscribers still hold references, and this
+        // callback runs on the watcher's own thread, which must not drop it.
         Err(err) => {
             tracing::warn!(error = ?err,
                 path = %path_for_cb,
                 "file watcher error"
             );
-            if let Some(map) = weak.upgrade() {
-                cleanup(&map, &path_for_cb);
-            }
         }
     }
 }

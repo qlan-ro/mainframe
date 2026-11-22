@@ -18,19 +18,13 @@ use mainframe_types::seam_error::SeamError;
 use mainframe_types::settings_kv::SettingsKv;
 
 use super::backoff::handle_pull_failure;
-use super::keying::{compute_quota_key, resolve_account_identity};
+use super::identity::{IdentityCache, IdentityResolver, SharedClock, concrete_identity};
+use super::keying::compute_quota_key;
 use super::merge::{merge_provider_quota, replace_blob, to_sparse_update};
 use super::persist::QuotaPersister;
 use super::status::derive_provider_status;
 
 pub(super) const QUOTA_CATEGORY: &str = "quota";
-/// Identity sentinel prefix meaning "read failed transiently" — reuse last-known,
-/// never re-key.
-const TRANSIENT_IDENTITY_PREFIX: &str = "transient:";
-/// How long a resolved account identity is trusted before the resolver is
-/// re-consulted (#268 F2). Short enough to catch a same-provider swap promptly,
-/// long enough that a burst of pushes doesn't hammer the trust-store read.
-const IDENTITY_TTL_MS: i64 = 60_000;
 
 /// How a harvested quota folds in. `Pull` fully replaces; `Push` sparse-merges
 /// (an omitted window keeps the prior value); `Snapshot` is a push that carries
@@ -50,15 +44,8 @@ pub type QuotaPuller = Arc<
         + Sync,
 >;
 
-/// Resolves the current logged-in account identity for one adapter (Claude
-/// trust-store read, Codex quota-identity read). `None` means the resolver could
-/// not produce a concrete identity right now (transient/absent) — reuse last-known.
-pub type IdentityResolver =
-    Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Option<String>> + Send>> + Send + Sync>;
-
 type EmitFn = Box<dyn Fn(DaemonEvent) + Send + Sync>;
 type ClockFn = Box<dyn Fn() -> i64 + Send + Sync>;
-type SharedClock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 /// The read + manual-refresh surface the quota routes depend on. A trait (not the
 /// concrete `QuotaManager`) so the route-unit harness can inject a fake.
@@ -99,19 +86,11 @@ struct QuotaState {
     last_known_identity: HashMap<String, String>,
 }
 
-/// A resolved identity trusted until `expires_at` (#268 F2 TTL cache).
-#[derive(Clone)]
-struct CachedIdentity {
-    identity: String,
-    expires_at: i64,
-}
-
 pub struct QuotaManager {
     state: Mutex<QuotaState>,
     pullers: Mutex<HashMap<String, (IngestMode, QuotaPuller)>>,
     push_modes: Mutex<HashMap<String, IngestMode>>,
-    identity_resolvers: Mutex<HashMap<String, IdentityResolver>>,
-    identity_cache: Arc<Mutex<HashMap<String, CachedIdentity>>>,
+    identities: IdentityCache,
     settings: Arc<dyn SettingsKv>,
     persister: QuotaPersister,
     emit_event: EmitFn,
@@ -128,8 +107,7 @@ impl QuotaManager {
             state: Mutex::new(QuotaState::default()),
             pullers: Mutex::new(HashMap::new()),
             push_modes: Mutex::new(HashMap::new()),
-            identity_resolvers: Mutex::new(HashMap::new()),
-            identity_cache: Arc::new(Mutex::new(HashMap::new())),
+            identities: IdentityCache::new(Arc::clone(&now)),
             persister: QuotaPersister::new(Arc::clone(&deps.settings)),
             settings: deps.settings,
             emit_event: deps.emit_event,
@@ -161,9 +139,7 @@ impl QuotaManager {
     /// the TTL cache when a push arrives without a concrete identity, and at boot to
     /// select the right persisted blob for a swapped account.
     pub fn register_identity_resolver(&self, adapter_id: &str, resolver: IdentityResolver) {
-        self.identity_resolvers
-            .lock_recover()
-            .insert(adapter_id.to_string(), resolver);
+        self.identities.register(adapter_id, resolver);
     }
 
     /// Rehydrate persisted blobs. The newest-observed per adapter is the default
@@ -216,7 +192,7 @@ impl QuotaManager {
     /// current blob (overriding the newest-observed fallback). A transient/absent
     /// resolution leaves the fallback in place.
     async fn apply_boot_identity(&self, adapter_id: &str) {
-        let Some(identity) = self.refresh_cached_identity(adapter_id).await else {
+        let Some(identity) = self.identities.refresh(adapter_id).await else {
             return;
         };
         let key = compute_quota_key(adapter_id, Some(&identity));
@@ -250,14 +226,8 @@ impl QuotaManager {
         let now = (self.now)();
         let (key, next) = {
             let mut st = self.state.lock_recover();
-            let identity = match mode {
-                IngestMode::Pull => {
-                    self.resolve_identity(&st, adapter_id, quota.account_identity.as_deref())
-                }
-                IngestMode::Push | IngestMode::Snapshot => {
-                    self.resolve_push_identity(&st, adapter_id, quota.account_identity.as_deref())
-                }
-            };
+            let identity =
+                self.resolve_identity(&st, adapter_id, quota.account_identity.as_deref(), mode);
             let key = compute_quota_key(adapter_id, identity.as_deref());
             let next = match mode {
                 IngestMode::Pull | IngestMode::Snapshot => {
@@ -313,105 +283,27 @@ impl QuotaManager {
         Some(next)
     }
 
+    /// The identity a harvested quota is keyed under. A concrete identity on
+    /// the quota wins. Otherwise a pull reuses the last-known identity, while a
+    /// push first consults the TTL cache and, on a miss, warms it out of band
+    /// for the next push (`ingest` stays sync, so it never awaits the resolver).
     fn resolve_identity(
         &self,
         st: &QuotaState,
         adapter_id: &str,
         raw_identity: Option<&str>,
+        mode: IngestMode,
     ) -> Option<String> {
-        let is_transient = raw_identity.is_none_or(|r| r.starts_with(TRANSIENT_IDENTITY_PREFIX));
-        if is_transient {
-            resolve_account_identity(
-                None,
-                st.last_known_identity.get(adapter_id).map(String::as_str),
-            )
-        } else {
-            raw_identity.map(str::to_string)
+        if let Some(identity) = concrete_identity(raw_identity) {
+            return Some(identity.to_string());
         }
-    }
-
-    /// Identity for a push (#268 F2). A concrete identity on the push wins outright.
-    /// Otherwise consult the TTL cache; on a cache miss warm it out-of-band for the
-    /// next push and fall back to last-known for this one (`ingest` stays sync, so we
-    /// never block on the resolver here).
-    fn resolve_push_identity(
-        &self,
-        st: &QuotaState,
-        adapter_id: &str,
-        raw_identity: Option<&str>,
-    ) -> Option<String> {
-        if let Some(raw) = raw_identity
-            && !raw.starts_with(TRANSIENT_IDENTITY_PREFIX)
-        {
-            return Some(raw.to_string());
-        }
-        if let Some(identity) = self.fresh_cached_identity(adapter_id) {
-            return Some(identity);
-        }
-        self.spawn_identity_warm(adapter_id);
-        resolve_account_identity(
-            None,
-            st.last_known_identity.get(adapter_id).map(String::as_str),
-        )
-    }
-
-    /// The cached identity for an adapter if it hasn't passed its TTL.
-    fn fresh_cached_identity(&self, adapter_id: &str) -> Option<String> {
-        let now = (self.now)();
-        self.identity_cache
-            .lock_recover()
-            .get(adapter_id)
-            .filter(|cached| cached.expires_at > now)
-            .map(|cached| cached.identity.clone())
-    }
-
-    /// Fire-and-forget resolver read that refills the TTL cache for the next push.
-    /// A no-op without a runtime (sync-only tests) or a registered resolver.
-    fn spawn_identity_warm(&self, adapter_id: &str) {
-        if tokio::runtime::Handle::try_current().is_err() {
-            return;
-        }
-        let Some(resolver) = self
-            .identity_resolvers
-            .lock_recover()
-            .get(adapter_id)
-            .cloned()
-        else {
-            return;
-        };
-        let cache = Arc::clone(&self.identity_cache);
-        let now = Arc::clone(&self.now);
-        let adapter_id = adapter_id.to_string();
-        tokio::spawn(async move {
-            if let Some(identity) = resolver().await {
-                cache.lock_recover().insert(
-                    adapter_id,
-                    CachedIdentity {
-                        identity,
-                        expires_at: (now)() + IDENTITY_TTL_MS,
-                    },
-                );
+        if mode != IngestMode::Pull {
+            if let Some(identity) = self.identities.fresh(adapter_id) {
+                return Some(identity);
             }
-        });
-    }
-
-    /// Await the resolver and refill the TTL cache (boot path). `None` on a
-    /// transient/absent resolution leaves the cache untouched.
-    async fn refresh_cached_identity(&self, adapter_id: &str) -> Option<String> {
-        let resolver = self
-            .identity_resolvers
-            .lock_recover()
-            .get(adapter_id)
-            .cloned()?;
-        let identity = resolver().await?;
-        self.identity_cache.lock_recover().insert(
-            adapter_id.to_string(),
-            CachedIdentity {
-                identity: identity.clone(),
-                expires_at: (self.now)() + IDENTITY_TTL_MS,
-            },
-        );
-        Some(identity)
+            self.identities.warm_in_background(adapter_id);
+        }
+        st.last_known_identity.get(adapter_id).cloned()
     }
 
     /// Waits for every queued blob write to be attempted.
@@ -453,9 +345,7 @@ fn commit_state(
     st.blobs.insert(key.to_string(), blob.clone());
     st.current_key
         .insert(adapter_id.to_string(), key.to_string());
-    if let Some(identity) = identity
-        && !identity.starts_with(TRANSIENT_IDENTITY_PREFIX)
-    {
+    if let Some(identity) = concrete_identity(identity) {
         st.last_known_identity
             .insert(adapter_id.to_string(), identity.to_string());
     }

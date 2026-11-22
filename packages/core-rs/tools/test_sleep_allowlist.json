@@ -6,5 +6,6 @@
   "mainframe-launch/src/tunnel_manager/behavior_tests.rs::start_resolves_with_url_when_dns_outlasts_the_start_timeout": "Let the stopped cloudflared stand-in exit watcher attempt a duplicate event.",
   "mainframe-launch/src/tunnel_manager/shutdown_tests.rs::restarting_a_label_keeps_the_new_tunnel_when_the_old_child_exits": "Let the replaced cloudflared stand-in exit watcher run before checking the replacement.",
   "mainframe-runtime/src/test_support.rs::write_shell_script": "The executable shell probe retries an OS child writer race.",
-  "mainframe-runtime/src/test_support.rs::poll_until": "The shared polling helper waits between condition checks."
+  "mainframe-runtime/src/test_support.rs::poll_until": "The shared polling helper waits between condition checks.",
+  "mainframe-services/src/files/file_watcher_tests.rs::unsubscribing_while_the_file_changes_does_not_hang": "Hold each watch open long enough for FSEvents to deliver events while it is torn down."
 }

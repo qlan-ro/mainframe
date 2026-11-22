@@ -3,8 +3,6 @@ use std::path::{Path, PathBuf};
 use mainframe_types::http_status::{HttpStatus, StatusKind};
 use serde::{Deserialize, Serialize};
 
-/// A single safe path segment — matches nanoid's alphabet; rejects `..`, `/`, etc.
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AttachmentKind {
@@ -24,6 +22,21 @@ pub struct StoredAttachment {
     pub original_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub materialized_path: Option<String>,
+}
+
+impl StoredAttachment {
+    /// The record without its payload, under `id`.
+    fn into_meta(self, id: String) -> StoredAttachmentMeta {
+        StoredAttachmentMeta {
+            id,
+            name: self.name,
+            media_type: self.media_type,
+            size_bytes: self.size_bytes,
+            kind: self.kind,
+            original_path: self.original_path,
+            materialized_path: self.materialized_path,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,7 +112,7 @@ impl AttachmentStore {
             let materialized_path = match self.materialize(&files_dir, &id, &attachment).await {
                 Ok(path) => Some(path),
                 Err(err) => {
-                    tracing::warn!(error = ?err,
+                    tracing::warn!(error = %err,
                         chat_id,
                         name = %attachment.name,
                         "failed to materialize attachment file"
@@ -109,20 +122,11 @@ impl AttachmentStore {
             };
 
             let stored = StoredAttachment {
-                materialized_path: materialized_path.clone(),
-                ..attachment.clone()
+                materialized_path,
+                ..attachment
             };
             tokio::fs::write(dir.join(format!("{id}.json")), serde_json::to_vec(&stored)?).await?;
-
-            results.push(StoredAttachmentMeta {
-                id,
-                name: attachment.name,
-                media_type: attachment.media_type,
-                size_bytes: attachment.size_bytes,
-                kind: attachment.kind,
-                original_path: attachment.original_path,
-                materialized_path,
-            });
+            results.push(stored.into_meta(id));
         }
         Ok(results)
     }
@@ -157,41 +161,31 @@ impl AttachmentStore {
     }
 
     pub async fn list(&self, chat_id: &str) -> Vec<StoredAttachmentMeta> {
-        let dir = match self.chat_dir(chat_id) {
-            Ok(dir) if tokio::fs::metadata(&dir).await.is_ok() => dir,
-            // expected: no attachments for this chat (invalid id or missing dir)
-            _ => return Vec::new(),
+        let Ok(dir) = self.chat_dir(chat_id) else {
+            // expected: an invalid chat id has no attachments
+            return Vec::new();
         };
         let mut read_dir = match tokio::fs::read_dir(&dir).await {
             Ok(rd) => rd,
-            // expected: attachment dir not readable
+            // expected: no attachments for this chat yet, or the dir is unreadable
             Err(_) => return Vec::new(),
         };
         let mut results = Vec::new();
         while let Ok(Some(entry)) = read_dir.next_entry().await {
             let file_name = entry.file_name();
             let file_name = file_name.to_string_lossy();
-            if !file_name.ends_with(".json") {
+            let Some(id) = file_name.strip_suffix(".json") else {
                 continue;
-            }
-            let id = file_name.trim_end_matches(".json").to_string();
+            };
+            let id = id.to_string();
             let Ok(content) = tokio::fs::read(entry.path()).await else {
                 continue;
             };
-            let parsed: StoredAttachment = match serde_json::from_slice(&content) {
-                Ok(p) => p,
-                // expected: attachment metadata missing or malformed
-                Err(_) => continue,
+            // expected: a malformed record is skipped
+            let Ok(parsed) = serde_json::from_slice::<StoredAttachment>(&content) else {
+                continue;
             };
-            results.push(StoredAttachmentMeta {
-                id,
-                name: parsed.name,
-                media_type: parsed.media_type,
-                size_bytes: parsed.size_bytes,
-                kind: parsed.kind,
-                original_path: parsed.original_path,
-                materialized_path: parsed.materialized_path,
-            });
+            results.push(parsed.into_meta(id));
         }
         results
     }
@@ -219,9 +213,10 @@ impl AttachmentStore {
     }
 }
 
-/// `basename(name).replace(/[^\w.\-() ]+/g, '_').trim()` with an
-/// `attachment.bin` fallback for an empty result — the on-disk name for an
-/// uploaded file (the record keeps the original).
+/// The on-disk name for an uploaded file (the record keeps the original): the
+/// base name with each run of characters outside ASCII letters, digits and
+/// `_.-() ` collapsed to one `_`, trimmed, or `attachment.bin` when nothing
+/// is left.
 pub fn sanitize_file_name(name: &str) -> String {
     let base = Path::new(name)
         .file_name()
@@ -246,11 +241,11 @@ pub fn sanitize_file_name(name: &str) -> String {
             prev_replaced = true;
         }
     }
-    let file = out.trim().to_string();
-    if !file.is_empty() {
-        file
-    } else {
+    let file = out.trim();
+    if file.is_empty() {
         "attachment.bin".to_string()
+    } else {
+        file.to_string()
     }
 }
 

@@ -18,7 +18,7 @@ use tokio::task::JoinHandle;
 const CLAUDE_PULL_INTERVAL_MS: u64 = 5 * 60 * 1000;
 
 /// Refresh the Claude quota (delegates to the `QuotaManager` puller). Errors are
-/// swallowed so one failed pull never halts the cadence.
+/// logged, so one failed pull never halts the cadence.
 pub type RefreshFn =
     Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), SeamError>> + Send>> + Send + Sync>;
 

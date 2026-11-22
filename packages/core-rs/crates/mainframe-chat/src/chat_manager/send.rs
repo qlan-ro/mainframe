@@ -141,7 +141,7 @@ impl ChatManager {
                 .args
                 .clone()
                 .or_else(|| find_mainframe_command(&cmd.name).and_then(|c| c.prompt_template));
-            let wrapped = wrap_mainframe_command(&cmd.name, content, resolved_args.as_deref());
+            let wrapped = wrap_mainframe_command(&cmd.name, resolved_args.as_deref());
             session
                 .send_message(with_handoff(handoff, wrapped), Vec::new(), None)
                 .await?;
