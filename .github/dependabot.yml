@@ -14,15 +14,48 @@ updates:
           - '*'
     open-pull-requests-limit: 10
     ignore:
-      # Held majors from the 2026-07 refresh (PR #496). Delete an entry when
-      # its unblock condition is met.
+      # Held updates. Delete an entry when its unblock condition is met.
       # monaco-languageclient stable (10.x) pins monaco 0.55.1; unblocks when
       # its v11 goes stable. Scoped to 0.56.x so a future 0.57 resurfaces.
       - dependency-name: 'monaco-editor'
         versions: ['0.56.x']
+      # 0.15.36 fails 33 streaming, reasoning and selection tests (2026-11
+      # refresh, PR #929). Unblocks when tracker todo #436 lands the upgrade;
+      # that PR deletes this entry.
+      - dependency-name: '@assistant-ui/*'
+      # Changesets 3 needs changesets/action v2, which renames the inputs
+      # version.yml passes. Unblocks when one PR upgrades both, together with
+      # the changesets/action entry below.
+      - dependency-name: '@changesets/cli'
+        versions: ['>=3.0.0']
+      - dependency-name: '@changesets/changelog-github'
+        versions: ['>=1.0.0']
+      # The Tauri CLI rejects a build whose JS packages and Rust crates differ
+      # in major or minor version, and no PR check compiles the shell. Bump
+      # these by hand in the same PR as packages/app-tauri/src-tauri's crates.
+      # Patch updates still flow. Permanent, not a hold.
+      - dependency-name: '@tauri-apps/*'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+
+  # The daemon workspace only: PRs that touch it run rust-port.yml. The Tauri
+  # shell (packages/app-tauri/src-tauri) is not listed because no PR check
+  # compiles it, so its updates would arrive green without being built.
+  - package-ecosystem: 'cargo'
+    directory: '/packages/core-rs'
+    schedule:
+      interval: 'weekly'
+    rebase-strategy: 'disabled'
+    groups:
+      dependencies:
+        patterns:
+          - '*'
 
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
       interval: 'weekly'
     rebase-strategy: 'disabled'
+    ignore:
+      # v2 pairs with Changesets 3; see the npm entries above.
+      - dependency-name: 'changesets/action'
+        versions: ['>=2.0.0']
