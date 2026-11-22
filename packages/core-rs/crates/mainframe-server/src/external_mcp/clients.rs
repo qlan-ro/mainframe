@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use mainframe_types::external_mcp::CreateExternalMcpClient;
+use mainframe_types::external_mcp::{CreateExternalMcpClient, ExternalMcpAccess};
 use serde_json::json;
 
 use crate::{
@@ -109,6 +109,12 @@ fn validate(input: &CreateExternalMcpClient) -> Result<(), ApiError> {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "Enter a name and select 1 to 100 distinct projects",
+        ));
+    }
+    if input.answer_prompts && input.access != ExternalMcpAccess::Control {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Answering prompts needs control access",
         ));
     }
     Ok(())

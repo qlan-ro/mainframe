@@ -38,6 +38,7 @@ function ClientRow({ client, projects, busy, onRevoke }: Omit<Props, 'clients'> 
         <p className="break-words text-sm font-medium">{client.name}</p>
         <p className="text-sm text-muted-foreground">
           {client.access === 'read' ? 'Read only' : `Control up to ${modeLabel(client.maxPermissionMode)}`}
+          {client.answerPrompts && ' · answers prompts'}
         </p>
         <p className="break-words text-sm text-muted-foreground">{projectNames}</p>
         <p className="text-xs text-muted-foreground">

@@ -26,6 +26,7 @@ export function ClientForm({ projects, busy, onCreate }: Props) {
   const [name, setName] = useState('');
   const [access, setAccess] = useState<ExternalMcpAccess>('read');
   const [mode, setMode] = useState<ExecutionMode>('default');
+  const [answerPrompts, setAnswerPrompts] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   return (
     <form
@@ -33,11 +34,18 @@ export function ClientForm({ projects, busy, onCreate }: Props) {
       data-testid="external-clients-form"
       onSubmit={(e) => {
         e.preventDefault();
-        void onCreate({ name: name.trim(), projectIds: selected, access, maxPermissionMode: mode });
+        void onCreate({
+          name: name.trim(),
+          projectIds: selected,
+          access,
+          maxPermissionMode: mode,
+          answerPrompts: access === 'control' && answerPrompts,
+        });
       }}
     >
       <ClientName name={name} setName={setName} busy={busy} />
       <ClientPermissions access={access} setAccess={setAccess} mode={mode} setMode={setMode} busy={busy} />
+      {access === 'control' && <PromptAnswers checked={answerPrompts} setChecked={setAnswerPrompts} busy={busy} />}
       <ProjectChoices projects={projects} selected={selected} setSelected={setSelected} busy={busy} />
       <Button
         type="submit"
@@ -132,6 +140,34 @@ function ProjectChoices({ projects, selected, setSelected, busy }: ProjectProps)
   );
 }
 
+function PromptAnswers({
+  checked,
+  setChecked,
+  busy,
+}: {
+  checked: boolean;
+  setChecked: (v: boolean) => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="grid gap-2">
+      <label className="flex min-h-9 items-center gap-2 text-sm">
+        <Checkbox
+          checked={checked}
+          disabled={busy}
+          data-testid="external-clients-answer-prompts"
+          onCheckedChange={(value) => setChecked(value === true)}
+        />
+        <span>Answer prompts</span>
+      </label>
+      <p className="text-sm text-muted-foreground">
+        Can approve or deny permission prompts once, answer questions and approve plans. Without this, prompts stay in
+        Mainframe.
+      </p>
+    </div>
+  );
+}
+
 function PermissionCeiling({ mode, setMode, busy }: Pick<PermissionProps, 'mode' | 'setMode' | 'busy'>) {
   return (
     <div className="grid gap-2">
@@ -155,9 +191,7 @@ function PermissionCeiling({ mode, setMode, busy }: Pick<PermissionProps, 'mode'
           ))}
         </SelectContent>
       </Select>
-      <p className="text-sm text-muted-foreground">
-        Can start, message, stop and configure chats up to this level. Permission prompts stay in Mainframe.
-      </p>
+      <p className="text-sm text-muted-foreground">Can start, message, stop and configure chats up to this level.</p>
     </div>
   );
 }

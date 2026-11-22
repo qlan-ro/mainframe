@@ -16,6 +16,10 @@ pub struct CreateExternalMcpClient {
     pub project_ids: Vec<String>,
     pub access: ExternalMcpAccess,
     pub max_permission_mode: ExecutionMode,
+    /// Whether the client may answer permission prompts, questions and plan
+    /// approvals through `chat_answer`. Off unless the user opts in.
+    #[serde(default)]
+    pub answer_prompts: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,6 +30,8 @@ pub struct ExternalMcpClient {
     pub project_ids: Vec<String>,
     pub access: ExternalMcpAccess,
     pub max_permission_mode: ExecutionMode,
+    #[serde(default)]
+    pub answer_prompts: bool,
     pub created_at: String,
     pub last_used_at: Option<String>,
 }

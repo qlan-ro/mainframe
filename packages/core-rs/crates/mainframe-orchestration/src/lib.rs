@@ -33,7 +33,7 @@ mod system_prompt;
 mod tasks;
 mod tasks_ops;
 pub mod tools;
-mod waiter;
+pub mod waiter;
 
 #[cfg(test)]
 mod test_support;

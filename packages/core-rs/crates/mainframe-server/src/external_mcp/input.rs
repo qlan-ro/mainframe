@@ -56,6 +56,30 @@ pub struct ConfigureInput {
     pub permission_mode: Option<ExecutionMode>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct WaitInput {
+    pub chat_id: String,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Decision {
+    Allow,
+    Deny,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AnswerInput {
+    pub chat_id: String,
+    pub request_id: String,
+    pub decision: Decision,
+    pub answers: Option<serde_json::Map<String, serde_json::Value>>,
+    pub message: Option<String>,
+}
+
 pub fn parse<T: serde::de::DeserializeOwned>(args: serde_json::Value) -> Result<T, ToolError> {
     serde_json::from_value(args)
         .map_err(|_| ToolError::invalid("Arguments do not match this tool's schema"))

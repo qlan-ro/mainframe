@@ -6,12 +6,13 @@ use std::future::Future;
 use std::time::Duration;
 
 use mainframe_types::events::DaemonEvent;
+use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::time::Instant;
 
 use crate::service::{CallCtx, OrchestrationService};
 
-pub(crate) enum WaitEnd<T> {
+pub enum WaitEnd<T> {
     Matched(T),
     TimedOut,
     Cancelled,
@@ -41,10 +42,34 @@ fn is_relevant(event: &DaemonEvent, watched: &[String]) -> bool {
     }
 }
 
-/// Runs `probe` until it yields, re-running it on each relevant event.
+/// Runs `probe` until it yields, re-running it on each relevant event, and
+/// stops when the calling turn is cancelled.
 pub(crate) async fn wait_for<T, F, Fut>(
     svc: &OrchestrationService,
     ctx: &CallCtx,
+    timeout: Duration,
+    watched: &[String],
+    probe: F,
+) -> WaitEnd<T>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Option<T>>,
+{
+    let rx = svc.port.subscribe();
+    tokio::select! {
+        // The wait is polled first, so a state that already matches wins over
+        // a cancellation that arrived at the same moment.
+        biased;
+        end = wait_on(rx, timeout, watched, probe) => end,
+        () = ctx.cancel.cancelled() => WaitEnd::Cancelled,
+    }
+}
+
+/// The wait itself, for callers with no calling turn to cancel it. `rx` must
+/// be subscribed before the call so no transition ahead of the first `probe`
+/// is lost. `Cancelled` here means the event stream closed.
+pub async fn wait_on<T, F, Fut>(
+    mut rx: Receiver<DaemonEvent>,
     timeout: Duration,
     watched: &[String],
     mut probe: F,
@@ -53,7 +78,6 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = Option<T>>,
 {
-    let mut rx = svc.port.subscribe();
     let deadline = Instant::now() + timeout;
     loop {
         if let Some(found) = probe().await {
@@ -61,7 +85,6 @@ where
         }
         loop {
             tokio::select! {
-                () = ctx.cancel.cancelled() => return WaitEnd::Cancelled,
                 () = tokio::time::sleep_until(deadline) => return WaitEnd::TimedOut,
                 received = rx.recv() => match received {
                     Ok(event) if is_relevant(&event, watched) => break,
