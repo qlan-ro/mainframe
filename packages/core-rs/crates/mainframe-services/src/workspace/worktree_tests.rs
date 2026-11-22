@@ -186,3 +186,6 @@ async fn branch_exists_true_for_existing_false_for_missing() {
 
 #[path = "worktree_checkout_tests.rs"]
 mod checkout;
+
+#[path = "worktree_remove_tests.rs"]
+mod remove;

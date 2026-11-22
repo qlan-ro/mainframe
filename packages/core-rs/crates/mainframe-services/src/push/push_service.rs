@@ -1,3 +1,9 @@
+//! Mobile push delivery through the Expo push API.
+//!
+//! Pushes go to every registered device token while the desktop is idle. A
+//! desktop activity report suppresses them for six minutes, after which a
+//! timer resumes delivery unless the desktop reports again.
+
 use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -8,8 +14,13 @@ use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
 const EXPO_PUSH_URL: &str = "https://exp.host/--/api/v2/push/send";
-/// 6 minutes.
-const STALENESS_MS: u64 = 6 * 60 * 1000;
+/// How long a desktop activity report suppresses pushes.
+const STALENESS: Duration = Duration::from_secs(6 * 60);
+/// Deadline for one Expo request. Automation notify steps await the send, so
+/// a stalled connection must not hold a run open.
+const SEND_TIMEOUT: Duration = Duration::from_secs(15);
+/// The ticket error Expo returns for a token whose app was uninstalled.
+const DEVICE_NOT_REGISTERED: &str = "DeviceNotRegistered";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -37,25 +48,41 @@ struct ExpoPushMessage {
     data: serde_json::Value,
     priority: PushPriority,
     #[serde(skip_serializing_if = "Option::is_none")]
-    sound: Option<String>,
+    sound: Option<&'static str>,
 }
 
-#[derive(Debug, Clone)]
-struct RegisteredDevice {
-    push_token: String,
-    connected: bool,
+/// Expo answers a batch with one ticket per message, in message order.
+#[derive(Debug, Default, Deserialize)]
+struct ExpoResponse {
+    #[serde(default)]
+    data: Vec<ExpoTicket>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExpoTicket {
+    status: String,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    details: Option<ExpoTicketDetails>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExpoTicketDetails {
+    #[serde(default)]
+    error: Option<String>,
 }
 
 struct Inner {
-    devices: HashMap<String, RegisteredDevice>,
+    /// Push token per paired device id.
+    devices: HashMap<String, String>,
     desktop_active: bool,
     staleness_handle: Option<JoinHandle<()>>,
 }
 
-/// `PushService`. The single-threaded JS class becomes shared interior state:
-/// `Arc<Mutex<Inner>>` is touched by the public methods and by the spawned
-/// staleness timer (§3.3: `setTimeout` → named task + JoinHandle; shared state →
-/// `Arc<Mutex>`). No lock is ever held across an `.await`.
+/// Shared between the routes that register devices and report desktop
+/// activity, the notification paths that send, and the staleness timer. No
+/// lock is held across an `.await`.
 pub struct PushService {
     inner: Arc<Mutex<Inner>>,
     rt: Option<Handle>,
@@ -70,6 +97,7 @@ impl Default for PushService {
 }
 
 impl PushService {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(Inner {
@@ -83,26 +111,19 @@ impl PushService {
         }
     }
 
+    #[cfg(test)]
+    fn with_url(url: String) -> Self {
+        Self { url, ..Self::new() }
+    }
+
     fn lock(&self) -> MutexGuard<'_, Inner> {
         self.inner.lock_recover()
     }
 
     pub fn register_device(&self, device_id: &str, push_token: &str) {
-        {
-            let mut inner = self.lock();
-            let connected = inner
-                .devices
-                .get(device_id)
-                .map(|d| d.connected)
-                .unwrap_or(false);
-            inner.devices.insert(
-                device_id.to_string(),
-                RegisteredDevice {
-                    push_token: push_token.to_string(),
-                    connected,
-                },
-            );
-        }
+        self.lock()
+            .devices
+            .insert(device_id.to_string(), push_token.to_string());
         tracing::info!(device_id, "push token registered");
     }
 
@@ -110,27 +131,14 @@ impl PushService {
         self.lock().devices.remove(device_id);
     }
 
-    #[cfg(test)]
-    pub(crate) fn set_device_connected(&self, device_id: &str, connected: bool) {
-        let mut inner = self.lock();
-        if let Some(device) = inner.devices.get_mut(device_id) {
-            device.connected = connected;
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn is_device_connected(&self, device_id: &str) -> bool {
-        self.lock()
-            .devices
-            .get(device_id)
-            .map(|d| d.connected)
-            .unwrap_or(false)
-    }
-
+    #[must_use]
     pub fn has_registered_devices(&self) -> bool {
         !self.lock().devices.is_empty()
     }
 
+    /// Record desktop activity. An active report suppresses pushes and
+    /// restarts the staleness timer; the timer is replaced under the same lock
+    /// so concurrent reports cannot leave an orphaned timer behind.
     pub fn set_desktop_active(&self, active: bool) {
         {
             let mut inner = self.lock();
@@ -138,88 +146,112 @@ impl PushService {
             if let Some(handle) = inner.staleness_handle.take() {
                 handle.abort();
             }
-        }
-        if active && let Some(rt) = &self.rt {
-            let inner = Arc::clone(&self.inner);
-            let handle = rt.spawn(async move {
-                tokio::time::sleep(Duration::from_millis(STALENESS_MS)).await;
-                let mut guard = inner.lock_recover();
-                guard.desktop_active = false;
-                tracing::info!("desktop staleness timeout — resuming push");
-            });
-            self.lock().staleness_handle = Some(handle);
+            if active && let Some(rt) = &self.rt {
+                let shared = Arc::clone(&self.inner);
+                inner.staleness_handle = Some(rt.spawn(async move {
+                    tokio::time::sleep(STALENESS).await;
+                    shared.lock_recover().desktop_active = false;
+                    tracing::info!("desktop staleness timeout — resuming push");
+                }));
+            }
         }
         tracing::info!(active, "desktop active state changed");
     }
 
-    pub fn dispose(&self) {
-        if let Some(handle) = self.lock().staleness_handle.take() {
-            handle.abort();
-        }
-    }
-
+    /// Send `message` to every registered device unless the desktop is active.
+    /// Failures are logged; a token Expo reports as no longer registered is
+    /// dropped until its device registers again.
     pub async fn send_push(&self, message: PushMessage) {
         let messages = self.collect_push_messages(&message);
         if messages.is_empty() {
             return;
         }
-
         let client = match &self.client {
             Ok(client) => client,
             Err(err) => {
-                tracing::error!(error = ?err, "failed to send push notification");
+                tracing::error!(error = %err, "push HTTP client unavailable");
                 return;
             }
         };
-        match client.post(&self.url).json(&messages).send().await {
-            Ok(res) => {
-                if !res.status().is_success() {
-                    tracing::error!(status = res.status().as_u16(), "expo push API error");
-                }
-            }
+        let response = match client
+            .post(&self.url)
+            .timeout(SEND_TIMEOUT)
+            .json(&messages)
+            .send()
+            .await
+        {
+            Ok(response) => response,
             Err(err) => {
-                tracing::error!(error = ?err, "failed to send push notification");
+                tracing::error!(error = %err, "failed to send push notification");
+                return;
             }
+        };
+        let status = response.status();
+        if !status.is_success() {
+            tracing::error!(status = status.as_u16(), "expo push API error");
+            return;
+        }
+        match response.json::<ExpoResponse>().await {
+            Ok(body) => self.apply_tickets(&messages, &body.data),
+            Err(err) => tracing::warn!(error = %err, "unreadable expo push response"),
         }
     }
 
-    /// Builds outbound messages separately from the network call so it is testable
-    /// without a live network round-trip. Returns empty when suppressed or
-    /// when there are no disconnected devices.
+    fn apply_tickets(&self, messages: &[ExpoPushMessage], tickets: &[ExpoTicket]) {
+        let mut unregistered: HashSet<&str> = HashSet::new();
+        for (message, ticket) in messages.iter().zip(tickets) {
+            if ticket.status == "ok" {
+                continue;
+            }
+            let error = ticket.details.as_ref().and_then(|d| d.error.as_deref());
+            tracing::warn!(
+                error,
+                message = ticket.message.as_deref(),
+                "expo rejected a push"
+            );
+            if error == Some(DEVICE_NOT_REGISTERED) {
+                unregistered.insert(message.to.as_str());
+            }
+        }
+        if unregistered.is_empty() {
+            return;
+        }
+        self.lock().devices.retain(|device_id, token| {
+            let keep = !unregistered.contains(token.as_str());
+            if !keep {
+                tracing::info!(device_id, "dropping a push token expo no longer accepts");
+            }
+            keep
+        });
+    }
+
+    /// One Expo message per distinct token, or none while the desktop is
+    /// active. Kept apart from the network call so it is testable offline.
     fn collect_push_messages(&self, message: &PushMessage) -> Vec<ExpoPushMessage> {
-        let tokens = {
+        let tokens: Vec<String> = {
             let inner = self.lock();
             if inner.desktop_active {
                 tracing::debug!("push suppressed — desktop is active");
                 return Vec::new();
             }
-            let mut seen: HashSet<String> = HashSet::new();
-            let mut tokens: Vec<String> = Vec::new();
-            for device in inner.devices.values() {
-                if !device.connected && seen.insert(device.push_token.clone()) {
-                    tokens.push(device.push_token.clone());
-                }
-            }
-            tokens
+            let mut seen = HashSet::new();
+            inner
+                .devices
+                .values()
+                .filter(|token| seen.insert(token.as_str()))
+                .cloned()
+                .collect()
         };
-
-        if tokens.is_empty() {
-            return Vec::new();
-        }
-
+        let sound = (message.priority == PushPriority::High).then_some("default");
         tokens
             .into_iter()
-            .map(|token| ExpoPushMessage {
-                to: token,
+            .map(|to| ExpoPushMessage {
+                to,
                 title: message.title.clone(),
                 body: message.body.clone(),
                 data: message.data.clone(),
                 priority: message.priority,
-                sound: if message.priority == PushPriority::High {
-                    Some("default".to_string())
-                } else {
-                    None
-                },
+                sound,
             })
             .collect()
     }

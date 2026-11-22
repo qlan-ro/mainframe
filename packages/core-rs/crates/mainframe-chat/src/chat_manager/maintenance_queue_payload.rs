@@ -98,7 +98,7 @@ pub(super) async fn dispatch(
                 .or_else(|| find_mainframe_command(&cmd.name).and_then(|c| c.prompt_template));
             session
                 .send_message(
-                    wrap_mainframe_command(&cmd.name, &input.content, args.as_deref()),
+                    wrap_mainframe_command(&cmd.name, args.as_deref()),
                     images,
                     Some(input.uuid.clone()),
                 )

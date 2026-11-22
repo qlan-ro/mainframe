@@ -1,6 +1,6 @@
 use super::*;
 
-async fn repo_with_commit() -> tempfile::TempDir {
+pub(super) async fn repo_with_commit() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_str().unwrap();
     run_git(repo, &["init", "-q", "-b", "main"]).await;
