@@ -4,3 +4,17 @@ packages:
   # entered the lockfile only where the submodule was checked out, so a plain
   # install anywhere else (CI, fresh worktrees) stripped it again.
   - '!packages/mobile'
+
+# pnpm settings live here, not in package.json's "pnpm" field: pnpm 11 and
+# later ignore that field. Dependabot runs a newer pnpm than CI, so with the
+# settings in package.json its lockfiles lost the overrides block and every
+# job failed the frozen install.
+onlyBuiltDependencies:
+  - '@vscode/ripgrep'
+  - better-sqlite3
+  - esbuild
+
+overrides:
+  tar: '>=7.5.7'
+  '@qlan-ro/mainframe-types': workspace:*
+  '@radix-ui/react-dismissable-layer': 1.1.19
