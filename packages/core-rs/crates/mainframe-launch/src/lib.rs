@@ -1,8 +1,7 @@
 //! `mainframe-launch` owns the launcher (parse/validate `launch.json`, spawn +
 //! stream + tear down user launch processes, one manager per project) and the
-//! cloudflared tunnel manager. DaemonEvents are emitted through a broadcast
-//! handle (`BroadcastFn`) passed in by the daemon, matching the `DaemonEvent`
-//! shapes in `packages/types/src/events.ts` (`launch.*`, `tunnel:status`).
+//! cloudflared tunnel manager. Both emit `DaemonEvent`s (`launch.*`,
+//! `tunnel:status`) through the `BroadcastFn` the daemon passes in.
 #![forbid(unsafe_code)]
 #![cfg_attr(
     test,
@@ -14,33 +13,34 @@
     )
 )]
 
-pub mod expand_variables;
-pub mod launch_config;
-pub mod launch_manager;
-pub mod launch_process_state;
-pub mod launch_registry;
-pub mod port_tunnel_registry;
-pub mod process;
-pub mod resolve_cloudflared;
+mod expand_variables;
+mod launch_config;
+mod launch_manager;
+mod launch_process_state;
+mod launch_registry;
+mod port_tunnel_registry;
+mod process;
+mod resolve_cloudflared;
 #[cfg(test)]
-pub(crate) mod test_support;
-pub mod tunnel_error;
-pub mod tunnel_manager;
+mod test_support;
+mod tunnel_error;
+mod tunnel_manager;
 
-pub use expand_variables::expand_variables;
-pub use launch_config::parse_launch_config;
-pub use launch_manager::{LaunchError, LaunchManager, LaunchTimings, clean_env};
-pub use launch_process_state::{LaunchOutputEntry, LaunchProcessState};
+pub use expand_variables::UnresolvedVariable;
+pub use launch_config::{LaunchConfigError, parse_launch_config};
+pub use launch_manager::{LaunchError, LaunchManager};
+pub use launch_process_state::LaunchOutputEntry;
 pub use launch_registry::{LaunchRegistry, shutdown_launches_and_tunnels};
 pub use port_tunnel_registry::{
     PORT_TUNNEL_LABEL_PREFIX, PortTunnelEntryInfo, PortTunnelRegistry, PortTunnelScope,
     port_tunnel_label,
 };
 pub use process::{
-    ChildRegistryPort, FileChildRegistry, ManagedChildEntry, ManagedChildKind, NoopChildRegistry,
-    SweepDeps, SweepResult, default_sweep_deps, sweep_stray_children,
+    ChildRegistryPort, FileChildRegistry, KillFn, ManagedChildEntry, ManagedChildKind,
+    ProcessQueryFn, SweepDeps, SweepPlatform, SweepResult, default_sweep_deps,
+    sweep_stray_children,
 };
-pub use resolve_cloudflared::{ResolveCloudflaredDeps, resolve_cloudflared_path};
+pub use resolve_cloudflared::{IsExecutableFn, ResolveCloudflaredDeps, resolve_cloudflared_path};
 pub use tunnel_error::TunnelStartError;
 pub use tunnel_manager::{
     BroadcastFn, TunnelConfig, TunnelManager, TunnelManagerOptions, TunnelStartOptions,

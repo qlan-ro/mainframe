@@ -24,7 +24,7 @@ fn binary_rejects_a_sibling_sharing_the_path_as_a_prefix() {
 #[test]
 fn launch_matches_when_full_argv_and_cwd_match() {
     assert!(process_matches_launch(
-        Some(&format!("{PNPM} run dev")),
+        &format!("{PNPM} run dev"),
         Some(CWD),
         &launch(1)
     ));
@@ -33,7 +33,7 @@ fn launch_matches_when_full_argv_and_cwd_match() {
 #[test]
 fn launch_matches_argv_only_invocation_with_matching_cwd() {
     assert!(process_matches_launch(
-        Some(PNPM),
+        PNPM,
         Some(CWD),
         &launch_args(1, vec![], CWD.to_string())
     ));
@@ -42,7 +42,7 @@ fn launch_matches_argv_only_invocation_with_matching_cwd() {
 #[test]
 fn launch_rejects_when_the_command_line_differs() {
     assert!(!process_matches_launch(
-        Some("/usr/bin/postgres -D /data"),
+        "/usr/bin/postgres -D /data",
         Some(CWD),
         &launch(1)
     ));
@@ -51,7 +51,7 @@ fn launch_rejects_when_the_command_line_differs() {
 #[test]
 fn launch_rejects_when_only_a_fragment_of_the_argv_matches() {
     assert!(!process_matches_launch(
-        Some(&format!("{PNPM} run dev --host")),
+        &format!("{PNPM} run dev --host"),
         Some(CWD),
         &launch(1)
     ));
@@ -60,7 +60,7 @@ fn launch_rejects_when_only_a_fragment_of_the_argv_matches() {
 #[test]
 fn launch_rejects_when_the_cwd_differs() {
     assert!(!process_matches_launch(
-        Some(&format!("{PNPM} run dev")),
+        &format!("{PNPM} run dev"),
         Some("/Users/me/other"),
         &launch(1)
     ));
@@ -69,7 +69,7 @@ fn launch_rejects_when_the_cwd_differs() {
 #[test]
 fn launch_rejects_when_the_live_cwd_is_unreadable() {
     assert!(!process_matches_launch(
-        Some(&format!("{PNPM} run dev")),
+        &format!("{PNPM} run dev"),
         None,
         &launch(1)
     ));

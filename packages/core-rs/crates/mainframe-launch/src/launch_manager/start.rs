@@ -1,5 +1,15 @@
 use super::*;
 
+/// A supervised launch child whose pid is not recorded yet.
+struct Spawned {
+    inner: Arc<Inner>,
+    pid: Option<u32>,
+    status: Arc<Mutex<LaunchProcessStatus>>,
+    executable: String,
+    /// Fired once the pid is recorded; the exit watcher forgets it only then.
+    recorded_tx: oneshot::Sender<()>,
+}
+
 impl LaunchManager {
     pub async fn start(&self, config: &LaunchConfiguration) -> Result<(), LaunchError> {
         let inner = &self.inner;
@@ -26,13 +36,14 @@ impl LaunchManager {
                 return Err(self.spawn_failed(name, error).await);
             }
         };
-        let (pid, status) = self.supervise(child, config, generation);
+        let spawned = self.register(child, config, generation, executable);
         drop(gate);
-        inner
-            .record_spawn(name, pid, &executable, &config.runtime_args)
-            .await;
-        self.ready(config, &status).await;
-        self.preview(config);
+        // A task, so a caller that stops waiting (a dropped HTTP request)
+        // cannot leave the child unrecorded, `starting` forever, or without
+        // its preview tunnel.
+        if let Err(error) = tokio::spawn(settle(spawned, config.clone())).await {
+            tracing::warn!(name, %error, "launch start task failed");
+        }
         Ok(())
     }
 
@@ -102,21 +113,22 @@ impl LaunchManager {
             .state
             .set_status(name, LaunchProcessStatus::Failed);
         self.inner.emit_status(name, LaunchProcessStatus::Failed);
-        if let Some(tm) = &self.inner.tunnel_manager {
-            tm.stop(&format!("preview:{name}")).await;
-        }
+        self.inner.stop_preview(name).await;
         LaunchError::Spawn {
             name: name.to_string(),
             source: error,
         }
     }
 
-    fn supervise(
+    /// Publish the child in the process map, drain its output and hand it to
+    /// its exit watcher. Call under the spawn gate.
+    fn register(
         &self,
         mut child: tokio::process::Child,
         config: &LaunchConfiguration,
         generation: u64,
-    ) -> (Option<u32>, Arc<Mutex<LaunchProcessStatus>>) {
+        executable: String,
+    ) -> Spawned {
         let inner = &self.inner;
         let name = &config.name;
         let pid = child.id();
@@ -133,6 +145,7 @@ impl LaunchManager {
         );
         let tail = Arc::new(Mutex::new(TailBuffer::new(MAX_STDERR_LINES)));
         let pumps = self.pumps(&mut child, name, &tail);
+        let (recorded_tx, recorded) = oneshot::channel();
         tokio::spawn(wait_for_exit_task(
             child,
             ExitWatch {
@@ -144,10 +157,17 @@ impl LaunchManager {
                 status: status.clone(),
                 stderr_tail: tail,
                 exit_tx,
+                recorded,
             },
             pumps,
         ));
-        (pid, status)
+        Spawned {
+            inner: inner.clone(),
+            pid,
+            status,
+            executable,
+            recorded_tx,
+        }
     }
 
     fn pumps(
@@ -177,61 +197,28 @@ impl LaunchManager {
         }
         pumps
     }
+}
 
-    async fn ready(&self, config: &LaunchConfiguration, status: &Arc<Mutex<LaunchProcessStatus>>) {
-        let inner = &self.inner;
-        let name = &config.name;
-        if let Some(port) = config.port {
-            tracing::info!(name, port, "waiting for port to become ready…");
-            if wait_for_port(port as u16, status, &inner.timings).await {
-                (inner.on_event)(DaemonEvent::LaunchPortTimeout {
-                    project_id: inner.project_id.clone(),
-                    effective_path: inner.project_path.clone(),
-                    name: name.clone(),
-                    port,
-                });
-            }
-        }
-        let mut guard = status.lock_recover();
-        if *guard == LaunchProcessStatus::Starting {
-            *guard = LaunchProcessStatus::Running;
-            inner.state.set_status(name, LaunchProcessStatus::Running);
-            inner.emit_status(name, LaunchProcessStatus::Running);
-            tracing::info!(name, port = ?config.port, "launch process ready");
-        }
-    }
-
-    fn preview(&self, config: &LaunchConfiguration) {
-        if config.preview != Some(true) {
-            return;
-        }
-        let (Some(port), Some(tunnel)) = (config.port, self.inner.tunnel_manager.clone()) else {
-            return;
-        };
-        let inner = self.inner.clone();
-        let name = config.name.clone();
-        tokio::spawn(async move {
-            let event = match tunnel
-                .start(port as u16, &format!("preview:{name}"), None)
-                .await
-            {
-                Ok(url) => DaemonEvent::LaunchTunnel {
-                    project_id: inner.project_id.clone(),
-                    effective_path: inner.project_path.clone(),
-                    name,
-                    url,
-                },
-                Err(error) => {
-                    tracing::warn!(name, error = %error, "tunnel failed to start");
-                    DaemonEvent::LaunchTunnelFailed {
-                        project_id: inner.project_id.clone(),
-                        effective_path: inner.project_path.clone(),
-                        name,
-                        error: error.to_string(),
-                    }
-                }
-            };
-            (inner.on_event)(event);
-        });
+/// Record the pid, wait for the port and start the preview tunnel.
+async fn settle(spawned: Spawned, config: LaunchConfiguration) {
+    let Spawned {
+        inner,
+        pid,
+        status,
+        executable,
+        recorded_tx,
+    } = spawned;
+    inner
+        .record_spawn(&config.name, pid, &executable, &config.runtime_args)
+        .await;
+    let _ = recorded_tx.send(()); /* expected: Err when the watcher already ended */
+    let port = tcp_port(&config);
+    let running = inner.ready(&config.name, port, &status).await;
+    // A process stopped or failed while its port was awaited gets no tunnel.
+    if running
+        && config.preview == Some(true)
+        && let Some(port) = port
+    {
+        inner.start_preview(&config.name, port);
     }
 }

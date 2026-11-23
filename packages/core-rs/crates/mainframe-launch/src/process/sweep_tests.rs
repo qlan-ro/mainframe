@@ -75,12 +75,6 @@ impl ChildRegistryPort for FakeRegistry {
     fn list(&self) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
         Box::pin(async move { self.entries.lock().unwrap().clone() })
     }
-    fn list_by_kind(&self, _kind: ManagedChildKind) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
-        Box::pin(async { vec![] })
-    }
-    fn clear(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async {})
-    }
 }
 
 /// Models a process that reports `command` for the identity guard, then

@@ -52,8 +52,7 @@ impl TunnelManager {
         });
 
         let mut child = self.spawn_tunnel(port, label, &options)?;
-        let mut out_lines = child.stdout.take().map(|s| BufReader::new(s).lines());
-        let mut err_lines = child.stderr.take().map(|s| BufReader::new(s).lines());
+        let (pumps, mut lines) = pump_output_lines(&mut child);
         // Tracked in `live` (and its reap pid recorded) BEFORE the start window,
         // so a shutdown or crash during it can reap the child (see stop_all).
         let process = self.watch_child(child, label);
@@ -67,20 +66,10 @@ impl TunnelManager {
 
         let initial_url = if is_named { options.url.clone() } else { None };
         let url = self
-            .wait_for_registration(
-                label,
-                is_named,
-                initial_url,
-                &process,
-                &mut out_lines,
-                &mut err_lines,
-            )
+            .wait_for_registration(label, is_named, initial_url, &process, &mut lines)
             .await?;
-
-        // Keep reading the child's output for its whole life: dropping the pipe
-        // readers closes the pipes, and cloudflared (Go) dies on SIGPIPE at its
-        // next log write.
-        let pumps = spawn_output_drain(out_lines, err_lines);
+        // The pumps keep draining the pipes; only the forwarding stops.
+        drop(lines);
 
         self.register_connected(label, port, &url, &process);
 
@@ -95,44 +84,37 @@ impl TunnelManager {
         label: &str,
         options: &TunnelStartOptions,
     ) -> Result<Child, TunnelStartError> {
-        let is_named = options.token.is_some();
-        let args: Vec<String> = if is_named {
-            vec![
+        let args: Vec<String> = match &options.token {
+            Some(token) => vec![
                 "tunnel".to_string(),
                 "run".to_string(),
                 "--token".to_string(),
-                options.token.clone().unwrap_or_default(),
-            ]
-        } else {
-            vec![
+                token.clone(),
+            ],
+            None => vec![
                 "tunnel".to_string(),
                 "--url".to_string(),
                 format!("http://localhost:{port}"),
-            ]
+            ],
         };
 
-        let child = match build_cloudflared_command(
+        build_cloudflared_command(
             &self.config.cloudflared_bin,
             &args,
             self.resolved_path.as_deref(),
         )
         .spawn()
-        {
-            Ok(child) => child,
-            Err(err) => {
-                let error = TunnelStartError::spawn(err);
-                self.broadcast(DaemonEvent::TunnelStatus {
-                    state: TunnelState::Error,
-                    label: label.to_string(),
-                    url: None,
-                    dns_verified: None,
-                    error: Some(error.to_string()),
-                });
-                return Err(error);
-            }
-        };
-
-        Ok(child)
+        .map_err(|err| {
+            let error = TunnelStartError::spawn(err);
+            self.broadcast(DaemonEvent::TunnelStatus {
+                state: TunnelState::Error,
+                label: label.to_string(),
+                url: None,
+                dns_verified: None,
+                error: Some(error.to_string()),
+            });
+            error
+        })
     }
 
     async fn wait_for_registration(
@@ -141,8 +123,7 @@ impl TunnelManager {
         is_named: bool,
         initial_url: Option<String>,
         process: &process::TunnelProcess,
-        out_lines: &mut Option<Lines<BufReader<ChildStdout>>>,
-        err_lines: &mut Option<Lines<BufReader<ChildStderr>>>,
+        lines: &mut mpsc::UnboundedReceiver<String>,
     ) -> Result<String, TunnelStartError> {
         let mut pending_url = initial_url;
         let mut registered = false;
@@ -152,19 +133,13 @@ impl TunnelManager {
 
         // Step 1: wait for URL + registration (or timeout / early exit).
         loop {
-            if pending_url.is_some() && registered {
-                break;
+            if registered && let Some(url) = pending_url.take() {
+                return Ok(url);
             }
             tokio::select! {
-                line = next_line_stdout(out_lines) => {
-                    if let Some(line) = line {
-                        self.scan_line(&line, is_named, label, &mut pending_url, &mut registered);
-                    }
-                }
-                line = next_line_stderr(err_lines) => {
-                    if let Some(line) = line {
-                        self.scan_line(&line, is_named, label, &mut pending_url, &mut registered);
-                    }
+                // `None` once both pipes closed; the exit arm then ends the wait.
+                Some(line) = lines.recv() => {
+                    self.scan_line(&line, is_named, label, &mut pending_url, &mut registered);
                 }
                 () = &mut start_deadline => {
                     process.terminate(self.config.stop_grace).await;
@@ -186,8 +161,6 @@ impl TunnelManager {
                 }
             }
         }
-
-        Ok(pending_url.unwrap_or_default())
     }
 
     fn register_connected(

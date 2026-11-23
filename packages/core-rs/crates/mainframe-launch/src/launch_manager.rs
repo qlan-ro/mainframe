@@ -5,10 +5,9 @@
 //! `preview` with a port and a `TunnelManager` is present, a tunnel is started
 //! and its URL / failure emitted.
 //!
-//! State: `processes` = `Arc<DashMap<String, ManagedProcess>>` (name →
-//! child handle + status). Env is threaded explicitly (no `std::env::set_var`):
-//! `clean_env` reads a snapshot map, so the MAINFRAME_ORIG_PATH clean-env
-//! contract is unit-testable without mutating global state.
+//! Env is threaded explicitly (no `std::env::set_var`): `clean_env` reads a
+//! snapshot map, so the MAINFRAME_ORIG_PATH clean-env contract is
+//! unit-testable without mutating global state.
 
 use mainframe_runtime::process::{Signal, TailBuffer};
 use mainframe_types::sync::LockExt;
@@ -20,15 +19,16 @@ use dashmap::DashMap;
 use mainframe_types::events::{DaemonEvent, LaunchStream};
 use mainframe_types::launch::{LaunchConfiguration, LaunchProcessStatus};
 use tokio::process::Command;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 use tokio::time::sleep;
 
 use crate::launch_process_state::{LaunchOutputEntry, LaunchProcessState};
 use crate::process::{
-    BoxFuture, ChildRegistryPort, ManagedChildEntry, ManagedChildKind, default_process_command,
-    now_ms,
+    ChildRegistryPort, ManagedChildEntry, ManagedChildKind, default_process_command,
 };
 use crate::tunnel_manager::{BroadcastFn, TunnelManager};
+use mainframe_types::BoxFuture;
+use mainframe_types::time::now_ms;
 
 const MAX_STDERR_LINES: usize = 20;
 
@@ -40,8 +40,8 @@ fn default_read_command() -> ReadCommandFn {
 }
 
 /// Lexically resolve a relative executable against an absolute project dir,
-/// normalizing `.`/`..` like `path.resolve(projectPath, exe)`, so the
-/// recorded reap command matches what the sweep reads back.
+/// normalizing `.`/`..` without touching the filesystem, so the recorded reap
+/// command matches what the sweep reads back.
 fn lexical_resolve(base: &str, rel: &str) -> String {
     let mut stack: Vec<&str> = Vec::new();
     for comp in base.split('/').chain(rel.split('/')) {
@@ -178,10 +178,13 @@ pub(crate) use construction::LaunchExecution;
 mod env;
 mod lifecycle;
 mod process;
+mod ready;
 mod start;
 mod state;
-pub use env::clean_env;
+#[cfg(test)]
+use env::clean_env;
 use env::compose_launch_env;
 use process::{
     ExitWatch, pump_output, signal_group, wait_for_exit_task, wait_for_port, wait_until_exited,
 };
+use ready::tcp_port;

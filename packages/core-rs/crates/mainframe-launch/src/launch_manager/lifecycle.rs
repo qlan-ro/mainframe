@@ -16,11 +16,7 @@ impl LaunchManager {
 
         // The preview tunnel and the process group stop concurrently, so a
         // stubborn one does not delay the other's grace period.
-        let stop_tunnel = async {
-            if let Some(tm) = &inner.tunnel_manager {
-                tm.stop(&format!("preview:{name}")).await;
-            }
-        };
+        let stop_tunnel = inner.stop_preview(name);
         let stop_process = async {
             use mainframe_runtime::process::{Terminated, terminate_with};
             tracing::info!(name, pid = ?pid, "stopping launch process (SIGTERM)");

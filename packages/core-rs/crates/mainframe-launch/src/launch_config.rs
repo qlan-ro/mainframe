@@ -79,14 +79,8 @@ pub fn parse_launch_config(
     }
 }
 
-// Allowed executables: common package managers + node. No shell operators.
-// The trailing alternative
-// `[a-zA-Z0-9_\-./]+` makes any operator-free path acceptable, so the guard is
-// really "no `;`, `|`, or `&`, and only path-safe characters".
+/// Only path-safe characters, so no shell operator (`;`, `|`, `&`) can appear.
 fn is_safe_executable(value: &str) -> bool {
-    if value.contains(';') || value.contains('|') || value.contains('&') {
-        return false;
-    }
     !value.is_empty()
         && value
             .chars()
@@ -154,52 +148,24 @@ fn parse_configuration(item: &Value) -> Result<LaunchConfiguration, Vec<&'static
     }
 }
 
-/// A number, string, or null (default null). A JSON number passes through
-/// unchecked (its positivity is never validated);
-/// a string is `parseInt`-ed and must be a positive integer; `null`/absent → None.
+/// A TCP port (1–65535) given as a JSON integer or a decimal string, or
+/// `null`/absent for none.
 fn parse_port(value: Option<&Value>) -> Result<Option<i64>, &'static str> {
     const MESSAGE: &str = "port must be a positive integer or null";
-    match value {
-        None | Some(Value::Null) => Ok(None),
-        Some(Value::Number(n)) => Ok(n
-            .as_i64()
-            .or_else(|| n.as_f64().map(|f| f as i64))
-            .or(Some(0))),
-        Some(Value::String(s)) => match parse_int_prefix(s) {
-            Some(parsed) if parsed > 0 => Ok(Some(parsed)),
-            _ => Err(MESSAGE),
-        },
-        Some(_) => Err(MESSAGE),
+    let port = match value {
+        None | Some(Value::Null) => return Ok(None),
+        Some(Value::Number(n)) => n.as_u64().and_then(|n| u16::try_from(n).ok()),
+        Some(Value::String(s)) => s.trim().parse::<u16>().ok(),
+        Some(_) => None,
+    };
+    match port {
+        Some(port) if port > 0 => Ok(Some(i64::from(port))),
+        _ => Err(MESSAGE),
     }
 }
 
-/// JS `parseInt(value, 10)`: skip leading ASCII whitespace, take an optional
-/// sign and the leading run of decimal digits. Empty digit run → `None` (NaN).
-fn parse_int_prefix(value: &str) -> Option<i64> {
-    let trimmed = value.trim_start();
-    let mut chars = trimmed.chars().peekable();
-    let mut digits = String::new();
-    if let Some(&sign @ ('+' | '-')) = chars.peek() {
-        digits.push(sign);
-        chars.next();
-    }
-    while let Some(&c) = chars.peek() {
-        if c.is_ascii_digit() {
-            digits.push(c);
-            chars.next();
-        } else {
-            break;
-        }
-    }
-    let has_digit = digits.chars().any(|c| c.is_ascii_digit());
-    if !has_digit {
-        return None;
-    }
-    digits.parse::<i64>().ok()
-}
-
-/// `z.string().url().nullable().optional().default(null)`. Without a URL crate
-/// the check is a light `scheme://host` shape; `null`/absent → None.
+/// A URL string, or `null`/absent for none. Without a URL crate the check is
+/// a light `scheme://host` shape.
 fn parse_url_field(value: Option<&Value>) -> Result<Option<String>, &'static str> {
     match value {
         None | Some(Value::Null) => Ok(None),
@@ -215,8 +181,7 @@ fn parse_url_field(value: Option<&Value>) -> Result<Option<String>, &'static str
 }
 
 // TODO: this shape check is permissive (`scheme://non-empty`, no whitespace); a
-// real URL parser would also reject bare hosts, missing authority, etc. No test
-// exercises URL rejection yet.
+// real URL parser would also reject bare hosts, missing authority, etc.
 fn looks_like_url(value: &str) -> bool {
     if let Some(idx) = value.find("://") {
         idx > 0 && value.len() > idx + 3 && !value.chars().any(char::is_whitespace)
@@ -225,8 +190,8 @@ fn looks_like_url(value: &str) -> bool {
     }
 }
 
-/// `z.record(keyRegex, z.coerce.string())`. Keys must match
-/// `^[A-Za-z_][A-Za-z0-9_]*$`; values are coerced to strings.
+/// An object of env vars. Keys must match `^[A-Za-z_][A-Za-z0-9_]*$`;
+/// scalar values are coerced to strings.
 fn parse_env(value: Option<&Value>) -> Result<Option<HashMap<String, String>>, Vec<&'static str>> {
     let obj = match value {
         None | Some(Value::Null) => return Ok(None),

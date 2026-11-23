@@ -210,3 +210,90 @@ async fn signal_group_does_not_fall_back_to_the_pid_when_the_group_is_gone() {
     unrelated.wait().unwrap();
     assert!(still_running, "the bare pid was signalled");
 }
+
+/// A localhost port nothing listens on.
+fn closed_port() -> i64 {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    i64::from(listener.local_addr().unwrap().port())
+}
+
+fn port_timings(port_timeout: Duration) -> crate::launch_manager::LaunchExecution {
+    crate::launch_manager::LaunchExecution {
+        read_process_command: default_read_command(),
+        timings: LaunchTimings {
+            port_poll: Duration::from_millis(20),
+            port_timeout,
+            ..LaunchTimings::default()
+        },
+    }
+}
+
+#[tokio::test]
+async fn a_start_whose_caller_stops_waiting_still_reaches_running() {
+    // The launch route awaits `start`, so a client that disconnects while the
+    // port is awaited drops it. The process used to stay `starting` forever.
+    let (broadcast, _events) = recorder();
+    let manager = LaunchManager::with_timings(
+        "proj-1",
+        "/tmp",
+        broadcast,
+        None,
+        None,
+        None,
+        port_timings(Duration::from_millis(400)),
+    );
+
+    let config = cfg("server", "sleep 100", Some(closed_port()));
+    let dropped = tokio::time::timeout(Duration::from_millis(100), manager.start(&config)).await;
+    assert!(dropped.is_err(), "start should still be awaiting the port");
+    assert_eq!(manager.get_status("server"), LaunchProcessStatus::Starting);
+
+    wait_until(|| manager.get_status("server") == LaunchProcessStatus::Running).await;
+    manager.stop_all().await;
+}
+
+#[tokio::test]
+async fn stopping_a_preview_while_its_port_is_awaited_opens_no_tunnel() {
+    use crate::test_support::{spawn_count, write_counting_cloudflared};
+    let dir = tempfile::tempdir().unwrap();
+    let tunnels = Arc::new(TunnelManager::with_config(
+        None,
+        crate::tunnel_manager::TunnelConfig {
+            cloudflared_bin: write_counting_cloudflared(dir.path()),
+            ..Default::default()
+        },
+    ));
+    let (broadcast, events) = recorder();
+    let manager = Arc::new(LaunchManager::with_timings(
+        "proj-1",
+        "/tmp",
+        broadcast,
+        Some(tunnels.clone()),
+        None,
+        None,
+        port_timings(Duration::from_secs(10)),
+    ));
+    let mut config = cfg("web", "printf up; sleep 100", Some(closed_port()));
+    config.preview = Some(true);
+
+    let starting = tokio::spawn({
+        let manager = manager.clone();
+        async move { manager.start(&config).await }
+    });
+    wait_until(|| output_events(&events).iter().any(|(_, d)| d.contains("up"))).await;
+    manager.stop("web").await;
+    starting.await.unwrap().unwrap();
+
+    // The old code opened the tunnel right after the port wait gave up.
+    let spawned = mainframe_runtime::test_support::poll_until(
+        Duration::from_millis(500),
+        Duration::from_millis(10),
+        async || spawn_count(dir.path()) > 0,
+    )
+    .await;
+    assert!(
+        spawned.is_err(),
+        "a stopped launch must not open a preview tunnel"
+    );
+    assert_eq!(tunnels.get_url("preview:web"), None);
+}

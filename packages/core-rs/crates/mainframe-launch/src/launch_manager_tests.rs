@@ -56,9 +56,10 @@ fn env_source(pairs: &[(&str, &str)]) -> HashMap<String, String> {
 }
 
 use crate::process::{
-    BoxFuture, ChildRegistryPort, FileChildRegistry, ManagedChildEntry, ManagedChildKind,
-    default_sweep_deps, sweep_stray_children,
+    ChildRegistryPort, FileChildRegistry, ManagedChildEntry, ManagedChildKind, default_sweep_deps,
+    sweep_stray_children,
 };
+use mainframe_types::BoxFuture;
 use std::os::unix::fs::PermissionsExt;
 
 struct RecordingRegistry {
@@ -94,12 +95,6 @@ impl ChildRegistryPort for RecordingRegistry {
     }
     fn list(&self) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
         Box::pin(async { vec![] })
-    }
-    fn list_by_kind(&self, _kind: ManagedChildKind) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
-        Box::pin(async { vec![] })
-    }
-    fn clear(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async {})
     }
 }
 

@@ -27,13 +27,9 @@ impl TunnelManager {
     }
 
     pub(super) fn on_exit_before_ready(&self, label: &str, exit: TunnelExit) -> TunnelStartError {
-        let code = exit
-            .code
-            .map(|c| c.to_string())
-            .unwrap_or_else(|| "null".to_string());
         let error = TunnelStartError::ExitedEarly {
             label: label.to_string(),
-            code,
+            code: exit.code,
         };
         self.broadcast(DaemonEvent::TunnelStatus {
             state: TunnelState::Error,
@@ -45,10 +41,9 @@ impl TunnelManager {
         error
     }
 
-    /// Post-ready exit handling (TS `child.once('exit')` `else` branch): remove
-    /// the tunnel and broadcast `stopped` when the established child dies on its
-    /// own. A tunnel removed by `stop`, or since respawned under the same label,
-    /// is left alone.
+    /// When an established tunnel's child dies on its own, remove the tunnel
+    /// and broadcast `stopped`. A tunnel removed by `stop`, or since respawned
+    /// under the same label, is left alone.
     pub(super) fn spawn_exit_watcher(
         &self,
         label: String,

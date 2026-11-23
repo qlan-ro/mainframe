@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::process::child_registry::BoxFuture;
+use mainframe_types::BoxFuture;
 
 /// Predicate the resolver probes each candidate with; default checks `X_OK`.
 pub type IsExecutableFn = Arc<dyn Fn(String) -> BoxFuture<'static, bool> + Send + Sync>;

@@ -13,7 +13,9 @@ use std::time::Duration;
 use mainframe_runtime::process::Signal;
 use tokio::time::sleep;
 
-use super::child_registry::{BoxFuture, ChildRegistryPort, ManagedChildEntry};
+use mainframe_types::BoxFuture;
+
+use super::child_registry::{ChildRegistryPort, ManagedChildEntry};
 
 const SIGTERM_GRACE: Duration = Duration::from_millis(2_000);
 
@@ -77,13 +79,10 @@ pub(crate) fn process_matches_binary(command: &str, bin_path: &str) -> bool {
 /// exactly (a fragment must not match) AND the recorded cwd to match the live
 /// cwd. Either mismatch means the pid was reused.
 pub(crate) fn process_matches_launch(
-    command: Option<&str>,
+    command: &str,
     cwd: Option<&str>,
     entry: &ManagedChildEntry,
 ) -> bool {
-    let Some(command) = command else {
-        return false;
-    };
     let recorded = if entry.args.is_empty() {
         entry.command.clone()
     } else {
@@ -93,36 +92,24 @@ pub(crate) fn process_matches_launch(
         return false;
     }
     // cwd is a hard guard: an unreadable (None) or differing cwd rejects the match.
-    if let Some(entry_cwd) = &entry.cwd
-        && cwd != Some(entry_cwd.as_str())
-    {
-        return false;
-    }
-    true
-}
-
-fn matches_entry(entry: &ManagedChildEntry, command: Option<&str>, cwd: Option<&str>) -> bool {
-    let Some(command) = command else {
-        return false;
-    };
-    if entry.group {
-        process_matches_launch(Some(command), cwd, entry)
-    } else {
-        process_matches_binary(command, &entry.command)
+    match &entry.cwd {
+        Some(entry_cwd) => cwd == Some(entry_cwd.as_str()),
+        None => true,
     }
 }
 
-/// Re-read a pid's identity to decide whether the orphan (or its still-matching
-/// group) survived our SIGTERM. Re-verifies the full command + cwd guard so a pid
-/// reused during the grace window is treated as gone, never SIGKILLed.
-async fn orphan_still_matches(entry: &ManagedChildEntry, deps: &SweepDeps) -> bool {
-    let command = (deps.process_command)(entry.pid).await;
-    let cwd = if command.is_some() && entry.group {
-        (deps.process_cwd)(entry.pid).await
+/// Whether the process holding the record's pid is still the child the record
+/// names, or `None` when no process holds the pid. Re-read after SIGTERM too,
+/// so a pid reused during the grace window is never SIGKILLed.
+async fn identity_matches(entry: &ManagedChildEntry, deps: &SweepDeps) -> Option<bool> {
+    let command = (deps.process_command)(entry.pid).await?;
+    let matches = if entry.group {
+        let cwd = (deps.process_cwd)(entry.pid).await;
+        process_matches_launch(&command, cwd.as_deref(), entry)
     } else {
-        None
+        process_matches_binary(&command, &entry.command)
     };
-    matches_entry(entry, command.as_deref(), cwd.as_deref())
+    Some(matches)
 }
 
 pub(crate) async fn default_process_command(pid: i64) -> Option<String> {
@@ -193,11 +180,14 @@ pub async fn sweep_stray_children(
     }
 
     for entry in entries {
-        if !reap_entry(registry, deps, &entry).await {
-            continue;
+        match reap_entry(deps, &entry).await {
+            Reap::Reaped => {
+                reaped += 1;
+                registry.remove(entry.pid).await;
+            }
+            Reap::Prune => registry.remove(entry.pid).await,
+            Reap::Keep => {}
         }
-        reaped += 1;
-        registry.remove(entry.pid).await;
     }
 
     SweepResult {
@@ -211,27 +201,27 @@ pub async fn sweep_stray_children(
 #[path = "sweep_tests.rs"]
 mod tests;
 
-async fn reap_entry(
-    registry: &dyn ChildRegistryPort,
-    deps: &SweepDeps,
-    entry: &ManagedChildEntry,
-) -> bool {
-    let command = (deps.process_command)(entry.pid).await;
-    let cwd = if command.is_some() && entry.group {
-        (deps.process_cwd)(entry.pid).await
-    } else {
-        None
-    };
-    if !matches_entry(entry, command.as_deref(), cwd.as_deref()) {
+/// What the sweep does with one record.
+enum Reap {
+    /// The orphan was signalled; drop its record.
+    Reaped,
+    /// The pid is gone or belongs to another process; drop the record.
+    Prune,
+    /// The orphan may still be alive (the kill failed); keep the record.
+    Keep,
+}
+
+async fn reap_entry(deps: &SweepDeps, entry: &ManagedChildEntry) -> Reap {
+    let identity = identity_matches(entry, deps).await;
+    if identity != Some(true) {
         tracing::debug!(
             pid = entry.pid,
             kind = ?entry.kind,
             label = %entry.label,
-            alive = command.is_some(),
+            alive = identity.is_some(),
             "pruning child registry entry (process gone or not ours)",
         );
-        registry.remove(entry.pid).await;
-        return false;
+        return Reap::Prune;
     }
 
     tracing::warn!(
@@ -241,22 +231,21 @@ async fn reap_entry(
         group = entry.group,
         "reaping stray child orphaned by a previous daemon run",
     );
-    let killed = (deps.kill)(entry.pid, Signal::Term, entry.group);
-    if !killed {
+    if !(deps.kill)(entry.pid, Signal::Term, entry.group) {
         tracing::warn!(
             pid = entry.pid,
             kind = ?entry.kind,
             label = %entry.label,
             "kept child registry entry: kill failed, orphan may still be alive",
         );
-        return false;
+        return Reap::Keep;
     }
 
     // `kill` reports signal delivery, not death. Mirror stop()'s TERM→KILL
     // ladder: after a grace period, SIGKILL an orphan (or its still-matching
     // group) that ignored or slow-handled SIGTERM before pruning its record.
     sleep(deps.grace.unwrap_or(SIGTERM_GRACE)).await;
-    if orphan_still_matches(entry, deps).await {
+    if identity_matches(entry, deps).await == Some(true) {
         tracing::warn!(
             pid = entry.pid,
             kind = ?entry.kind,
@@ -265,5 +254,5 @@ async fn reap_entry(
         );
         (deps.kill)(entry.pid, Signal::Kill, entry.group);
     }
-    true
+    Reap::Reaped
 }

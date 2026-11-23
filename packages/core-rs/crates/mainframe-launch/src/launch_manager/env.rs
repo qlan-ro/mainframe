@@ -14,7 +14,7 @@ fn is_allowed_env_var(key: &str) -> bool {
 /// user launch processes (they'd resolve `node`/`npm` to Mainframe's internal
 /// single-file Node instead of the user's toolchain). `MAINFRAME_ORIG_PATH`
 /// carries the pristine, pre-prefix PATH and is itself never forwarded.
-pub fn clean_env(source: &HashMap<String, String>) -> HashMap<String, String> {
+pub(super) fn clean_env(source: &HashMap<String, String>) -> HashMap<String, String> {
     let mut result: HashMap<String, String> = HashMap::new();
     for (key, value) in source {
         if key == "MAINFRAME_ORIG_PATH" {

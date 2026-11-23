@@ -1,19 +1,15 @@
 //! Durable per-config status + recent output, kept independent of
 //! `LaunchManager`'s live process map (which deletes its entry the instant the
 //! child exits). Two races this closes:
-//!  - a terminal status ('stopped'/'failed') would be unobservable if reads went
-//!    through the process map — the exit path sets the status and deletes the
-//!    entry in the same tick, so a later read would fall through to a 'stopped'
-//!    default and mask a real failure;
+//!  - a terminal status (`stopped`/`failed`) would be unobservable if reads went
+//!    through the process map: the exit path removes the entry, so a later read
+//!    would fall through to a `stopped` default and mask a real failure;
 //!  - a fast subprocess (spawn → stdout → exit within one tick) can finish before
 //!    a late-attaching console pane observes the live event, so the output buffer
 //!    is a durable replay source.
 //!
 //! Both maps are reset (not deleted) on the next `start()` of the same name, so a
 //! fresh run never carries a previous run's terminal status or output.
-//!
-//! State: `statuses` = `Arc<Mutex<HashMap<String, LaunchProcessStatus>>>`,
-//! `outputBuffers` = `Arc<Mutex<HashMap<String, VecDeque<LaunchOutputEntry>>>>`.
 
 use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};

@@ -2,7 +2,8 @@ use super::*;
 
 impl Inner {
     /// Persist a spawned launch pid so a crashed daemon's next startup sweep can
-    /// reap its process group. Identity is the child's LIVE command line, read
+    /// reap its process group. Call before the child is reaped, so the pid
+    /// still names it. Identity is the child's LIVE command line, read
     /// from `ps` at spawn — the kernel rewrites argv for a `#!` script, which is
     /// what the sweep reads back, so recording our own argv would never match. If
     /// `ps` can't read the pid we fall back to the spawned argv (a weaker guard).
@@ -57,17 +58,10 @@ impl Inner {
             .is_some_and(|current| *current == generation)
     }
 
-    pub(super) fn forget_spawn(&self, pid: Option<u32>) {
-        let Some(pid) = pid else {
-            return;
-        };
-        let Some(registry) = &self.child_registry else {
-            return;
-        };
-        let registry = registry.clone();
-        tokio::spawn(async move {
+    pub(super) async fn forget_spawn(&self, pid: Option<u32>) {
+        if let (Some(pid), Some(registry)) = (pid, &self.child_registry) {
             registry.remove(i64::from(pid)).await;
-        });
+        }
     }
 
     pub(super) fn emit_status(&self, name: &str, status: LaunchProcessStatus) {
