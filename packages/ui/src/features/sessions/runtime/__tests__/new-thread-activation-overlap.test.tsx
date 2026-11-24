@@ -37,7 +37,7 @@ import { openNewThreadDraft, type OpenNewThreadDraftDeps } from '../../new-threa
 import { useNewThreadSwitchPending } from '../../new-thread/new-thread-switch-pending';
 
 vi.mock('../../../../lib/daemon/ws-client', () => ({
-  daemonWs: { onEvent: vi.fn(() => () => {}) },
+  daemonWs: { connected: true, onEvent: vi.fn(() => () => {}), subscribeConnection: vi.fn(() => () => {}) },
 }));
 vi.mock('../../../../lib/host', () => ({
   getHost: () => ({ notify: async () => {} }),

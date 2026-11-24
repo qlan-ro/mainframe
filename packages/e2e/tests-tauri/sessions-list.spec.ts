@@ -185,14 +185,15 @@ test.describe('§sessions-list Hover card', () => {
     let lineage: Record<string, unknown> = {};
     app = await launchTauriApp({
       // The mock adapter cannot fork: hand the list a parent and a PR.
-      beforeNavigate: (page) =>
-        page.route(/\/api\/chats(\?.*)?$/, async (route) => {
+      beforeNavigate: async (page) => {
+        await page.route(/\/api\/chats(\?.*)?$/, async (route) => {
           if (route.request().method() !== 'GET') return route.continue();
           const response = await route.fetch();
           const body = (await response.json()) as { data: Record<string, unknown>[] };
           for (const chat of body.data) if (chat['id'] === child) Object.assign(chat, lineage);
           return route.fulfill({ response, json: body });
-        }),
+        });
+      },
     });
     project = await createTauriProject(app.page);
     parent = await createTauriChat(app.page, project.projectId);
