@@ -68,6 +68,9 @@ impl EventEmitter for DaemonChatDeps {
     fn workflow_runs_stop_all(&self, chat_id: &str) {
         self.claude_workflows.stop_all_running(chat_id);
     }
+    fn workflow_runs_remove_chat(&self, chat_id: &str) {
+        self.claude_workflows.remove_chat(chat_id);
+    }
 }
 
 impl DaemonChatDeps {

@@ -10,4 +10,7 @@ pub trait EventEmitter: Send + Sync {
     fn tracker_end_all_running(&self, chat_id: &str);
 
     fn workflow_runs_stop_all(&self, chat_id: &str);
+
+    /// Drops the chat's workflow runs once the chat itself is deleted.
+    fn workflow_runs_remove_chat(&self, chat_id: &str);
 }

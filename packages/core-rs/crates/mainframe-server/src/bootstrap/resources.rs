@@ -137,7 +137,7 @@ fn adapters(
     adapters.seed_static_snapshots();
 
     spawn_task_event_bridge(Arc::clone(background_tasks), broadcast.clone());
-    spawn_workflow_run_bridge(Arc::clone(claude_workflows), broadcast.clone());
+    spawn_workflow_run_bridge(claude_workflows, broadcast.clone());
 
     // Kill adapters and cloudflared before the default panic hook to avoid orphaning them.
     install_panic_cleanup(&adapters, tunnel_manager);

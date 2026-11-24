@@ -10,7 +10,8 @@ impl ChatManager {
     /// project, extracted so `discard_chat` reuses the exact same steps: kill
     /// tasks, kill the session, drop the active entry, drop the message cache,
     /// forget per-chat state (including pending gates and worktree offers),
-    /// remove it from the tracker, and notify the chat-surface `ChatEnded`.
+    /// remove it from the tracker and the workflow-run store, and notify the
+    /// chat-surface `ChatEnded`.
     pub(super) async fn teardown_live_chat(&self, chat: &Chat) {
         let cell = self.get_active(&chat.id);
         let session = cell.as_ref().and_then(|c| c.lock_recover().session.clone());
@@ -37,6 +38,7 @@ impl ChatManager {
         self.lifecycle.orchestration().revoke(&chat.id);
         self.teardown.clear(&chat.id, TeardownMode::Discard);
         self.shared.deps.tracker_remove_chat(&chat.id);
+        self.shared.deps.workflow_runs_remove_chat(&chat.id);
         self.event_handler
             .notify_chat_surface(crate::chat_surface::ChatSurfaceEvent::ChatEnded {
                 chat_id: chat.id.clone(),

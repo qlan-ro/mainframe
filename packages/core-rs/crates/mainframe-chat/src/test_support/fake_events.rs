@@ -24,6 +24,8 @@ pub(crate) struct FakeEventEmitter {
     pub(crate) tracker_removed: Mutex<Vec<String>>,
     /// Every chat id `workflow_runs_stop_all` was called with, in order.
     pub(crate) workflow_runs_stopped: Mutex<Vec<String>>,
+    /// Every chat id `workflow_runs_remove_chat` was called with, in order.
+    pub(crate) workflow_runs_removed: Mutex<Vec<String>>,
     /// When set, `tracker_end_all_running` also ends the tasks in it.
     pub(crate) tracker: Mutex<Option<Arc<BackgroundTaskTracker>>>,
 }
@@ -59,6 +61,12 @@ impl EventEmitter for FakeDeps {
     fn workflow_runs_stop_all(&self, chat_id: &str) {
         self.emitter
             .workflow_runs_stopped
+            .lock_recover()
+            .push(chat_id.to_string());
+    }
+    fn workflow_runs_remove_chat(&self, chat_id: &str) {
+        self.emitter
+            .workflow_runs_removed
             .lock_recover()
             .push(chat_id.to_string());
     }
