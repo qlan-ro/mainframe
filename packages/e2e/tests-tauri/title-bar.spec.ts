@@ -27,17 +27,21 @@
  * packages/ui/src/store/layout-placement.ts (isSurfaceFloor).
  *
  * Testid reference (all verified against source):
- *   title-bar / title-bar-sidebar-section / title-bar-chat-column / title-bar-actions
+ *   title-bar / title-bar-sidebar-segment / title-bar-chat-column / title-bar-trailing /
+ *   title-bar-workspace / title-bar-actions, and title-bar-separator-{sidebar,workspace,actions}
  *   session-tab-<id>         — right-click target (role=tab); opens `SessionTabContextMenu`
  *   session-tab-ctx-hide-chat — always rendered; `disabled` (Radix `data-disabled`) while
  *                               chat is the only lit surface (the dynamic floor)
- *   surface-rail-<chat|workspace> / workspace-surface / workspace-surface-close — layout.spec.ts's
+ *   surface-rail-<chat|workspace> / workspace-surface — layout.spec.ts's
  *                               own testids, referenced here only to observe hide effects
  *   [data-surface="chat|workspace"] — layout engine's per-surface panel wrapper
  */
+import { writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
+import { workspace } from '../helpers/tauri/page-objects.js';
 
 // ─── Hide-Chat control (dynamic floor, tab context menu) ─────────────────────
 
@@ -83,6 +87,273 @@ test.describe('§title-bar — hide-chat control (dynamic floor, tab context men
     await expect(page.locator('[data-surface="chat"]')).toHaveCount(0);
     // Files remains the sole lit surface.
     await expect(page.getByTestId('workspace-surface')).toBeVisible();
+  });
+});
+
+// ─── Segments line up with the columns below (W1) ─────────────────────────────
+
+test.describe('§title-bar — separators stand on the column edges', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  const left = async (page: Page, selector: string) =>
+    (await page.locator(selector).evaluate((el) => el.getBoundingClientRect().left)) as number;
+  const separator = (name: string) => `[data-testid="title-bar-separator-${name}"]`;
+
+  /** A separator covers the one pixel left of its column, where the column's own hairline is. */
+  async function expectOnEdge(page: Page, name: string, column: string) {
+    await expect
+      .poll(async () => Math.abs((await left(page, column)) - 1 - (await left(page, separator(name)))))
+      .toBeLessThan(0.5);
+  }
+
+  test('the first stands on the sidebar edge, and follows the capsule once the sidebar is collapsed', async () => {
+    const { page } = app;
+    await expectOnEdge(page, 'sidebar', '[data-testid="main-surface-shell"]');
+
+    await page.keyboard.press('ControlOrMeta+B');
+    const capsule = page.getByTestId('usage-capsule');
+    await expect
+      .poll(async () => {
+        const box = (await capsule.boundingBox())!;
+        return (await left(page, separator('sidebar'))) - (box.x + box.width);
+      })
+      .toBe(12);
+    await page.keyboard.press('ControlOrMeta+B');
+    await expectOnEdge(page, 'sidebar', '[data-testid="main-surface-shell"]');
+  });
+
+  test('the second stands on the workspace edge through a divider drag; the third closes the segment', async () => {
+    const { page } = app;
+    await expect(page.locator(separator('workspace'))).toHaveCount(0);
+    await page.getByTestId('surface-rail-workspace').click();
+    await expectOnEdge(page, 'workspace', '[data-surface="workspace"]');
+
+    const divider = (await page.getByTestId('surf-divider-x').boundingBox())!;
+    const before = await left(page, separator('workspace'));
+    await page.mouse.move(divider.x, divider.y + divider.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(divider.x - 90, divider.y + divider.height / 2, { steps: 5 });
+    await page.mouse.up();
+    expect(before - (await left(page, separator('workspace')))).toBeGreaterThan(60);
+    await expectOnEdge(page, 'workspace', '[data-surface="workspace"]');
+
+    const [files, third, search] = await Promise.all([
+      left(page, '[data-testid="workspace-files-open"]'),
+      left(page, separator('actions')),
+      left(page, '[data-testid="main-toolbar-search"]'),
+    ]);
+    expect(files).toBeLessThan(third);
+    expect(third).toBeLessThan(search);
+  });
+});
+
+// ─── Segments at their limits (W1, W2) ────────────────────────────────────────
+
+test.describe('§title-bar — segments at their limits', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+    for (const file of ['UsageCapsule.tsx', 'quota.rs', 'use-quota.ts']) {
+      writeFileSync(path.join(project.projectPath, file), '// seeded\n');
+    }
+    await createTauriChat(app.page, project.projectId, 'default');
+    await app.page.setViewportSize({ width: 1200, height: 800 });
+    await app.page.getByTestId('surface-rail-workspace').click();
+    for (const file of ['UsageCapsule.tsx', 'quota.rs', 'use-quota.ts']) {
+      await workspace(app.page).openFilePicker();
+      await app.page.getByTestId('file-picker-input').fill(file);
+      await app.page.locator('[data-testid^="file-picker-row-"]').filter({ hasText: file }).first().click();
+      await workspace(app.page).tab(file).dblclick();
+    }
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  async function dragDivider(page: Page, x: number) {
+    const box = (await page.getByTestId('surf-divider-x').boundingBox())!;
+    await page.mouse.move(box.x, 400);
+    await page.mouse.down();
+    await page.mouse.move(x, 400, { steps: 5 });
+    await page.mouse.up();
+  }
+
+  async function dragSidebar(page: Page, width: number) {
+    const edge = (await page.getByTestId('main-surface-shell').boundingBox())!.x;
+    await page.mouse.move(edge - 4, 400);
+    await page.mouse.down();
+    await page.mouse.move(56 + width - 4, 400, { steps: 8 });
+    await page.mouse.up();
+  }
+
+  const edges = (page: Page) =>
+    page.evaluate(() => {
+      const box = (id: string) => document.querySelector(id)!.getBoundingClientRect();
+      const panel = box('[data-surface="workspace"]');
+      return {
+        sidebarOff:
+          box('[data-testid="main-surface-shell"]').left - 1 - box('[data-testid="title-bar-separator-sidebar"]').left,
+        workspaceOff: panel.left - 1 - box('[data-testid="title-bar-separator-workspace"]').left,
+        panelOverflow: panel.right - window.innerWidth,
+        togglesOverflow: box('[data-testid="surface-rail"]').right - window.innerWidth,
+      };
+    });
+
+  /** Separators on their edges, the panel and the toggles inside the window. */
+  async function expectAligned(page: Page) {
+    await expect
+      .poll(async () => {
+        const e = await edges(page);
+        return Math.max(Math.abs(e.sidebarOff), Math.abs(e.workspaceOff), e.panelOverflow, e.togglesOverflow);
+      })
+      .toBeLessThan(0.5);
+  }
+
+  test('follows a clamped panel that moves without resizing', async () => {
+    const { page } = app;
+    await page.setViewportSize({ width: 920, height: 800 });
+    await expectAligned(page);
+    for (const width of [880, 800]) {
+      await page.setViewportSize({ width, height: 800 });
+      expect((await page.locator('[data-surface="workspace"]').boundingBox())!.width).toBeCloseTo(320, 0);
+      await expectAligned(page);
+    }
+  });
+
+  test('follows the panel at the divider minimum, both ways, with the toggles on screen', async () => {
+    const { page } = app;
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await dragDivider(page, 1190);
+    await expectAligned(page);
+    for (const width of [1400, 1200, 800, 1200]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expectAligned(page);
+    }
+  });
+
+  test('stands on the sidebar edge at its narrowest and widest, in the smallest window', async () => {
+    const { page } = app;
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await dragSidebar(page, 100);
+    expect((await page.getByTestId('main-surface-shell').boundingBox())!.x).toBe(56 + 208);
+    await expectAligned(page);
+
+    await dragSidebar(page, 700);
+    expect((await page.getByTestId('main-surface-shell').boundingBox())!.x).toBe(56 + 480);
+    await page.setViewportSize({ width: 800, height: 800 });
+    await expectAligned(page);
+
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await dragSidebar(page, 260);
+    await expectAligned(page);
+  });
+
+  test('a mouse click leaves the tabs out of reach of Delete and Backspace', async () => {
+    const { page } = app;
+    await page.setViewportSize({ width: 1200, height: 800 });
+    const tabs = workspace(page).tabs();
+    await expect(tabs).toHaveCount(3);
+    for (const key of ['Backspace', 'Delete']) {
+      await workspace(page).tab('quota.rs').click();
+      await page.keyboard.press(key);
+      await expect(tabs).toHaveCount(3);
+    }
+  });
+
+  test('a held Delete closes one tab, on a tab reached by keyboard', async () => {
+    const { page } = app;
+    const tabs = workspace(page).tabs();
+    await workspace(page).tab('quota.rs').click();
+    await page.getByTestId('main-toolbar-search').focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
+    await expect(workspace(page).tab('quota.rs')).toBeFocused();
+
+    await page.keyboard.down('Delete');
+    for (let i = 0; i < 4; i++) await page.keyboard.down('Delete'); // auto-repeat
+    await page.keyboard.up('Delete');
+    await expect(tabs).toHaveCount(2);
+    await expect(workspace(page).tab('quota.rs')).toHaveCount(0);
+    await expect(page.locator('[role="tab"]:focus')).toHaveCount(1);
+
+    await workspace(page).openFilePicker();
+    await page.getByTestId('file-picker-input').fill('quota.rs');
+    await page.locator('[data-testid^="file-picker-row-"]').filter({ hasText: 'quota.rs' }).first().click();
+    await workspace(page).tab('quota.rs').dblclick();
+    await expect(tabs).toHaveCount(3);
+  });
+
+  test('is dragged from the chat side only, clear of a native webview in the panel', async () => {
+    const { page } = app;
+    const grabs = await page.evaluate(() => {
+      const left = document.querySelector('[data-surface="workspace"]')!.getBoundingClientRect().left;
+      const divider = document.querySelector('[data-testid="surf-divider-x"]')!;
+      return [-9, -5, -1, 0, 4].map((dx) => divider.contains(document.elementFromPoint(left + dx + 0.5, 400)));
+    });
+    expect(grabs).toEqual([true, true, true, false, false]);
+  });
+
+  test('shrinks the other tabs to 60px and never truncates the selected one', async () => {
+    const { page } = app;
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await dragDivider(page, 760);
+    await workspace(page).tab('UsageCapsule.tsx').click();
+    const title = workspace(page)
+      .tab('UsageCapsule.tsx')
+      .getByTestId(/^workspace-tab-title-/);
+    await expect.poll(() => title.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
+    for (const file of ['quota.rs', 'use-quota.ts']) {
+      expect((await workspace(page).tab(file).boundingBox())!.width).toBeGreaterThanOrEqual(60);
+    }
+
+    await dragDivider(page, 900);
+    const widths = await Promise.all(
+      ['quota.rs', 'use-quota.ts'].map(async (file) => (await workspace(page).tab(file).boundingBox())!.width),
+    );
+    expect(Math.min(...widths)).toBe(60);
+  });
+
+  test('keeps the selected tab and its close button inside the row at the 320px panel', async () => {
+    const { page } = app;
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await dragDivider(page, 1190);
+    const overhang = (file: string) =>
+      page.evaluate((name) => {
+        const tab = [...document.querySelectorAll<HTMLElement>('[data-testid^="workspace-tab-"][role="tab"]')].find(
+          (el) => el.textContent!.includes(name),
+        )!;
+        const row = tab.closest('[role="tablist"]')!.getBoundingClientRect();
+        const close = tab.querySelector('[data-tab-close]')!.getBoundingClientRect();
+        return { close: close.right - row.right, start: row.left - tab.getBoundingClientRect().left };
+      }, file);
+    for (const file of ['use-quota.ts', 'UsageCapsule.tsx']) {
+      await workspace(page).tab(file).click();
+      await expect.poll(async () => Math.max(...Object.values(await overhang(file)))).toBeLessThan(0.5);
+    }
+    // A short name fits whole even here; a longer one fades rather than losing its close button.
+    const title = workspace(page)
+      .tab('quota.rs')
+      .getByTestId(/^workspace-tab-title-/);
+    await workspace(page).tab('quota.rs').click();
+    await expect.poll(() => title.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
   });
 });
 

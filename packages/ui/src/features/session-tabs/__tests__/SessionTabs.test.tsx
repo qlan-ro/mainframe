@@ -323,6 +323,134 @@ describe('waiting (todo #344)', () => {
   });
 });
 
+describe('status dot', () => {
+  it('marks a tab whose session is running', () => {
+    itemsValue = [{ id: 'chat-a', status: 'regular', custom: { projectId: 'proj-1', displayStatus: 'working' } }];
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: null, hydrated: true });
+
+    render();
+
+    expect(screen.getByTestId('session-tab-status-chat-a')).toHaveAttribute('data-status', 'working');
+    expect(screen.getByRole('img', { name: 'Running' })).toBeInTheDocument();
+  });
+
+  it('leads an idle tab with a quiet dot that says nothing to screen readers', () => {
+    seed('chat-a');
+
+    render();
+
+    expect(screen.getByTestId('session-tab-status-chat-a')).toHaveAttribute('data-status', 'idle');
+    expect(screen.queryByRole('img')).toBeNull();
+  });
+});
+
+describe('keyboard', () => {
+  const tab = (id: string) => screen.getByTestId(`session-tab-${id}`);
+
+  it('is one tab stop, on the selected tab', () => {
+    seed('chat-a');
+
+    render();
+
+    expect(screen.getAllByRole('tab').map((el) => el.tabIndex)).toEqual([0, -1, -1]);
+  });
+
+  it('moves focus with the arrow keys and selects with Enter', () => {
+    seed('chat-a');
+    render();
+    tab('chat-a').focus();
+
+    fireEvent.keyDown(tab('chat-a'), { key: 'ArrowRight' });
+    expect(tab('chat-b')).toHaveFocus();
+    expect(switchToThread).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(tab('chat-b'), { key: 'Enter' });
+    expect(switchToThread).toHaveBeenCalledWith('chat-b');
+  });
+
+  it('jumps to the ends with Home and End, and stays put past them', () => {
+    seed('chat-a');
+    render();
+    tab('chat-a').focus();
+
+    fireEvent.keyDown(tab('chat-a'), { key: 'End' });
+    expect(tab('chat-p')).toHaveFocus();
+    fireEvent.keyDown(tab('chat-p'), { key: 'ArrowRight' });
+    expect(tab('chat-p')).toHaveFocus();
+    fireEvent.keyDown(tab('chat-p'), { key: 'Home' });
+    expect(tab('chat-a')).toHaveFocus();
+  });
+
+  it.each(['Delete', 'Backspace'])('closes the focused tab with %s and moves focus to its neighbour', (key) => {
+    seed('chat-a');
+    render();
+    tab('chat-b').focus();
+
+    fireEvent.keyDown(tab('chat-b'), { key });
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a']);
+    expect(screen.queryByTestId('session-tab-chat-b')).toBeNull();
+    expect(tab('chat-p')).toHaveFocus();
+  });
+
+  it('closes one tab per press: a held key stops at the first', () => {
+    seed('chat-a');
+    render();
+    tab('chat-a').focus();
+
+    fireEvent.keyDown(tab('chat-a'), { key: 'Delete' });
+    const held = document.activeElement as HTMLElement;
+    expect(held).toBe(tab('chat-b'));
+    fireEvent.keyDown(held, { key: 'Delete', repeat: true });
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-b']);
+  });
+
+  it.each(['metaKey', 'ctrlKey', 'altKey', 'shiftKey'])('leaves Backspace with %s alone', (modifier) => {
+    seed('chat-a');
+    render();
+    tab('chat-b').focus();
+
+    fireEvent.keyDown(tab('chat-b'), { key: 'Backspace', [modifier]: true });
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-b']);
+  });
+
+  it.each(['Delete', 'Backspace'])('ignores %s while the focus is not visible', (key) => {
+    seed('chat-a');
+    render();
+    tab('chat-b').focus();
+    vi.spyOn(tab('chat-b'), 'matches').mockReturnValue(false);
+
+    fireEvent.keyDown(tab('chat-b'), { key });
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-b']);
+  });
+
+  it('moves focus back to the previous tab when the last one closes', () => {
+    seed('chat-a');
+    render();
+    tab('chat-p').focus();
+
+    fireEvent.keyDown(tab('chat-p'), { key: 'Delete' });
+
+    expect(tab('chat-b')).toHaveFocus();
+  });
+
+  it('moves focus to the + when the only tab closes', () => {
+    itemsValue = SESSIONS;
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: null, hydrated: true });
+    render();
+    tab('chat-a').focus();
+
+    fireEvent.keyDown(tab('chat-a'), { key: 'Delete' });
+
+    expect(screen.getByTestId('session-tabs-new')).toHaveFocus();
+  });
+});
+
 describe('titles', () => {
   it('labels a tab with no thread-list entry as a new session', () => {
     itemsValue = SESSIONS;

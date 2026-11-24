@@ -66,8 +66,7 @@ function gitCommit(cwd: string, message: string): void {
  * Toggle the workspace surface on (MainToolbar surface rail).
  *
  * Wait on the SURFACE, not on a pane strip: with no tabs open the workspace renders
- * `workspace-empty-state`, whose header is the same chrome row minus a pane
- * (WorkspaceStripChrome), so `workspace-tab-strip-pane-<id>` does not exist yet.
+ * `workspace-empty-state` and no `workspace-tab-strip-pane-<id>` exists yet.
  */
 async function ensureWorkspaceOn(page: import('@playwright/test').Page): Promise<void> {
   const surface = page.getByTestId('workspace-surface');

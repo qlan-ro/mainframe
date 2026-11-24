@@ -5,6 +5,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { DAEMON_BASE } from '../../../packages/e2e/fixtures/daemon.js';
 import { waitConnected } from '../../../packages/e2e/helpers/tauri/wait.js';
+import { workspace } from '../../../packages/e2e/helpers/tauri/page-objects.js';
 import { createTauriChat } from '../../../packages/e2e/helpers/tauri/setup.js';
 import { WORK_DIR } from './isolation.mts';
 import type { Page } from '../../../packages/e2e/node_modules/@playwright/test/index.mjs';
@@ -156,8 +157,8 @@ const SESSIONS: ['atlas' | 'ledger', string][] = [
 ];
 
 /** Two projects and six sessions: the populated window most boards start from. */
-export async function seedWorkbench(page: Page): Promise<Workbench> {
-  const atlas = await seedProject('atlas-web');
+export async function seedWorkbench(page: Page, atlasFiles?: Record<string, string>): Promise<Workbench> {
+  const atlas = await seedProject('atlas-web', atlasFiles);
   const ledger = await seedProject('ledger-api');
   await reload(page);
   const chats: string[] = [];
@@ -165,4 +166,29 @@ export async function seedWorkbench(page: Page): Promise<Workbench> {
     chats.push(await seedChat(page, project === 'atlas' ? atlas : ledger, title));
   }
   return { atlas, ledger, chats };
+}
+
+/** Files a workspace state opens: one per kind of name a tab has to cope with. */
+export const WORKSPACE_FILES: Record<string, string> = {
+  ...DEFAULT_FILES,
+  'UsageCapsule.tsx': 'export function UsageCapsule() {\n  return <button className="capsule">42%</button>;\n}\n',
+  'use-quota.ts': 'export const useQuota = () => ({ percent: 42 });\n',
+  'quota.rs': 'pub fn percent() -> u8 {\n    42\n}\n',
+};
+
+/** Shows the workspace and opens files in it as kept tabs; the last one is selected. */
+export async function openWorkspaceFiles(page: Page, files: string[]): Promise<void> {
+  if ((await page.getByTestId('workspace-surface').count()) === 0) {
+    await page.getByTestId('surface-rail-workspace').click();
+    await page.getByTestId('workspace-surface').waitFor();
+  }
+  for (const file of files) {
+    await workspace(page).openFilePicker();
+    await page.getByTestId('file-picker-input').fill(file);
+    await page.locator('[data-testid^="file-picker-row-"]', { hasText: file }).first().click();
+    const tab = workspace(page).tab(file);
+    await tab.waitFor();
+    // A picked file opens as a preview the next one would replace.
+    await tab.dblclick();
+  }
 }

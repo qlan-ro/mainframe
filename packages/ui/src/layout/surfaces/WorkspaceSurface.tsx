@@ -1,8 +1,8 @@
 /**
  * layout/surfaces/WorkspaceSurface.tsx — the single non-chat surface: files,
  * terminals, consoles, previews and URL tabs in one pane model.
- * 1 or 2 panes laid out along `run.dir`; each pane is a `WorkspaceTabStrip` + the
- * active body. A preview-config tab shows the webview (`PreviewInstance`); a
+ * 1 or 2 panes laid out along `run.dir`. The first pane's tabs are in the title
+ * bar (W2); a second pane has its own `WorkspaceTabStrip`. A preview-config tab shows the webview (`PreviewInstance`); a
  * process-config tab shows a full-space console (`ConsolePane variant="full"`);
  * a terminal tab shows the PTY; a `url` tab shows an arbitrary address in the
  * same webview (`UrlTabInstance`); a file tab shows the editor/diff/viewer
@@ -14,35 +14,15 @@ import { PreviewInstance } from '@/features/preview/PreviewInstance';
 import { UrlTabInstance } from '@/features/url-tab/UrlTabInstance';
 import { ConsolePane } from '@/features/run/ConsolePane';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { useLayoutStore } from '@/store/layout';
 import { useSandboxStore } from '@/store/sandbox';
-import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
-import { activeLaunchScope } from '@/lib/launch-scope';
-import { filterRunByScope } from '@/store/run-scope-filter';
 import { WorkspaceFilesPanel } from '@/features/files/WorkspaceFilesPanel';
 import { WorkspaceEmptyState } from '../WorkspaceEmptyState';
-import { STRIP_ROW, WorkspaceStripActions, WorkspaceStripLead } from '../WorkspaceStripChrome';
 import { WorkspaceTabStrip } from '../WorkspaceTabStrip';
 import { EditorTabBody } from './EditorTabBody';
+import { useScopedRun } from './use-scoped-run';
 import type { RunPane, RunTab } from '@/store/run-pane';
-
-/**
- * Header shown when the workspace has no tabs — keeps the split/close controls
- * reachable so an empty surface can still be split or dismissed (todo #195). The
- * `+`/add affordance is the empty state below, so it isn't repeated here; there
- * is no pane yet either, so this cannot be the strip itself.
- */
-function WorkspaceEmptyHeader() {
-  return (
-    <div className={STRIP_ROW}>
-      <WorkspaceStripLead primary />
-      <div className="flex-1" />
-      <WorkspaceStripActions primary />
-    </div>
-  );
-}
 
 interface WorkspacePaneViewProps {
   pane: RunPane;
@@ -118,7 +98,7 @@ function WorkspaceTabBody({
 function WorkspacePaneView({ pane, primary, scopeKey, projectId }: WorkspacePaneViewProps) {
   return (
     <div data-testid={`workspace-pane-${pane.id}`} className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <WorkspaceTabStrip pane={pane} primary={primary} />
+      {!primary && <WorkspaceTabStrip pane={pane} />}
       <div className="relative min-h-0 flex-1">
         {pane.tabs.map((t) => (
           <WorkspaceTabBody
@@ -135,15 +115,8 @@ function WorkspacePaneView({ pane, primary, scopeKey, projectId }: WorkspacePane
 }
 
 export function WorkspaceSurface() {
-  const storeRun = useLayoutStore((s) => s.run);
-
-  const { projectId, worktreePath, projectPath } = useActiveIdentity();
+  const { run, scopeKey: activeScopeKey, projectId } = useScopedRun();
   const processStatuses = useSandboxStore((s) => s.processStatuses);
-
-  // Show only the tabs belonging to the active session's launch scope — a tab
-  // opened under another project/worktree must not leak into this session.
-  const activeScopeKey = activeLaunchScope(projectId, worktreePath, projectPath);
-  const run = filterRunByScope(storeRun, activeScopeKey);
   const hasContent = run && run.panes.some((p) => p.tabs.length > 0);
 
   // Fallback scope for any legacy tab that predates per-tab scopeKeys: the first
@@ -177,10 +150,7 @@ export function WorkspaceSurface() {
             ))}
           </div>
         ) : (
-          <>
-            <WorkspaceEmptyHeader />
-            <WorkspaceEmptyState />
-          </>
+          <WorkspaceEmptyState />
         )}
       </div>
       <WorkspaceFilesPanel />

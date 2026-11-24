@@ -30,7 +30,7 @@ function ShortcutRow({ binding, isMac }: { binding: EffectiveBinding; isMac: boo
   return (
     <div
       data-testid={`shortcuts-cheat-sheet-row-${entry.id}`}
-      className="flex items-center justify-between gap-3 rounded-md px-2 py-1 hover:bg-muted"
+      className="flex min-h-7 items-center justify-between gap-3 rounded-md px-2 py-1 hover:bg-muted"
     >
       <span className="min-w-0 flex-1 truncate text-sm">{entry.label}</span>
       {chord === null ? (
@@ -38,7 +38,7 @@ function ShortcutRow({ binding, isMac }: { binding: EffectiveBinding; isMac: boo
         // and hiding it would make the cheat sheet disagree with Settings.
         <span className="shrink-0 text-xs text-muted-foreground">Unassigned</span>
       ) : (
-        <kbd className="shrink-0 rounded border bg-muted px-1 py-0.5 font-mono text-xs text-muted-foreground">
+        <kbd className="shrink-0 rounded border bg-muted px-1 py-0.5 font-mono text-xs text-foreground/80">
           {renderEntryChord({ ...entry, chord }, isMac)}
         </kbd>
       )}
@@ -87,7 +87,7 @@ export function ShortcutsCheatSheet({ entries = SHORTCUTS, dev = import.meta.env
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {sections.map(({ group, rows }) => (
-            <section key={group} data-testid={`shortcuts-cheat-sheet-group-${group.toLowerCase()}`}>
+            <section key={group} aria-label={group} data-testid={`shortcuts-cheat-sheet-group-${group.toLowerCase()}`}>
               <SectionHeader>{group}</SectionHeader>
               {rows.map((binding) => (
                 <ShortcutRow key={binding.entry.id} binding={binding} isMac={isMac} />

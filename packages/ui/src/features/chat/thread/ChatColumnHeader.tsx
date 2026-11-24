@@ -1,9 +1,9 @@
 /**
  * ChatColumnHeader — every chat column's title row, the single view and each
  * zone of a split alike: the chat's name, its "Forked from" / "Delegated by"
- * link (on a child), its delegated-tasks chip (on a parent), then on the
- * trailing edge its side-chat and session-details toggles and — for
- * a split zone — the zone close ✕.
+ * link (on a child), then on the trailing edge its side-chat and session-details
+ * toggles and, for a split zone, the zone close ✕. Ongoing work is not repeated
+ * here (S4): it shows in the composer and in the panel's Activity section.
  *
  * It sits INSIDE the transcript column (above the thread), so the docked
  * session panel beside it runs the chat area's full height. Name and fork
@@ -18,7 +18,6 @@ import { SessionPanelToggle } from '@/features/session-panel/SessionPanelToggle'
 import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
 import type { PanelColumnId } from '@/features/session-panel/panel-control-store';
 import { ChatHeaderParentLink } from './ChatHeaderParentLink';
-import { ChatHeaderTasksChip } from '../orchestration/ChatHeaderTasksChip';
 
 interface ChatColumnHeaderProps {
   columnId: PanelColumnId;
@@ -47,7 +46,6 @@ export function ChatColumnHeader({ columnId, toggleTestId, tourAnchor = false, z
         {title}
       </span>
       <ChatHeaderParentLink />
-      <ChatHeaderTasksChip />
       <span className="flex-1" />
       <SideChatToggle />
       <SessionPanelToggle columnId={columnId} testId={toggleTestId} tourAnchor={tourAnchor} />

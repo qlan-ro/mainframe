@@ -1,9 +1,9 @@
 /**
  * SurfaceHost — the outer wrapper carries only its flex-container classes,
- * the divider gutter is the shared 9px value, and flex weights follow the
+ * the workspace reports its left edge for the title bar, and flex weights follow the
  * lone-pane and two-pane rules.
  */
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLayoutStore } from '@/store/layout';
 
@@ -26,6 +26,7 @@ vi.mock('@/store/url-tab-intent-subscriber', () => ({
   subscribeToUrlTabIntents: () => () => {},
 }));
 
+import { useColumnEdges } from '../column-edges';
 import { SurfaceHost } from '../SurfaceHost';
 
 beforeEach(() => {
@@ -42,14 +43,41 @@ describe('SurfaceHost — flat shell geometry', () => {
     expect(outer.className).toBe('flex flex-1 flex-col overflow-hidden');
   });
 
-  it('wires the shared gutter width through to the divider', () => {
+  it('divides chat and workspace with a hairline', () => {
     useLayoutStore.setState({
       layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 1 } },
     });
     const { container } = render(<SurfaceHost />);
 
     const divider = container.querySelector('[data-testid="surf-divider-x"]') as HTMLElement | null;
-    expect(divider?.style.width).toBe('9px');
+    expect(divider?.style.width).toBe('1px');
+  });
+});
+
+describe('SurfaceHost — workspace edge', () => {
+  const place = (top: ('chat' | 'workspace')[], bottom: 'workspace' | null = null) =>
+    useLayoutStore.setState({ layout: { top, bottom, topFlex: {}, vFlex: { top: 1, bottom: 1 } } });
+
+  it('reports the edge while the workspace sits beside the chat', () => {
+    place(['chat', 'workspace']);
+    render(<SurfaceHost />);
+    expect(useColumnEdges.getState().workspace).toBe(0);
+  });
+
+  it.each([
+    ['alone', ['workspace'] as const, null],
+    ['in the bottom strip', ['chat'] as const, 'workspace' as const],
+  ])('reports none while it is %s', (_, top, bottom) => {
+    place([...top], bottom);
+    render(<SurfaceHost />);
+    expect(useColumnEdges.getState().workspace).toBeNull();
+  });
+
+  it('drops the edge when the workspace closes', () => {
+    place(['chat', 'workspace']);
+    render(<SurfaceHost />);
+    act(() => place(['chat']));
+    expect(useColumnEdges.getState().workspace).toBeNull();
   });
 });
 

@@ -90,6 +90,11 @@ export function layoutCanSplit(layout: WorkspaceLayout): boolean {
   return !layout.top.includes('workspace') && layout.bottom !== 'workspace';
 }
 
+/** True while the surface is on screen: in the top row or the bottom strip. */
+export function isSurfaceLit(layout: WorkspaceLayout, id: SurfaceId): boolean {
+  return layout.top.includes(id) || layout.bottom === id;
+}
+
 /** Number of surfaces currently shown (top row + optional bottom strip). */
 export function litSurfaceCount(layout: WorkspaceLayout): number {
   return layout.top.length + (layout.bottom ? 1 : 0);
@@ -101,6 +106,5 @@ export function litSurfaceCount(layout: WorkspaceLayout): number {
  * chat floor — whichever surface is last-lit becomes the floor.
  */
 export function isSurfaceFloor(layout: WorkspaceLayout, id: SurfaceId): boolean {
-  const lit = layout.top.includes(id) || layout.bottom === id;
-  return lit && litSurfaceCount(layout) === 1;
+  return isSurfaceLit(layout, id) && litSurfaceCount(layout) === 1;
 }

@@ -132,8 +132,8 @@ A delegated child is a **task chat**. It lives inside its parent's transcript, i
 - **Hover card.** On a launched chat, `Started by "<chat>"` (`sessions-meta-card-started-by`). On an
   orphaned task chat, `Delegated by "<parent>" · <role> · <status>`
   (`sessions-meta-card-delegated-by`).
-- **Parent header.** A chip, `N tasks running · M waiting` (`chat-header-tasks-chip`), opens a
-  popover. It lists the parent's tasks with status and an open link (`chat-header-task-row-<taskId>`).
+- **Parent header.** Nothing. The delegated-tasks chip was removed by the window redesign (S4 in
+  `design/redesign/DECISIONS.md`); the parent's tasks show in the session panel's Activity section.
   A task counts as waiting while it, or a task below it, waits on a gate.
 - **Child header.** "Delegated by" (`chat-header-parent-link`) links back to the parent.
 - **Transcript.** The `delegate_task` tool card shows the child title, a live status, and an open

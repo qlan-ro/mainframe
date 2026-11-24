@@ -1,16 +1,13 @@
 /**
  * SessionTabPill — one session tab in the title bar: a 14px lead slot (the
- * provider dot, or the ⌘N badge while the hint modifier is held), the session
- * title, and a hover ✕ — everything else (open in split, keep open, fork,
- * side chat) lives in the right-click menu.
+ * status dot, or the ⌘N badge while the hint modifier is held), the session
+ * title, and a ✕ — everything else (open in split, keep open, fork, side chat)
+ * lives in the right-click menu.
  *
- * A content-sized `rounded-md` pill, `h-8`, capped at `max-w-45` and never
- * narrower than `min-w-24`: active is a filled `accent` pill with a soft
- * shadow; inactive is quiet ink. (The old 2px underline is gone with the
- * toolbar hairline it sat on.) The title fades only when it overflows, and it
- * owns the pill's full width at rest: the controls sit out of flow and overlay
- * its tail on hover (on the pill's ground, behind a short ramp) rather than
- * reserving room while invisible.
+ * The shared title-bar tab shape (`tab-shape`), 180px wide, shrinking to 96.
+ * The title fades only when it overflows. On a background tab it owns the whole
+ * pill: the ✕ sits out of flow and overlays its tail on hover or keyboard focus
+ * (on the pill's ground, behind a short ramp). The selected tab's ✕ is in flow.
  *
  * Inside a split pair the pill is one SEGMENT (`segment`): the focused one is
  * filled, the other is not, and a parked pair fills neither.
@@ -21,7 +18,7 @@
  * matching under a held button) and acts on pointerup, before the drag's
  * rAF-deferred `end()`.
  *
- * data-testid: session-tab-<id> / -close- / -waiting-.
+ * data-testid: session-tab-<id> / -close- / -status- / -waiting-.
  */
 import { useRef, useState } from 'react';
 import { X } from 'lucide-react';
@@ -31,9 +28,10 @@ import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { useTabDragStore } from '@/features/chat/zones/tab-drag-store';
 import type { ForkAvailability } from '@/features/sessions/view-model/fork-availability';
-import { ProviderDot } from '@/features/shared/ProviderDot';
 import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
 import { SessionTabContextMenu, type SurfaceMenuActions } from './SessionTabContextMenu';
+import { SessionTabDot, type SessionTabStatus } from './SessionTabDot';
+import { TAB_CLOSE_ATTR, TAB_CLOSE_BUTTON, TAB_CLOSE_OVERLAY, tabHoverStyle, tabShape } from './tab-shape';
 
 /** Pixels of pointer travel before a press becomes a drag-to-split. */
 const DRAG_THRESHOLD = 6;
@@ -43,13 +41,11 @@ export interface SessionTabEntry {
   title: string;
   projectId: string | undefined;
   projectName: string | undefined;
-  adapterId: string | undefined;
   active: boolean;
   /** The temporary slot — the next opened session replaces this tab. */
   preview: boolean;
   forkAvailability: ForkAvailability;
-  /** The chat's own pending gate OR its side chat's (todo #344). */
-  hasPending: boolean;
+  status: SessionTabStatus;
   /** True for a real, non-side-chat tab (todo #344) — a draft has no chat id yet. */
   canOpenSideChat: boolean;
 }
@@ -123,7 +119,9 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
   const [dropHover, setDropHover] = useState(false);
   const filled = segment == null ? tab.active : segment === 'focused';
   const inPair = segment != null;
-  const restingClose = filled || inPair;
+  // A lone selected tab keeps its ✕ in flow. Pair segments are both ON SCREEN, so
+  // both show theirs at rest, over the title: it closes the zone, not a hidden session.
+  const closeInFlow = filled && !inPair;
 
   return (
     <SessionTabContextMenu
@@ -144,6 +142,7 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
         data-testid={`session-tab-${tab.id}`}
         role="tab"
         aria-selected={tab.active}
+        tabIndex={tab.active ? 0 : -1}
         data-preview={tab.preview ? 'true' : 'false'}
         data-dragging={dragging || undefined}
         data-drop-hover={dropHover || undefined}
@@ -168,31 +167,22 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
         onDoubleClick={() => {
           if (tab.preview) actions.onPin(tab.id);
         }}
-        className={cn(
-          'group relative flex max-w-45 min-w-24 shrink cursor-pointer items-center gap-1.5 rounded-md px-2 text-xs select-none',
-          // A pair segment fills the pair pill's content box (32px minus its 1px
-          // border): at h-8 it overflowed by 1px top and bottom, and the hover
-          // controls' ground painted over the pair's border.
-          inPair ? 'h-full' : 'h-8',
-          // The dragged pill ghosts so the cursor + drop targets read as the live thing.
-          dragging && 'opacity-40',
-          filled
-            ? 'bg-accent font-semibold text-foreground shadow-sm'
-            : 'font-medium text-muted-foreground hover:text-foreground',
-          // A background tab (or an unfocused pair segment) tints on hover —
-          // quieter than the active fill + shadow, so "pointed at" never reads
-          // as "selected".
-          !filled && 'hover:bg-(--tab-hover)',
-          dropHover && 'ring-2 ring-primary',
+        className={tabShape(
+          closeInFlow,
+          cn(
+            'w-45 min-w-24 shrink gap-2',
+            closeInFlow ? 'pr-1 pl-3' : 'px-3',
+            // A pair segment fills the pair pill's content box (32px minus its 1px
+            // border): at h-8 it overflowed by 1px top and bottom, and the hover
+            // controls' ground painted over the pair's border.
+            inPair && 'h-full rounded-md',
+            inPair && filled && 'bg-accent text-foreground hover:bg-accent',
+            // The dragged pill ghosts so the cursor + drop targets read as the live thing.
+            dragging && 'opacity-40',
+            dropHover && 'ring-2 ring-primary',
+          ),
         )}
-        // One opaque hover ground, shared with the controls cluster below so the
-        // ✕ sits on exactly the pill's colour (no patch).
-        style={
-          {
-            // Mixed over whatever the pill sits on: the title bar for a lone tab, the pair pill for a segment.
-            '--tab-hover': `color-mix(in oklch, var(--sidebar-accent) 60%, var(${inPair ? '--popover' : '--sidebar'}))`,
-          } as React.CSSProperties
-        }
+        style={tabHoverStyle(inPair ? '--popover' : '--sidebar')}
       >
         {/* The badge takes the dot's 14px slot rather than adding one, so
             holding the modifier never reflows the strip under the pointer. */}
@@ -200,49 +190,34 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
           {hintIndex != null ? (
             <ShortcutIndexBadge index={hintIndex} data-testid={`session-tab-hint-${tab.id}`} />
           ) : (
-            <ProviderDot adapterId={tab.adapterId ?? ''} testId={`session-tab-provider-${tab.id}`} />
-          )}
-          {/* The chat's own pending gate or its side chat's (todo #344) — the
-              same primary/pulse treatment as the sidebar's waiting state. */}
-          {tab.hasPending && (
-            <Hint label="Your turn">
-              <span
-                data-testid={`session-tab-waiting-${tab.id}`}
-                aria-label="waiting"
-                className="absolute -top-0.5 -right-0.5 size-1.5 animate-pulse rounded-full bg-primary"
-              />
-            </Hint>
+            <SessionTabDot id={tab.id} status={tab.status} />
           )}
         </span>
-        {/* The title owns the whole pill at rest and fades at the pill's end. The
-            controls are out of flow: they overlay its tail on hover, on the pill's
-            own ground with a short ramp, so a hidden ✕ never reserves label room. */}
         <FadeLabel className={cn('flex-1', tab.preview && 'italic')} tooltipDelay={600}>
           {tab.title}
         </FadeLabel>
         <span
           data-testid={`session-tab-controls-${tab.id}`}
           className={cn(
-            'absolute inset-y-0 right-1 flex items-center gap-0.5 pl-0.5',
-            'before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-r before:from-transparent',
-            filled
-              ? 'bg-accent before:to-accent'
-              : inPair
-                ? // A segment's ✕ rests visible, so its ground follows the hover tint.
-                  'bg-popover before:to-popover group-hover:bg-(--tab-hover) group-hover:before:to-(--tab-hover)'
-                : 'bg-(--tab-hover) before:to-(--tab-hover)',
-            // Pair segments are both ON SCREEN, so both keep the resting ✕ the
-            // active tab gets — it closes the zone, not a hidden session. Every
-            // other pill shows its controls (and their ground) only on hover.
-            !restingClose && 'opacity-0 group-hover:opacity-100',
+            !closeInFlow && TAB_CLOSE_OVERLAY,
+            !closeInFlow && !inPair && 'bg-(--tab-hover) opacity-0 before:to-(--tab-hover)',
+            !closeInFlow && !inPair && 'group-focus-within/tab:opacity-100 group-hover/tab:opacity-100',
+            inPair && filled && 'bg-accent before:to-accent',
+            // A segment's ✕ rests visible, so its ground follows the hover tint.
+            inPair &&
+              !filled &&
+              'bg-popover before:to-popover group-hover/tab:bg-(--tab-hover) group-hover/tab:before:to-(--tab-hover)',
           )}
         >
           <Hint label={`Close ${tab.title}`}>
             <Button
               data-testid={`session-tab-close-${tab.id}`}
+              {...TAB_CLOSE_ATTR}
+              aria-label={`Close ${tab.title}`}
+              tabIndex={-1}
               variant="ghost"
-              size="icon-2xs"
-              className={cn('opacity-0 group-hover:opacity-100', restingClose && 'opacity-60')}
+              size="icon-xs"
+              className={TAB_CLOSE_BUTTON}
               onClick={(e) => {
                 e.stopPropagation();
                 actions.onClose(tab.id);

@@ -107,7 +107,7 @@ test.describe('§editor', () => {
     const tab = tabByTitle(page, 'index.ts');
     await expect(tab).toBeVisible({ timeout: 10_000 });
     await expect(tab).toHaveAttribute('aria-selected', 'true');
-    await expect(tab.locator('span.truncate')).toHaveCSS('font-style', 'italic');
+    await expect(tab.getByTestId(/^workspace-tab-title-/)).toHaveCSS('font-style', 'italic');
     await expect(page.getByTestId('editor-code')).toBeVisible();
   });
 
@@ -125,7 +125,7 @@ test.describe('§editor', () => {
     const { page } = app;
     const utilsTab = tabByTitle(page, 'utils.ts');
     await utilsTab.dblclick();
-    await expect(utilsTab.locator('span.truncate')).toHaveCSS('font-style', 'normal');
+    await expect(utilsTab.getByTestId(/^workspace-tab-title-/)).toHaveCSS('font-style', 'normal');
 
     await showFilesTree(page);
     await page.getByTestId('file-tree-row-notes.md').click();

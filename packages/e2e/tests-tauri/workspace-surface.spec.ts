@@ -51,7 +51,6 @@
  *   workspace-tab-close-<id> / workspace-tab-stop-<id> — per-tab controls
  *   workspace-add-menu-<paneId>               — the "+" menu content
  *   workspace-pane-new-terminal-<paneId> / workspace-pane-launch-<config>-<paneId> — its rows
- *   workspace-surface-close                   — primary-pane hide control
  *   workspace-pane-close-<paneId>             — secondary-pane close (un-split)
  *   run-console-pane                          — full-space ConsolePane (process tabs)
  *   session-panel-toggle                      — the chat header's session-panel switch
@@ -304,7 +303,7 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
     // the guard stays: this test opens one, and a later test opens another.
     await waitForMenusClosed(page);
     const paneId = await workspace(page).firstPaneId();
-    const tabCountBefore = await page.locator(`[data-testid="workspace-pane-${paneId}"] [role="tab"]`).count();
+    const tabCountBefore = await page.locator(`[data-testid="workspace-tab-strip-${paneId}"] [role="tab"]`).count();
 
     await page.getByTestId(`workspace-tab-strip-add-${paneId}`).click();
     await expect(page.getByTestId(`workspace-add-menu-${paneId}`)).toBeVisible();
@@ -316,7 +315,9 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
     await expect(page.getByTestId(`workspace-add-menu-${paneId}`)).toHaveCount(0);
     // Same PTY-unavailable no-op as the empty-state card: tab count in this
     // pane is unchanged.
-    await expect(page.locator(`[data-testid="workspace-pane-${paneId}"] [role="tab"]`)).toHaveCount(tabCountBefore);
+    await expect(page.locator(`[data-testid="workspace-tab-strip-${paneId}"] [role="tab"]`)).toHaveCount(
+      tabCountBefore,
+    );
   });
 
   // Previously: the console pane never showed `echo-once`'s stdout — a fast
@@ -533,21 +534,22 @@ test.describe('§21 workspace-surface — pane split, secondary-pane close, clos
     await closeTauriApp(app);
   });
 
-  test('the strip offers no split controls, only hide', async () => {
+  test('the tabs carry no split or hide controls: the title-bar toggle hides the workspace', async () => {
     const { page } = app;
     // The strip's split buttons were deleted (they could only render while the
     // workspace was placed — exactly when `layoutCanSplit` is false). Splitting
     // PANES is the tab-drag gesture below instead.
     await expect(page.getByTestId('workspace-tab-strip-split-right')).toHaveCount(0);
     await expect(page.getByTestId('workspace-tab-strip-split-down')).toHaveCount(0);
-    await expect(page.getByTestId('workspace-surface-close')).toBeEnabled();
+    await expect(page.getByTestId('workspace-surface-close')).toHaveCount(0);
+    await expect(page.getByTestId('surface-rail-workspace')).toBeEnabled();
   });
 
   // (The secondary-pane close case rode the tab-drag gesture, deleted with the
   // surface-drag system 2026-08-12 — pane splitting has no UI path until a
   // replacement lands.)
 
-  test('workspace-surface-close is disabled once the workspace is the sole lit surface (the dynamic floor)', async () => {
+  test('the Workspace toggle is disabled once the workspace is the sole lit surface (the dynamic floor)', async () => {
     const { page } = app;
     // litCount is 2 here (chat + workspace) — hiding chat leaves the workspace alone.
     // Hide Chat lives on the session tab's context menu now (ChatCardHeader and
@@ -556,7 +558,6 @@ test.describe('§21 workspace-surface — pane split, secondary-pane close, clos
     await page.getByTestId('session-tab-ctx-hide-chat').click();
     await expect(page.locator('[data-surface="chat"]')).toHaveCount(0);
 
-    await expect(page.getByTestId('workspace-surface-close')).toBeDisabled();
     await expect(page.getByTestId('surface-rail-workspace')).toBeDisabled();
   });
 });

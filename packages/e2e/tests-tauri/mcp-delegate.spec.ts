@@ -27,7 +27,6 @@
  *   chat-tool-delegate-task-transcript-<taskId> — the child's transcript inside the card
  *   sessions-row (data-chat-id) — a sidebar row; the child never gets one
  *   chat-task-result-card-<taskId> — the delivered result in the parent
- *   chat-header-tasks-chip / chat-header-task-row-<taskId> — the parent's tasks chip
  *   chat-header-parent-link     — the child's "Delegated by" link
  *   chat-zone-<chatId>          — a split zone, one per chat shown side by side
  */
@@ -67,7 +66,6 @@ test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
     await waitForIdle(page, 60_000);
 
     await expect(card.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'completed');
-    await expect(page.getByTestId('chat-header-tasks-chip')).toHaveText(/1 task done/);
     // The child row has loaded (the card reads its status), yet the sidebar lists only the parent.
     await expect(page.getByTestId('sessions-row')).toHaveCount(1);
     await expect(page.getByTestId('sessions-row-fork-nest')).toHaveCount(0);

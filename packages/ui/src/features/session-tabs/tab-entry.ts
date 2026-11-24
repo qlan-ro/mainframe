@@ -6,6 +6,7 @@ import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import type { SessionCustom, ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { forkAvailability, type ForkAvailability } from '@/features/sessions/view-model/fork-availability';
 import { isSideChat } from '@/features/side-chat/side-chat-ids';
+import type { SessionTabStatus } from './SessionTabDot';
 import type { SessionTabEntry } from './SessionTabPill';
 
 /**
@@ -44,6 +45,16 @@ function tabCanOpenSideChat(custom: SessionCustom | undefined): boolean {
   return !isSideChat(custom);
 }
 
+/**
+ * Needs-you outranks running (L3). Waiting is the chat's own gate, its side
+ * chat's (todo #344) or a delegated child's. Running is `displayStatus`, not
+ * `isRunning`: sub-agents still going after the turn ended count.
+ */
+function tabStatus(custom: SessionCustom | undefined): SessionTabStatus {
+  if (custom?.hasPending || custom?.sideChatWaiting || custom?.delegatedWaiting) return 'waiting';
+  return custom?.displayStatus === 'working' ? 'working' : 'idle';
+}
+
 export function toTabEntry(
   id: string,
   items: readonly ThreadListEntry[],
@@ -61,16 +72,12 @@ export function toTabEntry(
     title: entry?.title ?? (isDraft ? 'New Session' : 'Untitled'),
     projectId,
     projectName: projectId != null ? projectNames.get(projectId) : undefined,
-    adapterId: custom?.adapterId,
     active: id === activeId,
     preview,
     forkAvailability: tabForkAvailability(custom, adaptersById),
-    // The chat's own pending gate OR its side chat's (todo #344) or a
-    // delegated child's — NOT the `hasPending` fed to tabForkAvailability
-    // above, which stays the chat's own value so a waiting side chat never
-    // blocks forking the parent.
-    hasPending:
-      (custom?.hasPending ?? false) || (custom?.sideChatWaiting ?? false) || (custom?.delegatedWaiting ?? false),
+    // NOT the `hasPending` fed to tabForkAvailability above, which stays the
+    // chat's own value so a waiting side chat never blocks forking the parent.
+    status: tabStatus(custom),
     canOpenSideChat: tabCanOpenSideChat(custom),
   };
 }

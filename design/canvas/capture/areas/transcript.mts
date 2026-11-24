@@ -1,10 +1,12 @@
-// Transcript: failed work. The other Chat-* boards are not captured by this tool yet (README).
+// Transcript: the window while a session delegates (no tasks chip in the header, S4), and failed work. The other Chat-* boards are not captured by this tool yet (README).
 import { sendMessage, waitForIdle } from '../../../../packages/e2e/helpers/tauri/wait.js';
-import { parkPointer, seedWorkbench, stubUsage } from '../seed.mts';
+import { createTauriChat } from '../../../../packages/e2e/helpers/tauri/setup.js';
+import { parkPointer, renameChat, seedWorkbench, stubUsage } from '../seed.mts';
 import type { CaptureArea } from '../types.mts';
 
 const area: CaptureArea = {
   boards: [
+    { file: 'Chat-Window', title: 'Chat — populated window', width: 1440, bare: true },
     {
       file: 'Chat-States-Failures',
       title: 'Chat — failed work',
@@ -13,6 +15,21 @@ const area: CaptureArea = {
     },
   ],
   groups: [
+    {
+      board: 'Chat-Window',
+      launch: { recordingKey: 'mcp-delegate' },
+      before: stubUsage,
+      seed: async ({ page }) => {
+        const { atlas } = await seedWorkbench(page);
+        const parent = await createTauriChat(page, atlas, 'acceptEdits');
+        await sendMessage(page, 'Delegate a race review of the diff to a child chat');
+        await page.locator('[data-testid^="chat-task-result-card-"]').waitFor({ timeout: 60_000 });
+        await waitForIdle(page, 60_000);
+        await renameChat(page, parent, 'Race review of the diff');
+        await parkPointer(page);
+      },
+      states: [{ id: 'chat-window' }],
+    },
     {
       board: 'Chat-States-Failures',
       launch: { recordingKey: 'bash-exit-code' },

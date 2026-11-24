@@ -1,11 +1,22 @@
 // Shell & title bar: Shell-Window, Shell-States, Shell-TitleBar. Shell-Flow is interactive (README, Known limits).
 import { sendMessage, waitForIdle } from '../../../../packages/e2e/helpers/tauri/wait.js';
-import { escape, openTab, parkPointer, reload, renameChat, seedProject, seedWorkbench, stubUsage } from '../seed.mts';
+import {
+  escape,
+  openTab,
+  openWorkspaceFiles,
+  parkPointer,
+  reload,
+  renameChat,
+  seedProject,
+  seedWorkbench,
+  stubUsage,
+  WORKSPACE_FILES,
+} from '../seed.mts';
 import type { CaptureArea, CaptureContext, CaptureState } from '../types.mts';
 
 async function workbench(ctx: CaptureContext): Promise<void> {
   const { page } = ctx;
-  const { chats } = await seedWorkbench(page);
+  const { chats } = await seedWorkbench(page, WORKSPACE_FILES);
   for (const id of chats.slice(3)) await openTab(page, id);
   await sendMessage(page, 'Find where greeting is defined and used');
   await waitForIdle(page);
@@ -55,13 +66,13 @@ const area: CaptureArea = {
     {
       file: 'Shell-States',
       title: 'Shell — window states',
-      subtitle: 'First run, the tour, a lost daemon and the collapsed sidebar.',
+      subtitle: 'First run, the tour, the workspace, the shortcuts sheet, the collapsed sidebar and a lost daemon.',
       width: 4512,
     },
     {
       file: 'Shell-TitleBar',
       title: 'Shell — title bar and navigation',
-      subtitle: 'Usage capsule, session tabs, the nav rail and what opens from them.',
+      subtitle: 'Segments over the columns below, session and workspace tabs, the nav rail and what opens from them.',
       width: 3100,
     },
   ],
@@ -108,9 +119,40 @@ const area: CaptureArea = {
       seed: workbench,
       states: [
         {
+          id: 'shortcuts-sheet',
+          caption: '**Shortcuts sheet (H1).** ⌘/ lists the app’s registry: Sessions, Chat, Workspace, App.',
+          setup: async ({ page }) => {
+            await page.keyboard.press('ControlOrMeta+Slash');
+            await page.getByTestId('shortcuts-cheat-sheet').waitFor();
+          },
+        },
+        {
+          id: 'workspace-open',
+          caption: '**Workspace open (W1–W3).** Three title-bar segments, each separator on the column edge below it.',
+          setup: async ({ page }) => {
+            await escape(page);
+            await openWorkspaceFiles(page, ['use-quota.ts', 'quota.rs', 'UsageCapsule.tsx']);
+            await parkPointer(page);
+          },
+          wait: 800,
+        },
+        {
+          id: 'workspace-only',
+          caption: '**Chat hidden.** The workspace has no edge of its own, so its tabs take the room they need.',
+          setup: async ({ page }) => {
+            await page.getByTestId('surface-rail-chat').click();
+            await parkPointer(page);
+          },
+          wait: 800,
+        },
+        {
           id: 'sidebar-collapsed',
-          caption: '**Sidebar collapsed** to the rail (⌘B).',
-          setup: async ({ page }) => page.keyboard.press('ControlOrMeta+b'),
+          caption: '**Sidebar collapsed** to the rail (⌘B). The first separator follows the usage capsule.',
+          setup: async ({ page }) => {
+            await page.getByTestId('surface-rail-chat').click();
+            await page.getByTestId('surface-rail-workspace').click();
+            await page.keyboard.press('ControlOrMeta+b');
+          },
           wait: 800,
         },
         {
@@ -131,8 +173,43 @@ const area: CaptureArea = {
       before: stubUsage,
       seed: workbench,
       states: [
-        { id: 'title-bar', caption: '**Title bar.** Usage capsule, session tabs, search, actions.', crop: 'title-bar' },
-        hover('tab-hover', '**Tab hover.** The tooltip carries the full title.', 'session-tabs', [0, 0, 1440, 96]),
+        {
+          id: 'title-bar',
+          caption:
+            '**Workspace closed (W1).** Usage capsule, session tabs, Search and the Chat / Workspace toggles. The separator is on the sidebar’s edge.',
+          crop: [0, 0, 1440, 96],
+        },
+        {
+          id: 'title-bar-workspace',
+          caption:
+            '**Workspace open (W1–W3).** Its tabs, `+` and Files stand over the panel; a third separator closes the segment. Both toggles are lit.',
+          crop: [0, 0, 1440, 96],
+          setup: async ({ page }) => {
+            await openWorkspaceFiles(page, ['use-quota.ts', 'quota.rs', 'UsageCapsule.tsx']);
+            await page.getByTestId('workspace-files-open').click();
+            await parkPointer(page);
+          },
+        },
+        {
+          id: 'title-bar-collapsed',
+          caption: '**Sidebar collapsed.** The first separator follows the usage capsule.',
+          crop: [0, 0, 1440, 96],
+          setup: async ({ page }) => {
+            await page.getByTestId('workspace-files-open').click();
+            await page.getByTestId('surface-rail-workspace').click();
+            await page.keyboard.press('ControlOrMeta+b');
+            await parkPointer(page);
+          },
+          wait: 800,
+        },
+        {
+          ...hover('tab-hover', '**Tab hover.** The close button takes the end of the title.', '', [300, 0, 860, 96]),
+          setup: async ({ page, vars }) => {
+            await page.keyboard.press('ControlOrMeta+b');
+            await parkPointer(page);
+            await page.getByTestId(`session-tab-${vars['previous']}`).hover();
+          },
+        },
         {
           id: 'usage-open',
           caption: '**Usage open.** Hover shows every limit at once; a click pins it.',
