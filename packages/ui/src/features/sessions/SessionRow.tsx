@@ -27,7 +27,7 @@ import { SessionContextMenu } from './SessionContextMenu';
 import { SessionMetaCard } from './SessionMetaCard';
 import { RowBody } from './SessionRowBody';
 import { SessionRowRename } from './SessionRowRename';
-import { canOpenMetaCard, useHoverCardWedgeGuard } from './use-hover-card-wedge-guard';
+import { useSessionMetaCard } from './use-session-meta-card';
 import { useForkLineageRow } from './sidebar/use-fork-lineage-row';
 import { useRowActions } from './sidebar/use-row-actions';
 import { forkCount } from './view-model/fork-lineage';
@@ -64,7 +64,6 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
   const unread = useUnreadStore((s) => isSessionUnread(item, s.unread));
   const [isRenaming, setIsRenaming] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const [metaOpen, setMetaOpen] = useState(false);
   const actions = useRowActions(item);
   const openSideChat = useOpenSideChat();
   // A draft has no chat id, an archived row 409s the daemon open route, and a
@@ -74,20 +73,14 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
   // cursor rather than at the host's default (0,0).
   const menuPoint = useRef<{ x: number; y: number } | null>(null);
   const rowRef = useRef<HTMLLIElement | null>(null);
-  // A ref, not state: the menu only gates the card, and re-rendering the row on
-  // every right-click would cost the open menu its anchor.
-  const menuOpen = useRef(false);
-  const closeMeta = useCallback(() => setMetaOpen(false), []);
-  useHoverCardWedgeGuard(metaOpen, rowRef, closeMeta);
-
-  const handleMetaOpenChange = useCallback((next: boolean) => {
-    setMetaOpen(next && !menuOpen.current && canOpenMetaCard(rowRef.current, document.activeElement));
-  }, []);
-
-  const handleMenuOpenChange = useCallback((open: boolean) => {
-    menuOpen.current = open;
-    if (open) setMetaOpen(false);
-  }, []);
+  const meta = useSessionMetaCard(rowRef);
+  const { onOpenParent } = lineage;
+  const openParent =
+    onOpenParent &&
+    (() => {
+      meta.closeAfterUse();
+      onOpenParent();
+    });
 
   const title = item.title ?? 'Untitled session';
 
@@ -124,7 +117,7 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
     <SessionContextMenu
       pinned={custom.pinned}
       temporary={custom.temporary}
-      onOpenChange={handleMenuOpenChange}
+      onOpenChange={meta.onMenuOpenChange}
       onPin={actions.onPin}
       onUnpin={actions.onUnpin}
       onRename={openRenameFromMenu}
@@ -143,21 +136,21 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
       <ThreadListItemPrimitive.Root asChild data-testid="sessions-row" data-chat-id={item.id}>
         <SidebarMenuItem
           ref={rowRef}
+          // Named so the row's own width, not the panel's, decides what fits: a
+          // nested fork is narrower than its neighbours.
+          className="@container/row"
           onContextMenu={(e) => {
             menuPoint.current = { x: e.clientX, y: e.clientY };
           }}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
-          {/* Controlled so the wedge guard can force-close and `canOpenMetaCard`
-              can refuse an open the pointer never asked for: under load Radix's
-              open timer can fire after the pointer already left the row (or on a
-              click, which focuses it), and then no pointerleave ever closes the
-              card. */}
-          <HoverCard open={metaOpen} onOpenChange={handleMetaOpenChange} openDelay={500} closeDelay={60}>
+          <HoverCard open={meta.open} onOpenChange={meta.onOpenChange} openDelay={500} closeDelay={60}>
             <HoverCardTrigger asChild>
               <ThreadListItemPrimitive.Trigger asChild>
                 <SidebarMenuButton
+                  ref={meta.triggerRef}
+                  {...meta.triggerProps}
                   size="sm"
                   data-zone-visible={zoneDimmed || undefined}
                   // ⌘-click opens/retargets the split; capture so the native
@@ -209,7 +202,7 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
                 </SidebarMenuButton>
               </ThreadListItemPrimitive.Trigger>
             </HoverCardTrigger>
-            <HoverCardContent side="right" align="start">
+            <HoverCardContent ref={meta.cardRef} {...meta.cardProps} side="right" align="start">
               <SessionMetaCard
                 title={title}
                 projectId={custom.projectId}
@@ -225,7 +218,7 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
                 tags={custom.tags}
                 colorOf={colorOf}
                 parentState={lineage.parentState}
-                onOpenParent={lineage.onOpenParent}
+                onOpenParent={openParent}
                 delegation={custom.delegation}
                 startedBy={startedByTitle(allItems, custom)}
                 forkCount={childForkCount}

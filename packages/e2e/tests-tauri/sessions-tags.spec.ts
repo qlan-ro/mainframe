@@ -18,8 +18,7 @@
  *   features/sessions/tags/validate-tag-name.ts — client-side name validation
  *   SessionRow.tsx          — row hover action `sessions-row-action-tags`
  *   SessionContextMenu.tsx  — row context-menu item `sessions-ctx-tags`
- *   SessionRowMetaLine.tsx  — the applied-tag dot cluster on the row (replaced
- *                             `SessionRowMetaIcons.tsx`, hence the dot testid rename)
+ *   SessionMetaCard.tsx     — the applied tags, on the row's hover card
  *   SessionsFilterMenu.tsx  — the group header's tag-filter dropdown
  *
  * Testid reference (all verified against source above):

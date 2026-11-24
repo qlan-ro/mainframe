@@ -27,6 +27,7 @@
  *  - a draft never writes lastSessionId / lastForProject
  *  - a burst of onReload() calls coalesces into a leading reload plus at most
  *    one trailing reload per 200ms window, not one reload per event
+ *  - the socket coming back reloads the list; a drop does not; unmount stops listening
  *  - while a New-session switch is pending (todo #375): first-send adoption
  *    re-keys the layout but does not switch; the switch resumes once the
  *    claim releases; boot auto-select consumes its one-shot without
@@ -87,9 +88,28 @@ let disposeSpy: ReturnType<typeof vi.fn>;
 // Mocks — vi.mock factories are hoisted before imports
 // ---------------------------------------------------------------------------
 
-vi.mock('../../../../lib/daemon/ws-client', () => ({
-  daemonWs: { onEvent: vi.fn(() => () => {}) },
-}));
+const { ws } = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  return {
+    ws: {
+      connected: true,
+      listeners,
+      onEvent: () => () => {},
+      subscribeConnection: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+  };
+});
+
+/** What the client does on open and close: flips `connected`, then tells every listener. */
+function setConnected(connected: boolean) {
+  ws.connected = connected;
+  for (const listener of ws.listeners) listener();
+}
+
+vi.mock('../../../../lib/daemon/ws-client', () => ({ daemonWs: ws }));
 
 vi.mock('../session-list-router', () => ({
   createSessionListRouter: vi.fn((_ws: unknown, deps: typeof capturedDeps) => {
@@ -176,6 +196,8 @@ import { useSessionListRouter } from '../use-session-list-router';
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
+  ws.connected = true;
+  ws.listeners.clear();
   markUnreadSpy = vi.fn();
   clearUnreadSpy = vi.fn();
   clearProjectFilterSpy = vi.fn();
@@ -282,6 +304,22 @@ describe('useSessionListRouter — onReload coalesces a burst into leading + one
 // ---------------------------------------------------------------------------
 // onOsNotify → host.notify(), unguarded by the active-thread check
 // ---------------------------------------------------------------------------
+
+describe('useSessionListRouter — the socket coming back reloads the list', () => {
+  it('reloads on reconnect, and not on the drop itself', () => {
+    const { unmount } = renderHook(() => useSessionListRouter());
+
+    setConnected(false);
+    expect(reloadSpy).not.toHaveBeenCalled();
+
+    setConnected(true);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+
+    unmount();
+    setConnected(true);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('useSessionListRouter — attention requests reach the host bridge', () => {
   it('notifies the OS for the ACTIVE thread while markUnread stays suppressed', () => {

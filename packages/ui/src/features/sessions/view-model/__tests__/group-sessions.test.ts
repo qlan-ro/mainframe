@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
 import { arrangeSessions, SESSION_SORTS } from '../group-sessions';
 import type { SortMode, SessionGroupResult } from '../group-sessions';
@@ -429,4 +429,38 @@ describe('arrangeSessions is independent of input order', () => {
       });
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// Clock changes — a day is 23 or 25 hours long, so "24 hours ago" is not yesterday
+// ---------------------------------------------------------------------------
+
+describe('arrangeSessions — yesterday across a clock change', () => {
+  const zone = process.env['TZ'];
+  beforeAll(() => {
+    process.env['TZ'] = 'America/New_York';
+  });
+  afterAll(() => {
+    if (zone === undefined) delete process.env['TZ'];
+    else process.env['TZ'] = zone;
+  });
+
+  const groupOf = (updatedAt: number, now: number) =>
+    arrangeSessions([item('a', { updatedAt })], 'recent', now)[0]!.label;
+
+  it('keeps Sunday under Yesterday just after midnight on the Monday after a 23-hour day', () => {
+    // 2026-03-08 loses 02:00–03:00; 24 h before Monday 00:30 is Saturday 23:30.
+    const now = new Date(2026, 2, 9, 0, 30).getTime();
+    expect(new Date(now - 86_400_000).getDate()).toBe(7);
+    expect(groupOf(new Date(2026, 2, 8, 20, 0).getTime(), now)).toBe('Yesterday');
+    expect(groupOf(new Date(2026, 2, 7, 23, 45).getTime(), now)).toBe('Earlier');
+  });
+
+  it('keeps Saturday under Yesterday late on a 25-hour Sunday', () => {
+    // 2026-11-01 repeats 01:00–02:00; 24 h before Sunday 23:30 is still Sunday.
+    const now = new Date(2026, 10, 1, 23, 30).getTime();
+    expect(new Date(now - 86_400_000).getDate()).toBe(1);
+    expect(groupOf(new Date(2026, 9, 31, 12, 0).getTime(), now)).toBe('Yesterday');
+    expect(groupOf(new Date(2026, 10, 1, 0, 10).getTime(), now)).toBe('Today');
+  });
 });

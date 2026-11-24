@@ -14,9 +14,11 @@ import type { SessionStatus } from './view-model/session-status';
 interface SessionRowStatusProps {
   status: SessionStatus;
   updatedAt: number;
+  /** The hover actions are up: on a narrow row the value leaves the screen for them. */
+  yieldsToActions?: boolean;
 }
 
-export function SessionRowStatus({ status, updatedAt }: SessionRowStatusProps) {
+export function SessionRowStatus({ status, updatedAt, yieldsToActions = false }: SessionRowStatusProps) {
   return (
     <span
       data-testid="sessions-row-status"
@@ -25,6 +27,8 @@ export function SessionRowStatus({ status, updatedAt }: SessionRowStatusProps) {
         'flex h-4 min-w-4 shrink-0 items-center justify-end text-xs text-muted-foreground',
         // The row's fills darken the ground under the meta ink; step up with them.
         'group-hover/menu-item:text-sidebar-foreground/80 group-data-active/menu-item:text-sidebar-foreground/80',
+        'group-data-zone-visible/menu-button:text-sidebar-foreground/80',
+        yieldsToActions && '@max-[216px]/row:sr-only @max-[216px]/row:min-w-0',
       )}
     >
       <StatusValue status={status} updatedAt={updatedAt} />
@@ -32,7 +36,7 @@ export function SessionRowStatus({ status, updatedAt }: SessionRowStatusProps) {
   );
 }
 
-function StatusValue({ status, updatedAt }: SessionRowStatusProps) {
+function StatusValue({ status, updatedAt }: Pick<SessionRowStatusProps, 'status' | 'updatedAt'>) {
   const now = useNow();
   if (status === 'running') {
     return (

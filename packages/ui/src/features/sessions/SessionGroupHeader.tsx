@@ -12,9 +12,16 @@
  */
 import { SidebarGroupLabel } from '@/components/ui/sidebar';
 import { FadeLabel } from '@/components/ui/fade-label';
+import { JUMP_HEADER_HEIGHT } from '../shared/SidebarJumpSection';
 
 /** The space above a group header, in px — tucked under the parked header once stuck. */
 export const GROUP_GAP = 14;
+
+/** Where a stuck header's box starts: its space is hidden behind the parked header. */
+export const STUCK_HEADER_TOP = JUMP_HEADER_HEIGHT - GROUP_GAP;
+
+/** How deep the parked header and the stuck one reach together, in px: `h-9.5` from there. */
+export const HEADER_STACK_DEPTH = STUCK_HEADER_TOP + 38;
 
 export function SessionGroupHeader({ label }: { label: string }) {
   return (

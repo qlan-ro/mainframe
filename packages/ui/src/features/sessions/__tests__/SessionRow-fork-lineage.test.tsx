@@ -9,6 +9,7 @@
  * archived/deleted cases, which fall through to `use-parent-chat`.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FC, ReactNode } from 'react';
 import {
@@ -90,6 +91,7 @@ const RowUnderTest: FC<{
   return (
     <SessionLineageProvider value={lineage}>
       <SessionRow item={item} depth={depth} />
+      <button type="button">After the row</button>
     </SessionLineageProvider>
   );
 };
@@ -257,5 +259,78 @@ describe('the hover card names a parent the row is not nested under', () => {
 
     expect(await screen.findByTestId('sessions-meta-card-forked-from')).toHaveTextContent('a deleted chat');
     expect(screen.queryByTestId('sessions-meta-card-open-parent')).toBeNull();
+  });
+});
+
+describe('the row’s hover card from the keyboard', () => {
+  const lineage = {
+    allItems: [parentItem, forkItem],
+    listedIds: new Set(['parent-1']),
+    unfilteredIds: new Set(['parent-1', 'fork-1']),
+  };
+
+  /** Focuses the row with the keyboard and waits for its card. */
+  async function openCard() {
+    const user = userEvent.setup();
+    const main = renderRow(forkItem, 0, lineage);
+    await waitFor(() => expect(screen.getByText('Fork Chat')).toBeTruthy());
+    const trigger = document.querySelector<HTMLElement>('[data-chat-id="fork-1"] button')!;
+    await user.tab();
+    expect(trigger).toHaveFocus();
+    const link = await screen.findByTestId('sessions-meta-card-open-parent');
+    return { user, main, trigger, link };
+  }
+
+  const card = () => screen.queryByTestId('sessions-meta-card');
+
+  it('tabs into the parent link and opens the parent, closing the card', async () => {
+    const { user, main, trigger, link } = await openCard();
+
+    await user.tab();
+    expect(link).toHaveFocus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(main.id).toBe('parent-1'));
+    expect(card()).toBeNull();
+    expect(trigger).toHaveFocus();
+    // Handing focus back to the row must not bring the card back with it.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(card()).toBeNull();
+  });
+
+  it('opens the parent on a click, closing the card', async () => {
+    const { user, main, link } = await openCard();
+
+    await user.click(link);
+
+    await waitFor(() => expect(main.id).toBe('parent-1'));
+    expect(card()).toBeNull();
+  });
+
+  it('keeps the card open while focus is inside it, and moves on past the last link', async () => {
+    const { user, link } = await openCard();
+
+    await user.tab();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(link).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'After the row' })).toHaveFocus();
+    await waitFor(() => expect(card()).toBeNull());
+  });
+
+  it('goes back to the row on Shift+Tab, and on Escape, which closes the card', async () => {
+    const { user, trigger, link } = await openCard();
+
+    await user.tab();
+    await user.tab({ shift: true });
+    expect(trigger).toHaveFocus();
+    expect(card()).not.toBeNull();
+
+    await user.tab();
+    expect(link).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(card()).toBeNull());
   });
 });

@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { TAG_CHIP_STYLE } from '@/features/sessions/tags/tag-colors';
+import { cn } from '@/lib/utils';
 import { worktreeBasename } from '@/features/sessions/sidebar/worktree-basename';
 import { ProviderLogo } from '@/features/shared/ProviderLogo';
 import { LINEAGE_GLYPH } from './lineage-glyph';
@@ -32,6 +33,13 @@ function FieldLabel({ children }: { children: string }) {
     </span>
   );
 }
+
+/**
+ * The card's links: body ink, because the accent is under 4.5:1 at this size, and
+ * an underline to say they open something. 24px tall in a 16px line.
+ */
+const CARD_LINK =
+  '-my-1 inline-flex h-6 items-center rounded-sm text-popover-foreground underline decoration-muted-foreground underline-offset-2 outline-hidden hover:decoration-current focus-visible:focus-line-inset';
 
 /** Never both — a chat with no real project never has a projectName to show. */
 function ProjectRow({
@@ -110,13 +118,13 @@ function ParentValue({ onOpen, children }: { onOpen?: () => void; children: stri
     <button
       type="button"
       data-testid="sessions-meta-card-open-parent"
-      className="truncate text-left text-primary hover:underline"
+      className={cn(CARD_LINK, 'min-w-0 text-left')}
       onClick={(e) => {
         e.stopPropagation();
         onOpen();
       }}
     >
-      {children}
+      <span className="truncate">{children}</span>
     </button>
   );
 }
@@ -214,9 +222,7 @@ function PrRow({ detectedPrs }: { detectedPrs: DetectedPr[] }) {
             href={pr.url}
             target="_blank"
             rel="noreferrer"
-            // The one link in the card, and the only thing here that navigates —
-            // it takes the accent, like the task numbers in the sidebar.
-            className="text-primary hover:underline"
+            className={CARD_LINK}
             onClick={(e) => e.stopPropagation()}
           >
             #{pr.number}

@@ -6,8 +6,8 @@
  * from this file. No other file re-declares them.
  *
  * unread is NOT a field of SessionCustom. It is client-only store state
- * injected at call sites (e.g. deriveSessionBadge). This
- * keeps the mapper side-effect-free.
+ * injected at call sites (`isSessionUnread`). This keeps the mapper
+ * side-effect-free.
  *
  * The return type satisfies RemoteThreadMetadata (from @assistant-ui/react)
  * at the call site; we do not import it here to keep this module aui-free.
@@ -71,8 +71,7 @@ export interface SessionCustom {
   /**
    * True when this chat's side chat has a pending permission or question.
    * `hasPending` above stays this chat's OWN value (fork-availability reads
-   * it), so the badge derivation ORs this in separately (see
-   * `deriveSessionBadge`).
+   * it), so the row's status ORs this in separately (see `sessionStatus`).
    */
   sideChatWaiting?: boolean;
   /** The chat whose agent created this one (orchestration MCP server); absent for the user's own. */

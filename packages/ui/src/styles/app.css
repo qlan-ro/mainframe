@@ -23,6 +23,8 @@
 :root:not(.dark) {
   --sidebar: oklch(0.97 0.004 286);
   --sidebar-accent: oklch(0.945 0.004 286);
+  /* The preset's 0.556 is 4.36:1 on that sidebar. */
+  --muted-foreground: oklch(0.546 0 0);
 }
 
 /* Native form controls must be painted for the active mode. */

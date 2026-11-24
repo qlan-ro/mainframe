@@ -106,6 +106,15 @@ describe('RowBody — the rest of the row', () => {
     expect(screen.getByRole('button')).toHaveAccessibleName(/Fix the login race.*mainframe-ui.*needs you/);
   });
 
+  it('says in the name that the worktree or the transcript is missing', () => {
+    const { unmount } = renderBody(makeItem({ worktreeMissing: true, transcriptMissing: true }));
+    expect(screen.getByRole('button')).toHaveAccessibleName(/worktree missing.*transcript missing/);
+    unmount();
+
+    renderBody(makeItem({ worktreeMissing: false }));
+    expect(screen.getByRole('button')).not.toHaveAccessibleName(/missing/);
+  });
+
   it('marks an unread response on the title and in the name', () => {
     renderBody(makeItem(), { unread: true });
     expect(screen.getByTestId('sessions-row-title')).toHaveAttribute('data-unread', 'true');

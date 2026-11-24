@@ -10,8 +10,17 @@ import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
 import { cn } from '@/lib/utils';
 import { SessionProjectTile } from './SessionProjectTile';
 import { SessionRowStatus } from './SessionRowStatus';
-import type { SessionItem } from './view-model/chat-to-thread-custom';
+import type { SessionCustom, SessionItem } from './view-model/chat-to-thread-custom';
 import { sessionStatus } from './view-model/session-status';
+
+/** What assistive tech hears after the project; the row draws none of it but the unread weight. */
+function rowFlags(custom: SessionCustom, unread: boolean): string[] {
+  return [
+    ...(unread ? ['unread'] : []),
+    ...(custom.worktreeMissing ? ['worktree missing'] : []),
+    ...(custom.transcriptMissing ? ['transcript missing'] : []),
+  ];
+}
 
 interface RowBodyProps {
   item: SessionItem;
@@ -42,16 +51,21 @@ export function RowBody({ item, unread, projectName, renameSlot, actionsSlot }: 
           {item.title ?? 'Untitled session'}
         </FadeLabel>
       )}
-      <span className="sr-only">{`, ${project ?? 'No project'}${unread ? ', unread' : ''},`}</span>
+      <span className="sr-only">{`, ${[project ?? 'No project', ...rowFlags(custom, unread)].join(', ')},`}</span>
       {/* Actions sit in front of the trailing value, which stays put — the
-          truncating title is the only thing that gives way on hover. */}
+          truncating title is what gives way on hover. On a row too narrow for
+          both, the value yields instead, so the title keeps its room. */}
       {actionsSlot}
       {/* While the hints show, the row trades its value for the ⌘N that reaches
           it. A row whose session has no open tab has no number. */}
       {hintIndex != null ? (
         <ShortcutIndexBadge index={hintIndex} data-testid="sessions-row-hint" />
       ) : (
-        <SessionRowStatus status={sessionStatus(custom)} updatedAt={custom.updatedAt} />
+        <SessionRowStatus
+          status={sessionStatus(custom)}
+          updatedAt={custom.updatedAt}
+          yieldsToActions={actionsSlot != null}
+        />
       )}
     </>
   );

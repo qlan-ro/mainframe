@@ -66,7 +66,7 @@
  * the scope dropdown's per-project attention badge (`sidebar-project-badge-<id>`),
  * its "Unavailable" badge (`sidebar-project-unavailable-<id>`), and the
  * trigger's own hidden-attention badge (`sidebar-project-scope-badge`). Row
- * status already shows waiting ("your turn"); unavailable projects render
+ * status already shows waiting ("needs you"); unavailable projects render
  * dimmed with a tooltip instead of a badge. The "attention badges appear on a
  * project item inside the scope menu" scenario is deleted below with this note.
  *

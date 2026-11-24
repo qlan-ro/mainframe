@@ -8,6 +8,9 @@
  *  - open=true + a move in the gap band just past the row's right edge → stays
  *    open (crossing the sideOffset gap toward the card is not "leaving").
  *  - open=true + a move inside the mounted hover-card content rect → stays open.
+ *  - open=true + a diagonal move from the row to the card, across the rows below
+ *    → stays open; resting on the way, or heading elsewhere → closes.
+ *  - open=true + keyboard focus inside the card → a move elsewhere does not close.
  *  - open flipping back to false tears the listener down.
  *
  * jsdom returns all-zero rects, so the row and the card element each get a fixed
@@ -120,6 +123,75 @@ describe('useHoverCardWedgeGuard', () => {
     renderGuard(true, rowRef, close);
 
     move(400, 150);
+
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('stays open on a diagonal move to the card’s lower half, and says it is crossing', () => {
+    const close = vi.fn();
+    mountWithRect(CARD_RECT, 'hover-card-content');
+    const { result } = renderGuard(true, mountRowRef(), close);
+
+    move(200, 70);
+    expect(result.current.current).toBe(false);
+    move(230, 99);
+    move(280, 145);
+    expect(result.current.current).toBe(true);
+    move(400, 180);
+
+    expect(close).not.toHaveBeenCalled();
+    expect(result.current.current).toBe(false);
+  });
+
+  it('stays open when the first move it sees is already between the row and the card', () => {
+    const close = vi.fn();
+    const rowRef = mountRowRef();
+    mountWithRect(CARD_RECT, 'hover-card-content');
+    const { rerender } = renderGuard(false, rowRef, close);
+    rowRef.current!.dispatchEvent(new PointerEvent('pointermove', { clientX: 240, clientY: 70, bubbles: true }));
+
+    rerender({ open: true });
+    move(290, 130);
+    move(400, 180);
+
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('closes when the pointer rests on the way', () => {
+    vi.useFakeTimers();
+    const close = vi.fn();
+    mountWithRect(CARD_RECT, 'hover-card-content');
+    renderGuard(true, mountRowRef(), close);
+
+    move(200, 70);
+    move(230, 99);
+    vi.advanceTimersByTime(300);
+
+    expect(close).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('closes on a move straight down, away from the card', () => {
+    const close = vi.fn();
+    mountWithRect(CARD_RECT, 'hover-card-content');
+    renderGuard(true, mountRowRef(), close);
+
+    move(200, 70);
+    move(200, 140);
+
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the card alone while the keyboard is in it', () => {
+    const close = vi.fn();
+    const card = mountWithRect(CARD_RECT, 'hover-card-content');
+    const link = document.createElement('button');
+    card.appendChild(link);
+    link.focus();
+    link.matches = vi.fn((selector: string) => selector === ':focus-visible') as unknown as HTMLElement['matches'];
+    renderGuard(true, mountRowRef(), close);
+
+    move(900, 900);
 
     expect(close).not.toHaveBeenCalled();
   });

@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 export const SIDEBAR_WIDTH = '260px';
 export const SIDEBAR_WIDTH_ICON = '3rem';
 
-/** Below the floor the two-line rows truncate to nothing; above the ceiling the panel stops being chrome. */
+/** Below the floor the rows' titles truncate to nothing; above the ceiling the panel stops being chrome. */
 export const SIDEBAR_MIN_WIDTH = 208;
 export const SIDEBAR_MAX_WIDTH = 480;
 
