@@ -1,4 +1,5 @@
 """What the product-board builders share: the page shape, captions and writing canvas.json."""
+import base64
 import getpass
 import html
 import json
@@ -82,24 +83,44 @@ class Component extends DCLogic {{
 """
 
 
+def telling(name):
+    """Whether a name is this machine's and not a word any board may hold, such as `max`, `main` or `alex`."""
+    return len(name) > 2 and (len(name) >= 8 or not name.isalpha()) and name.lower() != "localhost"
+
+
 def machine_names():
     """The user and host names of this machine, in every spelling the app could show."""
     host = socket.gethostname()
-    names = {getpass.getuser(), os.path.basename(os.path.expanduser("~")), host, host.split(".")[0]}
-    # Two letters and these CI defaults are words any board may hold.
-    return {n for n in names if len(n) > 2 and n.lower() not in {"root", "runner", "user", "localhost"}}
+    return {getpass.getuser(), os.path.basename(os.path.expanduser("~")), host, host.split(".")[0]}
 
 
 # The shapes of a local path, shared with design/tools/check.mjs, which holds committed boards to the same rule.
 with open(os.path.join(CANVAS, "lib", "local-paths.json")) as f:
     _PATHS = json.load(f)
 LOCAL_PATH = re.compile(_PATHS["path"])
-ENCODED_SLASH = re.compile(_PATHS["encodedSlash"])
+ENCODED = re.compile(_PATHS["encoded"])
+BASE64 = re.compile(_PATHS["base64"])
+
+
+def _decoded(match):
+    by_hex, entity_hex, entity, slash, _ = match.groups()
+    if by_hex or entity_hex:
+        return chr(int(by_hex or entity_hex, 16))
+    if entity:
+        return chr(int(entity))
+    return "/" if slash else "\\"
+
+
+def _unbase64(run):
+    run = run.replace("-", "+").replace("_", "/")
+    run = run[:-1] if len(run) % 4 == 1 else run
+    return base64.b64decode(run + "=" * (-len(run) % 4)).decode("latin-1")
 
 
 def local_paths(text):
-    """Home and temp paths of a machine, encoded ones (`%2FUsers%2F…`) included."""
-    return sorted(set(LOCAL_PATH.findall(ENCODED_SLASH.sub("/", text))))
+    """Home and temp paths of a machine, escaped ones (`%2FUsers%2F…`) and base64 ones included."""
+    texts = [text, *map(_unbase64, BASE64.findall(text))]
+    return sorted({path for t in texts for path in LOCAL_PATH.findall(ENCODED.sub(_decoded, t))})
 
 
 class _Markup(HTMLParser):
@@ -130,7 +151,7 @@ def leaks(text, names=None):
     markup = _Markup()
     markup.feed(text)
     markup.close()
-    for name in sorted(names):
+    for name in sorted(filter(telling, names)):
         word = re.compile(rf"(?i)(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])")
         for part in markup.parts:
             found += word.findall(part)

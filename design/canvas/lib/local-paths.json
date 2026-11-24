@@ -1,5 +1,6 @@
 {
-  "about": "What a local path looks like, read by lib/boards.py (before a board is written) and tools/check.mjs (on committed files). Keep both to the regex syntax Python and JavaScript share.",
-  "path": "(?:/Users/|/private/(?:tmp|var|etc)\\b|(?<![\\w.-])/(?:private|home)/|/var/folders/|\\b[A-Za-z]:[\\\\/]+Users[\\\\/]|/tmp/claude-\\d|/tmp/[^\\s\"'<>&;)]*-(?:Users|home)-|(?<![\\w-])-(?:Users|home|private-tmp|private-var|var-folders)-(?=\\w))[^\\s\"'<>&;)]*",
-  "encodedSlash": "(?:%(?:25)*2[fF]|\\\\u002[fF]|\\\\x2[fF]|\\\\/|&#[xX]0*2[fF];|&#0*47;|&sol;)"
+  "about": "What a local path looks like, read by lib/boards.py (before a board is written) and tools/check.mjs (on committed files). Keep all of it to the regex syntax Python and JavaScript share. The text is searched with `encoded` characters decoded, and so is what each `base64` run holds.",
+  "path": "(?:/Users/|/private/(?:tmp|var|etc)\\b|(?<![\\w.-])/(?:private|home)/|/var/folders/|\\b[A-Za-z]:[\\\\/]+Users[\\\\/]|\\\\Users\\\\+(?=\\w)|(?<![\\w./~-])Users/(?=[\\w.-]+/)|(?<![\\w./~-])(?:private/(?:tmp|var/folders)|var/folders)/(?=\\w)|/tmp/claude-\\d|/tmp/[^\\s\"'<>&;)]*-(?:Users|home)-|(?<![\\w-])-(?:Users|home|private-tmp|private-var|var-folders)-(?=\\w)|-(?:Users-|private-var-folders-|var-folders-)(?=[\\w.]+-\\w)|(?<!\\w)-home-(?=[\\w.]+-\\w)|-private-tmp-(?=\\w))[^\\s\"'<>&;)]*",
+  "encoded": "(?:%(?:25)*|\\\\u00|\\\\x)([2-7][0-9a-fA-F])|&#[xX]0*([2-7][0-9a-fA-F])(?![0-9a-fA-F]);?|&#0*([0-9]{2,3})(?![0-9]);?|(&sol;|\\\\/)|(&bsol;)",
+  "base64": "[A-Za-z0-9+/_-]{12,}"
 }

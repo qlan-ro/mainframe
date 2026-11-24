@@ -44,7 +44,7 @@ The `overview` page holds the map board (`Main`). The `proposals` page holds des
 
 CI runs `node design/tools/check.mjs --base origin/main`:
 
-- **Canvas:** every board in `canvas.json` has a file, nothing is orphaned, `order` lists every board once, every board sits on its area's page, and every named brief exists. No file in `canvas/project/` or `redesign/` holds a local path (`/Users/…`, `/private/tmp/…`, `/var/folders/…`, URL-encoded too): this repository is public, so write `~/projects/…`. Private project names cannot be checked for; leave them out.
+- **Canvas:** every board in `canvas.json` has a file, nothing is orphaned, `order` lists every board once, every board sits on its area's page, and every named brief exists. No board, brief (`packages/ui/.impeccable`), spec or prototype, nor `DESIGN.md` or this file, holds a local path (a home or temp directory, encoded ones too; `canvas/lib/local-paths.json` lists the shapes): this repository is public, so write `~/projects/…`. Private project names cannot be checked for; leave them out.
 - **Coverage:** every area whose UI code changed (`.tsx` and `.css` files, tests and stories excluded; moves and deletions count) also adds or edits one of its own boards or its brief. A proposal board or a deleted board does not count.
 
 A PR with no visible change (a refactor, a performance fix) carries the `design: none` label, which skips the coverage check.

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -71,6 +71,21 @@ test('the committed canvas passes', () => {
   assert.deepEqual(checkCanvas(cfg), []);
 });
 
+test('the briefs and the two guides are held to it too', () => {
+  for (const planted of ['packages/ui/.impeccable/surfaces/x.md', 'DESIGN.md', 'design/README.md', 'design/canvas/project/x.dc.html', 'design/redesign/DECISIONS.md']) {
+    const repo = mkdtempSync(join(tmpdir(), 'design-check-'));
+    try {
+      for (const dir of ['design/canvas/project', 'design/redesign', 'packages/ui/.impeccable/surfaces']) mkdirSync(join(repo, dir), { recursive: true });
+      for (const file of ['DESIGN.md', 'design/README.md']) writeFileSync(join(repo, file), 'fine');
+      assert.deepEqual(checkLocalPaths(repo), []);
+      writeFileSync(join(repo, planted), 'see /Users/jane/Code');
+      assert.deepEqual(checkLocalPaths(repo), [`${planted} holds local paths: /Users/jane/Code`]);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  }
+});
+
 test('the published design files name no local path', () => {
   assert.deepEqual(checkLocalPaths(), []);
 });
@@ -103,6 +118,31 @@ const PATHS = [
   ['{"p":"\\u002fUsers\\u002fjane"}', '/Users/jane'],
   ['<p>&#x2F;Users&#47;jane</p>', '/Users/jane'],
   ['<p>C:\\Users\\jane</p>', 'C:\\Users\\jane'],
+  // Encoded by a tool that turns every slash into a dash, after a dash or a prefix.
+  ['<p>a--Users-jane-Code</p>', '-Users-jane-Code'],
+  ['<p>row-Users-jane-Projects</p>', '-Users-jane-Projects'],
+  ['<p>x--home-jane-code</p>', '-home-jane-code'],
+  ['<p>--private-tmp-claude</p>', '-private-tmp-claude'],
+  ['<p>t-private-tmp-claude</p>', '-private-tmp-claude'],
+  ['<p>x-var-folders-y6-abc</p>', '-var-folders-y6-abc'],
+  // Escaped letters, and entities without their semicolon.
+  ['<p>&#47Users&#47jane</p>', '/Users/jane'],
+  ['<p>&#x2fUsers&#x2fjane</p>', '/Users/jane'],
+  ['<a href="x?p=/%55sers/jane">x</a>', '/Users/jane'],
+  ['<a href="x?p=%252F%2555sers%252Fjane">x</a>', '/Users/jane'],
+  ['{"p":"/\\u0055sers/jane"}', '/Users/jane'],
+  ['<p>/&#85;sers/jane</p>', '/Users/jane'],
+  // Without the leading slash, or the drive.
+  ['<p>Users/jane/Code</p>', 'Users/jane/Code'],
+  ['<p>private/tmp/x</p>', 'private/tmp/x'],
+  ['<p>var/folders/y6/abc</p>', 'var/folders/y6/abc'],
+  ['<p>\\Users\\jane</p>', '\\Users\\jane'],
+  ['{"p":"\\\\Users\\\\jane"}', '\\Users\\\\jane'],
+  // base64: padded, unpadded and URL-safe.
+  [`<a href="data:text/plain;base64,${btoa('see /Users/jane/Code')}">x</a>`, '/Users/jane/Code'],
+  ['<p>L1VzZXJzL2phbmU</p>', '/Users/jane'],
+  [`<p>${Buffer.from('/Users/jane/??>>').toString('base64url')}</p>`, '/Users/jane/??'],
+  [`<p>${btoa('%2FUsers%2Fjane')}</p>`, '/Users/jane'],
 ];
 const NEUTRAL = [
   '<p>~/Code/atlas-web</p>',
@@ -110,6 +150,8 @@ const NEUTRAL = [
   '<a href="https://example.com/home/jane">x</a>',
   '<p>src/private/key.ts, /users/1, packages/home/Home.tsx</p>',
   '<svg class="icon-home-x -home"></svg>',
+  '<svg class="nav-home-icon-large go-Users-x"></svg>',
+  '<p style="--my-private-var-name:1">Users/List.tsx, 100%25 wide, &#477; and &#x2fa;</p>',
 ];
 
 test('a local path is found in any spelling, by the CI check and by the board writers alike', () => {
@@ -124,11 +166,17 @@ test('a local path is found in any spelling, by the CI check and by the board wr
 });
 
 test('the user and host names are looked for in the markup only', () => {
-  assert.deepEqual(leaks('<b>janemac.local</b> and janet', ['jane', 'JaneMac']), ['janemac']);
-  assert.deepEqual(leaks('<p aria-label="jane’s chat">x</p>', ['jane']), ['jane']);
-  const css = '<style>.max{max-width:1px}</style><script>Math.max(1)</script>';
-  assert.deepEqual(leaks(`${css}<p class="max-w-64" style="max-width:1px">hello</p>`, ['max']), []);
-  assert.deepEqual(leaks(`${css}<p>max</p>`, ['max']), ['max']);
+  assert.deepEqual(leaks('<b>janes-mac.local</b> and janet', ['janet9', 'Janes-Mac']), ['janes-mac']);
+  assert.deepEqual(leaks('<p aria-label="janedoes’s chat">x</p>', ['janedoes']), ['janedoes']);
+  const css = '<style>.max-width{max-width:1px}</style><script>max-width</script>';
+  assert.deepEqual(leaks(`${css}<p class="max-width" style="max-width:1px">hello</p>`, ['max-width']), []);
+  assert.deepEqual(leaks(`${css}<p>max-width</p>`, ['max-width']), ['max-width']);
+});
+
+test('a user name that is an ordinary word may stand in a board, but not its home', () => {
+  const text = '<p aria-label="Alex’s chat">max effort, on main, with Alex</p>';
+  assert.deepEqual(leaks(text, ['max', 'main', 'alex', 'root', 'runner', 'localhost']), []);
+  assert.deepEqual(leaks('<p>/Users/alex/Code</p>', ['alex']), ['/Users/alex/Code']);
 });
 
 test('tool cards and markers are numbered within their own state', () => {
@@ -231,6 +279,64 @@ test('a capture’s daemon gets an empty HOME and none of the machine’s tokens
   } finally {
     for (const name of Object.keys(process.env)) if (!(name in before)) delete process.env[name];
     Object.assign(process.env, before);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** Stands in for Playwright, so a capture runs without it: keeps the spec's body, and has no browser to launch. */
+const FAKE_PLAYWRIGHT = `
+import { registerHooks } from 'node:module';
+const source = "export const test = (name, body) => { globalThis.captureBody = body };" +
+  "export const chromium = { launch: async () => { throw new Error('no browser') } };" +
+  "export const expect = undefined, request = undefined;";
+registerHooks({
+  resolve(specifier, context, next) {
+    if (/@playwright.test(?:.index.mjs)?$/.test(specifier)) return { url: 'fake:playwright', shortCircuit: true };
+    return next(specifier.replace(/^(\\..*)\\.js$/, '$1.ts'), context);
+  },
+  load(url, context, next) {
+    return url === 'fake:playwright' ? { format: 'module', source, shortCircuit: true } : next(url, context);
+  },
+});
+`;
+
+test('every capture starts its app on the isolated HOME and data dir', async () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'design-check-')));
+  try {
+    for (const part of ['design/canvas/capture', 'packages/e2e/fixtures', 'packages/e2e/helpers']) {
+      cpSync(join(REPO, part), join(dir, part), { recursive: true, filter: (from) => !/\/(?:\.work|recordings)$/.test(from) });
+    }
+    const capture = join(dir, 'design/canvas/capture');
+    mkdirSync(join(capture, '.work'));
+    writeFileSync(join(capture, 'areas/one-group.mts'), "export default { boards: [], groups: [{ board: 'X', states: [] }] };");
+    const fake = join(dir, 'fake-daemon');
+    writeFileSync(fake, FAKE_DAEMON.replace('process.env.MAINFRAME_DATA_DIR', '__dirname'));
+    chmodSync(fake, 0o755);
+    writeFileSync(join(dir, 'fake-playwright.mjs'), FAKE_PLAYWRIGHT);
+    const run = join(dir, 'run.mjs');
+    writeFileSync(
+      run,
+      "await import('./design/canvas/capture/capture.spec.mts');" +
+        'await globalThis.captureBody().catch((error) => console.log(error.message));',
+    );
+    const said = execFileSync(process.execPath, ['--import', join(dir, 'fake-playwright.mjs'), run], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        E2E_MODE: '',
+        SOME_NEW_SECRET: 'x',
+        CAPTURE_AREA: 'one-group',
+        CAPTURE_BOARDS: '',
+        MF_E2E_RUST_DAEMON_PATH: fake,
+        MF_E2E_DAEMON_PORT: await freePort(),
+      },
+    });
+    assert.match(said, /no browser/);
+    const env = JSON.parse(readFileSync(join(dir, 'env.json'), 'utf8'));
+    assert.equal(env.HOME, join(capture, '.work/home'));
+    assert.equal(env.MAINFRAME_DATA_DIR, join(capture, '.work/data-0'));
+    assert.equal(env.SOME_NEW_SECRET, undefined);
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
