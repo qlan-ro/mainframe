@@ -5,12 +5,13 @@
  *
  * Reuses SessionRow.test.tsx's real-runtime harness (a stub thread list +
  * SessionRowItemScope) since the lineage hook reads `useAui().threads` for
- * the fallback glyph's activate action. `getChat` is mocked for the
+ * opening the parent. `getChat` is mocked for the
  * archived/deleted cases, which fall through to `use-parent-chat`.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import {
   AssistantRuntimeProvider,
   useAuiState,
@@ -23,7 +24,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { DaemonPortProvider } from '../runtime/daemon-port-context';
 import { SessionLineageProvider, type SessionLineageContextValue } from '../SessionLineageContext';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
+import { SessionMetaCard } from '../SessionMetaCard';
 import { SessionRow } from '../SessionRow';
+import { useForkLineageRow } from '../sidebar/use-fork-lineage-row';
 
 const getChatMock = vi.fn();
 vi.mock('@/lib/api/chats', () => ({ getChat: (...args: unknown[]) => getChatMock(...args) }));
@@ -88,24 +91,18 @@ const RowUnderTest: FC<{
   return (
     <SessionLineageProvider value={lineage}>
       <SessionRow item={item} depth={depth} />
+      <button type="button">After the row</button>
     </SessionLineageProvider>
   );
 };
 
-const Harness: FC<{
-  item: SessionItem;
-  depth: 0 | 1 | 2;
-  lineage: SessionLineageContextValue;
-  main: { id: string | null };
-}> = ({ item, depth, lineage, main }) => {
+const Providers: FC<{ children: ReactNode }> = ({ children }) => {
   const runtime = useRemoteThreadListRuntime({ runtimeHook: useStubThreadRuntime, adapter });
   return (
     <TooltipProvider>
       <DaemonPortProvider port={PORT}>
         <SidebarProvider>
-          <AssistantRuntimeProvider runtime={runtime}>
-            <RowUnderTest item={item} depth={depth} lineage={lineage} main={main} />
-          </AssistantRuntimeProvider>
+          <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>
         </SidebarProvider>
       </DaemonPortProvider>
     </TooltipProvider>
@@ -114,7 +111,11 @@ const Harness: FC<{
 
 function renderRow(item: SessionItem, depth: 0 | 1 | 2, lineage: SessionLineageContextValue) {
   const main: { id: string | null } = { id: null };
-  render(<Harness item={item} depth={depth} lineage={lineage} main={main} />);
+  render(
+    <Providers>
+      <RowUnderTest item={item} depth={depth} lineage={lineage} main={main} />
+    </Providers>,
+  );
   return main;
 }
 
@@ -127,7 +128,7 @@ const parentItem = makeItem('parent-1', 'Parent Chat');
 const forkItem = makeItem('fork-1', 'Fork Chat', 'parent-1');
 
 describe('SessionRow — nested fork (depth > 0)', () => {
-  it('wraps the row in the nest wrapper with the leading glyph, and no fallback glyph', async () => {
+  it('wraps the row in the nest wrapper', async () => {
     renderRow(forkItem, 1, {
       allItems: [parentItem, forkItem],
       listedIds: new Set(['parent-1', 'fork-1']),
@@ -137,8 +138,6 @@ describe('SessionRow — nested fork (depth > 0)', () => {
     await waitFor(() => expect(screen.getByText('Fork Chat')).toBeTruthy());
     const nest = screen.getByTestId('sessions-row-fork-nest');
     expect(nest.querySelector('[data-chat-id="fork-1"]')).toBeTruthy();
-    expect(screen.getByTestId('sessions-row-fork-nest-glyph')).toBeTruthy();
-    expect(screen.queryByTestId('sessions-row-parent-link')).toBeNull();
   });
 
   it('wraps a depth-2 fork-of-fork row in two nest wrappers, not a single one', async () => {
@@ -168,34 +167,62 @@ describe('SessionRow — nested fork (depth > 0)', () => {
 
     await waitFor(() => expect(screen.getByText('Parent Chat')).toBeTruthy());
     expect(screen.queryByTestId('sessions-row-fork-nest')).toBeNull();
-    expect(screen.queryByTestId('sessions-row-parent-link')).toBeNull();
   });
 });
 
-describe('SessionRow — fallback glyph (depth 0, parent not adjacent)', () => {
-  it('reads the different-group Hint and activates the parent without activating the fork row', async () => {
-    const main = renderRow(forkItem, 0, {
+/** The row's own lineage hook feeding its hover card, without the hover. */
+const CardUnderTest: FC<{ item: SessionItem; main: { id: string | null } }> = ({ item, main }) => {
+  main.id = useAuiState((s) => s.threads.mainThreadId);
+  // Switching to a thread the list has not loaded yet throws.
+  const loaded = useAuiState((s) => s.threads.threadItems.some((t) => t.id === 'parent-1'));
+  const lineage = useForkLineageRow(item, 0);
+  if (!loaded) return null;
+  return (
+    <SessionMetaCard
+      title={item.title ?? ''}
+      worktreeMissing={false}
+      transcriptMissing={false}
+      detectedPrs={[]}
+      tags={[]}
+      parentState={lineage.parentState}
+      onOpenParent={lineage.onOpenParent}
+    />
+  );
+};
+
+function renderCard(item: SessionItem, lineage: SessionLineageContextValue) {
+  const main: { id: string | null } = { id: null };
+  render(
+    <Providers>
+      <SessionLineageProvider value={lineage}>
+        <CardUnderTest item={item} main={main} />
+      </SessionLineageProvider>
+    </Providers>,
+  );
+  return main;
+}
+
+describe('the hover card names a parent the row is not nested under', () => {
+  it('opens a parent listed in another group', async () => {
+    const main = renderCard(forkItem, {
       allItems: [parentItem, forkItem],
       listedIds: new Set(['parent-1']), // parent listed, but not alongside the fork
       unfilteredIds: new Set(['parent-1', 'fork-1']),
     });
 
-    await waitFor(() => expect(screen.getByText('Fork Chat')).toBeTruthy());
-    const glyph = screen.getByTestId('sessions-row-parent-link');
-
-    fireEvent.click(glyph);
+    fireEvent.click(await screen.findByTestId('sessions-meta-card-open-parent'));
     await waitFor(() => expect(main.id).toBe('parent-1'));
   });
 
-  it('reads the filtered-out Hint (no suffix) when the parent is loaded but not listed anywhere', async () => {
-    renderRow(forkItem, 0, {
+  it('opens a parent a filter hides from the list', async () => {
+    const main = renderCard(forkItem, {
       allItems: [parentItem, forkItem],
       listedIds: new Set(),
       unfilteredIds: new Set(['parent-1', 'fork-1']),
     });
 
-    await waitFor(() => expect(screen.getByText('Fork Chat')).toBeTruthy());
-    expect(screen.getByTestId('sessions-row-parent-link')).toBeTruthy();
+    fireEvent.click(await screen.findByTestId('sessions-meta-card-open-parent'));
+    await waitFor(() => expect(main.id).toBe('parent-1'));
   });
 
   it('resolves archived via use-parent-chat and is not interactive', async () => {
@@ -212,27 +239,133 @@ describe('SessionRow — fallback glyph (depth 0, parent not adjacent)', () => {
       totalTokensOutput: 0,
       lastContextTokensInput: 0,
     });
-    const main = renderRow(forkItem, 0, {
+    renderCard(forkItem, {
       allItems: [forkItem],
       listedIds: new Set(),
       unfilteredIds: new Set(['fork-1']),
     });
 
-    await waitFor(() => expect(screen.getByTestId('sessions-row-parent-link')).toBeTruthy());
-    fireEvent.click(screen.getByTestId('sessions-row-parent-link'));
-    expect(main.id).not.toBe('parent-1');
+    expect(await screen.findByTestId('sessions-meta-card-forked-from')).toHaveTextContent('"Parent Chat" (archived)');
+    expect(screen.queryByTestId('sessions-meta-card-open-parent')).toBeNull();
   });
 
   it('resolves deleted via a 404 and is not interactive', async () => {
     getChatMock.mockRejectedValue(new ApiRequestError('not found', [], 404));
-    const main = renderRow(forkItem, 0, {
+    renderCard(forkItem, {
       allItems: [forkItem],
       listedIds: new Set(),
       unfilteredIds: new Set(['fork-1']),
     });
 
-    await waitFor(() => expect(screen.getByTestId('sessions-row-parent-link')).toBeTruthy());
-    fireEvent.click(screen.getByTestId('sessions-row-parent-link'));
-    expect(main.id).not.toBe('parent-1');
+    expect(await screen.findByTestId('sessions-meta-card-forked-from')).toHaveTextContent('a deleted chat');
+    expect(screen.queryByTestId('sessions-meta-card-open-parent')).toBeNull();
+  });
+});
+
+describe('the row’s hover card from the keyboard', () => {
+  const lineage = {
+    allItems: [parentItem, forkItem],
+    listedIds: new Set(['parent-1']),
+    unfilteredIds: new Set(['parent-1', 'fork-1']),
+  };
+
+  /** Focuses the row with the keyboard and waits for its card. */
+  async function openCard() {
+    const user = userEvent.setup();
+    const main = renderRow(forkItem, 0, lineage);
+    await waitFor(() => expect(screen.getByText('Fork Chat')).toBeTruthy());
+    const trigger = document.querySelector<HTMLElement>('[data-chat-id="fork-1"] button')!;
+    await user.tab();
+    expect(trigger).toHaveFocus();
+    const link = await screen.findByTestId('sessions-meta-card-open-parent');
+    return { user, main, trigger, link };
+  }
+
+  const card = () => screen.queryByTestId('sessions-meta-card');
+
+  /** jsdom knows neither `:hover` nor what a mouse does to `:focus-visible`. */
+  function pointTo(trigger: HTMLElement) {
+    const row = trigger.closest('li')!;
+    row.matches = ((selector: string) => selector === ':hover') as unknown as HTMLElement['matches'];
+    trigger.matches = (() => false) as unknown as HTMLElement['matches'];
+  }
+
+  it('tabs into the parent link and opens the parent, closing the card', async () => {
+    const { user, main, trigger, link } = await openCard();
+
+    await user.tab();
+    expect(link).toHaveFocus();
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(main.id).toBe('parent-1'));
+    expect(card()).toBeNull();
+    expect(trigger).toHaveFocus();
+    // Handing focus back to the row must not bring the card back with it.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(card()).toBeNull();
+  });
+
+  it('opens the parent on a click, closing the card', async () => {
+    const { user, main, link } = await openCard();
+
+    await user.click(link);
+
+    await waitFor(() => expect(main.id).toBe('parent-1'));
+    expect(card()).toBeNull();
+  });
+
+  it('keeps the card open while focus is inside it, and moves on past the last link', async () => {
+    const { user, link } = await openCard();
+
+    await user.tab();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(link).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'After the row' })).toHaveFocus();
+    await waitFor(() => expect(card()).toBeNull());
+  });
+
+  it('goes back to the row on Shift+Tab, and on Escape, which closes the card', async () => {
+    const { user, trigger, link } = await openCard();
+
+    await user.tab();
+    await user.tab({ shift: true });
+    expect(trigger).toHaveFocus();
+    expect(card()).not.toBeNull();
+
+    await user.tab();
+    expect(link).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(card()).toBeNull());
+  });
+
+  it('opens again on hover after a mouse click closed it', async () => {
+    const { user, trigger, link } = await openCard();
+    pointTo(trigger);
+
+    await user.click(link);
+    await waitFor(() => expect(card()).toBeNull());
+    expect(trigger).toHaveFocus();
+
+    await user.hover(trigger);
+    expect(await screen.findByTestId('sessions-meta-card')).toBeTruthy();
+  });
+
+  it('leaves Tab to the rename input', async () => {
+    const { user, trigger } = await openCard();
+    fireEvent.contextMenu(trigger);
+    await user.click(await screen.findByTestId('sessions-ctx-rename'));
+    const input = await screen.findByTestId('sessions-rename-input');
+    pointTo(trigger);
+    await user.hover(trigger);
+    const link = await screen.findByTestId('sessions-meta-card-open-parent');
+    expect(input).toHaveFocus();
+
+    await user.tab();
+
+    expect(link).not.toHaveFocus();
+    expect(screen.queryByTestId('sessions-rename-input')).toBeNull();
   });
 });

@@ -72,6 +72,7 @@ describe('applySessionFilters — single filter dimension', () => {
   ])('%s', (_name, filterProjectIds, tags, synthetic, expectedIds) => {
     const result = applySessionFilters([s1, s2, s3, s4], {
       filterProjectIds: new Set(filterProjectIds),
+      statusFilter: 'all',
       selectedTags: new Set(tags),
       selectedSynthetic: new Set<SyntheticTag>(synthetic),
     });
@@ -83,6 +84,7 @@ describe('applySessionFilters — multi-project scope', () => {
   it('keeps items from any of two scoped projects, excluding a third', () => {
     const result = applySessionFilters([s1, s2, s3, s4], {
       filterProjectIds: new Set(['proj-a', 'proj-b']),
+      statusFilter: 'all',
       selectedTags: new Set(),
       selectedSynthetic: new Set(),
     });
@@ -92,6 +94,7 @@ describe('applySessionFilters — multi-project scope', () => {
   it('keeps items from all three projects when the scope names all of them', () => {
     const result = applySessionFilters([s1, s2, s3, s4], {
       filterProjectIds: new Set(['proj-a', 'proj-b', 'proj-c']),
+      statusFilter: 'all',
       selectedTags: new Set(),
       selectedSynthetic: new Set(),
     });
@@ -101,6 +104,7 @@ describe('applySessionFilters — multi-project scope', () => {
   it('returns no items when the scope names projects none of the items belong to', () => {
     const result = applySessionFilters([s1, s2, s3, s4], {
       filterProjectIds: new Set(['proj-x', 'proj-y']),
+      statusFilter: 'all',
       selectedTags: new Set(),
       selectedSynthetic: new Set(),
     });
@@ -117,6 +121,7 @@ describe('applySessionFilters — cross-dimension AND-match', () => {
   ])('%s', (_name, filterProjectIds, tags, synthetic, expectedIds) => {
     const result = applySessionFilters([s1, s2, s3, s4], {
       filterProjectIds: new Set(filterProjectIds),
+      statusFilter: 'all',
       selectedTags: new Set(tags),
       selectedSynthetic: new Set<SyntheticTag>(synthetic),
     });
@@ -129,6 +134,7 @@ describe('applySessionFilters — a project pill hides non-project chats (todo #
     const np = noProjectItem('np1');
     const result = applySessionFilters([s1, np], {
       filterProjectIds: new Set(['proj-a']),
+      statusFilter: 'all',
       selectedTags: new Set(),
       selectedSynthetic: new Set(),
     });
@@ -139,9 +145,36 @@ describe('applySessionFilters — a project pill hides non-project chats (todo #
     const np = noProjectItem('np1');
     const result = applySessionFilters([s1, np], {
       filterProjectIds: new Set(),
+      statusFilter: 'all',
       selectedTags: new Set(),
       selectedSynthetic: new Set(),
     });
     expect(result.map((i) => i.id)).toEqual(['s1', 'np1']);
+  });
+});
+
+describe('applySessionFilters — status', () => {
+  const withStatus = (id: string, custom: Partial<SessionItem['custom']>): SessionItem => {
+    const base = item(id, 'proj-a', []);
+    return { ...base, custom: { ...base.custom, ...custom } };
+  };
+  const running = withStatus('running', { displayStatus: 'working' });
+  const gate = withStatus('gate', { displayStatus: 'waiting', hasPending: true });
+  const childGate = withStatus('child-gate', { displayStatus: 'working', delegatedWaiting: true });
+  const idle = withStatus('idle', {});
+
+  it.each([
+    ['all' as const, ['running', 'gate', 'child-gate', 'idle']],
+    ['running' as const, ['running']],
+    // A running chat whose delegated task waits is the user's to answer, so it counts here only.
+    ['needs-you' as const, ['gate', 'child-gate']],
+  ])('%s', (statusFilter, expected) => {
+    const result = applySessionFilters([running, gate, childGate, idle], {
+      filterProjectIds: new Set(),
+      statusFilter,
+      selectedTags: new Set(),
+      selectedSynthetic: new Set(),
+    });
+    expect(result.map((i) => i.id)).toEqual(expected);
   });
 });

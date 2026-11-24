@@ -214,7 +214,7 @@
       "title": "Window redesign: queue and activity strip",
       "w": 2932,
       "x": 1460,
-      "y": 15318
+      "y": 14038
     },
     "Proposal-Redesign-BottomStrip.dc.html": {
       "h": 1120,
@@ -222,7 +222,7 @@
       "title": "Window redesign: where it runs, branch and changes",
       "w": 2616,
       "x": 1460,
-      "y": 19470
+      "y": 18190
     },
     "Proposal-Redesign-Composer.dc.html": {
       "h": 4586,
@@ -230,7 +230,7 @@
       "title": "Window redesign: composer toolbar, send and stop",
       "w": 2616,
       "x": 1460,
-      "y": 8152
+      "y": 6872
     },
     "Proposal-Redesign-Gates.dc.html": {
       "h": 2428,
@@ -238,7 +238,7 @@
       "title": "Window redesign: permission, plan and question gates",
       "w": 2616,
       "x": 1460,
-      "y": 20750
+      "y": 19470
     },
     "Proposal-Redesign-NewSession.dc.html": {
       "h": 3426,
@@ -246,7 +246,7 @@
       "title": "Window redesign: composer before the first message",
       "w": 2616,
       "x": 1460,
-      "y": 4566
+      "y": 3286
     },
     "Proposal-Redesign-SessionPanel.dc.html": {
       "h": 2726,
@@ -254,7 +254,7 @@
       "title": "Window redesign: session panel",
       "w": 3596,
       "x": 1460,
-      "y": 27184
+      "y": 25904
     },
     "Proposal-Redesign-Shortcuts.dc.html": {
       "h": 1088,
@@ -262,15 +262,7 @@
       "title": "Window redesign: keyboard shortcuts sheet",
       "w": 1536,
       "x": 1460,
-      "y": 35262
-    },
-    "Proposal-Redesign-Sidebar.dc.html": {
-      "h": 1120,
-      "page": "proposals",
-      "title": "Window redesign: sidebar session list",
-      "w": 1504,
-      "x": 1460,
-      "y": 3286
+      "y": 33982
     },
     "Proposal-Redesign-Spec.dc.html": {
       "h": 9952,
@@ -294,7 +286,7 @@
       "title": "Window redesign: workspace surface",
       "w": 3024,
       "x": 1460,
-      "y": 30070
+      "y": 28790
     },
     "Proposal-SessionPanel-Sections.dc.html": {
       "h": 1797,
@@ -302,7 +294,7 @@
       "title": "Session panel rows: other section states (first column, Session, is removed by R2)",
       "w": 2120,
       "x": 0,
-      "y": 37070
+      "y": 35790
     },
     "Proposal-Window-Baseline.dc.html": {
       "h": 900,
@@ -395,35 +387,35 @@
       "y": 0
     },
     "Shell-SidebarMenus.dc.html": {
-      "h": 1952,
+      "h": 2424,
       "page": "sidebar",
       "title": "Shell — sidebar menus and hover cards",
-      "w": 6000,
+      "w": 2181,
       "x": 0,
-      "y": 3583
+      "y": 3120
     },
     "Shell-SidebarRows.dc.html": {
-      "h": 132,
+      "h": 536,
       "page": "sidebar",
       "title": "Shell — session rows and group headers",
-      "w": 6000,
+      "w": 1584,
       "x": 0,
-      "y": 1091
+      "y": 1200
     },
     "Shell-SidebarStates.dc.html": {
-      "h": 980,
+      "h": 1075,
       "page": "sidebar",
-      "title": "Shell — live row states in the window",
-      "w": 6000,
+      "title": "Shell — session list states",
+      "w": 1890,
       "x": 0,
-      "y": 2443
+      "y": 1900
     },
     "Shell-SidebarViews.dc.html": {
-      "h": 931,
+      "h": 1057,
       "page": "sidebar",
       "title": "Shell — sidebar views",
-      "w": 6000,
-      "x": 3040,
+      "w": 2197,
+      "x": 0,
       "y": 0
     },
     "Shell-States.dc.html": {
@@ -559,7 +551,7 @@
     "Proposal-Redesign-Transcript.dc.html": {
       "page": "proposals",
       "x": 1460,
-      "y": 23338,
+      "y": 22058,
       "w": 3504,
       "h": 3686,
       "title": "Window redesign: transcript, every row and state"
@@ -567,7 +559,7 @@
     "Proposal-Redesign-ComposerContent.dc.html": {
       "page": "proposals",
       "x": 1460,
-      "y": 12898,
+      "y": 11618,
       "w": 2616,
       "h": 2260,
       "title": "Window redesign: files, captures and quotes in the composer"
@@ -585,8 +577,8 @@
       "page": "sidebar",
       "title": "Shell — sidebar: editing and errors",
       "w": 1424,
-      "x": 0,
-      "y": 5695
+      "x": 2320,
+      "y": 3120
     },
     "Chat-ComposerFocus.dc.html": {
       "h": 708,
@@ -697,7 +689,7 @@
       "text": "One earlier board still applies.\n\nSession-panel section states other than Activity (Launch, files, skills, attachments, tasks). Their rows and values are binding; the panel around them follows the redesign: “Session” title with the Sections button (R3), no Session section (R2: ignore the sheet's first column), rhythm per R12. Activity follows R13 and is drawn on Proposal-Redesign-SessionPanel.",
       "w": 560,
       "x": -640,
-      "y": 37070
+      "y": 35790
     },
     "adoptedTitle": {
       "kind": "title1",
@@ -706,7 +698,7 @@
       "text": "Adopted from an earlier proposal: the other session-panel sections",
       "w": 240,
       "x": 0,
-      "y": 36810
+      "y": 35530
     },
     "proposalsHowTo": {
       "fill": "blue",
@@ -721,7 +713,7 @@
       "fill": "gray",
       "page": "proposals",
       "size": 24,
-      "text": "The window redesign, final (approved 24 Nov 2026).\n\nLeft: Proposal-Redesign-Spec, every decision with an id (S shell, W workspace, G gates, H shortcuts, L sidebar, T transcript, C composer, K composer strips, R session panel). Captions on the boards cite these ids.\n\nRight, top to bottom: today's window (v2.15.0) beside the proposed window; then title bar and window states, sidebar, composer before the first message, toolbar / send / stop, files, captures and quotes in the composer, queue and activity strip, bottom strip, gates, transcript (every row and state), session panel, workspace, shortcuts sheet. Every board shows light and dark.\n\nClickable prototype with every state: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn (open Prototype controls, bottom left).\n\nBoards are rendered from that prototype. They are reference pictures, not components: build with the app's own primitives and tokens, and take exact values from the spec.",
+      "text": "The window redesign, final (approved 24 Nov 2026).\n\nLeft: Proposal-Redesign-Spec, every decision with an id (S shell, W workspace, G gates, H shortcuts, L sidebar, T transcript, C composer, K composer strips, R session panel). Captions on the boards cite these ids.\n\nRight, top to bottom: today's window (v2.15.0) beside the proposed window; then title bar and window states, composer before the first message, toolbar / send / stop, files, captures and quotes in the composer, queue and activity strip, bottom strip, gates, transcript (every row and state), session panel, workspace, shortcuts sheet. Every board shows light and dark.\n\nClickable prototype with every state: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn (open Prototype controls, bottom left).\n\nThe sidebar is built; its boards are on the Sidebar page.\n\nBoards are rendered from that prototype. They are reference pictures, not components: build with the app's own primitives and tokens, and take exact values from the spec.",
       "w": 560,
       "x": -640,
       "y": 960
@@ -842,7 +834,6 @@
     "Proposal-Window-Baseline.dc.html",
     "Proposal-Window-BaselineDark.dc.html",
     "Proposal-Redesign-Window.dc.html",
-    "Proposal-Redesign-Sidebar.dc.html",
     "Proposal-Redesign-NewSession.dc.html",
     "Proposal-Redesign-Composer.dc.html",
     "Proposal-Redesign-ComposerContent.dc.html",

@@ -1,6 +1,6 @@
 /**
  * Pure AND-match filter over the in-memory thread list.
- * All active filter dimensions must match (project ∧ tags ∧ synthetic).
+ * All active filter dimensions must match (project ∧ status ∧ tags ∧ synthetic).
  *
  * has-pr and has-worktree are client-only synthetic checks — not sent to
  * the server (D7).
@@ -10,10 +10,15 @@
  */
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
+import { sessionStatus, type SessionStatus } from '../view-model/session-status';
+
+/** Which sessions the filter menu's "Show" group keeps. */
+export type StatusFilter = 'all' | Exclude<SessionStatus, 'idle'>;
 
 export interface SessionFilters {
   /** Project scope; empty = all projects. */
   filterProjectIds: ReadonlySet<string>;
+  statusFilter: StatusFilter;
   selectedTags: Set<string>;
   selectedSynthetic: Set<SyntheticTag>;
 }
@@ -34,6 +39,7 @@ function matchesSynthetic(item: SessionItem, selectedSynthetic: Set<SyntheticTag
 export function applySessionFilters(items: SessionItem[], f: SessionFilters): SessionItem[] {
   return items.filter((item) => {
     if (f.filterProjectIds.size > 0 && !f.filterProjectIds.has(item.custom.projectId)) return false;
+    if (f.statusFilter !== 'all' && sessionStatus(item.custom) !== f.statusFilter) return false;
     if (!matchesTags(item, f.selectedTags)) return false;
     if (!matchesSynthetic(item, f.selectedSynthetic)) return false;
     return true;

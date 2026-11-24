@@ -19,8 +19,16 @@ import { SidebarGroupLabel } from '@/components/ui/sidebar';
 import { FadeLabel } from '@/components/ui/fade-label';
 import { cn } from '@/lib/utils';
 
-/** The parked header's own height, in px — what a jump has to clear. */
-export const JUMP_HEADER_HEIGHT = 32;
+/** The parked header's own height, in px — what a jump has to clear: 4px above a 24px label (L4). */
+export const JUMP_HEADER_HEIGHT = 28;
+
+/**
+ * A header control's reveal (L4): shown while the header is hovered, while the
+ * keyboard is anywhere in it, or while the control's own menu is open. Opacity,
+ * never display, so every control stays in the tab order.
+ */
+export const JUMP_ACTION =
+  'size-6 opacity-0 transition-opacity motion-reduce:transition-none group-hover/jump:opacity-100 group-has-focus-visible/jump:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100';
 
 interface SidebarJumpSectionProps {
   label: string;
@@ -32,7 +40,10 @@ interface SidebarJumpSectionProps {
    * it clears the ones in front.
    */
   sticky: string;
-  /** Controls that belong to this section, kept reachable with the header. */
+  /**
+   * Controls that belong to this section, kept reachable with the header. Each
+   * hides itself until hover or keyboard focus with `JUMP_ACTION`.
+   */
   actions?: ReactNode;
   children: ReactNode;
 }
@@ -44,18 +55,20 @@ export function SidebarJumpSection({ label, testId, sticky, actions, children }:
     <>
       {/* Full-bleed so a parked header occludes the rows sliding under it, but
           padded to the same 16px as a SidebarGroup's label so the two align. */}
-      <SidebarGroupLabel className={cn('sticky z-10 shrink-0 bg-sidebar pr-2 pl-4 font-semibold', sticky)}>
+      <SidebarGroupLabel
+        className={cn('group/jump sticky z-10 h-7 shrink-0 items-end rounded-none bg-sidebar pr-2 pl-4', sticky)}
+      >
         <button
           type="button"
           data-testid={`${testId}-jump`}
-          className="flex min-w-0 flex-1 text-left"
+          className="flex min-w-0 flex-1 pb-1 text-left"
           // Scrolls the content, not the header: a parked header already counts
           // as in view, so asking the browser to reveal it does nothing.
           onClick={() => content.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
         >
           <FadeLabel className="flex-1">{label}</FadeLabel>
         </button>
-        {actions != null && <span className="flex shrink-0 items-center gap-0.5">{actions}</span>}
+        {actions != null && <span className="flex shrink-0 items-center">{actions}</span>}
       </SidebarGroupLabel>
       {/* The scroll margin reserves the header's own height, so the jump lands
           with the label at the top edge rather than scrolled past it. */}

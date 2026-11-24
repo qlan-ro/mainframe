@@ -23,7 +23,7 @@ const disposeSpy = vi.fn();
 let factoryCallCount = 0;
 
 vi.mock('../../../../lib/daemon/ws-client', () => ({
-  daemonWs: { onEvent: vi.fn(() => () => {}) },
+  daemonWs: { connected: true, onEvent: vi.fn(() => () => {}), subscribeConnection: vi.fn(() => () => {}) },
 }));
 
 vi.mock('../session-list-router', () => ({

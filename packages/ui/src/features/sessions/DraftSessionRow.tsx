@@ -2,44 +2,30 @@
  * The synthetic "New Session" row, pinned above the time groups.
  *
  * Purely presentational — the sidebar injects the state. It reads as a session
- * row that hasn't happened yet: the provider mark is a hollow dashed dot, the
- * relative time is a fixed "now", and the trailing slot swaps to a discard on
- * hover the way a real row's meta yields to its actions.
+ * row that hasn't happened yet: the same project letter and title, a
+ * fixed "now" for its time, and a discard that takes the time's place on hover.
  *
  * The shipped row carried a second line explaining that the draft clears if you
  * leave. v2 rows are single-line, so that moved to the row's hint.
  */
 import type { MouseEvent } from 'react';
-import { SquareDashedBottom, XIcon } from 'lucide-react';
+import { XIcon } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
-import { projectColor } from '@/features/sessions/sidebar/project-color';
-import { ProjectAvatar } from './ProjectAvatar';
 import { FadeLabel } from '@/components/ui/fade-label';
-
-/** Level 2 — the same rung as the session rows it sits above. */
-const ROW_INDENT = 'pl-2';
+import { SessionProjectTile } from './SessionProjectTile';
 
 interface DraftSessionRowProps {
   /** null for a draft explicitly set to "No project" (todo #346). */
   projectId: string | null;
   projectName: string;
   selected: boolean;
-  /** True in "All" view, where the row has to say which project it belongs to. */
-  showProject: boolean;
   onSelect: () => void;
   onDiscard: () => void;
 }
 
-export function DraftSessionRow({
-  projectId,
-  projectName,
-  selected,
-  showProject,
-  onSelect,
-  onDiscard,
-}: DraftSessionRowProps) {
+export function DraftSessionRow({ projectId, projectName, selected, onSelect, onDiscard }: DraftSessionRowProps) {
   const discard = (e: MouseEvent) => {
     // The row is the select target; the discard must not also open the draft.
     e.stopPropagation();
@@ -55,34 +41,23 @@ export function DraftSessionRow({
           size="sm"
           isActive={selected}
           onClick={onSelect}
-          className={cn(ROW_INDENT, 'pr-2! data-active:bg-sidebar-selection')}
+          className="pr-2! pl-1.5 hover:bg-sidebar-accent/60 data-active:bg-sidebar-accent data-active:font-normal"
         >
-          {/* Same 24px slot as StatusDot, so the titles line up with real rows. */}
-          <span aria-hidden className="inline-flex size-6 shrink-0 items-center justify-center">
-            <span
-              className={cn(
-                'size-2 rounded-full border-[1.5px] border-dashed',
-                selected ? 'border-primary' : 'border-muted-foreground',
-              )}
-            />
-          </span>
+          <SessionProjectTile projectName={projectId != null ? projectName : undefined} />
           <FadeLabel
             data-testid="sessions-draft-row-title"
-            className={cn(
-              'flex-1 group-data-active/menu-item:text-primary',
-              selected ? 'font-semibold text-foreground' : 'text-muted-foreground',
-            )}
+            className={cn('flex-1', selected ? 'text-sidebar-foreground' : 'text-sidebar-foreground/85')}
           >
             New Session
           </FadeLabel>
-          <span className="flex shrink-0 items-center gap-1.5 transition-opacity group-hover/menu-item:opacity-0">
-            {showProject &&
-              (projectId != null ? (
-                <ProjectAvatar name={projectName} color={projectColor(projectId)} size={14} />
-              ) : (
-                <SquareDashedBottom size={14} className="shrink-0 text-muted-foreground" aria-hidden />
-              ))}
-            <span className="tabular-nums">now</span>
+          <span className="sr-only">, {projectName},</span>
+          <span
+            className={cn(
+              'shrink-0 text-xs tabular-nums transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0 motion-reduce:transition-none',
+              selected ? 'text-sidebar-foreground/80' : 'text-muted-foreground',
+            )}
+          >
+            now
           </span>
         </SidebarMenuButton>
       </Hint>

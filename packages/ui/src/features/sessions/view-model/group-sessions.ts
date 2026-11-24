@@ -25,6 +25,7 @@
  */
 import type { SessionItem } from './chat-to-thread-custom';
 import { lineageAnchors, nestForks } from './fork-lineage';
+import { sessionStatus, type SessionStatus } from './session-status';
 
 export type SortMode = 'recent' | 'name' | 'status' | 'project';
 
@@ -35,9 +36,10 @@ export const SESSION_SORTS = [
   { id: 'project', label: 'Project' },
 ] as const;
 
-const SESSION_STATUS_RANK: Record<string, number> = {
-  working: 0,
-  waiting: 1,
+/** Follows the rows: what needs the user first, then what is running. */
+const SESSION_STATUS_RANK: Record<SessionStatus, number> = {
+  'needs-you': 0,
+  running: 1,
   idle: 2,
 };
 
@@ -63,8 +65,12 @@ function toGroup(label: string, sortedItems: SessionItem[]): SessionGroupResult 
 }
 
 /** Local calendar-day key (YYYY-MM-DD via getFullYear/getMonth/getDate). */
-function dayKey(ts: number): number {
+function dayKey(ts: number, dayOffset = 0): number {
   const d = new Date(ts);
+  // By date, not by 24 h: a day that changes the clocks is 23 or 25 hours long.
+  // Noon first, so the offset cannot land in an hour the change skips.
+  d.setHours(12);
+  d.setDate(d.getDate() + dayOffset);
   return d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
 }
 
@@ -131,7 +137,7 @@ function arrangeRecent(
 ): SessionGroupResult[] {
   const { noProject, rest: dated } = splitNoProject(rest, lineage);
   const todayKey = dayKey(now);
-  const yesterdayKey = dayKey(now - 86_400_000);
+  const yesterdayKey = dayKey(now, -1);
 
   const today: SessionItem[] = [];
   const yesterday: SessionItem[] = [];
@@ -231,8 +237,7 @@ export function arrangeSessions(
   if (mode === 'status') {
     const sorted = [...rest].sort(
       (a, b) =>
-        (SESSION_STATUS_RANK[a.custom.displayStatus] ?? 3) - (SESSION_STATUS_RANK[b.custom.displayStatus] ?? 3) ||
-        byRecency(a, b),
+        SESSION_STATUS_RANK[sessionStatus(a.custom)] - SESSION_STATUS_RANK[sessionStatus(b.custom)] || byRecency(a, b),
     );
     return arrangeFlat(pinned, sorted, 'By status', lineage);
   }

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
+import { JUMP_ACTION } from '@/features/shared/SidebarJumpSection';
 import { SESSION_SORTS, type SortMode } from '@/features/sessions/view-model/group-sessions';
 
 interface SessionSortMenuProps {
@@ -35,7 +36,7 @@ export function SessionSortMenu({ mode, onChange }: SessionSortMenuProps) {
             size="icon-sm"
             data-testid="sessions-sort-button"
             aria-label="Sort sessions"
-            className="size-5"
+            className={JUMP_ACTION}
           >
             <ArrowUpDownIcon />
           </Button>

@@ -296,8 +296,9 @@ test.describe('§45 Sessions panel — archive dialog worktree branch', () => {
   });
 
   test.afterAll(async () => {
-    cleanupTauriProject(project);
+    // The daemon runs git in the project, so it stops before the folder goes.
     await closeTauriApp(app);
+    cleanupTauriProject(project);
   });
 
   test('a chat with a worktree is asked about it before archiving, and Keep spares the directory', async () => {
@@ -332,10 +333,15 @@ test.describe('§45 Sessions panel — archive dialog worktree branch', () => {
 
     const confirmDialog = page.getByTestId('sessions-archive-confirm-dialog');
     await confirmDialog.waitFor({ timeout: 5_000 });
+    // The row leaves optimistically and the directory goes first; `git branch -D`
+    // still rewrites the project's .git/config after that. Only the response says
+    // git is done — cleaning up before it fails with ENOTEMPTY.
+    const archived = page.waitForResponse((res) => res.url().includes(`/api/chats/${chatDelete}/archive`));
     await page.getByTestId('sessions-archive-delete-worktree').click();
     await expect(row).toHaveCount(0, { timeout: 10_000 });
+    expect((await archived).ok()).toBe(true);
 
-    await expect.poll(() => existsSync(worktreePathDelete), { timeout: 10_000 }).toBe(false);
+    expect(existsSync(worktreePathDelete)).toBe(false);
   });
 });
 

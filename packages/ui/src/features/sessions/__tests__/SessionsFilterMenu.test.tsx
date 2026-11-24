@@ -1,29 +1,24 @@
 /**
  * SessionsFilterMenu — unit tests.
  *
- * D15: the tag filter lives on the first group header as one `primary` chip
- * (the lone filter's name, or "N filters" for several) plus the filter
- * button. Picks AND together and the menu stays open across them
- * (multi-select); Clear filters (and the chip itself) drops every pick.
+ * The list's filter lives on the first group header: one status ("Show") plus
+ * tags that AND together, in a menu that stays open across picks. An active
+ * filter keeps the button visible and named; Clear filters drops every pick.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { TagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
-import { SessionsFilterMenu, filterChipLabel } from '../SessionsFilterMenu';
+import { SessionsFilterMenu, filterButtonLabel } from '../SessionsFilterMenu';
 
-describe('filterChipLabel', () => {
-  it('is null with nothing selected', () => {
-    expect(filterChipLabel([])).toBeNull();
+describe('filterButtonLabel', () => {
+  it('names only the action with nothing filtered', () => {
+    expect(filterButtonLabel('all', [])).toBe('Filter sessions');
   });
 
-  it('is the lone tag name when exactly one is selected', () => {
-    expect(filterChipLabel(['bug'])).toBe('bug');
-  });
-
-  it('is "N filters" once two or more are selected', () => {
-    expect(filterChipLabel(['bug', 'has-pr'])).toBe('2 filters');
-    expect(filterChipLabel(['a', 'b', 'c'])).toBe('3 filters');
+  it('says what is filtered, status first', () => {
+    expect(filterButtonLabel('needs-you', [])).toBe('Filter sessions: Needs you');
+    expect(filterButtonLabel('running', ['bug', 'has-pr'])).toBe('Filter sessions: Running, bug, has-pr');
   });
 });
 
@@ -51,37 +46,42 @@ function openMenu() {
 }
 
 beforeEach(() => {
-  useSessionFilters.setState({ selectedTags: new Set(), selectedSynthetic: new Set() });
+  useSessionFilters.setState({ statusFilter: 'all', selectedTags: new Set(), selectedSynthetic: new Set() });
 });
 
-describe('SessionsFilterMenu — the chip', () => {
-  it('renders no chip with nothing selected', () => {
+describe('SessionsFilterMenu — the button', () => {
+  const button = () => screen.getByTestId('sessions-filter-button');
+
+  it('waits for hover with nothing filtered', () => {
     renderMenu();
-    expect(screen.queryByTestId('sessions-filter-chip')).toBeNull();
+    expect(button()).not.toHaveAttribute('data-filtered');
+    expect(button()).toHaveClass('opacity-0');
   });
 
-  it('shows the tag name when exactly one filter is active', () => {
-    useSessionFilters.setState({ selectedTags: new Set(['bug']) });
+  it.each([
+    ['a status', { statusFilter: 'running' as const }, 'Filter sessions: Running'],
+    ['a tag', { selectedTags: new Set(['bug']) }, 'Filter sessions: bug'],
+    ['a synthetic kind', { selectedSynthetic: new Set(['has-pr' as const]) }, 'Filter sessions: has-pr'],
+  ])('stays on screen and says so while %s filters the list', (_what, state, label) => {
+    useSessionFilters.setState(state);
     renderMenu();
-    expect(screen.getByTestId('sessions-filter-chip')).toHaveTextContent('bug');
-  });
-
-  it('shows "N filters" once several are active, across tags and synthetic', () => {
-    useSessionFilters.setState({ selectedTags: new Set(['bug']), selectedSynthetic: new Set(['has-pr']) });
-    renderMenu();
-    expect(screen.getByTestId('sessions-filter-chip')).toHaveTextContent('2 filters');
-  });
-
-  it('clears every filter when the chip itself is clicked', () => {
-    useSessionFilters.setState({ selectedTags: new Set(['bug', 'urgent']), selectedSynthetic: new Set(['has-pr']) });
-    renderMenu();
-    fireEvent.click(screen.getByTestId('sessions-filter-chip'));
-    expect(useSessionFilters.getState().selectedTags.size).toBe(0);
-    expect(useSessionFilters.getState().selectedSynthetic.size).toBe(0);
+    expect(button()).toHaveAttribute('data-filtered', 'true');
+    expect(button()).not.toHaveClass('opacity-0');
+    expect(button()).toHaveAccessibleName(label);
   });
 });
 
 describe('SessionsFilterMenu — the menu', () => {
+  it('shows one status at a time and keeps the menu open for tag picks', () => {
+    renderMenu();
+    openMenu();
+    expect(screen.getByTestId('sessions-status-filter-all')).toHaveAttribute('data-state', 'checked');
+    fireEvent.click(screen.getByTestId('sessions-status-filter-needs-you'));
+    expect(useSessionFilters.getState().statusFilter).toBe('needs-you');
+    expect(screen.getByTestId('sessions-status-filter-all')).toHaveAttribute('data-state', 'unchecked');
+    expect(screen.getByTestId('sessions-tag-filter-bug')).toBeInTheDocument();
+  });
+
   it('lists only the in-use tags and the offered synthetic kinds', () => {
     renderMenu(['bug', 'urgent'], ['has-pr']);
     openMenu();
@@ -120,10 +120,15 @@ describe('SessionsFilterMenu — the menu', () => {
   });
 
   it('clears every filter from "Clear filters"', () => {
-    useSessionFilters.setState({ selectedTags: new Set(['bug']), selectedSynthetic: new Set(['has-pr']) });
+    useSessionFilters.setState({
+      statusFilter: 'running',
+      selectedTags: new Set(['bug']),
+      selectedSynthetic: new Set(['has-pr']),
+    });
     renderMenu();
     openMenu();
     fireEvent.click(screen.getByTestId('sessions-tag-filter-clear'));
+    expect(useSessionFilters.getState().statusFilter).toBe('all');
     expect(useSessionFilters.getState().selectedTags.size).toBe(0);
     expect(useSessionFilters.getState().selectedSynthetic.size).toBe(0);
   });

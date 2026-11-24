@@ -9,6 +9,9 @@
  *                                          re-derives custom from the daemon)
  *   chat.notification / permission(notify) → unread.markUnread()
  *   chat.notification (attention_request)  → host.notify() (OS banner)
+ *   socket (re)connected                → threads.reload() (what moved while
+ *                                          it was down was never sent), except
+ *                                          a boot connect whose list is loading
  *
  * On every active-thread change it also: clears the active chat's unread,
  * clears the project filter when the activated chat crosses projects, adopts
@@ -160,8 +163,21 @@ export function useSessionListRouter(): void {
           .catch((err: unknown) => console.warn('[sessions/useSessionListRouter] notify failed', err));
       },
     });
+    // Events are not replayed: a gate opened, a run ended or a chat created while
+    // the socket was down reaches the list only by asking again.
+    // At boot the socket opens while the runtime's own first load is running, and
+    // asking again would request the list twice. Only that one connect is skipped:
+    // a load that already finished (or failed) or a drop before it can have missed
+    // something.
+    let booting = !daemonWs.connected;
+    const unsubscribeConnection = daemonWs.subscribeConnection(() => {
+      const bootLoadRunning = booting && threads.getState().isLoading;
+      booting = false;
+      if (daemonWs.connected && !bootLoadRunning) scheduleReload();
+    });
     return () => {
       if (cooling != null) clearTimeout(cooling);
+      unsubscribeConnection();
       router.dispose();
     };
     // The scope's identity survives a thread switch (the client's does not), so

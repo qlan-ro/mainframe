@@ -49,7 +49,7 @@
  *                                      Hint tooltip's, not the toggle's)
  *   sessions-scope-label             — the strip's own summary: "All projects" (empty scope)
  *                                      or "N of M"
- *   project-avatar                   — the coloured initial the draft row shows in "All" view.
+ *   sessions-row-project-tile        — the project letter that leads the draft row, as on every row.
  *                                      The draft row no longer prints the project NAME (v2
  *                                      DraftSessionRow renders a `ProjectAvatar`), so the
  *                                      project a draft belongs to is asserted on the welcome
@@ -289,10 +289,11 @@ test.describe('§sessions-draft — All view welcome picker + draft row', () => 
     await expect(draftRow).toHaveAttribute('data-active', 'true');
     // The draft is a distinct synthetic row — no new sessions-row was created.
     await expect(page.getByTestId('sessions-row')).toHaveCount(rowsBefore);
-    // In "All" view the row marks its project with a coloured initial, not the
-    // name (v2 DraftSessionRow → ProjectAvatar); the name is on the welcome
-    // screen's project chip (the chat header that used to share it is gone).
-    await expect(draftRow.getByTestId('project-avatar')).toBeVisible();
+    // The row marks its project with its letter, not the name; the name is on
+    // the welcome screen's project chip.
+    await expect(draftRow.getByTestId('sessions-row-project-tile')).toHaveText(
+      baseName(project.projectPath).charAt(0).toUpperCase(),
+    );
     // The welcome screen names the inherited project up front, and the
     // composer — which only the choose-project state would withhold — is
     // live for the first send.
@@ -481,12 +482,10 @@ test.describe('§sessions-draft — selected-project skip + no leak across New c
     await expect(page.getByTestId('welcome-project')).toContainText(baseName(projectA.projectPath));
     await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0);
     await expect(composer(page).input()).toBeVisible({ timeout: 10_000 });
-    // The draft row's project marker only renders in "All" view (`showProject`,
-    // DraftSessionRow.tsx) — with a project selected the row omits it. The
-    // welcome screen's `welcome-project` chip (asserted above) is the only
-    // place left that names the draft's project — the chat header it used to
-    // share that with is gone (D7).
-    await expect(draftRow.getByTestId('project-avatar')).toHaveCount(0);
+    // A single-project scope keeps the letter: every row always leads with it (L3).
+    await expect(draftRow.getByTestId('sessions-row-project-tile')).toHaveText(
+      baseName(projectA.projectPath).charAt(0).toUpperCase(),
+    );
 
     // Clean up: discard, then clear the scope for the next test — toggling A's
     // own avatar off clears it, since scope is multi-select and empty = "All".

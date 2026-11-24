@@ -1,30 +1,18 @@
 /**
- * Pure badge-state derivation from SessionCustom + client unread flag.
+ * The one status a sidebar row can show, from what the daemon reports.
  *
- * `base` is the dominant lifecycle status (precedence: worktree-missing >
- * transcript-missing > side-chat/delegated waiting > working > waiting > idle).
- * `sideChatWaiting` sits ahead of `working` because a pending gate beats
- * working in the daemon's own `enrich_chat` (todo #344) — a parent can be
- * mid-turn while its side chat is the thing actually waiting on the user.
- * `delegatedWaiting` (a delegated child's gate) ranks the same way.
- * `unread` is a MODIFIER carried alongside it — the row tints idle / adds the
- * answer-ready treatment to waiting based on it. unread is NOT a field of
- * SessionCustom; callers inject it from the client store.
+ * `needs-you` outranks `running`: a parent can be mid-turn while its side chat
+ * or a delegated task is the thing waiting on the user, and the daemon already
+ * lets the chat's own gate (permission, question, plan) win over its turn.
+ *
+ * `running` is `displayStatus`, not `isRunning`: the daemon keeps it on while
+ * sub-agents, delegated tasks or background work outlive the turn (L3).
  */
 import type { SessionCustom } from './chat-to-thread-custom';
 
-export type SessionBase = 'worktree-missing' | 'transcript-missing' | 'working' | 'waiting' | 'idle';
+export type SessionStatus = 'needs-you' | 'running' | 'idle';
 
-export interface SessionBadge {
-  base: SessionBase;
-  unread: boolean;
-}
-
-export function deriveSessionBadge(custom: SessionCustom, unread: boolean): SessionBadge {
-  if (custom.worktreeMissing) return { base: 'worktree-missing', unread };
-  if (custom.transcriptMissing) return { base: 'transcript-missing', unread };
-  if (custom.sideChatWaiting || custom.delegatedWaiting) return { base: 'waiting', unread };
-  if (custom.displayStatus === 'working') return { base: 'working', unread };
-  if (custom.hasPending) return { base: 'waiting', unread };
-  return { base: 'idle', unread };
+export function sessionStatus(custom: SessionCustom): SessionStatus {
+  if (custom.hasPending || custom.sideChatWaiting || custom.delegatedWaiting) return 'needs-you';
+  return custom.displayStatus === 'working' ? 'running' : 'idle';
 }

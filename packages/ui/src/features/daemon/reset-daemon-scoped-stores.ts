@@ -54,6 +54,7 @@ export function resetDaemonScopedStores(): void {
 
   useSessionFilters.setState({
     filterProjectIds: new Set<string>(),
+    statusFilter: 'all',
     selectedTags: new Set<string>(),
     selectedSynthetic: new Set(),
   });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
 import { arrangeSessions, SESSION_SORTS } from '../group-sessions';
 import type { SortMode, SessionGroupResult } from '../group-sessions';
@@ -186,7 +186,7 @@ describe("arrangeSessions mode 'name'", () => {
 });
 
 // ---------------------------------------------------------------------------
-// mode 'status' — a single By status group ranked working→waiting→idle
+// mode 'status' — a single By status group ranked needs-you→running→idle
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -320,15 +320,16 @@ describe("arrangeSessions mode 'project'", () => {
 });
 
 describe("arrangeSessions mode 'status'", () => {
-  it('orders By status working then waiting then idle', () => {
+  it('orders By status needs-you, then running, then idle', () => {
     const items = [
       item('idle1', { displayStatus: 'idle' }),
       item('working1', { displayStatus: 'working' }),
-      item('waiting1', { displayStatus: 'waiting' }),
+      item('waiting1', { displayStatus: 'waiting', hasPending: true }),
+      item('child-waiting1', { displayStatus: 'working', delegatedWaiting: true }),
     ];
     const groups = arrangeSessions(items, 'status', NOW);
     expect(labels(groups)).toEqual(['By status']);
-    expect(idsOf(groups, 'By status')).toEqual(['working1', 'waiting1', 'idle1']);
+    expect(idsOf(groups, 'By status')).toEqual(['child-waiting1', 'waiting1', 'working1', 'idle1']);
   });
 
   it('surfaces pinned items in a Pinned group ahead of By status', () => {
@@ -339,7 +340,7 @@ describe("arrangeSessions mode 'status'", () => {
     expect(idsOf(groups, 'By status')).toEqual(['idle1']);
   });
 
-  it('resolves same-status ties by updatedAt descending while rank order stays working/waiting/idle', () => {
+  it('resolves same-status ties by updatedAt descending while the rank order holds', () => {
     const items = [
       item('w1', { displayStatus: 'working', updatedAt: TODAY_0900 }),
       item('i-old', { displayStatus: 'idle', updatedAt: EARLIER_MON }),
@@ -428,4 +429,38 @@ describe('arrangeSessions is independent of input order', () => {
       });
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// Clock changes — a day is 23 or 25 hours long, so "24 hours ago" is not yesterday
+// ---------------------------------------------------------------------------
+
+describe('arrangeSessions — yesterday across a clock change', () => {
+  const zone = process.env['TZ'];
+  beforeAll(() => {
+    process.env['TZ'] = 'America/New_York';
+  });
+  afterAll(() => {
+    if (zone === undefined) delete process.env['TZ'];
+    else process.env['TZ'] = zone;
+  });
+
+  const groupOf = (updatedAt: number, now: number) =>
+    arrangeSessions([item('a', { updatedAt })], 'recent', now)[0]!.label;
+
+  it('keeps Sunday under Yesterday just after midnight on the Monday after a 23-hour day', () => {
+    // 2026-03-08 loses 02:00–03:00; 24 h before Monday 00:30 is Saturday 23:30.
+    const now = new Date(2026, 2, 9, 0, 30).getTime();
+    expect(new Date(now - 86_400_000).getDate()).toBe(7);
+    expect(groupOf(new Date(2026, 2, 8, 20, 0).getTime(), now)).toBe('Yesterday');
+    expect(groupOf(new Date(2026, 2, 7, 23, 45).getTime(), now)).toBe('Earlier');
+  });
+
+  it('keeps Saturday under Yesterday late on a 25-hour Sunday', () => {
+    // 2026-11-01 repeats 01:00–02:00; 24 h before Sunday 23:30 is still Sunday.
+    const now = new Date(2026, 10, 1, 23, 30).getTime();
+    expect(new Date(now - 86_400_000).getDate()).toBe(1);
+    expect(groupOf(new Date(2026, 9, 31, 12, 0).getTime(), now)).toBe('Yesterday');
+    expect(groupOf(new Date(2026, 10, 1, 0, 10).getTime(), now)).toBe('Today');
+  });
 });

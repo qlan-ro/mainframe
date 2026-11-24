@@ -17,10 +17,15 @@
  * timeline, so an edge with nothing past it is not dimmed. All this component
  * adds is how far the sticky headers parked at each edge reach, which the
  * `scroll-fade-sticky` shape starts its ramps below.
+ *
+ * The same headers cover whatever sits under them, so a caller with parked
+ * headers passes how deep the stack gets: the browser then scrolls a focused row
+ * clear of it instead of stopping underneath.
  */
 import { createContext, useContext, useState, type CSSProperties, type ReactNode } from 'react';
 import { SidebarContent } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { useScrollMemory } from './use-scroll-memory';
 import { useStickyInsets } from './use-sticky-insets';
 
 const ScrollRegionContext = createContext<HTMLDivElement | null>(null);
@@ -34,14 +39,21 @@ export function SidebarScrollRegion({
   children,
   className,
   tut,
+  scrollPaddingTop,
+  memoryKey,
 }: {
   children: ReactNode;
   className?: string;
+  /** Depth of the headers parked at the top edge, in px. */
+  scrollPaddingTop?: number;
+  /** Set to keep the scroll position when the view unmounts and comes back. */
+  memoryKey?: string;
   /** `data-tut` anchor, when this region is a first-run tour target. */
   tut?: string;
 }) {
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
   const insets = useStickyInsets(viewport);
+  useScrollMemory(viewport, memoryKey);
 
   return (
     <SidebarContent
@@ -63,6 +75,7 @@ export function SidebarScrollRegion({
         {
           '--scroll-fade-inset-t': `${insets.top}px`,
           '--scroll-fade-inset-b': `${insets.bottom}px`,
+          scrollPaddingTop,
         } as CSSProperties
       }
     >

@@ -15,49 +15,70 @@
  * same surface instead of stranding the wheel at a nested boundary.
  */
 import { useEffect, useMemo, type ComponentPropsWithoutRef, type ReactNode } from 'react';
-import { GroupedVirtuoso } from 'react-virtuoso';
+import { GroupedVirtuoso, type GroupProps, type TopItemListProps } from 'react-virtuoso';
 import type { SessionGroupResult } from '@/features/sessions/view-model/group-sessions';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { SidebarMenu } from '@/components/ui/sidebar';
-import { JUMP_HEADER_HEIGHT } from '../shared/SidebarJumpSection';
 import { useScrollRegion } from '../shared/SidebarScrollRegion';
-import { SessionGroupHeader } from './SessionGroupHeader';
-
-const PINNED_GROUP_LABEL = 'Pinned';
+import { SessionGroupHeader, STUCK_HEADER_TOP } from './SessionGroupHeader';
 
 /**
  * One `<ul>` per row. Rows are `SidebarMenuItem`s — `<li>` elements — and
  * Virtuoso interleaves them with group-header divs, so a single list wrapper
  * would have to hold both. Per-row lists keep the markup valid without giving
- * up the stock menu contract.
- *
- * The gap is padding rather than the menu's own `gap`, which cannot reach
- * across two sibling lists: without it a hovered row and the selected row above
- * it fuse into one fill.
+ * up the stock menu contract. Rows touch: the list runs on one 28px pitch (L4).
  */
 function SessionsItem(props: ComponentPropsWithoutRef<'ul'>) {
-  return <SidebarMenu {...props} className="gap-0 pb-2" />;
+  return <SidebarMenu {...props} className="gap-0" />;
 }
 
 /**
- * Virtuoso sticks group headers at `top: 0` of the scroll parent, which is where
- * the list's own parked header already sits. Offsetting by its height lets the
- * two stack instead of the group header sliding underneath it.
+ * Holds the stuck group header, which Virtuoso pins at `top: 0` of the scroll
+ * parent — where the list's own parked header already sits. Offsetting by its
+ * height stacks the two, less the space above the group: a stuck header tucks
+ * that behind the parked one, so only its 24px label shows.
  */
-function SessionsGroup({ style, ...rest }: ComponentPropsWithoutRef<'div'>) {
-  return <div {...rest} style={{ ...style, top: JUMP_HEADER_HEIGHT }} />;
+function SessionsTopList({ style, children }: TopItemListProps) {
+  return <div style={{ ...style, top: STUCK_HEADER_TOP }}>{children}</div>;
 }
 
-const VIRTUOSO_COMPONENTS = { Item: SessionsItem, Group: SessionsGroup };
+/**
+ * A group header in the flow of the list. It sticks where the pinned copy does:
+ * Virtuoso only swaps that copy in once the header reaches the top of the
+ * scroll parent, so an unstuck one would first slide under the parked header
+ * and then jump back down. It covers the previous group's pinned copy, which
+ * stays up until that swap.
+ */
+function SessionsGroup({ style, ...props }: GroupProps) {
+  return <div {...props} style={{ ...style, top: STUCK_HEADER_TOP, zIndex: 2 }} />;
+}
+
+const VIRTUOSO_COMPONENTS = { Item: SessionsItem, Group: SessionsGroup, TopItemList: SessionsTopList };
+
+/**
+ * One key per flat index, headers included, in render order. Rows hold state (an
+ * open menu, a rename), so a row is keyed by its session alone: the key survives
+ * a reorder and a move to another group. Header labels can repeat (two projects
+ * with one name), so a header's key counts its repeats.
+ */
+function flatKeys(groups: readonly SessionGroupResult[]): string[] {
+  const seen = new Map<string, number>();
+  return groups.flatMap((group) => {
+    const repeat = seen.get(group.label) ?? 0;
+    seen.set(group.label, repeat + 1);
+    return [`group:${repeat}:${group.label}`, ...group.items.map((item) => `session:${item.id}`)];
+  });
+}
 
 export interface SessionListVirtuosoProps {
   groups: SessionGroupResult[];
-  renderItem: (item: SessionItem, flags: { inPinnedGroup: boolean; depth: 0 | 1 | 2 }) => ReactNode;
+  renderItem: (item: SessionItem, flags: { depth: 0 | 1 | 2 }) => ReactNode;
 }
 
 export function SessionListVirtuoso({ groups, renderItem }: SessionListVirtuosoProps) {
   const groupCounts = useMemo(() => groups.map((g) => g.items.length), [groups]);
   const flatItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+  const keys = useMemo(() => flatKeys(groups), [groups]);
   const scrollParent = useScrollRegion();
 
   // WKWebView boot race: Virtuoso measures its viewport once on mount, and on
@@ -89,6 +110,7 @@ export function SessionListVirtuoso({ groups, renderItem }: SessionListVirtuosoP
       customScrollParent={scrollParent}
       groupCounts={groupCounts}
       components={VIRTUOSO_COMPONENTS}
+      computeItemKey={(index) => keys[index] ?? index}
       // Overscan a little, so a fast scroll doesn't reveal blank space before
       // rows hydrate.
       increaseViewportBy={200}
@@ -106,10 +128,7 @@ export function SessionListVirtuoso({ groups, renderItem }: SessionListVirtuosoP
         const item = flatItems[index];
         const group = groups[groupIndex];
         if (item == null || group == null) return null;
-        return renderItem(item, {
-          inPinnedGroup: group.label === PINNED_GROUP_LABEL,
-          depth: group.depths[item.id] ?? 0,
-        });
+        return renderItem(item, { depth: group.depths[item.id] ?? 0 });
       }}
     />
   );

@@ -1,6 +1,6 @@
 /**
- * Pin / tag / archive, revealed on row hover — inline in the title line, just
- * before the timestamp.
+ * Pin / tag / archive, revealed on row hover — inline, just before the row's
+ * trailing value.
  *
  * Inline rather than the stock `SidebarMenuAction` overlay: parked over the
  * time slot, the cluster needed a padding reserve on the title and an opacity
@@ -21,6 +21,7 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { ArchiveIcon, PinIcon, PinOffIcon, TagIcon } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
+import { cn } from '@/lib/utils';
 
 interface RowHoverActionsProps {
   pinned: boolean;
@@ -42,11 +43,13 @@ const stop = (fn: () => void) => (e: MouseEvent) => {
 function ActionGlyph({
   label,
   testId,
+  className,
   onClick,
   children,
 }: {
   label: string;
   testId: string;
+  className?: string;
   onClick: (e: MouseEvent<HTMLSpanElement>) => void;
   children: ReactNode;
 }) {
@@ -57,7 +60,10 @@ function ActionGlyph({
         aria-label={label}
         data-testid={testId}
         onClick={onClick}
-        className="flex size-4.5 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-3.5 [&>svg]:shrink-0"
+        className={cn(
+          'flex size-6 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-3.5 [&>svg]:shrink-0',
+          className,
+        )}
       >
         {children}
       </span>
@@ -67,7 +73,7 @@ function ActionGlyph({
 
 export function RowHoverActions({ pinned, temporary, onPin, onUnpin, onTags, onArchive }: RowHoverActionsProps) {
   return (
-    <span className="flex shrink-0 items-center gap-0.5">
+    <span className="flex shrink-0 items-center">
       {!temporary && (
         <ActionGlyph
           label={pinned ? 'Unpin' : 'Pin'}
@@ -81,6 +87,8 @@ export function RowHoverActions({ pinned, temporary, onPin, onUnpin, onTags, onA
         <ActionGlyph
           label="Tags"
           testId="sessions-row-action-tags"
+          // Two actions leave a narrow row's title readable; Tags is in its menu.
+          className="@max-[216px]/row:hidden"
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();

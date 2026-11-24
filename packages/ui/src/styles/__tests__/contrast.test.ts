@@ -11,15 +11,16 @@
  * the failure mode that actually bit.
  *
  * Two themes now, not six: the ocean/velvet schemes and the window styles retired
- * with the v2 merge, so `:root` and `:root`+`.dark` are the whole cascade. Both
- * sheets layer per theme (v2 first, then the bridge) exactly as `app.css` imports
- * them, and `.dark` lands on the same element as `:root` in the real app, so a
- * a `var()` alias resolves to the DARK
- * value there — which is why the resolver keeps var() lazy.
+ * with the v2 merge. The sheets layer per theme exactly as the app loads them: the
+ * two that `app.css` imports, in its order, then `app.css`'s own rules — it
+ * re-points light tokens of its own (`:root:not(.dark)`), which the app paints and
+ * this suite missed until 2026-11-24. `.dark` lands on the same element as `:root`
+ * in the real app, so a `var()` alias resolves to the DARK value there — which is
+ * why the resolver keeps var() lazy.
  *
  * Measured floors at the time of writing (contrast ratios, light / dark):
  *   foreground on background 12.63 / 15.57 · on card 12.63 / 14.10
- *   muted-foreground on background 4.74 / 7.66 · on card 4.74 / 6.94
+ *   muted-foreground on background 4.95 / 7.66 · on card 4.95 / 6.94 · on sidebar 4.54 / 5.56
  *   warning as text on background 5.37 / 10.11
  *   foreground on bubble-tinted 11.17 / 9.93   (paled 2026-08-15, still clears by a wide margin)
  *   primary-foreground on primary 3.65 / 3.65  (system blue cannot reach AA)
@@ -49,6 +50,8 @@ const UI_COMPONENT_MIN = 3.0;
 /** The strongest `bg-fail` tint, in percent, that may sit under `text-fail`. */
 const FAIL_TEXT_TINT = 6;
 
+/** The app's entry sheet: what it imports, in order, is the token cascade. */
+const ENTRY_SHEET = 'styles/app.css';
 const V2_SHEET = 'styles/globals.css';
 const BRIDGE_SHEET = 'styles/domain-tokens.css';
 
@@ -65,9 +68,18 @@ function readSheet(relative: string): string {
   }
 }
 
+/** The entry sheet's own imports, then the entry sheet. */
+function cascade(): { name: string; rules: Map<string, Decls> }[] {
+  const entry = readSheet(ENTRY_SHEET);
+  const imported = [...entry.matchAll(/^@import '\.\/([\w-]+\.css)';/gm)].map(([, file]) => `styles/${file}`);
+  return [...imported, ENTRY_SHEET].map((name) => ({ name, rules: parseRules(readSheet(name)) }));
+}
+
+const SHEETS = cascade();
 const sheets = {
-  v2: parseRules(readSheet(V2_SHEET)),
-  bridge: parseRules(readSheet(BRIDGE_SHEET)),
+  v2: SHEETS.find((sheet) => sheet.name === V2_SHEET)!.rules,
+  bridge: SHEETS.find((sheet) => sheet.name === BRIDGE_SHEET)!.rules,
+  entry: SHEETS[SHEETS.length - 1]!.rules,
 };
 
 function uiSources(): { rel: string; text: string }[] {
@@ -77,9 +89,12 @@ function uiSources(): { rel: string; text: string }[] {
     .map((rel) => ({ rel, text: readFileSync(new URL(rel, root), 'utf8') }));
 }
 
-/** Cascade per theme: v2 tokens then the bridge's, `:root` then `.dark`. */
+/**
+ * The selectors that match `<html>` per theme, by rising specificity:
+ * `:root:not(.dark)` beats `:root` whatever the order of the sheets.
+ */
 const THEME_LAYERS: Record<string, string[]> = {
-  light: [':root'],
+  light: [':root', ':root:not(.dark)'],
   dark: [':root', '.dark'],
 };
 
@@ -89,8 +104,7 @@ function resolve(theme: string): Decls {
   const out: Decls = {};
   for (const sel of layers) {
     // A selector absent from one sheet is normal — the bridge has no @theme block.
-    Object.assign(out, sheets.v2.get(sel) ?? {});
-    Object.assign(out, sheets.bridge.get(sel) ?? {});
+    for (const { rules } of SHEETS) Object.assign(out, rules.get(sel) ?? {});
   }
   return out;
 }
@@ -124,6 +138,19 @@ function inkOn(ink: RGBA, bg: RGBA): number {
 }
 
 describe('token sources', () => {
+  it('follows the app’s entry sheet, overrides included', () => {
+    expect(SHEETS.map((sheet) => sheet.name)).toEqual([V2_SHEET, BRIDGE_SHEET, ENTRY_SHEET]);
+    // Every token the entry sheet sets on the root must reach the cascade; a new
+    // selector there would be skipped in silence.
+    const known = new Set(Object.values(THEME_LAYERS).flat());
+    const unread = [...sheets.entry].filter(
+      ([selector, decls]) => selector.startsWith(':root') && Object.keys(decls).length > 0 && !known.has(selector),
+    );
+    expect(unread.map(([selector]) => selector)).toEqual([]);
+    expect(resolve('light')['--sidebar-accent']).toBe('oklch(0.945 0.004 286)');
+    expect(resolve('dark')['--sidebar-accent']).toBe('oklch(0.35 0 0)');
+  });
+
   it('both sheets parse, and each contributes the tokens this guardrail reads', () => {
     expect(sheets.v2.get(':root'), `${V2_SHEET} has no :root block`).toBeDefined();
     expect(sheets.v2.get('.dark'), `${V2_SHEET} has no .dark block`).toBeDefined();
@@ -175,11 +202,41 @@ describe('v2 contrast guardrail', () => {
     ).toBeGreaterThanOrEqual(WCAG_MIN);
   });
 
+  it.each(THEMES)('a session row stays readable on every fill it wears — %s', (theme) => {
+    // The session list sits on `background` (AppSidebar re-points `--sidebar`);
+    // hover and selection are `sidebar-accent`, at 60% and full strength.
+    const t = resolve(theme);
+    const ground = color(t, '--background');
+    const accent = color(t, '--sidebar-accent');
+    const ink = color(t, '--sidebar-foreground');
+    const at = (c: RGBA, a: number): RGBA => ({ ...c, a: c.a * a });
+    const rest = [ground];
+    // Half strength is the row of the chat visible in the split's other zone.
+    const filled = [0.5, 0.6, 1].map((strength) => composite(at(accent, strength), ground));
+    for (const bg of rest) {
+      expect(inkOn(color(t, '--muted-foreground'), bg), `time at rest (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+    }
+    for (const bg of [...rest, ...filled]) {
+      expect(inkOn(at(ink, 0.85), bg), `title (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+      expect(inkOn(at(ink, 0.8), bg), `time on a filled row (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+      expect(inkOn(color(t, '--warning'), bg), `needs you (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+      expect(inkOn(color(t, '--primary'), bg), `spinner (${theme})`).toBeGreaterThanOrEqual(3);
+      const tile = composite(at(ink, 0.08), bg);
+      expect(inkOn(at(ink, 0.75), tile), `project letter (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+    }
+  });
+
+  it('the row’s time steps up on every fill, and the hover card’s links are body ink', () => {
+    const status = readSheet('features/sessions/SessionRowStatus.tsx');
+    for (const state of ['group-hover/menu-item', 'group-data-active/menu-item', 'group-data-zone-visible/menu-button'])
+      expect(status).toContain(`${state}:text-sidebar-foreground/80`);
+    // `primary` is 3.65:1 in light, and the card's text is 11px.
+    expect(readSheet('features/sessions/SessionMetaCard.tsx')).not.toMatch(/text-primary\b/);
+  });
+
   it.each(THEMES)('warning — the caution ink — clears 4.5:1 as TEXT — %s', (theme) => {
     // Unlike success/destructive this one IS body text: the composer edit banner,
-    // git divergence and worktree rows all render `text-warning` — and, since
-    // the redesign, so does a waiting sidebar row's "your turn" label
-    // (SessionRowMetaLine) on the `sidebar` surface.
+    // git divergence and worktree rows all render `text-warning`.
     const t = resolve(theme);
     const ink = color(t, '--warning');
     for (const name of ['background', 'card', 'sidebar'] as const) {

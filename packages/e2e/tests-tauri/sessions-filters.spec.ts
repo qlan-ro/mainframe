@@ -33,7 +33,9 @@
  *                                       (ConfirmDialogHost → ConfirmDialog, testid from
  *                                       use-remove-project.ts's requestConfirm)
  *   sessions-filter-button             — the tag-filter trigger on the first group header
- *                                       (funnel glyph; ALWAYS rendered, even with no tags in use)
+ *                                       (funnel glyph; ALWAYS rendered, transparent until the
+ *                                       header is hovered or focused, or while a filter is on;
+ *                                       its accessible name lists the active filters)
  *   sessions-tag-filter-bar            — the filter dropdown's content root (mounted only
  *                                       while open — a Radix `DropdownMenuContent`)
  *   sessions-tag-filter-<name>         — a tag's `DropdownMenuCheckboxItem` inside the menu;
@@ -41,9 +43,8 @@
  *                                       IS a checkbox primitive); picking one does NOT close
  *                                       the menu (multi-select)
  *   sessions-tag-filter-synthetic-<kind> — has-pr/has-worktree checkbox item
- *   sessions-tag-filter-clear          — menu item that clears every active tag filter
- *   sessions-filter-chip               — the one active-filter chip beside the button (the
- *                                       lone tag's name, or "N filters"); click clears it
+ *   sessions-status-filter-<all|running|needs-you> — the menu's "Show" radio items
+ *   sessions-tag-filter-clear          — menu item that clears every active filter
  *   sessions-row-action-tags           — row hover action that opens the TagPopover
  *   sessions-tag-popover               — TagPopover content root
  *   sessions-tag-popover-search        — TagPopover search/create input
@@ -65,7 +66,7 @@
  * the scope dropdown's per-project attention badge (`sidebar-project-badge-<id>`),
  * its "Unavailable" badge (`sidebar-project-unavailable-<id>`), and the
  * trigger's own hidden-attention badge (`sidebar-project-scope-badge`). Row
- * status already shows waiting ("your turn"); unavailable projects render
+ * status already shows waiting ("needs you"); unavailable projects render
  * dimmed with a tooltip instead of a badge. The "attention badges appear on a
  * project item inside the scope menu" scenario is deleted below with this note.
  *
@@ -320,7 +321,7 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
     await closeMenus(page);
   });
 
-  test('picking a tag in the menu filters the session list and shows the chip', async () => {
+  test('picking a tag in the menu filters the session list and lights the filter button', async () => {
     const { page } = app;
 
     await openTagFilter(page);
@@ -335,12 +336,31 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
     await expect(rows).toHaveCount(1, { timeout: 10_000 });
     await expect(rows.first()).toHaveAttribute('data-chat-id', chatIdA);
 
-    const chip = page.getByTestId('sessions-filter-chip');
-    await expect(chip).toHaveText(TAG_NAME);
+    // An active filter keeps the button on screen and names itself there.
+    const button = page.getByTestId('sessions-filter-button');
+    await page.mouse.move(0, 0);
+    await expect(button).toHaveCSS('opacity', '1');
+    await expect(button).toHaveAccessibleName(`Filter sessions: ${TAG_NAME}`);
 
-    // The chip itself clears the filter.
-    await chip.click();
-    await expect(page.getByTestId('sessions-filter-chip')).toHaveCount(0);
+    await openTagFilter(page);
+    await page.getByTestId('sessions-tag-filter-clear').click();
+    await expect(button).toHaveAccessibleName('Filter sessions');
+    await expect(rows).toHaveCount(2, { timeout: 10_000 });
+  });
+
+  test('showing only sessions that need you empties a list where none do', async () => {
+    const { page } = app;
+    const rows = page.getByTestId('sessions-row');
+
+    await openTagFilter(page);
+    await page.getByTestId('sessions-status-filter-needs-you').click();
+    await closeMenus(page);
+    await expect(rows).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByTestId('sidebar-sessions-empty')).toHaveText('No sessions match these filters.');
+
+    await openTagFilter(page);
+    await page.getByTestId('sessions-status-filter-all').click();
+    await closeMenus(page);
     await expect(rows).toHaveCount(2, { timeout: 10_000 });
   });
 
@@ -377,7 +397,7 @@ test.describe('§sessions-filters Project scope + tag filter menu', () => {
   // DELETED (D14 — capability dropped, not moved): the scope dropdown's
   // per-project attention badge no longer exists. The scope strip carries no
   // badge of its own — a project with a waiting session is only visible via
-  // that session's own row status ("your turn"), which sessions-rows.spec.ts
+  // that session's own row status ("needs you"), which sessions-rows.spec.ts
   // already covers. There is nothing left in the scope strip for this
   // scenario to assert.
 

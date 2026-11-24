@@ -1,110 +1,72 @@
 /**
- * The session row's title + time line, plus the meta line — extracted from
- * `SessionRow.tsx` to keep that file under the project's line limit.
- *
- * Two lines — title plus time, then the meta line — beside one status column.
- * The status glyph stays a sibling of the whole stack rather than of the title,
- * so the button's own `items-center` centres it across both lines.
+ * The session row's one line: project letter, title, then a single trailing
+ * value. Everything else the row used to carry (branch, PRs, tags, provider)
+ * is in its hover card.
  */
 import type { ReactNode } from 'react';
-import { PinIcon, Split } from 'lucide-react';
-import type { TagColor } from '@qlan-ro/mainframe-types';
 import { FadeLabel } from '@/components/ui/fade-label';
 import { useTabHintIndex } from '@/features/session-tabs/use-tab-hint-index';
 import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
-import { useNow } from '@/lib/use-now';
-import { formatCompactTime } from './compact-time';
-import type { SessionItem } from './view-model/chat-to-thread-custom';
-import type { SessionBadge } from './view-model/session-status';
-import { SessionRowMetaLine, type ForkFallback } from './SessionRowMetaLine';
-import { StatusDot } from './StatusDot';
+import { cn } from '@/lib/utils';
+import { SessionProjectTile } from './SessionProjectTile';
+import { SessionRowStatus } from './SessionRowStatus';
+import type { SessionCustom, SessionItem } from './view-model/chat-to-thread-custom';
+import { sessionStatus } from './view-model/session-status';
+
+/** What assistive tech hears after the project; the row draws none of it but the unread weight. */
+function rowFlags(custom: SessionCustom, unread: boolean): string[] {
+  return [
+    ...(unread ? ['unread'] : []),
+    ...(custom.worktreeMissing ? ['worktree missing'] : []),
+    ...(custom.transcriptMissing ? ['transcript missing'] : []),
+  ];
+}
 
 interface RowBodyProps {
   item: SessionItem;
-  badge: SessionBadge;
-  colorOf: (name: string) => TagColor;
+  unread: boolean;
   projectName?: string;
-  showPinGlyph: boolean;
   renameSlot: ReactNode | null;
-  /** The hover action cluster, revealed inline just before the time. */
+  /** The hover action cluster, revealed inline just before the trailing value. */
   actionsSlot: ReactNode;
-  /** True when this row nests under its parent (variant D). */
-  nestedFork: boolean;
-  /** Set only for a non-nested fork — the meta line's trailing fallback glyph. */
-  forkFallback?: ForkFallback;
 }
 
-export function RowBody({
-  item,
-  badge,
-  colorOf,
-  projectName,
-  showPinGlyph,
-  renameSlot,
-  actionsSlot,
-  nestedFork,
-  forkFallback,
-}: RowBodyProps) {
+export function RowBody({ item, unread, projectName, renameSlot, actionsSlot }: RowBodyProps) {
   const { custom } = item;
   const hintIndex = useTabHintIndex(item.id);
-  const now = useNow();
+  const project = custom.noProject ? undefined : projectName;
   return (
     <>
-      <StatusDot badge={badge} />
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        {/* h-4.5 pins the line at text-sm's own 18px line-height: WKWebView
-            rounds the bare text line to 17px, so without it the 18px action
-            glyphs grow the hovered row and nudge every row below by 1px. */}
-        <span className="flex h-4.5 items-center gap-1.5">
-          {nestedFork && (
-            <Split
-              aria-hidden
-              data-testid="sessions-row-fork-nest-glyph"
-              className="size-3! shrink-0 rotate-90 text-muted-foreground"
-            />
+      <SessionProjectTile projectName={project} />
+      {renameSlot ?? (
+        // No tooltip on the title: the hover card already carries it in full.
+        <FadeLabel
+          data-testid="sessions-row-title"
+          data-unread={unread || undefined}
+          className={cn(
+            'flex-1 group-data-active/menu-item:text-sidebar-foreground',
+            unread ? 'font-semibold text-sidebar-foreground' : 'text-sidebar-foreground/85',
           )}
-          {renameSlot ?? (
-            // No tooltip on the title: the hover card already carries it in full.
-            <FadeLabel
-              data-testid="sessions-row-title"
-              className="flex-1 text-muted-foreground group-data-active/menu-item:text-primary"
-            >
-              {item.title ?? 'Untitled session'}
-            </FadeLabel>
-          )}
-          {showPinGlyph && <PinIcon data-testid="sessions-row-pin-glyph" className="size-3! shrink-0 text-primary" />}
-          {/* Actions sit in front of the time, which stays put — the truncating
-              title is the only thing that gives way on hover. */}
-          {actionsSlot}
-          {/* While the hints show, the row trades its timestamp for the ⌘N that
-              reaches it — same trailing slot, so nothing below shifts. A row
-              whose session has no open tab has no number and keeps the time. */}
-          {hintIndex != null ? (
-            <ShortcutIndexBadge index={hintIndex} data-testid="sessions-row-hint" />
-          ) : (
-            <span
-              data-testid="sessions-row-relative-time"
-              className="shrink-0 text-xs tabular-nums text-muted-foreground"
-            >
-              {formatCompactTime(custom.updatedAt, now)}
-            </span>
-          )}
-        </span>
-        <SessionRowMetaLine
-          projectName={projectName}
-          waiting={badge.base === 'waiting'}
-          adapterId={custom.adapterId}
-          noProject={custom.noProject}
-          worktreePath={custom.worktreePath}
-          branchName={custom.branchName}
-          worktreeMissing={custom.worktreeMissing}
-          temporary={custom.temporary}
-          detectedPrs={custom.detectedPrs}
-          tags={custom.tags}
-          colorOf={colorOf}
-          forkFallback={forkFallback}
+        >
+          {item.title ?? 'Untitled session'}
+        </FadeLabel>
+      )}
+      <span className="sr-only">{`, ${[project ?? 'No project', ...rowFlags(custom, unread)].join(', ')},`}</span>
+      {/* Actions sit in front of the trailing value, which stays put — the
+          truncating title is what gives way on hover. On a row too narrow for
+          both, the value yields instead, so the title keeps its room. */}
+      {actionsSlot}
+      {/* While the hints show, the row trades its value for the ⌘N that reaches
+          it. A row whose session has no open tab has no number. */}
+      {hintIndex != null ? (
+        <ShortcutIndexBadge index={hintIndex} data-testid="sessions-row-hint" />
+      ) : (
+        <SessionRowStatus
+          status={sessionStatus(custom)}
+          updatedAt={custom.updatedAt}
+          yieldsToActions={actionsSlot != null}
         />
-      </span>
+      )}
     </>
   );
 }

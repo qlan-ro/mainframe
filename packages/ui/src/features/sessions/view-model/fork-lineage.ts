@@ -8,13 +8,12 @@
  * fork only lands outside its parent's group when it is pinned and the parent
  * isn't. A fork whose parent isn't in this same array (that pinned case,
  * filtered out, archived, or deleted) is left in the group's own sort position
- * at depth 0 — the row layer renders the fallback glyph for those, via
- * `classifyParent`.
+ * at depth 0 — its hover card names the parent instead, via `classifyParent`.
  *
  * A task chat (a delegated child, orchestration MCP server) never reaches
  * this pass while its parent is loaded — it has no row (`task-chats.ts`).
- * One whose parent is gone keeps a row; its fallback glyph and hover line
- * read as the parent's task (`lineageRelation`), and it never counts as a
+ * One whose parent is gone keeps a row; its hover line
+ * reads as the parent's task (`lineageRelation`), and it never counts as a
  * fork.
  *
  * Pure and side-effect-free: no daemon calls, no React. `use-parent-chat.ts`
@@ -144,8 +143,8 @@ export type ParentClassification =
   | 'unresolved';
 
 /**
- * Classifies a fork's parent for the FALLBACK glyph (the fork is not nested —
- * its parent isn't adjacent in its own group). `listedIds` is every id
+ * Classifies the parent of a fork that is not nested (its parent isn't adjacent
+ * in its own group). `listedIds` is every id
  * rendered across all of the arranged groups (post-filter); `unfilteredIds`
  * is every regular, non-archived session the sidebar has loaded regardless of
  * the active filters.
@@ -163,7 +162,7 @@ export function classifyParent(
 
 /**
  * The parent's resolved state, for the copy table shared by the sidebar's
- * fallback glyph and the chat header's parent link (the Design direction's
+ * hover card and the chat header's parent link (the Design direction's
  * "the sidebar and header never disagree on how lineage reads"). `linked` is
  * the header-only case: the parent is directly known and not archived, so it
  * reads exactly like `filtered-out`'s plain quoted title.

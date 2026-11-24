@@ -11,7 +11,7 @@ import { SessionRow } from './SessionRow';
 
 interface SessionListProps {
   groups: SessionGroupResult[];
-  /** Project id → name, for the hover card. */
+  /** Project id → name, for the row's letter and its hover card. */
   projectNames?: Record<string, string>;
   colorOf?: (name: string) => TagColor;
   /** True when a filter is what emptied the list, not the absence of sessions. */
@@ -30,11 +30,10 @@ export function SessionList({ groups, projectNames, colorOf, hasFilters = false 
   return (
     <SessionListVirtuoso
       groups={groups}
-      renderItem={(item, { inPinnedGroup, depth }) => (
+      renderItem={(item, { depth }) => (
         <SessionRow
           item={item}
           colorOf={colorOf}
-          inPinnedGroup={inPinnedGroup}
           depth={depth}
           projectName={item.custom.projectId ? projectNames?.[item.custom.projectId] : undefined}
         />

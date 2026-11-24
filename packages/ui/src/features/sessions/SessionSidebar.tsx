@@ -38,7 +38,9 @@ import { useDraftRow } from '@/features/sessions/sidebar/use-draft-row';
 import { useTagRegistry } from '@/features/sessions/tags/use-tag-registry';
 import { useSessionFilters } from '@/store/session-filters';
 import { useStableList } from '@/lib/use-stable-list';
+import { useToday } from '@/lib/use-today';
 import { SidebarScrollRegion } from '../shared/SidebarScrollRegion';
+import { HEADER_STACK_DEPTH } from './SessionGroupHeader';
 import { SidebarScopeStrip } from './SidebarScopeStrip';
 import { SessionsSection } from './SessionsSection';
 import { FadeLabel } from '@/components/ui/fade-label';
@@ -77,22 +79,25 @@ export function SessionSidebar() {
     useMemo<SessionItem[]>(() => listedThreadItemsToSessionItems(threadItems), [threadItems]),
   );
 
-  const { filterProjectIds, selectedTags, selectedSynthetic, sortMode } = useSessionFilters();
+  const { filterProjectIds, statusFilter, selectedTags, selectedSynthetic, sortMode } = useSessionFilters();
 
-  const hasFilters = filterProjectIds.size > 0 || selectedTags.size > 0 || selectedSynthetic.size > 0;
+  const hasFilters =
+    filterProjectIds.size > 0 || statusFilter !== 'all' || selectedTags.size > 0 || selectedSynthetic.size > 0;
   const registry = useTagRegistry(useDaemonPort());
   const { projects } = useProjects();
 
   const filteredItems = useMemo(
-    () => applySessionFilters(allItems, { filterProjectIds, selectedTags, selectedSynthetic }),
-    [allItems, filterProjectIds, selectedTags, selectedSynthetic],
+    () => applySessionFilters(allItems, { filterProjectIds, statusFilter, selectedTags, selectedSynthetic }),
+    [allItems, filterProjectIds, statusFilter, selectedTags, selectedSynthetic],
   );
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);
 
+  // Today's date, so the groups move on at midnight even when no session does.
+  const today = useToday();
   const groups = useMemo(
-    () => arrangeSessions(filteredItems, sortMode, Date.now(), sortedProjects),
-    [filteredItems, sortMode, sortedProjects],
+    () => arrangeSessions(filteredItems, sortMode, today, sortedProjects),
+    [filteredItems, sortMode, today, sortedProjects],
   );
 
   // Fork lineage (todo #343): shared with every row via context rather than
@@ -143,7 +148,7 @@ export function SessionSidebar() {
         <SidebarScopeStrip />
       </SidebarHeader>
 
-      <SidebarScrollRegion tut="sessions-list">
+      <SidebarScrollRegion tut="sessions-list" memoryKey="chats" scrollPaddingTop={HEADER_STACK_DEPTH}>
         <SessionLineageProvider value={lineage}>
           <SessionsSection
             groups={groups}

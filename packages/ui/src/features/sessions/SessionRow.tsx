@@ -17,7 +17,6 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { deriveSessionBadge } from '@/features/sessions/view-model/session-status';
 import { isSessionUnread } from '@/features/sessions/view-model/session-unread';
 import { useUnreadStore } from '@/store/unread-store';
 import { SessionRowItemScope } from '@/features/sessions/SessionRowItemScope';
@@ -28,15 +27,12 @@ import { SessionContextMenu } from './SessionContextMenu';
 import { SessionMetaCard } from './SessionMetaCard';
 import { RowBody } from './SessionRowBody';
 import { SessionRowRename } from './SessionRowRename';
-import { canOpenMetaCard, useHoverCardWedgeGuard } from './use-hover-card-wedge-guard';
+import { useSessionMetaCard } from './use-session-meta-card';
 import { useForkLineageRow } from './sidebar/use-fork-lineage-row';
 import { useRowActions } from './sidebar/use-row-actions';
 import { forkCount } from './view-model/fork-lineage';
 import { startedByTitle } from './view-model/agent-provenance';
 import { useSessionLineage } from './SessionLineageContext';
-
-/** The section owns the horizontal inset; the row only keeps the stock pad. */
-const ROW_INDENT = 'pl-2';
 
 /** Rows rendered outside the sidebar's tag registry still paint their dots. */
 const DEFAULT_COLOR_OF = (): TagColor => 'blue';
@@ -44,13 +40,12 @@ const DEFAULT_COLOR_OF = (): TagColor => 'blue';
 interface SessionRowInnerProps {
   item: SessionItem;
   colorOf: (name: string) => TagColor;
-  inPinnedGroup: boolean;
   projectName?: string;
   /** This row's indent depth from the group's `nestForks` pass — 0 when not nested. */
   depth: 0 | 1 | 2;
 }
 
-function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: SessionRowInnerProps) {
+function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerProps) {
   const { custom } = item;
   const aui = useAui();
   const lineage = useForkLineageRow(item, depth);
@@ -69,7 +64,6 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
   const unread = useUnreadStore((s) => isSessionUnread(item, s.unread));
   const [isRenaming, setIsRenaming] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const [metaOpen, setMetaOpen] = useState(false);
   const actions = useRowActions(item);
   const openSideChat = useOpenSideChat();
   // A draft has no chat id, an archived row 409s the daemon open route, and a
@@ -79,20 +73,14 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
   // cursor rather than at the host's default (0,0).
   const menuPoint = useRef<{ x: number; y: number } | null>(null);
   const rowRef = useRef<HTMLLIElement | null>(null);
-  // A ref, not state: the menu only gates the card, and re-rendering the row on
-  // every right-click would cost the open menu its anchor.
-  const menuOpen = useRef(false);
-  const closeMeta = useCallback(() => setMetaOpen(false), []);
-  useHoverCardWedgeGuard(metaOpen, rowRef, closeMeta);
-
-  const handleMetaOpenChange = useCallback((next: boolean) => {
-    setMetaOpen(next && !menuOpen.current && canOpenMetaCard(rowRef.current, document.activeElement));
-  }, []);
-
-  const handleMenuOpenChange = useCallback((open: boolean) => {
-    menuOpen.current = open;
-    if (open) setMetaOpen(false);
-  }, []);
+  const meta = useSessionMetaCard(rowRef);
+  const { onOpenParent } = lineage;
+  const openParent =
+    onOpenParent &&
+    (() => {
+      meta.closeAfterUse();
+      onOpenParent();
+    });
 
   const title = item.title ?? 'Untitled session';
 
@@ -129,7 +117,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
     <SessionContextMenu
       pinned={custom.pinned}
       temporary={custom.temporary}
-      onOpenChange={handleMenuOpenChange}
+      onOpenChange={meta.onMenuOpenChange}
       onPin={actions.onPin}
       onUnpin={actions.onUnpin}
       onRename={openRenameFromMenu}
@@ -148,21 +136,21 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
       <ThreadListItemPrimitive.Root asChild data-testid="sessions-row" data-chat-id={item.id}>
         <SidebarMenuItem
           ref={rowRef}
+          // Named so the row's own width, not the panel's, decides what fits: a
+          // nested fork is narrower than its neighbours.
+          className="@container/row"
           onContextMenu={(e) => {
             menuPoint.current = { x: e.clientX, y: e.clientY };
           }}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
         >
-          {/* Controlled so the wedge guard can force-close and `canOpenMetaCard`
-              can refuse an open the pointer never asked for: under load Radix's
-              open timer can fire after the pointer already left the row (or on a
-              click, which focuses it), and then no pointerleave ever closes the
-              card. */}
-          <HoverCard open={metaOpen} onOpenChange={handleMetaOpenChange} openDelay={500} closeDelay={60}>
+          <HoverCard open={meta.open} onOpenChange={meta.onOpenChange} openDelay={500} closeDelay={60}>
             <HoverCardTrigger asChild>
               <ThreadListItemPrimitive.Trigger asChild>
                 <SidebarMenuButton
+                  ref={meta.triggerRef}
+                  {...meta.triggerProps}
                   size="sm"
                   data-zone-visible={zoneDimmed || undefined}
                   // ⌘-click opens/retargets the split; capture so the native
@@ -176,21 +164,16 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                   }}
                   // pr-2!: the variants reserve a gutter for an overlaid
                   // SidebarMenuAction, but the actions render inline now.
-                  // h-11 clamps the row to its two lines; the draft row stays single-line.
+                  // Selection is neutral (L1) and a step darker than hover.
                   className={cn(
-                    ROW_INDENT,
-                    'h-11 rounded-md py-1 pr-2! hover:bg-sidebar-accent group-data-active/menu-item:bg-sidebar-selection',
-                    zoneDimmed && 'bg-sidebar-selection/40',
+                    'py-0 pr-2! pl-1.5 hover:bg-sidebar-accent/60 group-data-active/menu-item:bg-sidebar-accent',
+                    zoneDimmed && 'bg-sidebar-accent/50',
                   )}
                 >
                   <RowBody
                     item={item}
-                    badge={deriveSessionBadge(custom, unread)}
-                    colorOf={colorOf}
+                    unread={unread}
                     projectName={projectName}
-                    showPinGlyph={custom.pinned && !inPinnedGroup}
-                    nestedFork={lineage.nested}
-                    forkFallback={lineage.fallback}
                     actionsSlot={
                       hovered ? (
                         <RowHoverActions
@@ -219,12 +202,14 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                 </SidebarMenuButton>
               </ThreadListItemPrimitive.Trigger>
             </HoverCardTrigger>
-            <HoverCardContent side="right" align="start">
+            <HoverCardContent ref={meta.cardRef} {...meta.cardProps} side="right" align="start">
               <SessionMetaCard
                 title={title}
                 projectId={custom.projectId}
                 projectName={projectName}
                 noProject={custom.noProject}
+                adapterId={custom.adapterId}
+                temporary={custom.temporary}
                 worktreePath={custom.worktreePath}
                 branchName={custom.branchName}
                 worktreeMissing={custom.worktreeMissing}
@@ -233,6 +218,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
                 tags={custom.tags}
                 colorOf={colorOf}
                 parentState={lineage.parentState}
+                onOpenParent={openParent}
                 delegation={custom.delegation}
                 startedBy={startedByTitle(allItems, custom)}
                 forkCount={childForkCount}
@@ -245,7 +231,7 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
   );
 
   // Variant D: the indented wrapper (left rule) only exists for a nested row —
-  // everything else (fallback glyph, hover card) renders on the plain row.
+  // everything else (the hover card's lineage line) renders on the plain row.
   // Indentation goes one step per level and stops at two: a depth-2 row (a
   // fork of a fork) gets a second nested wrapper so it reads as a child of
   // its own (already-indented) parent rather than a sibling of it.
@@ -266,8 +252,6 @@ function SessionRowInner({ item, colorOf, inPinnedGroup, projectName, depth }: S
 interface SessionRowProps {
   item: SessionItem;
   colorOf?: (name: string) => TagColor;
-  /** True inside the 'Pinned' group, where the pin glyph would be redundant. */
-  inPinnedGroup?: boolean;
   projectName?: string;
   /** This row's indent depth from the group's `nestForks` pass — 0 when not nested. */
   depth?: 0 | 1 | 2;
@@ -281,25 +265,13 @@ interface SessionRowProps {
  * change. `threadItems` holds regular and archived entries alike, so an archive
  * does not trip this guard; a delete does.
  */
-function SessionRowResolver({
-  item,
-  colorOf = DEFAULT_COLOR_OF,
-  inPinnedGroup = false,
-  projectName,
-  depth = 0,
-}: SessionRowProps) {
+function SessionRowResolver({ item, colorOf = DEFAULT_COLOR_OF, projectName, depth = 0 }: SessionRowProps) {
   const present = useAuiState((s) => s.threads.threadItems.some((t) => t.id === item.id));
   if (!present) return null;
 
   return (
     <SessionRowItemScope id={item.id}>
-      <SessionRowInner
-        item={item}
-        colorOf={colorOf}
-        inPinnedGroup={inPinnedGroup}
-        projectName={projectName}
-        depth={depth}
-      />
+      <SessionRowInner item={item} colorOf={colorOf} projectName={projectName} depth={depth} />
     </SessionRowItemScope>
   );
 }
