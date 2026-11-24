@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mainframe App — map and sync rules</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mainframe/components/bundle.css">
+<script src="ds/mainframe/components/bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:var(--primary);text-decoration:none}a:hover{text-decoration:underline}
+</style>
+</helmet>
+<x-import component-from-global-scope="Mainframe.Root" mode="{{mode}}">
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 56px 64px; display: flex; flex-direction: column; gap: 40px; background: var(--background); color: var(--foreground)">
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h1 style="margin: 0; font-size: 40px; line-height: 44px; font-weight: 600; letter-spacing: -0.02em">Mainframe App</h1>
+      <p style="margin: 0; font-size: 13px; line-height: 18px; color: var(--muted-foreground)">The baseline: every screen captured from the running app and pixel-checked against it, in light and dark.</p>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; line-height: 16px; color: var(--muted-foreground)">
+      <x-import component-from-global-scope="Mainframe.Icon" name="GitCommitHorizontal" size="{{iconXs}}"></x-import>
+      <span>Captured from qlan-ro/mainframe at 76b2dab3, 11 Nov 2026. Chat session panel at v2.15.0 (9f504d34), 13 Nov 2026</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px">
+    <sc-for list="{{pages}}" as="p" hint-placeholder-count="10">
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 14px; background: var(--card); border: 1px solid var(--border)">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span style="display: inline-flex; color: var(--muted-foreground)"><x-import component-from-global-scope="Mainframe.Icon" name="{{p.icon}}"></x-import></span>
+          <span style="font-size: 13px; line-height: 18px; font-weight: 600">{{p.name}}</span>
+        </div>
+        <p style="margin: 0; font-size: 12px; line-height: 17px; color: var(--muted-foreground)">{{p.body}}</p>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 600">A PR that changes UI</h2>
+      <ol style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 18px">
+        <li>The source of this canvas is design/ in the repo. Every change goes through a PR; the hosted canvas is published from main by hand.</li>
+        <li>One page per area. design/areas.json maps each area to its code paths, its boards and its surface brief.</li>
+        <li>A PR that changes an area's UI code updates that area's boards or brief, captured from the running app, never drawn by hand. CI checks it; the design: none label skips it when nothing visible changes.</li>
+        <li>Open design work lives on Proposals. The PR that builds it moves its frames to the area page and removes them from Proposals.</li>
+      </ol>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 600">Status hues</h2>
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 18px">
+        <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--primary); flex-shrink: 0"></span><span><b style="font-weight: 600">primary</b> — selected, or running and wants attention</span></div>
+        <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--success); flex-shrink: 0"></span><span><b style="font-weight: 600">success</b> — connected, healthy or done. Never running.</span></div>
+        <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--warning); flex-shrink: 0"></span><span><b style="font-weight: 600">warning</b> — needs the user, or degraded</span></div>
+        <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--destructive); flex-shrink: 0"></span><span><b style="font-weight: 600">destructive</b> — failed, or an irreversible action</span></div>
+      </div>
+      <p style="margin: 4px 0 0; font-size: 12px; line-height: 17px; color: var(--muted-foreground)">Every artboard has a Theme tweak (light or dark). Reviews score each area page on its own, light and dark. Sessions were captured on the mock adapter, so provider marks and model names show its placeholders.</p>
+    </div>
+  </div>
+</div>
+</x-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      mode: this.props.mode ?? 'light',
+      iconXs: 12,
+      pages: [
+        { icon: 'AppWindow', name: 'Shell & title bar', body: 'The window, title bar and usage capsule, session tabs, nav rail, first run and empty states.' },
+        { icon: 'PanelLeft', name: 'Sidebar', body: 'Session list views, row states, menus and filters.' },
+        { icon: 'SquarePen', name: 'Composer & gates', body: 'The composer state matrix and its menus; permission, question and plan gates.' },
+        { icon: 'MessageSquare', name: 'Transcript', body: 'The thread: messages, tools, reasoning and delegation; loading and error states.' },
+        { icon: 'PanelRight', name: 'Session panel', body: 'Activity and the other sections, docked, floating and closed.' },
+        { icon: 'Columns2', name: 'Workspace', body: 'Files and editor, review and diff, terminal, console, preview and URL tabs, side chat.' },
+        { icon: 'Settings', name: 'Settings & dialogs', body: 'The settings surface and its panes, the command palette and dialogs.' },
+        { icon: 'Workflow', name: 'Automations', body: 'List, editor and runs, including the awaiting-answer state.' },
+        { icon: 'ListChecks', name: 'Tasks', body: 'The tasks board, cards and quick task dialog.' },
+        { icon: 'GitPullRequest', name: 'Proposals', body: 'Design not built yet: the window redesign, with its spec and one board per area.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

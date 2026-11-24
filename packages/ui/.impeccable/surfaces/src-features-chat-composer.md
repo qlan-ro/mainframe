@@ -1,0 +1,31 @@
+---
+version: 1
+slug: "src-features-chat-composer"
+primary_target: "src/features/chat/composer"
+related_targets: ["src/features/chat/gates"]
+---
+
+# Composer & gates
+
+## Scope and mode
+Operate. The composer card, its top strip (activity, queue), bottom strip (where it runs, branch, changes), the new-session empty state, draft content (files, captures, code annotations, quotes) and the gates pinned above it (permission, question, plan). Canvas page "Composer & gates". Spec rows: C, K, G in `design/redesign/DECISIONS.md`.
+
+## Audience and job
+Tell an agent what to do next, steer or queue while it runs, and answer what it asks. All of this happens without leaving the input.
+
+## Constraints
+Keyboard first: Enter, ⌥↵, ⇧⇥, ⌘.. Gates are answered one at a time, oldest first, as the app's gate queue does. Draft content keeps today's segment model and highlight to quote.
+
+## Direction contract
+THESIS: one calm card that carries its context with it, never a toolbar of switches. Project above the input, where it runs below it, ongoing work tucked in a strip on top.
+OWN-WORLD: white card on grey, 16 px radius, hairline and soft shadow, solid focus line. Tiles in one 172 × 40 shape. Requests pinned above in warning tone.
+STORY: the user sees what the agent is doing, adds to it (Steer) or lines it up (Queue), and answers requests where they type.
+FIRST VIEWPORT: before the first message, "What's next for <project>?" with recent sessions and project tasks, then the card with project and branch pickers.
+FORM: seed: none (pinned) "calm Mac atmosphere", project above the input (Antigravity).
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Memorable moment
+A sub-agent's request appearing above the composer on its own, saying how many more wait.
+
+## Unresolved
+None.

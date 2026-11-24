@@ -1,0 +1,125 @@
+{
+  "$comment": "One entry per UI area. Each area owns code paths (repo-relative prefixes; the longest matching prefix wins), one canvas page, the boards on it (file-name prefixes; the longest matching prefix wins) and, when it has one, an Impeccable surface brief. design/tools/check.mjs reads this file; see design/README.md.",
+  "proposalsPage": "proposals",
+  "proposalBoardPrefix": "Proposal-",
+  "ignore": ["/__tests__/", ".test.ts", ".test.tsx", ".stories.tsx", "/test-utils/", ".d.ts"],
+  "areas": [
+    {
+      "id": "overview",
+      "name": "Overview",
+      "page": "overview",
+      "boards": ["Main"],
+      "paths": []
+    },
+    {
+      "id": "shell",
+      "name": "Shell & title bar",
+      "page": "shell",
+      "boards": ["Shell-TitleBar", "Shell-Window", "Shell-States", "Shell-Flow"],
+      "brief": "packages/ui/.impeccable/surfaces/src-layout-titlebar-tsx.md",
+      "paths": [
+        "packages/ui/src/app/",
+        "packages/ui/src/layout/TitleBar",
+        "packages/ui/src/layout/NavRail",
+        "packages/ui/src/layout/RailUpdate",
+        "packages/ui/src/layout/SurfaceRail",
+        "packages/ui/src/layout/SurfDivider",
+        "packages/ui/src/layout/ContentCard",
+        "packages/ui/src/layout/surface-icons",
+        "packages/ui/src/layout/use-return-to-chats-on-activate",
+        "packages/ui/src/features/session-tabs/",
+        "packages/ui/src/features/quota/",
+        "packages/ui/src/features/shortcuts/",
+        "packages/ui/src/features/tour/"
+      ]
+    },
+    {
+      "id": "sidebar",
+      "name": "Sidebar",
+      "page": "sidebar",
+      "boards": ["Shell-Sidebar"],
+      "brief": "packages/ui/.impeccable/surfaces/src-features-sessions.md",
+      "paths": [
+        "packages/ui/src/layout/AppSidebar",
+        "packages/ui/src/features/sessions/",
+        "packages/ui/src/features/project-scope/"
+      ]
+    },
+    {
+      "id": "composer",
+      "name": "Composer & gates",
+      "page": "composer",
+      "boards": ["Chat-Composer"],
+      "brief": "packages/ui/.impeccable/surfaces/src-features-chat-composer.md",
+      "paths": [
+        "packages/ui/src/features/chat/composer/",
+        "packages/ui/src/features/chat/gates/",
+        "packages/ui/src/features/chat/commands/"
+      ]
+    },
+    {
+      "id": "transcript",
+      "name": "Transcript",
+      "page": "transcript",
+      "boards": ["Chat-Thread", "Chat-Window", "Chat-States"],
+      "brief": "packages/ui/.impeccable/surfaces/src-features-chat-thread.md",
+      "paths": ["packages/ui/src/features/chat/"]
+    },
+    {
+      "id": "session-panel",
+      "name": "Session panel",
+      "page": "session-panel",
+      "boards": ["Chat-SessionPanel", "Workspace-SessionPanel"],
+      "brief": "packages/ui/.impeccable/surfaces/src-features-session-panel.md",
+      "paths": ["packages/ui/src/features/session-panel/"]
+    },
+    {
+      "id": "workspace",
+      "name": "Workspace",
+      "page": "workspace",
+      "boards": ["Workspace-", "Chat-SideChat"],
+      "brief": "packages/ui/.impeccable/surfaces/src-layout-surfaces-workspacesurface-tsx.md",
+      "paths": [
+        "packages/ui/src/layout/Workspace",
+        "packages/ui/src/layout/SurfaceHost",
+        "packages/ui/src/layout/surfaces/",
+        "packages/ui/src/features/preview/",
+        "packages/ui/src/features/files/",
+        "packages/ui/src/features/editor/",
+        "packages/ui/src/features/terminal/",
+        "packages/ui/src/features/url-tab/",
+        "packages/ui/src/features/viewers/",
+        "packages/ui/src/features/review/",
+        "packages/ui/src/features/git/",
+        "packages/ui/src/features/run/",
+        "packages/ui/src/features/side-chat/"
+      ]
+    },
+    {
+      "id": "settings",
+      "name": "Settings & dialogs",
+      "page": "settings",
+      "boards": ["Settings-"],
+      "paths": [
+        "packages/ui/src/features/settings/",
+        "packages/ui/src/features/palette/",
+        "packages/ui/src/features/setup-advisor/",
+        "packages/ui/src/features/skills/"
+      ]
+    },
+    {
+      "id": "automations",
+      "name": "Automations",
+      "page": "automations",
+      "boards": ["Automations-"],
+      "paths": ["packages/ui/src/features/automations/"]
+    },
+    {
+      "id": "tasks",
+      "name": "Tasks",
+      "page": "tasks",
+      "boards": ["Tasks-"],
+      "paths": ["packages/ui/src/features/tasks/"]
+    }
+  ]
+}

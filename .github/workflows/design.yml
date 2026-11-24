@@ -1,0 +1,33 @@
+# .github/workflows/design.yml
+name: Design
+
+# Keeps the design source in design/ consistent and in step with UI code (design/README.md).
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: design-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Checker tests
+        run: node --test design/tools/check.test.mjs
+
+      # Canvas consistency always; area coverage unless the PR is labelled `design: none`.
+      - name: Design check
+        env:
+          DESIGN_CHECK_SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'design: none') && '1' || '0' }}
+        run: node design/tools/check.mjs --base origin/${{ github.base_ref }}

@@ -1,0 +1,1022 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Window redesign: keyboard shortcuts sheet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+
+.pf{
+  --claude:#d97757;--codex:#19c37d;
+  --page:#d6d6da;--ground:#f5f5f8;--side:#ffffff;--chip:#ececef;--sheet:#ffffff;--card:#ffffff;--frame:#f2f2f4;--frame-edge:#e6e6e9;
+  --hair:#e5e5e5;--hair2:#cfcfd4;--sel:#ececef;--hover:#ededf0;--press:#e2e2e6;
+  --ink:#1f1f1f;--ink2:#48484a;--meta:#5c5c61;--faint:#a1a1a6;
+  --accent:#0a84ff;--focus:#0b6fdc;--accent-ink:#0063cc;--accent-fill:#0063cc;--halo:rgba(10,132,255,.28);
+  --live:#0b6fdc;
+  --warn:#8a4b00;--warn-bg:rgba(217,119,6,.13);--warn-bd:rgba(138,75,0,.35);--warn-dot:#b45f06;
+  --crit:#c70016;--crit-bg:rgba(199,0,22,.07);--crit-bd:rgba(199,0,22,.28);
+  --ok:#1d7a46;--red:#c0392b;
+  --fail:#b04466;/* failed work: a muted rose, quieter than --crit (Doru, 2026-11-24); 5.4:1 on white, 4.6:1 on hover */
+  --bubble:#f1f1f3;--q:#f5f5f7;--track:#dcdcdf;--code:rgba(0,0,0,.06);
+  --shadow-card:0 1px 2px rgba(0,0,0,.04),0 3px 10px rgba(0,0,0,.05);
+  --shadow-menu:0 2px 4px rgba(0,0,0,.06),0 10px 30px rgba(0,0,0,.16);
+  --win-shadow:0 0 0 1px rgba(0,0,0,.14),0 22px 56px rgba(0,0,0,.2);
+  --tipbg:#1f1f1f;--tipink:#fff;--sb:rgba(0,0,0,.22);--sel-bg:rgba(10,132,255,.26);
+  color-scheme:light;
+}
+.pf[data-theme=dark]{
+  --page:#0b0b0b;--ground:#262626;--side:#171717;--chip:#363636;--sheet:#171717;--card:#262626;--frame:#1f1f1f;--frame-edge:#2e2e2e;
+  --hair:#333336;--hair2:#454549;--sel:#2f2f31;--hover:#262628;--press:#303033;
+  --ink:#ececec;--ink2:#c7c7cc;--meta:#aeaeb4;--faint:#5f5f64;
+  --accent:#0a84ff;--focus:#3d9bff;--accent-ink:#5aaeff;--accent-fill:#0a6fd6;--halo:rgba(10,132,255,.36);
+  --live:#0a84ff;
+  --warn:#f0b35a;--warn-bg:rgba(240,179,90,.12);--warn-bd:rgba(240,179,90,.38);--warn-dot:#e08a1e;
+  --crit:#ff8080;--crit-bg:rgba(255,107,107,.1);--crit-bd:rgba(255,107,107,.36);
+  --ok:#4cc38a;--red:#ff7b6e;
+  --fail:#e48aa3;
+  --bubble:#262626;--q:#2d2d30;--track:#3b3b3f;--code:rgba(255,255,255,.09);
+  --shadow-card:0 1px 2px rgba(0,0,0,.3),0 3px 10px rgba(0,0,0,.25);
+  --shadow-menu:0 2px 4px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.5);
+  --win-shadow:0 0 0 1px rgba(255,255,255,.08),0 22px 56px rgba(0,0,0,.6);
+  --tipbg:#ececec;--tipink:#1f1f1f;--sb:rgba(255,255,255,.22);--sel-bg:rgba(10,132,255,.42);
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0}
+/* Scrollbars (S3): overlay thumbs only, never a track or a gutter. Native scrollbars are hidden in every
+   engine, because WKWebView with "always show scroll bars" (a Mac with a mouse) draws its grey track and
+   takes 15 px whatever scrollbar-color says. A thin thumb (.osb, drawn by script) fades in while the area
+   scrolls or is hovered, as macOS overlay scrollbars and Radix ScrollArea do. */
+*{scrollbar-width:none}
+*::-webkit-scrollbar{display:none;width:0;height:0}
+.osb{position:fixed;z-index:95;border-radius:3px;background:color-mix(in srgb,var(--ink) 26%,transparent);opacity:0;pointer-events:none;transition:opacity .25s,background .12s,width .12s,height .12s}
+.osb.on{opacity:1;pointer-events:auto}
+.osb:hover,.osb.drag{background:color-mix(in srgb,var(--ink) 42%,transparent)}
+[hidden]{display:none!important}
+
+.pf{background:var(--page);color:var(--ink);font:13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left;padding:0}
+button:disabled{cursor:default}
+code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.92em}
+::selection{background:var(--sel-bg);color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+#thread:focus-visible{outline-offset:-2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ic *{vector-effect:non-scaling-stroke}
+.ic.sm{width:12px;height:12px}
+.ic.fill{fill:currentColor}
+.ic.spin{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.iconbtn{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--meta);flex:none}
+.iconbtn:hover{background:var(--hover);color:var(--ink)}
+.iconbtn[aria-pressed=true]{background:var(--sel);color:var(--ink)}
+
+/* page + window */
+.stage{height:100vh;display:grid;place-items:center}
+.win{width:min(var(--ww,1440px),100vw);height:100vh;display:flex;flex-direction:column;background:var(--ground);position:relative;overflow:hidden}
+.shell{flex:1;min-height:0;display:flex}
+.win.framed{height:calc(100vh - 24px);border-radius:12px;box-shadow:var(--win-shadow)}
+
+/* icon rail (own column, hairline) */
+
+
+/* title bar (today's shell) */
+.titlebar{height:48px;flex:none;display:flex;align-items:center;background:var(--ground);padding-right:12px;min-width:0}
+.lights{display:flex;gap:8px;width:80px;padding-left:20px;flex:none;align-items:center}
+.lights i{width:12px;height:12px;border-radius:50%}
+.capsule{width:224px;height:28px;flex:none;display:flex;align-items:center;gap:7px;padding:0 12px;border-radius:10px;background:var(--chip);font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden}
+.capsule:hover{background:var(--press)}
+.capsule .sepd{width:3px;height:3px;border-radius:50%;background:var(--meta);flex:none}
+.capsule .cbar{width:32px;height:4px;border-radius:2px;background:color-mix(in srgb,var(--ink) 16%,transparent);overflow:hidden;flex:none}
+.capsule .cbar i{display:block;height:100%;background:color-mix(in srgb,var(--ink) 62%,transparent)}
+.capsule b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.capsule .m{color:var(--meta)}
+.capsule .r{margin-left:auto;color:var(--meta);font-variant-numeric:tabular-nums}
+.tabs{flex:1;min-width:0;display:flex;align-items:center;gap:4px;margin-left:8px}
+/* Title bar segments (W1): [lights + usage] | [session tabs] | [workspace tabs + global actions].
+   Each separator sits exactly above the column edge below it. */
+.tl{display:flex;align-items:center;flex:none;height:100%;padding-right:12px}
+.win.sideopen .tl{width:315px;padding-right:0}
+.tsep{width:1px;height:16px;flex:none;background:var(--hair2)}
+.tm{flex:1;min-width:0;display:flex;align-items:center;height:100%}
+#wsep,#wsep2{opacity:0;transition:opacity .2s}
+.win.ws #wsep,.win.ws #wsep2{opacity:1}
+/* W1: a third separator closes the workspace segment, before Search and the view switch. */
+#wsep2{width:0;margin:0}
+.win.ws #wsep2{width:1px;margin:0 8px}
+.tw{flex:none;width:0;height:100%;display:flex;align-items:center;overflow:hidden;transition:width .32s cubic-bezier(.22,1,.36,1)}
+.win.ws .tw{width:max(0px,calc(var(--wsw) - var(--twr,148px)))}
+.wtabs{flex:0 1 auto;overflow-x:auto;scrollbar-width:none}
+.wtabs.ofl{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)}
+.wtabs .tab{flex:0 1 auto;max-width:176px;min-width:60px;padding:0 4px 0 10px;gap:6px}
+.wtabs .tab[aria-selected=true]{flex-shrink:0}
+/* Unselected tabs reserve no room for close: it overlays the title's end on hover, so truncated
+   titles keep their characters. */
+.wtabs .tab:not([aria-selected=true]){position:relative;padding-right:10px}
+.wtabs .tab:not([aria-selected=true]) .x{position:absolute;right:4px;top:4px;display:none;background:var(--hover);box-shadow:-10px 0 8px -2px var(--hover)}
+.wtabs .tab:not([aria-selected=true]):hover .x,.wtabs .tab:not([aria-selected=true]):focus-within .x{display:grid}
+.tab .tg{color:var(--meta)}
+.tab[aria-selected=true] .tg{color:var(--ink)}
+.tw .wadd{width:28px;height:28px;margin-left:6px}
+#wfiles{width:28px;height:28px;margin:0 12px 0 auto}
+.tab{display:flex;align-items:center;gap:8px;height:32px;flex:0 1 180px;min-width:96px;padding:0 4px 0 12px;border-radius:9px;font-size:12.5px;color:var(--ink2)}
+.tab:hover{background:var(--hover)}
+.tab[aria-selected=true]{background:var(--sheet);color:var(--ink);box-shadow:inset 0 0 0 1px var(--hair),0 1px 2px rgba(0,0,0,.05)}
+.tab .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab .x{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--meta);flex:none}
+.tab .x:hover{background:var(--press);color:var(--ink)}
+.tdot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
+.tdot.run{background:var(--live)}
+.tdot.need{background:none;border:1.5px solid var(--warn)}
+.tact{display:flex;align-items:center;gap:12px;flex:none}
+.ib32{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--meta);flex:none}
+.ib32:hover{background:var(--hover);color:var(--ink)}
+.ib32[aria-pressed=true]{background:var(--chip);color:var(--ink)}
+.segsw{display:flex;gap:2px}
+.segsw button{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--meta)}
+.segsw button:hover{background:var(--hover);color:var(--ink)}
+.segsw button[aria-pressed=true]{background:var(--chip);color:var(--ink)}
+/* rail */
+.rail{width:56px;flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 10px;background:var(--ground);border-right:1px solid var(--hair)}
+.rb{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--meta);position:relative}
+.rb .ic{width:20px;height:20px}
+.rb:hover{background:var(--hover);color:var(--ink)}
+.rb[aria-pressed=true]{background:var(--chip);color:var(--ink)}
+.rail .grow{flex:1}
+.rb .sdot{position:absolute;right:7px;bottom:7px;width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px var(--ground)}
+/* sidebar header */
+.shd0{display:flex;align-items:center;height:44px;padding:0 6px 0 12px;flex:none}
+.shd0 h2{flex:1;font-size:15px;font-weight:600;color:var(--ink)}
+.sq{padding:0 12px 6px}
+.sq input{width:100%;height:30px;border-radius:8px;border:0;background:var(--chip);color:var(--ink);font:inherit;font-size:13px;padding:0 10px;caret-color:var(--accent)}
+.sq input::placeholder{color:var(--meta);opacity:1}
+.newrow{display:flex;align-items:center;gap:10px;height:32px;margin:2px 8px 0;padding:0 6px 0 8px;border-radius:8px;font-size:13px;color:var(--ink);width:calc(100% - 16px)}
+.newrow:hover{background:var(--hover)}
+.newrow .ic{color:var(--ink2)}.newrow span{flex:1}
+.scope{display:flex;align-items:center;gap:2px;margin:8px 8px 4px;flex:none}
+.scopeb{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:4px 8px;border-radius:8px}
+.scopeb:hover,.scopeb.open{background:var(--hover)}
+.avs{display:flex;flex:none}
+.av{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;font-weight:600;color:#fff;box-shadow:0 0 0 2px var(--side);margin-left:-8px}
+.av:first-child{margin-left:0}
+.scopeb .tx{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.scopeb .tx span:first-child{font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scopeb .tx span:last-child{font-size:11.5px;color:var(--meta)}
+
+/* sidebar */
+.side{width:260px;flex:none;background:var(--side);border-right:1px solid var(--hair);border-top:1px solid var(--hair);display:flex;flex-direction:column;min-height:0}
+.slist{flex:1;min-height:0;overflow-y:auto;padding:0 8px 8px}
+/* Session list rhythm (L4, picked in Live mode): groups breathe, rows tighten, group actions wait for hover. */
+.gh{position:sticky;top:0;z-index:2;display:flex;align-items:flex-end;gap:2px;height:24px;margin-top:14px;padding:0 2px 4px 8px;background:var(--side);font-size:12px;font-weight:500;color:var(--meta)}
+.gh:first-child{margin-top:4px}
+.gh>span:first-child{flex:1}
+.gh .iconbtn{width:22px;height:22px;opacity:0;transition:opacity .12s}
+.gh:hover .iconbtn,.gh:focus-within .iconbtn,.gh .iconbtn[aria-expanded=true],.gh .iconbtn.on{opacity:1}
+.gh .iconbtn.on{color:var(--accent-ink)}
+.sr0{display:flex;align-items:center;gap:8px;width:100%;height:28px;padding:0 8px 0 6px;border-radius:8px;color:var(--ink2);font-size:13px}
+.sr0:hover{background:var(--hover)}
+.sr0[aria-current=true]{background:var(--sel);color:var(--ink)}
+.sr0 .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sr0 .v{flex:none;font-size:12px;color:var(--meta);font-variant-numeric:tabular-nums}
+.sr0 .v.need{color:var(--warn);font-weight:500}
+.sr0 .vst{display:inline-flex;align-items:center;justify-content:flex-end;gap:4px;min-width:16px}.sr0 .vst .ic{color:var(--live)}
+.st{width:16px;height:16px;flex:none;display:grid;place-items:center}
+.lav{width:16px;height:16px;border-radius:5px;display:grid;place-items:center;font-size:9.5px;line-height:1;font-weight:600;color:var(--meta);background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.sr0[aria-current=true] .lav{color:var(--ink);background:color-mix(in srgb,var(--ink) 12%,transparent)}
+.st .runic{color:var(--live)}
+.st .needic{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--warn)}
+.sempty{padding:8px;font-size:12px;color:var(--meta)}
+
+/* sheet, header */
+.sheet{flex:1;min-width:0;display:flex;background:var(--sheet);border-top:1px solid var(--hair);position:relative}
+/* Session panel floating over a chat column too narrow to dock it (R11), as in the app. */
+.spanel.float{position:absolute;top:52px;right:8px;margin:0;z-index:25;box-shadow:var(--shadow-menu);max-height:calc(100% - 52px - var(--pbot,8px))}
+.pscrim{position:absolute;inset:44px 0 calc(var(--pbot,8px) - 8px) 0;z-index:24;background:color-mix(in srgb,var(--sheet) 40%,transparent)}
+.workcol{flex:1;min-width:0;display:flex;flex-direction:column}
+.head{display:flex;gap:12px;align-items:center;padding:0 12px 0 16px;height:44px;flex:none;font-weight:600;min-width:0}
+.head h1{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.head .grow{flex:1}
+.pd{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.body{flex:1;min-height:0;display:flex}
+.colwrap{flex:1;min-width:0;min-height:0;display:flex}
+/* The transcript scrolls across the whole main pane so its scrollbar sits at the pane's right edge;
+   the reading column stays centred at --cw through padding. */
+.col{width:100%;display:flex;flex-direction:column;min-height:0}
+
+/* transcript */
+.thread{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;padding:8px max(24px,calc((100% - var(--cw,740px)) / 2)) 16px;font-size:14px;line-height:22px}
+.inner{margin-top:auto;display:flex;flex-direction:column;gap:16px}
+.msg.u{display:flex;justify-content:flex-end}
+.bubble{max-width:85%;background:var(--bubble);border-radius:14px;padding:8px 14px;font-size:14px;line-height:22px;overflow-wrap:anywhere}
+.bchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.bchips span{display:inline-flex;gap:5px;align-items:center;font-size:12px;color:var(--ink2);background:var(--code);border-radius:6px;padding:0 7px}
+/* Message footer (T1b): time and actions appear together on hover or keyboard focus; the row keeps its
+   height so nothing moves. Times are otherwise shown only as markers at the start and after a gap. */
+.steered{display:flex;justify-content:flex-end;align-items:center;gap:5px;font-size:12px;color:var(--meta);margin-top:4px}
+.mfoot{display:flex;align-items:center;gap:2px;height:24px;margin-top:4px;opacity:0;transition:opacity .12s}
+.mfoot.u{justify-content:flex-end}
+.turn:hover>.mfoot,.turn:focus-within>.mfoot,.mwrap:hover>.mfoot,.mwrap:focus-within>.mfoot,.mfoot.show{opacity:1}
+.mtime{font-size:12px;color:var(--meta);font-variant-numeric:tabular-nums;padding:0 6px 0 2px}
+.mfoot.u .mtime{padding:0 2px 0 6px}
+.mab{width:24px;height:24px;display:grid;place-items:center;border-radius:6px;color:var(--meta)}
+.mab:hover{background:var(--hover);color:var(--ink)}
+.mab .ic{width:14px;height:14px}
+.tmark{display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--meta);font-variant-numeric:tabular-nums;margin:4px 0 -4px}
+.turn{display:flex;flex-direction:column}
+.wk{position:relative;display:flex;align-items:center;gap:8px;width:100%;min-height:28px;border-radius:7px;padding:0 4px;color:var(--ink2);font-size:13px}
+.wkt{position:absolute;inset:0;border-radius:7px}
+.wkt:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.wk>*:not(.wkt){position:relative;pointer-events:none}
+.wk>.fl,.wk>.ag{pointer-events:auto}
+.wk:hover{background:var(--hover)}
+.wk .ok{color:var(--ok);width:16px;height:16px;flex:none;display:grid;place-items:center}
+.wk b{font-weight:500;color:var(--ink)}
+.wk .mt{color:var(--meta);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wk .fl{color:var(--fail);font-size:12px;font-weight:400;flex:none;height:24px;padding:0 6px;margin-right:-2px;border-radius:6px}
+.wk .fl:hover{background:color-mix(in srgb,var(--fail) 10%,transparent)}
+.wk .fl.retried{color:var(--meta);font-weight:400}
+.wk .fl.retried:hover{background:var(--press);color:var(--ink)}
+.wk .bad{color:var(--fail)}.wk .stp{color:var(--meta)}
+/* T1c: the turn names its agents; while one is still going the count carries its live status, needs-you first. */
+.wk .ag{color:var(--meta);font-size:12px;flex:none;height:24px;padding:0 6px;margin-right:-2px;border-radius:6px;white-space:nowrap}
+.wk .ag:hover{background:var(--press);color:var(--ink)}
+.wk .ag .nd{color:var(--warn)}
+.wk .ok .spin{width:13px;height:13px}
+.wk .chv{color:var(--meta);transition:transform .15s}
+.wk.open .chv{transform:rotate(90deg)}
+.wrows{display:none;flex-direction:column;padding:2px 0 4px 22px}
+.wk.open+.wrows{display:flex}
+.tr{display:flex;align-items:center;gap:8px;min-height:26px;font-size:13px;color:var(--ink2);min-width:0}
+.tr .ic{color:var(--meta);width:14px;height:14px}
+.tr .tg{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tr .mt{margin-left:auto;font-size:12px;color:var(--meta);white-space:nowrap;padding-left:8px;flex:none}
+.tr.bad .mt{color:var(--fail)}
+.tr.bad .ic{color:var(--fail)}
+.ans{margin-top:6px}
+.ans p{margin:8px 0}
+.ans ul,.ans ol{margin:8px 0;padding-left:22px}
+.ans li{margin-top:4px}
+.ans code,.bubble code{background:var(--code);padding:1px 5px;border-radius:5px;font-size:.92em}
+.ans table{border-collapse:collapse;margin:8px 0;font-size:13px;line-height:20px}
+.ans th{font-weight:500;color:var(--meta);text-align:left;padding:3px 24px 3px 0;border-bottom:1px solid var(--hair)}
+.ans td{padding:3px 24px 3px 0}
+.ans td.n,.ans th.n{font-variant-numeric:tabular-nums}
+.cb{margin:8px 0;border-radius:8px;background:var(--code);padding:8px 12px;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;line-height:19px;white-space:pre;overflow-x:auto}
+.cb small{display:block;font-family:inherit;font-size:11.5px;color:var(--meta);margin-bottom:2px}
+.live{color:var(--meta);font-size:13px;display:flex;gap:8px;align-items:center;padding:0 4px}
+.live .runic{color:var(--live)}
+.live code{background:var(--code);padding:1px 5px;border-radius:5px}
+.div{display:flex;align-items:center;gap:10px;color:var(--meta);font-size:12px}
+.div:before,.div:after{content:"";flex:1;height:1px;background:var(--hair)}
+.div span{display:inline-flex;gap:6px;align-items:center;text-align:center}
+.empty{color:var(--meta);font-size:14px;text-align:center;padding:0 12px 40px}
+/* K11: the new-session empty state. It sits where the conversation will start, just above the composer, so nothing
+   jumps when the first message goes. Project first, where it runs, then the project's own recent sessions and open
+   tasks: real things to resume or start from, never generic prompt suggestions. */
+.nse{display:flex;flex-direction:column;gap:22px;padding:0 4px 12px}
+.nsh{display:flex;align-items:center;gap:12px}
+.nsav{width:36px;height:36px;border-radius:10px;flex:none;display:grid;place-items:center;font-size:15px;font-weight:600;color:var(--ink2);background:color-mix(in srgb,var(--ink) 7%,transparent);box-shadow:inset 0 0 0 1px var(--hair)}
+.nsh h2{margin:0;font-size:19px;line-height:26px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.nsh p{margin:0;font-size:13px;line-height:18px;color:var(--meta)}
+.nsh p code{font:12px/18px ui-monospace,"SF Mono",Menlo,monospace;color:var(--ink2)}
+.nsg{display:flex;flex-direction:column}
+.nsl{font-size:12px;line-height:16px;font-weight:500;color:var(--meta);padding:0 8px 6px}
+.nsr{display:flex;align-items:center;gap:10px;height:32px;padding:0 8px;border-radius:8px;text-align:left;color:var(--ink2);font-size:13.5px;min-width:0}
+.nsr:hover{background:var(--hover);color:var(--ink)}
+.nsr:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.nsr>.ic{color:var(--meta);flex:none}
+.nsr .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nsr .v{flex:none;font-size:12px;color:var(--meta);font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:6px}
+.nsr .v.need{color:var(--warn)}
+.nsr .go{flex:none;color:var(--meta);opacity:0;transition:opacity .12s}
+.nsr:hover .go,.nsr:focus-visible .go{opacity:1}
+.nshint{margin:0;font-size:13px;color:var(--meta);padding:0 8px}
+
+/* composer frame */
+.composer{container-type:inline-size;flex:none;padding:0 0 16px;width:min(var(--cw,740px),calc(100% - 48px));margin:0 auto}
+.frame{display:flex;flex-direction:column}
+/* Strips are narrower than the card and tuck under its edge, so they read as part of it rather than a box around it. */
+.frame{--drawer-inset:12px;--tuck:17px}
+/* Top drawer (T3's attached banner): same surface and outline as the card, inset 12 px each side,
+   rounded on top only, its bottom tucked 17 px under the card so the seam disappears. */
+.top{position:relative;z-index:0;margin:0 var(--drawer-inset) calc(-1 * var(--tuck));padding:4px 4px calc(var(--tuck) + 4px);
+  border-radius:12px 12px 0 0;background:var(--card);box-shadow:inset 0 0 0 1px var(--hair),var(--shadow-card)}
+.top.warn{background:color-mix(in srgb,var(--warn) 8%,var(--card));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warn) 28%,transparent),var(--shadow-card)}
+.top:not(:has(> :not([hidden]))){display:none}
+.card{z-index:1}
+/* Bottom context row (T3's ContextStrip): no box of its own, a bare row of quiet controls under the card. */
+.bstrip .chg{margin-left:auto}
+.top{display:flex;align-items:center;min-height:32px;min-width:0}
+.ctxrow{display:flex;align-items:center;gap:4px;min-width:0;flex:1}
+.cbtn2{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border-radius:8px;color:var(--ink2);font-size:13px;min-width:0;white-space:nowrap}
+.cbtn2:hover,.cbtn2.open{background:var(--hover)}
+.cbtn2 .lab{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.cbtn2 .ic{color:var(--meta)}
+.cbtn2 b{font-weight:500;color:var(--ink)}
+.cbtn2 em{font-style:normal;color:var(--meta)}
+.acts{display:flex;flex-direction:column;flex:1;min-width:0;max-height:calc(28px * 6);overflow-y:auto}
+/* Every ongoing item is its own row in the strip; no popover. Needs-you first, then running. */
+.ar{display:flex;align-items:center;gap:8px;min-height:28px;padding:0 2px 0 8px;border-radius:8px;font-size:12.5px;color:var(--ink2);min-width:0}
+.ar>.ic{flex:none;color:var(--live)}
+.ar .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.ar .v{flex:none;color:var(--meta);font-variant-numeric:tabular-nums}
+.ar.need>.ic,.ar.need .v{color:var(--warn)}
+.ar.need .v{font-weight:500}
+.ar .ab{flex:none;height:24px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink2)}
+.ar .ab:hover{background:var(--hover);color:var(--ink)}
+.ar.need .ab{color:var(--accent-ink)}
+.ar.cfm{background:var(--hover)}
+.ar.cfm .t{color:var(--ink)}
+.ar .ab.danger{color:var(--red)}
+.ar .ab.danger:hover{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
+.ar .more{flex:none;font-size:12px;color:var(--meta);font-variant-numeric:tabular-nums}
+.ar .tg,.ar .tgsp{flex:none;width:24px;height:24px}
+.ar .tg{display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--meta)}
+.ar .tg:hover{background:var(--hover);color:var(--ink)}
+.ar .tg .ic.up{transform:rotate(180deg)}
+.ar.sum{gap:6px}.ar.sum .v.need{color:var(--warn);font-weight:500}.ar.sum .t{flex:1;color:var(--meta)}.ar.sum .v.vst{display:inline-flex;align-items:center;gap:4px}.ar.sum .v.vst .ic{width:12px;height:12px;color:var(--live)}
+.card{position:relative;background:var(--card);border-radius:16px;padding:10px 10px 8px;box-shadow:inset 0 0 0 1px var(--hair),var(--shadow-card);transition:box-shadow .16s}
+.card:has(.field:focus){box-shadow:inset 0 0 0 2px var(--focus),0 0 0 3px var(--halo),var(--shadow-card)}
+.queue{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.q{display:flex;gap:8px;align-items:center;padding:2px 2px 2px 10px;min-height:32px;border-radius:8px;background:var(--q);font-size:13px;animation:rise .22s cubic-bezier(.16,1,.3,1)}
+.q.bad{background:color-mix(in srgb,var(--fail) 7%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fail) 28%,transparent);padding-left:8px}
+.q.bad>.ic{color:var(--fail)}
+.qbody{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.3;padding:3px 0}
+.qm{font-size:12px;font-weight:400;color:var(--fail)}
+.q b{font-size:11.5px;font-weight:600;color:var(--meta);flex:none}
+.q .qt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qbody .qt{flex:none}
+@keyframes rise{from{opacity:0;transform:translateY(4px)}}
+.tbtn{height:24px;padding:0 8px;border-radius:6px;font-weight:600;color:var(--accent-ink);flex:none}
+.tbtn:hover{background:var(--hover)}
+.atts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.att{position:relative;display:flex;align-items:center;gap:8px;height:40px;width:172px;box-sizing:border-box;padding:0 2px 0 8px;border-radius:9px;background:var(--q);flex:none}
+.att>.ic{color:var(--meta)}
+.att .an{flex:1;display:flex;flex-direction:column;line-height:1.25;min-width:0}
+/* Every tile is the same width; a longer name, note or selector fades at the edge and shows whole in the tooltip. */
+.att .an>*{display:block;white-space:nowrap;overflow:hidden}
+.att .an>.fade{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 14px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 14px),transparent)}
+.att .an>:first-child{font-size:12.5px;font-weight:500}
+.att .an>:last-child{font-size:11.5px;color:var(--meta)}
+/* C14: what a draft carries. Tiles share one shape (40 px, 9 px radius, the queue's quiet fill): a file shows its
+   extension, an image its thumbnail, a preview capture its thumbnail, selector and note. Quotes sit as segments
+   above the text they belong to, each with its own prose, as the app's multi-quote composer does. */
+.att .ext{width:28px;height:28px;border-radius:6px;flex:none;display:grid;place-items:center;font:600 9px/1 -apple-system,system-ui,sans-serif;letter-spacing:.02em;text-transform:uppercase;color:var(--xc,var(--meta));background:color-mix(in srgb,var(--xc,var(--meta)) 13%,transparent)}
+.att .th{width:32px;height:32px;border-radius:6px;flex:none;overflow:hidden;box-shadow:inset 0 0 0 1px var(--hair);background:var(--sheet)}
+.att .th svg{display:block;width:100%;height:100%}
+.att.capt .aed{position:absolute;right:28px;top:8px;display:none;background:var(--q);box-shadow:-10px 0 8px -2px var(--q)}
+.att.capt:hover .aed,.att.capt:focus-within .aed{display:grid}
+.att.capt .addn{font-size:12.5px;color:var(--accent-ink);text-align:left;padding:0;font-weight:400}
+.att.capt .addn:hover{text-decoration:underline}
+.att.capt .an span:first-child{font-weight:400;color:var(--ink)}
+.att.capt .an .sel{font:11px/1.3 ui-monospace,"SF Mono",Menlo,monospace;color:var(--meta)}
+.att .aed{width:24px;height:24px}
+.segs{display:flex;flex-direction:column;gap:8px;padding:2px 4px 8px}
+.qseg{display:flex;flex-direction:column;gap:4px}
+.qbk{position:relative;display:flex;align-items:flex-start;gap:8px;padding:2px 2px 2px 12px;color:var(--meta);font-size:13px;line-height:19px}
+.qbk::before{content:"";position:absolute;left:0;top:3px;bottom:3px;width:2px;border-radius:1px;background:var(--hair2)}
+.qbk .qxw{flex:1;min-width:0}
+.qbk .qx{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Highlight to quote (today's ChatSelectionToolbar): selecting text in a message offers Quote and New session. */
+.seltb{position:fixed;z-index:60;display:flex;gap:2px;padding:3px;border-radius:9px;background:var(--card);box-shadow:0 0 0 1px var(--hair),var(--shadow-menu);animation:pop .12s ease-out}
+.seltb[hidden]{display:none}
+.seltb button{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px;border-radius:7px;font-size:12.5px;color:var(--ink2)}
+.seltb button:hover{background:var(--hover);color:var(--ink)}
+.seltb .ic{width:14px;height:14px;color:var(--meta)}
+.selhl{background:color-mix(in srgb,var(--accent) 22%,transparent);border-radius:2px}
+.qbk .qsrc{display:block;font-size:11.5px;color:var(--faint);margin-top:1px}
+.qbk .iconbtn{width:22px;height:22px;flex:none;margin-top:-1px}
+.qprose{font-size:14px;line-height:21px;color:var(--ink);padding:0 0 0 0;white-space:pre-wrap}
+.fieldwrap{padding:2px 4px 8px}
+.field{display:block;width:100%;resize:none;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:14px;line-height:21px;height:21px;padding:0;caret-color:var(--accent);overflow-y:hidden}
+.field::placeholder{color:var(--meta);opacity:1}
+.bar{display:flex;align-items:center;gap:2px;min-width:0}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border-radius:8px;color:var(--ink2);font-size:13px;flex:none;white-space:nowrap;transition:background .12s}
+.btn:hover{background:var(--hover)}
+.btn.open{background:var(--press)}
+.btn[aria-disabled=true]{cursor:default}
+.btn[aria-disabled=true]:hover{background:none}
+.plus{width:28px;padding:0;justify-content:center;border-radius:50%}
+.model{flex:0 1 auto;min-width:0}
+.model .ml{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.model .ml i{font-style:normal;color:var(--meta);margin-left:4px}
+.perm{font-weight:500;flex:0 1 auto;min-width:0}
+.perm .plabel2{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.chev{color:var(--meta)}
+.perm.warn{color:var(--warn)}.perm.warn .chev{color:var(--warn)}
+.perm.chip{background:var(--warn-bg);box-shadow:inset 0 0 0 1px var(--warn-bd)}
+.perm.plan{color:var(--accent-ink)}
+.perm .then{font-weight:400;color:var(--meta)}
+.combo{display:none;flex:0 1 auto;min-width:44px}
+/* Only the model name truncates; the permission status never does (C6). */
+.combo .ml{min-width:0;display:inline-flex;white-space:nowrap}
+.combo .cm{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.combo .cs,.combo .cp{flex:none}
+.combo .cp.warn{color:var(--warn)}.combo .cp.plan{color:var(--accent-ink)}
+.combo.chip{background:var(--warn-bg);box-shadow:inset 0 0 0 1px var(--warn-bd)}
+.spacer{flex:1;min-width:0}
+.model[aria-disabled=true] .chev{display:none}
+.ring{gap:6px;padding:0 6px;font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--meta)}
+.ring.warn{color:var(--warn)}.ring.crit{color:var(--crit)}
+.ring svg{width:16px;height:16px;flex:none}
+.ring .trk{stroke:color-mix(in srgb,var(--ink) 26%,transparent)} /* a visible full track: a gauge, not a spinner */
+.ring .arc{stroke:currentColor;transition:stroke-dasharray .3s cubic-bezier(.16,1,.3,1)}
+.send{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;flex:none;border:1px solid var(--hair2);color:var(--faint);background:transparent;transition:background .15s,border-color .15s,color .15s}
+.send.ready{background:var(--accent);border-color:var(--accent);color:#fff}
+.send.ready:hover{filter:brightness(1.08)}
+.send.stop{background:var(--ink);border-color:var(--ink);color:var(--card)}
+.send.stop:hover{opacity:.86}
+.send.stopping{color:var(--meta)}
+.split{order:1;display:inline-flex;height:28px;border-radius:14px;background:var(--accent-fill);color:#fff;flex:none}
+.split button{display:inline-flex;align-items:center;gap:6px;height:28px;color:#fff;font-weight:600;font-size:13px}
+.split button:hover{background:rgba(255,255,255,.14)}
+.sp-main{padding:0 8px 0 12px;border-radius:14px 0 0 14px}
+.sp-chev{width:26px;justify-content:center;border-radius:0 14px 14px 0;box-shadow:inset 1px 0 0 rgba(255,255,255,.35)}
+.sp-main:focus-visible,.sp-chev:focus-visible{outline-offset:-2px;outline-color:#fff}
+.bstrip{display:flex;align-items:center;gap:2px;min-height:30px;padding:6px 6px 0;font-size:12.5px;color:var(--ink2);min-width:0}
+.tbtn2{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 6px;border-radius:6px;min-width:0;color:var(--ink2);white-space:nowrap}
+button.tbtn2:hover{background:var(--hover)}
+.tbtn2.open{background:var(--press)}
+.tbtn2 .ic{color:var(--meta)}
+.tbtn2 .lab{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tbtn2 em{font-style:normal;color:var(--meta)}
+.tbtn2 b{font-weight:500}
+.tbtn2[aria-disabled=true]{cursor:default}
+.tbtn2.info{color:var(--ink2)}
+.chg .add,.add{color:var(--ok)}.chg .del,.del{color:var(--red)}
+.chg{font-variant-numeric:tabular-nums;font-weight:500}
+.dotsep{color:var(--meta);padding:0 2px}
+.t-short{display:none}
+
+@container (max-width:559px){ .model{max-width:150px} }
+@container (max-width:399px){
+  .model,.perm{display:none}
+  .combo{display:inline-flex}
+  .t-long{display:none}.t-short{display:inline}
+  .sp-main .qt{display:none}.sp-main{padding:0 6px 0 10px}
+  .card{padding:8px 8px 6px}
+}
+@container (max-width:319px){ .combo .cm,.combo .cs,.combo .pd,.combo .chev{display:none}
+  .bar.splitting{flex-wrap:wrap;row-gap:4px} .bar.splitting .spacer{flex-basis:100%;height:0} .bar.splitting .ring{margin-left:auto} .ring{padding:0 4px} .bar{gap:0} }
+
+/* session panel */
+.spanel{width:300px;flex:none;align-self:flex-start;max-height:calc(100% - 16px);margin:8px 8px 8px 0;border-radius:14px;border:1px solid var(--hair);background:var(--sheet);overflow-y:auto;display:flex;flex-direction:column} /* a real border: an inset shadow is painted under the sticky header and got covered */
+.pf[data-theme=dark] .spanel{background:color-mix(in srgb,var(--card) 55%,var(--sheet))}
+.ph{display:flex;align-items:center;justify-content:space-between;height:44px;padding:0 6px 0 14px;flex:none;position:sticky;top:0;background:inherit;z-index:1}.ph .pt{font-size:13px;font-weight:600;color:var(--ink)}
+.sec{position:relative;padding:0 0 10px} /* rhythm (R12): air between sections, labels tight to their rows */
+.sec+.sec:before{content:"";position:absolute;top:0;left:16px;right:16px;height:1px;background:var(--hair)}
+.shd{display:flex;align-items:flex-end;gap:6px;height:22px;margin-top:12px;padding:0 14px 4px 16px;font-size:12px;font-weight:500;color:var(--meta)}
+.shd .ac{margin-left:auto;font-size:12px;font-weight:500;color:var(--meta)}
+button.shd:hover,.shd .ac:hover{color:var(--ink)}
+.pr{display:flex;align-items:center;gap:8px;width:calc(100% - 12px);margin:0 6px;height:28px;padding:0 10px;border-radius:7px;color:var(--ink2);font-size:13px}
+button.pr:hover{background:var(--hover)}
+.pr .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr .t.b{font-weight:600;color:var(--ink)}
+.pr .v{flex:none;font-size:12px;color:var(--meta);font-variant-numeric:tabular-nums}
+.pr .v.need{color:var(--warn);font-weight:500}
+.pr .v.bad{color:var(--fail);font-weight:400}
+.pr>.ic{color:var(--meta)}
+.pr .runic{color:var(--live)}
+.pr .okic{color:var(--ok)}
+.pr .needic2{color:var(--warn)}
+.pr .stopsq{color:var(--crit)}
+.pr .v .ic{color:var(--meta)}.pr .v .stopsq .ic{color:var(--crit)}
+.tiles{display:flex;gap:8px;padding:2px 16px 4px;flex-wrap:nowrap;overflow:hidden}
+.tiles.all{flex-wrap:wrap}
+.tile{width:48px;height:48px;border-radius:12px;flex:none;display:grid;place-items:center;background:var(--q);box-shadow:inset 0 0 0 1px var(--hair);font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;font-weight:600;color:var(--ink2)}
+button.tile:hover{background:var(--hover)}
+.tile.more{font-family:inherit;font-size:12px;font-weight:500;color:var(--ink)}
+
+/* menu + tooltip + toast */
+.msearch{display:flex;align-items:center;gap:6px;margin:2px 2px 4px;padding:0 8px;height:30px;border-radius:7px;background:var(--chip);color:var(--meta)}
+.msearch input{flex:1;min-width:0;border:0;background:none;color:var(--ink);font:inherit;font-size:13px;outline:0}
+.msearch:focus-within{box-shadow:0 0 0 2px var(--focus)}
+.menu{position:fixed;z-index:50;background:var(--card);border-radius:10px;box-shadow:0 0 0 1px var(--hair),var(--shadow-menu);padding:4px;max-height:calc(100vh - 16px);overflow-y:auto;animation:pop .14s cubic-bezier(.16,1,.3,1);outline:0}
+@keyframes pop{from{opacity:0;transform:translateY(4px)}}
+.mi{display:flex;align-items:flex-start;gap:10px;width:100%;padding:7px 10px;border-radius:6px;min-height:28px}
+.mi:focus,.mi:hover{background:var(--hover);outline:0}
+.mi:focus-visible{box-shadow:inset 0 0 0 2px var(--focus)}
+.mi[aria-disabled=true]{opacity:.55;cursor:default}
+.mi[aria-disabled=true]:hover{background:none}
+.mi-lead{width:16px;height:20px;display:grid;place-items:center;flex:none;color:var(--meta)}
+.mi-lead .runic{color:var(--live)}.mi-lead .needic2{color:var(--warn)}
+.mi-body{flex:1;min-width:0;display:flex;flex-direction:column}
+.mi-l{font-weight:500;line-height:20px;overflow-wrap:anywhere}
+.mi-d{font-size:12px;line-height:1.35;color:var(--meta)}
+.mi-d.need{color:var(--warn);font-weight:500}
+.mi-t{flex:none;display:grid;place-items:center;height:20px;min-width:16px;color:var(--ink2);font-size:12px}
+.mi-t kbd{font:inherit;font-size:11.5px;color:var(--meta);background:var(--code);border-radius:4px;padding:0 5px}
+.mi-t .actw{font-weight:600;color:var(--accent-ink)}
+.mi.warn .mi-l{color:var(--warn)}
+.mi.mono .mi-l{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px;font-weight:400}
+.mlabel{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--meta);padding:8px 10px 3px}
+.mlabel .ic{width:14px;height:14px}
+.msep{height:1px;background:var(--hair);margin:4px 6px}
+.mnote{font-size:12px;color:var(--meta);padding:6px 10px;line-height:1.4}
+.mtext{padding:8px 10px 4px;font-size:13px;font-weight:500;color:var(--ink)}
+.mtext.hint{padding:6px 10px 4px;font-size:12px;font-weight:400;color:var(--meta)}
+.minfo{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;padding:8px 10px 6px;font-size:12px}
+.minfo span{color:var(--meta)}.minfo code{overflow-wrap:anywhere;color:var(--ink)}
+.minfo h3{grid-column:1/-1;font-size:12px;font-weight:600;margin-bottom:2px}
+.mrow{display:flex;gap:2px;padding:2px 4px 4px}
+.mrow .mi{flex:1;justify-content:center;padding:4px 6px;min-height:28px;border-radius:7px}
+.mrow .mi[aria-checked=true]{background:var(--sel)}
+.mrow .mi .mi-l{font-size:12.5px;white-space:nowrap}
+/* C5: provider tabs at the top of the model menu, as in today's app: browsing a tab doesn't change the model. */
+.mrow.mtabs{margin:4px 6px 6px;padding:2px;border-radius:9px;background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.mrow.mtabs .mi[aria-checked=true]{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.mrow.mtabs .mi .pd{width:7px;height:7px;border-radius:50%;flex:none;margin-right:6px}
+.confirm{position:fixed;z-index:55;width:300px;max-width:calc(100vw - 16px);background:var(--card);border-radius:12px;box-shadow:0 0 0 1px var(--hair),var(--shadow-menu);padding:14px 14px 12px;animation:pop .14s cubic-bezier(.16,1,.3,1)}
+.confirm h2{font-size:14px;font-weight:600;margin-bottom:4px}
+.confirm p{color:var(--ink2);line-height:1.45}
+.confirm .cr{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.cbtn{height:28px;padding:0 12px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--hair2);font-weight:500;text-align:center}
+.cbtn:hover{background:var(--hover)}
+.cbtn.pri{background:var(--accent-fill);color:#fff;box-shadow:none}
+.cbtn.pri:hover{filter:brightness(1.1)}
+.cbtn.warn{background:var(--warn-bg);color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn-bd)}
+.cbtn.warn:hover{filter:brightness(.97)}
+.tip{position:fixed;z-index:60;max-width:280px;background:var(--tipbg);color:var(--tipink);font-size:12px;line-height:1.4;padding:5px 9px;border-radius:7px;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.toast{position:absolute;left:50%;top:56px;transform:translateX(-50%);z-index:40;background:var(--tipbg);color:var(--tipink);padding:7px 14px;border-radius:9px;font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.2);animation:pop .18s cubic-bezier(.16,1,.3,1);max-width:80%}
+
+/* prototype controls (floating, collapsible) */
+.pc{position:fixed;left:72px;bottom:12px;z-index:80;width:224px;max-height:calc(100vh - 24px);display:flex;flex-direction:column;background:var(--card);border-radius:10px;box-shadow:0 0 0 1px var(--hair2),var(--shadow-menu);font-size:12px;overflow:hidden}
+.pc.collapsed{width:auto}
+.pc.collapsed .pbody{display:none}
+.pc .phead{display:flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;min-height:30px;font-weight:600;color:var(--ink2)}
+.pc .phead span{flex:1;white-space:nowrap}
+.pbody{overflow-y:auto;padding:2px 8px 10px;border-top:1px solid var(--hair)}
+.plabel{font-size:11.5px;font-weight:600;color:var(--meta);padding:10px 4px 4px;display:flex;justify-content:space-between}
+.seg{display:flex;background:var(--ground);border-radius:7px;padding:2px;gap:2px}
+.seg button{flex:1;height:24px;border-radius:5px;text-align:center;color:var(--ink2)}
+.seg button[aria-checked=true]{background:var(--card);color:var(--ink);box-shadow:0 0 0 1px var(--hair)}
+.pbtn{display:block;width:100%;min-height:24px;padding:3px 8px;border-radius:6px;color:var(--ink2)}
+.pbtn:hover{background:var(--hover)}
+.pbtn[aria-current=true]{background:var(--sel);color:var(--ink);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--accent);height:24px}
+/* workspace panel (W4): slides in from the right, pushing the chat column */
+.wsp{flex:none;width:0;position:relative;overflow:hidden;background:var(--sheet);border-top:1px solid var(--hair);transition:width .32s cubic-bezier(.22,1,.36,1)}
+.win.ws .wsp{width:var(--wsw);border-left:1px solid var(--hair)}
+.win.noanim .wsp,.win.noanim .tw,.win.noanim #wsep{transition:none}
+.wsin{position:absolute;top:0;bottom:0;left:0;width:calc(var(--wsw) - 1px);display:flex}
+.wsgrip{position:absolute;left:0;top:0;bottom:0;width:6px;z-index:3;cursor:col-resize}
+.wsgrip:hover,.wsgrip.drag,.wsgrip:focus-visible{box-shadow:inset 2px 0 0 var(--focus);outline:none}
+.wsmain{flex:1;min-width:0;display:flex;flex-direction:column}
+.wbody{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column}
+.wsfiles{width:224px;flex:none;border-left:1px solid var(--hair);display:flex;flex-direction:column;min-height:0}
+.wsfiles .fh{display:flex;align-items:center;height:36px;padding:0 6px 0 12px;font-size:12px;font-weight:500;color:var(--meta);flex:none}
+.wsfiles .fh span{flex:1}
+.ftree{flex:1;overflow:auto;padding:0 6px 8px}
+.fr{display:flex;align-items:center;gap:6px;width:100%;height:26px;border-radius:6px;padding-right:8px;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+.fr:hover{background:var(--hover)}
+.fr[aria-current=true]{background:var(--sel);color:var(--ink)}
+.fr .ic{color:var(--meta)}
+.fr span{overflow:hidden;text-overflow:ellipsis}
+/* tab bodies */
+.addr{display:flex;align-items:center;gap:2px;height:40px;padding:0 8px;flex:none;border-bottom:1px solid var(--hair)}
+.addr .url{flex:1;min-width:0;height:28px;margin-left:4px;border-radius:8px;background:var(--chip);display:flex;align-items:center;gap:6px;padding:0 10px;font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden}
+.addr .url .ic{color:var(--meta)}
+.addr .back .ic{transform:rotate(180deg)}
+.pv{flex:1;background:var(--ground);padding:28px 24px;display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+.pv h3,.pv .pvh{font-size:15px;font-weight:600}
+.pv p{font-size:12.5px;color:var(--meta);max-width:420px}
+.pv .story{display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:12px;background:var(--sheet);box-shadow:inset 0 0 0 1px var(--hair)}
+.pv .story .capsule{cursor:default}
+.pv .lab0{font-size:11.5px;color:var(--meta)}
+.term{flex:1;font:12px/19px ui-monospace,"SF Mono",Menlo,monospace;padding:10px 14px;white-space:pre;color:var(--ink2)}
+.term .ps{color:var(--ok)}.term .dim{color:var(--meta)}.term .okk{color:var(--ok)}
+.term .cur{display:inline-block;width:7px;height:14px;vertical-align:-2px;background:var(--ink2)}
+.code{font:12px/20px ui-monospace,"SF Mono",Menlo,monospace;padding:8px 0;display:grid;grid-template-columns:auto 1fr;align-content:start;white-space:pre;color:var(--ink)}
+.code .ln{padding:0 14px 0 16px;text-align:right;color:var(--meta);user-select:none}
+.code .lc{padding-right:16px}
+.code .k{color:var(--accent-ink)}.code .s{color:var(--ok)}.code .c{color:var(--meta);font-style:italic}
+.code .dl{grid-column:1/-1;display:grid;grid-template-columns:subgrid}
+.code .dl.a{background:color-mix(in srgb,var(--ok) 15%,transparent)}
+.code .dl.d{background:color-mix(in srgb,var(--red) 15%,transparent)}
+.code .dl.h{color:var(--meta);background:var(--hover)}
+.fileh{display:flex;align-items:center;gap:6px;height:32px;padding:0 14px;flex:none;font-size:12px;color:var(--meta);border-bottom:1px solid var(--hair)}
+.fileh b{font-weight:500;color:var(--ink2)}
+.fileh .add{color:var(--ok)}.fileh .del{color:var(--red)}
+.wempty{flex:1;display:grid;place-items:center;padding:24px}
+.wempty .box{width:min(300px,100%)}
+.wempty h3{font-size:13px;font-weight:600;margin:0 0 8px 8px}
+.wrow{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 8px;border-radius:8px;font-size:13px;color:var(--ink2)}
+.wrow:hover{background:var(--hover);color:var(--ink)}
+.wrow .ic{color:var(--meta)}
+.wrow span{flex:1}
+.wrow kbd,.wrow .h{font:11.5px ui-monospace,"SF Mono",Menlo,monospace;color:var(--meta)}
+/* Gates (G1–G4): today's app cards (GateCard: PermissionGate, PlanGate, AskUserQuestionGate),
+   pinned in the slot above the composer as ChatGateMount does, restyled only by the prototype tokens. */
+.gate{max-height:45vh;overflow-y:auto;margin:0 -4px 8px;padding:4px;scrollbar-width:none}
+.gc{border-radius:12px;border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent);background:var(--card);overflow:hidden}
+.gc.warn{border-color:color-mix(in srgb,var(--warn-dot) 45%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn-dot) 15%,transparent)}
+.gh2{display:flex;align-items:center;gap:10px;padding:12px 16px 8px}
+.gtile{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex:none;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent-ink)}
+.gc.warn .gtile{background:var(--warn-bg);color:var(--warn)}
+.gtile .ic{width:14px;height:14px}
+.ghx{display:flex;flex-direction:column;min-width:0;flex:1}
+.gey{font-size:12px;font-weight:500;color:var(--meta)}
+.gti{font-size:14px;line-height:1.3;font-weight:600;color:var(--ink)}
+.gbadge{flex:none;font:500 11.5px ui-monospace,"SF Mono",Menlo,monospace;color:var(--ink2);border:1px solid var(--hair2);border-radius:6px;padding:1px 6px}
+.gin{padding:0 16px 8px 50px}
+.gtool{display:flex;align-items:center;gap:8px;font:600 13px ui-monospace,"SF Mono",Menlo,monospace;color:var(--ink)}
+.gtool .ic{width:14px;height:14px;color:var(--meta)}
+.gcmd{margin-top:4px;font:12.5px/1.5 ui-monospace,"SF Mono",Menlo,monospace;color:var(--ink2);overflow-wrap:anywhere}
+.gdt{display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:12px;color:var(--meta)}
+.gdt:hover{color:var(--ink)}
+.gdt .ic{width:12px;height:12px;transition:transform .15s}
+.gdt[aria-expanded=true] .ic{transform:rotate(90deg)}
+.gpre{margin-top:8px;max-height:240px;overflow:auto;border-radius:6px;background:var(--code);padding:12px;font:12px/1.5 ui-monospace,"SF Mono",Menlo,monospace;white-space:pre;color:var(--ink)}
+.gacts{display:flex;align-items:center;gap:8px;padding:4px 16px 12px}
+.gb{height:32px;padding:0 10px;border-radius:8px;font-size:13.5px;font-weight:500;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.gb.pri{background:var(--accent-fill);color:#fff}
+.gb.pri:hover{filter:brightness(1.08)}
+.gb.out{border-color:var(--hair2);background:var(--card);color:var(--ink)}
+.gb.out:hover{background:var(--hover)}
+.gb.dan{background:color-mix(in srgb,var(--red) 11%,transparent);color:var(--red)}
+.gb.dan:hover{background:color-mix(in srgb,var(--red) 19%,transparent)}
+.gb.grow{flex:1}
+.gb .grule{font:12px ui-monospace,"SF Mono",Menlo,monospace;background:var(--code);border-radius:4px;padding:1px 5px;color:var(--ink2)}
+.gb:disabled{opacity:.5;cursor:default;filter:none}
+.gplan{max-height:300px;overflow:auto;border-top:1px solid var(--hair);padding:12px 16px;font-size:14px;line-height:22px}
+.gplan h4{font-size:14px;font-weight:600;margin:0 0 6px}
+.gplan ol{margin:0;padding-left:20px}
+.gplan li+li{margin-top:2px}
+.gctl{margin:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;border:1px solid var(--hair);background:var(--q);border-radius:8px;padding:10px 12px}
+.gctl .sp{flex:1}
+.gseg{display:inline-flex;gap:2px;border:1px solid var(--hair);background:var(--chip);border-radius:8px;padding:2px}
+.gseg button{display:inline-flex;align-items:center;gap:6px;border-radius:6px;padding:4px 10px;min-height:24px;font-size:12px;font-weight:600;color:var(--meta)}
+.gseg button:hover{color:var(--ink)}
+.gseg button .ic{width:12px;height:12px}
+.gseg button[aria-pressed=true]{background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.1);color:var(--accent-ink)}
+.gseg button[aria-pressed=true].w{color:var(--warn)}
+.gseg button[aria-pressed=true].d{color:var(--red)}
+.gchk{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--meta);cursor:pointer}
+.gchk input{width:16px;height:16px;margin:0;accent-color:var(--accent-fill)}
+.gfb{width:100%;resize:none;border-radius:8px;border:1px solid var(--hair2);background:var(--card);color:var(--ink);font:inherit;font-size:13.5px;padding:8px 10px}
+.gfb:focus{outline:2px solid var(--focus);outline-offset:0;border-color:transparent}
+.grev{display:flex;flex-direction:column;gap:8px;padding:0 16px 12px}
+.grev .row{display:flex;justify-content:flex-end;gap:8px}
+.gq{padding:0 16px 4px 50px;font-size:14px;color:var(--ink)}
+.gopts{display:flex;flex-direction:column;gap:8px;padding:4px 16px 12px}
+.gopt{display:flex;align-items:flex-start;gap:12px;width:100%;min-height:44px;border-radius:8px;border:1px solid var(--hair2);padding:10px 12px;font-size:14px;color:var(--ink)}
+.gopt:hover{background:var(--hover)}
+.gopt[aria-checked=true]{border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:var(--q)}
+.gopt .rd{width:16px;height:16px;margin-top:2px;flex:none;border-radius:50%;border:1px solid var(--hair2);display:grid;place-items:center}
+.gopt[aria-checked=true] .rd{background:var(--accent-fill);border-color:var(--accent-fill)}
+.gopt[aria-checked=true] .rd:after{content:"";width:6px;height:6px;border-radius:50%;background:#fff}
+.gopt b{display:block;font-weight:500}
+.gopt small{display:block;font-size:12px;color:var(--meta);margin-top:1px}
+.gother{width:100%;height:32px;border-radius:8px;border:1px solid var(--hair2);background:var(--card);color:var(--ink);font:inherit;font-size:13.5px;padding:0 10px}
+.div .okic{color:var(--ok)}
+/* T1g: markers. Skills, plans, schedules, monitors, worktree operations and notifications are centred pills on the
+   spine, outside the folded work, in the order they happened; a pill with content opens a card under it. */
+.mks{display:flex;flex-direction:column;gap:6px;margin:4px 0 2px}
+.mk{display:flex;justify-content:center}
+.mkp{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 11px;border-radius:13px;box-shadow:inset 0 0 0 1px var(--hair);background:var(--card);font-size:12.5px;color:var(--meta);max-width:100%;min-width:0}
+.mkp:not(:disabled):hover{background:var(--hover);color:var(--ink2)}
+.mkp:disabled{opacity:1;cursor:default}
+.mkp:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.mkp>.ic{width:14px;height:14px;flex:none}
+.mkp .mkl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mkp .mkl b{font-weight:500;color:var(--ink2)}
+.mkp .mkl b.mono{font:12px ui-monospace,"SF Mono",Menlo,monospace}
+.mkp .mkv{display:inline-flex;align-items:center;gap:4px;flex:none;font-variant-numeric:tabular-nums}
+.mkp .mkv::before{content:"·";margin-right:2px}
+.mkp .mkc{transition:transform .15s;flex:none}
+.mk.open .mkc{transform:rotate(90deg)}
+.mk.flash .mkp{animation:tcflash 2.2s ease-out}
+.mkb{display:none;width:100%;max-width:600px;margin:2px auto 4px;box-sizing:border-box;border-radius:12px;box-shadow:inset 0 0 0 1px var(--hair);background:var(--card);padding:10px 14px;font-size:13.5px}
+.mk.open+.mkb{display:block}
+.mkb .ans{font-size:13.5px}
+.mkb .ans>:first-child{margin-top:0}.mkb .ans>:last-child{margin-bottom:0}
+/* An answered question stays outside the work, as the record of what you chose. */
+.qa{align-self:stretch;max-width:600px;margin:2px auto;width:100%;box-sizing:border-box;border-radius:12px;box-shadow:inset 0 0 0 1px var(--hair);background:var(--card);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.qa .qah{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--meta)}
+.qa .qah .ic{width:14px;height:14px}
+.qa .qat{font-size:13.5px;font-weight:500;color:var(--ink)}
+.qa .qaa{display:flex;flex-wrap:wrap;gap:6px}
+.qa .qan{margin:0;font-size:12.5px;color:var(--meta)}
+/* Question card rhythm (G4, picked in Live mode): the question is the title, its context sits under it,
+   options and actions align to the text column, rows are compact. */
+.gcq .gqh{display:flex;gap:10px;align-items:flex-start;padding:14px 16px 10px}
+.gcq .gqh .gtile{margin-top:1px}
+.gcq .gqt{flex:1;min-width:0}
+.gcq .gqt h3{font-size:14px;line-height:20px;font-weight:600;color:var(--ink);margin:0}
+.gcq .gqc{display:block;margin-top:2px;font-size:12px;color:var(--meta)}
+.gcq .gopts{gap:6px;padding:0 16px 12px 50px}
+.gcq .gopt{min-height:0;gap:10px;padding:8px 12px}
+.gcq .gopt b{font-size:13.5px;display:inline}
+.gcq .gopt small{display:block}
+.gcq .gopt .rd{border-color:var(--meta)}
+.gcq .gopt[aria-checked=true] .rd{border:5px solid var(--accent-fill);background:none}
+.gcq .gopt[aria-checked=true] .rd:after{display:none}
+.gcq .grec{margin-left:6px;font-size:11px;font-weight:500;color:var(--accent-ink)}
+.gcq .gacts{padding:0 16px 14px 50px}
+/* Keyboard shortcuts sheet (⌘/), today's ShortcutsCheatSheet */
+.kscrim{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.32)}
+.ksheet{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:91;width:min(448px,calc(100vw - 32px));max-height:90vh;display:flex;flex-direction:column;background:var(--card);border-radius:12px;box-shadow:0 0 0 1px var(--hair),var(--shadow-menu)}
+.ksheet .kh{display:flex;align-items:center;gap:6px;padding:12px 8px 12px 16px;border-bottom:1px solid var(--hair);font-size:14px;font-weight:600}
+.ksheet .kh .ic{width:14px;height:14px;color:var(--accent-ink)}
+.ksheet .kh h2{font-size:14px;font-weight:600;flex:1}
+.ksheet .kb{overflow-y:auto;padding:8px}
+.ksheet h3{font-size:12px;font-weight:500;color:var(--meta);padding:8px 8px 4px}
+.krow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 8px;border-radius:6px;font-size:13.5px}
+.krow:hover{background:var(--hover)}
+.krow kbd{flex:none;font:12px ui-monospace,"SF Mono",Menlo,monospace;color:var(--ink2);background:var(--q);border:1px solid var(--hair);border-radius:4px;padding:1px 5px}
+/* Tool rows (T1, the transcript proposal's "one row for every tool"): glyph, verb, target, where, receipt,
+   action, chevron. A row with a body is one button; its body opens 24 px in, child steps get a guide line. */
+.tc{display:flex;flex-direction:column;min-width:0}
+.tcr{position:relative;display:flex;align-items:center;gap:8px;min-height:26px;margin:0 -6px;padding:0 6px;border-radius:6px;font-size:13px;color:var(--ink2);min-width:0}
+.tct{position:absolute;inset:0;border-radius:6px}
+.tct:hover{background:var(--hover)}
+.tct:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.tcr>*:not(.tct){position:relative;pointer-events:none}
+.tcr>.tca{pointer-events:auto}
+.tcr>.ic{width:14px;height:14px;color:var(--meta)}
+.tcr>.ic.ok{color:var(--ok)}.tcr>.ic.bad{color:var(--fail)}.tcr>.ic.warn{color:var(--warn)}.tcr>.ic.runic{color:var(--live)}
+.tcr .tv{flex:none;white-space:nowrap;color:var(--ink2)}
+.tcr .tv.b{font-weight:500;color:var(--ink)}
+.tcr .tg{min-width:0;flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12px;color:var(--ink)}
+.tcr .tg.sans{font-family:inherit;font-size:13px;color:var(--meta)}
+.tcr .twhere{flex:none;color:var(--meta);white-space:nowrap}
+.tcr .tsp{flex:1 1 0;min-width:4px}
+.tcr .tm{flex:none;font-size:12px;color:var(--meta);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tcr .tm.bad{color:var(--fail);font-weight:400}.tcr .tm.warn{color:var(--warn);font-weight:500}
+.tcr .tm .add{color:var(--ok)}.tcr .tm .del{color:var(--red)}
+.tcr .tca{width:24px;height:24px;margin:0 -4px;flex:none;display:grid;place-items:center;border-radius:6px;color:var(--meta)}
+.tcr .tca:hover{background:var(--press);color:var(--ink)}
+.tcr .tca .ic{width:14px;height:14px}
+.tcr .tch{width:12px;height:12px;flex:none;color:var(--meta);transition:transform .15s}
+.tc.open>.tcr .tch{transform:rotate(90deg)}
+.tcb,.tck{display:none;min-width:0}
+.tc.open>.tcb{display:block;margin:2px 0 8px 22px}
+.tc.open>.tck{display:flex;flex-direction:column;margin:1px 0 4px 7px;border-left:1px solid var(--hair);padding:1px 0 1px 15px}
+.tck>.tsay,.wrows>.tsay{margin:4px 0}
+.tsay{font-size:13px;line-height:20px;color:var(--ink);margin:0}
+.tdesc{font-size:12px;color:var(--meta);margin:0 0 6px}
+.tnote{font-size:12px;color:var(--meta)}
+.tlbl{font-size:12px;font-weight:500;color:var(--meta);margin:0 0 2px}
+.tblk{margin:2px 0 6px}.tblk p{margin:0;font-size:13px;line-height:20px;color:var(--ink2)}
+.tsurf{background:var(--code);border-radius:8px;min-width:0;overflow-x:auto;font:12px/19px ui-monospace,"SF Mono",Menlo,monospace;color:var(--ink)}
+.tsurf .l{white-space:pre;min-height:19px}
+.tkv{padding:8px 12px}.tkv+.tkv{border-top:1px solid var(--hair)}
+.tkv .k{font:500 12px/16px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:var(--meta);margin-bottom:2px}
+.tkv .k.bad{color:var(--fail)}
+.tterm{background:var(--code);color:var(--ink);border-radius:8px;padding:8px 12px;overflow-x:auto;font:12px/19px ui-monospace,"SF Mono",Menlo,monospace}
+.pf[data-theme=dark] .tterm{background:#0f0f10;color:#e4e4e7;box-shadow:inset 0 0 0 1px var(--hair)}
+.tterm .l{white-space:pre;min-height:19px}
+.tterm .g{color:var(--ok)}.tterm .r{color:var(--crit)}.tterm .a{color:var(--warn)}.tterm .c{color:var(--accent-ink)}.tterm .d{color:var(--meta)}.tterm .b{font-weight:600}
+.pf[data-theme=dark] .tterm .g{color:#7ee787}.pf[data-theme=dark] .tterm .r{color:#ff8a80}.pf[data-theme=dark] .tterm .a{color:#e3b341}.pf[data-theme=dark] .tterm .c{color:#79c0ff}.pf[data-theme=dark] .tterm .d{color:#a3a3ab}
+.tcode{padding:8px 0}
+.tcode .l{display:flex;min-width:max-content;padding-right:12px}
+.tcode .n{flex:none;width:40px;padding-right:12px;text-align:right;color:var(--meta);user-select:none;font-variant-numeric:tabular-nums}
+.tcode .s{flex:none;width:18px;text-align:center;font-weight:600;user-select:none}
+.tcode .l.add,.tcode .l.del{color:var(--ink)}.tcode .l.add .n,.tcode .l.del .n{color:var(--ink2)}
+.tcode .l.add span:not(.s),.tcode .l.del span:not(.s){color:var(--ink)}
+.tcode .add{background:color-mix(in srgb,var(--ok) 14%,transparent)}.tcode .add .s{color:var(--ok)}
+.tcode .del{background:color-mix(in srgb,var(--red) 14%,transparent)}.tcode .del .s{color:var(--red)}
+.tcode .kw{color:var(--accent-ink)}.tcode .str{color:var(--ok)}.tcode .cm{color:var(--meta);font-style:italic}
+.thits{display:grid;grid-template-columns:max-content max-content;column-gap:16px;padding:8px 12px}
+.thits span{white-space:pre}.thits .p{color:var(--meta)}
+.twres{padding:8px 12px;display:flex;flex-direction:column;gap:6px;font:13px/18px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;white-space:normal}
+.twres span{display:block;color:var(--meta);font-size:12px}
+.thits mark{background:color-mix(in srgb,var(--warn-dot) 26%,transparent);color:inherit;border-radius:2px}
+.tfetch{padding:8px 12px;display:flex;flex-direction:column;gap:4px;font:13px/20px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;white-space:normal}
+.tfetch a{color:var(--accent-ink);font-size:12px}
+.tmore{display:inline-flex;align-items:center;margin:4px 0 0 -6px;height:24px;padding:0 6px;border-radius:6px;font-size:12px;color:var(--meta)}
+.tmore:hover{background:var(--hover);color:var(--ink)}
+.tchip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;background:var(--q);box-shadow:inset 0 0 0 1px var(--hair);font-size:13px;color:var(--ink)}
+.tchip .ic{width:14px;height:14px;color:var(--ok)}
+.tthumbs{display:flex;gap:8px;flex-wrap:wrap}
+.tthumb{border-radius:8px;box-shadow:inset 0 0 0 1px var(--hair);background:var(--q);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--meta);font-size:12px}
+.tthumb:hover{background:var(--hover)}
+.tthumb .ic{width:16px;height:16px}
+.tlist{margin:0;padding-left:22px;font-size:13px;line-height:20px;color:var(--ink)}
+.tlist li+li{margin-top:2px}
+.tlist code,.tsay code,.tblk code,.tdesc code{background:var(--code);padding:1px 5px;border-radius:5px;font-size:12px}
+/* Markdown in replies (the app's markdown-text.tsx: GFM headings, emphasis, links, file links, smart-action
+   chips, lists, task lists, quotes, tables, code blocks with a header, images, rules, footnotes). Sizes stay on
+   the native scale: no heading above 15 px. */
+.ans h1{font-size:15px;line-height:22px;font-weight:600;margin:4px 0 8px}
+.ans h2{font-size:14px;line-height:22px;font-weight:600;margin:18px 0 6px}
+.ans h3{font-size:13px;line-height:20px;font-weight:600;margin:16px 0 4px}
+.ans h4{font-size:13px;line-height:20px;font-weight:500;color:var(--meta);margin:14px 0 4px}
+.ans>:first-child{margin-top:0}
+.ans del{color:var(--meta)}
+.ans .mdlink{color:var(--accent-ink);text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 40%,transparent);text-underline-offset:3px}
+.ans .mdlink:hover{text-decoration-color:currentColor}
+.ans .mdfile{display:inline-flex;align-items:baseline;gap:4px;color:var(--accent-ink);text-decoration:none}
+.ans .mdfile .ic{align-self:center}
+.ans .mdfile:hover{text-decoration:underline}
+/* One link style (T1d). Every URL opens where Settings › General › Open links in says; a file opens in the workspace editor and carries a file glyph. Paths and URLs are machine strings, so mono. */
+.ans .mdfile,.ans .mdurl{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.92em}
+.ans sup.fn a{color:var(--accent-ink);font-size:11px;text-decoration:none;margin-left:1px}
+.mdchip{display:inline-flex;align-items:center;gap:2px;height:22px;padding:0 2px 0 6px;border-radius:6px;background:var(--q);box-shadow:inset 0 0 0 1px var(--hair);vertical-align:1px}
+.mdchip code{background:none!important;padding:0!important;font-size:12px}
+.mdchip button{position:relative;width:20px;height:20px;display:grid;place-items:center;border-radius:4px;color:var(--meta)}
+.mdchip button::before{content:"";position:absolute;inset:-2px}
+.mdchip button:hover{background:var(--hover);color:var(--ink)}
+.mdchip .ic{width:12px;height:12px}
+.ans ol ul{margin:4px 0;padding-left:20px}
+.ans ul.tasks{list-style:none;padding-left:0}
+.ans ul.tasks li{display:flex;align-items:center;gap:8px}
+.tbox{width:14px;height:14px;flex:none;border-radius:4px;box-shadow:inset 0 0 0 1px var(--hair2);display:grid;place-items:center;color:#fff}
+.tbox.on{background:var(--accent-fill);box-shadow:none}
+.tbox .ic{width:10px;height:10px;stroke-width:2.5}
+.ans blockquote{margin:10px 0;padding:0 0 0 14px;border-left:3px solid var(--hair2);color:var(--meta)}
+.ans blockquote p{margin:0}
+.mdtable{margin:12px 0;border-radius:8px;box-shadow:inset 0 0 0 1px var(--hair);overflow-x:auto}
+.mdtable table{margin:0!important;width:100%}
+.mdtable th{background:var(--q);color:var(--ink)!important;padding:7px 12px!important}
+.mdtable td{padding:7px 12px!important;border-top:1px solid var(--hair)}
+.mdtable td code{font-size:12px}
+.mdcode{margin:12px 0;border-radius:8px;box-shadow:inset 0 0 0 1px var(--hair);overflow:hidden}
+.mdcode .mh{display:flex;align-items:center;justify-content:space-between;height:30px;padding:0 6px 0 12px;border-bottom:1px solid var(--hair);font-size:12px;color:var(--meta)}
+.mcopy{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 6px;border-radius:6px;font-size:12px;font-weight:500;color:var(--meta)}
+.mcopy:hover{background:var(--hover);color:var(--ink)}
+.mcopy .ic{width:12px;height:12px}
+.mdcode pre{margin:0;padding:10px 12px;background:var(--code);font:12px/19px ui-monospace,"SF Mono",Menlo,monospace;overflow-x:auto;white-space:pre;color:var(--ink)}
+.mdcode .kw{color:var(--accent-ink)}.mdcode .cm{color:var(--meta);font-style:italic}
+.mdimg{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:280px;height:170px;margin:8px 0;border-radius:8px;background:var(--q);box-shadow:inset 0 0 0 1px var(--hair);color:var(--meta);font-size:12px}
+.mdimg:hover{background:var(--hover)}
+.ans hr{border:0;height:1px;background:var(--hair);margin:16px 0 8px}
+.ans .fns p{font-size:12px;line-height:18px;color:var(--meta);margin:0}
+.pr .bad{color:var(--fail)}
+/* Agent tab (W8) */
+.agw{display:flex;flex-direction:column;min-height:0;flex:1}
+.agh{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--hair)}
+.agh>.ic{color:var(--meta)}
+.agt{flex:1;min-width:0;display:flex;flex-direction:column}
+.agt b{font-weight:600;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agt span{font-size:12px;color:var(--meta)}
+.agh .v{font-size:12px;color:var(--meta)}.agh .v.need{color:var(--warn);font-weight:500}.agh .v.bad{color:var(--fail);font-weight:400}
+.agb{padding:12px 22px 16px;overflow:auto}
+/* Activity rows: kind icon leads in every state; status in the value lane */
+.pr>.ic.kic,.ar>.ic.kic{color:var(--meta)}
+.ar.need>.ic.kic{color:var(--meta)}
+.pr .v.vst,.ar .v.vst{display:inline-flex;align-items:center;gap:4px}
+.pr .v.vst .ic,.ar .v.vst .ic{width:12px;height:12px;color:var(--live)}
+/* Workflow phases inside its Activity row */
+.wfx{margin:0 6px 6px;padding:2px 10px 4px 34px}
+.wfp{display:flex;align-items:center;gap:8px;height:24px;font-size:12px;color:var(--meta)}
+.wfp .ic{width:12px;height:12px;flex:none}
+.wfp.done .ic{color:var(--ok)}.wfp.running .ic{color:var(--live)}.wfp.failed .ic{color:var(--fail)}
+.wfo{width:8px;height:8px;margin:0 2px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--hair2);flex:none}
+.wfn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wfp.running .wfn{color:var(--ink);font-weight:500}.wfp.done .wfn{color:var(--ink2)}
+.wfag{display:flex;align-items:center;gap:8px;width:calc(100% + 12px);height:26px;margin:0 -6px;padding:0 6px 0 26px;border-radius:6px;font-size:12px;color:var(--ink2)}
+.wfag:hover{background:var(--hover);color:var(--ink)}
+.wfag .ic{width:12px;height:12px;flex:none;color:var(--meta)}
+.wfag .wft{display:inline-flex;align-items:center;gap:4px;color:var(--meta)}.wfag .wft .ic{color:var(--live)}
+.wft{flex:none;font-variant-numeric:tabular-nums}
+.wfacts{display:flex;gap:4px;margin:4px 0 0 -6px}
+.wfb{height:24px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink2)}
+.wfb:hover{background:var(--hover);color:var(--ink)}
+.wfb{color:var(--red)}.wfb:hover{color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent)}
+/* Jump target: a brief highlight on the transcript row an Activity item points to */
+.tc.flash>.tcr{animation:tcflash 2.2s ease-out}
+@keyframes tcflash{0%,35%{background:color-mix(in srgb,var(--accent) 16%,transparent)}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+@media (prefers-reduced-motion:reduce){.tc.flash>.tcr{background:color-mix(in srgb,var(--accent) 12%,transparent)}}
+
+.pf .stage{height:var(--fh)!important;display:block}
+.pf .win{width:var(--fw)!important;height:var(--fh)!important}
+.pfx{position:absolute;overflow:hidden;border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.12),0 6px 24px rgba(0,0,0,.08);background:#fff}
+.pf{position:absolute;transform:translateZ(0);overflow:hidden}
+.cap{position:absolute;font:12.5px/18px -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;color:#3a3a3c}
+.cap b{color:#1f1f1f;font-weight:600}
+.bh{position:absolute;left:48px;top:36px;font:600 22px/28px -apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;color:#1f1f1f;letter-spacing:-.01em}
+.bnote{position:absolute;left:48px;top:92px;max-width:1400px;font:13px/18px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#1f1f1f;background:#fff4d6;border-radius:8px;padding:6px 10px}
+.bs{position:absolute;left:48px;top:68px;font:13px/18px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#5c5c61}
+
+</style>
+</helmet>
+<div style="position:relative;width:1536px;height:1088px;background:#f3f3f5">
+<div style="position:absolute;width:0;height:0;overflow:hidden"><svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<defs>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"></path></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></symbol>
+<symbol id="i-chevr" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7M12 19V5"></path></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"></path></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></symbol>
+<symbol id="i-plan" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"></path></symbol>
+<symbol id="i-branch" viewBox="0 0 24 24"><path d="M6 3v12"></path><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></symbol>
+<symbol id="i-timer" viewBox="0 0 24 24"><path d="M10 2h4M12 14l3-3"></path><circle cx="12" cy="14" r="8"></circle></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8M12 17v4"></path></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"></path></symbol>
+<symbol id="i-folderopen" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path></symbol>
+<symbol id="i-move" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"></path></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M10 9H8M16 13H8M16 17H8"></path></symbol>
+<symbol id="i-fileplus" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M12 18v-6M9 15h6"></path></symbol>
+<symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"></path></symbol>
+<symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></symbol>
+<symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2M20 14h2M15 13v2M9 13v2"></path></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"></path></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></symbol>
+<symbol id="i-enter" viewBox="0 0 24 24"><path d="M20 4v7a4 4 0 0 1-4 4H4M9 10l-5 5 5 5"></path></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4M12 16h.01"></path></symbol>
+<symbol id="i-spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.22-8.56"></path></symbol>
+<symbol id="i-newchat" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.38 2.62a1 1 0 0 1 3 3L12 15l-4 1 1-4z"></path></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></symbol>
+<symbol id="i-compact" viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"></path></symbol>
+<symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M15 3v18"></path></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"></path></symbol>
+<symbol id="i-sort" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4M17 20V4M11 8 7 4 3 8M7 4v16"></path></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"></path></symbol>
+<symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3"></path></symbol>
+<symbol id="i-pr" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M13 6h3a2 2 0 0 1 2 2v7M6 9v12"></path></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3l14 9-14 9z"></path></symbol>
+<symbol id="i-sq" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5"></rect></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></symbol>
+<symbol id="i-term" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"></path></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path></symbol>
+<symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></symbol>
+<symbol id="i-tasks" viewBox="0 0 24 24"><path d="m9 11 3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></symbol>
+<symbol id="i-diff" viewBox="0 0 24 24"><path d="M12 3v14M5 10h14M5 21h14"></path></symbol>
+<symbol id="i-board" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M8 7v7M12 7v4M16 7v10"></path></symbol>
+<symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"></path><rect x="8" y="8" width="8" height="8" rx="1.5"></rect></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"></path></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></symbol>
+<symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"></path></symbol>
+<symbol id="i-chats" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"></path><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path></symbol>
+<symbol id="i-folderplus" viewBox="0 0 24 24"><path d="M12 10v6M9 13h6M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"></path></symbol>
+<symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18"></path></symbol>
+<symbol id="i-kbd" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M8 16h8"></path></symbol>
+<symbol id="i-qmark" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"></path><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"></path></symbol>
+<symbol id="i-sqcheck" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="m9 12 2 2 4-4"></path></symbol>
+<symbol id="i-tree" viewBox="0 0 24 24"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M3 5a2 2 0 0 0 2 2h3M3 3v13a2 2 0 0 0 2 2h3"></path></symbol>
+<symbol id="i-clipl" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4M12 16h4M8 11h.01M8 16h.01"></path></symbol>
+<symbol id="i-clipok" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="m9 14 2 2 4-4"></path></symbol>
+<symbol id="i-ask" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"></path></symbol>
+<symbol id="i-flow" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"></rect><path d="M7 11v4a2 2 0 0 0 2 2h4"></path><rect width="8" height="8" x="13" y="13" rx="2"></rect></symbol>
+<symbol id="i-split" viewBox="0 0 24 24"><path d="M16 3h5v5M8 3H3v5"></path><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3M15 9l6-6"></path></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"></path><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"></path></symbol>
+<symbol id="i-alarm" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2M5 3 2 6M22 6l-3-3M6.38 18.7 4 21M17.64 18.67 20 21"></path></symbol>
+<symbol id="i-calc" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5M16 2v4M8 2v4M3 10h5"></path><path d="M17.5 17.5 16 16.3V14"></path><circle cx="16" cy="16" r="6"></circle></symbol>
+<symbol id="i-calx" viewBox="0 0 24 24"><path d="M8 2v4M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18M10 14l4 4M14 14l-4 4"></path></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><path d="M8 2v4M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"></path></symbol>
+<symbol id="i-pulse" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"></path></symbol>
+<symbol id="i-imgplus" viewBox="0 0 24 24"><path d="M16 5h6M19 2v6M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5"></path><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path><circle cx="9" cy="9" r="2"></circle></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"></path></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></symbol>
+<symbol id="i-fsearch" viewBox="0 0 24 24"><path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"></path><circle cx="17" cy="17" r="3"></circle><path d="m21 21-1.9-1.9"></path></symbol>
+<symbol id="i-xc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="m15 9-6 6M9 9l6 6"></path></symbol>
+<symbol id="i-stopc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><rect x="9" y="9" width="6" height="6" rx="1"></rect></symbol>
+<symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M4.929 4.929 19.07 19.071"></path></symbol>
+<symbol id="i-shieldw" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="M12 8v4M12 16h.01"></path></symbol>
+<symbol id="i-qc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"></path></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></symbol>
+<symbol id="i-quote" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"></path><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"></path></symbol><symbol id="i-copy2" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></symbol>
+<symbol id="i-fork" viewBox="0 0 24 24"><circle cx="12" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="6" r="3"></circle><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9M12 12v3"></path></symbol>
+<symbol id="i-compare" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M13 6h3a2 2 0 0 1 2 2v7M11 18H8a2 2 0 0 1-2-2V9"></path></symbol>
+<symbol id="i-msgplus" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path><path d="M12 8v6M9 11h6"></path></symbol>
+<symbol id="i-exit" viewBox="0 0 24 24"><path d="m16 17 5-5-5-5M21 12H9M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></symbol>
+<symbol id="i-wt" viewBox="0 0 24 24"><path d="M18 19a5 5 0 0 1-5-5v8"></path><path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5"></path><circle cx="13" cy="12" r="2"></circle><circle cx="20" cy="19" r="2"></circle></symbol>
+<symbol id="i-listchk" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"></path></symbol>
+<symbol id="i-forkr" viewBox="0 0 24 24"><g transform="rotate(90 12 12)"><path d="M16 3h5v5M8 3H3v5"></path><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3M15 9l6-6"></path></g></symbol>
+<symbol id="i-botf" viewBox="0 0 24 24"><mask id="m-botf" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24"><rect width="24" height="24" fill="#fff"></rect><path d="M15 13v2M9 13v2" stroke="#000" stroke-width="2.4" stroke-linecap="round"></path></mask><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2" fill="currentColor" mask="url(#m-botf)"></rect><path d="M2 14h2M20 14h2"></path></symbol>
+<symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"></circle><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"></path><circle cx="18" cy="5" r="3"></circle></symbol>
+<symbol id="i-binoc" viewBox="0 0 24 24"><path d="M10 10h4M19 7V4a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v3"></path><path d="M20 21a2 2 0 0 0 2-2v-3.851c0-1.39-2-2.962-2-4.829V8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2zM22 16H2"></path><path d="M4 21a2 2 0 0 1-2-2v-3.851c0-1.39 2-2.962 2-4.829V8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v11a2 2 0 0 1-2 2zM9 7V4a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v3"></path></symbol>
+<symbol id="i-sqterm" viewBox="0 0 24 24"><path d="m7 11 2-2-2-2M11 13h4"></path><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect></symbol>
+<symbol id="i-clock3" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6h4.5"></path></symbol>
+</defs>
+</svg></div>
+<div class="bh">Window redesign: keyboard shortcuts sheet</div>
+<div class="bs">Rendered from the final prototype (prototype/index.html, 24 Nov 2026). Decision numbers refer to the spec board on the left.</div>
+<div class="cap" style="left:48px;top:112px;width:1440px"><b>⌘/ sheet (H1).</b> The app’s registry grouped Sessions / Chat / Workspace / App, plus the redesign’s ⌘., ⌘;, ⌥↵ and ⇧⇥.</div>
+<div class="pfx" style="left:48px;top:140px;width:1440px;height:900px"><div class="pf" data-theme="light" style="--fw:1440px;--fh:900px;left:0px;top:0px;width:1440px;height:900px"><div class="stage"><div class="win sideopen" id="win" style="--ww: 1440px; --wsw: 562px; --twr: 140px;"><div class="titlebar" id="titlebar"><div class="tl"><div class="lights" aria-hidden="true"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><button type="button" class="capsule" id="capsule" data-tip="Usage. Click to show the next provider" aria-label="Usage: Claude Week 42%, resets in 3d 2h. Click for the next provider"><span>Claude</span><i class="sepd"></i><span class="m">Week</span><span class="cbar"><i style="width:42%"></i></span><b>42%</b><span class="r">3d 2h</span></button></div><i class="tsep" aria-hidden="true"></i><div class="tm"><div class="tabs" id="tabs" role="tablist" aria-label="Open sessions"><div class="tab" role="tab" aria-selected="true" data-tab="s1" tabindex="0" title="Fix stuck Codex limits in the usage capsule"><i class="tdot run"></i><span class="tt">Fix stuck Codex limits in the usage capsule</span><button type="button" class="x" data-close="s1" aria-label="Close Fix stuck Codex limits in the usage capsule" tabindex="-1"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button></div><div class="tab" role="tab" aria-selected="false" data-tab="s2" tabindex="-1" title="Reuse an existing worktree branch in automation steps"><i class="tdot run"></i><span class="tt">Reuse an existing worktree branch in automation steps</span><button type="button" class="x" data-close="s2" aria-label="Close Reuse an existing worktree branch in automation steps" tabindex="-1"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button></div><button type="button" class="ib32" id="tabnew" aria-label="New session tab" data-tip="New session" style="width:28px;height:28px"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg></button></div></div><i class="tsep" id="wsep" aria-hidden="true"></i><div class="tw" id="tw" inert=""><div class="tabs wtabs ofl" id="wtabs" role="tablist" aria-label="Workspace tabs"><div class="tab" role="tab" aria-selected="false" data-wtab="w1" tabindex="-1" title="localhost:5173"><svg class="ic tg sm" aria-hidden="true" focusable="false"><use href="#i-eye"></use></svg><span class="tt">localhost:5173</span><button type="button" class="x" data-wclose="w1" aria-label="Close localhost:5173" tabindex="-1"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button></div><div class="tab" role="tab" aria-selected="false" data-wtab="w2" tabindex="-1" title="zsh"><svg class="ic tg sm" aria-hidden="true" focusable="false"><use href="#i-term"></use></svg><span class="tt">zsh</span><button type="button" class="x" data-wclose="w2" aria-label="Close zsh" tabindex="-1"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button></div><div class="tab" role="tab" aria-selected="true" data-wtab="w3" tabindex="0" title="UsageCapsule.tsx"><svg class="ic tg sm" aria-hidden="true" focusable="false"><use href="#i-code"></use></svg><span class="tt">UsageCapsule.tsx</span><button type="button" class="x" data-wclose="w3" aria-label="Close UsageCapsule.tsx" tabindex="-1"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button></div><div class="tab" role="tab" aria-selected="false" data-wtab="w4" tabindex="-1" title="quota.rs"><svg class="ic tg sm" aria-hidden="true" focusable="false"><use href="#i-diff"></use></svg><span class="tt">quota.rs</span><button type="button" class="x" data-wclose="w4" aria-label="Close quota.rs" tabindex="-1"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button></div></div><button type="button" class="ib32 wadd" data-id="wadd" aria-haspopup="menu" aria-expanded="false" aria-label="Open in workspace" data-tip="Open a file, terminal, URL or preview"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button><button type="button" class="ib32" id="wfiles" aria-pressed="false" aria-label="Files" data-tip="Show files"><svg class="ic" aria-hidden="true"><use href="#i-folder"></use></svg></button></div><i class="tsep" id="wsep2" aria-hidden="true"></i><div class="tact"><button type="button" class="ib32" id="tsearch" aria-label="Search" data-tip="Search&nbsp;&nbsp;⌘K"><svg class="ic" aria-hidden="true"><use href="#i-search"></use></svg></button><div class="segsw" role="group" aria-label="View"><button type="button" id="vchat" aria-pressed="true" aria-label="Chat" data-tip="Chat"><svg class="ic" aria-hidden="true"><use href="#i-msg"></use></svg></button><button type="button" id="vcode" aria-pressed="false" aria-label="Workspace" data-tip="Workspace&nbsp;&nbsp;⌘⇧W"><svg class="ic" aria-hidden="true"><use href="#i-code"></use></svg></button></div></div></div><div class="shell"><nav class="rail" id="rail" aria-label="Main navigation"><button type="button" class="rb" id="railchats" aria-pressed="true" aria-label="Chats" data-tip="Chats"><svg class="ic" aria-hidden="true"><use href="#i-msg"></use></svg></button><button type="button" class="rb" aria-pressed="false" aria-label="Board" data-tip="Board" data-nav="Board"><svg class="ic" aria-hidden="true"><use href="#i-board"></use></svg></button><button type="button" class="rb" aria-pressed="false" aria-label="Automations" data-tip="Automations" data-nav="Automations"><svg class="ic" aria-hidden="true"><use href="#i-zap"></use></svg></button><button type="button" class="rb" aria-pressed="false" aria-label="Preview and inspector" data-tip="Preview and inspector" data-nav="Preview"><svg class="ic" aria-hidden="true"><use href="#i-scan"></use></svg></button><span class="grow"></span><button type="button" class="rb" aria-label="Daemon: connected" data-tip="Daemon: connected" data-nav="Daemon"><svg class="ic" aria-hidden="true"><use href="#i-monitor"></use></svg><i class="sdot"></i></button><button type="button" class="rb" id="themebtn" aria-label="Switch to dark theme" data-tip="Switch to dark theme"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg></button><button type="button" class="rb" aria-label="Settings" data-tip="Settings" data-nav="Settings"><svg class="ic" aria-hidden="true"><use href="#i-gear"></use></svg></button></nav><aside class="side" id="side" aria-label="Sessions"><div class="shd0"><h2>Chats</h2><button type="button" class="ib32" id="sbsearch" aria-pressed="false" aria-label="Search sessions" data-tip="Search"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-search"></use></svg></button><button type="button" class="ib32" id="sbcollapse" aria-label="Collapse sidebar" data-tip="Collapse sidebar"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-sidebar"></use></svg></button></div><button type="button" class="newrow" data-id="newsess" aria-label="New session"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-newchat"></use></svg><span>New session</span><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg></button><div class="scope"><button type="button" class="scopeb" data-id="scope" aria-haspopup="menu" aria-expanded="false" aria-label="Project scope: All projects"><span class="avs" aria-hidden="true"><span class="av" style="background:#6e56cf">M</span><span class="av" style="background:#c2255c">C</span><span class="av" style="background:#217a52">D</span></span><span class="tx"><span>All projects</span><span>3 projects</span></span></button><button type="button" class="ib32" data-id="addproj" aria-label="Add project" data-tip="Add project"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-folderplus"></use></svg></button></div><div class="slist"><div class="gh"><span>Today</span><button type="button" class="iconbtn" data-id="gfilter" aria-haspopup="menu" aria-expanded="false" aria-label="Filter sessions" data-tip="Filter"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-filter"></use></svg></button><button type="button" class="iconbtn" data-id="gsort" aria-haspopup="menu" aria-expanded="false" aria-label="Sort sessions" data-tip="Sort"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-sort"></use></svg></button><button type="button" class="iconbtn" data-id="gmore" aria-haspopup="menu" aria-expanded="false" aria-label="More session actions" data-tip="More"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-dots"></use></svg></button></div><button type="button" class="sr0" data-nav="s1" aria-current="true" aria-label="Fix stuck Codex limits in the usage capsule, mainframe-ui, sub-agents running"><span class="st"><span class="lav" aria-hidden="true">M</span></span><span class="t">Fix stuck Codex limits in the usage capsule</span><span class="v vst" title="Sub-agents running"><svg class="ic spin runic " aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg><span class="sr">sub-agents running</span></span></button><button type="button" class="sr0" data-nav="s2" aria-label="Reuse an existing worktree branch in automation steps, mainframe-ui, running"><span class="st"><span class="lav" aria-hidden="true">M</span></span><span class="t">Reuse an existing worktree branch in automation steps</span><span class="v vst" title="Running"><svg class="ic spin runic " aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg><span class="sr">running</span></span></button><button type="button" class="sr0" data-nav="s3" aria-label="Add a scope switcher to the review header, mainframe-ui, needs you"><span class="st"><span class="lav" aria-hidden="true">M</span></span><span class="t">Add a scope switcher to the review header</span><span class="v need">needs you</span></button><button type="button" class="sr0" data-nav="s4" aria-label="Session panel sections for side chat, mainframe-ui, needs you"><span class="st"><span class="lav" aria-hidden="true">M</span></span><span class="t">Session panel sections for side chat</span><span class="v need">needs you</span></button><button type="button" class="sr0" data-nav="s5" aria-label="Prepare release v2.15.0, mainframe-ui, 33m"><span class="st"><span class="lav" aria-hidden="true">M</span></span><span class="t">Prepare release v2.15.0</span><span class="v">33m</span></button><button type="button" class="sr0" data-nav="s6" aria-label="Label Claude models by displayName, mainframe-ui, 33m"><span class="st"><span class="lav" aria-hidden="true">M</span></span><span class="t">Label Claude models by displayName</span><span class="v">33m</span></button><button type="button" class="sr0" data-nav="s7" aria-label="e-Factura SPV retry, contabil-ai, running"><span class="st"><span class="lav" aria-hidden="true">C</span></span><span class="t">e-Factura SPV retry</span><span class="v vst" title="Running"><svg class="ic spin runic " aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg><span class="sr">running</span></span></button><div class="gh"><span>Yesterday</span></div><button type="button" class="sr0" data-nav="s8" aria-label="Draft dividend checks, contabil-ai, 1d"><span class="st"><span class="lav" aria-hidden="true">C</span></span><span class="t">Draft dividend checks</span><span class="v">1d</span></button><button type="button" class="sr0" data-nav="s9" aria-label="Trace how ask_agent picks its worktree, mainframe-ui, 1d"><span class="st"><span class="lav" aria-hidden="true">M</span></span><span class="t">Trace how ask_agent picks its worktree</span><span class="v">1d</span></button><button type="button" class="sr0" data-nav="s10" aria-label="Resizable transcript width, mainframe-ui, 1d"><span class="st"><span class="lav" aria-hidden="true">M</span></span><span class="t">Resizable transcript width</span><span class="v">1d</span></button><div class="gh"><span>No project</span></div><button type="button" class="sr0" data-nav="s11" aria-label="Untitled session, 2d"><span class="st"><span class="lav" aria-hidden="true">–</span></span><span class="t">Untitled session</span><span class="v">2d</span></button></div></aside><div class="sheet" style="--pbot: 223px;"><div class="workcol"><header class="head" id="head"><h1>Fix stuck Codex limits in the usage capsule</h1><span class="grow"></span><button type="button" class="ib32" id="sidechat" aria-label="Open side chat" data-tip="Side chat"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-chats"></use></svg></button><button type="button" class="ib32" id="ptoggle" aria-pressed="true" aria-label="Session panel" data-tip="Session panel"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-panel"></use></svg></button></header><div class="body"><div class="colwrap"><div class="col" id="col" style="--cw: 740px;"><div class="thread" id="thread" tabindex="0" role="log" aria-label="Session transcript"><div class="inner" style="translate: 0px -922px;"><div class="tmark">Today, 11:18 PM</div><div class="msg"><div class="mwrap" style="width:100%"><div class="msg u"><div class="bubble">The usage capsule stays at 100% after the Codex window resets. Can you find out why?</div></div><div class="mfoot u"><button type="button" class="mab" data-mact="copy" aria-label="Copy message" data-tip="Copy"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-copy2"></use></svg></button><button type="button" class="mab" data-mact="more" data-id="mm-k0" aria-label="More actions" aria-haspopup="menu" data-tip="More"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-dots"></use></svg></button><span class="mtime" title="Mon 24 Nov 2026, 11:18 PM">11:18 PM</span></div></div></div><div class="turn"><div class="wk"><button type="button" class="wkt" data-turn="k1" aria-expanded="false" aria-label="Finished: Worked for 18s, read 2 files, searched 1 pattern"></button><span class="ok"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-check"></use></svg></span><b>Worked for 18s</b><span class="mt">read 2 files, searched 1 pattern</span><svg class="ic sm chv" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="wrows"><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1615" aria-label="Thought for 4s"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-spark"></use></svg><span class="sr">Done:</span><span class="tv">Thought for 4s</span><span class="tsp"></span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1615"><p class="tsay" style="color:var(--meta)">The capsule reads a cached snapshot; if nothing refreshes it after the reset, it stays at 100%.</p></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1616" aria-label="Read quota/use-quota.ts"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="sr">Done:</span><span class="tv">Read</span><span class="tg">quota/use-quota.ts</span><span class="tsp"></span><span class="tm">8 lines</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1616"><div class="tsurf tcode"><div class="l"><span class="n">8</span><span><span class="kw">export function</span> useQuota(adapterId: string) {</span></div><div class="l"><span class="n">9</span><span>​  <span class="kw">return</span> useQuery({</span></div><div class="l"><span class="n">10</span><span>    queryKey: [<span class="str">'quota'</span>, adapterId],</span></div><div class="l"><span class="n">11</span><span>    queryFn: () =&gt; api.quota.snapshot(adapterId),</span></div><div class="l"><span class="n">12</span><span>    refetchInterval: (q) =&gt; (allExhausted(q.state.data) ? <span class="kw">false</span> : 60_000),</span></div><div class="l"><span class="n">13</span><span>  });</span></div><div class="l"><span class="n">14</span><span>}</span></div></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1617" aria-label="Searched &quot;resets_at&quot; in packages/core-rs"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span class="sr">Done:</span><span class="tv">Searched</span><span class="tg">"resets_at"</span><span class="twhere">in packages/core-rs</span><span class="tsp"></span><span class="tm">3 matches</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1617"><div class="tsurf thits"><span class="p">mainframe-quota/src/codex.rs:21</span><span>    pub <mark>resets_at</mark>: Option&lt;DateTime&lt;Utc&gt;&gt;,</span><span class="p">mainframe-quota/src/codex.rs:38</span><span>​            <mark>resets_at</mark>: w.<mark>resets_at</mark>,</span><span class="p">mainframe-server/src/routes/quota.rs:61</span><span>        "<mark>resets_at</mark>": w.<mark>resets_at</mark>,</span></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1618" aria-label="Read src/codex.rs"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="sr">Done:</span><span class="tv">Read</span><span class="tg">src/codex.rs</span><span class="tsp"></span><span class="tm">10 lines</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1618"><div class="tsurf tcode"><div class="l"><span class="n">32</span><span><span class="kw">pub</span>​ <span class="kw">fn</span> snapshot(&amp;self) -&gt; Vec&lt;QuotaWindow&gt; {</span></div><div class="l"><span class="n">33</span><span>    self.windows</span></div><div class="l"><span class="n">34</span><span>        .iter()</span></div><div class="l"><span class="n">35</span><span>        .map(|w| QuotaWindow {</span></div><div class="l"><span class="n">36</span><span>            window: w.window,</span></div><div class="l"><span class="n">37</span><span>            used_percent: w.used_percent,</span></div><div class="l"><span class="n">38</span><span>        })</span></div><div class="l"><span class="n">39</span><span>        .collect()</span></div><div class="l"><span class="n">40</span><span>}</span></div></div></div></div></div><div class="ans"><p>Found it. Two things together freeze the capsule:</p><ul><li><code>useQuota</code> stops polling once every window reads <strong>100%</strong> (<code>refetchInterval</code> returns <code>false</code>)</li><li><code>snapshot()</code> in <code>codex.rs</code> returns the last <code>rate_limits</code> event as-is, and Codex only sends one while a turn runs</li><li>so after the reset nothing refreshes the cached <code>used_percent</code></li></ul><div class="mdtable" tabindex="0" role="region" aria-label="Table"><table><thead><tr><th>Window</th><th class="n">Capsule shows</th><th class="n">After reset</th></tr></thead><tbody><tr><td>5-hour</td><td class="n">100%</td><td class="n">0%</td></tr><tr><td>Weekly</td><td class="n">100%</td><td class="n">12%</td></tr></tbody></table></div><p>The daemon should treat a window as reset once <code>resets_at</code> has passed:</p><div class="mdcode"><div class="mh"><span>rust</span><button type="button" class="mcopy" data-mact="copycode" aria-label="Copy code"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-copy2"></use></svg>Copy</button></div><pre>match w.resets_at {
+    Some(at) if at &lt;= now =&gt; QuotaWindow::reset(w.window),
+    _ =&gt; w.clone().into(),
+}</pre></div><p>The UI can then keep polling on a slow interval instead of stopping.</p></div><div class="mfoot"><span class="mtime" title="Mon 24 Nov 2026, 11:19 PM">11:19 PM</span><button type="button" class="mab" data-mact="copy" aria-label="Copy message" data-tip="Copy"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-copy2"></use></svg></button><button type="button" class="mab" data-mact="fork" aria-label="Fork from here" data-tip="Fork from here"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-forkr"></use></svg></button><button type="button" class="mab" data-mact="more" data-id="mm-k1" aria-label="More actions" aria-haspopup="menu" data-tip="More"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-dots"></use></svg></button></div></div><div class="msg"><div class="mwrap" style="width:100%"><div class="msg u"><div class="bubble">Makes sense. Fix it in the daemon and add a test.</div></div><div class="mfoot u"><button type="button" class="mab" data-mact="copy" aria-label="Copy message" data-tip="Copy"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-copy2"></use></svg></button><button type="button" class="mab" data-mact="more" data-id="mm-k2" aria-label="More actions" aria-haspopup="menu" data-tip="More"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-dots"></use></svg></button><span class="mtime" title="Mon 24 Nov 2026, 11:20 PM">11:20 PM</span></div></div></div><div class="turn"><div class="wk"><button type="button" class="wkt" data-turn="k3" aria-expanded="false" aria-label="Finished: Worked for 2m 14s, edited 3 files, ran 3 commands, 1 failed, retried"></button><span class="ok"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-check"></use></svg></span><b>Worked for 2m 14s</b><span class="mt">edited 3 files, ran 3 commands</span><button type="button" class="fl retried" data-failjump="k3" aria-label="1 failed, retried: show the step">1 failed, retried</button><svg class="ic sm chv" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="wrows"><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1619" aria-label="Thought for 6s"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-spark"></use></svg><span class="sr">Done:</span><span class="tv">Thought for 6s</span><span class="tsp"></span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1619"><p class="tsay" style="color:var(--meta)">Fix the daemon first, then let the hook keep polling slowly.</p></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1620" aria-label="Edited src/codex.rs"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-diff"></use></svg><span class="sr">Done:</span><span class="tv">Edited</span><span class="tg">src/codex.rs</span><span class="tsp"></span><span class="tm"><span class="add">+8</span><span class="del">−4</span></span><button type="button" class="tca" aria-label="Open src/codex.rs in the diff editor" data-tip="Open src/codex.rs in the diff editor"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-compare"></use></svg></button><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1620"><div class="tsurf tcode"><div class="l del"><span class="n">35</span><span class="s">-</span><span>        .map(|w| QuotaWindow {</span></div><div class="l add"><span class="n">35</span><span class="s">+</span><span>        .map(|w| <span class="kw">match</span> w.resets_at {</span></div><div class="l add"><span class="n">36</span><span class="s">+</span><span>​            <span class="kw">Some</span>(at) <span class="kw">if</span> at &lt;= now =&gt; QuotaWindow::reset(w.window),</span></div><div class="l add"><span class="n">37</span><span class="s">+</span><span>            _ =&gt; w.clone().into(),</span></div></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1621" aria-label="Wrote src/codex_tests.rs"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-fileplus"></use></svg><span class="sr">Done:</span><span class="tv">Wrote</span><span class="tg">src/codex_tests.rs</span><span class="tsp"></span><span class="tm">new · 24 lines</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1621"><div class="tsurf tcode"><div class="l"><span class="n">1</span><span><span class="kw">use</span> super::*;</span></div><div class="l"><span class="n">2</span><span></span></div><div class="l"><span class="n">3</span><span>#[test]</span></div><div class="l"><span class="n">4</span><span><span class="kw">fn</span> a_window_past_its_reset_reads_zero() {</span></div><div class="l"><span class="n">5</span><span>​    <span class="cm">// …</span></span></div><div class="l"><span class="n">6</span><span>}</span></div></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1622" aria-label="Ran cargo test -p mainframe-quota codex"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-term"></use></svg><span class="sr">Done:</span><span class="tv">Ran</span><span class="tg">cargo test -p mainframe-quota codex</span><span class="tsp"></span><span class="tm">exit 0 · 6.8s</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1622"><div class="tterm" tabindex="0" role="region" aria-label="Command output"><div class="l">running 4 tests</div><div class="l">test codex::tests::a_window_past_its_reset_reads_zero ... <span class="g">ok</span></div><div class="l">test result: <span class="g">ok</span>. 4 passed; 0 failed</div></div></div></div><div class="tc" data-fail="1" data-retried="1"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1623" aria-label="Ran pnpm --filter @qlan-ro/mainframe-ui exec vitest run use-quota"></button><svg class="ic bad" aria-hidden="true" focusable="false"><use href="#i-xc"></use></svg><span class="sr">Failed:</span><span class="tv">Ran</span><span class="tg">pnpm --filter @qlan-ro/mainframe-ui exec vitest run use-quota</span><span class="tsp"></span><span class="tm bad">exit 1 · 3.1s</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1623"><div class="tterm" tabindex="0" role="region" aria-label="Command output"><div class="l"><span class="r b"> FAIL </span> use-quota.test.ts &gt; stops polling when exhausted</div><div class="l"><span class="r">AssertionError: expected "spy" to be called 1 times, but got 2 times</span></div><div class="l"> Tests  <span class="r">1 failed</span> | 3 passed (4)</div></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1624" aria-label="Edited quota/use-quota.ts"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-diff"></use></svg><span class="sr">Done:</span><span class="tv">Edited</span><span class="tg">quota/use-quota.ts</span><span class="tsp"></span><span class="tm"><span class="add">+2</span><span class="del">−1</span></span><button type="button" class="tca" aria-label="Open quota/use-quota.ts in the diff editor" data-tip="Open quota/use-quota.ts in the diff editor"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-compare"></use></svg></button><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1624"><div class="tsurf tcode"><div class="l del"><span class="n">13</span><span class="s">-</span><span>    refetchInterval: (q) =&gt; (allExhausted(q.state.data) ? false : 60_000),</span></div><div class="l add"><span class="n">13</span><span class="s">+</span><span>    refetchInterval: (q) =&gt; (allExhausted(q.state.data) ? 300_000 : 60_000),</span></div></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1625" aria-label="Ran pnpm --filter @qlan-ro/mainframe-ui exec vitest run use-quota"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-term"></use></svg><span class="sr">Done:</span><span class="tv">Ran</span><span class="tg">pnpm --filter @qlan-ro/mainframe-ui exec vitest run use-quota</span><span class="tsp"></span><span class="tm">exit 0 · 2.9s</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1625"><div class="tterm" tabindex="0" role="region" aria-label="Command output"><div class="l"> Tests  <span class="g">4 passed</span> (4)</div></div></div></div></div><div class="ans"><p>Fixed in both places:</p><ol><li><strong>Daemon:</strong>​ <code>snapshot()</code> reports a window as reset once <code>resets_at</code> has passed, covered by two new tests in <code>codex_tests.rs</code>.</li><li><strong>UI:</strong>​ <code>useQuota</code> keeps polling every 5 minutes while exhausted, so the capsule picks up the reset.</li></ol><p>The crate suite passes (4/4). The hook test now asserts the slower interval instead of no polling.</p></div><div class="mfoot"><span class="mtime" title="Mon 24 Nov 2026, 11:22 PM">11:22 PM</span><button type="button" class="mab" data-mact="copy" aria-label="Copy message" data-tip="Copy"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-copy2"></use></svg></button><button type="button" class="mab" data-mact="fork" aria-label="Fork from here" data-tip="Fork from here"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-forkr"></use></svg></button><button type="button" class="mab" data-mact="more" data-id="mm-k3" aria-label="More actions" aria-haspopup="menu" data-tip="More"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-dots"></use></svg></button></div></div><div class="msg"><div class="mwrap" style="width:100%"><div class="msg u"><div class="bubble">Check the Codex docs on how rate limits reset, and pull up issue #847 so the PR can close it.</div></div><div class="mfoot u"><button type="button" class="mab" data-mact="copy" aria-label="Copy message" data-tip="Copy"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-copy2"></use></svg></button><button type="button" class="mab" data-mact="more" data-id="mm-k4" aria-label="More actions" aria-haspopup="menu" data-tip="More"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-dots"></use></svg></button><span class="mtime" title="Mon 24 Nov 2026, 11:23 PM">11:23 PM</span></div></div></div><div class="div"><span><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-compact"></use></svg>Context compacted</span></div><div class="turn"><div class="wk"><button type="button" class="wkt" data-turn="k6" aria-expanded="false" aria-label="Finished: Worked for 41s, fetched 1 page, called GitHub, read 1 file, 2 more"></button><span class="ok"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-check"></use></svg></span><b>Worked for 41s</b><span class="mt">fetched 1 page, called GitHub, read 1 file, 2 more</span><svg class="ic sm chv" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="wrows"><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1626" aria-label="Fetched developers.openai.com/codex/rate-limits"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-globe"></use></svg><span class="sr">Done:</span><span class="tv">Fetched</span><span class="tg">developers.openai.com/codex/rate-limits</span><span class="tsp"></span><span class="tm">1.2s</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1626"><div class="tsurf tfetch"><a href="#" data-href="https://developers.openai.com/codex/rate-limits">https://developers.openai.com/codex/rate-limits</a><span>Usage is reported in <code>rate_limits</code> events attached to each turn. Windows reset automatically; no event is sent at reset time.</span></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1627" aria-label="Called get_issue on GitHub"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-plug"></use></svg><span class="sr">Done:</span><span class="tv">Called</span><span class="tg">get_issue</span><span class="twhere">on GitHub</span><span class="tsp"></span><span class="tm">0.8s</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1627"><div class="tsurf"><div class="tkv"><div class="k ">Arguments</div><div class="l">{ "owner": "qlan-ro", "repo": "mainframe", "issue_number": 847 }</div></div><div class="tkv"><div class="k ">Result</div><div class="l">{ "number": 847, "state": "open", "labels": ["bug", "area:quota"] }</div></div></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1628" aria-label="Read mainframe-quota/src/lib.rs"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="sr">Done:</span><span class="tv">Read</span><span class="tg">mainframe-quota/src/lib.rs</span><span class="tsp"></span><span class="tm">4 lines</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1628"><div class="tsurf tcode"><div class="l"><span class="n">1</span><span><span class="kw">pub mod</span> codex;</span></div><div class="l"><span class="n">2</span><span><span class="kw">pub mod</span> claude;</span></div><div class="l"><span class="n">3</span><span><span class="kw">pub mod</span> window;</span></div><div class="l"><span class="n">4</span><span><span class="kw">pub use</span> window::QuotaWindow;</span></div></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1629" aria-label="Found **/quota*.rs in packages/core-rs"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span class="sr">Done:</span><span class="tv">Found</span><span class="tg">**/quota*.rs</span><span class="twhere">in packages/core-rs</span><span class="tsp"></span><span class="tm">4 files</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1629"><div class="tsurf"><div class="tkv"><div class="k ">Result</div><div class="l">crates/mainframe-quota/src/quota.rs</div><div class="l">crates/mainframe-quota/src/quota_window.rs</div><div class="l">crates/mainframe-server/src/routes/quota.rs</div><div class="l">crates/mainframe-quota/tests/quota_tests.rs</div></div></div></div></div><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1630" aria-label="Called LSP"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-wrench"></use></svg><span class="sr">Done:</span><span class="tv">Called</span><span class="tg">LSP</span><span class="tsp"></span><span class="tm">0.3s</span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1630"><div class="tsurf"><div class="tkv"><div class="k ">Arguments</div><div class="l">{ "operation": "findReferences", "filePath": "src/codex.rs", "line": 32 }</div></div><div class="tkv"><div class="k ">Result</div><div class="l">3 references to snapshot</div></div></div></div></div></div><div class="ans"><p>The docs confirm it: <strong>no event is sent at reset time</strong>, so the daemon has to infer the reset from <code>resets_in_seconds</code>, which is what the fix does. Issue #847 is open and labelled <code>area:quota</code>; I'll reference it as <code>Closes #847</code>.</p></div><div class="mfoot"><span class="mtime" title="Mon 24 Nov 2026, 11:24 PM">11:24 PM</span><button type="button" class="mab" data-mact="copy" aria-label="Copy message" data-tip="Copy"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-copy2"></use></svg></button><button type="button" class="mab" data-mact="fork" aria-label="Fork from here" data-tip="Fork from here"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-forkr"></use></svg></button><button type="button" class="mab" data-mact="more" data-id="mm-k6" aria-label="More actions" aria-haspopup="menu" data-tip="More"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-dots"></use></svg></button></div></div><div class="div"><span><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-repeat"></use></svg>Switched to Mock CLI B · earlier context carried over</span></div><div class="msg"><div class="mwrap" style="width:100%"><div class="msg u"><div class="bubble">Get a second opinion: have one agent review the diff and another check the mobile capsule.</div></div><div class="mfoot u"><button type="button" class="mab" data-mact="copy" aria-label="Copy message" data-tip="Copy"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-copy2"></use></svg></button><button type="button" class="mab" data-mact="more" data-id="mm-k8" aria-label="More actions" aria-haspopup="menu" data-tip="More"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-dots"></use></svg></button><span class="mtime" title="Mon 24 Nov 2026, 11:26 PM">11:26 PM</span></div></div></div><div class="turn"><div class="wk"><button type="button" class="wkt" data-turn="k9" aria-expanded="false" aria-label="Finished: Worked for 1m 14s, 2 agents"></button><span class="ok"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-check"></use></svg></span><b>Worked for 1m 14s</b><span class="mt"></span><button type="button" class="ag" data-agjump="k9" aria-label="2 agents: show them">2 agents</button><svg class="ic sm chv" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="wrows"><div class="tc"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1631" aria-label="Thought for 3s"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-spark"></use></svg><span class="sr">Done:</span><span class="tv">Thought for 3s</span><span class="tsp"></span><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tcb" id="tc1631"><p class="tsay" style="color:var(--meta)">One agent reviews the diff, another checks the mobile capsule.</p></div></div><div class="tc" data-child="done"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1632" aria-label="code-reviewer Review the quota reset diff"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span class="sr">Done:</span><span class="tv b">code-reviewer</span><span class="tg sans">Review the quota reset diff</span><span class="tsp"></span><span class="tm">1 step · 38s</span><button type="button" class="tca" aria-label="Open Review the quota reset diff in the workspace" data-tip="Open in workspace" data-wsagent="agent" data-wstitle="Review the quota reset diff"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-panel"></use></svg></button><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tck" id="tc1632"><div class="tblk"><p class="tlbl">Prompt</p><p>Review the uncommitted changes to mainframe-quota and use-quota.ts.</p></div><div class="tc"><div class="tcr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-term"></use></svg><span class="sr">Done:</span><span class="tv">Ran</span><span class="tg">git diff --stat</span><span class="tsp"></span><span class="tm">exit 0 · 0.2s</span><span class="tch"></span></div></div><div class="tblk"><p class="tlbl">Result</p><p>The diff is correct. One nit: <code>QuotaWindow::reset</code> drops <code>resets_at</code>.</p></div></div></div><div class="tc" data-child="done"><div class="tcr"><button type="button" class="tct" aria-expanded="false" aria-controls="tc1634" aria-label="Delegated Check the mobile usage capsule to Codex"></button><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-botf"></use></svg><span class="sr">Done:</span><span class="tv">Delegated</span><span class="tg sans">Check the mobile usage capsule</span><span class="twhere">to Codex</span><span class="tsp"></span><span class="tm">completed · 1m 12s</span><button type="button" class="tca" aria-label="Open Check the mobile usage capsule in the workspace" data-tip="Open in workspace" data-wsagent="task" data-wstitle="Check the mobile usage capsule"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-panel"></use></svg></button><svg class="ic tch" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg></div><div class="tck" id="tc1634"><div class="tblk"><p class="tlbl">Task</p><p>Check whether the mobile capsule reads the same snapshot.</p></div><div class="tc"><div class="tcr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span class="sr">Done:</span><span class="tv">Searched</span><span class="tg">"useQuota"</span><span class="twhere">in mobile/src</span><span class="tsp"></span><span class="tm">6 matches</span><span class="tch"></span></div></div><div class="tc"><div class="tcr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="sr">Done:</span><span class="tv">Read</span><span class="tg">mobile/src/quota/capsule.tsx</span><span class="tsp"></span><span class="tm">48 lines</span><span class="tch"></span></div></div><div class="tblk"><p class="tlbl">Result</p><p>Same snapshot endpoint; no change needed.</p></div></div></div></div><div class="ans"><p>Both checks are back. The diff is correct, with one nit: <code>QuotaWindow::reset</code> drops <code>resets_at</code>, so the tooltip loses the next reset time until the following turn. The mobile capsule reads the same snapshot, so it picks up the fix without a change of its own.</p></div><div class="mfoot"><span class="mtime" title="Mon 24 Nov 2026, 11:27 PM">11:27 PM</span><button type="button" class="mab" data-mact="copy" aria-label="Copy message" data-tip="Copy"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-copy2"></use></svg></button><button type="button" class="mab" data-mact="fork" aria-label="Fork from here" data-tip="Fork from here"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-forkr"></use></svg></button><button type="button" class="mab" data-mact="more" data-id="mm-k9" aria-label="More actions" aria-haspopup="menu" data-tip="More"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-dots"></use></svg></button></div></div></div></div><div class="composer" id="composer"><div class="gate" id="gate" hidden=""></div><div class="frame" id="frame"><div class="top" id="top"><div class="ctxrow" id="ctxrow" hidden="">​
+                      <button type="button" class="cbtn2" data-id="proj" aria-haspopup="menu" aria-expanded="false" data-tip="Select project&nbsp;&nbsp;⌘;" aria-label="Project: mainframe-ui"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-folder"></use></svg><span class="lab">mainframe-ui</span><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-chev"></use></svg></button>​
+                      <button type="button" class="cbtn2" data-id="pill" aria-haspopup="menu" aria-expanded="false" aria-label="Branch and environment: main" data-tip="Branch and worktree"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-branch"></use></svg><span class="lab">main</span><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-chev"></use></svg></button>​
+                    </div><div class="acts" id="actstrip" role="list" aria-label="Ongoing work"><div class="ar" role="listitem"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span class="t" title="Map diff scopes in the daemon">Map diff scopes in the daemon</span><span class="v vst"><svg class="ic spin runic sm" aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg>37m</span><button type="button" class="ab" data-act-stop="a1" aria-label="Stop Map diff scopes in the daemon">Stop</button><button type="button" class="tg" data-act-toggle="" aria-expanded="true" aria-label="Collapse to one row" data-tip="Collapse" data-tipalign="end"><svg class="ic sm up" aria-hidden="true" focusable="false"><use href="#i-chev"></use></svg></button></div><div class="ar" role="listitem"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-route"></use></svg><span class="t" title="review-readiness">review-readiness</span><span class="v vst"><svg class="ic spin runic sm" aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg>37m</span><button type="button" class="ab" data-act-stop="a2" aria-label="Stop review-readiness">Stop</button><span class="tgsp" aria-hidden="true"></span></div><div class="ar" role="listitem"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span class="t" title="Accessibility review of the scope switcher">Accessibility review of the scope switcher</span><span class="v vst"><svg class="ic spin runic sm" aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg>37m</span><button type="button" class="ab" data-act-stop="a3" aria-label="Stop Accessibility review of the scope switcher">Stop</button><span class="tgsp" aria-hidden="true"></span></div></div></div><div class="card" id="card"><div class="queue" id="queue" hidden=""></div><div class="atts" id="atts" hidden=""></div><div class="segs" id="segs" hidden=""></div><div class="fieldwrap"><textarea class="field" id="field" rows="1" aria-label="Message the agent" spellcheck="false" placeholder="Reply to the agent…" style="height: 21px; overflow-y: hidden;"></textarea></div><div class="bar" id="bar"><button type="button" class="btn plus" data-id="plus" aria-haspopup="menu" aria-expanded="false" aria-label="Add attachments or mentions" data-tip="Attach files or mention"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button><button type="button" class="btn model" data-id="model" aria-haspopup="menu" aria-expanded="false" aria-label="Model: Opus 4.5, High effort" aria-disabled="false" data-tip="Claude · Opus 4.5 · High effort"><i class="pd" style="background:#d97757"></i><span class="ml">Opus 4.5<i>High</i></span><svg class="ic sm chev" aria-hidden="true" focusable="false"><use href="#i-chev"></use></svg></button><button type="button" class="btn perm" data-id="perm" aria-haspopup="menu" aria-expanded="false" aria-label="Permissions: Auto-Edits" data-tip="Permissions: Auto-Edits&nbsp;&nbsp;·&nbsp;&nbsp;⇧⇥ to cycle"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-shield"></use></svg><span class="plabel2">Auto-Edits</span><svg class="ic sm chev" aria-hidden="true" focusable="false"><use href="#i-chev"></use></svg></button><button type="button" class="btn combo" data-id="combo" aria-haspopup="menu" aria-expanded="false" aria-label="Model and permissions: Opus 4.5, Auto-Edits" data-tip="Opus 4.5 · High effort · Auto-Edits"><i class="pd" style="background:#d97757"></i><span class="ml"><span class="cm">Opus 4.5</span><span class="cs">&nbsp;·&nbsp;</span><span class="cp ">Auto-Edits</span></span><svg class="ic sm chev" aria-hidden="true" focusable="false"><use href="#i-chev"></use></svg></button><span class="spacer"></span><button type="button" class="btn ring " data-id="ring" data-tipalign="end" data-tip="Context 41% used · 82K of 200K tokens" aria-label="Context 41% used · 82K of 200K tokens"><svg viewBox="0 0 16 16" aria-hidden="true"><circle class="trk" cx="8" cy="8" r="6.25" fill="none" stroke-width="2"></circle><circle class="arc" cx="8" cy="8" r="6.25" fill="none" stroke-width="2" stroke-linecap="round" stroke-dasharray="16.10 39.27" transform="rotate(-90 8 8)"></circle></svg><span class="pct">41%</span></button><button type="button" class="send stop" data-id="stopx" data-tipalign="end" aria-label="Stop 3 sub-agents" data-tip="Stop 3 sub-agents&nbsp;&nbsp;⌘."><svg class="ic" viewBox="0 0 16 16" aria-hidden="true" style="stroke:none;fill:currentColor"><rect x="3.5" y="3.5" width="9" height="9" rx="2"></rect></svg></button><div class="split" id="split" role="group" aria-label="Send while the agent runs" hidden="">​
+                        <button type="button" class="sp-main" data-id="splitmain" data-tipalign="end" aria-label="Queue message" data-tip="Queue for when the agent finishes (Enter)"><span class="qt">Queue</span><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-enter"></use></svg></button>​
+                        <button type="button" class="sp-chev" data-id="splitmenu" aria-haspopup="menu" aria-expanded="false" aria-label="More send options" data-tip="More send options" data-tipalign="end"><svg class="ic sm" aria-hidden="true"><use href="#i-chev"></use></svg></button>​
+                      </div><button type="button" class="send" data-id="send" data-tipalign="end" aria-label="Send" data-tip="Send (Enter)" disabled="" hidden=""><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-up"></use></svg></button></div></div><div class="bstrip" id="bstrip"><button type="button" class="tbtn2" data-id="wt" aria-haspopup="menu" aria-expanded="false" aria-label="Worktree feat/quota-reset from main" data-tip="Worktree options"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-wt"></use></svg><span class="lab t-long"><b>Worktree</b> · <span class="mono">feat/quota-reset</span>​ <em>from main</em></span><span class="lab t-short mono">feat/quota-reset</span></button><button type="button" class="tbtn2 chg" data-id="chg" aria-haspopup="menu" aria-expanded="false" aria-label="Changes: 22 added, 1 removed in 3 files" data-tip="3 changed files"><span class="add">+22</span><span class="del">−1</span></button></div></div></div></div></div></div></div><div class="pscrim" id="pscrim" aria-hidden="true" hidden=""></div><aside class="spanel" id="spanel" aria-label="Session panel"><div class="ph"><h2 class="pt">Session</h2><button type="button" class="iconbtn" data-id="sections" aria-haspopup="menu" aria-expanded="false" aria-label="Sections" data-tip="Sections"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-sliders"></use></svg></button></div><section class="sec" aria-label="Pull requests"><div class="shd">Pull requests</div><button type="button" class="pr"><svg class="ic okic" aria-hidden="true" focusable="false"><use href="#i-pr"></use></svg><span class="t">qlan-ro/mainframe#912</span><span class="v ">created</span></button></section><section class="sec" aria-label="Plan"><button type="button" class="shd" style="width:100%" data-pk="plan" aria-expanded="false">Plan <svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg><span class="ac">2 of 5</span></button><div class="pr"><svg class="ic spin runic " aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg><span class="t">Adding the scope helper to the UI lib</span></div></section><section class="sec" aria-label="Activity"><div class="shd">Activity</div><button type="button" class="pr"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span class="t">Map diff scopes in the daemon</span><span class="v vst"><svg class="ic spin runic sm" aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg><span>37m</span></span></button><button type="button" class="pr"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-route"></use></svg><span class="t">review-readiness</span><span class="v vst"><svg class="ic spin runic sm" aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg><span>37m</span></span></button><button type="button" class="pr"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span class="t">Accessibility review of the scope switcher</span><span class="v vst"><svg class="ic spin runic sm" aria-hidden="true" focusable="false"><use href="#i-spin"></use></svg><span>37m</span></span></button><button type="button" class="pr"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-clock3"></use></svg><span class="t">Check the review-readiness workflow</span><span class="v ">in 52m</span></button><button type="button" class="pr"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-clock3"></use></svg><span class="t">Post the review status to the PR</span><span class="v ">recurring</span></button><button type="button" class="pr" data-pk="earlier" aria-expanded="true"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-chevr"></use></svg><span class="t">Earlier</span><span class="v bad">3 failed</span><span class="v">· 24+</span></button><button type="button" class="pr"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span class="t">Review the scope diff</span><span class="v bad">failed</span></button><button type="button" class="pr"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-route"></use></svg><span class="t">Check the readiness gate</span><span class="v bad">failed</span></button><button type="button" class="pr"><svg class="ic kic" aria-hidden="true" focusable="false"><use href="#i-sqterm"></use></svg><span class="t">Rerun the typecheck</span><span class="v bad">failed</span></button></section><section class="sec" aria-label="Launch"><div class="shd">Launch</div><button type="button" class="pr" data-pk="launch:ui" aria-pressed="true" aria-label="ui-dev, running, stop"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-eye"></use></svg><span class="t b">ui-dev</span><span class="v"><span class="stopsq"><svg class="ic sm fill" aria-hidden="true" focusable="false"><use href="#i-sq"></use></svg></span></span></button><button type="button" class="pr" data-pk="launch:daemon" aria-pressed="false" aria-label="daemon, start"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-term"></use></svg><span class="t">daemon</span><span class="v"><svg class="ic sm fill" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg></span></button><button type="button" class="pr" data-pk="launch:typecheck" aria-pressed="false" aria-label="typecheck, start"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-term"></use></svg><span class="t">typecheck</span><span class="v"><svg class="ic sm fill" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg></span></button><button type="button" class="pr" data-pk="launch:storybook" aria-pressed="false" aria-label="storybook-design-system-preview…, start"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-term"></use></svg><span class="t">storybook-design-system-preview…</span><span class="v"><svg class="ic sm fill" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg></span></button></section><section class="sec" aria-label="Memory files"><div class="shd">Memory files</div><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">AGENTS.md</span><span class="v ">~418<span style="display:inline-block;width:56px;text-align:right">global</span></span></button><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">AGENTS.md</span><span class="v ">~53<span style="display:inline-block;width:56px;text-align:right">project</span></span></button></section><section class="sec" aria-label="Mentioned files"><div class="shd">Mentioned files</div><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">review-workflow.md</span><span class="v ">mentioned</span></button><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">git.ts</span><span class="v ">mentioned</span></button><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">codex.rs</span><span class="v ">edited</span></button><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">codex_tests.rs</span><span class="v ">edited</span></button><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">use-quota.ts</span><span class="v ">edited</span></button><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">quota.md</span><span class="v ">mentioned</span></button><button type="button" class="pr" data-pk="mentionAll" aria-expanded="false"><svg class="ic sm" aria-hidden="true" focusable="false"><use href="#i-chev"></use></svg><span class="t">Show all 7</span></button></section><section class="sec" aria-label="Skills"><div class="shd">Skills<button type="button" class="ac" data-pk="manage">Manage</button></div><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">mainframe-design-system</span></button><button type="button" class="pr"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-file"></use></svg><span class="t">ui-design</span></button></section><section class="sec" aria-label="Attachments"><div class="shd">Attachments</div><div class="tiles" id="tiles"><span class="tile" data-tile="" aria-label="Attachment .csv">.csv</span><span class="tile" data-tile="" aria-label="Attachment .png">.png</span><button type="button" class="tile more" id="tmore" hidden="" data-pk="attAll"></button></div></section><section class="sec" aria-label="Project tasks"><div class="shd">Project tasks</div><button type="button" class="pr" data-pk="newtask"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg><span class="t">New task</span></button><button type="button" class="pr" style="padding-left:34px"><span class="t">claude: --permission-mode auto i…</span><span class="v ">#24</span></button><button type="button" class="pr" style="padding-left:34px"><span class="t">Remember file tree expansion sta…</span><span class="v ">#23</span></button><button type="button" class="pr" style="padding-left:34px"><span class="t">Preview captures do not …</span><span class="v ">#22</span></button></section></aside></div><section class="wsp" id="wsp" aria-label="Workspace" inert=""><div class="wsgrip" id="wsgrip" role="separator" aria-orientation="vertical" aria-label="Resize workspace" aria-valuemin="320" tabindex="0"></div><div class="wsin"><div class="wsmain"><div class="wbody" id="wsbody" role="tabpanel" aria-label="UsageCapsule.tsx"><div class="fileh"><b>UsageCapsule.tsx</b><span>packages/ui/src/features/usage</span></div><div class="code"><span class="ln">1</span><span class="lc"><span class="k">import</span> { useUsage } <span class="k">from</span>​ <span class="s">'@/features/usage/use-usage'</span>;</span><span class="ln">2</span><span class="lc"><span class="k">import</span> { cn } <span class="k">from</span>​ <span class="s">'@/lib/utils'</span>;</span><span class="ln">3</span><span class="lc">​ </span><span class="ln">4</span><span class="lc"><span class="k">export</span>​ <span class="k">function</span> UsageCapsule() {</span><span class="ln">5</span><span class="lc">​  <span class="k">const</span> { windows, next } = useUsage();</span><span class="ln">6</span><span class="lc">​  <span class="k">const</span> w = windows[0];</span><span class="ln">7</span><span class="lc">​  <span class="k">if</span> (!w) <span class="k">return</span>​ <span class="k">null</span>;</span><span class="ln">8</span><span class="lc">​  <span class="c">// Codex resets its 5h window server-side: trust resetsAt, not the cached %.</span></span><span class="ln">9</span><span class="lc">​  <span class="k">const</span> pct = w.resetsAt &lt;= Date.now() ? 0 : w.percent;</span><span class="ln">10</span><span class="lc">​  <span class="k">return</span> (</span><span class="ln">11</span><span class="lc">    &lt;button className={cn(<span class="s">'capsule'</span>, pct &gt;= 80 &amp;&amp; <span class="s">'warn'</span>)} onClick={next}&gt;</span><span class="ln">12</span><span class="lc">      &lt;span&gt;{w.provider}&lt;/span&gt;</span><span class="ln">13</span><span class="lc">      &lt;Meter value={pct} /&gt;</span><span class="ln">14</span><span class="lc">      &lt;b&gt;{pct}%&lt;/b&gt;</span><span class="ln">15</span><span class="lc">    &lt;/button&gt;</span><span class="ln">16</span><span class="lc">  );</span><span class="ln">17</span><span class="lc">}</span></div></div></div><div class="wsfiles" id="wsfiles" hidden=""></div></div></section></div></div></div>
+<div class="kscrim" id="kscrim"></div>
+<div class="ksheet" id="ksheet" role="dialog" aria-modal="true" aria-labelledby="kst"><div class="kh"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-kbd"></use></svg><h2 id="kst">Keyboard Shortcuts</h2><button type="button" class="iconbtn" id="ksclose" aria-label="Close"><svg class="ic " aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button></div><div class="kb"><section aria-label="Sessions"><h3>Sessions</h3><div class="krow"><span>New session</span><kbd>⌘N</kbd></div><div class="krow"><span>Switch to tab N</span><kbd>⌘1…⌘9</kbd></div><div class="krow"><span>Next session tab</span><kbd>⌃⇥</kbd></div><div class="krow"><span>Previous session tab</span><kbd>⌃⇧⇥</kbd></div><div class="krow"><span>Open in split</span><kbd>⌘⇧\</kbd></div><div class="krow"><span>Close split</span><kbd>⌘\</kbd></div><div class="krow"><span>Toggle sessions sidebar</span><kbd>⌘B</kbd></div></section><section aria-label="Chat"><h3>Chat</h3><div class="krow"><span>Find in chat</span><kbd>⌘F</kbd></div><div class="krow"><span>Focus composer</span><kbd>⌘L</kbd></div><div class="krow"><span>Stop the turn and all sub-agents</span><kbd>⌘.</kbd></div><div class="krow"><span>Cycle permission mode (in the composer)</span><kbd>⇧⇥</kbd></div><div class="krow"><span>Select project (new session)</span><kbd>⌘;</kbd></div><div class="krow"><span>Queue or send now, while running</span><kbd>⌥↵</kbd></div></section><section aria-label="Workspace"><h3>Workspace</h3><div class="krow"><span>Toggle Chat surface</span><kbd>⌘⇧C</kbd></div><div class="krow"><span>Toggle Workspace surface</span><kbd>⌘⇧W</kbd></div><div class="krow"><span>New terminal</span><kbd>⌘J</kbd></div><div class="krow"><span>New browser tab</span><kbd>⌘T</kbd></div></section><section aria-label="App"><h3>App</h3><div class="krow"><span>Open command palette</span><kbd>⌘K</kbd></div><div class="krow"><span>Open review</span><kbd>⌘⇧R</kbd></div><div class="krow"><span>Open settings</span><kbd>⌘,</kbd></div><div class="krow"><span>Quick add task</span><kbd>⌘⇧T</kbd></div><div class="krow"><span>Show keyboard shortcuts</span><kbd>⌘/</kbd></div><div class="krow"><span>Open automations</span><kbd>⌘⇧A</kbd></div></section></div></div></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1536,"height":1088}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
