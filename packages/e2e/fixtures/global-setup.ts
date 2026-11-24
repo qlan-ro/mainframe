@@ -1,9 +1,11 @@
 import { request } from '@playwright/test';
-import { spawn, execFileSync, type ChildProcess } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
+import { createRequire } from 'module';
 import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { DAEMON_PORT } from './daemon.js';
+import { DAEMON_PORT } from './daemon.ts';
+import { beginRun, ensurePortFree, recordStarted } from './port-guard.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // The vite app is `packages/ui` (`@qlan-ro/mainframe-ui`). `packages/app-tauri` is the Rust/Tauri
@@ -76,31 +78,6 @@ function assertBundleTargetsTestPort(): void {
   }
 }
 
-/**
- * Free PREVIEW_PORT before we bind it. A run that dies mid-suite (globalTimeout, SIGINT) never
- * reaches the teardown, so its `vite preview` survives and keeps serving the OLD bundle: the next
- * run then either loses `--strictPort` or — worse — silently tests stale assets. Killed strictly by
- * who holds the port, never by matching a process name.
- */
-function freePreviewPort(): void {
-  let pids: string[];
-  try {
-    pids = execFileSync('lsof', ['-ti', `tcp:${PREVIEW_PORT}`], { encoding: 'utf8' })
-      .split('\n')
-      .map((p) => p.trim())
-      .filter(Boolean);
-  } catch {
-    return; // lsof found nothing bound to the port (or isn't on PATH) — nothing to free
-  }
-  for (const pid of pids) {
-    try {
-      process.kill(Number(pid), 'SIGKILL');
-    } catch {
-      /* expected: exited between lsof and kill — the port is free either way */
-    }
-  }
-}
-
 async function isPreviewServing(): Promise<boolean> {
   const ctx = await request.newContext();
   try {
@@ -113,26 +90,25 @@ async function isPreviewServing(): Promise<boolean> {
   }
 }
 
-async function startPreview(): Promise<ChildProcess> {
-  const preview = spawn(
-    PNPM,
-    [
-      '--filter',
-      '@qlan-ro/mainframe-ui',
-      'exec',
-      'vite',
-      'preview',
-      '--strictPort',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(PREVIEW_PORT),
-    ],
-    { cwd: UI_DIR, env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT }, stdio: 'ignore' },
-  );
+// Vite itself, not through pnpm: killing a pnpm wrapper leaves the server it started behind.
+const VITE_BIN = path.join(
+  path.dirname(createRequire(path.join(UI_DIR, 'package.json')).resolve('vite/package.json')),
+  'bin/vite.js',
+);
+const PREVIEW_ARGS = [VITE_BIN, 'preview', '--strictPort', '--host', '127.0.0.1', '--port', String(PREVIEW_PORT)];
+
+export async function startPreview(): Promise<void> {
+  const command = [process.execPath, ...PREVIEW_ARGS].join(' ');
+  await ensurePortFree(PREVIEW_PORT, { command, cwd: UI_DIR }, 'Use another: MF_E2E_PREVIEW_PORT=<port>');
+  const preview = spawn(process.execPath, PREVIEW_ARGS, {
+    cwd: UI_DIR,
+    env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT },
+    stdio: 'ignore',
+  });
+  recordStarted(preview.pid);
   const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    if (await isPreviewServing()) return preview;
+  while (Date.now() < deadline && preview.exitCode === null) {
+    if (await isPreviewServing()) return;
     await new Promise((r) => setTimeout(r, 200));
   }
   preview.kill('SIGKILL');
@@ -144,20 +120,23 @@ async function startPreview(): Promise<ChildProcess> {
  * respawned in every describe's beforeAll (via launchTauriApp) and killed in afterAll — the same
  * static server, torn up and down 100+ times a run. Start it once here and share it across every
  * spec and describe; per-describe isolation comes from a fresh BrowserContext + a fresh daemon, not
- * a fresh file server. Returns a teardown that kills the preview when the whole run ends.
+ * a fresh file server. Returns a teardown that kills whatever the run started and is still alive.
  *
- * Each invocation serves the bundle IT just verified: a survivor from a crashed run is killed
- * rather than adopted, so no run can inherit another run's assets. Concurrent invocations on one
- * PREVIEW_PORT are therefore unsupported — give the second `MF_E2E_PREVIEW_PORT`.
+ * Each invocation serves the bundle IT just verified: a survivor from a crashed run of this worktree is
+ * killed rather than adopted. Any other process on the port makes the run refuse to start (port-guard.ts),
+ * so concurrent invocations need ports of their own: `MF_E2E_PREVIEW_PORT`, `MF_E2E_DAEMON_PORT`.
  */
 export default async function globalSetup(): Promise<() => Promise<void>> {
   assertAdapterModeChosen();
   buildUi();
   assertBundleTargetsTestPort();
-  freePreviewPort();
 
-  const preview = await startPreview();
-  return async () => {
-    preview.kill('SIGKILL');
-  };
+  const endRun = beginRun();
+  try {
+    await startPreview();
+  } catch (err) {
+    endRun();
+    throw err;
+  }
+  return async () => endRun();
 }

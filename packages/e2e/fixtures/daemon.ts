@@ -14,10 +14,13 @@ import {
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { ensurePortFree, recordStarted } from './port-guard.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const CORE_RS_DIR = path.resolve(__dirname, '../../../packages/core-rs');
+const REPO_DIR = path.resolve(__dirname, '../../..');
+const E2E_DIR = path.join(REPO_DIR, 'packages/e2e');
+const CORE_RS_DIR = path.join(REPO_DIR, 'packages/core-rs');
 
 // Dedicated e2e port (NOT the dev default 31415) so the harness never collides with — and
 // silently runs against — a developer's running Mainframe. The renderer is built to talk to
@@ -48,85 +51,6 @@ export function resolveRustDaemon(): string {
   });
   if (!existsSync(release)) throw new Error(`Rust daemon build completed without producing ${release}`);
   return release;
-}
-
-async function isDaemonReachable(): Promise<boolean> {
-  try {
-    const res = await fetch(`${DAEMON_BASE}/api/projects`, { signal: AbortSignal.timeout(1_000) });
-    return res.ok;
-  } catch {
-    return false; /* connection refused / timeout = port is free, which is what we want */
-  }
-}
-
-/**
- * Best-effort reap of a stale e2e daemon left squatting on our port by a prior Playwright run
- * that timed out mid-describe (a timed-out worker is discarded without running `afterAll`, so
- * `stopDaemon` — and the SIGTERM it sends — never fires; see batch4-fixes-report.md). Left
- * unreaped, the zombie holds `DAEMON_PORT` for the rest of the process, and every later
- * describe's `assertPortFree()` fails instantly, cascading through the whole remaining run.
- *
- * Deliberately conservative: only ever kills a process whose full command line is unmistakably
- * OUR daemon entrypoint (`mainframe-daemon`). Anything else on the port — a
- * developer's real Mainframe instance, an unrelated process — is left alone and still fails loud
- * via the `assertPortFree` error below. Returns true if it killed something worth re-checking for.
- */
-function reapStaleE2eDaemon(): boolean {
-  let pids: string[];
-  try {
-    pids = execFileSync('lsof', ['-ti', `tcp:${DAEMON_PORT}`], { encoding: 'utf8' })
-      .split('\n')
-      .map((p) => p.trim())
-      .filter(Boolean);
-  } catch {
-    return false; // lsof found nothing bound to the port (or isn't on PATH) — nothing to reap
-  }
-
-  let killedAny = false;
-  for (const pid of pids) {
-    let cmdline: string;
-    try {
-      cmdline = execFileSync('ps', ['-p', pid, '-o', 'command='], { encoding: 'utf8' }).trim();
-    } catch {
-      continue; // process exited between lsof and ps — nothing left to kill
-    }
-    if (!cmdline.includes('mainframe-daemon')) {
-      continue; // not our daemon entrypoint — never kill an unrecognized process
-    }
-    try {
-      process.kill(Number(pid), 'SIGKILL');
-      killedAny = true;
-    } catch {
-      // already exited — fine, that's the outcome we wanted anyway
-    }
-  }
-  return killedAny;
-}
-
-/**
- * Fail fast if something is already answering on our port. Without this, a foreign daemon
- * (e.g. a dev Mainframe) would absorb the bind and the suite would run against — and pollute —
- * real data. See git history: this exact footgun registered junk projects in a real instance.
- *
- * Before failing, make one attempt to reap a stale *e2e* daemon (see `reapStaleE2eDaemon`) —
- * this is the common case when a previous run timed out mid-test. A daemon left by a clean
- * developer session, or anything not matching our entrypoint, is never touched and still throws.
- */
-export async function assertPortFree(): Promise<void> {
-  let reachable = await isDaemonReachable();
-  if (reachable && reapStaleE2eDaemon()) {
-    // Give the OS a moment to release the socket after SIGKILL, then re-check once.
-    await new Promise((r) => setTimeout(r, 500));
-    reachable = await isDaemonReachable();
-  }
-  if (reachable) {
-    throw new Error(
-      `A daemon is already answering on port ${DAEMON_PORT}. The e2e harness needs an exclusive ` +
-        `port so it never runs against (and pollutes) a real instance. Free it first:\n` +
-        `  lsof -ti :${DAEMON_PORT} | xargs kill\n` +
-        `or run with a different port: MF_E2E_DAEMON_PORT=<port> (rebuild the app to match).`,
-    );
-  }
 }
 
 export async function waitForDaemon(maxMs = 30_000): Promise<void> {
@@ -194,7 +118,14 @@ export async function startDaemon(opts?: {
   /** The daemon's HOME. The suite keeps the developer's own; a board capture must not read it. */
   home?: string;
 }): Promise<DaemonHandle> {
-  await assertPortFree();
+  const daemonPath = resolveRustDaemon();
+  // A daemon built elsewhere (MF_E2E_RUST_DAEMON_PATH) is shared, so an orphan of it proves nothing.
+  const ownDaemon = daemonPath.startsWith(REPO_DIR + path.sep) ? { command: daemonPath, cwd: E2E_DIR } : undefined;
+  await ensurePortFree(
+    Number(DAEMON_PORT),
+    ownDaemon,
+    'Use another: MF_E2E_DAEMON_PORT=<port> (rebuild the UI bundle to match)',
+  );
   const testDataDir = opts?.dataDir ?? mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
 
   const e2eEnv: Record<string, string> = {};
@@ -210,16 +141,17 @@ export async function startDaemon(opts?: {
     // A second mock adapter (`mock-cli-b`) for the provider-switch spec.
     if (opts?.mockSwitch) e2eEnv['E2E_MOCK_SWITCH'] = '1';
   }
-  const daemonPath = resolveRustDaemon();
   const daemonLogFd = openSync(path.join(testDataDir, 'daemon.log'), 'w');
   const daemon = spawn(daemonPath, [], {
+    cwd: E2E_DIR,
     env: { ...daemonBaseEnv(opts?.home), MAINFRAME_DATA_DIR: testDataDir, DAEMON_PORT, ...e2eEnv },
     stdio: ['ignore', daemonLogFd, daemonLogFd],
   });
+  recordStarted(daemon.pid);
   closeSync(daemonLogFd); // parent no longer needs the fd; child keeps it open
 
   // If any post-spawn step throws, kill the daemon before rethrowing so a failed beforeAll never
-  // leaks a process holding the port (which would cascade-fail every later spec via assertPortFree).
+  // leaks a process holding the port (a worker that dies here leaves it to the run's record, see port-guard.ts).
   try {
     await waitForDaemon();
     if (E2E_MODE === 'mock') await waitForMockAdapter();
