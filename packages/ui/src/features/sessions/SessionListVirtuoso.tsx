@@ -15,7 +15,7 @@
  * same surface instead of stranding the wheel at a nested boundary.
  */
 import { useEffect, useMemo, type ComponentPropsWithoutRef, type ReactNode } from 'react';
-import { GroupedVirtuoso } from 'react-virtuoso';
+import { GroupedVirtuoso, type TopItemListProps } from 'react-virtuoso';
 import type { SessionGroupResult } from '@/features/sessions/view-model/group-sessions';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { SidebarMenu } from '@/components/ui/sidebar';
@@ -34,16 +34,16 @@ function SessionsItem(props: ComponentPropsWithoutRef<'ul'>) {
 }
 
 /**
- * Virtuoso sticks group headers at `top: 0` of the scroll parent, which is where
- * the list's own parked header already sits. Offsetting by its height stacks the
- * two — less the space above the group, which a stuck header tucks behind the
- * parked one so only its 24px label shows.
+ * Holds the stuck group header, which Virtuoso pins at `top: 0` of the scroll
+ * parent — where the list's own parked header already sits. Offsetting by its
+ * height stacks the two, less the space above the group: a stuck header tucks
+ * that behind the parked one, so only its 24px label shows.
  */
-function SessionsGroup({ style, ...rest }: ComponentPropsWithoutRef<'div'>) {
-  return <div {...rest} style={{ ...style, top: JUMP_HEADER_HEIGHT - GROUP_GAP }} />;
+function SessionsTopList({ style, children }: TopItemListProps) {
+  return <div style={{ ...style, top: JUMP_HEADER_HEIGHT - GROUP_GAP }}>{children}</div>;
 }
 
-const VIRTUOSO_COMPONENTS = { Item: SessionsItem, Group: SessionsGroup };
+const VIRTUOSO_COMPONENTS = { Item: SessionsItem, TopItemList: SessionsTopList };
 
 export interface SessionListVirtuosoProps {
   groups: SessionGroupResult[];

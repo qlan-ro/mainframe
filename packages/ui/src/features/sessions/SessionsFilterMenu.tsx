@@ -76,7 +76,10 @@ export function SessionsFilterMenu({ inUse, synthetic, registry }: SessionsFilte
             data-testid="sessions-filter-button"
             data-filtered={active || undefined}
             aria-label={label}
-            className={cn(JUMP_ACTION, active && 'text-primary opacity-100 hover:text-primary')}
+            className={cn(
+              JUMP_ACTION,
+              active && 'text-primary opacity-100 hover:text-primary aria-expanded:text-primary',
+            )}
           >
             <ListFilterIcon />
           </Button>
