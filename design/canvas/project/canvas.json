@@ -68,7 +68,7 @@
       "y": 1060
     },
     "Chat-Composer.dc.html": {
-      "h": 1996,
+      "h": 2082,
       "page": "composer",
       "title": "Chat — composer",
       "w": 2772,
@@ -81,7 +81,7 @@
       "title": "Chat — composer, from draft to stop",
       "w": 2772,
       "x": 0,
-      "y": 2156
+      "y": 2242
     },
     "Chat-ComposerMenus.dc.html": {
       "h": 3272,
@@ -89,7 +89,7 @@
       "title": "Chat — composer menus",
       "w": 2772,
       "x": 0,
-      "y": 3070
+      "y": 3156
     },
     "Chat-SessionPanel-ActivitySection.dc.html": {
       "h": 2036,
@@ -178,10 +178,10 @@
       "title": "Window redesign: keyboard shortcuts sheet",
       "w": 1536,
       "x": 1460,
-      "y": 31096
+      "y": 18330
     },
     "Proposal-Redesign-Spec.dc.html": {
-      "h": 10085,
+      "h": 10294,
       "page": "proposals",
       "title": "Window redesign: the decisions (spec)",
       "w": 1360,
@@ -202,7 +202,7 @@
       "title": "Window redesign: workspace surface",
       "w": 3024,
       "x": 1460,
-      "y": 25904
+      "y": 13138
     },
     "Proposal-Window-Baseline.dc.html": {
       "h": 900,
@@ -459,7 +459,7 @@
     "Proposal-Redesign-Transcript.dc.html": {
       "page": "proposals",
       "x": 1460,
-      "y": 22058,
+      "y": 9292,
       "w": 3504,
       "h": 3686,
       "title": "Window redesign: transcript, every row and state"
@@ -467,7 +467,7 @@
     "Proposal-Redesign-ComposerContent.dc.html": {
       "page": "proposals",
       "x": 1460,
-      "y": 11618,
+      "y": 6872,
       "w": 2616,
       "h": 2260,
       "title": "Window redesign: files, captures and quotes in the composer"
@@ -494,7 +494,7 @@
       "title": "Chat — composer focus and gates",
       "w": 2772,
       "x": 0,
-      "y": 6502
+      "y": 6588
     },
     "Chat-States-Failures.dc.html": {
       "h": 1040,
