@@ -624,7 +624,7 @@
       "fill": "blue",
       "page": "proposals",
       "size": 24,
-      "text": "This page has one purpose: the UI revamp. Everything here is approved design that the app does not have yet.\n\nRead it top to bottom: the decisions spec (left column), then the boards to its right, one per area, then the earlier proposals the revamp adopts.\n\nWhen part of it ships, update that area's baseline page and remove the boards it made obsolete here. Keep whatever is not built yet.",
+      "text": "This page has one purpose: the UI revamp. Everything here is approved design that the app does not have yet.\n\nRead it top to bottom: the decisions spec (left column), then the boards to its right, one per area.\n\nWhen part of it ships, update that area's baseline page and remove the boards it made obsolete here. Keep whatever is not built yet.",
       "w": 560,
       "x": 0,
       "y": 0
@@ -633,7 +633,7 @@
       "fill": "gray",
       "page": "proposals",
       "size": 24,
-      "text": "The window redesign, final (approved 24 Nov 2026).\n\nLeft: Proposal-Redesign-Spec, every decision with an id (S shell, W workspace, G gates, H shortcuts, L sidebar, T transcript, C composer, K composer strips, R session panel). Captions on the boards cite these ids.\n\nRight, top to bottom: today's window (v2.15.0) beside the proposed window; then title bar and window states, composer before the first message, toolbar / send / stop, files, captures and quotes in the composer, queue and activity strip, bottom strip, gates, transcript (every row and state), session panel, workspace, shortcuts sheet. Every board shows light and dark.\n\nClickable prototype with every state: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn (open Prototype controls, bottom left).\n\nThe sidebar is built; its boards are on the Sidebar page.\n\nBoards are rendered from that prototype. They are reference pictures, not components: build with the app's own primitives and tokens, and take exact values from the spec.",
+      "text": "The window redesign, final (approved 24 Nov 2026).\n\nLeft: Proposal-Redesign-Spec, every decision with an id (S shell, W workspace, G gates, H shortcuts, L sidebar, T transcript, C composer, K composer strips, R session panel). Captions on the boards cite these ids.\n\nRight, top to bottom: today's window (v2.15.0) beside the proposed window; then title bar and window states, composer before the first message, toolbar / send / stop, files, captures and quotes in the composer, queue and activity strip, bottom strip, gates, transcript (every row and state), workspace, shortcuts sheet. Every board shows light and dark.\n\nClickable prototype with every state: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn (open Prototype controls, bottom left).\n\nThe sidebar is built; its boards are on the Sidebar page.\n\nBoards are rendered from that prototype. They are reference pictures, not components: build with the app's own primitives and tokens, and take exact values from the spec.",
       "w": 560,
       "x": -640,
       "y": 960
