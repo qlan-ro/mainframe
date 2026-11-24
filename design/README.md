@@ -11,7 +11,7 @@ Mainframe's design source lives here. The hosted [Mainframe App canvas](https://
 | `canvas/proposals/` | The generator for the `Proposal-Redesign-*` boards, rendered from the redesign prototype. |
 | `redesign/` | The window redesign: `DECISIONS.md` (the spec, mirrored on the `Proposal-Redesign-Spec` board) and the clickable `prototype/index.html`. |
 | `tools/check.mjs` | The CI check. |
-| `../packages/ui/.impeccable/surfaces/` | Impeccable surface briefs, one per area: purpose, direction and constraints. Written with `impeccable surface-brief write <target> <body>`. |
+| `../packages/ui/.impeccable/surfaces/` | Impeccable surface briefs (the six redesign areas): purpose, direction and constraints. Written with `impeccable surface-brief write <target> <body>`. |
 
 ## Areas
 
@@ -29,7 +29,7 @@ One canvas page per area. A board belongs to the area whose board prefix matches
 | Automations | `automations` | `Automations-*` | none |
 | Tasks | `tasks` | `Tasks-*` | none |
 
-The `overview` page holds the map board (`Main`). The `proposals` page holds design that is not built yet (`Proposal-*`). Shared primitives and theme (`components/ui`, `styles`) join as a Foundations area when `DESIGN.md` lands.
+The `overview` page holds the map board (`Main`). The `proposals` page holds design that is not built yet (`Proposal-*`). Shared primitives, theme and shared feature pieces (`components/ui`, `styles`, `features/shared`) join as a Foundations area when `DESIGN.md` lands.
 
 ## A PR that changes UI
 
@@ -41,7 +41,7 @@ The `overview` page holds the map board (`Main`). The `proposals` page holds des
 CI runs `node design/tools/check.mjs --base origin/main`:
 
 - **Canvas:** every board in `canvas.json` has a file, nothing is orphaned, `order` lists every board once, every board sits on its area's page, and every named brief exists.
-- **Coverage:** every area whose UI code changed also changes one of its own boards or its brief. A proposal board does not count. Tests and stories never trigger the check.
+- **Coverage:** every area whose UI code changed (`.tsx` and `.css` files, tests and stories excluded; moves and deletions count) also adds or edits one of its own boards or its brief. A proposal board or a deleted board does not count.
 
 A PR with no visible change (a refactor, a performance fix) carries the `design: none` label, which skips the coverage check.
 

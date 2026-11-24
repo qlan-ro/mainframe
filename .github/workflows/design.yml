@@ -7,6 +7,9 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
+permissions:
+  contents: read
+
 concurrency:
   group: design-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -30,4 +33,5 @@ jobs:
       - name: Design check
         env:
           DESIGN_CHECK_SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'design: none') && '1' || '0' }}
-        run: node design/tools/check.mjs --base origin/${{ github.base_ref }}
+          BASE: origin/${{ github.base_ref }}
+        run: node design/tools/check.mjs --base "$BASE"

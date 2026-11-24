@@ -35,6 +35,7 @@ function longest(candidates, value, keyOf) {
 
 export function areaForPath(cfg, file) {
   if (cfg.ignore.some((s) => file.includes(s))) return null;
+  if (cfg.visual && !cfg.visual.some((ext) => file.endsWith(ext))) return null;
   return longest(cfg.areas, file, (a) => a.paths);
 }
 
@@ -70,9 +71,8 @@ export function checkCanvas(cfg, repo = REPO) {
       problems.push(`${name} matches no area's board prefixes (design/areas.json)`);
       continue;
     }
-    if ((b.page || index.pages[0].id) !== area.page) {
-      problems.push(`${name} is on page "${b.page}" but belongs on "${area.page}"`);
-    }
+    const page = b.page || (index.pages && index.pages[0] && index.pages[0].id);
+    if (page !== area.page) problems.push(`${name} is on page "${page}" but belongs on "${area.page}"`);
   }
   for (const [id, n] of Object.entries(index.notes || {})) {
     if (n.page && !pages.has(n.page)) problems.push(`note "${id}" is on unknown page "${n.page}"`);
@@ -83,15 +83,22 @@ export function checkCanvas(cfg, repo = REPO) {
   return problems;
 }
 
-/** Areas whose code changed without any of their design files changing. */
-export function uncoveredAreas(cfg, changed) {
+/**
+ * Areas whose code changed without any of their design files changing.
+ * `changed` is a list of { status, path } (git --name-status, renames off): any status counts for code, but a
+ * deleted board or brief does not count as updating the design.
+ */
+export function uncoveredAreas(cfg, entries) {
+  const norm = entries.map((e) => (typeof e === 'string' ? { status: 'M', path: e } : e));
+  const changed = norm.map((e) => e.path);
+  const kept = norm.filter((e) => e.status !== 'D').map((e) => e.path);
   const touched = new Map();
   for (const f of changed) {
     const a = areaForPath(cfg, f);
     if (a) touched.set(a.id, [...(touched.get(a.id) || []), f]);
   }
   const designed = new Set();
-  for (const f of changed) {
+  for (const f of kept) {
     if (f.startsWith(`${CANVAS}/`) && f.endsWith('.dc.html')) {
       const stem = f.slice(CANVAS.length + 1).replace(/\.dc\.html$/, '');
       const a = areaForBoard(cfg, stem);
@@ -103,8 +110,15 @@ export function uncoveredAreas(cfg, changed) {
 }
 
 function changedSince(base) {
-  const out = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], { cwd: REPO, encoding: 'utf8' });
-  return out.split('\n').filter(Boolean);
+  // --no-renames: a moved file shows as a delete plus an add, so moving UI out of an area still counts for it.
+  const out = execFileSync('git', ['diff', '--name-status', '--no-renames', `${base}...HEAD`], { cwd: REPO, encoding: 'utf8' });
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [status, path] = line.split('\t');
+      return { status: status[0], path };
+    });
 }
 
 function summary(lines) {
@@ -126,6 +140,10 @@ function main() {
   }
 
   const i = process.argv.indexOf('--base');
+  if (i !== -1 && !process.argv[i + 1]) {
+    console.error('--base needs a git ref, e.g. --base origin/main');
+    process.exit(2);
+  }
   if (i !== -1) {
     if (process.env.DESIGN_CHECK_SKIP === '1') {
       console.log('Design coverage: skipped (`design: none` label).');

@@ -8,7 +8,7 @@ related_targets: ["src/app/AppShell.tsx","src/features/session-tabs","src/featur
 # Shell & title bar
 
 ## Scope and mode
-Operate. The window frame: title bar (usage capsule, session tabs, workspace tabs, Search, Chat / Workspace toggles), nav rail, shortcuts sheet. Canvas page "Shell & title bar". Code and boards: `design/areas.json` (area `shell`). Spec rows: S, W1–W3, H in `design/redesign/DECISIONS.md`.
+Operate. The window frame: title bar segments (usage capsule, session tabs, Search, Chat / Workspace toggles; the workspace tabs themselves belong to Workspace), nav rail, shortcuts sheet. Canvas page "Shell & title bar". Code and boards: `design/areas.json` (area `shell`). Spec rows: S, W1–W3, H in `design/redesign/DECISIONS.md`.
 
 ## Audience and job
 A developer running several agent sessions at once. They switch between sessions and see usage at a glance, without the frame competing with the work.

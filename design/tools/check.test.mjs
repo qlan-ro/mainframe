@@ -12,6 +12,13 @@ test('the most specific code path wins', () => {
   assert.equal(areaForPath(cfg, 'packages/ui/src/layout/TitleBar.tsx').id, 'shell');
 });
 
+test('only visual files count: logic, docs and tests belong to no area', () => {
+  assert.equal(areaForPath(cfg, 'packages/ui/src/features/chat/controller/chat-actions.ts'), null);
+  assert.equal(areaForPath(cfg, 'packages/ui/src/features/chat/README.md'), null);
+  assert.equal(areaForPath(cfg, 'packages/ui/src/app/main.tsx').id, 'shell');
+  assert.equal(areaForPath(cfg, 'packages/ui/src/features/daemon/AddRemoteDialog.tsx').id, 'settings');
+});
+
 test('tests and unmapped code belong to no area', () => {
   assert.equal(areaForPath(cfg, 'packages/ui/src/features/chat/composer/__tests__/Composer.test.tsx'), null);
   assert.equal(areaForPath(cfg, 'packages/ui/src/features/chat/composer/segments/segment-model.test.ts'), null);
@@ -33,6 +40,13 @@ test('a UI change needs its own area board or brief, not a proposal', () => {
   assert.deepEqual(uncoveredAreas(cfg, [code, 'packages/ui/.impeccable/surfaces/src-features-chat-composer.md']), []);
   assert.deepEqual(uncoveredAreas(cfg, [code, 'design/canvas/project/Proposal-Redesign-Composer.dc.html']).map((m) => m.area.id), ['composer']);
   assert.deepEqual(uncoveredAreas(cfg, [code, 'design/canvas/project/Chat-Thread.dc.html']).map((m) => m.area.id), ['composer']);
+});
+
+test('moving or deleting still counts as a code change, but deleting a board is not a design update', () => {
+  const code = { status: 'D', path: 'packages/ui/src/features/sessions/SessionRow.tsx' };
+  assert.deepEqual(uncoveredAreas(cfg, [code]).map((m) => m.area.id), ['sidebar']);
+  assert.deepEqual(uncoveredAreas(cfg, [code, { status: 'D', path: 'design/canvas/project/Shell-SidebarRows.dc.html' }]).map((m) => m.area.id), ['sidebar']);
+  assert.deepEqual(uncoveredAreas(cfg, [code, { status: 'A', path: 'design/canvas/project/Shell-SidebarRows.dc.html' }]), []);
 });
 
 test('the committed canvas passes', () => {

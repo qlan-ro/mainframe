@@ -2,7 +2,7 @@
 version: 1
 slug: "src-features-chat-composer"
 primary_target: "src/features/chat/composer"
-related_targets: ["src/features/chat/gates"]
+related_targets: ["src/features/chat/gates","src/features/chat/commands"]
 ---
 
 # Composer & gates
