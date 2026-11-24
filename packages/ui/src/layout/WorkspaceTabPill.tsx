@@ -6,7 +6,7 @@
  * The leading glyph identifies the tab TYPE by SHAPE and never changes with the
  * process's running/stopped state (eye = preview webview, globe = url,
  * square-terminal = console/logs process, terminal = shell, code = a file,
- * git-compare = a diff). Its INK carries the tab's active state instead — one
+ * git-compare = a diff, bot = an agent, speech = a chat). Its INK carries the tab's active state instead — one
  * rule for every kind, rather than a per-kind hue.
  *
  * The selected tab keeps its whole title, and `WorkspaceTabs` keeps it in view. Only
@@ -19,12 +19,29 @@
  * the close, mirroring the toolbar's Stop (todo #206): it stops the config via
  * the same daemon call, without closing the tab.
  *
+ * A chat tab follows its chat: the live title, and a dot while it works or needs
+ * you. Closing one keeps the chat.
+ *
  * A file tab in `preview` mode renders its title italic (the single replace-me
  * slot); double-clicking the pill promotes it to permanent.
  *
  * data-testid: workspace-tab-<id> / workspace-tab-title-<id> / workspace-tab-stop-<id> / workspace-tab-close-<id>.
  */
-import { Code2, Eye, FileText, GitCompare, Globe, Square, SquareTerminal, Terminal, X } from 'lucide-react';
+import {
+  Bot,
+  Code2,
+  Eye,
+  FileText,
+  GitCompare,
+  Globe,
+  MessageSquare,
+  MessagesSquare,
+  Split,
+  Square,
+  SquareTerminal,
+  Terminal,
+  X,
+} from 'lucide-react';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { FadeLabel } from '@/components/ui/fade-label';
@@ -35,15 +52,16 @@ import {
   TAB_CLOSE_BUTTON,
   TAB_CLOSE_OVERLAY,
   TAB_KEYS_ATTR,
-  tabHoverStyle,
+  TAB_HOVER_STYLE,
   tabShape,
 } from '@/features/session-tabs/tab-shape';
 import { useLayoutStore } from '@/store/layout';
 import { isLaunchStatusLive } from '@/features/run/derive-launch-control';
 import { requestTerminalFocus } from '@/features/terminal/terminal-focus';
-import type { RunPane, RunTab } from '@/store/run-pane';
+import { ConversationTabDot, useConversationTitle } from '@/features/workspace-chat/conversation-tab-state';
+import { isConversationTab, type ChatTabRole, type RunPane, type RunTab } from '@/store/run-pane';
 
-const GLYPHS: Record<RunTab['kind'], typeof Eye> = {
+const GLYPHS: Record<Exclude<RunTab['kind'], 'chat'>, typeof Eye> = {
   preview: Eye,
   url: Globe,
   console: SquareTerminal,
@@ -52,7 +70,20 @@ const GLYPHS: Record<RunTab['kind'], typeof Eye> = {
   skill: Code2,
   diff: GitCompare,
   viewer: FileText,
+  agent: Bot,
 };
+
+/** A delegated task is the sub-agent's robot, filled (T1c). */
+const CHAT_GLYPHS: Record<ChatTabRole, { glyph: typeof Eye; className?: string }> = {
+  fork: { glyph: Split, className: 'rotate-90' },
+  side: { glyph: MessagesSquare },
+  task: { glyph: Bot, className: 'fill-current/25' },
+  session: { glyph: MessageSquare },
+};
+
+function tabGlyph(tab: RunTab): { glyph: typeof Eye; className?: string } {
+  return tab.kind === 'chat' ? CHAT_GLYPHS[tab.role ?? 'session'] : { glyph: GLYPHS[tab.kind] };
+}
 
 interface WorkspaceTabPillProps {
   pane: RunPane;
@@ -62,7 +93,17 @@ interface WorkspaceTabPillProps {
   onStop: (config: LaunchConfiguration) => void;
 }
 
-export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: WorkspaceTabPillProps) {
+/** Reads the chat's title off the session list, which the other kinds have no need of. */
+function ConversationTabPill(props: WorkspaceTabPillProps) {
+  return <TabPill {...props} title={useConversationTitle(props.tab)} />;
+}
+
+export function WorkspaceTabPill(props: WorkspaceTabPillProps) {
+  if (isConversationTab(props.tab)) return <ConversationTabPill {...props} />;
+  return <TabPill {...props} title={props.tab.title} />;
+}
+
+function TabPill({ pane, tab, title, configs, scopeStatuses, onStop }: WorkspaceTabPillProps & { title: string }) {
   const activateRunTab = useLayoutStore((s) => s.activateRunTab);
   const closeRunTab = useLayoutStore((s) => s.closeRunTab);
   const promoteFileTab = useLayoutStore((s) => s.promoteFileTab);
@@ -72,7 +113,7 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
   // toolbar uses; only launch tabs carry a `config`, so terminals keep their glyph.
   const config = tab.config ? configs.find((c) => c.name === tab.config) : undefined;
   const live = config ? isLaunchStatusLive(scopeStatuses[config.name]) : false;
-  const Glyph = GLYPHS[tab.kind];
+  const { glyph: Glyph, className: glyphClass } = tabGlyph(tab);
 
   return (
     <div
@@ -95,21 +136,24 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
           !isActive && (live ? 'min-w-21 pr-1' : 'min-w-15'),
         ),
       )}
-      style={tabHoverStyle('--sidebar')}
+      style={TAB_HOVER_STYLE}
     >
-      <Glyph className={cn('size-3 shrink-0', isActive ? 'text-foreground' : 'text-muted-foreground')} />
+      <span className="relative inline-flex shrink-0">
+        <Glyph className={cn('size-3', isActive ? 'text-foreground' : 'text-muted-foreground', glyphClass)} />
+        {tab.kind === 'chat' && <ConversationTabDot tab={tab} />}
+      </span>
       <FadeLabel
         data-testid={`workspace-tab-title-${tab.id}`}
         className={cn(!isActive && 'flex-1', tab.mode === 'preview' && 'italic')}
         tooltipDelay={600}
       >
-        {tab.title}
+        {title}
       </FadeLabel>
       {live && config && (
-        <Hint label={`Stop ${tab.title}`}>
+        <Hint label={`Stop ${title}`}>
           <Button
             data-testid={`workspace-tab-stop-${tab.id}`}
-            aria-label={`Stop ${tab.title}`}
+            aria-label={`Stop ${title}`}
             variant="ghost"
             size="icon-xs"
             className="rounded-sm hover:bg-foreground/8"
@@ -131,11 +175,11 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
           !isActive && live && 'right-8.5',
         )}
       >
-        <Hint label={`Close ${tab.title}`}>
+        <Hint label={`Close ${title}`}>
           <Button
             data-testid={`workspace-tab-close-${tab.id}`}
             {...TAB_CLOSE_ATTR}
-            aria-label={`Close ${tab.title}`}
+            aria-label={`Close ${title}`}
             tabIndex={-1}
             variant="ghost"
             size="icon-xs"

@@ -13,60 +13,25 @@
  *   only then does the controller open a live WS sub (D4). A brand-new local
  *   thread with no remoteId is never live.
  *
- * `skipDraftRestore`: this hook's hidden instance is kept warm for every alive
- * thread, regardless of what the chat surface actually renders for it. A chat
- * that is (or is about to become, via a queued `pendingPair`) a split zone's
- * member is displayed through `ChatZone`'s OWN `ExternalThread`, with its own
- * composer — this hidden instance's composer is never shown. Without the
- * skip, this hook's mount effect (which runs well before the zone itself
- * renders) always wins `draft-stash`'s one-shot take and seeds a composer
- * nobody sees, leaving a #178 offload-release draft empty in the zone
- * that actually displays.
+ * `ownsComposer`: this hook's hidden instance is kept warm for every alive
+ * thread, whatever the chat surface renders. Its composer is the one on screen
+ * only while its chat is the conversation. A chat open in a workspace tab has a
+ * composer of its own there (`use-conversation-thread`), and a draft must be in
+ * whichever of the two the user sees, so:
  *
- * Zone MEMBERSHIP alone over-skips: `ChatSurface` only renders the split (and
- * mounts `ChatZone`, the other consumer) when `splitFits` is ALSO true (the
- * surface is wide enough for two zones — see `zones-store`'s `splitFits` and
- * `ChatSurface`'s split branch). In a narrow window, a zone member still
- * renders through THIS hook's instance as the plain single-chat view, so
- * skipping here too would leave NEITHER consumer taking the stash: the
- * composer renders empty now, and a later `ChatZone` mount (once the window
- * widens) would apply the stash stale, overwriting anything the user typed or
- * sent in the meantime.
- *
- * Take only when THIS instance is the one ChatSurface actually displays —
- * it's the focused chat, and the split will not render (`!splitWillRender`).
- * A queued `pendingPair` always defers: `switchToThread` already points
- * `mainThreadId` at the incoming chat before the pair resolves into `zones`,
- * so without this a pending fork would read as "focused, no split yet" and
- * take immediately.
- *
- * `splitFits` itself can lag `zones` by a render or more — opening the pair
- * parks the workspace panel to free the width, and that resize is measured
- * asynchronously (`useMeasuredWidth`'s `ResizeObserver`), not applied in the
- * same commit. So `zones` can already include this chat, with `splitFits`
- * still reading its pre-parking (false) value: this hook reads
- * "focused, no split" for a beat, takes the stash, and then loses that
- * status once `splitFits` catches up and `ChatZone` mounts. Predicting that
- * ahead of time isn't reliable; `useChatThreadRuntime`'s handoff effect
- * covers it instead — it hands whatever this instance's composer holds back
- * to the stash the moment `isVisibleSplitZone` (`isVisibleZone(zones, chatId)
- * && splitFits`) flips true, so `ChatZone`'s own restore still finds it.
- *
- * `isVisibleSplitZone` is deliberately NOT `skipDraftRestore`: the latter
- * also flips true on an ordinary focus change to any other chat (every warm
- * instance's `isDisplayedHere` goes false the moment it isn't
- * `mainThreadId`), which must never trigger the handoff — doing so stashes
- * and clears a draft nobody is giving away a composer for, and the later
- * real eviction (`OffloadRelease`) overwrites it with that now-empty
- * composer (#178 regression). `isVisibleSplitZone` only turns true when this
- * chat is actually about to render inside `ChatZone`.
+ * - this instance takes a stashed draft only while it owns the composer; a tab's
+ *   `DraftKeeper` takes it otherwise.
+ * - `shownInTab` turning true hands whatever this composer holds to the stash,
+ *   for the tab to pick up. Losing the screen to another session does NOT: that
+ *   composer still holds the draft, and stashing it there made a later offload
+ *   overwrite the real draft with an emptied one (#178).
  */
 import { useAuiState } from '@assistant-ui/react';
 import type { AssistantRuntime } from '@assistant-ui/react';
 import { useChatController } from './use-chat-controller';
 import { useDaemonPort } from './daemon-port-context';
 import { useChatThreadRuntime } from '../../chat/runtime/use-chat-thread-runtime';
-import { isVisibleZone, useZonesStore } from '../../chat/zones/zones-store';
+import { useMountedConversations } from '../../workspace-chat/mounted-conversations';
 
 export function useChatRuntimeHook(): AssistantRuntime {
   const chatId = useAuiState((s) => s.threadListItem.id);
@@ -84,13 +49,9 @@ export function useChatRuntimeHook(): AssistantRuntime {
 
   const controller = useChatController(chatId, port);
 
-  // Booleans about THIS chat only, for the same reason as `isActive`.
-  const isVisibleSplitZone = useZonesStore((s) => s.splitFits && isVisibleZone(s.zones, chatId));
-  const pendingPairHere = useZonesStore((s) => s.pendingPair?.[1] === chatId);
-  // When this chat is main, "the split renders" reduces to "this chat is a
-  // visible zone", so the raw mainThreadId is never needed here.
-  const isDisplayedHere = isMain && !isVisibleSplitZone;
-  const skipDraftRestore = pendingPairHere || !isDisplayedHere;
+  // A boolean about THIS chat only, for the same reason as `isActive`.
+  const shownInTab = useMountedConversations((s) => s.composing.has(chatId));
+  const ownsComposer = isMain && !shownInTab;
 
-  return useChatThreadRuntime(controller, port, { active: isActive, chatId, skipDraftRestore, isVisibleSplitZone });
+  return useChatThreadRuntime(controller, port, { active: isActive, chatId, ownsComposer, shownInTab });
 }

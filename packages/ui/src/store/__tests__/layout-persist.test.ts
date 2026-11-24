@@ -5,12 +5,10 @@ import { useLayoutStore } from '../layout';
 import type { RunState } from '../run-pane';
 import type { SessionWorkspace } from '../layout';
 
-const layout = {
-  top: ['chat', 'run'],
-  bottom: null,
-  topFlex: { chat: 0.6, run: 0.4 },
-  vFlex: { top: 1, bottom: 0.4 },
-} as SessionWorkspace['layout'];
+const layout: SessionWorkspace['layout'] = {
+  top: ['chat', 'workspace'],
+  topFlex: { chat: 0.6, workspace: 0.4 },
+};
 
 const run = (tabs: Array<{ id: string; kind: string; title: string; path?: string; config?: string }>): RunState =>
   ({ dir: 'v', flex: [1, 1], panes: [{ id: 'p1', active: tabs[0]?.id ?? null, tabs }] }) as RunState;
@@ -83,13 +81,13 @@ describe('layout-persist', () => {
     // terminal-only run sanitized away
     expect(out['chat-1']!.run).toBeNull();
     // layout kept fully
-    expect(out['chat-1']!.layout.topFlex).toEqual({ chat: 0.6, run: 0.4 });
+    expect(out['chat-1']!.layout.topFlex).toEqual({ chat: 0.6, workspace: 0.4 });
   });
 
   it('reviveSessions returns a real Map', () => {
     const m = reviveSessions({ 'chat-1': { layout, run: null } });
     expect(m).toBeInstanceOf(Map);
-    expect(m.get('chat-1')?.layout.top).toEqual(['chat', 'run']);
+    expect(m.get('chat-1')?.layout.top).toEqual(['chat', 'workspace']);
   });
 });
 
@@ -116,17 +114,6 @@ describe('layout-persist migrate (v1 → v2)', () => {
     expect(out.top).toEqual(['workspace']);
   });
 
-  it('drops a bottom strip that the top row now duplicates', () => {
-    const out = migrated({ top: ['chat', 'files'], bottom: 'run', topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
-    expect(out.top).toEqual(['chat', 'workspace']);
-    expect(out.bottom).toBeNull();
-  });
-
-  it('keeps a bottom strip the top row does not hold', () => {
-    const out = migrated({ top: ['chat'], bottom: 'run', topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
-    expect(out.bottom).toBe('workspace');
-  });
-
   it('carries flex weights over, run winning a files/run tie', () => {
     const out = migrated({
       top: ['chat', 'run'],
@@ -135,7 +122,6 @@ describe('layout-persist migrate (v1 → v2)', () => {
       vFlex: { top: 0.8, bottom: 0.2 },
     });
     expect(out.topFlex).toEqual({ chat: 0.6, workspace: 0.4 });
-    expect(out.vFlex).toEqual({ top: 0.8, bottom: 0.2 });
   });
 
   it('leaves persisted tabs alone — they already carry the merged RunTab shape', () => {
@@ -153,6 +139,54 @@ describe('layout-persist migrate (v1 → v2)', () => {
 
   it('survives an empty / absent persisted payload', () => {
     expect(migrate(undefined, 1)).toEqual({ sessions: {} });
+  });
+});
+
+describe('layout-persist migrate (v2 → v3: the bottom strip the chat split parked the workspace in)', () => {
+  const migrate = layoutPersistOptions.migrate!;
+  const migrated = (layout: unknown, tabs: Parameters<typeof run>[0] = []) =>
+    (
+      migrate({ sessions: { 'chat-1': { layout, run: tabs.length > 0 ? run(tabs) : null } } }, 2) as {
+        sessions: Record<string, SessionWorkspace>;
+      }
+    ).sessions['chat-1']!;
+
+  it('brings a parked workspace back beside the chat, still lit, with its tabs', () => {
+    const out = migrated({ top: ['chat'], bottom: 'workspace', topFlex: {}, vFlex: { top: 1, bottom: 0.4 } }, [
+      { id: 'c1', kind: 'code', title: 'a.ts', path: 'a.ts' },
+    ]);
+    expect(out.layout).toEqual({ top: ['chat', 'workspace'], topFlex: {} });
+    expect(out.run!.panes[0]!.tabs.map((t) => t.id)).toEqual(['c1']);
+  });
+
+  it('keeps the dragged widths', () => {
+    const out = migrated({
+      top: ['chat', 'workspace'],
+      bottom: null,
+      topFlex: { chat: 0.35, workspace: 0.65 },
+      vFlex: { top: 1, bottom: 0.4 },
+    });
+    expect(out.layout).toEqual({ top: ['chat', 'workspace'], topFlex: { chat: 0.35, workspace: 0.65 } });
+  });
+
+  it('keeps a hidden chat hidden', () => {
+    const out = migrated({ top: ['workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
+    expect(out.layout.top).toEqual(['workspace']);
+  });
+
+  it('puts chat on the left of a workspace that had been dragged to its other side', () => {
+    const out = migrated({ top: ['workspace', 'chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
+    expect(out.layout.top).toEqual(['chat', 'workspace']);
+  });
+});
+
+describe('layout-persist — conversation tabs', () => {
+  it('keeps chat and agent tabs across a restart', () => {
+    const tabs = [
+      { id: 'chat-side-1', kind: 'chat', title: 'Side chat', chatId: 'side-1', role: 'side' },
+      { id: 'agent-call-1', kind: 'agent', title: 'reviewer', chatId: 'chat-1', toolCallId: 'call-1' },
+    ];
+    expect(sanitizeRun(run(tabs))!.panes[0]!.tabs).toEqual(tabs);
   });
 });
 

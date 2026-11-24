@@ -52,29 +52,51 @@ describe('⌘L — focus the visible composer', () => {
     unmount();
   });
 
-  it("with a split rendered, targets the [data-focused=true] zone's composer", () => {
-    const unfocusedZone = document.createElement('div');
-    unfocusedZone.setAttribute('data-focused', 'false');
-    const unfocusedInput = document.createElement('textarea');
-    unfocusedInput.setAttribute('data-mf-composer-input', '');
-    unfocusedZone.appendChild(unfocusedInput);
+  /** A composer, inside a workspace chat tab when `tab` names its state. */
+  function mountComposer(tab?: 'active' | 'hidden'): HTMLTextAreaElement {
+    const input = document.createElement('textarea');
+    input.setAttribute('data-mf-composer-input', '');
+    const host = document.createElement('div');
+    if (tab) host.setAttribute('data-conversation-tab', tab);
+    host.appendChild(input);
+    document.body.appendChild(host);
+    return input;
+  }
 
-    const focusedZone = document.createElement('div');
-    focusedZone.setAttribute('data-focused', 'true');
-    const focusedInput = document.createElement('textarea');
-    focusedInput.setAttribute('data-mf-composer-input', '');
-    focusedZone.appendChild(focusedInput);
-
-    // Unfocused zone renders first in the DOM — proves the query targets the
-    // FOCUSED zone by attribute, not by document order.
-    document.body.appendChild(unfocusedZone);
-    document.body.appendChild(focusedZone);
+  it('means the conversation, whatever chat tabs the workspace shows', () => {
+    mountComposer('hidden');
+    mountComposer('active');
+    const conversation = mountComposer();
     const { unmount } = mountFocusComposerAction();
 
     pressFocusComposer();
 
-    expect(document.activeElement).toBe(focusedInput);
-    expect(document.activeElement).not.toBe(unfocusedInput);
+    expect(document.activeElement).toBe(conversation);
+    unmount();
+  });
+
+  it('means the workspace tab while the keyboard is in it', () => {
+    mountComposer();
+    const inTab = mountComposer('active');
+    const row = document.createElement('button');
+    inTab.parentElement!.appendChild(row);
+    row.focus();
+    const { unmount } = mountFocusComposerAction();
+
+    pressFocusComposer();
+
+    expect(document.activeElement).toBe(inTab);
+    unmount();
+  });
+
+  it('with the chat hidden, means the chat tab in front', () => {
+    mountComposer('hidden');
+    const front = mountComposer('active');
+    const { unmount } = mountFocusComposerAction();
+
+    pressFocusComposer();
+
+    expect(document.activeElement).toBe(front);
     unmount();
   });
 

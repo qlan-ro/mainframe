@@ -1,6 +1,5 @@
-import { Fragment, memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { ChatSurface } from '@/features/sessions/new-thread/ChatSurface';
-import type { SurfaceId } from '@/store/layout';
 import { useLayoutStore } from '@/store/layout';
 import { emitSurfaceIntent, onSurfaceIntent } from '@/store/surface-intents';
 import { subscribeToFileIntents } from '@/store/intent-subscriber';
@@ -10,62 +9,55 @@ import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { cn } from '@/lib/utils';
 import { useColumnEdge } from './column-edges';
 import { SurfDivider } from './SurfDivider';
+import { useWorkspaceSlide } from './use-workspace-slide';
 import { WorkspaceSurface } from './surfaces/WorkspaceSurface';
 
-// Each surface is its own rounded floating card, per the prototype (04-engine
-// `surfCard`); the MainToolbar sits transparent on the window background, NOT
-// inside a white card.
 const PANEL_LAYOUT = 'flex flex-col overflow-hidden bg-background';
 
-// The horizontal divider's gutter in px. The vertical one is a bare hairline, so
-// the workspace's left edge and its title-bar separator are the same pixel.
-const DIVIDER_GUTTER = 9;
+/** W4: what each panel keeps. In a row too narrow for both, the workspace wins. */
+const MIN_CHAT = 360;
+const MIN_WORKSPACE = 320;
 
-function SurfaceView({ name }: { name: SurfaceId }) {
-  if (name === 'chat') return <ChatSurface />;
-  return <WorkspaceSurface />;
+/**
+ * The workspace's width beside the chat: its share of the row, half by default,
+ * held between the two minimums (the chat's counts the 1px divider), or the row
+ * less the divider when the row itself is narrower. In `cqw` of the row, so the
+ * panel's content keeps its final width while the panel slides.
+ */
+const PANEL_WIDTH = 'w-[min(100cqw-1px,max(20rem,min(var(--mf-workspace-frac)*100cqw,100cqw-22.5rem-1px)))]';
+
+/** Reports where the panel's left edge comes to rest, so the title bar does not chase the slide. */
+function RestingEdge() {
+  const ref = useColumnEdge('workspace');
+  return (
+    <div
+      ref={ref}
+      aria-hidden
+      className={cn('pointer-events-none invisible absolute inset-y-0 right-0', PANEL_WIDTH)}
+    />
+  );
 }
 
-function SurfaceHostImpl() {
-  const layout = useLayoutStore((s) => s.layout);
+/** Opens and toggles surfaces on the app's intents and shortcuts. One stable subscription each. */
+function useSurfaceIntents() {
   const toggleSurface = useLayoutStore((s) => s.toggleSurface);
-  const setTopFrac = useLayoutStore((s) => s.setTopFrac);
-  const setVFrac = useLayoutStore((s) => s.setVFrac);
 
-  const outerRef = useRef<HTMLDivElement>(null);
-  const topRef = useRef<HTMLDivElement>(null);
-  const workspaceEdge = useColumnEdge('workspace');
-
-  // Stable subscription — reads live store state inside the callback, no re-sub on toggle.
   useEffect(() => {
     return onSurfaceIntent((intent) => {
       if (intent.type !== 'activate-surface') return;
       const state = useLayoutStore.getState();
-      const cur = state.layout;
-      const isActive = cur.top.includes(intent.surface) || cur.bottom === intent.surface;
-      if (!isActive) state.toggleSurface(intent.surface);
+      if (!state.layout.top.includes(intent.surface)) state.toggleSurface(intent.surface);
     });
   }, []);
+  // open-file / reveal-file: opens tabs + lights the workspace.
+  useEffect(() => subscribeToFileIntents(), []);
+  // new-terminal: resolves cwd, creates PTY+xterm, adds a tab.
+  useEffect(() => subscribeToTerminalIntents(), []);
+  // open-url-tab: normalizes the URL and adds the tab.
+  useEffect(() => subscribeToUrlTabIntents(), []);
 
-  // Subscribe to open-file / reveal-file intents — opens tabs + lights the workspace.
-  // One stable subscription; no re-sub on layout change.
-  useEffect(() => {
-    return subscribeToFileIntents();
-  }, []);
-
-  // Subscribe to new-terminal intents — resolves cwd, creates PTY+xterm, adds a tab.
-  // One stable subscription; no re-sub on layout change.
-  useEffect(() => {
-    return subscribeToTerminalIntents();
-  }, []);
-
-  // Subscribe to open-url-tab intents — normalizes the URL and adds the tab.
-  useEffect(() => {
-    return subscribeToUrlTabIntents();
-  }, []);
-
-  // ⌘1/⌘2 TOGGLE their surface — the `activate-surface` intent only lights an
-  // inactive one, so routing these through it would silently drop the "press
+  // These TOGGLE their surface — the `activate-surface` intent only lights an
+  // inactive one, so routing them through it would silently drop the "press
   // again to hide" half of the shipped behavior.
   useShortcutAction('workspace.toggle-chat', () => toggleSurface('chat'));
   useShortcutAction('workspace.toggle-workspace', () => toggleSurface('workspace'));
@@ -74,48 +66,64 @@ function SurfaceHostImpl() {
   // chord and the picker row can never diverge.
   useShortcutAction('workspace.new-terminal', () => emitSurfaceIntent({ type: 'new-terminal' }));
   useShortcutAction('workspace.new-url-tab', () => emitSurfaceIntent({ type: 'open-url-tab' }));
+}
 
-  const { top, bottom, topFlex, vFlex } = layout;
-  const twoCol = top.length === 2;
+function SurfaceHostImpl() {
+  const layout = useLayoutStore((s) => s.layout);
+  const sessionId = useLayoutStore((s) => s.activeSessionId);
+  const setTopFrac = useLayoutStore((s) => s.setTopFrac);
+  useSurfaceIntents();
+
+  const rowRef = useRef<HTMLDivElement>(null);
+  const chatLit = layout.top.includes('chat');
+  const workspaceLit = layout.top.includes('workspace');
+  const phase = useWorkspaceSlide({ lit: workspaceLit, beside: chatLit, sessionId });
+  const beside = chatLit && phase !== 'closed';
+  const workspaceFrac = layout.topFlex.workspace ?? 0.5;
 
   return (
-    <div data-testid="chat-thread-area" ref={outerRef} className="flex flex-1 flex-col overflow-hidden">
-      {/* Top row: 1 or 2 surfaces side by side. */}
-      <div ref={topRef} style={{ flex: bottom ? vFlex.top : 1 }} className="flex min-h-0 overflow-hidden">
-        {top.map((name, i) => (
-          <Fragment key={name}>
-            {/* A lone pane always takes the whole row: drag fractions are < 1,
-                and a flex row whose grow factors sum below 1 hands out only
-                that fraction of its free space — the stale weight would leave
-                the survivor at 30-something percent after a close. The weights
-                stay in the store so re-opening restores the dragged ratio
-                (same guard the vertical axis has via `bottom ? vFlex.top : 1`). */}
-            <div
-              ref={name === 'workspace' && i === 1 ? workspaceEdge : undefined}
-              data-surface={name}
-              style={{ flex: twoCol ? (topFlex[name] ?? 1) : 1 }}
-              // The workspace keeps room for its title-bar segment (W1), or the
-              // whole row less the divider when the row itself is narrower.
-              className={cn(name === 'workspace' ? 'min-w-[min(20rem,calc(100%-1px))]' : 'min-w-0', PANEL_LAYOUT)}
-            >
-              <SurfaceView name={name} />
-            </div>
-            {twoCol && i === 0 && <SurfDivider axis="x" containerRef={topRef} onFrac={setTopFrac} />}
-          </Fragment>
-        ))}
-      </div>
-
-      {/* Vertical divider + bottom strip. */}
-      {bottom && (
-        <>
-          <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} gutter={DIVIDER_GUTTER} />
-          <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
-            <div data-surface={bottom} className={`min-w-0 flex-1 ${PANEL_LAYOUT}`}>
-              <SurfaceView name={bottom} />
+    <div data-testid="chat-thread-area" className="flex flex-1 flex-col overflow-hidden">
+      <div
+        ref={rowRef}
+        style={{ '--mf-workspace-frac': workspaceFrac } as React.CSSProperties}
+        className="@container relative flex min-h-0 flex-1 overflow-hidden"
+      >
+        {chatLit && (
+          <div data-surface="chat" className={cn('min-w-0 flex-1', PANEL_LAYOUT)}>
+            <ChatSurface />
+          </div>
+        )}
+        {chatLit && workspaceLit && <RestingEdge />}
+        {beside && (
+          <SurfDivider
+            containerRef={rowRef}
+            frac={1 - workspaceFrac}
+            minLeft={MIN_CHAT}
+            minRight={MIN_WORKSPACE}
+            onFrac={setTopFrac}
+          />
+        )}
+        {phase !== 'closed' && (
+          <div
+            data-surface="workspace"
+            data-slide={phase}
+            inert={phase === 'closing'}
+            className={cn(
+              'relative min-w-0 overflow-hidden bg-background',
+              !chatLit && 'flex-1',
+              chatLit && 'shrink-0',
+              chatLit && (phase === 'closing' ? 'w-0' : PANEL_WIDTH),
+              (phase === 'opening' || phase === 'closing') &&
+                'transition-[width] duration-[320ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none',
+              phase === 'opening' && 'starting:w-0',
+            )}
+          >
+            <div className={cn('absolute inset-y-0 left-0', PANEL_LAYOUT, chatLit ? PANEL_WIDTH : 'w-full')}>
+              <WorkspaceSurface leaving={phase === 'closing'} />
             </div>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }

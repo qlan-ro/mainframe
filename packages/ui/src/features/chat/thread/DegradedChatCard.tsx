@@ -51,8 +51,8 @@ export function DegradedChatCard() {
   const port = useDaemonPort();
   // This card itself adds no scoping: on the main surface `threadListItem`
   // resolves to the active chat's item (the same default binding ChatSurface
-  // reads for `s.threadListItem`); in a split pane, ChatZone rebinds
-  // `threadListItem` to that zone's own chatId via its AuiProvider before
+  // reads for `s.threadListItem`); in a workspace tab, ChatTabBody rebinds
+  // `threadListItem` to that tab's own chat via its AuiProvider before
   // mounting this card, so the same unscoped read resolves to the right item
   // there too — no SessionRowItemScope needed in either case.
   const aui = useAui();

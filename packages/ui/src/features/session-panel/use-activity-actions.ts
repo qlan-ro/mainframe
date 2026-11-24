@@ -4,9 +4,8 @@
  */
 import { useCallback } from 'react';
 import { useAui } from '@assistant-ui/react';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
-import { openInSplit } from '@/features/chat/zones/open-in-split';
-import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
+import { openSubagentTab } from '@/features/workspace-chat/conversation-tabs';
+import { openTaskTab } from '@/features/workspace-chat/open-session';
 import {
   cancelDelegatedTask,
   readBackgroundTaskOutput,
@@ -53,9 +52,6 @@ export function useActivityActions(
   }: { chatId: string; adapterId?: string; columnId: PanelColumnId; jumps: ActivityJumps },
 ): ActivityActions {
   const aui = useAui();
-  const threadId = useSideAwareThreadId();
-  const openSubagent = useZonesStore((s) => s.openSubagent);
-  const splitFits = useZonesStore((s) => s.splitFits);
   const setOverlayOpen = usePanelControl((s) => s.setOverlayOpen);
   const { source } = row;
   const childId = row.delegated?.itemId;
@@ -70,25 +66,18 @@ export function useActivityActions(
   const activate = () => {
     // A jump still on its way would move the transcript under what this opens.
     jumps.cancel();
-    if (childId && threadId) {
+    if (childId) {
       reveal();
-      openInSplit(threadId, childId);
-      aui.threads.switchToThread(childId);
+      openTaskTab(aui.threads, childId);
       return;
     }
     if (row.state === 'needs-you') {
       reveal();
       if (focusPendingRequest(chatId)) return;
     }
-    if (row.kind === 'subagent' && source?.toolCallId && threadId && splitFits) {
+    if (row.kind === 'subagent' && source?.toolCallId) {
       reveal();
-      openSubagent({
-        parentChatId: chatId,
-        parentThreadId: threadId,
-        toolCallId: source.toolCallId,
-        messageId: source.messageId,
-        title: row.title,
-      });
+      openSubagentTab({ chatId, toolCallId: source.toolCallId, messageId: source.messageId, title: row.title });
       return;
     }
     jump();

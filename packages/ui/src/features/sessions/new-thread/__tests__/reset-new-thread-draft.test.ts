@@ -29,7 +29,7 @@ beforeEach(() => {
   useComposerSegments.setState({ byThread: {} });
   useSessionReferences.setState({ byThread: {} });
   useLayoutStore.setState({
-    layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['chat'], topFlex: {} },
     run: null,
     sessions: new Map(),
     activeSessionId: null,
@@ -142,6 +142,5 @@ describe('resetNewThreadDraft', () => {
     resetNewThreadDraft('__LOCALID_1');
 
     expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
-    expect(useLayoutStore.getState().layout.bottom).toBeNull();
   });
 });

@@ -43,7 +43,7 @@ interface Harness {
   calls: string[];
   items: ThreadItemRef[];
   mainThreadId: string | null;
-  zones: readonly [string, string] | null;
+  tabChats: ReadonlySet<string>;
   detachItem: ReturnType<typeof vi.fn>;
   disposeController: ReturnType<typeof vi.fn>;
   markForStash: ReturnType<typeof vi.fn>;
@@ -54,7 +54,7 @@ interface Harness {
 function makeHarness(items: ThreadItemRef[] = [], parentBySideChatId = new Map<string, string>()): Harness {
   const ws = fakeWs();
   const calls: string[] = [];
-  const state = { items, mainThreadId: null as string | null, zones: null as readonly [string, string] | null };
+  const state = { items, mainThreadId: null as string | null, tabChats: new Set<string>() as ReadonlySet<string> };
   const detachItem = vi.fn((id: string) => calls.push(`detach:${id}`));
   const disposeController = vi.fn((id: string) => calls.push(`dispose:${id}`));
   const markForStash = vi.fn((id: string) => calls.push(`stash:${id}`));
@@ -73,11 +73,11 @@ function makeHarness(items: ThreadItemRef[] = [], parentBySideChatId = new Map<s
     set mainThreadId(v: string | null) {
       state.mainThreadId = v;
     },
-    get zones(): readonly [string, string] | null {
-      return state.zones;
+    get tabChats(): ReadonlySet<string> {
+      return state.tabChats;
     },
-    set zones(v: readonly [string, string] | null) {
-      state.zones = v;
+    set tabChats(v: ReadonlySet<string>) {
+      state.tabChats = v;
     },
     detachItem,
     disposeController,
@@ -86,7 +86,7 @@ function makeHarness(items: ThreadItemRef[] = [], parentBySideChatId = new Map<s
     deps: {
       getThreadItems: () => state.items,
       getMainThreadId: () => state.mainThreadId,
-      getZones: () => state.zones,
+      getTabChats: () => state.tabChats,
       detachItem,
       disposeController,
       markForStash,
@@ -173,15 +173,29 @@ describe('OffloadRelease — AC12 on-screen defer', () => {
     release.dispose();
   });
 
-  it('defers when a resolved item is in the zones pair, even off the main thread', () => {
+  it('defers while a workspace tab shows the chat, even off the main thread', () => {
     const h = makeHarness([{ id: 'chat-9', remoteId: undefined }]);
-    h.zones = ['chat-9', 'other'];
+    h.tabChats = new Set(['chat-9']);
     const release = createOffloadRelease(h.ws as unknown as DaemonWsClient, h.deps);
 
     h.ws.emit(offloaded('chat-9'));
 
     expect(h.detachItem).not.toHaveBeenCalled();
     expect(h.disposeController).not.toHaveBeenCalled();
+    release.dispose();
+  });
+
+  it('defers a side chat whose own tab is open, though no thread list holds it', () => {
+    const h = makeHarness([{ id: 'chat-9', remoteId: undefined }]);
+    h.tabChats = new Set(['side-1']);
+    const release = createOffloadRelease(h.ws as unknown as DaemonWsClient, h.deps);
+
+    h.ws.emit(offloaded('side-1'));
+    expect(h.disposeController).not.toHaveBeenCalled();
+
+    h.tabChats = new Set();
+    release.recheck();
+    expect(h.disposeController).toHaveBeenCalledWith('side-1');
     release.dispose();
   });
 

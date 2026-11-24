@@ -8,7 +8,8 @@
  *   chat-assistant-message     — assistant turn root
  *   chat-assistant-message-fork — the turn's "Fork from here" button
  *   chat-header-parent-link    — the fork's link back to its parent
- *   chat-composer-input        — composer textarea (one per visible zone)
+ *   workspace-conversation-chat-<chatId> — a chat tab's body in the workspace
+ *   chat-composer-input        — composer textarea (the conversation's, and one per chat tab)
  */
 
 import { test, expect, type Page } from '@playwright/test';
@@ -33,19 +34,11 @@ async function sendBothPrompts(page: Page) {
   await waitForIdle(page, 90_000);
 }
 
-/**
- * The fork zone's own composer. `.first()` can select the parent zone.
- * `chat-zone-` also prefixes the column strip's own `chat-zone-strip-<id>` /
- * `chat-zone-close-<id>` testids, so exclude those to isolate zone roots.
- */
-async function forkZoneComposer(page: Page, parentChatId: string) {
-  const zones = page.locator('[data-testid^="chat-zone-"]:not([data-testid*="-strip-"]):not([data-testid*="-close-"])');
-  await expect(zones).toHaveCount(2);
-  const zoneTestIds = await zones.evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')));
-  const forkZoneTestId = zoneTestIds.find((id) => id !== `chat-zone-${parentChatId}`);
-  expect(forkZoneTestId).toBeTruthy();
-  return page.getByTestId(forkZoneTestId!).locator('[data-testid="chat-composer-input"]');
-}
+/** The conversation's own column, which a fork never takes over. */
+const conversation = (page: Page) => page.locator('[data-surface="chat"]');
+
+/** The one chat tab open in the workspace. */
+const forkTab = (page: Page) => page.locator('[data-testid^="workspace-conversation-chat-"]');
 
 test.describe('§fork-from-message (fork-capable mock)', () => {
   let app: TauriAppFixture;
@@ -76,131 +69,50 @@ test.describe('§fork-from-message (fork-capable mock)', () => {
     await expect(button).toBeEnabled();
     await button.click();
 
-    await expect(page.locator('[data-testid="chat-header-parent-link"]').first()).toBeVisible({ timeout: 15_000 });
-
-    // The parent was on screen, so the fork opens beside it as a split pair
-    // (forkAnchor). Scope the transcript checks per zone so each chat's own
-    // messages are asserted, not the union of both. `chat-zone-` also prefixes
-    // the column strip's own `chat-zone-strip-<id>` / `chat-zone-close-<id>`
-    // testids, so exclude those to isolate the zone root itself.
-    const zones = page.locator(
-      '[data-testid^="chat-zone-"]:not([data-testid*="-strip-"]):not([data-testid*="-close-"])',
-    );
-    await expect(zones).toHaveCount(2);
-    const zoneTestIds = await zones.evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')));
-    const forkZoneTestId = zoneTestIds.find((id) => id !== `chat-zone-${parentChatId}`);
-    expect(forkZoneTestId).toBeTruthy();
-    const parentZone = page.getByTestId(`chat-zone-${parentChatId}`);
-    const forkZone = page.getByTestId(forkZoneTestId!);
+    // The fork opens as a workspace tab; the parent stays the conversation.
+    await expect(forkTab(page).getByTestId('chat-header-parent-link')).toContainText('Forked from', {
+      timeout: 15_000,
+    });
 
     // The parent is untouched: both prompts (and the fork point itself) still
     // show in its own transcript.
-    const parentMessages = parentZone.locator('[data-testid="chat-user-message"]');
+    const parentMessages = conversation(page).locator('[data-testid="chat-user-message"]');
     await expect(parentMessages).toHaveCount(2);
     await expect(parentMessages.nth(0)).toContainText(PROMPT_1);
     await expect(parentMessages.nth(1)).toContainText(PROMPT_2);
 
     // The fork holds the first turn, while the later prompt stays only in the parent.
-    const forkMessages = forkZone.locator('[data-testid="chat-user-message"]');
+    const forkMessages = forkTab(page).locator('[data-testid="chat-user-message"]');
     await expect(forkMessages).toHaveCount(1);
     await expect(forkMessages.first()).toContainText(PROMPT_1);
     await expect(forkMessages).not.toContainText(PROMPT_2);
-    await expect(forkZone.getByTestId('chat-composer-input')).toBeEmpty();
-  });
-});
-
-/**
- * A narrow surface parks the split behind the single-chat view (ChatSurface's
- * `splitFits` gate, `MIN_ZONE_WIDTH` in zones-store.ts) even though the fork
- * is still a `zones` member. The review follow-up on 3e34c95c: zone
- * membership alone must not lose an edit made in the single view when the
- * window is widened and the fork moves into its own zone.
- */
-test.describe('§fork-from-message (narrow viewport — split parked behind single view)', () => {
-  let app: TauriAppFixture;
-  let project: TauriProject;
-  let parentChatId: string;
-
-  test.beforeAll(async () => {
-    app = await launchTauriApp({ recordingKey: 'messaging', mockFork: true });
-    await app.page.setViewportSize({ width: 820, height: 800 });
-    project = await createTauriProject(app.page);
-    parentChatId = await createTauriChat(app.page, project.projectId, 'acceptEdits');
-    await sendBothPrompts(app.page);
+    await expect(forkTab(page).getByTestId('chat-composer-input')).toBeEmpty();
   });
 
-  test.afterAll(async () => {
-    cleanupTauriProject(project);
-    await closeTauriApp(app);
-  });
-
-  test('keeps an edit made in the parked single view when widened', async () => {
+  test('keeps an unsent message in the fork: tab closed, reopened, and moved to the chat column', async () => {
     const { page } = app;
-    const button = await forkButton(page, 0);
-    await expect(button).toBeEnabled();
-    await button.click();
+    const unsent = 'not sent yet';
+    const tab = page.locator('[data-testid^="workspace-tab-chat-"][role="tab"]');
+    const forkId = (await tab.getAttribute('data-testid'))!.replace('workspace-tab-chat-', '');
+    await forkTab(page).getByTestId('chat-composer-input').fill(unsent);
 
-    await expect(page.getByTestId('chat-header-parent-link').first()).toBeVisible({ timeout: 15_000 });
-    // Too narrow for the split: ChatSurface renders the single view.
-    await expect(page.getByTestId('chat-split-row')).toHaveCount(0);
-    const composer = page.getByTestId('chat-composer-input');
-    await expect(composer).toBeEmpty();
+    await tab.hover();
+    await page.getByTestId(`workspace-tab-close-chat-${forkId}`).click();
+    await expect(forkTab(page)).toHaveCount(0);
+    // The last tab went, so the workspace collapsed (W5). The fork is a session like any other.
+    await expect(page.getByTestId('workspace-surface')).toHaveCount(0);
+    const row = page.locator(`[data-testid="sessions-row"][data-chat-id="${forkId}"]`);
+    await row.click({ button: 'right' });
+    await page.getByTestId('sessions-ctx-open-workspace').click();
+    await expect(forkTab(page).getByTestId('chat-composer-input')).toHaveValue(unsent);
 
-    const edited = 'edited before widening — must survive';
-    await composer.fill(edited);
+    await forkTab(page).getByTestId(`workspace-chat-promote-${forkId}`).click();
+    await expect(conversation(page).getByTestId('chat-composer-input')).toHaveValue(unsent);
+    await expect(forkTab(page)).toHaveCount(0);
 
-    // Widening now makes the split fit; the fork renders through its OWN
-    // ChatZone for the first time. The single-view instance's handoff effect
-    // (review follow-up on 214de9d4) re-stashes whatever the composer holds
-    // — the user's edit — the moment it loses displayed status.
-    await page.setViewportSize({ width: 1600, height: 900 });
-    await expect(page.getByTestId('chat-split-row')).toBeVisible();
-    const forkComposer = await forkZoneComposer(page, parentChatId);
-    await expect(forkComposer).toHaveValue(edited);
-  });
-});
-
-/**
- * Mid-width: the surface doesn't fit a split until the WORKSPACE PANEL parks
- * (ChatSurface measures the chat column alone; with the workspace open
- * beside it, that column is too narrow, until `use-zones-reconciler` parks
- * the workspace to the bottom strip on the pair becoming visible). This is
- * the exact race review follow-up B on 214de9d4 describes: `splitFits`
- * reads false for a beat right after the pair resolves into `zones` (its
- * ResizeObserver settles asynchronously, after the park).
- */
-test.describe('§fork-from-message (mid-width viewport — fits only once the workspace panel parks)', () => {
-  let app: TauriAppFixture;
-  let project: TauriProject;
-  let parentChatId: string;
-
-  test.beforeAll(async () => {
-    app = await launchTauriApp({ recordingKey: 'messaging', mockFork: true });
-    await app.page.setViewportSize({ width: 1500, height: 900 });
-    project = await createTauriProject(app.page);
-    parentChatId = await createTauriChat(app.page, project.projectId, 'acceptEdits');
-    await sendBothPrompts(app.page);
-    // Open the workspace beside the chat (⌘⇧W) so the chat column alone is
-    // too narrow for a split — until the fork's pair parks it.
-    await app.page.keyboard.press('ControlOrMeta+Shift+W');
-    await expect(app.page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
-  });
-
-  test.afterAll(async () => {
-    cleanupTauriProject(project);
-    await closeTauriApp(app);
-  });
-
-  test('opens an empty fork once the split catches up after the workspace parks', async () => {
-    const { page } = app;
-    const button = await forkButton(page, 0);
-    await expect(button).toBeEnabled();
-    await button.click();
-
-    await expect(page.getByTestId('chat-header-parent-link').first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId('chat-split-row')).toBeVisible({ timeout: 15_000 });
-    const forkComposer = await forkZoneComposer(page, parentChatId);
-    await expect(forkComposer).toBeEmpty();
+    // Back to the parent, whose workspace still has the tab, and so does the message.
+    await page.getByTestId(`session-tab-${parentChatId}`).click();
+    await expect(forkTab(page).getByTestId('chat-composer-input')).toHaveValue(unsent);
   });
 });
 

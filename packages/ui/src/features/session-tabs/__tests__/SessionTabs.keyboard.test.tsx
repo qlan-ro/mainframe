@@ -1,18 +1,17 @@
 /**
- * SessionTabs — the keyboard side of session-tab switching and open-in-split
- * (⌘1…⌘9, ⌃Tab / ⌃⇧Tab, ⌘⇧\), mounted alongside the real dispatcher and the
- * real zone shortcut actions the way `ChatSurface` mounts them. ⌘⇧\ is proven
- * against the SAME zones-store transition the tab's own context menu produces
- * — the keyboard gesture and the menu action can never disagree about what is
- * splittable (fact 18).
+ * SessionTabs — the keyboard side of session-tab switching and of opening a
+ * session in the workspace (⌘1…⌘9, ⌃Tab / ⌃⇧Tab, ⌘⇧\, ⌘\), mounted alongside
+ * the real dispatcher and the real shortcut actions the way `ChatSurface` mounts
+ * them. ⌘⇧\ is proven against the SAME workspace tab the tab's own context menu
+ * produces — the gesture and the menu can never disagree.
  *
- * Same mocked seams as SessionTabs.split.test.tsx.
+ * Same mocked seams as SessionTabs.workspace.test.tsx.
  */
-import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AssistantClient } from '@assistant-ui/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
+import { useLayoutStore } from '@/store/layout';
 import { useIndexHintsStore } from '@/features/shortcuts/index-hints';
 import { useSessionTabsStore } from '../store';
 
@@ -53,16 +52,16 @@ vi.mock('@/features/sessions/use-fork-chat', () => ({ useForkChat: () => vi.fn()
 vi.mock('@/features/side-chat/use-open-side-chat', () => ({ useOpenSideChat: () => vi.fn() }));
 
 import { useShortcutDispatcher } from '@/features/shortcuts/use-shortcut-dispatcher';
-import { useZoneShortcutActions } from '@/features/chat/zones/use-zone-shortcut-actions';
+import { useConversationShortcuts } from '@/features/workspace-chat/use-conversation-shortcuts';
 import { SessionTabs } from '../SessionTabs';
 
-/** Mirrors ChatSurface: the dispatcher, the zone shortcut actions, and the strip. */
+/** Mirrors ChatSurface: the dispatcher, the shortcut actions, and the strip. */
 function Harness() {
   const aui = {
     threads: { switchToThread, getState: () => ({ mainThreadId: mainThreadIdValue, threadItems: itemsValue }) },
   } as unknown as AssistantClient;
   useShortcutDispatcher();
-  useZoneShortcutActions(aui);
+  useConversationShortcuts(aui);
   return <SessionTabs />;
 }
 
@@ -86,20 +85,26 @@ function seedThreeTabs(active: string): void {
   });
 }
 
-const zones = () => useZonesStore.getState().zones;
+const opened = () => useLayoutStore.getState().run?.panes.flatMap((pane) => pane.tabs.map((tab) => tab.chatId)) ?? [];
+const emptyWorkspace = (sessionId: string) =>
+  useLayoutStore.setState({
+    layout: { top: ['chat'], topFlex: {} },
+    run: null,
+    sessions: new Map(),
+    activeSessionId: sessionId,
+  });
 
 const pressTabIndex = (digit: number) => fireEvent.keyDown(window, { code: `Digit${digit}`, metaKey: true });
 const pressTabNext = () => fireEvent.keyDown(window, { code: 'Tab', ctrlKey: true });
 const pressTabPrev = () => fireEvent.keyDown(window, { code: 'Tab', ctrlKey: true, shiftKey: true });
-const pressOpenInSplit = () =>
-  fireEvent.keyDown(window, { code: 'Backslash', key: '|', metaKey: true, shiftKey: true });
+const pressOpenBeside = () => fireEvent.keyDown(window, { code: 'Backslash', key: '|', metaKey: true, shiftKey: true });
 
 beforeEach(() => {
   isMac = true;
   switchToThread.mockReset();
   newSession.mockReset();
   useSessionTabsStore.setState({ tabIds: [], previewId: null, draftId: null, hydrated: false });
-  useZonesStore.setState({ zones: null, focusedIndex: 0 });
+  emptyWorkspace('chat-a');
   useIndexHintsStore.setState({ revealed: false });
 });
 
@@ -152,80 +157,81 @@ describe('⌃Tab / ⌃⇧Tab — cycle tabs (AC 11)', () => {
   });
 });
 
-describe('⌘⇧\\ — open the active session in a split from the keyboard (AC 12)', () => {
-  it('produces the same zones state as the tab context menu’s Open in Split action', () => {
+const pressCloseBeside = () => fireEvent.keyDown(window, { code: 'Backslash', key: '\\', metaKey: true });
+
+describe('⌘⇧\\ — open the next tab in the workspace from the keyboard (AC 12)', () => {
+  it('opens the same tab as the context menu’s Open in Workspace', () => {
     seedThreeTabs('chat-a');
     render();
-
-    // The menu's own path, captured first as the reference state.
     fireEvent.contextMenu(screen.getByTestId('session-tab-chat-b'));
-    fireEvent.click(screen.getByTestId('session-tab-ctx-open-split'));
-    const menuResult = zones();
-    expect(menuResult).toEqual(['chat-a', 'chat-b']);
+    fireEvent.click(screen.getByTestId('session-tab-ctx-open-workspace'));
+    const fromMenu = useLayoutStore.getState().run!.panes[0]!.tabs;
 
-    useZonesStore.setState({ zones: null, focusedIndex: 0 });
+    act(() => emptyWorkspace('chat-a'));
+    act(() => void pressOpenBeside());
 
-    pressOpenInSplit();
-
-    expect(zones()).toEqual(menuResult);
+    expect(useLayoutStore.getState().run!.panes[0]!.tabs).toEqual(fromMenu);
+    expect(opened()).toEqual(['chat-b']);
   });
 
-  it('retargets the unfocused zone while a split is visible, matching the menu action on the third session', () => {
+  it('opens another each time, and stops when there is none left', () => {
     seedThreeTabs('chat-a');
-    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
     render();
-
-    fireEvent.contextMenu(screen.getByTestId('session-tab-chat-c'));
-    fireEvent.click(screen.getByTestId('session-tab-ctx-open-split'));
-    const menuResult = zones();
-    expect(menuResult).toEqual(['chat-a', 'chat-c']);
-
-    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
-
-    pressOpenInSplit();
-
-    expect(zones()).toEqual(menuResult);
+    act(() => void pressOpenBeside());
+    act(() => void pressOpenBeside());
+    act(() => void pressOpenBeside());
+    expect(opened()).toEqual(['chat-b', 'chat-c']);
   });
 
-  it('is inert with only one session open — no partner to split with', () => {
+  it('is inert with only one session open', () => {
     itemsValue = [SESSIONS[0]!];
     mainThreadIdValue = 'chat-a';
     useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: null, draftId: null, hydrated: true });
     render();
 
-    pressOpenInSplit();
+    pressOpenBeside();
 
-    expect(zones()).toBeNull();
+    expect(opened()).toEqual([]);
   });
 
-  it('is inert when the only two sessions are already the visible pair', () => {
-    itemsValue = [SESSIONS[0]!, SESSIONS[1]!];
-    mainThreadIdValue = 'chat-a';
-    useSessionTabsStore.setState({ tabIds: ['chat-a', 'chat-b'], previewId: null, draftId: null, hydrated: true });
-    useZonesStore.setState({ zones: ['chat-a', 'chat-b'], focusedIndex: 0 });
-    render();
-
-    pressOpenInSplit();
-
-    expect(zones()).toEqual(['chat-a', 'chat-b']);
-  });
-
-  it('is inert when the active session is an unsent draft — it cannot anchor a split', () => {
+  it('is inert when the conversation is an unsent draft', () => {
     itemsValue = [SESSIONS[1]!, { id: '__LOCALID_1', status: 'new' }];
     mainThreadIdValue = '__LOCALID_1';
     useSessionTabsStore.setState({ tabIds: ['chat-b'], previewId: null, draftId: '__LOCALID_1', hydrated: true });
     render();
 
-    pressOpenInSplit();
+    pressOpenBeside();
 
-    expect(zones()).toBeNull();
+    expect(opened()).toEqual([]);
+  });
+});
+
+describe('⌘\\ — close the chat in the workspace', () => {
+  it('takes the front chat tab away and keeps the session', () => {
+    seedThreeTabs('chat-a');
+    render();
+    act(() => void pressOpenBeside());
+
+    act(() => void pressCloseBeside());
+
+    expect(opened()).toEqual([]);
+    expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
+    expect(useSessionTabsStore.getState().tabIds).toContain('chat-b');
+  });
+
+  it('leaves a terminal in front alone', () => {
+    seedThreeTabs('chat-a');
+    render();
+    act(() => void useLayoutStore.getState().addRunTab({ id: 'term-1', kind: 'terminal', title: 'zsh' }));
+
+    act(() => void pressCloseBeside());
+
+    expect(useLayoutStore.getState().run!.panes[0]!.tabs.map((tab) => tab.id)).toEqual(['term-1']);
   });
 });
 
 describe('⌘N hint badges', () => {
-  // These pin the WIRING, not the reveal timing (index-hints.test.ts owns that):
-  // the strip renders pills from four separate call sites, and a prop missing
-  // from the plain non-split one shipped badges that appeared only while split.
+  // These pin the WIRING, not the reveal timing (index-hints.test.ts owns that).
   const hints = () =>
     screen
       .queryAllByTestId(/^session-tab-hint-/)
@@ -245,18 +251,6 @@ describe('⌘N hint badges', () => {
     render();
 
     expect(hints()).toBe('123');
-  });
-
-  it('numbers the regrouped order while split, so the badge matches what ⌘N opens', () => {
-    seedThreeTabs('chat-a');
-    // a and c pair up and regroup adjacently, making c the second tab.
-    useZonesStore.setState({ zones: ['chat-a', 'chat-c'], focusedIndex: 0 });
-    useIndexHintsStore.setState({ revealed: true });
-    render();
-
-    expect(hints()).toBe('123');
-    expect(screen.getByTestId('session-tab-hint-chat-c').textContent).toBe('2');
-    expect(screen.getByTestId('session-tab-hint-chat-b').textContent).toBe('3');
   });
 
   it('badges the tab that ⌘2 actually switches to', () => {

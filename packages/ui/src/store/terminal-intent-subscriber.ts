@@ -44,7 +44,7 @@ async function spawnTerminal(paneId: string | undefined): Promise<void> {
     // Ensure the workspace surface is visible before adding the tab.
     const layoutStore = useLayoutStore.getState();
     const { layout } = layoutStore;
-    if (!layout.top.includes('workspace') && layout.bottom !== 'workspace') layoutStore.toggleSurface('workspace');
+    if (!layout.top.includes('workspace')) layoutStore.toggleSurface('workspace');
 
     // addRunTab returns false when an explicit paneId was given but that pane
     // was closed during the async create above (M6). The terminal is already

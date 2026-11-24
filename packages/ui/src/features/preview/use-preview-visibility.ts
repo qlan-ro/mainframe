@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
+import { useWorkspaceSlide } from '@/store/workspace-slide';
 
 interface ComputeVisibleInput {
   isActiveTab: boolean;
   surfaceVisible: boolean;
   overlayMounted: boolean;
+  /** The panel is sliding in or out: a webview above the DOM cannot move with it. */
+  sliding: boolean;
   /** A DOM overlay (popover/menu/dialog) is overlapping the preview region. */
   occluded: boolean;
   /** Whether the webview composites above the DOM (only then do DOM overlays hide it). */
@@ -16,11 +19,12 @@ export function computePreviewVisible({
   isActiveTab,
   surfaceVisible,
   overlayMounted,
+  sliding,
   occluded,
   compositesAboveDom,
 }: ComputeVisibleInput): boolean {
-  const hiddenByOverlay = compositesAboveDom && (overlayMounted || occluded);
-  return isActiveTab && surfaceVisible && !hiddenByOverlay;
+  const hiddenAboveDom = compositesAboveDom && (overlayMounted || sliding || occluded);
+  return isActiveTab && surfaceVisible && !hiddenAboveDom;
 }
 
 /**
@@ -39,8 +43,9 @@ export function usePreviewVisibility(
   const [overlayMounted, setOverlayMounted] = useState(false);
   const surfaceVisible = useLayoutStore((s) => {
     const { layout } = s;
-    return (Array.isArray(layout.top) && layout.top.includes('workspace')) || layout.bottom === 'workspace';
+    return Array.isArray(layout.top) && layout.top.includes('workspace');
   });
+  const sliding = useWorkspaceSlide((s) => s.sliding);
   const prevVisibleRef = useRef<boolean | null>(null);
   const prevHandleRef = useRef<PreviewHandle | null>(null);
 
@@ -60,13 +65,14 @@ export function usePreviewVisibility(
       isActiveTab,
       surfaceVisible,
       overlayMounted,
+      sliding,
       occluded,
       compositesAboveDom,
     });
     if (visible === prevVisibleRef.current) return;
     prevVisibleRef.current = visible;
     handle?.setVisible(visible);
-  }, [handle, isActiveTab, surfaceVisible, overlayMounted, occluded, compositesAboveDom]);
+  }, [handle, isActiveTab, surfaceVisible, overlayMounted, sliding, occluded, compositesAboveDom]);
 
   return [overlayMounted, setOverlayMounted];
 }

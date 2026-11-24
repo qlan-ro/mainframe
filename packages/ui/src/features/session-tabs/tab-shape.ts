@@ -20,12 +20,12 @@ export function tabShape(selected: boolean, className?: string): string {
 }
 
 /**
- * The hover tint as an OPAQUE colour mixed over whatever the pill sits on, so a
+ * The hover tint as an OPAQUE colour mixed over the title bar's ground, so a
  * control overlaying the title's tail can paint exactly the pill's own ground.
  */
-export function tabHoverStyle(ground: '--sidebar' | '--popover'): CSSProperties {
-  return { '--tab-hover': `color-mix(in srgb, var(--foreground) 5%, var(${ground}))` } as CSSProperties;
-}
+export const TAB_HOVER_STYLE = {
+  '--tab-hover': 'color-mix(in srgb, var(--foreground) 5%, var(--sidebar))',
+} as CSSProperties;
 
 /** A close control overlaying the end of the title: out of flow, so a hidden ✕ takes no room. */
 export const TAB_CLOSE_OVERLAY =

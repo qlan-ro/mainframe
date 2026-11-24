@@ -46,16 +46,16 @@ export const SHORTCUTS = [
     group: 'Sessions',
   },
   {
-    id: 'sessions.open-in-split',
+    id: 'sessions.open-beside',
     chord: { code: 'Backslash', mod: true, shift: true },
-    label: 'Open in split',
+    label: 'Open next tab in the workspace',
     group: 'Sessions',
     editorYielding: true,
   },
   {
-    id: 'sessions.close-split',
+    id: 'sessions.close-beside',
     chord: { code: 'Backslash', mod: true },
-    label: 'Close split',
+    label: 'Close the chat in the workspace',
     group: 'Sessions',
   },
   {

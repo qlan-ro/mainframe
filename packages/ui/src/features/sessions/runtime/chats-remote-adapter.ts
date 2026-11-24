@@ -100,7 +100,7 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
       useSessionListLoadState.getState().markLoaded();
       // The server never lists a side chat, but a parent carries its
       // `sideChatId` — record the mapping on every reload so the identity
-      // guards (tab store, zones, this adapter's own fetch below) recognize
+      // guards (tab store, this adapter's own fetch below) recognize
       // it before anything tries to open it as a session (todo #344).
       recordSideChatsFromList(chats);
       const threads = chats.map(toMetadata);

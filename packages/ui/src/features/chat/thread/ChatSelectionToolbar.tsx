@@ -11,11 +11,12 @@
  * (and each `Action`'s) already prevents the browser from clearing the
  * selection before the click handler runs.
  *
- * In split view each zone mounts one of these, and both portal to the same
+ * Every chat on screen (the conversation, workspace chat tabs) mounts one of
+ * these, and all portal to the same
  * fixed position for any selection anywhere (SelectionToolbarPrimitive.Root's
- * own behavior). `scopeRef` — the zone's own `ThreadPrimitive.Root` element —
- * lets only the toolbar whose zone holds the selection act on it; the other
- * stays mounted (so its own primitive still tracks selection info) but hidden
+ * own behavior). `scopeRef` — the chat's own `ThreadPrimitive.Root` element —
+ * lets only the toolbar whose chat holds the selection act on it; the others
+ * stay mounted (so their own primitive still tracks selection info) but hidden
  * via `display: none` rather than unmounted (#359).
  */
 import type { RefObject } from 'react';
