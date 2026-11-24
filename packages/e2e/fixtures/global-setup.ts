@@ -90,17 +90,14 @@ async function isPreviewServing(): Promise<boolean> {
   }
 }
 
-// Vite itself, not through pnpm: killing a pnpm wrapper leaves the server it started behind.
-const VITE_BIN = path.join(
-  path.dirname(createRequire(path.join(UI_DIR, 'package.json')).resolve('vite/package.json')),
-  'bin/vite.js',
-);
-const PREVIEW_ARGS = [VITE_BIN, 'preview', '--strictPort', '--host', '127.0.0.1', '--port', String(PREVIEW_PORT)];
-
 export async function startPreview(): Promise<void> {
-  const command = [process.execPath, ...PREVIEW_ARGS].join(' ');
+  // Vite itself, not through pnpm: killing a pnpm wrapper leaves the server it started behind.
+  const vite = createRequire(path.join(UI_DIR, 'package.json')).resolve('vite/package.json');
+  const bin = path.join(path.dirname(vite), 'bin/vite.js');
+  const args = [bin, 'preview', '--strictPort', '--host', '127.0.0.1', '--port', String(PREVIEW_PORT)];
+  const command = [process.execPath, ...args].join(' ');
   await ensurePortFree(PREVIEW_PORT, { command, cwd: UI_DIR }, 'Use another: MF_E2E_PREVIEW_PORT=<port>');
-  const preview = spawn(process.execPath, PREVIEW_ARGS, {
+  const preview = spawn(process.execPath, args, {
     cwd: UI_DIR,
     env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT },
     stdio: 'ignore',
