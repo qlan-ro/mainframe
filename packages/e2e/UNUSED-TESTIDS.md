@@ -1,7 +1,7 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e references
-(582). Unused: 549._
+_Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e references
+(581). Unused: 551._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
@@ -317,7 +317,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e ref
 - `skills-section-source`
 - `skills-section-source-error`
 
-## session (19)
+## session (20)
 
 - `session-panel-context-file-${…}`
 - `session-panel-launch-spinner-${…}`
@@ -335,6 +335,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e ref
 - `session-tab-ctx-open-split`
 - `session-tab-ctx-side-chat`
 - `session-tab-hint-${…}`
+- `session-tab-status-${…}`
 - `session-tab-waiting-${…}`
 - `session-tabs`
 - `session-tabs-zone-group`
@@ -408,19 +409,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e ref
 - `url-tab-retry`
 - `url-tab-toolbar`
 
-## usage (10)
-
-- `usage-capsule`
-- `usage-capsule-dots`
-- `usage-capsule-item-${…}`
-- `usage-capsule-popover`
-- `usage-popover`
-- `usage-popover-freshness-${…}`
-- `usage-popover-provider-${…}`
-- `usage-popover-refresh`
-- `usage-popover-unknown-${…}`
-- `usage-popover-window-${…}`
-
 ## daemon (9)
 
 - `daemon-add-error`
@@ -444,6 +432,18 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e ref
 - `shell-rail-update-dot`
 - `shell-rail-update-menu`
 - `shell-rail-update-settings`
+
+## usage (9)
+
+- `usage-capsule-dots`
+- `usage-capsule-item-${…}`
+- `usage-capsule-popover`
+- `usage-popover`
+- `usage-popover-freshness-${…}`
+- `usage-popover-provider-${…}`
+- `usage-popover-refresh`
+- `usage-popover-unknown-${…}`
+- `usage-popover-window-${…}`
 
 ## viewer (9)
 
@@ -487,6 +487,16 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e ref
 - `search-palette-loading`
 - `search-palette-symbol-row-${…}`
 
+## workspace (7)
+
+- `workspace-pane-close-${…}`
+- `workspace-pane-open-url-${…}`
+- `workspace-picker-recent-${…}`
+- `workspace-tab-stop-${…}`
+- `workspace-tab-title-${…}`
+- `workspace-url-entry`
+- `workspace-url-entry-input`
+
 ## artifact (6)
 
 - `artifact-card-error-body`
@@ -514,14 +524,14 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e ref
 - `side-chat-panel-${…}`
 - `side-chat-toggle-${…}`
 
-## workspace (6)
+## title (6)
 
-- `workspace-pane-close-${…}`
-- `workspace-pane-open-url-${…}`
-- `workspace-picker-recent-${…}`
-- `workspace-tab-stop-${…}`
-- `workspace-url-entry`
-- `workspace-url-entry-input`
+- `title-bar-actions`
+- `title-bar-chat-column`
+- `title-bar-separator-actions`
+- `title-bar-sidebar-segment`
+- `title-bar-trailing`
+- `title-bar-workspace`
 
 ## automation (5)
 
@@ -611,12 +621,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e ref
 - `shortcuts-cheat-sheet`
 - `shortcuts-cheat-sheet-group-${…}`
 - `shortcuts-cheat-sheet-row-${…}`
-
-## title (3)
-
-- `title-bar-actions`
-- `title-bar-chat-column`
-- `title-bar-separator-actions`
 
 ## tool (3)
 
@@ -710,10 +714,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e ref
 
 - `gate-head-tile`
 
-## main (1)
-
-- `main-surface-shell`
-
 ## new (1)
 
 - `new-session-initialization-retry`
@@ -725,10 +725,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e ref
 ## setup (1)
 
 - `setup-advisor-sidebar-section-${…}`
-
-## surface (1)
-
-- `surface-rail`
 
 ## thread (1)
 

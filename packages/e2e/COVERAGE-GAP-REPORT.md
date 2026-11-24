@@ -13,10 +13,10 @@ read in both directions._
 
 | Metric | Count |
 |---|---|
-| Defined | 1129 |
-| Referenced | 578 |
+| Defined | 1132 |
+| Referenced | 581 |
 | Unused | 551 |
-| Dead selectors | 18 |
+| Dead selectors | 19 |
 
 ## Dead selectors
 
@@ -36,6 +36,7 @@ read in both directions._
 - `tasks-board-project-${…}` — referenced by: sidebar-chrome.spec.ts
 - `tasks-surface-pick` — referenced by: sidebar-chrome.spec.ts
 - `tool-card` — referenced by: wait.ts
+- `workspace-surface-close` — referenced by: workspace-surface.spec.ts
 - `zone-button-tab-dropdown` — referenced by: zones.ts
 - `zone-tab-dropdown-option-${…}` — referenced by: zones.ts
 
@@ -76,9 +77,9 @@ read in both directions._
 | history-paint.ts | 6 | 0 |
 | history-performance-wire.ts | 0 | 0 |
 | history-performance.ts | 13 | 0 |
-| layout.spec.ts | 45 | 0 |
+| layout.spec.ts | 44 | 0 |
 | live-adapter.spec.ts | 1 | 0 |
-| mcp-delegate.spec.ts | 21 | 0 |
+| mcp-delegate.spec.ts | 20 | 0 |
 | menus.ts | 0 | 0 |
 | new-session-prefill.spec.ts | 15 | 0 |
 | overlay-scrollbars.spec.ts | 10 | 0 |
@@ -104,7 +105,7 @@ read in both directions._
 | stress-matrix.spec.ts | 15 | 0 |
 | tasks.spec.ts | 169 | 0 |
 | testids.ts | 3 | 0 |
-| title-bar.spec.ts | 4 | 0 |
+| title-bar.spec.ts | 25 | 0 |
 | tool-cards-history.spec.ts | 20 | 0 |
 | tool-cards.spec.ts | 95 | 0 |
 | transcript.spec.ts | 20 | 0 |
@@ -120,7 +121,7 @@ read in both directions._
 | windowed-history.spec.ts | 22 | 0 |
 | windowed-history.ts | 0 | 0 |
 | windowed-history.ts | 0 | 0 |
-| workspace-surface.spec.ts | 53 | 0 |
+| workspace-surface.spec.ts | 52 | 1 |
 | ws-control.ts | 0 | 0 |
 | zones.ts | 0 | 2 |
 
@@ -128,7 +129,7 @@ read in both directions._
 
 | Surface | Defined | Unused |
 |---|---|---|
-| chat | 200 | 92 |
+| chat | 198 | 91 |
 | automations | 92 | 80 |
 | tasks | 91 | 43 |
 | sessions | 97 | 29 |
@@ -139,17 +140,18 @@ read in both directions._
 | external | 15 | 14 |
 | preview | 31 | 13 |
 | url | 12 | 12 |
-| usage | 10 | 10 |
 | daemon | 26 | 9 |
 | shell | 13 | 9 |
+| usage | 10 | 9 |
 | viewer | 27 | 9 |
 | editor | 28 | 7 |
 | run | 8 | 7 |
 | search | 16 | 7 |
+| workspace | 26 | 7 |
 | artifact | 6 | 6 |
 | image | 8 | 6 |
 | side | 6 | 6 |
-| workspace | 26 | 6 |
+| title | 9 | 6 |
 | automation | 5 | 5 |
 | git | 35 | 5 |
 | push | 5 | 5 |
@@ -162,7 +164,6 @@ read in both directions._
 | zone | 4 | 4 |
 | pairing | 3 | 3 |
 | shortcuts | 3 | 3 |
-| title | 4 | 3 |
 | tool | 10 | 3 |
 | tunnel | 3 | 3 |
 | app | 2 | 2 |
@@ -182,11 +183,9 @@ read in both directions._
 | dialog | 2 | 1 |
 | find | 9 | 1 |
 | gate | 1 | 1 |
-| main | 2 | 1 |
 | new | 1 | 1 |
 | read | 4 | 1 |
 | setup | 1 | 1 |
-| surface | 2 | 1 |
 | thread | 3 | 1 |
 | transcript | 1 | 1 |
 | trigger | 1 | 1 |
@@ -196,10 +195,12 @@ read in both directions._
 | connection | 1 | 0 |
 | diff | 4 | 0 |
 | import | 1 | 0 |
+| main | 2 | 0 |
 | markdown | 3 | 0 |
 | marker | 1 | 0 |
 | quick | 1 | 0 |
 | restore | 1 | 0 |
 | show | 1 | 0 |
 | surf | 1 | 0 |
+| surface | 2 | 0 |
 | tour | 8 | 0 |
