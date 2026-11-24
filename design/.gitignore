@@ -1,0 +1,7 @@
+# Generator intermediates (rebuilt by design/canvas/proposals/run.sh)
+canvas/proposals/states.json
+canvas/proposals/frags.json
+canvas/proposals/sizes.json
+canvas/proposals/__pycache__/
+# Local preview runtime for shot.cjs (the canvas type's dc-runtime.js; third-party, not committed)
+canvas/proposals/render/

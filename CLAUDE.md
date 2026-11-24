@@ -22,6 +22,7 @@ Read only what the current task needs. Keep information used in fewer than rough
 - Code changes, commands, and validation: [development reference](docs/guides/development.md).
 - Cargo configuration, packaging paths, or disk cleanup: [Rust build constraints](docs/guides/rust-builds.md).
 - UI styling and component conventions: [Mainframe design skill](.agents/skills/mainframe-design-system/SKILL.md).
+- UI changes and the design canvas (area pages, surface briefs, the design check): [design workflow](design/README.md).
 - Module ownership and runtime boundaries: [architecture](docs/ARCHITECTURE.md).
 - CLI protocol work: [adapter references](docs/research/adapters/README.md); use the relevant protocol-debugger skill for live behavior.
 - Tracker work: [issue tracker](docs/guides/issue-tracker.md) and [triage labels](docs/guides/triage-labels.md).

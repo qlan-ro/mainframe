@@ -1,0 +1,815 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Automations-Editor.dc.html": {
+      "h": 900,
+      "page": "automations",
+      "title": "Automations — release checklist editor",
+      "w": 1440,
+      "x": 4560,
+      "y": 0
+    },
+    "Automations-Empty.dc.html": {
+      "h": 900,
+      "page": "automations",
+      "title": "Automations — empty library",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "Automations-Extras.dc.html": {
+      "h": 1976,
+      "page": "automations",
+      "title": "Automations — triggers and notification setup",
+      "w": 3008,
+      "x": 3088,
+      "y": 6196
+    },
+    "Automations-Flow.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "page": "automations",
+      "title": "Automations — release checklist flow",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Automations-List.dc.html": {
+      "h": 900,
+      "page": "automations",
+      "title": "Automations — library and run history",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Automations-Pickers.dc.html": {
+      "h": 7448,
+      "page": "automations",
+      "title": "Automations — pickers and menus",
+      "w": 3008,
+      "x": 0,
+      "y": 6196
+    },
+    "Automations-Run.dc.html": {
+      "h": 3819,
+      "page": "automations",
+      "title": "Automations — run states",
+      "w": 4496,
+      "x": 0,
+      "y": 1060
+    },
+    "Automations-Steps.dc.html": {
+      "h": 4976,
+      "page": "automations",
+      "title": "Automations — step cards and configuration",
+      "w": 3008,
+      "x": 4576,
+      "y": 1060
+    },
+    "Chat-Composer.dc.html": {
+      "h": 5330,
+      "page": "composer",
+      "title": "Chat — composer controls",
+      "w": 2645,
+      "x": 1205,
+      "y": 4415
+    },
+    "Chat-ComposerFlow.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "page": "composer",
+      "title": "Chat — send and stop flow",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Chat-ComposerMenus.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "page": "composer",
+      "title": "Chat — configuration menus",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Chat-SessionPanel-ActivityActions.dc.html": {
+      "h": 1875,
+      "page": "session-panel",
+      "title": "Chat — session panel: Activity row actions",
+      "w": 1424,
+      "x": 0,
+      "y": 15766
+    },
+    "Chat-SessionPanel-ActivityFlow.dc.html": {
+      "h": 1560,
+      "is_interactive": true,
+      "page": "session-panel",
+      "title": "Chat — session panel: Activity disclosure",
+      "w": 300,
+      "x": 0,
+      "y": 13500
+    },
+    "Chat-SessionPanel-ActivityRows.dc.html": {
+      "h": 2146,
+      "page": "session-panel",
+      "title": "Chat — session panel: Activity rows by kind and status",
+      "w": 3512,
+      "x": 380,
+      "y": 13500
+    },
+    "Chat-SessionPanel-ActivitySection.dc.html": {
+      "h": 1788,
+      "page": "session-panel",
+      "title": "Chat — session panel: Activity header, Earlier and loading",
+      "w": 2120,
+      "x": 3972,
+      "y": 13500
+    },
+    "Chat-SessionPanel-ActivityWindow.dc.html": {
+      "h": 1004,
+      "page": "session-panel",
+      "title": "Chat — session panel: Activity actions in the window",
+      "w": 3008,
+      "x": 3356,
+      "y": 15766
+    },
+    "Chat-SessionPanel-Flow.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "page": "session-panel",
+      "title": "Chat — session panel: dock, close and float",
+      "w": 1440,
+      "x": 0,
+      "y": 9205
+    },
+    "Chat-SessionPanel-Modes.dc.html": {
+      "h": 1976,
+      "page": "session-panel",
+      "title": "Chat — session panel in the window",
+      "w": 4496,
+      "x": 1520,
+      "y": 9205
+    },
+    "Chat-SessionPanel-MoreStates.dc.html": {
+      "h": 929,
+      "page": "session-panel",
+      "title": "Chat — session panel: more section states",
+      "w": 1772,
+      "x": 1504,
+      "y": 15766
+    },
+    "Chat-SessionPanel-States.dc.html": {
+      "h": 1738,
+      "page": "session-panel",
+      "title": "Chat — session panel states",
+      "w": 3164,
+      "x": 0,
+      "y": 11301
+    },
+    "Chat-SideChat.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "page": "workspace",
+      "title": "Chat — side chat panel",
+      "w": 1440,
+      "x": 4560,
+      "y": 0
+    },
+    "Chat-States.dc.html": {
+      "h": 5330,
+      "page": "transcript",
+      "title": "Chat — session states",
+      "w": 2645,
+      "x": 0,
+      "y": 4415
+    },
+    "Chat-Thread.dc.html": {
+      "h": 4255,
+      "page": "transcript",
+      "title": "Chat — realistic long thread",
+      "w": 903,
+      "x": 6080,
+      "y": 0
+    },
+    "Chat-Window.dc.html": {
+      "h": 900,
+      "page": "transcript",
+      "title": "Chat — populated window",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "h": 900,
+      "page": "overview",
+      "title": "Mainframe App — map and sync rules",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Proposal-Redesign-Activity.dc.html": {
+      "h": 3992,
+      "page": "proposals",
+      "title": "Window redesign: queue and activity strip",
+      "w": 2932,
+      "x": 1460,
+      "y": 16874
+    },
+    "Proposal-Redesign-BottomStrip.dc.html": {
+      "h": 1120,
+      "page": "proposals",
+      "title": "Window redesign: where it runs, branch and changes",
+      "w": 2616,
+      "x": 1460,
+      "y": 21026
+    },
+    "Proposal-Redesign-Composer.dc.html": {
+      "h": 4586,
+      "page": "proposals",
+      "title": "Window redesign: composer toolbar, send and stop",
+      "w": 2616,
+      "x": 1460,
+      "y": 9708
+    },
+    "Proposal-Redesign-Gates.dc.html": {
+      "h": 2428,
+      "page": "proposals",
+      "title": "Window redesign: permission, plan and question gates",
+      "w": 2616,
+      "x": 1460,
+      "y": 22306
+    },
+    "Proposal-Redesign-NewSession.dc.html": {
+      "h": 3426,
+      "page": "proposals",
+      "title": "Window redesign: composer before the first message",
+      "w": 2616,
+      "x": 1460,
+      "y": 6122
+    },
+    "Proposal-Redesign-SessionPanel.dc.html": {
+      "h": 2726,
+      "page": "proposals",
+      "title": "Window redesign: session panel",
+      "w": 3596,
+      "x": 1460,
+      "y": 28740
+    },
+    "Proposal-Redesign-Shell.dc.html": {
+      "h": 1396,
+      "page": "proposals",
+      "title": "Window redesign: title bar segments and window states",
+      "w": 3024,
+      "x": 1460,
+      "y": 3286
+    },
+    "Proposal-Redesign-Shortcuts.dc.html": {
+      "h": 1088,
+      "page": "proposals",
+      "title": "Window redesign: keyboard shortcuts sheet",
+      "w": 1536,
+      "x": 1460,
+      "y": 36818
+    },
+    "Proposal-Redesign-Sidebar.dc.html": {
+      "h": 1120,
+      "page": "proposals",
+      "title": "Window redesign: sidebar session list",
+      "w": 1504,
+      "x": 1460,
+      "y": 4842
+    },
+    "Proposal-Redesign-Spec.dc.html": {
+      "h": 9780,
+      "page": "proposals",
+      "title": "Window redesign: the decisions (spec)",
+      "w": 1360,
+      "x": 0,
+      "y": 960
+    },
+    "Proposal-Redesign-Window.dc.html": {
+      "h": 1106,
+      "page": "proposals",
+      "title": "Window redesign: the proposed window, light and dark",
+      "w": 3024,
+      "x": 1460,
+      "y": 2020
+    },
+    "Proposal-Redesign-Workspace.dc.html": {
+      "h": 5032,
+      "page": "proposals",
+      "title": "Window redesign: workspace surface",
+      "w": 3024,
+      "x": 1460,
+      "y": 31626
+    },
+    "Proposal-SessionPanel-Sections.dc.html": {
+      "h": 1797,
+      "page": "proposals",
+      "title": "Session panel rows: other section states (first column, Session, is removed by R2)",
+      "w": 2120,
+      "x": 0,
+      "y": 38626
+    },
+    "Proposal-Window-Baseline.dc.html": {
+      "h": 900,
+      "page": "proposals",
+      "title": "Today (v2.15.0), light: the window before the redesign",
+      "w": 1440,
+      "x": 1460,
+      "y": 960
+    },
+    "Proposal-Window-BaselineDark.dc.html": {
+      "h": 900,
+      "page": "proposals",
+      "title": "Today (v2.15.0), dark: the window before the redesign",
+      "w": 1440,
+      "x": 2980,
+      "y": 960
+    },
+    "Settings-Controls.dc.html": {
+      "h": 3464,
+      "page": "settings",
+      "title": "Settings — control states",
+      "w": 4528,
+      "x": 0,
+      "y": 5204
+    },
+    "Settings-Dialogs.dc.html": {
+      "h": 2964,
+      "page": "settings",
+      "title": "Settings — dialogs: branches, sessions and pickers",
+      "w": 4528,
+      "x": 0,
+      "y": 9308
+    },
+    "Settings-DialogsMore.dc.html": {
+      "h": 2964,
+      "page": "settings",
+      "title": "Settings — dialogs: find, shortcuts, daemon and picker states",
+      "w": 4528,
+      "x": 4608,
+      "y": 9308
+    },
+    "Settings-Flow.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "page": "settings",
+      "title": "Settings — tab navigation",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Settings-Palette.dc.html": {
+      "h": 3944,
+      "page": "settings",
+      "title": "Settings — command palette modes",
+      "w": 4528,
+      "x": 4608,
+      "y": 5204
+    },
+    "Settings-Panes.dc.html": {
+      "h": 5044,
+      "page": "settings",
+      "title": "Settings — panes and keybinding states",
+      "w": 6032,
+      "x": 3040,
+      "y": 0
+    },
+    "Settings-SetupAdvisor.dc.html": {
+      "h": 3944,
+      "page": "settings",
+      "title": "Settings — setup advisor",
+      "w": 4528,
+      "x": 0,
+      "y": 12432
+    },
+    "Settings-Surface.dc.html": {
+      "h": 900,
+      "page": "settings",
+      "title": "Settings — general pane",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Shell-Flow.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "page": "shell",
+      "title": "Shell — navigate sessions and views",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Shell-SidebarMenus.dc.html": {
+      "h": 1952,
+      "page": "sidebar",
+      "title": "Shell — sidebar menus and hover cards",
+      "w": 6000,
+      "x": 0,
+      "y": 3583
+    },
+    "Shell-SidebarRows.dc.html": {
+      "h": 132,
+      "page": "sidebar",
+      "title": "Shell — session rows and group headers",
+      "w": 6000,
+      "x": 0,
+      "y": 1091
+    },
+    "Shell-SidebarStates.dc.html": {
+      "h": 980,
+      "page": "sidebar",
+      "title": "Shell — live row states in the window",
+      "w": 6000,
+      "x": 0,
+      "y": 2443
+    },
+    "Shell-SidebarViews.dc.html": {
+      "h": 931,
+      "page": "sidebar",
+      "title": "Shell — sidebar views",
+      "w": 6000,
+      "x": 3040,
+      "y": 0
+    },
+    "Shell-States.dc.html": {
+      "h": 900,
+      "page": "shell",
+      "title": "Shell — window states",
+      "w": 7392,
+      "x": 0,
+      "y": 1383
+    },
+    "Shell-TitleBar.dc.html": {
+      "h": 2924,
+      "page": "shell",
+      "title": "Shell — title bar and navigation",
+      "w": 6000,
+      "x": 0,
+      "y": 5695
+    },
+    "Shell-Window.dc.html": {
+      "h": 900,
+      "page": "shell",
+      "title": "Shell — populated window",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Tasks-Board.dc.html": {
+      "h": 900,
+      "page": "tasks",
+      "title": "Tasks — project board",
+      "w": 1440,
+      "x": 6176,
+      "y": 0
+    },
+    "Tasks-Cards.dc.html": {
+      "h": 1004,
+      "page": "tasks",
+      "title": "Tasks — card states",
+      "w": 3008,
+      "x": 0,
+      "y": 7608
+    },
+    "Tasks-Details.dc.html": {
+      "h": 3920,
+      "page": "tasks",
+      "title": "Tasks — editing, filters and empty states",
+      "w": 4496,
+      "x": 0,
+      "y": 10716
+    },
+    "Tasks-Types.dc.html": {
+      "h": 2948,
+      "page": "tasks",
+      "title": "Tasks — task types",
+      "w": 4496,
+      "x": 3088,
+      "y": 7608
+    },
+    "Workspace-Branch.dc.html": {
+      "h": 1480,
+      "page": "workspace",
+      "title": "Workspace — branch and worktree menus",
+      "w": 1676,
+      "x": 0,
+      "y": 1060
+    },
+    "Workspace-Files.dc.html": {
+      "h": 900,
+      "page": "workspace",
+      "title": "Workspace — files and editor",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Workspace-Flow.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "page": "workspace",
+      "title": "Workspace — editor, review and run flow",
+      "w": 1440,
+      "x": 4560,
+      "y": 0
+    },
+    "Workspace-Markdown.dc.html": {
+      "h": 900,
+      "page": "workspace",
+      "title": "Workspace — markdown notes",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Workspace-Review.dc.html": {
+      "h": 900,
+      "page": "workspace",
+      "title": "Workspace — review changes",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "Workspace-ReviewStates.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "page": "workspace",
+      "title": "Workspace — review scopes and diff states",
+      "w": 1440,
+      "x": 6080,
+      "y": 0
+    },
+    "Workspace-Run.dc.html": {
+      "h": 4892,
+      "page": "workspace",
+      "title": "Workspace — run, preview and URL states",
+      "w": 4496,
+      "x": 0,
+      "y": 4451
+    },
+    "Workspace-SessionPanel.dc.html": {
+      "h": 3231,
+      "page": "session-panel",
+      "title": "Workspace — session panel, 11 Nov capture (superseded by the Chat page)",
+      "w": 1422,
+      "x": 1756,
+      "y": 0
+    },
+    "Workspace-Viewers.dc.html": {
+      "h": 2948,
+      "page": "workspace",
+      "title": "Workspace — file viewers",
+      "w": 3008,
+      "x": 3258,
+      "y": 1060
+    },
+    "Proposal-Redesign-Transcript.dc.html": {
+      "page": "proposals",
+      "x": 1460,
+      "y": 24894,
+      "w": 3504,
+      "h": 3686,
+      "title": "Window redesign: transcript, every row and state"
+    },
+    "Proposal-Redesign-ComposerContent.dc.html": {
+      "page": "proposals",
+      "x": 1460,
+      "y": 14454,
+      "w": 2616,
+      "h": 2260,
+      "title": "Window redesign: files, captures and quotes in the composer"
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-11-10T22:30:00Z",
+    "v": 1
+  },
+  "designSystems": [
+    {
+      "artifact": "https://claude.ai/artifact/Y1JoF1MeyeqbPfcqLCWB7R",
+      "copiedAt": "2026-11-10T23:20:00Z",
+      "namespace": "mainframe",
+      "title": "Mainframe",
+      "version": "1794344389-bf76"
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "overview"
+  },
+  "noteOrder": [
+    "proposalsHowTo",
+    "sessionPanelTitle",
+    "sessionPanelGuide",
+    "sessionPanelActivityTitle",
+    "sessionPanelActivityGuide",
+    "revampTitle",
+    "revampGuide",
+    "adoptedTitle",
+    "adoptedGuide"
+  ],
+  "notes": {
+    "adoptedGuide": {
+      "fill": "gray",
+      "page": "proposals",
+      "size": 24,
+      "text": "One earlier board still applies.\n\nSession-panel section states other than Activity (Launch, files, skills, attachments, tasks). Their rows and values are binding; the panel around them follows the redesign: “Session” title with the Sections button (R3), no Session section (R2: ignore the sheet's first column), rhythm per R12. Activity follows R13 and is drawn on Proposal-Redesign-SessionPanel.",
+      "w": 560,
+      "x": -640,
+      "y": 38626
+    },
+    "adoptedTitle": {
+      "kind": "title1",
+      "maxW": 7400,
+      "page": "proposals",
+      "text": "Adopted from an earlier proposal: the other session-panel sections",
+      "w": 240,
+      "x": 0,
+      "y": 38366
+    },
+    "proposalsHowTo": {
+      "fill": "blue",
+      "page": "proposals",
+      "size": 24,
+      "text": "This page has one purpose: the UI revamp. Everything here is approved design that the app does not have yet.\n\nRead it top to bottom: the decisions spec (left column), then the boards to its right, one per area, then the earlier proposals the revamp adopts.\n\nWhen part of it ships, update that area's baseline page and remove the boards it made obsolete here. Keep whatever is not built yet.",
+      "w": 560,
+      "x": 0,
+      "y": 0
+    },
+    "revampGuide": {
+      "fill": "gray",
+      "page": "proposals",
+      "size": 24,
+      "text": "The window redesign, final (approved 24 Nov 2026).\n\nLeft: Proposal-Redesign-Spec, every decision with an id (S shell, W workspace, G gates, H shortcuts, L sidebar, T transcript, C composer, K composer strips, R session panel). Captions on the boards cite these ids.\n\nRight, top to bottom: today's window (v2.15.0) beside the proposed window; then title bar and window states, sidebar, composer before the first message, toolbar / send / stop, files, captures and quotes in the composer, queue and activity strip, bottom strip, gates, transcript (every row and state), session panel, workspace, shortcuts sheet. Every board shows light and dark.\n\nClickable prototype with every state: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn (open Prototype controls, bottom left).\n\nBoards are rendered from that prototype. They are reference pictures, not components: build with the app's own primitives and tokens, and take exact values from the spec.",
+      "w": 560,
+      "x": -640,
+      "y": 960
+    },
+    "revampTitle": {
+      "kind": "title1",
+      "maxW": 7000,
+      "page": "proposals",
+      "text": "UI revamp: the window redesign",
+      "w": 240,
+      "x": 0,
+      "y": 700
+    },
+    "sessionPanelActivityGuide": {
+      "fill": "gray",
+      "page": "session-panel",
+      "size": 24,
+      "text": "Activity, state by state, plus states the first sheet missed in other sections. Same build as above: v2.15.0 (9f504d34), the shipped components at the real 300 px panel width, pixel-checked in light and dark on 13 Nov 2026.\n\nThe narrow first board is interactive: press Play, then click Earlier, Show all, the running row or Load earlier messages. Hovering a row swaps its time for its actions.\n\nA caption that says \"fixture\" marks a state the mock runtime cannot reach by itself: monitors, usage counts, Stop, a running command, loaded output, failed requests, stopped or failed child chats. Those were set on the app's network boundary. No live provider ran.\n\nNot shown: resumed activity (PR 912, not merged), the brief \"Loading message...\" line after Transcript, and a queued child chat, which draws the same as waiting. COVERAGE.md in the handoff folder lists every state with its source and evidence.",
+      "w": 520,
+      "x": -600,
+      "y": 13500
+    },
+    "sessionPanelActivityTitle": {
+      "kind": "title1",
+      "maxW": 6364,
+      "page": "session-panel",
+      "text": "Session panel: Activity and missing states",
+      "w": 240,
+      "x": 0,
+      "y": 13240
+    },
+    "sessionPanelGuide": {
+      "fill": "gray",
+      "page": "session-panel",
+      "size": 24,
+      "text": "Session panel as shipped in v2.15.0 (9f504d34). Captured 13 Nov 2026 from the running app on the mock adapter and pixel-checked in light and dark.\n\nThe first board is interactive: press Play, then click the panel toggle above the transcript, the workspace button at the top right, or the dimmed area beside the floating panel.\n\nThe boards above this section are from the 11 Nov capture of an older build (76b2dab3). The session panel board on the Workspace page is that older capture too.",
+      "w": 520,
+      "x": -600,
+      "y": 9205
+    },
+    "sessionPanelTitle": {
+      "kind": "title1",
+      "maxW": 6016,
+      "page": "session-panel",
+      "text": "Session panel",
+      "w": 240,
+      "x": 0,
+      "y": 8945
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Shell-Window.dc.html",
+    "Shell-Flow.dc.html",
+    "Shell-SidebarViews.dc.html",
+    "Shell-SidebarRows.dc.html",
+    "Shell-States.dc.html",
+    "Shell-SidebarStates.dc.html",
+    "Shell-SidebarMenus.dc.html",
+    "Shell-TitleBar.dc.html",
+    "Chat-Window.dc.html",
+    "Chat-ComposerFlow.dc.html",
+    "Chat-ComposerMenus.dc.html",
+    "Chat-SideChat.dc.html",
+    "Chat-Thread.dc.html",
+    "Chat-States.dc.html",
+    "Chat-Composer.dc.html",
+    "Chat-SessionPanel-Flow.dc.html",
+    "Chat-SessionPanel-Modes.dc.html",
+    "Chat-SessionPanel-States.dc.html",
+    "Chat-SessionPanel-ActivityFlow.dc.html",
+    "Chat-SessionPanel-ActivityRows.dc.html",
+    "Chat-SessionPanel-ActivitySection.dc.html",
+    "Chat-SessionPanel-ActivityActions.dc.html",
+    "Chat-SessionPanel-MoreStates.dc.html",
+    "Chat-SessionPanel-ActivityWindow.dc.html",
+    "Workspace-Files.dc.html",
+    "Workspace-Markdown.dc.html",
+    "Workspace-Review.dc.html",
+    "Workspace-Flow.dc.html",
+    "Workspace-ReviewStates.dc.html",
+    "Workspace-Branch.dc.html",
+    "Workspace-SessionPanel.dc.html",
+    "Workspace-Viewers.dc.html",
+    "Workspace-Run.dc.html",
+    "Settings-Surface.dc.html",
+    "Settings-Flow.dc.html",
+    "Settings-Panes.dc.html",
+    "Settings-Controls.dc.html",
+    "Settings-Palette.dc.html",
+    "Settings-Dialogs.dc.html",
+    "Settings-DialogsMore.dc.html",
+    "Settings-SetupAdvisor.dc.html",
+    "Automations-List.dc.html",
+    "Automations-Flow.dc.html",
+    "Automations-Empty.dc.html",
+    "Automations-Editor.dc.html",
+    "Automations-Run.dc.html",
+    "Automations-Steps.dc.html",
+    "Automations-Pickers.dc.html",
+    "Automations-Extras.dc.html",
+    "Tasks-Board.dc.html",
+    "Tasks-Cards.dc.html",
+    "Tasks-Types.dc.html",
+    "Tasks-Details.dc.html",
+    "Proposal-Redesign-Spec.dc.html",
+    "Proposal-Window-Baseline.dc.html",
+    "Proposal-Window-BaselineDark.dc.html",
+    "Proposal-Redesign-Window.dc.html",
+    "Proposal-Redesign-Shell.dc.html",
+    "Proposal-Redesign-Sidebar.dc.html",
+    "Proposal-Redesign-NewSession.dc.html",
+    "Proposal-Redesign-Composer.dc.html",
+    "Proposal-Redesign-ComposerContent.dc.html",
+    "Proposal-Redesign-Activity.dc.html",
+    "Proposal-Redesign-BottomStrip.dc.html",
+    "Proposal-Redesign-Gates.dc.html",
+    "Proposal-Redesign-Transcript.dc.html",
+    "Proposal-Redesign-SessionPanel.dc.html",
+    "Proposal-Redesign-Workspace.dc.html",
+    "Proposal-Redesign-Shortcuts.dc.html",
+    "Proposal-SessionPanel-Sections.dc.html"
+  ],
+  "pages": [
+    {
+      "id": "overview",
+      "name": "Overview"
+    },
+    {
+      "id": "shell",
+      "name": "Shell & title bar"
+    },
+    {
+      "id": "sidebar",
+      "name": "Sidebar"
+    },
+    {
+      "id": "composer",
+      "name": "Composer & gates"
+    },
+    {
+      "id": "transcript",
+      "name": "Transcript"
+    },
+    {
+      "id": "session-panel",
+      "name": "Session panel"
+    },
+    {
+      "id": "workspace",
+      "name": "Workspace"
+    },
+    {
+      "id": "settings",
+      "name": "Settings & dialogs"
+    },
+    {
+      "id": "automations",
+      "name": "Automations"
+    },
+    {
+      "id": "tasks",
+      "name": "Tasks"
+    },
+    {
+      "id": "proposals",
+      "name": "Proposals"
+    }
+  ],
+  "title": "Mainframe App"
+}
