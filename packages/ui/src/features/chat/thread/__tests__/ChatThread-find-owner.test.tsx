@@ -11,14 +11,13 @@ vi.mock('@assistant-ui/react', () => ({
 }));
 vi.mock('../ChatThreadViewport', () => ({ ChatThreadViewport: () => null }));
 vi.mock('../ChatSelectionToolbar', () => ({ ChatSelectionToolbar: () => null }));
-vi.mock('../../tools/register-cards', () => ({}));
 vi.mock('../../composer/edit/composer-edit-context', () => ({
   ComposerEditProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock('@/features/skills/use-chat-skills', () => ({
   SkillsProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
-vi.mock('../../messages/compact/transcript-scope', () => ({
+vi.mock('../../messages/turn/transcript-scope', () => ({
   RootTranscriptScope: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock('../../find/FindBar', () => ({ FindBar: () => <div data-testid="find-bar">{useContext(Scope)}</div> }));

@@ -11,55 +11,55 @@ beforeEach(() => {
   useTheme.setState({ mode: 'light', resolvedMode: 'light', uiScale: 'normal' });
 });
 
-it('exposes the default selection in a named Transcript group', () => {
+it('exposes the default selection in a named group', () => {
   render(<AppearanceControls />);
-  const group = screen.getByRole('radiogroup', { name: 'Transcript' });
-  expect(within(group).getByRole('radio', { name: 'Verbose' })).toHaveAttribute('aria-checked', 'true');
-  expect(within(group).getByRole('radio', { name: 'Compact' })).toHaveAttribute('aria-checked', 'false');
+  const group = screen.getByRole('radiogroup', { name: 'Finished work' });
+  expect(within(group).getByRole('radio', { name: 'Fold' })).toHaveAttribute('aria-checked', 'true');
+  expect(within(group).getByRole('radio', { name: 'Keep open' })).toHaveAttribute('aria-checked', 'false');
 });
 
 it('immediately persists a selection without changing appearance or layout preferences', () => {
   useUiPrefs.setState({ sidebarWidth: 320, dontWarnOnTuningChange: true });
   render(<AppearanceControls />);
-  fireEvent.click(screen.getByTestId('settings-appearance-transcript-compact'));
+  fireEvent.click(screen.getByTestId('settings-appearance-finished-work-open'));
   expect(useUiPrefs.getState()).toMatchObject({
-    transcriptMode: 'compact',
+    finishedWork: 'open',
     sidebarWidth: 320,
     dontWarnOnTuningChange: true,
   });
   expect(useTheme.getState()).toMatchObject({ mode: 'light', uiScale: 'normal' });
-  expect(JSON.parse(localStorage.getItem('mf:ui-prefs')!).state.transcriptMode).toBe('compact');
-  expect(screen.getByTestId('settings-appearance-transcript-compact')).toHaveAttribute('aria-checked', 'true');
+  expect(JSON.parse(localStorage.getItem('mf:ui-prefs')!).state.finishedWork).toBe('open');
+  expect(screen.getByTestId('settings-appearance-finished-work-open')).toHaveAttribute('aria-checked', 'true');
 });
 
 it('ignores empty selection when clicking the selected option', () => {
-  useUiPrefs.getState().setTranscriptMode('compact');
+  useUiPrefs.getState().setFinishedWork('open');
   render(<AppearanceControls />);
-  fireEvent.click(screen.getByTestId('settings-appearance-transcript-compact'));
-  expect(useUiPrefs.getState().transcriptMode).toBe('compact');
-  expect(screen.getByTestId('settings-appearance-transcript-compact')).toHaveAttribute('aria-checked', 'true');
+  fireEvent.click(screen.getByTestId('settings-appearance-finished-work-open'));
+  expect(useUiPrefs.getState().finishedWork).toBe('open');
+  expect(screen.getByTestId('settings-appearance-finished-work-open')).toHaveAttribute('aria-checked', 'true');
 });
 
 it('supports arrow-key focus and Space or Enter selection', async () => {
   const user = userEvent.setup();
   render(<AppearanceControls />);
-  const verbose = screen.getByTestId('settings-appearance-transcript-verbose');
-  const compact = screen.getByTestId('settings-appearance-transcript-compact');
-  act(() => verbose.focus());
+  const fold = screen.getByTestId('settings-appearance-finished-work-fold');
+  const open = screen.getByTestId('settings-appearance-finished-work-open');
+  act(() => fold.focus());
   await user.keyboard('{ArrowRight}');
-  expect(compact).toHaveFocus();
+  expect(open).toHaveFocus();
   await user.keyboard(' ');
-  expect(useUiPrefs.getState().transcriptMode).toBe('compact');
-  expect(compact).toHaveAttribute('aria-checked', 'true');
+  expect(useUiPrefs.getState().finishedWork).toBe('open');
+  expect(open).toHaveAttribute('aria-checked', 'true');
   await user.keyboard('{ArrowLeft}{Enter}');
-  expect(verbose).toHaveFocus();
-  expect(useUiPrefs.getState().transcriptMode).toBe('verbose');
-  expect(verbose).toHaveAttribute('aria-checked', 'true');
+  expect(fold).toHaveFocus();
+  expect(useUiPrefs.getState().finishedWork).toBe('fold');
+  expect(fold).toHaveAttribute('aria-checked', 'true');
 });
 
 it('updates the displayed choice when the shared preference changes', () => {
   render(<AppearanceControls />);
-  act(() => useUiPrefs.getState().setTranscriptMode('compact'));
-  expect(screen.getByTestId('settings-appearance-transcript-compact')).toHaveAttribute('aria-checked', 'true');
-  expect(screen.getByTestId('settings-appearance-transcript-verbose')).toHaveAttribute('aria-checked', 'false');
+  act(() => useUiPrefs.getState().setFinishedWork('open'));
+  expect(screen.getByTestId('settings-appearance-finished-work-open')).toHaveAttribute('aria-checked', 'true');
+  expect(screen.getByTestId('settings-appearance-finished-work-fold')).toHaveAttribute('aria-checked', 'false');
 });

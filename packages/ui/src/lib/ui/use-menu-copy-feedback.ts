@@ -11,7 +11,7 @@
  * happened: a rejected clipboard write (WKWebView refuses `writeText` on an
  * unfocused document) reads "Copy failed", never "Copied".
  *
- * Extracted from LinkWithPreview (markdown-text.tsx) so the message path
+ * Extracted from the markdown link so the message path
  * menu (MessagePathContextMenu) doesn't paste the mechanism a second time.
  *
  * A generation token drops settlements that land after the menu closed: the

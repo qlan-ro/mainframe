@@ -30,7 +30,7 @@ vi.mock('@assistant-ui/react', () => ({
     sel({ thread: { isRunning: false, messages: [] } }),
 }));
 
-vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
+vi.mock('../../messages/turn/TurnTranscript', () => ({ TurnTranscript: () => <div data-testid="messages-stub" /> }));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({
   WorktreeSwitchBanner: () => <div data-testid="worktree-banner" />,
 }));

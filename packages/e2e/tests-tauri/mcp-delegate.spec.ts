@@ -23,19 +23,22 @@
  * gain from retrying these and a real drift risk from doing so.
  *
  * Testid reference:
- *   chat-tool-delegate-task-card / -trigger / -status / -open-<taskId> — the tool card
- *   chat-tool-delegate-task-transcript-<taskId> — the child's transcript inside the card
+ *   chat-tool-delegate-task-card / -toggle / -receipt, -open-<taskId> — the task's row
+ *   chat-tool-delegate-task-transcript-<taskId> — the child's steps inside the row
  *   sessions-row (data-chat-id) — a sidebar row; the child never gets one
- *   chat-task-result-card-<taskId> — the delivered result in the parent
+ *   chat-absorbed-message — the delivered result message, which the row shows instead (T1f)
  *   chat-header-parent-link     — the child's "Delegated by" link
  *   chat-zone-<chatId>          — a split zone, one per chat shown side by side
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { openRow, openWork, workRows } from '../helpers/tauri/transcript.js';
 import { DAEMON_BASE } from '../fixtures/daemon.js';
+
+const taskStatus = (card: Locator) => card.getByTestId('chat-tool-delegate-task-card-receipt').locator('[data-status]');
 
 test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
   let app: TauriAppFixture;
@@ -52,34 +55,37 @@ test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
     await closeTauriApp(app);
   });
 
-  test('delegate → the child stays out of the sidebar → result card lands in the parent', async () => {
+  test('delegate → the child stays out of the sidebar → its result lands in its row', async () => {
     const { page } = app;
     await sendMessage(page, 'Delegate a race review of the diff to a child chat');
 
-    const card = page.getByTestId('chat-tool-delegate-task-card');
-    await expect(card).toBeVisible({ timeout: 60_000 });
-    await expect(card).toContainText('Race review');
-
-    const result = page.locator('[data-testid^="chat-task-result-card-"]');
-    await expect(result).toBeVisible({ timeout: 60_000 });
-    await expect(result).toContainText('No data races found');
+    // The result message itself is not drawn: the parent's next turn simply follows.
+    await expect(page.getByText('The child chat found no data races in the diff.')).toBeVisible({ timeout: 60_000 });
     await waitForIdle(page, 60_000);
+    await expect(page.getByTestId('chat-absorbed-message')).toHaveCount(1);
+    await expect(page.locator('[data-testid^="chat-task-result-"]')).toHaveCount(0);
 
-    await expect(card.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'completed');
+    // Finished child work folds its turn, which still names it.
+    await expect(page.getByRole('button', { name: '1 agent: show them' })).toBeVisible();
+    await openWork(page, 0);
+    const card = page.getByTestId('chat-tool-delegate-task-card');
+    await expect(card).toContainText('Race review');
+    await expect(taskStatus(card)).toHaveAttribute('data-status', 'success');
     // The child row has loaded (the card reads its status), yet the sidebar lists only the parent.
     await expect(page.getByTestId('sessions-row')).toHaveCount(1);
     await expect(page.getByTestId('sessions-row-fork-nest')).toHaveCount(0);
   });
 
-  test("the card expands into the child's transcript", async () => {
+  test("the row opens on the child's steps and its result", async () => {
     const { page } = app;
     const card = page.getByTestId('chat-tool-delegate-task-card');
-    await card.getByTestId('chat-tool-delegate-task-trigger').click();
+    await openRow(card);
+    await expect(card.getByTestId('chat-agent-result')).toContainText('No data races found', { timeout: 15_000 });
     const transcript = card.locator('[data-testid^="chat-tool-delegate-task-transcript-"]');
     await expect(transcript).toContainText('No data races found', { timeout: 15_000 });
   });
 
-  test('the card opens the child in a split beside the parent, which links back to its delegator', async () => {
+  test('the row opens the child in a split beside the parent, which links back to its delegator', async () => {
     const { page } = app;
     const card = page.getByTestId('chat-tool-delegate-task-card');
     await expect(card).toBeVisible();
@@ -87,7 +93,7 @@ test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
     await page.locator('[data-testid^="chat-tool-delegate-task-open-"]').click();
 
     // Opened beside the parent, not instead of it: two zones on screen, and
-    // the parent's own delegate card is still visible in its zone. Scoped to
+    // the parent's own task row is still visible in its zone. Scoped to
     // `data-focused` (only each zone's own root carries it) so it doesn't also
     // pick up that zone's `chat-zone-strip-<id>` header and `chat-zone-close-<id>` button.
     await expect(page.locator('[data-testid^="chat-zone-"][data-focused]')).toHaveCount(2);
@@ -126,14 +132,12 @@ test.describe('§mcp-delegate privilege-ceiling refusal', () => {
     await sendMessage(page, 'Try to delegate with a higher permission mode than I have');
     await waitForIdle(page, 60_000);
 
-    // The card still mounts for a refused call (it is keyed on the tool
-    // name, not success), but with no parsed TaskResult: expanding it shows
-    // the refusal itself, not a child's transcript, and no task status dot.
+    // A refused call has no child to show: its row opens, by itself, on the refusal.
+    await openWork(page);
     const card = page.getByTestId('chat-tool-delegate-task-card');
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(card.getByTestId('chat-tool-delegate-task-status')).toHaveCount(0);
-    await card.getByTestId('chat-tool-delegate-task-trigger').click();
-    await expect(card.getByTestId('chat-tool-delegate-task-error')).toContainText('permission_mode_escalation_denied', {
+    await expect(taskStatus(card)).toHaveAttribute('data-status', 'failed');
+    await expect(card.getByTestId('chat-agent-result')).toContainText('permission_mode_escalation_denied', {
       timeout: 15_000,
     });
 
@@ -166,7 +170,7 @@ test.describe('§mcp-delegate Stop cascade', () => {
 
     const card = page.getByTestId('chat-tool-delegate-task-card');
     await expect(card).toBeVisible({ timeout: 60_000 });
-    const status = card.getByTestId('chat-tool-delegate-task-status');
+    const status = taskStatus(card);
     // The child's recording never completes its turn, so the task stays
     // non-terminal until the Stop below reaches it.
     await expect(status).toHaveAttribute('data-status', 'running', { timeout: 60_000 });
@@ -178,7 +182,10 @@ test.describe('§mcp-delegate Stop cascade', () => {
     const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/interrupt`, { method: 'POST' });
     expect(res.ok).toBe(true);
 
-    await expect(status).toHaveAttribute('data-status', 'cancelled', { timeout: 15_000 });
+    // Nothing holds the turn open any more, so it folds.
+    await expect(workRows(page).last()).toHaveAttribute('aria-expanded', 'false', { timeout: 15_000 });
+    await openWork(page);
+    await expect(status).toHaveAttribute('data-status', 'stopped', { timeout: 15_000 });
   });
 });
 
@@ -202,17 +209,16 @@ test.describe('§mcp-delegate wait mode', () => {
     const { page } = app;
     await sendMessage(page, 'Delegate and wait for the result in this same turn');
 
-    const card = page.getByTestId('chat-tool-delegate-task-card');
-    await expect(card).toBeVisible({ timeout: 60_000 });
     // Unlike async mode (the first describe above), this needs no
     // follow-up sendMessage: the daemon capped the wait at
     // policy::MAX_SINGLE_WAIT_MS (well under the child's own quick
     // completion) and returned the terminal result as this very tool
     // call's answer, inside the parent's first and only turn.
-    await expect(card.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'completed', {
-      timeout: 15_000,
-    });
+    await workRows(page).last().waitFor({ timeout: 60_000 });
     await waitForIdle(page, 60_000);
+    await openWork(page);
+    const card = page.getByTestId('chat-tool-delegate-task-card');
+    await expect(taskStatus(card)).toHaveAttribute('data-status', 'success', { timeout: 15_000 });
     await expect(page.getByTestId('sessions-row')).toHaveCount(1);
   });
 });

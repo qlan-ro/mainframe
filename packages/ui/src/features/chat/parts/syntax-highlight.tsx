@@ -9,14 +9,11 @@
  */
 import type { FC } from 'react';
 import type { SyntaxHighlighterProps } from '@assistant-ui/react-markdown';
-import { cn } from '@/lib/utils';
 import { ShikiCode } from '@/lib/shiki-tokens';
 import { useInstructionChipForLine } from '../smart-actions/use-instruction-chip';
 
-const PRE_CLASS = cn(
-  'bg-mf-code-bg text-mf-code-fg overflow-x-auto p-3 mt-0 mb-3',
-  'border border-t-0 border-border rounded-b-md font-mono text-xs leading-5',
-);
+const PRE_CLASS =
+  'mf-tr-mono mt-0 mb-3 overflow-x-auto rounded-b-lg border border-t-0 border-border bg-mf-tr-code px-3 py-2.5 text-foreground';
 
 export const SyntaxHighlighter: FC<SyntaxHighlighterProps> = ({ code, language }) => {
   // A single-instruction fence renders as the block chip that CodeHeader emits;
@@ -24,7 +21,7 @@ export const SyntaxHighlighter: FC<SyntaxHighlighterProps> = ({ code, language }
   const chip = useInstructionChipForLine(code);
   if (chip) return null;
 
-  return <ShikiCode code={code} lang={language} preClass={PRE_CLASS} showLineNumbers />;
+  return <ShikiCode code={code} lang={language} preClass={PRE_CLASS} />;
 };
 
 SyntaxHighlighter.displayName = 'SyntaxHighlighter';

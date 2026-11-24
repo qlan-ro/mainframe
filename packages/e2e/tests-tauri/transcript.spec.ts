@@ -28,7 +28,7 @@
  *   chat-message-copy / chat-message-more / chat-message-export — MessageActionBar.
  *     `data-copied` is set by the native ActionBarPrimitive.Copy (asChild → our Button),
  *     not by us — see @assistant-ui/react's ActionBarCopy.
- *   chat-message-timestamp / chat-message-timing — assistant footer row
+ *   chat-message-timestamp / chat-message-time-detail — the footer's time and its tooltip
  *   chat-code-copy — CodeHeader's Copy/Copied button (fenced code blocks only)
  *   chat-scroll-to-bottom — ThreadPrimitive.ScrollToBottom (native `disabled` at-bottom state)
  *   find-bar / thread-find-input / thread-find-prev / thread-find-next / thread-find-close
@@ -51,6 +51,7 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
+import { openWork, toolRow } from '../helpers/tauri/transcript.js';
 
 /** A single sentence repeated 12x (803 chars) — comfortably over ReadMoreBubble's
  *  600-char CHAR_THRESHOLD, and "deliberately" appears in it exactly 12 times
@@ -126,12 +127,13 @@ test.describe('§transcript — thread turn', () => {
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test('assistant reply renders markdown (bold list) and a Bash tool card', async () => {
+  test('assistant reply renders markdown (bold list) and a Bash row', async () => {
     const { page } = app;
     await sendMessage(page, "Use the Bash tool to run 'ls' and show me the files.");
     await waitForIdle(page, 90_000);
 
-    await expect(page.getByTestId('chat-bash-card').first()).toBeVisible({ timeout: 10_000 });
+    await openWork(page);
+    await expect(toolRow(page, 'Bash').first()).toBeVisible();
 
     const lastAssistant = page.getByTestId('chat-assistant-message').last();
     await expect(lastAssistant.locator('strong').filter({ hasText: 'CLAUDE.md' })).toBeVisible();
@@ -141,7 +143,8 @@ test.describe('§transcript — thread turn', () => {
     const { page } = app;
     const lastAssistant = page.getByTestId('chat-assistant-message').last();
 
-    // autohide="not-last" — the LAST assistant message's bar is visible without hover.
+    // The footer shows on hover or keyboard focus, and keeps its height either way.
+    await lastAssistant.hover();
     const copyBtn = lastAssistant.getByTestId('chat-message-copy');
     await expect(copyBtn).toBeVisible();
     await expect(copyBtn).not.toHaveAttribute('data-copied', 'true');
@@ -160,26 +163,22 @@ test.describe('§transcript — thread turn', () => {
     await expect(timestamp).toHaveText(/^\d{1,2}:\d{2}\s?(AM|PM)$/i);
   });
 
-  // Previously: MessageTiming.tsx reads `useMessageTiming()?.totalStreamTime`,
-  // sourced from a `system`-type message's `metadata.turnDurationMs`, but
-  // nothing in packages/core ever wrote that field — `chat-message-timing`
-  // could never render. Fixed by the product-bug-fix campaign:
-  // `event-handler.ts`'s `onResult` now computes `turnDurationMs` from
-  // `active.turnStartedAt` and emits a transient system message carrying it,
-  // which `groupMessages` merges onto the preceding assistant message.
-  test('assistant message action bar: timing pill shows total duration on hover', async () => {
+  test("the time's tooltip has the full date and what the reply took", async () => {
     const { page } = app;
-    const lastAssistant = page.getByTestId('chat-assistant-message').last();
-    const timingPill = lastAssistant.getByTestId('chat-message-timing');
-    await expect(timingPill).toBeVisible({ timeout: 10_000 });
-    // formatDurationMs: "412ms" / "8.94s" / "1m 15s" / "2h 15m".
-    await expect(timingPill).toHaveText(/^(\d+ms|\d+\.\d{2}s|\d+m \d{2}s|\d+h \d{2}m)$/);
+    await page.getByTestId('chat-assistant-message').last().getByTestId('chat-message-timestamp').hover();
+    const detail = page.getByTestId('chat-message-time-detail').first();
+    await expect(detail).toContainText(String(new Date().getFullYear()));
+    await expect(detail).toContainText('Took ');
+  });
 
-    // Hovering reveals the tooltip's "Total" breakdown row. Radix Tooltip
-    // portals content twice (an aria-live announcer copy plus the visible
-    // one) — scope to the first match rather than the ambiguous bare text.
-    await timingPill.hover();
-    await expect(page.getByText('Total').first()).toBeVisible({ timeout: 5_000 });
+  test("the user's own message has a footer, and the conversation opens with its time", async () => {
+    const { page } = app;
+    const message = page.getByTestId('chat-user-message').last();
+    await message.hover();
+    await expect(message.getByTestId('chat-message-copy')).toBeVisible();
+    await expect(message.getByTestId('chat-message-timestamp')).toBeVisible();
+    await scrollViewportToTop(page);
+    await expect(page.getByTestId('chat-time-marker').first()).toContainText('Today, ');
   });
 
   test('scroll-to-bottom button appears when scrolled up and returns to the tail on click', async () => {
@@ -252,8 +251,8 @@ test.describe('§transcript — thread turn', () => {
       clamped: el.querySelector('[data-clamp]') !== null,
     }));
     expect(box.clamped).toBe(false);
-    // 470px cap + the 0.5px hairline border on each side.
-    expect(box.width).toBeLessThanOrEqual(471);
+    // At most 85% of the 640px column.
+    expect(box.width).toBeLessThanOrEqual(545);
     // scrollWidth includes content painted past the padding box — this is the
     // containment assertion itself.
     expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);

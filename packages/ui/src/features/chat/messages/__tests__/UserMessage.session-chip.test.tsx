@@ -14,6 +14,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
+vi.mock('../MessageFooter', () => ({ MessageFooter: () => <div data-testid="footer-stub" /> }));
+vi.mock('../PlanApprovedMarker', () => ({
+  PlanApprovedMarker: ({ plan }: { plan: string }) => <div data-testid="plan-stub">{plan}</div>,
+}));
 vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({ retryMessage: vi.fn() }),
   useChatQueuedMessages: () => [],

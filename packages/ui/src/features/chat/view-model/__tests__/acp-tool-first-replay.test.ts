@@ -72,7 +72,6 @@ it('keeps native tool lookup and group identities while wire IDs link nested tas
     messages: [
       {
         content: [{ toolCallId: 'child' }, { type: 'text', text: 'Nested answer' }],
-        metadata: { custom: { mainframe: { partGroups: { child: 'child' } } } },
       },
     ],
   });

@@ -6,6 +6,7 @@ describe('classifyLocalhostUrl', () => {
     expect(classifyLocalhostUrl('http://localhost:5173')).toEqual({ port: 5173 });
     expect(classifyLocalhostUrl('http://127.0.0.1:3000/path?q=1')).toEqual({ port: 3000 });
     expect(classifyLocalhostUrl('http://[::1]:8080')).toEqual({ port: 8080 });
+    expect(classifyLocalhostUrl('http://0.0.0.0:5173/')).toEqual({ port: 5173 });
   });
 
   it('defaults the port by scheme when none is given', () => {

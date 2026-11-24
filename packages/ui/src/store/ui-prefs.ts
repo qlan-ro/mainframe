@@ -80,7 +80,10 @@ export function dialogSizeFor(sizes: DialogSizes, key: string, fallback: DialogS
 
 const SIDE_CHAT_DEFAULT_FRAC = 0.4;
 
-export type TranscriptMode = 'verbose' | 'compact';
+/** Whether a turn's work row folds once the turn has ended, or stays open. */
+export type FinishedWork = 'fold' | 'open';
+/** Where a URL in a reply opens: the workspace browser, or the system's own. */
+export type LinkTarget = 'workspace' | 'browser';
 
 /** The transcript column's un-dragged cap, its 2 × 20px padding included. */
 export const TRANSCRIPT_DEFAULT_WIDTH = 680;
@@ -93,8 +96,10 @@ export function clampTranscriptWidth(width: number): number {
 }
 
 interface UiPrefsState {
-  transcriptMode: TranscriptMode;
-  setTranscriptMode: (mode: TranscriptMode) => void;
+  finishedWork: FinishedWork;
+  setFinishedWork: (finishedWork: FinishedWork) => void;
+  openLinksIn: LinkTarget;
+  setOpenLinksIn: (openLinksIn: LinkTarget) => void;
   /** The transcript column's cap, dragged from its edge grips. A narrower
    *  chat column still squeezes it — this is a max, not a fixed width. */
   transcriptWidth: number;
@@ -139,7 +144,8 @@ interface UiPrefsState {
 /** The persisted subset. */
 function partializeUiPrefs(s: UiPrefsState) {
   return {
-    transcriptMode: s.transcriptMode,
+    finishedWork: s.finishedWork,
+    openLinksIn: s.openLinksIn,
     transcriptWidth: s.transcriptWidth,
     sidebarVisible: s.sidebarVisible,
     sidebarWidth: s.sidebarWidth,
@@ -180,7 +186,8 @@ function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPr
   const state = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
   return {
     ...state,
-    transcriptMode: state.transcriptMode === 'compact' ? 'compact' : 'verbose',
+    finishedWork: state.finishedWork === 'open' ? 'open' : 'fold',
+    openLinksIn: state.openLinksIn === 'browser' ? 'browser' : 'workspace',
     transcriptWidth:
       typeof state.transcriptWidth === 'number'
         ? clampTranscriptWidth(state.transcriptWidth)
@@ -219,8 +226,10 @@ function migrateToV8(next: Record<string, unknown>): void {
 export const useUiPrefs = create<UiPrefsState>()(
   persist(
     (set) => ({
-      transcriptMode: 'verbose',
-      setTranscriptMode: (transcriptMode) => set({ transcriptMode }),
+      finishedWork: 'fold',
+      setFinishedWork: (finishedWork) => set({ finishedWork }),
+      openLinksIn: 'workspace',
+      setOpenLinksIn: (openLinksIn) => set({ openLinksIn }),
       transcriptWidth: TRANSCRIPT_DEFAULT_WIDTH,
       setTranscriptWidth: (width) => set({ transcriptWidth: clampTranscriptWidth(width) }),
       sidebarVisible: true,

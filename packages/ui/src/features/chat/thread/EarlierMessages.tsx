@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { SCROLLBAR_DRAG_EVENT } from '@/lib/overlay-scrollbars/thumb';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useTranscriptScroll } from './transcript-scroll-context';
@@ -21,7 +22,10 @@ export function EarlierMessages() {
   return (
     <div
       data-testid="chat-history-boundary"
-      className="flex min-h-12 flex-col items-center py-2 text-xs text-muted-foreground"
+      className={cn(
+        'flex flex-col items-center text-xs text-muted-foreground',
+        (loading || history?.hasMore || history?.error) && 'min-h-12 py-2',
+      )}
       aria-live="polite"
       aria-busy={loading}
     >
@@ -38,9 +42,7 @@ export function EarlierMessages() {
         >
           Earlier messages
         </Button>
-      ) : (
-        <span>Beginning of conversation</span>
-      )}
+      ) : null}
       {history?.error && <span role="alert">{history.error}</span>}
     </div>
   );

@@ -1,12 +1,9 @@
 /**
  * UserMessage — the user turn, on the v2 chat kit.
  *
- * The shell is `Message align="end"` › `MessageContent` › `Bubble variant="tinted"`
- * › `BubbleContent`: aui supplies the message state, the kit supplies the pixels.
- * `tinted` is the kit's soft-primary fill — the v2 analogue of the warm-chrome
- * `--mf-um-card` gradient this replaced. The 470px cap is kept over the kit's
- * relative `max-w-[80%]`: at this column width 80% measures ~582px, and the
- * absolute cap is a deliberate app value (an e2e case pins it).
+ * The shell is `Message align="end"` › `MessageContent` › `Bubble` ›
+ * `BubbleContent`: aui supplies the message state, the kit supplies the pixels.
+ * The bubble is neutral (T1), 14 px corners, at most 85% of the column.
  *
  * Variants rendered by this file:
  *   - Plain text    → CoolCard + ReadMoreBubble + markdown + @mention chips
@@ -15,7 +12,7 @@
  *   - Inline images → thumbnail row (regular image parts)
  *   - Attachments   → UserAttachments: file pills + clickable capture-image
  *     tiles with their selector context (native message.attachments)
- *   - Implementing plan → PlanBubble, when the daemon sent a clear-context
+ *   - Plan approved → PlanApprovedMarker, when the daemon sent a clear-context
  *     `Implement the following plan:` turn (see plan-message.ts)
  *   - Agent-sent turn → AgentMessageCard, when another chat's agent wrote it
  *     through the orchestration MCP server (see markers/agent-message.ts)
@@ -39,7 +36,9 @@ import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import { Badge } from '@/components/ui/badge';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
-import { useChatExtras, useChatQueuedMessages } from '../runtime/chat-extras';
+import { useChatQueuedMessages } from '../runtime/chat-extras';
+import { MessageFooter } from './MessageFooter';
+import { useIsNestedTranscript } from './nested-transcript-context';
 import { ReadMoreBubble } from './ReadMoreBubble';
 import { QueuedUserTurn } from './QueuedUserTurn';
 import { queuePosition } from './queue-position';
@@ -49,7 +48,7 @@ import { visibleMessageText } from '../markers/message-markers';
 import { useChatSkills, resolveSkillName } from '@/features/skills/use-chat-skills';
 import { UserAttachments } from './UserAttachments';
 import { ReviewCommentCard } from './ReviewCommentCard';
-import { PlanBubble } from './PlanBubble';
+import { PlanApprovedMarker } from './PlanApprovedMarker';
 import { parsePlanUserMessage } from './plan-message';
 import { AgentMessageCard } from './AgentMessageCard';
 import { SendFailureNotice } from './SendFailureNotice';
@@ -67,8 +66,10 @@ const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 
 function UserBubble({ children }: { children: ReactNode }) {
   return (
-    <Bubble variant="tinted" align="end" className="max-w-[470px]">
-      <BubbleContent data-testid="chat-user-bubble">{children}</BubbleContent>
+    <Bubble variant="muted" align="end" className="max-w-[85%]">
+      <BubbleContent data-testid="chat-user-bubble" className="mf-prose rounded-[14px] px-3.5 py-2 wrap-anywhere">
+        {children}
+      </BubbleContent>
     </Bubble>
   );
 }
@@ -99,8 +100,8 @@ function SlashPill({ kind, name }: SlashPillProps) {
 
 function UserMessageImpl() {
   const meta = useMainframeMeta();
-  const chatExtras = useChatExtras();
   const isQueued = meta.queued === true;
+  const nested = useIsNestedTranscript();
   // FIFO position/total for the queued footer (design 7.2: UMQueuedStack).
   // Only needed while queued — the hook is cheap (memoized off extras.queued).
   const queuedRefs = useChatQueuedMessages();
@@ -159,8 +160,8 @@ function UserMessageImpl() {
   const reviewCard = meta.reviewComment ? <ReviewCommentCard review={meta.reviewComment} /> : null;
 
   // Clear-context "Implementing plan" turn: the daemon prefixes the plan with
-  // `Implement the following plan:` — render the PlanBubble in place of the
-  // plain bubble (never a command/review turn, never queued).
+  // `Implement the following plan:` — render the approved plan's marker in place
+  // of the plain bubble (never a command/review turn, never queued).
   const planBody = !slashProps && !meta.reviewComment ? parsePlanUserMessage(cleanText) : null;
   // A message another agent sent (chat_send/launch, a task prompt, task
   // results) renders as a card naming the sender, never as the user's bubble.
@@ -199,12 +200,12 @@ function UserMessageImpl() {
   const hasExtras = imageParts.length > 0 || attachmentCount > 0;
 
   return (
-    // The fork bar's footer takes over most of the bottom padding when it renders.
     <MessagePrimitive.Root
       data-testid="chat-user-message"
       data-message-id={messageId}
       data-search-item-id={messageId}
-      className="pt-1 pb-4 has-data-[slot=message-footer]:pb-1"
+      data-tr-message
+      className="pt-1 pb-1"
     >
       <Message align="end">
         <MessageContent>
@@ -224,14 +225,13 @@ function UserMessageImpl() {
               </QueuedUserTurn>
             )
           ) : planBody ? (
-            // The gate shell's max-width cap should govern the record's width,
-            // not MessageContent's end-alignment of its slotted children — an
-            // explicit full-width wrapper escapes the shrink-to-fit sizing.
-            <div className="w-full" data-text-part>
-              <PlanBubble plan={planBody} clearedContext executionMode={chatExtras?.state.chatConfig?.permissionMode} />
+            // Full width, so the marker centres on the spine rather than on the
+            // end-aligned column.
+            <div className="w-full">
+              <PlanApprovedMarker plan={planBody} messageId={messageId} />
             </div>
           ) : agentText ? (
-            <div data-text-part>
+            <div data-text-part className="w-full">
               <AgentMessageCard parsed={agentText} messageId={messageId} />
             </div>
           ) : (
@@ -251,6 +251,7 @@ function UserMessageImpl() {
           )}
         </MessageContent>
       </Message>
+      {!isQueued && !planBody && !nested && <MessageFooter user />}
     </MessagePrimitive.Root>
   );
 }

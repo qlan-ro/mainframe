@@ -1,6 +1,6 @@
 /**
- * The URL chip's behaviour (#279), kept out of the component so the chip stays
- * presentational.
+ * A local-server link's tunnel (#279), kept out of the component so the link
+ * stays presentational.
  *
  * Every transition rides `tunnel:status` events through `store/port-tunnels`;
  * the start POST is only a trigger. `TunnelManager::start` resolves after DNS
@@ -36,8 +36,8 @@ export function useUrlTunnel(href: string, port: number): UrlTunnelController {
   const chatId = useChatId();
   const entry = usePortTunnel(port);
 
-  // Set on the click that starts a tunnel, so only the chip the user clicked
-  // opens a window when the port goes ready — other chips for the same port
+  // Set on the click that starts a tunnel, so only the link the user clicked
+  // opens a window when the port goes ready — other links for the same port
   // just follow the state.
   const pendingOpenRef = useRef(false);
   const [starting, setStarting] = useState(false);
@@ -82,7 +82,7 @@ export function useUrlTunnel(href: string, port: number): UrlTunnelController {
     startPortTunnel(daemonPort, { port, chatId }).catch((err: unknown) => {
       pendingOpenRef.current = false;
       setStarting(false);
-      // This chip's start failed; the daemon said nothing. Marking the entry
+      // This link's start failed; the daemon said nothing. Marking the entry
       // client-written keeps it out of a URL tab's claim evidence (#281 D10).
       reportPortTunnelError(port, message(err), 'client');
     });
@@ -90,7 +90,7 @@ export function useUrlTunnel(href: string, port: number): UrlTunnelController {
 
   const stop = useCallback(() => {
     // No optimistic removal: the entry clears on the daemon's `stopped` event,
-    // so a failed stop leaves the chip honest about the tunnel still being up.
+    // so a failed stop leaves the link honest about the tunnel still being up.
     stopPortTunnel(daemonPort, port).catch((err: unknown) => {
       mfToast.error(`Couldn’t stop the tunnel on port ${port}`, { description: message(err) });
     });

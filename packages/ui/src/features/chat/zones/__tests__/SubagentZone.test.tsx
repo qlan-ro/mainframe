@@ -29,11 +29,11 @@ vi.mock('../../runtime/use-native-thread-messages', () => ({
     },
   ],
 }));
-vi.mock('../../messages/compact/transcript-scope', () => ({
+vi.mock('../../messages/turn/transcript-scope', () => ({
   RootTranscriptScope: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-vi.mock('../../tools/cards/SubagentTranscript', () => ({
-  SubagentTranscript: ({ messages, messageId }: { messages: readonly ThreadMessage[]; messageId: string }) => (
+vi.mock('../../messages/turn/AgentSteps', () => ({
+  AgentSteps: ({ messages, messageId }: { messages: readonly ThreadMessage[]; messageId: string }) => (
     <div data-testid="transcript-stub" data-message={messageId}>
       {messages.map((message) => message.id).join(',')}
     </div>
@@ -75,7 +75,7 @@ afterEach(() => {
   controller.loadEarlier.mockClear();
 });
 
-it('loads the complete subagent transcript when its card was supplied as context', async () => {
+it('loads the complete subagent transcript when its row was supplied as context', async () => {
   controller.isHistoryContext.mockReturnValue(true);
   childMessages.current = [{ id: 'later-child' } as ThreadMessage];
   render(<SubagentZone subagent={subagent} grow={0.5} onClose={vi.fn()} />);

@@ -1,0 +1,111 @@
+/** Where a turn's child work stands right now: an agent, a delegated task or a workflow (T1e). Pure. */
+import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
+import { isTerminalTaskStatus } from '@qlan-ro/mainframe-types';
+import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { findSession } from '../../orchestration/use-session-items';
+import type { TurnChild, TurnModel } from '../../view-model/turn/types';
+
+export type ChildState = 'needs-you' | 'running' | 'queued';
+
+export interface LiveChildren {
+  readonly byCall: ReadonlyMap<string, ChildState>;
+  /** Call → when the background command or monitor it started began, while that still runs. */
+  readonly background: ReadonlyMap<string, number>;
+  /** Delegated tasks whose call went through and whose work then failed. */
+  readonly failed: ReadonlySet<string>;
+  /** A background agent is running and the daemon hasn't said yet which call started it. */
+  readonly unplacedAgents: boolean;
+}
+
+export interface ChildSources {
+  readonly sessions: readonly SessionItem[];
+  readonly live: Readonly<Record<string, BackgroundActivityTask>>;
+  readonly listed: readonly BackgroundTask[];
+}
+
+function delegatedState(chatId: string, sessions: readonly SessionItem[]): ChildState | undefined {
+  const custom = findSession(sessions, chatId)?.custom;
+  const status = custom?.delegation?.status;
+  if (!custom || !status) return undefined;
+  if (custom.hasPending || custom.delegatedWaiting === true) return 'needs-you';
+  // A finished task's chat can be resumed, and is going again while it runs. A stopped one only winds down.
+  if (isTerminalTaskStatus(status)) return custom.isRunning && status !== 'cancelled' ? 'running' : undefined;
+  if (status === 'queued') return 'queued';
+  return status === 'waiting' ? 'needs-you' : 'running';
+}
+
+function taskFailed(child: TurnChild, sessions: readonly SessionItem[]): boolean {
+  return !!child.taskChatId && findSession(sessions, child.taskChatId)?.custom.delegation?.status === 'failed';
+}
+
+export function childState(child: TurnChild, sources: ChildSources): ChildState | undefined {
+  if (child.status === 'awaiting-approval') return 'needs-you';
+  if (child.taskChatId) return delegatedState(child.taskChatId, sources.sessions);
+  if (child.status === 'running') return 'running';
+  if (child.workflowTaskId) return sources.live[child.workflowTaskId] ? 'running' : undefined;
+  const background = sources.listed.some(
+    (task) => task.toolUseId === child.toolCallId && task.status === 'running' && sources.live[task.id],
+  );
+  return background ? 'running' : undefined;
+}
+
+export function liveChildren(model: TurnModel, sources: ChildSources): LiveChildren {
+  const byCall = new Map<string, ChildState>();
+  const failed = new Set<string>();
+  for (const turn of model.turns.values())
+    for (const child of turn.children) {
+      const state = childState(child, sources);
+      if (state) byCall.set(child.toolCallId, state);
+      else if (taskFailed(child, sources.sessions)) failed.add(child.toolCallId);
+    }
+  const background = new Map<string, number>();
+  for (const task of sources.listed)
+    if (task.toolUseId && task.kind !== 'agent' && task.status === 'running' && sources.live[task.id])
+      background.set(task.toolUseId, task.startedAt);
+  const placed = new Set(sources.listed.map((task) => task.id));
+  const unplacedAgents = Object.values(sources.live).some((task) => task.kind === 'agent' && !placed.has(task.id));
+  return { byCall, background, failed, unplacedAgents };
+}
+
+export const NO_CHILDREN: LiveChildren = {
+  byCall: new Map(),
+  background: new Map(),
+  failed: new Set(),
+  unplacedAgents: false,
+};
+
+export function sameLive(a: LiveChildren, b: LiveChildren): boolean {
+  if (a.unplacedAgents !== b.unplacedAgents || a.byCall.size !== b.byCall.size) return false;
+  if (a.background.size !== b.background.size || a.failed.size !== b.failed.size) return false;
+  for (const id of a.failed) if (!b.failed.has(id)) return false;
+  for (const [id, state] of a.byCall) if (b.byCall.get(id) !== state) return false;
+  for (const [id, startedAt] of a.background) if (b.background.get(id) !== startedAt) return false;
+  return true;
+}
+
+export function childGoing(child: TurnChild, live: LiveChildren): boolean {
+  return live.byCall.has(child.toolCallId);
+}
+
+/** "7 agents · 1 needs you · 1 running · 1 queued", as its parts. */
+export interface ChildCounts {
+  readonly who: string;
+  readonly needsYou: number;
+  readonly running: number;
+  readonly queued: number;
+}
+
+const plural = (n: number, word: string) => (n ? `${n} ${word}${n === 1 ? '' : 's'}` : '');
+
+export function childCounts(children: readonly TurnChild[], live: LiveChildren): ChildCounts | undefined {
+  if (!children.length) return undefined;
+  const agents = children.filter((child) => child.kind === 'agent').length;
+  const states = children.map((child) => live.byCall.get(child.toolCallId));
+  const count = (state: ChildState) => states.filter((value) => value === state).length;
+  return {
+    who: [plural(agents, 'agent'), plural(children.length - agents, 'workflow')].filter(Boolean).join(', '),
+    needsYou: count('needs-you'),
+    running: count('running'),
+    queued: count('queued'),
+  };
+}

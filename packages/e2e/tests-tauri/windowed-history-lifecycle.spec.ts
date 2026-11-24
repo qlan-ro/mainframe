@@ -6,6 +6,7 @@ import { HistoryWire, seedWindowedHistory } from '../helpers/tauri/windowed-hist
 import { cleanupHeadlessProject, createHeadlessChat } from '../helpers/tauri/headless-chat.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
+import { openWork } from '../helpers/tauri/transcript.js';
 
 test.describe('windowed history lifecycle', () => {
   let seed: Awaited<ReturnType<typeof seedWindowedHistory>>;
@@ -93,13 +94,10 @@ test.describe('windowed history lifecycle', () => {
     await expect(page.getByText('Needle turn 234', { exact: true })).toHaveCount(0);
   });
 
-  test('keeps compact disclosures on prepend and opens an unloaded find target', async () => {
+  test('keeps opened rows on prepend and opens an unloaded find target', async () => {
     const page = app.page;
-    await page.getByTestId('shell-rail-settings').click();
-    await page.getByTestId('settings-nav-general').click();
-    await page.getByTestId('settings-appearance-transcript-compact').click();
-    await page.getByTestId('shell-rail-chats').click();
-    const recent = page.locator('[data-testid^="chat-compact-toggle-"]').last();
+    await openWork(page);
+    const recent = page.locator('[data-testid^="chat-row-"][data-testid$="-toggle"]').last();
     const testId = await recent.getAttribute('data-testid');
     expect(testId).toBeTruthy();
     await recent.click();

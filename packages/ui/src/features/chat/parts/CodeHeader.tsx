@@ -35,14 +35,10 @@ export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
 
   return (
     <div
-      className={cn(
-        // select-none: a selection spanning the block must not copy the language label or "Copy".
-        'flex select-none items-center justify-between',
-        'mt-3 bg-muted border border-border rounded-t-md',
-        'px-3 py-1.5',
-      )}
+      // select-none: a selection spanning the block must not copy the language label or "Copy".
+      className="mf-tr-meta mt-3 flex h-7.5 items-center justify-between rounded-t-lg border border-border pr-1.5 pl-3 text-muted-foreground select-none"
     >
-      <span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">{displayLang}</span>
+      <span>{displayLang}</span>
 
       <button
         data-testid="chat-code-copy"
@@ -50,14 +46,12 @@ export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
         onClick={handleCopy}
         aria-label={copied ? 'Copied' : 'Copy code'}
         className={cn(
-          'flex items-center gap-1 px-1.5 py-0.5 rounded-sm',
-          'text-xs font-semibold text-muted-foreground',
-          'transition-colors hover:text-foreground hover:bg-accent',
-          'focus-visible:focus-line',
-          copied && 'text-success',
+          'flex h-6 items-center gap-1 rounded-md px-1.5 font-medium',
+          'transition-colors hover:bg-accent hover:text-foreground focus-visible:focus-line-inset',
+          copied && 'text-mf-tr-ok',
         )}
       >
-        {copied ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+        {copied ? <Check size={12} /> : <Copy size={12} />}
         {copied ? 'Copied' : 'Copy'}
       </button>
     </div>

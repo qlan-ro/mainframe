@@ -27,6 +27,7 @@ describe('idle compaction settings', () => {
     render(<GeneralPane port={9999} />);
     expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
       'Appearance',
+      'Links',
       'Worktree directory',
       'Chats',
       'Updates',

@@ -6,8 +6,8 @@ import { useChatController } from '@/features/sessions/runtime/use-chat-controll
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useControllerState } from '../runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
-import { SubagentTranscript } from '../tools/cards/SubagentTranscript';
-import { RootTranscriptScope } from '../messages/compact/transcript-scope';
+import { AgentSteps } from '../messages/turn/AgentSteps';
+import { RootTranscriptScope } from '../messages/turn/transcript-scope';
 import type { SubagentZoneRef } from './zones-store';
 import { findSubagentTranscript } from './find-subagent-transcript';
 import { findToolCall } from '@/features/session-panel/activity-model';
@@ -110,12 +110,7 @@ export function SubagentZone({
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {transcript ? (
           <RootTranscriptScope>
-            <SubagentTranscript
-              messages={transcript}
-              messageId={messageId ?? ''}
-              toolCallId={subagent.toolCallId}
-              inZone
-            />
+            <AgentSteps messages={transcript} messageId={messageId ?? ''} toolCallId={subagent.toolCallId} />
           </RootTranscriptScope>
         ) : (
           <p className="text-sm text-muted-foreground">{historyError ?? 'Loading subagent transcript...'}</p>

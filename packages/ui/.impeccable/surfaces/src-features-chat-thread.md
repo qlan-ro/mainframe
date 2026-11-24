@@ -2,7 +2,7 @@
 version: 1
 slug: "src-features-chat-thread"
 primary_target: "src/features/chat/thread"
-related_targets: ["src/features/chat/messages","src/features/chat/tools"]
+related_targets: ["src/features/chat/messages/turn","src/features/chat/tools","src/features/chat/links","src/features/chat/view-model/turn"]
 ---
 
 # Transcript
@@ -14,7 +14,7 @@ Operate. Messages, turns, tool rows, markers, sub-agents and delegated tasks, ma
 Follow what an agent did and why, find the step that failed, and copy or quote what matters.
 
 ## Constraints
-Long threads, streamed. Every tool the app renders has a row or a marker (T1a). Times live in hover footers.
+A turn is the agent's response to one user message, read from the messages themselves, so it holds for every provider and for history. Rows render per message: a streamed chunk re-renders the slice it touched, and text that becomes a step keeps its element. Long threads, streamed. Every tool the app renders has a row or a marker (T1a). Times live in hover footers.
 
 Every row, marker and card for a tool call carries `data-activity-id` with the call's id (space-separated when a row stands for several), and its own disclosure is the first `aria-expanded` control inside it. A group that renders its rows only once opened lists their ids in `data-activity-group`. The session panel's jump (R13) relies on both.
 
@@ -30,4 +30,4 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 "1 failed, retried" in grey, so a recovered failure doesn't shout.
 
 ## Unresolved
-None.
+Agents open in today's split until the Agent tab (W8). A delegated task's request stays in its row until it shows above the composer (G5).

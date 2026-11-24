@@ -79,6 +79,7 @@ import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { openWork, toolRow } from '../helpers/tauri/transcript.js';
 
 // ── git helpers (test-process only; array-arg execFileSync, no shell) ─────────
 
@@ -370,9 +371,8 @@ test.describe('§editor-diff — Open in diff editor from EditFileCard', () => {
     await sendMessage(page, 'Edit index.ts and add a comment "// changed by AI" on line 1');
     await waitForIdle(page, 60_000);
 
-    const card = page.getByTestId('chat-edit-card');
-    await expect(card).toBeVisible({ timeout: 45_000 });
-    await page.getByTestId('chat-edit-open-diff').click();
+    await openWork(page);
+    await toolRow(page, 'Edit').locator('[data-testid^="chat-row-open-diff-"]').click();
 
     const diffTab = page.getByTestId('diff-tab');
     await expect(diffTab).toBeVisible({ timeout: 10_000 });

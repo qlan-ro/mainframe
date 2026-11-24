@@ -223,41 +223,6 @@ describe('convertAcpItems — reaggregation', () => {
   });
 });
 
-describe('convertAcpItems — tool-group echo', () => {
-  it('echoes groupId membership into partGroups and derives a groupSummaries entry', () => {
-    const items: AccumulatedItem[] = [
-      {
-        kind: 'tool-call',
-        id: 't1',
-        title: 'Read',
-        status: 'completed',
-        content: [],
-        rawInput: {},
-        meta: itemMeta({ containerId: 'c1', groupId: 'g1' }),
-      },
-      {
-        kind: 'tool-call',
-        id: 't2',
-        title: 'Read',
-        status: 'completed',
-        content: [],
-        rawInput: {},
-        meta: itemMeta({ containerId: 'c1', groupId: 'g1' }),
-      },
-    ];
-
-    const container = convertAcpItems(items, stampFor)[0]!;
-    expect(container.metadata).toEqual({
-      custom: {
-        mainframe: {
-          partGroups: { t1: 'g1', t2: 'g1' },
-          groupSummaries: { g1: 'Read 2 files' },
-        },
-      },
-    });
-  });
-});
-
 describe('convertAcpItems — assistant cost/timing', () => {
   it('reads cost_usd and turnDurationMs off messageMeta into metadata.custom.mainframe.cost and metadata.timing', () => {
     const items: AccumulatedItem[] = [

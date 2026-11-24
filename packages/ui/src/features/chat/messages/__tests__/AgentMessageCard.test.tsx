@@ -4,7 +4,8 @@
  * thread list, is stubbed.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { AgentMessageCard } from '../AgentMessageCard';
 
 const TITLES: Record<string, string> = { parent_1: 'Fix the login flow', c1: 'Review PR 12853' };
@@ -42,7 +43,7 @@ describe('AgentMessageCard', () => {
     render(
       <AgentMessageCard
         messageId="m5"
-        parsed={{ type: 'task-results', results: [{ taskId: 't9', chatId: 'c1', status: 'completed', body: 'Ok' }] }}
+        parsed={{ type: 'agent-message', message: { fromChatId: 'parent_1', kind: 'send', body: 'Hi' } }}
       />,
     );
     const card = screen.getByTestId('chat-agent-message-card-m5');
@@ -68,24 +69,28 @@ describe('AgentMessageCard', () => {
     expect(card.querySelector('.font-mono')).toBeNull();
   });
 
-  it('renders one section per batched task result', () => {
+  it('keeps each task result whose row is not loaded as a line that opens on it', () => {
     render(
-      <AgentMessageCard
-        messageId="m2"
-        parsed={{
-          type: 'task-results',
-          results: [
-            { taskId: 't1', chatId: 'c1', status: 'completed', body: 'Done' },
-            { taskId: 't2', chatId: 'c2', status: 'waiting_for_children', body: '' },
-          ],
-        }}
-      />,
+      <TooltipProvider>
+        <AgentMessageCard
+          messageId="m2"
+          parsed={{
+            type: 'task-results',
+            results: [
+              { taskId: 't1', chatId: 'c1', status: 'completed', body: 'Done **well**' },
+              { taskId: 't2', chatId: 'c2', status: 'cancelled', body: '' },
+            ],
+          }}
+        />
+      </TooltipProvider>,
     );
-    expect(screen.getByTestId('chat-task-result-card-t1')).toHaveTextContent(
-      'Task result · completed · Review PR 12853',
-    );
-    expect(screen.getByTestId('chat-task-result-card-t1')).not.toHaveTextContent('c1');
-    expect(screen.getByTestId('chat-task-result-card-t1')).toHaveTextContent('Done');
-    expect(screen.getByTestId('chat-task-result-card-t2')).toHaveTextContent('waiting for children · chat c2');
+    const first = screen.getByTestId('chat-task-result-t1');
+    expect(first).toHaveTextContent('Task result Review PR 12853·completed');
+    expect(screen.queryByText('well')).toBeNull();
+    fireEvent.click(first);
+    expect(screen.getByText('well').tagName).toBe('STRONG');
+    // Stopped, never cancelled (T1c); nothing came back to open.
+    expect(screen.getByTestId('chat-task-result-t2')).toHaveTextContent('c2·stopped');
+    expect(screen.getByTestId('chat-task-result-t2')).toBeDisabled();
   });
 });

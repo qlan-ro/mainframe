@@ -1,72 +1,31 @@
 /**
- * §tool-cards — Per-family tool-card rendering (Cluster B, spec #12 of
- * docs/plans/2026-07-03-tauri-e2e-test-plan.md).
+ * §tool-cards — every tool as the transcript draws it: steps as rows inside the
+ * turn's one work row, events as pills outside it (redesign T1a, T1g).
  *
- * chat.spec.ts's §messaging describe already asserts a bare `chat-bash-card`
- * appears after a Bash tool call — this spec goes deeper (expand/collapse,
- * command/description/output text) and covers every OTHER card family that a
- * committed recording can reach. Recordings are content-agnostic replay
- * (packages/core-rs/crates/mainframe-adapter-mock/src/session.rs — `send_message`/
- * `respondToPermission` just advance a cursor; the text sent and the button
- * clicked don't have to match what was recorded, only the call ORDER does),
- * so the daemon reuses these fixtures as pure canned tool-call payloads.
+ * Recordings are content-agnostic replay (`send_message`/`respondToPermission`
+ * just advance a cursor; the text sent and the button clicked don't have to
+ * match what was recorded, only the call ORDER does), so these fixtures serve
+ * as canned tool-call payloads:
+ *   messaging.0 → Bash                    permissions-interactive.0 → Write
+ *   changes-tab.0 → Read, Edit            plan-approval.0 → ExitPlanMode (approved)
+ *   ask-question.0 → AskUserQuestion      task-subagent.0 → Task
+ *   web-fetch.0 → WebFetch                mcp-tool.0 → mcp__linear__get_issue (done + error)
+ *   unregistered-tool.0 → a tool with no row of its own
+ *   schedule-pills.0 → ScheduleWakeup/CronCreate/CronList/CronDelete/Monitor
+ *   worktree-pills.0 → EnterWorktree ×2 / ExitWorktree (keep + remove)
+ *   tool-result-truncated.0 → Bash with a 51191-byte result
+ *   tool-group.0 → Read + Grep            bash-exit-code.0 → `exit 0`, then `exit 127`
+ *   transcript-rows.0 → a realistic thread: every row kind, retried and failed steps, markers
  *
- * Recording inventory (every tool a fixture actually replays — see report for
- * the full grep):
- *   messaging.0, thread.0            → Bash
- *   permissions-interactive.0        → Write
- *   changes-tab.0, context-tab.0     → Read, Edit
- *   plan-approval.0                  → Read, Write, Edit, ExitPlanMode
- *   plan-revision.0                  → Read, Write, Edit, ExitPlanMode (rejected → revised)
- *   ask-question.0                   → AskUserQuestion
- *   chat-status.0                    → Skill (SlashCommandCard) + onSkillLoaded (SkillLoadedCard)
- *   task-subagent.0                  → Task (nested onSubagentChild transcript)
- *   web-fetch.0                      → WebFetch
- *   mcp-tool.0                       → mcp__linear__get_issue (done + error)
- *   unregistered-tool.0              → CustomAnalyticsReport (ToolFallback)
- *   schedule-pills.0                 → ScheduleWakeup/CronCreate/CronList/CronDelete/Monitor
- *   worktree-pills.0                 → EnterWorktree ×2 / ExitWorktree (keep + remove)
- *   tool-result-truncated.0          → Bash w/ a 51191-byte result (ToolResultExpand)
- *   tool-group.0                     → consecutive Read + Grep (daemon-grouped → ToolGroup)
- *   bash-exit-code.0                 → Bash `exit 0` then Bash `exit 127` (isError)
- *   app-restart.0, composer-attachments.0, context-picker.0, image-lightbox.0,
- *   multi-chat.0/.1                  → no tool calls
- *
- * The five families this spec once listed as unrecorded — Schedule/Cron/Monitor,
- * EnterWorktree/ExitWorktree, a truncated (>threshold) tool result, ToolGroup, and
- * a Bash call with a trailing `exit N` line — all have committed recordings now
- * (above) and are asserted live below; nothing in this file is skipped for a
- * missing fixture.
- *
- * Still uncovered in TOOL_REGISTRY (register-cards.ts), all needing a recording
- * before a test can exist — no e2e spec touches any of them today:
- *   WebSearch                  → shares WebFetchCard, so only the registry key is untested
- *   PushNotification           → PushNotificationCard (landed with the attention-request work)
- *   Workflow / RunWorkflow     → WorkflowLauncherRow (landed with the workflow-run panel)
- *
- * Testid reference (verified against source; all asserted below):
- *   chat-bash-card / -trigger / -command / -description / chat-bash-output
- *   chat-write-card / -trigger ; tool-card-file-path
- *   read-card-root / -trigger ; read-card-code-preview
- *   chat-edit-card / -open-diff ; diff-tab (workspace surface) ; editor-diff (CmDiffEditor mount)
- *   chat-ask-card / -header / -body / -question-text
- *   chat-plan-bubble (approved) ; chat-plan-card / -label / -body (not approved)
- *   chat-slash-command-row (Skill tool call)
- *   chat-skill-loaded-pill ; chat-system-message ; marker-body (onSkillLoaded system message)
- *   chat-task-card / -toggle / -agent / -description (Task subagent card)
- *   web-fetch-card-root / -trigger / -url / -summary
- *   chat-mcp-pill ; marker-body (MCP tool pill)
- *   chat-tool-fallback-card / -trigger / -args / -result (ToolFallback)
- *   tool-card-status-dot — the shared tri-state dot, now testid'd with a
- *     data-status="pending|error|success" (packages/ui/src/features/chat/tools/shared/chrome.tsx).
- *     Every CollapsibleCardShell card carries one; no test here reads it, since each
- *     card's own describe already pins its done/error rendering by border and body.
+ * A row is found by the tool it stands for (`[data-tool]`, helpers/tauri/transcript.ts);
+ * its body keeps the test ids of what it shows (chat-bash-output, read-card-code-preview, …).
  */
 
 import { test, expect } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { expectRowClosed, openRow, openWork, toolRow, workRows } from '../helpers/tauri/transcript.js';
 
 // ─── Bash card — deep dive (messaging recording) ──────────────────────────────
 
@@ -93,25 +52,23 @@ test.describe('§tool-cards — Bash (messaging)', () => {
     await closeTauriApp(app);
   });
 
-  test('is collapsed by default; expanding reveals command, description, and colorized output', async () => {
+  test('a row says the command and its exit; opening it shows the description and the output', async () => {
     const { page } = app;
     await sendMessage(page, 'List the files in this project using bash ls.');
+    await waitForIdle(page, 90_000);
+    await openWork(page);
 
-    const card = page.getByTestId('chat-bash-card').first();
-    await card.waitFor({ timeout: 90_000 });
+    const row = toolRow(page, 'Bash').first();
+    await expect(row).toContainText('Ran');
+    await expect(row).toContainText('ls -la');
+    await expect(row).toContainText('exit 0');
+    await expect(row.getByTestId('chat-bash-output')).toHaveCount(0);
 
-    // Header text is present without expanding.
-    await expect(card.getByTestId('chat-bash-command')).toHaveText('ls -la');
-    await expect(card.getByTestId('chat-bash-description')).toHaveText('List files in the project directory');
-
-    // Body is not mounted until the trigger is clicked (Radix Collapsible unmounts closed content).
-    await expect(card.getByTestId('chat-bash-output')).toHaveCount(0);
-
-    await card.getByTestId('chat-bash-trigger').click();
-    const output = card.getByTestId('chat-bash-output');
-    await expect(output).toBeVisible({ timeout: 5_000 });
+    await openRow(row);
+    const output = row.getByTestId('chat-bash-output');
     await expect(output).toContainText('CLAUDE.md');
     await expect(output).toContainText('index.ts');
+    await expect(row.getByTestId('chat-bash-description')).toHaveText('List files in the project directory');
   });
 });
 
@@ -132,7 +89,7 @@ test.describe('§tool-cards — Write (permissions-interactive)', () => {
     await closeTauriApp(app);
   });
 
-  test('collapsed by default; expanding shows the written content once the write succeeds', async () => {
+  test('a written file says it is new; opening it shows its content', async () => {
     const { page } = app;
 
     // Recording replay is positional: the first Write is scripted to be rejected regardless of
@@ -148,16 +105,14 @@ test.describe('§tool-cards — Write (permissions-interactive)', () => {
     await page.getByTestId('chat-permission-option-allow-once').click();
     await waitForIdle(page, 60_000);
 
-    const card = page.getByTestId('chat-write-card').first();
-    await card.waitFor({ timeout: 15_000 });
-    await expect(card.getByTestId('tool-card-file-path')).toContainText('mf-e2e-test.txt');
-
-    // No structuredPatch on this result (plain "File created successfully" string) — body starts
-    // collapsed (Radix Collapsible.Root exposes data-state on the same element as the testid).
-    await expect(card).toHaveAttribute('data-state', 'closed');
-    await card.getByTestId('chat-write-trigger').click();
-    await expect(card).toHaveAttribute('data-state', 'open');
-    await expect(card.getByText('hello', { exact: true })).toBeVisible({ timeout: 5_000 });
+    await openWork(page);
+    const row = toolRow(page, 'Write').last();
+    await expect(row).toContainText('Wrote');
+    await expect(row).toContainText('mf-e2e-test.txt');
+    await expect(row).toContainText('new · 1 line');
+    await expectRowClosed(row);
+    await openRow(row);
+    await expect(row.getByTestId('chat-write-code')).toContainText('hello');
   });
 });
 
@@ -178,40 +133,35 @@ test.describe('§tool-cards — Read + Edit (changes-tab)', () => {
     await closeTauriApp(app);
   });
 
-  test('Read card shows the line-count meta and a collapsed code preview', async () => {
+  test('a read says its line count and opens on numbered code', async () => {
     const { page } = app;
     await sendMessage(page, 'Read index.ts and add a comment above the greeting export.');
+    await waitForIdle(page, 60_000);
+    await openWork(page);
 
-    const readCard = page.getByTestId('read-card-root').first();
-    await readCard.waitFor({ timeout: 60_000 });
-    await expect(readCard.getByTestId('tool-card-file-path')).toContainText('index.ts');
+    const row = toolRow(page, 'Read').first();
+    await expect(row).toContainText('index.ts');
     // Recorded Read result is "1\texport const greeting = \"hello\";\n2\t" → 2 lines.
-    await expect(readCard).toContainText('· 2 lines');
-
-    await expect(readCard.getByTestId('read-card-code-preview')).toHaveCount(0);
-    await readCard.getByTestId('read-card-trigger').click();
-    const preview = readCard.getByTestId('read-card-code-preview');
-    await expect(preview).toBeVisible({ timeout: 5_000 });
-    await expect(preview).toContainText('export const greeting');
+    await expect(row).toContainText('2 lines');
+    await expectRowClosed(row);
+    await openRow(row);
+    await expect(row.getByTestId('read-card-code-preview')).toContainText('export const greeting');
   });
 
-  test('Edit card is open by default with +/- stat pills and the diff body visible', async () => {
+  test('an edit says what it changed and opens on the diff', async () => {
     const { page } = app;
-    const editCard = page.getByTestId('chat-edit-card').first();
-    await editCard.waitFor({ timeout: 15_000 });
-
-    await expect(editCard.getByTestId('tool-card-file-path')).toContainText('index.ts');
-    // No trigger click needed — Edit cards default open.
-    await expect(editCard).toContainText('changed by AI');
-    // old_string → new_string adds exactly one line ("// changed by AI"); computeFallbackHunks
-    // reports it as +1 (the unchanged "export const greeting" line stays context).
-    await expect(editCard).toContainText('+1');
+    const row = toolRow(page, 'Edit').first();
+    await expect(row).toContainText('Edited');
+    // The edit adds exactly one line ("// changed by AI"); the rest stays context.
+    await expect(row).toContainText('+1');
+    await openRow(row);
+    const diff = row.getByTestId('chat-edit-diff');
+    await expect(diff.locator('[data-diff="add"]')).toContainText('changed by AI');
   });
 
-  test('"Open in diff editor" opens the workspace diff tab with the edit\'s sides', async () => {
+  test('"Open in the diff editor" opens the workspace diff tab with the edit\'s sides', async () => {
     const { page } = app;
-    const editCard = page.getByTestId('chat-edit-card').first();
-    await editCard.getByTestId('chat-edit-open-diff').click();
+    await toolRow(page, 'Edit').first().locator('[data-testid^="chat-row-open-diff-"]').click();
 
     const diffTab = page.getByTestId('diff-tab');
     await expect(diffTab).toBeVisible({ timeout: 10_000 });
@@ -234,10 +184,11 @@ test.describe('§tool-cards — Message path context menu (changes-tab)', () => 
     await createTauriChat(app.page, project.projectId, 'acceptEdits');
     await app.page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 
-    // Both tests below read the same Read card. Sent here, not in the first test,
+    // Both tests below use the same Read row. Sent here, not in the first test,
     // so a worker restart after a failure re-seeds it for whichever test runs next.
     await sendMessage(app.page, 'Read index.ts and add a comment above the greeting export.');
-    await app.page.getByTestId('read-card-root').first().waitFor({ timeout: 60_000 });
+    await waitForIdle(app.page, 60_000);
+    await openWork(app.page);
   });
 
   test.afterAll(async () => {
@@ -245,11 +196,9 @@ test.describe('§tool-cards — Message path context menu (changes-tab)', () => 
     await closeTauriApp(app);
   });
 
-  test('right-clicking the file-path pill opens the two copy items, which copy the absolute/relative path (274-A1, A2, A3, A10)', async () => {
+  test('right-clicking the row of a file opens the two copy items, which copy the absolute/relative path (274-A1, A2, A3, A10)', async () => {
     const { page } = app;
-    const readCard = page.getByTestId('read-card-root').first();
-    const pill = readCard.getByTestId('tool-card-file-path');
-    await pill.waitFor({ timeout: 60_000 });
+    const pill = toolRow(page, 'Read').first().locator('[data-file-path]');
     await expect(pill).toHaveAttribute('data-file-path', /index\.ts$/);
 
     await pill.click({ button: 'right' });
@@ -273,12 +222,10 @@ test.describe('§tool-cards — Message path context menu (changes-tab)', () => 
     await page.keyboard.press('Escape');
   });
 
-  test('right-clicking assistant content outside any file-path pill opens no menu at all (274-A5)', async () => {
+  test('right-clicking assistant content outside the row of any file opens no menu at all (274-A5)', async () => {
     const { page } = app;
-    const readCard = page.getByTestId('read-card-root').first();
-    // The verb label, not the "· N lines" meta: that count is derived from the
-    // fixture's result text, so pinning it couples this test to fixture content.
-    const outsideAnyPath = readCard.getByText('Read', { exact: true });
+    const message = page.getByTestId('chat-assistant-message').filter({ has: toolRow(page, 'Read') });
+    const outsideAnyPath = message.locator('[data-work-turn] p, [data-testid="chat-answer"] p').first();
 
     // A menu left open by a FAILING previous test blocks pointer events for the
     // full 120s timeout; dismissing first keeps that failure reported once.
@@ -291,14 +238,14 @@ test.describe('§tool-cards — Message path context menu (changes-tab)', () => 
     // With nothing to copy the trigger must stay closed, so the webview's own
     // Copy / Look Up / Search menu survives. Opening a disabled "no actions"
     // item instead replaced it with a dead menu.
-    const trigger = page.getByTestId('chat-message-menu-trigger').filter({ has: page.getByTestId('read-card-root') });
+    const trigger = message.getByTestId('chat-message-menu-trigger');
     await expect(trigger).toHaveAttribute('data-state', 'closed');
     await expect(page.getByTestId('tool-card-path-copy-absolute')).toHaveCount(0);
     await expect(page.getByTestId('tool-card-path-copy-relative')).toHaveCount(0);
   });
 });
 
-// ─── AskUserQuestion display card (answered preview) — ask-question ──────────
+// ─── AskUserQuestion: the answered question's card — ask-question ──────────
 
 test.describe('§tool-cards — AskUserQuestion display (ask-question)', () => {
   let app: TauriAppFixture;
@@ -317,7 +264,7 @@ test.describe('§tool-cards — AskUserQuestion display (ask-question)', () => {
     cleanupTauriProject(project);
   });
 
-  test('renders the answered question with its selected-answer pill once the gate resolves', async () => {
+  test('keeps the answered question and its chosen answer in the transcript', async () => {
     const { page } = app;
     await sendMessage(page, 'Use AskUserQuestion to ask me a single-select question with 2 options');
 
@@ -326,29 +273,20 @@ test.describe('§tool-cards — AskUserQuestion display (ask-question)', () => {
     await page.getByTestId('chat-question-submit').click();
     await waitForIdle(page, 60_000);
 
-    // The daemon parses the recorded tool_result string into a structured `askUserQuestion` array
-    // (packages/core/src/messages/parse-ask-user-question.ts) — deterministic regardless of which
-    // option the live test clicked, since replay is positional/content-agnostic.
-    const askCard = page.getByTestId('chat-ask-card').first();
-    await askCard.waitFor({ timeout: 15_000 });
-    await expect(askCard.getByTestId('chat-ask-header')).toContainText('Next Step');
-    await expect(askCard.getByTestId('chat-ask-header')).toContainText('Work on index.ts');
-
-    // FIXED: AskUserQuestionCard now derives its open state via
-    // useAutoOpenOnTransition (packages/ui/src/features/chat/tools/cards/use-auto-open-on-transition.ts)
-    // instead of an uncontrolled `defaultOpen`. This mock-cli path mounts the card PENDING first
-    // (getToolCategories() here doesn't hide AskUserQuestion while pending, unlike the real Claude
-    // adapter), so the answer arrives on a rerender of the SAME instance — `defaultOpen` only seeds
-    // the initial mount and never re-fires, which is what caused the body to stay closed. The hook
-    // watches the pending→answered transition on that instance and forces `open` to true exactly
-    // once, while still honoring a manual collapse afterward.
-    const body = askCard.getByTestId('chat-ask-body');
-    await expect(body).toBeVisible({ timeout: 5_000 });
-    await expect(body).toContainText('Would you like to start working on the index.ts file');
+    // The daemon parses the recorded tool_result string into a structured `askUserQuestion` array,
+    // whichever option the live test clicked: replay is positional.
+    const card = page.getByTestId('chat-ask-card').first();
+    await expect(card.getByTestId('chat-ask-header')).toHaveText('Next Step · answered');
+    await expect(card.getByTestId('chat-ask-question-text')).toContainText(
+      'Would you like to start working on the index.ts file',
+    );
+    await expect(card.getByTestId('chat-ask-answer').first()).toContainText('Work on index.ts');
+    // It stays outside the folded work.
+    await expect(card.locator('xpath=ancestor::*[@data-work-turn]')).toHaveCount(0);
   });
 });
 
-// ─── Plan family: PlanBubble (approved) + PlanCard (rejected) — plan-approval ─
+// ─── Plan approved — plan-approval ────────────────────────────────────────────
 
 test.describe('§tool-cards — Plan (plan-approval)', () => {
   let app: TauriAppFixture;
@@ -370,19 +308,16 @@ test.describe('§tool-cards — Plan (plan-approval)', () => {
     await closeTauriApp(app);
   });
 
-  test('an approved plan renders the PlanBubble ("Implementing plan") in the transcript', async () => {
+  test('an approved plan is a pill that opens on its markdown', async () => {
     const { page } = app;
     await sendMessage(page, 'Add `export function greet(name: string) { return "Hello " + name; }` to utils.ts');
     await page.getByTestId('chat-plan-gate').waitFor({ timeout: 45_000 });
     await page.getByTestId('chat-plan-approve').click();
 
-    const bubble = page.getByTestId('chat-plan-bubble').first();
-    await bubble.waitFor({ timeout: 15_000 });
-    await expect(bubble).toContainText('Implementing plan');
-    await expect(bubble).toContainText('Approved');
-    await expect(bubble).toContainText('greet');
-    // The approved path replaces the raw "Updated plan" card entirely.
-    await expect(page.getByTestId('chat-plan-card')).toHaveCount(0);
+    const pill = page.getByTestId('chat-marker-exitplanmode').filter({ hasText: 'Plan approved' });
+    await pill.waitFor({ timeout: 15_000 });
+    await pill.click();
+    await expect(page.getByTestId('chat-marker-exitplanmode-body').last()).toContainText('greet');
 
     // Clean up: the approval triggers an Edit permission gate next (plan-approval.0.ndjson) —
     // deny so the mock session ends cleanly.
@@ -409,27 +344,22 @@ test.describe('§tool-cards — Task subagent (task-subagent)', () => {
     await closeTauriApp(app);
   });
 
-  test('collapsed by default with agent name/description; expanding renders the nested subagent transcript', async () => {
+  test('a sub-agent names itself and its errand; opening it shows its prompt and steps as rows', async () => {
     const { page } = app;
     await sendMessage(page, 'Delegate finding the greeting export to a subagent');
 
-    const card = page.getByTestId('chat-task-card').first();
-    await card.waitFor({ timeout: 60_000 });
-    await expect(card.getByTestId('chat-task-agent')).toHaveText('general-purpose');
-    await expect(card.getByTestId('chat-task-description')).toContainText('Find the greeting export');
+    const row = toolRow(page, 'Task').first();
+    await row.waitFor({ timeout: 60_000 });
+    await expect(row).toContainText('general-purpose');
+    await expect(row).toContainText('Find the greeting export');
+    await expectRowClosed(row);
 
-    // Nested transcript isn't mounted until expanded (Radix Collapsible unmounts closed content).
-    await expect(card.getByTestId('chat-bash-card')).toHaveCount(0);
-    await expect(card).toHaveAttribute('data-state', 'closed');
-
-    await card.getByTestId('chat-task-toggle').click();
-    await expect(card).toHaveAttribute('data-state', 'open');
-
-    // The recorded onSubagentChild carries a nested Bash call (search) rendered via the same
-    // tool-card registry the main thread uses.
-    const nestedBash = card.getByTestId('chat-bash-card').first();
-    await expect(nestedBash).toBeVisible({ timeout: 5_000 });
-    await expect(nestedBash.getByTestId('chat-bash-command')).toContainText('export const greeting');
+    await openRow(row);
+    await expect(row.getByTestId('chat-agent-prompt')).toContainText('Search the project');
+    const step = toolRow(row, 'Bash').first();
+    await expect(step).toContainText('export const greeting');
+    await openRow(step);
+    await expect(step.getByTestId('chat-bash-output')).toBeVisible();
   });
 });
 
@@ -450,19 +380,19 @@ test.describe('§tool-cards — WebFetch (web-fetch)', () => {
     await closeTauriApp(app);
   });
 
-  test('collapsed by default; expanding shows the fetched url and a summary body', async () => {
+  test('a fetched page opens on its address and what it said', async () => {
     const { page } = app;
     await sendMessage(page, 'Fetch https://example.com/docs and summarize it');
+    await waitForIdle(page, 60_000);
+    await openWork(page);
 
-    const card = page.getByTestId('web-fetch-card-root').first();
-    await card.waitFor({ timeout: 60_000 });
-    await expect(card).toHaveAttribute('data-state', 'closed');
-    await expect(card.getByTestId('web-fetch-card-url')).toHaveCount(0);
-
-    await card.getByTestId('web-fetch-card-trigger').click();
-    await expect(card).toHaveAttribute('data-state', 'open');
-    await expect(card.getByTestId('web-fetch-card-url')).toHaveText('https://example.com/docs');
-    await expect(card.getByTestId('web-fetch-card-summary')).toContainText('REST API');
+    const row = toolRow(page, 'WebFetch').first();
+    await expect(row).toContainText('Fetched');
+    await expect(row).toContainText('example.com/docs');
+    await expectRowClosed(row);
+    await openRow(row);
+    await expect(row.getByTestId('web-fetch-card-url')).toHaveText('https://example.com/docs');
+    await expect(row.getByTestId('web-fetch-card-summary')).toContainText('REST API');
   });
 });
 
@@ -483,35 +413,32 @@ test.describe('§tool-cards — MCP pill (mcp-tool)', () => {
     await closeTauriApp(app);
   });
 
-  test('done pill is expandable to ARGUMENTS/RESULT; the errored second call renders the failed variant', async () => {
+  test('a call opens on its arguments and result; a failed one opens by itself and is counted', async () => {
     const { page } = app;
     await sendMessage(page, 'Use the linear MCP server to look up issue MF-42');
+    await waitForIdle(page, 60_000);
+    await openWork(page);
 
-    const pills = page.getByTestId('chat-mcp-pill');
-    const donePill = pills.nth(0);
-    await donePill.waitFor({ timeout: 60_000 });
-    await expect(donePill).toContainText('Linear executed');
-    await expect(donePill).toContainText('get_issue');
+    const rows = page.locator('[data-tool^="mcp__linear__"]');
+    const done = rows.nth(0);
+    await expect(done).toContainText('Called');
+    await expect(done).toContainText('get_issue');
+    await expect(done).toContainText('on Linear');
+    await expectRowClosed(done);
+    await openRow(done);
+    await expect(done.getByTestId('chat-call-args')).toContainText('MF-42');
+    await expect(done.getByTestId('chat-call-result')).toContainText('In Progress');
 
-    await expect(page.getByTestId('marker-body')).toHaveCount(0);
-    await donePill.click();
-    const body = page.getByTestId('marker-body');
-    await expect(body).toBeVisible({ timeout: 5_000 });
-    await expect(body).toContainText('MF-42');
-    await expect(body).toContainText('In Progress');
-
-    // Second call errors — its pill renders the failed variant and is not expandable.
-    const errorPill = pills.nth(1);
-    await expect(errorPill).toBeVisible({ timeout: 10_000 });
-    await expect(errorPill).toContainText('Linear failed:');
-    await expect(errorPill).toContainText('get_issue');
-    await expect(errorPill).toBeDisabled();
+    const failed = rows.nth(1);
+    await expect(failed).toContainText('failed');
+    await expect(failed.getByTestId('chat-call-body')).toContainText('Error');
+    await expect(page.locator('[data-testid^="chat-work-failed-"]')).toHaveText('1 failed');
   });
 });
 
-// ─── ToolFallback card for an unregistered tool name — unregistered-tool ──────
+// ─── A tool without a row of its own — unregistered-tool ──────────────────────
 
-test.describe('§tool-cards — ToolFallback (unregistered-tool)', () => {
+test.describe('§tool-cards — a tool without a row of its own (unregistered-tool)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -526,19 +453,18 @@ test.describe('§tool-cards — ToolFallback (unregistered-tool)', () => {
     await closeTauriApp(app);
   });
 
-  test('a tool name absent from TOOL_REGISTRY falls through to the generic card', async () => {
+  test('a tool with no row of its own uses the call row', async () => {
     const { page } = app;
     await sendMessage(page, 'Use the custom analytics tool to report a build event');
+    await waitForIdle(page, 60_000);
+    await openWork(page);
 
-    const card = page.getByTestId('chat-tool-fallback-card').first();
-    await card.waitFor({ timeout: 60_000 });
-    await expect(card.getByTestId('chat-tool-fallback-trigger')).toContainText('CustomAnalyticsReport');
-
-    await expect(card.getByTestId('chat-tool-fallback-args')).toHaveCount(0);
-    await card.getByTestId('chat-tool-fallback-trigger').click();
-
-    await expect(card.getByTestId('chat-tool-fallback-args')).toContainText('build_completed');
-    await expect(card.getByTestId('chat-tool-fallback-result')).toContainText('Event recorded');
+    const row = toolRow(page, 'CustomAnalyticsReport').first();
+    await expect(row).toContainText('Called');
+    await expect(row).toContainText('CustomAnalyticsReport');
+    await openRow(row);
+    await expect(row.getByTestId('chat-call-args')).toContainText('build_completed');
+    await expect(row.getByTestId('chat-call-result')).toContainText('Event recorded');
   });
 });
 
@@ -563,45 +489,33 @@ test.describe('§tool-cards — Schedule/Cron/Monitor pills (schedule-pills)', (
     const { page } = app;
     await sendMessage(page, 'Schedule a wakeup, create a cron job, list schedules, delete one, and monitor the build');
 
-    const wakeupPill = page.getByTestId('chat-schedule-schedulewakeup-pill');
-    await wakeupPill.waitFor({ timeout: 60_000 });
-    // formatDelay(5400) = "90m"; ScheduleWakeup is never expandable.
-    await expect(wakeupPill).toContainText('Will resume in');
-    await expect(wakeupPill).toContainText('90m');
-    await expect(wakeupPill).toBeDisabled();
+    const marker = (tool: string) => page.getByTestId(`chat-marker-${tool}`);
+    await marker('monitor').waitFor({ timeout: 60_000 });
+    await waitForIdle(page, 60_000);
 
-    const cronCreatePill = page.getByTestId('chat-schedule-croncreate-pill');
-    await expect(cronCreatePill).toContainText('Scheduled:');
-    await expect(cronCreatePill).toContainText('every day at 9:00 AM');
-    await expect(cronCreatePill).toContainText('recurring');
-    await expect(cronCreatePill).toBeDisabled();
+    // Markers stay on the spine: a turn of events alone has no work row at all.
+    await expect(workRows(page)).toHaveCount(0);
 
-    // CronList is expandable — 1 job in the body.
-    const cronListPill = page.getByTestId('chat-schedule-cronlist-pill');
-    await expect(cronListPill).toContainText('Listed');
-    await expect(cronListPill).toContainText('1 scheduled job');
-    await cronListPill.click();
-    const cronListBody = page.getByTestId('marker-body');
-    await expect(cronListBody).toBeVisible({ timeout: 5_000 });
-    await expect(cronListBody).toContainText('cron-1');
-    await expect(cronListBody).toContainText('every day at 9:00 AM');
-    await expect(cronListBody).toContainText('Send the weekly report');
-    await cronListPill.click();
-    await expect(page.getByTestId('marker-body')).toHaveCount(0);
+    await expect(marker('schedulewakeup')).toContainText('Scheduled a wakeup in 1h 30m');
+    await expect(marker('croncreate')).toContainText('Scheduled every day at 9:00 AM');
+    await expect(marker('croncreate')).toContainText('recurring');
+    await expect(marker('crondelete')).toContainText('Removed schedule cron-1');
+    await expect(marker('crondelete')).toBeDisabled();
 
-    const cronDeletePill = page.getByTestId('chat-schedule-crondelete-pill');
-    await expect(cronDeletePill).toContainText('Removed schedule');
-    await expect(cronDeletePill).toContainText('cron-1');
-    await expect(cronDeletePill).toBeDisabled();
+    await expect(marker('cronlist')).toContainText('Listed schedules');
+    await expect(marker('cronlist')).toContainText('1 job');
+    const jobs = page.getByTestId('chat-marker-cronlist-body');
+    await expect(jobs).toHaveCount(0);
+    await marker('cronlist').click();
+    await expect(jobs).toContainText('cron-1');
+    await expect(jobs).toContainText('every day at 9:00 AM');
+    await expect(jobs).toContainText('Send the weekly report');
+    await marker('cronlist').click();
+    await expect(jobs).toHaveCount(0);
 
-    // Monitor is expandable — raw result text in the body.
-    const monitorPill = page.getByTestId('chat-schedule-monitor-pill');
-    await expect(monitorPill).toContainText('Stopped monitoring:');
-    await expect(monitorPill).toContainText('Watch the build');
-    await monitorPill.click();
-    const monitorBody = page.getByTestId('marker-body');
-    await expect(monitorBody).toBeVisible({ timeout: 5_000 });
-    await expect(monitorBody).toContainText('Build succeeded in 42s');
+    await expect(marker('monitor')).toContainText('Monitored Watch the build');
+    await marker('monitor').click();
+    await expect(page.getByTestId('chat-marker-monitor-body')).toContainText('Build succeeded in 42s');
   });
 });
 
@@ -629,20 +543,18 @@ test.describe('§tool-cards — EnterWorktree / ExitWorktree pills (worktree-pil
       'Enter a worktree for feature-x, exit keeping it, enter one for feature-y, then exit removing it',
     );
 
-    const enterPills = page.getByTestId('chat-worktree-enter-pill');
-    const exitPills = page.getByTestId('chat-worktree-exit-pill');
-    await enterPills.nth(1).waitFor({ timeout: 60_000 });
+    const enter = page.getByTestId('chat-marker-enterworktree');
+    const exit = page.getByTestId('chat-marker-exitworktree');
+    await enter.nth(1).waitFor({ timeout: 60_000 });
 
-    await expect(enterPills.nth(0)).toContainText('Entered worktree:');
-    await expect(enterPills.nth(0)).toContainText('feature-x');
-    await expect(exitPills.nth(0)).toHaveText(/Exited worktree \(kept\)/);
-
-    await expect(enterPills.nth(1)).toContainText('Entered worktree:');
-    await expect(enterPills.nth(1)).toContainText('feature-y');
-    await expect(exitPills.nth(1)).toHaveText(/Removed worktree/);
-
-    // Non-expandable — no disclosure body on any of the 4 pills.
-    await expect(page.getByTestId('marker-body')).toHaveCount(0);
+    await expect(enter.nth(0)).toContainText('Entered worktree feature-x');
+    await expect(exit.nth(0)).toContainText('Left worktree');
+    await expect(exit.nth(0)).toContainText('kept');
+    await expect(enter.nth(1)).toContainText('Entered worktree feature-y');
+    await expect(exit.nth(1)).toContainText('Removed worktree');
+    // Nothing to open on any of the four.
+    await expect(enter.nth(0)).toBeDisabled();
+    await expect(exit.nth(1)).toBeDisabled();
   });
 });
 
@@ -667,23 +579,23 @@ test.describe('§tool-cards — ToolResultExpand (tool-result-truncated)', () =>
     const { page } = app;
     await sendMessage(page, 'Print the contents of build.log');
 
-    const card = page.getByTestId('chat-bash-card').first();
-    await card.waitFor({ timeout: 60_000 });
-    await card.getByTestId('chat-bash-trigger').click();
+    await waitForIdle(page, 60_000);
+    await openWork(page);
+    const row = toolRow(page, 'Bash').first();
+    await openRow(row);
 
     // truncateToolContent kicks in above its 32KB threshold — the recorded
     // result is 51191 bytes, so fmtBytes rounds to "50 KB".
-    const toggle = card.getByTestId('tool-result-expand-toggle');
-    await expect(toggle).toBeVisible({ timeout: 5_000 });
+    const toggle = row.getByTestId('tool-result-expand-toggle');
     await expect(toggle).toContainText('Show full output');
     await expect(toggle).toContainText('50 KB');
-    await expect(card.getByTestId('chat-bash-output')).toHaveCount(0);
+    await expect(row.getByTestId('chat-bash-output')).toHaveCount(0);
   });
 });
 
-// ─── ToolGroup — consecutive explore-family tool calls — tool-group ───────────
+// ─── A short exploration — tool-group ─────────────────────────────────────────
 
-test.describe('§tool-cards — ToolGroup (tool-group)', () => {
+test.describe('§tool-cards — a short exploration (tool-group)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -698,26 +610,23 @@ test.describe('§tool-cards — ToolGroup (tool-group)', () => {
     await closeTauriApp(app);
   });
 
-  test('ToolGroup — consecutive explore-family tool calls collapse under one header', async () => {
+  test('the work row sums up the steps, which stay rows of their own', async () => {
     const { page } = app;
     await sendMessage(page, 'Find where greeting is defined and used');
+    await waitForIdle(page, 60_000);
 
-    const group = page.getByTestId('chat-tool-group').first();
-    await group.waitFor({ timeout: 60_000 });
-
-    const toggle = group.getByTestId('chat-tool-group-toggle');
-    await expect(toggle.getByTestId('tool-group-trigger-label')).toHaveText('Read 1 file · Searched 1 pattern');
-    await expect(toggle.getByTestId('tool-group-trigger-count')).toHaveText('2 calls');
-
-    // defaultOpen — the grouped Read + Grep cards are already mounted.
-    await expect(group.getByTestId('read-card-root')).toBeVisible();
-    await expect(group.getByTestId('search-card-root')).toBeVisible();
+    await expect(workRows(page)).toHaveAccessibleName(/read 1 file, searched 1 pattern/);
+    await expect(toolRow(page, 'Read')).toHaveCount(0);
+    await openWork(page);
+    await expect(toolRow(page, 'Read')).toBeVisible();
+    await expect(toolRow(page, 'Grep')).toContainText('Searched');
+    await expect(page.locator('[data-activity-group]')).toHaveCount(0);
   });
 });
 
-// ─── Bash card exit-code coloring — bash-exit-code ────────────────────────────
+// ─── Exit codes and failures — bash-exit-code ─────────────────────────────────
 
-test.describe('§tool-cards — Bash exit-code coloring (bash-exit-code)', () => {
+test.describe('§tool-cards — exit codes (bash-exit-code)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -732,34 +641,87 @@ test.describe('§tool-cards — Bash exit-code coloring (bash-exit-code)', () =>
     await closeTauriApp(app);
   });
 
-  test('Bash card exit-code coloring (ExitLine green/red) and error-bordered card', async () => {
+  test('a failed command is counted in the work row, which opens on its output', async () => {
     const { page } = app;
     await sendMessage(page, 'Run the test suite, then run a bad command');
+    await waitForIdle(page, 60_000);
 
-    const cards = page.getByTestId('chat-bash-card');
-    const testCard = cards.nth(0);
-    await testCard.waitFor({ timeout: 60_000 });
-    await testCard.getByTestId('chat-bash-trigger').click();
-    const testOutput = testCard.getByTestId('chat-bash-output');
-    await expect(testOutput).toBeVisible({ timeout: 5_000 });
-    await expect(testOutput).toContainText('exit 0');
-    // The outer `<span>` line wrapper (BashCard.tsx) and ExitLine's own inner
-    // colored `<span>` both contain "exit 0" text, so the bare filter matches
-    // both — scope to the innermost (last) match, the one that actually
-    // carries the color class.
-    await expect(testOutput.locator('span', { hasText: 'exit 0' }).last()).toHaveClass(/text-mf-term-green/);
+    const failed = page.locator('[data-testid^="chat-work-failed-"]');
+    await expect(failed).toHaveText('1 failed');
+    await failed.click();
 
-    const buildCard = cards.nth(1);
-    await buildCard.waitFor({ timeout: 10_000 });
-    await buildCard.getByTestId('chat-bash-trigger').click();
-    const buildOutput = buildCard.getByTestId('chat-bash-output');
-    await expect(buildOutput).toBeVisible({ timeout: 5_000 });
-    await expect(buildOutput).toContainText('exit 127');
-    // Same wrapper/inner-span ambiguity as the "exit 0" case above.
-    await expect(buildOutput.locator('span', { hasText: 'exit 127' }).last()).toHaveClass(/text-destructive/);
+    const bad = toolRow(page, 'Bash').nth(1);
+    await expect(bad).toContainText('exit 127');
+    // It is open already: an unresolved failure opens by itself.
+    await expect(bad.getByTestId('chat-bash-output')).toContainText('exit 127');
+    await expect(toolRow(page, 'Bash').nth(0)).toContainText('exit 0');
+    await expectRowClosed(toolRow(page, 'Bash').nth(0));
+  });
+});
 
-    // cardStyle's fail border lives on the trigger's immediate parent
-    // (the styled wrapper div), not the outer `chat-bash-card` testid element.
-    await expect(buildCard.getByTestId('chat-bash-trigger').locator('..')).toHaveClass(/border-fail/);
+// ─── A realistic thread — transcript-rows ─────────────────────────────────────
+
+test.describe('§tool-cards — a realistic thread (transcript-rows)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'transcript-rows' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    for (const turn of ['Why is it stuck?', 'Fix it.', 'Set up the follow-ups.', 'Explore it with an agent.']) {
+      await sendMessage(app.page, turn);
+      await waitForIdle(app.page, 60_000);
+    }
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('each turn folds to one work row and the answer stays', async () => {
+    const { page } = app;
+    // The events-only turn has no work row.
+    await expect(workRows(page)).toHaveCount(3);
+    for (const row of await workRows(page).all()) await expect(row).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByText('Lint still fails.')).toBeVisible();
+  });
+
+  test('a retried failure stays closed, an unresolved one is open', async () => {
+    const { page } = app;
+    await openWork(page, 1);
+    const turn = page.getByTestId('chat-assistant-message').filter({ has: toolRow(page, 'Edit') });
+    await expectRowClosed(turn.locator('[data-tool="Bash"]').first());
+    await expect(turn.locator('[data-tool="mcp__github__get_issue"]').nth(1)).toContainText('404 Not Found');
+  });
+
+  test('a long run of reads is one Explored row, which opens on its steps', async () => {
+    const { page } = app;
+    const group = page.locator('[data-activity-group]');
+    await expect(group).toContainText('4 files, 1 search');
+    await openRow(group);
+    await expect(group.locator('[data-tool="Read"]')).toHaveCount(4);
+  });
+
+  test("a skill's text is in its marker, with no message of its own", async () => {
+    const { page } = app;
+    const skill = page.getByTestId('chat-marker-skill');
+    // The rows opened above may have pushed this turn out of the rendered window.
+    await page.getByTestId('chat-thread-viewport').evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
+    await expect(skill).toBeInViewport();
+    await expect(skill).toContainText('Used skill /mainframe-design-system');
+    await expect(page.getByTestId('chat-system-message')).toHaveCount(0);
+    await skill.click();
+    await expect(page.getByTestId('chat-skill-content')).toContainText('# Design system');
+  });
+
+  test('the work row names its agents and opens on them', async () => {
+    const { page } = app;
+    await page.getByRole('button', { name: '1 agent: show them' }).click();
+    const agent = toolRow(page, 'Task');
+    await expect(agent).toBeVisible();
+    await openRow(agent);
+    await expect(agent.getByTestId('chat-agent-result')).toContainText('One nit');
   });
 });

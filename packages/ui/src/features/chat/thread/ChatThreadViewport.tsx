@@ -1,15 +1,5 @@
 import { EarlierMessages } from './EarlierMessages';
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-  type RefCallback,
-} from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefCallback } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
@@ -18,7 +8,7 @@ import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { Composer } from '../composer/Composer';
 import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';
 import { AgentOutboxChip } from '../orchestration/AgentOutboxChip';
-import { boundedMessageComponents } from '../messages/bounded-messages';
+import { TurnTranscript } from '../messages/turn/TurnTranscript';
 import { ChatGateMount } from '../gates/ChatGateMount';
 import { useChatExtras } from '../runtime/chat-extras';
 import { ContextNotPreservedNotice } from './ContextNotPreservedNotice';
@@ -26,26 +16,12 @@ import { DegradedChatCard } from './DegradedChatCard';
 import { useThreadBottomPin } from './use-thread-bottom-pin';
 import { useElementHeight } from './use-element-height';
 import { TranscriptScrollToBottom } from './TranscriptScrollToBottom';
-import { VirtualMessages } from './VirtualMessages';
 import { TranscriptScrollProvider } from './transcript-scroll-context';
 import { TRANSCRIPT_WIDTH_VAR, TranscriptWidthHandle } from './TranscriptWidthHandle';
 import { ChatThreadLoadingSpinner, LoadErrorBanner } from './ChatThreadIndicators';
 import type { ChatThreadVariant } from './ChatThread';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 
-const CompactTranscript = lazy(() =>
-  import('../messages/compact/CompactTranscript').then((module) => ({ default: module.CompactTranscript })),
-);
-function TranscriptMessages() {
-  const mode = useUiPrefs((state) => state.transcriptMode);
-  return mode === 'compact' ? (
-    <Suspense fallback={null}>
-      <CompactTranscript />
-    </Suspense>
-  ) : (
-    <VirtualMessages components={boundedMessageComponents} />
-  );
-}
 function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
   const directoryMissing = useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
   const itemId = useSideAwareThreadId();
@@ -160,7 +136,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
             {variant !== 'side' && <ContextNotPreservedNotice />}
             {messageCount === 0 && emptyState != null ? emptyState : null}
             <EarlierMessages />
-            <TranscriptMessages key={threadId ?? ''} />
+            <TurnTranscript key={threadId ?? ''} />
           </div>
           <ThreadFooter variant={variant} readOnly={readOnly} footerRef={composedFooterRef} />
           <TranscriptScrollToBottom host={overlayHost} footerHeight={footerHeight} />

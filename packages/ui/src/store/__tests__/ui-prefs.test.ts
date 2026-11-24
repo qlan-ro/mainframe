@@ -190,7 +190,8 @@ describe('useUiPrefs persistence', () => {
         'sidebarVisible',
         'sidebarWidth',
         'sidebarView',
-        'transcriptMode',
+        'finishedWork',
+        'openLinksIn',
         'transcriptWidth',
       ].sort(),
     );

@@ -3,6 +3,7 @@ import { useSettingsStore } from '../../../../store/settings';
 import { updateGeneralSettings } from '../../../../lib/api/settings';
 import { IdleCompactionSettings } from './IdleCompactionSettings';
 import { AppearanceControls, PickerRow } from './AppearanceControls';
+import { LinkSettings } from './LinkSettings';
 import { WorktreeDirectorySettings } from './WorktreeDirectorySettings';
 
 const UPDATE_CHANNEL_OPTIONS: { id: UpdateChannel; label: string }[] = [
@@ -26,6 +27,8 @@ export function GeneralPane({ port }: { port: number }) {
         <h3 className="text-sm font-semibold text-foreground">Appearance</h3>
         <AppearanceControls />
       </section>
+
+      <LinkSettings />
 
       <WorktreeDirectorySettings port={port} />
 

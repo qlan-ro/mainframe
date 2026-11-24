@@ -22,7 +22,6 @@ import type { MainframeMessageMeta } from './message-meta';
 import { toolCallResult } from './tool-call-result';
 import { mapPresentationSources } from './transcript-presentation';
 import { projectToolLifecycle } from './tool-call-lifecycle';
-import { toolGroupSummary, type ToolGroupSummaryItem } from './tool-group-summary';
 
 export interface ParsedItem {
   readonly item: AccumulatedItem;
@@ -74,7 +73,9 @@ function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
   const item = parsed.item as Extract<AccumulatedItem, { kind: 'tool-call' }>;
   // Never the id as a name (D3): a missing title means the daemon hasn't
   // sent one yet, not that the id itself is presentable.
-  const toolName = parsed.meta.subagent ? 'Task' : (item.title ?? 'Unknown tool');
+  // Every sub-agent is a `Task` to the renderer, whatever its provider calls it; a Codex one says so in its row.
+  const codexAgent = item.title === 'CollabAgent';
+  const toolName = parsed.meta.subagent && !codexAgent ? 'Task' : (item.title ?? 'Unknown tool');
   const lifecycle = projectToolLifecycle(item.status);
   return {
     type: 'tool-call',
@@ -98,9 +99,7 @@ function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
  * Rebuild a subagent transcript from the flat parent relation: the Task's
  * `prompt` arg becomes a leading user turn; the child items (message,
  * thought, tool calls — recursively including nested Tasks) become one
- * assistant turn whose metadata carries its own group membership, exactly
- * the shape the legacy `projectSubagentMessages` produced for the native
- * readonly-thread renderer.
+ * assistant turn.
  */
 function subagentMessages(task: Extract<AccumulatedItem, { kind: 'tool-call' }>, children: ChildrenMap) {
   const likes: ThreadMessageLike[] = [];
@@ -120,20 +119,18 @@ function subagentMessages(task: Extract<AccumulatedItem, { kind: 'tool-call' }>,
   return ExportedMessageRepository.fromArray(likes).messages.map((m) => m.message);
 }
 
-/** Items → parts in item order, plus the echoed tool-group membership meta. */
+/** Items → parts in item order, plus where each part came from. */
 function assistantParts(
   items: readonly ParsedItem[],
   children: ChildrenMap,
 ): {
   parts: ContentPart[];
-  mainframe: Pick<MainframeMessageMeta, 'partGroups' | 'groupSummaries' | 'partSources'> | undefined;
+  mainframe: Pick<MainframeMessageMeta, 'partSources'> | undefined;
   /** True when any part in this container is the one the overlay is currently streaming (D6) — the container's own `ThreadMessageLike.status`. */
   streaming: boolean;
 } {
   const partSources = mapPresentationSources(items);
   const parts: ContentPart[] = [];
-  const groups: Record<string, string> = {};
-  const members: Record<string, ToolGroupSummaryItem[]> = {};
   let streaming = false;
 
   for (const parsed of items) {
@@ -151,23 +148,9 @@ function assistantParts(
       continue;
     }
     parts.push(toolPart(parsed, children));
-    const groupId = parsed.meta.groupId;
-    if (groupId) {
-      groups[parsed.meta.sourceToolCallId ?? item.id] = groupId;
-      (members[groupId] ??= []).push({ toolName: item.title ?? item.id });
-    }
   }
 
-  if (Object.keys(groups).length === 0)
-    return { parts, mainframe: partSources ? { partSources } : undefined, streaming };
-  const summaries = Object.fromEntries(
-    Object.entries(members).map(([groupId, names]) => [groupId, toolGroupSummary(names)]),
-  );
-  return {
-    parts,
-    mainframe: { partGroups: groups, groupSummaries: summaries, ...(partSources && { partSources }) },
-    streaming,
-  };
+  return { parts, mainframe: partSources ? { partSources } : undefined, streaming };
 }
 
 function assistantContainer(

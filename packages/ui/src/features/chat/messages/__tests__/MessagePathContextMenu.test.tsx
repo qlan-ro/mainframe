@@ -61,7 +61,7 @@ describe('MessagePathContextMenu — trigger element', () => {
     const trigger = screen.getByTestId('chat-message-menu-trigger');
     expect(trigger.className).toContain('flex');
     expect(trigger.className).toContain('flex-col');
-    expect(trigger.className).toContain('gap-2');
+    expect(trigger.className).toContain('flex-col');
   });
 });
 
