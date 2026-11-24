@@ -13,22 +13,28 @@ read in both directions._
 
 | Metric | Count |
 |---|---|
-| Defined | 1090 |
-| Referenced | 554 |
-| Unused | 536 |
-| Dead selectors | 12 |
+| Defined | 1129 |
+| Referenced | 578 |
+| Unused | 551 |
+| Dead selectors | 18 |
 
 ## Dead selectors
 
+- `advisor-project-${…}` — referenced by: sidebar-chrome.spec.ts
 - `ask-question-card` — referenced by: wait.ts
 - `changes-panel` — referenced by: files-tree.spec.ts
 - `chat-composer-worktree-missing` — referenced by: composer.spec.ts
+- `composer-adapter-locked-codex` — referenced by: composer-providers.spec.ts
 - `inspector-tab-changes` — referenced by: files-tree.spec.ts
 - `inspector-tab-files` — referenced by: files-tree.spec.ts
 - `message-image-thumb` — referenced by: composer.spec.ts
 - `permission-card` — referenced by: wait.ts
 - `plan-approval-card` — referenced by: wait.ts
+- `probe-input` — referenced by: windowed-history-measurement.spec.ts
+- `probe-row` — referenced by: windowed-history-measurement.spec.ts
 - `session-bar-status` — referenced by: wait.ts
+- `tasks-board-project-${…}` — referenced by: sidebar-chrome.spec.ts
+- `tasks-surface-pick` — referenced by: sidebar-chrome.spec.ts
 - `tool-card` — referenced by: wait.ts
 - `zone-button-tab-dropdown` — referenced by: zones.ts
 - `zone-tab-dropdown-option-${…}` — referenced by: zones.ts
@@ -38,13 +44,14 @@ read in both directions._
 | Spec | Live | Dead |
 |---|---|---|
 | app-tauri.ts | 0 | 0 |
-| automations-library.spec.ts | 23 | 0 |
+| automations-library.spec.ts | 28 | 0 |
 | background-client.ts | 0 | 0 |
 | chat.spec.ts | 29 | 0 |
-| compact-transcript.spec.ts | 22 | 0 |
+| compact-transcript.spec.ts | 21 | 0 |
 | composer-advanced.spec.ts | 87 | 0 |
-| composer-providers.spec.ts | 13 | 0 |
-| composer.spec.ts | 41 | 2 |
+| composer-catalog.spec.ts | 3 | 0 |
+| composer-providers.spec.ts | 17 | 2 |
+| composer.spec.ts | 39 | 2 |
 | daemon-picker.spec.ts | 66 | 0 |
 | daemon.ts | 0 | 0 |
 | directory-picker.spec.ts | 42 | 0 |
@@ -60,41 +67,60 @@ read in both directions._
 | facade-streaming-segments.spec.ts | 1 | 0 |
 | files-tree.spec.ts | 49 | 3 |
 | find-in-path.spec.ts | 55 | 0 |
+| focus-line.spec.ts | 6 | 0 |
+| fork-from-message.spec.ts | 15 | 0 |
 | gates.spec.ts | 82 | 0 |
 | git-branch.spec.ts | 75 | 0 |
 | global-setup.ts | 0 | 0 |
 | headless-chat.ts | 0 | 0 |
-| layout.spec.ts | 50 | 0 |
+| history-paint.ts | 6 | 0 |
+| history-performance-wire.ts | 0 | 0 |
+| history-performance.ts | 13 | 0 |
+| layout.spec.ts | 45 | 0 |
+| live-adapter.spec.ts | 1 | 0 |
+| mcp-delegate.spec.ts | 21 | 0 |
 | menus.ts | 0 | 0 |
 | new-session-prefill.spec.ts | 15 | 0 |
+| overlay-scrollbars.spec.ts | 10 | 0 |
 | page-objects.ts | 20 | 0 |
 | plan-clear-context.spec.ts | 6 | 0 |
 | preview.spec.ts | 49 | 0 |
+| provider-switch.spec.ts | 8 | 0 |
 | raw-ws-client.ts | 0 | 0 |
 | review-panel.spec.ts | 65 | 0 |
 | selection-hold.spec.ts | 11 | 0 |
-| session-panel.spec.ts | 90 | 0 |
-| session-tabs.spec.ts | 20 | 0 |
-| sessions-draft.spec.ts | 68 | 0 |
-| sessions-filters.spec.ts | 32 | 0 |
-| sessions-rows.spec.ts | 29 | 0 |
-| sessions-tags.spec.ts | 54 | 0 |
+| session-panel.spec.ts | 92 | 0 |
+| session-tabs.spec.ts | 22 | 0 |
+| sessions-draft.spec.ts | 70 | 0 |
+| sessions-filters.spec.ts | 37 | 0 |
+| sessions-list.spec.ts | 26 | 0 |
+| sessions-rows.spec.ts | 36 | 0 |
+| sessions-tags.spec.ts | 49 | 0 |
 | sessions.spec.ts | 51 | 0 |
 | settings.spec.ts | 72 | 0 |
 | setup.ts | 1 | 0 |
-| sidebar-chrome.spec.ts | 22 | 0 |
+| sidebar-chrome.spec.ts | 20 | 3 |
 | spotlight.spec.ts | 40 | 0 |
-| stress-matrix.spec.ts | 13 | 0 |
-| tasks.spec.ts | 183 | 0 |
-| testids.ts | 0 | 0 |
-| title-bar.spec.ts | 19 | 0 |
-| tool-cards.spec.ts | 112 | 0 |
+| stress-matrix.spec.ts | 15 | 0 |
+| tasks.spec.ts | 169 | 0 |
+| testids.ts | 3 | 0 |
+| title-bar.spec.ts | 4 | 0 |
+| tool-cards-history.spec.ts | 20 | 0 |
+| tool-cards.spec.ts | 95 | 0 |
 | transcript.spec.ts | 20 | 0 |
 | viewers.spec.ts | 55 | 0 |
 | wait.ts | 2 | 0 |
 | wait.ts | 0 | 7 |
 | window-states.spec.ts | 34 | 0 |
-| workspace-surface.spec.ts | 51 | 0 |
+| windowed-history-lifecycle.spec.ts | 29 | 0 |
+| windowed-history-measurement.spec.ts | 4 | 7 |
+| windowed-history-performance.spec.ts | 0 | 0 |
+| windowed-history-protocol.spec.ts | 0 | 0 |
+| windowed-history-virtualization.spec.ts | 27 | 0 |
+| windowed-history.spec.ts | 22 | 0 |
+| windowed-history.ts | 0 | 0 |
+| windowed-history.ts | 0 | 0 |
+| workspace-surface.spec.ts | 53 | 0 |
 | ws-control.ts | 0 | 0 |
 | zones.ts | 0 | 2 |
 
@@ -102,51 +128,54 @@ read in both directions._
 
 | Surface | Defined | Unused |
 |---|---|---|
-| automations | 105 | 96 |
-| chat | 165 | 74 |
-| tasks | 104 | 49 |
-| sessions | 101 | 40 |
+| chat | 200 | 92 |
+| automations | 92 | 80 |
+| tasks | 91 | 43 |
+| sessions | 97 | 29 |
 | settings | 41 | 24 |
 | skills | 24 | 24 |
-| session | 64 | 21 |
-| composer | 49 | 17 |
+| session | 60 | 20 |
+| composer | 50 | 18 |
+| external | 15 | 14 |
 | preview | 31 | 13 |
 | url | 12 | 12 |
-| daemon | 29 | 10 |
-| provider | 9 | 9 |
-| viewer | 26 | 8 |
-| automation | 7 | 7 |
+| usage | 10 | 10 |
+| daemon | 26 | 9 |
+| shell | 13 | 9 |
+| viewer | 27 | 9 |
 | editor | 28 | 7 |
 | run | 8 | 7 |
 | search | 16 | 7 |
-| image | 7 | 6 |
+| artifact | 6 | 6 |
+| image | 8 | 6 |
 | side | 6 | 6 |
 | workspace | 26 | 6 |
+| automation | 5 | 5 |
 | git | 35 | 5 |
 | push | 5 | 5 |
+| review | 26 | 5 |
 | smart | 5 | 5 |
+| toast | 8 | 5 |
 | worktree | 5 | 5 |
 | error | 4 | 4 |
-| shell | 6 | 4 |
-| toast | 4 | 4 |
-| tool | 10 | 4 |
+| html | 4 | 4 |
 | zone | 4 | 4 |
 | pairing | 3 | 3 |
-| review | 24 | 3 |
 | shortcuts | 3 | 3 |
-| sidebar | 6 | 3 |
-| thread | 4 | 3 |
-| title | 5 | 3 |
+| title | 4 | 3 |
+| tool | 10 | 3 |
 | tunnel | 3 | 3 |
 | app | 2 | 2 |
 | csv | 2 | 2 |
 | directory | 14 | 2 |
 | edit | 2 | 2 |
-| external | 3 | 2 |
 | file | 14 | 2 |
+| idle | 2 | 2 |
 | md | 2 | 2 |
 | named | 5 | 2 |
+| project | 2 | 2 |
 | remote | 2 | 2 |
+| sidebar | 6 | 2 |
 | web | 6 | 2 |
 | confirm | 1 | 1 |
 | content | 1 | 1 |
@@ -158,15 +187,17 @@ read in both directions._
 | read | 4 | 1 |
 | setup | 1 | 1 |
 | surface | 2 | 1 |
+| thread | 3 | 1 |
+| transcript | 1 | 1 |
 | trigger | 1 | 1 |
 | welcome | 5 | 1 |
+| advisor | 2 | 0 |
 | archived | 1 | 0 |
 | connection | 1 | 0 |
 | diff | 4 | 0 |
 | import | 1 | 0 |
 | markdown | 3 | 0 |
 | marker | 1 | 0 |
-| project | 1 | 0 |
 | quick | 1 | 0 |
 | restore | 1 | 0 |
 | show | 1 | 0 |

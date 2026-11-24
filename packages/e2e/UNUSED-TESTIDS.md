@@ -1,122 +1,27 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e references
-(554). Unused: 536._
+_Generated 2026-08-11. Source: packages/ui/src data-testids (1131) minus e2e references
+(582). Unused: 549._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
 > buttons via getByRole), so this lists selector gaps, not necessarily untested behavior. `${…}`
 > marks templated id families.
 
-## automations (96)
+## chat (91)
 
-- `automations-blank-build`
-- `automations-blank-describe`
-- `automations-blank-state`
-- `automations-condition-${…}`
-- `automations-condition-add-${…}`
-- `automations-condition-remove-${…}`
-- `automations-describe`
-- `automations-describe-back`
-- `automations-describe-draft`
-- `automations-describe-input`
-- `automations-describe-open-editor`
-- `automations-describe-retry`
-- `automations-details`
-- `automations-details-back`
-- `automations-details-edit`
-- `automations-details-not-found`
-- `automations-details-overview`
-- `automations-details-run`
-- `automations-details-run-${…}`
-- `automations-details-runs`
-- `automations-details-runs-empty`
-- `automations-details-step-${…}`
-- `automations-details-tab-${…}`
-- `automations-draft-preview`
-- `automations-editor`
-- `automations-editor-back`
-- `automations-editor-cancel`
-- `automations-editor-description`
-- `automations-editor-issues`
-- `automations-editor-name`
-- `automations-editor-save`
-- `automations-file-item${…}`
-- `automations-if-add-condition-${…}`
-- `automations-if-add-otherwise-${…}`
-- `automations-if-match-all`
-- `automations-if-match-any`
-- `automations-if-remove-otherwise-${…}`
-- `automations-library-edit-${…}`
-- `automations-library-error`
-- `automations-library-error-banner`
-- `automations-library-error-retry`
-- `automations-library-last-run-${…}`
-- `automations-library-new`
-- `automations-library-retry`
-- `automations-library-run-${…}`
-- `automations-library-toggle-${…}`
-- `automations-loop-max-${…}`
-- `automations-loop-mode-${…}`
-- `automations-loop-recipe-${…}`
-- `automations-parallel-add-branch-${…}`
-- `automations-parallel-branch-${…}`
-- `automations-parallel-branch-remove-${…}`
-- `automations-parallel-recipe-${…}`
-- `automations-parallel-remove-confirm-${…}`
-- `automations-recipe-${…}`
-- `automations-recipe-root`
-- `automations-repeat-concurrency-${…}`
-- `automations-repeat-concurrency-caveat-${…}`
-- `automations-repeat-concurrency-mode-${…}`
-- `automations-repeat-items-${…}`
-- `automations-repeat-items-picker-${…}`
-- `automations-retry-attempts-${…}`
-- `automations-retry-recipe-${…}`
-- `automations-retry-warning-${…}`
-- `automations-run-again`
-- `automations-run-back`
-- `automations-run-cancel`
-- `automations-run-not-found`
-- `automations-run-repeat-${…}`
-- `automations-run-step-${…}`
-- `automations-run-timeline`
-- `automations-run-view`
-- `automations-section-describe`
-- `automations-section-details`
-- `automations-section-editor`
-- `automations-section-library`
-- `automations-section-run`
-- `automations-sidebar-empty`
-- `automations-sidebar-error`
-- `automations-sidebar-loading`
-- `automations-sidebar-row-${…}`
-- `automations-sidebar-row-status`
-- `automations-skill-item${…}`
-- `automations-step-${…}`
-- `automations-step-config-${…}`
-- `automations-step-delete-${…}`
-- `automations-step-grip-${…}`
-- `automations-step-issues-${…}`
-- `automations-step-setup-${…}`
-- `automations-step-title-${…}`
-- `automations-title-count`
-- `automations-trigger-${…}`
-- `automations-view`
-- `automations-when-add`
-- `automations-when-add-${…}`
-- `automations-when-add-menu`
-
-## chat (74)
-
+- `chat-agent-message-card-${…}`
 - `chat-ask-answer-notes`
 - `chat-ask-answer-preview`
 - `chat-ask-question-text`
 - `chat-ask-trigger`
 - `chat-capture-selector`
+- `chat-compact-activity-members`
 - `chat-compact-elapsed`
 - `chat-compact-row-${…}`
 - `chat-compact-transcript`
+- `chat-composer-agent-outbox-cancel-${…}`
+- `chat-composer-agent-outbox-chip`
 - `chat-composer-cancel`
 - `chat-composer-edit-cancel`
 - `chat-composer-edit-save`
@@ -131,35 +36,50 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `chat-error-block`
 - `chat-fileref-${…}`
 - `chat-fileref-open-${…}`
-- `chat-header-parent-link`
+- `chat-header`
+- `chat-header-title`
 - `chat-image-zoom-dialog`
 - `chat-image-zoom-image`
 - `chat-image-zoom-trigger`
 - `chat-link-copy`
 - `chat-link-copy-url`
+- `chat-markdown-image-skeleton`
+- `chat-markdown-image-unavailable`
 - `chat-markdown-table-scroll`
 - `chat-message-session-chip-${…}`
 - `chat-plan-exec-mode`
 - `chat-plan-revise-cancel`
 - `chat-provider-keeps-transcript-${…}`
+- `chat-provider-switch-logo-${…}`
 - `chat-question-text`
 - `chat-queued-bubble`
+- `chat-queued-retry`
+- `chat-read-only-note`
 - `chat-reasoning-toggle`
 - `chat-slash-command-args`
 - `chat-split-divider`
-- `chat-split-row`
+- `chat-subagent-close-${…}`
+- `chat-subagent-zone-${…}`
 - `chat-system-message`
+- `chat-task-open-${…}`
 - `chat-thread-area`
 - `chat-thread-load-error`
 - `chat-thread-load-retry`
-- `chat-thread-loading`
 - `chat-thread-running-elapsed`
+- `chat-thread-running-tasks`
 - `chat-thread-running-text`
+- `chat-thread-tasks-finished`
+- `chat-tool-delegate-task-empty-${…}`
+- `chat-tool-delegate-task-gate-${…}`
+- `chat-tool-delegate-task-open-full-${…}`
+- `chat-tool-delegate-task-prompt`
 - `chat-tool-fallback-error`
 - `chat-tool-fallback-images`
+- `chat-turn-status`
 - `chat-user-attachment-${…}`
 - `chat-user-attachments`
 - `chat-user-message-send-error`
+- `chat-user-message-unarchive`
 - `chat-user-snippet-expand-${…}`
 - `chat-user-snippet-scroll-${…}`
 - `chat-work-toggle-${…}`
@@ -179,12 +99,95 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `chat-workflow-upnext-${…}`
 - `chat-workflow-upnext-toggle`
 - `chat-write-error-text`
-- `chat-zone-${…}`
 - `chat-zone-close-${…}`
 - `chat-zone-strip-${…}`
 
-## tasks (49)
+## automations (80)
 
+- `automations-blank-build`
+- `automations-blank-describe`
+- `automations-blank-state`
+- `automations-condition-${…}`
+- `automations-condition-add-${…}`
+- `automations-condition-remove-${…}`
+- `automations-describe`
+- `automations-describe-back`
+- `automations-describe-draft`
+- `automations-describe-input`
+- `automations-describe-open-editor`
+- `automations-describe-retry`
+- `automations-details-edit`
+- `automations-details-not-found`
+- `automations-details-overview`
+- `automations-details-run`
+- `automations-details-step-${…}`
+- `automations-details-toggle`
+- `automations-draft-preview`
+- `automations-editor`
+- `automations-editor-back`
+- `automations-editor-cancel`
+- `automations-editor-issues`
+- `automations-editor-project`
+- `automations-editor-project-${…}`
+- `automations-editor-project-name`
+- `automations-editor-save`
+- `automations-empty-new`
+- `automations-file-item${…}`
+- `automations-if-add-condition-${…}`
+- `automations-if-add-otherwise-${…}`
+- `automations-if-match-all`
+- `automations-if-match-any`
+- `automations-if-remove-otherwise-${…}`
+- `automations-loop-max-${…}`
+- `automations-loop-mode-${…}`
+- `automations-loop-recipe-${…}`
+- `automations-parallel-add-branch-${…}`
+- `automations-parallel-branch-${…}`
+- `automations-parallel-branch-remove-${…}`
+- `automations-parallel-recipe-${…}`
+- `automations-parallel-remove-confirm-${…}`
+- `automations-recipe-root`
+- `automations-repeat-concurrency-${…}`
+- `automations-repeat-concurrency-caveat-${…}`
+- `automations-repeat-concurrency-mode-${…}`
+- `automations-repeat-items-${…}`
+- `automations-repeat-items-picker-${…}`
+- `automations-retry-attempts-${…}`
+- `automations-retry-recipe-${…}`
+- `automations-retry-warning-${…}`
+- `automations-run-again`
+- `automations-run-cancel`
+- `automations-run-not-found`
+- `automations-run-repeat-${…}`
+- `automations-run-step-${…}`
+- `automations-run-timeline`
+- `automations-runs-column`
+- `automations-runs-empty`
+- `automations-runs-overview`
+- `automations-runs-row-${…}`
+- `automations-section-describe`
+- `automations-section-details`
+- `automations-section-editor`
+- `automations-sidebar-empty`
+- `automations-sidebar-error`
+- `automations-sidebar-loading`
+- `automations-sidebar-row-status`
+- `automations-skill-item${…}`
+- `automations-step-${…}`
+- `automations-step-config-${…}`
+- `automations-step-delete-${…}`
+- `automations-step-grip-${…}`
+- `automations-step-issues-${…}`
+- `automations-step-setup-${…}`
+- `automations-step-title-${…}`
+- `automations-trigger-${…}`
+- `automations-when-add`
+- `automations-when-add-${…}`
+- `automations-when-add-menu`
+
+## tasks (43)
+
+- `tasks-board-close`
 - `tasks-board-loading`
 - `tasks-edit-body`
 - `tasks-github-banner`
@@ -200,7 +203,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `tasks-github-import-error`
 - `tasks-github-import-issue-${…}`
 - `tasks-github-import-update-token`
-- `tasks-github-link`
 - `tasks-github-link-cancel`
 - `tasks-github-link-confirm`
 - `tasks-github-link-dialog`
@@ -209,7 +211,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `tasks-github-menu-sync`
 - `tasks-github-menu-token`
 - `tasks-github-menu-unlink`
-- `tasks-github-pill`
 - `tasks-github-publish-cancel`
 - `tasks-github-publish-confirm`
 - `tasks-github-publish-dialog`
@@ -221,21 +222,16 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `tasks-github-token`
 - `tasks-github-token-dialog`
 - `tasks-github-unlink-dialog`
-- `tasks-priority-dot-${…}`
 - `tasks-quick-feature`
 - `tasks-quick-project`
-- `tasks-sidebar-cycle-${…}`
 - `tasks-sidebar-edit-${…}`
 - `tasks-sidebar-empty`
-- `tasks-sidebar-group-${…}`
-- `tasks-sidebar-group-toggle-${…}`
 - `tasks-sidebar-loading`
-- `tasks-sidebar-new`
-- `tasks-sidebar-no-project`
 - `tasks-sidebar-row-${…}`
+- `tasks-sidebar-row-project-${…}`
 - `tasks-sidebar-start-${…}`
 
-## sessions (40)
+## sessions (29)
 
 - `sessions-archive-cancel`
 - `sessions-ctx-fork`
@@ -244,36 +240,25 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `sessions-draft-row-title`
 - `sessions-firstrun-no-project`
 - `sessions-import-back`
-- `sessions-meta-card`
+- `sessions-meta-card-delegated-by`
 - `sessions-meta-card-fork-count`
 - `sessions-meta-card-forked-from`
 - `sessions-meta-card-label-${…}`
 - `sessions-meta-card-no-project`
-- `sessions-meta-card-pr`
-- `sessions-meta-card-tags`
+- `sessions-meta-card-provider`
+- `sessions-meta-card-started-by`
+- `sessions-meta-card-temporary`
 - `sessions-meta-card-title`
-- `sessions-meta-card-worktree`
 - `sessions-more-menu`
-- `sessions-row-fork-nest`
 - `sessions-row-fork-nest-2`
-- `sessions-row-fork-nest-glyph`
 - `sessions-row-hint`
-- `sessions-row-meta`
-- `sessions-row-meta-glyphs`
-- `sessions-row-meta-pr`
-- `sessions-row-meta-tag-dots`
-- `sessions-row-no-project`
-- `sessions-row-parent-link`
-- `sessions-row-pin-glyph`
-- `sessions-row-project`
-- `sessions-row-provider`
 - `sessions-row-provider-logo`
-- `sessions-row-temporary-glyph`
-- `sessions-row-your-turn`
+- `sessions-scope-avatars`
 - `sessions-scope-more`
-- `sessions-scope-strip`
+- `sessions-scope-names`
+- `sessions-scope-summary`
+- `sessions-scope-tooltip`
 - `sessions-section`
-- `sessions-tag-filter-clear`
 - `sessions-tag-filter-synthetic-${…}`
 - `sessions-tag-popover-error`
 - `sessions-welcome-suggestion-insert-${…}`
@@ -298,7 +283,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `settings-notify-tool-request-toggle`
 - `settings-notify-user-question-toggle`
 - `settings-pane-about`
-- `settings-pane-general`
+- `settings-pane-external-clients`
 - `settings-pane-keybindings`
 - `settings-pane-notifications`
 - `settings-pane-providers`
@@ -332,8 +317,9 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `skills-section-source`
 - `skills-section-source-error`
 
-## session (20)
+## session (19)
 
+- `session-panel-context-file-${…}`
 - `session-panel-launch-spinner-${…}`
 - `session-panel-section-prs`
 - `session-panel-sections`
@@ -341,23 +327,22 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `session-panel-summary-pr-${…}`
 - `session-panel-tasks-attachments`
 - `session-panel-tasks-attachments-clear`
-- `session-panel-workflow-${…}`
-- `session-panel-workflow-back-${…}`
+- `session-panel-toggle-${…}`
+- `session-tab-controls-${…}`
 - `session-tab-ctx-close`
 - `session-tab-ctx-close-split`
 - `session-tab-ctx-fork`
-- `session-tab-ctx-keep-open`
 - `session-tab-ctx-open-split`
 - `session-tab-ctx-side-chat`
 - `session-tab-hint-${…}`
-- `session-tab-open-beside-${…}`
 - `session-tab-waiting-${…}`
 - `session-tabs`
 - `session-tabs-zone-group`
 
-## composer (17)
+## composer (18)
 
 - `composer-adapter-logo-${…}`
+- `composer-adapter-switch-blocked-${…}`
 - `composer-attachments`
 - `composer-command-item-${…}`
 - `composer-context-percent`
@@ -374,6 +359,23 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `composer-worktree-busy`
 - `composer-worktree-draft-cancel`
 - `composer-worktree-draft-panel`
+
+## external (14)
+
+- `external-clients-access`
+- `external-clients-add`
+- `external-clients-answer-prompts`
+- `external-clients-confirm-${…}`
+- `external-clients-done`
+- `external-clients-form`
+- `external-clients-key`
+- `external-clients-mode`
+- `external-clients-name`
+- `external-clients-project-${…}`
+- `external-clients-revoke-${…}`
+- `external-clients-row-${…}`
+- `external-session-branch`
+- `external-session-worktree`
 
 ## preview (13)
 
@@ -406,7 +408,20 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `url-tab-retry`
 - `url-tab-toolbar`
 
-## daemon (10)
+## usage (10)
+
+- `usage-capsule`
+- `usage-capsule-dots`
+- `usage-capsule-item-${…}`
+- `usage-capsule-popover`
+- `usage-popover`
+- `usage-popover-freshness-${…}`
+- `usage-popover-provider-${…}`
+- `usage-popover-refresh`
+- `usage-popover-unknown-${…}`
+- `usage-popover-window-${…}`
+
+## daemon (9)
 
 - `daemon-add-error`
 - `daemon-add-insecure`
@@ -415,42 +430,32 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `daemon-add-storage-error`
 - `daemon-add-unreachable`
 - `daemon-dialog-cancel`
-- `daemon-footer-trigger-host`
 - `daemon-pair-insecure`
 - `daemon-picker-fallback`
 
-## provider (9)
+## shell (9)
 
-- `provider-quota-card`
-- `provider-quota-freshness-${…}`
-- `provider-quota-glyph-${…}`
-- `provider-quota-popover-${…}`
-- `provider-quota-popover-glyph-${…}`
-- `provider-quota-refresh-${…}`
-- `provider-quota-row-${…}`
-- `provider-quota-unknown-${…}`
-- `provider-quota-window-${…}`
+- `shell-rail`
+- `shell-rail-appearance`
+- `shell-rail-automations-pending`
+- `shell-rail-update`
+- `shell-rail-update-app`
+- `shell-rail-update-cli-${…}`
+- `shell-rail-update-dot`
+- `shell-rail-update-menu`
+- `shell-rail-update-settings`
 
-## viewer (8)
+## viewer (9)
 
 - `viewer-csv-preview-toggle`
 - `viewer-csv-source`
 - `viewer-csv-source-toggle`
+- `viewer-shell-reveal-finder`
 - `viewer-unsupported`
 - `viewer-unsupported-card`
 - `viewer-unsupported-icon-chip`
 - `viewer-unsupported-open`
 - `viewer-unsupported-reveal`
-
-## automation (7)
-
-- `automation-recommender-copy-${…}`
-- `automation-recommender-evidence-toggle`
-- `automation-recommender-loading`
-- `automation-recommender-open`
-- `automation-recommender-retry`
-- `automation-recommender-sheet`
-- `automation-recommender-tab-${…}`
 
 ## editor (7)
 
@@ -482,6 +487,15 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `search-palette-loading`
 - `search-palette-symbol-row-${…}`
 
+## artifact (6)
+
+- `artifact-card-error-body`
+- `artifact-card-open`
+- `artifact-card-open-browser`
+- `artifact-card-result`
+- `artifact-card-root`
+- `artifact-card-trigger`
+
 ## image (6)
 
 - `image-context-menu`
@@ -509,6 +523,14 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `workspace-url-entry`
 - `workspace-url-entry-input`
 
+## automation (5)
+
+- `automation-recommender-copy-${…}`
+- `automation-recommender-evidence-toggle`
+- `automation-recommender-loading`
+- `automation-recommender-retry`
+- `automation-recommender-tab-${…}`
+
 ## git (5)
 
 - `git-branch-group-${…}`
@@ -525,6 +547,14 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `push-notification-card-root`
 - `push-notification-card-trigger`
 
+## review (5)
+
+- `review-commit-error`
+- `review-file-status-${…}`
+- `review-file-toolbar-stat`
+- `review-load-error`
+- `review-session-diff-fallback`
+
 ## smart (5)
 
 - `smart-action-instruction-append`
@@ -532,6 +562,14 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `smart-action-url-copy`
 - `smart-action-url-open`
 - `smart-action-url-stop-tunnel`
+
+## toast (5)
+
+- `toast-description`
+- `toast-details-body`
+- `toast-details-close`
+- `toast-details-copy`
+- `toast-details-dialog`
 
 ## worktree (5)
 
@@ -548,26 +586,12 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `error-state-retry`
 - `error-state-root`
 
-## shell (4)
+## html (4)
 
-- `shell-rail`
-- `shell-rail-appearance`
-- `shell-rail-automations-pending`
-- `shell-rail-update`
-
-## toast (4)
-
-- `toast-details-body`
-- `toast-details-close`
-- `toast-details-copy`
-- `toast-details-dialog`
-
-## tool (4)
-
-- `tool-card-path-open`
-- `tool-card-status-dot`
-- `tool-result-expand-collapse`
-- `tool-result-image-${…}`
+- `html-mode-edit`
+- `html-mode-preview`
+- `html-open-in-browser`
+- `html-preview-frame`
 
 ## zone (4)
 
@@ -582,34 +606,23 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `pairing-generate-code`
 - `pairing-regenerate-code`
 
-## review (3)
-
-- `review-commit-error`
-- `review-file-status-${…}`
-- `review-load-error`
-
 ## shortcuts (3)
 
 - `shortcuts-cheat-sheet`
 - `shortcuts-cheat-sheet-group-${…}`
 - `shortcuts-cheat-sheet-row-${…}`
 
-## sidebar (3)
-
-- `sidebar-collapse`
-- `sidebar-scroll`
-- `sidebar-search`
-
-## thread (3)
-
-- `thread-find-close`
-- `thread-find-next`
-- `thread-find-prev`
-
-## title (2)
+## title (3)
 
 - `title-bar-actions`
 - `title-bar-chat-column`
+- `title-bar-separator-actions`
+
+## tool (3)
+
+- `tool-card-path-open`
+- `tool-card-status-dot`
+- `tool-result-image-${…}`
 
 ## tunnel (3)
 
@@ -637,15 +650,15 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `edit-card-diff-raw`
 - `edit-card-diff-unavailable`
 
-## external (2)
-
-- `external-session-branch`
-- `external-session-worktree`
-
 ## file (2)
 
 - `file-picker-loading`
 - `file-tree-keep-open-${…}`
+
+## idle (2)
+
+- `idle-compaction-${…}`
+- `idle-compaction-enabled`
 
 ## md (2)
 
@@ -657,10 +670,20 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `named-tunnel-clear-config`
 - `named-tunnel-toggle`
 
+## project (2)
+
+- `project-avatar`
+- `project-avatar-check`
+
 ## remote (2)
 
 - `remote-access-device-remove-${…}`
 - `remote-access-port-tunnel-stop-${…}`
+
+## sidebar (2)
+
+- `sidebar-collapse`
+- `sidebar-search`
 
 ## web (2)
 
@@ -701,11 +724,19 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 
 ## setup (1)
 
-- `setup-advisor-section-${…}`
+- `setup-advisor-sidebar-section-${…}`
 
 ## surface (1)
 
 - `surface-rail`
+
+## thread (1)
+
+- `thread-find-limit`
+
+## transcript (1)
+
+- `transcript-width-handle-${…}`
 
 ## trigger (1)
 
