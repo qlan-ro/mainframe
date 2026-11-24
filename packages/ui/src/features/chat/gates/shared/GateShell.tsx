@@ -20,6 +20,9 @@ const ACCENT_RING: Record<GateAccent, string> = {
  */
 export const GATE_BODY_INSET = 'pl-[calc(1rem+1.5rem+0.625rem)]';
 
+/** A gate's primary answer: white text needs the deeper blue (DESIGN.md, Deep Blue Fill). */
+export const GATE_PRIMARY = 'bg-accent-fill text-white hover:bg-accent-fill/90';
+
 export function GateCardShell({
   resolved,
   accent = 'primary',

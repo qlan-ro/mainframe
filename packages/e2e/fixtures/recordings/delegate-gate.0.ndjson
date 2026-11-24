@@ -1,0 +1,7 @@
+{"dir":"in","method":"sendMessage","args":["Have another agent check the migration"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-delegate-gate-parent"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll have a child chat check it while I keep going."}],null],"delayMs":40}
+{"dir":"out","method":"mcp_call","args":[{"toolUseId":"toolu_gate_1","tool":"delegate_task","arguments":{"task":"Check the migration against a copy of the database.","role":"research","title":"Check the migration"}}],"delayMs":80}
+{"dir":"out","method":"mcp_call","args":[{"toolUseId":"toolu_gate_2","tool":"delegate_task","arguments":{"task":"Review the diff for data races.","role":"review","title":"Review the diff"}}],"delayMs":100}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Both are running."}],null],"delayMs":120}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":160}

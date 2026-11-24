@@ -297,6 +297,8 @@ export interface AdapterInfo {
     noPersistence?: boolean;
     /** Can branch this chat's conversation into a new chat (todo #343). Absent means unsupported. */
     fork?: boolean;
+    /** Can fold a message into a running turn (C9). Absent means unsupported. */
+    steer?: boolean;
   };
   /**
    * Why `capabilities.fork` is currently false (todo #368), e.g. a CLI below
@@ -429,6 +431,8 @@ export interface Adapter {
     noPersistence?: boolean;
     /** Can branch this chat's conversation into a new chat (todo #343). Absent means unsupported. */
     fork?: boolean;
+    /** Can fold a message into a running turn (C9). Absent means unsupported. */
+    steer?: boolean;
   };
 
   isInstalled(): Promise<boolean>;

@@ -210,9 +210,9 @@ impl Adapter for FakeAdapter {
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {
             plan_mode: true,
-            auto_mode: false,
             no_persistence: false,
             fork: self.fork_version_gated && self.observed_version.lock().unwrap().is_some(),
+            ..AdapterCapabilities::default()
         }
     }
     fn observe_cli_version(&self, version: Option<&str>) {
@@ -509,9 +509,9 @@ async fn capability_and_reason_flip_after_observed_version_even_with_no_catalog_
                 capabilities,
                 &Some(AdapterCapabilities {
                     plan_mode: true,
-                    auto_mode: false,
                     no_persistence: false,
                     fork: true,
+                    ..AdapterCapabilities::default()
                 })
             );
             assert_eq!(fork_unavailable_reason, &None);

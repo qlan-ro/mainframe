@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { rmSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
+import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
@@ -58,6 +59,8 @@ test.describe('§composer config selects @real', () => {
     await closeMenus();
     await trigger.click();
     await page.locator('[data-testid="composer-permission-mode-select-option-yolo"]').click();
+    // The session's first switch to Unattended asks (C13).
+    await page.getByTestId('composer-unattended-confirm-confirm').click();
     await expect(trigger).toContainText(/unattended/i, { timeout: 5_000 });
     // Reset to Interactive for cleanliness — only after the menu has actually
     // unmounted, per the TODO(bug) above.
@@ -91,9 +94,9 @@ test.describe('§composer config selects @real', () => {
   }
 
   /**
-   * Effort and options live in each model row's hover flyout now, not in their
-   * own composer chips. Opens the model menu and reveals the first candidate
-   * model's flyout; returns its id, or null when this environment exposes none.
+   * Effort and options sit below the model list, for the selected model only.
+   * Selects the first candidate the menu offers and opens the menu on its
+   * tuning; returns its id, or null when this environment exposes none.
    */
   async function openModelTuning(candidates: string[]): Promise<string | null> {
     const { page } = app;
@@ -105,7 +108,9 @@ test.describe('§composer config selects @real', () => {
     for (const id of candidates) {
       const row = page.locator(`[data-testid="composer-model-select-option-${id}"]`);
       if (!(await row.isVisible({ timeout: 2_000 }).catch(() => false))) continue;
-      await row.hover();
+      await row.click();
+      await closeMenus();
+      await page.locator('[data-testid="composer-model-select"]').click();
       await expect(page.locator(`[data-testid="composer-model-${id}-tuning"]`)).toBeVisible({ timeout: 5_000 });
       return id;
     }
@@ -116,7 +121,7 @@ test.describe('§composer config selects @real', () => {
   const SONNET = ['claude-sonnet-4-5-20251101', 'sonnet'];
   const HAIKU = ['claude-haiku-4-5-20251001', 'haiku'];
 
-  test("M6: a capable model's flyout lists its declared effort levels", async () => {
+  test("M6: a capable model's effort segment lists its declared levels", async () => {
     const { page } = app;
     const id = await openModelTuning([...OPUS, ...SONNET]);
     if (id == null) {
@@ -146,7 +151,7 @@ test.describe('§composer config selects @real', () => {
     await closeMenus();
   });
 
-  test('M6c: haiku exposes no tuning flyout at all', async () => {
+  test('M6c: haiku shows no effort or options', async () => {
     const { page } = app;
     await closeMenus();
     await page.locator('[data-testid="composer-model-select"]').click();
@@ -154,7 +159,7 @@ test.describe('§composer config selects @real', () => {
     for (const id of HAIKU) {
       const row = page.locator(`[data-testid="composer-model-select-option-${id}"]`);
       if (!(await row.isVisible({ timeout: 2_000 }).catch(() => false))) continue;
-      await row.hover();
+      await row.click();
       found = id;
       break;
     }
@@ -162,7 +167,9 @@ test.describe('§composer config selects @real', () => {
       test.skip(true, 'haiku model not found in this environment');
       return;
     }
-    // No effort levels, no options — so the row is a plain item with no flyout.
+    await closeMenus();
+    await page.locator('[data-testid="composer-model-select"]').click();
+    // No effort levels and no options, so there is nothing below the list.
     await expect(page.locator(`[data-testid="composer-model-${found}-tuning"]`)).toHaveCount(0);
     await closeMenus();
   });
@@ -193,7 +200,7 @@ test.describe('§composer config selects @real', () => {
     await expect(ultracode).toBeVisible({ timeout: 5_000 });
     if ((await ultracode.getAttribute('aria-checked')) !== 'true') await ultracode.click();
 
-    // The resolver coerces ultracode to xhigh, so the flyout shows it checked and
+    // The resolver coerces ultracode to xhigh, so the segment shows it checked and
     // every level inert — the effort is no longer the user's to set.
     const xhigh = page.locator(`[data-testid="composer-model-${id}-effort-xhigh"]`);
     await expect(xhigh).toHaveAttribute('aria-checked', 'true', { timeout: 5_000 });
@@ -228,7 +235,7 @@ test.describe('§composer attachments', () => {
     const { page } = app;
 
     const fileChooserPromise = page.waitForEvent('filechooser');
-    // app-tauri uses testid `composer-add-attachment` instead of aria-label "Add attachment"
+    await page.getByTestId('composer-add-menu').click();
     await page.getByTestId('composer-add-attachment').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(testImagePath);
@@ -260,6 +267,7 @@ test.describe('§composer attachments', () => {
 
     // Re-attach
     const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.getByTestId('composer-add-menu').click();
     await page.getByTestId('composer-add-attachment').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(testImagePath);
@@ -272,8 +280,8 @@ test.describe('§composer attachments', () => {
   });
 });
 
-// ─── Plan-mode toggle (§9a) ────────────────────────────────────────────────────
-test.describe('§composer plan-mode toggle', () => {
+// ─── Permissions ──────────────────────────────────────────────────────────────
+test.describe('§composer permissions', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -288,25 +296,96 @@ test.describe('§composer plan-mode toggle', () => {
     await closeTauriApp(app);
   });
 
-  // PlanModeToggle.tsx returns null unless `adapter.capabilities.planMode` is true. Every
-  // adapter registered in this suite (builtin claude/codex, plus mock-cli under E2E_MODE=mock —
-  // verified in mainframe-adapter-mock/src/adapter.rs: `plan_mode: true`) declares
-  // the capability, so there's no non-capable adapter here to assert the hidden branch against;
-  // this exercises the visible/on path only.
-  test('is visible for the plan-capable adapter and aria-pressed flips with active styling', async () => {
+  test('⇧⇥ in the field switches Interactive and Auto-Edits, and says so', async () => {
     const { page } = app;
-    const toggle = page.getByTestId('composer-plan-toggle');
-    await expect(toggle).toBeVisible({ timeout: 10_000 });
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(toggle).not.toHaveClass(/border-primary/);
+    const permissions = page.getByTestId('composer-permission-mode-select');
+    await expect(permissions).toContainText('Interactive');
+    await page.getByTestId('chat-composer-input').click();
+    await page.keyboard.press('Shift+Tab');
+    await expect(permissions).toContainText('Auto-Edits', { timeout: 5_000 });
+    await expect(page.getByTestId('chat-composer-input')).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(permissions).toContainText('Interactive', { timeout: 5_000 });
+  });
 
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-pressed', 'true', { timeout: 5_000 });
-    await expect(toggle).toHaveClass(/border-primary/);
+  test('Unattended asks once per session', async () => {
+    const { page } = app;
+    const permissions = page.getByTestId('composer-permission-mode-select');
+    const pick = async (mode: string) => {
+      // A click on the trigger while the menu animates out is swallowed.
+      await expect(page.locator('[role="menu"]')).toHaveCount(0);
+      await permissions.click();
+      await page.getByTestId(`composer-permission-mode-select-option-${mode}`).click();
+    };
+    await pick('yolo');
+    await expect(page.getByTestId('composer-unattended-confirm-cancel')).toBeFocused();
+    await page.getByTestId('composer-unattended-confirm-confirm').click();
+    await expect(permissions).toContainText('Unattended', { timeout: 5_000 });
+    await pick('default');
+    await expect(permissions).toContainText('Interactive', { timeout: 5_000 });
+    await pick('yolo');
+    await expect(permissions).toContainText('Unattended', { timeout: 5_000 });
+    await expect(page.getByTestId('composer-unattended-confirm')).toHaveCount(0);
+  });
+});
 
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false', { timeout: 5_000 });
-    await expect(toggle).not.toHaveClass(/border-primary/);
+// ─── Running turn: queue, stop, send what was held (C8–C10) ───────────────────
+test.describe('§composer running turn', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'composer-running', mockMaxDelayMs: 3_600_000 });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+    for (const text of ['Where does the quota reset?', 'Read the tests around it', 'Write the missing test']) {
+      await sendMessage(app.page, text);
+      await waitForIdle(app.page);
+    }
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('typing while a turn runs offers Queue and Steer, and keeps Stop', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Fix the reset');
+    await expect(page.getByTestId('chat-composer-cancel')).toHaveAttribute('aria-label', 'Stop the turn');
+    await expect(page.getByTestId('composer-model-select')).toHaveAttribute('aria-disabled', 'true');
+    await page.getByTestId('chat-composer-input').fill('Also cover the DST case');
+    await expect(page.getByTestId('chat-composer-cancel')).toBeVisible();
+    await page.getByTestId('chat-composer-send-options').click();
+    // The mock adapter cannot steer, and the menu says what happens instead.
+    await expect(page.getByTestId('chat-composer-send-steer')).toContainText('it will queue');
+    await page.keyboard.press('Escape');
+  });
+
+  test('a queued message is a row in the card, not a transcript bubble', async () => {
+    const { page } = app;
+    await page.getByTestId('chat-composer-input').press('Enter');
+    await expect(page.getByTestId('chat-composer-queue').getByTestId('chat-queued-message')).toHaveCount(1);
+    await expect(page.getByTestId('chat-user-message').filter({ hasText: 'DST' })).toHaveCount(0);
+    await page.getByTestId('chat-composer-input').fill('Then open a PR');
+    await page.getByTestId('chat-composer-input').press('Enter');
+    await expect(page.getByTestId('chat-queued-message')).toHaveCount(2);
+  });
+
+  test('⌘. stops the turn and holds the queue; Send now sends it in order', async () => {
+    const { page } = app;
+    await page.keyboard.press('ControlOrMeta+.');
+    const rows = page.getByTestId('chat-queued-message');
+    await expect(rows.first()).toContainText('Not sent: the session stopped.', { timeout: 10_000 });
+    await expect(rows.nth(1)).toContainText('Waiting');
+    await expect(page.getByTestId('chat-composer-input')).toBeFocused();
+    await waitForIdle(page);
+    await expect(rows).toHaveCount(2);
+
+    await page.getByTestId('chat-queued-send-now').click();
+    await expect(rows).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByText('Opened the pull request.')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('chat-user-message').filter({ hasText: 'Also cover the DST case' })).toHaveCount(1);
   });
 });
 

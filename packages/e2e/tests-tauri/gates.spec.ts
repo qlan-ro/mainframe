@@ -511,6 +511,7 @@ test.describe('§gate slot cap under a tall composer draft', () => {
     // Drive the composer toward its own natural size with a multi-line queued draft
     // plus an attachment tile row.
     const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.getByTestId('composer-add-menu').click();
     await page.getByTestId('composer-add-attachment').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(testImagePath);
@@ -593,6 +594,7 @@ test.describe('§gate slot cap with the find bar open', () => {
     await page.locator('[data-testid="chat-permission-details-pre"]').waitFor({ timeout: 5_000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.getByTestId('composer-add-menu').click();
     await page.getByTestId('composer-add-attachment').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(testImagePath);

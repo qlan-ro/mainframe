@@ -62,7 +62,6 @@ function renderSwitch(blockedReason: string | null = null) {
         disabled={false}
         setAdapter={setAdapter}
         setModel={setModel}
-        setModelTuning={vi.fn()}
         setEffort={vi.fn()}
         setFeature={vi.fn()}
         switchBlockedReason={blockedReason}

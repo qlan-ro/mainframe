@@ -7,7 +7,7 @@
  */
 import type { AppendMessage } from '@assistant-ui/react';
 import type { PromptRemedy, PromptSendMeta } from '@qlan-ro/mainframe-types';
-import { unarchiveNativeSession } from '../../../lib/api/chats';
+import { cancelQueuedMessage, unarchiveNativeSession } from '../../../lib/api/chats';
 import { uploadAttachments } from '../../../lib/api/attachments';
 import {
   acceptWorktreeOffer as postAcceptWorktreeOffer,
@@ -17,7 +17,9 @@ import { mfToast } from '@/lib/toast';
 import { matchCommandInvocation } from '../commands/command-registry';
 import { buildPendingMessage, parseSendInput } from './chat-reconcile';
 import { previewsById } from './local-attachments';
-import type { ChatStateEvent, ChatThreadState } from './chat-thread-state';
+import { wantsSteer } from './steer';
+import { useHeldQueue } from '../composer/queue/held-queue-store';
+import type { ChatStateEvent, ChatThreadState, PendingUserMessage } from './chat-thread-state';
 
 export interface ChatActionHost {
   getPort(): number;
@@ -54,8 +56,13 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   // so a later retry can re-carry it (T34) — attachmentIds are NOT part of
   // it: a retry is text-only.
   const command = matchCommandInvocation(text);
-  const sendMeta = command ? { command: { ...command } } : {};
-  const pending = buildPendingMessage(host.getDaemonId(), text, sendMeta, uploadItems);
+  const sendMeta: PromptSendMeta = command ? { command: { ...command } } : {};
+  const running = host.getState().runState.type === 'running';
+  if (running && wantsSteer(message) && !command && uploadItems.length === 0) sendMeta.steer = true;
+  const pending: PendingUserMessage = {
+    ...buildPendingMessage(host.getDaemonId(), text, sendMeta, uploadItems),
+    ...(running && !command && !sendMeta.steer ? { queueing: true } : {}),
+  };
   host.dispatch({ type: 'local.message.queued', pending });
   host.dispatch({ type: 'run.started' });
 
@@ -109,6 +116,40 @@ export async function retryChatMessage(host: ChatActionHost, clientId: string, r
   } catch (error) {
     host.dispatch({ type: 'local.message.failed', clientId, error, stage: 'send', pending });
     throw error;
+  }
+}
+
+/** How long Stop waits for the queue to be taken back before interrupting anyway. */
+const HOLD_QUEUE_BUDGET_MS = 1000;
+
+/**
+ * Take the queue back from the agent before a Stop, so nothing queued starts a
+ * new turn behind it (C10). Each row is kept the moment its cancel lands; one
+ * the agent already picked up stays in the transcript and drops out of the
+ * rows (`QueuedRows` checks its id).
+ */
+export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
+  const refs = Object.values(host.getState().interactions.queued).filter((ref) => ref.delivery == null);
+  if (refs.length === 0) return;
+  const chatId = host.getDaemonId();
+  const cancels = refs.map((ref) =>
+    cancelQueuedMessage(host.getPort(), chatId, ref.messageId).then(
+      () => useHeldQueue.getState().hold(chatId, ref),
+      (error: unknown) => console.warn('[chat] queued message could not be held', { error }),
+    ),
+  );
+  await Promise.race([Promise.all(cancels), new Promise((resolve) => setTimeout(resolve, HOLD_QUEUE_BUDGET_MS))]);
+}
+
+/** Send a held row, then line the rows behind it up again in their order. */
+export async function sendHeldMessages(host: ChatActionHost, firstId: string): Promise<void> {
+  const chatId = host.getDaemonId();
+  const rows = useHeldQueue.getState().byChat[chatId] ?? [];
+  const at = rows.findIndex((row) => row.messageId === firstId);
+  if (at < 0) return;
+  for (const row of [rows[at]!, ...rows.slice(at + 1)]) {
+    await host.sendPrompt(row.content, row.attachmentIds ? { attachmentIds: row.attachmentIds } : {});
+    useHeldQueue.getState().remove(chatId, row.messageId);
   }
 }
 

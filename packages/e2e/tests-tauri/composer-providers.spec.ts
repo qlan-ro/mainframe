@@ -111,20 +111,14 @@ test.describe('§composer provider availability and session lock', () => {
     await expect(page.getByText('Codex models')).toBeVisible();
     await expect(alternative).toHaveAttribute('aria-selected', 'true');
 
-    // Picking one of its models opens the switch confirmation rather than
-    // switching outright; cancelling leaves the chat on its original provider
-    // (codex is only faked as "installed" client-side here, so confirming
-    // would hit the daemon's real not-installed refusal — out of scope for
-    // this UI-level test).
-    const confirmDialog = page.getByTestId('composer-provider-switch-confirm');
-    await page.getByTestId('composer-model-select-option-fake-codex-model').click();
-    await expect(confirmDialog).toBeVisible();
-    await expect(confirmDialog).toContainText('Continue this chat in Codex?');
+    // Closing the menu without picking a model leaves the chat where it was
+    // (picking one switches at once; codex is only faked as installed here, so
+    // that is provider-switch.spec.ts's case).
+    await expect(page.getByTestId('composer-model-select-option-fake-codex-model')).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(page.getByTestId('composer-provider-model-popover')).toHaveCount(0);
-    await page.getByTestId('composer-provider-switch-confirm-cancel').click();
-    await expect(confirmDialog).toBeHidden();
 
-    // Reopening the menu shows the active provider selected again — cancelling
+    // Reopening the menu shows the active provider selected again — browsing
     // never switched anything.
     await page.getByTestId('composer-model-select').click();
     await expect(page.getByTestId(`composer-adapter-select-option-${ACTIVE_PROVIDER}`)).toHaveAttribute(

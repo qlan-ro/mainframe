@@ -179,7 +179,7 @@ impl ChatManager {
             .prepare_outgoing(chat_id, content, attachment_ids)
             .await;
         let (transient_metadata, message_uuid, is_queued) =
-            self.queued_message_metadata(post, session, &outgoing.attachment_previews);
+            self.queued_message_metadata(post, session, &outgoing.attachment_previews, &delivery);
         let message = self.store_user_message(
             chat_id,
             outgoing.message_content,

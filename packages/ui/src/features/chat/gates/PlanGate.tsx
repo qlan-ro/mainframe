@@ -7,8 +7,9 @@ import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
-import type { ReplyFn } from './gate-types';
-import { GateCardShell, GateHead } from './shared/GateShell';
+import { gateEyebrow, type GateContext, type ReplyFn } from './gate-types';
+import { cn } from '@/lib/utils';
+import { GateCardShell, GateHead, GATE_PRIMARY } from './shared/GateShell';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { buildPlanResponse } from './build-control-response';
@@ -25,6 +26,9 @@ export interface PlanGateProps {
   reply: ReplyFn;
   /** Resolved by the mount from the chat's adapter; omitted means no Auto segment. */
   autoAllowed?: boolean;
+  /** The mode the composer's permissions control names ("then Auto-Edits"), preselected (G3). */
+  composerMode?: ExecutionMode;
+  context?: GateContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +86,7 @@ function ActionRow({
 }) {
   return (
     <div className="flex items-center gap-2 px-4 pb-3">
-      <Button size="sm" data-testid="chat-plan-approve" onClick={onApprove} className="flex-1">
+      <Button size="sm" data-testid="chat-plan-approve" onClick={onApprove} className={cn('flex-1', GATE_PRIMARY)}>
         Approve &amp; run
       </Button>
       <Button variant="outline" size="sm" data-testid="chat-plan-keep-planning" onClick={onKeepPlanning}>
@@ -124,7 +128,13 @@ function ReviseRow({
         <Button variant="outline" size="sm" data-testid="chat-plan-revise-cancel" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" data-testid="chat-plan-send-feedback" disabled={feedback.trim() === ''} onClick={onSend}>
+        <Button
+          size="sm"
+          className={GATE_PRIMARY}
+          data-testid="chat-plan-send-feedback"
+          disabled={feedback.trim() === ''}
+          onClick={onSend}
+        >
           Send feedback
         </Button>
       </div>
@@ -136,8 +146,9 @@ function ReviseRow({
 // PlanGate
 // ---------------------------------------------------------------------------
 
-export function PlanGate({ entry, reply, autoAllowed }: PlanGateProps) {
-  const [execMode, setExecMode] = useState<ExecutionMode>('default');
+export function PlanGate({ entry, reply, autoAllowed, composerMode, context }: PlanGateProps) {
+  const offered = composerMode !== 'auto' || autoAllowed === true;
+  const [execMode, setExecMode] = useState<ExecutionMode>((offered && composerMode) || 'default');
   const [clearContext, setClearContext] = useState(false);
   const [revising, setRevising] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -163,7 +174,7 @@ export function PlanGate({ entry, reply, autoAllowed }: PlanGateProps) {
         <GateHead
           icon={<SquareCheckIcon className="size-3.5" />}
           tileClassName="bg-primary/10 text-primary"
-          eyebrow="Plan"
+          eyebrow={gateEyebrow('Plan', context)}
           title="Ready to implement"
         />
         {plan && <PlanBody plan={plan} />}

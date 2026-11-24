@@ -356,23 +356,23 @@ pub enum CatalogSource {
     Fallback,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AdapterCapabilities {
     pub plan_mode: bool,
     /// Whether this adapter supports the CLI's native `auto` permission mode.
     pub auto_mode: bool,
-    /// The adapter's CLI has a native mechanism to run a session without writing
-    /// a vendor transcript (Claude `--no-session-persistence`, Codex
-    /// `thread/start.ephemeral`), verified interactively.
-    /// `#[serde(default)]` so a payload recorded before this field existed still
-    /// deserializes, defaulting to false (no mechanism).
+    /// Can run a session without writing a vendor transcript (Claude
+    /// `--no-session-persistence`, Codex `thread/start.ephemeral`).
     #[serde(default)]
     pub no_persistence: bool,
     /// Whether this adapter can branch a chat's conversation into a new chat.
     /// Absent on the wire (older daemon) deserializes to `false`.
     #[serde(default)]
     pub fork: bool,
+    /// Can fold a message into a running turn (`AdapterSession::steer`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub steer: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

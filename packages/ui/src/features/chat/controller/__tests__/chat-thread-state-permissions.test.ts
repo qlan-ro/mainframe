@@ -3,12 +3,11 @@
  * permission.resolved, focused on removal of a non-front entry (todo #284).
  *
  * All expected values are hardcoded; no logic from the reducer or from
- * `selectPermissionFront` is re-derived here.
+ * queue ordering is re-derived here.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ControlRequest } from '@qlan-ro/mainframe-types';
 import { createChatThreadState, reduceChatThreadState, type ChatThreadState } from '../chat-thread-state';
-import { selectPermissionFront } from '../../gates/select-front';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -60,13 +59,13 @@ describe('reduceChatThreadState — permission.resolved', () => {
     expect(after.interactions.permissions['r3']).toBe(r3Before);
   });
 
-  it('resolving the front leaves the rest presentable', () => {
+  it('resolving the first request leaves the later two pending, oldest first', () => {
     const before = stateWithThree();
 
     const after = reduceChatThreadState(before, { type: 'permission.resolved', requestId: 'r1' });
 
-    const front = selectPermissionFront(after.interactions.permissions);
-    expect(front?.requestId).toBe('r2');
+    expect(Object.keys(after.interactions.permissions)).toEqual(['r2', 'r3']);
+    expect(after.interactions.permissions['r2']?.askedAt).toBeLessThan(after.interactions.permissions['r3']!.askedAt);
   });
 
   it('resolving an unknown requestId leaves the map untouched', () => {

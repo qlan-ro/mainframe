@@ -102,6 +102,39 @@ test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
   });
 });
 
+test.describe('§mcp-delegate requests surface in the parent', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'delegate-gate', mockMaxDelayMs: 2_500 });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('two tasks ask: one request shows above the composer at a time, oldest first', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Have another agent check the migration');
+    const gate = page.getByTestId('chat-thread-gate-slot');
+    await expect(gate).toContainText('1 more waiting', { timeout: 60_000 });
+    await expect(gate).toContainText('Check the migration');
+    await expect(page.getByTestId('chat-permission-rule')).toHaveText('cargo test *');
+    // The strip steps back, and the item being answered is left out of it.
+    await expect(page.getByTestId('composer-activity-summary')).toContainText('1 more needs you');
+
+    await gate.getByTestId('chat-permission-option-allow-once').click();
+    await expect(gate).toContainText('Review the diff', { timeout: 15_000 });
+    await expect(gate).not.toContainText('more waiting');
+    await gate.getByTestId('chat-permission-option-allow-once').click();
+    await expect(gate).toHaveCount(0, { timeout: 15_000 });
+  });
+});
+
 // Each scenario below owns its app/recording key end to end (see the file
 // doc comment) and disables retries: a failure here is deterministic.
 test.describe('§mcp-delegate privilege-ceiling refusal', () => {

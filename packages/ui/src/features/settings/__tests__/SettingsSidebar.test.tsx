@@ -71,3 +71,18 @@ describe('SettingsSidebar — Providers nav auto-select', () => {
     expect(useSettingsStore.getState().selectedProvider).toBeNull();
   });
 });
+
+describe('SettingsSidebar — Chat tab', () => {
+  it('lists Chat right after General', () => {
+    render(<SettingsSidebar />);
+    const ids = screen.getAllByTestId(/^settings-nav-/).map((el) => el.getAttribute('data-testid'));
+    expect(ids.slice(0, 3)).toEqual(['settings-nav-general', 'settings-nav-chat', 'settings-nav-providers']);
+    expect(screen.getByTestId('settings-nav-chat')).toHaveTextContent('Chat');
+  });
+
+  it('opens the Chat tab when clicked', () => {
+    render(<SettingsSidebar />);
+    fireEvent.click(screen.getByTestId('settings-nav-chat'));
+    expect(useSettingsStore.getState().activeTab).toBe('chat');
+  });
+});

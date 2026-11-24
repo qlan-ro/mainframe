@@ -27,14 +27,14 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
 
   const handleSave = useCallback(() => {
     const trimmed = text.trim();
-    if (!extras || !trimmed || trimmed === edit.content) {
+    const save = edit.save ?? ((content: string) => extras?.editQueued(edit.messageId, content) ?? Promise.resolve());
+    if (!trimmed || trimmed === edit.content) {
       onDone();
       return;
     }
     setSaving(true);
     setSaveError(null);
-    extras
-      .editQueued(edit.messageId, trimmed)
+    save(trimmed)
       .then(() => {
         onDone();
       })
@@ -50,7 +50,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
       data-testid="chat-composer-edit"
       // Caution amber and the edit-ring glow stay bridge-owned: v2's `warning`
       // means wrong-but-not-broken, and an edit in flight is neither.
-      className="overflow-hidden rounded-xl border border-warning bg-card shadow-[var(--mf-shadow-edit-ring)] has-[textarea:focus-visible]:focus-line-inset"
+      className="relative z-1 overflow-hidden rounded-2xl border border-warning bg-card shadow-[var(--mf-shadow-edit-ring)] has-[textarea:focus-visible]:focus-line-inset"
     >
       <div className="flex items-center gap-2 bg-warning/10 py-1.5 pr-3 pl-2.5">
         <PencilIcon size={12} className="shrink-0 text-warning" />

@@ -270,3 +270,48 @@ describe('PlanGate', () => {
     expect(reply).not.toHaveBeenCalled();
   });
 });
+
+describe('PlanGate — preselects the composer mode (G3)', () => {
+  const reply = vi.fn<ReplyFn>();
+  const pressed = (mode: string) => screen.getByTestId(`chat-plan-execmode-${mode}`).getAttribute('aria-pressed');
+
+  it('preselects Auto-Edits when the composer says "then Auto-Edits"', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} composerMode="acceptEdits" />);
+
+    expect(pressed('acceptEdits')).toBe('true');
+    expect(pressed('default')).toBe('false');
+  });
+
+  it('preselects Auto only when the adapter allows it', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} composerMode="auto" autoAllowed />);
+
+    expect(pressed('auto')).toBe('true');
+  });
+
+  it('falls back to Interactive when the composer is on Auto but the adapter does not offer it', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} composerMode="auto" autoAllowed={false} />);
+
+    expect(screen.queryByTestId('chat-plan-execmode-auto')).toBeNull();
+    expect(pressed('default')).toBe('true');
+  });
+
+  it('defaults to Interactive with no composer mode', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+
+    expect(pressed('default')).toBe('true');
+  });
+
+  it('approves into the preselected mode', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} composerMode="yolo" />);
+
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ executionMode: 'yolo' }));
+  });
+
+  it('eyebrow names the asker and how many more wait', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} context={{ asker: 'planner', more: 1 }} />);
+
+    expect(screen.getByText('Plan · planner · 1 more waiting')).toBeInTheDocument();
+  });
+});

@@ -1,0 +1,7 @@
+{"dir":"in","method":"sendMessage","args":["Plan the quota fix"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-composer-plan"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Here is the plan."}],null],"delayMs":40}
+{"dir":"out","method":"onPermission","args":[{"requestId":"e2e-composer-plan-req","toolName":"ExitPlanMode","toolUseId":"toolu_plan_1","input":{"plan":"## Reset the quota window by the clock\n\n1. Compare against the stored window start, not a timer.\n2. Reset on wake as well as on the hour.\n3. Cover the jump with a fake clock.\n"},"suggestions":[]}],"delayMs":80}
+{"dir":"in","method":"respondToPermission","args":[{"requestId":"e2e-composer-plan-req","behavior":"allow"}],"delayMs":100}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Working on it."}],null],"delayMs":120}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.002,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":160}

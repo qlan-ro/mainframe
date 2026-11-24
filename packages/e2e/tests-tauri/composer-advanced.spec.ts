@@ -7,7 +7,7 @@
  *   composer-trigger-popover        — shared shell for both `/` and `@` trigger popovers
  *   composer-skill-item-{id}        — `/` skill row (id = invocationName, no plugin prefix here)
  *   composer-file-item-{id}         — `@` file/directory row (id = repo-relative path)
- *   composer-add-mention            — "@" toolbar button (appends `@` to the composer text)
+ *   composer-add-menu / -add-mention — the `+` menu's "Mention" item (appends `@` to the composer text)
  *   composer-prompt-highlight       — color-only overlay behind the transparent textarea
  *   chat-selection-toolbar          — floating toolbar shown on a text selection in a message
  *   chat-selection-quote/-new-session — its two actions (append a quote segment / open a draft)
@@ -156,6 +156,7 @@ test.describe('§composer mention trigger (@)', () => {
     const { page } = app;
     await clearComposer(page);
     await page.getByTestId('chat-composer-input').fill('check ');
+    await page.getByTestId('composer-add-menu').click();
     await page.getByTestId('composer-add-mention').click();
     await expect(page.getByTestId('chat-composer-input')).toHaveValue('check @');
   });

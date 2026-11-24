@@ -14,7 +14,7 @@ Operate. The composer card, its top strip (activity, queue), bottom strip (where
 Tell an agent what to do next, steer or queue while it runs, and answer what it asks. All of this happens without leaving the input.
 
 ## Constraints
-Keyboard first: Enter, ⌥↵, ⇧⇥, ⌘.. Gates are answered one at a time, oldest first, as the app's gate queue does. Draft content keeps today's segment model and highlight to quote.
+Keyboard first: Enter, ⌥↵, ⇧⇥, ⌘.. Gates are answered one at a time, oldest first, whoever asks: the session, a sub-agent or a delegated task. Steer needs an adapter that can take a message mid-turn; otherwise both choices queue and the menu says so. Draft content keeps today's segment model and highlight to quote.
 The gate slot carries `data-chat-gate`: an Activity row that needs you moves focus into it (R13).
 
 ## Direction contract

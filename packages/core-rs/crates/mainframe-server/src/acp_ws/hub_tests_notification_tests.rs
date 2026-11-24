@@ -76,6 +76,7 @@ async fn queue_changes_notify_attached_connections_with_the_full_snapshot() {
             content: "queued text".to_string(),
             attachment_ids: None,
             timestamp: "2026-08-29T00:00:00.000Z".to_string(),
+            steered: None,
         }],
     });
     hub.on_chat_surface_event(ChatSurfaceEvent::QueueChanged {

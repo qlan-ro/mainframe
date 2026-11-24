@@ -13,14 +13,17 @@
  *        `<button type="submit">` inside `ComposerPrimitive.Root`, not a primitive)
  *  - Mock `./edit/composer-edit-context` to return { editing: null, cancelEdit: vi.fn() }
  *    (edit mode is inactive in all cases tested here).
- *  - Mock `./config-toolbar/ComposerToolbar` and `./attachments/ComposerAttachmentStrip`
- *    to plain no-op stubs so their internal hooks don't run.
+ *  - Mock the card's children at their module seams (toolbar, strips, queue rows,
+ *    context ring, send controls, add menu, attachment strip) so their hooks
+ *    don't run; each has its own suite. The toolbar stub exposes the
+ *    `cyclePermission` handle ⇧⇥ drives.
  *  - All assertions use hardcoded expected values.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, createEvent, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useComposerSegments } from '../segments/segment-store';
+import { useUiPrefs } from '@/store/ui-prefs';
 
 const THREAD_ID = 'thread-1';
 
@@ -33,6 +36,7 @@ const THREAD_ID = 'thread-1';
 // `(s) => s.thread.isRunning` is applied. The stub invokes the selector against
 // a fake state object so the real selector path is exercised.
 let __isRunning = false;
+let __messages: unknown[] = [];
 // useSubmitComposition's imperative read (submit's __internal_getRuntime-first
 // path — see use-submit-composition.ts) — non-empty by default so the
 // Enter-to-queue tests exercise a real submit, not a no-op guarded by emptiness.
@@ -42,6 +46,11 @@ const __composerGetState = () => ({ text: 'queued message', attachments: [], run
 
 // Stub ComposerPrimitive with passthrough primitives that forward the props
 // our assertions depend on (data-testid, disabled, children).
+// The chat's agent can take a message mid-turn, so Enter follows the setting.
+vi.mock('../send/use-enter-mode', async () => {
+  const { useUiPrefs: prefs } = await import('@/store/ui-prefs');
+  return { useCanSteer: () => true, useEnterMode: () => prefs((state) => state.enterWhileRunning) };
+});
 vi.mock('@assistant-ui/react', () => ({
   ComposerPrimitive: {
     Root: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
@@ -68,7 +77,7 @@ vi.mock('@assistant-ui/react', () => ({
   // logic all call useAuiState with selectors over this same fake state object.
   useAuiState: (
     selector: (s: { thread: { isRunning: boolean; messages: unknown[] }; threadListItem: { id: string } }) => unknown,
-  ) => selector({ thread: { isRunning: __isRunning, messages: [] }, threadListItem: { id: THREAD_ID } }),
+  ) => selector({ thread: { isRunning: __isRunning, messages: __messages }, threadListItem: { id: THREAD_ID } }),
   // useAui returns thread()/composer() handles matching useSubmitComposition's
   // shape: thread().append is a spy so tests can assert on it; composer()
   // exposes __internal_getRuntime().getState() (the live read submit() prefers)
@@ -93,28 +102,31 @@ vi.mock('../segments/ComposerSegments', () => ({
   ComposerSegments: () => null,
 }));
 
-// The run state the Stop button reads — 'running' unless a test sets 'cancelling'.
-let __runStateType = 'running';
-vi.mock('../../runtime/chat-extras', () => ({
-  useChatExtras: () => ({ state: { runState: { type: __runStateType } } }),
-}));
-
 // Edit context — editing is null so Composer renders the normal shell, not ComposerEditMode.
 vi.mock('../edit/composer-edit-context', () => ({
   useComposerEdit: () => ({ editing: null, cancelEdit: vi.fn() }),
 }));
 
-// ComposerToolbar uses many hooks internally — stub it to avoid those.
-vi.mock('../config-toolbar/ComposerToolbar', () => ({
-  ComposerToolbar: () => null,
-}));
+// ⇧⇥ reaches the permissions through the toolbar's imperative handle.
+const cyclePermission = vi.fn();
+vi.mock('../config-toolbar/ComposerToolbar', async () => {
+  const { useImperativeHandle } = await import('react');
+  return {
+    ComposerToolbar: ({ ref }: { ref?: React.Ref<{ cyclePermission: () => void }> }) => {
+      useImperativeHandle(ref, () => ({ cyclePermission }));
+      return null;
+    },
+  };
+});
 
-// The attachment strip calls useAuiState internally — stub it.
-vi.mock('../attachments/ComposerAttachmentStrip', () => ({
-  ComposerAttachments: () => null,
-  ComposerAddAttachment: () => null,
-  ComposerAddMention: () => null,
-}));
+// The card's other children each have their own suite.
+vi.mock('../attachments/ComposerAttachmentStrip', () => ({ ComposerAttachments: () => null }));
+vi.mock('../attachments/ComposerAddMenu', () => ({ ComposerAddMenu: () => null }));
+vi.mock('../strips/TopStrip', () => ({ TopStrip: () => <div data-testid="top-strip-stub" /> }));
+vi.mock('../strips/BottomStrip', () => ({ BottomStrip: () => <div data-testid="bottom-strip-stub" /> }));
+vi.mock('../queue/QueuedRows', () => ({ QueuedRows: () => null }));
+vi.mock('../config-toolbar/ContextRing', () => ({ ContextRing: () => null }));
+vi.mock('../send/SendControls', () => ({ SendControls: () => <div data-testid="send-controls-stub" /> }));
 
 // ComposerTriggers pulls in Unstable_TriggerPopover* primitives, useChatSkills,
 // and searchFiles — stub it to a passthrough so Composer.test doesn't exercise
@@ -186,91 +198,146 @@ describe('Composer — healthy shell', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Send ↔ Stop swap in the send slot
+// The card's parts
 // ---------------------------------------------------------------------------
 
-describe('Composer — Send ↔ Stop swap', () => {
+describe('Composer — structure', () => {
   beforeEach(() => {
-    __runStateType = 'running';
-  });
-
-  it('shows Send, and no Stop, while idle', () => {
     __isRunning = false;
-    renderComposer();
-
-    expect(screen.getByTestId('chat-composer-send')).toBeInTheDocument();
-    expect(screen.queryByTestId('chat-composer-cancel')).toBeNull();
+    __messages = [];
   });
 
-  it('swaps Send for an enabled Stop while a turn runs', () => {
-    __isRunning = true;
+  it('hosts the send controls inside the card and the strips around it', () => {
     renderComposer();
 
-    const stop = screen.getByTestId('chat-composer-cancel');
-    expect(stop).toHaveAttribute('aria-label', 'Stop');
-    expect(stop).not.toBeDisabled();
-    expect(stop).not.toHaveAttribute('data-stopping');
-    expect(screen.queryByTestId('chat-composer-send')).toBeNull();
+    expect(screen.getByTestId('chat-composer')).toContainElement(screen.getByTestId('send-controls-stub'));
+    expect(screen.getByTestId('top-strip-stub')).toBeInTheDocument();
+    expect(screen.getByTestId('bottom-strip-stub')).toBeInTheDocument();
   });
 
-  it('shows a disabled "Stopping" state once the run is cancelling', () => {
-    __isRunning = true;
-    __runStateType = 'cancelling';
-    renderComposer();
+  it('the side variant has no strips', () => {
+    render(
+      <TooltipProvider>
+        <Composer variant="side" />
+      </TooltipProvider>,
+    );
 
-    const stop = screen.getByTestId('chat-composer-cancel');
-    expect(stop).toHaveAttribute('aria-label', 'Stopping');
-    expect(stop).toHaveAttribute('data-stopping', 'true');
-    expect(stop).toBeDisabled();
+    expect(screen.queryByTestId('top-strip-stub')).toBeNull();
+    expect(screen.queryByTestId('bottom-strip-stub')).toBeNull();
+    expect(screen.getByTestId('chat-composer-input')).toBeInTheDocument();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Mid-run Enter-to-queue interception (handleInputKeyDown)
+// Mid-run keys (C9, C12). Enter while a turn runs does the preferred action,
+// ⌥↵ the other; ⇧Tab cycles the permission mode. Every other combination
+// leaves append() alone so the native path handles the event.
 // ---------------------------------------------------------------------------
-//
-// When isRunning=true, pressing plain Enter on the composer input must call
-// submit() → aui.thread.append() exactly once (the daemon-backed queue path)
-// and prevent the default browser action. Every other combination must leave
-// appendSpy uncalled so the native path handles the event.
 
-describe('Composer — mid-run Enter-to-queue interception', () => {
+const steerFlag = (call: unknown[]) =>
+  (call[0] as { runConfig?: { custom?: Record<string, unknown> } }).runConfig?.custom?.mainframeSteer;
+
+describe('Composer — Enter while running', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __appendSpy = vi.fn();
+    __messages = [];
+    localStorage.clear();
+    useUiPrefs.setState({ enterWhileRunning: 'queue' });
   });
 
-  it('calls append() once and prevents default when isRunning=true', () => {
+  it('queues on Enter by default: append() once, default prevented, no steer flag', () => {
     __isRunning = true;
     renderComposer();
 
     const input = screen.getByTestId('chat-composer-input');
-    // Use createEvent so we can inspect defaultPrevented after dispatch.
     const event = createEvent.keyDown(input, { key: 'Enter', bubbles: true });
     fireEvent(input, event);
 
     expect(event.defaultPrevented).toBe(true);
     expect(__appendSpy).toHaveBeenCalledTimes(1);
+    expect(steerFlag(__appendSpy.mock.calls[0]!)).toBeUndefined();
   });
 
-  it('does NOT call append() when Shift+Enter is pressed (isRunning=true)', () => {
+  it('steers on ⌥Enter by default', () => {
     __isRunning = true;
     renderComposer();
 
+    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Enter', altKey: true });
+
+    expect(__appendSpy).toHaveBeenCalledTimes(1);
+    expect(steerFlag(__appendSpy.mock.calls[0]!)).toBe(true);
+  });
+
+  it('with Steer preferred, Enter steers and ⌥Enter queues', () => {
+    useUiPrefs.setState({ enterWhileRunning: 'steer' });
+    __isRunning = true;
+    renderComposer();
     const input = screen.getByTestId('chat-composer-input');
-    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.keyDown(input, { key: 'Enter', altKey: true });
+
+    expect(__appendSpy).toHaveBeenCalledTimes(2);
+    expect(steerFlag(__appendSpy.mock.calls[0]!)).toBe(true);
+    expect(steerFlag(__appendSpy.mock.calls[1]!)).toBeUndefined();
+  });
+
+  it('does NOT call append() on Shift+Enter (a newline)', () => {
+    __isRunning = true;
+    renderComposer();
+
+    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Enter', shiftKey: true });
 
     expect(__appendSpy).not.toHaveBeenCalled();
   });
 
-  it('does NOT call append() when isRunning=false (idle — native path handles submit)', () => {
+  it('does NOT call append() when idle: the native path submits', () => {
     __isRunning = false;
     renderComposer();
 
-    const input = screen.getByTestId('chat-composer-input');
-    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Enter' });
 
     expect(__appendSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not send while an IME composition is in progress', () => {
+    __isRunning = true;
+    renderComposer();
+
+    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Enter', isComposing: true });
+
+    expect(__appendSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('Composer — ⇧Tab (C12)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __messages = [];
+  });
+
+  it('cycles the permission mode and keeps focus in the field, idle or running', () => {
+    renderComposer();
+    const input = screen.getByTestId('chat-composer-input');
+    const event = createEvent.keyDown(input, { key: 'Tab', shiftKey: true, bubbles: true });
+
+    fireEvent(input, event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(cyclePermission).toHaveBeenCalledTimes(1);
+
+    __isRunning = true;
+    fireEvent.keyDown(input, { key: 'Tab', shiftKey: true });
+    expect(cyclePermission).toHaveBeenCalledTimes(2);
+  });
+
+  it('plain Tab is left alone', () => {
+    renderComposer();
+
+    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Tab' });
+
+    expect(cyclePermission).not.toHaveBeenCalled();
   });
 });
 
@@ -320,14 +387,51 @@ describe('Composer — placeholder copy switches on pending-quote state', () => 
   beforeEach(() => {
     vi.clearAllMocks();
     __isRunning = false;
+    __messages = [];
     __appendSpy = vi.fn();
+    localStorage.clear();
+    useUiPrefs.setState({ enterWhileRunning: 'queue' });
     useComposerSegments.setState({ byThread: {} });
   });
 
-  it('shows "Reply to the agent…" when no quote is pending', () => {
+  it('invites a first message before the thread has started', () => {
     renderComposer();
-    const input = screen.getByTestId('chat-composer-input');
-    expect(input).toHaveAttribute('placeholder', 'Reply to the agent…');
+    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute(
+      'placeholder',
+      'Ask anything, @ to mention, / for actions',
+    );
+  });
+
+  it('says "Reply to the agent…" once the thread has messages', () => {
+    __messages = [{ id: 'm1' }];
+    renderComposer();
+    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute('placeholder', 'Reply to the agent…');
+  });
+
+  it('says what Enter will do while a turn runs: queue by default', () => {
+    __messages = [{ id: 'm1' }];
+    __isRunning = true;
+    renderComposer();
+    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute(
+      'placeholder',
+      'Queue a message for when the agent finishes…',
+    );
+  });
+
+  it('says what Enter will do while a turn runs: steer when preferred, with ⌥↵ to queue', () => {
+    useUiPrefs.setState({ enterWhileRunning: 'steer' });
+    __isRunning = true;
+    renderComposer();
+    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute('placeholder', 'Steer the agent, ⌥↵ to queue…');
+  });
+
+  it('a pending quote wins over the running copy', () => {
+    __isRunning = true;
+    useComposerSegments.setState({
+      byThread: { [THREAD_ID]: { committed: [], liveQuote: { id: 'live1', text: 'q' } } },
+    });
+    renderComposer();
+    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute('placeholder', 'Add a message…');
   });
 
   it('shows "Add a message…" when the live segment has a pending quote', () => {

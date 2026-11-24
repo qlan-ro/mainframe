@@ -159,17 +159,6 @@ describe('PermissionGate', () => {
     expect(screen.getByTestId('chat-permission-details-pre')).toHaveClass('animate-in', 'fade-in-0');
   });
 
-  // --- ToolNameRow/DetailsDisclosure indent aligns to the head's own title
-  //     column: the px-4 gutter + the size-6 tile + the gap-2.5 between them,
-  //     expressed once as GATE_BODY_INSET so the two cannot drift. ---
-
-  it('the tool-name row aligns to the head title column via GATE_BODY_INSET', () => {
-    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
-    const row = screen.getByText('Bash').closest('div');
-    expect(row).toHaveClass('pl-[calc(1rem+1.5rem+0.625rem)]');
-    expect(row).not.toHaveClass('pl-12');
-  });
-
   // --- disclosure chevron sits on the 12px step of the v2 scale ---
 
   it('the details chevron is sized on the v2 scale (size-3)', () => {
@@ -272,15 +261,17 @@ describe('PermissionGate', () => {
 
   // --- Behavior 5: kind drives styling, id/name never do ---
 
-  it('renders allow_once outline, allow_always default, and reject_once destructive — by kind, not id/name', () => {
+  it('renders allow_once primary, allow_always outline, and reject_once destructive — by kind, not id/name', () => {
     // Deliberately mismatched id/name so a bug that keys off them would show up here.
     const scrambled: PermissionOption[] = [
       { optionId: 'reject-once', name: 'Reject', kind: 'allow_once' },
       { optionId: 'allow-once', name: 'Allow once', kind: 'reject_once' },
+      { optionId: 'x', name: 'Always', kind: 'allow_always' },
     ];
     wrap(<PermissionGate entry={makeEntry(scrambled)} reply={reply} />);
 
-    expect(screen.getByTestId('chat-permission-option-reject-once')).toHaveAttribute('data-variant', 'outline');
+    expect(screen.getByTestId('chat-permission-option-reject-once')).toHaveAttribute('data-variant', 'default');
+    expect(screen.getByTestId('chat-permission-option-x')).toHaveAttribute('data-variant', 'outline');
     expect(screen.getByTestId('chat-permission-option-allow-once')).toHaveAttribute('data-variant', 'destructive');
   });
 
@@ -313,5 +304,66 @@ describe('PermissionGate', () => {
       },
       'do-something-new',
     );
+  });
+});
+
+describe('PermissionGate — redesigned content (G1, G2, G5)', () => {
+  const reply = vi.fn<ReplyFn>();
+
+  it('shows the command a Bash request runs, without opening the details', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
+
+    expect(screen.getByTestId('chat-permission-command')).toHaveTextContent('ls -la');
+    expect(screen.queryByTestId('chat-permission-details-pre')).toBeNull();
+  });
+
+  it('shows no command line for a request without a command', () => {
+    const entry = makeEntry();
+    entry.request.input = { path: '/tmp/x' };
+
+    wrap(<PermissionGate entry={entry} reply={reply} />);
+
+    expect(screen.queryByTestId('chat-permission-command')).toBeNull();
+  });
+
+  it('names the rule "Always allow" will save on that button, and only there', () => {
+    wrap(<PermissionGate entry={makeEntry(STANDARD_OPTIONS, [SUG])} reply={reply} />);
+
+    const rule = screen.getByTestId('chat-permission-rule');
+    expect(rule).toHaveTextContent('git:*');
+    expect(screen.getByTestId('chat-permission-option-allow-always')).toContainElement(rule);
+    expect(screen.getByTestId('chat-permission-option-allow-once')).not.toContainElement(rule);
+  });
+
+  it('names no rule when the CLI suggested none', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
+
+    expect(screen.queryByTestId('chat-permission-rule')).toBeNull();
+  });
+
+  it('eyebrow is just "Permission required" for the session itself', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} />);
+
+    expect(screen.getByText('Permission required')).toBeInTheDocument();
+    expect(screen.getByText('Permission Required')).toBeInTheDocument();
+  });
+
+  it('eyebrow names the asker and "· N more waiting"; the title is what the asker is doing', () => {
+    wrap(
+      <PermissionGate
+        entry={makeEntry()}
+        reply={reply}
+        context={{ asker: 'code-reviewer', title: 'Review the diff', more: 2 }}
+      />,
+    );
+
+    expect(screen.getByText('Permission required · code-reviewer · 2 more waiting')).toBeInTheDocument();
+    expect(screen.getByText('Review the diff')).toBeInTheDocument();
+  });
+
+  it('leaves "more waiting" out when nothing waits behind it', () => {
+    wrap(<PermissionGate entry={makeEntry()} reply={reply} context={{ asker: 'code-reviewer', more: 0 }} />);
+
+    expect(screen.getByText('Permission required · code-reviewer')).toBeInTheDocument();
   });
 });

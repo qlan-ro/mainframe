@@ -175,6 +175,8 @@ export const PromptSendMetaSchema = z
   .object({
     attachmentIds: z.array(z.string()).optional(),
     command: z.object({ name: z.string(), source: z.string(), args: z.string().optional() }).loose().optional(),
+    /** Fold the prompt into the running turn; the daemon queues it when it can't. */
+    steer: z.boolean().optional(),
   })
   .loose();
 export type PromptSendMeta = z.infer<typeof PromptSendMetaSchema>;

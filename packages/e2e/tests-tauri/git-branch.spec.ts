@@ -16,7 +16,7 @@
  *     `BranchPopover` with the session's `chatId`, so its git writes still land in
  *     the chat's worktree. This is the trigger for every mutating scenario below.
  *     It is absent before the first message, when there is no chatId.
- *   • `welcome-branch` — the draft welcome screen's branch pill
+ *   • `composer-branch-picker` — a new session's branch picker
  *     (WelcomeState.tsx), the same popover scoped to the PROJECT (no chatId).
  *     Covered by one read-only test at the end of this file; mutating from there
  *     would rewrite the project root's checkout, which every other test depends on.
@@ -81,7 +81,7 @@
  * features/sessions/new-thread/WelcomeState.tsx):
  *   session-strip-branch — the strip's branch control / menu trigger
  *   session-strip-worktree — "Worktree" or "Local", naming the directory to screen readers
- *   welcome-branch               — the draft welcome screen's branch pill / trigger
+ *   composer-branch-picker       — a new session's branch picker
  *   sessions-welcome             — WelcomeState root (the draft empty state)
  *   git-branch-popover           — DropdownMenuContent root (name kept from the Popover era)
  *   git-branch-search            — search input (menu body)
@@ -796,35 +796,28 @@ test.describe('§git-branch — session branch popover', () => {
     await page.getByTestId(`welcome-project-${project.projectId}`).click({ timeout: 10_000 });
     await expect(page.getByTestId('welcome-project-picker')).toHaveCount(0, { timeout: 10_000 });
 
-    // The pill names the PROJECT's checkout (`main`), not any worktree session's.
-    const pill = page.getByTestId('welcome-branch');
-    await expect(pill).toContainText('main', { timeout: 15_000 });
-
-    await expect(menuLayers(page)).toHaveCount(0, { timeout: 5_000 });
-    const branchesLoaded = page.waitForResponse(
-      (r) => r.request().method() === 'GET' && r.url().includes('/git/branches'),
-      { timeout: 10_000 },
-    );
-    await openTriggerMenu(pill);
-    await expect(page.getByTestId('git-branch-popover')).toBeVisible({ timeout: 10_000 });
-    await branchesLoaded;
-    // Same menu, same rows — including the branch the fixtures created above.
-    await expect(page.getByTestId('git-branch-row-feature/e2e-created')).toBeVisible({ timeout: 10_000 });
-    await closeBranchPopover(page);
+    // The branch picker names the PROJECT's checkout (`main`), not any worktree session's.
+    const picker = page.getByTestId('composer-branch-picker');
+    await expect(picker).toContainText('main', { timeout: 15_000 });
+    await picker.click();
+    await expect(page.getByTestId('composer-branch-search')).toBeFocused();
+    // Every branch, including the one the fixtures created above; the search filters them.
+    await expect(page.getByTestId('composer-branch-option-feature/e2e-created')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('composer-branch-search').fill('e2e-created');
+    await expect(page.getByTestId('composer-branch-option-main')).toHaveCount(0);
+    await page.getByTestId('composer-branch-search').fill('');
   });
 
-  // The POINTER contract, stated once: both triggers used to carry their own
-  // `onClick={() => setOpen(o => !o)}`, which double-toggled against
-  // `DropdownMenuTrigger`'s pointerdown open — a plain click flashed the menu
-  // and dismissed it. The handlers are gone; this pins that a click opens the
-  // menu and it STAYS open. (The other tests open via ArrowDown for stability.)
-  // Continues from the welcome draft the test above left active.
-  test('clicking the branch row opens the menu and keeps it open', async () => {
+  test('a new session picks where it runs: a worktree and Temporary exclude each other', async () => {
     const { page } = app;
-    await expect(menuLayers(page)).toHaveCount(0, { timeout: 5_000 });
-    await page.getByTestId('welcome-branch').click();
-    await expect(page.getByTestId('git-branch-popover')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('git-branch-row-main')).toBeVisible({ timeout: 10_000 });
-    await closeBranchPopover(page);
+    const picker = page.getByTestId('composer-branch-picker');
+    await page.getByTestId('composer-branch-new-worktree').click();
+    await expect(page.getByTestId('composer-worktree-branch-name')).toHaveValue(/^session-\d+$/);
+    await expect(picker).toHaveAttribute('data-env', 'new-worktree');
+    await page.getByTestId('composer-temporary-toggle').click();
+    await expect(picker).toHaveAttribute('data-env', 'temporary');
+    await picker.click();
+    await page.getByTestId('composer-temporary-toggle').click();
+    await expect(picker).toHaveAttribute('data-env', 'local');
   });
 });

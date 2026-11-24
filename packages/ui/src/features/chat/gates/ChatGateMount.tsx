@@ -1,9 +1,12 @@
-import { useChatExtras, useChatPermissionFront } from '../runtime/chat-extras';
+import { DelegatedGateProbes } from './DelegatedGateProbes';
 import { GateCard } from './GateCard';
+import { useGateQueue } from './use-gate-queue';
 
 /**
  * Renders the single pending gate (permission / question / plan) in the thread's
- * sticky footer above the composer, dispatched by `ControlRequest.toolName`.
+ * sticky footer above the composer, dispatched by `ControlRequest.toolName`. The
+ * oldest request shows, whoever asks: the session, a sub-agent, or a delegated
+ * task (G5, `useGateQueue`).
  *
  * The slot is pinned so a gate never scrolls out of reach: a user reading back
  * through the transcript still sees what is blocking the run (#336). `max-h-[45cqh]`
@@ -31,24 +34,33 @@ import { GateCard } from './GateCard';
  * the delivery re-read finds nothing to restore. An approved plan's durable
  * record is the transcript's PlanBubble, not this card.
  *
- * The chat's adapter is read here and handed to `GateCard`, which keeps the
- * gate cards prop-driven: the plan gate offers the CLI's `auto` execution
- * mode only when that adapter advertises `capabilities.autoMode`.
+ * The asking chat's adapter is handed to `GateCard`, which keeps the gate cards
+ * prop-driven: the plan gate offers the CLI's `auto` execution mode only when
+ * that adapter advertises `capabilities.autoMode`.
  */
 export function ChatGateMount() {
-  const { front, reply } = useChatPermissionFront();
-  const extras = useChatExtras();
-
-  if (!front) return null;
-
+  const { front, more } = useGateQueue();
   return (
-    <div
-      data-testid="chat-thread-gate-slot"
-      // Where an Activity row that needs you moves focus (`session-panel/activity-source`).
-      data-chat-gate
-      className="-mx-1 mb-2 min-h-24 max-h-[45cqh] shrink-[100] overflow-y-auto px-1 py-1"
-    >
-      <GateCard entry={front} reply={reply} adapterId={extras?.state.chatConfig?.adapterId} />
-    </div>
+    <>
+      <DelegatedGateProbes />
+      {front && (
+        <div
+          data-testid="chat-thread-gate-slot"
+          // Where an Activity row that needs you moves focus (`session-panel/activity-source`).
+          data-chat-gate
+          className="-mx-1 mb-2 min-h-24 max-h-[45cqh] shrink-[100] overflow-y-auto px-1 py-1"
+        >
+          {/* Keyed by request: the next one starts with nothing chosen. */}
+          <GateCard
+            key={front.entry.requestId}
+            entry={front.entry}
+            reply={front.reply}
+            adapterId={front.adapterId}
+            composerMode={front.mode}
+            context={{ asker: front.from?.name, title: front.from?.title, more }}
+          />
+        </div>
+      )}
+    </>
   );
 }

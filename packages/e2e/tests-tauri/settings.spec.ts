@@ -497,7 +497,7 @@ test.describe('§settings tuning inheritance', () => {
     // chat.spec.ts's mid-test createTauriChat note does not apply.
     await createTauriChat(page, project.projectId, 'default', 'mock-cli');
 
-    // The opus-tier model's tuning flyout must show the EFFECTIVE effort checked
+    // The opus-tier model's tuning must show the EFFECTIVE effort checked
     // (chat override → provider default → model default). A fresh chat has no
     // override, so it inherits the provider default set above.
     const opusId = 'claude-opus-4-5-20251001';
@@ -506,17 +506,18 @@ test.describe('§settings tuning inheritance', () => {
     // CLOSING menu's exit animation is swallowed outright (see composer.spec.ts's
     // TODO(bug) on the same wart) — the menu simply never reopens.
     await closeMenus(page);
-    await page.getByTestId('composer-model-select').click();
-    await page.getByTestId(`composer-model-select-option-${opusId}`).hover();
-    await expect(page.getByTestId(`composer-model-${opusId}-tuning`)).toBeVisible({ timeout: 5_000 });
+    const openOpusTuning = async () => {
+      await closeMenus(page);
+      await page.getByTestId('composer-model-select').click();
+      await page.getByTestId(`composer-model-select-option-${opusId}`).click();
+      await closeMenus(page);
+      await page.getByTestId('composer-model-select').click();
+      await expect(page.getByTestId(`composer-model-${opusId}-tuning`)).toBeVisible({ timeout: 5_000 });
+    };
+    await openOpusTuning();
     await expect(page.getByTestId(`composer-model-${opusId}-effort-high`)).toHaveAttribute('aria-checked', 'true');
 
-    // Explicitly override the per-chat effort to 'low'. Clicking the row itself
-    // would choose the model and close the menu, so select it first, then tune.
-    await page.getByTestId(`composer-model-select-option-${opusId}`).click();
-    await closeMenus(page);
-    await page.getByTestId('composer-model-select').click();
-    await page.getByTestId(`composer-model-select-option-${opusId}`).hover();
+    // Explicitly override the per-chat effort to 'low'.
     await page.getByTestId(`composer-model-${opusId}-effort-low`).click();
     await expect(page.getByTestId(`composer-model-${opusId}-effort-low`)).toHaveAttribute('aria-checked', 'true');
     await closeMenus(page);

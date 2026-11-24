@@ -44,10 +44,6 @@ vi.mock('../../controller/transcript-projector', () => ({
   },
 }));
 
-vi.mock('../../gates/select-front', () => ({
-  selectPermissionFront: () => undefined,
-}));
-
 import { useChatThreadRuntime } from '../use-chat-thread-runtime';
 import { createChatThreadState } from '../../controller/chat-thread-state';
 import { markForStash, handoffDraft, takeStash } from '../draft-stash';

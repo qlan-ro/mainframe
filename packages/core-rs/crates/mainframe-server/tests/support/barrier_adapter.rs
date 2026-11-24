@@ -62,9 +62,9 @@ impl Adapter for BarrierAdapter {
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {
             plan_mode: false,
-            auto_mode: false,
             no_persistence: false,
             fork: false,
+            ..AdapterCapabilities::default()
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {

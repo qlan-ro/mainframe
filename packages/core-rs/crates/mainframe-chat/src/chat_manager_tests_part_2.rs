@@ -124,6 +124,7 @@ async fn a_queued_steer_records_a_ref_instead_of_restarting_the_turn() {
         1,
         "a steer the adapter also replay-acks must record a queued ref"
     );
+    assert_eq!(mgr.get_queued_for_chat("c1")[0].steered, Some(true));
     assert!(
         mgr.get_messages("c1").await.iter().any(|m| {
             m.content.iter().any(|c| {

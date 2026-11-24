@@ -1,6 +1,6 @@
 ---
 name: Mainframe
-description: A calm, native workbench for running several coding agents at once. The system of the window revamp, approved 24 Nov 2026. Failure rose, the focus line and overlay scrollbars are built in packages/ui; the rest is the target the revamp builds towards.
+description: A calm, native workbench for running several coding agents at once. The system of the window revamp, approved 24 Nov 2026. Failure rose, the focus line, overlay scrollbars, the accent's text and fill pair (accent-ink, accent-fill), the composer and the gates are built in packages/ui; the rest is the target the revamp builds towards.
 colors:
   ground: "#f5f5f8"
   side: "#ffffff"

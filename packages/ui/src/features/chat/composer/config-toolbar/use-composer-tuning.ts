@@ -49,21 +49,8 @@ export interface ComposerTuningHook {
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
   setModel: (model: string) => void;
-  /**
-   * Switch to `model` AND apply one tuning field in the same gesture (a write
-   * from a non-active model's flyout). ONE guarded change — its apply issues
-   * the config PATCH and the tuning PATCH together, so the mid-session gate
-   * can never drop half of it.
-   */
-  setModelTuning: (model: string, tuning: SessionTuning) => void;
   setAdapter: (adapterId: string) => void;
-  setPlanMode: (on: boolean) => void;
   setPermissionMode: (mode: ExecutionMode) => void;
-  /**
-   * Draft-only, create-time setter — a no-op once the daemon chat exists
-   * (temporary is fixed at creation, todo #346).
-   */
-  setTemporary: (on: boolean) => void;
   /** True while bound to a `__LOCALID_*` draft with no daemon chat yet. */
   draftMode: boolean;
   disabled: boolean;
@@ -161,7 +148,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     [draftMode, chatId, patchChatId, port, guard],
   );
 
-  // adapter / model / permission / plan all go through PATCH /config (or the draft).
+  // adapter / model / permission all go through PATCH /config (or the draft).
   const patchConfig = useCallback(
     (patch: ChatConfigPatch, label: string) => {
       if (port == null || !patchChatId) return;
@@ -184,24 +171,6 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
       guard({ kind: 'model', to: m }, () => patchConfig({ model: m }, 'setModel'));
     },
     [draftMode, chatId, patchConfig, guard],
-  );
-  const setModelTuning = useCallback(
-    (m: string, tuning: SessionTuning) => {
-      if (draftMode && chatId) {
-        patchDraftConfig(chatId, { model: m, ...tuning });
-        return;
-      }
-      if (port == null || !patchChatId) return;
-      // Guarded as a model change — switching is the dominant act; the tuning
-      // rides in the same parked closure.
-      guard({ kind: 'model', to: m }, () => {
-        patchConfig({ model: m }, 'setModelTuning');
-        setChatTuning(port, patchChatId, tuning).catch((err: unknown) =>
-          console.warn('[composer/useComposerTuning] setModelTuning failed', { err }),
-        );
-      });
-    },
-    [draftMode, chatId, patchChatId, port, patchConfig, guard],
   );
   const setAdapter = useCallback(
     (id: string) => {
@@ -232,16 +201,6 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     },
     [adapters, draft, draftMode, chatId, patchConfig, port],
   );
-  const setPlanMode = useCallback(
-    (on: boolean) => {
-      if (draftMode && chatId) {
-        patchDraftConfig(chatId, { planMode: on });
-        return;
-      }
-      patchConfig({ planMode: on }, 'setPlanMode');
-    },
-    [draftMode, chatId, patchConfig],
-  );
   const setPermissionMode = useCallback(
     (mode: ExecutionMode) => {
       if (draftMode && chatId) {
@@ -252,14 +211,6 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     },
     [draftMode, chatId, patchConfig],
   );
-  // Create-time only — no live path once the chat exists (todo #346).
-  const setTemporary = useCallback(
-    (on: boolean) => {
-      if (draftMode && chatId) patchDraftConfig(chatId, { temporary: on });
-    },
-    [draftMode, chatId],
-  );
-
   return {
     chat,
     adapter,
@@ -269,11 +220,8 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     setEffort,
     setFeature,
     setModel,
-    setModelTuning,
     setAdapter,
-    setPlanMode,
     setPermissionMode,
-    setTemporary,
     draftMode,
     disabled: isRunning,
     hasMessages,

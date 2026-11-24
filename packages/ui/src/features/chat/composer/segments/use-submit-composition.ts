@@ -42,6 +42,8 @@
  * without an adapter round-trip.
  */
 import { useAui, useAuiState } from '@assistant-ui/react';
+import type { EnterWhileRunning } from '@/store/ui-prefs';
+import { withSteer } from '../../controller/steer';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
 import { readLiveComposerState } from '../read-live-composer-state';
 import { toCompleteAttachment } from '../attachment-adapter';
@@ -51,11 +53,14 @@ import { sessionReferencesFor, useSessionReferences } from '../sessions/session-
 import { useComposerSegments } from './segment-store';
 import { serializeComposition } from './serialize-composition';
 
-export function useSubmitComposition(): () => void {
+/** `steer` folds the message into the running turn; anything else sends or queues it (C9). */
+export type SubmitComposition = (mode?: EnterWhileRunning) => void;
+
+export function useSubmitComposition(): SubmitComposition {
   const aui = useAui();
   const threadId = useActiveThreadId();
 
-  return () => {
+  return (mode) => {
     if (threadId == null) return;
     const composer = aui.composer;
     const state = readLiveComposerState(composer);
@@ -71,7 +76,7 @@ export function useSubmitComposition(): () => void {
     const wireText = expandSessionMentions(text, [...references.keys()]);
     const body = prependSessionReferences(wireText, references);
     const attachments = state.attachments.map(toCompleteAttachment);
-    const runConfig = state.runConfig;
+    const runConfig = mode === 'steer' ? withSteer(state.runConfig) : state.runConfig;
     aui.thread.append({ role: 'user', content: [{ type: 'text', text: body }], attachments, runConfig });
     composer.reset();
     useComposerSegments.getState().clear(threadId);

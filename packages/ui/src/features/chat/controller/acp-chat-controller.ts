@@ -16,8 +16,10 @@ import {
   acceptWorktreeOffer,
   dismissWorktreeOffer,
   markAttachmentsRestoredForFailure,
+  holdQueuedMessages,
   retryChatMessage,
   sendChatMessage,
+  sendHeldMessages,
   type ChatActionHost,
 } from './chat-actions';
 import { ChatPlaneLoader } from './chat-plane-loader';
@@ -237,6 +239,7 @@ export class AcpChatController {
     // nothing would ever clear 'cancelling', stranding the "Working…" indicator.
     if (this.state.runState.type !== 'running') return;
     this.dispatch({ type: 'run.cancelling' });
+    await holdQueuedMessages(this.actionHost);
     try {
       this.plane.cancel();
     } catch (error) {
@@ -252,6 +255,11 @@ export class AcpChatController {
    */
   public async replyToPermission(response: ControlResponse, selectedOptionId?: string): Promise<void> {
     this.plane.replyToPermission(response, selectedOptionId);
+  }
+
+  /** Send a message a Stop held back, and line up the ones behind it. */
+  public sendHeld(messageId: string): Promise<void> {
+    return sendHeldMessages(this.actionHost, messageId);
   }
 
   public async cancelQueued(messageId: string): Promise<void> {

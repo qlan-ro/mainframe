@@ -73,6 +73,35 @@ export const SHORTCUTS = [
     editorYielding: true,
   },
   {
+    id: 'chat.stop',
+    chord: { code: 'Period', mod: true },
+    label: 'Stop the turn and all sub-agents',
+    group: 'Chat',
+    ignoreRepeat: true,
+  },
+  {
+    id: 'chat.project-picker',
+    chord: { code: 'Semicolon', mod: true },
+    label: 'Choose the project (new session)',
+    group: 'Chat',
+  },
+  // The next two act only in the composer's field, which handles the keys
+  // itself; they are listed so the cheat sheet names them.
+  {
+    id: 'composer.send-other-way',
+    chord: { code: 'Enter', alt: true },
+    label: 'Steer instead of queue, or the reverse',
+    group: 'Chat',
+    fixed: true,
+  },
+  {
+    id: 'composer.cycle-permission',
+    chord: { code: 'Tab', shift: true },
+    label: 'Switch Interactive / Auto-Edits (in the composer)',
+    group: 'Chat',
+    fixed: true,
+  },
+  {
     id: 'workspace.toggle-chat',
     chord: { code: 'KeyC', mod: true, shift: true },
     label: 'Toggle Chat surface',

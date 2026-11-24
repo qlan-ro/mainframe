@@ -13,10 +13,11 @@ import type { Overrides } from './keybindings-store';
 /**
  * A multi-chord entry is ONE action holding nine chords (⌘1…⌘9). A single
  * recorder cannot express that, so the family stays at its defaults for now
- * rather than pretending otherwise in the UI.
+ * rather than pretending otherwise in the UI. A `fixed` entry is handled by the
+ * field it acts in, so there is nothing to rebind.
  */
 export function isRebindable(entry: ShortcutDescriptor): boolean {
-  return !Array.isArray(entry.chord);
+  return !Array.isArray(entry.chord) && entry.fixed !== true;
 }
 
 export interface EffectiveBinding {
@@ -45,7 +46,7 @@ export function dispatchableShortcuts(
   overrides: Overrides,
 ): ShortcutDescriptor[] {
   return effectiveBindings(entries, overrides)
-    .filter((binding) => binding.chord !== null)
+    .filter((binding) => binding.chord !== null && binding.entry.fixed !== true)
     .map((binding) => ({ ...binding.entry, chord: binding.chord as ShortcutDescriptor['chord'] }));
 }
 

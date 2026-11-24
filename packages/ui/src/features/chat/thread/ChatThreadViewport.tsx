@@ -16,6 +16,7 @@ import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { SessionStrip } from '@/features/session-panel/SessionStrip';
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { Composer } from '../composer/Composer';
+import { DraftStrip } from '../composer/strips/DraftStrip';
 import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';
 import { AgentOutboxChip } from '../orchestration/AgentOutboxChip';
 import { boundedMessageComponents } from '../messages/bounded-messages';
@@ -55,7 +56,7 @@ function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
   return (
     <>
       <DegradedChatCard />
-      {!directoryMissing && !projectlessDraft && <Composer variant={variant} />}
+      {projectlessDraft ? <DraftStrip standalone /> : !directoryMissing && <Composer variant={variant} />}
     </>
   );
 }

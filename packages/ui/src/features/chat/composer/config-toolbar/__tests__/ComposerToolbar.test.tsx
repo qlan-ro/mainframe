@@ -9,9 +9,12 @@
  *  1. toolbar renders nothing when chat is null
  *  2. the resolved adapter reaches PermissionSelect, so a Claude-only mode is
  *     offered on an adapter that advertises it (todo #325)
+ *  3. the side variant drops the provider footer
+ *  4. ⇧⇥ cycling and the Unattended confirmation
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { createRef } from 'react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
@@ -71,11 +74,8 @@ vi.mock('../use-composer-tuning', () => ({
     adapter: null,
     model: null,
     setModel: vi.fn(),
-    setModelTuning: vi.fn(),
     setAdapter: vi.fn(),
     setPermissionMode: vi.fn(),
-    setPlanMode: vi.fn(),
-    setTemporary: vi.fn(),
     draftMode: false,
     setEffort: vi.fn(),
     setFeature: vi.fn(),
@@ -95,7 +95,7 @@ vi.mock('../use-composer-tuning', () => ({
 }));
 
 // Import component AFTER mocks
-import { ComposerToolbar } from '../ComposerToolbar';
+import { ComposerToolbar, type ComposerToolbarHandle } from '../ComposerToolbar';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -130,11 +130,8 @@ describe('ComposerToolbar — no render when chat is null', () => {
       model: null,
       runningModel: null,
       setModel: vi.fn(),
-      setModelTuning: vi.fn(),
       setAdapter: vi.fn(),
       setPermissionMode: vi.fn(),
-      setPlanMode: vi.fn(),
-      setTemporary: vi.fn(),
       draftMode: false,
       setEffort: vi.fn(),
       setFeature: vi.fn(),
@@ -186,48 +183,114 @@ describe('ComposerToolbar — adapter capabilities reach the permission picker',
 });
 
 // ---------------------------------------------------------------------------
-// 3. variant="side" (todo #344) hides the adapter switch, worktree controls
-//    and Temporary toggle, but keeps model + permission controls
+// 3. variant="side" (todo #344) hides the provider tabs but keeps model +
+//    permission controls
 // ---------------------------------------------------------------------------
 
 describe('ComposerToolbar — variant="side" (todo #344)', () => {
-  async function renderWithDraftAdapter(variant: 'main' | 'side') {
+  const adapter = {
+    id: 'claude',
+    name: 'Claude',
+    description: '',
+    installed: true,
+    models: [{ id: 'sonnet', label: 'Claude Sonnet 4' }],
+    capabilities: { planMode: false },
+  };
+
+  async function renderWith(variant: 'main' | 'side') {
     const composerTuningMod = await import('../use-composer-tuning');
     const base = vi.mocked(composerTuningMod.useComposerTuning).getMockImplementation();
-    const adapter = {
-      id: 'claude',
-      name: 'Claude',
-      description: '',
-      installed: true,
-      models: [],
-      capabilities: { planMode: false },
-    };
     vi.mocked(composerTuningMod.useAdapters).mockReturnValue([adapter]);
-    vi.mocked(composerTuningMod.useComposerTuning).mockReturnValue({
-      ...base!([]),
-      adapter,
-      draftMode: true, // TemporaryToggle only renders in draft mode or when already temporary
-    });
-    return render(
+    vi.mocked(composerTuningMod.useComposerTuning).mockReturnValue({ ...base!([]), adapter });
+    render(
       <TooltipProvider>
         <ComposerToolbar variant={variant} />
       </TooltipProvider>,
     );
+    fireEvent.pointerDown(screen.getByTestId('composer-model-select'), { button: 0 });
+    await screen.findByTestId('composer-provider-model-popover');
   }
 
-  it('keeps the Temporary toggle and worktree trigger for the main variant', async () => {
-    await renderWithDraftAdapter('main');
+  it('offers the provider footer in the main variant', async () => {
+    await renderWith('main');
 
-    expect(screen.getByTestId('composer-temporary-toggle')).toBeInTheDocument();
-    expect(screen.getByTestId('composer-worktree-trigger')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-provider-footer')).toBeInTheDocument();
   });
 
-  it('hides the Temporary toggle and worktree trigger for the side variant', async () => {
-    await renderWithDraftAdapter('side');
+  it('has no provider footer in the side variant, and keeps the permission control', async () => {
+    await renderWith('side');
 
-    expect(screen.queryByTestId('composer-temporary-toggle')).toBeNull();
-    expect(screen.queryByTestId('composer-worktree-trigger')).toBeNull();
-    // Model + permission controls stay.
+    expect(screen.queryByTestId('composer-provider-footer')).toBeNull();
     expect(screen.getByTestId('composer-permission-mode-select')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. ⇧⇥ (C12) reaches the permissions through the handle
+// ---------------------------------------------------------------------------
+
+describe('ComposerToolbar — cyclePermission handle (C12)', () => {
+  async function mountWithMode(permissionMode: string | undefined) {
+    const composerTuningMod = await import('../use-composer-tuning');
+    const base = vi.mocked(composerTuningMod.useComposerTuning).getMockImplementation()!([]);
+    const setPermissionMode = vi.fn();
+    vi.mocked(composerTuningMod.useComposerTuning).mockReturnValue({
+      ...base,
+      chat: { ...base.chat!, permissionMode: permissionMode as never },
+      setPermissionMode,
+    });
+    const ref = createRef<ComposerToolbarHandle>();
+    render(
+      <TooltipProvider>
+        <ComposerToolbar ref={ref} />
+      </TooltipProvider>,
+    );
+    return { ref, setPermissionMode };
+  }
+
+  it('switches Interactive to Auto-Edits and announces it', async () => {
+    const { ref, setPermissionMode } = await mountWithMode('default');
+
+    act(() => ref.current!.cyclePermission());
+
+    expect(setPermissionMode).toHaveBeenCalledExactlyOnceWith('acceptEdits');
+    expect(screen.getByTestId('composer-permission-announcement')).toHaveTextContent(
+      'Permissions: Interactive · ⇧⇥ to switch',
+    );
+  });
+
+  it('is silent until the mode is cycled', async () => {
+    await mountWithMode('default');
+
+    expect(screen.getByTestId('composer-permission-announcement')).toBeEmptyDOMElement();
+  });
+
+  it('steps Auto-Edits back down to Interactive', async () => {
+    const { ref, setPermissionMode } = await mountWithMode('acceptEdits');
+
+    act(() => ref.current!.cyclePermission());
+
+    expect(setPermissionMode).toHaveBeenCalledExactlyOnceWith('default');
+  });
+
+  it('steps Unattended down to Interactive without asking again', async () => {
+    const { ref, setPermissionMode } = await mountWithMode('yolo');
+
+    act(() => ref.current!.cyclePermission());
+
+    expect(setPermissionMode).toHaveBeenCalledExactlyOnceWith('default');
+  });
+
+  it('asks before turning Unattended on, and applies it only after the user confirms', async () => {
+    const { setPermissionMode } = await mountWithMode('default');
+    fireEvent.pointerDown(screen.getByTestId('composer-permission-mode-select'), { button: 0 });
+    fireEvent.click(await screen.findByTestId('composer-permission-mode-select-option-yolo'));
+
+    expect(await screen.findByText('Run this session unattended?')).toBeInTheDocument();
+    expect(setPermissionMode).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('composer-unattended-confirm-confirm'));
+
+    expect(setPermissionMode).toHaveBeenCalledExactlyOnceWith('yolo');
   });
 });

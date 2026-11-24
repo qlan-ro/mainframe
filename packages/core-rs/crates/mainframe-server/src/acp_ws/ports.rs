@@ -41,6 +41,11 @@ impl PromptPort for ManagerPorts {
         Box::pin(async move {
             let manager = self.require()?;
             let is_command = send_meta.command.is_some();
+            if send_meta.wants_steer()
+                && let Some(acceptance) = steer_prompt(manager, session_id, text).await
+            {
+                return Ok(acceptance);
+            }
             let command = send_meta.command.map(|c| CommandMeta {
                 name: c.name,
                 source: c.source,
@@ -77,6 +82,24 @@ impl PromptPort for ManagerPorts {
             Ok(())
         })
     }
+}
+
+/// Folds a prompt into the running turn. `None` when it cannot be steered (the
+/// turn just ended, or the adapter has no steer): the caller then sends it the
+/// ordinary way, which queues it behind a running turn.
+async fn steer_prompt(
+    manager: &ChatManager,
+    chat_id: &str,
+    text: &str,
+) -> Option<PromptAcceptance> {
+    if let Err(error) = manager.steer_message(chat_id, text).await {
+        tracing::debug!(chat_id, error = %error, "steer unavailable, queueing instead");
+        return None;
+    }
+    let queued = manager.queued_message_count(chat_id);
+    Some(PromptAcceptance {
+        queued_position: (queued > 0).then_some(queued as i64),
+    })
 }
 
 impl ResumePort for ManagerPorts {

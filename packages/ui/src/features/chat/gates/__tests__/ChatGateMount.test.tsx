@@ -2,8 +2,8 @@
  * ChatGateMount — behavior tests.
  *
  * Strategy:
- *  - The runtime module is mocked for its two hooks (`useChatPermissionFront`
- *    and `useChatExtras`) — the real gate components are used so that routing
+ *  - The queue hook (`useGateQueue`) and the delegated-task probes are mocked —
+ *    the real gate components are used so that routing
  *    decisions are verified through observable DOM state (data-testids), not
  *    through inspecting which JSX branch the component chose.
  *  - The adapters store is the real one, seeded per case.
@@ -37,20 +37,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import type { AdapterInfo, PermissionOption } from '@qlan-ro/mainframe-types';
+import type { AdapterInfo, ExecutionMode, PermissionOption } from '@qlan-ro/mainframe-types';
 import { resetAdapters, seedAdapters } from '@/store/adapters';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
-import type { ChatRuntimeExtras } from '../../runtime/chat-extras';
 
-vi.mock('../../runtime/chat-extras', () => ({
-  useChatPermissionFront: vi.fn(),
-  useChatExtras: vi.fn(),
-}));
-import { useChatExtras, useChatPermissionFront } from '../../runtime/chat-extras';
+vi.mock('../use-gate-queue', () => ({ useGateQueue: vi.fn() }));
+vi.mock('../DelegatedGateProbes', () => ({ DelegatedGateProbes: () => null }));
+import { useGateQueue, type GateQueue } from '../use-gate-queue';
 import { ChatGateMount } from '../ChatGateMount';
 
-const mockFront = vi.mocked(useChatPermissionFront);
-const mockExtras = vi.mocked(useChatExtras);
+const mockQueue = vi.mocked(useGateQueue);
+
+/** The queue the mount reads: `front` asking through `reply`, `more` waiting behind it. */
+function queue(
+  front: ChatPermissionEntry | undefined,
+  replyFn: unknown = reply,
+  extra: {
+    adapterId?: string;
+    mode?: ExecutionMode;
+    more?: number;
+    from?: NonNullable<GateQueue['front']>['from'];
+  } = {},
+): GateQueue {
+  return {
+    front: front && {
+      entry: front,
+      reply: replyFn as never,
+      adapterId: extra.adapterId,
+      mode: extra.mode,
+      from: extra.from ?? null,
+    },
+    more: extra.more ?? 0,
+    waitingCalls: new Set(),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -77,10 +97,6 @@ function adapter(id: string, capabilities: AdapterInfo['capabilities']): Adapter
   return { id, name: id, description: '', installed: true, models: [], capabilities };
 }
 
-function extrasWithAdapter(adapterId: string): ChatRuntimeExtras {
-  return { state: { chatConfig: { adapterId } } } as unknown as ChatRuntimeExtras;
-}
-
 const permissionEntry = entry('Bash', { command: 'ls' });
 const askEntry = entry('AskUserQuestion', { questions: [{ question: 'Pick', options: [{ label: 'A' }] }] });
 const planEntry = entry('ExitPlanMode', { plan: '1. step' });
@@ -102,14 +118,13 @@ describe('ChatGateMount', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // clearAllMocks does not drop a mockReturnValue, so each case restates it.
-    mockExtras.mockReturnValue(undefined);
     resetAdapters();
   });
 
   // --- Behavior 1: front undefined → renders nothing ---
 
   it('renders nothing when front is undefined', () => {
-    mockFront.mockReturnValue({ front: undefined, reply });
+    mockQueue.mockReturnValue(queue(undefined));
     const { container } = wrap(<ChatGateMount />);
     expect(screen.queryByTestId('chat-question-gate')).toBeNull();
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
@@ -120,7 +135,7 @@ describe('ChatGateMount', () => {
   // --- Behavior 2: AskUserQuestion → question gate only ---
 
   it('renders chat-question-gate and only that gate when toolName is AskUserQuestion', () => {
-    mockFront.mockReturnValue({ front: askEntry, reply });
+    mockQueue.mockReturnValue(queue(askEntry));
     wrap(<ChatGateMount />);
     expect(screen.getByTestId('chat-question-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
@@ -130,7 +145,7 @@ describe('ChatGateMount', () => {
   // --- Behavior 3: ExitPlanMode → plan gate only ---
 
   it('renders chat-plan-gate and only that gate when toolName is ExitPlanMode', () => {
-    mockFront.mockReturnValue({ front: planEntry, reply });
+    mockQueue.mockReturnValue(queue(planEntry));
     wrap(<ChatGateMount />);
     expect(screen.getByTestId('chat-plan-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-question-gate')).toBeNull();
@@ -140,7 +155,7 @@ describe('ChatGateMount', () => {
   // --- Behavior 4: unknown toolName → permission gate only ---
 
   it('renders chat-permission-gate and only that gate when toolName is Bash (unknown to gate router)', () => {
-    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    mockQueue.mockReturnValue(queue(permissionEntry));
     wrap(<ChatGateMount />);
     expect(screen.getByTestId('chat-permission-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-question-gate')).toBeNull();
@@ -152,7 +167,7 @@ describe('ChatGateMount', () => {
   // a rich Plan/AskUserQuestion card (spec decision 27) ---
 
   it('routes a synthesized AskUserQuestion entry to chat-permission-gate, not chat-question-gate', () => {
-    mockFront.mockReturnValue({ front: synthesizedAskEntry, reply });
+    mockQueue.mockReturnValue(queue(synthesizedAskEntry));
     wrap(<ChatGateMount />);
     expect(screen.getByTestId('chat-permission-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-question-gate')).toBeNull();
@@ -162,7 +177,7 @@ describe('ChatGateMount', () => {
 
   it('forwards the hook reply fn to PermissionGate — the Reject option calls reply with the deny ControlResponse', () => {
     const localReply = vi.fn();
-    mockFront.mockReturnValue({ front: permissionEntry, reply: localReply });
+    mockQueue.mockReturnValue(queue(permissionEntry, localReply));
     wrap(<ChatGateMount />);
 
     fireEvent.click(screen.getByTestId('chat-permission-option-reject-once'));
@@ -187,12 +202,12 @@ describe('ChatGateMount', () => {
   // durable record is the transcript PlanBubble, not this card.
 
   it('unmounts the plan gate once the queue front clears', () => {
-    mockFront.mockReturnValue({ front: planEntry, reply });
+    mockQueue.mockReturnValue(queue(planEntry));
     const { container, rerender } = wrap(<ChatGateMount />);
 
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
-    mockFront.mockReturnValue({ front: undefined, reply });
+    mockQueue.mockReturnValue(queue(undefined));
     rerender(
       <TooltipProvider>
         <ChatGateMount />
@@ -204,12 +219,12 @@ describe('ChatGateMount', () => {
   });
 
   it('unmounts the permission gate once an option answer clears the queue front', () => {
-    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    mockQueue.mockReturnValue(queue(permissionEntry));
     const { container, rerender } = wrap(<ChatGateMount />);
 
     fireEvent.click(screen.getByTestId('chat-permission-option-allow-once'));
 
-    mockFront.mockReturnValue({ front: undefined, reply });
+    mockQueue.mockReturnValue(queue(undefined));
     rerender(
       <TooltipProvider>
         <ChatGateMount />
@@ -221,12 +236,12 @@ describe('ChatGateMount', () => {
   });
 
   it('still routes AskUserQuestion and permission gates by toolName after a plan gate was answered', () => {
-    mockFront.mockReturnValue({ front: planEntry, reply });
+    mockQueue.mockReturnValue(queue(planEntry));
     const { rerender } = wrap(<ChatGateMount />);
 
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
 
-    mockFront.mockReturnValue({ front: askEntry, reply });
+    mockQueue.mockReturnValue(queue(askEntry));
     rerender(
       <TooltipProvider>
         <ChatGateMount />
@@ -235,7 +250,7 @@ describe('ChatGateMount', () => {
     expect(screen.getByTestId('chat-question-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-plan-gate')).toBeNull();
 
-    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    mockQueue.mockReturnValue(queue(permissionEntry));
     rerender(
       <TooltipProvider>
         <ChatGateMount />
@@ -249,8 +264,7 @@ describe('ChatGateMount', () => {
 
   it('offers the Auto exec-mode segment when the chat adapter advertises autoMode', () => {
     seedAdapters([adapter('claude', { planMode: true, autoMode: true })]);
-    mockExtras.mockReturnValue(extrasWithAdapter('claude'));
-    mockFront.mockReturnValue({ front: planEntry, reply });
+    mockQueue.mockReturnValue(queue(planEntry, reply, { adapterId: 'claude' }));
 
     wrap(<ChatGateMount />);
 
@@ -259,8 +273,7 @@ describe('ChatGateMount', () => {
 
   it('omits the Auto exec-mode segment when the chat adapter does not advertise autoMode', () => {
     seedAdapters([adapter('codex', { planMode: true })]);
-    mockExtras.mockReturnValue(extrasWithAdapter('codex'));
-    mockFront.mockReturnValue({ front: planEntry, reply });
+    mockQueue.mockReturnValue(queue(planEntry, reply, { adapterId: 'codex' }));
 
     wrap(<ChatGateMount />);
 
@@ -271,7 +284,7 @@ describe('ChatGateMount', () => {
   // --- Behavior 9: the pinned-slot wrapper ---
 
   it('wraps a permission gate in the chat-thread-gate-slot', () => {
-    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    mockQueue.mockReturnValue(queue(permissionEntry));
     wrap(<ChatGateMount />);
 
     const slot = screen.getByTestId('chat-thread-gate-slot');
@@ -281,7 +294,7 @@ describe('ChatGateMount', () => {
   });
 
   it('wraps an AskUserQuestion gate in the chat-thread-gate-slot', () => {
-    mockFront.mockReturnValue({ front: askEntry, reply });
+    mockQueue.mockReturnValue(queue(askEntry));
     wrap(<ChatGateMount />);
 
     const slot = screen.getByTestId('chat-thread-gate-slot');
@@ -289,7 +302,7 @@ describe('ChatGateMount', () => {
   });
 
   it('wraps a plan gate in the chat-thread-gate-slot', () => {
-    mockFront.mockReturnValue({ front: planEntry, reply });
+    mockQueue.mockReturnValue(queue(planEntry));
     wrap(<ChatGateMount />);
 
     const slot = screen.getByTestId('chat-thread-gate-slot');
@@ -297,7 +310,7 @@ describe('ChatGateMount', () => {
   });
 
   it('renders no slot and an empty container when front is undefined', () => {
-    mockFront.mockReturnValue({ front: undefined, reply });
+    mockQueue.mockReturnValue(queue(undefined));
     const { container } = wrap(<ChatGateMount />);
 
     expect(screen.queryByTestId('chat-thread-gate-slot')).toBeNull();
@@ -305,11 +318,11 @@ describe('ChatGateMount', () => {
   });
 
   it('re-mounts the slot with the same gate after the front clears and returns', () => {
-    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    mockQueue.mockReturnValue(queue(permissionEntry));
     const { rerender } = wrap(<ChatGateMount />);
     expect(screen.getByTestId('chat-thread-gate-slot')).toContainElement(screen.getByTestId('chat-permission-gate'));
 
-    mockFront.mockReturnValue({ front: undefined, reply });
+    mockQueue.mockReturnValue(queue(undefined));
     rerender(
       <TooltipProvider>
         <ChatGateMount />
@@ -317,7 +330,7 @@ describe('ChatGateMount', () => {
     );
     expect(screen.queryByTestId('chat-thread-gate-slot')).toBeNull();
 
-    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    mockQueue.mockReturnValue(queue(permissionEntry));
     rerender(
       <TooltipProvider>
         <ChatGateMount />
@@ -344,7 +357,7 @@ describe('ChatGateMount', () => {
   // in gates.spec.ts. Overlay scrollbars (S3) take no width, so the
   // edges line up whether or not the slot scrolls.
   it('carries the slot/scroll/cap class contract the height cap and width parity depend on', () => {
-    mockFront.mockReturnValue({ front: permissionEntry, reply });
+    mockQueue.mockReturnValue(queue(permissionEntry));
     wrap(<ChatGateMount />);
 
     const slot = screen.getByTestId('chat-thread-gate-slot');
@@ -352,5 +365,42 @@ describe('ChatGateMount', () => {
     expect(slot).toHaveClass('max-h-[45cqh]');
     expect(slot).toHaveClass('min-h-24');
     expect(slot).toHaveClass('shrink-[100]');
+  });
+});
+
+describe('ChatGateMount — the queue (G5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetAdapters();
+  });
+
+  it('tells the front gate who asks and how many wait behind it', () => {
+    mockQueue.mockReturnValue(
+      queue(permissionEntry, reply, {
+        more: 2,
+        from: { name: 'code-reviewer', title: 'Review the diff', matches: () => false },
+      }),
+    );
+
+    wrap(<ChatGateMount />);
+
+    expect(screen.getByText('Permission required · code-reviewer · 2 more waiting')).toBeInTheDocument();
+    expect(screen.getByText('Review the diff')).toBeInTheDocument();
+  });
+
+  it('shows a plain eyebrow for the session’s own request with nothing behind it', () => {
+    mockQueue.mockReturnValue(queue(permissionEntry));
+
+    wrap(<ChatGateMount />);
+
+    expect(screen.getByText('Permission required')).toBeInTheDocument();
+  });
+
+  it('preselects the asking chat’s permission mode on a plan gate', () => {
+    mockQueue.mockReturnValue(queue(planEntry, reply, { mode: 'acceptEdits' }));
+
+    wrap(<ChatGateMount />);
+
+    expect(screen.getByTestId('chat-plan-execmode-acceptEdits')).toHaveAttribute('aria-pressed', 'true');
   });
 });

@@ -2,14 +2,16 @@
  * The option list for one AskUserQuestion question.
  *
  * The row chrome is the shadcn `questionnaire` kit's `QuestionnaireChoice`
- * recipe — min-h-11, hairline `border-input`, `border-primary/40 bg-muted` when
- * chosen, a size-4 indicator — but NOT its primitive. See the ledger for why:
+ * recipe — hairline `border-input`, `border-primary/40 bg-muted` when chosen, a
+ * size-4 indicator — in compact rows aligned to the question's text (G4), but
+ * NOT its primitive. See the ledger for why:
  * the kit's state model is a `<form>` whose only value surface is FormData, and
  * its Skip is per-question while this gate's Skip answers the whole request once.
  */
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { GATE_BODY_INSET } from './shared/GateShell';
 import { OTHER } from './answers';
 import type { AskQuestion } from './answers';
 
@@ -30,6 +32,9 @@ export interface AskQuestionWizardProps {
 // Option row
 // ---------------------------------------------------------------------------
 
+/** The suffix a model marks its preferred option with; it shows as a tag. */
+const RECOMMENDED = /\s*\(Recommended\)$/i;
+
 interface OptionRowProps {
   label: string;
   description?: string;
@@ -40,13 +45,15 @@ interface OptionRowProps {
 }
 
 function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }: OptionRowProps) {
-  // A `<div role="button">` (not a native <button>) so the multi-select branch can
+  const recommended = RECOMMENDED.test(label);
+  // A `<div>` with a role (not a native <button>) so the multi-select branch can
   // nest the real interactive Checkbox primitive without invalid nested-button HTML.
   return (
     <div
       data-testid={testId}
-      role="button"
+      role={isMulti ? 'checkbox' : 'radio'}
       tabIndex={0}
+      aria-checked={isSelected}
       onClick={onToggle}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -55,26 +62,41 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
         }
       }}
       className={cn(
-        'flex min-h-11 w-full cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 text-left text-sm shadow-xs transition-colors select-none',
+        'flex w-full cursor-pointer items-start gap-3 rounded-md border px-3 py-2 text-left text-sm shadow-xs transition-colors select-none focus-visible:focus-line-inset',
         isSelected ? 'border-primary/40 bg-muted' : 'border-input bg-transparent hover:bg-muted/50 dark:bg-input/20',
       )}
     >
       {isMulti ? (
-        <Checkbox className="pointer-events-none mt-0.5" checked={isSelected} tabIndex={-1} aria-hidden="true" />
+        <Checkbox
+          className="pointer-events-none mt-0.5 border-muted-foreground"
+          checked={isSelected}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
       ) : (
         // Radio indicator, the kit's shape: a filled dot inside a ring.
         <span
           data-radio-indicator
           className={cn(
             'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
-            isSelected ? 'border-primary bg-primary' : 'border-input',
+            isSelected ? 'border-primary bg-primary' : 'border-muted-foreground',
           )}
         >
           {isSelected && <span className="size-1.5 rounded-full bg-primary-foreground" />}
         </span>
       )}
       <span className="min-w-0">
-        <span className="block font-medium text-foreground">{label}</span>
+        <span className="block font-medium text-foreground">
+          {label.replace(RECOMMENDED, '')}
+          {recommended && (
+            <span
+              data-testid={`${testId}-recommended`}
+              className="ml-2 rounded-sm bg-primary/10 px-1.5 py-0.5 text-xs text-accent-ink"
+            >
+              Recommended
+            </span>
+          )}
+        </span>
         {description && <span className="block text-xs text-muted-foreground">{description}</span>}
       </span>
     </div>
@@ -97,7 +119,11 @@ export function AskQuestionWizard({
   const otherSelected = selected.has(OTHER);
 
   return (
-    <div className="flex flex-col gap-2 px-4 pb-3">
+    <div
+      role={isMulti ? 'group' : 'radiogroup'}
+      aria-label={question.question}
+      className={cn('flex flex-col gap-1.5 pr-4 pb-3', GATE_BODY_INSET)}
+    >
       {question.options.map((opt) => (
         <OptionRow
           key={opt.label}
