@@ -5,9 +5,9 @@
  * send when it finishes; rows a Stop took back wait for the user, the first
  * one saying so. Only a stop turns a row failed, never a normal drain.
  */
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { CircleAlert, PencilIcon, RotateCcwIcon, XIcon } from 'lucide-react';
+import { CircleAlert, Loader2, PencilIcon, RotateCcwIcon, XIcon } from 'lucide-react';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -17,7 +17,7 @@ import { visibleMessageText } from '../../markers/message-markers';
 import { ComposerHint } from '../composer-card-context';
 import { useComposerEdit } from '../edit/composer-edit-context';
 import { focusVisibleComposer } from '../focus-composer';
-import { useHeldQueue, type HeldMessage } from './held-queue-store';
+import { CLAIM_MS, settled, useHeldQueue, type HeldMessage } from './held-queue-store';
 
 const NO_ROWS: readonly HeldMessage[] = [];
 
@@ -29,8 +29,10 @@ interface QueueRow {
   failure?: string;
   action?: { label: string; testId: string; onClick: () => void; icon?: ReactNode };
   note?: string;
+  /** On its way to the agent. */
+  sending?: boolean;
   onEdit?: () => void;
-  onRemove: () => void;
+  onRemove?: () => void;
 }
 
 const DELIVERY_FAILURE: Record<string, string> = {
@@ -82,16 +84,26 @@ function Row({ row }: { row: QueueRow }) {
       data-testid="chat-queued-message"
       data-queued-id={row.messageId}
       data-failed={row.failure ? true : undefined}
+      data-sending={row.sending || undefined}
       className={cn(
         'flex min-h-8 min-w-0 items-center gap-2 rounded-lg py-0.5 pr-0.5 pl-2.5 text-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1',
         row.failure ? 'bg-fail/6 ring-1 ring-fail/28 ring-inset' : 'bg-muted',
       )}
     >
+      {row.sending && (
+        <Loader2
+          className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+          aria-hidden
+        />
+      )}
       {row.failure && <CircleAlert className="size-4 shrink-0 text-fail" aria-hidden />}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 gap-2">
           {!row.failure && (
-            <span className="shrink-0 text-xs leading-[inherit] font-semibold text-muted-foreground">
+            <span
+              role={row.sending ? 'status' : undefined}
+              className="shrink-0 text-xs leading-[inherit] font-semibold text-muted-foreground"
+            >
               {row.note ?? 'Queued'}
             </span>
           )}
@@ -119,9 +131,11 @@ function Row({ row }: { row: QueueRow }) {
           <PencilIcon />
         </IconAction>
       )}
-      <IconAction label="Remove" testId="chat-queued-cancel" onClick={row.onRemove}>
-        <XIcon />
-      </IconAction>
+      {row.onRemove && (
+        <IconAction label="Remove" testId="chat-queued-cancel" onClick={row.onRemove}>
+          <XIcon />
+        </IconAction>
+      )}
     </div>
   );
 }
@@ -170,30 +184,57 @@ function useHeldRows(): QueueRow[] {
   useEffect(() => {
     for (const id of sentIds.split('\n')) if (id) useHeldQueue.getState().remove(chatId, id);
   }, [sentIds, chatId]);
+  const now = useClaimClock(held);
   const queuedIds = new Set(Object.values(extras?.queued ?? {}).map((ref) => ref.messageId));
-  const { edit, remove } = useHeldQueue.getState();
-  return held
+  const rows = held
     .filter((row) => !sentIds.split('\n').includes(row.messageId) && !queuedIds.has(row.messageId))
-    .map(({ messageId, content, attachmentIds }, index) => ({
-      messageId,
-      content,
-      attachments: attachmentIds?.length ?? 0,
-      failure: index === 0 ? 'Not sent: the session stopped.' : undefined,
+    .map((row) => settled(row, now));
+  const busy = rows.some((row) => row.claim);
+  return rows.map((row, index) => {
+    const base = { messageId: row.messageId, content: row.content, attachments: row.attachmentIds?.length ?? 0 };
+    // On its way, or about to be: nothing to press until it is sent or comes back.
+    if (row.claim) return { ...base, note: row.claim.started ? 'Sending…' : 'Waiting', sending: row.claim.started };
+    return {
+      ...base,
+      failure: row.unconfirmed ? UNCONFIRMED : index === 0 ? 'Not sent: the session stopped.' : undefined,
       note: 'Waiting',
       action:
-        index === 0
+        index === 0 && !busy
           ? {
-              label: 'Send now',
+              label: row.unconfirmed ? 'Send again' : 'Send now',
               testId: 'chat-queued-send-now',
               onClick: () => {
-                void extras?.sendHeld(messageId).catch(report('send'));
+                void extras?.sendHeld(row.messageId).catch(report('send'));
                 focusVisibleComposer();
               },
             }
           : undefined,
-      onEdit: () => startEdit({ messageId, content, save: async (next) => edit(chatId, messageId, next) }),
-      onRemove: () => remove(chatId, messageId),
-    }));
+      onEdit: () =>
+        startEdit({ messageId: row.messageId, content: row.content, save: saveHeld(chatId, row.messageId) }),
+      onRemove: () => useHeldQueue.getState().remove(chatId, row.messageId),
+    };
+  });
+}
+
+const UNCONFIRMED = 'It may already have reached the agent. Check the conversation before sending it again.';
+
+/** An edit never fails in silence: a row on its way is not changed. */
+const saveHeld = (chatId: string, messageId: string) => async (content: string) => {
+  if (!useHeldQueue.getState().edit(chatId, messageId, content)) {
+    throw new Error('This message is being sent, or is gone.');
+  }
+};
+
+/** The time, read again whenever a claim runs out. */
+function useClaimClock(held: readonly HeldMessage[]): number {
+  const [now, setNow] = useState(() => Date.now());
+  const newest = Math.max(0, ...held.map((row) => row.claim?.at ?? 0));
+  useEffect(() => {
+    if (newest === 0) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(0, newest + CLAIM_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [newest]);
+  return now;
 }
 
 export function QueuedRows() {

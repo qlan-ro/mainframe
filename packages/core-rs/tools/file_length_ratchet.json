@@ -53,6 +53,6 @@
   "mainframe-server/tests/support/mod.rs": 423,
   "mainframe-server/tests/workflow_runs_history.rs": 392,
   "mainframe-services/src/quota/manager.rs": 363,
-  "mainframe-types/src/adapter.rs": 579,
+  "mainframe-types/src/adapter.rs": 519,
   "mainframe-types/src/events.rs": 331
 }

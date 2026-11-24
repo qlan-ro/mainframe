@@ -170,6 +170,100 @@ test.describe('§permission gate no suggestions', () => {
   });
 });
 
+// ─── Permission gate — a long list, a mode left out, text that hides ─────────
+
+test.describe('§permission gate many suggestions', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-many' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  // The recording suggests forty rules and `bypassPermissions`, which the daemon cannot read as a mode.
+  test('counts forty rules on the button, reaches the last one with the answers in view, and says what is left out', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Build and test the workspace');
+    const gate = page.getByTestId('chat-permission-gate');
+    await gate.waitFor({ timeout: 45_000 });
+
+    await expect(page.getByTestId('chat-permission-grant-count')).toHaveText('40 changes');
+    await expect(page.getByTestId('chat-permission-omitted')).toContainText('switching permissions to Unattended');
+    await expect(page.getByTestId('chat-permission-command')).toHaveText(/⟨U\+202E⟩tset-ylper/);
+
+    const slot = page.getByTestId('chat-thread-gate-slot');
+    const always = page.getByTestId('chat-permission-option-allow-always');
+    const first = page.getByTestId('chat-permission-grants').getByRole('listitem').first();
+    const last = page.getByTestId('chat-permission-grants').getByRole('listitem').last();
+    // Before any scrolling the answers are in view, and the list is not all of it.
+    await expect(always).toBeInViewport({ ratio: 1 });
+    await expect(last).not.toBeInViewport();
+    // No line of the list shows under them.
+    const slotBox = (await slot.boundingBox())!;
+    const optionsBox = (await page.getByTestId('chat-permission-options').boundingBox())!;
+    expect(Math.abs(optionsBox.y + optionsBox.height - (slotBox.y + slotBox.height))).toBeLessThanOrEqual(1);
+
+    await slot.hover();
+    await page.mouse.wheel(0, 5_000);
+    await expect(page.getByTestId('chat-permission-omitted')).toBeInViewport({ ratio: 1 });
+    await expect(last).toBeInViewport({ ratio: 1 });
+    await expect(last).toContainText('Bash(cargo metadata -p mainframe-types *)');
+    await expect(first).not.toBeInViewport();
+    // Nothing covers the end of the list: the answers sit below it.
+    const omittedBox = (await page.getByTestId('chat-permission-omitted').boundingBox())!;
+    const alwaysBox = (await always.boundingBox())!;
+    expect(omittedBox.y + omittedBox.height).toBeLessThanOrEqual(alwaysBox.y + 1);
+
+    await page.getByTestId('chat-permission-option-allow-once').click();
+    await waitForIdle(page, 60_000);
+  });
+});
+
+// ─── Two requests, one burst of clicks ───────────────────────────────────────
+
+test.describe('§a burst of clicks', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-stacked' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('eight clicks over 700 ms answer the first request only', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Write /tmp/mf-e2e-stacked.txt then run `ls -la /tmp` to confirm it');
+    const guard = page.locator('[data-testid="chat-gate-guard"][data-armed]');
+    await guard.waitFor({ timeout: 45_000 });
+    await expect(page.getByTestId('chat-permission-gate')).toContainText('Write');
+    const box = (await page.getByTestId('chat-permission-option-allow-once').boundingBox())!;
+
+    for (let click = 1; click <= 8; click++) {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { clickCount: click });
+      await page.waitForTimeout(100);
+    }
+
+    // The daemon raises the second request as soon as the first is answered, under the same pointer.
+    await expect(page.getByTestId('chat-permission-command')).toHaveText('ls -la /tmp');
+    await guard.waitFor({ timeout: 5_000 });
+    await page.getByTestId('chat-permission-option-reject-once').click();
+    await waitForIdle(page, 60_000);
+  });
+});
+
 // ─── Ask-question wizard — Other… free-text + Skip ────────────────────────────
 
 test.describe('§ask-question wizard extras', () => {

@@ -35,7 +35,8 @@ export function GateCardShell({
     <div
       data-testid="chat-gate-card"
       className={cn(
-        'overflow-hidden rounded-xl border bg-card',
+        // `clip`, not `hidden`: it is no scroll container, so a sticky footer answers to the gate's slot.
+        'overflow-clip rounded-xl border bg-card',
         resolved ? 'border-border' : ACCENT_RING[accent],
         className,
       )}

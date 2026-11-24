@@ -537,6 +537,34 @@ const area: CaptureArea = {
     },
     {
       board: 'Chat-ComposerFocus',
+      launch: { recordingKey: 'permissions-many' },
+      before,
+      seed,
+      states: [
+        {
+          id: 'permission-long',
+          caption:
+            '**A long list** (G2): the button counts what “always” saves, the answers stay in view while the list scrolls, and hidden characters are spelled out.',
+          crop: around(40),
+          setup: async ({ page }) => {
+            await sendMessage(page, 'Build and test the workspace');
+            await page.getByTestId('chat-permission-gate').waitFor();
+            await parkPointer(page);
+          },
+          wait: 800,
+        },
+        {
+          id: 'permission-left-out',
+          caption: '**What is left out** is said at the end of the list: a wider mode is never saved from a prompt.',
+          crop: around(40),
+          setup: async ({ page }) => {
+            await page.getByTestId('chat-thread-gate-slot').evaluate((slot) => slot.scrollTo(0, slot.scrollHeight));
+          },
+        },
+      ],
+    },
+    {
+      board: 'Chat-ComposerFocus',
       launch: { recordingKey: 'delegate-gate', mockMaxDelayMs: 2_500 },
       before,
       seed: async (ctx) => {

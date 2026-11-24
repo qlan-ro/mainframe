@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as http from '../http';
-import { discardChat, listChats, resumeChat, trustWorkspace } from '../chats';
+import { cancelQueuedMessage, discardChat, listChats, resumeChat, trustWorkspace } from '../chats';
 
 describe('resumeChat readiness contract', () => {
   beforeEach(() => vi.restoreAllMocks());
@@ -61,5 +61,29 @@ describe('listChats — includeTemporary (todo #346)', () => {
     await listChats(0, { includeTemporary: true });
     const url = new URL(spy.mock.calls[0]![1] as string);
     expect(url.searchParams.get('includeTemporary')).toBe('true');
+  });
+});
+
+describe('cancelQueuedMessage', () => {
+  beforeEach(() => vi.restoreAllMocks());
+  const answered = (data: unknown) => {
+    vi.spyOn(http, 'apiBase').mockReturnValue('http://d');
+    return vi.spyOn(http, 'request').mockResolvedValue(data);
+  };
+
+  it('is true when the daemon took the message back', async () => {
+    const spy = answered({ cancelled: true });
+    expect(await cancelQueuedMessage(0, 'chat-1', 'm1')).toBe(true);
+    expect(spy).toHaveBeenCalledWith('DELETE', 'http://d/api/chats/chat-1/queue/m1');
+  });
+
+  it('is false when the agent already had it', async () => {
+    answered({ cancelled: false });
+    expect(await cancelQueuedMessage(0, 'chat-1', 'm1')).toBe(false);
+  });
+
+  it.each([undefined, {}])('reads an older daemon’s answer (%o) as taken back', async (data) => {
+    answered(data);
+    expect(await cancelQueuedMessage(0, 'chat-1', 'm1')).toBe(true);
   });
 });

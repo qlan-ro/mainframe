@@ -119,6 +119,59 @@ describe('a double-click', () => {
   });
 });
 
+describe('a burst of clicks', () => {
+  it('answers one gate only, however long it goes on', () => {
+    answerOwnThenShowTask(() => press(allow()));
+
+    for (let click = 2; click <= 8; click++) {
+      pass(100);
+      press(allow(), click);
+    }
+    pass(499);
+    press(allow(), 9);
+
+    expect(taskReply).not.toHaveBeenCalled();
+  });
+
+  it('holds the gate off wherever it lands: the next gate takes no pointer while it arms', () => {
+    answerOwnThenShowTask(() => press(allow()));
+    for (let click = 0; click < 7; click++) {
+      pass(100);
+      fireEvent.pointerDown(document.body);
+    }
+    pass(499);
+    expect(screen.getByTestId('chat-gate-guard')).toHaveAttribute('inert');
+
+    pass(1);
+
+    expect(screen.getByTestId('chat-gate-guard')).not.toHaveAttribute('inert');
+  });
+
+  it('a slow double-click’s second click does not answer the armed gate', () => {
+    answerOwnThenShowTask(() => press(allow()));
+    pass(600);
+
+    press(allow(), 2);
+    expect(taskReply).not.toHaveBeenCalled();
+
+    press(allow(), 1);
+    expect(taskReply).toHaveBeenCalledTimes(1);
+  });
+
+  it('so does a run of Enter presses', () => {
+    answerOwnThenShowTask(() => enter(allow()));
+    for (let i = 0; i < 7; i++) {
+      pass(100);
+      fireEvent.keyDown(document.body, { key: 'Enter' });
+      fireEvent.keyUp(document.body, { key: 'Enter' });
+    }
+    pass(499);
+    enter(allow());
+
+    expect(taskReply).not.toHaveBeenCalled();
+  });
+});
+
 describe('a press that began on the previous gate', () => {
   it('cannot finish on this one, however long it is held', () => {
     answerOwnThenShowTask(() => press(allow()));
@@ -168,6 +221,60 @@ describe('the keyboard', () => {
     enter(allow());
 
     expect(taskReply).toHaveBeenCalledTimes(1);
+  });
+
+  it('⌘Enter, whose release macOS never reports, leaves Space and assistive clicks working', () => {
+    answerOwnThenShowTask(() => press(allow()));
+    pass(500);
+    fireEvent.keyDown(document.body, { key: 'Enter', metaKey: true });
+    fireEvent.keyUp(document.body, { key: 'Meta' });
+    pass(1);
+
+    fireEvent.click(allow(), { detail: 0 });
+
+    expect(taskReply).toHaveBeenCalledTimes(1);
+  });
+
+  it('a key held when ⌘ went down, whose release is lost too, is forgotten with ⌘', () => {
+    answerOwnThenShowTask(() => press(allow()));
+    pass(500);
+    fireEvent.keyDown(document.body, { key: ' ' });
+    fireEvent.keyUp(document.body, { key: 'Meta' });
+
+    expect(fireEvent.keyUp(allow(), { key: ' ' })).toBe(true);
+  });
+
+  it('a key stuck elsewhere stops only itself: Space still presses', () => {
+    answerOwnThenShowTask(() => press(allow()));
+    pass(500);
+    fireEvent.keyDown(document.body, { key: 'Enter' });
+
+    fireEvent.keyDown(allow(), { key: ' ' });
+    expect(fireEvent.keyUp(allow(), { key: ' ' })).toBe(true);
+    fireEvent.click(allow(), { detail: 0 });
+
+    expect(taskReply).toHaveBeenCalledTimes(1);
+  });
+
+  it('a Space that went down elsewhere cannot press here on release', () => {
+    answerOwnThenShowTask(() => press(allow()));
+    pass(500);
+    fireEvent.keyDown(document.body, { key: ' ' });
+
+    expect(fireEvent.keyUp(allow(), { key: ' ' })).toBe(false);
+    fireEvent.click(allow(), { detail: 0 });
+
+    expect(taskReply).not.toHaveBeenCalled();
+  });
+
+  it('a ⌘Enter held over from the previous gate presses nothing as it repeats', () => {
+    answerOwnThenShowTask(() => {
+      fireEvent.keyDown(allow(), { key: 'Enter', metaKey: true });
+      fireEvent.click(allow(), { detail: 0 });
+    });
+    pass(5_000);
+
+    expect(fireEvent.keyDown(allow(), { key: 'Enter', metaKey: true, repeat: true })).toBe(false);
   });
 
   it('is out of the gate altogether while it arms', () => {

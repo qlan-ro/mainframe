@@ -146,20 +146,25 @@ export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
 
 /**
  * Send a held row, then line the rows behind it up again in their order. They
- * are taken out first, so a second press (or another window) finds nothing to
- * send; whatever does not go out is put back.
+ * are claimed first, so a second press (or another window) finds nothing to
+ * send, and each leaves the queue only once the daemon has it: a quit in between
+ * loses none. What does not go out is given back, marked when it may have.
  */
 export async function sendHeldMessages(host: ChatActionHost, firstId: string): Promise<void> {
   const chatId = host.getDaemonId();
-  const rows = useHeldQueue.getState().takeFrom(chatId, firstId);
-  for (let sent = 0; sent < rows.length; sent++) {
-    const row = rows[sent]!;
-    try {
-      await host.sendPrompt(row.content, row.attachmentIds ? { attachmentIds: row.attachmentIds } : {});
-    } catch (error) {
-      useHeldQueue.getState().putBack(chatId, rows.slice(sent));
-      throw error;
+  const held = useHeldQueue.getState();
+  const rows = held.claimFrom(chatId, firstId);
+  // Another press holds the claims, and gives them back itself.
+  if (rows.length === 0) return;
+  try {
+    for (const { messageId, content, attachmentIds } of rows) {
+      // Removed meanwhile, with its chat say, or no longer this window's: not sent.
+      if (!held.startSending(chatId, messageId)) continue;
+      await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {});
+      held.remove(chatId, messageId);
     }
+  } finally {
+    held.releaseClaims(chatId);
   }
 }
 

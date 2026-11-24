@@ -34,8 +34,11 @@ function ref(id: string, second: number, overrides: Partial<QueuedMessageRef> = 
   };
 }
 
-function makeHost(opts: { running?: boolean; queued?: QueuedMessageRef[] } = {}) {
+function makeHost(opts: { running?: boolean; queued?: QueuedMessageRef[]; temporary?: boolean } = {}) {
   let state = createChatThreadState(CHAT);
+  if (opts.temporary !== undefined) {
+    state = { ...state, chatConfig: { temporary: opts.temporary } as NonNullable<typeof state.chatConfig> };
+  }
   if (opts.running) state = reduceChatThreadState(state, { type: 'run.started' });
   if (opts.queued) state = reduceChatThreadState(state, { type: 'queued.snapshot', refs: opts.queued });
   const events: ChatStateEvent[] = [];
@@ -211,6 +214,23 @@ describe('holdQueuedMessages (C10)', () => {
     vi.mocked(cancelQueuedMessage).mockResolvedValue(true);
   });
 
+  it('holds a temporary session’s messages in memory only', async () => {
+    const { host } = makeHost({ running: true, queued: [ref('m1', 1)], temporary: true });
+
+    await holdQueuedMessages(host);
+
+    expect(useHeldQueue.getState().byChat[CHAT]).toHaveLength(1);
+    expect(localStorage.getItem('mf:held-queue') ?? '').not.toContain('text m1');
+  });
+
+  it('writes down what any other session holds', async () => {
+    const { host } = makeHost({ running: true, queued: [ref('m1', 1)], temporary: false });
+
+    await holdQueuedMessages(host);
+
+    expect(localStorage.getItem('mf:held-queue')).toContain('text m1');
+  });
+
   it('stops waiting after one second so Stop is never held up by a slow daemon', async () => {
     vi.useFakeTimers();
     vi.mocked(cancelQueuedMessage).mockImplementation(() => new Promise(() => {}));
@@ -288,7 +308,40 @@ describe('sendHeldMessages (C10)', () => {
 
     await expect(sendHeldMessages(host, 'm1')).rejects.toThrow('offline');
 
-    expect(useHeldQueue.getState().byChat[CHAT]!.map((row) => row.messageId)).toEqual(['m2']);
+    // The failed one may have reached the agent; neither is claimed any more.
+    expect(useHeldQueue.getState().byChat[CHAT]).toEqual([
+      { messageId: 'm2', content: 'text m2', timestamp: ref('m2', 2).timestamp, unconfirmed: true },
+    ]);
+  });
+
+  it('keeps each row until the daemon has it', async () => {
+    hold('m1', 1);
+    hold('m2', 2);
+    const { host, sendPrompt } = makeHost();
+    const heldDuring: string[][] = [];
+    sendPrompt.mockImplementation(async () => {
+      heldDuring.push(useHeldQueue.getState().byChat[CHAT]!.map((row) => row.messageId));
+      return { queued: false };
+    });
+
+    await sendHeldMessages(host, 'm1');
+
+    expect(heldDuring).toEqual([['m1', 'm2'], ['m2']]);
+    expect(useHeldQueue.getState().byChat).toEqual({});
+  });
+
+  it('sends nothing more once the chat is gone', async () => {
+    hold('m1', 1);
+    hold('m2', 2);
+    const { host, sendPrompt } = makeHost();
+    sendPrompt.mockImplementation(async () => {
+      useHeldQueue.getState().clearChat(CHAT);
+      return { queued: false };
+    });
+
+    await sendHeldMessages(host, 'm1');
+
+    expect(sendPrompt).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing for an unknown row', async () => {

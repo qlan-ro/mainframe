@@ -329,6 +329,29 @@ describe('PlanGate — preselects the composer mode (G3)', () => {
     expect(reply).toHaveBeenCalledWith(expect.objectContaining({ executionMode: 'yolo' }));
   });
 
+  it('eyebrow names what a delegated task is working on, so two askers read apart', () => {
+    wrap(
+      <PlanGate
+        entry={makeEntry()}
+        reply={reply}
+        context={{ asker: 'Codex task', title: 'Fix the login flow', more: 0 }}
+      />,
+    );
+
+    expect(screen.getByText('Plan · Codex task · Fix the login flow')).toBeInTheDocument();
+    expect(screen.getByText('Ready to implement')).toBeInTheDocument();
+  });
+
+  it('refusing Unattended puts focus back on Approve', async () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} chatId="focus-chat" />);
+    fireEvent.click(screen.getByTestId('chat-plan-execmode-yolo'));
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    fireEvent.click(screen.getByTestId('composer-unattended-confirm-cancel'));
+
+    await vi.waitFor(() => expect(screen.getByTestId('chat-plan-approve')).toHaveFocus());
+  });
+
   it('eyebrow names the asker and how many more wait', () => {
     wrap(<PlanGate entry={makeEntry()} reply={reply} context={{ asker: 'planner', more: 1 }} />);
 

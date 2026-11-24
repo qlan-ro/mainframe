@@ -5,7 +5,7 @@
  * Steered messages are in the transcript, not here.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -27,7 +27,8 @@ const startEdit = vi.fn();
 vi.mock('../../edit/composer-edit-context', () => ({ useComposerEdit: () => ({ startEdit }) }));
 vi.mock('../../focus-composer', () => ({ focusVisibleComposer: vi.fn() }));
 
-import { useHeldQueue } from '../held-queue-store';
+import { focusVisibleComposer } from '../../focus-composer';
+import { CLAIM_MS, useHeldQueue } from '../held-queue-store';
 import { QueuedRows } from '../QueuedRows';
 
 const ref = (id: string, second: number, overrides: Partial<QueuedMessageRef> = {}): QueuedMessageRef => ({
@@ -167,6 +168,7 @@ describe('QueuedRows — held rows after a Stop', () => {
     fireEvent.click(screen.getByTestId('chat-queued-send-now'));
 
     expect(sendHeld).toHaveBeenCalledExactlyOnceWith('h1');
+    expect(focusVisibleComposer).toHaveBeenCalledOnce();
   });
 
   it('removing a held row drops it from the store', () => {
@@ -201,6 +203,8 @@ describe('QueuedRows — held rows after a Stop', () => {
 
     expect(rows().map((row) => row.dataset.queuedId)).toEqual(['h2']);
     expect(rows()[0]).toHaveTextContent('Not sent: the session stopped.');
+    // Forgotten, not just hidden.
+    expect(useHeldQueue.getState().byChat['chat-1']!.map((row) => row.messageId)).toEqual(['h2']);
   });
 
   it('hides a held row while its id is still in the live queue, so it never shows twice', () => {
@@ -211,5 +215,61 @@ describe('QueuedRows — held rows after a Stop', () => {
 
     expect(rows()).toHaveLength(1);
     expect(within(rows()[0]!).getByText('Queued')).toBeInTheDocument();
+  });
+
+  it('shows a row on its way, and nothing to press on it or behind it', () => {
+    hold('h1', 1);
+    hold('h2', 2);
+    useHeldQueue.getState().claimFrom('chat-1', 'h1');
+    useHeldQueue.getState().startSending('chat-1', 'h1');
+
+    renderRows();
+
+    expect(rows()[0]).toHaveTextContent('Sending…text h1');
+    expect(rows()[0]).toHaveAttribute('data-sending');
+    expect(within(rows()[0]!).getByRole('status')).toHaveTextContent('Sending…');
+    expect(rows()[1]).toHaveTextContent('Waitingtext h2');
+    expect(screen.queryAllByRole('button')).toEqual([]);
+  });
+
+  it('a row that may have gone out says so and offers to send it again', () => {
+    hold('h1', 1);
+    useHeldQueue.getState().claimFrom('chat-1', 'h1');
+    useHeldQueue.getState().startSending('chat-1', 'h1');
+    useHeldQueue.getState().releaseClaims();
+
+    renderRows();
+
+    expect(rows()[0]).toHaveTextContent('It may already have reached the agent.');
+    expect(screen.getByTestId('chat-queued-send-now')).toHaveTextContent('Send again');
+    expect(screen.getByTestId('chat-queued-cancel')).toBeInTheDocument();
+  });
+
+  it('a claim left by a window that is gone runs out on its own', () => {
+    vi.useFakeTimers();
+    try {
+      hold('h1', 1);
+      useHeldQueue.getState().claimFrom('chat-1', 'h1');
+      useHeldQueue.getState().startSending('chat-1', 'h1');
+      renderRows();
+      expect(rows()[0]).toHaveAttribute('data-sending');
+
+      act(() => vi.advanceTimersByTime(CLAIM_MS));
+
+      expect(rows()[0]).not.toHaveAttribute('data-sending');
+      expect(screen.getByTestId('chat-queued-send-now')).toHaveTextContent('Send again');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an edit saved while the row is sent fails, so its text is not lost', async () => {
+    hold('h1', 1);
+    renderRows();
+    fireEvent.click(screen.getByTestId('chat-queued-edit'));
+    const [edit] = startEdit.mock.calls[0] as [{ save: (next: string) => Promise<void> }];
+    act(() => void useHeldQueue.getState().claimFrom('chat-1', 'h1'));
+
+    await expect(edit.save('reworded')).rejects.toThrow('being sent');
   });
 });

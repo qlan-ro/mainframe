@@ -91,7 +91,11 @@ export type ControlBehavior = 'allow' | 'deny';
 
 export type ControlDestination = 'userSettings' | 'projectSettings' | 'localSettings' | 'session' | 'cliArg';
 
-/** A control rule update to save for future tool uses. */
+/**
+ * A control rule update to save for future tool uses. A request's suggestions may
+ * also hold shapes not listed here (the daemon passes on what it cannot read), and
+ * an answer never may: the daemon takes those out, and modes wider than `acceptEdits`.
+ */
 export type ControlUpdate =
   | {
       type: 'addRules';

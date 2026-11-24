@@ -221,10 +221,9 @@ fn permission_inner(response: &ControlResponse, behavior_str: &str) -> Value {
             inner["updatedInput"] = serde_json::to_value(ui).unwrap_or(Value::Null);
         }
         if let Some(up) = response.updated_permissions.clone() {
-            inner["updatedPermissions"] = serde_json::to_value(
-                crate::permission_updates::keep_mode_changes_session_scoped(up),
-            )
-            .unwrap_or(Value::Null);
+            inner["updatedPermissions"] =
+                serde_json::to_value(crate::permission_updates::forwardable_updates(up))
+                    .unwrap_or(Value::Null);
         }
     } else {
         inner["message"] = Value::String(denial_message(response));

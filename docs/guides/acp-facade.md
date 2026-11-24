@@ -182,13 +182,13 @@ Updates keep streaming while the gate is open. Answer with a JSON-RPC response u
 
 Rules that matter:
 
-- Render the options the daemon offers and send back one of their ids. Do not infer what an option does from its `kind` or `name`; the adapter owns the effect. `allow-always` is only offered when the adapter has something durable to save, which for Claude means a non-empty `suggestions` list as in the example above.
+- Render the options the daemon offers and send back one of their ids. Do not infer what an option does from its `kind` or `name`; the adapter owns the effect. `allow-always` is only offered when the adapter has something durable to save, which for Claude means at least one entry of `suggestions` that an answer may save (see below), as in the example above. The list can hold shapes you do not know; skip them.
 - A plain answer with an `optionId` the daemon did not offer is logged and ignored. The gate stays open and you receive nothing back, so validate against the offered list before sending.
 - An error response (`"error": {...}`) under the gate id denies the request.
 - `{ "outcome": { "outcome": "cancelled" } }` only withdraws the gate from your connection. It does not resolve it for the agent; send `session/cancel` for that.
 - Unknown `kind` values may appear from a newer daemon. Render them neutrally and treat them as deny, never as approval.
 
-A Mainframe-aware client can attach a rich answer under `_meta["_mainframe.dev"].controlResponse`: the full `ControlResponse` (behavior, `updatedInput`, `updatedPermissions`, `executionMode`, `clearContext`). It must repeat the request's `requestId` and `toolUseId` or it is ignored in favor of the plain `optionId`. This is how the desktop app edits a command before allowing it, or answers plan-approval and question gates that have no clickable option.
+A Mainframe-aware client can attach a rich answer under `_meta["_mainframe.dev"].controlResponse`: the full `ControlResponse` (behavior, `updatedInput`, `updatedPermissions`, `executionMode`, `clearContext`). It must repeat the request's `requestId` and `toolUseId` or it is ignored in favor of the plain `optionId`. This is how the desktop app edits a command before allowing it, or answers plan-approval and question gates that have no clickable option. From `updatedPermissions` the daemon takes out a `setMode` wider than `acceptEdits` and any update it cannot read, whichever client sent it, and adds a line to the session saying what was not saved.
 
 Gates are shared. Every connection observing the session receives the same request under the same id; the first answer wins. When a gate resolves elsewhere (another client, or the CLI itself), everyone still holding it gets:
 

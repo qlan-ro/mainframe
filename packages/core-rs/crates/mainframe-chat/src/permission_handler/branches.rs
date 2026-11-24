@@ -116,13 +116,18 @@ impl ChatPermissionHandler {
         Ok(())
     }
 
-    pub(super) fn transient_user_text(&self, chat_id: &str, text: &str) -> ChatMessage {
+    pub(super) fn transient_text(
+        &self,
+        chat_id: &str,
+        author: ChatMessageType,
+        text: &str,
+    ) -> ChatMessage {
         self.shared
             .messages
             .lock_recover()
             .create_transient_message(
                 chat_id,
-                ChatMessageType::User,
+                author,
                 vec![MessageContent::Leaf(LeafContent::Text {
                     text: text.to_string(),
                     parent_tool_use_id: None,
