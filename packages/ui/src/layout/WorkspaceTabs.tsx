@@ -69,7 +69,7 @@ export function WorkspaceTabs({ pane }: { pane: RunPane | null }) {
           role="tablist"
           aria-label="Workspace tabs"
           onKeyDown={onTabListKeyDown}
-          className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto scroll-fade-r"
+          className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto scroll-fade-x"
         >
           {pane.tabs.map((t) => (
             <WorkspaceTabPill

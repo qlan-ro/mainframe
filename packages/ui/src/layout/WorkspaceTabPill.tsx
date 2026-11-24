@@ -85,9 +85,9 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
       onDoubleClick={() => promoteFileTab(tab.id)}
       className={tabShape(
         isActive,
-        // scroll-mr keeps a tab scrolled into view clear of the row's end fade.
+        // Keeps a tab scrolled into view clear of the fades at the ends of the row.
         cn(
-          'scroll-mr-5 gap-1.5 pl-2.5',
+          'scroll-mx-5 gap-1.5 pl-2.5',
           isActive ? 'shrink-0 pr-1' : 'max-w-44 shrink pr-2.5',
           !isActive && (live ? 'min-w-21 pr-1' : 'min-w-15'),
         ),

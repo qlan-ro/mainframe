@@ -435,7 +435,7 @@
       "y": 0
     },
     "Shell-States.dc.html": {
-      "h": 2060,
+      "h": 3032,
       "page": "shell",
       "title": "Shell — window states",
       "w": 4512,
@@ -443,7 +443,7 @@
       "y": 1383
     },
     "Shell-TitleBar.dc.html": {
-      "h": 2690,
+      "h": 2858,
       "page": "shell",
       "title": "Shell — title bar and navigation",
       "w": 3024,
@@ -659,6 +659,14 @@
       "w": 1440,
       "x": 0,
       "y": 0
+    },
+    "Workspace-Tabs.dc.html": {
+      "h": 1260,
+      "page": "workspace",
+      "title": "Workspace — tabs in the title bar",
+      "w": 2172,
+      "x": 0,
+      "y": 10751
     }
   },
   "createdOnFiles": {
@@ -814,6 +822,7 @@
     "Workspace-Viewers.dc.html",
     "Workspace-Run.dc.html",
     "Workspace-ReviewError.dc.html",
+    "Workspace-Tabs.dc.html",
     "Settings-Surface.dc.html",
     "Settings-Flow.dc.html",
     "Settings-Panes.dc.html",
