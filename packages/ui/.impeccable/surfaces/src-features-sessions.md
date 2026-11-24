@@ -14,7 +14,7 @@ Operate. The session list: time groups, rows, filters, project scope. Canvas pag
 Find the session that needs attention, or the one to resume, in a list of dozens.
 
 ## Constraints
-Rows stay one line. Virtualised list. Status must stay readable at a glance without colour alone.
+Rows stay one line and 28 px tall. Virtualised list. Status must stay readable at a glance without colour alone. Branch, PR, tags, provider, lineage and missing-checkout warnings live in the row hover card.
 
 ## Direction contract
 THESIS: the project always leads and status replaces the time. This replaces a status glyph that pushed the project out.

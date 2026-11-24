@@ -27,14 +27,7 @@ function mount() {
     <SidebarProvider>
       <SessionGroupHeader label="Today" />
       <SidebarMenu>
-        <DraftSessionRow
-          projectId="p1"
-          projectName="P"
-          selected={false}
-          showProject={false}
-          onSelect={() => {}}
-          onDiscard={() => {}}
-        />
+        <DraftSessionRow projectId="p1" projectName="P" selected={false} onSelect={() => {}} onDiscard={() => {}} />
       </SidebarMenu>
       <NewSessionRow />
       <NoProjectLabel data-testid="np" />

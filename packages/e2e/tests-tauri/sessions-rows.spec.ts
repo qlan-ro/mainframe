@@ -1,32 +1,30 @@
 /**
  * §sessions-rows — The session row as a human uses it: click-to-select, hover
- * actions, the right-click context menu, pin/unpin, the four StatusDot states,
- * and the row's compact meta glyphs + hover-card detail.
+ * actions, the right-click context menu, pin/unpin, the row's one trailing value
+ * (spinner, "needs you" or the time), and the hover-card detail.
  *
  * Ported from plan spec #2 (docs/plans/2026-07-03-tauri-e2e-test-plan.md,
  * Cluster A). Does NOT duplicate: sessions.spec.ts (rename/archive/restore/
  * import), sessions-filters.spec.ts (pills/tag-bar/sort), sessions-tags.spec.ts
- * (tag popover internals — this file only asserts the resulting row dot).
+ * (tag popover internals — this file only asserts the tag on the hover card).
  *
  * Source (verified against packages/ui/src/v2/features/sessions/):
- *   SessionRow.tsx          — row root, StatusDot, RowHoverActions, pin glyph
- *   SessionRowMetaLine.tsx  — the row's second line: project name + trailing worktree/PR/tag-dot
- *                             glyphs (replaced `SessionRowMetaIcons.tsx`, hence the testid renames)
+ *   SessionRow.tsx          — row root, RowHoverActions, hover card, context menu
+ *   SessionRowBody.tsx      — the one line: project letter, title, trailing value
+ *   SessionRowStatus.tsx    — the trailing value
  *   SessionMetaCard.tsx     — hover-card detail (project/worktree/branch/PR/tags/warning)
  *   SessionContextMenu.tsx  — right-click menu (Pin/Unpin, Rename, Tags, Archive, Copy Session ID)
  *   SessionGroupHeader.tsx  — header for the SECOND group onward (see the note below)
- *   view-model/session-status.ts — deriveSessionBadge (worktree-missing > transcript-missing > working > waiting > idle)
+ *   view-model/session-status.ts — sessionStatus (needs-you > running > idle)
  *
  * Testid reference (all verified against source above):
  *   sessions-row                     — row root (data-chat-id, data-active)
- *   sessions-row-status-dot          — StatusDot; aria-label = data-status = badge.base
- *                                       ('idle'|'working'|'waiting'|'worktree-missing'|'transcript-missing').
- *                                       The slot itself carries no ink (the glyph inside it does), so
- *                                       state is asserted through `data-status`, plus `data-unread="true"`
- *                                       on an idle chat with an unseen response (absent otherwise).
- *   sessions-row-relative-time       — time label; it STAYS PUT on hover (the actions insert in
- *                                       front of it and the truncating title gives way instead —
- *                                       SessionRow.tsx RowBody)
+ *   sessions-row-status              — the trailing value; `data-status` is
+ *                                       'idle' | 'running' | 'needs-you'
+ *   sessions-row-title               — the title; `data-unread="true"` while a response is unseen
+ *   sessions-row-relative-time       — time label, present only while idle; it STAYS PUT on hover
+ *                                       (the actions insert in front of it and the truncating
+ *                                       title gives way instead)
  *   sessions-row-action-pin/-tags/-archive — hover-action buttons, MOUNTED on row hover rather
  *                                       than CSS-hidden (SessionRowHoverActions.tsx header);
  *                                       Rename is context-menu-only
@@ -38,19 +36,10 @@
  *                                       `sessions-group-header-Pinned` — it is the parked
  *                                       label's text.
  *   sessions-group-header-<label>    — headers from the second group onward ('Today' below 'Pinned')
- *   sessions-row-meta-worktree       — worktree/branch glyph on the row; `text-warning` (NOT
- *                                       `text-destructive`) when the checkout is missing —
- *                                       SessionRowMetaLine.tsx reserves destructive for
- *                                       irreversible menu actions
- *   sessions-row-meta-tag-dot-<name> — tag-dot glyph on the row (capped at 3)
  *   sessions-meta-card-project       — project row inside the hover card
  *   sessions-meta-card-warning       — branch-safety warning inside the hover card
  *
- * NOTE on the pin glyph: SessionRow.tsx renders a PER-ROW
- * `sessions-row-pin-glyph` only when `custom.pinned && !inPinnedGroup`, and the
- * sidebar always routes pinned rows into the 'Pinned' group — so no pin glyph
- * is reachable through the sidebar (the header is deliberately plain text, see
- * SessionGroupHeader.tsx). Pinned-ness is asserted via the group label.
+ * NOTE: rows carry no pin glyph. Pinned-ness is asserted via the group label.
  */
 
 import { test, expect, type Locator, type Page } from '@playwright/test';
@@ -66,17 +55,17 @@ const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 /**
  * The mock-cli replay caps every inter-event delay at 120ms (ReplaySession.MAX_DELAY_MS),
- * so the 'working' badge (set synchronously by chat-manager.sendMessage, before any adapter
+ * so the 'running' status (set synchronously by chat-manager.sendMessage, before any adapter
  * event) is only observable for a short window before the next recorded event (permission
  * request or result) flips it. Playwright's built-in expect() retry cadence is too coarse to
  * reliably sample that window, so this polls the DOM directly via requestAnimationFrame.
  */
-async function waitForWorkingSpinner(page: Page, chatId: string, timeout = 10_000): Promise<void> {
+async function waitForRunningSpinner(page: Page, chatId: string, timeout = 10_000): Promise<void> {
   await page.waitForFunction(
     (id) => {
       const row = document.querySelector(`[data-testid="sessions-row"][data-chat-id="${id}"]`);
-      const dot = row?.querySelector('[data-testid="sessions-row-status-dot"]');
-      return dot?.getAttribute('aria-label') === 'working';
+      const status = row?.querySelector('[data-testid="sessions-row-status"]');
+      return status?.getAttribute('data-status') === 'running';
     },
     chatId,
     { timeout, polling: 'raf' },
@@ -139,15 +128,40 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await expect(rowY).not.toHaveAttribute('data-active', 'true');
   });
 
-  test('idle status dot is muted on a fresh, read chat', async () => {
+  test('a fresh, read chat shows its project letter and the time', async () => {
     const { page } = app;
     const rowX = sessionsSidebar(page).row(chatIdX);
-    const dot = rowX.getByTestId('sessions-row-status-dot');
 
-    // Idle and read: the muted ring, i.e. idle with no unread flag (StatusDot.tsx).
-    await expect(dot).toHaveAttribute('aria-label', 'idle');
-    await expect(dot).toHaveAttribute('data-status', 'idle');
-    await expect(dot).not.toHaveAttribute('data-unread');
+    await expect(rowX.getByTestId('sessions-row-status')).toHaveAttribute('data-status', 'idle');
+    await expect(rowX.getByTestId('sessions-row-relative-time')).toBeVisible();
+    await expect(rowX.getByTestId('sessions-row-title')).not.toHaveAttribute('data-unread');
+    const initial = path.basename(project.projectPath).charAt(0).toUpperCase();
+    await expect(rowX.getByTestId('sessions-row-project-tile')).toHaveText(initial);
+  });
+
+  test('group actions appear on hover and on keyboard focus', async () => {
+    const { page } = app;
+    const header = page.getByTestId('sessions-section-jump');
+    const filter = page.getByTestId('sessions-filter-button');
+    const sort = page.getByTestId('sessions-sort-button');
+
+    await page.mouse.move(0, 0);
+    await expect(filter).toHaveCSS('opacity', '0');
+    await expect(sort).toHaveCSS('opacity', '0');
+
+    await header.hover();
+    await expect(filter).toHaveCSS('opacity', '1');
+    await expect(sort).toHaveCSS('opacity', '1');
+
+    await page.mouse.move(0, 0);
+    await expect(sort).toHaveCSS('opacity', '0');
+
+    await header.focus();
+    await page.keyboard.press('Tab');
+    await expect(filter).toBeFocused();
+    await expect(filter).toHaveCSS('opacity', '1');
+    await expect(sort).toHaveCSS('opacity', '1');
+    await filter.blur();
   });
 
   test('hovering a row reveals the pin/tag/archive actions in front of the relative time', async () => {
@@ -245,14 +259,7 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     const { page } = app;
     const rowX = sessionsSidebar(page).row(chatIdX);
 
-    // The row's own second line names the project too (SessionRowMetaLine), and the
-    // hover card spells it out with an avatar (SessionMetaCard `sessions-meta-card-project`).
-    //
-    // The "only in the All view" half of this test is GONE: `SessionsSection` still
-    // computes `showProject` from the active filter, but threads it to the draft row
-    // only — `SessionList`/`SessionRow` receive `projectNames` unconditionally, so a
-    // filtered view keeps naming the project. Reported as a suspected regression
-    // rather than pinned here in either direction.
+    // The row only carries the project's letter; the hover card spells it out.
     await rowX.hover();
     const cardProject = page.getByTestId('sessions-meta-card-project');
     // Exactly one card, named before the visibility check: a click-focused row used
@@ -264,7 +271,7 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await expect(cardProject).toContainText(path.basename(project.projectPath));
   });
 
-  test('applying a tag surfaces a colored dot in the row meta line', async () => {
+  test('applying a tag names it on the hover card', async () => {
     const { page } = app;
     const rowX = sessionsSidebar(page).row(chatIdX);
     const tagName = 'e2e-rows-meta';
@@ -281,13 +288,16 @@ test.describe('§sessions-rows Row selection, hover, context menu, pin, meta lin
     await page.keyboard.press('Escape');
     await expect(popover).toHaveCount(0, { timeout: 5_000 });
 
-    await expect(rowX.getByTestId(`sessions-row-meta-tag-dot-${tagName}`)).toBeVisible({ timeout: 5_000 });
+    await page.mouse.move(0, 0);
+    await rowX.hover();
+    await expect(page.getByTestId('sessions-meta-card-tags')).toContainText(tagName, { timeout: 5_000 });
+    await page.mouse.move(0, 0);
   });
 });
 
-// ─── Worktree meta pill + missing state ───────────────────────────────────────
+// ─── Worktree on the hover card + missing state ───────────────────────────────────────
 
-test.describe('§sessions-rows Worktree meta pill + missing state', () => {
+test.describe('§sessions-rows Worktree on the hover card + missing state', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
   let chatId: string;
@@ -303,22 +313,19 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
     await closeTauriApp(app);
   });
 
-  test('worktree glyph is present; going missing on disk flips the glyph to warning, the dot to worktree-missing, and the hover card warns', async () => {
+  test('the hover card names the worktree, and warns once it goes missing on disk', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
-    const dot = row.getByTestId('sessions-row-status-dot');
 
     const enableRes = await page.request.post(`${DAEMON_BASE}/api/chats/${chatId}/enable-worktree`, {
       data: { baseBranch: 'main', branchName: 'e2e-rows-worktree' },
     });
     expect(enableRes.ok()).toBe(true);
 
-    // The row shows an icon-only worktree glyph (SessionRowMetaLine); the full
-    // "Worktree missing" cause text lives in the SessionMetaCard hover card.
-    const glyph = row.getByTestId('sessions-row-meta-worktree');
-    await expect(glyph).toBeVisible({ timeout: 15_000 });
-    await expect(glyph).not.toHaveClass(/text-warning/);
-    await expect(dot).toHaveAttribute('aria-label', 'idle');
+    await row.hover();
+    await expect(page.getByTestId('sessions-meta-card-worktree')).toContainText('Worktree', { timeout: 15_000 });
+    await expect(page.getByTestId('sessions-meta-card-warning')).toHaveCount(0);
+    await page.mouse.move(0, 0);
 
     const chatRes = await page.request.get(`${DAEMON_BASE}/api/chats/${chatId}`);
     const chatBody = (await chatRes.json()) as { data?: { worktreePath?: string } };
@@ -331,27 +338,25 @@ test.describe('§sessions-rows Worktree meta pill + missing state', () => {
     await page.reload();
     await waitConnected(page);
 
-    await expect(dot).toHaveAttribute('aria-label', 'worktree-missing', { timeout: 15_000 });
-    // `warning`, not `destructive`: the session still works, its checkout is just
-    // gone — SessionRowMetaLine.tsx reserves destructive for irreversible actions.
-    await expect(glyph).toHaveClass(/text-warning/);
+    // The session still works, so the row keeps showing the time (L2).
+    await expect(row.getByTestId('sessions-row-status')).toHaveAttribute('data-status', 'idle', { timeout: 15_000 });
 
     await row.hover();
     const warning = page.getByTestId('sessions-meta-card-warning');
-    await expect(warning).toBeVisible({ timeout: 5_000 });
+    await expect(warning).toBeVisible({ timeout: 15_000 });
     await expect(warning).toContainText('Worktree missing');
   });
 });
 
-// ─── Working spinner + waiting beacon during a gate-held run ─────────────────
+// ─── Running spinner + "needs you" during a gate-held run ─────────────────
 
-test.describe('§sessions-rows Working + waiting status dot during a gate-held run', () => {
+test.describe('§sessions-rows Running + needs-you during a gate-held run', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
   let chatId: string;
 
   test.beforeAll(async () => {
-    // Widen the mock replay clamp for this describe: the transient 'working' dot is
+    // Widen the mock replay clamp for this describe: the transient running spinner is
     // broadcast at send (t≈0) but observed only via a debounced full-list refetch, and
     // the default ~120ms burst collapses the whole turn (incl. the permission that flips
     // the daemon to 'waiting') into a window the refetch races. An ~800ms ceiling delays
@@ -366,33 +371,34 @@ test.describe('§sessions-rows Working + waiting status dot during a gate-held r
     await closeTauriApp(app);
   });
 
-  test('shows a working spinner while the CLI processes, then a waiting beacon once the permission gate lands', async () => {
+  test('shows a spinner while the CLI processes, then "needs you" once the permission gate lands', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
-    const dot = row.getByTestId('sessions-row-status-dot');
+    const status = row.getByTestId('sessions-row-status');
 
-    await expect(dot).toHaveAttribute('aria-label', 'idle');
+    await expect(status).toHaveAttribute('data-status', 'idle');
 
     await sendMessage(page, 'Create a file at /tmp/mf-e2e-test.txt with content "hello"');
     // chat-manager sets processState='working' synchronously on send (before any
-    // adapter event), so this is reachable — but briefly, see waitForWorkingSpinner.
-    await waitForWorkingSpinner(page, chatId);
+    // adapter event), so this is reachable — but briefly, see waitForRunningSpinner.
+    await waitForRunningSpinner(page, chatId);
 
     await page.locator('[data-testid="chat-permission-gate"]').waitFor({ timeout: 45_000 });
     // The same onPermission handler that surfaces the gate also emits the
     // chat.updated that flips displayStatus to 'waiting' — no race here.
-    await expect(dot).toHaveAttribute('aria-label', 'waiting', { timeout: 5_000 });
+    await expect(status).toHaveAttribute('data-status', 'needs-you', { timeout: 5_000 });
+    await expect(status).toHaveText('needs you');
 
     // Clean up: deny so the mock session ends cleanly before teardown.
     await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
     await waitForIdle(page, 60_000);
-    await expect(dot).toHaveAttribute('aria-label', 'idle', { timeout: 10_000 });
+    await expect(status).toHaveAttribute('data-status', 'idle', { timeout: 10_000 });
   });
 });
 
-// ─── Unread status dot + copy session id ──────────────────────────────────────
+// ─── Unread title + copy session id ──────────────────────────────────────
 
-test.describe('§sessions-rows Unread status dot + copy session id', () => {
+test.describe('§sessions-rows Unread title + copy session id', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
   let chatIdA: string;
@@ -419,8 +425,8 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
 
   // Previously: a backgrounded chat's `chat.notification` WS event never reached
   // the client — `broadcastEvent` scoped delivery to `client.subscriptions.has(chatId)`,
-  // and per-chat subscriptions are torn down on deactivation, so the unread dot
-  // never lit up. Fixed by the product-bug-fix campaign: `chat.notification` is
+  // and per-chat subscriptions are torn down on deactivation, so the unread mark
+  // never showed. Fixed by the product-bug-fix campaign: `chat.notification` is
   // now connection-global (websocket.rs `CONNECTION_GLOBAL_EVENT_TYPES`),
   // reaching every client regardless of which chat it's currently subscribed to.
   test('marks the row unread once a response lands while a different chat is active, and clears it on reselect', async () => {
@@ -428,7 +434,7 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
     const sidebar = sessionsSidebar(page);
     const rowA = sidebar.row(chatIdA);
     const rowB = sidebar.row(chatIdB);
-    const dotA = rowA.getByTestId('sessions-row-status-dot');
+    const titleA = rowA.getByTestId('sessions-row-title');
 
     // A is already active (created last, per createTauriChat's select-on-create), so
     // the message below originates from A's composer.
@@ -441,14 +447,13 @@ test.describe('§sessions-rows Unread status dot + copy session id', () => {
     await selectRow(rowB);
 
     // A's response lands in the background: chat.notification reaches the
-    // client and session-list-router's onMarkUnread(chatIdA) flips the dot to
-    // the solid primary "unread" glyph (StatusDot.tsx, idle + unread).
-    await expect(dotA).toHaveAttribute('data-unread', 'true', { timeout: 45_000 });
-    await expect(dotA).toHaveAttribute('aria-label', 'idle');
+    // client and session-list-router's onMarkUnread(chatIdA) marks the
+    // title unread.
+    await expect(titleA).toHaveAttribute('data-unread', 'true', { timeout: 45_000 });
 
     // Reselecting A clears the unread flag.
     await selectRow(rowA);
-    await expect(dotA).not.toHaveAttribute('data-unread', { timeout: 10_000 });
+    await expect(titleA).not.toHaveAttribute('data-unread', { timeout: 10_000 });
   });
 
   test('copy-session-id appears once the chat has a claudeSessionId, and copies it to the clipboard', async () => {

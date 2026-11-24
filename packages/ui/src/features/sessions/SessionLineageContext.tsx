@@ -3,7 +3,7 @@
  * instead of prop drilling (todo #343's plan: "the all-items map, the
  * filtered set, group membership flows through a small React context from
  * SessionSidebar"). `SessionSidebar` already computes both arrays; this just
- * publishes them for `use-fork-lineage-row` to classify a fallback fork's
+ * publishes them for `use-fork-lineage-row` to classify an un-nested fork's
  * parent against.
  */
 import { createContext, useContext, useMemo, type ReactNode } from 'react';

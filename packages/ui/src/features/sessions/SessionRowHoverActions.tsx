@@ -1,6 +1,6 @@
 /**
- * Pin / tag / archive, revealed on row hover — inline in the title line, just
- * before the timestamp.
+ * Pin / tag / archive, revealed on row hover — inline, just before the row's
+ * trailing value.
  *
  * Inline rather than the stock `SidebarMenuAction` overlay: parked over the
  * time slot, the cluster needed a padding reserve on the title and an opacity
@@ -57,7 +57,7 @@ function ActionGlyph({
         aria-label={label}
         data-testid={testId}
         onClick={onClick}
-        className="flex size-4.5 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-3.5 [&>svg]:shrink-0"
+        className="flex size-6 cursor-pointer items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-3.5 [&>svg]:shrink-0"
       >
         {children}
       </span>
@@ -67,7 +67,7 @@ function ActionGlyph({
 
 export function RowHoverActions({ pinned, temporary, onPin, onUnpin, onTags, onArchive }: RowHoverActionsProps) {
   return (
-    <span className="flex shrink-0 items-center gap-0.5">
+    <span className="flex shrink-0 items-center">
       {!temporary && (
         <ActionGlyph
           label={pinned ? 'Unpin' : 'Pin'}

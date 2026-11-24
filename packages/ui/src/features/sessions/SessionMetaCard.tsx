@@ -1,19 +1,22 @@
 /**
  * The hover-detail body for a session row: full title, project, worktree or
- * branch, PRs, tags, and any missing-artifact warning.
+ * branch, PRs, tags, provider, and any missing-artifact warning — everything the
+ * one-line row leaves out.
  *
  * Content only — the row owns the `HoverCard` and the anchoring. The shipped
  * version portals itself to `document.body` and positions from a captured
  * DOMRect because no hover-card primitive was installed there; v2 has one, so
  * the manual portal and `use-row-hover-card` are dropped.
  */
-import { AlertTriangle, Bot, FolderGit2, GitBranch, ListChecks, Split } from 'lucide-react';
+import { AlertTriangle, Bot, FolderGit2, GitBranch, Split, Timer } from 'lucide-react';
 import type { ChatDelegation, DetectedPr, TagColor } from '@qlan-ro/mainframe-types';
 import { Badge } from '@/components/ui/badge';
 import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { TAG_CHIP_STYLE } from '@/features/sessions/tags/tag-colors';
 import { worktreeBasename } from '@/features/sessions/sidebar/worktree-basename';
+import { ProviderLogo } from '@/features/shared/ProviderLogo';
+import { LINEAGE_GLYPH } from './lineage-glyph';
 import { parentLineageValue, type ParentLineageState } from './view-model/fork-lineage';
 import { delegatedByValue } from './view-model/agent-provenance';
 import { ProjectAvatar } from './ProjectAvatar';
@@ -100,22 +103,60 @@ function TagsRow({ tags, colorOf }: { tags: string[]; colorOf?: (name: string) =
   );
 }
 
-function ForkedFromRow({ parentState }: { parentState: ParentLineageState }) {
+/** The parent's name; a link when it can be opened, plain text when it is archived or deleted. */
+function ParentValue({ onOpen, children }: { onOpen?: () => void; children: string }) {
+  if (onOpen == null) return <span className="truncate">{children}</span>;
+  return (
+    <button
+      type="button"
+      data-testid="sessions-meta-card-open-parent"
+      className="truncate text-left text-primary hover:underline"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ForkedFromRow({ parentState, onOpenParent }: { parentState: ParentLineageState; onOpenParent?: () => void }) {
+  const Glyph = LINEAGE_GLYPH.fork;
   return (
     <div data-testid="sessions-meta-card-forked-from" className="flex items-center gap-1.5 text-xs">
       <FieldLabel>Forked from</FieldLabel>
-      <Split aria-hidden className="size-3 shrink-0 rotate-90 text-muted-foreground" />
-      <span className="truncate">{parentLineageValue(parentState)}</span>
+      <Glyph aria-hidden className="size-3 shrink-0 rotate-90 text-muted-foreground" />
+      <ParentValue onOpen={onOpenParent}>{parentLineageValue(parentState)}</ParentValue>
     </div>
   );
 }
 
-function DelegatedByRow({ parentState, delegation }: { parentState: ParentLineageState; delegation: ChatDelegation }) {
+function DelegatedByRow({
+  parentState,
+  delegation,
+  onOpenParent,
+}: {
+  parentState: ParentLineageState;
+  delegation: ChatDelegation;
+  onOpenParent?: () => void;
+}) {
+  const Glyph = LINEAGE_GLYPH.delegated;
   return (
     <div data-testid="sessions-meta-card-delegated-by" className="flex items-center gap-1.5 text-xs">
       <FieldLabel>Delegated by</FieldLabel>
-      <ListChecks aria-hidden className="size-3 shrink-0 text-muted-foreground" />
-      <span className="truncate">{delegatedByValue(parentLineageValue(parentState), delegation)}</span>
+      <Glyph aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <ParentValue onOpen={onOpenParent}>{delegatedByValue(parentLineageValue(parentState), delegation)}</ParentValue>
+    </div>
+  );
+}
+
+function TemporaryRow() {
+  return (
+    <div data-testid="sessions-meta-card-temporary" className="flex items-center gap-1.5 text-xs">
+      <FieldLabel>Type</FieldLabel>
+      <Timer aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+      <span className="truncate">Temporary, deleted when closed</span>
     </div>
   );
 }
@@ -135,14 +176,15 @@ function LineageRows({
   parentState,
   delegation,
   startedBy,
-}: Pick<SessionMetaCardProps, 'parentState' | 'delegation' | 'startedBy'>) {
+  onOpenParent,
+}: Pick<SessionMetaCardProps, 'parentState' | 'delegation' | 'startedBy' | 'onOpenParent'>) {
   return (
     <>
       {parentState != null &&
         (delegation != null ? (
-          <DelegatedByRow parentState={parentState} delegation={delegation} />
+          <DelegatedByRow parentState={parentState} delegation={delegation} onOpenParent={onOpenParent} />
         ) : (
-          <ForkedFromRow parentState={parentState} />
+          <ForkedFromRow parentState={parentState} onOpenParent={onOpenParent} />
         ))}
       {startedBy != null && <StartedByRow startedBy={startedBy} />}
     </>
@@ -191,6 +233,9 @@ interface SessionMetaCardProps {
   projectName?: string;
   /** True for a chat with no real project — renders NoProjectLabel instead of the project name (todo #346). */
   noProject?: boolean;
+  adapterId?: string;
+  /** Deleted rather than archived when closed (todo #346). */
+  temporary?: boolean;
   worktreePath?: string;
   branchName?: string;
   worktreeMissing: boolean;
@@ -200,6 +245,8 @@ interface SessionMetaCardProps {
   colorOf?: (name: string) => TagColor;
   /** Set on any child — the "Forked from" line, or "Delegated by" with `delegation`. */
   parentState?: ParentLineageState;
+  /** Opens the parent chat; absent when it is archived or deleted. */
+  onOpenParent?: () => void;
   /** Set on a delegated child: its role and live task status. */
   delegation?: ChatDelegation;
   /** The quoted title of the chat whose agent launched this one (`chat_launch`). */
@@ -216,6 +263,8 @@ export function SessionMetaCard({
   projectId,
   projectName,
   noProject = false,
+  adapterId,
+  temporary = false,
   worktreePath,
   branchName,
   worktreeMissing,
@@ -224,6 +273,7 @@ export function SessionMetaCard({
   tags,
   colorOf,
   parentState,
+  onOpenParent,
   delegation,
   startedBy,
   forkCount = 0,
@@ -233,14 +283,30 @@ export function SessionMetaCard({
       {/* Clamped: the row already truncates this, and a pathological title —
           a pasted paragraph, an unbroken branch name — would otherwise grow the
           card without bound. `break-words` keeps an unspaced one inside it. */}
-      <span
-        data-testid="sessions-meta-card-title"
-        className="line-clamp-3 font-semibold break-words text-muted-foreground"
-      >
-        {title}
+      <span className="flex items-start gap-1.5">
+        {adapterId != null && (
+          <ProviderLogo
+            adapterId={adapterId}
+            muted
+            testId="sessions-meta-card-provider"
+            className="mt-0.5 size-3.5 shrink-0"
+          />
+        )}
+        <span
+          data-testid="sessions-meta-card-title"
+          className="line-clamp-3 min-w-0 font-semibold break-words text-muted-foreground"
+        >
+          {title}
+        </span>
       </span>
       <ProjectRow projectId={projectId} projectName={projectName} noProject={noProject} />
-      <LineageRows parentState={parentState} delegation={delegation} startedBy={startedBy} />
+      {temporary && <TemporaryRow />}
+      <LineageRows
+        parentState={parentState}
+        delegation={delegation}
+        startedBy={startedBy}
+        onOpenParent={onOpenParent}
+      />
       <ForkCountRow count={forkCount} />
       <WorktreeOrBranchRow worktreePath={worktreePath} branchName={branchName} />
       <PrRow detectedPrs={detectedPrs} />

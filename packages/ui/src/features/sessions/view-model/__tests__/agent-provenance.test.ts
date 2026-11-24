@@ -3,7 +3,7 @@ import type { ChatDelegation } from '@qlan-ro/mainframe-types';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
 import { forkCount, lineageRelation, nestForks, parentLineageText } from '../fork-lineage';
 import { delegatedByValue, delegatedTasksOf, outboxHeadline, startedByTitle } from '../agent-provenance';
-import { deriveSessionBadge } from '../session-status';
+import { sessionStatus } from '../session-status';
 import { withoutTaskChats } from '../task-chats';
 
 function item(
@@ -66,9 +66,9 @@ describe('task chats in the fork lineage', () => {
 });
 
 describe('parent waiting state', () => {
-  it('a waiting delegated child shows on the parent badge, ahead of working', () => {
+  it('a waiting delegated child makes the parent need you, ahead of running', () => {
     const parent = item('p', { delegatedWaiting: true, displayStatus: 'working' }).custom;
-    expect(deriveSessionBadge(parent, false)).toEqual({ base: 'waiting', unread: false });
+    expect(sessionStatus(parent)).toBe('needs-you');
   });
 });
 

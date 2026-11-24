@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { deriveSessionBadge } from '../session-status';
+import { sessionStatus } from '../session-status';
 import type { SessionCustom } from '../chat-to-thread-custom';
 
-// `status` is Chat['status']; deriveSessionBadge never reads it, so cast the stub.
-const base = (over: Partial<SessionCustom> = {}): SessionCustom =>
+// `status` is Chat['status']; sessionStatus never reads it, so cast the stub.
+const custom = (over: Partial<SessionCustom> = {}): SessionCustom =>
   ({
     projectId: 'p',
     adapterId: 'claude',
@@ -18,69 +18,30 @@ const base = (over: Partial<SessionCustom> = {}): SessionCustom =>
     ...over,
   }) as SessionCustom;
 
-describe('deriveSessionBadge', () => {
-  it('worktree-missing wins over everything', () => {
-    expect(deriveSessionBadge(base({ worktreeMissing: true, displayStatus: 'working' }), true)).toEqual({
-      base: 'worktree-missing',
-      unread: true,
-    });
+describe('sessionStatus', () => {
+  it('is idle with nothing going on', () => {
+    expect(sessionStatus(custom())).toBe('idle');
   });
-  it('working maps to base working', () => {
-    expect(deriveSessionBadge(base({ displayStatus: 'working' }), false)).toEqual({ base: 'working', unread: false });
-  });
-  it('hasPending maps to waiting; unread rides alongside', () => {
-    expect(deriveSessionBadge(base({ hasPending: true }), true)).toEqual({ base: 'waiting', unread: true });
-  });
-  it('idle with unread keeps base idle, unread true', () => {
-    expect(deriveSessionBadge(base(), true)).toEqual({ base: 'idle', unread: true });
-  });
-  it('plain idle', () => {
-    expect(deriveSessionBadge(base(), false)).toEqual({ base: 'idle', unread: false });
-  });
-});
 
-describe('deriveSessionBadge — transcript-missing', () => {
-  it('transcript-missing outranks working', () => {
-    expect(deriveSessionBadge(base({ transcriptMissing: true, displayStatus: 'working' }), false)).toEqual({
-      base: 'transcript-missing',
-      unread: false,
-    });
+  it('is running during a turn', () => {
+    expect(sessionStatus(custom({ displayStatus: 'working', isRunning: true }))).toBe('running');
   });
-  it('worktree-missing stays highest precedence when both flags are set', () => {
-    expect(deriveSessionBadge(base({ worktreeMissing: true, transcriptMissing: true }), false)).toEqual({
-      base: 'worktree-missing',
-      unread: false,
-    });
-  });
-  it('transcript-missing outranks waiting; unread rides alongside', () => {
-    expect(deriveSessionBadge(base({ transcriptMissing: true, hasPending: true }), true)).toEqual({
-      base: 'transcript-missing',
-      unread: true,
-    });
-  });
-});
 
-describe('deriveSessionBadge — sideChatWaiting (todo #344)', () => {
-  it('sideChatWaiting outranks working — a pending gate beats a working turn', () => {
-    expect(deriveSessionBadge(base({ sideChatWaiting: true, displayStatus: 'working' }), false)).toEqual({
-      base: 'waiting',
-      unread: false,
-    });
+  it('stays running while sub-agents outlive the turn', () => {
+    expect(sessionStatus(custom({ displayStatus: 'working', isRunning: false }))).toBe('running');
   });
-  it('sideChatWaiting still loses to transcript-missing and worktree-missing', () => {
-    expect(deriveSessionBadge(base({ sideChatWaiting: true, transcriptMissing: true }), false)).toEqual({
-      base: 'transcript-missing',
-      unread: false,
-    });
-    expect(deriveSessionBadge(base({ sideChatWaiting: true, worktreeMissing: true }), false)).toEqual({
-      base: 'worktree-missing',
-      unread: false,
-    });
+
+  it('needs you on the chat’s own gate — permission, question or plan', () => {
+    expect(sessionStatus(custom({ displayStatus: 'waiting', hasPending: true }))).toBe('needs-you');
   });
-  it('no sideChatWaiting falls through to the chat’s own working/waiting/idle', () => {
-    expect(deriveSessionBadge(base({ sideChatWaiting: false, displayStatus: 'working' }), false)).toEqual({
-      base: 'working',
-      unread: false,
-    });
+
+  it.each(['sideChatWaiting', 'delegatedWaiting'] as const)('%s outranks a running turn', (flag) => {
+    expect(sessionStatus(custom({ displayStatus: 'working', [flag]: true }))).toBe('needs-you');
+  });
+
+  it('a missing checkout or transcript does not hide what the session is doing', () => {
+    expect(sessionStatus(custom({ worktreeMissing: true, displayStatus: 'working' }))).toBe('running');
+    expect(sessionStatus(custom({ transcriptMissing: true, hasPending: true }))).toBe('needs-you');
+    expect(sessionStatus(custom({ worktreeMissing: true }))).toBe('idle');
   });
 });

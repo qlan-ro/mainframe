@@ -25,6 +25,7 @@
  */
 import type { SessionItem } from './chat-to-thread-custom';
 import { lineageAnchors, nestForks } from './fork-lineage';
+import { sessionStatus, type SessionStatus } from './session-status';
 
 export type SortMode = 'recent' | 'name' | 'status' | 'project';
 
@@ -35,9 +36,10 @@ export const SESSION_SORTS = [
   { id: 'project', label: 'Project' },
 ] as const;
 
-const SESSION_STATUS_RANK: Record<string, number> = {
-  working: 0,
-  waiting: 1,
+/** Follows the rows: what needs the user first, then what is running. */
+const SESSION_STATUS_RANK: Record<SessionStatus, number> = {
+  'needs-you': 0,
+  running: 1,
   idle: 2,
 };
 
@@ -231,8 +233,7 @@ export function arrangeSessions(
   if (mode === 'status') {
     const sorted = [...rest].sort(
       (a, b) =>
-        (SESSION_STATUS_RANK[a.custom.displayStatus] ?? 3) - (SESSION_STATUS_RANK[b.custom.displayStatus] ?? 3) ||
-        byRecency(a, b),
+        SESSION_STATUS_RANK[sessionStatus(a.custom)] - SESSION_STATUS_RANK[sessionStatus(b.custom)] || byRecency(a, b),
     );
     return arrangeFlat(pinned, sorted, 'By status', lineage);
   }

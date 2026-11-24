@@ -77,15 +77,16 @@ export function SessionSidebar() {
     useMemo<SessionItem[]>(() => listedThreadItemsToSessionItems(threadItems), [threadItems]),
   );
 
-  const { filterProjectIds, selectedTags, selectedSynthetic, sortMode } = useSessionFilters();
+  const { filterProjectIds, statusFilter, selectedTags, selectedSynthetic, sortMode } = useSessionFilters();
 
-  const hasFilters = filterProjectIds.size > 0 || selectedTags.size > 0 || selectedSynthetic.size > 0;
+  const hasFilters =
+    filterProjectIds.size > 0 || statusFilter !== 'all' || selectedTags.size > 0 || selectedSynthetic.size > 0;
   const registry = useTagRegistry(useDaemonPort());
   const { projects } = useProjects();
 
   const filteredItems = useMemo(
-    () => applySessionFilters(allItems, { filterProjectIds, selectedTags, selectedSynthetic }),
-    [allItems, filterProjectIds, selectedTags, selectedSynthetic],
+    () => applySessionFilters(allItems, { filterProjectIds, statusFilter, selectedTags, selectedSynthetic }),
+    [allItems, filterProjectIds, statusFilter, selectedTags, selectedSynthetic],
   );
 
   const sortedProjects = useMemo(() => sortProjectsByRecentActivity(projects, allItems), [projects, allItems]);

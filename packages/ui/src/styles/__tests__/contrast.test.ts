@@ -175,11 +175,32 @@ describe('v2 contrast guardrail', () => {
     ).toBeGreaterThanOrEqual(WCAG_MIN);
   });
 
+  it.each(THEMES)('a session row stays readable on every fill it wears — %s', (theme) => {
+    // The session list sits on `background` (AppSidebar re-points `--sidebar`);
+    // hover and selection are `sidebar-accent`, at 60% and full strength.
+    const t = resolve(theme);
+    const ground = color(t, '--background');
+    const accent = color(t, '--sidebar-accent');
+    const ink = color(t, '--sidebar-foreground');
+    const at = (c: RGBA, a: number): RGBA => ({ ...c, a: c.a * a });
+    const rest = [ground];
+    const filled = [composite(at(accent, 0.6), ground), composite(accent, ground)];
+    for (const bg of rest) {
+      expect(inkOn(color(t, '--muted-foreground'), bg), `time at rest (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+    }
+    for (const bg of [...rest, ...filled]) {
+      expect(inkOn(at(ink, 0.85), bg), `title (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+      expect(inkOn(at(ink, 0.8), bg), `time on a filled row (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+      expect(inkOn(color(t, '--warning'), bg), `needs you (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+      expect(inkOn(color(t, '--primary'), bg), `spinner (${theme})`).toBeGreaterThanOrEqual(3);
+      const tile = composite(at(ink, 0.08), bg);
+      expect(inkOn(at(ink, 0.75), tile), `project letter (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+    }
+  });
+
   it.each(THEMES)('warning — the caution ink — clears 4.5:1 as TEXT — %s', (theme) => {
     // Unlike success/destructive this one IS body text: the composer edit banner,
-    // git divergence and worktree rows all render `text-warning` — and, since
-    // the redesign, so does a waiting sidebar row's "your turn" label
-    // (SessionRowMetaLine) on the `sidebar` surface.
+    // git divergence and worktree rows all render `text-warning`.
     const t = resolve(theme);
     const ink = color(t, '--warning');
     for (const name of ['background', 'card', 'sidebar'] as const) {

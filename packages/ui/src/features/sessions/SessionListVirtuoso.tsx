@@ -21,38 +21,33 @@ import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-
 import { SidebarMenu } from '@/components/ui/sidebar';
 import { JUMP_HEADER_HEIGHT } from '../shared/SidebarJumpSection';
 import { useScrollRegion } from '../shared/SidebarScrollRegion';
-import { SessionGroupHeader } from './SessionGroupHeader';
-
-const PINNED_GROUP_LABEL = 'Pinned';
+import { GROUP_GAP, SessionGroupHeader } from './SessionGroupHeader';
 
 /**
  * One `<ul>` per row. Rows are `SidebarMenuItem`s — `<li>` elements — and
  * Virtuoso interleaves them with group-header divs, so a single list wrapper
  * would have to hold both. Per-row lists keep the markup valid without giving
- * up the stock menu contract.
- *
- * The gap is padding rather than the menu's own `gap`, which cannot reach
- * across two sibling lists: without it a hovered row and the selected row above
- * it fuse into one fill.
+ * up the stock menu contract. Rows touch: the list runs on one 28px pitch (L4).
  */
 function SessionsItem(props: ComponentPropsWithoutRef<'ul'>) {
-  return <SidebarMenu {...props} className="gap-0 pb-2" />;
+  return <SidebarMenu {...props} className="gap-0" />;
 }
 
 /**
  * Virtuoso sticks group headers at `top: 0` of the scroll parent, which is where
- * the list's own parked header already sits. Offsetting by its height lets the
- * two stack instead of the group header sliding underneath it.
+ * the list's own parked header already sits. Offsetting by its height stacks the
+ * two — less the space above the group, which a stuck header tucks behind the
+ * parked one so only its 24px label shows.
  */
 function SessionsGroup({ style, ...rest }: ComponentPropsWithoutRef<'div'>) {
-  return <div {...rest} style={{ ...style, top: JUMP_HEADER_HEIGHT }} />;
+  return <div {...rest} style={{ ...style, top: JUMP_HEADER_HEIGHT - GROUP_GAP }} />;
 }
 
 const VIRTUOSO_COMPONENTS = { Item: SessionsItem, Group: SessionsGroup };
 
 export interface SessionListVirtuosoProps {
   groups: SessionGroupResult[];
-  renderItem: (item: SessionItem, flags: { inPinnedGroup: boolean; depth: 0 | 1 | 2 }) => ReactNode;
+  renderItem: (item: SessionItem, flags: { depth: 0 | 1 | 2 }) => ReactNode;
 }
 
 export function SessionListVirtuoso({ groups, renderItem }: SessionListVirtuosoProps) {
@@ -106,10 +101,7 @@ export function SessionListVirtuoso({ groups, renderItem }: SessionListVirtuosoP
         const item = flatItems[index];
         const group = groups[groupIndex];
         if (item == null || group == null) return null;
-        return renderItem(item, {
-          inPinnedGroup: group.label === PINNED_GROUP_LABEL,
-          depth: group.depths[item.id] ?? 0,
-        });
+        return renderItem(item, { depth: group.depths[item.id] ?? 0 });
       }}
     />
   );

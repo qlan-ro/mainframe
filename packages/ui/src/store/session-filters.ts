@@ -12,6 +12,7 @@
  */
 import { create } from 'zustand';
 import type { SyntheticTag } from '@qlan-ro/mainframe-types';
+import type { StatusFilter } from '@/features/sessions/filter/apply-session-filters';
 import type { SortMode } from '@/features/sessions/view-model/group-sessions';
 import { daemonScopedKey } from '@/lib/daemon/daemon-scoped-storage';
 
@@ -44,6 +45,8 @@ export function projectsInScopeOrAll<T extends { id: string }>(
 
 interface SessionFiltersState {
   filterProjectIds: ReadonlySet<string>;
+  /** The filter menu's "Show" pick. Not persisted: it names a moment, not a preference. */
+  statusFilter: StatusFilter;
   selectedTags: Set<string>;
   selectedSynthetic: Set<SyntheticTag>;
   /** Active sessions-list sort: drives arrangeSessions grouping/ordering. */
@@ -54,6 +57,7 @@ interface SessionFiltersState {
   clearProjectFilter: () => void;
   /** Drop a deleted project from the scope; the rest of the scope survives. */
   removeFilterProject: (id: string) => void;
+  setStatusFilter: (filter: StatusFilter) => void;
   toggleTag: (t: string) => void;
   toggleSynthetic: (s: SyntheticTag) => void;
   setSortMode: (mode: SortMode) => void;
@@ -89,6 +93,7 @@ function loadPersistedProjectIds(): ReadonlySet<string> {
 
 export const useSessionFilters = create<SessionFiltersState>((set) => ({
   filterProjectIds: loadPersistedProjectIds(),
+  statusFilter: 'all',
   selectedTags: new Set<string>(),
   selectedSynthetic: new Set<SyntheticTag>(),
   sortMode: 'recent',
@@ -127,6 +132,8 @@ export const useSessionFilters = create<SessionFiltersState>((set) => ({
 
   setSortMode: (mode) => set({ sortMode: mode }),
 
+  setStatusFilter: (statusFilter) => set({ statusFilter }),
+
   toggleTag: (t) =>
     set((state) => {
       const next = new Set(state.selectedTags);
@@ -153,6 +160,7 @@ export const useSessionFilters = create<SessionFiltersState>((set) => ({
     persistProjectIds(new Set());
     set({
       filterProjectIds: new Set<string>(),
+      statusFilter: 'all',
       selectedTags: new Set<string>(),
       selectedSynthetic: new Set<SyntheticTag>(),
     });

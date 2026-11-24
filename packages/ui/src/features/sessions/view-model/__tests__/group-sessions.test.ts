@@ -186,7 +186,7 @@ describe("arrangeSessions mode 'name'", () => {
 });
 
 // ---------------------------------------------------------------------------
-// mode 'status' — a single By status group ranked working→waiting→idle
+// mode 'status' — a single By status group ranked needs-you→running→idle
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -320,15 +320,16 @@ describe("arrangeSessions mode 'project'", () => {
 });
 
 describe("arrangeSessions mode 'status'", () => {
-  it('orders By status working then waiting then idle', () => {
+  it('orders By status needs-you, then running, then idle', () => {
     const items = [
       item('idle1', { displayStatus: 'idle' }),
       item('working1', { displayStatus: 'working' }),
-      item('waiting1', { displayStatus: 'waiting' }),
+      item('waiting1', { displayStatus: 'waiting', hasPending: true }),
+      item('child-waiting1', { displayStatus: 'working', delegatedWaiting: true }),
     ];
     const groups = arrangeSessions(items, 'status', NOW);
     expect(labels(groups)).toEqual(['By status']);
-    expect(idsOf(groups, 'By status')).toEqual(['working1', 'waiting1', 'idle1']);
+    expect(idsOf(groups, 'By status')).toEqual(['child-waiting1', 'waiting1', 'working1', 'idle1']);
   });
 
   it('surfaces pinned items in a Pinned group ahead of By status', () => {
@@ -339,7 +340,7 @@ describe("arrangeSessions mode 'status'", () => {
     expect(idsOf(groups, 'By status')).toEqual(['idle1']);
   });
 
-  it('resolves same-status ties by updatedAt descending while rank order stays working/waiting/idle', () => {
+  it('resolves same-status ties by updatedAt descending while the rank order holds', () => {
     const items = [
       item('w1', { displayStatus: 'working', updatedAt: TODAY_0900 }),
       item('i-old', { displayStatus: 'idle', updatedAt: EARLIER_MON }),

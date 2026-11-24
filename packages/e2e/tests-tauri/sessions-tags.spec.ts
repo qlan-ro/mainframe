@@ -47,7 +47,7 @@
  *   sessions-tag-color-<c>           — a palette swatch button (TAG_PALETTE from mainframe-types)
  *   sessions-tag-delete-confirm      — delete confirm dialog root
  *   sessions-tag-delete-confirm-cancel / -ok — dialog buttons
- *   sessions-row-meta-tag-dot-<name> — applied-tag dot on the row meta line
+ *   sessions-meta-card-tags          — applied tags on the row's hover card
  *   sessions-filter-button           — the group header's tag-filter trigger (opens the menu)
  *   sessions-tag-filter-<name>       — a tag's checkbox item inside that filter menu
  *
@@ -145,6 +145,29 @@ async function expectTagInFilterMenu(page: Page, name: string, listed: boolean):
   await expect(page.getByTestId('sessions-tag-filter-bar')).toHaveCount(0, { timeout: 5_000 });
 }
 
+/** Rows carry no tag marks; the row's hover card lists what is applied. */
+async function expectRowTags(page: Page, row: Locator, applied: string[], absent: string[] = []): Promise<void> {
+  await page.mouse.move(0, 0);
+  await expect(hoverCards(page)).toHaveCount(0, { timeout: 5_000 });
+  await row.hover();
+  await expect(hoverCards(page)).toBeVisible({ timeout: 5_000 });
+  const tags = page.getByTestId('sessions-meta-card-tags');
+  for (const name of applied) await expect(tags.getByText(name, { exact: true })).toBeVisible({ timeout: 10_000 });
+  for (const name of absent) await expect(tags.getByText(name, { exact: true })).toHaveCount(0, { timeout: 10_000 });
+  await page.mouse.move(0, 0);
+  await expect(hoverCards(page)).toHaveCount(0, { timeout: 5_000 });
+}
+
+/** The tag's colour as the filter menu paints it. */
+async function filterMenuTagColor(page: Page, name: string): Promise<string> {
+  await page.getByTestId('sessions-filter-button').click();
+  const dot = page.getByTestId(`sessions-tag-filter-${name}`).locator('span[style]').first();
+  const color = await dot.evaluate((el) => (el as HTMLElement).style.backgroundColor);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('sessions-tag-filter-bar')).toHaveCount(0, { timeout: 5_000 });
+  return color;
+}
+
 /** Right-click a registry row to open its item context menu. */
 async function openRegistryItemMenu(page: Page, name: string): Promise<void> {
   await page.getByTestId(`sessions-tag-toggle-${name}`).click({ button: 'right' });
@@ -223,7 +246,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     await closePopover(page);
 
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible({ timeout: 5_000 });
+    await expectRowTags(page, row, [TAG_A]);
     await expectTagInFilterMenu(page, TAG_A, true);
   });
 
@@ -234,7 +257,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await waitConnected(page);
 
     const row = sessionsSidebar(page).row(chatId);
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible({ timeout: 10_000 });
+    await expectRowTags(page, row, [TAG_A]);
 
     await openViaHoverAction(page, row);
     await expect(page.getByTestId(`sessions-tag-toggle-${TAG_A}`)).toHaveAttribute('data-checked', 'true');
@@ -260,8 +283,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     await closePopover(page);
 
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible();
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_B}`)).toBeVisible();
+    await expectRowTags(page, row, [TAG_A, TAG_B]);
   });
 
   test('search field filters the registry list', async () => {
@@ -282,7 +304,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await closePopover(page);
   });
 
-  test('toggles a tag off, removing its dot from the row', async () => {
+  test('toggles a tag off, removing it from the hover card', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
 
@@ -293,8 +315,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     await closePopover(page);
 
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_B}`)).toHaveCount(0, { timeout: 5_000 });
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toBeVisible();
+    await expectRowTags(page, row, [TAG_A], [TAG_B]);
   });
 
   // The context menu's close-focus-restore used to blur-and-commit the rename
@@ -319,12 +340,11 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     await closePopover(page);
 
     // Rename cascades to every thread carrying the old name (spec §5.5).
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`)).toBeVisible({ timeout: 10_000 });
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A}`)).toHaveCount(0);
+    await expectRowTags(page, row, [TAG_A_RENAMED], [TAG_A]);
     await expectTagInFilterMenu(page, TAG_A_RENAMED, true);
   });
 
-  // Previously: a registry-only recolor never updated the row's tag dot color
+  // Previously: a registry-only recolor never updated the tag's dot color elsewhere
   // (`SessionSidebar.tsx` and `TagPopoverHost.tsx` each held their own
   // independent `useTagRegistry` instance with no cross-invalidation). Fixed
   // by the product-bug-fix campaign; the dot now picks up the new color.
@@ -334,9 +354,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
   test('recolors a tag via the recolor panel (registry-only — no cascade needed for the name)', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
-    const dot = row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`);
-    const readBackgroundColor = () => dot.evaluate((el) => (el as HTMLElement).style.backgroundColor);
-    const styleBefore = await readBackgroundColor();
+    const colorBefore = await filterMenuTagColor(page, TAG_A_RENAMED);
 
     await openViaHoverAction(page, row);
     await openRegistryItemMenu(page, TAG_A_RENAMED);
@@ -345,8 +363,8 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
     const panel = page.getByTestId('sessions-tag-recolor-panel');
     await expect(panel).toBeVisible({ timeout: 5_000 });
     const redSwatch = page.getByTestId('sessions-tag-color-red');
-    // Read the swatch's own rendered color before clicking it — comparing the dot
-    // to this DOM-observed value (not a hardcoded oklch string) avoids coupling
+    // Read the swatch's own rendered color before clicking it — comparing the menu's
+    // dot to this DOM-observed value (not a hardcoded oklch string) avoids coupling
     // the assertion to browser-specific oklch() serialization.
     const redSwatchColor = await redSwatch.evaluate((el) => (el as HTMLElement).style.backgroundColor);
     expect(redSwatchColor).not.toBe('');
@@ -358,9 +376,8 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     await closePopover(page);
 
-    await expect(dot).toBeVisible({ timeout: 5_000 });
-    await expect.poll(readBackgroundColor, { timeout: 10_000 }).not.toBe(styleBefore);
-    await expect.poll(readBackgroundColor, { timeout: 5_000 }).toBe(redSwatchColor);
+    expect(redSwatchColor).not.toBe(colorBefore);
+    await expect.poll(() => filterMenuTagColor(page, TAG_A_RENAMED), { timeout: 15_000 }).toBe(redSwatchColor);
   });
 
   test('delete confirm dialog: Cancel keeps the tag in the registry', async () => {
@@ -386,7 +403,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
   // Deletes TAG_A_RENAMED (TAG_A's post-rename name — see the recolor test's
   // note). It is still applied to the seeded chat, so this exercises the full
-  // cascade: registry row → row dot → filter menu item.
+  // cascade: registry row → hover card → filter menu item.
   test('delete confirm dialog: OK removes the tag from the registry, the row, and the filter menu', async () => {
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
@@ -404,9 +421,7 @@ test.describe('§sessions-tags Tag popover lifecycle', () => {
 
     await closePopover(page);
 
-    await expect(row.getByTestId(`sessions-row-meta-tag-dot-${TAG_A_RENAMED}`)).toHaveCount(0, {
-      timeout: 10_000,
-    });
+    await expectRowTags(page, row, [], [TAG_A_RENAMED]);
     await expectTagInFilterMenu(page, TAG_A_RENAMED, false);
   });
 

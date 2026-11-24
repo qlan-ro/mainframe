@@ -31,7 +31,7 @@ describe('SessionMetaCard — fork lineage lines', () => {
     expect(screen.getByTestId('sessions-meta-card-forked-from')).toHaveTextContent('"Parent Chat"');
   });
 
-  it('carries the same archived/deleted wording as the fallback glyph', () => {
+  it('carries the archived/deleted wording', () => {
     const { rerender } = render(
       <SessionMetaCard {...BASE_PROPS} parentState={{ kind: 'archived', title: 'Parent Chat' }} />,
     );
@@ -58,6 +58,21 @@ describe('SessionMetaCard — fork lineage lines', () => {
 
     expect(screen.getByTestId('sessions-meta-card-forked-from')).toBeInTheDocument();
     expect(screen.getByTestId('sessions-meta-card-fork-count')).toHaveTextContent('1x');
+  });
+});
+
+describe('SessionMetaCard — what the one-line row leaves out', () => {
+  it('says a temporary session is deleted when closed', () => {
+    const { rerender } = render(<SessionMetaCard {...BASE_PROPS} />);
+    expect(screen.queryByTestId('sessions-meta-card-temporary')).toBeNull();
+
+    rerender(<SessionMetaCard {...BASE_PROPS} temporary />);
+    expect(screen.getByTestId('sessions-meta-card-temporary')).toHaveTextContent('Temporary, deleted when closed');
+  });
+
+  it('carries the provider mark', () => {
+    render(<SessionMetaCard {...BASE_PROPS} adapterId="codex" />);
+    expect(screen.getByTestId('sessions-meta-card-provider')).toHaveAttribute('data-provider-id', 'openai');
   });
 });
 

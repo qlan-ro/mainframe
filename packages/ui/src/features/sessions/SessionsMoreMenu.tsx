@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useProjects } from '@/features/sessions/use-projects';
+import { JUMP_ACTION } from '@/features/shared/SidebarJumpSection';
 import { soleProjectId, useSessionFilters } from '@/store/session-filters';
 import { ArchivedSessionsDialog } from './ArchivedSessionsDialog';
 import { ImportSessionsDialog } from './ImportSessionsDialog';
@@ -43,7 +44,7 @@ export function SessionsMoreMenu() {
               size="icon-sm"
               data-testid="sessions-more-button"
               aria-label="More session actions"
-              className="size-5"
+              className={JUMP_ACTION}
             >
               <MoreHorizontalIcon />
             </Button>
