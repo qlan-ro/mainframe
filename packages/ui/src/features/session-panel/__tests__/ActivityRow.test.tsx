@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -115,30 +115,75 @@ describe('ActivityRow', () => {
 
 describe('ActivityRow — a background command’s output', () => {
   const command: ActivityEntry = { ...agent, kind: 'command', title: 'Build', command: 'pnpm build' };
-  const openOutput = async () => {
-    fireEvent.contextMenu(screen.getByTestId('session-panel-activity-task:a-1'));
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Full output' }));
-    return within(await screen.findByRole('dialog', { name: 'Build' }));
-  };
+  const onOutput = vi.fn();
 
-  it('opens from the row menu, reads once, and gives focus back to the row', async () => {
-    const read = vi.fn().mockResolvedValue('✓ built in 42s');
-    render(<ActivityRow row={command} now={1} onActivate={onActivate} readOutput={read} />);
-    expect(read).not.toHaveBeenCalled();
-    const dialog = await openOutput();
-    expect(await dialog.findByText('✓ built in 42s')).toBeInTheDocument();
-    expect(dialog.getByText('pnpm build')).toBeInTheDocument();
-    expect(read).toHaveBeenCalledOnce();
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(screen.getByTestId('session-panel-activity-task:a-1')).toHaveFocus());
+  it('is a Tab away from the row, before Stop', async () => {
+    render(<ActivityRow row={command} now={1} onActivate={onActivate} onOutput={onOutput} onStop={onStop} />);
+    await userEvent.tab();
+    await userEvent.tab();
+    expect(screen.getByRole('button', { name: 'Full output of Build' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(onOutput).toHaveBeenCalledOnce();
+    expect(onActivate).not.toHaveBeenCalled();
+    await userEvent.tab();
+    expect(screen.getByRole('button', { name: 'Stop Build' })).toHaveFocus();
   });
 
-  it('says when there is none, and when it could not be read', async () => {
-    const read = vi.fn().mockResolvedValueOnce('').mockRejectedValueOnce(new Error('Output request failed (500)'));
-    render(<ActivityRow row={command} now={1} onActivate={onActivate} readOutput={read} />);
-    expect(await (await openOutput()).findByText('No output')).toBeInTheDocument();
-    await userEvent.keyboard('{Escape}');
-    expect(await (await openOutput()).findByRole('alert')).toHaveTextContent('Output request failed (500)');
+  it('stays there once the command ended, and in the row menu', async () => {
+    render(
+      <ActivityRow
+        row={{ ...command, state: 'completed', endedAt: 1 }}
+        now={1}
+        onActivate={onActivate}
+        onOutput={onOutput}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Full output of Build' })).toBeInTheDocument();
+    fireEvent.contextMenu(screen.getByTestId('session-panel-activity-task:a-1'));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Full output' }));
+    expect(onOutput).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ActivityRow — focus and loading', () => {
+  it('says that history is loading, while its value would make way on hover', () => {
+    const view = render(<ActivityRow row={agent} now={1} onActivate={onActivate} onStop={onStop} loading />);
+    const row = screen.getByRole('button', { name: 'Agent: Review, loading' });
+    const value = within(row).getByText('loading');
+    expect(value.parentElement!.className).not.toContain('group-hover/activity:opacity-0');
+    view.rerender(<ActivityRow row={agent} now={1} onActivate={onActivate} onStop={onStop} />);
+    expect(within(row).queryByText('loading')).toBeNull();
+    expect(row.querySelector('[class*="group-hover/activity:opacity-0"]')).not.toBeNull();
+  });
+
+  it('gives focus to the row when its Stop goes away under it', () => {
+    const view = render(<ActivityRow row={agent} now={1} onActivate={onActivate} onStop={onStop} />);
+    screen.getByRole('button', { name: 'Stop Review' }).focus();
+    view.rerender(<ActivityRow row={agent} now={1} onActivate={onActivate} />);
+    expect(screen.getByTestId('session-panel-activity-task:a-1')).toHaveFocus();
+  });
+
+  it('gives focus to the row when an unfolded workflow’s Stop goes away under it', () => {
+    const view = render(<ActivityRow row={workflow} run={run} now={1} onActivate={onActivate} onStop={onStop} />);
+    const row = screen.getByTestId('session-panel-activity-task:wf-1');
+    fireEvent.click(row);
+    screen.getByTestId('session-panel-workflow-stop').focus();
+    view.rerender(<ActivityRow row={workflow} run={run} now={1} onActivate={onActivate} />);
+    expect(row).toHaveFocus();
+  });
+
+  it('keeps the focus of a row that can no longer be stopped', () => {
+    const view = render(<ActivityRow row={agent} now={1} onActivate={onActivate} onStop={onStop} />);
+    const row = screen.getByTestId('session-panel-activity-task:a-1');
+    row.focus();
+    view.rerender(<ActivityRow row={agent} now={1} onActivate={onActivate} />);
+    expect(row).toHaveFocus();
+  });
+
+  it('leaves focus where it is when Stop goes away without it', () => {
+    const view = render(<ActivityRow row={agent} now={1} onActivate={onActivate} onStop={onStop} />);
+    view.rerender(<ActivityRow row={agent} now={1} onActivate={onActivate} />);
+    expect(document.body).toHaveFocus();
   });
 });
 

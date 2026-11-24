@@ -162,6 +162,13 @@ describe('SessionStrip — changes', () => {
     expect(screen.queryByTestId('session-strip-changes')).toBeNull();
   });
 
+  it('reads the branch once, not again with the changes', () => {
+    renderStrip();
+    expect(useWorkingChangesSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ projectId: 'proj-1', chatId: 'chat-9', withBranch: false }),
+    );
+  });
+
   it('counts the files where the scope reports no totals', () => {
     mockChanges = { ...mockChanges, totalAdditions: undefined!, totalDeletions: undefined! };
     renderStrip();

@@ -58,6 +58,16 @@ describe('windowed history loading', () => {
     expect(f.client.historyPage).toHaveBeenCalledTimes(1);
   });
 
+  it('tells a dropped load from a finished one by its generation', async () => {
+    const f = fixture();
+    const before = f.history.loadGeneration;
+    f.client.historyPage = async (_, apply) => apply({ hasMore: false, floorItemId: 'old', stale: true });
+    expect(await f.history.load('missing')).toBe(false);
+    expect(f.history.loadGeneration).toBe(before);
+    f.history.invalidate();
+    expect(f.history.loadGeneration).not.toBe(before);
+  });
+
   it('drops a page after a replay changed the floor or the subscription detached', async () => {
     for (const invalidate of [
       (f: ReturnType<typeof fixture>) => f.history.reset({ hasMore: true, floorItemId: 'reset' }),

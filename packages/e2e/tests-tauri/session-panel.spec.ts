@@ -77,7 +77,8 @@
  *                                    the task-subagent, schedule-pills,
  *                                    background-command, workflow and Stop describes
  *                                    below cover each kind
- *   session-panel-activity-row-stop-<entryId> — its Stop, shown on hover and focus
+ *   session-panel-activity-row-stop-<entryId> / -row-output-<entryId> — its Stop, and a background
+ *                                    command's full output, shown on hover and focus
  *   session-panel-activity-output-<entryId> / session-panel-output-dialog — a background
  *                                    command's output, from its row menu
  *   session-panel-workflow-phase-<index> / -agent-<id> / -stop — an unfolded workflow
@@ -868,7 +869,14 @@ test.describe('§session-panel — Activity section (background-command)', () =>
           await route.fulfill({ response, json: { success: true, data: { tasks: [...data.tasks, monitor] } } });
         });
         await page.route(/\/background-tasks\/mock-toolu_bg_1\/output/, (route) =>
-          route.fulfill({ body: '12 tests passed', headers: { 'access-control-allow-origin': '*' } }),
+          route.fulfill({
+            body: '12 tests passed',
+            headers: {
+              'access-control-allow-origin': '*',
+              'access-control-expose-headers': 'x-output-truncated',
+              'x-output-truncated': 'true',
+            },
+          }),
         );
       },
     });
@@ -899,12 +907,30 @@ test.describe('§session-panel — Activity section (background-command)', () =>
     await expect(target.locator('[aria-expanded="true"]').first()).toBeFocused();
   });
 
-  test('its full output is in the row menu', async () => {
+  test('its full output is in the row menu, up to the daemon’s limit', async () => {
     const { page } = app;
+    const request = page.waitForRequest(/\/background-tasks\/mock-toolu_bg_1\/output/);
     await commandRow(page).click({ button: 'right' });
     await page.getByTestId('session-panel-activity-output-task:mock-toolu_bg_1').click();
+    expect(new URL((await request).url()).searchParams.get('bytes')).toBe('1048576');
     const dialog = page.getByTestId('session-panel-output-dialog');
     await expect(dialog.getByTestId('session-panel-output-text')).toHaveText('12 tests passed');
+    await expect(dialog.getByTestId('session-panel-output-truncated')).toContainText('last 1 MB');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(commandRow(page)).toBeFocused();
+  });
+
+  test('its full output is a Tab away from the row', async () => {
+    const { page } = app;
+    const output = page.getByTestId('session-panel-activity-row-output-task:mock-toolu_bg_1');
+    await commandRow(page).focus();
+    await page.keyboard.press('Tab');
+    await expect(output).toBeFocused();
+    await expect(output.locator('..')).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Enter');
+    const dialog = page.getByTestId('session-panel-output-dialog');
+    await expect(dialog.getByTestId('session-panel-output-text')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await expect(commandRow(page)).toBeFocused();
@@ -1002,7 +1028,7 @@ test.describe('§session-panel — Activity section (Stop)', () => {
     await closeTauriApp(app);
   });
 
-  test('the row’s Stop shows on hover and ends the work with one request', async () => {
+  test('the row’s Stop shows on hover, ends the work with one request and leaves focus on the row', async () => {
     const { page } = app;
     await sendMessage(page, 'Delegate a long task, I will stop you after');
     await ensurePanelOpen(page);
@@ -1012,16 +1038,23 @@ test.describe('§session-panel — Activity section (Stop)', () => {
 
     const stop = page.locator('[data-testid^="session-panel-activity-row-stop-delegated:"]');
     await page.mouse.move(0, 0);
-    await expect(stop).toHaveCSS('opacity', '0');
+    const actions = stop.locator('..');
+    await expect(actions).toHaveCSS('opacity', '0');
     await row.hover();
-    await expect(stop).toHaveCSS('opacity', '1');
+    await expect(actions).toHaveCSS('opacity', '1');
 
     const requests: string[] = [];
     page.on('request', (request) => {
       if (/\/delegated-tasks\/.*\/cancel$/.test(request.url()) && request.method() === 'POST')
         requests.push(request.url());
     });
-    await stop.dblclick();
+    await page.mouse.move(0, 0);
+    await row.focus();
+    await page.keyboard.press('Tab');
+    await expect(stop).toBeFocused();
+    await expect(actions).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
     await expect(page.getByText(/Stopped “.+”/)).toBeVisible({ timeout: 15_000 });
     // The mock child never ends its turn, so its row reads as a resumed chat
     // rather than stopped; the task itself is what Stop cancels.
@@ -1030,5 +1063,6 @@ test.describe('§session-panel — Activity section (Stop)', () => {
     });
     await expect(stop).toHaveCount(0);
     expect(requests).toHaveLength(1);
+    await expect(row).toBeFocused();
   });
 });

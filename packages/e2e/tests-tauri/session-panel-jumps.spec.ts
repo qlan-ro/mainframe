@@ -81,6 +81,7 @@ test.describe('§session-panel — jumps in a windowed session', () => {
   });
   test.beforeEach(async () => {
     const { page } = app;
+    wire.release();
     await page.reload();
     await waitConnected(page);
     await sessionsSidebar(page).row(seed.chatId).click();
@@ -122,6 +123,41 @@ test.describe('§session-panel — jumps in a windowed session', () => {
     await expect(page.getByText('started before the history shown here')).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('[data-activity-flash]')).toHaveCount(0);
     await expect(page.getByText('Needle turn 249', { exact: true })).toBeInViewport();
+  });
+
+  test('a row says it is loading, and a click on another row wins over its late history', async () => {
+    const { page } = app;
+    wire.holdPage = true;
+    await row(page, 'earlier-monitor').click();
+    await expect(page.getByRole('button', { name: 'Monitor: earlier-monitor, loading' })).toBeVisible();
+    await row(page, 'recent-monitor').click();
+    const landed = target(page, 'window-tool-244-1');
+    await expect(landed).toHaveAttribute('data-activity-flash', '', { timeout: 10_000 });
+    await expect(page.getByRole('button', { name: /, loading$/ })).toHaveCount(0);
+
+    wire.release();
+    await expect(page.getByTestId('chat-message-list')).not.toHaveAttribute(
+      'data-loaded-count',
+      String(WINDOWED_PAGE_CONTAINERS),
+    );
+    await expect(landed).not.toHaveAttribute('data-activity-flash', '', { timeout: 5_000 });
+    await expect(landed).toBeInViewport();
+    await expect(target(page, 'window-tool-239-1').locator('[aria-expanded="true"]')).toHaveCount(0);
+    await expect(page.locator('[data-activity-flash]')).toHaveCount(0);
+  });
+
+  test('leaving the session while its history loads says nothing about it in the next one', async () => {
+    const { page } = app;
+    wire.holdPage = true;
+    await row(page, 'earlier-monitor').click();
+    await expect(page.getByRole('button', { name: 'Monitor: earlier-monitor, loading' })).toBeVisible();
+    await sessionsSidebar(page).newButton().click();
+    await expect(row(page, 'earlier-monitor')).toHaveCount(0);
+    wire.release();
+    // Nothing is expected to appear; long enough for it to have.
+    await page.waitForTimeout(1_500);
+    await expect(page.getByText('started before the history shown here')).toHaveCount(0);
+    await expect(page.getByText('Could not load the message')).toHaveCount(0);
   });
 
   test('a row taller than the viewport lands on its top, with focus on it', async () => {

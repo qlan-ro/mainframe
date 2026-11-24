@@ -118,7 +118,14 @@ async function stubSession(page: Page, options: { tasks?: () => unknown[]; child
   await stub(page, /\/api\/chats\/[^/]+\/context$/, context);
   await stub(page, /\/api\/chats\/[^/]+\/workflow-runs$/, RUNS);
   await page.route(/\/background-tasks\/c1\/output/, (route) =>
-    route.fulfill({ body: OUTPUT, headers: { 'access-control-allow-origin': '*' } }),
+    route.fulfill({
+      body: OUTPUT,
+      headers: {
+        'access-control-allow-origin': '*',
+        'access-control-expose-headers': 'x-output-truncated',
+        'x-output-truncated': 'true',
+      },
+    }),
   );
   await page.route(/\/api\/chats\/[^/]+\/background-tasks$/, (route) =>
     route.fulfill({ json: { success: true, data: { tasks: tasks() } }, headers: { 'access-control-allow-origin': '*' } }),
@@ -392,7 +399,7 @@ const area: CaptureArea = {
         },
         {
           id: 'row-stop',
-          caption: '**Hover or focus.** A row that can be stopped shows Stop in place of its value (until K4).',
+          caption: '**Hover or focus.** A row that can be stopped shows Stop in place of its value (until K4), and a background command its full output.',
           crop: 'session-panel-card-activity',
           pad: 12,
           setup: async ({ page }) => {
@@ -413,7 +420,7 @@ const area: CaptureArea = {
         },
         {
           id: 'command-output',
-          caption: '**Full output.**',
+          caption: '**Full output.** Up to its last 1 MB; it says when the start is left out. It stays open when the command ends.',
           crop: 'session-panel-output-dialog',
           pad: 12,
           setup: async ({ page }) => {

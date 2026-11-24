@@ -3,7 +3,7 @@
  * state, the running phase's agents, the agents no phase names, and Stop while
  * it runs.
  */
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Bot, Check, Circle, CircleStop, CircleX } from 'lucide-react';
 import type { ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -18,6 +18,7 @@ import {
 import { isTerminalRunStatus } from '@/features/chat/workflow/workflow-progress';
 import { cn } from '@/lib/utils';
 import { ActivitySpinner } from './ActivitySpinner';
+import { useFocusLoss } from './use-row-focus';
 
 /** A phase's glyph, its word for screen readers, and the value when it has no time to show. */
 const PHASE: Record<PhaseStatus, { glyph: ReactNode; label: string; value: string }> = {
@@ -107,18 +108,46 @@ function PhaselessAgents({ agents, run }: { agents: ViewAgent[]; run: ClaudeWork
   );
 }
 
+interface StopRunProps {
+  title: string;
+  stopping: boolean;
+  onStop: () => void;
+  onFocusLost?: () => void;
+}
+
+function StopRun({ title, stopping, onStop, onFocusLost }: StopRunProps) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useFocusLoss(ref, onFocusLost);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      data-testid="session-panel-workflow-stop"
+      aria-label={stopping ? `Stopping ${title}` : `Stop ${title}`}
+      aria-disabled={stopping}
+      onClick={onStop}
+      className="-ml-2 flex h-6 items-center rounded-md px-2 font-medium text-destructive transition-colors hover:bg-destructive/10 aria-disabled:pointer-events-none aria-disabled:text-muted-foreground"
+    >
+      {stopping ? 'Stopping' : 'Stop'}
+    </button>
+  );
+}
+
 export function WorkflowPhases({
   title,
   run,
   now,
   onStop,
   stopping = false,
+  onFocusLost,
 }: {
   title: string;
   run: ClaudeWorkflowRun;
   now: number;
   onStop?: () => void;
   stopping?: boolean;
+  /** Stop is going away with the focus on it. */
+  onFocusLost?: () => void;
 }) {
   const view = neutralizedRun(run, now);
   const { all: phases, orphans } = runTimeline(view);
@@ -135,18 +164,7 @@ export function WorkflowPhases({
         </ol>
       )}
       {orphans.length > 0 && <PhaselessAgents agents={orphans} run={run} />}
-      {onStop && (
-        <button
-          type="button"
-          data-testid="session-panel-workflow-stop"
-          aria-label={stopping ? `Stopping ${title}` : `Stop ${title}`}
-          aria-disabled={stopping}
-          onClick={onStop}
-          className="-ml-2 flex h-6 items-center rounded-md px-2 font-medium text-destructive transition-colors hover:bg-destructive/10 aria-disabled:pointer-events-none aria-disabled:text-muted-foreground"
-        >
-          {stopping ? 'Stopping' : 'Stop'}
-        </button>
-      )}
+      {onStop && <StopRun title={title} stopping={stopping} onStop={onStop} onFocusLost={onFocusLost} />}
     </div>
   );
 }

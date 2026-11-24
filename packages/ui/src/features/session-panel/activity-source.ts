@@ -47,8 +47,12 @@ function openDisclosure(anchor: HTMLElement): HTMLElement | null {
   return trigger;
 }
 
-async function revealRow(chatId: string, toolCallId: string): Promise<HTMLElement | undefined> {
-  for (let frame = 0; frame < REVEAL_FRAMES; frame++) {
+async function revealRow(
+  chatId: string,
+  toolCallId: string,
+  isCurrent: () => boolean,
+): Promise<HTMLElement | undefined> {
+  for (let frame = 0; frame < REVEAL_FRAMES && isCurrent(); frame++) {
     const row = findAnchor(chatId, 'activityId', toolCallId);
     if (row) return row;
     const group = findAnchor(chatId, 'activityGroup', toolCallId);
@@ -78,7 +82,15 @@ async function locateSource(chatId: string, { messageId, toolCallId }: ActivityS
   };
   const target = toolCallId ?? messageId;
   if (!controller || !target) return messageId ? { messageId, toolCallId } : undefined;
-  return loaded() ?? ((await controller.loadEarlier(target)) ? loaded() : undefined);
+  const found = loaded();
+  if (found) return found;
+  const generation = controller.historyGeneration;
+  await controller.loadEarlier(target);
+  const arrived = loaded();
+  // A load stopped on the way (the session was left or reloaded) says nothing about what the history holds.
+  if (!arrived && controller.historyGeneration !== generation)
+    throw new Error('The session reloaded meanwhile. Try again.');
+  return arrived;
 }
 
 function focusElement(element: HTMLElement): void {
@@ -86,53 +98,74 @@ function focusElement(element: HTMLElement): void {
   element.focus({ preventScroll: true });
 }
 
-/** Only the last jump asked for still scrolls and takes focus. */
+/** Only the last jump asked for still opens rows, scrolls and takes focus. */
 let latestJump = 0;
+
+/** Drops the jump on its way, for an action that shows something else. */
+export function cancelActivityJump(): void {
+  latestJump++;
+}
+
+/** `missing`: the history doesn't hold it. `superseded`: something else was asked for, or the session was left. */
+export type JumpOutcome = 'shown' | 'missing' | 'superseded';
 
 async function showSource(
   chatId: string,
   source: LocatedSource,
-  isLatest: () => boolean,
+  isCurrent: () => boolean,
   settled: Promise<void>,
-): Promise<boolean> {
+): Promise<JumpOutcome> {
   const mount = () =>
     window.dispatchEvent(new CustomEvent<ActivityJump>(ACTIVITY_JUMP_EVENT, { detail: { chatId, source, settled } }));
   mount();
   const message = await waitForMessage(chatId, source.messageId);
-  if (!message) return false;
-  if (!isLatest()) return true;
+  if (!isCurrent()) return 'superseded';
+  if (!message) return 'missing';
   mount();
   const { toolCallId } = source;
-  const revealed = toolCallId ? await revealRow(chatId, toolCallId) : undefined;
-  if (!isLatest()) return true;
+  const revealed = toolCallId ? await revealRow(chatId, toolCallId, isCurrent) : undefined;
   const target = () =>
     (toolCallId ? findAnchor(chatId, 'activityId', toolCallId) : undefined) ?? messageElement(chatId, source.messageId);
   const trigger = revealed && openDisclosure(revealed);
   await nextFrame();
+  if (!isCurrent()) return 'superseded';
   const landed = target() ?? message;
   highlight(landed);
   focusElement(trigger ?? landed);
   const viewport = transcript(chatId);
-  if (viewport) await scrollToRow(viewport, target);
+  if (viewport) await scrollToRow(viewport, () => (isCurrent() ? target() : undefined));
   // A row remounted on the way takes its focus with it.
-  if (isLatest() && document.activeElement === document.body) {
+  if (isCurrent() && document.activeElement === document.body) {
     const row = target();
     if (row) focusElement(row.querySelector<HTMLElement>('[aria-expanded]') ?? row);
   }
-  return true;
+  return 'shown';
 }
 
-/** Scrolls the transcript to an activity's row, opened and highlighted. False when the history doesn't hold it. */
-export async function jumpToActivitySource(chatId: string, source: ActivitySource): Promise<boolean> {
+/**
+ * Scrolls the transcript to an activity's row, opened and highlighted.
+ * `onLocated` runs once its message is known, before anything moves.
+ */
+export async function jumpToActivitySource(
+  chatId: string,
+  source: ActivitySource,
+  onLocated?: () => void,
+): Promise<JumpOutcome> {
   const jump = ++latestJump;
-  const located = await locateSource(chatId, source);
-  if (!located) return false;
+  const isCurrent = () => jump === latestJump && transcript(chatId) !== undefined;
   let settle = () => {};
   const settled = new Promise<void>((resolve) => {
     settle = resolve;
   });
   try {
-    return await showSource(chatId, located, () => jump === latestJump, settled);
+    const located = await locateSource(chatId, source);
+    if (!isCurrent()) return 'superseded';
+    if (!located) return 'missing';
+    onLocated?.();
+    return await showSource(chatId, located, isCurrent, settled);
+  } catch (error) {
+    if (!isCurrent()) return 'superseded';
+    throw error;
   } finally {
     settle();
   }

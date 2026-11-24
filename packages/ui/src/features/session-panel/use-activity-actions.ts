@@ -2,24 +2,28 @@
  * use-activity-actions — what an Activity row does: its main action, the jump
  * to its transcript row, a background command's output, and Stop.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import { useAui } from '@assistant-ui/react';
 import { useZonesStore } from '@/features/chat/zones/zones-store';
 import { openInSplit } from '@/features/chat/zones/open-in-split';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
-import { cancelDelegatedTask, readBackgroundTaskOutput, stopBackgroundTask } from '@/lib/api/background-tasks';
-import { mfToast } from '@/lib/toast';
+import {
+  cancelDelegatedTask,
+  readBackgroundTaskOutput,
+  stopBackgroundTask,
+  type BackgroundTaskOutput,
+} from '@/lib/api/background-tasks';
 import { isOngoing, type ActivityEntry } from './activity-model';
-import { focusPendingRequest, jumpToActivitySource } from './activity-source';
+import { focusPendingRequest } from './activity-source';
 import { usePanelControl, type PanelColumnId } from './panel-control-store';
-
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+import type { ActivityJumps } from './use-activity-jump';
+import { useStop } from './use-stop';
 
 export interface ActivityActions {
   onActivate: () => void;
   onJump?: () => void;
   /** Reads a background command's output, which no transcript row shows. */
-  readOutput?: () => Promise<string>;
+  readOutput?: () => Promise<BackgroundTaskOutput>;
   onStop?: () => void;
   /** A Stop was asked for and the work hasn't ended yet. */
   stopping: boolean;
@@ -33,35 +37,6 @@ function stopRequest(row: ActivityEntry, chatId: string, adapterId: string | und
   return task && adapterId === 'claude' ? () => stopBackgroundTask(chatId, task.id) : undefined;
 }
 
-/** How long a Stop that went through may take to show before it can be asked for again. */
-const STOP_RETRY_MS = 10_000;
-
-/** One Stop at a time: until the work ends, the request fails, or it had time to take effect. */
-function useStop(title: string, request: (() => Promise<void>) | undefined) {
-  const [stopping, setStopping] = useState(false);
-  const pending = useRef(false);
-  const retry = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(retry.current), []);
-  const release = () => {
-    pending.current = false;
-    setStopping(false);
-  };
-  const stop = async () => {
-    if (!request || pending.current) return;
-    pending.current = true;
-    setStopping(true);
-    try {
-      await request();
-      mfToast.success(`Stopped “${title}”`);
-      retry.current = setTimeout(release, STOP_RETRY_MS);
-    } catch (error) {
-      release();
-      mfToast.error(`Could not stop “${title}”`, { description: messageOf(error) });
-    }
-  };
-  return { onStop: request && (() => void stop()), stopping: stopping && request !== undefined };
-}
-
 function useReadOutput(row: ActivityEntry, chatId: string) {
   const taskId = row.kind === 'command' ? row.task?.id : undefined;
   const read = useCallback(() => readBackgroundTaskOutput(chatId, taskId ?? ''), [chatId, taskId]);
@@ -70,7 +45,12 @@ function useReadOutput(row: ActivityEntry, chatId: string) {
 
 export function useActivityActions(
   row: ActivityEntry,
-  { chatId, adapterId, columnId }: { chatId: string; adapterId?: string; columnId: PanelColumnId },
+  {
+    chatId,
+    adapterId,
+    columnId,
+    jumps,
+  }: { chatId: string; adapterId?: string; columnId: PanelColumnId; jumps: ActivityJumps },
 ): ActivityActions {
   const aui = useAui();
   const threadId = useSideAwareThreadId();
@@ -85,23 +65,11 @@ export function useActivityActions(
   /** The floating panel covers what the action is about to show. */
   const reveal = () => setOverlayOpen(columnId, false);
 
-  const outOfHistory = () => mfToast.info(`“${row.title}” started before the history shown here`);
-
-  const jump = () => {
-    if (!source) {
-      outOfHistory();
-      return;
-    }
-    reveal();
-    jumpToActivitySource(chatId, source).then(
-      (found) => {
-        if (!found) outOfHistory();
-      },
-      (error: unknown) => mfToast.error('Could not load the message', { description: messageOf(error) }),
-    );
-  };
+  const jump = () => jumps.jump(row);
 
   const activate = () => {
+    // A jump still on its way would move the transcript under what this opens.
+    jumps.cancel();
     if (childId && threadId) {
       reveal();
       openInSplit(threadId, childId);

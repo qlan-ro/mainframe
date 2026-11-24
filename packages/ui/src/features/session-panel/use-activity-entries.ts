@@ -5,6 +5,7 @@ import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { useSessionItems } from '@/features/chat/orchestration/use-session-items';
 import { delegatedTasksOf } from '@/features/sessions/view-model/agent-provenance';
 import { listBackgroundTasks } from '@/lib/api/background-tasks';
+import { errorMessage } from '@/lib/error-message';
 import {
   agentsAwaiting,
   anchorEntries,
@@ -67,7 +68,7 @@ export function useActivityEntries() {
         }
       },
       (error: unknown) => {
-        if (active) setLoadError(error instanceof Error ? error.message : String(error));
+        if (active) setLoadError(errorMessage(error));
       },
     );
     return () => {

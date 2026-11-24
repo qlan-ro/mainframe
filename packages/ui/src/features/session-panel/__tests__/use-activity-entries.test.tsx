@@ -69,6 +69,19 @@ it('marks only the agent whose own tool call waits on you', async () => {
   expect(state('task:a-2')).toBe('running');
 });
 
+it("names the session's provider, which decides what can be stopped", async () => {
+  expect(renderHook(useActivityEntries).result.current.adapterId).toBeUndefined();
+  data.state = { ...createChatThreadState('parent'), chatConfig: { adapterId: 'codex' } } as ChatThreadState;
+  expect(renderHook(useActivityEntries).result.current.adapterId).toBe('codex');
+  await waitFor(() => expect(data.list).toHaveBeenCalled());
+});
+
+it('says why the list failed when the rejection is not an Error', async () => {
+  data.list.mockRejectedValue({ code: -32000, message: 'request timed out' });
+  const view = renderHook(useActivityEntries);
+  await waitFor(() => expect(view.result.current.loadError).toBe('request timed out'));
+});
+
 it("leaves agents running while the session's own tool call waits", async () => {
   data.permissions = { r1: { request: { toolUseId: 'main-bash' } } };
   const view = renderHook(useActivityEntries);
