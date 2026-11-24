@@ -217,6 +217,11 @@ async fn discard_chat_stops_the_process_deletes_the_row_and_removes_the_scratch_
         deps.chats_get("c1").unwrap().is_none(),
         "the row must be deleted (a subsequent GET 404s)"
     );
+    assert_eq!(
+        deps.emitter.workflow_runs_removed.lock().unwrap().as_slice(),
+        &["c1".to_string()],
+        "the deleted chat's workflow runs must not outlive it"
+    );
 }
 
 #[tokio::test]

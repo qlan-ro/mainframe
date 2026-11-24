@@ -12,11 +12,14 @@ use crate::record::read_run_records;
 use crate::store::ClaudeWorkflowStore;
 
 /// Where a chat's Claude session writes its workflow records.
+#[derive(Debug, Clone)]
 pub struct RecordLocation {
     pub project_dir: PathBuf,
     pub session_id: String,
 }
 
+/// Reads the session's records in the background and applies the one for
+/// `task_id` to the store, if the CLI has written it.
 pub fn spawn_terminal_reconcile(
     store: Arc<ClaudeWorkflowStore>,
     chat_id: String,

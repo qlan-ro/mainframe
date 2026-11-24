@@ -6,14 +6,24 @@ use mainframe_types::claude_workflow::{
 };
 use serde_json::Value;
 
+use crate::fields::{i64_or_zero, opt_i64, opt_str, str_or_empty};
+
 /// The parsed structure of one `workflow_progress` snapshot.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ParsedSnapshot {
     pub phases: Vec<ClaudeWorkflowPhase>,
     pub agents: Vec<ClaudeWorkflowAgent>,
 }
 
-/// Discriminates `workflow_phase` / `workflow_agent` / `workflow_log` entries;
-/// anything else is ignored. Phases sort by `index`, agents by
+impl ParsedSnapshot {
+    /// Whether the snapshot named at least one phase or agent.
+    pub fn has_structure(&self) -> bool {
+        !self.phases.is_empty() || !self.agents.is_empty()
+    }
+}
+
+/// Keeps `workflow_phase` and `workflow_agent` entries and ignores every other
+/// type (`workflow_log` included). Phases sort by `index`, agents by
 /// `(phase_index, index)`.
 pub fn parse_snapshot(entries: &[Value]) -> ParsedSnapshot {
     let mut phases = Vec::new();
@@ -35,59 +45,29 @@ pub fn parse_snapshot(entries: &[Value]) -> ParsedSnapshot {
 
 fn parse_phase(entry: &Value) -> ClaudeWorkflowPhase {
     ClaudeWorkflowPhase {
-        index: entry.get("index").and_then(Value::as_i64).unwrap_or(0),
-        title: entry
-            .get("title")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string(),
-        kind: entry
-            .get("kind")
-            .and_then(Value::as_str)
-            .map(str::to_string),
+        index: i64_or_zero(entry, "index"),
+        title: str_or_empty(entry, "title"),
+        kind: opt_str(entry, "kind"),
     }
 }
 
 fn parse_agent(entry: &Value) -> ClaudeWorkflowAgent {
     ClaudeWorkflowAgent {
-        agent_id: entry
-            .get("agentId")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string(),
-        index: entry.get("index").and_then(Value::as_i64).unwrap_or(0),
-        phase_index: entry.get("phaseIndex").and_then(Value::as_i64).unwrap_or(0),
-        label: entry
-            .get("label")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string(),
+        agent_id: str_or_empty(entry, "agentId"),
+        index: i64_or_zero(entry, "index"),
+        phase_index: i64_or_zero(entry, "phaseIndex"),
+        label: str_or_empty(entry, "label"),
         state: parse_agent_state(entry.get("state").and_then(Value::as_str)),
-        model: entry
-            .get("model")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        attempt: entry.get("attempt").and_then(Value::as_i64),
-        tokens: entry.get("tokens").and_then(Value::as_i64).unwrap_or(0),
-        tool_calls: entry.get("toolCalls").and_then(Value::as_i64).unwrap_or(0),
-        duration_ms: entry.get("durationMs").and_then(Value::as_i64).unwrap_or(0),
-        error: entry
-            .get("error")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        result_preview: entry
-            .get("resultPreview")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        last_tool_name: entry
-            .get("lastToolName")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        last_tool_summary: entry
-            .get("lastToolSummary")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        last_progress_at: entry.get("lastProgressAt").and_then(Value::as_i64),
+        model: opt_str(entry, "model"),
+        attempt: opt_i64(entry, "attempt"),
+        tokens: i64_or_zero(entry, "tokens"),
+        tool_calls: i64_or_zero(entry, "toolCalls"),
+        duration_ms: i64_or_zero(entry, "durationMs"),
+        error: opt_str(entry, "error"),
+        result_preview: opt_str(entry, "resultPreview"),
+        last_tool_name: opt_str(entry, "lastToolName"),
+        last_tool_summary: opt_str(entry, "lastToolSummary"),
+        last_progress_at: opt_i64(entry, "lastProgressAt"),
     }
 }
 

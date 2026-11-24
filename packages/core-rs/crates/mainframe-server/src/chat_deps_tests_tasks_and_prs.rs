@@ -53,6 +53,18 @@ fn workflow_runs_stop_all_delegates_to_the_workflow_store() {
 }
 
 #[test]
+fn workflow_runs_remove_chat_drops_the_chats_runs_from_the_workflow_store() {
+    let deps = test_deps();
+    deps.claude_workflows.seed("c-gone", "task-1", None);
+    deps.claude_workflows.seed("c-kept", "task-2", None);
+
+    deps.workflow_runs_remove_chat("c-gone");
+
+    assert!(deps.claude_workflows.runs_for_chat("c-gone").is_empty());
+    assert_eq!(deps.claude_workflows.runs_for_chat("c-kept").len(), 1);
+}
+
+#[test]
 fn scan_and_persist_prs_persists_a_new_pr_and_emits_chat_pr_detected() {
     let deps = test_deps();
     let project = deps

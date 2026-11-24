@@ -9,10 +9,12 @@ use dashmap::DashMap;
 use mainframe_types::claude_workflow::{
     ClaudeWorkflowRun, ClaudeWorkflowRunSource, ClaudeWorkflowRunStatus,
 };
+use mainframe_types::time::now_ms;
 use serde_json::Value;
 use tokio::sync::broadcast;
 
-use crate::store_mutations::resolve_record;
+use crate::merge::{resolve_record, sort_runs};
+use crate::snapshot::parse_snapshot;
 
 const EVENT_CHANNEL_CAPACITY: usize = 256;
 
@@ -30,6 +32,7 @@ pub struct ProgressUsage {
     pub duration_ms: i64,
 }
 
+#[derive(Debug)]
 pub struct ClaudeWorkflowStore {
     runs: DashMap<String, HashMap<String, ClaudeWorkflowRun>>,
     sender: broadcast::Sender<RunEvent>,
@@ -116,7 +119,7 @@ impl ClaudeWorkflowStore {
             let settled = run.status.is_terminal() || run.source == ClaudeWorkflowRunSource::Record;
             let retained_revision = run.structure_revision.unwrap_or(i64::MIN);
             if !settled && usage.duration_ms >= retained_revision {
-                let parsed = crate::snapshot::parse_snapshot(entries);
+                let parsed = parse_snapshot(entries);
                 run.structure_revision = Some(usage.duration_ms);
                 run.phases = parsed.phases;
                 run.agents = parsed.agents;
@@ -161,13 +164,15 @@ impl ClaudeWorkflowStore {
         let task_id = incoming.task_id.clone();
 
         let resolved = match chat.get(&task_id) {
-            Some(retained) => resolve_record(retained, &incoming),
+            Some(retained) => {
+                let resolved = resolve_record(retained, &incoming);
+                if &resolved == retained {
+                    return;
+                }
+                resolved
+            }
             None => incoming,
         };
-
-        if chat.get(&task_id) == Some(&resolved) {
-            return;
-        }
 
         chat.insert(task_id, resolved.clone());
         drop(chat);
@@ -194,19 +199,18 @@ impl ClaudeWorkflowStore {
         }
     }
 
-    /// Sorted per merge precedence rule 5 (see `merge`):
-    /// `structure_revision.or(terminal_at).unwrap_or(0)` ascending, then
-    /// `task_id`.
+    /// The chat's runs in merge precedence rule 5's order (see `merge`).
     pub fn runs_for_chat(&self, chat_id: &str) -> Vec<ClaudeWorkflowRun> {
         let mut runs: Vec<ClaudeWorkflowRun> = self
             .runs
             .get(chat_id)
             .map(|chat| chat.values().cloned().collect())
             .unwrap_or_default();
-        runs.sort_by_key(crate::merge::sort_key);
+        sort_runs(&mut runs);
         runs
     }
 
+    /// Drops every run the chat holds. Called when the chat is deleted.
     pub fn remove_chat(&self, chat_id: &str) {
         self.runs.remove(chat_id);
     }
@@ -225,5 +229,3 @@ impl Default for ClaudeWorkflowStore {
         Self::new()
     }
 }
-
-use mainframe_types::time::now_ms;

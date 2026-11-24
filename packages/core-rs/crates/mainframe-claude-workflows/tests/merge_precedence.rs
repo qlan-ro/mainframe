@@ -63,6 +63,19 @@ fn rule_2_empty_record_does_not_clobber_a_populated_snapshot() {
 }
 
 #[test]
+fn rule_2_holds_when_the_empty_record_is_folded_first() {
+    let mut empty_record = record_run("t2b", Some("r2b"));
+    empty_record.phases.clear();
+    let snapshot = snapshot_run("t2b", None, 50);
+
+    let merged = merge_runs(vec![empty_record, snapshot], vec![]);
+    assert_eq!(merged.len(), 1);
+    assert_eq!(merged[0].source, ClaudeWorkflowRunSource::Snapshot);
+    assert_eq!(merged[0].phases[0].title, "In-memory phase");
+    assert_eq!(merged[0].run_id, Some("r2b".to_string()));
+}
+
+#[test]
 fn rule_3_between_two_snapshots_the_larger_structure_revision_wins() {
     let older = snapshot_run("t3", Some("r3"), 100);
     let newer = snapshot_run("t3", Some("r3"), 200);

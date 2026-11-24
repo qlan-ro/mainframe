@@ -5,16 +5,12 @@
 //! against the on-disk `wf_<runId>.json` record once the run goes terminal.
 
 #![forbid(unsafe_code)]
-#![cfg_attr(
-    test,
-    allow(clippy::too_many_lines, reason = "Test assertions and scenarios")
-)]
 
 pub mod bridge;
+mod fields;
 pub mod merge;
 pub mod reconcile;
 pub mod record;
 pub mod snapshot;
 pub mod status;
 pub mod store;
-mod store_mutations;
