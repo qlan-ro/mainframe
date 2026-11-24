@@ -31,7 +31,7 @@ def frame_css(css):
     css = re.sub(r"(?<=[{},])\s*(?:html|body)(?=[,{])", ".dcb-frame", css)
     css = re.sub(r"\b100(?:d|s|l)?vh\b", "var(--dcb-vh)", css)
     css = re.sub(r"\b100(?:d|s|l)?vw\b", "var(--dcb-vw)", css)
-    css = re.sub(r"(?<!\\):hover\b", ":is(:hover,[data-dcb-hover])", css)
+    css = re.sub(r"(?<!\\)(?<!\(hover):hover\b", ":is(:hover,[data-dcb-hover])", css)
     css = re.sub(r"(?<!\\):focus-visible\b", ":is(:focus-visible,[data-dcb-focus-visible])", css)
     css = re.sub(r"(?<!\\):focus-within\b", ":is(:focus-within,[data-dcb-focus-within])", css)
     css = re.sub(r"(?<!\\):focus(?![\w-])", ":is(:focus,[data-dcb-focus])", css)
