@@ -1,14 +1,14 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e references
-(581). Unused: 551._
+_Generated 2026-08-11. Source: packages/ui/src data-testids (1130) minus e2e references
+(597). Unused: 533._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
 > buttons via getByRole), so this lists selector gaps, not necessarily untested behavior. `${…}`
 > marks templated id families.
 
-## chat (91)
+## chat (84)
 
 - `chat-agent-message-card-${…}`
 - `chat-ask-answer-notes`
@@ -36,7 +36,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `chat-error-block`
 - `chat-fileref-${…}`
 - `chat-fileref-open-${…}`
-- `chat-header`
 - `chat-header-title`
 - `chat-image-zoom-dialog`
 - `chat-image-zoom-image`
@@ -57,11 +56,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `chat-read-only-note`
 - `chat-reasoning-toggle`
 - `chat-slash-command-args`
-- `chat-split-divider`
-- `chat-subagent-close-${…}`
-- `chat-subagent-zone-${…}`
 - `chat-system-message`
-- `chat-task-open-${…}`
 - `chat-thread-area`
 - `chat-thread-load-error`
 - `chat-thread-load-retry`
@@ -99,8 +94,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `chat-workflow-upnext-${…}`
 - `chat-workflow-upnext-toggle`
 - `chat-write-error-text`
-- `chat-zone-close-${…}`
-- `chat-zone-strip-${…}`
 
 ## automations (80)
 
@@ -231,11 +224,10 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `tasks-sidebar-row-project-${…}`
 - `tasks-sidebar-start-${…}`
 
-## sessions (29)
+## sessions (28)
 
 - `sessions-archive-cancel`
 - `sessions-ctx-fork`
-- `sessions-ctx-open-split`
 - `sessions-ctx-side-chat`
 - `sessions-draft-row-title`
 - `sessions-firstrun-no-project`
@@ -317,29 +309,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `skills-section-source`
 - `skills-section-source-error`
 
-## session (20)
-
-- `session-panel-context-file-${…}`
-- `session-panel-launch-spinner-${…}`
-- `session-panel-section-prs`
-- `session-panel-sections`
-- `session-panel-summary-empty`
-- `session-panel-summary-pr-${…}`
-- `session-panel-tasks-attachments`
-- `session-panel-tasks-attachments-clear`
-- `session-panel-toggle-${…}`
-- `session-tab-controls-${…}`
-- `session-tab-ctx-close`
-- `session-tab-ctx-close-split`
-- `session-tab-ctx-fork`
-- `session-tab-ctx-open-split`
-- `session-tab-ctx-side-chat`
-- `session-tab-hint-${…}`
-- `session-tab-status-${…}`
-- `session-tab-waiting-${…}`
-- `session-tabs`
-- `session-tabs-zone-group`
-
 ## composer (18)
 
 - `composer-adapter-logo-${…}`
@@ -360,6 +329,26 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `composer-worktree-busy`
 - `composer-worktree-draft-cancel`
 - `composer-worktree-draft-panel`
+
+## session (17)
+
+- `session-drop-workspace`
+- `session-panel-context-file-${…}`
+- `session-panel-launch-spinner-${…}`
+- `session-panel-section-prs`
+- `session-panel-sections`
+- `session-panel-summary-empty`
+- `session-panel-summary-pr-${…}`
+- `session-panel-tasks-attachments`
+- `session-panel-tasks-attachments-clear`
+- `session-tab-controls-${…}`
+- `session-tab-ctx-close`
+- `session-tab-ctx-fork`
+- `session-tab-ctx-side-chat`
+- `session-tab-hint-${…}`
+- `session-tab-status-${…}`
+- `session-tab-waiting-${…}`
+- `session-tabs`
 
 ## external (14)
 
@@ -408,6 +397,19 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `url-tab-instance-${…}`
 - `url-tab-retry`
 - `url-tab-toolbar`
+
+## workspace (10)
+
+- `workspace-agent-stop-${…}`
+- `workspace-chat-unlisted-${…}`
+- `workspace-pane-close-${…}`
+- `workspace-pane-open-url-${…}`
+- `workspace-picker-recent-${…}`
+- `workspace-tab-state-${…}`
+- `workspace-tab-stop-${…}`
+- `workspace-tab-title-${…}`
+- `workspace-url-entry`
+- `workspace-url-entry-input`
 
 ## daemon (9)
 
@@ -487,16 +489,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `search-palette-loading`
 - `search-palette-symbol-row-${…}`
 
-## workspace (7)
-
-- `workspace-pane-close-${…}`
-- `workspace-pane-open-url-${…}`
-- `workspace-picker-recent-${…}`
-- `workspace-tab-stop-${…}`
-- `workspace-tab-title-${…}`
-- `workspace-url-entry`
-- `workspace-url-entry-input`
-
 ## artifact (6)
 
 - `artifact-card-error-body`
@@ -514,15 +506,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `image-lightbox-current`
 - `image-lightbox-next`
 - `image-lightbox-prev`
-
-## side (6)
-
-- `side-chat-close-${…}`
-- `side-chat-collapse-${…}`
-- `side-chat-divider-${…}`
-- `side-chat-header-${…}`
-- `side-chat-panel-${…}`
-- `side-chat-toggle-${…}`
 
 ## title (6)
 
@@ -602,13 +585,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `html-mode-preview`
 - `html-open-in-browser`
 - `html-preview-frame`
-
-## zone (4)
-
-- `zone-drop-left`
-- `zone-drop-right`
-- `zone-drop-split`
-- `zone-drop-split-left`
 
 ## pairing (3)
 

@@ -11,11 +11,13 @@
  *   workspace-tab-close-chat-<chatId>   — its close button
  *   workspace-conversation-chat-<chatId> — its body
  *   session-tab-ctx-open-workspace      — the session tab menu's Open in Workspace
+ *   chat-task-open-<toolCallId>         — a sub-agent row's Open in workspace
+ *   workspace-agent-<header|brief|status|result>-<toolCallId> — the agent tab's parts
  */
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { waitConnected } from '../helpers/tauri/wait.js';
+import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
 
 const CHAT_TABS = '[data-testid^="workspace-tab-chat-"][role="tab"]';
 const BODIES = '[data-testid^="workspace-conversation-chat-"]';
@@ -202,5 +204,51 @@ test.describe('§workspace-chats', () => {
     await expect(page.locator(CHAT_TABS)).toHaveCount(0);
     await toggle.click();
     await expect(page.locator(BODIES)).toHaveCount(1);
+  });
+});
+
+test.describe('§workspace-chats — agent tab (W8)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'task-subagent' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('a sub-agent opens as a tab with its brief, steps and result, and reopens as the same tab', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Delegate finding the greeting export to a subagent');
+    await waitForIdle(page, 60_000);
+    await sendMessage(page, 'Thanks — what did it find?');
+    await waitForIdle(page, 60_000);
+
+    const open = page.locator('[data-testid^="chat-task-open-"]');
+    await open.click();
+    const agent = page.locator('[data-testid^="workspace-conversation-agent-"]');
+    await expect(agent.locator('[data-testid^="workspace-agent-header-"]')).toContainText('Find the greeting export');
+    await expect(agent.locator('[data-testid^="workspace-agent-header-"]')).toContainText('general-purpose');
+    await expect(agent.locator('[data-testid^="workspace-agent-brief-"]')).toContainText('Search the project');
+    await expect(agent.getByTestId('chat-bash-card')).toHaveCount(1);
+    await expect(agent.locator('[data-testid^="workspace-agent-result-"]')).toContainText('index.ts');
+    await expect(agent.locator('[data-testid^="workspace-agent-status-"]')).toHaveAttribute('data-status', 'completed');
+    // Read-only: the one composer on screen is the conversation's.
+    await expect(page.getByTestId('chat-composer-input')).toHaveCount(1);
+
+    await open.click();
+    await expect(page.locator('[data-testid^="workspace-tab-agent-"][role="tab"]')).toHaveCount(1);
+
+    // It survives a restart, read back from the transcript.
+    await page.reload();
+    await waitConnected(page);
+    await expect(agent.locator('[data-testid^="workspace-agent-result-"]')).toContainText('index.ts', {
+      timeout: 15_000,
+    });
   });
 });

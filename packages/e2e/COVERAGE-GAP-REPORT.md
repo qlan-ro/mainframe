@@ -13,9 +13,9 @@ read in both directions._
 
 | Metric | Count |
 |---|---|
-| Defined | 1132 |
-| Referenced | 581 |
-| Unused | 551 |
+| Defined | 1130 |
+| Referenced | 597 |
+| Unused | 533 |
 | Dead selectors | 19 |
 
 ## Dead selectors
@@ -69,7 +69,7 @@ read in both directions._
 | files-tree.spec.ts | 49 | 3 |
 | find-in-path.spec.ts | 55 | 0 |
 | focus-line.spec.ts | 6 | 0 |
-| fork-from-message.spec.ts | 15 | 0 |
+| fork-from-message.spec.ts | 16 | 0 |
 | gates.spec.ts | 82 | 0 |
 | git-branch.spec.ts | 75 | 0 |
 | global-setup.ts | 0 | 0 |
@@ -79,7 +79,7 @@ read in both directions._
 | history-performance.ts | 13 | 0 |
 | layout.spec.ts | 44 | 0 |
 | live-adapter.spec.ts | 1 | 0 |
-| mcp-delegate.spec.ts | 20 | 0 |
+| mcp-delegate.spec.ts | 22 | 0 |
 | menus.ts | 0 | 0 |
 | new-session-prefill.spec.ts | 15 | 0 |
 | overlay-scrollbars.spec.ts | 10 | 0 |
@@ -121,6 +121,7 @@ read in both directions._
 | windowed-history.spec.ts | 22 | 0 |
 | windowed-history.ts | 0 | 0 |
 | windowed-history.ts | 0 | 0 |
+| workspace-chats.spec.ts | 40 | 0 |
 | workspace-surface.spec.ts | 52 | 1 |
 | ws-control.ts | 0 | 0 |
 | zones.ts | 0 | 2 |
@@ -129,17 +130,18 @@ read in both directions._
 
 | Surface | Defined | Unused |
 |---|---|---|
-| chat | 198 | 91 |
+| chat | 191 | 84 |
 | automations | 92 | 80 |
 | tasks | 91 | 43 |
-| sessions | 97 | 29 |
+| sessions | 97 | 28 |
 | settings | 41 | 24 |
 | skills | 24 | 24 |
-| session | 60 | 20 |
 | composer | 50 | 18 |
+| session | 58 | 17 |
 | external | 15 | 14 |
 | preview | 31 | 13 |
 | url | 12 | 12 |
+| workspace | 39 | 10 |
 | daemon | 26 | 9 |
 | shell | 13 | 9 |
 | usage | 10 | 9 |
@@ -147,10 +149,8 @@ read in both directions._
 | editor | 28 | 7 |
 | run | 8 | 7 |
 | search | 16 | 7 |
-| workspace | 26 | 7 |
 | artifact | 6 | 6 |
 | image | 8 | 6 |
-| side | 6 | 6 |
 | title | 9 | 6 |
 | automation | 5 | 5 |
 | git | 35 | 5 |
@@ -161,7 +161,6 @@ read in both directions._
 | worktree | 5 | 5 |
 | error | 4 | 4 |
 | html | 4 | 4 |
-| zone | 4 | 4 |
 | pairing | 3 | 3 |
 | shortcuts | 3 | 3 |
 | tool | 10 | 3 |
@@ -201,6 +200,7 @@ read in both directions._
 | quick | 1 | 0 |
 | restore | 1 | 0 |
 | show | 1 | 0 |
+| side | 4 | 0 |
 | surf | 1 | 0 |
 | surface | 2 | 0 |
 | tour | 8 | 0 |

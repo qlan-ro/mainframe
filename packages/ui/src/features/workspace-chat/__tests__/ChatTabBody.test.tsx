@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import type { ChatTabRole, RunTab } from '@/store/run-pane';
+import { onSurfaceIntent } from '@/store/surface-intents';
 
 interface Item {
   id: string;
@@ -34,11 +35,21 @@ const getOrCreate = vi.fn((_id: string) => ({}));
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
   chatControllerRegistry: { getOrCreate: (id: string) => getOrCreate(id) },
 }));
+let identity: { worktreePath?: string; projectPath?: string } = {};
+vi.mock('@/features/sessions/use-active-identity', () => ({ useActiveIdentity: () => identity }));
 vi.mock('../use-conversation-thread', () => ({ useConversationThread: () => ({}) }));
 vi.mock('../DraftKeeper', () => ({
   DraftKeeper: ({ chatId }: { chatId: string }) => <div data-testid={`keeper-${chatId}`} />,
 }));
-vi.mock('@/features/chat/thread/ChatThread', () => ({ ChatThread: () => <div data-testid="thread" /> }));
+vi.mock('@/features/chat/thread/ChatThread', async () => {
+  const { useOpenFile } = await import('@/features/chat/tools/chat-tool-context');
+  return {
+    ChatThread: () => {
+      const { openFile } = useOpenFile();
+      return <button type="button" data-testid="thread" onClick={() => openFile('src/a.ts')} />;
+    },
+  };
+});
 vi.mock('@/features/chat/thread/ChatHeaderParentLink', () => ({
   ChatHeaderParentLink: () => <span>Forked from Main</span>,
 }));
@@ -79,6 +90,7 @@ const header = () => screen.getByTestId('workspace-chat-header-kid');
 beforeEach(() => {
   items = [];
   mainThreadId = 'main';
+  identity = {};
   switchToThread.mockClear();
   cancelDelegatedTask.mockClear();
   getOrCreate.mockClear();
@@ -165,6 +177,19 @@ describe('with no chat to show', () => {
     show();
     expect(screen.queryByTestId('thread')).toBeNull();
     expect(useMountedConversations.getState().composing.has('kid')).toBe(false);
+  });
+});
+
+describe('a file link in its transcript', () => {
+  it('opens this chat’s own file, not the conversation’s file at the same path', () => {
+    identity = { worktreePath: '/wt/kid', projectPath: '/proj' };
+    const paths: string[] = [];
+    const stop = onSurfaceIntent((intent) => intent.type === 'open-file' && paths.push(intent.path));
+    list();
+    show();
+    fireEvent.click(screen.getByTestId('thread'));
+    stop();
+    expect(paths).toEqual(['/wt/kid/src/a.ts']);
   });
 });
 

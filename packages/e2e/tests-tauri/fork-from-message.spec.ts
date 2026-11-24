@@ -111,7 +111,7 @@ test.describe('§fork-from-message (fork-capable mock)', () => {
     await expect(forkTab(page)).toHaveCount(0);
 
     // Back to the parent, whose workspace still has the tab, and so does the message.
-    await page.getByTestId(`session-tab-${parentChatId}`).click();
+    await page.locator(`[data-testid="sessions-row"][data-chat-id="${parentChatId}"]`).click();
     await expect(forkTab(page).getByTestId('chat-composer-input')).toHaveValue(unsent);
   });
 });

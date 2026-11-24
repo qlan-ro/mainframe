@@ -8,6 +8,7 @@ import { useCallback } from 'react';
 import { useTranscriptScope } from '../messages/compact/transcript-scope';
 import { useChatExtras } from '../runtime/chat-extras';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { useIntentPath } from './chat-file-bases';
 
 /** The active chat id, or undefined before the runtime is ready. */
 export function useChatId(): string | undefined {
@@ -30,14 +31,29 @@ export interface OpenFileIntent {
 }
 
 export function useOpenFile(): OpenFileIntent {
-  const openFile = useCallback((path: string, position?: OpenFilePosition) => {
-    emitSurfaceIntent({ type: 'open-file', path, line: position?.line, character: position?.character });
-  }, []);
-  const openDiff = useCallback((path: string, original: string, modified: string) => {
-    emitSurfaceIntent({ type: 'open-diff', path, original, modified });
-  }, []);
-  const revealFile = useCallback((path: string) => {
-    emitSurfaceIntent({ type: 'reveal-file', path });
-  }, []);
+  const intentPath = useIntentPath();
+  const openFile = useCallback(
+    (path: string, position?: OpenFilePosition) => {
+      emitSurfaceIntent({
+        type: 'open-file',
+        path: intentPath(path),
+        line: position?.line,
+        character: position?.character,
+      });
+    },
+    [intentPath],
+  );
+  const openDiff = useCallback(
+    (path: string, original: string, modified: string) => {
+      emitSurfaceIntent({ type: 'open-diff', path: intentPath(path), original, modified });
+    },
+    [intentPath],
+  );
+  const revealFile = useCallback(
+    (path: string) => {
+      emitSurfaceIntent({ type: 'reveal-file', path: intentPath(path) });
+    },
+    [intentPath],
+  );
   return { openFile, openDiff, revealFile };
 }

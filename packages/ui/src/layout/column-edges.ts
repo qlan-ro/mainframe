@@ -8,7 +8,7 @@
  * just left of their edge, so a separator covers `[edge - 1, edge)`.
  *
  * `null` means "no such edge on screen": the sidebar's content pane has not
- * mounted, or the workspace is hidden, alone, or in the bottom strip.
+ * mounted, or the workspace is hidden or alone.
  */
 import { useCallback, type RefCallback } from 'react';
 import { create } from 'zustand';

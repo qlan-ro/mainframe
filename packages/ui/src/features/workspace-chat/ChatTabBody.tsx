@@ -8,15 +8,17 @@
  * the user, and one that became the conversation itself steps aside: the chat
  * column owns its composer now.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AuiProvider, useAui, useAuiState } from '@assistant-ui/react';
 import { ArrowLeftToLine, Bot, MessageSquare, Split } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { findByChatId } from '@/features/chat/orchestration/use-session-items';
 import { ChatThread } from '@/features/chat/thread/ChatThread';
+import { ChatFileBasesContext } from '@/features/chat/tools/chat-file-bases';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
 import { useSideChatTab } from '@/features/side-chat/use-side-chat-tab';
@@ -137,6 +139,13 @@ function SideChatFollower({ chatId }: { chatId: string }): null {
   return null;
 }
 
+/** The chat's own worktree and project, so its file links open its files whatever the conversation's are. */
+function OwnFiles({ children }: { children: React.ReactNode }) {
+  const { worktreePath, projectPath } = useActiveIdentity();
+  const bases = useMemo(() => ({ worktreePath, projectPath }), [worktreePath, projectPath]);
+  return <ChatFileBasesContext.Provider value={bases}>{children}</ChatFileBasesContext.Provider>;
+}
+
 function Conversation({ tab, chatId, itemId, active }: ChatTabBodyProps & { itemId: string }) {
   const aui = useAui();
   const controller = useChatController(itemId, useDaemonPort());
@@ -147,9 +156,11 @@ function Conversation({ tab, chatId, itemId, active }: ChatTabBodyProps & { item
       <DraftKeeper chatId={itemId} />
       <SideChatFollower chatId={chatId} />
       <ThreadHeader tab={tab} chatId={chatId} itemId={itemId} />
-      <div className="min-h-0 flex-1">
-        <ChatThread />
-      </div>
+      <OwnFiles>
+        <div className="min-h-0 flex-1">
+          <ChatThread />
+        </div>
+      </OwnFiles>
     </AuiProvider>
   );
 }
