@@ -5,7 +5,6 @@ COMPM=(316,380,808,520)         # composer with a menu or gate above it
 COMPN=(316,470,808,430)         # new-session composer with its strip
 PANEL=(1124,48,316,852)
 SIDE=(0,40,316,860)
-TITLE=(0,0,1440,64)
 def S(id,preset,cap,crop=COMP,theme='light',ww=1440,actions=(),wait=200,h=900):
     return dict(id=id,preset=preset,cap=cap,crop=crop,theme=theme,ww=ww,actions=list(actions),wait=wait,h=h)
 TRWT=(316,48,816,1902)          # the same, 1440x1950, for a whole thread
@@ -19,13 +18,6 @@ BOARDS=[
  dict(file='Proposal-Redesign-Window',title='Window redesign: the proposed window, light and dark',cols=2,states=[
    S('win-l','idle','**Light.** A session with three sub-agents still running: title bar with usage capsule and session tabs (S1), sidebar with time groups (L1–L4), transcript (T1), composer with activity strip (K4) and bottom strip (K8), session panel docked (R1–R12).',FULL),
    S('win-d','idle','**Dark.** The same session.',FULL,theme='dark'),
- ]),
- dict(file='Proposal-Redesign-Shell',title='Window redesign: title bar segments and window states',cols=2,states=[
-   S('tb-closed','idle','**Title bar, workspace closed (W1).** Two segments. The 1×16 separator sits exactly above the sidebar’s right edge.',TITLE),
-   S('tb-open','workspace-preview','**Title bar, workspace open (W1–W3).** Three segments: workspace tabs after the second separator, which sits exactly above the panel’s left edge; a third separator closes the workspace segment, so Search and the Chat/Workspace toggles stand apart at the far right.',TITLE),
-   S('ws-1180','workspace-preview','**1180 px, workspace open.** The workspace takes half the area right of the sidebar (min 320, chat keeps 360). Overflowing workspace tabs fade at the edge; the selected tab never truncates (W2, W4).',FULL,ww=1180),
-   S('collapsed-full','idle','**Sidebar collapsed (rail only).**',FULL,actions=[{'click':'#railchats'}]),
-   S('tb-collapsed','idle','**Sidebar collapsed.** The first separator follows the usage capsule.',TITLE,actions=[{'click':'#railchats'}]),
  ]),
  dict(file='Proposal-Redesign-Sidebar',title='Window redesign: sidebar session list',cols=5,states=[
    S('side-l','idle','**List (L1, L3, L4).** Project letter leads; status replaces the time: spinner, spinner + sub-agent count when only sub-agents run (“3”), “needs you”. Group headers 24 px with 14 px above; rows 28 px.',SIDE),
@@ -146,8 +138,9 @@ BOARDS=[
    S('w-agent','every-activity','**Agent tab (W8).** A sub-agent or delegated task opens as a workspace tab: title, kind, status, Stop while live, the brief, its steps as transcript rows, the result. Opened from the transcript row’s “Open in workspace” or the Activity row.',FULL,actions=[JS_PANEL_ROW('Review the quota reset diff')]),
    S('w-float','workspace-panel-floating','**Workspace + floating session panel (R11, W6).**',FULL),
    S('w-files-d','workspace-code-files','**Dark.**',FULL,theme='dark'),
+   S('ws-1180','workspace-preview','**1180 px.** The workspace takes half the area right of the sidebar (min 320, chat keeps 360), and slides in (W4). The title-bar tabs above it are built.',FULL,ww=1180),
  ]),
  dict(file='Proposal-Redesign-Shortcuts',title='Window redesign: keyboard shortcuts sheet',cols=1,states=[
-   S('k-sheet','shortcuts-sheet','**⌘/ sheet (H1).** The app’s registry grouped Sessions / Chat / Workspace / App, plus the redesign’s ⌘., ⌘;, ⌥↵ and ⇧⇥.',FULL),
+   S('k-sheet','shortcuts-sheet','**⌘/ sheet (H1).** The grouped sheet is built (Shell-States). Still proposed: the rows for ⌘., ⌘;, ⌥↵ and ⇧⇥, which join the registry with their handlers.',FULL),
  ]),
 ]

@@ -214,7 +214,7 @@
       "title": "Window redesign: queue and activity strip",
       "w": 2932,
       "x": 1460,
-      "y": 16874
+      "y": 15318
     },
     "Proposal-Redesign-BottomStrip.dc.html": {
       "h": 1120,
@@ -222,7 +222,7 @@
       "title": "Window redesign: where it runs, branch and changes",
       "w": 2616,
       "x": 1460,
-      "y": 21026
+      "y": 19470
     },
     "Proposal-Redesign-Composer.dc.html": {
       "h": 4586,
@@ -230,7 +230,7 @@
       "title": "Window redesign: composer toolbar, send and stop",
       "w": 2616,
       "x": 1460,
-      "y": 9708
+      "y": 8152
     },
     "Proposal-Redesign-Gates.dc.html": {
       "h": 2428,
@@ -238,7 +238,7 @@
       "title": "Window redesign: permission, plan and question gates",
       "w": 2616,
       "x": 1460,
-      "y": 22306
+      "y": 20750
     },
     "Proposal-Redesign-NewSession.dc.html": {
       "h": 3426,
@@ -246,7 +246,7 @@
       "title": "Window redesign: composer before the first message",
       "w": 2616,
       "x": 1460,
-      "y": 6122
+      "y": 4566
     },
     "Proposal-Redesign-SessionPanel.dc.html": {
       "h": 2726,
@@ -254,15 +254,7 @@
       "title": "Window redesign: session panel",
       "w": 3596,
       "x": 1460,
-      "y": 28740
-    },
-    "Proposal-Redesign-Shell.dc.html": {
-      "h": 1396,
-      "page": "proposals",
-      "title": "Window redesign: title bar segments and window states",
-      "w": 3024,
-      "x": 1460,
-      "y": 3286
+      "y": 27184
     },
     "Proposal-Redesign-Shortcuts.dc.html": {
       "h": 1088,
@@ -270,7 +262,7 @@
       "title": "Window redesign: keyboard shortcuts sheet",
       "w": 1536,
       "x": 1460,
-      "y": 36818
+      "y": 35262
     },
     "Proposal-Redesign-Sidebar.dc.html": {
       "h": 1120,
@@ -278,7 +270,7 @@
       "title": "Window redesign: sidebar session list",
       "w": 1504,
       "x": 1460,
-      "y": 4842
+      "y": 3286
     },
     "Proposal-Redesign-Spec.dc.html": {
       "h": 9819,
@@ -302,7 +294,7 @@
       "title": "Window redesign: workspace surface",
       "w": 3024,
       "x": 1460,
-      "y": 31626
+      "y": 30070
     },
     "Proposal-SessionPanel-Sections.dc.html": {
       "h": 1797,
@@ -310,7 +302,7 @@
       "title": "Session panel rows: other section states (first column, Session, is removed by R2)",
       "w": 2120,
       "x": 0,
-      "y": 38626
+      "y": 37070
     },
     "Proposal-Window-Baseline.dc.html": {
       "h": 900,
@@ -567,7 +559,7 @@
     "Proposal-Redesign-Transcript.dc.html": {
       "page": "proposals",
       "x": 1460,
-      "y": 24894,
+      "y": 23338,
       "w": 3504,
       "h": 3686,
       "title": "Window redesign: transcript, every row and state"
@@ -575,7 +567,7 @@
     "Proposal-Redesign-ComposerContent.dc.html": {
       "page": "proposals",
       "x": 1460,
-      "y": 14454,
+      "y": 12898,
       "w": 2616,
       "h": 2260,
       "title": "Window redesign: files, captures and quotes in the composer"
@@ -705,7 +697,7 @@
       "text": "One earlier board still applies.\n\nSession-panel section states other than Activity (Launch, files, skills, attachments, tasks). Their rows and values are binding; the panel around them follows the redesign: “Session” title with the Sections button (R3), no Session section (R2: ignore the sheet's first column), rhythm per R12. Activity follows R13 and is drawn on Proposal-Redesign-SessionPanel.",
       "w": 560,
       "x": -640,
-      "y": 38626
+      "y": 37070
     },
     "adoptedTitle": {
       "kind": "title1",
@@ -714,7 +706,7 @@
       "text": "Adopted from an earlier proposal: the other session-panel sections",
       "w": 240,
       "x": 0,
-      "y": 38366
+      "y": 36810
     },
     "proposalsHowTo": {
       "fill": "blue",
@@ -850,7 +842,6 @@
     "Proposal-Window-Baseline.dc.html",
     "Proposal-Window-BaselineDark.dc.html",
     "Proposal-Redesign-Window.dc.html",
-    "Proposal-Redesign-Shell.dc.html",
     "Proposal-Redesign-Sidebar.dc.html",
     "Proposal-Redesign-NewSession.dc.html",
     "Proposal-Redesign-Composer.dc.html",
