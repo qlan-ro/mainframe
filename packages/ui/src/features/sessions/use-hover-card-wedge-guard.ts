@@ -47,10 +47,10 @@ export function canOpenMetaCard(row: HTMLElement | null, activeElement: Element 
   return activeElement != null && row.contains(activeElement) && activeElement.matches(':focus-visible');
 }
 
-/** Focus the keyboard put inside the card must survive a stray pointer move. */
-function holdsKeyboardFocus(card: Element): boolean {
+/** Whether the keyboard put focus on or inside `element`. */
+export function holdsKeyboardFocus(element: Element | null): boolean {
   const active = document.activeElement;
-  return active != null && card.contains(active) && active.matches(':focus-visible');
+  return element != null && active != null && element.contains(active) && active.matches(':focus-visible');
 }
 
 /**
@@ -59,7 +59,9 @@ function holdsKeyboardFocus(card: Element): boolean {
  * ever reaches trigger or content, and the card wedges open over the chat,
  * eating clicks (measured 2026-08-06, the sessions-filters load flake). While
  * the card is open, any pointer move outside the row and the card force-closes
- * it, unless the pointer is crossing from the row to the card.
+ * it, unless the pointer is crossing from the row to the card or the keyboard is
+ * in the card. `cardRef` is this row's own card: another row's can be on screen at
+ * the same time, fading out or wedged.
  *
  * Returns whether it is crossing right now; Radix's own leave timer fires in the
  * middle of that move, and the caller has to ignore it.
@@ -67,6 +69,7 @@ function holdsKeyboardFocus(card: Element): boolean {
 export function useHoverCardWedgeGuard(
   open: boolean,
   rowRef: RefObject<HTMLElement | null>,
+  cardRef: RefObject<HTMLElement | null>,
   close: () => void,
 ): RefObject<boolean> {
   const crossing = useRef(false);
@@ -99,14 +102,13 @@ export function useHoverCardWedgeGuard(
       clearTimeout(rest);
       crossing.current = false;
       const row = rowRef.current?.getBoundingClientRect();
-      const cardElement = document.querySelector('[data-slot="hover-card-content"]');
-      const card = cardElement?.getBoundingClientRect();
+      const card = cardRef.current?.getBoundingClientRect();
       if (within(card, point)) return;
       if (within(row, point)) {
         lastOverRow.current = point;
         return;
       }
-      if (cardElement && holdsKeyboardFocus(cardElement)) return;
+      if (holdsKeyboardFocus(cardRef.current)) return;
       const from = lastOverRow.current;
       crossing.current =
         within(row, point, SLOP_PX) ||
@@ -121,7 +123,7 @@ export function useHoverCardWedgeGuard(
       crossing.current = false;
       document.removeEventListener('pointermove', onMove, true);
     };
-  }, [open, rowRef, close]);
+  }, [open, rowRef, cardRef, close]);
 
   return crossing;
 }

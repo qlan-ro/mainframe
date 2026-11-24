@@ -239,7 +239,7 @@ test.describe('§sessions-list Hover card', () => {
     await page.mouse.move(0, 0);
   });
 
-  test('a diagonal move reaches the link, and using it closes the card', async () => {
+  test('a diagonal move reaches the link; using it closes the card until the next hover', async () => {
     const { page } = app;
     const row = await selectChild(page);
     const box = (await row.boundingBox())!;
@@ -261,6 +261,9 @@ test.describe('§sessions-list Hover card', () => {
 
     await expect(sessionsSidebar(page).row(parent)).toHaveAttribute('data-active', 'true');
     await expect(page.getByTestId('sessions-meta-card-open-parent')).toHaveCount(0);
+
+    await page.mouse.move(box.x + 60, box.y + box.height / 2);
+    await expect(link).toBeVisible();
     await page.mouse.move(0, 0);
   });
 

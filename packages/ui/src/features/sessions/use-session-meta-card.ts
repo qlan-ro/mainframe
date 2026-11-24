@@ -11,7 +11,7 @@
  * on to whatever follows the row; Escape goes back to the row.
  */
 import { useCallback, useRef, useState, type FocusEvent, type KeyboardEvent, type RefObject } from 'react';
-import { canOpenMetaCard, useHoverCardWedgeGuard } from './use-hover-card-wedge-guard';
+import { canOpenMetaCard, holdsKeyboardFocus, useHoverCardWedgeGuard } from './use-hover-card-wedge-guard';
 
 export interface SessionMetaCardState {
   open: boolean;
@@ -35,12 +35,13 @@ export function useSessionMetaCard(rowRef: RefObject<HTMLElement | null>): Sessi
   // Refs, not state: they only gate the card, and re-rendering the row on every
   // right-click would cost the open menu its anchor.
   const menuOpen = useRef(false);
-  // Handing focus back to the row would reopen the card it was dismissed from.
+  // Handing keyboard focus back to the row would reopen the card it was dismissed
+  // from. A mouse click must not set it: hovering the row again reopens the card.
   const dismissed = useRef(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
-  const crossing = useHoverCardWedgeGuard(open, rowRef, close);
+  const crossing = useHoverCardWedgeGuard(open, rowRef, cardRef, close);
 
   const onOpenChange = useCallback(
     (next: boolean) => {
@@ -60,13 +61,15 @@ export function useSessionMetaCard(rowRef: RefObject<HTMLElement | null>): Sessi
 
   const closeAfterUse = useCallback(() => {
     if (cardRef.current?.contains(document.activeElement)) {
-      dismissed.current = true;
       triggerRef.current?.focus();
+      dismissed.current = holdsKeyboardFocus(triggerRef.current);
     }
     setOpen(false);
   }, []);
 
   const onTriggerKeyDown = (e: KeyboardEvent) => {
+    // The rename input sits inside the row: Tab there leaves the field, not the row.
+    if (e.target instanceof HTMLInputElement) return;
     if (e.key !== 'Tab' || e.shiftKey || !open) return;
     const first = linksIn(cardRef.current)[0];
     if (first == null) return;

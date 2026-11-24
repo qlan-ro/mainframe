@@ -283,6 +283,13 @@ describe('the row’s hover card from the keyboard', () => {
 
   const card = () => screen.queryByTestId('sessions-meta-card');
 
+  /** jsdom knows neither `:hover` nor what a mouse does to `:focus-visible`. */
+  function pointTo(trigger: HTMLElement) {
+    const row = trigger.closest('li')!;
+    row.matches = ((selector: string) => selector === ':hover') as unknown as HTMLElement['matches'];
+    trigger.matches = (() => false) as unknown as HTMLElement['matches'];
+  }
+
   it('tabs into the parent link and opens the parent, closing the card', async () => {
     const { user, main, trigger, link } = await openCard();
 
@@ -332,5 +339,33 @@ describe('the row’s hover card from the keyboard', () => {
     await user.keyboard('{Escape}');
     expect(trigger).toHaveFocus();
     await waitFor(() => expect(card()).toBeNull());
+  });
+
+  it('opens again on hover after a mouse click closed it', async () => {
+    const { user, trigger, link } = await openCard();
+    pointTo(trigger);
+
+    await user.click(link);
+    await waitFor(() => expect(card()).toBeNull());
+    expect(trigger).toHaveFocus();
+
+    await user.hover(trigger);
+    expect(await screen.findByTestId('sessions-meta-card')).toBeTruthy();
+  });
+
+  it('leaves Tab to the rename input', async () => {
+    const { user, trigger } = await openCard();
+    fireEvent.contextMenu(trigger);
+    await user.click(await screen.findByTestId('sessions-ctx-rename'));
+    const input = await screen.findByTestId('sessions-rename-input');
+    pointTo(trigger);
+    await user.hover(trigger);
+    const link = await screen.findByTestId('sessions-meta-card-open-parent');
+    expect(input).toHaveFocus();
+
+    await user.tab();
+
+    expect(link).not.toHaveFocus();
+    expect(screen.queryByTestId('sessions-rename-input')).toBeNull();
   });
 });

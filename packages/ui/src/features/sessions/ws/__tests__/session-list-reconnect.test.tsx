@@ -5,6 +5,9 @@
  * lost, so a gate that opened (or a run that ended) in that window reaches the
  * row only through a reload on reconnect — over the real thread-list runtime and
  * chats adapter, with only the REST layer and the socket stubbed.
+ *
+ * At boot the socket opens while the first load is running. That one connect does
+ * not ask again; any other first connect does.
  */
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { useMemo, type FC } from 'react';
@@ -134,4 +137,61 @@ it('stops the spinner of a run that ended with the daemon', async () => {
   setConnected(true);
 
   await waitFor(() => expect(rowStatus()).toBe('idle'));
+});
+
+it('asks once at boot, when the socket opens while the list is loading', async () => {
+  ws.connected = false;
+  let respond = (_chats: Chat[]) => {};
+  listChatsMock.mockImplementationOnce(() => new Promise<Chat[]>((resolve) => (respond = resolve)));
+  render(<Harness />);
+  await waitFor(() => expect(listChatsMock).toHaveBeenCalledTimes(1));
+
+  setConnected(true);
+  await act(async () => respond([chat({})]));
+
+  await waitFor(() => expect(rowStatus()).toBe('running'));
+  expect(listChatsMock).toHaveBeenCalledTimes(1);
+
+  listChatsMock.mockResolvedValue([chat({ displayStatus: 'waiting' })]);
+  setConnected(false);
+  setConnected(true);
+  await waitFor(() => expect(rowStatus()).toBe('needs-you'));
+});
+
+it('asks again when the list had already loaded before the socket first opened', async () => {
+  ws.connected = false;
+  await mountRunning();
+
+  listChatsMock.mockResolvedValue([chat({ displayStatus: 'waiting' })]);
+  setConnected(true);
+
+  await waitFor(() => expect(rowStatus()).toBe('needs-you'));
+});
+
+it('asks again when the boot load failed before the socket first opened', async () => {
+  ws.connected = false;
+  listChatsMock.mockRejectedValueOnce(new Error('daemon not up'));
+  render(<Harness />);
+  await waitFor(() => expect(listChatsMock).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+
+  listChatsMock.mockResolvedValue([chat({})]);
+  setConnected(true);
+
+  await waitFor(() => expect(rowStatus()).toBe('running'));
+});
+
+it('asks again when the socket dropped before it first opened', async () => {
+  ws.connected = false;
+  let respond = (_chats: Chat[]) => {};
+  listChatsMock.mockImplementationOnce(() => new Promise<Chat[]>((resolve) => (respond = resolve)));
+  render(<Harness />);
+  await waitFor(() => expect(listChatsMock).toHaveBeenCalledTimes(1));
+
+  setConnected(false);
+  listChatsMock.mockResolvedValue([chat({ displayStatus: 'waiting' })]);
+  setConnected(true);
+  await act(async () => respond([chat({})]));
+
+  await waitFor(() => expect(rowStatus()).toBe('needs-you'));
 });

@@ -11,6 +11,7 @@
  *  - open=true + a diagonal move from the row to the card, across the rows below
  *    → stays open; resting on the way, or heading elsewhere → closes.
  *  - open=true + keyboard focus inside the card → a move elsewhere does not close.
+ *  - two cards on screen → each guard follows its own card.
  *  - open flipping back to false tears the listener down.
  *
  * jsdom returns all-zero rects, so the row and the card element each get a fixed
@@ -51,9 +52,8 @@ const CARD_RECT: DOMRect = {
 
 const appended: HTMLElement[] = [];
 
-function mountWithRect(rect: DOMRect, slot?: string): HTMLElement {
+function mountWithRect(rect: DOMRect): HTMLElement {
   const el = document.createElement('div');
-  if (slot != null) el.setAttribute('data-slot', slot);
   el.getBoundingClientRect = () => rect;
   document.body.appendChild(el);
   appended.push(el);
@@ -64,12 +64,21 @@ function mountRowRef(): React.RefObject<HTMLElement | null> {
   return { current: mountWithRect(ROW_RECT) };
 }
 
+function mountCardRef(rect: DOMRect = CARD_RECT): React.RefObject<HTMLElement | null> {
+  return { current: mountWithRect(rect) };
+}
+
 function move(clientX: number, clientY: number): void {
   document.body.dispatchEvent(new PointerEvent('pointermove', { clientX, clientY, bubbles: true }));
 }
 
-function renderGuard(open: boolean, rowRef: React.RefObject<HTMLElement | null>, close: () => void) {
-  return renderHook(({ open: isOpen }: { open: boolean }) => useHoverCardWedgeGuard(isOpen, rowRef, close), {
+function renderGuard(
+  open: boolean,
+  rowRef: React.RefObject<HTMLElement | null>,
+  close: () => void,
+  cardRef: React.RefObject<HTMLElement | null> = { current: null },
+) {
+  return renderHook(({ open: isOpen }: { open: boolean }) => useHoverCardWedgeGuard(isOpen, rowRef, cardRef, close), {
     initialProps: { open },
   });
 }
@@ -119,8 +128,8 @@ describe('useHoverCardWedgeGuard', () => {
   it('stays open while the pointer is over the hover-card content', () => {
     const close = vi.fn();
     const rowRef = mountRowRef();
-    mountWithRect(CARD_RECT, 'hover-card-content');
-    renderGuard(true, rowRef, close);
+    const cardRef = mountCardRef();
+    renderGuard(true, rowRef, close, cardRef);
 
     move(400, 150);
 
@@ -129,8 +138,8 @@ describe('useHoverCardWedgeGuard', () => {
 
   it('stays open on a diagonal move to the card’s lower half, and says it is crossing', () => {
     const close = vi.fn();
-    mountWithRect(CARD_RECT, 'hover-card-content');
-    const { result } = renderGuard(true, mountRowRef(), close);
+    const cardRef = mountCardRef();
+    const { result } = renderGuard(true, mountRowRef(), close, cardRef);
 
     move(200, 70);
     expect(result.current.current).toBe(false);
@@ -146,8 +155,8 @@ describe('useHoverCardWedgeGuard', () => {
   it('stays open when the first move it sees is already between the row and the card', () => {
     const close = vi.fn();
     const rowRef = mountRowRef();
-    mountWithRect(CARD_RECT, 'hover-card-content');
-    const { rerender } = renderGuard(false, rowRef, close);
+    const cardRef = mountCardRef();
+    const { rerender } = renderGuard(false, rowRef, close, cardRef);
     rowRef.current!.dispatchEvent(new PointerEvent('pointermove', { clientX: 240, clientY: 70, bubbles: true }));
 
     rerender({ open: true });
@@ -160,8 +169,8 @@ describe('useHoverCardWedgeGuard', () => {
   it('closes when the pointer rests on the way', () => {
     vi.useFakeTimers();
     const close = vi.fn();
-    mountWithRect(CARD_RECT, 'hover-card-content');
-    renderGuard(true, mountRowRef(), close);
+    const cardRef = mountCardRef();
+    renderGuard(true, mountRowRef(), close, cardRef);
 
     move(200, 70);
     move(230, 99);
@@ -173,8 +182,8 @@ describe('useHoverCardWedgeGuard', () => {
 
   it('closes on a move straight down, away from the card', () => {
     const close = vi.fn();
-    mountWithRect(CARD_RECT, 'hover-card-content');
-    renderGuard(true, mountRowRef(), close);
+    const cardRef = mountCardRef();
+    renderGuard(true, mountRowRef(), close, cardRef);
 
     move(200, 70);
     move(200, 140);
@@ -184,16 +193,30 @@ describe('useHoverCardWedgeGuard', () => {
 
   it('leaves the card alone while the keyboard is in it', () => {
     const close = vi.fn();
-    const card = mountWithRect(CARD_RECT, 'hover-card-content');
+    const cardRef = mountCardRef();
     const link = document.createElement('button');
-    card.appendChild(link);
+    cardRef.current!.appendChild(link);
     link.focus();
     link.matches = vi.fn((selector: string) => selector === ':focus-visible') as unknown as HTMLElement['matches'];
-    renderGuard(true, mountRowRef(), close);
+    renderGuard(true, mountRowRef(), close, cardRef);
 
     move(900, 900);
 
     expect(close).not.toHaveBeenCalled();
+  });
+
+  it('follows its own card while another row’s card is on screen', () => {
+    const closeFirst = vi.fn();
+    const closeSecond = vi.fn();
+    const firstCard = mountCardRef();
+    const secondCard = mountCardRef({ ...CARD_RECT, top: 600, y: 600, bottom: 700 });
+    renderGuard(true, mountRowRef(), closeFirst, firstCard);
+    renderGuard(true, mountRowRef(), closeSecond, secondCard);
+
+    move(400, 650);
+
+    expect(closeFirst).toHaveBeenCalledTimes(1);
+    expect(closeSecond).not.toHaveBeenCalled();
   });
 
   it('drops the listener when the card closes', () => {
