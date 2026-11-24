@@ -255,7 +255,8 @@ describe('ComposerToolbar — cyclePermission handle (C12)', () => {
 
     expect(setPermissionMode).toHaveBeenCalledExactlyOnceWith('acceptEdits');
     expect(screen.getByTestId('composer-permission-announcement')).toHaveTextContent(
-      'Permissions: Interactive · ⇧⇥ to switch',
+      // The mode asked for, though the chat still carries the old one.
+      'Permissions: Auto-Edits · ⇧⇥ to switch',
     );
   });
 

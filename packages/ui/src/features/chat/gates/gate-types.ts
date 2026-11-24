@@ -20,9 +20,24 @@ export interface GateContext {
   more: number;
 }
 
-/** "Permission required · code-reviewer · 1 more waiting". */
-export function gateEyebrow(label: string, context: GateContext | undefined): string {
-  return [label, context?.asker, context && context.more > 0 ? `${context.more} more waiting` : undefined]
-    .filter(Boolean)
-    .join(' · ');
+/**
+ * "Permission required · code-reviewer · 1 more waiting". A card whose heading
+ * is not the asker's work names that too, so two askers of one provider read
+ * apart.
+ */
+export function gateEyebrow(
+  label: string,
+  context: GateContext | undefined,
+  { withTitle = false }: { withTitle?: boolean } = {},
+): string {
+  return [label, ...askerParts(context, withTitle)].join(' · ');
+}
+
+/** Who asks, what for, and how many wait behind. */
+export function askerParts(context: GateContext | undefined, withTitle: boolean): string[] {
+  if (!context) return [];
+  const title = withTitle && context.title !== context.asker ? context.title : undefined;
+  return [context.asker, title, context.more > 0 ? `${context.more} more waiting` : undefined].filter(
+    (part): part is string => Boolean(part),
+  );
 }

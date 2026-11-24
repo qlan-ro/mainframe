@@ -321,6 +321,7 @@ test.describe('§composer permissions', () => {
     await expect(page.getByTestId('composer-unattended-confirm-cancel')).toBeFocused();
     await page.getByTestId('composer-unattended-confirm-confirm').click();
     await expect(permissions).toContainText('Unattended', { timeout: 5_000 });
+    await expect(permissions).toBeFocused();
     await pick('default');
     await expect(permissions).toContainText('Interactive', { timeout: 5_000 });
     await pick('yolo');

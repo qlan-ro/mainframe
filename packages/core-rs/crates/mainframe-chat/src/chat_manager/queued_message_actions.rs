@@ -47,23 +47,25 @@ impl ChatManager {
             .await
     }
 
+    /// Takes a queued message back. `false` when the agent had already picked it
+    /// up, so it is (or will be) part of the conversation.
     pub async fn cancel_queued_message(
         &self,
         chat_id: &str,
         message_id: &str,
-    ) -> Result<(), SendError> {
+    ) -> Result<bool, SendError> {
         if self
             .edit_maintenance_input(chat_id, message_id, None)
             .await?
         {
-            return Ok(());
+            return Ok(true);
         }
         let r = self.find_ref(chat_id, message_id);
         let Some(r) = r else {
-            return Ok(());
+            return Ok(false);
         };
         let Some(session) = self.get_session_for_chat(chat_id) else {
-            return Ok(());
+            return Ok(false);
         };
 
         let cancelled = session.cancel_queued_message(r.uuid.clone()).await?;
@@ -73,7 +75,7 @@ impl ChatManager {
                 uuid = r.uuid,
                 "cancel lost race: message already dequeued by CLI"
             );
-            return Ok(());
+            return Ok(false);
         }
 
         self.shared
@@ -87,6 +89,6 @@ impl ChatManager {
         self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
         info!(chat_id, uuid = r.uuid, "queued message cancelled in CLI");
-        Ok(())
+        Ok(true)
     }
 }

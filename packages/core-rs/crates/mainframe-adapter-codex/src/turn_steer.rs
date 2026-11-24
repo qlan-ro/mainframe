@@ -8,6 +8,7 @@ use mainframe_types::sync::LockExt as _;
 use serde_json::{Value, json};
 
 use super::{AdapterError, CodexSession};
+use crate::jsonrpc::RpcFailure;
 
 /// The `turn/steer` params for one text message.
 pub(crate) fn steer_params(
@@ -19,6 +20,17 @@ pub(crate) fn steer_params(
         crate::user_input::build_turn_input(message, &[]);
     let input = serde_json::to_value(&input).map_err(AdapterError::from)?;
     Ok(json!({ "threadId": thread_id, "expectedTurnId": turn_id, "input": input }))
+}
+
+/// A refusal and a request that was never written leave the turn untouched; a
+/// request that went unanswered may have joined it.
+fn steer_error(failure: RpcFailure) -> AdapterError {
+    match failure {
+        RpcFailure::Rejected(error) | RpcFailure::NotWritten(error) => {
+            AdapterError::DeliveryRejected(error.0)
+        }
+        RpcFailure::Unconfirmed(error) => error.into(),
+    }
 }
 
 impl CodexSession {
@@ -33,9 +45,9 @@ impl CodexSession {
         };
         let params = steer_params(&thread_id, &turn_id, &message)?;
         client
-            .request("turn/steer", Some(params))
+            .request_with_disposition("turn/steer", Some(params))
             .await
-            .map_err(AdapterError::from)?;
+            .map_err(steer_error)?;
         Ok(())
     }
 }
@@ -43,6 +55,24 @@ impl CodexSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::jsonrpc::JsonRpcError;
+
+    #[test]
+    fn only_an_unanswered_steer_may_have_been_delivered() {
+        let error = || JsonRpcError("turn ended".to_string());
+        assert!(matches!(
+            steer_error(RpcFailure::Rejected(error())),
+            AdapterError::DeliveryRejected(_)
+        ));
+        assert!(matches!(
+            steer_error(RpcFailure::NotWritten(error())),
+            AdapterError::DeliveryRejected(_)
+        ));
+        assert!(!matches!(
+            steer_error(RpcFailure::Unconfirmed(error())),
+            AdapterError::DeliveryRejected(_)
+        ));
+    }
 
     #[test]
     fn steer_params_name_the_turn_they_expect() {

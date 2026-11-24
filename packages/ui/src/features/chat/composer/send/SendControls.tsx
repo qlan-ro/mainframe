@@ -156,22 +156,32 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
   );
 }
 
-export function SendControls({ submit }: { submit: SubmitComposition }) {
-  const isRunning = useAuiState((s) => s.thread.isRunning);
-  const canSubmit = useCanSubmit();
+/** Stop and its shortcut, wherever the composer shows them. */
+export function StopControl() {
   const stop = useComposerStop();
   // Split view mounts two composers: ⌘. belongs to the focused one.
   const focused = useAuiState((s) => s.threads?.mainThreadId === s.threadListItem?.id);
-
-  // A split appears only while the turn runs: with sub-agents alone, a new
-  // message starts a turn, so plain Send sits beside Stop.
-  const split = isRunning && !stop.stopping && canSubmit;
   return (
     <>
       {focused && <StopShortcut stop={stop.stop} />}
       {stop.available && <StopButton stop={stop} />}
+    </>
+  );
+}
+
+export function SendControls({ submit }: { submit: SubmitComposition }) {
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+  const canSubmit = useCanSubmit();
+  const { available, stopping } = useComposerStop();
+
+  // A split appears only while the turn runs: with sub-agents alone, a new
+  // message starts a turn, so plain Send sits beside Stop.
+  const split = isRunning && !stopping && canSubmit;
+  return (
+    <>
+      <StopControl />
       {split && <QueueSplit submit={submit} />}
-      {!isRunning && (canSubmit || !stop.available) && <SendButton ready={canSubmit} />}
+      {!isRunning && (canSubmit || !available) && <SendButton ready={canSubmit} />}
     </>
   );
 }

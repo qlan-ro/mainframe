@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { useHeldQueue } from '../held-queue-store';
 
@@ -91,5 +91,69 @@ describe('held queue store (C10)', () => {
     expect(stored.state.byChat['chat-1']).toEqual([
       { messageId: 'm1', content: 'first', timestamp: '2026-11-24T10:00:01.000Z' },
     ]);
+  });
+});
+
+describe('held queue store — what it keeps, and for whom', () => {
+  const stored = () => localStorage.getItem('mf:held-queue') ?? '';
+
+  it('never writes down what a temporary session holds', () => {
+    useHeldQueue.getState().hold('chat-temp', ref({ content: 'private words' }), { temporary: true });
+
+    expect(useHeldQueue.getState().byChat['chat-temp']).toHaveLength(1);
+    expect(stored()).not.toContain('private words');
+  });
+
+  it('keeps a temporary session’s row in memory through later changes', () => {
+    const { hold } = useHeldQueue.getState();
+    hold('chat-temp', ref({ content: 'private words' }), { temporary: true });
+    hold('chat-1', ref({ messageId: 'm2', content: 'saved' }));
+
+    expect(useHeldQueue.getState().byChat['chat-temp']).toHaveLength(1);
+    expect(stored()).toContain('saved');
+    expect(stored()).not.toContain('private words');
+  });
+
+  it('forgets a chat that ended, in storage too', () => {
+    useHeldQueue.getState().hold('chat-1', ref({ content: 'gone with the chat' }));
+    useHeldQueue.getState().clearChat('chat-1');
+
+    expect(useHeldQueue.getState().byChat).toEqual({});
+    expect(stored()).not.toContain('gone with the chat');
+  });
+
+  it('starts every change from what another window stored', () => {
+    useHeldQueue.getState().hold('chat-1', ref());
+    localStorage.setItem(
+      'mf:held-queue',
+      JSON.stringify({
+        state: { byChat: { 'chat-2': [{ messageId: 'other', content: 'theirs', timestamp: 't' }] } },
+        version: 1,
+      }),
+    );
+
+    useHeldQueue.getState().hold('chat-3', ref({ messageId: 'm3', content: 'mine' }));
+
+    expect(Object.keys(useHeldQueue.getState().byChat).sort()).toEqual(['chat-2', 'chat-3']);
+  });
+
+  it('takes nothing that another window already took', () => {
+    useHeldQueue.getState().hold('chat-1', ref());
+    localStorage.setItem('mf:held-queue', JSON.stringify({ state: { byChat: {} }, version: 1 }));
+
+    expect(useHeldQueue.getState().takeFrom('chat-1', 'm1')).toEqual([]);
+  });
+
+  it('follows another window as it changes', async () => {
+    localStorage.setItem(
+      'mf:held-queue',
+      JSON.stringify({
+        state: { byChat: { 'chat-2': [{ messageId: 'x', content: 'theirs', timestamp: 't' }] } },
+        version: 1,
+      }),
+    );
+    window.dispatchEvent(new StorageEvent('storage', { key: 'mf:held-queue' }));
+
+    await vi.waitFor(() => expect(useHeldQueue.getState().byChat['chat-2']).toHaveLength(1));
   });
 });

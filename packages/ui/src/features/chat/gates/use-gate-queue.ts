@@ -24,6 +24,10 @@ export interface GateSource {
 }
 
 export interface PendingGate {
+  /** Unique across the chats that ask: the same request id in two chats is two gates. */
+  key: string;
+  /** The chat that asks. */
+  chatId: string;
   entry: ChatPermissionEntry;
   reply: ReplyFn;
   adapterId: string | undefined;
@@ -60,6 +64,8 @@ export function useGateQueue(): GateQueue {
       .filter((entry): entry is ChatPermissionEntry => entry != null)
       .map((entry) => ({ entry, agent: subagentOf(messages, entry.request.toolUseId) }));
     const gates: PendingGate[] = own.map(({ entry, agent }) => ({
+      key: `${chatId}:${entry.requestId}`,
+      chatId: chatId ?? '',
       entry,
       reply: reply ?? (() => Promise.reject(new Error('Chat runtime not ready'))),
       adapterId,
@@ -73,13 +79,26 @@ export function useGateQueue(): GateQueue {
     for (const gate of Object.values(byTask)) {
       if (gate.parentChatId !== chatId) continue;
       const from: GateSource = {
-        name: `${adapters.find((a) => a.id === gate.adapterId)?.name ?? 'Delegated'} task`,
+        name: [
+          `${adapters.find((a) => a.id === gate.adapterId)?.name ?? 'Delegated'} task`,
+          gate.parentTitle && `in “${gate.parentTitle}”`,
+        ]
+          .filter(Boolean)
+          .join(' '),
         title: gate.title,
         matches: (row) => row.delegated?.taskId === gate.topTaskId,
       };
-      const { reply: answer, adapterId: askerAdapter, mode: askerMode } = gate;
+      const { reply: answer, adapterId: askerAdapter, mode: askerMode, chatId: askerChat } = gate;
       gates.push(
-        ...gate.entries.map((entry) => ({ entry, reply: answer, adapterId: askerAdapter, mode: askerMode, from })),
+        ...gate.entries.map((entry) => ({
+          key: `${askerChat}:${entry.requestId}`,
+          chatId: askerChat,
+          entry,
+          reply: answer,
+          adapterId: askerAdapter,
+          mode: askerMode,
+          from,
+        })),
       );
     }
     gates.sort((a, b) => a.entry.askedAt - b.entry.askedAt);

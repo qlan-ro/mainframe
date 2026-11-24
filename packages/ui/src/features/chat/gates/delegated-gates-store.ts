@@ -8,11 +8,16 @@ import type { ReplyFn } from './gate-types';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 
 export interface DelegatedGate {
+  /** The chat showing it. Two zones can surface the same task: a parent and its own child. */
   parentChatId: string;
+  /** The chat that asks. */
+  chatId: string;
   taskId: string;
   /** The task of THIS chat it runs under (itself, unless a task delegated further). */
   topTaskId: string;
   title: string;
+  /** The task it runs under, when a task delegated further. */
+  parentTitle: string | undefined;
   adapterId: string | undefined;
   mode: ExecutionMode | undefined;
   entries: readonly ChatPermissionEntry[];
@@ -22,16 +27,19 @@ export interface DelegatedGate {
 interface DelegatedGatesState {
   byTask: Readonly<Record<string, DelegatedGate>>;
   report: (gate: DelegatedGate) => void;
-  clear: (taskId: string) => void;
+  clear: (parentChatId: string, taskId: string) => void;
 }
+
+const keyOf = (parentChatId: string, taskId: string): string => `${parentChatId}:${taskId}`;
 
 export const useDelegatedGates = create<DelegatedGatesState>((set) => ({
   byTask: {},
-  report: (gate) => set((s) => ({ byTask: { ...s.byTask, [gate.taskId]: gate } })),
-  clear: (taskId) =>
+  report: (gate) => set((s) => ({ byTask: { ...s.byTask, [keyOf(gate.parentChatId, gate.taskId)]: gate } })),
+  clear: (parentChatId, taskId) =>
     set((s) => {
-      if (!(taskId in s.byTask)) return s;
-      const { [taskId]: _, ...byTask } = s.byTask;
+      const key = keyOf(parentChatId, taskId);
+      if (!(key in s.byTask)) return s;
+      const { [key]: _, ...byTask } = s.byTask;
       return { byTask };
     }),
 }));

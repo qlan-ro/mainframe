@@ -43,6 +43,8 @@ import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 
 vi.mock('../use-gate-queue', () => ({ useGateQueue: vi.fn() }));
 vi.mock('../DelegatedGateProbes', () => ({ DelegatedGateProbes: () => null }));
+// Arming is GateGuard.test.tsx's; here every gate answers at once.
+vi.mock('../GateGuard', () => ({ GateGuard: ({ children }: { children: React.ReactNode }) => children }));
 import { useGateQueue, type GateQueue } from '../use-gate-queue';
 import { ChatGateMount } from '../ChatGateMount';
 
@@ -61,6 +63,8 @@ function queue(
 ): GateQueue {
   return {
     front: front && {
+      key: `chat-1:${front.requestId}`,
+      chatId: 'chat-1',
       entry: front,
       reply: replyFn as never,
       adapterId: extra.adapterId,

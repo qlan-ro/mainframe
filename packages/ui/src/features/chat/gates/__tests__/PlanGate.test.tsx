@@ -117,11 +117,31 @@ describe('PlanGate', () => {
 
   // --- Behavior 3: select yolo then approve ---
 
-  it('selecting yolo exec-mode then approving calls reply with executionMode yolo', () => {
-    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+  it('approving into Unattended asks first, and a refusal approves nothing (C13)', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} chatId="plan-ask" />);
+    fireEvent.click(screen.getByTestId('chat-plan-execmode-yolo'));
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    expect(reply).not.toHaveBeenCalled();
+    expect(screen.getByTestId('composer-unattended-confirm')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('composer-unattended-confirm-cancel'));
+    expect(reply).not.toHaveBeenCalled();
+  });
+
+  it('asks once per session: a chat already running unattended is not asked again', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} chatId="plan-yolo" composerMode="yolo" />);
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    expect(screen.queryByTestId('composer-unattended-confirm')).toBeNull();
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ executionMode: 'yolo' }));
+  });
+
+  it('selecting yolo exec-mode, approving and confirming calls reply with executionMode yolo', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} chatId="plan-confirm" />);
 
     fireEvent.click(screen.getByTestId('chat-plan-execmode-yolo'));
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
+    fireEvent.click(screen.getByTestId('composer-unattended-confirm-confirm'));
 
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply).toHaveBeenCalledWith({

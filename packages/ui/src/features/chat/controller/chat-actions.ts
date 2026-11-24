@@ -124,32 +124,42 @@ const HOLD_QUEUE_BUDGET_MS = 1000;
 
 /**
  * Take the queue back from the agent before a Stop, so nothing queued starts a
- * new turn behind it (C10). Each row is kept the moment its cancel lands; one
- * the agent already picked up stays in the transcript and drops out of the
- * rows (`QueuedRows` checks its id).
+ * new turn behind it (C10). Each row is kept the moment its cancel wins; one the
+ * agent had already picked up is part of the conversation and is not held.
  */
 export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
   const refs = Object.values(host.getState().interactions.queued).filter((ref) => ref.delivery == null);
   if (refs.length === 0) return;
   const chatId = host.getDaemonId();
+  const temporary = host.getState().chatConfig?.temporary === true;
   const cancels = refs.map((ref) =>
     cancelQueuedMessage(host.getPort(), chatId, ref.messageId).then(
-      () => useHeldQueue.getState().hold(chatId, ref),
+      (takenBack) => {
+        // The agent already had it: it is in the conversation, not held.
+        if (takenBack) useHeldQueue.getState().hold(chatId, ref, { temporary });
+      },
       (error: unknown) => console.warn('[chat] queued message could not be held', { error }),
     ),
   );
   await Promise.race([Promise.all(cancels), new Promise((resolve) => setTimeout(resolve, HOLD_QUEUE_BUDGET_MS))]);
 }
 
-/** Send a held row, then line the rows behind it up again in their order. */
+/**
+ * Send a held row, then line the rows behind it up again in their order. They
+ * are taken out first, so a second press (or another window) finds nothing to
+ * send; whatever does not go out is put back.
+ */
 export async function sendHeldMessages(host: ChatActionHost, firstId: string): Promise<void> {
   const chatId = host.getDaemonId();
-  const rows = useHeldQueue.getState().byChat[chatId] ?? [];
-  const at = rows.findIndex((row) => row.messageId === firstId);
-  if (at < 0) return;
-  for (const row of [rows[at]!, ...rows.slice(at + 1)]) {
-    await host.sendPrompt(row.content, row.attachmentIds ? { attachmentIds: row.attachmentIds } : {});
-    useHeldQueue.getState().remove(chatId, row.messageId);
+  const rows = useHeldQueue.getState().takeFrom(chatId, firstId);
+  for (let sent = 0; sent < rows.length; sent++) {
+    const row = rows[sent]!;
+    try {
+      await host.sendPrompt(row.content, row.attachmentIds ? { attachmentIds: row.attachmentIds } : {});
+    } catch (error) {
+      useHeldQueue.getState().putBack(chatId, rows.slice(sent));
+      throw error;
+    }
   }
 }
 

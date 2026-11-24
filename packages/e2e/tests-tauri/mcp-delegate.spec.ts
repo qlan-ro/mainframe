@@ -123,7 +123,7 @@ test.describe('§mcp-delegate requests surface in the parent', () => {
     const gate = page.getByTestId('chat-thread-gate-slot');
     await expect(gate).toContainText('1 more waiting', { timeout: 60_000 });
     await expect(gate).toContainText('Check the migration');
-    await expect(page.getByTestId('chat-permission-rule')).toHaveText('cargo test *');
+    await expect(page.getByTestId('chat-permission-rule')).toHaveText('Bash(cargo test *)');
     // The strip steps back, and the item being answered is left out of it.
     await expect(page.getByTestId('composer-activity-summary')).toContainText('1 more needs you');
 

@@ -29,6 +29,7 @@
  * wires it to the live runtime, unread store, and daemon WS — call it once under
  * <AssistantRuntimeProvider>.
  */
+import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
 import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import { isRegisteredSideChatId, isSideChat } from '../../side-chat/side-chat-ids';
@@ -71,8 +72,13 @@ export class SessionListRouter {
   private route(event: DaemonEvent): void {
     if (this.disposed) return;
     switch (event.type) {
-      case 'chat.created':
       case 'chat.ended':
+        // Deleted or closed: nothing it held may outlive it.
+        useHeldQueue.getState().clearChat(event.chatId);
+        this.deps.onReload();
+        return;
+
+      case 'chat.created':
         this.deps.onReload();
         return;
 

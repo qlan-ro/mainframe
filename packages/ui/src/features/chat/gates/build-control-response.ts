@@ -1,4 +1,5 @@
 import type { ControlResponse, ExecutionMode, PermissionOption } from '@qlan-ro/mainframe-types';
+import { grantedUpdates } from './permission-grants';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 
 type Base = Pick<ControlResponse, 'requestId' | 'toolUseId' | 'toolName'>;
@@ -11,7 +12,8 @@ const base = (e: ChatPermissionEntry): Base => ({
 export function buildPermissionResponse(e: ChatPermissionEntry, kind: 'deny' | 'once' | 'always'): ControlResponse {
   if (kind === 'deny') return { ...base(e), behavior: 'deny' };
   const res: ControlResponse = { ...base(e), behavior: 'allow', updatedInput: e.request.input };
-  if (kind === 'always') res.updatedPermissions = e.request.suggestions;
+  // Exactly what the gate listed (`grantLines`), never the raw suggestions.
+  if (kind === 'always') res.updatedPermissions = grantedUpdates(e.request.suggestions);
   return res;
 }
 

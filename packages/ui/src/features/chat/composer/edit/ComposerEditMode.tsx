@@ -17,6 +17,7 @@ import { PencilIcon, CheckIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { ComposerToolbar } from '../config-toolbar/ComposerToolbar';
+import { StopControl } from '../send/SendControls';
 import type { QueuedEdit } from './composer-edit-context';
 
 export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: () => void }) {
@@ -58,7 +59,9 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
         {saveError ? (
           <span className="text-xs text-fail">{saveError}</span>
         ) : (
-          <span className="text-xs text-muted-foreground">· stays queued until the run finishes</span>
+          <span className="text-xs text-muted-foreground">
+            {edit.save ? '· not sent until you send it' : '· stays queued until the run finishes'}
+          </span>
         )}
         <span className="ml-auto font-mono text-xs text-muted-foreground">esc to cancel</span>
       </div>
@@ -90,6 +93,8 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
           <ComposerToolbar />
         </div>
         <div className="flex items-center gap-2">
+          {/* The turn keeps running while a queued message is edited. */}
+          <StopControl />
           <Button variant="outline" size="sm" data-testid="chat-composer-edit-cancel" onClick={onDone}>
             Cancel edit
           </Button>

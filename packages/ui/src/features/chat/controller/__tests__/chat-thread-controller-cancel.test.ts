@@ -11,7 +11,7 @@ vi.mock('../../../../lib/api/chats', () => ({
   getChat: vi.fn().mockResolvedValue(null),
   getChatWorkflowRuns: vi.fn().mockResolvedValue([]),
   resumeChat: vi.fn().mockResolvedValue(undefined),
-  cancelQueuedMessage: vi.fn().mockResolvedValue(undefined),
+  cancelQueuedMessage: vi.fn().mockResolvedValue(true),
   editQueuedMessage: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../../../../lib/api/git', () => ({
@@ -67,6 +67,7 @@ describe('AcpChatController.cancel — holds the queue first (C10)', () => {
     const order: string[] = [];
     vi.mocked(cancelQueuedMessage).mockImplementation(async (_port, _chat, id) => {
       order.push(`cancel-queued:${id}`);
+      return true;
     });
     const { ctrl, acpClient } = makeController();
     await ctrl.load();

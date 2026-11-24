@@ -1,0 +1,136 @@
+/** Where the session runs, its branch and its changes, under the card (K6, K8). */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import type { Chat } from '@qlan-ro/mainframe-types';
+
+let mockChat: Partial<Chat> | null;
+vi.mock('@assistant-ui/react', () => ({
+  useAuiState: (select: (s: unknown) => unknown) => select({ thread: { messages: [{}], isRunning: false } }),
+}));
+vi.mock('../../../runtime/chat-extras', () => ({
+  useChatExtrasSelector: (select: (extras: unknown) => unknown) => select({ state: { chatConfig: mockChat } }),
+}));
+vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
+vi.mock('@/features/sessions/use-display-branch', () => ({
+  useDisplayBranch: () => ({ branch: 'feat/quota', refetch: vi.fn() }),
+}));
+vi.mock('@/features/git/BranchPopover', () => ({
+  BranchPopover: ({ children }: { children: React.ReactElement }) => children,
+}));
+vi.mock('../../config-toolbar/WorktreePopover', () => ({
+  WorktreePopover: ({ children }: { children: React.ReactElement }) => children,
+}));
+type Changes = { files: { path: string; additions?: number }[]; totalAdditions?: number; totalDeletions?: number };
+let mockChanges: Changes & { loading: boolean; error: boolean };
+vi.mock('@/features/review/use-working-changes', () => ({
+  useWorkingChanges: () => mockChanges,
+  toChangesSummary: (c: Changes) => ({
+    fileCount: c.files.length,
+    additions: c.totalAdditions,
+    deletions: c.totalDeletions,
+  }),
+}));
+const emit = vi.fn();
+vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[]) => emit(...a) }));
+
+import { BottomStrip } from '../BottomStrip';
+
+const CHAT: Partial<Chat> = { id: 'chat-1', projectId: 'p1', temporary: false, noProject: false };
+const renderStrip = () =>
+  render(
+    <TooltipProvider>
+      <BottomStrip />
+    </TooltipProvider>,
+  );
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockChat = CHAT;
+  mockChanges = { files: [], loading: false, error: false };
+});
+
+describe('BottomStrip', () => {
+  it('is absent before the session exists', () => {
+    mockChat = { ...CHAT, id: '__LOCALID_1' };
+    renderStrip();
+    expect(screen.queryByTestId('composer-bottom-strip')).toBeNull();
+  });
+
+  it('is absent for a session with no project', () => {
+    mockChat = { ...CHAT, noProject: true };
+    renderStrip();
+    expect(screen.queryByTestId('composer-bottom-strip')).toBeNull();
+  });
+
+  it('names the local checkout, and keeps the branch manager beside it', () => {
+    renderStrip();
+    expect(screen.getByTestId('composer-worktree-trigger')).toHaveTextContent('Local');
+    expect(screen.getByTestId('composer-branch')).toHaveTextContent('feat/quota');
+  });
+
+  it('names a worktree', () => {
+    mockChat = { ...CHAT, worktreePath: '/repo/.worktrees/q' };
+    renderStrip();
+    expect(screen.getByTestId('composer-worktree-trigger')).toHaveTextContent('Worktree');
+  });
+
+  it('a temporary session says so, offers no worktree and shows no changes', () => {
+    mockChat = { ...CHAT, temporary: true };
+    mockChanges = { files: [{ path: 'a.ts' }], totalAdditions: 1, totalDeletions: 0, loading: false, error: false };
+    renderStrip();
+    expect(screen.getByTestId('composer-temporary')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByTestId('composer-worktree-trigger')).toBeNull();
+    expect(screen.queryByTestId('composer-changes')).toBeNull();
+  });
+});
+
+describe('ChangesButton', () => {
+  const some = { files: [{ path: 'src/a.ts' }, { path: 'src/b.ts' }], totalAdditions: 22, totalDeletions: 1 };
+
+  it('is hidden with no changes', () => {
+    renderStrip();
+    expect(screen.queryByTestId('composer-changes')).toBeNull();
+  });
+
+  it.each([
+    ['loading', { loading: true, error: false }],
+    ['failed', { loading: false, error: true }],
+  ])('claims nothing while the changes are %s', (_name, status) => {
+    mockChanges = { ...some, ...status };
+    renderStrip();
+    expect(screen.queryByTestId('composer-changes')).toBeNull();
+  });
+
+  it('shows the counts, lists the files and opens the diff', () => {
+    mockChanges = { ...some, loading: false, error: false };
+    renderStrip();
+    const button = screen.getByTestId('composer-changes');
+    expect(button).toHaveTextContent('+22−1');
+    expect(button).toHaveAttribute('aria-label', 'Changes: 2 changed files');
+
+    fireEvent.click(button);
+    expect(screen.getByText('src/b.ts')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('composer-changes-open-diff'));
+    expect(emit).toHaveBeenCalledExactlyOnceWith({ type: 'open-review' });
+  });
+
+  it('counts files where the daemon reports no lines, instead of a false zero', () => {
+    mockChanges = { files: [{ path: 'a.ts' }], loading: false, error: false };
+    renderStrip();
+    expect(screen.getByTestId('composer-changes')).toHaveTextContent('1 changed file');
+  });
+
+  it('caps the list and says how many more there are', () => {
+    mockChanges = {
+      files: Array.from({ length: 11 }, (_, i) => ({ path: `f${i}.ts` })),
+      loading: false,
+      error: false,
+    };
+    renderStrip();
+    fireEvent.click(screen.getByTestId('composer-changes'));
+    expect(screen.getByText('f7.ts')).toBeInTheDocument();
+    expect(screen.queryByText('f8.ts')).toBeNull();
+    expect(screen.getByText('and 3 more')).toBeInTheDocument();
+  });
+});

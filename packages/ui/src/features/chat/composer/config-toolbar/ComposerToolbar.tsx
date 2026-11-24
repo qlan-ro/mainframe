@@ -26,7 +26,7 @@ import { providerSwitchBlockedReason } from './provider-switch';
 import { TuningWarningDialog } from './TuningWarningDialog';
 import { UnattendedConfirmDialog } from './UnattendedConfirmDialog';
 import { useProviderSwitch } from './use-provider-switch';
-import { useUnattendedConfirm } from './use-unattended-confirm';
+import { useUnattendedGuard } from './use-unattended-confirm';
 
 const ANNOUNCE_MS = 1400;
 
@@ -34,17 +34,20 @@ export interface ComposerToolbarHandle {
   cyclePermission: () => void;
 }
 
-/** True for a moment after `flash()`. */
-function useFlash(ms: number): [boolean, () => void] {
-  const [on, setOn] = useState(false);
+/** Holds a value for a moment. */
+function useFlash<T>(ms: number): [T | null, (value: T) => void] {
+  const [held, setHeld] = useState<T | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
-  const flash = useCallback(() => {
-    clearTimeout(timer.current);
-    setOn(true);
-    timer.current = setTimeout(() => setOn(false), ms);
-  }, [ms]);
-  return [on, flash];
+  const flash = useCallback(
+    (value: T) => {
+      clearTimeout(timer.current);
+      setHeld(value);
+      timer.current = setTimeout(() => setHeld(null), ms);
+    },
+    [ms],
+  );
+  return [held, flash];
 }
 
 export function ComposerToolbar({
@@ -61,16 +64,25 @@ export function ComposerToolbar({
   const queuedCount = Object.values(extras?.queued ?? {}).filter((q) => q != null).length;
   const switchProvider = useProviderSwitch(chat, extras?.port ?? null);
   const mode: ExecutionMode = chat ? currentPermission(chat, providerDefaults) : 'default';
-  const unattended = useUnattendedConfirm(chat?.id ?? null, mode, setPermissionMode);
-  const [announced, announce] = useFlash(ANNOUNCE_MS);
+  const unattended = useUnattendedGuard(chat?.id ?? null);
+  const choosePermission = (next: ExecutionMode) => unattended.run(next, mode, () => setPermissionMode(next));
+  const controls = useRef<HTMLDivElement>(null);
+  /** The permissions control on screen: the chip stands in for it in a narrow composer. */
+  const focusPermissions = () =>
+    [...(controls.current?.querySelectorAll<HTMLElement>('[data-permissions-control]') ?? [])]
+      .find((el) => el.offsetParent !== null)
+      ?.focus();
+  const [announced, announce] = useFlash<ExecutionMode>(ANNOUNCE_MS);
 
   useImperativeHandle(
     ref,
     () => ({
       cyclePermission: () => {
         if (chat == null) return;
-        setPermissionMode(cyclePermission(mode));
-        announce();
+        const next = cyclePermission(mode);
+        setPermissionMode(next);
+        // The mode asked for: the chat still carries the old one until the daemon answers.
+        announce(next);
       },
     }),
     [chat, mode, setPermissionMode, announce],
@@ -98,7 +110,7 @@ export function ComposerToolbar({
   };
 
   return (
-    <div className="relative flex min-w-0 items-center gap-0.5">
+    <div ref={controls} className="relative flex min-w-0 items-center gap-0.5">
       {/* Not a Radix tooltip: those take part in the menus' dismiss layers, and
           this one shows and hides on its own. */}
       <span
@@ -111,7 +123,8 @@ export function ComposerToolbar({
             : 'sr-only'
         }
       >
-        {announced && `Permissions: ${permissionLabel(mode)}${chat.planMode ? ', after the plan' : ''} · ⇧⇥ to switch`}
+        {announced &&
+          `Permissions: ${permissionLabel(announced)}${chat.planMode ? ', after the plan' : ''} · ⇧⇥ to switch`}
       </span>
       <ProviderModelSelect
         {...menu}
@@ -121,14 +134,14 @@ export function ComposerToolbar({
       <PermissionSelect
         chat={chat}
         adapter={adapter}
-        setPermissionMode={unattended.request}
+        setPermissionMode={choosePermission}
         providerDefaults={providerDefaults}
         className="@max-[400px]/composer:hidden"
       />
       <CombinedSelect
         {...menu}
         disabled={disabled}
-        setPermissionMode={unattended.request}
+        setPermissionMode={choosePermission}
         className="@min-[400px]/composer:hidden"
       />
       <TuningWarningDialog
@@ -139,7 +152,7 @@ export function ComposerToolbar({
         onConfirm={tuning.tuningWarning.confirm}
         onCancel={tuning.tuningWarning.cancel}
       />
-      <UnattendedConfirmDialog confirm={unattended} />
+      <UnattendedConfirmDialog confirm={unattended} returnFocus={focusPermissions} />
     </div>
   );
 }

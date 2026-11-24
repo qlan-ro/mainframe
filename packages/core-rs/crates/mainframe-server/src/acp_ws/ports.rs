@@ -42,7 +42,7 @@ impl PromptPort for ManagerPorts {
             let manager = self.require()?;
             let is_command = send_meta.command.is_some();
             if send_meta.wants_steer()
-                && let Some(acceptance) = steer_prompt(manager, session_id, text).await
+                && let Some(acceptance) = steer_prompt(manager, session_id, text).await?
             {
                 return Ok(acceptance);
             }
@@ -91,15 +91,28 @@ async fn steer_prompt(
     manager: &ChatManager,
     chat_id: &str,
     text: &str,
-) -> Option<PromptAcceptance> {
+) -> Result<Option<PromptAcceptance>, PromptError> {
     if let Err(error) = manager.steer_message(chat_id, text).await {
+        steer_fallback(&error)?;
         tracing::debug!(chat_id, error = %error, "steer unavailable, queueing instead");
-        return None;
+        return Ok(None);
     }
     let queued = manager.queued_message_count(chat_id);
-    Some(PromptAcceptance {
+    Ok(Some(PromptAcceptance {
         queued_position: (queued > 0).then_some(queued as i64),
-    })
+    }))
+}
+
+/// Whether a failed steer may be sent the ordinary way. Only when it certainly
+/// never reached the agent: otherwise resending could deliver it twice, so the
+/// user is told instead.
+fn steer_fallback(error: &SendError) -> Result<(), PromptError> {
+    if error.never_delivered() {
+        return Ok(());
+    }
+    Err(PromptError::new(format!(
+        "Could not confirm that the agent received this message ({error}). Check the conversation before sending it again."
+    )))
 }
 
 impl ResumePort for ManagerPorts {
@@ -194,5 +207,32 @@ fn prompt_error(err: SendError) -> PromptError {
     PromptError {
         message: err.to_string(),
         remedy,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_steer_is_resent_only_when_it_never_reached_the_agent() {
+        let refused = [
+            SendError::NoActiveTurn("c1".into()),
+            SendError::SteerUnsupported("c1".into()),
+            SendError::NotRunning("c1".into()),
+            SendError::Adapter(AdapterError::DeliveryRejected("turn ended".into())),
+            SendError::Adapter(AdapterError::StdinFull("s1".into())),
+        ];
+        for error in refused {
+            assert!(steer_fallback(&error).is_ok(), "{error}");
+        }
+        let unknown = SendError::Adapter(AdapterError::Message("timed out".into()));
+        let told = steer_fallback(&unknown).unwrap_err();
+        assert!(
+            told.message.contains("Check the conversation"),
+            "{}",
+            told.message
+        );
+        assert!(told.message.contains("timed out"));
     }
 }

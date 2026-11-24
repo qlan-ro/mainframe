@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * Turning on Unattended asks once per session (C13). `request` runs any other
- * mode change straight away; Unattended waits for the dialog the first time.
+ * Going Unattended asks once per session (C13), wherever it is chosen: the
+ * composer's permissions and the plan gate share the answer. `run` does
+ * anything else straight away.
  */
 import { useCallback, useState } from 'react';
 import type { ExecutionMode } from '@qlan-ro/mainframe-types';
@@ -12,30 +13,39 @@ const confirmedChats = new Set<string>();
 
 export interface UnattendedConfirm {
   open: boolean;
-  request: (mode: ExecutionMode) => void;
   confirm: () => void;
   cancel: () => void;
 }
 
-export function useUnattendedConfirm(
-  chatId: string | null,
-  current: ExecutionMode,
-  setMode: (mode: ExecutionMode) => void,
-): UnattendedConfirm {
-  const [pendingChat, setPendingChat] = useState<string | null>(null);
-  const request = useCallback(
-    (mode: ExecutionMode) => {
-      if (mode !== 'yolo' || current === 'yolo' || chatId == null || confirmedChats.has(chatId)) setMode(mode);
-      else setPendingChat(chatId);
+export interface UnattendedGuard extends UnattendedConfirm {
+  /** Runs `action`, after asking when it takes the session from `current` to Unattended. */
+  run: (next: ExecutionMode, current: ExecutionMode, action: () => void) => void;
+}
+
+interface Pending {
+  chatId: string | null;
+  action: () => void;
+}
+
+export function useUnattendedGuard(chatId: string | null): UnattendedGuard {
+  const [pending, setPending] = useState<Pending | null>(null);
+  // Leaving the chat drops the question: coming back must not reopen it.
+  if (pending != null && pending.chatId !== chatId) setPending(null);
+
+  const run = useCallback(
+    (next: ExecutionMode, current: ExecutionMode, action: () => void) => {
+      const asks = next === 'yolo' && current !== 'yolo' && (chatId == null || !confirmedChats.has(chatId));
+      if (asks) setPending({ chatId, action });
+      else action();
     },
-    [chatId, current, setMode],
+    [chatId],
   );
-  const cancel = useCallback(() => setPendingChat(null), []);
+  const cancel = useCallback(() => setPending(null), []);
   const confirm = useCallback(() => {
-    setPendingChat(null);
-    if (chatId == null || pendingChat !== chatId) return;
-    confirmedChats.add(chatId);
-    setMode('yolo');
-  }, [chatId, pendingChat, setMode]);
-  return { open: pendingChat != null && pendingChat === chatId, request, confirm, cancel };
+    setPending(null);
+    if (pending == null || pending.chatId !== chatId) return;
+    if (pending.chatId != null) confirmedChats.add(pending.chatId);
+    pending.action();
+  }, [chatId, pending]);
+  return { open: pending != null && pending.chatId === chatId, run, confirm, cancel };
 }

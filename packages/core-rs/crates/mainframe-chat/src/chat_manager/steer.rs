@@ -9,6 +9,13 @@ impl ChatManager {
     /// safe boundary. Fails when the chat has no live, working session or its
     /// adapter cannot steer; the caller then queues instead.
     pub async fn steer_message(&self, chat_id: &str, content: &str) -> Result<(), SendError> {
+        // The same gates an ordinary send passes: it must not race an offload, reach
+        // a session that is being interrupted, or jump maintenance's queue.
+        let _send_guard = self.lifecycle.begin_send(chat_id).await;
+        self.lifecycle.wait_for_interrupt(chat_id).await;
+        if self.input_reserved(chat_id)? {
+            return Err(SendError::NoActiveTurn(chat_id.to_string()));
+        }
         let (post, session) = self.require_live_session(chat_id)?;
         if !session.supports_steer() {
             return Err(SendError::SteerUnsupported(chat_id.to_string()));

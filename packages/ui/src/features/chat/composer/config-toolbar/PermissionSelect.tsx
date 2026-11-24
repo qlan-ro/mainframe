@@ -119,6 +119,7 @@ export function PermissionSelect({
           <button
             type="button"
             data-testid="composer-permission-mode-select"
+            data-permissions-control
             data-planning={planning || undefined}
             aria-label={`Permission mode: ${status}`}
             className={toolbarButton(open, cn('font-medium', permissionTone(mode, planning), className))}

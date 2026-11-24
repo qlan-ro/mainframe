@@ -9,7 +9,7 @@ import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import { GateCardShell, GateHead, GATE_BODY_INSET, GATE_PRIMARY } from './shared/GateShell';
 import { buildOptionResponse } from './build-control-response';
 import { gateEyebrow, type GateContext, type ReplyFn } from './gate-types';
-import { savedRule } from './saved-rule';
+import { grantLines, grantedUpdates, type GrantLine } from './permission-grants';
 
 export type { ReplyFn } from './gate-types';
 
@@ -84,12 +84,12 @@ const KIND_VARIANT: Partial<Record<PermissionOptionKind, ButtonVariant>> = {
 
 function OptionsFooter({
   options,
-  rule,
+  grants,
   onSelect,
 }: {
   options: PermissionOption[];
-  /** What "always" saves, named on its button. */
-  rule: string | null;
+  /** What "always" saves. A single line is named on the button itself. */
+  grants: readonly GrantLine[];
   onSelect: (option: PermissionOption) => void;
 }) {
   return (
@@ -104,12 +104,12 @@ function OptionsFooter({
           onClick={() => onSelect(option)}
         >
           {option.name}
-          {option.kind === 'allow_always' && rule && (
+          {option.kind === 'allow_always' && grants.length === 1 && (
             <code
               data-testid="chat-permission-rule"
               className="max-w-60 truncate rounded bg-muted px-1 font-mono text-xs text-muted-foreground"
             >
-              {rule}
+              {grants[0]!.subject}
             </code>
           )}
         </Button>
@@ -144,9 +144,42 @@ function commandOf(input: Record<string, unknown>): string | undefined {
   return typeof input.command === 'string' && input.command.trim() ? input.command : undefined;
 }
 
+/** Everything "Always allow" saves, in full, before it is pressed. */
+function GrantList({ grants }: { grants: readonly GrantLine[] }) {
+  if (grants.length === 0) return null;
+  return (
+    <div
+      data-testid="chat-permission-grants"
+      className={cn('pr-4 pb-2 text-xs text-muted-foreground', GATE_BODY_INSET)}
+    >
+      <span>Always allow saves:</span>
+      <ul className="mt-0.5 flex max-h-32 flex-col gap-0.5 overflow-y-auto">
+        {grants.map(({ verb, subject, where }) => (
+          <li key={`${verb} ${subject} ${where}`}>
+            {verb} <code className="font-mono wrap-anywhere text-foreground">{subject}</code> {where}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The options as offered, minus an "always" whose every suggestion was dropped:
+ * pressing it would save nothing. An adapter that suggests nothing (Codex) means
+ * its own "always", and keeps it.
+ */
+function offeredOptions(entry: ChatPermissionEntry, saves: boolean): PermissionOption[] {
+  const nothingLeft = !saves && (entry.request.suggestions?.length ?? 0) > 0;
+  return nothingLeft ? entry.options.filter((option) => option.kind !== 'allow_always') : entry.options;
+}
+
 export function PermissionGate({ entry, reply, context }: PermissionGateProps) {
   const { request } = entry;
   const { name, details } = requestSummary(request.toolName, request.input);
+  const grants = grantLines(grantedUpdates(request.suggestions));
+  const options = offeredOptions(entry, grants.length > 0);
+  const offersAlways = options.some((option) => option.kind === 'allow_always');
 
   // The clicked option's own id travels with the answer (spec decision 12 —
   // the daemon sees which offered option was actually selected, not a
@@ -164,7 +197,8 @@ export function PermissionGate({ entry, reply, context }: PermissionGateProps) {
         />
         <ToolNameRow toolName={name} command={commandOf(request.input)} />
         <DetailsDisclosure input={details} />
-        <OptionsFooter options={entry.options} rule={savedRule(request.suggestions)} onSelect={onSelect} />
+        {offersAlways && <GrantList grants={grants} />}
+        <OptionsFooter options={options} grants={grants} onSelect={onSelect} />
       </GateCardShell>
     </div>
   );

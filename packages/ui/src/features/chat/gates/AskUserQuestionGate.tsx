@@ -9,7 +9,7 @@ import { buildAskUserQuestionResponse } from './build-control-response';
 import { AskQuestionWizard } from './AskQuestionWizard';
 import { assembleAnswers, resolveChosen } from './answers';
 import type { AskQuestion } from './answers';
-import type { GateContext, ReplyFn } from './gate-types';
+import { askerParts, type GateContext, type ReplyFn } from './gate-types';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -160,8 +160,7 @@ export function AskUserQuestionGate({ entry, reply, context }: AskUserQuestionGa
   const details = [
     activeQuestion?.header,
     isMulti ? 'select all that apply' : undefined,
-    context?.asker,
-    context && context.more > 0 ? `${context.more} more waiting` : undefined,
+    ...askerParts(context, true),
   ].filter(Boolean);
 
   return (

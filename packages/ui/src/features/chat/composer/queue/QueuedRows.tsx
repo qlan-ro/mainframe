@@ -5,7 +5,7 @@
  * send when it finishes; rows a Stop took back wait for the user, the first
  * one saying so. Only a stop turns a row failed, never a normal drain.
  */
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { CircleAlert, PencilIcon, RotateCcwIcon, XIcon } from 'lucide-react';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
@@ -166,6 +166,10 @@ function useHeldRows(): QueueRow[] {
       .map((m) => m.id)
       .join('\n'),
   );
+  // One that reached the conversation after all is not held any more: forget it.
+  useEffect(() => {
+    for (const id of sentIds.split('\n')) if (id) useHeldQueue.getState().remove(chatId, id);
+  }, [sentIds, chatId]);
   const queuedIds = new Set(Object.values(extras?.queued ?? {}).map((ref) => ref.messageId));
   const { edit, remove } = useHeldQueue.getState();
   return held

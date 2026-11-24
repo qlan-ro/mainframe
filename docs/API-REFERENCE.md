@@ -336,7 +336,7 @@ before the facade is touched.
 | `POST /api/chats/{id}/resume` | Resume a paused/ended session | — | `ok_empty` |
 | `POST /api/chats/{id}/trust-workspace` | Mark the chat's workspace as trusted | — | `ok_empty` |
 | `PATCH /api/chats/{id}/queue/{messageId}` | Edit a queued (not-yet-sent) message | `{ content }` | `ok_empty` |
-| `DELETE /api/chats/{id}/queue/{messageId}` | Cancel a queued message | — | `ok_empty` |
+| `DELETE /api/chats/{id}/queue/{messageId}` | Cancel a queued message | — | `{ cancelled }`: `false` when the agent had already picked it up |
 
 ### Chats — Recovery
 

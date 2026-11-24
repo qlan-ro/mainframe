@@ -76,6 +76,8 @@ The daemon joins the text blocks with newlines. Image blocks in `prompt` are not
 
 `command` records a slash-command invocation. `name` must match `^[a-zA-Z0-9_-]+$` and `source` must be non-empty; `GET /api/commands` lists the built-ins.
 
+`"steer": true` asks the daemon to fold the prompt into the running turn instead of queueing it. Only plain text can be steered: a prompt with `attachmentIds` or `command` ignores it. When the turn certainly cannot take the prompt (no turn is running, the adapter has no steer, the provider refused it, or maintenance owns the chat's input), the daemon sends it the ordinary way, so it queues or starts a turn. When the daemon cannot tell whether the agent received it, the request fails instead, so the prompt is never delivered twice; tell the user to check before sending again. `AdapterInfo.capabilities.steer` (REST) says whether an adapter can be steered.
+
 The reply means the prompt was accepted, not that the turn finished. If a turn is already running, the prompt is queued and the reply says where:
 
 ```json
@@ -208,7 +210,7 @@ Prompts accepted mid-turn wait in a queue the daemon owns. Queued prompts are no
       "content": "Continue with the fix", "timestamp": "2026-07-08T10:15:30.000Z" } ] } }
 ```
 
-Replace your local queue with `refs` each time. Editing or cancelling a queued prompt is REST: `PATCH` or `DELETE /api/chats/{id}/queue/{messageId}`.
+Replace your local queue with `refs` each time. A ref with `"steered": true` is a steered prompt the agent has not picked up yet: it belongs to the conversation, not to the queue, and its item carries `messageMeta.steered` once it does. That mark is live only; history rebuilt from the provider's transcript does not have it. Editing or cancelling a queued prompt is REST: `PATCH` or `DELETE /api/chats/{id}/queue/{messageId}`.
 
 ## Stay in sync
 

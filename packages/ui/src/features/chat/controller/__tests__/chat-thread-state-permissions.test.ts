@@ -46,6 +46,23 @@ afterEach(() => {
 // permission.resolved — non-front removal
 // ---------------------------------------------------------------------------
 
+describe('reduceChatThreadState — permission.requested again', () => {
+  it('keeps its place in the queue when a reconnect delivers the same request again', () => {
+    const before = stateWithThree();
+    const firstSeen = before.interactions.permissions['r1']!.askedAt;
+    vi.advanceTimersByTime(60_000);
+
+    const after = reduceChatThreadState(before, {
+      type: 'permission.requested',
+      requestId: 'r1',
+      request: makeRequest('r1'),
+      options: [],
+    });
+
+    expect(after.interactions.permissions['r1']!.askedAt).toBe(firstSeen);
+  });
+});
+
 describe('reduceChatThreadState — permission.resolved', () => {
   it('removes only the named permission and leaves the others in place', () => {
     const before = stateWithThree();

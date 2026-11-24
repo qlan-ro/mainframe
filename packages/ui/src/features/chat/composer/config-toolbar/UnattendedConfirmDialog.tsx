@@ -13,10 +13,23 @@ import {
 import type { UnattendedConfirm } from './use-unattended-confirm';
 
 /** "Run this session unattended?" (C13). Cancel takes the initial focus. */
-export function UnattendedConfirmDialog({ confirm }: { confirm: UnattendedConfirm }) {
+export function UnattendedConfirmDialog({
+  confirm,
+  returnFocus,
+}: {
+  confirm: UnattendedConfirm;
+  /** Puts focus back on the control that asked: the menu that opened this is gone. */
+  returnFocus: () => void;
+}) {
   return (
     <AlertDialog open={confirm.open} onOpenChange={(open) => !open && confirm.cancel()}>
-      <AlertDialogContent data-testid="composer-unattended-confirm">
+      <AlertDialogContent
+        data-testid="composer-unattended-confirm"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocus();
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>Run this session unattended?</AlertDialogTitle>
           <AlertDialogDescription>

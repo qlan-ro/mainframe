@@ -11,6 +11,8 @@ interface GateCardProps {
   reply: (response: ControlResponse, selectedOptionId?: string) => Promise<void>;
   /** The gated chat's adapter: the plan gate offers `auto` only when it advertises `capabilities.autoMode`. */
   adapterId: string | undefined;
+  /** The asking chat, for the plan gate's once-per-session Unattended question. */
+  chatId?: string;
   /** Who is asking and how many wait behind (G5). */
   context?: GateContext;
   /** The asking chat's permission mode, preselected by the plan gate. */
@@ -24,7 +26,7 @@ interface GateCardProps {
  * `input` the rich Plan/AskUserQuestion cards read, so it routes to the
  * generic options-only card regardless of toolName (spec decision 27).
  */
-export function GateCard({ entry, reply, adapterId, context, composerMode }: GateCardProps) {
+export function GateCard({ entry, reply, adapterId, chatId, context, composerMode }: GateCardProps) {
   const adapters = useAdapters();
   const { toolName } = entry.request;
   if (entry.synthesizedRequest) return <PermissionGate entry={entry} reply={reply} context={context} />;
@@ -36,6 +38,7 @@ export function GateCard({ entry, reply, adapterId, context, composerMode }: Gat
         entry={entry}
         reply={reply}
         context={context}
+        chatId={chatId}
         composerMode={composerMode}
         autoAllowed={adapter?.capabilities.autoMode === true}
       />

@@ -47,6 +47,7 @@ export function CombinedSelect({ disabled, setPermissionMode, className, ...menu
           <button
             type="button"
             data-testid="composer-model-permission-select"
+            data-permissions-control
             aria-label={`Model and permissions: ${summary}`}
             className={toolbarButton(open, cn(permissionTone(mode, planning), 'text-foreground/90', className))}
           >

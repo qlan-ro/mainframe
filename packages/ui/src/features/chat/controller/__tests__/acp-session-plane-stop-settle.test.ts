@@ -13,7 +13,7 @@ vi.mock('../../../../lib/api/chats', () => ({
   getChat: vi.fn().mockResolvedValue(null),
   getChatWorkflowRuns: vi.fn().mockResolvedValue([]),
   resumeChat: vi.fn().mockResolvedValue(undefined),
-  cancelQueuedMessage: vi.fn().mockResolvedValue(undefined),
+  cancelQueuedMessage: vi.fn().mockResolvedValue(true),
   editQueuedMessage: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('../../../../lib/api/git', () => ({

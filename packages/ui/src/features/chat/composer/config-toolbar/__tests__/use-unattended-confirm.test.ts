@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useUnattendedConfirm } from '../use-unattended-confirm';
+import type { ExecutionMode } from '@qlan-ro/mainframe-types';
+import { useUnattendedGuard } from '../use-unattended-confirm';
+
+/** The guard as a permissions control uses it: one mode, one setter. */
+function useUnattendedConfirm(chatId: string | null, current: ExecutionMode, setMode: (mode: ExecutionMode) => void) {
+  const guard = useUnattendedGuard(chatId);
+  return { ...guard, request: (next: ExecutionMode) => guard.run(next, current, () => setMode(next)) };
+}
 
 // The set of confirmed chats lives at module level for the life of the app, so
 // each case uses a chat id of its own.
@@ -85,12 +92,31 @@ describe('useUnattendedConfirm (C13)', () => {
     expect(setMode).toHaveBeenCalledExactlyOnceWith('yolo');
   });
 
-  it('does not ask without a chat to remember it for', () => {
+  it('asks every time without a chat to remember the answer for', () => {
     const setMode = vi.fn();
     const { result } = renderHook(() => useUnattendedConfirm(null, 'default', setMode));
 
     act(() => result.current.request('yolo'));
-
+    act(() => result.current.confirm());
     expect(setMode).toHaveBeenCalledExactlyOnceWith('yolo');
+
+    act(() => result.current.request('yolo'));
+    expect(result.current.open).toBe(true);
+  });
+
+  it('drops the question when the chat changes, and does not reopen it on the way back', () => {
+    const setMode = vi.fn();
+    const { result, rerender } = renderHook(({ id }) => useUnattendedConfirm(id, 'default', setMode), {
+      initialProps: { id: 'chat-left' },
+    });
+    act(() => result.current.request('yolo'));
+    expect(result.current.open).toBe(true);
+
+    rerender({ id: 'chat-elsewhere' });
+    rerender({ id: 'chat-left' });
+
+    expect(result.current.open).toBe(false);
+    act(() => result.current.confirm());
+    expect(setMode).not.toHaveBeenCalled();
   });
 });

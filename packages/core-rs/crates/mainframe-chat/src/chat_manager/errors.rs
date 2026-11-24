@@ -37,6 +37,24 @@ pub enum SendError {
 }
 
 impl SendError {
+    /// Whether a failed steer certainly never reached the agent, so sending the
+    /// message the ordinary way cannot deliver it twice. Any other failure leaves
+    /// that unknown.
+    pub fn never_delivered(&self) -> bool {
+        match self {
+            Self::NotRunning(_) | Self::SteerUnsupported(_) | Self::NoActiveTurn(_) => true,
+            Self::Adapter(error) => matches!(
+                error,
+                AdapterError::DeliveryRejected(_)
+                    | AdapterError::NotSpawned(_)
+                    | AdapterError::StdinFull(_)
+                    | AdapterError::NoActiveTurn(_)
+                    | AdapterError::Unsupported(_)
+            ),
+            Self::HandoffTooLarge(_) | Self::Recovery(_) | Self::Store(_) => false,
+        }
+    }
+
     /// The plan-mode follow-up send answers the adapter's handler, whose seam
     /// speaks `AdapterError`: an adapter failure passes through unchanged and
     /// any other refusal reaches it as its text.

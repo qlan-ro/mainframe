@@ -149,6 +149,8 @@ describe('useGateQueue', () => {
       byTask: {
         t1: {
           parentChatId: 'chat-1',
+          chatId: 'task-chat',
+          parentTitle: undefined,
           taskId: 't1',
           topTaskId: 't1',
           title: 'Fix the build',
@@ -174,6 +176,8 @@ describe('useGateQueue', () => {
       byTask: {
         t1: {
           parentChatId: 'chat-1',
+          chatId: 'task-chat',
+          parentTitle: undefined,
           taskId: 't1',
           topTaskId: 't1',
           title: 'T',
@@ -196,6 +200,8 @@ describe('useGateQueue', () => {
       byTask: {
         t1: {
           parentChatId: 'other-chat',
+          chatId: 'task-chat',
+          parentTitle: undefined,
           taskId: 't1',
           topTaskId: 't1',
           title: 'T',
@@ -218,6 +224,8 @@ describe('useGateQueue', () => {
       byTask: {
         t2: {
           parentChatId: 'chat-1',
+          chatId: 'task-chat',
+          parentTitle: undefined,
           taskId: 't2',
           topTaskId: 't1',
           title: 'Nested',

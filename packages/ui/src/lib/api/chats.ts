@@ -88,9 +88,19 @@ export const interruptChat = (port: number, chatId: string): Promise<void> =>
 export const editQueuedMessage = (port: number, chatId: string, messageId: string, content: string): Promise<void> =>
   requestEmpty('PATCH', `${apiBase(port)}/api/chats/${chatId}/queue/${messageId}`, { content });
 
-/** Cancel a queued message before the CLI consumes it (races consumption; a lost race is silent). */
-export const cancelQueuedMessage = (port: number, chatId: string, messageId: string): Promise<void> =>
-  requestEmpty('DELETE', `${apiBase(port)}/api/chats/${chatId}/queue/${messageId}`);
+/**
+ * Take a queued message back before the CLI consumes it. Resolves `false` when
+ * the CLI already had it. A daemon from before that answer existed sends no
+ * data; it is read as taken back, because losing the text is worse than offering
+ * it again (and a message that reached the conversation is never offered).
+ */
+export async function cancelQueuedMessage(port: number, chatId: string, messageId: string): Promise<boolean> {
+  const data = await request<{ cancelled?: boolean } | undefined>(
+    'DELETE',
+    `${apiBase(port)}/api/chats/${chatId}/queue/${messageId}`,
+  );
+  return data?.cancelled !== false;
+}
 
 /** Full (untruncated) output for a tool call, fetched on demand for long results. */
 export async function getToolResultContent(port: number, chatId: string, toolUseId: string): Promise<string> {

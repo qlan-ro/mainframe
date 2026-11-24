@@ -21,6 +21,17 @@ impl ChatShared {
 }
 
 impl ChatManager {
+    /// Whether maintenance owns the chat's input right now, so a message has to
+    /// wait its turn behind it.
+    pub(super) fn input_reserved(&self, chat_id: &str) -> Result<bool, SendError> {
+        let provider_busy = self
+            .get_session_for_chat(chat_id)
+            .is_some_and(|s| !s.ready_for_input());
+        Ok(self.shared.maintenance.active(chat_id)
+            || provider_busy
+            || !self.shared.deps.idle_queue_list(chat_id)?.is_empty())
+    }
+
     pub(super) async fn enqueue_when_reserved(
         &self,
         chat_id: &str,
@@ -28,13 +39,7 @@ impl ChatManager {
         attachment_ids: Option<&[String]>,
         command: Option<&CommandMeta>,
     ) -> Result<bool, SendError> {
-        let provider_busy = self
-            .get_session_for_chat(chat_id)
-            .is_some_and(|s| !s.ready_for_input());
-        if !self.shared.maintenance.active(chat_id)
-            && !provider_busy
-            && self.shared.deps.idle_queue_list(chat_id)?.is_empty()
-        {
+        if !self.input_reserved(chat_id)? {
             return Ok(false);
         }
         self.enqueue_maintenance_input(chat_id, content, attachment_ids, command.cloned())

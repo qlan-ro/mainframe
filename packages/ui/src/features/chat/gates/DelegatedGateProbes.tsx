@@ -21,7 +21,13 @@ function daemonChatId(items: readonly SessionItem[], itemId: string): string {
   return item?.remoteId ?? itemId;
 }
 
-function DelegatedGateProbe({ parentChatId, row, topTaskId, chatId }: WaitingTask & { parentChatId: string }) {
+function DelegatedGateProbe({
+  parentChatId,
+  row,
+  topTaskId,
+  parentTitle,
+  chatId,
+}: WaitingTask & { parentChatId: string }) {
   const port = useDaemonPort();
   const controller = useChatController(chatId, port);
   useEffect(() => controller.holdActive(), [controller]);
@@ -33,21 +39,23 @@ function DelegatedGateProbe({ parentChatId, row, topTaskId, chatId }: WaitingTas
   useEffect(() => {
     const entries = Object.values(permissions).filter((entry) => entry != null);
     if (entries.length === 0) {
-      useDelegatedGates.getState().clear(taskId);
+      useDelegatedGates.getState().clear(parentChatId, taskId);
       return;
     }
     useDelegatedGates.getState().report({
       parentChatId,
+      chatId,
       taskId,
       topTaskId,
       title,
+      parentTitle,
       adapterId,
       mode,
       entries,
       reply: (response, selectedOptionId) => controller.replyToPermission(response, selectedOptionId),
     });
-  }, [permissions, controller, parentChatId, taskId, topTaskId, title, adapterId, mode]);
-  useEffect(() => () => useDelegatedGates.getState().clear(taskId), [taskId]);
+  }, [permissions, controller, parentChatId, chatId, taskId, topTaskId, title, parentTitle, adapterId, mode]);
+  useEffect(() => () => useDelegatedGates.getState().clear(parentChatId, taskId), [parentChatId, taskId]);
   return null;
 }
 
@@ -55,16 +63,22 @@ interface WaitingTask {
   row: DelegatedTaskRow;
   /** The asking task's own ancestor among this chat's tasks, whose row it is in the activity strip. */
   topTaskId: string;
+  parentTitle: string | undefined;
   chatId: string;
 }
 
 /** The tasks waiting on the user, tasks below them included. */
-function waitingTasks(items: SessionItem[], chatId: string, topTaskId?: string): WaitingTask[] {
+function waitingTasks(items: SessionItem[], chatId: string, under?: WaitingTask): WaitingTask[] {
   return delegatedTasksOf(items, chatId)
     .filter((row) => row.waiting)
     .flatMap((row) => {
-      const child = { row, topTaskId: topTaskId ?? row.taskId, chatId: daemonChatId(items, row.itemId) };
-      return [child, ...waitingTasks(items, child.chatId, child.topTaskId)];
+      const child: WaitingTask = {
+        row,
+        topTaskId: under?.topTaskId ?? row.taskId,
+        parentTitle: under?.row.title,
+        chatId: daemonChatId(items, row.itemId),
+      };
+      return [child, ...waitingTasks(items, child.chatId, child)];
     });
 }
 

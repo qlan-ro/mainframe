@@ -10,7 +10,7 @@
  * the checkout has uncommitted changes.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, FolderGit2, FolderPlus, GitBranch, Loader2, Timer } from 'lucide-react';
+import { ChevronDown, FolderGit2, FolderPlus, GitBranch, Loader2, Settings2, Timer } from 'lucide-react';
 import type { BranchListResult } from '@qlan-ro/mainframe-types';
 import {
   Command,
@@ -26,6 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { getGitBranch, getGitBranches, getProjectWorktrees, type WorktreeEntry } from '@/lib/api/git';
+import { BranchPopover } from '@/features/git/BranchPopover';
 import { useBranchActions } from '@/features/git/use-branch-actions';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { patchDraftConfig, type DraftCfg } from '@/features/sessions/runtime/draft-config';
@@ -91,6 +92,16 @@ function TriggerLabel({ env, branch }: { env: DraftEnvironment; branch: string |
   }
 }
 
+/** A detached worktree has no branch: its folder is the only name it has. */
+function worktreeNames({ branch, path }: WorktreeEntry): { name: string; label: string } {
+  if (branch) {
+    const name = branch.replace('refs/heads/', '');
+    return { name, label: name };
+  }
+  const folder = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+  return { name: 'detached', label: `${folder} (detached)` };
+}
+
 const ENV_ICON = { local: GitBranch, temporary: Timer, 'new-worktree': FolderPlus, worktree: FolderGit2 } as const;
 
 function TwoLine({ title, detail }: { title: string; detail: string }) {
@@ -137,6 +148,7 @@ export function DraftBranchPicker({
 }) {
   const port = useDaemonPort();
   const [open, setOpen] = useState(false);
+  const [managing, setManaging] = useState(false);
   const data = useBranchData(port, projectId, open);
   const { branch, reload } = useCurrentBranch(port, projectId);
   const { handleCheckout } = useBranchActions({ port, projectId });
@@ -146,10 +158,7 @@ export function DraftBranchPicker({
   const set = (next: DraftEnvironment) => patchDraftConfig(localId, environmentPatch(next));
   const local = useMemo(() => data.branches?.local.map((b) => b.name) ?? [], [data.branches]);
   // The project's own checkout is the "local" choice, not a worktree to attach.
-  const worktrees = useMemo(
-    () => data.worktrees.slice(1).filter((w): w is WorktreeEntry & { branch: string } => w.branch != null),
-    [data.worktrees],
-  );
+  const worktrees = useMemo(() => data.worktrees.slice(1), [data.worktrees]);
   const current = data.branches?.current ?? branch;
   const checked = env.kind === 'new-worktree' ? env.base : env.kind === 'local' ? current : null;
 
@@ -161,6 +170,10 @@ export function DraftBranchPicker({
     }
     setOpen(false);
   };
+  const openManager = () => {
+    setOpen(false);
+    setManaging(true);
+  };
   const toggleNewWorktree = () => {
     if (env.kind === 'new-worktree') set({ kind: 'local' });
     else set({ kind: 'new-worktree', base: current ?? 'main', branchName: suggestBranchName(local) });
@@ -171,101 +184,129 @@ export function DraftBranchPicker({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <ComposerHint label="Branch and worktree">
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            data-testid="composer-branch-picker"
-            data-env={env.kind}
-            aria-label="Branch and where it runs"
-            className={cn(
-              'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-lg px-2 text-sm hover:bg-accent focus-visible:focus-line',
-              open && 'bg-accent',
-            )}
-          >
-            <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 truncate">
-              <TriggerLabel env={env} branch={branch} />
-            </span>
-            <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-          </button>
-        </PopoverTrigger>
-      </ComposerHint>
-      <PopoverContent data-testid="composer-branch-menu" align="start" side="top" sideOffset={6} className="gap-0 p-0">
-        <Command>
-          <CommandInput data-testid="composer-branch-search" placeholder="Search branches..." autoFocus />
-          <CommandList className="p-1">
-            {data.branches == null && !data.error && (
-              <div className="flex justify-center py-4">
-                <Loader2 className="size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none" />
-              </div>
-            )}
-            {data.error && <p className="px-2 py-2 text-xs text-fail">{data.error}</p>}
-            {data.branches && <CommandEmpty>No branch matches.</CommandEmpty>}
-            <CommandGroup>
-              {local.map((name) => (
-                <CommandItem
-                  key={name}
-                  value={`branch:${name}`}
-                  data-testid={`composer-branch-option-${name}`}
-                  data-checked={name === checked}
-                  onSelect={() => pickBranch(name)}
-                >
-                  <GitBranch className="text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate">{name}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            <CommandSeparator className="my-1" />
-            <CommandGroup>
-              <CommandItem
-                value="Work in a new worktree"
-                data-testid="composer-branch-new-worktree"
-                data-checked={env.kind === 'new-worktree'}
-                onSelect={toggleNewWorktree}
-              >
-                <FolderPlus className="text-muted-foreground" />
-                <TwoLine title="Work in a new worktree" detail="Keeps your checkout untouched" />
-              </CommandItem>
-              <CommandItem
-                value="Temporary session"
-                data-testid="composer-temporary-toggle"
-                data-checked={env.kind === 'temporary'}
-                onSelect={toggleTemporary}
-              >
-                <Timer className="text-muted-foreground" />
-                <TwoLine title="Temporary session" detail="Deleted when closed; no worktree" />
-              </CommandItem>
-            </CommandGroup>
-            {worktrees.length > 0 && (
-              <CommandGroup heading="Worktrees">
-                {worktrees.map((worktree) => {
-                  const name = worktree.branch.replace('refs/heads/', '');
-                  return (
-                    <CommandItem
-                      key={worktree.path}
-                      value={`worktree:${name}:${worktree.path}`}
-                      data-testid={`composer-branch-worktree-${name}`}
-                      data-checked={env.kind === 'worktree' && env.path === worktree.path}
-                      onSelect={() => {
-                        set({ kind: 'worktree', branch: name, path: worktree.path });
-                        setOpen(false);
-                      }}
-                    >
-                      <FolderGit2 className="text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">{name}</span>
-                    </CommandItem>
-                  );
-                })}
+    <>
+      {/* Today's branch manager, for the project's own checkout. It opens from the
+        picker's menu and hangs off the same spot. */}
+      <BranchPopover
+        port={port}
+        projectId={projectId}
+        open={managing}
+        onOpenChange={setManaging}
+        onBranchChanged={reload}
+      >
+        <button type="button" tabIndex={-1} aria-hidden className="pointer-events-none h-7 w-0" />
+      </BranchPopover>
+      <Popover open={open} onOpenChange={setOpen}>
+        <ComposerHint label="Branch and worktree">
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              data-testid="composer-branch-picker"
+              data-env={env.kind}
+              aria-label="Branch and where it runs"
+              className={cn(
+                'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-lg px-2 text-sm hover:bg-accent focus-visible:focus-line',
+                open && 'bg-accent',
+              )}
+            >
+              <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 truncate">
+                <TriggerLabel env={env} branch={branch} />
+              </span>
+              <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+            </button>
+          </PopoverTrigger>
+        </ComposerHint>
+        <PopoverContent
+          data-testid="composer-branch-menu"
+          align="start"
+          side="top"
+          sideOffset={6}
+          className="gap-0 p-0"
+        >
+          <Command>
+            <CommandInput data-testid="composer-branch-search" placeholder="Search branches..." autoFocus />
+            <CommandList className="p-1">
+              {data.branches == null && !data.error && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none" />
+                </div>
+              )}
+              {data.error && <p className="px-2 py-2 text-xs text-fail">{data.error}</p>}
+              {data.branches && <CommandEmpty>No branch matches.</CommandEmpty>}
+              <CommandGroup>
+                {local.map((name) => (
+                  <CommandItem
+                    key={name}
+                    value={`branch:${name}`}
+                    data-testid={`composer-branch-option-${name}`}
+                    data-checked={name === checked}
+                    onSelect={() => pickBranch(name)}
+                  >
+                    <GitBranch className="text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">{name}</span>
+                  </CommandItem>
+                ))}
               </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
-        {env.kind === 'new-worktree' && (
-          <NewBranchName name={env.branchName} onChange={(branchName) => set({ ...env, branchName })} />
-        )}
-      </PopoverContent>
-    </Popover>
+              <CommandSeparator className="my-1" />
+              <CommandGroup>
+                <CommandItem
+                  value="Work in a new worktree"
+                  data-testid="composer-branch-new-worktree"
+                  data-checked={env.kind === 'new-worktree'}
+                  onSelect={toggleNewWorktree}
+                >
+                  <FolderPlus className="text-muted-foreground" />
+                  <TwoLine title="Work in a new worktree" detail="Keeps your checkout untouched" />
+                </CommandItem>
+                <CommandItem
+                  value="Temporary session"
+                  data-testid="composer-temporary-toggle"
+                  data-checked={env.kind === 'temporary'}
+                  onSelect={toggleTemporary}
+                >
+                  <Timer className="text-muted-foreground" />
+                  <TwoLine title="Temporary session" detail="Deleted when closed; no worktree" />
+                </CommandItem>
+              </CommandGroup>
+              {worktrees.length > 0 && (
+                <CommandGroup heading="Worktrees">
+                  {worktrees.map((worktree) => {
+                    const { name, label } = worktreeNames(worktree);
+                    return (
+                      <CommandItem
+                        key={worktree.path}
+                        value={`worktree:${name}:${worktree.path}`}
+                        data-testid={`composer-branch-worktree-${label}`}
+                        data-checked={env.kind === 'worktree' && env.path === worktree.path}
+                        onSelect={() => {
+                          set({ kind: 'worktree', branch: name, path: worktree.path });
+                          setOpen(false);
+                        }}
+                      >
+                        <FolderGit2 className="text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate" title={worktree.path}>
+                          {label}
+                        </span>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              )}
+              <CommandSeparator className="my-1" />
+              <CommandGroup>
+                <CommandItem value="Manage branches" data-testid="composer-branch-manage" onSelect={openManager}>
+                  <Settings2 className="text-muted-foreground" />
+                  <TwoLine title="Manage branches…" detail="Fetch, push, create, rename and more" />
+                </CommandItem>
+              </CommandGroup>
+            </CommandList>
+          </Command>
+          {env.kind === 'new-worktree' && (
+            <NewBranchName name={env.branchName} onChange={(branchName) => set({ ...env, branchName })} />
+          )}
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }

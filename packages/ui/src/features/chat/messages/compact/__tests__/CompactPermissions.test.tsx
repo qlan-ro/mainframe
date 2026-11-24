@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { buildChatExtras } from '../../../runtime/chat-extras';
@@ -71,6 +71,8 @@ it.each(['allow-once', 'reject-once'])(
     act(() => useUiPrefs.getState().setTranscriptMode('verbose'));
     expect(screen.getByTestId('chat-thread-gate-slot')).toBeInTheDocument();
     act(() => useUiPrefs.getState().setTranscriptMode('compact'));
+    // A new gate takes no input for its first half second.
+    await waitFor(() => expect(screen.getByTestId('chat-gate-guard')).toHaveAttribute('data-armed'));
     fireEvent.click(screen.getByRole('button', { name: optionId === 'allow-once' ? 'Allow once' : 'Reject' }));
     expect(reply).toHaveBeenCalledWith(expect.objectContaining({ requestId: 'request' }), optionId);
   },

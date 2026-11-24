@@ -9,7 +9,7 @@ import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 
 vi.mock('../../../../lib/api/attachments', () => ({ uploadAttachments: vi.fn().mockResolvedValue(['att-1']) }));
 vi.mock('../../../../lib/api/chats', () => ({
-  cancelQueuedMessage: vi.fn().mockResolvedValue(undefined),
+  cancelQueuedMessage: vi.fn().mockResolvedValue(true),
   unarchiveNativeSession: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/toast', () => ({ mfToast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() } }));
@@ -186,9 +186,20 @@ describe('holdQueuedMessages (C10)', () => {
     expect(useHeldQueue.getState().byChat[CHAT]!.map((row) => row.messageId)).toEqual(['m2']);
   });
 
+  it('does not hold a message the agent had already picked up', async () => {
+    vi.mocked(cancelQueuedMessage).mockImplementation(async (_port, _chat, id) => id !== 'm1');
+    const { host } = makeHost({ running: true, queued: [ref('m1', 1), ref('m2', 2)] });
+
+    await holdQueuedMessages(host);
+
+    expect(useHeldQueue.getState().byChat[CHAT]!.map((row) => row.messageId)).toEqual(['m2']);
+    vi.mocked(cancelQueuedMessage).mockResolvedValue(true);
+  });
+
   it('does not hold a message whose cancel failed, and still holds the others', async () => {
     vi.mocked(cancelQueuedMessage).mockImplementation(async (_port, _chat, id) => {
       if (id === 'm1') throw new Error('gone');
+      return true;
     });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { host } = makeHost({ running: true, queued: [ref('m1', 1), ref('m2', 2)] });
@@ -197,7 +208,7 @@ describe('holdQueuedMessages (C10)', () => {
 
     expect(useHeldQueue.getState().byChat[CHAT]!.map((row) => row.messageId)).toEqual(['m2']);
     warn.mockRestore();
-    vi.mocked(cancelQueuedMessage).mockResolvedValue(undefined);
+    vi.mocked(cancelQueuedMessage).mockResolvedValue(true);
   });
 
   it('stops waiting after one second so Stop is never held up by a slow daemon', async () => {
@@ -214,13 +225,23 @@ describe('holdQueuedMessages (C10)', () => {
     await vi.advanceTimersByTimeAsync(2);
 
     expect(settled).toBe(true);
-    vi.mocked(cancelQueuedMessage).mockResolvedValue(undefined);
+    vi.mocked(cancelQueuedMessage).mockResolvedValue(true);
   });
 });
 
 describe('sendHeldMessages (C10)', () => {
   const hold = (id: string, second: number, content = `text ${id}`) =>
     useHeldQueue.getState().hold(CHAT, ref(id, second, { content }));
+
+  it('sends each row once however often Send now is pressed', async () => {
+    hold('m1', 1);
+    hold('m2', 2);
+    const { host, sendPrompt } = makeHost();
+
+    await Promise.all([sendHeldMessages(host, 'm1'), sendHeldMessages(host, 'm1')]);
+
+    expect(sendPrompt.mock.calls.map((call) => call[0])).toEqual(['text m1', 'text m2']);
+  });
 
   it('sends the chosen row, then every row behind it in order, removing each as it goes', async () => {
     hold('m1', 1);

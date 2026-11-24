@@ -366,7 +366,7 @@ describe('AskUserQuestionGate', () => {
       />,
     );
 
-    expect(screen.getByTestId('chat-question-context').textContent).toBe('Format · code-reviewer · 2 more waiting');
+    expect(screen.getByTestId('chat-question-context').textContent).toBe('Format · code-reviewer · Review the diff · 2 more waiting');
   });
 
   it('shows no "more waiting" when nothing waits behind it', () => {
