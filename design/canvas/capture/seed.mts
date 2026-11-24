@@ -1,24 +1,15 @@
 // Seeding helpers: realistic, stable projects and sessions, so boards read like the app in use and
 // re-capturing an unchanged screen gives the same board.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { DAEMON_BASE } from '../../../packages/e2e/fixtures/daemon.js';
 import { waitConnected } from '../../../packages/e2e/helpers/tauri/wait.js';
 import { createTauriChat } from '../../../packages/e2e/helpers/tauri/setup.js';
+import { WORK_DIR } from './isolation.mts';
 import type { Page } from '../../../packages/e2e/node_modules/@playwright/test/index.mjs';
 
-/** Everything a run writes besides the boards. Ignored by git and cleared at the start of a run. */
-export const WORK_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '.work');
 const PROJECTS_DIR = path.join(WORK_DIR, 'projects');
-
-/** The daemon's HOME: empty, so no board shows the machine's own skills, agents, sessions or accounts. */
-export function captureHome(): string {
-  const home = path.join(WORK_DIR, 'home');
-  mkdirSync(home, { recursive: true });
-  return realpathSync(home);
-}
 
 /** What the run's own paths are drawn as on the boards, longest first. */
 export const PATH_ALIASES: [string, string][] = [

@@ -156,24 +156,27 @@ async function waitForMockAdapter(maxMs = 10_000): Promise<void> {
   throw new Error(`Mock adapter did not become ready within ${maxMs}ms`);
 }
 
-/** Variables that point a CLI's config or credentials at a place outside HOME. */
-const CONFIG_OVERRIDES = [
-  'CLAUDE_CONFIG_DIR',
-  'CODEX_HOME',
-  'GH_CONFIG_DIR',
-  'XDG_CONFIG_HOME',
-  'XDG_DATA_HOME',
-  'XDG_STATE_HOME',
-  'XDG_CACHE_HOME',
-  'ZDOTDIR',
-];
+/** What a daemon on a HOME of its own may keep: enough to run programs, never a token or a config path. */
+const ISOLATED_ENV = new Set([
+  'PATH',
+  'SHELL',
+  'TERM',
+  'TMPDIR',
+  'TMP',
+  'TEMP',
+  'TZ',
+  'LANG',
+  'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_SYSTEM',
+  'RUST_LOG',
+  'RUST_BACKTRACE',
+]);
 
-/** This process's environment, or with `home` the same one pointed at that HOME alone. */
+/** This process's environment, or with `home` a minimal one pointed at that HOME alone. */
 export function daemonBaseEnv(home?: string): NodeJS.ProcessEnv {
   if (home === undefined) return { ...process.env };
-  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, USER: 'you', LOGNAME: 'you' };
-  for (const name of CONFIG_OVERRIDES) delete env[name];
-  return env;
+  const kept = Object.entries(process.env).filter(([name]) => ISOLATED_ENV.has(name) || name.startsWith('LC_'));
+  return { ...Object.fromEntries(kept), HOME: home, USER: 'you', LOGNAME: 'you' };
 }
 
 export interface DaemonHandle {

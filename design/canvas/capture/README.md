@@ -15,7 +15,7 @@ Each state's DOM is written into `design/canvas/project/<Board>.dc.html` with th
 - `pnpm install` at the repo root, `pnpm --filter @qlan-ro/mainframe-e2e exec playwright install chromium`, python3.
 - The Rust daemon. The harness looks in `packages/core-rs/target/{release,debug}` and builds a release binary when neither exists. `MF_E2E_RUST_DAEMON_PATH` points it at any other `mainframe-daemon`, for example the one inside an installed Mainframe.app; it must speak this branch's API.
 
-A run is isolated. It uses ports 31516 (daemon) and 4399 (UI) of its own, a fresh data dir per group with no `config.json` (so no tunnel starts), projects of its own, and an empty HOME for the daemon, so no skill, agent, session or account of the machine reaches a board. `build.py` also refuses to write a board that holds `/Users/`, `/private/`, `/home/`, the user name or the host name. All of it lives in the ignored `design/canvas/capture/.work/`, which the next run clears.
+A run is isolated. It uses ports 31516 (daemon) and 4399 (UI) of its own, a fresh data dir per group with no `config.json` (so no tunnel starts), projects of its own, and an empty HOME and a minimal environment for the daemon (`isolation.mts`), so no skill, agent, session, account or token of the machine reaches a board. `write_board` in `../lib/boards.py`, which every board builder uses, refuses a board that holds a local path, the user name or the host name; `../lib/local-paths.json` says what a local path looks like. All of it lives in the ignored `design/canvas/capture/.work/`, which the next run clears.
 
 ## Files
 
@@ -24,6 +24,7 @@ A run is isolated. It uses ports 31516 (daemon) and 4399 (UI) of its own, a fres
 | `areas/<area>.mts` | The area's boards and states. The file name is the area id in `design/areas.json`. |
 | `seed.mts` | Realistic projects and sessions, network stubs, small page helpers. |
 | `capture.spec.mts` | Starts the app per group, walks the states, writes `.work/<area>.json`, and saves a screenshot of each state there for comparison. |
+| `isolation.mts` | The run's work dir, and the data dir and HOME a group's daemon gets. |
 | `serialise.mts` | Runs in the page: turns the window into static HTML. |
 | `build.py` | Lays the frames out, embeds the CSS, writes the board and `canvas.json`. |
 | `../lib/boards.py` | The page shape and board chrome, shared with `../foundations/`. |

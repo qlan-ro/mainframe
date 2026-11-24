@@ -1134,8 +1134,8 @@ const PERMS=[
   {id:'auto',n:'Auto',d:'The agent decides what needs approval',tone:'warn',claudeOnly:true},
   {id:'yolo',n:'Unattended',d:'Runs without prompts',tone:'chip'}
 ];
-const PROJECTS=['mainframe-ui','contabil-ai'];
-const PCOL={'mainframe-ui':'#6e56cf','contabil-ai':'#c2255c','docs':'#217a52'};
+const PROJECTS=['mainframe-ui','contact-ui'];
+const PCOL={'mainframe-ui':'#6e56cf','contact-ui':'#c2255c','docs':'#217a52'};
 const WORKTREES=[{b:'feat/quota-reset',from:'main'},{b:'feat/composer-v2',from:'main'},{b:'fix/ws-reconnect',from:'develop'}];
 const BRANCHES=['main','develop','release/2.15','refactor/daemon-baseline'];
 const CT_FILES=[{n:'quota-trace.log',s:'14 KB',k:'file'},{n:'capsule-after-reset.png',s:'88 KB',k:'img',dim:'1280×800'},{n:'manager.rs.diff',s:'6 KB',k:'file'}];
@@ -1290,8 +1290,8 @@ const TPL={
  s4:{...base,id:'s4',title:'Session panel sections for side chat',time:'33m',plan:true,ctx:62,env:{kind:'worktree',branch:'feat/panel-sections',from:'main'},changes:[],msgs:[{k:'user',t:'Show the session panel sections in the side chat and let me hide the ones I never use.',time:'10:40 PM'},{k:'turn',id:'tx',inline:{title:'Worked for 12s',meta:'read 2 files',rows:[{i:'file',v:'Read',t:'SessionPanel.tsx',m:'210 lines'},{i:'file',v:'Read',t:'SideChat.tsx',m:'88 lines'}],ans:'<p>I read the panel and the side chat. The plan is ready for your review.</p>',time:'10:41 PM'}}],gate:{kind:'plan',title:'Session panel sections in the side chat',steps:['Add a Sections menu to the panel header, one toggle per section.','Persist the choice per user in ui-prefs.','Mount the same panel in the side chat, reading the same prefs.']}},
  s5:{...base,id:'s5',title:'Prepare release v2.15.0',time:'33m',provider:'codex',model:'gpt-5.1-codex',effort:'Medium',perm:'default',ctx:23,env:{kind:'local',branch:'main'},changes:[{n:'CHANGELOG.md',a:14,d:0},{n:'package.json',a:1,d:1}],msgs:smallMsgs('Prepare release v2.15.0.','The changelog entry and version bump are ready. Nothing is committed.')},
  s6:{...base,id:'s6',title:'Label Claude models by displayName',time:'33m',model:'sonnet-4.5',effort:'Medium',ctx:12,env:{kind:'temp'},project:'mainframe-ui',msgs:smallMsgs('Label Claude models by displayName when the description is a tagline.','The picker now prefers displayName and falls back to the id.')},
- s7:{...base,id:'s7',title:'e-Factura SPV retry',time:'1h',project:'contabil-ai',model:'sonnet-4.5',effort:'Medium',ctx:34,running:true,autoEnd:true,env:{kind:'local',branch:'main'},live:`Running ${C('pnpm test efactura')}…`,changes:[{n:'src/efactura/upload.ts',a:34,d:3}],msgs:smallMsgs('The SPV upload fails with a timeout. Add a retry with backoff.','Added exponential backoff to the upload client, capped at five attempts.')},
- s8:{...base,id:'s8',title:'Draft dividend checks',time:'1d',project:'contabil-ai',model:'sonnet-4.5',effort:'Medium',perm:'default',ctx:12,env:{kind:'local',branch:'main'},msgs:smallMsgs('Draft the checks we run before paying out a dividend.','Retained earnings cover the amount, the legal reserve is filled, and the shareholder resolution is dated before payment.')},
+ s7:{...base,id:'s7',title:'e-Factura SPV retry',time:'1h',project:'contact-ui',model:'sonnet-4.5',effort:'Medium',ctx:34,running:true,autoEnd:true,env:{kind:'local',branch:'main'},live:`Running ${C('pnpm test efactura')}…`,changes:[{n:'src/efactura/upload.ts',a:34,d:3}],msgs:smallMsgs('The SPV upload fails with a timeout. Add a retry with backoff.','Added exponential backoff to the upload client, capped at five attempts.')},
+ s8:{...base,id:'s8',title:'Draft dividend checks',time:'1d',project:'contact-ui',model:'sonnet-4.5',effort:'Medium',perm:'default',ctx:12,env:{kind:'local',branch:'main'},msgs:smallMsgs('Draft the checks we run before paying out a dividend.','Retained earnings cover the amount, the legal reserve is filled, and the shareholder resolution is dated before payment.')},
  s9:{...base,id:'s9',title:'Trace how ask_agent picks its worktree',time:'1d',ctx:30,env:{kind:'local',branch:'main'},msgs:smallMsgs('Trace how ask_agent picks its worktree.','It reads the step config first, then the session worktree, then falls back to the checkout.')},
  s10:{...base,id:'s10',title:'Resizable transcript width',time:'1d',ctx:18,env:{kind:'local',branch:'main'},msgs:smallMsgs('Make the transcript width resizable.','A drag handle on the column edge now sets the width and remembers it.')},
  s11:{...base,id:'s11',title:'Untitled session',time:'2d',project:null,ctx:3,env:{kind:'temp'},msgs:[{k:'user',t:'What does `git worktree prune` remove?',time:'9:12 AM'},{k:'agent',h:'Only metadata for worktrees whose folder no longer exists.'}]},
@@ -1456,7 +1456,7 @@ const spin=c=>ic('spin','spin runic '+(c||''));
 
 /* ================= sidebar ================= */
 function renderSide(){
-  const avs=['mainframe-ui','contabil-ai','docs'].map(p=>`<span class="av" style="background:${PCOL[p]}">${p[0].toUpperCase()}</span>`).join('');
+  const avs=['mainframe-ui','contact-ui','docs'].map(p=>`<span class="av" style="background:${PCOL[p]}">${p[0].toUpperCase()}</span>`).join('');
   const sc=UI.scope;
   let h=`<div class="shd0"><h2>Chats</h2><button type="button" class="ib32" id="sbsearch" aria-pressed="${UI.sq}" aria-label="Search sessions" data-tip="Search">${ic('search')}</button><button type="button" class="ib32" id="sbcollapse" aria-label="Collapse sidebar" data-tip="Collapse sidebar">${ic('sidebar')}</button></div>`;
   if(UI.sq) h+=`<div class="sq"><input id="sqin" type="search" aria-label="Search sessions" placeholder="Search sessions" value="${esc(UI.q)}"></div>`;

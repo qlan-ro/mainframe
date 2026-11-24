@@ -8,7 +8,7 @@
 // DESIGN_CHECK_SKIP=1 skips the area check (the PR carries the `design: none` label: no visible change).
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -83,6 +83,29 @@ export function checkCanvas(cfg, repo = REPO) {
   return problems;
 }
 
+const LOCAL = JSON.parse(readFileSync(join(REPO, 'design/canvas/lib/local-paths.json'), 'utf8'));
+const ENCODED_SLASH = new RegExp(LOCAL.encodedSlash, 'g');
+const LOCAL_PATH = new RegExp(LOCAL.path, 'g');
+
+/** Home and temp paths of a machine in `text`, encoded ones included. `lib/boards.py` holds new boards to the same rule. */
+export function localPaths(text) {
+  return [...new Set(text.replace(ENCODED_SLASH, '/').match(LOCAL_PATH) ?? [])].sort();
+}
+
+/** The published design files (boards, index, design system, spec and prototype) name no machine's paths. */
+export function checkLocalPaths(repo = REPO) {
+  const problems = [];
+  for (const dir of [CANVAS, 'design/redesign']) {
+    for (const entry of readdirSync(join(repo, dir), { recursive: true, withFileTypes: true })) {
+      if (!entry.isFile() || !/\.(?:html|json|css|js|md|svg)$/.test(entry.name)) continue;
+      const file = join(entry.parentPath, entry.name);
+      const found = localPaths(readFileSync(file, 'utf8'));
+      if (found.length) problems.push(`${relative(repo, file)} holds local paths: ${found.slice(0, 5).join(', ')}`);
+    }
+  }
+  return problems;
+}
+
 /**
  * Areas whose code changed without any of their design files changing.
  * `changed` is a list of { status, path } (git --name-status, renames off): any status counts for code, but a
@@ -129,14 +152,14 @@ function main() {
   const cfg = loadAreas();
   let failed = false;
 
-  const problems = checkCanvas(cfg);
+  const problems = [...checkCanvas(cfg), ...checkLocalPaths()];
   if (problems.length) {
     failed = true;
     console.error(`Design canvas: ${problems.length} problem(s)`);
     for (const p of problems) console.error(`  - ${p}`);
     summary(['### Design canvas', ...problems.map((p) => `- ${p}`)]);
   } else {
-    console.log('Design canvas: index, files and pages agree.');
+    console.log('Design canvas: index, files and pages agree, and no file names a local path.');
   }
 
   const i = process.argv.indexOf('--base');

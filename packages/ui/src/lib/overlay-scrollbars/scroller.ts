@@ -1,5 +1,5 @@
 /** Reading scroll containers from the DOM. */
-import { intersect, overflows, THUMB_HIT_SIZE, type Axis, type AxisMetrics, type Box } from './geometry';
+import { intersect, overflows, THUMB_HIT_SIZE, type Axis, type AxisMetrics, type Box, type Span } from './geometry';
 
 const SCROLLABLE = new Set(['auto', 'scroll']);
 
@@ -49,12 +49,9 @@ export function visibleBox(element: Element): Box {
   return box;
 }
 
-/** Points along a thumb's box: near both ends and in the middle, `across` px in from the scroller's edge. */
-function samplePoints(axis: Axis, box: Box, across: number): [number, number][] {
-  const [from, to] = axis === 'y' ? [box.top, box.bottom] : [box.left, box.right];
-  return [from + 2, (from + to) / 2, to - 2].map((along) =>
-    axis === 'y' ? [box.right - across, along] : [along, box.bottom - across],
-  );
+/** A point `along` the axis (in the viewport) and `across` px in from the scroller's edge. */
+function pointAt(axis: Axis, box: Box, along: number, across: number): [number, number] {
+  return axis === 'y' ? [box.right - across, along] : [along, box.bottom - across];
 }
 
 /** What is painted at a point, topmost first. Thumbs are aside: they sit above everything and cover nothing. */
@@ -71,18 +68,52 @@ function isEdgeHandle(el: Element): boolean {
   return el.closest('[data-edge-handle]') !== null;
 }
 
+/** Close enough that nothing the pointer can aim at hides between two samples. */
+const SAMPLE_STEP = 8;
+
 /**
- * True when something else (a dialog, the sticky composer) is painted over all of
- * the box. Part of it is not enough: a toast over one end must not take the thumb
- * away from the rest.
+ * The parts of the thumb's box, in px along it, that nothing else (a dialog, a
+ * popover, the sticky composer) is painted over. The thumb sits above every
+ * portal, so it must not draw or take clicks where something covers its scroller.
  */
-export function isCovered(element: Element, axis: Axis, box: Box): boolean {
-  return samplePoints(axis, box, THUMB_HIT_SIZE / 2).every((point) => {
-    const painted = paintedAt(point).filter((el) => !isEdgeHandle(el));
-    return painted.length > 0 && !element.contains(painted[0]!);
-  });
+export function uncoveredSpans(element: Element, axis: Axis, box: Box): Span[] {
+  const [start, end] = axis === 'y' ? [box.top, box.bottom] : [box.left, box.right];
+  const isOpen = (along: number): boolean => {
+    const painted = paintedAt(pointAt(axis, box, along, THUMB_HIT_SIZE / 2)).filter((el) => !isEdgeHandle(el));
+    return painted.length === 0 || element.contains(painted[0]!);
+  };
+  /** The whole pixel on the open side of where the answer changes between two points. */
+  const boundary = (before: number, after: number): number => {
+    const open = isOpen(before);
+    while (after - before > 0.5) {
+      const middle = (before + after) / 2;
+      if (isOpen(middle) === open) before = middle;
+      else after = middle;
+    }
+    return open ? Math.floor(before) : Math.ceil(after);
+  };
+
+  const spans: Span[] = [];
+  const steps = Math.max(1, Math.ceil((end - start - 2) / SAMPLE_STEP));
+  let previous = start + 1;
+  let from = isOpen(previous) ? start : null;
+  for (let i = 1; i <= steps; i++) {
+    const at = start + 1 + ((end - start - 2) * i) / steps;
+    const open = isOpen(at);
+    if (open && from === null) from = boundary(previous, at);
+    else if (!open && from !== null) {
+      spans.push([from - start, boundary(previous, at) - start]);
+      from = null;
+    }
+    previous = at;
+  }
+  if (from !== null) spans.push([from - start, end - start]);
+  return spans;
 }
 
 export function hasEdgeHandle(axis: Axis, box: Box): boolean {
-  return samplePoints(axis, box, 1).some((point) => paintedAt(point).some(isEdgeHandle));
+  const [from, to] = axis === 'y' ? [box.top, box.bottom] : [box.left, box.right];
+  return [from + 2, (from + to) / 2, to - 2].some((along) =>
+    paintedAt(pointAt(axis, box, along, 1)).some(isEdgeHandle),
+  );
 }

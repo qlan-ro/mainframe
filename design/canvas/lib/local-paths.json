@@ -1,0 +1,5 @@
+{
+  "about": "What a local path looks like, read by lib/boards.py (before a board is written) and tools/check.mjs (on committed files). Keep both to the regex syntax Python and JavaScript share.",
+  "path": "(?:/Users/|/private/(?:tmp|var|etc)\\b|(?<![\\w.-])/(?:private|home)/|/var/folders/|\\b[A-Za-z]:[\\\\/]+Users[\\\\/]|/tmp/claude-\\d|/tmp/[^\\s\"'<>&;)]*-(?:Users|home)-|(?<![\\w-])-(?:Users|home|private-tmp|private-var|var-folders)-(?=\\w))[^\\s\"'<>&;)]*",
+  "encodedSlash": "(?:%(?:25)*2[fF]|\\\\u002[fF]|\\\\x2[fF]|\\\\/|&#[xX]0*2[fF];|&#0*47;|&sol;)"
+}

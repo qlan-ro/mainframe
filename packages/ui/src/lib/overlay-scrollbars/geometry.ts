@@ -19,6 +19,9 @@ export interface Box {
   bottom: number;
 }
 
+/** Start and end along an axis, in px. */
+export type Span = [from: number, to: number];
+
 export const THUMB_INSET = 2;
 export const THUMB_MIN_LENGTH = 24;
 /** The grab area across the axis: the widened thumb plus its inset. */
@@ -85,4 +88,22 @@ export function thumbBox(axis: Axis, metrics: AxisMetrics, box: Box, clip: Box):
   const along = axis === 'y' ? visible.bottom - visible.top : visible.right - visible.left;
   const across = axis === 'y' ? visible.right - visible.left : visible.bottom - visible.top;
   return along < Math.min(MIN_VISIBLE_LENGTH, length) || across < THUMB_HIT_SIZE ? null : visible;
+}
+
+/**
+ * The `clip-path` that leaves only `spans` of a thumb `length` px long, '' when
+ * they are all of it, or null when none is worth drawing. A clipped part takes
+ * no pointer events. Spans are joined along the thumb's inner edge by lines of no width.
+ */
+export function thumbClip(axis: Axis, length: number, spans: Span[]): string | null {
+  const drawn = spans.filter(([from, to]) => to - from >= Math.min(MIN_VISIBLE_LENGTH, length));
+  if (drawn.length === 0) return null;
+  if (drawn.length === 1 && drawn[0]![0] <= 0 && drawn[0]![1] >= length) return '';
+  const corners = drawn.flatMap(([from, to]): [string, number][] => [
+    ['0px', from],
+    ['100%', from],
+    ['100%', to],
+    ['0px', to],
+  ]);
+  return `polygon(${corners.map(([across, along]) => (axis === 'y' ? `${across} ${along}px` : `${along}px ${across}`)).join(', ')})`;
 }
