@@ -34,6 +34,7 @@ import {
   TAB_CLOSE_ATTR,
   TAB_CLOSE_BUTTON,
   TAB_CLOSE_OVERLAY,
+  TAB_KEYS_ATTR,
   tabHoverStyle,
   tabShape,
 } from '@/features/session-tabs/tab-shape';
@@ -77,6 +78,7 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
     <div
       data-testid={`workspace-tab-${tab.id}`}
       role="tab"
+      {...TAB_KEYS_ATTR}
       aria-selected={isActive}
       tabIndex={isActive ? 0 : -1}
       onClick={() => {

@@ -31,7 +31,15 @@ import type { ForkAvailability } from '@/features/sessions/view-model/fork-avail
 import { ShortcutIndexBadge } from '@/features/shortcuts/ShortcutIndexBadge';
 import { SessionTabContextMenu, type SurfaceMenuActions } from './SessionTabContextMenu';
 import { SessionTabDot, type SessionTabStatus } from './SessionTabDot';
-import { TAB_CLOSE_ATTR, TAB_CLOSE_BUTTON, TAB_CLOSE_OVERLAY, tabHoverStyle, tabShape } from './tab-shape';
+import {
+  keepFocusOnTabPress,
+  TAB_CLOSE_ATTR,
+  TAB_CLOSE_BUTTON,
+  TAB_CLOSE_OVERLAY,
+  TAB_KEYS_ATTR,
+  tabHoverStyle,
+  tabShape,
+} from './tab-shape';
 
 /** Pixels of pointer travel before a press becomes a drag-to-split. */
 const DRAG_THRESHOLD = 6;
@@ -141,6 +149,7 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
       <div
         data-testid={`session-tab-${tab.id}`}
         role="tab"
+        {...TAB_KEYS_ATTR}
         aria-selected={tab.active}
         tabIndex={tab.active ? 0 : -1}
         data-preview={tab.preview ? 'true' : 'false'}
@@ -150,7 +159,7 @@ export function SessionTabPill({ tab, segment, hintIndex = null, canOpenInSplit,
         // a native text selection on mousedown, and once that gesture starts no
         // later user-select/removeAllRanges stops it from painting the
         // transcript as the pointer crosses it.
-        onMouseDown={(event) => event.preventDefault()}
+        onMouseDown={keepFocusOnTabPress}
         onPointerDown={onPointerDown}
         onPointerEnter={() => dropTarget && setDropHover(true)}
         onPointerLeave={() => setDropHover(false)}

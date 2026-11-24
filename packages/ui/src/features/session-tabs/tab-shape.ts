@@ -37,6 +37,9 @@ export const TAB_CLOSE_BUTTON = 'size-6 rounded-sm text-muted-foreground hover:b
 /** Marks the button `Delete` or `Backspace` presses on a focused tab. */
 export const TAB_CLOSE_ATTR = { 'data-tab-close': '' } as const;
 
+/** What a focused tab answers to, for assistive tech: closing by keyboard has no visible hint. */
+export const TAB_KEYS_ATTR = { 'aria-keyshortcuts': 'Delete Backspace' } as const;
+
 /**
  * Keyboard for a `role="tablist"`: arrows, Home and End move focus between tabs,
  * Enter and Space select, Delete or Backspace closes and moves focus to the tab
@@ -77,8 +80,15 @@ export function onTabListKeyDown(event: KeyboardEvent<HTMLElement>, afterLast?: 
 
 /**
  * For a `role="tablist"`: a mouse press selects a tab without focusing it, so a
- * later stray key cannot reach it. Focus arrives by keyboard only.
+ * later stray key cannot reach it. Focus arrives by keyboard only, so a press on
+ * another tab also takes keyboard focus off the tab that held it, in either strip: left
+ * there, the next Backspace would close a tab the user has moved away from.
  */
 export function keepFocusOnTabPress(event: { target: EventTarget; preventDefault: () => void }): void {
-  if (event.target instanceof Element && event.target.closest('[role="tab"]')) event.preventDefault();
+  const tab = event.target instanceof Element ? event.target.closest('[role="tab"]') : null;
+  if (tab == null) return;
+  event.preventDefault();
+  const active = document.activeElement;
+  const focusedTab = active?.closest('[role="tab"]');
+  if (focusedTab != null && focusedTab !== tab && active instanceof HTMLElement) active.blur();
 }
