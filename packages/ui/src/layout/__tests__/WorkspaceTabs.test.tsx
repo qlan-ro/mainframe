@@ -201,6 +201,12 @@ describe('WorkspaceTabs — nothing open', () => {
 });
 
 describe('WorkspaceTabs — keyboard', () => {
+  it('does not take focus on a mouse press, so a stray key cannot close a tab', () => {
+    const { getAllByRole } = render(<WorkspaceTabs pane={paneWith([terminalTab, previewTab])} />);
+    // fireEvent returns false once the default (focusing the tab) is prevented.
+    expect(fireEvent.mouseDown(getAllByRole('tab')[1]!)).toBe(false);
+  });
+
   it('moves focus to the Workspace toggle when the last tab closes, since the workspace goes with it', () => {
     const pane = paneWith([terminalTab]);
     const { getByRole, getByTestId } = render(

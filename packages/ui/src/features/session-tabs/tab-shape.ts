@@ -42,10 +42,15 @@ export const TAB_CLOSE_ATTR = { 'data-tab-close': '' } as const;
  * Enter and Space select, Delete or Backspace closes and moves focus to the tab
  * that takes its place, or after the last one to `afterLast` (by default the strip's
  * `+`). Ignores keys from controls nested in a tab, which handle their own.
+ *
+ * Closing can kill a process and never asks, so it takes a deliberate press: one
+ * unmodified key, not a held one (focus moves to the neighbour, which the repeat
+ * would close too), on a tab whose focus is visible.
  */
 export function onTabListKeyDown(event: KeyboardEvent<HTMLElement>, afterLast?: () => HTMLElement | null): void {
   const tab = event.target as HTMLElement;
   if (tab.getAttribute('role') !== 'tab') return;
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
   const tabs = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')];
   const index = tabs.indexOf(tab);
   const focusable: Partial<Record<string, HTMLElement | undefined>> = {
@@ -62,9 +67,18 @@ export function onTabListKeyDown(event: KeyboardEvent<HTMLElement>, afterLast?: 
     tab.click();
   } else if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault();
+    if (event.repeat || !tab.matches(':focus-visible')) return;
     // Before the close: the closing tab takes focus with it, and the neighbour survives the render.
     const next = tabs[index + 1] ?? tabs[index - 1] ?? afterLast?.() ?? event.currentTarget.nextElementSibling;
     if (next instanceof HTMLElement) next.focus();
     tab.querySelector<HTMLElement>('[data-tab-close]')?.click();
   }
+}
+
+/**
+ * For a `role="tablist"`: a mouse press selects a tab without focusing it, so a
+ * later stray key cannot reach it. Focus arrives by keyboard only.
+ */
+export function keepFocusOnTabPress(event: { target: EventTarget; preventDefault: () => void }): void {
+  if (event.target instanceof Element && event.target.closest('[role="tab"]')) event.preventDefault();
 }

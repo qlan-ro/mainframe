@@ -394,6 +394,40 @@ describe('keyboard', () => {
     expect(tab('chat-p')).toHaveFocus();
   });
 
+  it('closes one tab per press: a held key stops at the first', () => {
+    seed('chat-a');
+    render();
+    tab('chat-a').focus();
+
+    fireEvent.keyDown(tab('chat-a'), { key: 'Delete' });
+    const held = document.activeElement as HTMLElement;
+    expect(held).toBe(tab('chat-b'));
+    fireEvent.keyDown(held, { key: 'Delete', repeat: true });
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-b']);
+  });
+
+  it.each(['metaKey', 'ctrlKey', 'altKey', 'shiftKey'])('leaves Backspace with %s alone', (modifier) => {
+    seed('chat-a');
+    render();
+    tab('chat-b').focus();
+
+    fireEvent.keyDown(tab('chat-b'), { key: 'Backspace', [modifier]: true });
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-b']);
+  });
+
+  it.each(['Delete', 'Backspace'])('ignores %s while the focus is not visible', (key) => {
+    seed('chat-a');
+    render();
+    tab('chat-b').focus();
+    vi.spyOn(tab('chat-b'), 'matches').mockReturnValue(false);
+
+    fireEvent.keyDown(tab('chat-b'), { key });
+
+    expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-b']);
+  });
+
   it('moves focus back to the previous tab when the last one closes', () => {
     seed('chat-a');
     render();

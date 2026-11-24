@@ -265,6 +265,42 @@ test.describe('§title-bar — segments at their limits', () => {
     await expectAligned(page);
   });
 
+  test('a mouse click leaves the tabs out of reach of Delete and Backspace', async () => {
+    const { page } = app;
+    await page.setViewportSize({ width: 1200, height: 800 });
+    const tabs = workspace(page).tabs();
+    await expect(tabs).toHaveCount(3);
+    for (const key of ['Backspace', 'Delete']) {
+      await workspace(page).tab('quota.rs').click();
+      await page.keyboard.press(key);
+      await expect(tabs).toHaveCount(3);
+    }
+  });
+
+  test('a held Delete closes one tab, on a tab reached by keyboard', async () => {
+    const { page } = app;
+    const tabs = workspace(page).tabs();
+    await workspace(page).tab('quota.rs').click();
+    await page.getByTestId('main-toolbar-search').focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
+    await expect(workspace(page).tab('quota.rs')).toBeFocused();
+
+    await page.keyboard.down('Delete');
+    for (let i = 0; i < 4; i++) await page.keyboard.down('Delete'); // auto-repeat
+    await page.keyboard.up('Delete');
+    await expect(tabs).toHaveCount(2);
+    await expect(workspace(page).tab('quota.rs')).toHaveCount(0);
+    await expect(page.locator('[role="tab"]:focus')).toHaveCount(1);
+
+    await workspace(page).openFilePicker();
+    await page.getByTestId('file-picker-input').fill('quota.rs');
+    await page.locator('[data-testid^="file-picker-row-"]').filter({ hasText: 'quota.rs' }).first().click();
+    await workspace(page).tab('quota.rs').dblclick();
+    await expect(tabs).toHaveCount(3);
+  });
+
   test('is dragged from the chat side only, clear of a native webview in the panel', async () => {
     const { page } = app;
     const grabs = await page.evaluate(() => {

@@ -17,7 +17,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
-import { onTabListKeyDown } from '@/features/session-tabs/tab-shape';
+import { keepFocusOnTabPress, onTabListKeyDown } from '@/features/session-tabs/tab-shape';
 import { WorkspaceAddMenu } from './WorkspaceAddMenu';
 import { WorkspaceTabPill } from './WorkspaceTabPill';
 import { WorkspaceUrlEntry } from './WorkspaceUrlEntry';
@@ -82,6 +82,7 @@ export function WorkspaceTabs({ pane }: { pane: RunPane | null }) {
           data-scrollbar="none"
           role="tablist"
           aria-label="Workspace tabs"
+          onMouseDown={keepFocusOnTabPress}
           onKeyDown={(event) => onTabListKeyDown(event, workspaceToggle)}
           className="group/tabs flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto scroll-fade-x data-filled:[--scroll-fade-size:0px]"
         >
