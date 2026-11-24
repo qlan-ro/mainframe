@@ -106,11 +106,28 @@ impl PortTunnelRegistry {
             StartAction::Existing(url) => Ok(url),
             StartAction::Wait(mut waiters) => await_outcome(&mut waiters).await,
             StartAction::Spawn(waiters) => {
+                let mut abandon = AbandonGuard {
+                    registry: self,
+                    port,
+                    waiters: &waiters,
+                    armed: true,
+                };
                 let started = self.manager.start(port, &label, None).await;
                 let outcome = self.settle(port, &label, started).await;
-                let _ = waiters.send(Some(outcome.clone()));
+                abandon.armed = false;
+                waiters.send_replace(Some(outcome.clone()));
                 outcome
             }
+        }
+    }
+
+    /// Drop the `Starting` entry `waiters` belongs to, if it is still there.
+    fn remove_start(&self, port: u16, waiters: &Waiters) {
+        let mut inner = self.lock();
+        if let Some(Entry::Starting { waiters: entry, .. }) = inner.get(&port)
+            && entry.same_channel(waiters)
+        {
+            inner.remove(&port);
         }
     }
 
@@ -237,6 +254,28 @@ impl PortTunnelRegistry {
         }
         live.sort_unstable_by_key(|entry| entry.port);
         live
+    }
+}
+
+/// Ends a spawning `start` whose caller stopped waiting (a dropped HTTP
+/// request) before it settled. Without it the port would stay `Starting`
+/// forever, and every later start for it would join a start nobody finishes.
+/// The cancelled `TunnelManager::start` has already killed its child.
+struct AbandonGuard<'a> {
+    registry: &'a PortTunnelRegistry,
+    port: u16,
+    waiters: &'a Waiters,
+    armed: bool,
+}
+
+impl Drop for AbandonGuard<'_> {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        self.registry.remove_start(self.port, self.waiters);
+        self.waiters
+            .send_replace(Some(Err(TunnelStartError::Abandoned)));
     }
 }
 

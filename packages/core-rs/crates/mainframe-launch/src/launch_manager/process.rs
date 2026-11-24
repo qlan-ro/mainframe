@@ -31,6 +31,8 @@ pub(super) struct ExitWatch {
     pub(super) status: Arc<Mutex<LaunchProcessStatus>>,
     pub(super) stderr_tail: Arc<Mutex<TailBuffer>>,
     pub(super) exit_tx: watch::Sender<bool>,
+    /// Resolves once `start` has recorded the pid in the child registry.
+    pub(super) recorded: oneshot::Receiver<()>,
 }
 
 /// Reap the child, then retire it in two steps: the process entry is removed
@@ -55,22 +57,31 @@ pub(super) async fn wait_for_exit_task(
         status,
         stderr_tail,
         exit_tx,
+        recorded,
     } = watch;
     let code = child.wait().await.ok().and_then(|s| s.code());
     inner.processes.remove(&name);
-    inner.forget_spawn(pid);
-    let _ = exit_tx.send(true); /* expected: no stop() is waiting */
+    exit_tx.send_replace(true);
+    // Forget the pid only after its record landed, or a child that exits
+    // while `ps` is read would leave a stale record. A task, so a slow record
+    // does not hold up the final status.
+    let registry = inner.clone();
+    tokio::spawn(async move {
+        // Err: the start task ended before recording; nothing to wait for.
+        let _ = recorded.await; /* expected */
+        registry.forget_spawn(pid).await;
+    });
 
     mainframe_runtime::process::finish_pumps(pumps).await;
 
     log_exit(&name, pid, code, &stderr_tail);
 
     let _gate = spawn_gate.lock().await;
-    if !inner.is_current_generation(&name, generation) {
-        tracing::debug!(name = %name, pid = ?pid, "a newer start owns the name; leaving its status and tunnel alone");
-        return;
-    }
+    let current = inner.is_current_generation(&name, generation);
     {
+        // This process's own status always turns terminal, so its pending
+        // port wait ends without marking the name `running`; the name's
+        // status is published only while this start is still the latest.
         let mut guard = status.lock_recover();
         if *guard != LaunchProcessStatus::Stopped {
             *guard = if code == Some(0) {
@@ -78,14 +89,18 @@ pub(super) async fn wait_for_exit_task(
             } else {
                 LaunchProcessStatus::Failed
             };
-            inner.state.set_status(&name, *guard);
-            inner.emit_status(&name, *guard);
+            if current {
+                inner.state.set_status(&name, *guard);
+                inner.emit_status(&name, *guard);
+            }
         }
     }
-
-    if let Some(tm) = &inner.tunnel_manager {
-        tm.stop(&format!("preview:{name}")).await;
+    if !current {
+        tracing::debug!(name = %name, pid = ?pid, "a newer start owns the name; leaving its status and tunnel alone");
+        return;
     }
+
+    inner.stop_preview(&name).await;
 }
 
 /// Poll `localhost:port` until it accepts a TCP connection or the process
@@ -147,18 +162,16 @@ pub(super) fn signal_group(pid: Option<u32>, kind: Signal) {
 }
 
 fn log_exit(name: &str, pid: Option<u32>, code: Option<i32>, stderr_tail: &Arc<Mutex<TailBuffer>>) {
-    {
-        let tail = stderr_tail.lock_recover();
-        if code != Some(0) && !tail.is_empty() {
-            tracing::warn!(
-                name = %name,
-                pid = ?pid,
-                code = ?code,
-                stderr = %tail.iter().cloned().collect::<Vec<_>>().join("\n"),
-                "launch process failed"
-            );
-        } else {
-            tracing::info!(name = %name, pid = ?pid, code = ?code, "launch process exited");
-        }
+    let tail = stderr_tail.lock_recover();
+    if code != Some(0) && !tail.is_empty() {
+        tracing::warn!(
+            name = %name,
+            pid = ?pid,
+            code = ?code,
+            stderr = %tail.iter().cloned().collect::<Vec<_>>().join("\n"),
+            "launch process failed"
+        );
+    } else {
+        tracing::info!(name = %name, pid = ?pid, code = ?code, "launch process exited");
     }
 }

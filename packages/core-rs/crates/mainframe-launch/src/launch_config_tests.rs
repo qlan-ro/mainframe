@@ -196,3 +196,70 @@ fn rejects_empty_configurations() {
             .contains("At least one configuration is required")
     );
 }
+
+#[test]
+fn rejects_ports_outside_the_tcp_range() {
+    // A port that does not fit a u16 used to be truncated at spawn
+    // (70000 waited on 4464), and 0 or a negative number passed unchecked.
+    for port in [
+        json!(0),
+        json!(-1),
+        json!(70000),
+        json!(3000.5),
+        json!("0"),
+        json!("70000"),
+        json!("3000abc"),
+    ] {
+        let result = parse_launch_config(
+            &json!({
+                "version": "1",
+                "configurations": [{
+                    "name": "test",
+                    "runtimeExecutable": "node",
+                    "port": port,
+                }],
+            }),
+            &env(&[]),
+        );
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "port must be a positive integer or null",
+            "port {port} should be rejected"
+        );
+    }
+}
+
+#[test]
+fn accepts_a_padded_string_port_and_the_highest_port() {
+    for (port, expected) in [(json!(" 5173 "), 5173), (json!(65535), 65535)] {
+        let result = parse_launch_config(
+            &json!({
+                "version": "1",
+                "configurations": [{
+                    "name": "test",
+                    "runtimeExecutable": "node",
+                    "port": port,
+                }],
+            }),
+            &env(&[]),
+        )
+        .unwrap();
+        assert_eq!(result.configurations[0].port, Some(expected));
+    }
+}
+
+#[test]
+fn rejects_a_url_without_a_scheme() {
+    let result = parse_launch_config(
+        &json!({
+            "version": "1",
+            "configurations": [{
+                "name": "web",
+                "runtimeExecutable": "node",
+                "url": "localhost:3000",
+            }],
+        }),
+        &env(&[]),
+    );
+    assert_eq!(result.unwrap_err().to_string(), "url must be a valid URL");
+}

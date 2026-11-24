@@ -219,3 +219,44 @@ async fn records_a_shebang_child_so_the_real_sweep_reaps_its_group() {
     // Cleanup: reap the group if anything survived the assertions.
     crate::process::sweep::default_kill(pid, Signal::Kill, true);
 }
+
+#[tokio::test]
+async fn a_child_that_exits_while_its_pid_is_read_leaves_no_record() {
+    // The exit watcher used to run alongside the pid record, so a child that
+    // exited before `ps` answered was forgotten first and recorded after:
+    // its stale record stayed in the pidfile.
+    let dir = tempfile::tempdir().unwrap();
+    let registry = Arc::new(FileChildRegistry::new(
+        dir.path()
+            .join("children.json")
+            .to_string_lossy()
+            .into_owned(),
+    ));
+    let slow_reader: ReadCommandFn = Arc::new(|_pid| {
+        Box::pin(async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            Some("sh -c exit 0".to_string())
+        })
+    });
+    let manager = LaunchManager::with_read_command(
+        "proj-1",
+        dir.path().to_string_lossy().into_owned(),
+        recorder().0,
+        None,
+        None,
+        Some(registry.clone()),
+        slow_reader,
+    );
+
+    manager
+        .start(&launch_cfg("dev", "sh", &["-c", "exit 0"]))
+        .await
+        .unwrap();
+    mainframe_runtime::test_support::poll_until(
+        Duration::from_secs(2),
+        Duration::from_millis(25),
+        async || registry.list().await.is_empty(),
+    )
+    .await
+    .expect("the exited child's record should be forgotten");
+}

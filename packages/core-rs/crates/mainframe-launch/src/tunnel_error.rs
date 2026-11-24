@@ -17,9 +17,13 @@ pub enum TunnelStartError {
     Spawn(Arc<std::io::Error>),
     #[error("Tunnel \"{label}\" timed out after {ms}ms")]
     Timeout { label: String, ms: u128 },
-    /// `code` is the exit code, or `null` for a signal.
-    #[error("Tunnel \"{label}\" process exited before ready (code {code})")]
-    ExitedEarly { label: String, code: String },
+    /// `code` is `None` when a signal ended the process; the text then reads
+    /// `code null`.
+    #[error(
+        "Tunnel \"{label}\" process exited before ready (code {})",
+        .code.map_or_else(|| "null".to_string(), |code| code.to_string())
+    )]
+    ExitedEarly { label: String, code: Option<i32> },
     #[error("Tunnel start cancelled")]
     Cancelled,
     /// The start the caller joined ended without publishing an outcome.
@@ -63,9 +67,16 @@ mod tests {
             (
                 TunnelStartError::ExitedEarly {
                     label: "daemon".into(),
-                    code: "null".into(),
+                    code: None,
                 },
                 "Tunnel \"daemon\" process exited before ready (code null)",
+            ),
+            (
+                TunnelStartError::ExitedEarly {
+                    label: "daemon".into(),
+                    code: Some(1),
+                },
+                "Tunnel \"daemon\" process exited before ready (code 1)",
             ),
             (TunnelStartError::Cancelled, "Tunnel start cancelled"),
             (TunnelStartError::Abandoned, "Tunnel start abandoned"),

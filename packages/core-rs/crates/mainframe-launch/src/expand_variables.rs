@@ -47,16 +47,19 @@ fn expand_string(value: &str, env: &HashMap<String, String>) -> Result<String, U
     let expanded = replace_vars(value, env)?;
 
     // Tilde expansion: `~` alone or a leading `~/` become the home directory.
-    let home = dirs::home_dir()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_default();
     if expanded == "~" {
-        return Ok(home);
+        return Ok(home_dir());
     }
     if let Some(rest) = expanded.strip_prefix("~/") {
-        return Ok(format!("{home}/{rest}"));
+        return Ok(format!("{}/{rest}", home_dir()));
     }
     Ok(expanded)
+}
+
+fn home_dir() -> String {
+    dirs::home_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 fn replace_vars(value: &str, env: &HashMap<String, String>) -> Result<String, UnresolvedVariable> {
@@ -116,8 +119,7 @@ fn parse_var(s: &str) -> Option<(String, Option<String>, usize)> {
     let name = body[..name_len].to_string();
     let after_name = &body[name_len..];
 
-    if let Some(after_brace) = after_name.strip_prefix('}') {
-        let _ = after_brace;
+    if after_name.starts_with('}') {
         // 2 (`${`) + name + 1 (`}`)
         return Some((name, None, 2 + name_len + 1));
     }

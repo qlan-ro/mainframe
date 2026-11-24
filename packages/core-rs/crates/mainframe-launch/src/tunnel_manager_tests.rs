@@ -68,7 +68,8 @@ fn insert_ready(manager: &TunnelManager, label: &str, url: &str) {
     );
 }
 
-use crate::process::{BoxFuture, ManagedChildEntry, ManagedChildKind};
+use crate::process::{ManagedChildEntry, ManagedChildKind};
+use mainframe_types::BoxFuture;
 
 struct RecordingRegistry {
     added: Mutex<Vec<ManagedChildEntry>>,
@@ -103,12 +104,6 @@ impl ChildRegistryPort for RecordingRegistry {
     }
     fn list(&self) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
         Box::pin(async { vec![] })
-    }
-    fn list_by_kind(&self, _kind: ManagedChildKind) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
-        Box::pin(async { vec![] })
-    }
-    fn clear(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async {})
     }
 }
 

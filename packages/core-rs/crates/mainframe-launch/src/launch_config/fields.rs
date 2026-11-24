@@ -6,13 +6,11 @@ pub(super) fn parse_runtime_executable(
 ) -> String {
     match obj.get("runtimeExecutable").and_then(Value::as_str) {
         Some(v) if !v.is_empty() => {
-            if is_safe_executable(v) {
-                v.to_string()
-            } else {
+            if !is_safe_executable(v) {
                 issues
                     .push("runtimeExecutable must be a safe executable name (no shell operators)");
-                v.to_string()
             }
+            v.to_string()
         }
         _ => {
             issues.push("runtimeExecutable must be a non-empty string");
@@ -25,8 +23,6 @@ pub(super) fn parse_runtime_args(
     obj: &serde_json::Map<String, Value>,
     issues: &mut Vec<&'static str>,
 ) -> Vec<String> {
-    // runtimeArgs: array of strings, optional, default [].
-
     match obj.get("runtimeArgs") {
         None | Some(Value::Null) => Vec::new(),
         Some(Value::Array(items)) => {

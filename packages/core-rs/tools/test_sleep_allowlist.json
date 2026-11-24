@@ -1,5 +1,6 @@
 {
   "mainframe-automations/src/actions/run_command_tests.rs::dropping_the_spawn_future_kills_the_shell_subprocess": "Let the shell child start, then wait beyond its sentinel deadline after cancellation.",
+  "mainframe-launch/src/launch_manager_tests_child_registry.rs::a_child_that_exits_while_its_pid_is_read_leaves_no_record": "Hold the pid read past the child's exit, so the exit watcher could forget it before it is recorded.",
   "mainframe-launch/src/launch_manager_tests_exit_order.rs::a_restart_during_the_drain_keeps_its_status_and_preview_tunnel": "Wait beyond the retired shell grandchild pipe-drain deadline before checking the replacement.",
   "mainframe-launch/src/launch_manager_tests_start_stop.rs::signal_group_does_not_fall_back_to_the_pid_when_the_group_is_gone": "Observe that the unrelated sleep child survives a rejected process-group signal.",
   "mainframe-launch/src/tunnel_manager/behavior_tests.rs::tunnel_survives_continued_child_logging_after_start_resolves": "Let the cloudflared stand-in emit post-start output before checking it remains alive.",

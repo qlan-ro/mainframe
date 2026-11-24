@@ -61,22 +61,6 @@ async fn persists_entries_of_both_kinds_across_instances() {
 }
 
 #[tokio::test]
-async fn list_by_kind_filters_by_kind() {
-    let (_dir, file) = temp_file();
-    let registry = FileChildRegistry::new(file);
-    registry.add(tunnel_entry(111)).await;
-    registry.add(launch_entry(222)).await;
-    assert_eq!(
-        registry.list_by_kind(ManagedChildKind::Launch).await,
-        vec![launch_entry(222)]
-    );
-    assert_eq!(
-        registry.list_by_kind(ManagedChildKind::Tunnel).await,
-        vec![tunnel_entry(111)]
-    );
-}
-
-#[tokio::test]
 async fn remove_drops_only_the_matching_pid() {
     let (_dir, file) = temp_file();
     let registry = FileChildRegistry::new(file);
@@ -99,15 +83,6 @@ async fn replaces_an_existing_entry_with_the_same_pid_rather_than_duplicating() 
     let list = registry.list().await;
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].label, "proj:second");
-}
-
-#[tokio::test]
-async fn clear_empties_the_registry() {
-    let (_dir, file) = temp_file();
-    let registry = FileChildRegistry::new(file);
-    registry.add(tunnel_entry(111)).await;
-    registry.clear().await;
-    assert_eq!(registry.list().await, vec![]);
 }
 
 #[tokio::test]
@@ -186,10 +161,5 @@ async fn noop_registry_is_inert() {
     let registry = NoopChildRegistry;
     registry.add(tunnel_entry(1)).await;
     registry.remove(1).await;
-    registry.clear().await;
     assert_eq!(registry.list().await, vec![]);
-    assert_eq!(
-        registry.list_by_kind(ManagedChildKind::Launch).await,
-        vec![]
-    );
 }

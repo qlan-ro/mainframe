@@ -262,3 +262,27 @@ fn record_entry_none_when_the_cloudflared_path_is_a_bare_name() {
 fn record_entry_none_when_the_child_has_no_pid() {
     assert!(tunnel_record_entry("/abs/bin/cloudflared", None, "preview:Dev").is_none());
 }
+#[tokio::test]
+async fn a_non_utf8_log_line_does_not_stop_the_output_reader() {
+    // `Lines` gave up on a stream at its first non-UTF-8 byte, so the URL that
+    // followed was never seen and the closed pipe would SIGPIPE cloudflared.
+    let dir = tempfile::tempdir().unwrap();
+    let bin = dir.path().join("binary-noise-cloudflared.sh");
+    mainframe_runtime::test_support::write_shell_script(
+        &bin,
+        "printf 'INF \\377\\376 noise\\n'\necho 'https://abc-def.trycloudflare.com'\necho 'Registered tunnel connection'\nsleep 100\n",
+    )
+    .unwrap();
+    let config = TunnelConfig {
+        cloudflared_bin: bin.to_string_lossy().into_owned(),
+        start_timeout: Duration::from_millis(3_000),
+        dns_poll: Duration::from_millis(20),
+        dns_timeout: Duration::from_millis(60),
+        ..TunnelConfig::default()
+    };
+    let manager = TunnelManager::with_config(None, config);
+
+    let url = manager.start(3000, "daemon", None).await.unwrap();
+    assert_eq!(url, "https://abc-def.trycloudflare.com");
+    manager.stop("daemon").await;
+}

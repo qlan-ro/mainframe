@@ -251,3 +251,33 @@ async fn starts_during_cancelled_child_teardown_share_the_cancelled_outcome() {
     assert_eq!(manager.live_count(), 0);
     assert!(registry.list().is_empty());
 }
+
+#[tokio::test]
+async fn a_start_whose_caller_stops_waiting_frees_the_port() {
+    // An HTTP client that disconnects mid-start drops the route's future. The
+    // port used to stay `Starting` forever: joiners hung and no later start
+    // could spawn a tunnel for it.
+    let dir = tempfile::tempdir().unwrap();
+    let (_manager, registry) = registry_with(write_slow_cloudflared(dir.path()));
+
+    let mut abandoned = Box::pin(registry.start(5173, scope("chat-a")));
+    enter_mid_start(abandoned.as_mut()).await;
+    let mut joined = Box::pin(registry.start(5173, scope("chat-b")));
+    enter_mid_start(joined.as_mut()).await;
+    drop(abandoned);
+
+    let joined = tokio::time::timeout(Duration::from_secs(2), joined)
+        .await
+        .expect("a joiner of an abandoned start should not hang");
+    assert!(matches!(joined, Err(TunnelStartError::Abandoned)));
+    assert_eq!(registry.list(), vec![]);
+
+    let url = tokio::time::timeout(
+        Duration::from_secs(5),
+        registry.start(5173, scope("chat-c")),
+    )
+    .await
+    .expect("a fresh start should not join the abandoned one")
+    .unwrap();
+    assert_eq!(url, "https://abc-def.trycloudflare.com");
+}

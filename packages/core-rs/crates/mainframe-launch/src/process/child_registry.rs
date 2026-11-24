@@ -3,9 +3,9 @@
 //! startup sweep (`process::sweep`) can reap children this daemon leaked. Writes
 //! are serialized (a `tokio::sync::Mutex`) and atomic (temp file + rename)
 //! so concurrent spawns across the
-//! tunnel and launch managers never interleave. Records that fail validation (a
-//! corrupt file, or a stale pre-generalization cloudflared entry) are dropped on
-//! read rather than crashing the daemon.
+//! tunnel and launch managers never interleave. Records that fail to parse (a
+//! corrupt file, or an entry from an older format) are dropped on read rather
+//! than crashing the daemon.
 //!
 //! `ChildRegistryPort` is object-safe via manually boxed futures (`BoxFuture`) so
 //! the tunnel/launch managers can hold an `Arc<dyn ChildRegistryPort>` without an
@@ -15,14 +15,9 @@
 
 use std::path::Path;
 
+use mainframe_types::BoxFuture;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-
-/// Boxed future returned by the object-safe `ChildRegistryPort` methods.
-pub use mainframe_types::BoxFuture;
-
-/// Epoch milliseconds.
-pub use mainframe_types::time::now_ms;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -45,9 +40,8 @@ pub struct ManagedChildEntry {
     pub command: String,
     /// argv after the executable, exactly as spawned.
     pub args: Vec<String>,
-    /// Working directory the child was spawned in, or `null` when not tracked
-    /// (tunnels). Serialized as an explicit `null` (a fixture shows it), never
-    /// omitted.
+    /// Working directory the child was spawned in, or `None` when not tracked
+    /// (tunnels). Serialized as an explicit `null`, never omitted.
     pub cwd: Option<String>,
     /// Reap the child's whole process group (`kill(-pid)`) on sweep — set for
     /// detached launch trees.
@@ -62,8 +56,6 @@ pub trait ChildRegistryPort: Send + Sync {
     fn add(&self, entry: ManagedChildEntry) -> BoxFuture<'_, ()>;
     fn remove(&self, pid: i64) -> BoxFuture<'_, ()>;
     fn list(&self) -> BoxFuture<'_, Vec<ManagedChildEntry>>;
-    fn list_by_kind(&self, kind: ManagedChildKind) -> BoxFuture<'_, Vec<ManagedChildEntry>>;
-    fn clear(&self) -> BoxFuture<'_, ()>;
 }
 
 /// Inert registry for callers (and tests) that don't persist child pids.
@@ -79,12 +71,6 @@ impl ChildRegistryPort for NoopChildRegistry {
     }
     fn list(&self) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
         Box::pin(async { Vec::new() })
-    }
-    fn list_by_kind(&self, _kind: ManagedChildKind) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
-        Box::pin(async { Vec::new() })
-    }
-    fn clear(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async {})
     }
 }
 
@@ -118,7 +104,10 @@ impl FileChildRegistry {
                 .into_iter()
                 .filter_map(|item| serde_json::from_value::<ManagedChildEntry>(item).ok())
                 .collect(),
-            Ok(_) => Vec::new(),
+            Ok(_) => {
+                tracing::warn!(file = %self.file, "child registry is not an array, treating as empty");
+                Vec::new()
+            }
             Err(err) => {
                 tracing::warn!(error = ?err, file = %self.file, "child registry is corrupt, treating as empty");
                 Vec::new()
@@ -180,23 +169,6 @@ impl ChildRegistryPort for FileChildRegistry {
         Box::pin(async move {
             let _guard = self.lock.lock().await;
             self.read().await
-        })
-    }
-
-    fn list_by_kind(&self, kind: ManagedChildKind) -> BoxFuture<'_, Vec<ManagedChildEntry>> {
-        Box::pin(async move {
-            self.list()
-                .await
-                .into_iter()
-                .filter(|e| e.kind == kind)
-                .collect()
-        })
-    }
-
-    fn clear(&self) -> BoxFuture<'_, ()> {
-        Box::pin(async move {
-            let _guard = self.lock.lock().await;
-            self.write(&[]).await;
         })
     }
 }

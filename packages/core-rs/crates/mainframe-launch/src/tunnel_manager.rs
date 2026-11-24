@@ -10,8 +10,8 @@
 //! Stopping a tunnel sends SIGTERM through that watcher, escalates to SIGKILL
 //! after `stop_grace`, and waits for the watcher to report the exit.
 //!
-//! State: `tunnels` = `Arc<DashMap<String, ManagedTunnel>>` keyed by
-//! label; `verifiedAt` = `Arc<DashMap<String, VerifyResult>>` (30s TTL cache).
+//! `tunnels` holds the established tunnels by label; `verified_at` caches
+//! each label's last `verify()` result for `verify_cache_ttl`.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -20,19 +20,20 @@ use std::sync::{Arc, Mutex as StdMutex, MutexGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
+use mainframe_runtime::process::{PumpTasks, spawn_line_pump};
 use mainframe_types::events::{DaemonEvent, TunnelState};
 use serde::Deserialize;
-use tokio::io::{AsyncBufReadExt, BufReader, Lines};
-use tokio::process::{Child, ChildStderr, ChildStdout, Command};
+use tokio::io::AsyncRead;
+use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 
-use crate::process::{
-    BoxFuture, ChildRegistryPort, ManagedChildEntry, ManagedChildKind, NoopChildRegistry, now_ms,
-};
+use crate::process::{ChildRegistryPort, ManagedChildEntry, ManagedChildKind, NoopChildRegistry};
 use crate::tunnel_error::TunnelStartError;
 use mainframe_runtime::process::Signal;
+use mainframe_types::BoxFuture;
+use mainframe_types::time::now_ms;
 
 /// Fire-and-forget DaemonEvent sink.
 pub type BroadcastFn = Arc<dyn Fn(DaemonEvent) + Send + Sync>;
@@ -173,46 +174,29 @@ fn extract_hostname(url: &str) -> String {
     after.split(['/', ':']).next().unwrap_or(after).to_string()
 }
 
-/// Discard the child's remaining output until both streams hit EOF.
-fn spawn_output_drain(
-    mut out_lines: Option<Lines<BufReader<ChildStdout>>>,
-    mut err_lines: Option<Lines<BufReader<ChildStderr>>>,
-) -> mainframe_runtime::process::PumpTasks {
-    let task = tokio::spawn(async move {
-        while out_lines.is_some() || err_lines.is_some() {
-            tokio::select! {
-                _ = next_line_stdout(&mut out_lines) => {}
-                _ = next_line_stderr(&mut err_lines) => {}
-            }
-        }
-    });
-    mainframe_runtime::process::PumpTasks::new(vec![task])
+/// Drain the child's stdout and stderr for its whole life, forwarding each
+/// line to the returned receiver while it is held. Closing the pipes instead
+/// would kill cloudflared (Go) with SIGPIPE at its next log write. Lines are
+/// decoded lossily, so a non-UTF-8 byte cannot end the drain.
+fn pump_output_lines(child: &mut Child) -> (PumpTasks, mpsc::UnboundedReceiver<String>) {
+    let (line_tx, lines) = mpsc::unbounded_channel();
+    let mut tasks = Vec::new();
+    if let Some(stdout) = child.stdout.take() {
+        tasks.push(forward_lines(stdout, line_tx.clone()));
+    }
+    if let Some(stderr) = child.stderr.take() {
+        tasks.push(forward_lines(stderr, line_tx));
+    }
+    (PumpTasks::new(tasks), lines)
 }
 
-async fn next_line_stdout(lines: &mut Option<Lines<BufReader<ChildStdout>>>) -> Option<String> {
-    match lines {
-        Some(l) => match l.next_line().await {
-            Ok(Some(line)) => Some(line),
-            _ => {
-                *lines = None;
-                None
-            }
-        },
-        None => std::future::pending().await,
-    }
-}
-
-async fn next_line_stderr(lines: &mut Option<Lines<BufReader<ChildStderr>>>) -> Option<String> {
-    match lines {
-        Some(l) => match l.next_line().await {
-            Ok(Some(line)) => Some(line),
-            _ => {
-                *lines = None;
-                None
-            }
-        },
-        None => std::future::pending().await,
-    }
+fn forward_lines<R>(stream: R, line_tx: mpsc::UnboundedSender<String>) -> JoinHandle<()>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    spawn_line_pump(stream, move |line| {
+        let _ = line_tx.send(line); /* expected: Err once the start stopped reading */
+    })
 }
 
 #[cfg(test)]
