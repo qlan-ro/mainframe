@@ -32,6 +32,6 @@ jobs:
       # Canvas consistency always; area coverage unless the PR is labelled `design: none`.
       - name: Design check
         env:
-          DESIGN_CHECK_SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'design: none') && '1' || '0' }}
+          DESIGN_CHECK_SKIP: "${{ contains(github.event.pull_request.labels.*.name, 'design: none') && '1' || '0' }}"
           BASE: origin/${{ github.base_ref }}
         run: node design/tools/check.mjs --base "$BASE"
