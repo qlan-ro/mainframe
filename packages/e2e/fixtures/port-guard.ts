@@ -1,12 +1,17 @@
-// Frees a harness port only of a process the harness itself started. Everything else on the port is
+// The harness uses only servers it started, and stops only processes it started. Everything else on its ports is
 // somebody else's (another session's run, a dev daemon, the installed app): the run refuses to start.
-import { execFileSync } from 'child_process';
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'fs';
+import { execFileSync, type ChildProcess } from 'child_process';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync } from 'fs';
 import { connect } from 'net';
-import { tmpdir } from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-/** The file naming every process this run started. An env var, so a worker started later finds it too. */
+/** The installed app's daemon. */
+const PRODUCTION_PORT = 31415;
+
+/** Where each run of this worktree lists the processes it starts, one file per run. */
+const RUNS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../.harness');
+/** This run's file. An env var, so a worker started later finds it too. */
 const LEDGER_ENV = 'MF_E2E_RUN_LEDGER';
 
 /** What this worktree starts on a port: the exact command line and working directory. */
@@ -15,12 +20,29 @@ export interface OwnProcess {
   cwd: string;
 }
 
-interface Process {
+/** A process and its start time: a pid alone is reused. */
+interface Identity {
   pid: number;
-  ppid: number;
-  /** With the pid, the identity of a process: a pid alone is reused. */
   started: string;
+}
+
+interface Started extends Identity {
+  port: number;
+}
+
+interface Process extends Identity {
+  ppid: number;
   command: string;
+}
+
+/** The port a variable names. Read at load, so a run that names the installed app's port never begins. */
+export function harnessPort(envName: string, fallback: string): number {
+  const value = process.env[envName] ?? fallback;
+  if (!/^[1-9]\d{3,4}$/.test(value) || Number(value) > 65_535) throw new Error(`${envName}="${value}" is not a port.`);
+  if (Number(value) === PRODUCTION_PORT) {
+    throw new Error(`${envName} must not be ${PRODUCTION_PORT}: that is the installed app's daemon.`);
+  }
+  return Number(value);
 }
 
 function output(file: string, args: string[]): string {
@@ -68,54 +90,73 @@ function accepts(port: number): Promise<boolean> {
   });
 }
 
-function recorded(): Pick<Process, 'pid' | 'started'>[] {
-  const ledger = process.env[LEDGER_ENV];
+const isSame = (a: Identity, b: Identity | undefined): boolean => a.pid === b?.pid && a.started === b.started;
+
+function read(ledger: string | undefined): Started[] {
   if (!ledger || !existsSync(ledger)) return [];
-  return readFileSync(ledger, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as Pick<Process, 'pid' | 'started'>);
+  const lines = readFileSync(ledger, 'utf8').split('\n').filter(Boolean);
+  return lines.map((line) => JSON.parse(line) as Started);
 }
 
-function isRecorded(found: Process): boolean {
-  return recorded().some((own) => own.pid === found.pid && own.started === found.started);
+function ledgersIn(dir: string): string[] {
+  return existsSync(dir) ? readdirSync(dir).map((name) => path.join(dir, name)) : [];
 }
 
-/** An earlier run of this worktree left it: nobody owns it any more, and it is exactly what we would start. */
-function isOwnOrphan(found: Process, own: OwnProcess | undefined): boolean {
-  if (!own) return false;
-  return found.ppid === 1 && found.command === own.command && cwdOf(found.pid) === realpathSync(own.cwd);
+const startedOn = (port: number, found: Process, ledger: string | undefined): boolean =>
+  read(ledger).some((own) => own.port === port && isSame(own, found));
+
+/** A process an earlier run of this worktree recorded and left: it has no parent, and is exactly what we would start. */
+function isOwnOrphan(port: number, found: Process, own: OwnProcess | undefined): boolean {
+  const ledger = process.env[LEDGER_ENV];
+  if (!own || !ledger || found.ppid !== 1 || found.command !== own.command) return false;
+  if (cwdOf(found.pid) !== realpathSync(own.cwd)) return false;
+  return ledgersIn(path.dirname(ledger)).some((earlier) => earlier !== ledger && startedOn(port, found, earlier));
 }
 
-function kill(pid: number): void {
+/** Looks the process up again right before the signal, so a pid reused meanwhile is left alone. */
+function kill(own: Identity): void {
+  if (!isSame(own, processOf(own.pid))) return;
   try {
-    process.kill(pid, 'SIGKILL');
+    process.kill(own.pid, 'SIGKILL');
   } catch {
     /* expected: it exited by itself */
   }
 }
 
 /** Starts a run's record of its processes. The returned teardown kills the ones still alive. */
-export function beginRun(): () => void {
-  const dir = mkdtempSync(path.join(tmpdir(), 'mf-e2e-run-'));
-  process.env[LEDGER_ENV] = path.join(dir, 'started.jsonl');
+export function beginRun(dir = RUNS_DIR): () => void {
+  // Records of processes that are gone say nothing any more.
+  for (const ledger of ledgersIn(dir)) {
+    if (!read(ledger).some((own) => isSame(own, processOf(own.pid)))) rmSync(ledger, { force: true });
+  }
+  mkdirSync(dir, { recursive: true });
+  const ledger = path.join(dir, `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2)}.jsonl`);
+  process.env[LEDGER_ENV] = ledger;
   return () => {
-    for (const { pid, started } of recorded()) if (processOf(pid)?.started === started) kill(pid);
-    rmSync(dir, { recursive: true, force: true });
+    read(ledger).forEach(kill);
+    rmSync(ledger, { force: true });
   };
 }
 
-/** Call right after spawning a process that will hold a port. */
-export function recordStarted(pid: number | undefined): void {
+/** Call right after spawning the server of a port. */
+export function recordStarted(child: ChildProcess, port: number): void {
   const ledger = process.env[LEDGER_ENV];
-  const started = pid === undefined ? undefined : processOf(pid)?.started;
-  if (ledger && started) appendFileSync(ledger, `${JSON.stringify({ pid, started })}\n`);
+  const found = child.pid === undefined ? undefined : processOf(child.pid);
+  if (!ledger || !found) return;
+  appendFileSync(ledger, `${JSON.stringify({ pid: found.pid, started: found.started, port } satisfies Started)}\n`);
 }
 
 function describe({ pid, command, started }: Process): string {
   const shown = command.length > 300 ? `${command.slice(0, 300)}…` : command;
   return `  pid ${pid}, started ${started}, in ${cwdOf(pid) ?? 'an unknown directory'}:\n    ${shown}`;
 }
+
+const taken = (port: number, foreign: Process[], remedy: string): Error =>
+  new Error(
+    `Port ${port} is taken by a process this run did not start, so it will not be used or stopped:\n` +
+      (foreign.map(describe).join('\n') || '  a process lsof cannot name (another user’s, or lsof is missing)') +
+      `\n${remedy}`,
+  );
 
 /**
  * Makes sure nothing listens on `port`. A process left by this run (a timed-out worker never runs its
@@ -125,19 +166,28 @@ export async function ensurePortFree(port: number, own: OwnProcess | undefined, 
   const holders = listenersOn(port);
   if (holders.length === 0 && !(await accepts(port))) return;
 
-  const foreign = holders.filter((found) => !isRecorded(found) && !isOwnOrphan(found, own));
-  if (holders.length === 0 || foreign.length > 0) {
-    throw new Error(
-      `Port ${port} is taken by a process this run did not start, so it will not be stopped:\n` +
-        (foreign.map(describe).join('\n') || '  a process lsof cannot name (another user’s, or lsof is missing)') +
-        `\n${remedy}`,
-    );
-  }
+  const ledger = process.env[LEDGER_ENV];
+  const foreign = holders.filter((found) => !startedOn(port, found, ledger) && !isOwnOrphan(port, found, own));
+  if (holders.length === 0 || foreign.length > 0) throw taken(port, foreign, remedy);
 
-  for (const { pid } of holders) kill(pid);
+  holders.forEach(kill);
   const deadline = Date.now() + 5_000;
   while (listenersOn(port).length > 0 || (await accepts(port))) {
     if (Date.now() > deadline) throw new Error(`Port ${port} is still taken after stopping this worktree’s process.`);
     await new Promise((r) => setTimeout(r, 100));
   }
+}
+
+/**
+ * Whether the server on `port` is `child`: false while nothing listens yet. Throws when the child has exited or
+ * something else listens. Call it before a request, so that none reaches a server this run did not start.
+ */
+export function isServing(child: ChildProcess, port: number, remedy: string): boolean {
+  const holders = listenersOn(port);
+  const foreign = holders.filter(({ pid }) => pid !== child.pid);
+  if (foreign.length > 0) throw taken(port, foreign, remedy);
+  if (child.exitCode !== null || child.signalCode !== null) {
+    throw new Error(`The server started for port ${port} exited (${child.signalCode ?? `code ${child.exitCode}`}).`);
+  }
+  return holders.length > 0;
 }

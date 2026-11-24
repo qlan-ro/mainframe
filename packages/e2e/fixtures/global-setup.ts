@@ -4,8 +4,8 @@ import { createRequire } from 'module';
 import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { DAEMON_PORT } from './daemon.ts';
-import { beginRun, ensurePortFree, recordStarted } from './port-guard.ts';
+import { DAEMON_PORT, ensureDaemonPortFree } from './daemon.ts';
+import { beginRun, ensurePortFree, harnessPort, isServing, recordStarted } from './port-guard.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // The vite app is `packages/ui` (`@qlan-ro/mainframe-ui`). `packages/app-tauri` is the Rust/Tauri
@@ -14,7 +14,8 @@ const UI_DIR = path.resolve(__dirname, '../../../packages/ui');
 const DIST_ASSETS = path.join(UI_DIR, 'dist', 'assets');
 const PNPM = 'pnpm';
 
-export const PREVIEW_PORT = Number(process.env['MF_E2E_PREVIEW_PORT'] ?? 4317);
+export const PREVIEW_PORT = harnessPort('MF_E2E_PREVIEW_PORT', '4317');
+if (String(PREVIEW_PORT) === DAEMON_PORT) throw new Error('The preview and the daemon need a port each.');
 export const PREVIEW_BASE = `http://127.0.0.1:${PREVIEW_PORT}`;
 
 /**
@@ -90,26 +91,39 @@ async function isPreviewServing(): Promise<boolean> {
   }
 }
 
-export async function startPreview(): Promise<void> {
-  // Vite itself, not through pnpm: killing a pnpm wrapper leaves the server it started behind.
+const REMEDY = 'Use another: MF_E2E_PREVIEW_PORT=<port>';
+
+// Vite itself, not through pnpm: killing a pnpm wrapper leaves the server it started behind.
+function previewCommand(): string[] {
   const vite = createRequire(path.join(UI_DIR, 'package.json')).resolve('vite/package.json');
   const bin = path.join(path.dirname(vite), 'bin/vite.js');
-  const args = [bin, 'preview', '--strictPort', '--host', '127.0.0.1', '--port', String(PREVIEW_PORT)];
-  const command = [process.execPath, ...args].join(' ');
-  await ensurePortFree(PREVIEW_PORT, { command, cwd: UI_DIR }, 'Use another: MF_E2E_PREVIEW_PORT=<port>');
-  const preview = spawn(process.execPath, args, {
+  return [process.execPath, bin, 'preview', '--strictPort', '--host', '127.0.0.1', '--port', String(PREVIEW_PORT)];
+}
+
+async function ensurePreviewPortFree(): Promise<void> {
+  await ensurePortFree(PREVIEW_PORT, { command: previewCommand().join(' '), cwd: UI_DIR }, REMEDY);
+}
+
+async function startPreview(): Promise<void> {
+  await ensurePreviewPortFree();
+  const [node, ...args] = previewCommand();
+  const preview = spawn(node!, args, {
     cwd: UI_DIR,
     env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT },
     stdio: 'ignore',
   });
-  recordStarted(preview.pid);
+  recordStarted(preview, PREVIEW_PORT);
   const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline && preview.exitCode === null) {
-    if (await isPreviewServing()) return;
-    await new Promise((r) => setTimeout(r, 200));
+  try {
+    while (Date.now() < deadline) {
+      if (isServing(preview, PREVIEW_PORT, REMEDY) && (await isPreviewServing())) return;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    throw new Error(`vite preview did not become ready on ${PREVIEW_BASE}`);
+  } catch (err) {
+    preview.kill('SIGKILL');
+    throw err;
   }
-  preview.kill('SIGKILL');
-  throw new Error(`vite preview did not become ready on ${PREVIEW_BASE}`);
 }
 
 /**
@@ -125,11 +139,13 @@ export async function startPreview(): Promise<void> {
  */
 export default async function globalSetup(): Promise<() => Promise<void>> {
   assertAdapterModeChosen();
-  buildUi();
-  assertBundleTargetsTestPort();
-
   const endRun = beginRun();
   try {
+    // Before the build: a run that is refused must not replace the bundle another run serves.
+    await ensurePreviewPortFree();
+    await ensureDaemonPortFree();
+    buildUi();
+    assertBundleTargetsTestPort();
     await startPreview();
   } catch (err) {
     endRun();

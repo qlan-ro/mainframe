@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { ensurePortFree, recordStarted } from './port-guard.ts';
+import { ensurePortFree, harnessPort, isServing, recordStarted } from './port-guard.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,8 +25,11 @@ const CORE_RS_DIR = path.join(REPO_DIR, 'packages/core-rs');
 // Dedicated e2e port (NOT the dev default 31415) so the harness never collides with — and
 // silently runs against — a developer's running Mainframe. The renderer is built to talk to
 // this port (VITE_DAEMON_PORT); see `pnpm build:app:tauri` in this package.
-export const DAEMON_PORT = process.env['MF_E2E_DAEMON_PORT'] ?? '31416';
+const PORT = harnessPort('MF_E2E_DAEMON_PORT', '31416');
+export const DAEMON_PORT = String(PORT);
 export const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
+
+const REMEDY = 'Use another: MF_E2E_DAEMON_PORT=<port> (rebuild the UI bundle to match)';
 
 export const E2E_MODE = process.env['E2E_MODE'];
 export const RECORDINGS_DIR = path.resolve(__dirname, '../fixtures/recordings');
@@ -53,25 +56,34 @@ export function resolveRustDaemon(): string {
   return release;
 }
 
-export async function waitForDaemon(maxMs = 30_000): Promise<void> {
+/** Frees the daemon port of this worktree's own leftover, or throws naming what holds it. */
+export async function ensureDaemonPortFree(): Promise<void> {
+  const daemonPath = resolveRustDaemon();
+  // A daemon built elsewhere (MF_E2E_RUST_DAEMON_PATH) is shared, so an orphan of it proves nothing.
+  const own = daemonPath.startsWith(REPO_DIR + path.sep) ? { command: daemonPath, cwd: E2E_DIR } : undefined;
+  await ensurePortFree(PORT, own, REMEDY);
+}
+
+/** Fetches from the daemon this run started, or returns undefined while it is not listening. */
+async function fetchOwn(daemon: ChildProcess, route: string, init?: RequestInit): Promise<Response | undefined> {
+  if (!isServing(daemon, PORT, REMEDY)) return undefined;
+  return fetch(`${DAEMON_BASE}${route}`, init).catch(() => undefined);
+}
+
+async function waitForDaemon(daemon: ChildProcess, maxMs = 30_000): Promise<void> {
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`${DAEMON_BASE}/api/projects`);
-      if (res.ok) return;
-    } catch {
-      // not ready yet
-    }
+    if ((await fetchOwn(daemon, '/api/projects'))?.ok) return;
     await new Promise((r) => setTimeout(r, 150));
   }
   throw new Error(`Daemon did not become ready within ${maxMs}ms`);
 }
 
-async function waitForMockAdapter(maxMs = 10_000): Promise<void> {
+async function waitForMockAdapter(daemon: ChildProcess, maxMs = 10_000): Promise<void> {
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
-    const res = await fetch(`${DAEMON_BASE}/api/adapters`);
-    if (res.ok) {
+    const res = await fetchOwn(daemon, '/api/adapters');
+    if (res?.ok) {
       const body = (await res.json()) as { data?: { id?: string; installed?: boolean }[] };
       if (body.data?.some((adapter) => adapter.id === 'mock-cli' && adapter.installed)) return;
     }
@@ -118,14 +130,7 @@ export async function startDaemon(opts?: {
   /** The daemon's HOME. The suite keeps the developer's own; a board capture must not read it. */
   home?: string;
 }): Promise<DaemonHandle> {
-  const daemonPath = resolveRustDaemon();
-  // A daemon built elsewhere (MF_E2E_RUST_DAEMON_PATH) is shared, so an orphan of it proves nothing.
-  const ownDaemon = daemonPath.startsWith(REPO_DIR + path.sep) ? { command: daemonPath, cwd: E2E_DIR } : undefined;
-  await ensurePortFree(
-    Number(DAEMON_PORT),
-    ownDaemon,
-    'Use another: MF_E2E_DAEMON_PORT=<port> (rebuild the UI bundle to match)',
-  );
+  await ensureDaemonPortFree();
   const testDataDir = opts?.dataDir ?? mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
 
   const e2eEnv: Record<string, string> = {};
@@ -142,25 +147,26 @@ export async function startDaemon(opts?: {
     if (opts?.mockSwitch) e2eEnv['E2E_MOCK_SWITCH'] = '1';
   }
   const daemonLogFd = openSync(path.join(testDataDir, 'daemon.log'), 'w');
-  const daemon = spawn(daemonPath, [], {
+  const daemon = spawn(resolveRustDaemon(), [], {
     cwd: E2E_DIR,
     env: { ...daemonBaseEnv(opts?.home), MAINFRAME_DATA_DIR: testDataDir, DAEMON_PORT, ...e2eEnv },
     stdio: ['ignore', daemonLogFd, daemonLogFd],
   });
-  recordStarted(daemon.pid);
+  recordStarted(daemon, PORT);
   closeSync(daemonLogFd); // parent no longer needs the fd; child keeps it open
 
   // If any post-spawn step throws, kill the daemon before rethrowing so a failed beforeAll never
   // leaks a process holding the port (a worker that dies here leaves it to the run's record, see port-guard.ts).
   try {
-    await waitForDaemon();
-    if (E2E_MODE === 'mock') await waitForMockAdapter();
+    await waitForDaemon(daemon);
+    if (E2E_MODE === 'mock') await waitForMockAdapter(daemon);
 
-    await fetch(`${DAEMON_BASE}/api/settings/providers/claude`, {
+    const configured = await fetchOwn(daemon, '/api/settings/providers/claude', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ defaultModel: 'claude-haiku-4-5-20251001' }),
     });
+    if (!configured) throw new Error('The daemon stopped answering while it was configured');
     return { daemon, testDataDir };
   } catch (err) {
     daemon.kill('SIGKILL');

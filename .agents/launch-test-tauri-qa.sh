@@ -132,7 +132,7 @@ PID_FILE="/tmp/mf-tauri-qa-${DAEMON_PORT}.pid"
 # plain SIGTERM to the shell process doesn't run its sidecar-teardown path —
 # confirmed empirically, and it's exactly what would fail every relaunch after
 # the first. Kill any port holder whose binary lives under THIS checkout only —
-# scoped, unlike stop-test.sh's blanket kill-by-port, because a QA port derived
+# scoped, because a QA port derived
 # from a low dev port can in principle meet another checkout's dev port range;
 # an unscoped kill would take down that sibling's app instead of leaving the
 # in-use refusal below to catch it. This ordering — kill before the "already
