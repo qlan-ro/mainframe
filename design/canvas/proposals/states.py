@@ -19,12 +19,6 @@ BOARDS=[
    S('win-l','idle','**Light.** A session with three sub-agents still running: title bar with usage capsule and session tabs (S1), sidebar with time groups (L1–L4), transcript (T1), composer with activity strip (K4) and bottom strip (K8), session panel docked (R1–R12).',FULL),
    S('win-d','idle','**Dark.** The same session.',FULL,theme='dark'),
  ]),
- dict(file='Proposal-Redesign-Sidebar',title='Window redesign: sidebar session list',cols=5,states=[
-   S('side-l','idle','**List (L1, L3, L4).** Project letter leads; status replaces the time: spinner, spinner + sub-agent count when only sub-agents run (“3”), “needs you”. Group headers 24 px with 14 px above; rows 28 px.',SIDE),
-   S('side-d','idle','**Dark.**',SIDE,theme='dark'),
-   S('side-hover','idle','**Group actions on hover (L4).** Filter, Sort and More appear on hover or keyboard focus.',SIDE,actions=[{'hover':'.gh'}]),
-   S('side-filter','idle','**Filter menu.** While a filter is active the Filter button stays visible, in blue.',SIDE,actions=[{'hover':'.gh'},{'click':'[data-id=gfilter]'}]),
- ]),
  dict(file='Proposal-Redesign-NewSession',title='Window redesign: composer before the first message',cols=3,states=[
    S('ns-empty','new-session','**New session (K3, K11, C7).** Project and branch pickers in the top strip; no bottom strip (K7). Above it the empty state: project, where it runs, recent sessions to continue, project tasks to start from.',(316,48,808,852)),
    S('ns-empty-wt','new-session','**Empty state follows the pickers (K11).** New worktree chosen: “New worktree from main”.',(316,380,808,520),actions=[{'click':'[data-id=pill]','wait':250},JS_CLICK_MI('Work in a new worktree'),{'press':'Escape'},{'mouse':[700,120]}]),

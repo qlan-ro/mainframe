@@ -156,7 +156,7 @@ function TemporaryRow() {
     <div data-testid="sessions-meta-card-temporary" className="flex items-center gap-1.5 text-xs">
       <FieldLabel>Type</FieldLabel>
       <Timer aria-hidden className="size-3 shrink-0 text-muted-foreground" />
-      <span className="truncate">Temporary, deleted when closed</span>
+      <span>Temporary, deleted when closed</span>
     </div>
   );
 }
