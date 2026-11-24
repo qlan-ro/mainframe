@@ -71,7 +71,12 @@ export function WorkspaceAddMenu({ paneId: pane, configs, onLaunch, onOpenUrl }:
           </Button>
         </DropdownMenuTrigger>
       </Hint>
-      <DropdownMenuContent data-testid={`workspace-add-menu-${paneId}`} className="w-56" align="start">
+      <DropdownMenuContent
+        data-testid={`workspace-add-menu-${paneId}`}
+        className="w-56"
+        align="start"
+        collisionPadding={8}
+      >
         <DropdownMenuLabel>New tab</DropdownMenuLabel>
         <DropdownMenuItem
           data-testid={`workspace-pane-open-file-${paneId}`}

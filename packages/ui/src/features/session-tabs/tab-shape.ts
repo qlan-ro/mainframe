@@ -13,7 +13,7 @@ export function tabShape(selected: boolean, className?: string): string {
   return cn(
     'group/tab relative flex h-8 cursor-pointer items-center rounded-[9px] text-sm select-none focus-visible:focus-line-inset',
     selected
-      ? 'bg-background text-foreground shadow-[inset_0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.05)]'
+      ? 'bg-background text-foreground shadow-xs inset-ring inset-ring-border'
       : 'text-foreground/80 hover:bg-(--tab-hover) hover:text-foreground',
     className,
   );

@@ -21,7 +21,7 @@
  * A file tab in `preview` mode renders its title italic (the single replace-me
  * slot); double-clicking the pill promotes it to permanent.
  *
- * data-testid: workspace-tab-<id> / workspace-tab-stop-<id> / workspace-tab-close-<id>.
+ * data-testid: workspace-tab-<id> / workspace-tab-title-<id> / workspace-tab-stop-<id> / workspace-tab-close-<id>.
  */
 import { Code2, Eye, FileText, GitCompare, Globe, Square, SquareTerminal, Terminal, X } from 'lucide-react';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
@@ -96,9 +96,18 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
     >
       <Glyph className={cn('size-3 shrink-0', isActive ? 'text-foreground' : 'text-muted-foreground')} />
       {isActive ? (
-        <span className={cn('whitespace-nowrap', tab.mode === 'preview' && 'italic')}>{tab.title}</span>
+        <span
+          data-testid={`workspace-tab-title-${tab.id}`}
+          className={cn('whitespace-nowrap', tab.mode === 'preview' && 'italic')}
+        >
+          {tab.title}
+        </span>
       ) : (
-        <FadeLabel className={cn('flex-1', tab.mode === 'preview' && 'italic')} tooltipDelay={600}>
+        <FadeLabel
+          data-testid={`workspace-tab-title-${tab.id}`}
+          className={cn('flex-1', tab.mode === 'preview' && 'italic')}
+          tooltipDelay={600}
+        >
           {tab.title}
         </FadeLabel>
       )}
