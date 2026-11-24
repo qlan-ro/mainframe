@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -128,6 +129,26 @@ test('the user and host names are looked for in the markup only', () => {
   const css = '<style>.max{max-width:1px}</style><script>Math.max(1)</script>';
   assert.deepEqual(leaks(`${css}<p class="max-w-64" style="max-width:1px">hello</p>`, ['max']), []);
   assert.deepEqual(leaks(`${css}<p>max</p>`, ['max']), ['max']);
+});
+
+test('tool cards and markers are numbered within their own state', () => {
+  const { numberIds } = createRequire(import.meta.url)('../canvas/proposals/number-ids.cjs');
+  const card = (from) =>
+    `<button aria-controls="tc${from}"></button><div id="tc${from}"></div><button aria-controls="mk${from + 1}"></button>` +
+    `<div id="mk${from + 1}"></div><div id="wsep1" data-id="mm-k3"></div>`;
+  assert.equal(
+    numberIds(card(57), 'tools'),
+    '<button aria-controls="tools-tc1"></button><div id="tools-tc1"></div><button aria-controls="tools-mk2"></button>' +
+      '<div id="tools-mk2"></div><div id="wsep1" data-id="mm-k3"></div>',
+  );
+  assert.equal(numberIds(card(900), 'tools'), numberIds(card(57), 'tools'));
+});
+
+test('no committed proposal board holds an id that depends on the states captured before it', () => {
+  const dir = join(REPO, 'design/canvas/project');
+  for (const board of readdirSync(dir).filter((name) => name.startsWith('Proposal-Redesign-'))) {
+    assert.deepEqual(readFileSync(join(dir, board), 'utf8').match(/"(?:tc|mk)\d+"/g) ?? [], [], board);
+  }
 });
 
 test('no builder writes a board that holds a local path', () => {
