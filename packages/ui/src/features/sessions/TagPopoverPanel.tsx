@@ -29,12 +29,12 @@ function PanelErrors({ nameError, error }: { nameError: TagNameError | null; err
   return (
     <>
       {nameError !== null && (
-        <p data-testid="sessions-tag-popover-name-error" className="px-2 py-1 text-xs text-destructive">
+        <p data-testid="sessions-tag-popover-name-error" className="px-2 py-1 text-xs text-fail">
           {tagNameErrorMessage(nameError)}
         </p>
       )}
       {error !== null && (
-        <p data-testid="sessions-tag-popover-error" className="px-2 py-1 text-xs text-destructive">
+        <p data-testid="sessions-tag-popover-error" className="px-2 py-1 text-xs text-fail">
           {error}
         </p>
       )}

@@ -169,7 +169,7 @@ describe('MessagePathContextMenu — copied feedback', () => {
     const item = screen.getByTestId('tool-card-path-copy-absolute');
     expect(item.textContent).toContain('Copy failed');
     expect(item.textContent).not.toContain('Copied');
-    expect(item.querySelector('svg')).toHaveClass('text-destructive');
+    expect(item.querySelector('svg')).toHaveClass('text-fail');
   });
 });
 

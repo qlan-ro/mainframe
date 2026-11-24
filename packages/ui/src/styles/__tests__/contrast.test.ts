@@ -24,6 +24,8 @@
  *   foreground on bubble-tinted 11.17 / 9.93   (paled 2026-08-15, still clears by a wide margin)
  *   primary-foreground on primary 3.65 / 3.65  (system blue cannot reach AA)
  *   success on background 3.39 / 9.50          (a glyph/dot hue, never body text)
+ *   fail as text on background 5.43 / 6.72
+ *   focus on background 4.86 / 5.82
  *
  * `--mf-glass` is gone (2026-08-07): its one consumer, the deleted `layout/SurfaceDragLayer`,
  * is on `bg-background/85` now, so the chip's worst case is `foreground` over
@@ -175,6 +177,27 @@ describe('v2 contrast guardrail', () => {
     }
   });
 
+  it.each(THEMES)('fail — the failed-work ink — clears 4.5:1 as TEXT — %s', (theme) => {
+    // Error labels, failed tool rows and failed counts are `text-fail` (S6).
+    const t = resolve(theme);
+    for (const [name, bg] of Object.entries(backdrops(t))) {
+      expect(inkOn(color(t, '--fail'), bg), `fail on ${name} (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+    }
+  });
+
+  it.each(THEMES)('the focus line clears 3:1 against every surface and the hairline — %s', (theme) => {
+    const t = resolve(theme);
+    const focus = color(t, '--focus');
+    expect(focus.a, `the focus line is solid (${theme})`).toBe(1);
+    for (const [name, bg] of Object.entries(backdrops(t))) {
+      expect(inkOn(focus, bg), `focus on ${name} (${theme})`).toBeGreaterThanOrEqual(UI_COMPONENT_MIN);
+      const hairline = composite(color(t, '--border'), bg);
+      expect(contrast(focus, hairline), `focus on the hairline over ${name} (${theme})`).toBeGreaterThanOrEqual(
+        UI_COMPONENT_MIN,
+      );
+    }
+  });
+
   it.each(THEMES)('primary clears the 3:1 UI floor as ink on sidebar and background — %s', (theme) => {
     // `primary` doubles as running/selected (D26) and, since the redesign,
     // short glyph-adjacent text too: the sidebar Tasks rows and the panel's
@@ -194,7 +217,7 @@ describe('v2 contrast guardrail', () => {
     const t = resolve(theme);
     // These carry meaning on a dot, glyph or tint — never on body text, per the
     // design system. So the UI floor, not the text floor, is the right bar.
-    for (const token of ['--success', '--warning', '--destructive']) {
+    for (const token of ['--success', '--warning', '--fail', '--destructive']) {
       for (const name of ['background', 'card'] as const) {
         expect(inkOn(color(t, token), backdrops(t)[name]!), `${token} on ${name} (${theme})`).toBeGreaterThanOrEqual(
           UI_COMPONENT_MIN,
@@ -217,9 +240,9 @@ describe('v2 token integrity', () => {
   // semantic was swept into its source at the call sites, so there is no alias left
   // to drift. What remains is the v2 layer's own internal consistency.
 
-  it.each(THEMES)('focus rings and selection are built from the accent — %s', (theme) => {
+  it.each(THEMES)('rings are the focus blue, and selection is built from the accent — %s', (theme) => {
     const t = resolve(theme);
-    expect(color(t, '--ring'), `ring should be primary (${theme})`).toEqual(color(t, '--primary'));
+    expect(color(t, '--ring'), `ring should be focus (${theme})`).toEqual(color(t, '--focus'));
     const selection = color(t, '--sidebar-selection');
     const primary = color(t, '--primary');
     expect([selection.r, selection.g, selection.b], `sidebar-selection hue (${theme})`).toEqual([

@@ -113,7 +113,7 @@ export function NewBranchDialog({
               disabled={creating}
               aria-invalid={error ? true : undefined}
             />
-            {error && <p className="text-xs text-destructive">{error}</p>}
+            {error && <p className="text-xs text-fail">{error}</p>}
           </div>
 
           <div className="flex flex-col gap-1.5">

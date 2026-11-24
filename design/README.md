@@ -8,6 +8,9 @@ Mainframe's design source lives here. The hosted [Mainframe App canvas](https://
 | --- | --- |
 | `areas.json` | The area map. Each UI area owns code paths, one canvas page, the boards on that page and, when it has one, a surface brief. |
 | `canvas/project/` | The canvas source as it is published: `canvas.json` (pages, frames, notes) and one `.dc.html` per board. `ds/` is the installed Mainframe design system. |
+| `canvas/capture/` | The product-board capture tool: one command redraws an area's boards from the running app. See its README. |
+| `canvas/foundations/` | The generator for `Foundations-Tokens`, from the tokens in `../DESIGN.md`. |
+| `canvas/lib/` | The page shape those two share. |
 | `canvas/proposals/` | The generator for the `Proposal-Redesign-*` boards, rendered from the redesign prototype. |
 | `redesign/` | The window redesign: `DECISIONS.md` (the spec, mirrored on the `Proposal-Redesign-Spec` board) and the clickable `prototype/index.html`. |
 | `tools/check.mjs` | The CI check. |
@@ -19,6 +22,7 @@ One canvas page per area. A board belongs to the area whose board prefix matches
 
 | Area | Page | Boards | Brief |
 | --- | --- | --- | --- |
+| Foundations | `foundations` | `Foundations-*` | `DESIGN.md` (repo root) |
 | Shell & title bar | `shell` | `Shell-TitleBar`, `Shell-Window`, `Shell-States`, `Shell-Flow` | `src-layout-titlebar-tsx.md` |
 | Sidebar | `sidebar` | `Shell-Sidebar*` | `src-features-sessions.md` |
 | Composer & gates | `composer` | `Chat-Composer*` | `src-features-chat-composer.md` |
@@ -29,12 +33,12 @@ One canvas page per area. A board belongs to the area whose board prefix matches
 | Automations | `automations` | `Automations-*` | none |
 | Tasks | `tasks` | `Tasks-*` | none |
 
-The `overview` page holds the map board (`Main`). The `proposals` page holds design that is not built yet (`Proposal-*`). Shared primitives, theme and shared feature pieces (`components/ui`, `styles`, `features/shared`) join as a Foundations area when `DESIGN.md` lands.
+The `overview` page holds the map board (`Main`). The `proposals` page holds design that is not built yet (`Proposal-*`). Foundations is the visual system: shared primitives, theme and shared feature pieces (`components/ui`, `styles`, `features/shared`). Its brief is `DESIGN.md`, so a change there counts as that area's design file.
 
 ## A PR that changes UI
 
 1. Change the code.
-2. Update the area's boards. Product boards are captured from the running app, never drawn by hand. If the area's purpose or direction changed, update its surface brief too.
+2. Update the area's boards. Product boards are captured from the running app with `canvas/capture/`, never drawn by hand. If the area's purpose or direction changed, update its surface brief too.
 3. If the PR builds something from Proposals, move that work to the area page and remove the proposal boards it replaces. Keep whatever is not built yet. Mark the decisions it implements in `redesign/DECISIONS.md`.
 4. Name the changed boards in the PR description.
 
@@ -59,4 +63,9 @@ bash design/canvas/proposals/run.sh
 
 `run.sh` renders every state listed in `states.py` from the prototype, writes the boards, sets the spec board's height, lays out the Proposals page and runs the check. With an unchanged prototype it reproduces the committed boards byte for byte. `shot.cjs` previews a board locally; it needs the canvas runtime at `canvas/proposals/render/support.js` (the canvas type's `artifact-type/dc-runtime.js`, which is not committed).
 
-Product boards have no general capture tool in the repo yet. The first PR that re-captures an area's boards adds one under `canvas/capture/`.
+## Regenerating the other boards
+
+```bash
+bash design/canvas/capture/run.sh <area>          # product boards, from the running app (canvas/capture/README.md)
+python3 design/canvas/foundations/build.py        # Foundations-Tokens, from DESIGN.md
+```

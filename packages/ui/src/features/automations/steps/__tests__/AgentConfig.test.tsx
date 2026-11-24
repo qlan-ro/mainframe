@@ -123,7 +123,7 @@ describe('AgentConfig — card', () => {
       'border-border',
       'bg-card',
       'shadow-sm',
-      'focus-within:border-ring',
+      'focus-within:focus-line-inset',
     ]) {
       expect(pane.className).toContain(cls);
     }

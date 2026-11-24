@@ -22,6 +22,6 @@ export const STATUS_ICON: Record<ToolStatus, React.ElementType> = {
 export const STATUS_DOT_CLASS: Record<ToolStatus, string> = {
   running: 'bg-primary',
   complete: 'bg-success',
-  incomplete: 'bg-destructive',
+  incomplete: 'bg-fail',
   'requires-action': 'bg-primary',
 };

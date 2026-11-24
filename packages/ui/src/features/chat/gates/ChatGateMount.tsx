@@ -24,9 +24,8 @@ import { GateCard } from './GateCard';
  * `px-1` with a matching `-mx-1` gives the card's accent ring room inside a
  * scroll container (`overflow-y-auto` computes the other axis to `auto` too)
  * while keeping the card's edges on the composer's.
- * `[scrollbar-width:none]` keeps that parity while the slot scrolls: app.css
- * styles `::-webkit-scrollbar` globally, which makes the 14px vertical bar
- * layout-consuming and would take those 14px out of the card's width.
+ * Scrollbars are overlay thumbs (S3), so that parity holds while the slot
+ * scrolls.
  *
  * An answered gate just unmounts: the daemon shifts the pending permission, so
  * the delivery re-read finds nothing to restore. An approved plan's durable
@@ -45,7 +44,7 @@ export function ChatGateMount() {
   return (
     <div
       data-testid="chat-thread-gate-slot"
-      className="-mx-1 mb-2 min-h-24 max-h-[45cqh] shrink-[100] overflow-y-auto px-1 py-1 [scrollbar-width:none]"
+      className="-mx-1 mb-2 min-h-24 max-h-[45cqh] shrink-[100] overflow-y-auto px-1 py-1"
     >
       <GateCard entry={front} reply={reply} adapterId={extras?.state.chatConfig?.adapterId} />
     </div>

@@ -54,7 +54,7 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
       data-testid={`automations-step-${step.id}`}
       className={cn(
         'overflow-hidden rounded-lg border-[0.5px]',
-        bad ? 'border-destructive/55' : meta.borderClass,
+        bad ? 'border-fail/55' : meta.borderClass,
         meta.cardTintClass ?? meta.tintClass,
       )}
     >
@@ -85,9 +85,9 @@ export function BlockCard({ step, onChange, tokens, catalog, issues, depth, onDr
         </button>
       </div>
       {bad && (
-        <div className="flex flex-col gap-[4px] border-t-[0.5px] border-destructive/20 bg-destructive/[0.06] px-[12px] pt-[7px] pb-[8px]">
+        <div className="flex flex-col gap-[4px] border-t-[0.5px] border-fail/20 bg-fail/[0.06] px-[12px] pt-[7px] pb-[8px]">
           {myIssues.map((issue, i) => (
-            <span key={i} className="flex items-start gap-1.5 text-xs font-semibold text-destructive">
+            <span key={i} className="flex items-start gap-1.5 text-xs font-semibold text-fail">
               <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden />
               {issue.msg}
             </span>

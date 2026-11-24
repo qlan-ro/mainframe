@@ -200,7 +200,7 @@ export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {
         // automatic minimum is its content size, so it would overflow the
         // footer's cap instead of shrinking to fit; `overflow-y-auto` clips
         // that content rather than letting it paint past the card's border.
-        className="min-h-0 min-w-60 overflow-y-auto rounded-xl border border-input bg-card shadow-xs transition-colors [scrollbar-width:none] focus-within:border-ring"
+        className="min-h-0 min-w-60 overflow-y-auto rounded-xl border border-input bg-card shadow-xs transition-colors focus-within:focus-line-inset"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"

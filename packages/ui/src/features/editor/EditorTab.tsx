@@ -219,7 +219,7 @@ export function EditorTab({ tabId, path, readOnly = false }: EditorTabProps) {
 
   if (loadState.status === 'error') {
     return (
-      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-sm text-destructive">
+      <div data-testid="editor-tab" className="flex h-full items-center justify-center text-sm text-fail">
         {loadState.message}
       </div>
     );

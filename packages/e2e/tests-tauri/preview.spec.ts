@@ -14,8 +14,8 @@
  *     tooltip's own (documented in that file's header);
  *   - the URL bar flags a bad address with `aria-invalid` (PreviewUrlBar.tsx). A
  *     class assertion would be a phantom pass here — the v2 `Input` base carries
- *     the literal `aria-invalid:ring-destructive/20` variant in its static class
- *     list, so /ring-destructive/ matches whether the value is valid or not.
+ *     the literal `aria-invalid:ring-fail/20` variant in its static class
+ *     list, so /ring-fail/ matches whether the value is valid or not.
  *
  * Browser-mode limits (see `.superpowers/sdd/e2e-shared-brief.md` + the plan's "Not
  * testable in browser mode" section): there is no real Tauri webview in Chromium.

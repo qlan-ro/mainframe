@@ -22,7 +22,7 @@ export function InlineImageThumbs({ parts }: InlineImageThumbsProps) {
           data-testid="chat-image-zoom-trigger"
           aria-label="View image full size"
           onClick={() => setOpenIndex(i)}
-          className="block cursor-zoom-in rounded-[11px] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="block cursor-zoom-in rounded-[11px] focus-visible:focus-line"
         >
           <img
             src={p.image}

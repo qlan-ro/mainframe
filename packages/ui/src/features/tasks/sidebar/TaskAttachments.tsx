@@ -27,7 +27,7 @@ function AttachmentTile({ item, onZoom, onRemove }: TileProps) {
           data-testid={`tasks-attach-zoom-${item.id}`}
           aria-label={`View ${item.filename}`}
           onClick={onZoom}
-          className="block cursor-zoom-in outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="block cursor-zoom-in focus-visible:focus-line"
         >
           <img src={item.dataSrc} alt={item.filename} className="block size-20 object-cover" />
         </button>

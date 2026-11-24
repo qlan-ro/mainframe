@@ -57,7 +57,7 @@ export function LabelAutocomplete({ value, onChange, allLabels }: LabelAutocompl
 
   return (
     <div
-      className="flex min-h-9 cursor-text flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2.5 py-1 shadow-xs focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30"
+      className="flex min-h-9 cursor-text flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2.5 py-1 shadow-xs focus-within:focus-line-inset dark:bg-input/30"
       onClick={() => inputRef.current?.focus()}
     >
       {value.map((label) => (

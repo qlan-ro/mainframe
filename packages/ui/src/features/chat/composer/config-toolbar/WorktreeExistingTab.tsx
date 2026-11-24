@@ -89,7 +89,7 @@ export function WorktreeExistingTab({ worktrees, disabled, onAttach, error }: Ex
           <span className="max-w-full truncate text-xs text-muted-foreground">{wt.path}</span>
         </button>
       ))}
-      {error && <p className="mt-1 px-2 text-xs text-destructive">{error}</p>}
+      {error && <p className="mt-1 px-2 text-xs text-fail">{error}</p>}
     </div>
   );
 }

@@ -117,7 +117,7 @@ export function LinkRepoDialog(): React.ReactElement {
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
           {loadError !== null ? (
-            <p className="px-2 py-4 text-sm text-destructive">{loadError}</p>
+            <p className="px-2 py-4 text-sm text-fail">{loadError}</p>
           ) : remotes.length === 0 ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">
               No GitHub remotes in this project&apos;s repository.

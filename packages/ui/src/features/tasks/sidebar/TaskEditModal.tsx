@@ -170,7 +170,7 @@ export function TaskEditModal({
               />
             </div>
 
-            {form.attachErr && <p className="text-sm text-destructive">{form.attachErr}</p>}
+            {form.attachErr && <p className="text-sm text-fail">{form.attachErr}</p>}
 
             <TaskAttachments
               port={port}

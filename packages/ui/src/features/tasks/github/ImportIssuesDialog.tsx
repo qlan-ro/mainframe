@@ -114,7 +114,7 @@ export function ImportIssuesDialog(): React.ReactElement | null {
           {issues.length === 0 ? (
             error !== null ? (
               <div className="flex flex-col items-start gap-2 px-2 py-4">
-                <p data-testid="tasks-github-import-error" className="text-sm text-destructive">
+                <p data-testid="tasks-github-import-error" className="text-sm text-fail">
                   {error}
                 </p>
                 {errorAuth && (

@@ -37,7 +37,7 @@ export function IdleCompactionSettings({ port }: { port: number }) {
         testId="idle-compaction-enabled"
       />
       {saveError !== null && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-xs text-fail">
           {saveError}
         </p>
       )}

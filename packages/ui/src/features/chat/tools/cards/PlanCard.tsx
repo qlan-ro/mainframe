@@ -52,7 +52,7 @@ export const PlanCard: ToolCallMessagePartComponent = (part) => {
       <div
         className={cn(
           'overflow-hidden rounded-lg border border-border bg-card',
-          isError && result !== undefined && 'border-destructive',
+          isError && result !== undefined && 'border-fail',
         )}
       >
         {/* Header trigger */}

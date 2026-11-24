@@ -4,7 +4,7 @@
  *
  * The connection dot is green, not the accent: green is the convention users
  * already read as "connected", where the accent would say "selected". Quiet
- * reads `muted-foreground` and anything wrong reads `destructive`, the same
+ * reads `muted-foreground` and anything wrong reads `fail`, the same
  * collapse `StatusDot` made.
  */
 import { LockIcon, MonitorIcon, ServerIcon } from 'lucide-react';
@@ -38,15 +38,15 @@ export const DAEMON_STATUS: Record<DaemonStatus, StatusMeta> = {
   unreachable: {
     label: 'Unreachable',
     word: 'Offline',
-    dotClass: 'bg-destructive',
-    wordClass: 'text-destructive',
+    dotClass: 'bg-fail',
+    wordClass: 'text-fail',
   },
   'needs-repair': {
     label: 'Re-pair needed',
     word: 'Re-pair',
     lock: true,
-    dotClass: 'text-destructive',
-    wordClass: 'text-destructive',
+    dotClass: 'text-fail',
+    wordClass: 'text-fail',
   },
 };
 
@@ -63,7 +63,7 @@ export function ConnDot({ status }: { status: DaemonStatus }) {
   }
 
   if (meta.lock) {
-    return <LockIcon aria-label={meta.label} className="size-3 shrink-0 text-destructive" />;
+    return <LockIcon aria-label={meta.label} className="size-3 shrink-0 text-fail" />;
   }
 
   return <span aria-label={meta.label} className={cn('inline-block size-2 shrink-0 rounded-full', meta.dotClass)} />;

@@ -97,7 +97,7 @@ export function ReviewCommitRail({
           )}
 
           {error && (
-            <div data-testid="review-commit-error" className="mb-3 text-xs text-destructive">
+            <div data-testid="review-commit-error" className="mb-3 text-xs text-fail">
               {error}
             </div>
           )}

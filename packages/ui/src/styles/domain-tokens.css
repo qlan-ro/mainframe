@@ -18,14 +18,15 @@
      mf-directive-skill/-session. (Provider brand hues live in TS —
      features/shared/provider-avatar.ts — because the dot and the logo read
      them as inline paint, never as utilities.)
-   - APP CHROME with no v2 token: mf-scrim, mf-focus-ring (+ the @layer base
-     ring rule — bare non-`data-slot` interactive elements rely on it as their
-     ONLY focus indicator), mf-shadow-pop/-modal/-card/-card-hover/-edit-ring,
+   - APP CHROME with no v2 token: mf-scrim (+ the @layer base focus-line rule —
+     bare non-`data-slot` interactive elements rely on it as their ONLY focus
+     indicator), mf-shadow-pop/-modal/-card/-card-hover/-edit-ring,
      the easings, --radius-xs, and the twPulse keyframe.
 
    Retired here, do NOT reintroduce — reach for the v2 token instead:
    mf-text-3 → muted-foreground · mf-chip → accent · mf-success → success ·
    mf-warning → warning (they held the same value in two notations) ·
+   mf-focus-ring → the `focus-line` utilities (globals.css) ·
    mf-content2/mf-raised → muted · mf-glass → bg-background/85 ·
    mf-border-hover → border-input · mf-text-4 → muted-foreground/50 ·
    mf-selection → sidebar-selection · mf-destructive-tint → bg-destructive/10 ·
@@ -82,10 +83,9 @@
   --mf-viewer-check-a: color-mix(in srgb, var(--foreground) 5%, var(--background));
   --mf-viewer-check-b: color-mix(in srgb, var(--foreground) 13%, var(--background));
 
-  /* Theme file shadows + focus ring (ring tracks v2's --ring = primary) */
+  /* Theme file shadows */
   --mf-shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
   --mf-shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.18);
-  --mf-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent);
   --mf-scrim: rgba(0, 0, 0, 0.4);
 
   /* Motion (fonts come from the v2 layer) */
@@ -175,7 +175,6 @@
 
   --mf-shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
   --mf-shadow-modal: 0 28px 64px rgba(0, 0, 0, 0.66), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
-  --mf-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
   --mf-scrim: rgba(0, 0, 0, 0.55);
 
   /* ── App-only tokens — DARK ── */
@@ -261,21 +260,20 @@
      xs (2px) visibly shrinks the legacy chips that use it. */
   --radius-xs: calc(var(--radius) * 0.4);
 
-
   /* Easings */
   --ease-default: var(--ease-default);
   --ease-signature: var(--ease-signature);
 }
 
-/* Keyboard focus ring for BARE interactive elements (no `data-slot`): the
+/* Keyboard focus line for BARE interactive elements (no `data-slot`): the
    app-owned hand-rolled buttons/inputs (FileTree rows, tree header controls,
    deep dialog bodies) rely on this rule as their ONLY focus indicator, so it
    cannot be dropped. Every v2 primitive carries `data-slot` and owns its
-   focus treatment (ring utilities, or none by design — Radix menu items are
-   hover-FOCUSED divs with tabindex, and this rule was painting the blue ring
+   focus treatment (`focus-line` utilities, or none by design — Radix menu items are
+   hover-FOCUSED divs with tabindex, and this rule was painting the blue line
    on them whenever WebKit's focus-visible heuristic leaned keyboard).
    [data-noring] opts out elements with a focus treatment of their own. In
-   @layer base so ring/shadow utilities keep winning. */
+   @layer base so outline/shadow utilities keep winning. */
 @layer base {
   [data-noring]:focus-visible {
     outline: none;
@@ -287,8 +285,8 @@
   textarea:not([data-noring], [data-slot]):focus-visible,
   select:not([data-noring], [data-slot]):focus-visible,
   [tabindex]:not([data-noring], [data-slot]):focus-visible {
-    outline: none;
-    box-shadow: var(--mf-focus-ring);
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
     border-radius: var(--radius-sm);
   }
 }

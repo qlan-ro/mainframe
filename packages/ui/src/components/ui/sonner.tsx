@@ -18,7 +18,7 @@ function Toaster({ ...props }: ToasterProps) {
         success: <CircleCheckIcon className="size-4 text-success" />,
         info: <InfoIcon className="size-4 text-muted-foreground" />,
         warning: <TriangleAlertIcon className="size-4 text-warning" />,
-        error: <CircleAlertIcon className="size-4 text-destructive" />,
+        error: <CircleAlertIcon className="size-4 text-fail" />,
         loading: <Loader2Icon className="size-4 animate-spin text-muted-foreground" />,
       }}
       toastOptions={{

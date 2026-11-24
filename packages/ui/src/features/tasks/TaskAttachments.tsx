@@ -192,7 +192,7 @@ export function TaskAttachments({ port, todoId, pending, onPendingChange, onReje
                     data-testid={`tasks-attach-zoom-${att.id}`}
                     aria-label={`View ${att.filename}`}
                     onClick={() => setLightboxIndex(galleryIndexById.get(att.id) ?? null)}
-                    className="block cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="block cursor-zoom-in focus-visible:focus-line"
                   >
                     <img src={att.dataSrc} alt={att.filename} className="w-20 h-20 object-cover block" />
                   </button>

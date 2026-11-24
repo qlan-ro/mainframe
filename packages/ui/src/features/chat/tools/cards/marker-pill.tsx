@@ -57,7 +57,7 @@ export function MarkerPill({
   const clickable = expandable && !isPending && !isError;
 
   return (
-    <Marker variant="separator" className={cn('select-none', isError && 'text-destructive')}>
+    <Marker variant="separator" className={cn('select-none', isError && 'text-fail')}>
       <Hint label={title}>
         <button
           data-testid={testId}
@@ -72,7 +72,7 @@ export function MarkerPill({
           <MarkerIcon>{icon}</MarkerIcon>
           <MarkerContent>{children}</MarkerContent>
           {isPending && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground" />}
-          {isError && <span className="size-1.5 shrink-0 rounded-full bg-destructive" />}
+          {isError && <span className="size-1.5 shrink-0 rounded-full bg-fail" />}
           {clickable &&
             (open ? <ChevronDownIcon className="size-3 shrink-0" /> : <ChevronRightIcon className="size-3 shrink-0" />)}
         </button>

@@ -63,7 +63,7 @@ function MessageBody({ testId, children }: { testId: string; children: ReactNode
 function FailureLine({ text }: { text: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="size-2 rounded-full bg-destructive" />
+      <span className="size-2 rounded-full bg-fail" />
       <span className="text-sm text-muted-foreground">{text}</span>
     </div>
   );

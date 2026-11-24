@@ -123,7 +123,7 @@ export function ReviewDiffView({ port, projectId, chatId, file, source, onAppend
 
   return (
     <div className="flex flex-col h-full">
-      {error && <div className="px-4 py-3 text-xs text-destructive">{error}</div>}
+      {error && <div className="px-4 py-3 text-xs text-fail">{error}</div>}
 
       {diff?.fellBackToGit && (
         <div data-testid="review-session-diff-fallback" className="px-4 py-2 text-xs text-muted-foreground">

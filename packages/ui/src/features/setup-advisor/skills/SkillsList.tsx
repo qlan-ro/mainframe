@@ -91,7 +91,7 @@ function RegistryHalf({
   if (mode === 'search') {
     if (searchStatus === 'error') {
       return (
-        <p data-testid="skills-browse-search-error" className="px-2 py-1.5 text-xs text-destructive">
+        <p data-testid="skills-browse-search-error" className="px-2 py-1.5 text-xs text-fail">
           {searchError ?? 'Could not search the skills registry'}
         </p>
       );

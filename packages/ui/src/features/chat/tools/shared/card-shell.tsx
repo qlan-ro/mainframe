@@ -15,7 +15,7 @@ import { useCompactDetail } from './compact-detail-context';
  * tiles stacked down a transcript read as six features, and state is already
  * carried by the trailing StatusDot.
  *
- * ErrorBody — the destructive-tinted pre shared by ReadFileCard and SearchCard.
+ * ErrorBody — the rose-tinted (`fail`) pre shared by ReadFileCard and SearchCard.
  */
 import React from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -36,7 +36,7 @@ export function ErrorBody({ text, testId }: ErrorBodyProps) {
   return (
     <pre
       data-testid={testId}
-      className="bg-destructive/10 px-3 py-2 font-mono text-xs wrap-break-word whitespace-pre-wrap text-destructive"
+      className="bg-fail/10 px-3 py-2 font-mono text-xs wrap-break-word whitespace-pre-wrap text-fail"
     >
       {text}
     </pre>

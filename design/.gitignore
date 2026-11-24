@@ -5,3 +5,5 @@ canvas/proposals/sizes.json
 canvas/proposals/__pycache__/
 # Local preview runtime for shot.cjs (the canvas type's dc-runtime.js; third-party, not committed)
 canvas/proposals/render/
+canvas/capture/.work/
+canvas/lib/__pycache__/

@@ -21,7 +21,7 @@ export function SendFailureNotice({ error, clientId, remedy, attachmentsRestored
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
-        <span data-testid="chat-user-message-send-failed" className="text-xs text-destructive">
+        <span data-testid="chat-user-message-send-failed" className="text-xs text-fail">
           Failed to send
         </span>
         {canResend && remedy === 'unarchive_native_session' && (

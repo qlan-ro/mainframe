@@ -70,7 +70,7 @@ export function WorkspaceUrlEntry({ paneId, onDone }: WorkspaceUrlEntryProps) {
         onBlur={onDone}
         className={cn(
           'min-w-0 flex-1 bg-transparent px-1 font-mono text-xs outline-none placeholder:text-muted-foreground',
-          invalid ? 'rounded-sm text-destructive ring-1 ring-destructive' : 'text-foreground',
+          invalid ? 'rounded-sm text-fail ring-1 ring-fail' : 'text-foreground',
         )}
       />
     </div>

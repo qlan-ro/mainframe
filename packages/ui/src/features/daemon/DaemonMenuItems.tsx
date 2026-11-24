@@ -141,7 +141,7 @@ export function DaemonMenuItems({
     <div data-testid="daemon-picker">
       {activeDown && local != null && (
         <DropdownMenuItem data-testid="daemon-picker-fallback" onSelect={() => onSwitch(local)}>
-          <WifiOffIcon className="text-destructive" />
+          <WifiOffIcon className="text-fail" />
           <span className="min-w-0 flex-1 truncate">
             <strong className="font-semibold">{active.label}</strong> is unreachable.
           </span>

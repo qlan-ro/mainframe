@@ -55,7 +55,7 @@ export function WorktreeDirectorySettings({ port }: { port: number }) {
           </Button>
         )}
       </div>
-      {saveError !== null && <p className="text-xs text-destructive">{saveError}</p>}
+      {saveError !== null && <p className="text-xs text-fail">{saveError}</p>}
     </section>
   );
 }

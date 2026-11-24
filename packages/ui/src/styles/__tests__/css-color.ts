@@ -129,14 +129,16 @@ export function resolveOklch(value: string, lookup: (token: string) => string, s
     return { L, C, H, a: origin.a };
   }
 
-  const oklch = v.match(new RegExp(String.raw`^oklch\(\s*(${NUM}%?)\s+(${NUM})\s+(${NUM})\s*\)$`, 'i'));
+  const oklch = v.match(
+    new RegExp(String.raw`^oklch\(\s*(${NUM}%?)\s+(${NUM})\s+(${NUM})(?:\s*/\s*(${NUM}%?))?\s*\)$`, 'i'),
+  );
   if (oklch) {
-    const raw = oklch[1]!;
+    const fraction = (raw: string): number => (raw.endsWith('%') ? parseFloat(raw) / 100 : parseFloat(raw));
     return {
-      L: raw.endsWith('%') ? parseFloat(raw) / 100 : parseFloat(raw),
+      L: fraction(oklch[1]!),
       C: parseFloat(oklch[2]!),
       H: parseFloat(oklch[3]!),
-      a: 1,
+      a: oklch[4] === undefined ? 1 : fraction(oklch[4]),
     };
   }
 

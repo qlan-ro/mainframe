@@ -92,7 +92,7 @@ export function AutomationProjectPicker({ projects, value, onChange }: Automatio
                 data-testid={`automations-editor-project-${entry.id ?? ALL_KEY}`}
                 onClick={() => onChange(entry.id)}
                 onKeyDown={(e) => handleKeyDown(e, i)}
-                className="flex items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="flex items-center justify-center rounded-full focus-visible:focus-line"
               >
                 {entry.id == null ? (
                   <span

@@ -107,16 +107,16 @@ export function TokenChip({ descriptor, field, onRemove, testId }: TokenChipProp
     return (
       <span
         data-testid={testId}
-        className="inline-flex h-[20px] max-w-[220px] items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 align-middle text-xs font-medium text-foreground"
+        className="inline-flex h-[20px] max-w-[220px] items-center gap-1 rounded-full border border-fail/30 bg-fail/10 px-2 align-middle text-xs font-medium text-foreground"
       >
-        <TriangleAlert size={12} className="text-destructive" aria-hidden />
+        <TriangleAlert size={12} className="text-fail" aria-hidden />
         <span className="truncate">Missing value</span>
         {onRemove && (
           <button
             type="button"
             data-testid={testId ? `${testId}-remove` : undefined}
             onClick={onRemove}
-            className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-full text-destructive hover:bg-destructive/15"
+            className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-full text-fail hover:bg-fail/15"
           >
             <X size={9} aria-hidden />
           </button>

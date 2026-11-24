@@ -134,7 +134,7 @@ describe('ProviderCliVersion', () => {
     expect(screen.getByText(/can't tell how this CLI was installed/)).toBeTruthy();
   });
 
-  it('checkFailed renders a muted line, no destructive banner', () => {
+  it('checkFailed renders a muted line, no error banner', () => {
     applyProviderCliStatus(base({ checkFailed: true }));
     render(<ProviderCliVersion port={31415} adapterId="claude" />);
     const line = screen.getByText('Couldn’t check for updates');

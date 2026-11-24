@@ -2,7 +2,7 @@
  * A delegated task's live status: a hue dot plus the muted word. The hue sits
  * on the dot, never the text (design-system rule: semantic hues stay off ink).
  * `primary` = running, `warning` = waits on the user, `success` = completed,
- * `destructive` = failed; queued, cancelled and interrupted stay neutral.
+ * `fail` = failed; queued, cancelled and interrupted stay neutral.
  */
 import type { TaskStatus } from '@qlan-ro/mainframe-types';
 import { taskStatusLabel } from '@/features/sessions/view-model/agent-provenance';
@@ -13,7 +13,7 @@ const DOT: Record<TaskStatus, string> = {
   running: 'bg-primary',
   waiting: 'bg-warning',
   completed: 'bg-success',
-  failed: 'bg-destructive',
+  failed: 'bg-fail',
   cancelled: 'bg-muted-foreground',
   interrupted: 'bg-muted-foreground',
 };

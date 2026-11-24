@@ -19,7 +19,7 @@ export function ReadOnlyBanner({ external }: { external: boolean }) {
 
 export function SaveErrorBanner({ message }: { message: string }) {
   return (
-    <div data-testid="editor-tab-save-error" className="shrink-0 bg-destructive/10 px-3 py-1 text-xs text-destructive">
+    <div data-testid="editor-tab-save-error" className="shrink-0 bg-fail/10 px-3 py-1 text-xs text-fail">
       Save failed: {message}
     </div>
   );

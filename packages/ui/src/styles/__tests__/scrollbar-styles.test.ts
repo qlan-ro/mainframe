@@ -4,56 +4,38 @@ import { describe, expect, it } from 'vitest';
 
 const sheet = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
 
-function blockAfter(source: string, header: string): string {
-  const headerStart = source.indexOf(header);
-  if (headerStart < 0) throw new Error(`missing CSS block: ${header}`);
-
-  const openingBrace = source.indexOf('{', headerStart + header.length);
-  if (openingBrace < 0) throw new Error(`missing opening brace after: ${header}`);
-
-  let depth = 0;
-  for (let index = openingBrace; index < source.length; index += 1) {
-    if (source[index] === '{') depth += 1;
-    if (source[index] !== '}') continue;
-    depth -= 1;
-    if (depth === 0) return source.slice(openingBrace + 1, index);
-  }
-
-  throw new Error(`missing closing brace after: ${header}`);
+function rule(selector: string): string {
+  const start = sheet.indexOf(`${selector} {`);
+  if (start < 0) throw new Error(`missing CSS rule: ${selector}`);
+  return sheet.slice(start, sheet.indexOf('}', start));
 }
 
-describe('scrollbar styling paths', () => {
-  const base = blockAfter(sheet, '@layer base');
-  const webkitQuery = 'selector(*::-webkit-scrollbar)';
-
-  it('keeps the WebKit thumb visible on a transparent track', () => {
-    const webkit = blockAfter(base, `@supports ${webkitQuery}`);
-
-    expect(webkit).toMatch(/\*::-webkit-scrollbar-track\s*{\s*background:\s*transparent/);
-    expect(webkit).not.toMatch(/::-webkit-scrollbar-(?:track|corner)\s*,\s*\*::-webkit-scrollbar-(?:track|corner)/);
-    expect(webkit).toMatch(/\*::-webkit-scrollbar-thumb\s*{\s*background:\s*var\(--border\)/);
-    expect(webkit).not.toContain('*:hover::-webkit-scrollbar-thumb');
-    expect(webkit).not.toMatch(/scrollbar-(?:color|width)\s*:/);
+describe('scrollbar styling (S3)', () => {
+  it('hides native scrollbars in every engine, with no @supports fork', () => {
+    expect(rule('  *')).toMatch(/scrollbar-width:\s*none/);
+    expect(rule('  *::-webkit-scrollbar')).toMatch(/display:\s*none/);
+    expect(sheet).not.toContain('@supports selector(*::-webkit-scrollbar)');
+    expect(sheet).not.toMatch(/scrollbar-(?:color|gutter)\s*:/);
   });
 
-  it('insets the vertical thumb 6px from the right edge and leaves horizontal bars at 8px', () => {
-    const webkit = blockAfter(base, `@supports ${webkitQuery}`);
-    const bar = blockAfter(webkit, '*::-webkit-scrollbar ');
-    const vertical = blockAfter(webkit, '*::-webkit-scrollbar-thumb:vertical');
-
-    expect(bar).toMatch(/width:\s*14px/);
-    expect(bar).toMatch(/height:\s*8px/);
-    expect(vertical).toMatch(/border-width:\s*0 6px 0 0/);
-    expect(vertical).toMatch(/background-clip:\s*padding-box/);
-    // 4px round corners on the painted 8px: 4 left, 10 − 6 right, 4 vertically.
-    expect(vertical).toMatch(/border-radius:\s*4px 10px 10px 4px \/ 4px/);
+  it('never paints a track', () => {
+    expect(sheet).not.toContain('::-webkit-scrollbar-track');
+    expect(rule('.mf-scrollbar')).not.toContain('background');
   });
 
-  it('retains the standards path when WebKit scrollbar parts are unavailable', () => {
-    const standards = blockAfter(base, `@supports not ${webkitQuery}`);
+  it('draws the thumb 6px wide and 2px from the edge, 8px under the pointer', () => {
+    const thumb = rule('.mf-scrollbar > span');
+    expect(thumb).toMatch(/width:\s*6px/);
+    expect(thumb).toMatch(/inset:\s*0 2px 0 auto/);
+    expect(thumb).toMatch(/border-radius:\s*3px/);
+    expect(thumb).toMatch(/var\(--foreground\) 26%/);
+    const held = rule('.mf-scrollbar:is(:hover, [data-dragging]) > span');
+    expect(held).toMatch(/width:\s*8px/);
+    expect(held).toMatch(/var\(--foreground\) 42%/);
+  });
 
-    expect(standards).toContain('scrollbar-width: thin');
-    expect(standards).toContain('scrollbar-color: transparent transparent');
-    expect(standards).not.toContain('::-webkit-scrollbar');
+  it('drops the fade under prefers-reduced-motion', () => {
+    const reduced = sheet.slice(sheet.indexOf('prefers-reduced-motion'));
+    expect(reduced).toMatch(/\.mf-scrollbar,\s*\.mf-scrollbar > span {\s*transition: none/);
   });
 });

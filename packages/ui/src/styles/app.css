@@ -25,8 +25,7 @@
   --sidebar-accent: oklch(0.945 0.004 286);
 }
 
-/* Native scrollbars/form controls must be painted for the active mode, or
-   WebKit draws light chrome (the white track) on dark surfaces. */
+/* Native form controls must be painted for the active mode. */
 :root {
   color-scheme: light;
 }
@@ -65,42 +64,84 @@ code {
   opacity: 1;
 }
 
-/* WebKit needs direct track painting because its native track can ignore scrollbar-color. */
+/* Scrollbars (S3) are overlay thumbs only: no track and no gutter, in every
+   engine and with every macOS scroll-bar setting. WKWebView with "always show"
+   ignores scrollbar-color and takes 15px, so native bars are hidden outright and
+   `lib/overlay-scrollbars` draws `.mf-scrollbar` for the area that is hovered or
+   scrolling. `data-scrollbar="none"` opts a strip out of the thumb. */
 @layer base {
-  /* A vertical thumb sits 6px in from the right edge, so a scroller that ends
-     on a border (the transcript beside the docked panel) doesn't touch it.
-     The 8px thumb plus that gap is why vertical bars are 14px wide. */
-  @supports selector(*::-webkit-scrollbar) {
-    *::-webkit-scrollbar {
-      width: 14px;
-      height: 8px;
-    }
-    *::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    *::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 999px;
-    }
-    /* The 999px pill radius clamps to half the 14px box (7px), leaving the
-       painted 8px only 1px of rounding beside the 6px border. Per-corner radii
-       give 4px circles on both sides: 4 on the left, 10 − 6 on the right. */
-    *::-webkit-scrollbar-thumb:vertical {
-      border: solid transparent;
-      border-width: 0 6px 0 0;
-      border-radius: 4px 10px 10px 4px / 4px;
-      background-clip: padding-box;
-    }
+  * {
+    scrollbar-width: none;
   }
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
 
-  @supports not selector(*::-webkit-scrollbar) {
-    * {
-      scrollbar-width: thin;
-      scrollbar-color: transparent transparent;
-    }
-    *:hover {
-      scrollbar-color: var(--border) transparent;
-    }
+/* The element is the 10px grab area; its span is the painted thumb, 6px wide and
+   2px from the edge, 8px under the pointer. Above every portal it may scroll. */
+.mf-scrollbar {
+  position: fixed;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  touch-action: none;
+  transition: opacity 250ms;
+}
+.mf-scrollbar[data-visible] {
+  opacity: 1;
+  pointer-events: auto;
+}
+.mf-scrollbar > span {
+  position: absolute;
+  inset: 0 2px 0 auto;
+  width: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--foreground) 26%, transparent);
+  transition:
+    width 120ms,
+    height 120ms,
+    background-color 120ms;
+}
+.mf-scrollbar[data-axis='x'] > span {
+  inset: auto 0 2px 0;
+  width: auto;
+  height: 6px;
+}
+.mf-scrollbar:is(:hover, [data-dragging]) > span {
+  width: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--foreground) 42%, transparent);
+}
+.mf-scrollbar[data-axis='x']:is(:hover, [data-dragging]) > span {
+  width: auto;
+  height: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mf-scrollbar,
+  .mf-scrollbar > span {
+    transition: none;
+  }
+}
+
+/* xterm draws its own overlay bar (terminal-cache.ts sets its 10px lane and its
+   colours); only its geometry and fade are ours to match. It styles the slider
+   inline, hence !important. */
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  left: 2px !important;
+  width: 6px !important;
+  border-radius: 3px;
+}
+.xterm .xterm-scrollable-element > .scrollbar.vertical > .slider:is(:hover, .active) {
+  left: 0 !important;
+  width: 8px !important;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .xterm .xterm-scrollable-element > :is(.visible, .invisible.fade) {
+    transition: none;
   }
 }
 

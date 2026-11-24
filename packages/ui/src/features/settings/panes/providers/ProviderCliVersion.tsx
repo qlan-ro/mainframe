@@ -130,7 +130,7 @@ export function ProviderCliVersion({ port, adapterId }: ProviderCliVersionProps)
         />
       )}
 
-      {actionError && <p className="text-xs text-destructive">{actionError}</p>}
+      {actionError && <p className="text-xs text-fail">{actionError}</p>}
 
       {running && status.update && <ProviderCliOutput adapterId={adapterId} output={status.update.output} />}
 
@@ -155,7 +155,7 @@ export function ProviderCliVersion({ port, adapterId }: ProviderCliVersionProps)
 
       {failed && status.update && (
         <div data-testid={`settings-${adapterId}-cli-update-result`} className="flex flex-col gap-2">
-          <p className="text-xs text-destructive">{status.update.error ?? 'The update failed.'}</p>
+          <p className="text-xs text-fail">{status.update.error ?? 'The update failed.'}</p>
           <ProviderCliOutput adapterId={adapterId} output={status.update.output} />
           {status.update.permissionDenied && (
             <ProviderCliManualCommand

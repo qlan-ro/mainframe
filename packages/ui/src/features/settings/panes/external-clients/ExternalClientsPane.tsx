@@ -22,7 +22,7 @@ function LocalClients({ port }: { port: number }) {
         </p>
       </header>
       {state.error && (
-        <div role="alert" className="grid gap-2 text-sm text-destructive">
+        <div role="alert" className="grid gap-2 text-sm text-fail">
           <p>{state.error}</p>
           <Button variant="outline" className="justify-self-start" onClick={state.retry} disabled={state.busy}>
             Retry

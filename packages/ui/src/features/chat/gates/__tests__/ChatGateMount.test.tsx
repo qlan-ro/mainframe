@@ -339,16 +339,14 @@ describe('ChatGateMount', () => {
   // geometry (both caps engaging against a live container, the edges
   // lining up while the slot scrolls, and the composer's bottom edge never
   // painting past the pane) is verified live by the Playwright assertions
-  // in gates.spec.ts. Dropping `[scrollbar-width:none]` costs 8px of card
-  // width off the composer's edge whenever the slot actually scrolls (see
-  // the plan's fact 8).
+  // in gates.spec.ts. Overlay scrollbars (S3) take no width, so the
+  // edges line up whether or not the slot scrolls.
   it('carries the slot/scroll/cap class contract the height cap and width parity depend on', () => {
     mockFront.mockReturnValue({ front: permissionEntry, reply });
     wrap(<ChatGateMount />);
 
     const slot = screen.getByTestId('chat-thread-gate-slot');
     expect(slot).toHaveClass('overflow-y-auto');
-    expect(slot).toHaveClass('[scrollbar-width:none]');
     expect(slot).toHaveClass('max-h-[45cqh]');
     expect(slot).toHaveClass('min-h-24');
     expect(slot).toHaveClass('shrink-[100]');

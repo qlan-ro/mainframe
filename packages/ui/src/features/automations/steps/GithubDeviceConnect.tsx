@@ -180,7 +180,7 @@ export function GithubDeviceConnect({ onChange, testId }: GithubDeviceConnectPro
           : phase.message;
     return (
       <div className="flex flex-col gap-1.5">
-        <span data-testid={`${testId}-status`} className="text-xs text-destructive">
+        <span data-testid={`${testId}-status`} className="text-xs text-fail">
           {message}
         </span>
         <Button

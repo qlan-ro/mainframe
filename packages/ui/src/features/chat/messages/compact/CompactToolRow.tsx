@@ -53,7 +53,7 @@ function StatusIcon({ status, kind }: { status: ToolStatus; kind: ToolKind }) {
       aria-label={status.replace(/-/g, ' ')}
       className={cn(
         'size-3.5 shrink-0 text-muted-foreground',
-        status === 'failed' && 'text-destructive',
+        status === 'failed' && 'text-fail',
         status === 'awaiting-approval' && 'text-warning',
         status === 'running' && 'animate-spin motion-reduce:animate-none',
       )}

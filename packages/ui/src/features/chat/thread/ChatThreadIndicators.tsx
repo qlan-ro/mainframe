@@ -9,7 +9,7 @@ export function LoadErrorBanner() {
   if (extras?.state.loadState.type !== 'error') return null;
   return (
     <div data-testid="chat-thread-load-error" className="mx-auto my-8 flex max-w-sm flex-col gap-3">
-      <Alert variant="destructive">
+      <Alert variant="fail">
         <AlertTriangleIcon />
         <AlertTitle>Couldn’t load this chat</AlertTitle>
         <AlertDescription>Its history is on the daemon — retrying re-reads it.</AlertDescription>

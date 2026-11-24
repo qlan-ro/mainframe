@@ -274,7 +274,7 @@ export function AutomationEditor() {
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
-            <TriangleAlert size={13} className="text-destructive" aria-hidden />
+            <TriangleAlert size={13} className="text-fail" aria-hidden />
             {errors.length} to fix
           </span>
         )}
@@ -285,9 +285,7 @@ export function AutomationEditor() {
           ) : (
             issues.map((issue, i) => (
               <span key={i} className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                <span
-                  className={cn('size-1.5 rounded-full', issue.level === 'error' ? 'bg-destructive' : 'bg-warning')}
-                />
+                <span className={cn('size-1.5 rounded-full', issue.level === 'error' ? 'bg-fail' : 'bg-warning')} />
                 {issue.msg}
               </span>
             ))

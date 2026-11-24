@@ -123,7 +123,7 @@ export function FlatTreeView({ tree, selectedPath, onSelect, onToggle }: FlatTre
           {node.expanded && node.loadError && (
             <p
               data-testid={`directory-picker-load-error-${node.entry.path}`}
-              className="px-3 py-0.5 text-xs text-destructive"
+              className="px-3 py-0.5 text-xs text-fail"
               style={{ paddingLeft: `${nodeStateIndent(node.depth)}px` }}
             >
               Failed to load

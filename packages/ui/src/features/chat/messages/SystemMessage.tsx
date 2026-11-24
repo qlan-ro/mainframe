@@ -26,7 +26,7 @@ function SystemTextMarker({ text }: { text: string }) {
   const isError = CLI_ERROR_RE.test(text);
   const Icon = isError ? AlertTriangleIcon : ZapIcon;
   return (
-    <Marker variant="separator" className={cn('my-1.5 select-none', isError && 'text-destructive')}>
+    <Marker variant="separator" className={cn('my-1.5 select-none', isError && 'text-fail')}>
       <MarkerIcon>
         <Icon />
       </MarkerIcon>

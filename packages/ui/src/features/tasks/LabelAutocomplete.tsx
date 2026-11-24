@@ -62,7 +62,7 @@ export function LabelAutocomplete({ value, onChange, allLabels }: Props): React.
         className={cn(
           'bg-background border border-border rounded-md px-2 py-1.5',
           'flex flex-wrap gap-1 cursor-text min-h-[32px]',
-          'focus-within:ring-1 focus-within:ring-ring',
+          'focus-within:focus-line-inset',
         )}
         onClick={() => inputRef.current?.focus()}
       >

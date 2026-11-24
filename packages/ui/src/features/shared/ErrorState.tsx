@@ -53,7 +53,7 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
         ].join(' ')}
       >
         {/* Icon tile */}
-        <div className="w-[44px] h-[44px] mx-auto rounded-[13px] bg-destructive/10 text-destructive flex items-center justify-center">
+        <div className="w-[44px] h-[44px] mx-auto rounded-[13px] bg-fail/10 text-fail flex items-center justify-center">
           <TriangleAlert size={22} />
         </div>
 

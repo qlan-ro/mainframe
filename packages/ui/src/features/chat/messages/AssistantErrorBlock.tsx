@@ -26,9 +26,9 @@ export function AssistantErrorBlock({ text }: { text: string }) {
   return (
     // No AlertTitle: the error string IS the message, and the primitive's title
     // is `line-clamp-1` — a multi-line CLI error would be silently cut to one.
-    <Alert variant="destructive" data-testid="chat-error-block" className="border-destructive/25">
+    <Alert variant="fail" data-testid="chat-error-block" className="border-fail/25">
       <AlertTriangleIcon />
-      <AlertDescription className="min-w-0 whitespace-pre-wrap wrap-break-word text-destructive">
+      <AlertDescription className="min-w-0 whitespace-pre-wrap wrap-break-word text-fail">
         {headline}
         {detail !== null && (
           <span className="mt-1 block whitespace-pre-wrap wrap-break-word font-mono text-xs text-muted-foreground select-text">

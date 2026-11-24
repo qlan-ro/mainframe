@@ -151,7 +151,7 @@ export function RunStepRow({
         {open && entry.error && (
           <div
             data-testid={`${testId}-error`}
-            className="mt-[7px] rounded-md border-[0.5px] border-destructive/30 bg-destructive/[0.07] px-[11px] py-[9px] text-xs leading-relaxed text-destructive"
+            className="mt-[7px] rounded-md border-[0.5px] border-fail/30 bg-fail/[0.07] px-[11px] py-[9px] text-xs leading-relaxed text-fail"
           >
             {entry.error}
           </div>

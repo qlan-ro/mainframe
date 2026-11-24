@@ -85,10 +85,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
   return (
     <div
       data-testid={`automations-step-${step.id}`}
-      className={cn(
-        'overflow-hidden rounded-md border-[0.5px] bg-card',
-        bad ? 'border-destructive/55' : 'border-border',
-      )}
+      className={cn('overflow-hidden rounded-md border-[0.5px] bg-card', bad ? 'border-fail/55' : 'border-border')}
     >
       <div className="flex items-start gap-[9px] px-2.5 py-[9px]">
         <button
@@ -152,7 +149,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           data-level={bad ? 'error' : 'warning'}
           className={cn(
             'flex flex-col gap-[4px] border-t-[0.5px] px-[12px] pt-[7px] pb-[8px]',
-            bad ? 'border-destructive/20 bg-destructive/[0.06]' : 'border-warning/30 bg-warning/10',
+            bad ? 'border-fail/20 bg-fail/[0.06]' : 'border-warning/30 bg-warning/10',
           )}
         >
           {myIssues.map((issue, i) => (
@@ -160,7 +157,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
               key={i}
               className={cn(
                 'flex items-start gap-1.5 text-xs font-semibold',
-                issue.level === 'error' ? 'text-destructive' : 'text-warning',
+                issue.level === 'error' ? 'text-fail' : 'text-warning',
               )}
             >
               <TriangleAlert size={12} className="mt-0.5 shrink-0" aria-hidden />

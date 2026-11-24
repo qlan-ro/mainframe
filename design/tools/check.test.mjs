@@ -12,6 +12,18 @@ test('the most specific code path wins', () => {
   assert.equal(areaForPath(cfg, 'packages/ui/src/layout/TitleBar.tsx').id, 'shell');
 });
 
+test('shared primitives, styles and shared pieces are Foundations, and DESIGN.md is its design file', () => {
+  assert.equal(areaForPath(cfg, 'packages/ui/src/components/ui/button.tsx').id, 'foundations');
+  assert.equal(areaForPath(cfg, 'packages/ui/src/components/ui/sidebar/menu.tsx').id, 'foundations');
+  assert.equal(areaForPath(cfg, 'packages/ui/src/styles/globals.css').id, 'foundations');
+  assert.equal(areaForPath(cfg, 'packages/ui/src/features/shared/ErrorState.tsx').id, 'foundations');
+  assert.equal(areaForBoard(cfg, 'Foundations-Tokens').id, 'foundations');
+  const code = 'packages/ui/src/styles/globals.css';
+  assert.deepEqual(uncoveredAreas(cfg, [code]).map((m) => m.area.id), ['foundations']);
+  assert.deepEqual(uncoveredAreas(cfg, [code, 'DESIGN.md']), []);
+  assert.deepEqual(uncoveredAreas(cfg, [code, 'design/canvas/project/Foundations-Tokens.dc.html']), []);
+});
+
 test('only visual files count: logic, docs and tests belong to no area', () => {
   assert.equal(areaForPath(cfg, 'packages/ui/src/features/chat/controller/chat-actions.ts'), null);
   assert.equal(areaForPath(cfg, 'packages/ui/src/features/chat/README.md'), null);

@@ -6,19 +6,19 @@ const HEADLINE = 'OpenAI kept dropping the response and Codex gave up retrying.'
 const RAW = 'stream disconnected before completion: stream closed before response.completed';
 
 describe('AssistantErrorBlock', () => {
-  it('renders the headline in the destructive style and the original text muted, mono and selectable', () => {
+  it('renders the headline in the fail style and the original text muted, mono and selectable', () => {
     render(<AssistantErrorBlock text={`${HEADLINE}\n\n${RAW}`} />);
     const headline = screen.getByText(HEADLINE);
-    expect(headline).toHaveClass('text-destructive');
+    expect(headline).toHaveClass('text-fail');
     const raw = screen.getByText(RAW);
     expect(raw).toHaveClass('text-muted-foreground', 'font-mono', 'text-xs', 'select-text');
-    expect(raw).not.toHaveClass('text-destructive');
+    expect(raw).not.toHaveClass('text-fail');
     expect(screen.getByTestId('chat-error-block')).toContainElement(raw);
   });
 
   it('splits only at the first blank line and keeps the rest verbatim', () => {
     render(<AssistantErrorBlock text={'Headline\n\nOpenAI: line one\n\nline two'} />);
-    expect(screen.getByText('Headline')).toHaveClass('text-destructive');
+    expect(screen.getByText('Headline')).toHaveClass('text-fail');
     const raw = screen.getByText(/OpenAI: line one/);
     expect(raw.textContent).toBe('OpenAI: line one\n\nline two');
     expect(raw).toHaveClass('whitespace-pre-wrap');
@@ -29,12 +29,12 @@ describe('AssistantErrorBlock', () => {
       <AssistantErrorBlock text={'Selected model is at capacity.\nPlease try a different model.'} />,
     );
     expect(container.querySelectorAll('.font-mono')).toHaveLength(0);
-    expect(screen.getByText(/Selected model is at capacity\./)).toHaveClass('text-destructive');
+    expect(screen.getByText(/Selected model is at capacity\./)).toHaveClass('text-fail');
   });
 
   it('treats an empty remainder as no split', () => {
     const { container } = render(<AssistantErrorBlock text={'Only a headline\n\n'} />);
     expect(container.querySelectorAll('.font-mono')).toHaveLength(0);
-    expect(screen.getByText(/Only a headline/)).toHaveClass('text-destructive');
+    expect(screen.getByText(/Only a headline/)).toHaveClass('text-fail');
   });
 });

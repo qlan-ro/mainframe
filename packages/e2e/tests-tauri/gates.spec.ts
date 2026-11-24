@@ -430,7 +430,7 @@ test.describe('§gate pinned slot', () => {
     const scrollTopAfterSettle = await page.getByTestId('chat-thread-viewport').evaluate((el) => el.scrollTop);
     expect(scrollTopAfterSettle).toBe(0);
 
-    // Force the slot itself to overflow (Decisions: `[scrollbar-width:none]` suppression is
+    // Force the slot itself to overflow (overlay scrollbars take no width, which is
     // the load-bearing bit for width parity once this happens) and re-check parity.
     await page.locator('[data-testid="chat-permission-details-toggle"]').click();
     await page.locator('[data-testid="chat-permission-details-pre"]').waitFor({ timeout: 5_000 });

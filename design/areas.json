@@ -2,38 +2,29 @@
   "$comment": "One entry per UI area. Each area owns code paths (repo-relative prefixes; the longest matching prefix wins), one canvas page, the boards on it (file-name prefixes; the longest matching prefix wins) and, when it has one, an Impeccable surface brief. Only `visual` file types count as a UI change. design/tools/check.mjs reads this file; see design/README.md.",
   "proposalsPage": "proposals",
   "proposalBoardPrefix": "Proposal-",
-  "visual": [
-    ".tsx",
-    ".css"
-  ],
-  "ignore": [
-    "/__tests__/",
-    ".test.ts",
-    ".test.tsx",
-    ".stories.tsx",
-    "/test-utils/",
-    ".d.ts"
-  ],
+  "visual": [".tsx", ".css"],
+  "ignore": ["/__tests__/", ".test.ts", ".test.tsx", ".stories.tsx", "/test-utils/", ".d.ts"],
   "areas": [
     {
       "id": "overview",
       "name": "Overview",
       "page": "overview",
-      "boards": [
-        "Main"
-      ],
+      "boards": ["Main"],
       "paths": []
+    },
+    {
+      "id": "foundations",
+      "name": "Foundations",
+      "page": "foundations",
+      "boards": ["Foundations-"],
+      "brief": "DESIGN.md",
+      "paths": ["packages/ui/src/components/ui/", "packages/ui/src/styles/", "packages/ui/src/features/shared/"]
     },
     {
       "id": "shell",
       "name": "Shell & title bar",
       "page": "shell",
-      "boards": [
-        "Shell-TitleBar",
-        "Shell-Window",
-        "Shell-States",
-        "Shell-Flow"
-      ],
+      "boards": ["Shell-TitleBar", "Shell-Window", "Shell-States", "Shell-Flow"],
       "brief": "packages/ui/.impeccable/surfaces/src-layout-titlebar-tsx.md",
       "paths": [
         "packages/ui/src/app/",
@@ -55,9 +46,7 @@
       "id": "sidebar",
       "name": "Sidebar",
       "page": "sidebar",
-      "boards": [
-        "Shell-Sidebar"
-      ],
+      "boards": ["Shell-Sidebar"],
       "brief": "packages/ui/.impeccable/surfaces/src-features-sessions.md",
       "paths": [
         "packages/ui/src/layout/AppSidebar",
@@ -69,9 +58,7 @@
       "id": "composer",
       "name": "Composer & gates",
       "page": "composer",
-      "boards": [
-        "Chat-Composer"
-      ],
+      "boards": ["Chat-Composer"],
       "brief": "packages/ui/.impeccable/surfaces/src-features-chat-composer.md",
       "paths": [
         "packages/ui/src/features/chat/composer/",
@@ -83,37 +70,23 @@
       "id": "transcript",
       "name": "Transcript",
       "page": "transcript",
-      "boards": [
-        "Chat-Thread",
-        "Chat-Window",
-        "Chat-States"
-      ],
+      "boards": ["Chat-Thread", "Chat-Window", "Chat-States"],
       "brief": "packages/ui/.impeccable/surfaces/src-features-chat-thread.md",
-      "paths": [
-        "packages/ui/src/features/chat/"
-      ]
+      "paths": ["packages/ui/src/features/chat/"]
     },
     {
       "id": "session-panel",
       "name": "Session panel",
       "page": "session-panel",
-      "boards": [
-        "Chat-SessionPanel",
-        "Workspace-SessionPanel"
-      ],
+      "boards": ["Chat-SessionPanel", "Workspace-SessionPanel"],
       "brief": "packages/ui/.impeccable/surfaces/src-features-session-panel.md",
-      "paths": [
-        "packages/ui/src/features/session-panel/"
-      ]
+      "paths": ["packages/ui/src/features/session-panel/"]
     },
     {
       "id": "workspace",
       "name": "Workspace",
       "page": "workspace",
-      "boards": [
-        "Workspace-",
-        "Chat-SideChat"
-      ],
+      "boards": ["Workspace-", "Chat-SideChat"],
       "brief": "packages/ui/.impeccable/surfaces/src-layout-surfaces-workspacesurface-tsx.md",
       "paths": [
         "packages/ui/src/layout/Workspace",
@@ -135,9 +108,7 @@
       "id": "settings",
       "name": "Settings & dialogs",
       "page": "settings",
-      "boards": [
-        "Settings-"
-      ],
+      "boards": ["Settings-"],
       "paths": [
         "packages/ui/src/features/settings/",
         "packages/ui/src/features/palette/",
@@ -150,23 +121,15 @@
       "id": "automations",
       "name": "Automations",
       "page": "automations",
-      "boards": [
-        "Automations-"
-      ],
-      "paths": [
-        "packages/ui/src/features/automations/"
-      ]
+      "boards": ["Automations-"],
+      "paths": ["packages/ui/src/features/automations/"]
     },
     {
       "id": "tasks",
       "name": "Tasks",
       "page": "tasks",
-      "boards": [
-        "Tasks-"
-      ],
-      "paths": [
-        "packages/ui/src/features/tasks/"
-      ]
+      "boards": ["Tasks-"],
+      "paths": ["packages/ui/src/features/tasks/"]
     }
   ]
 }

@@ -36,7 +36,7 @@ export function CopyMenuItem({ testId, label, status, onSelect, as: Item = Conte
     // own both (gap-2 + the [&_svg] size rule).
     <Item data-testid={testId} onSelect={onSelect}>
       {status === 'copied' && <Check className="text-success" />}
-      {status === 'failed' && <AlertTriangle className="text-destructive" />}
+      {status === 'failed' && <AlertTriangle className="text-fail" />}
       {status === 'idle' && <Copy />}
       {status === 'copied' ? 'Copied' : status === 'failed' ? 'Copy failed' : label}
     </Item>

@@ -48,13 +48,13 @@ export type NoticeKind = 'success' | 'error' | 'info';
 
 const NOTICE_STYLES: Record<NoticeKind, string> = {
   success: 'bg-success/10 border-success/30 text-foreground',
-  error: 'bg-destructive/10 border-destructive/30 text-foreground',
+  error: 'bg-fail/10 border-fail/30 text-foreground',
   info: 'bg-muted border-border text-muted-foreground',
 };
 
 const NOTICE_ICON: Record<NoticeKind, React.ReactNode> = {
   success: <CheckIcon className="size-3.5 shrink-0 text-success" />,
-  error: <AlertTriangleIcon className="size-3.5 shrink-0 text-destructive" />,
+  error: <AlertTriangleIcon className="size-3.5 shrink-0 text-fail" />,
   info: <GlobeIcon className="size-3.5 shrink-0 text-muted-foreground" />,
 };
 
@@ -97,6 +97,6 @@ export function UrlAdornment({ phase }: { phase: UrlPhase }) {
   if (phase === 'verifying') return <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground" />;
   if (phase === 'reachable') return <CheckIcon className="size-3.5 shrink-0 text-success" />;
   if (phase === 'unreachable' || phase === 'refused')
-    return <AlertTriangleIcon className="size-3.5 shrink-0 text-destructive" />;
+    return <AlertTriangleIcon className="size-3.5 shrink-0 text-fail" />;
   return <GlobeIcon className="size-3.5 shrink-0 text-muted-foreground" />;
 }

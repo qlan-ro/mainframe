@@ -56,7 +56,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
         <PencilIcon size={12} className="shrink-0 text-warning" />
         <span className="text-xs font-semibold text-foreground">Editing queued message</span>
         {saveError ? (
-          <span className="text-xs text-destructive">{saveError}</span>
+          <span className="text-xs text-fail">{saveError}</span>
         ) : (
           <span className="text-xs text-muted-foreground">· stays queued until the run finishes</span>
         )}

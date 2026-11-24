@@ -28,6 +28,7 @@ import { ActiveDaemonProvider, useActiveDaemon } from '../features/daemon/active
 import { AppShell } from './AppShell';
 import { ConnectionStatusProvider, useConnectionStatus } from './ConnectionStatusContext';
 import { ConnectionOverlay } from './ConnectionOverlay';
+import { OverlayScrollbars } from './OverlayScrollbars';
 import { ThemeEffect } from './ThemeEffect';
 import { MfErrorBoundary } from '@/features/shared/MfErrorBoundary';
 import { Toaster } from '@/components/ui/sonner';
@@ -134,6 +135,7 @@ export function App() {
     <MfErrorBoundary>
       <div className="flex h-screen flex-col bg-background text-foreground font-sans">
         <ThemeEffect />
+        <OverlayScrollbars />
         <ConnectionStatusProvider value={{ state, daemonStatus }}>
           {/* Gate the data shell on `ready` (first successful /health), not merely
               on a known port — the sidecar opens its port before it accepts

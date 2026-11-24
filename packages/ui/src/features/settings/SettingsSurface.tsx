@@ -8,7 +8,6 @@
  * mount IS open now, since this only renders while the view is active.
  */
 import { useEffect } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { getProviderSettings, getGeneralSettings } from '@/lib/api/settings';
 import { refreshAdapters } from '@/store/adapters-seed';
 import { useSettingsStore } from '../../store/settings';
@@ -57,12 +56,12 @@ export function SettingsSurface({ port }: { port: number }) {
 
   return (
     <div data-testid="settings-surface" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <ScrollArea className="flex-1">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-6 pt-5 pb-8">
           <h1 className="mb-4 text-lg font-semibold text-foreground">{title}</h1>
           <SettingsContent port={port} />
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

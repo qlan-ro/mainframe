@@ -435,18 +435,18 @@
       "y": 0
     },
     "Shell-States.dc.html": {
-      "h": 900,
+      "h": 2060,
       "page": "shell",
       "title": "Shell — window states",
-      "w": 7392,
+      "w": 4512,
       "x": 0,
       "y": 1383
     },
     "Shell-TitleBar.dc.html": {
-      "h": 2924,
+      "h": 2690,
       "page": "shell",
       "title": "Shell — title bar and navigation",
-      "w": 6000,
+      "w": 3024,
       "x": 0,
       "y": 5695
     },
@@ -579,6 +579,86 @@
       "w": 2616,
       "h": 2260,
       "title": "Window redesign: files, captures and quotes in the composer"
+    },
+    "Foundations-Behaviour.dc.html": {
+      "h": 1988,
+      "page": "foundations",
+      "title": "Foundations — scrollbars and focus",
+      "w": 1910,
+      "x": 1600,
+      "y": 0
+    },
+    "Shell-SidebarErrors.dc.html": {
+      "h": 766,
+      "page": "sidebar",
+      "title": "Shell — sidebar: editing and errors",
+      "w": 1424,
+      "x": 0,
+      "y": 5695
+    },
+    "Chat-ComposerFocus.dc.html": {
+      "h": 708,
+      "page": "composer",
+      "title": "Chat — composer focus and gates",
+      "w": 1792,
+      "x": 0,
+      "y": 9905
+    },
+    "Chat-States-Failures.dc.html": {
+      "h": 1040,
+      "page": "transcript",
+      "title": "Chat — failed work",
+      "w": 1792,
+      "x": 0,
+      "y": 9905
+    },
+    "Chat-SessionPanel-ActivityError.dc.html": {
+      "h": 766,
+      "page": "session-panel",
+      "title": "Chat — session panel: Activity could not load",
+      "w": 900,
+      "x": 0,
+      "y": 17801
+    },
+    "Workspace-ReviewError.dc.html": {
+      "h": 1088,
+      "page": "workspace",
+      "title": "Workspace — review could not load",
+      "w": 1536,
+      "x": 0,
+      "y": 9503
+    },
+    "Settings-Errors.dc.html": {
+      "h": 748,
+      "page": "settings",
+      "title": "Settings — field focus and errors",
+      "w": 2390,
+      "x": 0,
+      "y": 16536
+    },
+    "Automations-Errors.dc.html": {
+      "h": 1088,
+      "page": "automations",
+      "title": "Automations — errors",
+      "w": 2304,
+      "x": 0,
+      "y": 13804
+    },
+    "Tasks-Errors.dc.html": {
+      "h": 1088,
+      "page": "tasks",
+      "title": "Tasks — field focus and errors",
+      "w": 3024,
+      "x": 0,
+      "y": 14796
+    },
+    "Foundations-Tokens.dc.html": {
+      "h": 2309,
+      "page": "foundations",
+      "title": "Foundations — tokens",
+      "w": 1440,
+      "x": 0,
+      "y": 0
     }
   },
   "createdOnFiles": {
@@ -694,6 +774,8 @@
   },
   "order": [
     "Main.dc.html",
+    "Foundations-Tokens.dc.html",
+    "Foundations-Behaviour.dc.html",
     "Shell-Window.dc.html",
     "Shell-Flow.dc.html",
     "Shell-SidebarViews.dc.html",
@@ -701,6 +783,7 @@
     "Shell-States.dc.html",
     "Shell-SidebarStates.dc.html",
     "Shell-SidebarMenus.dc.html",
+    "Shell-SidebarErrors.dc.html",
     "Shell-TitleBar.dc.html",
     "Chat-Window.dc.html",
     "Chat-ComposerFlow.dc.html",
@@ -708,7 +791,9 @@
     "Chat-SideChat.dc.html",
     "Chat-Thread.dc.html",
     "Chat-States.dc.html",
+    "Chat-States-Failures.dc.html",
     "Chat-Composer.dc.html",
+    "Chat-ComposerFocus.dc.html",
     "Chat-SessionPanel-Flow.dc.html",
     "Chat-SessionPanel-Modes.dc.html",
     "Chat-SessionPanel-States.dc.html",
@@ -725,8 +810,10 @@
     "Workspace-ReviewStates.dc.html",
     "Workspace-Branch.dc.html",
     "Workspace-SessionPanel.dc.html",
+    "Chat-SessionPanel-ActivityError.dc.html",
     "Workspace-Viewers.dc.html",
     "Workspace-Run.dc.html",
+    "Workspace-ReviewError.dc.html",
     "Settings-Surface.dc.html",
     "Settings-Flow.dc.html",
     "Settings-Panes.dc.html",
@@ -735,6 +822,7 @@
     "Settings-Dialogs.dc.html",
     "Settings-DialogsMore.dc.html",
     "Settings-SetupAdvisor.dc.html",
+    "Settings-Errors.dc.html",
     "Automations-List.dc.html",
     "Automations-Flow.dc.html",
     "Automations-Empty.dc.html",
@@ -743,10 +831,12 @@
     "Automations-Steps.dc.html",
     "Automations-Pickers.dc.html",
     "Automations-Extras.dc.html",
+    "Automations-Errors.dc.html",
     "Tasks-Board.dc.html",
     "Tasks-Cards.dc.html",
     "Tasks-Types.dc.html",
     "Tasks-Details.dc.html",
+    "Tasks-Errors.dc.html",
     "Proposal-Redesign-Spec.dc.html",
     "Proposal-Window-Baseline.dc.html",
     "Proposal-Window-BaselineDark.dc.html",
@@ -769,6 +859,10 @@
     {
       "id": "overview",
       "name": "Overview"
+    },
+    {
+      "id": "foundations",
+      "name": "Foundations"
     },
     {
       "id": "shell",

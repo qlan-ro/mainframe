@@ -365,10 +365,10 @@ describe('TaskCard — error state', () => {
         />
       </Wrap>,
     );
-    // ErrorDot renders a span with bg-destructive class when isError is true
+    // ErrorDot renders a span with bg-fail class when isError is true
     const card = screen.getByTestId('chat-task-card');
-    // The ErrorDot span is inside the card; it has no testid but has bg-destructive
-    const dot = card.querySelector('.bg-destructive');
+    // The ErrorDot span is inside the card; it has no testid but has bg-fail
+    const dot = card.querySelector('.bg-fail');
     expect(dot).not.toBeNull();
   });
 

@@ -158,7 +158,7 @@ export function ViewerRouter({ path, renderCode }: ViewerRouterProps) {
   }
 
   if (state.status === 'error') {
-    return <div className="flex h-full items-center justify-center text-sm text-destructive">{state.message}</div>;
+    return <div className="flex h-full items-center justify-center text-sm text-fail">{state.message}</div>;
   }
 
   const { kind, content } = state;

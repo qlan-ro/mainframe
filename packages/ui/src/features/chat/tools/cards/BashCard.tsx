@@ -61,7 +61,7 @@ function TerminalBody({ command, resultText, isError, chatId, toolCallId, trunca
   const lines = resultText.split('\n');
 
   return (
-    <div className={cn('rounded-b-lg border-t border-border bg-mf-term-bg px-3 py-2', isError && 'border-destructive')}>
+    <div className={cn('rounded-b-lg border-t border-border bg-mf-term-bg px-3 py-2', isError && 'border-fail')}>
       {truncated && chatId && toolCallId ? (
         <ToolResultExpand chatId={chatId} toolUseId={toolCallId} truncatedContent={resultText} fullBytes={fullBytes} />
       ) : (

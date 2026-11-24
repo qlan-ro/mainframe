@@ -49,7 +49,7 @@ function DisclosureTrigger({
         <CollapsibleTrigger
           data-testid={`chat-compact-toggle-${identity}`}
           aria-label={label}
-          className="flex w-full min-w-0 items-center gap-2 rounded-sm py-1 text-left text-xs text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full min-w-0 items-center gap-2 rounded-sm py-1 text-left text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:focus-line"
         >
           {icon}
           <Label label={label} live={live} />

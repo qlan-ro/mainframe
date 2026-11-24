@@ -11,7 +11,7 @@
  * archives. Closing the last tab falls back to the new-session flow.
  *
  * Overflow: pills shrink to min-w-24, then the row scrolls horizontally (no
- * scrollbar — the app's opt-out idiom). The trailing spacer stays outside
+ * scrollbar thumb: `data-scrollbar="none"`). The trailing spacer stays outside
  * `data-no-drag`, so the empty middle remains a window-drag area.
  */
 import { useMemo } from 'react';
@@ -86,7 +86,8 @@ export function SessionTabs() {
     <div data-tut="session-tabs" data-testid="session-tabs" className="flex h-full min-w-0 flex-1 items-center">
       <div
         data-no-drag
-        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] scroll-fade-x"
+        data-scrollbar="none"
+        className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 scroll-fade-x"
       >
         {entries.map((entry) =>
           entry.kind === 'pair' ? (
