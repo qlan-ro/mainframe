@@ -119,8 +119,10 @@ const PATHS = [
   ['<p>&#x2F;Users&#47;jane</p>', '/Users/jane'],
   ['<p>C:\\Users\\jane</p>', 'C:\\Users\\jane'],
   // Encoded by a tool that turns every slash into a dash, after a dash or a prefix.
-  ['<p>a--Users-jane-Code</p>', '-Users-jane-Code'],
-  ['<p>row-Users-jane-Projects</p>', '-Users-jane-Projects'],
+  ['<p>a--Users-jane-Code</p>', 'a--Users-jane-Code'],
+  ['<p>row-Users-jane-Projects</p>', 'row-Users-jane-Projects'],
+  ['<p>x-Users-jane</p>', 'x-Users-jane'],
+  ['<p>Row-Users-jane-Code</p>', '-Users-jane-Code'],
   ['<p>x--home-jane-code</p>', '-home-jane-code'],
   ['<p>--private-tmp-claude</p>', '-private-tmp-claude'],
   ['<p>t-private-tmp-claude</p>', '-private-tmp-claude'],
@@ -132,8 +134,15 @@ const PATHS = [
   ['<a href="x?p=%252F%2555sers%252Fjane">x</a>', '/Users/jane'],
   ['{"p":"/\\u0055sers/jane"}', '/Users/jane'],
   ['<p>/&#85;sers/jane</p>', '/Users/jane'],
+  ['<p>\\057Users\\057jane</p>', '/Users/jane'],
+  ['{"p":"\\u{2f}Users\\u{002F}jane"}', '/Users/jane'],
+  // Below another root, or on another host.
+  ['<p>/Volumes/Backup/Users/jane</p>', '/Volumes/Backup/Users/jane'],
+  ['<p>file://janes-mac/Users/jane</p>', 'file://janes-mac/Users/jane'],
+  ['<p>backup/Users/jane/Documents</p>', '/Users/jane/Documents'],
   // Without the leading slash, or the drive.
   ['<p>Users/jane/Code</p>', 'Users/jane/Code'],
+  ['<p>home/jane/Code</p>', 'home/jane/Code'],
   ['<p>private/tmp/x</p>', 'private/tmp/x'],
   ['<p>var/folders/y6/abc</p>', 'var/folders/y6/abc'],
   ['<p>\\Users\\jane</p>', '\\Users\\jane'],
@@ -143,6 +152,10 @@ const PATHS = [
   ['<p>L1VzZXJzL2phbmU</p>', '/Users/jane'],
   [`<p>${Buffer.from('/Users/jane/??>>').toString('base64url')}</p>`, '/Users/jane/??'],
   [`<p>${btoa('%2FUsers%2Fjane')}</p>`, '/Users/jane'],
+  [`<p>${btoa('a log that goes on for a good while, then /Users/jane').replace(/.{20}/g, '$&\n')}</p>`, '/Users/jane'],
+  [`{"p":"${btoa('a log that goes on for a good while, then /Users/jane').replace(/.{20}/g, '$&\\r\\n')}"}`, '/Users/jane'],
+  [`<p>${Buffer.from('/Users/jane', 'utf16le').toString('base64')}</p>`, '/Users/jane'],
+  [`<p>${Buffer.from('/Users/jane', 'utf16le').swap16().toString('base64')}</p>`, '/Users/jane'],
 ];
 const NEUTRAL = [
   '<p>~/Code/atlas-web</p>',
@@ -150,7 +163,9 @@ const NEUTRAL = [
   '<a href="https://example.com/home/jane">x</a>',
   '<p>src/private/key.ts, /users/1, packages/home/Home.tsx</p>',
   '<svg class="icon-home-x -home"></svg>',
-  '<svg class="nav-home-icon-large go-Users-x"></svg>',
+  '<svg class="nav-home-icon-large -home-page-card"></svg>',
+  '<p>Max-Users-per-team, max-Users-per-team, src/Users/list, src/Users/list.tsx</p>',
+  '<p>packages/home/index.ts, home/index.ts, home/components/Card.tsx</p>',
   '<p style="--my-private-var-name:1">Users/List.tsx, 100%25 wide, &#477; and &#x2fa;</p>',
 ];
 
@@ -173,9 +188,22 @@ test('the user and host names are looked for in the markup only', () => {
   assert.deepEqual(leaks(`${css}<p>max-width</p>`, ['max-width']), ['max-width']);
 });
 
-test('a user name that is an ordinary word may stand in a board, but not its home', () => {
-  const text = '<p aria-label="Alex’s chat">max effort, on main, with Alex</p>';
-  assert.deepEqual(leaks(text, ['max', 'main', 'alex', 'root', 'runner', 'localhost']), []);
+test('a user name that may be a word counts only where it names a user', () => {
+  const names = ['max', 'main', 'alex', 'root', 'runner', 'localhost'];
+  const prose = 'max effort, on main, with Alex, alex@acme.dev, origin/main, plugin-alex@store, the user max limit, Alex’s chat';
+  assert.deepEqual(leaks(`<p aria-label="${prose}">${prose}</p>`, names), []);
+  for (const [text, name] of [
+    ['cd ~alex', '~alex'],
+    ['alex@studio ~ %', 'alex'],
+    ['alex@studio.local', 'alex'],
+    ['Alex’s MacBook Pro', 'Alex'],
+    ['alexs-mac', 'alex'],
+    ['user=alex', 'alex'],
+    ['user: Alex', 'Alex'],
+    ['Logged in as alex', 'alex'],
+  ]) {
+    assert.deepEqual(leaks(`<p>${text}</p>`, names), [name], text);
+  }
   assert.deepEqual(leaks('<p>/Users/alex/Code</p>', ['alex']), ['/Users/alex/Code']);
 });
 

@@ -83,9 +83,22 @@ class Component extends DCLogic {{
 """
 
 
-def telling(name):
-    """Whether a name is this machine's and not a word any board may hold, such as `max`, `main` or `alex`."""
-    return len(name) > 2 and (len(name) >= 8 or not name.isalpha()) and name.lower() != "localhost"
+# Names of CI machines, and words of every page.
+_COMMON = {"root", "runner", "user", "localhost"}
+
+
+def name_pattern(name):
+    """Finds a name of this machine. One that may be a word (`max`, `main`, `alex`) counts only where it names a user."""
+    start = rf"(?<![a-z0-9]){re.escape(name)}"
+    word = rf"{start}(?![a-z0-9])"
+    if len(name) < 8 and name.isalpha():
+        mail = r"[\w.-]+\.(?:com|dev|org|io|net|test|example)\b"
+        machine = r"(?:mac|macbook|imac|pc|laptop|computer|desktop)\b"
+        word = (
+            rf"(?:~{word}|(?<![._-]){word}(?=@(?!{mail})\w)|{start}(?=(?:[’']?s)?[ -]+{machine})"
+            rf"|(?<=user[:=]){word}|(?<=user: ){word}|(?<=user=\"){word}|(?<=logname=){word}|(?<=logged in as ){word})"
+        )
+    return re.compile(f"(?i){word}")
 
 
 def machine_names():
@@ -97,29 +110,32 @@ def machine_names():
 # The shapes of a local path, shared with design/tools/check.mjs, which holds committed boards to the same rule.
 with open(os.path.join(CANVAS, "lib", "local-paths.json")) as f:
     _PATHS = json.load(f)
-LOCAL_PATH = re.compile(_PATHS["path"])
+LOCAL_PATH = re.compile(f"(?:{'|'.join(_PATHS['paths'])}){_PATHS['end']}")
 ENCODED = re.compile(_PATHS["encoded"])
 BASE64 = re.compile(_PATHS["base64"])
+WRAP = re.compile(_PATHS["wrap"])
 
 
 def _decoded(match):
-    by_hex, entity_hex, entity, slash, _ = match.groups()
+    by_hex, entity_hex, entity, octal, slash, _ = match.groups()
     if by_hex or entity_hex:
         return chr(int(by_hex or entity_hex, 16))
-    if entity:
-        return chr(int(entity))
+    if entity or octal:
+        return chr(int(entity) if entity else int(octal, 8))
     return "/" if slash else "\\"
 
 
 def _unbase64(run):
+    """What a base64 run says. Dropping the NULs reads UTF-16 as well."""
     run = run.replace("-", "+").replace("_", "/")
     run = run[:-1] if len(run) % 4 == 1 else run
-    return base64.b64decode(run + "=" * (-len(run) % 4)).decode("latin-1")
+    return base64.b64decode(run + "=" * (-len(run) % 4)).decode("latin-1").replace("\0", "")
 
 
 def local_paths(text):
     """Home and temp paths of a machine, escaped ones (`%2FUsers%2F…`) and base64 ones included."""
-    texts = [text, *map(_unbase64, BASE64.findall(text))]
+    runs = {*BASE64.findall(text), *BASE64.findall(WRAP.sub("", text))}
+    texts = [text, *map(_unbase64, runs)]
     return sorted({path for t in texts for path in LOCAL_PATH.findall(ENCODED.sub(_decoded, t))})
 
 
@@ -151,10 +167,10 @@ def leaks(text, names=None):
     markup = _Markup()
     markup.feed(text)
     markup.close()
-    for name in sorted(filter(telling, names)):
-        word = re.compile(rf"(?i)(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])")
+    for name in sorted(n for n in names if len(n) > 2 and n.lower() not in _COMMON):
+        pattern = name_pattern(name)
         for part in markup.parts:
-            found += word.findall(part)
+            found += pattern.findall(part)
     return sorted(set(found))
 
 

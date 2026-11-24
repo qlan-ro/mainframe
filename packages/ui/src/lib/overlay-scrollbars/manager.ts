@@ -92,13 +92,18 @@ export function installOverlayScrollbars(): () => void {
       } else if (entry.visible) entry.place(refresh);
     }
   };
-  const schedulePlace = (): void => {
+  let refreshNext = false;
+  const schedulePlace = (refresh: boolean): void => {
+    refreshNext ||= refresh;
     if (!frame)
       frame = requestAnimationFrame(() => {
         frame = 0;
-        placeVisible(false);
+        placeVisible(refreshNext);
+        refreshNext = false;
       });
   };
+  // A resize moves what covers a thumb; a scroll moves the thumb, and what covers it is looked at again soon enough.
+  const onResize = (): void => schedulePlace(true);
 
   const hover = (scroller: Element | null): void => {
     if (scroller === hovered) return;
@@ -111,7 +116,7 @@ export function installOverlayScrollbars(): () => void {
   const onScroll = (event: Event): void => {
     const scroller = event.target;
     // A scroll moves nested scrollers too, so every visible thumb is re-placed.
-    schedulePlace();
+    schedulePlace(false);
     if (!(scroller instanceof Element) || !scrollsAnyAxis(scroller)) return;
     const entry = barsFor(scroller);
     if (!entry.visible) entry.show();
@@ -130,14 +135,14 @@ export function installOverlayScrollbars(): () => void {
   document.addEventListener('scroll', onScroll, { capture: true, passive: true });
   document.addEventListener('pointerover', onPointerOver, { passive: true });
   document.documentElement.addEventListener('pointerleave', onPointerLeave);
-  window.addEventListener('resize', schedulePlace);
+  window.addEventListener('resize', onResize);
   const recheck = setInterval(() => placeVisible(true), RECHECK_MS);
 
   return () => {
     document.removeEventListener('scroll', onScroll, { capture: true });
     document.removeEventListener('pointerover', onPointerOver);
     document.documentElement.removeEventListener('pointerleave', onPointerLeave);
-    window.removeEventListener('resize', schedulePlace);
+    window.removeEventListener('resize', onResize);
     clearInterval(recheck);
     cancelAnimationFrame(frame);
     for (const entry of bars.values()) entry.dispose();

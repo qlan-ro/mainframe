@@ -304,6 +304,23 @@ describe('overlay scrollbar manager', () => {
       expect(thumb.style.clipPath).toBe('');
     });
 
+    it('looks again at what covers the thumb in the frame after a resize, a scroll in that frame included', () => {
+      const scroller = makeScroller();
+      const popover = document.createElement('div');
+      document.body.append(popover);
+      let edge = 0;
+      paint((y) => (y < edge ? [popover, scroller] : [scroller]));
+      pointerOver(scroller);
+      edge = 20;
+      scroller.dispatchEvent(new Event('scroll'));
+      vi.advanceTimersByTime(17);
+      expect(thumbs()[0]!.style.clipPath).toBe('');
+      window.dispatchEvent(new Event('resize'));
+      scroller.dispatchEvent(new Event('scroll'));
+      vi.advanceTimersByTime(17);
+      expect(thumbs()[0]!.style.clipPath).toBe('polygon(0px 18px, 100% 18px, 100% 98px, 0px 98px)');
+    });
+
     it('never hides the thumb that is being dragged', () => {
       const scroller = makeScroller();
       const dialog = document.createElement('div');

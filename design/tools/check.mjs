@@ -86,17 +86,22 @@ export function checkCanvas(cfg, repo = REPO) {
 const LOCAL = JSON.parse(readFileSync(join(REPO, 'design/canvas/lib/local-paths.json'), 'utf8'));
 const ENCODED = new RegExp(LOCAL.encoded, 'g');
 const BASE64 = new RegExp(LOCAL.base64, 'g');
-const LOCAL_PATH = new RegExp(LOCAL.path, 'g');
+const WRAP = new RegExp(LOCAL.wrap, 'g');
+const LOCAL_PATH = new RegExp(`(?:${LOCAL.paths.join('|')})${LOCAL.end}`, 'g');
 
-const decoded = (_, byHex, entityHex, entity, slash) => {
+const decoded = (_, byHex, entityHex, entity, octal, slash) => {
   if (byHex || entityHex) return String.fromCharCode(parseInt(byHex || entityHex, 16));
-  if (entity) return String.fromCharCode(Number(entity));
+  if (entity || octal) return String.fromCharCode(entity ? Number(entity) : parseInt(octal, 8));
   return slash ? '/' : '\\';
 };
 
+/** What a base64 run says. Dropping the NULs reads UTF-16 as well. */
+const unbase64 = (run) => Buffer.from(run, 'base64').toString('latin1').replaceAll('\0', '');
+
 /** Home and temp paths of a machine in `text`, escaped and base64 ones included. `lib/boards.py` holds new boards to the same rule. */
 export function localPaths(text) {
-  const texts = [text, ...(text.match(BASE64) ?? []).map((run) => Buffer.from(run, 'base64').toString('latin1'))];
+  const runs = new Set([text, text.replace(WRAP, '')].flatMap((t) => t.match(BASE64) ?? []));
+  const texts = [text, ...[...runs].map(unbase64)];
   return [...new Set(texts.flatMap((t) => t.replace(ENCODED, decoded).match(LOCAL_PATH) ?? []))].sort();
 }
 
