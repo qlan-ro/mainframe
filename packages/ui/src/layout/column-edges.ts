@@ -29,10 +29,11 @@ export const useColumnEdges = create<ColumnEdgesStore>()((set) => ({
 }));
 
 /**
- * Ref for a column: reports its left edge while mounted. A column's left edge
- * only moves when the column is resized too (the sidebar, the divider and the
- * window all reflow the row), so a ResizeObserver sees every move, including
- * each frame of the sidebar's collapse.
+ * Ref for a column: reports its left edge while mounted. Watching the column
+ * alone is not enough: one clamped at its minimum MOVES without resizing. So the
+ * row it sits in is watched too, and the window, which covers a row that moves
+ * whole. Between them every reflow is seen, including each frame of the
+ * sidebar's collapse.
  */
 export function useColumnEdge(column: ColumnId): RefCallback<HTMLElement> {
   return useCallback(
@@ -42,9 +43,12 @@ export function useColumnEdge(column: ColumnId): RefCallback<HTMLElement> {
       const measure = () => report(column, el.getBoundingClientRect().left);
       const observer = new ResizeObserver(measure);
       observer.observe(el);
+      if (el.parentElement) observer.observe(el.parentElement);
+      window.addEventListener('resize', measure);
       measure();
       return () => {
         observer.disconnect();
+        window.removeEventListener('resize', measure);
         report(column, null);
       };
     },

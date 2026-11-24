@@ -201,6 +201,19 @@ describe('WorkspaceTabs — nothing open', () => {
 });
 
 describe('WorkspaceTabs — keyboard', () => {
+  it('moves focus to the Workspace toggle when the last tab closes, since the workspace goes with it', () => {
+    const pane = paneWith([terminalTab]);
+    const { getByRole, getByTestId } = render(
+      <>
+        <WorkspaceTabs pane={pane} />
+        <button type="button" data-tut="workspace" data-testid="toggle" />
+      </>,
+    );
+    getByRole('tab').focus();
+    fireEvent.keyDown(getByRole('tab'), { key: 'Backspace' });
+    expect(getByTestId('toggle')).toHaveFocus();
+  });
+
   it('is one tab stop on the selected tab, and arrows reach the others', () => {
     const { getAllByRole } = render(<WorkspaceTabs pane={paneWith([terminalTab, previewTab])} />);
     const [first, second] = getAllByRole('tab');

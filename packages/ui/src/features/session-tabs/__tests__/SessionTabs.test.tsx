@@ -382,14 +382,38 @@ describe('keyboard', () => {
     expect(tab('chat-a')).toHaveFocus();
   });
 
-  it('closes the focused tab with Delete', () => {
+  it.each(['Delete', 'Backspace'])('closes the focused tab with %s and moves focus to its neighbour', (key) => {
     seed('chat-a');
     render();
     tab('chat-b').focus();
 
-    fireEvent.keyDown(tab('chat-b'), { key: 'Delete' });
+    fireEvent.keyDown(tab('chat-b'), { key });
 
     expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a']);
+    expect(screen.queryByTestId('session-tab-chat-b')).toBeNull();
+    expect(tab('chat-p')).toHaveFocus();
+  });
+
+  it('moves focus back to the previous tab when the last one closes', () => {
+    seed('chat-a');
+    render();
+    tab('chat-p').focus();
+
+    fireEvent.keyDown(tab('chat-p'), { key: 'Delete' });
+
+    expect(tab('chat-b')).toHaveFocus();
+  });
+
+  it('moves focus to the + when the only tab closes', () => {
+    itemsValue = SESSIONS;
+    mainThreadIdValue = 'chat-a';
+    useSessionTabsStore.setState({ tabIds: ['chat-a'], previewId: null, hydrated: true });
+    render();
+    tab('chat-a').focus();
+
+    fireEvent.keyDown(tab('chat-a'), { key: 'Delete' });
+
+    expect(screen.getByTestId('session-tabs-new')).toHaveFocus();
   });
 });
 

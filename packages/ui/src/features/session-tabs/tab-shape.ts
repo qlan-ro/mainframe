@@ -34,15 +34,16 @@ export const TAB_CLOSE_OVERLAY =
 /** A 24px close button: small enough for the pill, large enough to hit. */
 export const TAB_CLOSE_BUTTON = 'size-6 rounded-sm text-muted-foreground hover:bg-foreground/8 hover:text-foreground';
 
-/** Marks the button `Delete` presses on a focused tab. */
+/** Marks the button `Delete` or `Backspace` presses on a focused tab. */
 export const TAB_CLOSE_ATTR = { 'data-tab-close': '' } as const;
 
 /**
  * Keyboard for a `role="tablist"`: arrows, Home and End move focus between tabs,
- * Enter and Space select, Delete closes. Ignores keys from controls nested in a
- * tab, which handle their own.
+ * Enter and Space select, Delete or Backspace closes and moves focus to the tab
+ * that takes its place, or after the last one to `afterLast` (by default the strip's
+ * `+`). Ignores keys from controls nested in a tab, which handle their own.
  */
-export function onTabListKeyDown(event: KeyboardEvent<HTMLElement>): void {
+export function onTabListKeyDown(event: KeyboardEvent<HTMLElement>, afterLast?: () => HTMLElement | null): void {
   const tab = event.target as HTMLElement;
   if (tab.getAttribute('role') !== 'tab') return;
   const tabs = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')];
@@ -59,8 +60,11 @@ export function onTabListKeyDown(event: KeyboardEvent<HTMLElement>): void {
   } else if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
     tab.click();
-  } else if (event.key === 'Delete') {
+  } else if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault();
+    // Before the close: the closing tab takes focus with it, and the neighbour survives the render.
+    const next = tabs[index + 1] ?? tabs[index - 1] ?? afterLast?.() ?? event.currentTarget.nextElementSibling;
+    if (next instanceof HTMLElement) next.focus();
     tab.querySelector<HTMLElement>('[data-tab-close]')?.click();
   }
 }

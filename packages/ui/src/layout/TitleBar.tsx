@@ -37,12 +37,14 @@ import { SidebarLeftGlyph } from './surface-icons';
 const TRAFFIC_LIGHTS_WIDTH = 80;
 /** Between the usage capsule and the separator that follows it. */
 const CAPSULE_GAP = 12;
+/** Below this the capsule is no use; the narrowest sidebar still leaves it more. */
+const MIN_CAPSULE_WIDTH = 160;
 
 /**
  * Lights, capsule and the first separator. While the sidebar is open the
- * segment ends on the sidebar's hairline and the capsule takes what is left; it
- * never goes below its collapsed size, so an opening sidebar slides out from
- * under a capsule that is already whole.
+ * segment ends on the sidebar's hairline and the capsule takes what is left. The
+ * minimum only holds while the sidebar slides open: at rest even the narrowest
+ * sidebar ends past it.
  */
 function SidebarSegment({ open, separator }: { open: boolean; separator: boolean }) {
   const edge = useColumnEdges((s) => s.content);
@@ -53,7 +55,7 @@ function SidebarSegment({ open, separator }: { open: boolean; separator: boolean
       data-collapsed={open ? undefined : ''}
       className="flex h-full shrink-0 items-center"
       style={
-        aligned ? { width: edge, minWidth: TRAFFIC_LIGHTS_WIDTH + USAGE_CAPSULE_WIDTH + CAPSULE_GAP + 1 } : undefined
+        aligned ? { width: edge, minWidth: TRAFFIC_LIGHTS_WIDTH + MIN_CAPSULE_WIDTH + CAPSULE_GAP + 1 } : undefined
       }
     >
       <div aria-hidden className="shrink-0" style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
@@ -84,6 +86,8 @@ function TrailingSegment({ workspaceLit, children }: { workspaceLit: boolean; ch
       data-testid="title-bar-trailing"
       className={cn(
         'flex h-full items-center pr-3',
+        // Over a narrow panel the gaps inside tighten, so the tabs get the room.
+        aligned && '@container/trailing',
         aligned || !workspaceLit ? 'shrink-0' : 'max-w-1/2 min-w-0 flex-initial',
       )}
       style={aligned ? { width: `calc(100% - ${edge - 1}px)` } : undefined}
@@ -104,22 +108,25 @@ export function TitleBar() {
     <div data-testid="title-bar" data-drag-region className="flex h-12 shrink-0 items-center bg-sidebar">
       <SidebarSegment open={open} separator={chats} />
 
-      <div data-testid="title-bar-chat-column" className="flex h-full min-w-0 flex-1 items-center gap-2 pl-1">
-        {!open && (
-          <Hint label="Show sidebar">
-            <Button
-              data-testid="show-sidebar-button"
-              aria-label="Show sidebar"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setOpen(true)}
-              className="text-muted-foreground"
-            >
-              <SidebarLeftGlyph size={16} />
-            </Button>
-          </Hint>
-        )}
-        {chats && <SessionTabs />}
+      {/* No padding of its own: it would hold 4px when the columns leave this segment none. */}
+      <div data-testid="title-bar-chat-column" className="h-full min-w-0 flex-1 overflow-hidden">
+        <div className="flex h-full min-w-0 items-center gap-2 pl-1">
+          {!open && (
+            <Hint label="Show sidebar">
+              <Button
+                data-testid="show-sidebar-button"
+                aria-label="Show sidebar"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setOpen(true)}
+                className="text-muted-foreground"
+              >
+                <SidebarLeftGlyph size={16} />
+              </Button>
+            </Hint>
+          )}
+          {chats && <SessionTabs />}
+        </div>
       </div>
 
       {chats && (
@@ -128,7 +135,7 @@ export function TitleBar() {
             <>
               <TitleBarSeparator testId="title-bar-separator-workspace" />
               <TitleBarWorkspace />
-              <TitleBarSeparator testId="title-bar-separator-actions" className="mx-2" />
+              <TitleBarSeparator testId="title-bar-separator-actions" className="mx-2 @max-[26rem]/trailing:mx-1" />
             </>
           )}
           <TitleBarActions />

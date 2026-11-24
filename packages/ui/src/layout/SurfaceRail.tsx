@@ -31,19 +31,20 @@ export function SurfaceRail() {
     <div role="group" aria-label="View" data-testid="surface-rail" className="flex shrink-0 gap-0.5">
       {SURFACES.map(({ id, label, shortcut, Icon }) => {
         const chord = chordHint(shortcut);
+        // Dynamic floor: the single lit surface (whichever it is) can't be toggled
+        // off. `aria-disabled`, not `disabled`, so the tooltip can say why.
+        const floor = isSurfaceFloor(layout, id);
+        const hint = chord == null ? label : `${label} ${chord}`;
         return (
           <TitleBarButton
             key={id}
             testId={`surface-rail-${id}`}
             data-tut={id === 'workspace' ? 'workspace' : undefined}
             label={label}
-            hint={chord == null ? label : `${label} ${chord}`}
+            hint={floor ? `${label} is the only surface left` : hint}
             on={isSurfaceLit(layout, id)}
-            // Dynamic floor: the single lit surface (whichever it is) can't be
-            // toggled off. It still reads as lit, so it does not dim.
-            disabled={isSurfaceFloor(layout, id)}
-            className="disabled:opacity-100"
-            onClick={() => toggleSurface(id)}
+            aria-disabled={floor || undefined}
+            onClick={() => !floor && toggleSurface(id)}
           >
             <Icon size={16} />
           </TitleBarButton>

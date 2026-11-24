@@ -332,7 +332,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `skills-section-source`
 - `skills-section-source-error`
 
-## session (21)
+## session (20)
 
 - `session-panel-launch-spinner-${…}`
 - `session-panel-section-prs`
@@ -351,7 +351,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `session-tab-ctx-side-chat`
 - `session-tab-hint-${…}`
 - `session-tab-open-beside-${…}`
-- `session-tab-provider-${…}`
 - `session-tab-waiting-${…}`
 - `session-tabs`
 - `session-tabs-zone-group`
@@ -607,11 +606,10 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1090) minus e2e ref
 - `thread-find-next`
 - `thread-find-prev`
 
-## title (3)
+## title (2)
 
 - `title-bar-actions`
 - `title-bar-chat-column`
-- `title-bar-sidebar-section`
 
 ## tunnel (3)
 

@@ -94,8 +94,9 @@ function SurfaceHostImpl() {
               ref={name === 'workspace' && i === 1 ? workspaceEdge : undefined}
               data-surface={name}
               style={{ flex: twoCol ? (topFlex[name] ?? 1) : 1 }}
-              // The workspace keeps room for its title-bar segment (W1).
-              className={cn(name === 'workspace' ? 'min-w-80' : 'min-w-0', PANEL_LAYOUT)}
+              // The workspace keeps room for its title-bar segment (W1), or the
+              // whole row less the divider when the row itself is narrower.
+              className={cn(name === 'workspace' ? 'min-w-[min(20rem,calc(100%-1px))]' : 'min-w-0', PANEL_LAYOUT)}
             >
               <SurfaceView name={name} />
             </div>

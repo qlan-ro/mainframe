@@ -23,13 +23,27 @@ import { WorkspaceTabPill } from './WorkspaceTabPill';
 import { WorkspaceUrlEntry } from './WorkspaceUrlEntry';
 import type { RunPane } from '@/store/run-pane';
 
-/** Scrolls the selected tab into view when it changes and whenever the row is resized. */
+/** Closing the last tab collapses the workspace and its `+`; the toggle that reopens it stays. */
+const workspaceToggle = () => document.querySelector<HTMLElement>('[data-tut="workspace"]');
+
+/** How far the row's edge fades reach (`--scroll-fade-size`). */
+const FADE_SIZE = 20;
+
+/**
+ * Scrolls the selected tab into view when it changes and whenever the row is
+ * resized. A tab that fills the row (`data-filled`) has no room between the edge
+ * fades, so they go: they would dissolve its close button.
+ */
 function useSelectedTabInView(rowRef: RefObject<HTMLDivElement | null>, selected: string | null | undefined): void {
   useEffect(() => {
     const row = rowRef.current;
     if (row == null || selected == null) return undefined;
-    const reveal = () =>
-      row.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    const reveal = () => {
+      const tab = row.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (tab == null) return;
+      row.toggleAttribute('data-filled', tab.offsetWidth > row.clientWidth - 2 * FADE_SIZE);
+      tab.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    };
     const observer = new ResizeObserver(reveal);
     observer.observe(row);
     reveal();
@@ -68,8 +82,8 @@ export function WorkspaceTabs({ pane }: { pane: RunPane | null }) {
           data-scrollbar="none"
           role="tablist"
           aria-label="Workspace tabs"
-          onKeyDown={onTabListKeyDown}
-          className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto scroll-fade-x"
+          onKeyDown={(event) => onTabListKeyDown(event, workspaceToggle)}
+          className="group/tabs flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto scroll-fade-x data-filled:[--scroll-fade-size:0px]"
         >
           {pane.tabs.map((t) => (
             <WorkspaceTabPill

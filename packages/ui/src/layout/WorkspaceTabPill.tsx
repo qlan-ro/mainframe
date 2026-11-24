@@ -9,7 +9,8 @@
  * git-compare = a diff). Its INK carries the tab's active state instead — one
  * rule for every kind, rather than a per-kind hue.
  *
- * The selected tab never truncates (`WorkspaceTabs` keeps it in view); the others
+ * The selected tab keeps its whole title, and `WorkspaceTabs` keeps it in view. Only
+ * when the row itself is narrower does its title fade, so its × stays reachable. The others
  * shrink to 60px (glyph plus a few letters) and show their × over the end of the
  * title on hover or keyboard focus, so it takes no space.
  *
@@ -87,30 +88,21 @@ export function WorkspaceTabPill({ pane, tab, configs, scopeStatuses, onStop }: 
         isActive,
         // Keeps a tab scrolled into view clear of the fades at the ends of the row.
         cn(
-          'scroll-mx-5 gap-1.5 pl-2.5',
-          isActive ? 'shrink-0 pr-1' : 'max-w-44 shrink pr-2.5',
+          'scroll-mx-5 gap-1.5 pl-2.5 group-data-filled/tabs:scroll-mx-0',
+          isActive ? 'max-w-full shrink-0 pr-1' : 'max-w-44 shrink pr-2.5',
           !isActive && (live ? 'min-w-21 pr-1' : 'min-w-15'),
         ),
       )}
       style={tabHoverStyle('--sidebar')}
     >
       <Glyph className={cn('size-3 shrink-0', isActive ? 'text-foreground' : 'text-muted-foreground')} />
-      {isActive ? (
-        <span
-          data-testid={`workspace-tab-title-${tab.id}`}
-          className={cn('whitespace-nowrap', tab.mode === 'preview' && 'italic')}
-        >
-          {tab.title}
-        </span>
-      ) : (
-        <FadeLabel
-          data-testid={`workspace-tab-title-${tab.id}`}
-          className={cn('flex-1', tab.mode === 'preview' && 'italic')}
-          tooltipDelay={600}
-        >
-          {tab.title}
-        </FadeLabel>
-      )}
+      <FadeLabel
+        data-testid={`workspace-tab-title-${tab.id}`}
+        className={cn(!isActive && 'flex-1', tab.mode === 'preview' && 'italic')}
+        tooltipDelay={600}
+      >
+        {tab.title}
+      </FadeLabel>
       {live && config && (
         <Hint label={`Stop ${tab.title}`}>
           <Button

@@ -160,6 +160,14 @@ describe('SurfDivider — thickness', () => {
     expect(getByTestId('surf-divider-x').style.width).toBe('1px');
   });
 
+  it('keeps its drag target off the right panel, which may be a native webview', () => {
+    const containerRef = makeContainerRef();
+    const { getByTestId } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={vi.fn()} />);
+    const target = getByTestId('surf-divider-x').querySelector<HTMLElement>('[data-edge-handle]')!;
+    expect(target.style.right).toBe('0px');
+    expect(target.style.width).toBe('9px');
+  });
+
   it('takes a wider gutter', () => {
     const containerRef = makeContainerRef();
     const { getByTestId } = render(<SurfDivider axis="y" containerRef={containerRef} onFrac={vi.fn()} gutter={9} />);

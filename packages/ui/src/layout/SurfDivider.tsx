@@ -12,8 +12,10 @@ interface Props {
 const HIT_SIZE = 9;
 
 /**
- * Drag handle between surface panels: a 1px hairline with a 9px drag target
- * over it. On hover: a 2px accent line appears.
+ * Drag handle between surface panels: a 1px hairline with a 9px drag target. The
+ * vertical one's target lies over the left panel only: the right one can hold a
+ * native webview, which sits above the DOM and would swallow the press.
+ * `data-edge-handle` lets the left panel's scrollbar thumb share those pixels. On hover: a 2px accent line appears.
  * On drag: calls onFrac(0.18–0.82) so the caller can update flex weights.
  */
 export function SurfDivider({ axis, containerRef, onFrac, gutter = 1 }: Props) {
@@ -62,10 +64,10 @@ export function SurfDivider({ axis, containerRef, onFrac, gutter = 1 }: Props) {
       className={`relative z-[6] flex items-center justify-center self-stretch ${isX ? 'cursor-col-resize' : 'cursor-row-resize'}`}
     >
       <div style={{ [isX ? 'width' : 'height']: 1, [isX ? 'height' : 'width']: '100%' }} className="bg-border" />
-      {/* Reaches past a 1px divider on both sides, a little further into the next panel. */}
       <div
         aria-hidden
-        style={isX ? { top: 0, bottom: 0, left: -3, width: HIT_SIZE } : { left: 0, right: 0, top: 0, height: HIT_SIZE }}
+        data-edge-handle=""
+        style={isX ? { top: 0, bottom: 0, right: 0, width: HIT_SIZE } : { left: 0, right: 0, top: 0, height: HIT_SIZE }}
         className="absolute"
       />
       {/* Hover accent: 2px primary line that fades in on hover/drag. */}

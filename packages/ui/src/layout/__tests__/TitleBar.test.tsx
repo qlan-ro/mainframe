@@ -54,6 +54,14 @@ describe('TitleBar — sidebar segment', () => {
     expect(screen.getByTestId('usage-capsule').style.width).toBe('100%');
   });
 
+  it('lets the narrowest sidebar (208px, after the 56px rail) set the edge', () => {
+    useColumnEdges.setState({ content: 264 });
+    renderBar();
+    const { width, minWidth } = screen.getByTestId('title-bar-sidebar-segment').style;
+    expect(width).toBe('264px');
+    expect(parseInt(minWidth, 10)).toBeLessThanOrEqual(264);
+  });
+
   it('follows the sidebar as it is resized', () => {
     renderBar();
     act(() => useColumnEdges.getState().report('content', 402));
@@ -130,10 +138,17 @@ describe('TitleBar — surface toggles', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('refuses to turn off the last lit surface', () => {
+  it('refuses to turn off the last lit surface, and says why', async () => {
     renderBar();
-    expect(screen.getByTestId('surface-rail-chat')).toBeDisabled();
-    expect(screen.getByTestId('surface-rail-workspace')).toBeEnabled();
+    const chat = screen.getByTestId('surface-rail-chat');
+    expect(chat).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('surface-rail-workspace')).not.toHaveAttribute('aria-disabled');
+
+    fireEvent.click(chat);
+    expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
+
+    fireEvent.focus(chat);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Chat is the only surface left');
   });
 });
 
