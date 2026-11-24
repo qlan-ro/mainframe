@@ -24,16 +24,21 @@ function read(): string[] {
 
 const pairKey = (sessionId: string, sideChatId: string): string => `${sessionId}:${sideChatId}`;
 
+/** The old panel's fold belongs to the side chat itself, so it holds in every session that shows it. */
+const FOLDED = '*';
+
 /** True the first time it is asked about a side chat in a session, unless the old panel was folded away. */
 export function claimFirstOpen(sessionId: string, sideChatId: string, parentChatId: string): boolean {
   const pairs = read();
   const key = pairKey(sessionId, sideChatId);
-  if (pairs.includes(key)) return false;
+  const foldedKey = pairKey(FOLDED, sideChatId);
+  if (pairs.includes(key) || pairs.includes(foldedKey)) return false;
   let folded = false;
   try {
-    localStorage.setItem(KEY, JSON.stringify([...pairs, key].slice(-MAX_PAIRS)));
-    folded = localStorage.getItem(`${COLLAPSED_PREFIX}${parentChatId}`) === 'true';
-    localStorage.removeItem(`${COLLAPSED_PREFIX}${parentChatId}`);
+    const legacyKey = `${COLLAPSED_PREFIX}${parentChatId}`;
+    folded = localStorage.getItem(legacyKey) === 'true';
+    localStorage.setItem(KEY, JSON.stringify([...pairs, folded ? foldedKey : key].slice(-MAX_PAIRS)));
+    localStorage.removeItem(legacyKey);
   } catch {
     /* expected: with no storage the choice lasts for this call only */
   }
