@@ -60,8 +60,9 @@ export function useSessionTabHandlers(activeTabId: string | null, displayIds: st
     const zonesStore = useZonesStore.getState();
     if (zonesStore.zones == null) return;
     const visible = splitVisible(zonesStore.zones, activeTabId, zonesStore.splitFits);
-    zonesStore.closeSplit();
-    if (visible && id !== activeTabId) aui.threads.switchToThread(id);
+    const moves = visible && id !== activeTabId;
+    zonesStore.closeSplit(moves ? (activeTabId ?? undefined) : undefined);
+    if (moves) aui.threads.switchToThread(id);
   };
 
   const onClose = (id: string) => {
@@ -73,9 +74,10 @@ export function useSessionTabHandlers(activeTabId: string | null, displayIds: st
     if (zonesStore.zones?.includes(id)) {
       const visible = activeTabId != null && zonesStore.zones.includes(activeTabId);
       const other = zonesStore.zones[0] === id ? zonesStore.zones[1] : zonesStore.zones[0];
-      zonesStore.closeSplit();
+      const moves = visible && other !== activeTabId;
+      zonesStore.closeSplit(moves ? (activeTabId ?? undefined) : undefined);
       closeTab(id);
-      if (visible && other !== activeTabId) aui.threads.switchToThread(other);
+      if (moves) aui.threads.switchToThread(other);
       return;
     }
     const next = nextActiveAfterClose(displayIds, id, activeTabId);

@@ -31,7 +31,15 @@ import { SessionTabPair } from './SessionTabPair';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { toTabEntry } from './tab-entry';
 import { useSessionTabsStore } from './store';
-import { canonicalTabId, displayedTabIds, nextTabId, stripEntries, tabAtIndex, tabHintIndex } from './tabs-model';
+import {
+  canonicalTabId,
+  displayedTabIds,
+  heldTabIds,
+  nextTabId,
+  stripEntries,
+  tabAtIndex,
+  tabHintIndex,
+} from './tabs-model';
 import { useSessionTabHandlers } from './use-session-tab-handlers';
 import { useSessionTabsSync } from './use-session-tabs-sync';
 
@@ -58,13 +66,13 @@ export function SessionTabs() {
   // Pinned tabs in order, then the peek, then the unsent draft. Passing no
   // zones keeps the PIN order, which is what a close resolves its successor
   // against; the regrouped order below is a display concern.
-  const tabsState = { tabIds, previewId, draftId };
+  const tabsState = { tabIds, previewId, draftId, heldIds: heldTabIds({ tabIds, previewId, draftId }, zones, items) };
   const displayIds = displayedTabIds(tabsState, null, activeTabId);
   const ordered = displayedTabIds(tabsState, zones, activeTabId);
   const splitFits = useZonesStore((s) => s.splitFits);
   const entries = stripEntries(tabsState, zones, activeTabId, splitFits);
   const entryOf = (id: string): SessionTabEntry =>
-    toTabEntry(id, items, projectNames, activeTabId, id === previewId, adaptersById);
+    toTabEntry(id, items, projectNames, activeTabId, id !== draftId && !tabIds.includes(id), adaptersById);
 
   const actions = useSessionTabHandlers(activeTabId, displayIds);
 

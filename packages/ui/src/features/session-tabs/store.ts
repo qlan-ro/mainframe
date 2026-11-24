@@ -11,6 +11,7 @@
  */
 import { create } from 'zustand';
 import { isRegisteredSideChatId } from '@/features/side-chat/side-chat-ids';
+import { useZonesStore } from '@/features/chat/zones/zones-store';
 import type { TabSlot, TabsState } from './tabs-model';
 
 interface SessionTabsStore extends TabsState {
@@ -32,7 +33,7 @@ interface SessionTabsStore extends TabsState {
    * user just created, `pinned` for a tab something else is keeping open.
    */
   ensureTab: (id: string, slot?: TabSlot) => void;
-  /** Preview or draft → pinned. A no-op for anything already pinned or not open. */
+  /** Preview, draft or split-held member → pinned. A no-op for anything already pinned or not open. */
   pinTab: (id: string) => void;
   closeTab: (id: string) => void;
   /**
@@ -75,6 +76,8 @@ export const useSessionTabsStore = create<SessionTabsStore>((set) => ({
       if (s.tabIds.includes(id)) return s;
       if (s.previewId === id) return { tabIds: [...s.tabIds, id], previewId: null };
       if (s.draftId === id) return { tabIds: [...s.tabIds, id], draftId: null };
+      // A split member shown without a slot ("held") pins in place.
+      if (useZonesStore.getState().zones?.includes(id)) return { tabIds: [...s.tabIds, id] };
       return s;
     }),
   closeTab: (id) =>
