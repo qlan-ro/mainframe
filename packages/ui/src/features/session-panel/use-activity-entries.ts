@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
-import { isRunningFromState, useChatExtras } from '@/features/chat/runtime/chat-extras';
+import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { useSessionItems } from '@/features/chat/orchestration/use-session-items';
 import { delegatedTasksOf } from '@/features/sessions/view-model/agent-provenance';
 import { listBackgroundTasks } from '@/lib/api/background-tasks';
-import { anchorEntries, delegatedEntries, scheduledEntries, taskEntries, transcriptTools } from './activity-model';
+import {
+  agentsAwaiting,
+  anchorEntries,
+  delegatedEntries,
+  markNeedsYou,
+  scheduledEntries,
+  taskEntries,
+  transcriptTools,
+} from './activity-model';
 import { useNow } from './background-activity-view';
 
 function mergedTasks(
@@ -41,6 +49,7 @@ export function useActivityEntries() {
   const extras = useChatExtras();
   const sessionItems = useSessionItems();
   const chatId = extras?.state.chatId;
+  const permissions = extras?.permissions;
   const liveTasks = extras?.state.backgroundTasks;
   const [loaded, setLoaded] = useState<{ chatId: string; tasks: BackgroundTask[] } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -69,15 +78,16 @@ export function useActivityEntries() {
     const tools = transcriptTools(messages);
     const listed = loaded?.chatId === chatId ? (loaded?.tasks ?? []) : [];
     const delegated = chatId ? delegatedTasksOf(sessionItems, chatId) : [];
+    const pending = new Set(Object.values(permissions ?? {}).map((entry) => entry.request.toolUseId));
     return anchorEntries(
       [
-        ...taskEntries(mergedTasks(listed, liveTasks), tools),
+        ...markNeedsYou(taskEntries(mergedTasks(listed, liveTasks), tools), agentsAwaiting(messages, pending)),
         ...delegatedEntries(delegated, tools),
         ...scheduledEntries(tools),
       ],
       messages,
     ).sort((a, b) => b.startedAt - a.startedAt);
-  }, [messages, loaded, chatId, liveTasks, sessionItems]);
+  }, [messages, loaded, chatId, liveTasks, sessionItems, permissions]);
 
   return {
     entries,
@@ -85,7 +95,5 @@ export function useActivityEntries() {
     adapterId: extras?.state.chatConfig?.adapterId,
     loadError,
     now,
-    sessionRunning: extras ? isRunningFromState(extras.state) : false,
-    sessionWaiting: extras ? Object.keys(extras.state.interactions.permissions).length > 0 : false,
   };
 }

@@ -64,9 +64,6 @@
  *                                               the ONE scrolling panel column; there is no
  *                                               more per-card close (`session-panel-card-close-*`
  *                                               is gone — the whole panel opens/closes together)
- *   session-panel-launch-live                 — the Launch section's OWN live dot, in its eyebrow
- *                                               header (PanelEyebrow) — this is where the run
- *                                               signal now lives, not on any outside button
  *   session-panel-launch-row-<name>           — a Launch-section config row
  *   session-panel-launch-start-<name> / -stop-<name> — the row's action glyph. A `span`
  *                                               INSIDE the row `button`, so a click on either
@@ -83,8 +80,7 @@
  * CARD replaced them. The shell redesign then deleted the floating rail itself
  * (`SessionPanelRail`/`SessionRailButton`) — there is no per-card button or dot
  * left outside the panel at all. `session-panel-toggle` is the only switch, for the
- * WHOLE panel; the Launch section's live dot moved into its own eyebrow header
- * (`session-panel-launch-live`). Three consequences this file has to respect:
+ * WHOLE panel; a Launch row's `data-live` carries its run state. Three consequences this file has to respect:
  *   1. The panel lives on the CHAT surface. With chat and workspace both lit,
  *      the chat host never clears `INLINE_MIN_WIDTH` (1044) here, so the panel
  *      FLOATS: `session-panel-toggle` opens it inside `session-panel-overlay`.
@@ -179,16 +175,10 @@ async function openSessionPanel(page: Page) {
 /**
  * Close the whole session panel so the next test starts without it.
  *
- * Docked, the header toggle closes it. Floated, the full-height overlay covers
- * the header (and its toggle), so the scrim — the overlay's light-dismiss — closes it.
+ * Docked or floated, the header toggle closes it: the float starts under the header.
  */
 async function closeSessionPanel(page: Page): Promise<void> {
-  const root = page.getByTestId('session-panel-root');
-  // A click on the scrim, not Escape: after a row click a hint tooltip can be
-  // open, and Escape closes that first.
-  if ((await root.getAttribute('data-mode')) === 'overlay') {
-    await page.getByTestId('session-panel-scrim').click({ position: { x: 10, y: 200 } });
-  } else await page.getByTestId('session-panel-toggle').click();
+  await page.getByTestId('session-panel-toggle').click();
   await expect(page.getByTestId('session-panel-root')).toHaveCount(0, { timeout: 5_000 });
 }
 
@@ -435,30 +425,27 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
   // Successor to "the rail then runs/stops it in one click" (T6.4). The floating
   // rail and its per-card quick action are both gone: `session-panel-toggle` opens
   // the whole panel with a static accessible name ("Show/Hide session
-  // details"), and the run signal it used to carry on the card's own button now
-  // lives on the Launch section's eyebrow header. So the run/stop pair is
-  // driven from the section's row — the only place that acts now — and the
-  // section's live dot is asserted as the MIRROR of that state, against the
+  // details"), so the run/stop pair is driven from the section's row — the only
+  // place that acts now — and the row's live state is asserted against the
   // daemon's own status rather than any button's self-report.
-  test('the section row runs and stops a config; the eyebrow mirrors the live state with a dot', async () => {
+  test('the section row runs and stops a config, and mirrors the live state', async () => {
     const { page } = app;
-    const dot = page.getByTestId('session-panel-launch-live');
     const panel = await openSessionPanel(page);
+    const row = panel.getByTestId('session-panel-launch-row-sleep-long');
 
-    // The preceding test left sleep-long stopped, and nothing else in this
-    // describe is live — so the eyebrow carries no dot yet.
+    // The preceding test left sleep-long stopped.
     await expect(panel.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible({ timeout: 10_000 });
-    await expect(dot).toHaveCount(0);
+    await expect(row).toHaveAttribute('data-live', 'false');
 
     await panel.getByTestId('session-panel-launch-start-sleep-long').click();
     await expect(panel.getByTestId('session-panel-launch-stop-sleep-long')).toBeVisible({ timeout: 15_000 });
     await expect.poll(() => launchStatus(page, project.projectId, 'sleep-long'), { timeout: 15_000 }).toBe('running');
-    await expect(dot).toBeVisible({ timeout: 10_000 });
+    await expect(row).toHaveAttribute('data-live', 'true', { timeout: 10_000 });
 
     await panel.getByTestId('session-panel-launch-stop-sleep-long').click();
     await expect(panel.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible({ timeout: 15_000 });
     await expect.poll(() => launchStatus(page, project.projectId, 'sleep-long'), { timeout: 15_000 }).toBe('stopped');
-    await expect(dot).toHaveCount(0, { timeout: 10_000 });
+    await expect(row).toHaveAttribute('data-live', 'false', { timeout: 10_000 });
 
     await closeSessionPanel(page);
   });

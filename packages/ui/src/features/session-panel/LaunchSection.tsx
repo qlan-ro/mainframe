@@ -1,10 +1,10 @@
 /**
  * LaunchSection — every launch configuration in the project, with its live
- * state and a one-click run/stop, as a section of the docked panel.
+ * state and a one-click run/stop.
  *
  * This is where config SELECTION lives: starting a config here stamps it as
- * the selection. There is deliberately no select-without-starting — selection
- * follows the run.
+ * the selection (bold). There is deliberately no select-without-starting —
+ * selection follows the run.
  *
  * `chatId` is mandatory on both calls: the daemon derives the effective
  * worktree path from it, and the scope key is itself chatId-dependent, so a
@@ -12,63 +12,45 @@
  */
 import { Eye, LoaderCircle, Play, Square, Terminal } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
-import { cn } from '@/lib/utils';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
 import { deriveLaunchRows, launchEmptyStateLabel, type LaunchRow } from './launch-view';
-import { PanelEyebrow } from './PanelEyebrow';
+import { PanelEmpty, PanelRow, PanelSection } from './PanelSection';
 
-const ROW = 'flex items-center gap-2 rounded-md px-2 py-1';
-
-function LaunchConfigRow({
-  row,
-  disabled,
-  onActivate,
-}: {
-  row: LaunchRow;
-  disabled: boolean;
-  onActivate: (row: LaunchRow) => void;
-}) {
-  const { config, name, status, live } = row;
-  const TypeIcon = config.preview ? Eye : Terminal;
-  const action = live ? 'stop' : 'start';
-
+function LaunchValue({ row }: { row: LaunchRow }) {
+  const { name, status, live } = row;
   return (
-    <Hint label={`${live ? 'Stop' : 'Start'} ${name}`}>
-      <button
-        type="button"
-        data-testid={`session-panel-launch-row-${name}`}
-        data-live={live}
-        disabled={disabled}
-        onClick={() => onActivate(row)}
-        className={cn(
-          ROW,
-          'w-full text-left transition-colors hover:bg-foreground/8 disabled:pointer-events-none disabled:opacity-50',
-        )}
-      >
-        <TypeIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <span className={cn('min-w-0 flex-1 truncate text-sm', row.selected && 'font-semibold')}>{name}</span>
-        {status === 'starting' && (
-          <LoaderCircle
-            data-testid={`session-panel-launch-spinner-${name}`}
-            className="size-3 shrink-0 animate-spin text-muted-foreground"
+    <>
+      {status === 'failed' && <span className="text-fail">failed</span>}
+      {status === 'starting' && (
+        <LoaderCircle
+          data-testid={`session-panel-launch-spinner-${name}`}
+          className="size-3 animate-spin text-primary motion-reduce:animate-none"
+          aria-hidden
+        />
+      )}
+      {/* The glyph is what the row does; the whole row acts. */}
+      <span data-testid={`session-panel-launch-${live ? 'stop' : 'start'}-${name}`}>
+        {live ? (
+          <Square className="size-3 text-destructive" fill="currentColor" aria-hidden />
+        ) : (
+          <Play
+            className="size-3 transition-colors group-hover/launch:text-primary group-focus-visible/launch:text-primary"
+            fill="currentColor"
             aria-hidden
           />
         )}
-        {/* The glyph IS the affordance — the whole row acts. Its testid mirrors
-            the retired toolbar picker's so the e2e swap is a selector change.
-            `primary` doubles as "run"; `success` is reserved for connected/healthy (D26). */}
-        <span data-testid={`session-panel-launch-${action}-${name}`} className="shrink-0">
-          {live ? (
-            <Square className="size-3.5 text-destructive" fill="currentColor" aria-hidden />
-          ) : (
-            <Play className="size-3.5 text-primary" fill="currentColor" aria-hidden />
-          )}
-        </span>
-      </button>
-    </Hint>
+      </span>
+    </>
   );
 }
+
+const STATUS_LABEL: Record<LaunchRow['status'], string> = {
+  starting: ', starting',
+  running: ', running',
+  failed: ', failed',
+  stopped: '',
+};
 
 export function LaunchSection({ port }: { port: number }) {
   const { projectId, chatId, noProject } = useActiveIdentity();
@@ -77,9 +59,7 @@ export function LaunchSection({ port }: { port: number }) {
     projectId,
     chatId,
   );
-
   const rows = deriveLaunchRows(configs, scopeStatuses, selectedConfigName);
-  const liveCount = rows.filter((row) => row.live).length;
 
   const activate = (row: LaunchRow) => {
     if (chatId == null) return;
@@ -88,19 +68,30 @@ export function LaunchSection({ port }: { port: number }) {
   };
 
   return (
-    <section data-testid="session-panel-card-launch" className="shrink-0">
-      <PanelEyebrow label="Launch" live={liveCount > 0} liveTestId="session-panel-launch-live" />
-      <div className="flex flex-col gap-0.5 px-2 pb-2">
-        {rows.length === 0 ? (
-          <div data-testid="session-panel-launch-empty" className={cn(ROW, 'text-sm text-muted-foreground')}>
-            {launchEmptyStateLabel(noProject)}
-          </div>
-        ) : (
-          rows.map((row) => (
-            <LaunchConfigRow key={row.name} row={row} disabled={chatId == null} onActivate={activate} />
-          ))
-        )}
-      </div>
-    </section>
+    <PanelSection section="launch" data-testid="session-panel-card-launch">
+      {rows.length === 0 ? (
+        <PanelEmpty data-testid="session-panel-launch-empty">{launchEmptyStateLabel(noProject)}</PanelEmpty>
+      ) : (
+        rows.map((row) => {
+          const action = `${row.live ? 'Stop' : 'Start'} ${row.name}`;
+          return (
+            <Hint key={row.name} label={action}>
+              <PanelRow
+                data-testid={`session-panel-launch-row-${row.name}`}
+                data-live={row.live}
+                aria-label={`${action}${STATUS_LABEL[row.status]}`}
+                disabled={chatId == null}
+                onClick={() => activate(row)}
+                className="group/launch"
+                icon={row.config.preview ? <Eye /> : <Terminal />}
+                label={row.name}
+                labelClassName={row.selected ? 'font-semibold' : undefined}
+                value={<LaunchValue row={row} />}
+              />
+            </Hint>
+          );
+        })
+      )}
+    </PanelSection>
   );
 }

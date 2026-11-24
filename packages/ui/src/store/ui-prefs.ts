@@ -42,6 +42,21 @@ const SESSION_PANEL_SECTION_DEFAULTS: Record<SessionPanelOpenSectionId, boolean>
   context: true,
 };
 
+/** Every section the session panel can show, in panel order. */
+export const SESSION_PANEL_SECTION_KEYS = [
+  'prs',
+  'plan',
+  'activity',
+  'launch',
+  'memory',
+  'mentions',
+  'skills',
+  'attachments',
+  'tasks',
+] as const;
+
+export type SessionPanelSectionKey = (typeof SESSION_PANEL_SECTION_KEYS)[number];
+
 export type SessionPanelSections = Partial<Record<SessionPanelOpenSectionId, boolean>>;
 
 /** Selector helper: a section with no recorded state falls back to its default. */
@@ -98,6 +113,8 @@ interface UiPrefsState {
   /** Per-section open state inside the session card. Absent keys read as the
    *  section's default; see isSessionPanelSectionOpen. */
   sessionPanelSections: SessionPanelSections;
+  /** Sections the viewer turned off in the panel's Sections menu. */
+  sessionPanelHiddenSections: readonly SessionPanelSectionKey[];
   /** Committed sizes for opt-in resizable dialogs. Absent keys read as that
    *  dialog's declared default; see dialogSizeFor. */
   dialogSizes: DialogSizes;
@@ -112,6 +129,7 @@ interface UiPrefsState {
   toggleSessionPanel: () => void;
   setSessionPanelOpen: (open: boolean) => void;
   toggleSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
+  setSessionPanelSectionShown: (key: SessionPanelSectionKey, shown: boolean) => void;
   /** Overwrites the committed size for one dialog key. Callers clamp before
    *  committing — the store doesn't know a dialog's measured minimum. */
   setDialogSize: (key: string, size: DialogSize) => void;
@@ -130,6 +148,7 @@ function partializeUiPrefs(s: UiPrefsState) {
     dontConfirmProviderSwitch: s.dontConfirmProviderSwitch,
     sessionPanelOpen: s.sessionPanelOpen,
     sessionPanelSections: s.sessionPanelSections,
+    sessionPanelHiddenSections: s.sessionPanelHiddenSections,
     dialogSizes: s.dialogSizes,
     sideChatFrac: s.sideChatFrac,
   };
@@ -153,6 +172,10 @@ function sanitizeBootSidebarView(value: unknown): SidebarView {
   return view === 'settings' ? 'chats' : view;
 }
 
+function sanitizeHiddenSections(value: unknown): SessionPanelSectionKey[] {
+  return Array.isArray(value) ? SESSION_PANEL_SECTION_KEYS.filter((key) => value.includes(key)) : [];
+}
+
 function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPrefs> {
   const state = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
   return {
@@ -163,6 +186,7 @@ function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPr
         ? clampTranscriptWidth(state.transcriptWidth)
         : TRANSCRIPT_DEFAULT_WIDTH,
     sidebarView: sanitizeBootSidebarView(state.sidebarView),
+    sessionPanelHiddenSections: sanitizeHiddenSections(state.sessionPanelHiddenSections),
   };
 }
 
@@ -206,6 +230,7 @@ export const useUiPrefs = create<UiPrefsState>()(
       dontConfirmProviderSwitch: false,
       sessionPanelOpen: true,
       sessionPanelSections: {},
+      sessionPanelHiddenSections: [],
       dialogSizes: {},
       sideChatFrac: SIDE_CHAT_DEFAULT_FRAC,
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
@@ -223,6 +248,11 @@ export const useUiPrefs = create<UiPrefsState>()(
             [id]: !isSessionPanelSectionOpen(s.sessionPanelSections, id),
           },
         })),
+      setSessionPanelSectionShown: (key, shown) =>
+        set((s) => {
+          const others = s.sessionPanelHiddenSections.filter((hidden) => hidden !== key);
+          return { sessionPanelHiddenSections: shown ? others : [...others, key] };
+        }),
       setDialogSize: (key, size) => set((s) => ({ dialogSizes: { ...s.dialogSizes, [key]: size } })),
       setSideChatFrac: (frac) => set({ sideChatFrac: Math.min(0.85, Math.max(0.15, frac)) }),
     }),

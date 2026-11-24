@@ -67,9 +67,8 @@
  * unit tests); the session panel's Tasks SECTION (`session-panel-tasks-new`,
  * `session-panel-tasks-empty`, `session-panel-tasks-no-project`,
  * `session-panel-task-row-<number>`) is still this file's main board-adjacent
- * coverage, unchanged by the redesign. The card lists EVERY active task — the
- * old VISIBLE_TASKS = 5 cap and its "N more" residual row have no successor, so
- * the overflow scenario below pins the uncapped list instead of being deleted.
+ * coverage. It lists the newest five active tasks and keeps the rest behind
+ * `session-panel-tasks-all`.
  *
  * The panel sits on the chat surface's right edge and only docks inline when the
  * chat host clears `INLINE_MIN_WIDTH` (1044, panel-mode.ts); narrower,
@@ -570,8 +569,8 @@ test.describe('§tasks', () => {
     const { page } = app;
     await openTasksCard(page);
 
-    // All 5 tasks are still open/in_progress (none done) at this point, and the
-    // card caps nothing — every active task gets a row.
+    // All 5 tasks are still open/in_progress (none done) at this point, and five
+    // is what the section shows before it offers Show all.
     for (const n of [1, 2, 3, 4, 5]) {
       await expect(page.getByTestId(`session-panel-task-row-${n}`)).toBeVisible({ timeout: 10_000 });
     }
@@ -594,13 +593,10 @@ test.describe('§tasks', () => {
     await expect(page.getByTestId('tasks-edit-title')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  // Successor to "a 6th active task overflows into a static 'N more' row": the
-  // card has no VISIBLE_TASKS cap and no residual row, so the 6th task is a row
-  // like any other. Kept as a scenario (rather than deleted with the cap) because
-  // the daemon-side numbering and the card's live refresh are what it really pins
-  // — and the 6th task is created through the card's own quick-add row, so the
-  // create gesture (type + Enter, focus kept for the next one) rides along.
-  test('tasks card: quick-add creates a 6th active task, and it gets a row of its own — the list is uncapped', async () => {
+  // The section lists the newest five and keeps the rest behind Show all. The 6th
+  // task is created through the section's own quick-add row, so the create gesture
+  // (type + Enter) and the live refresh ride along.
+  test('tasks card: quick-add creates a 6th task, which pushes the oldest behind Show all', async () => {
     const { page } = app;
     await openTasksCard(page);
 
@@ -613,14 +609,20 @@ test.describe('§tasks', () => {
     // "focus stays" claim is not a behaviour this spec can pin today.
     await expect(quickAdd).toHaveValue('', { timeout: 10_000 });
 
-    // Daemon list order is status, order_index, created_at — #6 is the newest
-    // 'open' task, and it renders instead of collapsing into a count.
+    // Newest first: #6 leads, and #1 is the one that no longer fits.
     const row6 = page.getByTestId('session-panel-task-row-6');
     await expect(row6).toBeVisible({ timeout: 10_000 });
     await expect(row6).toContainText('Overflow fixture task');
+    const row1 = page.getByTestId('session-panel-task-row-1');
+    await expect(row1).toHaveCount(0);
+    const showAll = page.getByTestId('session-panel-tasks-all');
+    await expect(showAll).toHaveText('Show all 6');
+    await showAll.click();
     for (const n of [1, 2, 3, 4, 5]) {
       await expect(page.getByTestId(`session-panel-task-row-${n}`)).toBeVisible();
     }
+    await showAll.click();
+    await expect(row1).toHaveCount(0);
 
     // Delete the fixture so the later delete tests keep their active counts.
     await openBoard(page);

@@ -130,11 +130,11 @@ describe('Activity source and metadata', () => {
       tool('wakeup', 'ScheduleWakeup', { prompt: 'Check CI', delaySeconds: 240 }, '{}', 1),
     ]);
     expect(scheduledEntries(tools)).toMatchObject([
-      { id: 'schedule:cron-1', title: 'Re-run e2e', state: 'waiting', nextAt: 120_000 },
-      { id: 'schedule:wakeup', title: 'Check CI', state: 'waiting', nextAt: 300_000 },
+      { id: 'schedule:cron-1', title: 'Re-run e2e', state: 'scheduled', nextAt: 120_000 },
+      { id: 'schedule:wakeup', title: 'Check CI', state: 'scheduled', nextAt: 300_000 },
     ]);
     const deleted = transcriptTools([tool('delete', 'CronDelete', { id: 'cron-1' }, '{}', 3)]);
-    expect(scheduledEntries([...tools, ...deleted])[0]).toMatchObject({ state: 'cancelled', endedAt: 180_000 });
+    expect(scheduledEntries([...tools, ...deleted])[0]).toMatchObject({ state: 'removed', endedAt: 180_000 });
   });
 
   it('links a delegated child to the call that created it', () => {

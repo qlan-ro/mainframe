@@ -16,6 +16,8 @@ export interface CompactDisclosureProps {
   maxDetailHeight?: string;
   /** A label that reports work in progress: it shimmers and fades in when it changes. */
   live?: boolean;
+  /** Where an Activity row's jump lands: `data-activity-*` (see `session-panel/activity-source`). */
+  anchor?: { 'data-activity-id'?: string; 'data-activity-group'?: string };
 }
 function Label({ label, live }: { label: string; live: boolean }) {
   return (
@@ -76,13 +78,14 @@ export function CompactDisclosure({
   expandable = true,
   maxDetailHeight = 'min(24rem, 50cqh)',
   live = false,
+  anchor,
 }: CompactDisclosureProps) {
   const { open, setOpen } = useCompactDisclosure(memberKeys);
   const { rowRef, beforeToggle } = useCompactScrollAnchor(open);
   const identity = encodeURIComponent(memberKeys[0] ?? '');
   if (!expandable)
     return (
-      <div ref={rowRef} data-testid={`chat-compact-row-${identity}`} className="min-w-0 py-0.5">
+      <div ref={rowRef} {...anchor} data-testid={`chat-compact-row-${identity}`} className="min-w-0 py-0.5">
         <div title={label} className="flex min-w-0 items-center gap-2 py-1 text-xs text-muted-foreground">
           {icon}
           <Label label={label} live={live} />
@@ -93,6 +96,7 @@ export function CompactDisclosure({
   return (
     <Collapsible
       ref={rowRef}
+      {...anchor}
       open={open}
       onOpenChange={(next) => {
         beforeToggle();

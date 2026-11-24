@@ -93,6 +93,10 @@ function ActivityDetails({ group }: { group: ActivityGroup }) {
     </>
   );
 }
+function groupAnchor(group: ActivityGroup) {
+  const ids = group.members.flatMap(({ part }) => (part.type === 'tool-call' ? [part.toolCallId] : []));
+  return { 'data-activity-group': ids.join(' ') };
+}
 // A settled group shows what it mostly was, aligned with standalone rows, rather than a done mark.
 function SettledIcon({ group }: { group: ActivityGroup }) {
   const first = group.members.find((member) => member.part.type === 'tool-call')?.part;
@@ -120,6 +124,7 @@ export function CompactActivityGroup({ group, details }: { group: ActivityGroup;
       maxDetailHeight="min(224px, 50cqh)"
       label={label}
       live={active}
+      anchor={groupAnchor(group)}
       trailing={hostsTurnStatus ? <TurnStatusTrailing /> : undefined}
       icon={
         active ? (

@@ -127,6 +127,8 @@ test.describe('windowed history lifecycle', () => {
     const page = app.page;
     const toggle = page.getByTestId('session-panel-toggle');
     if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
+    // The rest of the history sits behind the open-ended Earlier group.
+    await page.getByTestId('session-panel-activity-earlier').click();
     const load = page.getByTestId('session-panel-load-earlier');
     await expect(load).toBeVisible();
     const viewport = page.getByTestId('chat-thread-viewport');

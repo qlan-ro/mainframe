@@ -5,7 +5,9 @@ import { isErrorResult, resolveResultText } from '@/features/chat/tools/shared';
 import type { DelegatedTaskRow } from '@/features/sessions/view-model/agent-provenance';
 
 export type ActivityKind = 'workflow' | 'subagent' | 'delegated' | 'monitor' | 'scheduled' | 'command' | 'background';
-export type ActivityState = 'running' | 'waiting' | 'completed' | 'failed' | 'stopped' | 'cancelled';
+/** `needs-you`, `running`, `queued` and `scheduled` are ongoing; the rest are finished. */
+export type ActivityState =
+  'needs-you' | 'running' | 'queued' | 'scheduled' | 'completed' | 'failed' | 'stopped' | 'removed';
 export interface ActivitySource {
   messageId: string;
   toolCallId?: string;
@@ -22,6 +24,8 @@ export interface ActivityEntry {
   nextAt?: number;
   prompt?: string;
   schedule?: string;
+  /** A schedule that runs more than once. */
+  recurring?: boolean;
   command?: string;
   summary?: string;
   usage?: { totalTokens: number; toolUses: number; durationMs: number };
@@ -146,6 +150,24 @@ export function taskEntries(tasks: readonly BackgroundTask[], tools: readonly To
   });
 }
 
+const ONGOING: readonly ActivityState[] = ['needs-you', 'running', 'queued', 'scheduled'];
+export const isOngoing = (state: ActivityState): boolean => ONGOING.includes(state);
+
+function delegatedState(row: DelegatedTaskRow): ActivityState {
+  if (row.resumedState) return row.resumedState === 'waiting' ? 'needs-you' : 'running';
+  switch (row.status) {
+    case 'completed':
+    case 'failed':
+      return row.status;
+    case 'cancelled':
+    case 'interrupted':
+      return 'stopped';
+    default:
+      if (row.waiting) return 'needs-you';
+      return row.status === 'queued' ? 'queued' : 'running';
+  }
+}
+
 export function delegatedEntries(rows: readonly DelegatedTaskRow[], tools: readonly ToolRef[]): ActivityEntry[] {
   const sources = new Map<string, ToolRef>();
   for (const tool of tools) {
@@ -156,19 +178,7 @@ export function delegatedEntries(rows: readonly DelegatedTaskRow[], tools: reado
   return rows.map((row) => {
     const tool = sources.get(row.taskId);
     const source = tool && { messageId: tool.messageId, toolCallId: tool.toolCallId };
-    const state =
-      row.resumedState ??
-      (row.status === 'completed'
-        ? 'completed'
-        : row.status === 'failed'
-          ? 'failed'
-          : row.status === 'cancelled'
-            ? 'cancelled'
-            : row.status === 'interrupted'
-              ? 'stopped'
-              : row.status === 'queued' || row.waiting
-                ? 'waiting'
-                : 'running');
+    const state = delegatedState(row);
     return {
       id: `delegated:${row.taskId}`,
       kind: 'delegated',
@@ -178,7 +188,7 @@ export function delegatedEntries(rows: readonly DelegatedTaskRow[], tools: reado
         .join(' · '),
       state,
       startedAt: tool?.createdAt ?? row.updatedAt,
-      endedAt: state === 'running' || state === 'waiting' ? undefined : row.updatedAt,
+      endedAt: isOngoing(state) ? undefined : row.updatedAt,
       prompt: string(tool?.args.task) || undefined,
       source,
       delegated: row,
@@ -202,7 +212,8 @@ function scheduledEntry(tool: ToolRef): ActivityEntry | null {
       : undefined;
   const schedule = name === 'CronCreate' ? string(output.humanSchedule || tool.args.cron) : '';
   const id = string(output.id) || tool.toolCallId;
-  const cadence = output.recurring || tool.args.recurring ? 'Every' : 'Once';
+  const recurring = Boolean(output.recurring ?? tool.args.recurring);
+  const cadence = recurring ? 'Every' : 'Once';
   const detail =
     name === 'ScheduleWakeup'
       ? 'Once · wakeup'
@@ -214,7 +225,8 @@ function scheduledEntry(tool: ToolRef): ActivityEntry | null {
     kind: 'scheduled',
     title: prompt || string(tool.args.reason) || 'Scheduled work',
     detail,
-    state: 'waiting',
+    state: 'scheduled',
+    recurring,
     startedAt: tool.createdAt,
     nextAt,
     prompt: prompt || undefined,
@@ -233,10 +245,41 @@ export function scheduledEntries(tools: readonly ToolRef[]): ActivityEntry[] {
     }
     if (tool.toolName.split('__').pop() === 'CronDelete' && !tool.isError && tool.result !== undefined) {
       const previous = rows.get(`schedule:${string(tool.args.id)}`);
-      if (previous) rows.set(previous.id, { ...previous, state: 'cancelled', endedAt: tool.createdAt });
+      if (previous) rows.set(previous.id, { ...previous, state: 'removed', endedAt: tool.createdAt });
     }
   }
   return [...rows.values()];
+}
+
+function containsToolCall(messages: readonly ThreadMessage[] | undefined, ids: ReadonlySet<string>): boolean {
+  return (messages ?? []).some((message) =>
+    message.content.some(
+      (part) => part.type === 'tool-call' && (ids.has(part.toolCallId) || containsToolCall(part.messages, ids)),
+    ),
+  );
+}
+
+/** The tool calls that started an agent now waiting on one of these requests. */
+export function agentsAwaiting(
+  messages: readonly ThreadMessage[],
+  pendingToolIds: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const awaiting = new Set<string>();
+  if (pendingToolIds.size === 0) return awaiting;
+  for (const message of messages)
+    for (const part of message.content)
+      if (part.type === 'tool-call' && containsToolCall(part.messages, pendingToolIds)) awaiting.add(part.toolCallId);
+  return awaiting;
+}
+
+/** A running agent with a request open above the composer needs you. */
+export function markNeedsYou(entries: ActivityEntry[], awaiting: ReadonlySet<string>): ActivityEntry[] {
+  if (awaiting.size === 0) return entries;
+  return entries.map((entry) =>
+    entry.kind === 'subagent' && entry.state === 'running' && entry.task && awaiting.has(entry.task.toolUseId)
+      ? { ...entry, state: 'needs-you' }
+      : entry,
+  );
 }
 
 export function anchorEntries(entries: ActivityEntry[], messages: readonly ThreadMessage[]): ActivityEntry[] {

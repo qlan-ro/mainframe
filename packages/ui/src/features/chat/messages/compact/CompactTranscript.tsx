@@ -54,7 +54,12 @@ export function CompactTranscript() {
       if (target !== chatId) return;
       const presentation = model.messagesById.get(source.messageId);
       for (const unit of presentation?.units ?? []) {
-        if (source.toolCallId && (unit.part.type !== 'tool-call' || unit.part.toolCallId !== source.toolCallId))
+        // A group's unit stands for its members, so the call may be any of them.
+        const parts = unit.activity ? unit.activity.members.map((member) => member.part) : [unit.part];
+        if (
+          source.toolCallId &&
+          !parts.some((part) => part.type === 'tool-call' && part.toolCallId === source.toolCallId)
+        )
           continue;
         if (unit.turnKey) turnDisclosureStore.set(unit.turnKey, 'open');
       }

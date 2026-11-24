@@ -103,6 +103,42 @@ describe('useSessionPanelState — light dismiss', () => {
     expect(result.current.mode).toBe('overlay');
   });
 
+  it('stays open for a press in the composer it floats above', () => {
+    const { result } = openOverlay();
+    const footer = document.createElement('div');
+    footer.setAttribute('data-chat-footer', '');
+    h.host.append(footer);
+    pointerDownOn(footer);
+    expect(result.current.mode).toBe('overlay');
+  });
+
+  it("leaves a press on the column's own toggle to the toggle", () => {
+    const { result } = openOverlay();
+    const toggle = document.createElement('button');
+    toggle.setAttribute('data-session-panel-toggle', '');
+    h.host.append(toggle);
+    pointerDownOn(toggle);
+    expect(result.current.mode).toBe('overlay');
+  });
+
+  it("closes on a press in another column's composer", () => {
+    const { result } = openOverlay();
+    const footer = document.createElement('div');
+    footer.setAttribute('data-chat-footer', '');
+    document.body.append(footer);
+    pointerDownOn(footer);
+    expect(result.current.mode).toBe('hidden');
+  });
+
+  it('puts focus back on the toggle on Escape', () => {
+    openOverlay();
+    const toggle = document.createElement('button');
+    toggle.setAttribute('data-session-panel-toggle', '');
+    h.host.append(toggle);
+    escapeOn(document);
+    expect(document.activeElement).toBe(toggle);
+  });
+
   it('closes on Escape', () => {
     const { result } = openOverlay();
     escapeOn(document);

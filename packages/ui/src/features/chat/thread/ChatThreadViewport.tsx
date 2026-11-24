@@ -13,6 +13,7 @@ import {
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
+import { SessionStrip } from '@/features/session-panel/SessionStrip';
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { Composer } from '../composer/Composer';
 import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';
@@ -55,6 +56,7 @@ function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
     <>
       <DegradedChatCard />
       {!directoryMissing && !projectlessDraft && <Composer variant={variant} />}
+      {variant === 'main' && <SessionStrip />}
     </>
   );
 }
@@ -74,6 +76,7 @@ function ThreadFooter({
     >
       <div
         data-testid="chat-thread-footer"
+        data-chat-footer
         className="mx-auto flex w-full min-h-0 max-w-(--mf-transcript-width) flex-col px-5 pb-4"
       >
         <ChatGateMount />

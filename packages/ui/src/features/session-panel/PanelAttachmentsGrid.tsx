@@ -1,15 +1,13 @@
 /**
- * PanelAttachmentsGrid — the session's attachments as a 5-across grid of tiles.
+ * PanelAttachmentsGrid — the session's attachments as one row of 48px tiles
+ * ending in "+N", which expands to all of them and back.
  *
- * Same tile recipe the transcript uses for message attachments (the v2
+ * Same tile recipe the transcript uses for message attachments (the
  * `Attachment` compound, `extTint` for files, `variant="image"` for images), so
- * an attachment reads as the same object in both places. **No `size="sm"`**: it
- * sets the media to `w-8` at the same variant weight as vertical's `w-full`,
- * and CSS source order wins — the thumbnail collapses to 32px in a 90px tile.
+ * an attachment reads as the same object in both places.
  *
- * Thumbnails cost one REST call each, so the loader is gated twice: images
- * only (a file tile renders from its name), and only while the Context section
- * is open. Without that, every session switch fires N base64 reads.
+ * Thumbnails cost one REST call each, so only images that are on screen load (a
+ * file tile renders from its name).
  *
  * The payload is directory-ordered, not chronological — `SessionAttachment`
  * carries no message id or timestamp.
@@ -22,89 +20,132 @@ import { extTint, fileExtMeta } from '@/features/chat/messages/file-ext-colors';
 import { ImageLightbox, type LightboxImage } from '@/features/chat/parts/ImageLightbox';
 import { getAttachment, type LoadedAttachment } from '@/lib/api/attachments';
 
+/** 48px tiles and 8px gaps in the panel's 268px text column. */
+const TILES_PER_ROW = 4;
+const TILE = 'size-12 rounded-xl p-0!';
+
 interface PanelAttachmentsGridProps {
   port: number;
   chatId: string;
   attachments: readonly SessionAttachment[];
-  /** False while the Context section is collapsed — see the header note. */
-  enabled: boolean;
 }
 
 function dataUrl(loaded: LoadedAttachment): string {
   return `data:${loaded.mediaType};base64,${loaded.data}`;
 }
 
-export function PanelAttachmentsGrid({ port, chatId, attachments, enabled }: PanelAttachmentsGridProps) {
-  const [loaded, setLoaded] = useState<Map<string, LoadedAttachment>>(new Map());
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  // In-flight ids, not the loaded map: the map only fills when a fetch RESOLVES,
+/** The images among `shown`, loaded once each, and the ids that failed. */
+function useThumbnails(port: number, chatId: string, shown: readonly SessionAttachment[]) {
+  const [loaded, setLoaded] = useState<ReadonlyMap<string, LoadedAttachment>>(new Map());
+  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
+  // Requested ids, not the loaded map: the map only fills when a fetch RESOLVES,
   // so gating on it would re-request every image on the render in between.
   const requested = useRef(new Set<string>());
 
   useEffect(() => {
-    requested.current = new Set();
-    setLoaded(new Map());
-    setLightboxIndex(null);
-  }, [chatId]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    for (const att of attachments) {
+    for (const att of shown) {
       if (att.kind !== 'image' || requested.current.has(att.id)) continue;
       requested.current.add(att.id);
-      getAttachment(port, chatId, att.id)
-        .then((data) => setLoaded((prev) => new Map(prev).set(att.id, data)))
-        .catch((err: unknown) => {
-          requested.current.delete(att.id);
+      getAttachment(port, chatId, att.id).then(
+        (data) => setLoaded((prev) => new Map(prev).set(att.id, data)),
+        (err: unknown) => {
           console.warn('[session-panel] attachment load failed', att.id, err);
-        });
+          setFailed((prev) => new Set(prev).add(att.id));
+        },
+      );
     }
-  }, [port, chatId, attachments, enabled]);
+  }, [port, chatId, shown]);
+  return { loaded, failed };
+}
 
+function Tile({
+  attachment,
+  data,
+  onOpen,
+}: {
+  attachment: SessionAttachment;
+  data?: LoadedAttachment;
+  onOpen: () => void;
+}) {
+  const meta = fileExtMeta(attachment.name);
+  return (
+    <Hint label={attachment.name}>
+      <Attachment
+        data-testid={`session-panel-attachment-${attachment.id}`}
+        orientation="vertical"
+        className={`${TILE} overflow-hidden`}
+      >
+        {attachment.kind === 'image' ? (
+          <>
+            <AttachmentTrigger aria-label={`Open ${attachment.name}`} onClick={onOpen} />
+            <AttachmentMedia variant="image" className="size-full rounded-none">
+              {data && <img src={dataUrl(data)} alt={attachment.name} />}
+            </AttachmentMedia>
+          </>
+        ) : (
+          // The ext accent is decorative file-type recognition and has no
+          // token — globals.css defines none per extension.
+          <AttachmentMedia className="size-full rounded-none" style={{ background: extTint(meta.color) }}>
+            <span className="font-mono text-xs font-bold" style={{ color: meta.color }}>
+              .{meta.ext}
+            </span>
+          </AttachmentMedia>
+        )}
+      </Attachment>
+    </Hint>
+  );
+}
+
+function MoreTile({ hiddenCount, all, onToggle }: { hiddenCount: number; all: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      data-testid="session-panel-attachments-more"
+      aria-expanded={all}
+      aria-label={all ? 'Show fewer attachments' : `Show ${hiddenCount} more attachment${hiddenCount === 1 ? '' : 's'}`}
+      onClick={onToggle}
+      className="flex size-12 items-center justify-center rounded-xl border border-border bg-muted text-xs font-medium transition-colors hover:bg-foreground/8"
+    >
+      {all ? 'Less' : `+${hiddenCount}`}
+    </button>
+  );
+}
+
+export function PanelAttachmentsGrid({ port, chatId, attachments }: PanelAttachmentsGridProps) {
+  const [all, setAll] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const overflows = attachments.length > TILES_PER_ROW;
+  const shown = overflows && !all ? attachments.slice(0, TILES_PER_ROW - 1) : attachments;
+  const { loaded, failed } = useThumbnails(port, chatId, shown);
   if (attachments.length === 0) return null;
 
-  const images = attachments.filter((att) => att.kind === 'image');
-  const lightboxImages: LightboxImage[] = images.flatMap((att) => {
-    const data = loaded.get(att.id);
-    return data ? [{ src: dataUrl(data), alt: att.name }] : [];
-  });
+  const viewable = shown.filter((att) => loaded.has(att.id));
+  const lightboxImages = viewable.map((att): LightboxImage => ({ src: dataUrl(loaded.get(att.id)!), alt: att.name }));
+  const failures = shown.filter((att) => failed.has(att.id)).length;
 
   return (
     <>
-      <div data-testid="session-panel-attachment-grid" className="grid grid-cols-5 gap-1">
-        {attachments.map((att) => {
-          const meta = fileExtMeta(att.name);
-          const data = loaded.get(att.id);
-          const imageIndex = images.findIndex((image) => image.id === att.id);
-          return (
-            <Hint key={att.id} label={att.name}>
-              <Attachment data-testid={`session-panel-attachment-${att.id}`} orientation="vertical" className="w-full">
-                {att.kind === 'image' ? (
-                  <>
-                    <AttachmentTrigger
-                      aria-label={`Open ${att.name}`}
-                      onClick={() => {
-                        if (imageIndex >= 0 && imageIndex < lightboxImages.length) setLightboxIndex(imageIndex);
-                      }}
-                    />
-                    <AttachmentMedia variant="image">
-                      {data && <img src={dataUrl(data)} alt={att.name} />}
-                    </AttachmentMedia>
-                  </>
-                ) : (
-                  // The ext accent is decorative file-type recognition and has no
-                  // token — globals.css defines none per extension.
-                  <AttachmentMedia style={{ background: extTint(meta.color) }}>
-                    <span className="font-mono text-xs font-bold" style={{ color: meta.color }}>
-                      .{meta.ext}
-                    </span>
-                  </AttachmentMedia>
-                )}
-              </Attachment>
-            </Hint>
-          );
-        })}
+      <div data-testid="session-panel-attachment-grid" className="flex flex-wrap gap-2 px-4 pt-0.5 pb-1">
+        {shown.map((att) => (
+          <Tile
+            key={att.id}
+            attachment={att}
+            data={loaded.get(att.id)}
+            onOpen={() => {
+              const index = viewable.indexOf(att);
+              if (index >= 0) setLightboxIndex(index);
+            }}
+          />
+        ))}
+        {overflows && (
+          <MoreTile hiddenCount={attachments.length - shown.length} all={all} onToggle={() => setAll(!all)} />
+        )}
       </div>
+      {failures > 0 && (
+        <p className="px-4 pb-1 text-xs text-muted-foreground">
+          {failures === 1 ? '1 preview' : `${failures} previews`} couldn’t be loaded. Hover a tile for its file name.
+        </p>
+      )}
       <ImageLightbox images={lightboxImages} index={lightboxIndex} onIndexChange={setLightboxIndex} />
     </>
   );
