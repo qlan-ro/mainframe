@@ -1,6 +1,6 @@
 /**
- * WorkspaceSurface — empty-state header (todo #195): when the workspace has no
- * tabs, a header (with a close button) renders above the empty-state card.
+ * WorkspaceSurface — with no tabs the panel is the empty-state card alone: its
+ * controls are in the title bar.
  */
 import { render as rtlRender, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -58,9 +58,9 @@ describe('WorkspaceSurface — empty state', () => {
     });
   });
 
-  it('renders both the empty-state header close button and the empty-state card', () => {
+  it('renders the empty-state card and no tab strip', () => {
     render(<WorkspaceSurface />);
     expect(screen.getByTestId('workspace-empty-state')).toBeInTheDocument();
-    expect(screen.getByTestId('workspace-surface-close')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).toBeNull();
   });
 });

@@ -10,6 +10,8 @@
  * stays owned by `zones-store`. Closing removes from the set only — it never
  * archives. Closing the last tab falls back to the new-session flow.
  *
+ * Keyboard: the strip is a tablist with one tab stop (`onTabListKeyDown`).
+ *
  * Overflow: pills shrink to min-w-24, then the row scrolls horizontally (no
  * scrollbar thumb: `data-scrollbar="none"`). The trailing spacer stays outside
  * `data-no-drag`, so the empty middle remains a window-drag area.
@@ -31,6 +33,7 @@ import { SessionTabPair } from './SessionTabPair';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { toTabEntry } from './tab-entry';
 import { useSessionTabsStore } from './store';
+import { onTabListKeyDown } from './tab-shape';
 import { canonicalTabId, displayedTabIds, nextTabId, stripEntries, tabAtIndex, tabHintIndex } from './tabs-model';
 import { useSessionTabHandlers } from './use-session-tab-handlers';
 import { useSessionTabsSync } from './use-session-tabs-sync';
@@ -87,6 +90,9 @@ export function SessionTabs() {
       <div
         data-no-drag
         data-scrollbar="none"
+        role="tablist"
+        aria-label="Open sessions"
+        onKeyDown={onTabListKeyDown}
         className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 scroll-fade-x"
       >
         {entries.map((entry) =>
@@ -115,11 +121,12 @@ export function SessionTabs() {
           data-testid="session-tabs-new"
           data-tut="new-session-tab"
           variant="ghost"
+          aria-label="New session"
           size="icon-xs"
           onClick={newSession}
-          className="shrink-0 text-muted-foreground"
+          className="size-7 shrink-0 text-muted-foreground hover:bg-foreground/5 dark:hover:bg-foreground/5"
         >
-          <Plus />
+          <Plus className="size-4" />
         </Button>
       </Hint>
       {/* Trailing slack — plain div under the title bar's drag region, so the

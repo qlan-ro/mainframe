@@ -8,7 +8,7 @@
  * per-session layout persistence. All UI-only; no AI turns, no recording needed.
  *
  * Source read: packages/ui/src/layout/{SurfaceRail,SurfaceHost,SurfDivider,
- * WorkspaceEmptyState,WorkspaceTabStrip,WorkspaceStripChrome,WorkspaceTabPill,
+ * WorkspaceEmptyState,TitleBarWorkspace,WorkspaceTabs,WorkspaceTabStrip,WorkspaceTabPill,
 
  * packages/ui/src/layout/surfaces/WorkspaceSurface.tsx,
  * packages/ui/src/store/{layout,layout-placement,layout-persist,run-pane,
@@ -25,7 +25,6 @@
  *   chat-thread                     — chat surface body (T.thread)
  *   workspace-surface               — the merged surface root
  *   workspace-empty-state           — its inline picker card, shown while it has no tabs
- *   workspace-surface-close / -drag — hide the surface / its drag grip
  *   WORKSPACE.strip / .pane / .tab / .add — pane-id-keyed roots (see helpers/tauri/testids.ts)
  *   surf-divider-x / surf-divider-y — horizontal/vertical resize dividers
  *   file-picker-dialog / file-picker-input / file-picker-row-<path> — the file opener
@@ -155,12 +154,9 @@ test.describe('§20 layout — surface rail, floor, shortcuts', () => {
     await page.getByTestId('session-tab-ctx-hide-chat').click();
     await expect(page.locator('[data-surface="chat"]')).toHaveCount(0);
 
-    // The workspace is now the ONLY lit surface — its rail button and its own
-    // close button are both disabled (the dynamic floor). The close button exists
-    // even on an empty workspace: the empty-state header composes the same
-    // WorkspaceStripActions the tab strip does.
+    // The workspace is now the ONLY lit surface, so its toggle is disabled (the
+    // dynamic floor).
     await expect(page.getByTestId('surface-rail-workspace')).toBeDisabled();
-    await expect(page.getByTestId('workspace-surface-close')).toBeDisabled();
 
     // A shortcut aimed at the floor surface is a no-op, not a crash.
     await page.keyboard.press('ControlOrMeta+Shift+W');
@@ -258,7 +254,7 @@ test.describe('§20 layout — splits + divider resize', () => {
     await openFileTab(page, 'index.ts');
     await expect(workspace(page).tabs()).toHaveCount(1);
 
-    await page.getByTestId('workspace-surface-close').click();
+    await page.getByTestId('surface-rail-workspace').click();
     await expect(page.getByTestId('workspace-surface')).toHaveCount(0);
     await expect(page.getByTestId('chat-thread')).toBeVisible();
 

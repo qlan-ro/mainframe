@@ -110,7 +110,9 @@ export function workspace(page: Page) {
     },
     /** Open the file picker from whichever affordance the current state offers. */
     async openFilePicker(): Promise<void> {
-      if ((await page.locator(WORKSPACE.add).count()) > 0) {
+      // The title bar's `+` is there either way; with nothing open the card is the
+      // affordance the specs mean.
+      if ((await page.locator(WORKSPACE.pane).count()) > 0) {
         const paneId = await this.openAddMenu();
         await page.getByTestId(`workspace-pane-open-file-${paneId}`).click();
         return;

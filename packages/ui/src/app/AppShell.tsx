@@ -6,7 +6,8 @@
  *
  * The chrome is a COLUMN over a ROW: the title bar spans the window; under it
  * the nav rail and the one content card (sidebar + chat). The app root is the
- * `sidebar` ground; the card is the only `background` surface. The
+ * `sidebar` ground; the card is the only `background` surface. The content pane
+ * reports its left edge, which the title bar's first separator stands on. The
  * SidebarProvider wraps the whole column so the title bar reads
  * `--sidebar-width` live during a resize.
  */
@@ -39,6 +40,7 @@ import { useActiveBasesStore } from '../store/active-bases-store';
 import { activeLaunchScope } from '../lib/launch-scope';
 import { useUiPrefs } from '../store/ui-prefs';
 import { AppSidebar } from '../layout/AppSidebar';
+import { useColumnEdge } from '../layout/column-edges';
 import { ContentCard } from '../layout/ContentCard';
 import { NavRail } from '../layout/NavRail';
 import { SurfaceHost } from '../layout/SurfaceHost';
@@ -147,6 +149,7 @@ function RuntimeBody({ port }: { port: number }) {
   const setSidebarVisible = useUiPrefs((s) => s.setSidebarVisible);
   const sidebarWidth = useUiPrefs((s) => s.sidebarWidth);
   const setSidebarWidth = useUiPrefs((s) => s.setSidebarWidth);
+  const contentEdge = useColumnEdge('content');
 
   return (
     <SidebarProvider
@@ -162,7 +165,7 @@ function RuntimeBody({ port }: { port: number }) {
         <NavRail />
         <ContentCard>
           <AppSidebar />
-          <SidebarInset data-testid="main-surface-shell" className="overflow-hidden">
+          <SidebarInset ref={contentEdge} data-testid="main-surface-shell" className="overflow-hidden">
             <MainSurface port={port} />
           </SidebarInset>
         </ContentCard>

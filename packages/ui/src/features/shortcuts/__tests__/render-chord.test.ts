@@ -2,7 +2,7 @@
  * Chord rendering — turns a `Chord`/`PlatformChord` into the label the cheat
  * sheet (and the palette hints it drives) shows: ⌘/⌥/⌃/⇧ glyphs on macOS,
  * `Ctrl+`/`Alt+`/`Shift+` text elsewhere (AC 17). A multi-chord entry (D3,
- * `sessions.tab-by-index`'s nine chords) renders as a `first … last` range.
+ * `sessions.tab-by-index`'s nine chords) renders as a `first…last` range.
  */
 import { describe, expect, it } from 'vitest';
 import type { ShortcutDescriptor } from '../shortcut-types';
@@ -22,7 +22,7 @@ describe('renderChord — macOS', () => {
   });
 
   it('renders a lone ctrl modifier as ⌃', () => {
-    expect(renderChord({ code: 'Tab', ctrl: true }, true)).toBe('⌃Tab');
+    expect(renderChord({ code: 'Tab', ctrl: true }, true)).toBe('⌃⇥');
   });
 
   it('renders the Backslash key as \\', () => {
@@ -79,21 +79,21 @@ describe('renderEntryChord', () => {
     expect(renderEntryChord(single, false)).toBe('Ctrl+N');
   });
 
-  it('renders a nine-chord entry as a first … last range on macOS (D3)', () => {
+  it('renders a nine-chord entry as a first…last range on macOS (D3)', () => {
     const chords = Array.from({ length: 9 }, (_, i) => ({
       mac: { code: `Digit${i + 1}`, ctrl: true },
       other: { code: `Digit${i + 1}`, alt: true },
     }));
     const multi = entry(chords);
-    expect(renderEntryChord(multi, true)).toBe('⌃1 … ⌃9');
+    expect(renderEntryChord(multi, true)).toBe('⌃1…⌃9');
   });
 
-  it('renders a nine-chord entry as a first … last range off macOS (D3)', () => {
+  it('renders a nine-chord entry as a first…last range off macOS (D3)', () => {
     const chords = Array.from({ length: 9 }, (_, i) => ({
       mac: { code: `Digit${i + 1}`, ctrl: true },
       other: { code: `Digit${i + 1}`, alt: true },
     }));
     const multi = entry(chords);
-    expect(renderEntryChord(multi, false)).toBe('Alt+1 … Alt+9');
+    expect(renderEntryChord(multi, false)).toBe('Alt+1…Alt+9');
   });
 });

@@ -35,6 +35,7 @@ vi.mock('@/features/preview/PreviewInstance', () => ({
 
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useLayoutStore } from '@/store/layout';
+import { TitleBarWorkspace } from '../TitleBarWorkspace';
 import { WorkspaceSurface } from '../surfaces/WorkspaceSurface';
 
 // v2 `Hint` needs the v2 TooltipProvider — the v1 provider satisfies nothing.
@@ -69,7 +70,7 @@ describe('WorkspaceSurface terminal rendering', () => {
 
   it('the + opens a popover whose "New terminal" row emits new-terminal with the paneId', async () => {
     const user = userEvent.setup();
-    render(<WorkspaceSurface />);
+    render(<TitleBarWorkspace />);
     // The + is a popover trigger, not a direct action.
     await user.click(screen.getByTestId('workspace-tab-strip-add-pane-1'));
     await user.click(screen.getByTestId('workspace-pane-new-terminal-pane-1'));

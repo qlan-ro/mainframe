@@ -61,10 +61,10 @@ export const TOAST = {
 export const WORKSPACE = {
   /** One pane's tab-strip row. */
   strip: '[data-testid^="workspace-tab-strip-pane-"]',
-  /** One pane's root (strip + bodies). */
+  /** One pane's root (its bodies; the primary pane's tabs are in the title bar). */
   pane: '[data-testid^="workspace-pane-pane-"]',
   /** Every tab pill in the surface. `[role=tab]` excludes the per-tab close/stop buttons. */
   tab: '[data-testid^="workspace-tab-"][role="tab"]',
-  /** A pane's `+` trigger. */
+  /** The `+` trigger: a pane's, or `…-add-empty` while nothing is open. */
   add: '[data-testid^="workspace-tab-strip-add-"]',
 } as const;

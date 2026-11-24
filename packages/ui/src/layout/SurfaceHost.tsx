@@ -7,6 +7,8 @@ import { subscribeToFileIntents } from '@/store/intent-subscriber';
 import { subscribeToTerminalIntents } from '@/store/terminal-intent-subscriber';
 import { subscribeToUrlTabIntents } from '@/store/url-tab-intent-subscriber';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
+import { cn } from '@/lib/utils';
+import { useColumnEdge } from './column-edges';
 import { SurfDivider } from './SurfDivider';
 import { WorkspaceSurface } from './surfaces/WorkspaceSurface';
 
@@ -15,7 +17,8 @@ import { WorkspaceSurface } from './surfaces/WorkspaceSurface';
 // inside a white card.
 const PANEL_LAYOUT = 'flex flex-col overflow-hidden bg-background';
 
-// Gutter width in px — both dividers and the single-column spacer must agree.
+// The horizontal divider's gutter in px. The vertical one is a bare hairline, so
+// the workspace's left edge and its title-bar separator are the same pixel.
 const DIVIDER_GUTTER = 9;
 
 function SurfaceView({ name }: { name: SurfaceId }) {
@@ -31,6 +34,7 @@ function SurfaceHostImpl() {
 
   const outerRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
+  const workspaceEdge = useColumnEdge('workspace');
 
   // Stable subscription — reads live store state inside the callback, no re-sub on toggle.
   useEffect(() => {
@@ -87,24 +91,15 @@ function SurfaceHostImpl() {
                 stay in the store so re-opening restores the dragged ratio
                 (same guard the vertical axis has via `bottom ? vFlex.top : 1`). */}
             <div
+              ref={name === 'workspace' && i === 1 ? workspaceEdge : undefined}
               data-surface={name}
               style={{ flex: twoCol ? (topFlex[name] ?? 1) : 1 }}
-              className={`min-w-0 ${PANEL_LAYOUT}`}
+              // The workspace keeps room for its title-bar segment (W1).
+              className={cn(name === 'workspace' ? 'min-w-80' : 'min-w-0', PANEL_LAYOUT)}
             >
               <SurfaceView name={name} />
             </div>
-            {i < top.length - 1 &&
-              (twoCol ? (
-                <SurfDivider
-                  axis="x"
-                  containerRef={topRef}
-                  onFrac={setTopFrac}
-                  lineClass="bg-border"
-                  gutter={DIVIDER_GUTTER}
-                />
-              ) : (
-                <div style={{ width: DIVIDER_GUTTER, flexShrink: 0 }} />
-              ))}
+            {twoCol && i === 0 && <SurfDivider axis="x" containerRef={topRef} onFrac={setTopFrac} />}
           </Fragment>
         ))}
       </div>
@@ -112,13 +107,7 @@ function SurfaceHostImpl() {
       {/* Vertical divider + bottom strip. */}
       {bottom && (
         <>
-          <SurfDivider
-            axis="y"
-            containerRef={outerRef}
-            onFrac={setVFrac}
-            lineClass="bg-border"
-            gutter={DIVIDER_GUTTER}
-          />
+          <SurfDivider axis="y" containerRef={outerRef} onFrac={setVFrac} gutter={DIVIDER_GUTTER} />
           <div style={{ flex: vFlex.bottom }} className="flex min-h-0 overflow-hidden">
             <div data-surface={bottom} className={`min-w-0 flex-1 ${PANEL_LAYOUT}`}>
               <SurfaceView name={bottom} />

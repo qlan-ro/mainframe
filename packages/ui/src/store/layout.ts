@@ -33,7 +33,7 @@ import {
 } from './layout-placement';
 
 export type { RepositionTarget, SurfaceId, WorkspaceLayout } from './layout-placement';
-export { isSurfaceFloor, layoutCanSplit, litSurfaceCount } from './layout-placement';
+export { isSurfaceFloor, isSurfaceLit, layoutCanSplit, litSurfaceCount } from './layout-placement';
 
 /** A single session's remembered workspace (surface placement + workspace panes). */
 export interface SessionWorkspace {

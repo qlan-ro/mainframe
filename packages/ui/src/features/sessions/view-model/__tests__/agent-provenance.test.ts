@@ -2,14 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ChatDelegation } from '@qlan-ro/mainframe-types';
 import type { SessionItem, SessionCustom } from '../chat-to-thread-custom';
 import { forkCount, lineageRelation, nestForks, parentLineageText } from '../fork-lineage';
-import {
-  countTasks,
-  delegatedByValue,
-  delegatedTasksOf,
-  outboxHeadline,
-  startedByTitle,
-  taskChipLabel,
-} from '../agent-provenance';
+import { delegatedByValue, delegatedTasksOf, outboxHeadline, startedByTitle } from '../agent-provenance';
 import { deriveSessionBadge } from '../session-status';
 import { withoutTaskChats } from '../task-chats';
 
@@ -93,7 +86,7 @@ describe('startedByTitle', () => {
   });
 });
 
-describe('delegatedTasksOf + taskChipLabel', () => {
+describe('delegatedTasksOf', () => {
   const items = [
     item('p'),
     item('a', { parentChatId: 'p', delegation: task('task_a'), updatedAt: 3 }),
@@ -109,19 +102,11 @@ describe('delegatedTasksOf + taskChipLabel', () => {
       ['task_b', true],
       ['task_c', false],
     ]);
-    expect(countTasks(rows)).toEqual({ running: 1, waiting: 1, done: 1 });
   });
 
   it('counts a task as waiting while a task below it waits on a gate', () => {
     const nested = [item('d', { parentChatId: 'p', delegation: task('task_d'), delegatedWaiting: true })];
     expect(delegatedTasksOf(nested, 'p').map((r) => r.waiting)).toEqual([true]);
-  });
-
-  it('labels the chip by what is still open', () => {
-    expect(taskChipLabel({ running: 2, waiting: 1, done: 4 })).toBe('2 tasks running · 1 waiting');
-    expect(taskChipLabel({ running: 1, waiting: 0, done: 0 })).toBe('1 task running');
-    expect(taskChipLabel({ running: 0, waiting: 2, done: 0 })).toBe('2 tasks waiting');
-    expect(taskChipLabel({ running: 0, waiting: 0, done: 1 })).toBe('1 task done');
   });
 
   it('formats the hover card’s delegated-by value', () => {

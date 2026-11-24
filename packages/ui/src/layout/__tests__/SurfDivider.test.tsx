@@ -153,18 +153,16 @@ describe('SurfDivider — axis="x"', () => {
   });
 });
 
-describe('SurfDivider — gutter width', () => {
-  it('defaults to 6px when no gutter prop is given', () => {
+describe('SurfDivider — thickness', () => {
+  it('is a bare hairline by default, so the panel edge and the line are one pixel', () => {
     const containerRef = makeContainerRef();
     const { getByTestId } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={vi.fn()} />);
-    expect(getByTestId('surf-divider-x').style.width).toBe('6px');
+    expect(getByTestId('surf-divider-x').style.width).toBe('1px');
   });
 
-  it('renders the window-style gutter (8px unified/glass, 9px split) via the gutter prop', () => {
+  it('takes a wider gutter', () => {
     const containerRef = makeContainerRef();
-    const { getByTestId } = render(
-      <SurfDivider axis="x" containerRef={containerRef} onFrac={vi.fn()} gutter={9} />,
-    );
-    expect(getByTestId('surf-divider-x').style.width).toBe('9px');
+    const { getByTestId } = render(<SurfDivider axis="y" containerRef={containerRef} onFrac={vi.fn()} gutter={9} />);
+    expect(getByTestId('surf-divider-y').style.height).toBe('9px');
   });
 });

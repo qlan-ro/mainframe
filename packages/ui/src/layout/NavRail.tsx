@@ -1,5 +1,6 @@
 /**
- * NavRail — the 56px column under the title bar, left of the content card.
+ * NavRail — the 56px column under the title bar, left of the content card, with a
+ * hairline between the two (S2).
  * It owns WHICH list the sidebar shows (`sidebarView` in ui-prefs): Chats,
  * Tasks, Automations, Setup Advisor, Settings — all five are view buttons
  * with the same selected/aria-pressed treatment; picking one shows that
@@ -52,7 +53,7 @@ export function NavRail() {
   };
 
   return (
-    <nav data-testid="shell-rail" aria-label="Views" className="flex w-14 shrink-0 flex-col items-center py-2">
+    <nav data-testid="shell-rail" aria-label="Views" className="flex w-14 shrink-0 flex-col items-center border-r py-2">
       <div className="flex flex-col items-center gap-1">
         {VIEWS.map(({ id, label, icon, tut }) => (
           <NavRailButton

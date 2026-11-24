@@ -19,11 +19,10 @@ function tab(id: string, over: Partial<SessionTabEntry> = {}): SessionTabEntry {
     title: id,
     projectId: undefined,
     projectName: undefined,
-    adapterId: 'claude',
     active: false,
     preview: false,
     forkAvailability: { enabled: false, reason: 'not a fork' },
-    hasPending: false,
+    status: 'idle',
     canOpenSideChat: true,
     ...over,
   };

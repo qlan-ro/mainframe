@@ -79,34 +79,6 @@ export function delegatedTasksOf(items: readonly SessionItem[], parentChatId: st
   return rows.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export interface TaskCounts {
-  running: number;
-  waiting: number;
-  done: number;
-}
-
-export function countTasks(rows: readonly DelegatedTaskRow[]): TaskCounts {
-  const counts: TaskCounts = { running: 0, waiting: 0, done: 0 };
-  for (const row of rows) {
-    if (isTerminalTaskStatus(row.status)) counts.done++;
-    else if (row.waiting) counts.waiting++;
-    else counts.running++;
-  }
-  return counts;
-}
-
-function tasks(n: number): string {
-  return `${n} ${n === 1 ? 'task' : 'tasks'}`;
-}
-
-/** `N tasks running · M waiting`; once nothing is open, `N tasks done`. */
-export function taskChipLabel(counts: TaskCounts): string {
-  if (counts.running === 0 && counts.waiting === 0) return `${tasks(counts.done)} done`;
-  if (counts.running === 0) return `${tasks(counts.waiting)} waiting`;
-  const head = `${tasks(counts.running)} running`;
-  return counts.waiting > 0 ? `${head} · ${counts.waiting} waiting` : head;
-}
-
 /**
  * The composer chip's headline over the messages held for a chat:
  * `1 message from "<sender>" after this turn`, or a count of senders when

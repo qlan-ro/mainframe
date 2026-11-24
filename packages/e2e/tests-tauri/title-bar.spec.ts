@@ -27,11 +27,12 @@
  * packages/ui/src/store/layout-placement.ts (isSurfaceFloor).
  *
  * Testid reference (all verified against source):
- *   title-bar / title-bar-sidebar-section / title-bar-chat-column / title-bar-actions
+ *   title-bar / title-bar-sidebar-segment / title-bar-chat-column / title-bar-trailing /
+ *   title-bar-workspace / title-bar-actions, and title-bar-separator-{sidebar,workspace,actions}
  *   session-tab-<id>         — right-click target (role=tab); opens `SessionTabContextMenu`
  *   session-tab-ctx-hide-chat — always rendered; `disabled` (Radix `data-disabled`) while
  *                               chat is the only lit surface (the dynamic floor)
- *   surface-rail-<chat|workspace> / workspace-surface / workspace-surface-close — layout.spec.ts's
+ *   surface-rail-<chat|workspace> / workspace-surface — layout.spec.ts's
  *                               own testids, referenced here only to observe hide effects
  *   [data-surface="chat|workspace"] — layout engine's per-surface panel wrapper
  */
@@ -83,6 +84,75 @@ test.describe('§title-bar — hide-chat control (dynamic floor, tab context men
     await expect(page.locator('[data-surface="chat"]')).toHaveCount(0);
     // Files remains the sole lit surface.
     await expect(page.getByTestId('workspace-surface')).toBeVisible();
+  });
+});
+
+// ─── Segments line up with the columns below (W1) ─────────────────────────────
+
+test.describe('§title-bar — separators stand on the column edges', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp();
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  const left = async (page: Page, selector: string) =>
+    (await page.locator(selector).evaluate((el) => el.getBoundingClientRect().left)) as number;
+  const separator = (name: string) => `[data-testid="title-bar-separator-${name}"]`;
+
+  /** A separator covers the one pixel left of its column, where the column's own hairline is. */
+  async function expectOnEdge(page: Page, name: string, column: string) {
+    await expect
+      .poll(async () => Math.abs((await left(page, column)) - 1 - (await left(page, separator(name)))))
+      .toBeLessThan(0.5);
+  }
+
+  test('the first stands on the sidebar edge, and follows the capsule once the sidebar is collapsed', async () => {
+    const { page } = app;
+    await expectOnEdge(page, 'sidebar', '[data-testid="main-surface-shell"]');
+
+    await page.keyboard.press('ControlOrMeta+B');
+    const capsule = page.getByTestId('usage-capsule');
+    await expect
+      .poll(async () => {
+        const box = (await capsule.boundingBox())!;
+        return (await left(page, separator('sidebar'))) - (box.x + box.width);
+      })
+      .toBe(12);
+    await page.keyboard.press('ControlOrMeta+B');
+    await expectOnEdge(page, 'sidebar', '[data-testid="main-surface-shell"]');
+  });
+
+  test('the second stands on the workspace edge through a divider drag; the third closes the segment', async () => {
+    const { page } = app;
+    await expect(page.locator(separator('workspace'))).toHaveCount(0);
+    await page.getByTestId('surface-rail-workspace').click();
+    await expectOnEdge(page, 'workspace', '[data-surface="workspace"]');
+
+    const divider = (await page.getByTestId('surf-divider-x').boundingBox())!;
+    const before = await left(page, separator('workspace'));
+    await page.mouse.move(divider.x, divider.y + divider.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(divider.x - 90, divider.y + divider.height / 2, { steps: 5 });
+    await page.mouse.up();
+    expect(before - (await left(page, separator('workspace')))).toBeGreaterThan(60);
+    await expectOnEdge(page, 'workspace', '[data-surface="workspace"]');
+
+    const [files, third, search] = await Promise.all([
+      left(page, '[data-testid="workspace-files-open"]'),
+      left(page, separator('actions')),
+      left(page, '[data-testid="main-toolbar-search"]'),
+    ]);
+    expect(files).toBeLessThan(third);
+    expect(third).toBeLessThan(search);
   });
 });
 
