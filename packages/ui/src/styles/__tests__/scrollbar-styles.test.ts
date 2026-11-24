@@ -26,7 +26,8 @@ describe('scrollbar styling (S3)', () => {
   it('draws the thumb 6px wide and 2px from the edge, 8px under the pointer', () => {
     const thumb = rule('.mf-scrollbar > span');
     expect(thumb).toMatch(/width:\s*6px/);
-    expect(thumb).toMatch(/inset:\s*0 2px 0 auto/);
+    expect(thumb).toMatch(/inset:\s*0 var\(--thumb-inset\) 0 auto/);
+    expect(rule('.mf-scrollbar')).toMatch(/--thumb-inset:\s*2px/);
     expect(thumb).toMatch(/border-radius:\s*3px/);
     expect(thumb).toMatch(/var\(--foreground\) 26%/);
     const held = rule('.mf-scrollbar:is(:hover, [data-dragging]) > span');

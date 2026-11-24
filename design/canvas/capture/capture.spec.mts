@@ -4,7 +4,7 @@ import path from 'node:path';
 import { test } from '../../../packages/e2e/node_modules/@playwright/test/index.mjs';
 import type { Page } from '../../../packages/e2e/node_modules/@playwright/test/index.mjs';
 import { closeTauriApp, launchTauriApp } from '../../../packages/e2e/fixtures/app-tauri.js';
-import { PATH_ALIAS, WORK_DIR } from './seed.mts';
+import { captureHome, PATH_ALIASES, WORK_DIR } from './seed.mts';
 import { serialise } from './serialise.mts';
 import type { CaptureArea, CaptureContext, CaptureGroup, CaptureState, Crop } from './types.mts';
 
@@ -47,6 +47,7 @@ async function runGroup(group: CaptureGroup, index: number, css: Set<string>): P
   const app = await launchTauriApp({
     ...group.launch,
     dataDir,
+    home: captureHome(),
     beforeNavigate: async (page) => {
       page.setDefaultTimeout(15_000);
       await page.setViewportSize(viewport);
@@ -65,7 +66,7 @@ async function runGroup(group: CaptureGroup, index: number, css: Set<string>): P
       // Beside the boards' input, what the app itself drew: compare with a shot.cjs render of the board.
       await app.page.screenshot({ path: path.join(WORK_DIR, `${group.board}.${state.id}.png`) });
       const crop = await cropOf(app.page, state, viewport);
-      const { html, runtimeCss } = await app.page.evaluate(serialise, PATH_ALIAS);
+      const { html, runtimeCss } = await app.page.evaluate(serialise, PATH_ALIASES);
       for (const sheet of runtimeCss) css.add(sheet);
       frames.push({
         board: group.board,

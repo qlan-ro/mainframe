@@ -1,7 +1,7 @@
 // Seeding helpers: realistic, stable projects and sessions, so boards read like the app in use and
 // re-capturing an unchanged screen gives the same board.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DAEMON_BASE } from '../../../packages/e2e/fixtures/daemon.js';
@@ -13,8 +13,18 @@ import type { Page } from '../../../packages/e2e/node_modules/@playwright/test/i
 export const WORK_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '.work');
 const PROJECTS_DIR = path.join(WORK_DIR, 'projects');
 
-/** What a seeded path is drawn as on the boards. */
-export const PATH_ALIAS: [string, string] = [PROJECTS_DIR, '~/Code'];
+/** The daemon's HOME: empty, so no board shows the machine's own skills, agents, sessions or accounts. */
+export function captureHome(): string {
+  const home = path.join(WORK_DIR, 'home');
+  mkdirSync(home, { recursive: true });
+  return realpathSync(home);
+}
+
+/** What the run's own paths are drawn as on the boards, longest first. */
+export const PATH_ALIASES: [string, string][] = [
+  [PROJECTS_DIR, '~/Code'],
+  [path.join(WORK_DIR, 'home'), '~'],
+];
 
 async function api<T>(method: string, route: string, body?: unknown): Promise<T> {
   const res = await fetch(`${DAEMON_BASE}${route}`, {

@@ -441,7 +441,10 @@ Built so far in the base theme of `packages/ui`, each with a light and a dark va
 | --- | --- | --- |
 | `fail` | `--fail` | `text-fail`, `bg-fail`, `border-fail` |
 | `focus` | `--focus` (`--ring` and `--sidebar-ring` alias it) | `focus-line`, `focus-line-inset`, `*-focus` |
-| `crit`, `red` | `--destructive` | `text-destructive` and so on: irreversible actions, Stop, the context ring at 95 %, red terminal text, diff deletions |
+
+`crit` and `red` are not built. The app has one red, `--destructive` (`#e7000b` light, `#ff6467` dark, against `#c70016` and `#ff8080` for `crit`, `#c0392b` and `#ff7b6e` for `red`), and it does the work of both: irreversible actions, Reject, Stop, context and plan usage at 90 % and above, the Unattended permission, error output in tool bodies and the run console, and diff deletions (`--mf-diff-del-text` aliases it). The xterm terminal's red is its own ANSI palette. The split into two reds and the 95 % threshold come with the PRs that build those areas.
+
+Text in `fail` may sit on a `fail` tint of 6 % at most (`bg-fail/6`), at full strength; a stronger tint is for icons and `foreground` text. `contrast.test.ts` measures it (4.60:1 at worst in light, 4.96:1 in dark) and refuses a stronger one.
 
 The other names keep their stock tokens (`--background`, `--primary`, `--warning`, …) until the PR that builds their area.
 
@@ -592,6 +595,10 @@ A `card` surface with 10 px radius, the float shadow and 4 px padding. Items hav
 Overlay thumbs only, never a track or a gutter, whatever the engine or the macOS scroll bar setting. Native scrollbars are hidden. A 6 px thumb (ink at 26 %, 3 px radius, inset 2 px, at least 24 px long) fades in while a region scrolls or is hovered, widens to 8 px (ink at 42 %) under the pointer, can be dragged, and fades out about a second after. Content keeps its full width, so the transcript's text edges stay aligned with the composer. `prefers-reduced-motion` removes the fade.
 
 One manager draws the thumb for every scroll container in the app, portals included (`packages/ui/src/lib/overlay-scrollbars`, mounted once in `App.tsx`): a container only needs `overflow: auto`. `data-scrollbar="none"` opts a strip out where a thumb would cover it (session tabs, workspace tabs, the project strip, attachments); those fade at the edge instead. The terminal uses xterm's own overlay bar, set to the same size and colours in a 10 px lane.
+
+A resize strip on a scroller's edge carries `data-edge-handle` (the sidebar's rail). The thumb shows over it and leaves it the outermost 2 px.
+
+Exception: the HTML file preview keeps the engine's own scrollbars. It is a sandboxed frame with an opaque origin, so no thumb can be drawn for it, and hiding its bars from the outside would mean rewriting the user's document.
 
 ### Tooltips and toasts
 Tooltips: inverted (`tipbg`, `tipink`), 12 px, 7 px radius, max 280 px, clamped to the composer card's edge. Toasts: the same inversion, 12.5 px, 9 px radius, centred under the header.

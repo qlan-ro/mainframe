@@ -50,7 +50,7 @@ export function WorkspaceUrlEntry({ paneId, onDone }: WorkspaceUrlEntryProps) {
   return (
     <div
       data-testid="workspace-url-entry"
-      className="flex h-6 min-w-0 flex-1 items-center gap-1 rounded-md border border-border bg-card pr-1 pl-1.5"
+      className="flex h-6 min-w-0 flex-1 items-center gap-1 rounded-md border border-border bg-card pr-1 pl-1.5 has-[input:focus-visible]:focus-line-inset"
     >
       <Globe className="size-3 shrink-0 text-muted-foreground" aria-hidden />
       <input

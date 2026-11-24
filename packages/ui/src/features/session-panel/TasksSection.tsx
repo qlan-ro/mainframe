@@ -50,11 +50,11 @@ function AttachmentCountChip({ count, onClear }: { count: number; onClear: () =>
 function QuickAddRow({ port, projectId }: { port: number; projectId: string }) {
   const quick = useQuickAddTodo(port, projectId);
 
-  // The row reads exactly like its sibling task rows — no input box, no focus
-  // ring (data-noring opts out of the global island ring); focus is a quiet
-  // wash on the whole row, Reminders-style.
+  // The row reads exactly like its sibling task rows: no input box. Focus is a
+  // quiet wash and the focus line on the whole row, so the input opts out of
+  // the fallback line with data-noring.
   return (
-    <div className="flex w-full flex-col gap-1 rounded-md px-2 py-1 transition-colors focus-within:bg-foreground/5">
+    <div className="flex w-full flex-col gap-1 rounded-md px-2 py-1 transition-colors focus-within:bg-foreground/5 has-[input:focus-visible]:focus-line-inset">
       <div className="flex w-full items-center gap-2">
         <Plus className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <input

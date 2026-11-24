@@ -15,7 +15,7 @@ Each state's DOM is written into `design/canvas/project/<Board>.dc.html` with th
 - `pnpm install` at the repo root, `pnpm --filter @qlan-ro/mainframe-e2e exec playwright install chromium`, python3.
 - The Rust daemon. The harness looks in `packages/core-rs/target/{release,debug}` and builds a release binary when neither exists. `MF_E2E_RUST_DAEMON_PATH` points it at any other `mainframe-daemon`, for example the one inside an installed Mainframe.app; it must speak this branch's API.
 
-A run is isolated. It uses ports 31516 (daemon) and 4399 (UI) of its own, a fresh data dir per group with no `config.json` (so no tunnel starts), and projects of its own. All of it lives in the ignored `design/canvas/capture/.work/`, which the next run clears.
+A run is isolated. It uses ports 31516 (daemon) and 4399 (UI) of its own, a fresh data dir per group with no `config.json` (so no tunnel starts), projects of its own, and an empty HOME for the daemon, so no skill, agent, session or account of the machine reaches a board. `build.py` also refuses to write a board that holds `/Users/`, `/private/`, `/home/`, the user name or the host name. All of it lives in the ignored `design/canvas/capture/.work/`, which the next run clears.
 
 ## Files
 

@@ -1,6 +1,6 @@
 /** One overlay thumb: its element, its placement and dragging it. */
-import { scrollPerDragPixel, thumbBox, type Axis } from './geometry';
-import { isCovered, metricsOf, paddingBox, scrolls, visibleBox } from './scroller';
+import { scrollPerDragPixel, THUMB_INSET, thumbBox, type Axis, type Box } from './geometry';
+import { hasEdgeHandle, isCovered, metricsOf, paddingBox, scrolls, visibleBox } from './scroller';
 
 /**
  * Fired on a scroller (not bubbling) when its thumb is grabbed. Code that tells
@@ -36,12 +36,21 @@ function startDrag(thumb: HTMLDivElement, scroller: Element, axis: Axis, down: P
   thumb.setPointerCapture?.(down.pointerId);
   thumb.dataset.dragging = '';
   scroller.dispatchEvent(new CustomEvent(SCROLLBAR_DRAG_EVENT));
-  const metrics = metricsOf(scroller, axis);
-  const ratio = scrollPerDragPixel(metrics);
-  const origin = axis === 'y' ? down.clientY : down.clientX;
+  // Each move scrolls by its own delta from where the scroller is now, so content
+  // that loads above mid-drag moves the view once, with its anchor, and no more.
+  let pointer = axis === 'y' ? down.clientY : down.clientX;
+  let landed = metricsOf(scroller, axis).position;
+  /** Scroll asked for and not given: a fraction of a px, or the pull past an end. */
+  let owed = 0;
   const move = (event: PointerEvent): void => {
-    const delta = (axis === 'y' ? event.clientY : event.clientX) - origin;
-    setScroll(scroller, axis, metrics.position + delta * ratio);
+    const next = axis === 'y' ? event.clientY : event.clientX;
+    const metrics = metricsOf(scroller, axis);
+    if (metrics.position !== landed) owed = 0;
+    const target = metrics.position + owed + (next - pointer) * scrollPerDragPixel(metrics);
+    pointer = next;
+    setScroll(scroller, axis, target);
+    landed = metricsOf(scroller, axis).position;
+    owed = target - landed;
   };
   const end = (): void => {
     delete thumb.dataset.dragging;
@@ -53,6 +62,12 @@ function startDrag(thumb: HTMLDivElement, scroller: Element, axis: Axis, down: P
   thumb.addEventListener('pointermove', move);
   thumb.addEventListener('pointerup', end);
   thumb.addEventListener('pointercancel', end);
+}
+
+/** Leaves the outermost pixels of the scroller's edge to a resize strip that shares it. */
+function yieldEdge(axis: Axis, box: Box): Box {
+  if (!hasEdgeHandle(axis, box)) return box;
+  return axis === 'y' ? { ...box, right: box.right - THUMB_INSET } : { ...box, bottom: box.bottom - THUMB_INSET };
 }
 
 /** The thumb covers the scroller's edge, so a wheel over it has to reach the scroller. */
@@ -78,7 +93,10 @@ export function createThumb(scroller: Element, axis: Axis, { onEnter, onLeave }:
     hovered = false;
     onLeave();
   });
-  element.addEventListener('mousedown', (event) => event.preventDefault());
+  element.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
   element.addEventListener('pointerdown', (event) => {
     if (event.button === 0) startDrag(element, scroller, axis, event, onLeave);
   });
@@ -86,15 +104,22 @@ export function createThumb(scroller: Element, axis: Axis, { onEnter, onLeave }:
   document.body.append(element);
 
   const place = (): void => {
-    const box = scrolls(scroller, axis)
+    const full = scrolls(scroller, axis)
       ? thumbBox(axis, metricsOf(scroller, axis), paddingBox(scroller), visibleBox(scroller))
       : null;
-    element.hidden = box === null || isCovered(scroller, axis, box, element);
-    if (!box) return;
+    // Hiding the thumb mid-drag would drop its pointer capture.
+    const dragging = element.dataset.dragging !== undefined;
+    element.hidden = !dragging && (full === null || isCovered(scroller, axis, full));
+    if (!full) return;
+    const box = yieldEdge(axis, full);
     element.style.top = `${box.top}px`;
     element.style.left = `${box.left}px`;
     element.style.width = `${box.right - box.left}px`;
     element.style.height = `${box.bottom - box.top}px`;
+    element.style.setProperty(
+      '--thumb-inset',
+      `${THUMB_INSET - (axis === 'y' ? full.right - box.right : full.bottom - box.bottom)}px`,
+    );
   };
 
   return {

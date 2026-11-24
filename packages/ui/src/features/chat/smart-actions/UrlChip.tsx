@@ -49,7 +49,7 @@ function badgeFor(entry: PortTunnelEntry | undefined, busy: boolean): BadgeSpec 
     case 'ready':
       return { label: 'tunnelled', className: 'bg-success/10 text-success' };
     case 'error':
-      return { label: 'tunnel failed', className: 'bg-fail/10 text-fail' };
+      return { label: 'tunnel failed', className: 'bg-fail/6 text-fail' };
     default:
       return null;
   }

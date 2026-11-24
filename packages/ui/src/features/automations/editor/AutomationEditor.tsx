@@ -222,14 +222,14 @@ export function AutomationEditor() {
               value={draft.name}
               onChange={(e) => updateDraft((d) => ({ ...d, name: e.target.value }))}
               placeholder="Name this automation"
-              className="border-none bg-transparent p-0 text-lg font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
+              className="border-none bg-transparent p-0 text-lg font-semibold tracking-tight text-foreground placeholder:text-muted-foreground"
             />
             <input
               data-testid="automations-editor-description"
               value={draft.description}
               onChange={(e) => updateDraft((d) => ({ ...d, description: e.target.value }))}
               placeholder="What does it do? (optional)"
-              className="border-none bg-transparent p-0 text-sm text-muted-foreground outline-none placeholder:text-muted-foreground"
+              className="border-none bg-transparent p-0 text-sm text-muted-foreground placeholder:text-muted-foreground"
             />
           </div>
 

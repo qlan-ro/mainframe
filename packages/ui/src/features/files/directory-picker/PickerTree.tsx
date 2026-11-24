@@ -43,7 +43,7 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
         if (isDirectory) onToggle(node);
         onSelect(node);
       }}
-      className={`flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1 text-left outline-none ${
+      className={`flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1 text-left focus-visible:focus-line-inset ${
         isSelected
           ? 'bg-primary/10 font-semibold text-foreground'
           : 'font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground'

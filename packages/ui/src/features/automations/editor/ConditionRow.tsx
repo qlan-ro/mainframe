@@ -100,7 +100,7 @@ function ValueChipList({
   return (
     <div
       data-testid={testId}
-      className="flex min-h-7 flex-wrap items-center gap-1 rounded-md border-[0.5px] border-input bg-card px-2 py-1"
+      className="flex min-h-7 flex-wrap items-center gap-1 rounded-md border-[0.5px] border-input bg-card px-2 py-1 has-[input:focus-visible]:focus-line-inset"
     >
       {value.map((v, i) => (
         <span key={i} className="inline-flex h-5 items-center gap-1 rounded-full bg-muted px-2 text-xs text-foreground">

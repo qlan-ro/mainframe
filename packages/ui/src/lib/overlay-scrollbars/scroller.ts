@@ -1,5 +1,5 @@
 /** Reading scroll containers from the DOM. */
-import { intersect, overflows, type Axis, type AxisMetrics, type Box } from './geometry';
+import { intersect, overflows, THUMB_HIT_SIZE, type Axis, type AxisMetrics, type Box } from './geometry';
 
 const SCROLLABLE = new Set(['auto', 'scroll']);
 
@@ -49,25 +49,40 @@ export function visibleBox(element: Element): Box {
   return box;
 }
 
-/** True when something else (a dialog, the sticky composer) is painted over the box. */
-export function isCovered(element: Element, axis: Axis, box: Box, thumb: Element): boolean {
-  if (typeof document.elementsFromPoint !== 'function') return false;
-  const midX = (box.left + box.right) / 2;
-  const midY = (box.top + box.bottom) / 2;
-  const points: [number, number][] =
-    axis === 'y'
-      ? [
-          [midX, box.top + 2],
-          [midX, midY],
-          [midX, box.bottom - 2],
-        ]
-      : [
-          [box.left + 2, midY],
-          [midX, midY],
-          [box.right - 2, midY],
-        ];
-  return points.some(([x, y]) => {
-    const hit = document.elementsFromPoint(x, y).find((el) => !thumb.contains(el));
-    return !hit || !(element === hit || element.contains(hit));
+/** Points along a thumb's box: near both ends and in the middle, `across` px in from the scroller's edge. */
+function samplePoints(axis: Axis, box: Box, across: number): [number, number][] {
+  const [from, to] = axis === 'y' ? [box.top, box.bottom] : [box.left, box.right];
+  return [from + 2, (from + to) / 2, to - 2].map((along) =>
+    axis === 'y' ? [box.right - across, along] : [along, box.bottom - across],
+  );
+}
+
+/** What is painted at a point, topmost first. Thumbs are aside: they sit above everything and cover nothing. */
+function paintedAt([x, y]: [number, number]): Element[] {
+  if (typeof document.elementsFromPoint !== 'function') return [];
+  return document.elementsFromPoint(x, y).filter((el) => !el.closest('.mf-scrollbar'));
+}
+
+/**
+ * A resize strip along the scroller's edge (`data-edge-handle`). It is invisible
+ * until hovered and shares its pixels with the thumb, so it does not cover it.
+ */
+function isEdgeHandle(el: Element): boolean {
+  return el.closest('[data-edge-handle]') !== null;
+}
+
+/**
+ * True when something else (a dialog, the sticky composer) is painted over all of
+ * the box. Part of it is not enough: a toast over one end must not take the thumb
+ * away from the rest.
+ */
+export function isCovered(element: Element, axis: Axis, box: Box): boolean {
+  return samplePoints(axis, box, THUMB_HIT_SIZE / 2).every((point) => {
+    const painted = paintedAt(point).filter((el) => !isEdgeHandle(el));
+    return painted.length > 0 && !element.contains(painted[0]!);
   });
+}
+
+export function hasEdgeHandle(axis: Axis, box: Box): boolean {
+  return samplePoints(axis, box, 1).some((point) => paintedAt(point).some(isEdgeHandle));
 }

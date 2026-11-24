@@ -69,7 +69,7 @@ export function TemporaryToggle({ chat, draftMode, setTemporary }: TemporaryTogg
           'flex h-[20px] w-[26px] shrink-0 items-center justify-center',
           'rounded-sm border-[0.5px] text-xs',
           'transition-colors',
-          'focus-visible:outline-none',
+          'focus-visible:focus-line',
           active
             ? 'border-primary bg-sidebar-selection text-primary'
             : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',

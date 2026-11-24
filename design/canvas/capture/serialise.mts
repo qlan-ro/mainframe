@@ -7,7 +7,7 @@ export interface Serialised {
   runtimeCss: string[];
 }
 
-export async function serialise([fromPath, toPath]: [string, string]): Promise<Serialised> {
+export async function serialise(aliases: [string, string][]): Promise<Serialised> {
   const ZWSP = '​';
   // Attributes that change on every run (ids) or mean nothing on a board. Ids inside SVG stay: gradients use them.
   const DROP = /^(data-testid|data-.*-id|data-state-id|aria-controls|aria-labelledby|aria-describedby|id|jsaction)$/;
@@ -138,7 +138,7 @@ export async function serialise([fromPath, toPath]: [string, string]): Promise<S
     ...document.adoptedStyleSheets,
   ];
   return {
-    html: clone.innerHTML.replaceAll(fromPath, toPath),
+    html: aliases.reduce((html, [from, to]) => html.replaceAll(from, to), clone.innerHTML),
     runtimeCss: runtime.map((sheet) => [...sheet.cssRules].map((rule) => rule.cssText).join('\n')).filter(Boolean),
   };
 }

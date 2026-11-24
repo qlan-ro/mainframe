@@ -21,7 +21,7 @@ export function FailureTail({ message, tail }: FailureTailProps) {
   const clean = tail?.replace(ANSI, '').trim();
 
   return (
-    <div className="flex flex-col gap-1 rounded-md border-[0.5px] border-fail/30 bg-fail/8 px-2 py-1.5">
+    <div className="flex flex-col gap-1 rounded-md border-[0.5px] border-fail/30 bg-fail/6 px-2 py-1.5">
       <p className="text-xs font-medium text-fail">{message}</p>
       {clean ? (
         <>

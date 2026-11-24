@@ -89,7 +89,7 @@ export function AddStepMenu({ catalog, onAdd, onAddAction, testId }: AddStepMenu
         ))}
         {catalog.length > 0 && (
           <div className="mt-1 border-t border-border pt-1.5">
-            <div className="flex items-center gap-1.5 px-2 py-1">
+            <div className="flex items-center gap-1.5 rounded-md px-2 py-1 has-[input:focus-visible]:focus-line-inset">
               <Search size={11} className="text-muted-foreground" aria-hidden />
               <input
                 data-testid={`${testId}-search`}

@@ -50,4 +50,10 @@ describe('overlay thumb geometry', () => {
     // The scroller's right edge is behind a panel.
     expect(thumbBox('y', metrics, box, { ...box, right: 245 })).toBeNull();
   });
+
+  it('follows the visible edge when a border clips the last pixel or two of the scroller', () => {
+    const metrics = { view: 200, full: 400, position: 0 };
+    expect(thumbBox('y', metrics, box, { ...box, right: 249 })).toMatchObject({ left: 239, right: 249 });
+    expect(thumbBox('x', metrics, box, { ...box, bottom: 298 })).toMatchObject({ top: 288, bottom: 298 });
+  });
 });

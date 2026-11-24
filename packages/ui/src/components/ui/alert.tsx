@@ -8,7 +8,7 @@ const alertVariants = cva(
     variants: {
       variant: {
         default: 'bg-card text-card-foreground',
-        fail: 'text-fail bg-card [&>svg]:text-current *:data-[slot=alert-description]:text-fail/90',
+        fail: 'text-fail bg-card [&>svg]:text-current *:data-[slot=alert-description]:text-fail',
       },
     },
     defaultVariants: {

@@ -62,6 +62,11 @@ export function intersect(a: Box, b: Box): Box {
   };
 }
 
+/** An ancestor's border may clip the last pixels of a scroller (the sidebar's does). */
+function visibleEdge(edge: number, clip: number): number {
+  return edge - clip <= THUMB_INSET ? Math.min(edge, clip) : edge;
+}
+
 /**
  * The thumb's grab box in viewport coordinates, or null when the scroller's
  * surroundings leave nothing worth drawing. `box` is the scroller's padding box;
@@ -70,15 +75,12 @@ export function intersect(a: Box, b: Box): Box {
 export function thumbBox(axis: Axis, metrics: AxisMetrics, box: Box, clip: Box): Box | null {
   const offset = thumbOffset(metrics);
   const length = thumbLength(metrics);
+  const right = visibleEdge(box.right, clip.right);
+  const bottom = visibleEdge(box.bottom, clip.bottom);
   const thumb: Box =
     axis === 'y'
-      ? { top: box.top + offset, bottom: box.top + offset + length, left: box.right - THUMB_HIT_SIZE, right: box.right }
-      : {
-          left: box.left + offset,
-          right: box.left + offset + length,
-          top: box.bottom - THUMB_HIT_SIZE,
-          bottom: box.bottom,
-        };
+      ? { top: box.top + offset, bottom: box.top + offset + length, left: right - THUMB_HIT_SIZE, right }
+      : { left: box.left + offset, right: box.left + offset + length, top: bottom - THUMB_HIT_SIZE, bottom };
   const visible = intersect(thumb, clip);
   const along = axis === 'y' ? visible.bottom - visible.top : visible.right - visible.left;
   const across = axis === 'y' ? visible.right - visible.left : visible.bottom - visible.top;

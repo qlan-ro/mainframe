@@ -36,7 +36,7 @@ export function ErrorBody({ text, testId }: ErrorBodyProps) {
   return (
     <pre
       data-testid={testId}
-      className="bg-fail/10 px-3 py-2 font-mono text-xs wrap-break-word whitespace-pre-wrap text-fail"
+      className="bg-fail/6 px-3 py-2 font-mono text-xs wrap-break-word whitespace-pre-wrap text-fail"
     >
       {text}
     </pre>

@@ -1,9 +1,12 @@
 """What the product-board builders share: the page shape, captions and writing canvas.json."""
+import getpass
 import html
 import json
 import math
 import os
 import re
+import socket
+import sys
 
 CANVAS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(CANVAS, "project")
@@ -78,7 +81,27 @@ class Component extends DCLogic {{
 """
 
 
+def machine_names():
+    """The user and host names of this machine, in every spelling the app could show."""
+    host = socket.gethostname()
+    names = {getpass.getuser(), os.path.basename(os.path.expanduser("~")), host, host.split(".")[0]}
+    # Two letters and these CI defaults are words any board may hold.
+    return {n for n in names if len(n) > 2 and n.lower() not in {"root", "runner", "user", "localhost"}}
+
+
+def leaks(text, names=None):
+    """What in a board tells whose machine drew it: home and temp paths, the user name, the host name."""
+    names = machine_names() if names is None else names
+    found = re.findall(r"/(?:Users|private|home)/[^\s\"'<>&;)]*", text)
+    for name in sorted(names):
+        found += re.findall(rf"(?i)(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", text)
+    return sorted(set(found))
+
+
 def write_board(stem, text):
+    found = leaks(text)
+    if found:
+        sys.exit(f"{stem}: the board names this machine, not written: {', '.join(found[:10])}")
     with open(os.path.join(PROJECT, stem + ".dc.html"), "w") as f:
         f.write(text)
 
@@ -99,6 +122,7 @@ def place_board(stem, title, width, height, page_id):
     entry.pop("is_interactive", None)
     with open(INDEX, "w") as f:
         json.dump(index, f, indent=2, ensure_ascii=False)
+        f.write("\n")
     overlaps = [
         k
         for k, b in index["boards"].items()

@@ -66,8 +66,7 @@ const MoreMenu: FC = () => (
           data-testid="chat-message-export"
           className={cn(
             'flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5',
-            'text-sm outline-none transition-colors',
-            'focus:bg-muted focus:text-foreground',
+            'text-sm outline-none transition-colors focus:bg-muted focus:text-foreground',
             'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
             "[&_svg:not([class*='size-'])]:size-4",
           )}

@@ -109,7 +109,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
               value={step.title}
               onChange={(e) => patchTitle(e.target.value)}
               placeholder={meta.label}
-              className="w-full border-none bg-transparent p-0 text-sm font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground"
+              className="w-full border-none bg-transparent p-0 text-sm font-semibold tracking-tight text-foreground placeholder:text-muted-foreground"
             />
           ) : (
             <span className="block text-sm font-semibold tracking-tight text-foreground">{meta.label}</span>
@@ -149,7 +149,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           data-level={bad ? 'error' : 'warning'}
           className={cn(
             'flex flex-col gap-[4px] border-t-[0.5px] px-[12px] pt-[7px] pb-[8px]',
-            bad ? 'border-fail/20 bg-fail/[0.06]' : 'border-warning/30 bg-warning/10',
+            bad ? 'border-fail/20 bg-fail/6' : 'border-warning/30 bg-warning/10',
           )}
         >
           {myIssues.map((issue, i) => (

@@ -44,8 +44,8 @@ export interface SessionPanelState {
   toggleSection: (id: SessionPanelOpenSectionId) => void;
 }
 
-/** Radix portals render outside the panel root; a click in one is not "outside". */
-const PORTAL_SELECTOR = '[data-radix-popper-content-wrapper],[role="menu"],[role="dialog"]';
+/** Radix portals and scrollbar thumbs render outside the panel root; a click in one is not "outside". */
+const PORTAL_SELECTOR = '[data-radix-popper-content-wrapper],[role="menu"],[role="dialog"],.mf-scrollbar';
 
 /** An open dialog owns Escape; the non-modal overlay must not swallow it. */
 function hasOpenDialogOutside(root: HTMLElement | null): boolean {

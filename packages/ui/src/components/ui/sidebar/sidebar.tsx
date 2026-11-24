@@ -136,6 +136,7 @@ export function SidebarRail({ className, ...props }: React.ComponentProps<'butto
       <button
         data-slot="sidebar-rail"
         data-sidebar="rail"
+        data-edge-handle=""
         aria-label="Resize sidebar"
         tabIndex={-1}
         onPointerDown={onPointerDown}

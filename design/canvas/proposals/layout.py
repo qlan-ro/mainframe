@@ -27,5 +27,7 @@ for k in added:  # a new board goes after the one before it in BOARDS
     prev = BOARDS[[b['file'] + '.dc.html' for b in BOARDS].index(k) - 1]['file'] + '.dc.html'
     d['order'].insert(d['order'].index(prev) + 1, k)
 assert set(d['order']) == set(d['boards'])
-json.dump(d, open(INDEX, 'w'), indent=2, ensure_ascii=False)
+with open(INDEX, 'w') as f:
+    json.dump(d, f, indent=2, ensure_ascii=False)
+    f.write('\n')
 print('proposals laid out; adopted section at', YA, '; new boards', added)

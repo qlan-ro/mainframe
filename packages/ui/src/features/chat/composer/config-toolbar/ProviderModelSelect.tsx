@@ -75,7 +75,7 @@ function CollapsibleModelSection({ label, testId, containsCurrent, children }: M
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <CollapsibleTrigger
         data-testid={testId}
-        className="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground"
+        className="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:focus-line-inset"
       >
         {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
         {label}
@@ -180,7 +180,7 @@ export function ProviderModelSelect({
                 // Driven by state, not data-[state=open]: TooltipTrigger asChild
                 // overwrites the child's data-state with the tooltip's own.
                 open && 'border-primary bg-sidebar-selection',
-                'transition-colors focus-visible:outline-none',
+                'transition-colors focus-visible:focus-line',
                 'disabled:pointer-events-none disabled:opacity-40',
               )}
             >

@@ -12,7 +12,7 @@ function makeScroller(overflow = 'auto', parent: Element = document.body): HTMLD
   el.style.overflowY = overflow;
   Object.defineProperties(el, {
     clientHeight: { value: 200 },
-    scrollHeight: { value: 400 },
+    scrollHeight: { value: 400, configurable: true },
     clientWidth: { value: 100 },
     scrollWidth: { value: 100 },
   });
@@ -25,6 +25,17 @@ function makeScroller(overflow = 'auto', parent: Element = document.body): HTMLD
   }) as typeof el.scrollBy;
   parent.append(el);
   return el;
+}
+
+/** A browser's scroll offset: whole px, inside the range. jsdom keeps whatever it is given. */
+function clampScroll(el: HTMLElement): void {
+  let offset = 0;
+  Object.defineProperty(el, 'scrollTop', {
+    get: () => offset,
+    set: (value: number) => {
+      offset = Math.round(Math.min(Math.max(value, 0), el.scrollHeight - el.clientHeight));
+    },
+  });
 }
 
 const pointerOver = (el: Element): void => {
@@ -134,18 +145,129 @@ describe('overlay scrollbar manager', () => {
     expect(scroller.scrollTop).toBe(30);
   });
 
-  it('hides the thumb when a dialog covers the area', () => {
+  it('keeps the point under the pointer when content is prepended mid-drag', () => {
     const scroller = makeScroller();
-    const dialog = document.createElement('div');
-    document.body.append(dialog);
-    let top: Element = scroller;
-    document.elementsFromPoint = () => [top];
     pointerOver(scroller);
-    expect(thumbs()[0]?.hidden).toBe(false);
-    top = dialog;
-    vi.advanceTimersByTime(300);
-    expect(thumbs()[0]?.hidden).toBe(true);
-    Reflect.deleteProperty(document, 'elementsFromPoint');
+    const thumb = thumbs()[0]!;
+    drag(thumb, 'pointerdown', 10);
+    drag(thumb, 'pointermove', 59);
+    expect(scroller.scrollTop).toBe(100);
+
+    // History loads above: the area doubles and its anchor moves the view down by as much.
+    Object.defineProperty(scroller, 'scrollHeight', { value: 800 });
+    scroller.scrollTop = 500;
+    // Track 196, thumb 49: 600px of range over 147px of travel.
+    drag(thumb, 'pointermove', 108);
+    expect(scroller.scrollTop).toBe(700);
+  });
+
+  it('lets the pointer overshoot an end and come back before the area scrolls again', () => {
+    const scroller = makeScroller();
+    clampScroll(scroller);
+    pointerOver(scroller);
+    const thumb = thumbs()[0]!;
+    drag(thumb, 'pointerdown', 10);
+    drag(thumb, 'pointermove', 208);
+    expect(scroller.scrollTop).toBe(200);
+    drag(thumb, 'pointermove', 108);
+    expect(scroller.scrollTop).toBe(200);
+    drag(thumb, 'pointermove', 59);
+    expect(scroller.scrollTop).toBe(100);
+  });
+
+  it('does not lose slow drags to whole-pixel scroll offsets', () => {
+    const scroller = makeScroller();
+    Object.defineProperty(scroller, 'scrollHeight', { value: 230 });
+    clampScroll(scroller);
+    pointerOver(scroller);
+    const thumb = thumbs()[0]!;
+    drag(thumb, 'pointerdown', 10);
+    // Track 196, thumb 170.4: each px of the drag is 1.17px of the 30px range.
+    for (let y = 11; y <= 23; y++) drag(thumb, 'pointermove', y);
+    expect(scroller.scrollTop).toBe(15);
+  });
+
+  describe('what is painted over the thumb', () => {
+    /** Answers `elementsFromPoint` by y, topmost first. */
+    const paint = (layers: (y: number) => Element[]): void => {
+      document.elementsFromPoint = (_x, y) => [...layers(y)];
+    };
+    afterEach(() => {
+      Reflect.deleteProperty(document, 'elementsFromPoint');
+    });
+
+    it('hides the thumb when a dialog covers all of it', () => {
+      const scroller = makeScroller();
+      const dialog = document.createElement('div');
+      document.body.append(dialog);
+      let top: Element = scroller;
+      paint(() => [top]);
+      pointerOver(scroller);
+      expect(thumbs()[0]?.hidden).toBe(false);
+      top = dialog;
+      vi.advanceTimersByTime(300);
+      expect(thumbs()[0]?.hidden).toBe(true);
+    });
+
+    it('keeps the thumb when something covers only a part of it', () => {
+      const scroller = makeScroller();
+      const toast = document.createElement('div');
+      document.body.append(toast);
+      paint((y) => (y < 20 ? [toast, scroller] : [scroller]));
+      pointerOver(scroller);
+      expect(thumbs()[0]?.hidden).toBe(false);
+    });
+
+    it('ignores the thumbs of other areas', () => {
+      const scroller = makeScroller();
+      const other = document.createElement('div');
+      other.className = 'mf-scrollbar';
+      other.append(document.createElement('span'));
+      document.body.append(other);
+      paint(() => [other.firstElementChild!, other, scroller]);
+      pointerOver(scroller);
+      expect(thumbs().find((el) => el !== other)?.hidden).toBe(false);
+    });
+
+    it('shows over a resize edge, and leaves the outermost pixels to it', () => {
+      const scroller = makeScroller();
+      pointerOver(scroller);
+      expect(thumbs()[0]?.style.width).toBe('10px');
+      const edge = document.createElement('button');
+      edge.setAttribute('data-edge-handle', '');
+      document.body.append(edge);
+      paint(() => [edge, scroller]);
+      vi.advanceTimersByTime(300);
+      expect(thumbs()[0]?.hidden).toBe(false);
+      expect(thumbs()[0]?.style.left).toBe('90px');
+      expect(thumbs()[0]?.style.width).toBe('8px');
+    });
+
+    it('never hides the thumb that is being dragged', () => {
+      const scroller = makeScroller();
+      const dialog = document.createElement('div');
+      document.body.append(dialog);
+      let top: Element = scroller;
+      paint(() => [top]);
+      pointerOver(scroller);
+      const thumb = thumbs()[0]!;
+      drag(thumb, 'pointerdown', 10);
+      top = dialog;
+      vi.advanceTimersByTime(300);
+      expect(thumb.hidden).toBe(false);
+      drag(thumb, 'pointerup', 10);
+      vi.advanceTimersByTime(300);
+      expect(thumb.hidden).toBe(true);
+    });
+  });
+
+  it('keeps its mousedown from light-dismiss handlers', () => {
+    pointerOver(makeScroller());
+    const outside = vi.fn();
+    document.addEventListener('mousedown', outside);
+    drag(thumbs()[0]!, 'mousedown', 10);
+    expect(outside).not.toHaveBeenCalled();
+    document.removeEventListener('mousedown', outside);
   });
 
   it('drops the thumb of an area that unmounts', () => {

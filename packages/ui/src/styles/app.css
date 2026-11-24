@@ -83,6 +83,9 @@ code {
 /* The element is the 10px grab area; its span is the painted thumb, 6px wide and
    2px from the edge, 8px under the pointer. Above every portal it may scroll. */
 .mf-scrollbar {
+  /* Where an edge resize strip keeps the outer 2px, the grab area starts after
+     them and thumb.ts sets this to 0: the paint stays 2px from the edge. */
+  --thumb-inset: 2px;
   position: fixed;
   z-index: 100;
   opacity: 0;
@@ -96,7 +99,7 @@ code {
 }
 .mf-scrollbar > span {
   position: absolute;
-  inset: 0 2px 0 auto;
+  inset: 0 var(--thumb-inset) 0 auto;
   width: 6px;
   border-radius: 3px;
   background: color-mix(in srgb, var(--foreground) 26%, transparent);
@@ -106,7 +109,7 @@ code {
     background-color 120ms;
 }
 .mf-scrollbar[data-axis='x'] > span {
-  inset: auto 0 2px 0;
+  inset: auto 0 var(--thumb-inset) 0;
   width: auto;
   height: 6px;
 }

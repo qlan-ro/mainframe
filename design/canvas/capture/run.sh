@@ -14,6 +14,8 @@ shift
 export MF_E2E_DAEMON_PORT=${MF_E2E_DAEMON_PORT:-31516}
 export MF_E2E_PREVIEW_PORT=${MF_E2E_PREVIEW_PORT:-4399}
 export E2E_MODE=mock
+# The seeded repositories are made with git's own defaults, not this machine's config.
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
 export CAPTURE_AREA=$AREA
 CAPTURE_BOARDS=$(IFS=,; echo "$*")
 export CAPTURE_BOARDS
