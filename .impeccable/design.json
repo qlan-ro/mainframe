@@ -1,0 +1,719 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-24T17:56:00Z",
+  "title": "Design System: Mainframe",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "tonalRamp": ["#0b0b0c", "#252526", "#424244", "#616163", "#828284", "#a5a5a7", "#c9c9cb", "#eeeef0"]
+      },
+      "side": {
+        "role": "neutral",
+        "displayName": "Sidebar Sheet",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Sheet",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "chip": {
+        "role": "neutral",
+        "displayName": "Chip Well",
+        "tonalRamp": ["#0b0b0c", "#252526", "#424244", "#616163", "#828284", "#a5a5a7", "#c9c9cb", "#eeeef0"]
+      },
+      "q": {
+        "role": "neutral",
+        "displayName": "Well",
+        "tonalRamp": ["#0b0b0c", "#252526", "#424243", "#616162", "#828284", "#a5a5a6", "#c9c9ca", "#eeeeef"]
+      },
+      "bubble": {
+        "role": "neutral",
+        "displayName": "Bubble",
+        "tonalRamp": ["#0b0b0c", "#252526", "#424243", "#616162", "#828284", "#a5a5a6", "#c9c9ca", "#eeeeef"]
+      },
+      "hair": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "hair2": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "tonalRamp": ["#0b0b0d", "#252527", "#424245", "#616165", "#828286", "#a4a4a8", "#c9c9cc", "#eeeef1"]
+      },
+      "sel": {
+        "role": "neutral",
+        "displayName": "Selected Fill",
+        "tonalRamp": ["#0b0b0c", "#252526", "#424244", "#616163", "#828284", "#a5a5a7", "#c9c9cb", "#eeeef0"]
+      },
+      "hover": {
+        "role": "neutral",
+        "displayName": "Hover Fill",
+        "tonalRamp": ["#0b0b0c", "#252526", "#424244", "#616163", "#828284", "#a5a5a7", "#c9c9cb", "#eeeef0"]
+      },
+      "press": {
+        "role": "neutral",
+        "displayName": "Pressed Fill",
+        "tonalRamp": ["#0b0b0c", "#252527", "#424244", "#616164", "#828285", "#a5a5a8", "#c9c9cb", "#eeeef0"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "ink2": {
+        "role": "neutral",
+        "displayName": "Body Ink",
+        "tonalRamp": ["#0b0b0c", "#252526", "#424243", "#616163", "#828284", "#a5a5a6", "#c9c9ca", "#eeeeef"]
+      },
+      "meta": {
+        "role": "neutral",
+        "displayName": "Meta Grey",
+        "tonalRamp": ["#0b0b0d", "#252527", "#424245", "#616165", "#828287", "#a4a4a9", "#c9c9cc", "#eeeef1"]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Faint Grey",
+        "tonalRamp": ["#0b0b0d", "#252527", "#424245", "#616165", "#828286", "#a4a4a8", "#c9c9cc", "#eeeef1"]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "System Blue",
+        "tonalRamp": ["#000334", "#001e62", "#003c94", "#005cc9", "#1a80f1", "#5aa6ff", "#8eccff", "#c1f2ff"]
+      },
+      "accent-ink": {
+        "role": "primary",
+        "displayName": "Blue Ink",
+        "tonalRamp": ["#00052f", "#00205b", "#003e8a", "#085dbd", "#3681e4", "#68a6fc", "#98ccff", "#c9f1ff"]
+      },
+      "accent-fill": {
+        "role": "primary",
+        "displayName": "Deep Blue Fill",
+        "tonalRamp": ["#00052f", "#00205b", "#003e8a", "#085dbd", "#3681e4", "#68a6fc", "#98ccff", "#c9f1ff"]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus Blue",
+        "tonalRamp": ["#000530", "#00205c", "#003e8c", "#005dc0", "#3181e7", "#65a6fe", "#96ccff", "#c7f2ff"]
+      },
+      "live": {
+        "role": "primary",
+        "displayName": "Live Blue",
+        "tonalRamp": ["#000530", "#00205c", "#003e8c", "#005dc0", "#3181e7", "#65a6fe", "#96ccff", "#c7f2ff"]
+      },
+      "sel-bg": {
+        "role": "primary",
+        "displayName": "Selection",
+        "tonalRamp": ["#000334", "#001e62", "#003c94", "#005cc9", "#1a80f1", "#5aa6ff", "#8eccff", "#c1f2ff"],
+        "canonical": "rgba(10,132,255,.26)"
+      },
+      "warn": {
+        "role": "secondary",
+        "displayName": "Burnt Amber",
+        "tonalRamp": ["#1b0400", "#3d1a00", "#633501", "#8b5117", "#b0723d", "#ce986c", "#edbf9b", "#ffe7ca"]
+      },
+      "warn-bg": {
+        "role": "secondary",
+        "displayName": "Amber Tint",
+        "tonalRamp": ["#200000", "#461100", "#6f2b00", "#9b4500", "#c16800", "#de9051", "#fbb987", "#ffe3bc"],
+        "canonical": "rgba(217,119,6,.13)"
+      },
+      "warn-bd": {
+        "role": "secondary",
+        "displayName": "Amber Outline",
+        "tonalRamp": ["#1b0400", "#3d1a00", "#633501", "#8b5117", "#b0723d", "#ce986c", "#edbf9b", "#ffe7ca"],
+        "canonical": "rgba(138,75,0,.35)"
+      },
+      "warn-dot": {
+        "role": "secondary",
+        "displayName": "Amber Mark",
+        "tonalRamp": ["#1e0100", "#431500", "#6b2e00", "#964900", "#bb6b29", "#d99360", "#f6bb91", "#ffe4c3"]
+      },
+      "crit": {
+        "role": "tertiary",
+        "displayName": "Signal Red",
+        "tonalRamp": ["#2a0000", "#550000", "#850001", "#b70816", "#e0413b", "#fc766b", "#ffa599", "#ffd4c9"]
+      },
+      "crit-bg": {
+        "role": "tertiary",
+        "displayName": "Red Tint",
+        "tonalRamp": ["#2a0000", "#550000", "#850001", "#b70816", "#e0413b", "#fc766b", "#ffa599", "#ffd4c9"],
+        "canonical": "rgba(199,0,22,.07)"
+      },
+      "crit-bd": {
+        "role": "tertiary",
+        "displayName": "Red Outline",
+        "tonalRamp": ["#2a0000", "#550000", "#850001", "#b70816", "#e0413b", "#fc766b", "#ffa599", "#ffd4c9"],
+        "canonical": "rgba(199,0,22,.28)"
+      },
+      "ok": {
+        "role": "tertiary",
+        "displayName": "Diff Green",
+        "tonalRamp": ["#001102", "#002f13", "#07502a", "#207343", "#479563", "#76b68a", "#a4d8b3", "#d2fbdd"]
+      },
+      "fail": {
+        "role": "tertiary",
+        "displayName": "Muted Rose",
+        "tonalRamp": ["#200008", "#460920", "#6f213b", "#9c3a59", "#c25c7a", "#e0869d", "#fdb0c3", "#ffdbe9"]
+      },
+      "red": {
+        "role": "tertiary",
+        "displayName": "Diff Red",
+        "tonalRamp": ["#250000", "#4e0000", "#7a160d", "#aa2f22", "#d15445", "#ee8271", "#ffae9f", "#ffdacd"]
+      },
+      "code": {
+        "role": "neutral",
+        "displayName": "Code Tint",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"],
+        "canonical": "rgba(0,0,0,.06)"
+      },
+      "tipbg": {
+        "role": "neutral",
+        "displayName": "Tooltip Ground",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "tipink": {
+        "role": "neutral",
+        "displayName": "Tooltip Ink",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "claude": {
+        "role": "custom",
+        "displayName": "Claude Dot",
+        "tonalRamp": ["#1f0000", "#451101", "#6d2a13", "#994428", "#bf6649", "#dc8e75", "#f9b7a1", "#ffe1cf"]
+      },
+      "codex": {
+        "role": "custom",
+        "displayName": "Codex Dot",
+        "tonalRamp": ["#001300", "#00320f", "#005526", "#00793e", "#009c5e", "#53bd86", "#8cdeb0", "#c1ffda"]
+      },
+      "ground-dark": {
+        "role": "neutral",
+        "displayName": "Ground (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "side-dark": {
+        "role": "neutral",
+        "displayName": "Sidebar Sheet (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "sheet-dark": {
+        "role": "neutral",
+        "displayName": "Sheet (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "card-dark": {
+        "role": "neutral",
+        "displayName": "Card (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "chip-dark": {
+        "role": "neutral",
+        "displayName": "Chip Well (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "q-dark": {
+        "role": "neutral",
+        "displayName": "Well (dark)",
+        "tonalRamp": ["#0b0b0c", "#252527", "#424244", "#616164", "#828285", "#a5a5a8", "#c9c9cb", "#eeeef0"]
+      },
+      "bubble-dark": {
+        "role": "neutral",
+        "displayName": "Bubble (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "hair-dark": {
+        "role": "neutral",
+        "displayName": "Hairline (dark)",
+        "tonalRamp": ["#0b0b0c", "#252527", "#424244", "#616164", "#828285", "#a5a5a7", "#c9c9cb", "#eeeef0"]
+      },
+      "hair2-dark": {
+        "role": "neutral",
+        "displayName": "Strong Hairline (dark)",
+        "tonalRamp": ["#0b0b0c", "#252527", "#424245", "#616165", "#828286", "#a4a5a8", "#c9c9cc", "#eeeef1"]
+      },
+      "sel-dark": {
+        "role": "neutral",
+        "displayName": "Selected Fill (dark)",
+        "tonalRamp": ["#0b0b0c", "#252526", "#424243", "#616163", "#828284", "#a5a5a7", "#c9c9ca", "#eeeeef"]
+      },
+      "hover-dark": {
+        "role": "neutral",
+        "displayName": "Hover Fill (dark)",
+        "tonalRamp": ["#0b0b0c", "#252526", "#424243", "#616163", "#828284", "#a5a5a7", "#c9c9ca", "#eeeef0"]
+      },
+      "press-dark": {
+        "role": "neutral",
+        "displayName": "Pressed Fill (dark)",
+        "tonalRamp": ["#0b0b0c", "#252527", "#424244", "#616164", "#828285", "#a5a5a7", "#c9c9cb", "#eeeef0"]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "ink2-dark": {
+        "role": "neutral",
+        "displayName": "Body Ink (dark)",
+        "tonalRamp": ["#0b0b0d", "#252527", "#424245", "#616165", "#828286", "#a4a4a8", "#c9c9cc", "#eeeef1"]
+      },
+      "meta-dark": {
+        "role": "neutral",
+        "displayName": "Meta Grey (dark)",
+        "tonalRamp": ["#0b0b0d", "#252528", "#414145", "#616166", "#828287", "#a4a4a9", "#c9c9cc", "#eeeef1"]
+      },
+      "faint-dark": {
+        "role": "neutral",
+        "displayName": "Faint Grey (dark)",
+        "tonalRamp": ["#0b0b0d", "#252527", "#424245", "#616165", "#828287", "#a4a4a9", "#c9c9cc", "#eeeef1"]
+      },
+      "accent-ink-dark": {
+        "role": "primary",
+        "displayName": "Blue Ink (dark)",
+        "tonalRamp": ["#000a27", "#00254f", "#00437a", "#0b64a9", "#3986ce", "#6caae9", "#9bceff", "#cbf3ff"]
+      },
+      "accent-fill-dark": {
+        "role": "primary",
+        "displayName": "Deep Blue Fill (dark)",
+        "tonalRamp": ["#00062e", "#00215a", "#003f89", "#005ebc", "#3282e2", "#66a7fb", "#97ccff", "#c8f2ff"]
+      },
+      "focus-dark": {
+        "role": "primary",
+        "displayName": "Focus Blue (dark)",
+        "tonalRamp": ["#00072d", "#002357", "#004086", "#0060b8", "#2d84de", "#64a9f7", "#95cdff", "#c7f3ff"]
+      },
+      "live-dark": {
+        "role": "primary",
+        "displayName": "Live Blue (dark)",
+        "tonalRamp": ["#000334", "#001e62", "#003c94", "#005cc9", "#1a80f1", "#5aa6ff", "#8eccff", "#c1f2ff"]
+      },
+      "sel-bg-dark": {
+        "role": "primary",
+        "displayName": "Selection (dark)",
+        "tonalRamp": ["#000334", "#001e62", "#003c94", "#005cc9", "#1a80f1", "#5aa6ff", "#8eccff", "#c1f2ff"],
+        "canonical": "rgba(10,132,255,.42)"
+      },
+      "warn-dark": {
+        "role": "secondary",
+        "displayName": "Burnt Amber (dark)",
+        "tonalRamp": ["#190500", "#3b1d00", "#603800", "#885500", "#ab761e", "#ca9c5b", "#e9c28e", "#ffe9c1"]
+      },
+      "warn-bg-dark": {
+        "role": "secondary",
+        "displayName": "Amber Tint (dark)",
+        "tonalRamp": ["#190500", "#3b1d00", "#603800", "#885500", "#ab761e", "#ca9c5b", "#e9c28e", "#ffe9c1"],
+        "canonical": "rgba(240,179,90,.12)"
+      },
+      "warn-bd-dark": {
+        "role": "secondary",
+        "displayName": "Amber Outline (dark)",
+        "tonalRamp": ["#190500", "#3b1d00", "#603800", "#885500", "#ab761e", "#ca9c5b", "#e9c28e", "#ffe9c1"],
+        "canonical": "rgba(240,179,90,.38)"
+      },
+      "warn-dot-dark": {
+        "role": "secondary",
+        "displayName": "Amber Mark (dark)",
+        "tonalRamp": ["#1e0100", "#431600", "#6a2f00", "#954b00", "#ba6d00", "#d8954f", "#f5bc86", "#ffe5bb"]
+      },
+      "crit-dark": {
+        "role": "tertiary",
+        "displayName": "Signal Red (dark)",
+        "tonalRamp": ["#230000", "#4a050e", "#751d23", "#a3363b", "#ca595b", "#e78583", "#ffb0ad", "#ffdbd8"]
+      },
+      "crit-bg-dark": {
+        "role": "tertiary",
+        "displayName": "Red Tint (dark)",
+        "tonalRamp": ["#260000", "#4f0006", "#7c0e1b", "#ac2831", "#d44f51", "#f17e7b", "#ffaba6", "#ffd8d3"],
+        "canonical": "rgba(255,107,107,.1)"
+      },
+      "crit-bd-dark": {
+        "role": "tertiary",
+        "displayName": "Red Outline (dark)",
+        "tonalRamp": ["#260000", "#4f0006", "#7c0e1b", "#ac2831", "#d44f51", "#f17e7b", "#ffaba6", "#ffd8d3"],
+        "canonical": "rgba(255,107,107,.36)"
+      },
+      "ok-dark": {
+        "role": "tertiary",
+        "displayName": "Diff Green (dark)",
+        "tonalRamp": ["#001202", "#003115", "#00522c", "#007646", "#269966", "#64ba8d", "#97dbb5", "#c9fddf"]
+      },
+      "fail-dark": {
+        "role": "tertiary",
+        "displayName": "Muted Rose (dark)",
+        "tonalRamp": ["#1c0109", "#401322", "#672b3e", "#91455c", "#b6667d", "#d48ea0", "#f2b6c5", "#ffe0eb"]
+      },
+      "red-dark": {
+        "role": "tertiary",
+        "displayName": "Diff Red (dark)",
+        "tonalRamp": ["#240000", "#4c0304", "#771b17", "#a6342d", "#cd584d", "#ea8478", "#ffafa4", "#ffdbd1"]
+      },
+      "code-dark": {
+        "role": "neutral",
+        "displayName": "Code Tint (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"],
+        "canonical": "rgba(255,255,255,.09)"
+      },
+      "tipbg-dark": {
+        "role": "neutral",
+        "displayName": "Tooltip Ground (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      },
+      "tipink-dark": {
+        "role": "neutral",
+        "displayName": "Tooltip Ink (dark)",
+        "tonalRamp": ["#0b0b0b", "#252525", "#424242", "#616161", "#828282", "#a5a5a5", "#c9c9c9", "#eeeeee"]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Sidebar header and workspace preview headings; one per region."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Session title, gate titles, dialog and sheet titles."
+      },
+      "transcript": {
+        "displayName": "Transcript",
+        "purpose": "Agent prose and user bubbles in the 740 px reading column."
+      },
+      "input": {
+        "displayName": "Input",
+        "purpose": "The composer field."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default UI size: rows, menus, toolbar, dialog copy."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Labels you act on: permissions, menu items, gate buttons."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Tabs, activity and bottom strips, attachments, file tree."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Group headers, panel section labels, eyebrows; sentence case."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Times, counts, values, tooltips, menu descriptions."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Menu group labels and queued-row index."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Code, terminal, diffs, tool names, branches, paths, keycaps."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card-lift",
+        "value": "inset 0 0 0 1px #e5e5e5, 0 1px 2px rgba(0,0,0,.04), 0 3px 10px rgba(0,0,0,.05)",
+        "purpose": "Composer card and its top strip."
+      },
+      {
+        "name": "card-lift-dark",
+        "value": "inset 0 0 0 1px #333336, 0 1px 2px rgba(0,0,0,.3), 0 3px 10px rgba(0,0,0,.25)",
+        "purpose": "Composer card, dark theme."
+      },
+      {
+        "name": "float",
+        "value": "0 0 0 1px #e5e5e5, 0 2px 4px rgba(0,0,0,.06), 0 10px 30px rgba(0,0,0,.16)",
+        "purpose": "Menus, confirm dialogs, shortcuts sheet, floating session panel."
+      },
+      {
+        "name": "float-dark",
+        "value": "0 0 0 1px #333336, 0 2px 4px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.5)",
+        "purpose": "Floating surfaces, dark theme."
+      },
+      {
+        "name": "tab-selected",
+        "value": "inset 0 0 0 1px #e5e5e5, 0 1px 2px rgba(0,0,0,.05)",
+        "purpose": "Selected session or workspace tab."
+      },
+      {
+        "name": "composer-focus",
+        "value": "inset 0 0 0 2px #0b6fdc, 0 1px 2px rgba(0,0,0,.04), 0 3px 10px rgba(0,0,0,.05)",
+        "purpose": "Composer card while the field has focus."
+      },
+      {
+        "name": "gate-halo",
+        "value": "0 0 0 3px rgba(10,132,255,.15)",
+        "purpose": "Pending gate card (with a 1px accent-40% border); amber for permission gates."
+      },
+      {
+        "name": "tooltip",
+        "value": "0 4px 14px rgba(0,0,0,.2)",
+        "purpose": "Tooltips."
+      },
+      {
+        "name": "toast",
+        "value": "0 6px 20px rgba(0,0,0,.2)",
+        "purpose": "Toasts."
+      },
+      {
+        "name": "window",
+        "value": "0 0 0 1px rgba(0,0,0,.14), 0 22px 56px rgba(0,0,0,.2)",
+        "purpose": "The framed window in canvas boards only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-rise",
+        "value": "cubic-bezier(.16,1,.3,1)",
+        "purpose": "Menus, queued rows, toasts entering (4px rise, 0.14–0.22s); ring arc changes."
+      },
+      {
+        "name": "ease-panel",
+        "value": "cubic-bezier(.22,1,.36,1)",
+        "purpose": "Workspace panel slide and title-bar segment width, 0.32s."
+      },
+      {
+        "name": "duration-state",
+        "value": "120ms–160ms",
+        "purpose": "Hover and state fills, composer focus ring."
+      },
+      {
+        "name": "duration-disclosure",
+        "value": "150ms",
+        "purpose": "Chevron rotation on disclosures."
+      },
+      {
+        "name": "spinner",
+        "value": "800ms linear infinite",
+        "purpose": "Running spinners."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "none",
+        "purpose": "prefers-reduced-motion removes every animation and transition."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "composer-md",
+        "value": "560px",
+        "purpose": "Container query on the composer: model label caps at 150px below this."
+      },
+      {
+        "name": "composer-sm",
+        "value": "400px",
+        "purpose": "Model and permissions merge into one chip; labels shorten; card padding 8px."
+      },
+      {
+        "name": "composer-xs",
+        "value": "320px",
+        "purpose": "Merged chip shows only the permission status; ring, Stop and split wrap to a second row."
+      },
+      {
+        "name": "panel-dock",
+        "value": "1044px",
+        "purpose": "Chat column width at which the session panel docks (720 + 24 + 300); narrower floats it."
+      },
+      {
+        "name": "chat-min",
+        "value": "360px",
+        "purpose": "Minimum chat column width beside the workspace panel."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Composer card",
+      "kind": "custom",
+      "refersTo": "composer-card",
+      "description": "The signature surface: field, toolbar with model, permissions, context ring and Send.",
+      "html": "<div class=\"ds-composer\"><div class=\"ds-field\" contenteditable=\"true\" data-ph=\"Reply to the agent…\"></div><div class=\"ds-bar\"><button class=\"ds-tb ds-plus\" aria-label=\"Attach\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 3.5v9M3.5 8h9\"/></svg></button><button class=\"ds-tb\"><i class=\"ds-pd\"></i>Opus 4.5<em>High</em><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" style=\"color:#5c5c61;width:12px;height:12px\"><path d=\"M4.5 6.5 8 10l3.5-3.5\"/></svg></button><button class=\"ds-tb ds-perm\">Auto-Edits<svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" style=\"color:#5c5c61;width:12px;height:12px\"><path d=\"M4.5 6.5 8 10l3.5-3.5\"/></svg></button><span class=\"ds-sp\"></span><span class=\"ds-ring\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6\" fill=\"none\" stroke=\"rgba(31,31,31,.26)\" stroke-width=\"2\"/><circle cx=\"8\" cy=\"8\" r=\"6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-dasharray=\"15.8 37.7\" transform=\"rotate(-90 8 8)\"/></svg>42%</span><button class=\"ds-send\" aria-label=\"Send\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 12.5v-9M4.5 7 8 3.5 11.5 7\"/></svg></button></div></div>",
+      "css": ".ds-composer{width:520px;max-width:100%;background:#fff;border-radius:16px;padding:10px 10px 8px;box-shadow:inset 0 0 0 1px #e5e5e5,0 1px 2px rgba(0,0,0,.04),0 3px 10px rgba(0,0,0,.05);font:13px/1.45 -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;color:#1f1f1f;transition:box-shadow .16s} .ds-composer:focus-within{box-shadow:inset 0 0 0 2px #0b6fdc,0 0 0 3px rgba(10,132,255,.28),0 3px 10px rgba(0,0,0,.05)} .ds-field{min-height:21px;padding:2px 4px 8px;font-size:14px;line-height:21px;outline:0;caret-color:#0a84ff} .ds-field:empty:before{content:attr(data-ph);color:#5c5c61} .ds-bar{display:flex;align-items:center;gap:2px} .ds-tb{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:0;border-radius:8px;background:none;color:#48484a;font:inherit;cursor:pointer;transition:background .12s} .ds-tb:hover{background:#ededf0} .ds-tb:focus-visible,.ds-send:focus-visible{outline:2px solid #0b6fdc;outline-offset:2px} .ds-tb em{font-style:normal;color:#5c5c61} .ds-plus{width:28px;padding:0;justify-content:center;border-radius:50%} .ds-pd{width:8px;height:8px;border-radius:50%;background:#d97757} .ds-perm{font-weight:500} .ds-sp{flex:1} .ds-ring{display:inline-flex;align-items:center;gap:6px;padding:0 6px;font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;color:#5c5c61} .ds-send{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:1px solid #0a84ff;background:#0a84ff;color:#fff;cursor:pointer} .ds-send:hover{filter:brightness(1.08)}"
+    },
+    {
+      "name": "Send, Stop and Queue",
+      "kind": "button",
+      "refersTo": "send-ready",
+      "description": "The one-slot action in its states: idle, ready, stop, and the Queue split beside Stop.",
+      "html": "<div class=\"ds-row\"><button class=\"ds-s\" disabled aria-label=\"Send\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 12.5v-9M4.5 7 8 3.5 11.5 7\"/></svg></button><button class=\"ds-s ds-ready\" aria-label=\"Send\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 12.5v-9M4.5 7 8 3.5 11.5 7\"/></svg></button><button class=\"ds-s ds-stop\" aria-label=\"Stop ⌘.\"><svg width=\"10\" height=\"10\" viewBox=\"0 0 10 10\"><rect width=\"10\" height=\"10\" rx=\"2\" fill=\"currentColor\"/></svg></button><span class=\"ds-split\"><button class=\"ds-main\">Queue ↵</button><button class=\"ds-chev\" aria-label=\"More send options\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" style=\"color:#fff;width:12px;height:12px\"><path d=\"M4.5 6.5 8 10l3.5-3.5\"/></svg></button></span></div>",
+      "css": ".ds-row{display:flex;gap:10px;align-items:center} .ds-s{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:1px solid #cfcfd4;background:transparent;color:#a1a1a6;cursor:pointer;transition:background .15s,border-color .15s,color .15s} .ds-s:disabled{cursor:default} .ds-ready{background:#0a84ff;border-color:#0a84ff;color:#fff} .ds-ready:hover{filter:brightness(1.08)} .ds-stop{background:#1f1f1f;border-color:#1f1f1f;color:#fff} .ds-stop:hover{opacity:.86} .ds-s:focus-visible{outline:2px solid #0b6fdc;outline-offset:2px} .ds-split{display:inline-flex;height:28px;border-radius:14px;background:#0063cc} .ds-split button{display:inline-flex;align-items:center;height:28px;border:0;background:none;color:#fff;font:600 13px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;cursor:pointer} .ds-split button:hover{background:rgba(255,255,255,.14)} .ds-split button:focus-visible{outline:2px solid #fff;outline-offset:-2px} .ds-main{padding:0 8px 0 12px;border-radius:14px 0 0 14px} .ds-chev{width:26px;justify-content:center;border-radius:0 14px 14px 0;box-shadow:inset 1px 0 0 rgba(255,255,255,.35)}"
+    },
+    {
+      "name": "Gate buttons",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary, outline (naming the rule it saves) and danger actions on a permission gate.",
+      "html": "<div class=\"ds-acts\"><button class=\"ds-gb ds-pri\">Allow once</button><button class=\"ds-gb ds-out\">Always allow <code>cargo test *</code></button><button class=\"ds-gb ds-dan\">Reject</button></div>",
+      "css": ".ds-acts{display:flex;gap:8px;flex-wrap:wrap} .ds-gb{height:32px;padding:0 10px;border-radius:8px;border:1px solid transparent;display:inline-flex;align-items:center;gap:6px;font:500 13.5px -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;cursor:pointer;white-space:nowrap} .ds-gb:focus-visible{outline:2px solid #0b6fdc;outline-offset:2px} .ds-pri{background:#0063cc;color:#fff} .ds-pri:hover{filter:brightness(1.08)} .ds-out{border-color:#cfcfd4;background:#fff;color:#1f1f1f} .ds-out:hover{background:#ededf0} .ds-out code{font:12px ui-monospace,\"SF Mono\",Menlo,monospace;background:rgba(0,0,0,.06);border-radius:4px;padding:1px 5px;color:#48484a} .ds-dan{background:rgba(192,57,43,.11);color:#c0392b} .ds-dan:hover{background:rgba(192,57,43,.19)}"
+    },
+    {
+      "name": "Permission gate",
+      "kind": "card",
+      "refersTo": "gate-card",
+      "description": "A pending permission, pinned above the composer with an amber halo.",
+      "html": "<div class=\"ds-gate\"><div class=\"ds-gh\"><span class=\"ds-gtile\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" style=\"width:14px;height:14px\"><path d=\"M8 2 3 4v4c0 3 2.2 5.2 5 6 2.8-.8 5-3 5-6V4L8 2Z\"/></svg></span><span class=\"ds-ghx\"><span class=\"ds-gey\">Permission required</span><span class=\"ds-gti\">Permission Required</span></span></div><div class=\"ds-gin\"><div class=\"ds-tool\">Bash</div><div class=\"ds-cmd\">cargo test -p mainframe-core quota</div></div><div class=\"ds-ga\"><button class=\"ds-b ds-p\">Allow once</button><button class=\"ds-b\">Reject</button></div></div>",
+      "css": ".ds-gate{width:460px;max-width:100%;border-radius:12px;border:1px solid rgba(180,95,6,.45);box-shadow:0 0 0 3px rgba(180,95,6,.15);background:#fff;font:13px/1.45 -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;color:#1f1f1f} .ds-gh{display:flex;gap:10px;align-items:center;padding:12px 16px 8px} .ds-gtile{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;background:rgba(217,119,6,.13);color:#8a4b00} .ds-ghx{display:flex;flex-direction:column} .ds-gey{font-size:12px;font-weight:500;color:#5c5c61} .ds-gti{font-size:14px;line-height:1.3;font-weight:600} .ds-gin{padding:0 16px 8px 50px} .ds-tool{font:600 13px ui-monospace,\"SF Mono\",Menlo,monospace} .ds-cmd{margin-top:4px;font:12.5px/1.5 ui-monospace,\"SF Mono\",Menlo,monospace;color:#48484a} .ds-ga{display:flex;gap:8px;padding:4px 16px 12px 50px} .ds-b{height:32px;padding:0 10px;border-radius:8px;border:1px solid #cfcfd4;background:#fff;color:#1f1f1f;font:500 13.5px -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;cursor:pointer} .ds-b:hover{background:#ededf0} .ds-b:focus-visible{outline:2px solid #0b6fdc;outline-offset:2px} .ds-p{background:#0063cc;border-color:transparent;color:#fff} .ds-p:hover{background:#0063cc;filter:brightness(1.08)}"
+    },
+    {
+      "name": "Session tabs",
+      "kind": "nav",
+      "refersTo": "session-tab",
+      "description": "Title-bar tabs: status dot, truncating title, selected tab raised as a white sheet.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab\" aria-selected=\"true\"><i class=\"ds-dot ds-run\"></i><span>Fix quota reset</span></button><button class=\"ds-tab\"><i class=\"ds-dot ds-need\"></i><span>Review PR 912</span></button><button class=\"ds-tab\"><i class=\"ds-dot\"></i><span>Session panel rows</span></button></div>",
+      "css": ".ds-tabs{display:flex;gap:4px;padding:8px;background:#f5f5f8;font:12.5px -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif} .ds-tab{display:flex;align-items:center;gap:8px;height:32px;width:180px;min-width:96px;padding:0 12px;border:0;border-radius:9px;background:none;color:#48484a;font:inherit;cursor:pointer;text-align:left} .ds-tab span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .ds-tab:hover{background:#ededf0} .ds-tab:focus-visible{outline:2px solid #0b6fdc;outline-offset:2px} .ds-tab[aria-selected=true]{background:#fff;color:#1f1f1f;box-shadow:inset 0 0 0 1px #e5e5e5,0 1px 2px rgba(0,0,0,.05)} .ds-dot{width:8px;height:8px;border-radius:50%;flex:none;background:#a1a1a6} .ds-run{background:#0b6fdc} .ds-need{background:none;border:1.5px solid #8a4b00}"
+    },
+    {
+      "name": "Sidebar rows",
+      "kind": "nav",
+      "refersTo": "sidebar-row",
+      "description": "28px session rows: project letter first, status replaces the time on the right.",
+      "html": "<div class=\"ds-side\"><div class=\"ds-gh\">Today</div><button class=\"ds-sr\" aria-current=\"true\"><span class=\"ds-lav\">M</span><span class=\"ds-t\">Fix quota reset</span><span class=\"ds-v ds-live\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"ds-spin\"><path d=\"M8 2.5a5.5 5.5 0 1 1-5.5 5.5\"/></svg>3</span></button><button class=\"ds-sr\"><span class=\"ds-lav\">M</span><span class=\"ds-t\">Review PR 912</span><span class=\"ds-v ds-need\">needs you</span></button><button class=\"ds-sr\"><span class=\"ds-lav\">A</span><span class=\"ds-t\">Astra onboarding copy</span><span class=\"ds-v\">2h</span></button></div>",
+      "css": ".ds-side{width:260px;padding:0 8px 8px;background:#fff;font:13px/1.45 -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif} .ds-gh{height:24px;display:flex;align-items:flex-end;padding:0 2px 4px 8px;margin-top:4px;font-size:12px;font-weight:500;color:#5c5c61} .ds-sr{display:flex;align-items:center;gap:8px;width:100%;height:28px;padding:0 8px 0 6px;border:0;border-radius:8px;background:none;color:#48484a;font:inherit;cursor:pointer;text-align:left} .ds-sr:hover{background:#ededf0} .ds-sr:focus-visible{outline:2px solid #0b6fdc;outline-offset:2px} .ds-sr[aria-current=true]{background:#ececef;color:#1f1f1f} .ds-lav{width:16px;height:16px;border-radius:5px;display:grid;place-items:center;font-size:9.5px;font-weight:600;color:#5c5c61;background:rgba(31,31,31,.08);flex:none} .ds-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .ds-v{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#5c5c61;font-variant-numeric:tabular-nums} .ds-live svg{color:#0b6fdc;width:14px;height:14px;animation:ds-r .8s linear infinite} .ds-need{color:#8a4b00;font-weight:500} @keyframes ds-r{to{transform:rotate(360deg)}} @media (prefers-reduced-motion:reduce){.ds-live svg{animation:none}}"
+    },
+    {
+      "name": "Menu",
+      "kind": "custom",
+      "refersTo": "menu",
+      "description": "Floating menu: leading icon, label, description, trailing keycap or check.",
+      "html": "<div class=\"ds-menu\" role=\"menu\"><div class=\"ds-ml\">Permissions</div><button class=\"ds-mi\" role=\"menuitemradio\" aria-checked=\"true\"><span class=\"ds-mb\"><span class=\"ds-l\">Interactive</span><span class=\"ds-d\">Asks before edits and commands</span></span><kbd>⇧⇥</kbd></button><button class=\"ds-mi\" role=\"menuitemradio\"><span class=\"ds-mb\"><span class=\"ds-l\">Auto-Edits</span><span class=\"ds-d\">Edits files, asks before commands</span></span></button><div class=\"ds-sep\"></div><button class=\"ds-mi ds-w\" role=\"menuitemradio\"><span class=\"ds-mb\"><span class=\"ds-l\">Unattended</span><span class=\"ds-d\">Never asks</span></span></button></div>",
+      "css": ".ds-menu{width:280px;background:#fff;border-radius:10px;padding:4px;box-shadow:0 0 0 1px #e5e5e5,0 2px 4px rgba(0,0,0,.06),0 10px 30px rgba(0,0,0,.16);font:13px/1.45 -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;color:#1f1f1f} .ds-ml{font-size:11.5px;font-weight:600;color:#5c5c61;padding:8px 10px 3px} .ds-mi{display:flex;align-items:flex-start;gap:10px;width:100%;padding:7px 10px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer} .ds-mi:hover,.ds-mi:focus{background:#ededf0;outline:0} .ds-mi:focus-visible{box-shadow:inset 0 0 0 2px #0b6fdc} .ds-mi[aria-checked=true]{background:#ececef} .ds-mb{flex:1;display:flex;flex-direction:column} .ds-l{font-weight:500;line-height:20px} .ds-d{font-size:12px;line-height:1.35;color:#5c5c61} .ds-w .ds-l{color:#8a4b00} .ds-mi kbd{font:11.5px -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;color:#5c5c61;background:rgba(0,0,0,.06);border-radius:4px;padding:0 5px} .ds-sep{height:1px;background:#e5e5e5;margin:4px 6px}"
+    },
+    {
+      "name": "Activity strip",
+      "kind": "custom",
+      "refersTo": "activity-row",
+      "description": "The composer's top drawer listing ongoing work: needs-you first, then running.",
+      "html": "<div class=\"ds-top\"><div class=\"ds-ar ds-need\"><span class=\"ds-ri\">!</span><span class=\"ds-t\">code-reviewer wants to run a command</span><span class=\"ds-v\">needs you</span><button class=\"ds-ab\">Open</button></div><div class=\"ds-ar\"><span class=\"ds-ri\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"ds-spin\"><path d=\"M8 2.5a5.5 5.5 0 1 1-5.5 5.5\"/></svg></span><span class=\"ds-t\">Explore · quota sources</span><span class=\"ds-v\">1m 12s</span><button class=\"ds-ab\">Stop</button></div></div>",
+      "css": ".ds-top{width:500px;max-width:100%;padding:4px;border-radius:12px 12px 0 0;background:#fff;box-shadow:inset 0 0 0 1px #e5e5e5,0 1px 2px rgba(0,0,0,.04),0 3px 10px rgba(0,0,0,.05);font:12.5px/1.45 -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;color:#48484a} .ds-ar{display:flex;align-items:center;gap:8px;min-height:28px;padding:0 2px 0 8px;border-radius:8px} .ds-ri{width:16px;display:grid;place-items:center;color:#0b6fdc;font-weight:700} .ds-ri svg{width:14px;height:14px;animation:ds-r .8s linear infinite} .ds-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#1f1f1f} .ds-v{color:#5c5c61;font-variant-numeric:tabular-nums} .ds-need .ds-ri,.ds-need .ds-v{color:#8a4b00} .ds-need .ds-v{font-weight:500} .ds-ab{height:24px;padding:0 8px;border:0;border-radius:6px;background:none;font:500 12px -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;color:#48484a;cursor:pointer} .ds-ab:hover{background:#ededf0;color:#1f1f1f} .ds-ab:focus-visible{outline:2px solid #0b6fdc;outline-offset:2px} .ds-need .ds-ab{color:#0063cc} @keyframes ds-r{to{transform:rotate(360deg)}} @media (prefers-reduced-motion:reduce){.ds-ri svg{animation:none}}"
+    },
+    {
+      "name": "Search field",
+      "kind": "input",
+      "refersTo": "sidebar-search",
+      "description": "Borderless chip-filled field used for sidebar, menu and branch search.",
+      "html": "<input class=\"ds-in\" placeholder=\"Search sessions\" aria-label=\"Search sessions\">",
+      "css": ".ds-in{width:236px;height:30px;border:0;border-radius:8px;background:#ececef;color:#1f1f1f;font:13px -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;padding:0 10px;caret-color:#0a84ff} .ds-in::placeholder{color:#5c5c61;opacity:1} .ds-in:hover{background:#e2e2e6} .ds-in:focus-visible{outline:2px solid #0b6fdc;outline-offset:2px}"
+    },
+    {
+      "name": "Tooltip",
+      "kind": "custom",
+      "refersTo": "tooltip",
+      "description": "Inverted tooltip carrying a control's full meaning and its shortcut.",
+      "html": "<span class=\"ds-tip\">Stop the turn and 3 sub-agents <kbd>⌘.</kbd></span>",
+      "css": ".ds-tip{display:inline-block;max-width:280px;background:#1f1f1f;color:#fff;font:12px/1.4 -apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif;padding:5px 9px;border-radius:7px;box-shadow:0 4px 14px rgba(0,0,0,.2)} .ds-tip kbd{font:inherit;opacity:.7;margin-left:4px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Workbench",
+    "overview": "Mainframe is a native Mac work surface for someone running four to six coding agents at once. The workbench steps back so the work leads: grey ground, white sheets, hairlines a single pixel thin, and a system font in a few weights. Nothing in the chrome asks for attention unless an agent needs the user, something is running, or an action is ready. When several sessions are busy, the window should still read as quiet, scannable status.\n\nThe layout is the category standard that users of the Claude desktop app, Codex and Antigravity already know: a title bar with tabs, a session list on the left, a centred reading column with the composer under it, and optional panels on the right. Distinction comes from craft, not from a themed look. Columns line up from the title bar down, one 28 px row pitch runs through every list, each shortcut has a visible control, and narrowing the window never drops a control. Bold themed directions were explored and rejected; consumer-chat softness was rejected too.\n\nDensity is moderate and keyboard-first. Body text is 13 px, the transcript 14 px, and controls are 24–32 px. Colour is a signal, never decoration: blue for action, focus and live work, amber and red only when a state earns them, and provider brand colours only as small dots. Light and dark are equal citizens: every colour token has a `-dark` twin, and the dark theme compensates contrast instead of simply inverting.\n\nThis file is the approved target for the window revamp (sidebar, title bar, transcript, composer, session panel, workspace). The decision log is `~/Documents/Mainframe/design-council/2026-11-23-composer-canon/DECISIONS.md`, and the rendered states are the `Proposal-Redesign-*` boards on the \"Mainframe App\" canvas Proposals page. Settings, automations, tasks and mobile adopt the system later.",
+    "keyCharacteristics": [
+      "Grey ground, white sheets and cards, one-pixel hairlines; depth by tone first, shadow second.",
+      "The system font stack only, in three weights (400, 500, 600) and sizes from 11.5 to 15 px.",
+      "One 28 px row pitch in the sidebar, session panel, activity strip, menus and toolbar.",
+      "Blue only where something can act or is acting; amber and red only for earned states.",
+      "Columns aligned from the title bar down; nothing disappears at narrow widths.",
+      "Status outranks settings: what the agent is doing is always the loudest thing on screen."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Blue appears only where something can act or is acting: focus, a ready Send, the caret, live work, the plan status. It is never a background wash, a resting border or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The State-Earned Colour Rule",
+        "body": "Amber, rose and red appear only when a state earns them: amber for needs you, Auto and Unattended permissions and context at 80 %; rose for failed work; red for context at 95 %. A screen where every session is idle is entirely neutral apart from provider dots.",
+        "section": "colors"
+      },
+      {
+        "name": "The Provider Dot Rule",
+        "body": "Provider brand colours appear only as small dots beside a name. They never tint text, fills or borders.",
+        "section": "colors"
+      },
+      {
+        "name": "The Native Stack Rule",
+        "body": "Use the system font stack and the system monospace only. No webfonts, no display sizes above 15 px, and weights only 400, 500 and 600.",
+        "section": "typography"
+      },
+      {
+        "name": "The Mono Means Machine Rule",
+        "body": "Monospace marks strings the machine owns: code, commands, branches, paths, file names and rule patterns. UI labels such as \"Worktree\" or \"from main\" stay in the UI face.",
+        "section": "typography"
+      },
+      {
+        "name": "The Steady Number Rule",
+        "body": "Numbers that change in place (context percent, elapsed time, change counts, sub-agent counts, usage) use tabular figures, so nothing shifts as they update.",
+        "section": "typography"
+      },
+      {
+        "name": "The Aligned Seams Rule",
+        "body": "Every vertical edge in the title bar continues an edge below it. A separator that doesn't sit above a column edge is a bug.",
+        "section": "layout"
+      },
+      {
+        "name": "The 28 Pitch Rule",
+        "body": "Lists and toolbars use one 28 px row pitch. A new list row that is 30 or 32 px tall needs a reason (tabs and queued messages are 32 px because they hold a close or edit control).",
+        "section": "layout"
+      },
+      {
+        "name": "The Nothing Disappears Rule",
+        "body": "Narrowing merges, shortens or iconifies a control, and never removes one. Every shortened control keeps its full meaning in its tooltip and accessible name, and the context ring and permission status stay visible at every width.",
+        "section": "layout"
+      },
+      {
+        "name": "The Two-Lift Rule",
+        "body": "The composer card lifts slightly and floating surfaces lift clearly. Nothing else casts a shadow, and no resting border is thicker than 1 px.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Halo Means Waiting Rule",
+        "body": "A translucent ring around a card means it is waiting for the user: a pending gate. The focused composer has a solid line, not a ring. Never use it for emphasis.",
+        "section": "elevation"
+      },
+      {
+        "name": "The One Slot Rule",
+        "body": "The composer's bottom-right slot holds the action that matters now: Send, Stop or Stopping. Only the Queue split may sit beside Stop, and only while the agent runs with text typed.",
+        "section": "components"
+      },
+      {
+        "name": "The No-Confirm Stop Rule",
+        "body": "Stopping is always one click or one keystroke (⌘.), in the composer and in the activity strip. The result is reported afterwards (a toast or a transcript line), never asked for before.",
+        "section": "components"
+      },
+      {
+        "name": "The Exclusive Environment Rule",
+        "body": "Local, worktree and temporary are one choice with one answer. Temporary never has a branch or worktree, and the UI shows this by locking the control, not hiding it.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do use the 28 px row pitch for every new list, and align new title bar elements to the column edges below them.",
+      "Do put blue text in Blue Ink (`accent-ink`) and blue fills behind white text in Deep Blue Fill (`accent-fill`); System Blue (`accent`) is for the ready Send, the caret and tints.",
+      "Do keep the focus line a solid 2 px Focus Blue (2 px off a control, on a field's own edge), at 3:1 or better against the ground, card and hairline.",
+      "Do show status in the right slot of a row (spinner, \"needs you\", count) and keep the project letter in the leading slot.",
+      "Do use tabular figures for every number that changes in place.",
+      "Do design every surface in light and dark together, using the `-dark` twin of each token.",
+      "Do keep text at 4.5:1 (`meta` is the lowest text colour), targets at 24 px or more, and toolbar targets at 28 px.",
+      "Do give every shortened or icon-only control a tooltip and accessible name that carry its full meaning and shortcut."
+    ],
+    "donts": [
+      "Don't use webfonts, sizes above 15 px, uppercase labels or weights other than 400, 500 and 600.",
+      "Don't use blue, amber or red as decoration, a background wash or a resting border.",
+      "Don't tint text, fills or borders with a provider colour; it is a dot only.",
+      "Don't add shadows beyond the card lift and the float shadow, or any resting border thicker than 1 px.",
+      "Don't wrap the composer in a frame or a different-grey box; strips tuck under the card.",
+      "Don't hide a control at narrow widths; merge, shorten or iconify it.",
+      "Don't confirm Stop; the one confirmation in the composer is turning on Unattended, once per session.",
+      "Don't use `faint` for text, draw a scrollbar track, or let a native scrollbar take width; scrollbars are overlay thumbs."
+    ]
+  }
+}

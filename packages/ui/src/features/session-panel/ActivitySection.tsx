@@ -160,7 +160,7 @@ function ActivityBody({
         onShowAll={onShowAll}
       />
       {loadError && (
-        <p role="alert" className="px-2 text-xs text-destructive">
+        <p role="alert" className="px-2 text-xs text-fail">
           Could not load earlier tasks: {loadError}
         </p>
       )}

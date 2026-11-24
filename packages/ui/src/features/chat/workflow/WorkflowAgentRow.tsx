@@ -24,7 +24,7 @@ import { WorkflowPip } from './WorkflowPip';
 
 const NOTE_TONE: Record<DetailKind, string> = {
   stale: 'text-muted-foreground',
-  error: 'text-destructive',
+  error: 'text-fail',
   result: 'text-muted-foreground',
   tool: 'text-muted-foreground',
 };

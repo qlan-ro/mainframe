@@ -20,6 +20,6 @@ export const RUN_STATUS_DOT_CLASS: Record<AutomationRunStatus, string> = {
   running: 'bg-primary',
   waiting: 'bg-warning',
   succeeded: 'bg-success',
-  failed: 'bg-destructive',
+  failed: 'bg-fail',
   cancelled: 'bg-muted-foreground',
 };

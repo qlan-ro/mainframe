@@ -226,9 +226,9 @@ describe('BashCard', () => {
 
   it('does NOT show the error border when isError is false', () => {
     renderCard(makePart({ args: { command: 'echo ok' }, result: 'ok', isError: false }));
-    // No border-destructive on the card root
+    // No border-fail on the card root
     const card = screen.getByTestId('chat-bash-card');
-    expect(card).not.toHaveClass('border-destructive');
+    expect(card).not.toHaveClass('border-fail');
   });
 
   // --- Truncated result: ToolResultExpand mock shown ---

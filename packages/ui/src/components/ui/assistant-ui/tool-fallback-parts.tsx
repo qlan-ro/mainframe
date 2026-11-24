@@ -76,7 +76,7 @@ export function ToolFallbackError({
       className={cn('aui-tool-fallback-error', className)}
       {...props}
     >
-      <p className="aui-tool-fallback-error-header text-xs font-semibold text-destructive mb-1">{headerText}</p>
+      <p className="aui-tool-fallback-error-header text-xs font-semibold text-fail mb-1">{headerText}</p>
       <p className="aui-tool-fallback-error-reason text-xs text-muted-foreground">{errorText}</p>
     </div>
   );

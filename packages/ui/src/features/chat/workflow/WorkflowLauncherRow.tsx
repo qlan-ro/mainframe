@@ -23,7 +23,7 @@ const ROW = 'flex w-full items-center gap-[9px] rounded-lg border border-border 
 const DOT_FILL: Record<string, string> = {
   green: 'bg-success',
   amber: 'bg-warning',
-  red: 'bg-destructive',
+  red: 'bg-fail',
   hollow: 'border border-muted-foreground',
   accent: 'bg-primary',
 };
@@ -88,7 +88,7 @@ export const WorkflowLauncherRow: ToolCallMessagePartComponent = ({ toolCallId, 
         dot={{ tone: 'red', pulse: false }}
         name={name}
         detail={launch.error}
-        detailClass="text-destructive"
+        detailClass="text-fail"
       />
     );
   }

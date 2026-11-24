@@ -83,7 +83,7 @@ export function PermissionSelect({ chat, setPermissionMode, providerDefaults, ad
               'hover:bg-accent hover:text-accent-foreground',
               open && 'border-primary bg-sidebar-selection',
               'transition-colors',
-              'focus-visible:outline-none',
+              'focus-visible:focus-line',
               toneInk(current?.tone),
               toneChip(current?.tone),
             )}

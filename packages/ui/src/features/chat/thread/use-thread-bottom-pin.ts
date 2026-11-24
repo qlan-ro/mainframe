@@ -1,3 +1,4 @@
+import { SCROLLBAR_DRAG_EVENT } from '@/lib/overlay-scrollbars/thumb';
 import { captureReadingAnchor, restoreReadingAnchor, type ReadingAnchor } from './reading-anchor';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefCallback } from 'react';
 
@@ -75,9 +76,8 @@ function trackUserScroll(element: HTMLDivElement, state: PinState) {
     state.userScrollUntil = performance.now() + 300;
     if (event instanceof KeyboardEvent) scrollToBoundary(element, state, event);
   };
-  // Only the scrollbar itself targets the viewport; content clicks target content.
-  const startDrag = (event: PointerEvent) => {
-    if (event.target === element) state.dragging = true;
+  const startDrag = () => {
+    state.dragging = true;
   };
   const endDrag = () => {
     state.dragging = false;
@@ -85,14 +85,14 @@ function trackUserScroll(element: HTMLDivElement, state: PinState) {
   element.addEventListener('wheel', mark, { passive: true });
   element.addEventListener('touchmove', mark, { passive: true });
   element.addEventListener('keydown', mark);
-  element.addEventListener('pointerdown', startDrag);
+  element.addEventListener(SCROLLBAR_DRAG_EVENT, startDrag);
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
   return () => {
     element.removeEventListener('wheel', mark);
     element.removeEventListener('touchmove', mark);
     element.removeEventListener('keydown', mark);
-    element.removeEventListener('pointerdown', startDrag);
+    element.removeEventListener(SCROLLBAR_DRAG_EVENT, startDrag);
     window.removeEventListener('pointerup', endDrag);
     window.removeEventListener('pointercancel', endDrag);
   };

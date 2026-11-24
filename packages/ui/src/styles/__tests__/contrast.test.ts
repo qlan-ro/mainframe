@@ -24,6 +24,8 @@
  *   foreground on bubble-tinted 11.17 / 9.93   (paled 2026-08-15, still clears by a wide margin)
  *   primary-foreground on primary 3.65 / 3.65  (system blue cannot reach AA)
  *   success on background 3.39 / 9.50          (a glyph/dot hue, never body text)
+ *   fail as text on background 5.43 / 6.72 · on its 6% tint, worst surface 4.60 / 4.96
+ *   focus on background 4.86 / 5.82
  *
  * `--mf-glass` is gone (2026-08-07): its one consumer, the deleted `layout/SurfaceDragLayer`,
  * is on `bg-background/85` now, so the chip's worst case is `foreground` over
@@ -34,7 +36,7 @@
  * remainder premultiplied-alpha readback noise at α=0.1).
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { composite, contrast, parseRules, resolveOklch, toRgba, type Decls, type RGBA } from './css-color';
 
 /** muted-foreground sits at *exactly* 4.5:1 worst-case, so absorb float noise. */
@@ -43,6 +45,9 @@ const WCAG_MIN = 4.49;
 /* SC 1.4.11 (non-text/UI) and the large-text bar are 3:1. #0a84ff on white is
    3.65:1 — macOS system blue cannot reach AA-normal-text with white ink. */
 const UI_COMPONENT_MIN = 3.0;
+
+/** The strongest `bg-fail` tint, in percent, that may sit under `text-fail`. */
+const FAIL_TEXT_TINT = 6;
 
 const V2_SHEET = 'styles/globals.css';
 const BRIDGE_SHEET = 'styles/domain-tokens.css';
@@ -64,6 +69,13 @@ const sheets = {
   v2: parseRules(readSheet(V2_SHEET)),
   bridge: parseRules(readSheet(BRIDGE_SHEET)),
 };
+
+function uiSources(): { rel: string; text: string }[] {
+  const root = new URL('../../', import.meta.url);
+  return readdirSync(root, { recursive: true, encoding: 'utf8' })
+    .filter((rel) => /\.tsx?$/.test(rel) && !rel.includes('__tests__'))
+    .map((rel) => ({ rel, text: readFileSync(new URL(rel, root), 'utf8') }));
+}
 
 /** Cascade per theme: v2 tokens then the bridge's, `:root` then `.dark`. */
 const THEME_LAYERS: Record<string, string[]> = {
@@ -175,6 +187,71 @@ describe('v2 contrast guardrail', () => {
     }
   });
 
+  it.each(THEMES)('fail — the failed-work ink — clears 4.5:1 as TEXT — %s', (theme) => {
+    // Error labels, failed tool rows and failed counts are `text-fail` (S6).
+    const t = resolve(theme);
+    for (const [name, bg] of Object.entries(backdrops(t))) {
+      expect(inkOn(color(t, '--fail'), bg), `fail on ${name} (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+    }
+  });
+
+  it.each(THEMES)('fail text clears 4.5:1 on its own tint and on muted — %s', (theme) => {
+    const t = resolve(theme);
+    const fail = color(t, '--fail');
+    const muted = color(t, '--muted');
+    expect(inkOn(fail, muted), `fail on muted (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+    const surfaces: Record<string, RGBA> = {
+      ...backdrops(t),
+      // The transcript's link chip is `bg-muted/60`; in light the full muted grey carries tints too.
+      chip: composite({ ...muted, a: 0.6 }, color(t, '--background')),
+      ...(theme === 'light' ? { muted } : {}),
+    };
+    for (const [name, bg] of Object.entries(surfaces)) {
+      const tint = composite({ ...fail, a: FAIL_TEXT_TINT / 100 }, bg);
+      expect(inkOn(fail, tint), `fail on its ${FAIL_TEXT_TINT}% tint over ${name} (${theme})`).toBeGreaterThanOrEqual(
+        WCAG_MIN,
+      );
+    }
+  });
+
+  it('no rose text is faded, and no tint under rose text is stronger than the one measured', () => {
+    const faded: string[] = [];
+    const strong: string[] = [];
+    for (const { rel, text } of uiSources()) {
+      for (const [match] of text.matchAll(/(?<![\w/-])(?:[\w-]+[:/])*text-fail\/[\d[][^\s'"`]*/g))
+        faded.push(`${rel}: ${match}`);
+      for (const [, prefix, percent, fraction] of text.matchAll(
+        /((?:[\w-]+(?:\[[^\]]*\])?(?:\/[\w-]+)?:)*)bg-fail\/(?:(\d+)|\[([\d.]+)\])/g,
+      )) {
+        const strength = percent !== undefined ? Number(percent) : Number(fraction) * 100;
+        if (strength > FAIL_TEXT_TINT && !prefix!.includes('hover:')) strong.push(`${rel}: bg-fail/${strength}`);
+      }
+    }
+    expect(faded).toEqual([]);
+    expect(strong.sort()).toEqual([
+      // Icons (3:1) and `text-foreground`; no rose text on any of them.
+      'components/ui/attachment.tsx: bg-fail/10',
+      'features/automations/fields/TokenChip.tsx: bg-fail/10',
+      'features/automations/run/status-meta.ts: bg-fail/14',
+      'features/chat/workflow/WorkflowRunPanelHeader.tsx: bg-fail/10',
+      'features/daemon/pairing-shared.tsx: bg-fail/10',
+      'features/shared/ErrorState.tsx: bg-fail/10',
+    ]);
+  });
+
+  it.each(THEMES)('the focus line clears 3:1 against every surface and the hairline — %s', (theme) => {
+    const t = resolve(theme);
+    const focus = color(t, '--focus');
+    expect(focus.a, `the focus line is solid (${theme})`).toBe(1);
+    for (const [name, bg] of Object.entries(backdrops(t))) {
+      expect(inkOn(focus, bg), `focus on ${name} (${theme})`).toBeGreaterThanOrEqual(UI_COMPONENT_MIN);
+      const hairline = composite(color(t, '--border'), bg);
+      expect(contrast(focus, hairline), `focus on the hairline over ${name} (${theme})`).toBeGreaterThanOrEqual(
+        UI_COMPONENT_MIN,
+      );
+    }
+  });
+
   it.each(THEMES)('primary clears the 3:1 UI floor as ink on sidebar and background — %s', (theme) => {
     // `primary` doubles as running/selected (D26) and, since the redesign,
     // short glyph-adjacent text too: the sidebar Tasks rows and the panel's
@@ -194,7 +271,7 @@ describe('v2 contrast guardrail', () => {
     const t = resolve(theme);
     // These carry meaning on a dot, glyph or tint — never on body text, per the
     // design system. So the UI floor, not the text floor, is the right bar.
-    for (const token of ['--success', '--warning', '--destructive']) {
+    for (const token of ['--success', '--warning', '--fail', '--destructive']) {
       for (const name of ['background', 'card'] as const) {
         expect(inkOn(color(t, token), backdrops(t)[name]!), `${token} on ${name} (${theme})`).toBeGreaterThanOrEqual(
           UI_COMPONENT_MIN,
@@ -217,9 +294,9 @@ describe('v2 token integrity', () => {
   // semantic was swept into its source at the call sites, so there is no alias left
   // to drift. What remains is the v2 layer's own internal consistency.
 
-  it.each(THEMES)('focus rings and selection are built from the accent — %s', (theme) => {
+  it.each(THEMES)('rings are the focus blue, and selection is built from the accent — %s', (theme) => {
     const t = resolve(theme);
-    expect(color(t, '--ring'), `ring should be primary (${theme})`).toEqual(color(t, '--primary'));
+    expect(color(t, '--ring'), `ring should be focus (${theme})`).toEqual(color(t, '--focus'));
     const selection = color(t, '--sidebar-selection');
     const primary = color(t, '--primary');
     expect([selection.r, selection.g, selection.b], `sidebar-selection hue (${theme})`).toEqual([

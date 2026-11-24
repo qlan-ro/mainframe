@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranscriptScroll } from './transcript-scroll-context';
+import { SCROLLBAR_DRAG_EVENT } from '@/lib/overlay-scrollbars/thumb';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 
 export const HISTORY_PREPEND_EVENT = 'mainframe:history-prepend';
@@ -95,16 +96,9 @@ function stopOnScrollInput(viewport: HTMLElement, stop: () => void) {
     )
       return;
     if (event instanceof WheelEvent && event.deltaY === 0) return;
-    if (
-      event instanceof PointerEvent &&
-      (event.target !== viewport ||
-        viewport.offsetWidth <= viewport.clientWidth ||
-        event.clientX < viewport.getBoundingClientRect().left + viewport.clientWidth)
-    )
-      return;
     stop();
   };
-  const events = ['wheel', 'touchmove', 'keydown', 'pointerdown'];
+  const events = ['wheel', 'touchmove', 'keydown', SCROLLBAR_DRAG_EVENT];
   for (const name of events) viewport.addEventListener(name, input, { passive: true });
   return () => {
     for (const name of events) viewport.removeEventListener(name, input);

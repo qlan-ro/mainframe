@@ -53,7 +53,7 @@ export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
           'flex items-center gap-1 px-1.5 py-0.5 rounded-sm',
           'text-xs font-semibold text-muted-foreground',
           'transition-colors hover:text-foreground hover:bg-accent',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+          'focus-visible:focus-line',
           copied && 'text-success',
         )}
       >

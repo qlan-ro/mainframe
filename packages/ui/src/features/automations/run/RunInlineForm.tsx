@@ -172,7 +172,7 @@ export function RunInlineForm({ interaction, onSubmitted, testId }: RunInlineFor
         <div key={field.key} data-testid={`${testId}-field-${field.key}`} className="flex flex-col gap-[5px]">
           <span className="text-xs font-semibold text-muted-foreground">
             {field.label || field.key}
-            {field.required && <span className="text-destructive"> *</span>}
+            {field.required && <span className="text-fail"> *</span>}
           </span>
           <FieldControl
             field={field}

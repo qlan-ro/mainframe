@@ -7,14 +7,16 @@ description: Use when building or restyling Mainframe UI components, or reviewin
 
 Mainframe uses React, Tailwind v4, and shadcn primitives in `packages/ui/src`.
 
-## Current sources
+## Visual source of truth
 
-Consult the source relevant to the change:
+[`DESIGN.md`](../../../DESIGN.md) is the visual system: colours, type, layout, shape, components and rules. It is the target of the window redesign, whose decisions are rows in `design/redesign/DECISIONS.md`; a row marked "Implemented" is in the code, and the rest is not built yet. Where DESIGN.md and the code differ on something not built, keep the code's look unless your task builds it. `PRODUCT.md` says who the app is for.
+
+Code sources, for the part you are changing:
 
 - `packages/ui/src/components/ui/`: shared primitives. Match a nearby feature's composition; extend a primitive when it needs another prop rather than bypassing it with raw Radix in a feature.
 - `packages/ui/src/styles/globals.css`: base theme, typography, radius, and Tailwind mappings.
 - `packages/ui/src/styles/domain-tokens.css`: domain colors and app chrome.
-- `packages/ui/src/styles/app.css`: stylesheet composition.
+- `packages/ui/src/styles/app.css`: stylesheet composition, scrollbars.
 
 Use source values rather than copying token tables. A CSS variable only becomes a Tailwind utility when the theme maps it; check the mapping before using a domain token.
 
@@ -27,6 +29,9 @@ Use source values rather than copying token tables. A CSS variable only becomes 
 - Interactive elements have stable `<surface>-<element>` data-testids, keyed by domain id rather than array index; primitives pass them through.
 - Represent the actual data contract and relevant empty, loading, error, populated, disabled, and running states.
 
+- Give every scroll area plain `overflow: auto`. Scrollbars are overlay thumbs drawn app-wide by `lib/overlay-scrollbars` (S3): don't style native scrollbars, reserve a gutter or wrap a container for its scrollbar. `data-scrollbar="none"` hides the thumb on a strip it would cover.
+- Focus is the solid 2 px focus line (C3), never a translucent ring: `focus-visible:focus-line` on controls, `focus-visible:focus-line-inset` on fields, full-width rows and anything a scroll area clips. A bare element with no `data-slot` gets it from the base stylesheet.
+
 ## Status colours
 
 Each status hue has one meaning; do not choose by appearance.
@@ -34,7 +39,9 @@ Each status hue has one meaning; do not choose by appearance.
 - `primary`: selected, or running/wants attention (working spinner, "your turn" dot, unread dot, Run/Launch glyph).
 - `success`: connected, healthy, or done (daemon connection dot, healthy PR row, done check). Never "running".
 - `warning`: needs the user or degraded (Unattended chip, missing worktree/transcript, automation awaiting an answer).
-- `destructive`: failed, or an irreversible action (errors, delete/stop).
+- `fail`: failed work and errors (S6): failed tools, tasks, runs and queued messages, error labels, invalid fields, an unreachable daemon. Muted rose, at regular weight: a failure is information to read later, not an alarm.
+- `destructive`: an irreversible action (delete, discard, reject), Stop, the context ring and usage near their limit, red output in terminal text, and diff deletions. Never a failure.
+- `focus`: keyboard focus only.
 
 ## Verification
 

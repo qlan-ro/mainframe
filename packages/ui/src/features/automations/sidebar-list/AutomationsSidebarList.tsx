@@ -88,7 +88,7 @@ export function AutomationsSidebarList() {
               Loading automations…
             </div>
           ) : library.error && rows.length === 0 ? (
-            <div data-testid="automations-sidebar-error" className="px-2 py-6 text-center text-xs text-destructive">
+            <div data-testid="automations-sidebar-error" className="px-2 py-6 text-center text-xs text-fail">
               {library.error}
             </div>
           ) : rows.length === 0 ? (

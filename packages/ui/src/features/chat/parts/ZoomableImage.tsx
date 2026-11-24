@@ -35,7 +35,7 @@ export function ZoomableImage({ src, alt = '', className, onLoad, onError }: Zoo
           type="button"
           data-testid="chat-image-zoom-trigger"
           aria-label="View image full size"
-          className="block cursor-zoom-in rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="block cursor-zoom-in rounded-[inherit] focus-visible:focus-line"
         >
           <img src={src} alt={alt} className={className} onLoad={onLoad} onError={onError} />
         </button>

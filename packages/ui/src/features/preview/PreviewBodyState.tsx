@@ -39,7 +39,7 @@ export function PreviewBodyState({
       <div data-testid="preview-body-tunnel-failed" className="absolute inset-0 grid place-items-center bg-card">
         <div className="flex max-w-[80%] flex-col items-center gap-2.5 text-center">
           <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-destructive" />
+            <span className="size-2 rounded-full bg-fail" />
             <span className="text-sm text-muted-foreground">Preview tunnel unavailable</span>
           </div>
           {tunnelError && <span className="line-clamp-2 font-mono text-xs text-muted-foreground">{tunnelError}</span>}
@@ -125,7 +125,7 @@ export function PreviewBodyState({
   return (
     <div data-testid="preview-body-failed" className="absolute inset-0 grid place-items-center bg-card">
       <div className="flex items-center">
-        <span className="mr-2 size-2 rounded-full bg-destructive" />
+        <span className="mr-2 size-2 rounded-full bg-fail" />
         <span className="text-sm text-muted-foreground">Failed to start</span>
       </div>
     </div>

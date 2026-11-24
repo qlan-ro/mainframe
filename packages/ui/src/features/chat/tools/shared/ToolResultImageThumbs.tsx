@@ -33,7 +33,7 @@ function ToolResultImageThumb({ image, testId, onOpen, active, onResolve, onRetr
       {(state === 'done' || failed) && <ImageTrigger failed={!!failed} activate={activate} />}
       <AttachmentMedia variant="image">
         {error || state === 'error' ? (
-          <ImageOffIcon className="size-3.5 text-destructive" />
+          <ImageOffIcon className="size-3.5 text-fail" />
         ) : (
           <img src={src} alt="" onLoad={() => setState('done')} onError={() => setState('error')} />
         )}

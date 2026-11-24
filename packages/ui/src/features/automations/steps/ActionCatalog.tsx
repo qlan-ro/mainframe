@@ -157,7 +157,7 @@ export function ActionCatalog({ catalog, onPick, testId }: ActionCatalogProps) {
   return (
     <div data-testid={testId} className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-col gap-[10px] border-b-[0.5px] border-border p-[10px]">
-        <div className="flex items-center gap-2 rounded-md border-[0.5px] border-border bg-card px-2.5 py-1.5">
+        <div className="flex items-center gap-2 rounded-md border-[0.5px] border-border bg-card px-2.5 py-1.5 has-[input:focus-visible]:focus-line-inset">
           <Search size={14} className="text-muted-foreground" aria-hidden />
           <input
             data-testid={`${testId}-search`}

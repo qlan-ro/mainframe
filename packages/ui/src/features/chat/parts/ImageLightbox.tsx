@@ -94,7 +94,7 @@ function GalleryArrow({ direction, onClick }: { direction: 'prev' | 'next'; onCl
       data-testid={`image-lightbox-${direction}`}
       aria-label={previous ? 'Previous image' : 'Next image'}
       onClick={onClick}
-      className={`absolute ${previous ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+      className={`absolute ${previous ? 'left-2' : 'right-2'} top-1/2 -translate-y-1/2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white hover:bg-black/65 focus-visible:focus-line`}
     >
       <Icon size={20} aria-hidden />
     </button>

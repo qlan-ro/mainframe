@@ -25,7 +25,7 @@ it('keeps failures muted with an explicit error icon and no mounted body', () =>
   render(<CompactFixture rootId="error-style" messages={[fixtureMessage([fixtureTool({ isError: true })])]} />);
   const toggle = screen.getByRole('button', { name: 'Failed to read /src/a.ts' });
   expect(toggle).toHaveClass('text-muted-foreground');
-  expect(screen.getByLabelText('failed')).toHaveClass('text-destructive');
+  expect(screen.getByLabelText('failed')).toHaveClass('text-fail');
   expect(screen.queryByTestId('read-card-root')).toBeNull();
 });
 it('keeps known empty completion stopped while a missing terminal signal remains active', () => {

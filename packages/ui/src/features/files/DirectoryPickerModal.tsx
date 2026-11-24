@@ -59,7 +59,7 @@ export function DirectoryPickerModal() {
         <div className="min-h-72 flex-1 overflow-y-auto">
           {showRecent && <RecentDirs paths={recents} onPick={confirm} />}
           {rootError && (
-            <p data-testid="directory-picker-error" className="px-4 py-4 text-xs text-destructive">
+            <p data-testid="directory-picker-error" className="px-4 py-4 text-xs text-fail">
               {rootError}
             </p>
           )}

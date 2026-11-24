@@ -35,7 +35,7 @@ export function AgentConfig({ step, onChange, tokens, testId }: AgentConfigProps
   return (
     <div
       data-testid={`${testId}-pane`}
-      className="rounded-xl [border-width:0.5px] border-border bg-card shadow-sm transition-colors focus-within:border-ring"
+      className="rounded-xl [border-width:0.5px] border-border bg-card shadow-sm transition-colors focus-within:focus-line-inset"
     >
       <TriggerTextField
         value={singlePart(step.prompt)}

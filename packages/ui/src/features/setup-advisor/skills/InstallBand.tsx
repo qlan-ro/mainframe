@@ -123,7 +123,7 @@ export function InstallBand({ projectId, adapterId }: InstallBandProps) {
       </div>
 
       {sourceError ? (
-        <p data-testid="skills-section-source-error" className="text-xs text-destructive">
+        <p data-testid="skills-section-source-error" className="text-xs text-fail">
           {sourceError}
         </p>
       ) : null}

@@ -53,7 +53,7 @@ test.describe('§tool-cards — Plan revision (plan-revision)', () => {
     await expect(planCard).toBeVisible({ timeout: 10_000 });
     await expect(planCard.getByTestId('chat-plan-label')).toHaveText('Updated plan');
     await expect(planCard.getByTestId('chat-plan-trigger')).toBeEnabled();
-    await expect(planCard.getByTestId('chat-plan-trigger').locator('..')).toHaveClass(/border-destructive/);
+    await expect(planCard.getByTestId('chat-plan-trigger').locator('..')).toHaveClass(/border-fail/);
     await expect(planCard.getByTestId('chat-plan-body')).toContainText(
       "The user doesn't want to proceed with this tool use",
     );

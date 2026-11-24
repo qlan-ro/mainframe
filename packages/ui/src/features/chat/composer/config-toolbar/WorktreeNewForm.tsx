@@ -111,10 +111,10 @@ export function WorktreeNewForm({
           aria-invalid={validationError != null}
           className="h-8 text-xs md:text-xs"
         />
-        {validationError && <p className="text-xs text-destructive">{validationError}</p>}
+        {validationError && <p className="text-xs text-fail">{validationError}</p>}
       </div>
 
-      {apiError && !validationError && <p className="text-xs text-destructive">{apiError}</p>}
+      {apiError && !validationError && <p className="text-xs text-fail">{apiError}</p>}
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-1.5">

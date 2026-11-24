@@ -10,7 +10,7 @@
  *   Header row: Sparkles icon (text-primary) + "Review comment" + range label
  *     (mono) + close button
  *   Snippet block (when lineContent provided): bg-muted, SnippetLines rows
- *   Card: shadow-md, accent border when editing (focus-within:border-primary/40)
+ *   Card: shadow-md, focus line when editing (focus-within:focus-line-inset)
  *   Textarea: ⌘↩ to submit
  *   Footer: "⌘↩ to add" hint + Cancel + "Add context" + Send
  *
@@ -97,7 +97,7 @@ export function InlineCommentWidget({
       </div>
 
       {/* Card */}
-      <div className="flex-1 overflow-hidden rounded-md border border-border bg-card shadow-md focus-within:border-primary/40">
+      <div className="flex-1 overflow-hidden rounded-md border border-border bg-card shadow-md focus-within:focus-line-inset">
         {/* Header */}
         <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5">
           <span className="text-xs font-semibold text-muted-foreground">Review comment</span>
@@ -128,7 +128,7 @@ export function InlineCommentWidget({
           onChange={(e) => onTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Describe what the agent should know about these lines…"
-          className="min-h-13 resize-none rounded-none border-0 bg-transparent px-2.5 py-2 shadow-none focus-visible:border-0 focus-visible:ring-0"
+          className="min-h-13 resize-none rounded-none border-0 bg-transparent px-2.5 py-2 shadow-none focus-visible:border-0 focus-visible:outline-none"
         />
 
         {/* Footer */}

@@ -758,8 +758,8 @@ test.describe('§tool-cards — Bash exit-code coloring (bash-exit-code)', () =>
     // Same wrapper/inner-span ambiguity as the "exit 0" case above.
     await expect(buildOutput.locator('span', { hasText: 'exit 127' }).last()).toHaveClass(/text-destructive/);
 
-    // cardStyle's destructive border lives on the trigger's immediate parent
+    // cardStyle's fail border lives on the trigger's immediate parent
     // (the styled wrapper div), not the outer `chat-bash-card` testid element.
-    await expect(buildCard.getByTestId('chat-bash-trigger').locator('..')).toHaveClass(/border-destructive/);
+    await expect(buildCard.getByTestId('chat-bash-trigger').locator('..')).toHaveClass(/border-fail/);
   });
 });

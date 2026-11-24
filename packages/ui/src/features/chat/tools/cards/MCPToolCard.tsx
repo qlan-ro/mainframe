@@ -97,7 +97,7 @@ function McpLabel({ server, verb, state, tool }: { server: string; verb: string;
   return (
     <>
       {server} {verb} {state !== 'error' && <span className="text-primary">{tool}</span>}
-      {state === 'error' && <span className="text-destructive">{tool}</span>}
+      {state === 'error' && <span className="text-fail">{tool}</span>}
     </>
   );
 }

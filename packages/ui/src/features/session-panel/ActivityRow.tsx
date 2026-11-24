@@ -281,7 +281,7 @@ export function ActivityRow({ row, now, chatId, adapterId, run, onJump, onOpenCh
         <>
           <DetailFields row={row} run={run} output={controls.output} />
           {controls.error && (
-            <p role="alert" className="px-2.5 pb-2 text-xs text-destructive">
+            <p role="alert" className="px-2.5 pb-2 text-xs text-fail">
               {controls.error}
             </p>
           )}

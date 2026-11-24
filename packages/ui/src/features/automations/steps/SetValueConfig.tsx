@@ -37,7 +37,7 @@ export interface SetValueConfigProps {
 function NameStatus({ error, name, testId }: { error: string | null; name: string; testId: string }) {
   if (error) {
     return (
-      <span data-testid={`${testId}-name-error`} className="text-xs font-medium text-destructive">
+      <span data-testid={`${testId}-name-error`} className="text-xs font-medium text-fail">
         {error}
       </span>
     );

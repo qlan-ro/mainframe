@@ -15,7 +15,7 @@ import { useOpenFile } from '../chat-tool-context';
 // ---------------------------------------------------------------------------
 
 /**
- * Three-state dot: pending (pulsing muted), error (destructive), success.
+ * Three-state dot: pending (pulsing muted), error (`fail`), success.
  * `result === undefined` = the tool call is still in flight. **Dot only** — the
  * coloured dot alone conveys running/failed/done (decided 2026-06-21; the
  * "Running"/"Failed"/"Done" word was redundant).
@@ -23,11 +23,7 @@ import { useOpenFile } from '../chat-tool-context';
 export function StatusDot({ result, isError }: { result: unknown; isError: boolean | undefined }) {
   const status = result === undefined ? 'pending' : isError ? 'error' : 'success';
   const dotClass =
-    status === 'pending'
-      ? 'bg-muted-foreground/40 animate-pulse'
-      : status === 'error'
-        ? 'bg-destructive'
-        : 'bg-success';
+    status === 'pending' ? 'bg-muted-foreground/40 animate-pulse' : status === 'error' ? 'bg-fail' : 'bg-success';
   return (
     <span className="inline-flex shrink-0 items-center">
       <span data-testid="tool-card-status-dot" data-status={status} className={cn('size-2 rounded-full', dotClass)} />
@@ -39,10 +35,10 @@ export function StatusDot({ result, isError }: { result: unknown; isError: boole
 // ErrorDot
 // ---------------------------------------------------------------------------
 
-/** Renders a destructive dot only when `isError` is true. */
+/** Renders a `fail` dot only when `isError` is true. */
 export function ErrorDot({ isError }: { isError: boolean | undefined }) {
   if (!isError) return null;
-  return <span className="size-2 shrink-0 rounded-full bg-destructive" />;
+  return <span className="size-2 shrink-0 rounded-full bg-fail" />;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,7 +49,7 @@ export function ErrorDot({ isError }: { isError: boolean | undefined }) {
 export function cardStyle(result: unknown, isError: boolean | undefined): string {
   const base = 'overflow-hidden rounded-lg border bg-card';
   if (isError && result !== undefined) {
-    return cn(base, 'border-destructive');
+    return cn(base, 'border-fail');
   }
   return cn(base, 'border-border');
 }

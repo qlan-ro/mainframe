@@ -83,7 +83,7 @@ export function TaskProjectChips({ projects, value, onChange }: Props) {
                 data-testid={`tasks-edit-project-${project.id}`}
                 onClick={() => onChange(project.id)}
                 onKeyDown={(event) => handleKeyDown(event, index)}
-                className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                className="rounded-full focus-visible:focus-line"
               >
                 <ProjectAvatar
                   name={project.name}

@@ -46,7 +46,7 @@ export function BranchGroupSection({
       <Collapsible open={open} onOpenChange={setExpanded}>
         <CollapsibleTrigger
           data-testid={`git-branch-section-toggle-${slug}`}
-          className="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground"
+          className="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:focus-line-inset"
         >
           {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
           {title}

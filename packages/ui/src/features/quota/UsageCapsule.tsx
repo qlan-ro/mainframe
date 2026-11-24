@@ -127,8 +127,8 @@ export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: numbe
           onPointerLeave={hover.onPointerLeave}
           style={{ width }}
           className={cn(
-            'flex h-7 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg bg-sidebar-accent pr-1.5 pl-2.5 outline-none',
-            'hover:bg-foreground/15 focus-visible:ring-2 focus-visible:ring-ring',
+            'flex h-7 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg bg-sidebar-accent pr-1.5 pl-2.5',
+            'outline-none hover:bg-foreground/15 focus-visible:focus-line',
             hover.open && 'bg-foreground/15',
           )}
         >

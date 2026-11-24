@@ -103,7 +103,7 @@ export function ReferencesPanel({ locations, symbolName, onSelectRange, onClose 
                   type="button"
                   data-testid={testId}
                   onClick={() => handleRowClick(loc)}
-                  className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-muted focus-visible:bg-muted focus-visible:focus-line-inset"
                 >
                   <span className="min-w-0 flex-1 truncate text-xs text-foreground">{basename(path)}</span>
                   <span className="shrink-0 font-mono text-xs text-muted-foreground">:{line}</span>

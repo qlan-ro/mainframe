@@ -156,6 +156,26 @@ async function waitForMockAdapter(maxMs = 10_000): Promise<void> {
   throw new Error(`Mock adapter did not become ready within ${maxMs}ms`);
 }
 
+/** Variables that point a CLI's config or credentials at a place outside HOME. */
+const CONFIG_OVERRIDES = [
+  'CLAUDE_CONFIG_DIR',
+  'CODEX_HOME',
+  'GH_CONFIG_DIR',
+  'XDG_CONFIG_HOME',
+  'XDG_DATA_HOME',
+  'XDG_STATE_HOME',
+  'XDG_CACHE_HOME',
+  'ZDOTDIR',
+];
+
+/** This process's environment, or with `home` the same one pointed at that HOME alone. */
+export function daemonBaseEnv(home?: string): NodeJS.ProcessEnv {
+  if (home === undefined) return { ...process.env };
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, USER: 'you', LOGNAME: 'you' };
+  for (const name of CONFIG_OVERRIDES) delete env[name];
+  return env;
+}
+
 export interface DaemonHandle {
   daemon: ChildProcess;
   testDataDir: string;
@@ -168,6 +188,8 @@ export async function startDaemon(opts?: {
   mockMaxDelayMs?: number;
   mockFork?: boolean;
   mockSwitch?: boolean;
+  /** The daemon's HOME. The suite keeps the developer's own; a board capture must not read it. */
+  home?: string;
 }): Promise<DaemonHandle> {
   await assertPortFree();
   const testDataDir = opts?.dataDir ?? mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
@@ -188,7 +210,7 @@ export async function startDaemon(opts?: {
   const daemonPath = resolveRustDaemon();
   const daemonLogFd = openSync(path.join(testDataDir, 'daemon.log'), 'w');
   const daemon = spawn(daemonPath, [], {
-    env: { ...process.env, MAINFRAME_DATA_DIR: testDataDir, DAEMON_PORT, ...e2eEnv },
+    env: { ...daemonBaseEnv(opts?.home), MAINFRAME_DATA_DIR: testDataDir, DAEMON_PORT, ...e2eEnv },
     stdio: ['ignore', daemonLogFd, daemonLogFd],
   });
   closeSync(daemonLogFd); // parent no longer needs the fd; child keeps it open

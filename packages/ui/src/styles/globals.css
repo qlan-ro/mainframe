@@ -5,7 +5,7 @@
    radix-vega ship byte-identical stylesheets, so nothing here moved when
    we switched off Luma's pill geometry.
 
-   Taken from the preset verbatim, with six deviations, each below. First,
+   Taken from the preset verbatim, with eight deviations, each below. First,
    `primary` and `sidebar-primary` are the macOS system blue #0a84ff — oklch(0.624 0.206
    255.486), one value for both modes — instead of the preset's two indigos.
    That is the accent the app already uses, and on a desktop app the system
@@ -43,6 +43,16 @@
    expression gives the fade no way to follow the mode — so the fill gets a
    name, declared per theme, and `bubble.tsx` reads it too.
 
+   `--fail`, the seventh, is failed work: a muted rose (S6 in
+   design/redesign/DECISIONS.md). A failure is information to read later, so it
+   must not share the alarm red. `--destructive` keeps irreversible actions
+   (delete, discard), Stop, the context ring at 95 % and red terminal output.
+
+   `--focus`, the eighth, is the keyboard focus line and nothing else. It is
+   darker than `primary` in light and lighter in dark, so the solid 2 px line
+   clears 3:1 against the ground, the card and the hairline (C3). `--ring` and
+   `--sidebar-ring` alias it, so stock `ring-ring` utilities follow.
+
    Nothing else Mainframe-specific lives here on purpose: the point of the
    clone is to see the stock baseline before anything is added back. The old
    warm-chrome sheet is NOT imported — no schemes, no window styles, no mf-*
@@ -75,6 +85,8 @@
   --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, monospace;
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-fail: var(--fail);
+  --color-focus: var(--focus);
   --color-bubble-tinted: var(--bubble-tinted);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -135,10 +147,12 @@
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.62 0.16 150);
   --warning: oklch(0.535 0.125 59.112);
+  --fail: #b04466;
+  --focus: #0b6fdc;
   --bubble-tinted: oklch(from var(--primary) 0.96 calc(c * 0.15) h);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: var(--primary);
+  --ring: var(--focus);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
@@ -153,7 +167,7 @@
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.32 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: var(--sidebar-primary);
+  --sidebar-ring: var(--focus);
 }
 
 .dark {
@@ -178,10 +192,12 @@
   --destructive: oklch(0.704 0.191 22.216);
   --success: oklch(0.75 0.17 150);
   --warning: oklch(0.794 0.127 63.093);
+  --fail: #e48aa3;
+  --focus: #3d9bff;
   --bubble-tinted: oklch(from var(--primary) 0.32 calc(c * 0.15) h);
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
-  --ring: var(--primary);
+  --ring: var(--focus);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
@@ -195,7 +211,7 @@
   --sidebar-accent: oklch(0.35 0 0);
   --sidebar-accent-foreground: oklch(0.92 0 0);
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: var(--sidebar-primary);
+  --sidebar-ring: var(--focus);
 }
 
 /**
@@ -210,6 +226,23 @@
   overflow: hidden;
   white-space: nowrap;
   mask-image: linear-gradient(to right, black calc(100% - 1.25rem), transparent);
+}
+
+/**
+ * Keyboard focus (C3): one solid 2 px line in focus blue, never a translucent
+ * halo. `focus-line` stands 2 px off the element; `focus-line-inset` draws on
+ * the element's own edge, for fields and for anything a scroller would clip.
+ * Use them behind a state variant (`focus-visible:focus-line`). Both are
+ * registered with tailwind-merge in `lib/utils.ts`.
+ */
+@utility focus-line {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@utility focus-line-inset {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 /** Ramp depth for every `scroll-fade*` scroller — the app's existing ~20px reading, not stock's deeper percentage default. */
@@ -245,7 +278,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-focus;
   }
   /*
    * The UI size is the document's size. Without this, anything that forgets a

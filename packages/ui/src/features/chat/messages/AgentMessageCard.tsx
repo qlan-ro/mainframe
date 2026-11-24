@@ -103,7 +103,7 @@ export function AgentMessageCard({ parsed, messageId }: { parsed: ParsedAgentTex
   if (message.kind === 'dropped') {
     return (
       <CardShell testId={`chat-agent-message-card-${messageId}`}>
-        <Header icon={<TriangleAlert className="size-3.5 shrink-0 text-destructive" />}>{KIND_LABELS.dropped}</Header>
+        <Header icon={<TriangleAlert className="size-3.5 shrink-0 text-fail" />}>{KIND_LABELS.dropped}</Header>
         <Body text={message.body} />
       </CardShell>
     );

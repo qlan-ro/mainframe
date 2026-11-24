@@ -18,7 +18,7 @@ const CHIP_BASE = [
   'text-xs font-medium transition-colors',
   'hover:bg-accent hover:text-accent-foreground',
   'data-[state=open]:border-primary data-[state=open]:bg-sidebar-selection',
-  'disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none',
+  'disabled:pointer-events-none disabled:opacity-50 focus-visible:focus-line',
 ].join(' ');
 
 export interface ChipButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

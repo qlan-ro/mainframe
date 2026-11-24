@@ -117,7 +117,7 @@ export function RailUpdateMenu({ app, appHint, onAppAction, clis }: RailUpdateMe
             {isRunning(status) ? (
               <LoaderCircle className="animate-spin" />
             ) : status.update?.state === 'failed' ? (
-              <TriangleAlert className="text-destructive" />
+              <TriangleAlert className="text-fail" />
             ) : (
               <Download />
             )}

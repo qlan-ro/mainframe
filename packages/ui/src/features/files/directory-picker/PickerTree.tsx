@@ -43,7 +43,7 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
         if (isDirectory) onToggle(node);
         onSelect(node);
       }}
-      className={`flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1 text-left outline-none ${
+      className={`flex w-full items-center gap-1.5 rounded-sm px-2.5 py-1 text-left focus-visible:focus-line-inset ${
         isSelected
           ? 'bg-primary/10 font-semibold text-foreground'
           : 'font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground'
@@ -123,7 +123,7 @@ export function FlatTreeView({ tree, selectedPath, onSelect, onToggle }: FlatTre
           {node.expanded && node.loadError && (
             <p
               data-testid={`directory-picker-load-error-${node.entry.path}`}
-              className="px-3 py-0.5 text-xs text-destructive"
+              className="px-3 py-0.5 text-xs text-fail"
               style={{ paddingLeft: `${nodeStateIndent(node.depth)}px` }}
             >
               Failed to load

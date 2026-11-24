@@ -16,7 +16,7 @@ import { currentPhase, donePhaseCount, runTimeline, type PhaseStatus, type RunTi
 const PILL_TINT: Record<ClaudeWorkflowRunStatus, string> = {
   running: 'bg-primary/10 text-foreground',
   completed: 'bg-success/10 text-foreground',
-  failed: 'bg-destructive/10 text-foreground',
+  failed: 'bg-fail/10 text-foreground',
   stopped: 'bg-muted text-muted-foreground',
   paused: 'bg-muted text-muted-foreground',
   unavailable: 'bg-muted text-muted-foreground',
@@ -24,7 +24,7 @@ const PILL_TINT: Record<ClaudeWorkflowRunStatus, string> = {
 
 const RAIL_FILL: Record<PhaseStatus, string> = {
   done: 'bg-success',
-  failed: 'bg-destructive',
+  failed: 'bg-fail',
   running: 'bg-primary motion-safe:animate-pulse',
   unknown: 'bg-muted-foreground/40',
   pending: 'bg-muted',

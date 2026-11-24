@@ -50,13 +50,13 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
       data-testid="chat-composer-edit"
       // Caution amber and the edit-ring glow stay bridge-owned: v2's `warning`
       // means wrong-but-not-broken, and an edit in flight is neither.
-      className="overflow-hidden rounded-xl border border-warning bg-card shadow-[var(--mf-shadow-edit-ring)]"
+      className="overflow-hidden rounded-xl border border-warning bg-card shadow-[var(--mf-shadow-edit-ring)] has-[textarea:focus-visible]:focus-line-inset"
     >
       <div className="flex items-center gap-2 bg-warning/10 py-1.5 pr-3 pl-2.5">
         <PencilIcon size={12} className="shrink-0 text-warning" />
         <span className="text-xs font-semibold text-foreground">Editing queued message</span>
         {saveError ? (
-          <span className="text-xs text-destructive">{saveError}</span>
+          <span className="text-xs text-fail">{saveError}</span>
         ) : (
           <span className="text-xs text-muted-foreground">· stays queued until the run finishes</span>
         )}

@@ -97,7 +97,7 @@ export function CsvViewer({ content, path }: CsvViewerProps) {
   // Filter chip — lives in the ViewerShell header actions slot, hidden in
   // Source where there is nothing to filter.
   const filterChip = mode === 'preview' && (
-    <div className="inline-flex h-5 items-center gap-1 rounded-sm bg-muted px-2">
+    <div className="inline-flex h-5 items-center gap-1 rounded-sm bg-muted px-2 has-[input:focus-visible]:focus-line-inset">
       <Search className="size-2.5 shrink-0 text-muted-foreground" aria-hidden />
       <input
         type="text"

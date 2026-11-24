@@ -3,7 +3,7 @@
  *
  * Mirrors packages/app-electron/src/__tests__/setup.ts: a localStorage shim, the
  * React act environment flag, jest-dom matchers, and a ResizeObserver stub for
- * Radix-based primitives (scroll-area, collapsible).
+ * Radix-based primitives (collapsible).
  *
  * Also stubs DOM Range methods required by CodeMirror 6: CM6 measures text
  * via Range.getClientRects / getBoundingClientRect which jsdom doesn't

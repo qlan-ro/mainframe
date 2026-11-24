@@ -4,7 +4,7 @@
  * survive a daemon restart, a config respawn, a degraded-recovery rebind, or
  * an unexpected CLI exit) and its earlier turns cannot be resumed (todo #346).
  *
- * A default-variant `Alert`, not `DegradedChatCard`'s destructive one: nothing
+ * A default-variant `Alert`, not `DegradedChatCard`'s `fail` one: nothing
  * failed and there is no recovery action to offer — the next message simply
  * starts a fresh vendor session in the same chat. Per the user's live design
  * review (2026-09-24), it is dismissible rather than a standing fact, keyed by

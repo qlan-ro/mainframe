@@ -21,6 +21,11 @@ function tokenColor(name: string, fallback: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
+/** A `#rrggbb` colour at `alpha` (two hex digits); xterm's theme takes no color-mix. */
+function withAlpha(color: string, alpha: string): string {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alpha}` : color;
+}
+
 /** Build (or return the cached) xterm for `id`, opened into a detached wrapper. */
 export function getOrCreate(id: string): CachedTerminal {
   const existing = cache.get(id);
@@ -29,8 +34,12 @@ export function getOrCreate(id: string): CachedTerminal {
   const wrapper = document.createElement('div');
   wrapper.className = 'absolute inset-0';
 
+  const foreground = tokenColor('--mf-term-fg', '#e7e6e3');
   const term = new Terminal({
     cursorBlink: true,
+    // The lane FitAddon leaves for the scrollbar: 2px inset + an up-to-8px thumb
+    // (app.css), matching `lib/overlay-scrollbars`.
+    overviewRuler: { width: 10 },
     fontSize: 13,
     fontFamily: "'JetBrains Mono', monospace",
     theme: {
@@ -38,9 +47,14 @@ export function getOrCreate(id: string): CachedTerminal {
       // Desktop used --mf-input-bg / --mf-text-primary / --mf-accent which
       // do not exist in app-tauri CSS — remapped to the real token names.
       background: tokenColor('--mf-term-bg', '#1d1d20'),
-      foreground: tokenColor('--mf-term-fg', '#e7e6e3'),
+      foreground,
       cursor: tokenColor('--mf-term-amber', '#ff9f0a'),
       selectionBackground: '#585b7066',
+      // Ink at 26 %, 42 % under the pointer (S3).
+      scrollbarSliderBackground: withAlpha(foreground, '42'),
+      scrollbarSliderHoverBackground: withAlpha(foreground, '6b'),
+      scrollbarSliderActiveBackground: withAlpha(foreground, '6b'),
+      overviewRulerBorder: '#00000000',
     },
   });
 

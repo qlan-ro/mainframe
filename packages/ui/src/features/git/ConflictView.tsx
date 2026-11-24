@@ -30,11 +30,11 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
       {/* No rounded-t here — the parent card (PANEL_CARD_SHELL) is overflow-hidden with
           the matching rounded corner, so this header bleeds edge-to-edge under it
           per the design's edge-to-edge danger header (finding 10.1). */}
-      <div className="flex items-center gap-2 border-b border-destructive/15 bg-destructive/10 px-3 py-2">
-        <AlertTriangle size={14} className="shrink-0 text-destructive" />
-        <span className="text-sm font-semibold text-destructive">{headerLabel}</span>
+      <div className="flex items-center gap-2 border-b border-fail/15 bg-fail/6 px-3 py-2">
+        <AlertTriangle size={14} className="shrink-0 text-fail" />
+        <span className="text-sm font-semibold text-fail">{headerLabel}</span>
         {hasConflicts && (
-          <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-0.5 font-mono text-xs font-bold text-destructive">
+          <span className="shrink-0 rounded-full border border-fail/30 px-1.5 py-0.5 font-mono text-xs font-bold text-fail">
             {conflictFiles.length}
           </span>
         )}
@@ -50,7 +50,7 @@ export function ConflictView({ conflictFiles, activeOperation, onAbort, aborting
           <div className="max-h-40 overflow-y-auto py-1">
             {conflictFiles.map((f) => (
               <div key={f.path} className="flex items-center gap-2 px-3 py-1 text-sm">
-                <span className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-sm bg-destructive/10 font-mono text-xs font-bold text-destructive">
+                <span className="inline-flex size-4.5 shrink-0 items-center justify-center rounded-sm bg-fail/6 font-mono text-xs font-bold text-fail">
                   C
                 </span>
                 <span className="truncate text-foreground" style={{ direction: 'rtl', textAlign: 'left' }}>

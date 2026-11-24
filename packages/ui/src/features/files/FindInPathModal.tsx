@@ -162,7 +162,7 @@ export function FindInPathModal() {
               </p>
             )}
             {error != null && (
-              <p data-testid="find-in-path-error" className="px-4 py-4 text-center text-xs text-destructive">
+              <p data-testid="find-in-path-error" className="px-4 py-4 text-center text-xs text-fail">
                 {error}
               </p>
             )}

@@ -45,7 +45,7 @@ export function QuickTunnelSection({ tunnel }: QuickTunnelSectionProps): React.R
       </div>
 
       <TunnelStatusRow state={tunnel.state} url={tunnel.url} onRetryVerify={tunnel.retryVerify} />
-      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-xs text-destructive">{tunnel.errorMsg}</p>}
+      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-xs text-fail">{tunnel.errorMsg}</p>}
     </div>
   );
 }

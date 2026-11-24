@@ -39,7 +39,7 @@ export function SessionRowRename({ initialTitle, onCommit, onCancel }: SessionRo
     <input
       ref={ref}
       data-testid="sessions-rename-input"
-      className="h-4.5 w-full min-w-0 rounded-sm border border-input bg-background px-1.5 text-xs text-foreground ring-1 ring-ring outline-hidden"
+      className="h-4.5 w-full min-w-0 rounded-sm border border-input bg-background px-1.5 text-xs text-foreground focus-line-inset"
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={commit}

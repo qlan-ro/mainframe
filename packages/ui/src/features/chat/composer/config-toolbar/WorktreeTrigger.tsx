@@ -81,7 +81,7 @@ export function WorktreeTrigger({
             showIsolated ? 'border-success text-success' : 'border-border',
             'hover:bg-accent hover:text-accent-foreground',
             'data-[state=open]:border-primary data-[state=open]:bg-sidebar-selection',
-            'transition-colors focus-visible:outline-none',
+            'transition-colors focus-visible:focus-line',
             'disabled:pointer-events-none disabled:opacity-50',
             locked && 'cursor-default opacity-50',
           )}

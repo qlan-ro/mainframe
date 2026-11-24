@@ -112,8 +112,8 @@ function NamedTunnelConfigured({
       ) : (
         <TunnelStatusRow state={tunnel.state} url={tunnel.url ?? savedUrl} onRetryVerify={tunnel.retryVerify} />
       )}
-      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-xs text-destructive">{tunnel.errorMsg}</p>}
-      {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+      {tunnel.state === 'error' && tunnel.errorMsg && <p className="text-xs text-fail">{tunnel.errorMsg}</p>}
+      {saveError && <p className="text-xs text-fail">{saveError}</p>}
       <div className="flex items-center gap-2">
         <Button
           size="sm"
@@ -183,7 +183,7 @@ function NamedTunnelSetup({
         placeholder="https://mainframe.example.com"
         className="h-8"
       />
-      {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+      {saveError && <p className="text-xs text-fail">{saveError}</p>}
       <Button
         size="sm"
         data-testid="named-tunnel-save"

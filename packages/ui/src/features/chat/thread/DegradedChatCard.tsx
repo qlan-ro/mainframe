@@ -5,7 +5,7 @@
  * have multiple causes, in which case transcript recovery merges into the
  * working-directory action.
  *
- * ONE recipe for every cause (user decision 2026-08-06): a v2 destructive
+ * ONE recipe for every cause (user decision 2026-08-06): a `fail`
  * `Alert` per cause, then a single row of `Button variant="outline"` actions.
  * The three banners used to differ in chrome, which read as three features.
  */
@@ -36,7 +36,7 @@ function MissingPath({ path }: { path: string }) {
 
 function Cause({ title, body }: { title: string; body: ReactNode }) {
   return (
-    <Alert variant="destructive">
+    <Alert variant="fail">
       <AlertTriangleIcon />
       <AlertTitle>{title}</AlertTitle>
       <AlertDescription>
@@ -120,7 +120,7 @@ export function DegradedChatCard() {
       )}
 
       {recreateError != null && (
-        <p data-testid="chat-degraded-error" className="text-xs text-destructive">
+        <p data-testid="chat-degraded-error" className="text-xs text-fail">
           {recreateError}
         </p>
       )}

@@ -148,7 +148,7 @@ export function FindBar(): React.ReactElement | null {
         aria-label="Find in chat"
         className={cn(
           'flex-1 rounded border border-border bg-background px-2 py-1 text-sm text-foreground',
-          'placeholder:text-muted-foreground focus:border-ring focus:outline-none',
+          'placeholder:text-muted-foreground focus:focus-line-inset',
         )}
       />
       <span className="min-w-[3rem] shrink-0 text-center text-muted-foreground">

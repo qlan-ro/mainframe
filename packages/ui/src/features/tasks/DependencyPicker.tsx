@@ -109,7 +109,7 @@ export function DependencyPicker({ currentNumber, allTodos, value, onChange }: P
           </button>
           {open && (
             <div className="absolute left-0 top-full mt-1 z-50 w-full min-w-[240px] bg-popover border border-border rounded-md shadow-lg overflow-hidden">
-              <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border">
+              <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border has-[input:focus-visible]:focus-line-inset">
                 <Search size={12} className="text-muted-foreground shrink-0" />
                 <input
                   ref={searchRef}

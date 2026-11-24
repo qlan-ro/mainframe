@@ -194,7 +194,8 @@ export function ScopeStrip({ projects, scope, onToggle, onSolo, onRemoveProject,
         onPointerEnter={linger.enter}
         onPointerLeave={linger.leave}
         onWheel={scrollSideways}
-        className="flex min-w-0 shrink items-center overflow-x-auto p-1 [scrollbar-width:none] scroll-fade-x"
+        data-scrollbar="none"
+        className="flex min-w-0 shrink items-center overflow-x-auto p-1 scroll-fade-x"
       >
         <ToggleGroup
           type="multiple"

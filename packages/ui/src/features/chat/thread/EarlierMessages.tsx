@@ -1,11 +1,14 @@
 import { useEffect } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
+import { SCROLLBAR_DRAG_EVENT } from '@/lib/overlay-scrollbars/thumb';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useTranscriptScroll } from './transcript-scroll-context';
 
 import { usePrependAnchor } from './use-prepend-anchor';
 export { HISTORY_PREPEND_EVENT } from './use-prepend-anchor';
+
+const SCROLL_GESTURES = ['wheel', 'touchmove', 'keydown', SCROLLBAR_DRAG_EVENT];
 
 export function EarlierMessages() {
   const extras = useChatExtras();
@@ -62,24 +65,13 @@ function useOlderPageGesture(
       if ((event.target as Element).closest('input, textarea, [contenteditable="true"]')) return;
       if (event instanceof KeyboardEvent && !['ArrowUp', 'PageUp', 'Home'].includes(event.key)) return;
       if (event instanceof WheelEvent && event.deltaY >= 0) return;
-      if (event.type === 'pointerdown') {
-        const pointer = event as PointerEvent;
-        const box = viewport.getBoundingClientRect();
-        if (
-          event.target !== viewport ||
-          viewport.offsetWidth <= viewport.clientWidth ||
-          pointer.clientX < box.left + viewport.clientWidth
-        )
-          return;
-      }
       armed = true;
       check();
     };
-    for (const name of ['wheel', 'touchmove', 'keydown', 'pointerdown'])
-      viewport.addEventListener(name, gesture, { passive: true });
+    for (const name of SCROLL_GESTURES) viewport.addEventListener(name, gesture, { passive: true });
     viewport.addEventListener('scroll', check, { passive: true });
     return () => {
-      for (const name of ['wheel', 'touchmove', 'keydown', 'pointerdown']) viewport.removeEventListener(name, gesture);
+      for (const name of SCROLL_GESTURES) viewport.removeEventListener(name, gesture);
       viewport.removeEventListener('scroll', check);
     };
   }, [load, hasMore, loading, scroll]);

@@ -24,12 +24,12 @@ a{color:var(--primary);text-decoration:none}a:hover{text-decoration:underline}
     </div>
     <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; line-height: 16px; color: var(--muted-foreground)">
       <x-import component-from-global-scope="Mainframe.Icon" name="GitCommitHorizontal" size="{{iconXs}}"></x-import>
-      <span>Captured from qlan-ro/mainframe at 76b2dab3, 11 Nov 2026. Chat session panel at v2.15.0 (9f504d34), 13 Nov 2026</span>
+      <span>Most boards: 76b2dab3, 11 Nov 2026. Session panel: v2.15.0, 13 Nov. Shell and Foundations: 24 Nov 2026</span>
     </div>
   </div>
 
-  <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px">
-    <sc-for list="{{pages}}" as="p" hint-placeholder-count="10">
+  <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px">
+    <sc-for list="{{pages}}" as="p" hint-placeholder-count="11">
       <div style="display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 14px; background: var(--card); border: 1px solid var(--border)">
         <div style="display: flex; align-items: center; gap: 8px">
           <span style="display: inline-flex; color: var(--muted-foreground)"><x-import component-from-global-scope="Mainframe.Icon" name="{{p.icon}}"></x-import></span>
@@ -56,7 +56,8 @@ a{color:var(--primary);text-decoration:none}a:hover{text-decoration:underline}
         <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--primary); flex-shrink: 0"></span><span><b style="font-weight: 600">primary</b> — selected, or running and wants attention</span></div>
         <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--success); flex-shrink: 0"></span><span><b style="font-weight: 600">success</b> — connected, healthy or done. Never running.</span></div>
         <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--warning); flex-shrink: 0"></span><span><b style="font-weight: 600">warning</b> — needs the user, or degraded</span></div>
-        <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--destructive); flex-shrink: 0"></span><span><b style="font-weight: 600">destructive</b> — failed, or an irreversible action</span></div>
+        <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--destructive); flex-shrink: 0"></span><span><b style="font-weight: 600">destructive</b> — an irreversible action, or a limit about to be hit. Never a failure.</span></div>
+        <div style="display: flex; align-items: center; gap: 10px"><span style="width: 8px; height: 8px; border-radius: 999px; background: var(--fail, #b04466); flex-shrink: 0"></span><span><b style="font-weight: 600">fail</b> — failed work and errors, in muted rose</span></div>
       </div>
       <p style="margin: 4px 0 0; font-size: 12px; line-height: 17px; color: var(--muted-foreground)">Every artboard has a Theme tweak (light or dark). Reviews score each area page on its own, light and dark. Sessions were captured on the mock adapter, so provider marks and model names show its placeholders.</p>
     </div>
@@ -71,6 +72,7 @@ class Component extends DCLogic {
       mode: this.props.mode ?? 'light',
       iconXs: 12,
       pages: [
+        { icon: 'Palette', name: 'Foundations', body: 'Tokens, type, radius and spacing; scrollbars and the focus line. The rules are in DESIGN.md.' },
         { icon: 'AppWindow', name: 'Shell & title bar', body: 'The window, title bar and usage capsule, session tabs, nav rail, first run and empty states.' },
         { icon: 'PanelLeft', name: 'Sidebar', body: 'Session list views, row states, menus and filters.' },
         { icon: 'SquarePen', name: 'Composer & gates', body: 'The composer state matrix and its menus; permission, question and plan gates.' },

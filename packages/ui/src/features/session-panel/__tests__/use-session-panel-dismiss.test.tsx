@@ -64,6 +64,16 @@ describe('useSessionPanelState — light dismiss', () => {
     expect(result.current.mode).toBe('overlay');
   });
 
+  it('stays open for a pointerdown on a scrollbar thumb', () => {
+    const { result } = openOverlay();
+    const thumb = document.createElement('div');
+    thumb.className = 'mf-scrollbar';
+    thumb.append(document.createElement('span'));
+    document.body.append(thumb);
+    pointerDownOn(thumb.firstElementChild!);
+    expect(result.current.mode).toBe('overlay');
+  });
+
   it('stays open for a pointerdown inside a portalled menu', () => {
     const { result } = openOverlay();
     const menu = document.createElement('div');

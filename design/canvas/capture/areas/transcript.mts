@@ -1,0 +1,46 @@
+// Transcript: failed work. The other Chat-* boards are not captured by this tool yet (README).
+import { sendMessage, waitForIdle } from '../../../../packages/e2e/helpers/tauri/wait.js';
+import { parkPointer, seedWorkbench, stubUsage } from '../seed.mts';
+import type { CaptureArea } from '../types.mts';
+
+const area: CaptureArea = {
+  boards: [
+    {
+      file: 'Chat-States-Failures',
+      title: 'Chat — failed work',
+      subtitle: 'Failed tools are muted rose (`fail`, S6). Red stays inside terminal text.',
+      width: 1900,
+    },
+  ],
+  groups: [
+    {
+      board: 'Chat-States-Failures',
+      launch: { recordingKey: 'bash-exit-code' },
+      before: stubUsage,
+      seed: async ({ page }) => {
+        await seedWorkbench(page);
+        await sendMessage(page, 'Run the test suite, then run a bad command');
+        await waitForIdle(page);
+        await parkPointer(page);
+      },
+      states: [
+        {
+          id: 'failed-tool',
+          caption: '**A failed tool.** The second command failed: rose dot on the card.',
+          crop: [317, 48, 824, 852],
+        },
+        {
+          id: 'failed-tool-open',
+          caption: '**Opened.** Rose outline on the card; the exit line keeps the terminal’s own red.',
+          crop: [317, 48, 824, 852],
+          setup: async ({ page }) => {
+            await page.getByTestId('chat-bash-card').nth(1).getByTestId('chat-bash-trigger').click();
+            await parkPointer(page);
+          },
+        },
+      ],
+    },
+  ],
+};
+
+export default area;

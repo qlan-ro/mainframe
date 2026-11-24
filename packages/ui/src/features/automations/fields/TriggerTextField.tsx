@@ -94,7 +94,10 @@ export function TriggerTextField({
     <TriggerFieldPopover field={field} testId={`${testId}-trigger-popover`} side="bottom" className="w-80">
       <div
         data-testid={`${testId}-container`}
-        className={cn('relative', !bare && 'rounded-md border-[0.5px] border-input bg-card')}
+        className={cn(
+          'relative',
+          !bare && 'rounded-md border-[0.5px] border-input bg-card has-[textarea:focus-visible]:focus-line-inset',
+        )}
         style={{ minHeight }}
       >
         <TextareaAutosize

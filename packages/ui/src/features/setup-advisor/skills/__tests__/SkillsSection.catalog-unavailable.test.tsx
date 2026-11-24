@@ -42,7 +42,7 @@ describe('SkillsSection — catalog unavailable', () => {
 
     const note = await screen.findByTestId('skills-browse-catalog-unavailable');
     expect(note).toHaveTextContent('Search skills.sh to find a skill to install');
-    expect(note).not.toHaveClass('text-destructive');
+    expect(note).not.toHaveClass('text-fail');
     expect(screen.queryByTestId('skills-browse-search-error')).not.toBeInTheDocument();
   });
 

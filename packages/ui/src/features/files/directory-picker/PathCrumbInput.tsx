@@ -58,7 +58,7 @@ export function PathCrumbInput({ value, onNavigate }: PathCrumbInputProps) {
   }, []);
 
   return (
-    <div className="flex shrink-0 items-center gap-1.5 border-b px-3.5 py-2">
+    <div className="flex shrink-0 items-center gap-1.5 border-b px-3.5 py-2 has-[input:focus-visible]:focus-line-inset">
       <FolderIcon className="size-3 shrink-0 text-muted-foreground/70" fill="currentColor" />
       <input
         type="text"
