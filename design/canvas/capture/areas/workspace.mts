@@ -98,6 +98,21 @@ const area: CaptureArea = {
           wait: 800,
         },
         {
+          id: 'workspace-narrow',
+          caption: '**320 px panel.** A selected title longer than the row fades at its end; its close button stays.',
+          crop: [780, 0, 660, 120],
+          setup: async ({ page }) => {
+            await page.locator('[data-testid^="workspace-tab-"][role="tab"]').last().click();
+            const divider = (await page.getByTestId('surf-divider-x').boundingBox())!;
+            await page.mouse.move(divider.x, 500);
+            await page.mouse.down();
+            await page.mouse.move(1400, 500, { steps: 4 });
+            await page.mouse.up();
+            await parkPointer(page);
+          },
+          wait: 800,
+        },
+        {
           id: 'workspace-files',
           caption: '**Files on.** The toggle keeps a soft fill while the tree is docked.',
           crop: [780, 0, 660, 360],
