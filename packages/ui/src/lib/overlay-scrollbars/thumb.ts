@@ -1,6 +1,6 @@
 /** One overlay thumb: its element, its placement and dragging it. */
-import { scrollPerDragPixel, THUMB_INSET, thumbBox, type Axis, type Box } from './geometry';
-import { hasEdgeHandle, isCovered, metricsOf, paddingBox, scrolls, visibleBox } from './scroller';
+import { scrollPerDragPixel, THUMB_INSET, thumbBox, thumbClip, type Axis, type Box } from './geometry';
+import { hasEdgeHandle, metricsOf, paddingBox, scrolls, uncoveredSpans, visibleBox } from './scroller';
 
 /**
  * Fired on a scroller (not bubbling) when its thumb is grabbed. Code that tells
@@ -64,6 +64,10 @@ function startDrag(thumb: HTMLDivElement, scroller: Element, axis: Axis, down: P
   thumb.addEventListener('pointercancel', end);
 }
 
+function lengthOf(axis: Axis, box: Box): number {
+  return axis === 'y' ? box.bottom - box.top : box.right - box.left;
+}
+
 /** Leaves the outermost pixels of the scroller's edge to a resize strip that shares it. */
 function yieldEdge(axis: Axis, box: Box): Box {
   if (!hasEdgeHandle(axis, box)) return box;
@@ -107,9 +111,11 @@ export function createThumb(scroller: Element, axis: Axis, { onEnter, onLeave }:
     const full = scrolls(scroller, axis)
       ? thumbBox(axis, metricsOf(scroller, axis), paddingBox(scroller), visibleBox(scroller))
       : null;
-    // Hiding the thumb mid-drag would drop its pointer capture.
+    // Hiding the thumb mid-drag would drop its pointer capture, so a drag shows all of it.
     const dragging = element.dataset.dragging !== undefined;
-    element.hidden = !dragging && (full === null || isCovered(scroller, axis, full));
+    const clip = dragging || !full ? '' : thumbClip(axis, lengthOf(axis, full), uncoveredSpans(scroller, axis, full));
+    element.hidden = !dragging && (full === null || clip === null);
+    element.style.clipPath = clip ?? '';
     if (!full) return;
     const box = yieldEdge(axis, full);
     element.style.top = `${box.top}px`;

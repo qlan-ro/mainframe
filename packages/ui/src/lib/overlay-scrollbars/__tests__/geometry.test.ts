@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { overflows, scrollPerDragPixel, thumbBox, thumbLength, thumbOffset } from '../geometry';
+import { overflows, scrollPerDragPixel, thumbBox, thumbClip, thumbLength, thumbOffset } from '../geometry';
 
 const box = { top: 100, left: 50, right: 250, bottom: 300 };
 
@@ -55,5 +55,18 @@ describe('overlay thumb geometry', () => {
     const metrics = { view: 200, full: 400, position: 0 };
     expect(thumbBox('y', metrics, box, { ...box, right: 249 })).toMatchObject({ left: 239, right: 249 });
     expect(thumbBox('x', metrics, box, { ...box, bottom: 298 })).toMatchObject({ top: 288, bottom: 298 });
+  });
+});
+
+describe('thumb clip', () => {
+  it('is nothing for a whole thumb and null for one with no part worth drawing', () => {
+    expect(thumbClip('y', 98, [[0, 98]])).toBe('');
+    expect(thumbClip('y', 98, [])).toBeNull();
+    expect(thumbClip('y', 98, [[0, 5]])).toBeNull();
+  });
+
+  it('runs along the axis of the thumb', () => {
+    expect(thumbClip('y', 98, [[18, 98]])).toBe('polygon(0px 18px, 100% 18px, 100% 98px, 0px 98px)');
+    expect(thumbClip('x', 98, [[18, 98]])).toBe('polygon(18px 0px, 18px 100%, 98px 100%, 98px 0px)');
   });
 });

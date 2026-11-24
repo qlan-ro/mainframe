@@ -7,6 +7,7 @@ import os
 import re
 import socket
 import sys
+from html.parser import HTMLParser
 
 CANVAS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = os.path.join(CANVAS, "project")
@@ -89,16 +90,55 @@ def machine_names():
     return {n for n in names if len(n) > 2 and n.lower() not in {"root", "runner", "user", "localhost"}}
 
 
+# The shapes of a local path, shared with design/tools/check.mjs, which holds committed boards to the same rule.
+with open(os.path.join(CANVAS, "lib", "local-paths.json")) as f:
+    _PATHS = json.load(f)
+LOCAL_PATH = re.compile(_PATHS["path"])
+ENCODED_SLASH = re.compile(_PATHS["encodedSlash"])
+
+
+def local_paths(text):
+    """Home and temp paths of a machine, encoded ones (`%2FUsers%2F…`) included."""
+    return sorted(set(LOCAL_PATH.findall(ENCODED_SLASH.sub("/", text))))
+
+
+class _Markup(HTMLParser):
+    """Collects what a board says: its text and attribute values, without CSS and scripts."""
+
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self._skipping = False
+
+    def handle_starttag(self, tag, attrs):
+        self._skipping = tag in ("style", "script")
+        self.parts += [value for name, value in attrs if value and name not in ("class", "style")]
+
+    def handle_endtag(self, tag):
+        if tag in ("style", "script"):
+            self._skipping = False
+
+    def handle_data(self, data):
+        if not self._skipping:
+            self.parts.append(data)
+
+
 def leaks(text, names=None):
     """What in a board tells whose machine drew it: home and temp paths, the user name, the host name."""
     names = machine_names() if names is None else names
-    found = re.findall(r"/(?:Users|private|home)/[^\s\"'<>&;)]*", text)
+    found = local_paths(text)
+    markup = _Markup()
+    markup.feed(text)
+    markup.close()
     for name in sorted(names):
-        found += re.findall(rf"(?i)(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", text)
+        word = re.compile(rf"(?i)(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])")
+        for part in markup.parts:
+            found += word.findall(part)
     return sorted(set(found))
 
 
 def write_board(stem, text):
+    """The only way a board is written, whichever builder drew it, so none can write a leak."""
     found = leaks(text)
     if found:
         sys.exit(f"{stem}: the board names this machine, not written: {', '.join(found[:10])}")

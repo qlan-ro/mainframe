@@ -209,13 +209,41 @@ describe('overlay scrollbar manager', () => {
       expect(thumbs()[0]?.hidden).toBe(true);
     });
 
-    it('keeps the thumb when something covers only a part of it', () => {
+    it('leaves the part of the thumb under a popover to the popover', () => {
       const scroller = makeScroller();
-      const toast = document.createElement('div');
-      document.body.append(toast);
-      paint((y) => (y < 20 ? [toast, scroller] : [scroller]));
+      const popover = document.createElement('div');
+      document.body.append(popover);
+      paint((y) => (y < 20 ? [popover, scroller] : [scroller]));
       pointerOver(scroller);
-      expect(thumbs()[0]?.hidden).toBe(false);
+      const thumb = thumbs()[0]!;
+      expect(thumb.hidden).toBe(false);
+      // The thumb runs from 2 to 100 in the window, so the popover covers its first 18px.
+      expect(thumb.style.clipPath).toBe('polygon(0px 18px, 100% 18px, 100% 98px, 0px 98px)');
+
+      paint(() => [scroller]);
+      vi.advanceTimersByTime(300);
+      expect(thumb.style.clipPath).toBe('');
+    });
+
+    it('keeps both ends of a thumb whose middle is covered', () => {
+      const scroller = makeScroller();
+      const popover = document.createElement('div');
+      document.body.append(popover);
+      // From 38 to 50 of the thumb; a clipped edge may give up one more pixel, never one less.
+      paint((y) => (y >= 40 && y < 52 ? [popover, scroller] : [scroller]));
+      pointerOver(scroller);
+      expect(thumbs()[0]!.style.clipPath).toBe(
+        'polygon(0px 0px, 100% 0px, 100% 37px, 0px 37px, 0px 50px, 100% 50px, 100% 98px, 0px 98px)',
+      );
+    });
+
+    it('hides the thumb when only a sliver of it is uncovered', () => {
+      const scroller = makeScroller();
+      const popover = document.createElement('div');
+      document.body.append(popover);
+      paint((y) => (y < 95 ? [popover, scroller] : [scroller]));
+      pointerOver(scroller);
+      expect(thumbs()[0]?.hidden).toBe(true);
     });
 
     it('ignores the thumbs of other areas', () => {
@@ -255,6 +283,7 @@ describe('overlay scrollbar manager', () => {
       top = dialog;
       vi.advanceTimersByTime(300);
       expect(thumb.hidden).toBe(false);
+      expect(thumb.style.clipPath).toBe('');
       drag(thumb, 'pointerup', 10);
       vi.advanceTimersByTime(300);
       expect(thumb.hidden).toBe(true);

@@ -1,10 +1,11 @@
 // Drives every state of one area (CAPTURE_AREA) and writes .work/<area>.json for build.py.
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from '../../../packages/e2e/node_modules/@playwright/test/index.mjs';
 import type { Page } from '../../../packages/e2e/node_modules/@playwright/test/index.mjs';
 import { closeTauriApp, launchTauriApp } from '../../../packages/e2e/fixtures/app-tauri.js';
-import { captureHome, PATH_ALIASES, WORK_DIR } from './seed.mts';
+import { isolated, WORK_DIR } from './isolation.mts';
+import { PATH_ALIASES } from './seed.mts';
 import { serialise } from './serialise.mts';
 import type { CaptureArea, CaptureContext, CaptureGroup, CaptureState, Crop } from './types.mts';
 
@@ -42,12 +43,8 @@ async function cropOf(page: Page, state: CaptureState, viewport: Frame['viewport
 
 async function runGroup(group: CaptureGroup, index: number, css: Set<string>): Promise<Frame[]> {
   const viewport = group.viewport ?? DEFAULT_VIEWPORT;
-  const dataDir = path.join(WORK_DIR, `data-${index}`);
-  mkdirSync(dataDir, { recursive: true });
   const app = await launchTauriApp({
-    ...group.launch,
-    dataDir,
-    home: captureHome(),
+    ...isolated(group.launch, index),
     beforeNavigate: async (page) => {
       page.setDefaultTimeout(15_000);
       await page.setViewportSize(viewport);

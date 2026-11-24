@@ -1,6 +1,8 @@
 import json,re,math,html,sys,os
 sys.path.insert(0,os.path.dirname(__file__))
 from states import BOARDS
+sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','lib'))
+from boards import write_board
 HERE=os.path.dirname(os.path.abspath(__file__))
 ROOT=os.path.dirname(HERE)  # design/canvas
 PROTO=os.path.join(ROOT,'..','redesign','prototype','index.html')
@@ -112,7 +114,7 @@ if __name__=='__main__':
     outdir=os.path.join(ROOT,'project');os.makedirs(outdir,exist_ok=True)
     sizes={}
     for b in BOARDS:
-        txt,w,h=board(b);open(os.path.join(outdir,b['file']+'.dc.html'),'w').write(txt);sizes[b['file']]=(w,h,b['title'])
-    sb=spec();open(os.path.join(outdir,'Proposal-Redesign-Spec.dc.html'),'w').write(page('Window redesign: decisions',('',sb),1360,4000))
+        txt,w,h=board(b);write_board(b['file'],txt);sizes[b['file']]=(w,h,b['title'])
+    sb=spec();write_board('Proposal-Redesign-Spec',page('Window redesign: decisions',('',sb),1360,4000))
     json.dump(sizes,open(os.path.join(HERE,'sizes.json'),'w'),indent=1)
     for k,v in sizes.items(): print(k,v[0],'x',v[1], round(os.path.getsize(os.path.join(outdir,k+'.dc.html'))/1e6,2),'MB')

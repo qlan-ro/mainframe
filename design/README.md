@@ -10,7 +10,7 @@ Mainframe's design source lives here. The hosted [Mainframe App canvas](https://
 | `canvas/project/` | The canvas source as it is published: `canvas.json` (pages, frames, notes) and one `.dc.html` per board. `ds/` is the installed Mainframe design system. |
 | `canvas/capture/` | The product-board capture tool: one command redraws an area's boards from the running app. See its README. |
 | `canvas/foundations/` | The generator for `Foundations-Tokens`, from the tokens in `../DESIGN.md`. |
-| `canvas/lib/` | The page shape those two share. |
+| `canvas/lib/` | What the board builders share: the page shape, and the one check every board passes before it is written. |
 | `canvas/proposals/` | The generator for the `Proposal-Redesign-*` boards, rendered from the redesign prototype. |
 | `redesign/` | The window redesign: `DECISIONS.md` (the spec, mirrored on the `Proposal-Redesign-Spec` board) and the clickable `prototype/index.html`. |
 | `tools/check.mjs` | The CI check. |
@@ -44,7 +44,7 @@ The `overview` page holds the map board (`Main`). The `proposals` page holds des
 
 CI runs `node design/tools/check.mjs --base origin/main`:
 
-- **Canvas:** every board in `canvas.json` has a file, nothing is orphaned, `order` lists every board once, every board sits on its area's page, and every named brief exists.
+- **Canvas:** every board in `canvas.json` has a file, nothing is orphaned, `order` lists every board once, every board sits on its area's page, and every named brief exists. No file in `canvas/project/` or `redesign/` holds a local path (`/Users/…`, `/private/tmp/…`, `/var/folders/…`, URL-encoded too): this repository is public, so write `~/projects/…`. Private project names cannot be checked for; leave them out.
 - **Coverage:** every area whose UI code changed (`.tsx` and `.css` files, tests and stories excluded; moves and deletions count) also adds or edits one of its own boards or its brief. A proposal board or a deleted board does not count.
 
 A PR with no visible change (a refactor, a performance fix) carries the `design: none` label, which skips the coverage check.
