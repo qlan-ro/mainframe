@@ -1,0 +1,140 @@
+/**
+ * §session-panel — where a click on an Activity row takes you in a long session.
+ *
+ * The windowed-history fixture loads only the newest turns, and its tool
+ * results are 32 KB, taller than the viewport. The task list is answered on the
+ * network boundary: the mock adapter tracks only background work of its own.
+ *
+ * Testid reference:
+ *   session-panel-activity-<entryId>  — an Activity row
+ *   chat-message-list[data-loaded-count] — how many messages are loaded
+ *   chat-subagent-zone-<toolCallId>   — a sub-agent's transcript beside the chat
+ *   [data-activity-id]                — a transcript row, by the tool calls it stands for
+ */
+import { test, expect, type Page } from '@playwright/test';
+import { rmSync } from 'node:fs';
+import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
+import { WINDOWED_RECORDING_KEY, WINDOWED_PAGE_CONTAINERS } from '../fixtures/windowed-history.js';
+import { HistoryWire, seedWindowedHistory } from '../helpers/tauri/windowed-history.js';
+import { cleanupHeadlessProject } from '../helpers/tauri/headless-chat.js';
+import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
+import { waitConnected } from '../helpers/tauri/wait.js';
+
+const DOCKED = { width: 2100, height: 900 };
+
+/** A task started by this tool call; the fixture's calls are `window-tool-<turn>-<n>`. */
+function task(id: string, kind: 'agent' | 'other', toolUseId: string) {
+  return {
+    id,
+    kind,
+    toolName: kind === 'other' ? 'Monitor' : 'Bash',
+    toolUseId,
+    command: id,
+    description: id,
+    outputPath: null,
+    startedAt: Date.now() - 60_000,
+    endedAt: null,
+    status: 'running',
+    lastOutputLine: null,
+    summary: null,
+    usage: null,
+  };
+}
+
+const TASKS = [
+  task('earlier-monitor', 'other', 'window-tool-239-1'),
+  task('earlier-agent', 'agent', 'window-tool-239-2'),
+  task('missing-monitor', 'other', 'window-tool-missing'),
+  task('recent-monitor', 'other', 'window-tool-244-1'),
+];
+
+test.describe('§session-panel — jumps in a windowed session', () => {
+  let seed: Awaited<ReturnType<typeof seedWindowedHistory>>;
+  let app: TauriAppFixture;
+  const wire = new HistoryWire();
+
+  test.beforeAll(async () => {
+    seed = await seedWindowedHistory();
+    app = await launchTauriApp({
+      dataDir: seed.dataDir,
+      recordingKey: WINDOWED_RECORDING_KEY,
+      recordingsDir: seed.recordingsDir,
+      beforeNavigate: async (page) => {
+        await wire.install(page);
+        await page.route(/\/api\/chats\/[^/]+\/background-tasks$/, (route) =>
+          route.fulfill({
+            json: { success: true, data: { tasks: TASKS } },
+            headers: { 'access-control-allow-origin': '*' },
+          }),
+        );
+      },
+    });
+    await app.page.setViewportSize(DOCKED);
+  });
+  test.afterAll(async () => {
+    wire.release();
+    await closeTauriApp(app);
+    if (seed) {
+      cleanupHeadlessProject(seed.project);
+      rmSync(seed.recordingsDir, { recursive: true, force: true });
+    }
+  });
+  test.beforeEach(async () => {
+    const { page } = app;
+    await page.reload();
+    await waitConnected(page);
+    await sessionsSidebar(page).row(seed.chatId).click();
+    await expect(page.getByTestId('chat-message-list')).toHaveAttribute(
+      'data-loaded-count',
+      String(WINDOWED_PAGE_CONTAINERS),
+    );
+    await expect(page.getByText('Needle turn 249', { exact: true })).toBeInViewport();
+  });
+
+  const row = (page: Page, id: string) => page.getByTestId(`session-panel-activity-task:${id}`);
+  const target = (page: Page, toolCallId: string) => page.locator(`[data-activity-id="${toolCallId}"]`);
+
+  test('a monitor started before the loaded history loads it and lands on its own row', async () => {
+    const { page } = app;
+    await row(page, 'earlier-monitor').click();
+    const landed = target(page, 'window-tool-239-1');
+    await expect(landed).toHaveAttribute('data-activity-flash', '', { timeout: 10_000 });
+    await expect(landed).toBeInViewport();
+    await expect(landed.locator(':focus')).toHaveCount(1);
+  });
+
+  test('a sub-agent started before the loaded history opens its own transcript', async () => {
+    const { page } = app;
+    await row(page, 'earlier-agent').click();
+    const zone = page.getByTestId('chat-subagent-zone-window-tool-239-2');
+    await expect(zone).toBeVisible({ timeout: 10_000 });
+    await expect(zone.getByText('Loading subagent transcript...')).toHaveCount(0);
+    await expect(zone.getByText('Not in this transcript')).toHaveCount(0);
+    await expect(page.getByTestId('chat-message-list')).not.toHaveAttribute(
+      'data-loaded-count',
+      String(WINDOWED_PAGE_CONTAINERS),
+    );
+  });
+
+  test('a monitor the history does not hold says so and stays put', async () => {
+    const { page } = app;
+    await row(page, 'missing-monitor').click();
+    await expect(page.getByText('started before the history shown here')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-activity-flash]')).toHaveCount(0);
+    await expect(page.getByText('Needle turn 249', { exact: true })).toBeInViewport();
+  });
+
+  test('a row taller than the viewport lands on its top, with focus on it', async () => {
+    const { page } = app;
+    await row(page, 'recent-monitor').click();
+    const landed = target(page, 'window-tool-244-1');
+    await expect(landed).toHaveAttribute('data-activity-flash', '', { timeout: 10_000 });
+    await expect(landed).not.toHaveAttribute('data-activity-flash', '', { timeout: 5_000 });
+
+    const viewport = (await page.getByTestId('chat-thread-viewport').boundingBox())!;
+    const box = (await landed.boundingBox())!;
+    expect(box.height).toBeGreaterThan(viewport.height);
+    expect(Math.abs(box.y - viewport.y)).toBeLessThan(40);
+    await expect(landed.locator(':focus')).toHaveCount(1);
+  });
+});

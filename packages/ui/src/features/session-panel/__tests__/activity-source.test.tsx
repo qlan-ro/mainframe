@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const controller = vi.hoisted(() => ({
+  current: undefined as
+    { getState: () => { messages: unknown[] }; loadEarlier: (id: string) => Promise<boolean> } | undefined,
+}));
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
-  chatControllerRegistry: { get: () => undefined },
+  chatControllerRegistry: { get: () => controller.current },
 }));
 const { ACTIVITY_JUMP_EVENT, focusPendingRequest, jumpToActivitySource } = await import('../activity-source');
 
@@ -13,6 +17,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   document.body.innerHTML = '';
+  controller.current = undefined;
 });
 
 function transcript(html: string) {
@@ -77,17 +82,115 @@ describe('jumpToActivitySource', () => {
     window.addEventListener(ACTIVITY_JUMP_EVENT, listener);
     await jump();
     window.removeEventListener(ACTIVITY_JUMP_EVENT, listener);
-    expect(listener.mock.calls[0]![0].detail).toEqual({
+    expect(listener.mock.calls[0]![0].detail).toMatchObject({
       chatId: 'chat-1',
       source: { messageId: 'm-1', toolCallId: undefined },
     });
+  });
+
+  it('starts a row taller than the transcript at its top', async () => {
+    const root = transcript('<div data-activity-id="call-1"></div>');
+    Object.defineProperty(root, 'clientHeight', { value: 600 });
+    const row = root.querySelector<HTMLElement>('[data-activity-id]')!;
+    row.getBoundingClientRect = () => ({ top: 0, height: 900 }) as DOMRect;
+    await jump('call-1');
+    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' }));
+
+    row.getBoundingClientRect = () => ({ top: 0, height: 100 }) as DOMRect;
+    await jump('call-1');
+    expect(scrollIntoView).toHaveBeenLastCalledWith(expect.objectContaining({ block: 'center' }));
+  });
+
+  it('starts at the top a row whose end would sit behind the composer', async () => {
+    const root = transcript('<div data-activity-id="call-1"></div><div data-chat-footer></div>');
+    Object.defineProperty(root, 'clientHeight', { value: 600 });
+    Object.defineProperty(root.querySelector('[data-chat-footer]'), 'offsetHeight', { value: 200 });
+    root.querySelector<HTMLElement>('[data-activity-id]')!.getBoundingClientRect = () =>
+      ({ top: 0, height: 300 }) as DOMRect;
+    await jump('call-1');
+    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' }));
+  });
+
+  it('holds the scroll lock until the scroll has ended', async () => {
+    transcript('<div data-activity-id="call-1"></div>');
+    let settled = false;
+    let settledAtScroll: boolean | undefined;
+    const listener = (event: Event) =>
+      void (event as CustomEvent<{ settled: Promise<void> }>).detail.settled.then(() => {
+        settled = true;
+      });
+    scrollIntoView.mockImplementation(() => {
+      setTimeout(() => {
+        settledAtScroll = settled;
+      }, 60);
+    });
+    window.addEventListener(ACTIVITY_JUMP_EVENT, listener);
+    await jump('call-1');
+    window.removeEventListener(ACTIVITY_JUMP_EVENT, listener);
+    expect(settledAtScroll).toBe(false);
+    await Promise.resolve();
+    expect(settled).toBe(true);
+  });
+
+  it('focuses a row that has no control and was not focusable', async () => {
+    const root = transcript('<div data-activity-id="call-1">Scheduled</div>');
+    await jump('call-1');
+    expect(document.activeElement).toBe(root.querySelector('[data-activity-id]'));
+  });
+
+  it('takes focus again when the row was remounted on the way', async () => {
+    const root = transcript('<div data-activity-id="call-1"><button aria-expanded="true">Old</button></div>');
+    const message = root.querySelector<HTMLElement>('[data-message-id]')!;
+    scrollIntoView.mockImplementation(() => {
+      message.innerHTML = '<div data-activity-id="call-1"><button aria-expanded="true">New</button></div>';
+    });
+    await jump('call-1');
+    expect(document.activeElement).toHaveTextContent('New');
+  });
+});
+
+describe('jumpToActivitySource — a call that is not loaded', () => {
+  const messages: unknown[] = [];
+  const jumpTo = (toolCallId: string) => jumpToActivitySource('chat-1', { toolCallId });
+  function windowed(loadEarlier: (id: string) => Promise<boolean>) {
+    messages.length = 0;
+    messages.push({ id: 'm-9', content: [] });
+    controller.current = { getState: () => ({ messages }), loadEarlier };
+  }
+
+  it('loads the history up to the call and goes to its own row', async () => {
+    const root = transcript('');
+    const loadEarlier = vi.fn(async () => {
+      messages.unshift({ id: 'm-2', content: [{ type: 'tool-call', toolCallId: 'call-2' }] });
+      root.insertAdjacentHTML('afterbegin', '<div data-message-id="m-2"><div data-activity-id="call-2"></div></div>');
+      return true;
+    });
+    windowed(loadEarlier);
+    expect(await jumpTo('call-2')).toBe(true);
+    expect(loadEarlier).toHaveBeenCalledExactlyOnceWith('call-2');
+    expect(scrollIntoView.mock.instances).toEqual([root.querySelector('[data-activity-id="call-2"]')]);
+  });
+
+  it('reports a call the history does not hold, without moving', async () => {
+    transcript('');
+    windowed(async () => false);
+    expect(await jumpTo('call-2')).toBe(false);
+    windowed(async () => true);
+    expect(await jumpTo('call-2')).toBe(false);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('passes on a load that failed', async () => {
+    transcript('');
+    windowed(() => Promise.reject(new Error('offline')));
+    await expect(jumpTo('call-2')).rejects.toThrow('offline');
   });
 });
 
 describe('focusPendingRequest', () => {
   it("focuses the first control of this chat's request", () => {
     const root = transcript('');
-    root.insertAdjacentHTML('beforeend', '<div data-testid="chat-thread-gate-slot"><button>Allow once</button></div>');
+    root.insertAdjacentHTML('beforeend', '<div data-chat-gate><button>Allow once</button></div>');
     expect(focusPendingRequest('chat-1')).toBe(true);
     expect(document.activeElement).toHaveTextContent('Allow once');
   });

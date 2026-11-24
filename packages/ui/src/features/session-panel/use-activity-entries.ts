@@ -51,6 +51,7 @@ export function useActivityEntries() {
   const chatId = extras?.state.chatId;
   const permissions = extras?.permissions;
   const liveTasks = extras?.state.backgroundTasks;
+  const hasMore = extras?.state.historyWindow?.hasMore;
   const [loaded, setLoaded] = useState<{ chatId: string; tasks: BackgroundTask[] } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const now = useNow(true);
@@ -86,8 +87,9 @@ export function useActivityEntries() {
         ...scheduledEntries(tools),
       ],
       messages,
+      hasMore,
     ).sort((a, b) => b.startedAt - a.startedAt);
-  }, [messages, loaded, chatId, liveTasks, sessionItems, permissions]);
+  }, [messages, loaded, chatId, liveTasks, sessionItems, permissions, hasMore]);
 
   return {
     entries,

@@ -16,7 +16,8 @@ See everything the session is running or has run, and reach it in one click.
 ## Constraints
 300 px wide, fits its content and caps at the chat area. Docks only at a chat column of 1044 px or more, otherwise floats and ends 8 px above the composer, which stays usable. Sections can be hidden per viewer. Before the first message it shows project-level sections only.
 Rows don't unfold, except workflows. Worktree, branch and changes live in the strip under the composer (`SessionStrip`), not here.
-A jump lands on the transcript row that carries the tool call's id in `data-activity-id`.
+A jump lands on the transcript row that carries the tool call's id in `data-activity-id`. Work that started before the loaded history loads it first; a row never goes to a neighbouring message instead.
+A row that can be stopped shows Stop at its end on hover or keyboard focus, over its value. A background command's output is “Full output” in the row menu until its transcript row shows it.
 
 ## Direction contract
 THESIS: a quiet index of the session, not a dashboard. Every row leads with what it is and ends with its state.

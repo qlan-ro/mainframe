@@ -56,7 +56,6 @@ function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
     <>
       <DegradedChatCard />
       {!directoryMissing && !projectlessDraft && <Composer variant={variant} />}
-      {variant === 'main' && <SessionStrip />}
     </>
   );
 }
@@ -92,6 +91,7 @@ function ThreadFooter({
               <ThreadFooterInput variant={variant} />
             </>
           )}
+          {variant === 'main' && <SessionStrip />}
         </div>
       </div>
     </ThreadPrimitive.ViewportFooter>

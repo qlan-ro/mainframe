@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { ThreadMessage } from '@assistant-ui/react';
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
-import { anchorEntries, delegatedEntries, scheduledEntries, taskEntries, transcriptTools } from '../activity-model';
+import {
+  anchorEntries,
+  delegatedEntries,
+  findToolCall,
+  scheduledEntries,
+  taskEntries,
+  transcriptTools,
+} from '../activity-model';
 
 function tool(id: string, name: string, args: Record<string, unknown>, result: unknown, minute = 0): ThreadMessage {
   return {
@@ -174,5 +181,47 @@ describe('Activity source and metadata', () => {
       messageId: 'message-early',
       approximate: true,
     });
+  });
+
+  it('keeps the call of work that started before the loaded history, not the nearest loaded message', () => {
+    const messages = [tool('late', 'Read', {}, undefined, 5)];
+    const entries = taskEntries([task({ toolUseId: 'call-gone', startedAt: 60_000 })], transcriptTools(messages));
+    expect(anchorEntries(entries, messages, true)[0]!.source).toEqual({ toolCallId: 'call-gone' });
+  });
+
+  it('gives work without a call no anchor when it started before the loaded history', () => {
+    const messages = [tool('late', 'Read', {}, undefined, 5)];
+    const entries = taskEntries([task({ toolUseId: '', startedAt: 60_000 })], transcriptTools(messages));
+    expect(anchorEntries(entries, messages, true)[0]!.source).toBeUndefined();
+    expect(anchorEntries(entries, messages, false)[0]!.source).toEqual({
+      messageId: 'message-late',
+      approximate: true,
+    });
+  });
+
+  it('gives a delegated task whose call is not loaded no anchor', () => {
+    const messages = [tool('late', 'Read', {}, undefined, 1)];
+    const rows = [
+      { taskId: 't', itemId: 'c', title: 'T', status: 'running' as const, waiting: false, updatedAt: 120_000 },
+    ];
+    expect(anchorEntries(delegatedEntries(rows, []), messages)[0]!.source).toBeUndefined();
+  });
+
+  it('finds a nested call by the row of the sub-agent it is in', () => {
+    const nested = {
+      id: 'm-2',
+      content: [
+        { type: 'text' },
+        {
+          type: 'tool-call',
+          toolCallId: 'agent',
+          messages: [{ id: 'n', content: [{ type: 'tool-call', toolCallId: 'inner' }] }],
+        },
+      ],
+    };
+    const messages = [{ id: 'm-1', content: 'hello' }, nested];
+    expect(findToolCall(messages, 'inner')).toEqual({ messageId: 'm-2', toolCallId: 'agent' });
+    expect(findToolCall(messages, 'agent')).toEqual({ messageId: 'm-2', toolCallId: 'agent' });
+    expect(findToolCall(messages, 'other')).toBeUndefined();
   });
 });

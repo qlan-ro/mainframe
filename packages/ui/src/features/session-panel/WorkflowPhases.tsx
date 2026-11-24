@@ -1,6 +1,7 @@
 /**
  * WorkflowPhases — a workflow row unfolded: its numbered phases with their
- * state, the running phase's agents, and Stop while it runs.
+ * state, the running phase's agents, the agents no phase names, and Stop while
+ * it runs.
  */
 import type { ReactNode } from 'react';
 import { Bot, Check, Circle, CircleStop, CircleX } from 'lucide-react';
@@ -8,7 +9,12 @@ import type { ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { WorkflowRunPanel } from '@/features/chat/workflow/WorkflowRunPanel';
 import { formatAgentDuration, neutralizedRun, type ViewAgent } from '@/features/chat/workflow/workflow-agent-view';
-import { runTimeline, type PhaseStatus, type PhaseView } from '@/features/chat/workflow/workflow-phase-view';
+import {
+  agentPipStatus,
+  runTimeline,
+  type PhaseStatus,
+  type PhaseView,
+} from '@/features/chat/workflow/workflow-phase-view';
 import { isTerminalRunStatus } from '@/features/chat/workflow/workflow-progress';
 import { cn } from '@/lib/utils';
 import { ActivitySpinner } from './ActivitySpinner';
@@ -22,20 +28,29 @@ const PHASE: Record<PhaseStatus, { glyph: ReactNode; label: string; value: strin
   pending: { glyph: <Circle className="size-2" />, label: 'waiting', value: 'waiting' },
 };
 
+function StatusGlyph({ status }: { status: PhaseStatus }) {
+  return (
+    <span className="flex size-3 shrink-0 items-center justify-center" aria-hidden>
+      {PHASE[status].glyph}
+    </span>
+  );
+}
+
 /** Opens the run's detail panel beside the panel; the workspace Agent tab takes over in W8. */
 function AgentRow({ agent, run }: { agent: ViewAgent; run: ClaudeWorkflowRun }) {
+  const status = agentPipStatus(agent);
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
           data-testid={`session-panel-workflow-agent-${agent.agentId}`}
-          aria-label={`Open ${agent.label}, running, ${formatAgentDuration(agent.durationMs)}`}
+          aria-label={`Open ${agent.label}, ${PHASE[status].label}, ${formatAgentDuration(agent.durationMs)}`}
           className="-mx-1.5 flex h-[26px] w-[calc(100%+0.75rem)] items-center gap-2 rounded-md pr-1.5 pl-[26px] text-left transition-colors hover:bg-foreground/8"
         >
           <Bot className="size-3 shrink-0 text-muted-foreground" aria-hidden />
           <span className="min-w-0 flex-1 truncate text-foreground">{agent.label}</span>
-          <ActivitySpinner />
+          <StatusGlyph status={status} />
           <span className="shrink-0 tabular-nums">{formatAgentDuration(agent.durationMs)}</span>
         </button>
       </PopoverTrigger>
@@ -55,14 +70,12 @@ function AgentRow({ agent, run }: { agent: ViewAgent; run: ClaudeWorkflowRun }) 
 const longestAgentMs = (view: PhaseView): number => Math.max(0, ...view.agents.map((agent) => agent.durationMs));
 
 function PhaseRow({ view, position, run }: { view: PhaseView; position: number; run: ClaudeWorkflowRun }) {
-  const { glyph, label, value } = PHASE[view.status];
+  const { label, value } = PHASE[view.status];
   const running = view.agents.filter((agent) => agent.state === 'start' || agent.state === 'progress');
   return (
     <li data-testid={`session-panel-workflow-phase-${view.phase.index}`} data-status={view.status}>
       <div className="flex h-6 items-center gap-2">
-        <span className="flex size-3 shrink-0 items-center justify-center" aria-hidden>
-          {glyph}
-        </span>
+        <StatusGlyph status={view.status} />
         <span
           className={cn(
             'min-w-0 flex-1 truncate',
@@ -82,39 +95,56 @@ function PhaseRow({ view, position, run }: { view: PhaseView; position: number; 
   );
 }
 
+/** A run rebuilt without its phase list, or with an agent no phase names, still lists every agent it has. */
+function PhaselessAgents({ agents, run }: { agents: ViewAgent[]; run: ClaudeWorkflowRun }) {
+  return (
+    <div role="group" aria-label="Agents outside the phases" data-testid="session-panel-workflow-phaseless">
+      <div className="flex h-6 items-center">Agents</div>
+      {agents.map((agent) => (
+        <AgentRow key={agent.agentId} agent={agent} run={run} />
+      ))}
+    </div>
+  );
+}
+
 export function WorkflowPhases({
   title,
   run,
   now,
   onStop,
+  stopping = false,
 }: {
   title: string;
   run: ClaudeWorkflowRun;
   now: number;
   onStop?: () => void;
+  stopping?: boolean;
 }) {
   const view = neutralizedRun(run, now);
-  const phases = runTimeline(view).all;
+  const { all: phases, orphans } = runTimeline(view);
   return (
     <div className="mx-1.5 mb-1.5 pt-0.5 pr-2.5 pb-1 pl-[34px] text-xs text-muted-foreground">
-      {phases.length === 0 ? (
+      {phases.length === 0 && orphans.length === 0 && (
         <p className="py-1">{isTerminalRunStatus(run.status) ? 'No phases were reported' : 'No phases reported yet'}</p>
-      ) : (
+      )}
+      {phases.length > 0 && (
         <ol aria-label={`${title} phases`}>
           {phases.map((phase, index) => (
             <PhaseRow key={phase.phase.index} view={phase} position={index + 1} run={run} />
           ))}
         </ol>
       )}
+      {orphans.length > 0 && <PhaselessAgents agents={orphans} run={run} />}
       {onStop && (
         <button
           type="button"
           data-testid="session-panel-workflow-stop"
-          aria-label={`Stop ${title}`}
+          aria-label={stopping ? `Stopping ${title}` : `Stop ${title}`}
+          aria-disabled={stopping}
           onClick={onStop}
-          className="-ml-2 flex h-6 items-center rounded-md px-2 font-medium text-destructive transition-colors hover:bg-destructive/10"
+          className="-ml-2 flex h-6 items-center rounded-md px-2 font-medium text-destructive transition-colors hover:bg-destructive/10 aria-disabled:pointer-events-none aria-disabled:text-muted-foreground"
         >
-          Stop
+          {stopping ? 'Stopping' : 'Stop'}
         </button>
       )}
     </div>

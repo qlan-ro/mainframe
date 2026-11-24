@@ -48,9 +48,7 @@
  *   - The mock adapter derives `background_task.*` events from replayed tool_use /
  *     tool_result blocks (todo #327's `task_bridge.rs`) rather than emitting them
  *     itself, so most recordings still carry none and Activity reads empty for
- *     them. `task-subagent.0` is the one exception (below) — its Task tool_use
- *     resolves only on a second turn, giving Activity's running state a real,
- *     reachable fixture.
+ *     them. The Activity describes below use the recordings that do.
  * The two adapter-independent seeds survive: `POST /api/chats/:id/mentions` and
  * `POST /api/chats/:id/attachments` write straight to the daemon.
  *
@@ -76,9 +74,13 @@
  *   session-panel-activity-empty  — "No background activity": nothing is ongoing
  *   session-panel-activity-<entryId> — one row, keyed by the activity entry id
  *                                    (`task:<taskId>`, `delegated:<taskId>`, …); a
- *                                    subagent row is covered by the task-subagent
- *                                    describe below, workflow rows stay unreachable
- *                                    (out of scope — see the ground-truth note)
+ *                                    the task-subagent, schedule-pills,
+ *                                    background-command, workflow and Stop describes
+ *                                    below cover each kind
+ *   session-panel-activity-row-stop-<entryId> — its Stop, shown on hover and focus
+ *   session-panel-activity-output-<entryId> / session-panel-output-dialog — a background
+ *                                    command's output, from its row menu
+ *   session-panel-workflow-phase-<index> / -agent-<id> / -stop — an unfolded workflow
  *   session-panel-card-launch     — Launch section; ALWAYS rendered once the panel is open
  *   session-panel-launch-row-<name>   — a launch config row (whole row acts)
  *   session-panel-launch-start-<name> / -stop-<name> — the row's action glyph (a span
@@ -370,6 +372,7 @@ test.describe('§session-panel — docking modes', () => {
     await page.getByTestId('session-panel-scrim').click({ position: { x: 10, y: 100 } });
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('session-panel-root')).toHaveCount(0);
+    await expect(toggle).toBeFocused();
   });
 
   // Replaces the old rail's "survives a width that fits neither the stack nor
@@ -534,6 +537,43 @@ test.describe('§session-strip — under the composer', () => {
     await expect(page.getByTestId('session-panel-card-activity')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-card-launch')).toHaveCount(0);
     await expect(page.getByTestId('session-strip')).toHaveCount(0);
+  });
+});
+
+// ─── §session-panel — the context percentage ─────────────────────────────────
+//
+// The panel's context row is gone with its Session section (R2); the composer
+// carries the only readout. `chat-status` replays real usage numbers.
+
+test.describe('§session-panel — context percentage (composer)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'chat-status' });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('it is absent before a turn and reports a real percentage after one', async () => {
+    const { page } = app;
+    const percentage = page.getByTestId('composer-context-percent');
+    await expect(composer(page).input()).toBeVisible();
+    await expect(percentage).toHaveCount(0);
+
+    await sendMessage(page, 'Explain what TypeScript generics are in two sentences.');
+    await waitForIdle(page, 60_000);
+
+    await expect(percentage).toHaveText(/^\d+%$/, { timeout: 15_000 });
+    const value = Number.parseInt((await percentage.textContent()) ?? '', 10);
+    expect(value).toBeGreaterThan(0);
+    expect(value).toBeLessThanOrEqual(100);
   });
 });
 
@@ -791,5 +831,204 @@ test.describe('§session-panel — Activity section (schedule-pills)', () => {
 
     await page.getByRole('button', { name: 'Earlier, 1 item' }).click();
     await expect(page.getByTestId('session-panel-activity-schedule:cron-1')).toContainText('removed');
+  });
+});
+
+// ─── §session-panel — Activity section, background commands and monitors ─────
+//
+// The mock adapter tracks the background command itself; the monitor is added
+// to the task list on the network boundary, with its recorded tool call.
+
+test.describe('§session-panel — Activity section (background-command)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({
+      recordingKey: 'background-command',
+      beforeNavigate: async (page) => {
+        await page.route(/\/api\/chats\/[^/]+\/background-tasks$/, async (route) => {
+          const response = await route.fetch();
+          const { data } = (await response.json()) as { data: { tasks: object[] } };
+          const monitor = {
+            id: 'monitor-1',
+            kind: 'other',
+            toolName: 'Monitor',
+            toolUseId: 'toolu_mon_1',
+            command: 'Watch the build',
+            description: 'Watch the build',
+            outputPath: null,
+            startedAt: Date.now(),
+            endedAt: null,
+            status: 'running',
+            lastOutputLine: null,
+            summary: null,
+            usage: null,
+          };
+          await route.fulfill({ response, json: { success: true, data: { tasks: [...data.tasks, monitor] } } });
+        });
+        await page.route(/\/background-tasks\/mock-toolu_bg_1\/output/, (route) =>
+          route.fulfill({ body: '12 tests passed', headers: { 'access-control-allow-origin': '*' } }),
+        );
+      },
+    });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    await sendMessage(app.page, 'Run the tests in the background and watch the build');
+    await waitForIdle(app.page, 60_000);
+    await ensurePanelOpen(app.page);
+    await app.page.getByRole('button', { name: 'Earlier, 1 item' }).click();
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  const commandRow = (page: Page) => page.getByTestId('session-panel-activity-task:mock-toolu_bg_1');
+
+  test('a background command goes to its transcript row, opened on its result', async () => {
+    const { page } = app;
+    const target = page.locator('[data-activity-id="toolu_bg_1"]');
+    await expect(commandRow(page)).toHaveAttribute('data-activity-state', 'completed');
+    await commandRow(page).click();
+    await expect(target).toHaveAttribute('data-activity-flash', '');
+    await expect(target).toBeInViewport();
+    await expect(target).toContainText('Command running in background with ID: bg_1');
+    await expect(target.locator('[aria-expanded="true"]').first()).toBeFocused();
+  });
+
+  test('its full output is in the row menu', async () => {
+    const { page } = app;
+    await commandRow(page).click({ button: 'right' });
+    await page.getByTestId('session-panel-activity-output-task:mock-toolu_bg_1').click();
+    const dialog = page.getByTestId('session-panel-output-dialog');
+    await expect(dialog.getByTestId('session-panel-output-text')).toHaveText('12 tests passed');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(commandRow(page)).toBeFocused();
+  });
+
+  test('a monitor goes to its marker and opens it', async () => {
+    const { page } = app;
+    // Back to the end, so the jump has somewhere to go.
+    await page.getByTestId('chat-thread-viewport').press('End');
+    const target = page.locator('[data-activity-id="toolu_mon_1"]');
+    await expect(target).not.toBeInViewport();
+    await page.getByTestId('session-panel-activity-task:monitor-1').click();
+    await expect(target).toHaveAttribute('data-activity-flash', '');
+    await expect(target).toBeInViewport();
+    await expect(target).toContainText('Build succeeded in 42s');
+  });
+});
+
+// ─── §session-panel — Activity section, a workflow ───────────────────────────
+
+test.describe('§session-panel — Activity section (workflow)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'workflow' });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    await sendMessage(app.page, 'Run the release-readiness workflow');
+    await expect(app.page.getByText("I'll report when the last phase lands")).toBeVisible({ timeout: 60_000 });
+    await ensurePanelOpen(app.page);
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('a workflow unfolds its phases, and the running one lists its agents', async () => {
+    const { page } = app;
+    const row = page.getByTestId('session-panel-activity-task:mock-toolu_wf');
+    await expect(row).toContainText(/phase \d of 4/, { timeout: 10_000 });
+    await expect(row).toHaveAttribute('aria-expanded', 'false');
+    await row.click();
+    await expect(row).toHaveAttribute('aria-expanded', 'true');
+    const phases = page.locator('[data-testid^="session-panel-workflow-phase-"]');
+    await expect(phases).toHaveCount(4);
+    await expect(phases.first()).toContainText('1. Scan');
+    await expect(phases.last()).toHaveAttribute('data-status', 'pending');
+
+    // The mock adapter can't stop a task, so the run offers no Stop.
+    await expect(page.getByTestId('session-panel-workflow-stop')).toHaveCount(0);
+
+    const agent = page.locator('[data-testid^="session-panel-workflow-agent-"]').first();
+    await expect(agent).toHaveAccessibleName(/, running, /);
+    await agent.click();
+    await expect(page.getByTestId('chat-workflow-panel-wf_rel_readiness_01')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await row.click();
+    await expect(phases).toHaveCount(0);
+  });
+
+  test('“N running tasks” brings back a hidden Activity section', async () => {
+    const { page } = app;
+    await page.getByTestId('session-panel-sections-menu').click();
+    await page.getByTestId('session-panel-sections-menu-activity').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('session-panel-card-activity')).toHaveCount(0);
+    await page.getByRole('button', { name: '1 running task, show in Activity' }).click();
+    await expect(page.getByTestId('session-panel-card-activity')).toBeInViewport();
+  });
+});
+
+// ─── §session-panel — Activity section, Stop ─────────────────────────────────
+//
+// The mock adapter can't stop a background task, so Stop runs on a delegated
+// task. `retries: 0`: see mcp-delegate.spec.ts, whose recording this is.
+
+test.describe('§session-panel — Activity section (Stop)', () => {
+  test.describe.configure({ retries: 0 });
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'mcp-delegate-stop' });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('the row’s Stop shows on hover and ends the work with one request', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Delegate a long task, I will stop you after');
+    await ensurePanelOpen(page);
+    const row = page.locator('[data-testid^="session-panel-activity-delegated:"]');
+    await expect(row).toHaveAttribute('data-activity-state', 'running', { timeout: 60_000 });
+    await waitForIdle(page, 60_000);
+
+    const stop = page.locator('[data-testid^="session-panel-activity-row-stop-delegated:"]');
+    await page.mouse.move(0, 0);
+    await expect(stop).toHaveCSS('opacity', '0');
+    await row.hover();
+    await expect(stop).toHaveCSS('opacity', '1');
+
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      if (/\/delegated-tasks\/.*\/cancel$/.test(request.url()) && request.method() === 'POST')
+        requests.push(request.url());
+    });
+    await stop.dblclick();
+    await expect(page.getByText(/Stopped “.+”/)).toBeVisible({ timeout: 15_000 });
+    // The mock child never ends its turn, so its row reads as a resumed chat
+    // rather than stopped; the task itself is what Stop cancels.
+    await expect(page.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'cancelled', {
+      timeout: 15_000,
+    });
+    await expect(stop).toHaveCount(0);
+    expect(requests).toHaveLength(1);
   });
 });

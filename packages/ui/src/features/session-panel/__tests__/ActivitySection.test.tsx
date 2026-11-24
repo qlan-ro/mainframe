@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   focusRequest: vi.fn(),
   stop: vi.fn(),
   cancel: vi.fn(),
+  output: vi.fn(),
   switchTo: vi.fn(),
   openInSplit: vi.fn(),
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() },
@@ -29,7 +30,11 @@ vi.mock('../use-activity-entries', () => ({
   }),
 }));
 vi.mock('../activity-source', () => ({ jumpToActivitySource: state.jump, focusPendingRequest: state.focusRequest }));
-vi.mock('@/lib/api/background-tasks', () => ({ stopBackgroundTask: state.stop, cancelDelegatedTask: state.cancel }));
+vi.mock('@/lib/api/background-tasks', () => ({
+  stopBackgroundTask: state.stop,
+  cancelDelegatedTask: state.cancel,
+  readBackgroundTaskOutput: state.output,
+}));
 vi.mock('@/lib/toast', () => ({ mfToast: state.toast }));
 vi.mock('@/features/chat/runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: { historyWindow: state.history }, loadEarlier: state.loadEarlier }),
@@ -142,6 +147,23 @@ describe('ActivitySection — row clicks', () => {
     expect(state.jump).not.toHaveBeenCalled();
   });
 
+  it('opens the transcript of a sub-agent that started before the loaded history', () => {
+    state.entries = [row('agent', { source: { toolCallId: 'call-0' }, task })];
+    render(<ActivitySection columnId="main" />);
+    clickRow('agent');
+    expect(useZonesStore.getState().subagent).toMatchObject({ toolCallId: 'call-0', messageId: undefined });
+    expect(state.jump).not.toHaveBeenCalled();
+  });
+
+  it('says so when nothing in the loaded history stands for the row', () => {
+    state.entries = [row('r', { kind: 'background' })];
+    render(<ActivitySection columnId="main" />);
+    clickRow('r');
+    expect(state.toast.info).toHaveBeenCalledWith('“r” started before the history shown here');
+    expect(state.jump).not.toHaveBeenCalled();
+    expect(usePanelControl.getState().overlayOpen.main).toBe(true);
+  });
+
   it('goes to the sub-agent’s row when there is no room beside the chat', () => {
     useZonesStore.setState({ splitFits: false });
     state.entries = [row('agent', { source, task })];
@@ -213,6 +235,39 @@ describe('ActivitySection — Stop', () => {
     openMenu('agent');
     await screen.findByRole('menuitem', { name: 'Show in transcript' });
     expect(screen.queryByRole('menuitem', { name: 'Stop' })).toBeNull();
+  });
+
+  it('sends one request however often Stop is pressed, and again after it failed', async () => {
+    let fail: (error: Error) => void = () => {};
+    state.stop.mockReturnValueOnce(new Promise((_, reject) => (fail = reject)));
+    state.entries = [row('agent', { task, source })];
+    render(<ActivitySection columnId="main" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Stop agent' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stopping agent' }));
+    expect(state.stop).toHaveBeenCalledOnce();
+    expect(screen.getByTestId('session-panel-activity-agent')).toHaveTextContent('stopping');
+
+    fail(new Error('gone'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop agent' }));
+    expect(state.stop).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(state.toast.success).toHaveBeenCalledWith('Stopped “agent”'));
+    // Still running until the daemon says otherwise; not a second request.
+    fireEvent.click(screen.getByRole('button', { name: 'Stopping agent' }));
+    expect(state.stop).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads a background command’s output, and no other row’s', async () => {
+    state.output.mockResolvedValue('all green');
+    state.entries = [row('cmd', { kind: 'command', task, source }), row('agent', { task, source })];
+    render(<ActivitySection columnId="main" />);
+    openMenu('cmd');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Full output' }));
+    expect(await screen.findByText('all green')).toBeInTheDocument();
+    expect(state.output).toHaveBeenCalledExactlyOnceWith('chat-1', 'bg-1');
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    openMenu('agent');
+    await screen.findByRole('menuitem', { name: 'Show in transcript' });
+    expect(screen.queryByRole('menuitem', { name: 'Full output' })).toBeNull();
   });
 
   it('reports a Stop that failed', async () => {

@@ -1,8 +1,17 @@
-import type { ActivitySource } from './activity-model';
+import { findToolCall, type ActivitySource } from './activity-model';
 import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
 import { messageElement, waitForMessage } from '@/features/chat/find/daemon-highlights';
+import { scrollToRow } from './scroll-to-row';
 
+/** Asks the transcript to mount a message; its `detail` is an `ActivityJump`. */
 export const ACTIVITY_JUMP_EVENT = 'mainframe:activity-jump';
+
+export interface ActivityJump {
+  chatId: string;
+  source: { messageId: string; toolCallId?: string };
+  /** The transcript leaves its scroll position alone until this settles. */
+  settled?: Promise<void>;
+}
 
 /**
  * The transcript's side of the jump. A row, marker or card for a tool call
@@ -56,32 +65,82 @@ function highlight(element: HTMLElement): void {
   setTimeout(() => delete element.dataset.activityFlash, FLASH_MS);
 }
 
-const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+type LocatedSource = ActivityJump['source'];
 
-/** Scrolls the transcript to an activity's row, opened and highlighted. False when its message isn't in the history. */
-export async function jumpToActivitySource(chatId: string, source: ActivitySource): Promise<boolean> {
-  if (!messageElement(chatId, source.messageId)) {
-    const controller = chatControllerRegistry.get(chatId);
-    const loaded = controller?.getState().messages.some((message) => message.id === source.messageId);
-    if (controller && !loaded && !(await controller.loadEarlier(source.messageId))) return false;
-  }
-  window.dispatchEvent(new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId, source } }));
+/** The message a source is in, loading the history up to its call. Undefined when the history doesn't hold it. */
+async function locateSource(chatId: string, { messageId, toolCallId }: ActivitySource) {
+  if (messageId && messageElement(chatId, messageId)) return { messageId, toolCallId };
+  const controller = chatControllerRegistry.get(chatId);
+  const loaded = (): LocatedSource | undefined => {
+    const messages = controller?.getState().messages ?? [];
+    if (messageId && messages.some((message) => message.id === messageId)) return { messageId, toolCallId };
+    return toolCallId ? findToolCall(messages, toolCallId) : undefined;
+  };
+  const target = toolCallId ?? messageId;
+  if (!controller || !target) return messageId ? { messageId, toolCallId } : undefined;
+  return loaded() ?? ((await controller.loadEarlier(target)) ? loaded() : undefined);
+}
+
+function focusElement(element: HTMLElement): void {
+  if (element.tabIndex < 0 && !element.hasAttribute('tabindex')) element.tabIndex = -1;
+  element.focus({ preventScroll: true });
+}
+
+/** Only the last jump asked for still scrolls and takes focus. */
+let latestJump = 0;
+
+async function showSource(
+  chatId: string,
+  source: LocatedSource,
+  isLatest: () => boolean,
+  settled: Promise<void>,
+): Promise<boolean> {
+  const mount = () =>
+    window.dispatchEvent(new CustomEvent<ActivityJump>(ACTIVITY_JUMP_EVENT, { detail: { chatId, source, settled } }));
+  mount();
   const message = await waitForMessage(chatId, source.messageId);
   if (!message) return false;
-  window.dispatchEvent(new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId, source } }));
-  const row = source.toolCallId ? await revealRow(chatId, source.toolCallId) : undefined;
-  const target = row ?? message;
-  const trigger = row && openDisclosure(row);
+  if (!isLatest()) return true;
+  mount();
+  const { toolCallId } = source;
+  const revealed = toolCallId ? await revealRow(chatId, toolCallId) : undefined;
+  if (!isLatest()) return true;
+  const target = () =>
+    (toolCallId ? findAnchor(chatId, 'activityId', toolCallId) : undefined) ?? messageElement(chatId, source.messageId);
+  const trigger = revealed && openDisclosure(revealed);
   await nextFrame();
-  target.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
-  highlight(target);
-  (trigger ?? message).focus({ preventScroll: true });
+  const landed = target() ?? message;
+  highlight(landed);
+  focusElement(trigger ?? landed);
+  const viewport = transcript(chatId);
+  if (viewport) await scrollToRow(viewport, target);
+  // A row remounted on the way takes its focus with it.
+  if (isLatest() && document.activeElement === document.body) {
+    const row = target();
+    if (row) focusElement(row.querySelector<HTMLElement>('[aria-expanded]') ?? row);
+  }
   return true;
+}
+
+/** Scrolls the transcript to an activity's row, opened and highlighted. False when the history doesn't hold it. */
+export async function jumpToActivitySource(chatId: string, source: ActivitySource): Promise<boolean> {
+  const jump = ++latestJump;
+  const located = await locateSource(chatId, source);
+  if (!located) return false;
+  let settle = () => {};
+  const settled = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  try {
+    return await showSource(chatId, located, () => jump === latestJump, settled);
+  } finally {
+    settle();
+  }
 }
 
 /** Moves focus to the request above this chat's composer. False when none is showing. */
 export function focusPendingRequest(chatId: string): boolean {
-  const gate = transcript(chatId)?.querySelector<HTMLElement>('[data-testid="chat-thread-gate-slot"]');
+  const gate = transcript(chatId)?.querySelector<HTMLElement>('[data-chat-gate]');
   const control = gate?.querySelector<HTMLElement>('button, input, textarea, [tabindex="0"]');
   control?.focus();
   return control != null;

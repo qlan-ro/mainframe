@@ -9,8 +9,10 @@ export type ActivityKind = 'workflow' | 'subagent' | 'delegated' | 'monitor' | '
 export type ActivityState =
   'needs-you' | 'running' | 'queued' | 'scheduled' | 'completed' | 'failed' | 'stopped' | 'removed';
 export interface ActivitySource {
-  messageId: string;
+  /** Absent while the call's message isn't loaded; the jump loads the history that holds it. */
+  messageId?: string;
   toolCallId?: string;
+  /** The message nearest the start, for work that names no call. */
   approximate?: boolean;
 }
 export interface ActivityEntry {
@@ -115,7 +117,7 @@ export function taskEntries(tasks: readonly BackgroundTask[], tools: readonly To
     const tool = byCall.get(task.toolUseId);
     if (kind === 'command' && task.status !== 'running' && tool?.args.run_in_background !== true) return [];
     const args = tool?.args ?? {};
-    const source = tool && { messageId: tool.messageId, toolCallId: tool.toolCallId };
+    const source = task.toolUseId ? { messageId: tool?.messageId, toolCallId: task.toolUseId } : undefined;
     const command = kind === 'monitor' ? monitorTarget(args, task.command) : task.command;
     const title = kind === 'workflow' ? task.workflowName || task.description : task.description || command;
     const detail =
@@ -282,15 +284,54 @@ export function markNeedsYou(entries: ActivityEntry[], awaiting: ReadonlySet<str
   );
 }
 
-export function anchorEntries(entries: ActivityEntry[], messages: readonly ThreadMessage[]): ActivityEntry[] {
+/** A message as the thread or the controller holds it; only what the search reads. */
+interface MessageNode {
+  readonly id?: string;
+  readonly content:
+    | string
+    | readonly {
+        readonly type: string;
+        readonly toolCallId?: string;
+        readonly messages?: readonly MessageNode[];
+      }[];
+}
+
+function holdsCall(message: MessageNode, toolCallId: string): string | undefined {
+  if (typeof message.content === 'string') return undefined;
+  return message.content.find(
+    (part) =>
+      part.type === 'tool-call' &&
+      (part.toolCallId === toolCallId || part.messages?.some((child) => holdsCall(child, toolCallId) !== undefined)),
+  )?.toolCallId;
+}
+
+/** Where a loaded tool call shows: its message, and the call whose row stands for it (its sub-agent's, when nested). */
+export function findToolCall(
+  messages: readonly MessageNode[],
+  toolCallId: string,
+): { messageId: string; toolCallId: string } | undefined {
+  for (const message of messages) {
+    const row = holdsCall(message, toolCallId);
+    if (row && message.id) return { messageId: message.id, toolCallId: row };
+  }
+  return undefined;
+}
+
+/**
+ * Work that names no call goes to the message nearest its start, as long as
+ * that is in the loaded history (`hasMore`: there is an older part that isn't).
+ */
+export function anchorEntries(
+  entries: ActivityEntry[],
+  messages: readonly ThreadMessage[],
+  hasMore = false,
+): ActivityEntry[] {
   const assistants = messages.filter((message) => message.role === 'assistant');
   const candidates = assistants.length ? assistants : messages;
   return entries.map((entry) => {
-    if (entry.source || candidates.length === 0) return entry;
+    if (entry.source || !entry.task || candidates.length === 0) return entry;
     const prior = candidates.filter((message) => (message.createdAt?.getTime() ?? Infinity) <= entry.startedAt);
-    const nearest = prior.length
-      ? prior[prior.length - 1]!
-      : (candidates.find((message) => message.createdAt) ?? candidates[candidates.length - 1]!);
-    return { ...entry, source: { messageId: nearest.id, approximate: true } };
+    const nearest = prior[prior.length - 1] ?? (hasMore ? undefined : candidates[0]);
+    return nearest ? { ...entry, source: { messageId: nearest.id, approximate: true } } : entry;
   });
 }

@@ -94,10 +94,10 @@
       "y": 0
     },
     "Chat-SessionPanel-ActivitySection.dc.html": {
-      "h": 1240,
+      "h": 2036,
       "page": "session-panel",
       "title": "Session panel — Activity",
-      "w": 1149,
+      "w": 1240,
       "x": 0,
       "y": 2450
     },
@@ -107,7 +107,7 @@
       "title": "Session panel — from a row to the transcript",
       "w": 1536,
       "x": 0,
-      "y": 3850
+      "y": 4628
     },
     "Chat-SessionPanel-Modes.dc.html": {
       "h": 1088,
@@ -115,7 +115,7 @@
       "title": "Session panel — docked, floating, hidden",
       "w": 4252,
       "x": 0,
-      "y": 5098
+      "y": 5876
     },
     "Chat-SessionPanel-States.dc.html": {
       "h": 2030,
@@ -215,7 +215,7 @@
       "y": 33982
     },
     "Proposal-Redesign-Spec.dc.html": {
-      "h": 9952,
+      "h": 10085,
       "page": "proposals",
       "title": "Window redesign: the decisions (spec)",
       "w": 1360,
@@ -480,7 +480,7 @@
       "title": "Workspace — floating session panel",
       "w": 1536,
       "x": 0,
-      "y": 6346
+      "y": 7124
     },
     "Workspace-Viewers.dc.html": {
       "h": 2948,
@@ -544,7 +544,7 @@
       "title": "Session panel — Activity could not load",
       "w": 900,
       "x": 0,
-      "y": 8566
+      "y": 9344
     },
     "Workspace-ReviewError.dc.html": {
       "h": 1088,
@@ -612,13 +612,7 @@
     "view": "canvas",
     "page": "overview"
   },
-  "noteOrder": [
-    "proposalsHowTo",
-    "sessionPanelTitle",
-    "sessionPanelGuide",
-    "revampTitle",
-    "revampGuide"
-  ],
+  "noteOrder": ["proposalsHowTo", "sessionPanelTitle", "sessionPanelGuide", "revampTitle", "revampGuide"],
   "notes": {
     "proposalsHowTo": {
       "fill": "blue",

@@ -72,7 +72,7 @@ function BranchControl({ port }: { port: number }) {
 
 function ChangesControl({ port }: { port: number }) {
   const { projectId, chatId, noProject } = useActiveIdentity();
-  const changes = useWorkingChanges({ port, projectId, chatId, noProject });
+  const changes = useWorkingChanges({ port, projectId, chatId, noProject, withBranch: false });
   // Loading and error both mean "unknown"; a zero count would claim a clean tree.
   if (projectId == null || changes.loading || changes.error) return null;
   const { fileCount, additions, deletions } = toChangesSummary(changes);

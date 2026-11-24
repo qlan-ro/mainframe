@@ -60,6 +60,8 @@ const FINISHED_TASKS = () => [
   ended('e4', 'agent', 'Profile the capsule render', 'stopped'),
 ];
 
+const OUTPUT = ' RUN  v5.1.1\n\n ✓ src/quota/reset.test.ts (12 tests) 48ms\n ✓ src/quota/usage.test.ts (9 tests) 31ms\n   src/panel/rows.test.ts …';
+
 const CHILDREN = [
   { title: 'Check the mobile capsule', status: 'running', displayStatus: 'waiting' },
   { title: 'Write the weekly-window crate test', status: 'running' },
@@ -115,6 +117,9 @@ async function stubSession(page: Page, options: { tasks?: () => unknown[]; child
   const { tasks = () => [], children = false, context = CONTEXT } = options;
   await stub(page, /\/api\/chats\/[^/]+\/context$/, context);
   await stub(page, /\/api\/chats\/[^/]+\/workflow-runs$/, RUNS);
+  await page.route(/\/background-tasks\/c1\/output/, (route) =>
+    route.fulfill({ body: OUTPUT, headers: { 'access-control-allow-origin': '*' } }),
+  );
   await page.route(/\/api\/chats\/[^/]+\/background-tasks$/, (route) =>
     route.fulfill({ json: { success: true, data: { tasks: tasks() } }, headers: { 'access-control-allow-origin': '*' } }),
   );
@@ -386,10 +391,44 @@ const area: CaptureArea = {
           },
         },
         {
+          id: 'row-stop',
+          caption: '**Hover or focus.** A row that can be stopped shows Stop in place of its value (until K4).',
+          crop: 'session-panel-card-activity',
+          pad: 12,
+          setup: async ({ page }) => {
+            await page.getByTestId('session-panel-activity-earlier').click();
+            await page.getByTestId('session-panel-activity-delegated:task-1').hover();
+            // The row's own tooltip would cover the rows below it.
+            await page.addStyleTag({ content: '[data-slot="tooltip-content"]{display:none}' });
+          },
+        },
+        {
+          id: 'command-menu',
+          caption: '**A background command’s menu** has its full output, until its transcript row shows it.',
+          crop: [1040, 48, 400, 520],
+          setup: async ({ page }) => {
+            await page.getByTestId('session-panel-activity-task:c1').click({ button: 'right' });
+            await page.getByTestId('session-panel-activity-output-task:c1').waitFor();
+          },
+        },
+        {
+          id: 'command-output',
+          caption: '**Full output.**',
+          crop: 'session-panel-output-dialog',
+          pad: 12,
+          setup: async ({ page }) => {
+            await page.getByTestId('session-panel-activity-output-task:c1').click();
+            await page.getByTestId('session-panel-output-text').waitFor();
+            await parkPointer(page);
+          },
+        },
+        {
           id: 'row-menu',
-          caption: '**Right-click.** A row’s other actions: its transcript row, and Stop while it can be stopped.',
+          caption: '**Right-click.** Stop while the work can be stopped, and Show in transcript where the history holds its call (not for this task).',
           crop: [1040, 48, 400, 420],
           setup: async ({ page }) => {
+            await page.keyboard.press('Escape');
+            await page.getByTestId('session-panel-output-dialog').waitFor({ state: 'detached' });
             await page.getByTestId('session-panel-activity-delegated:task-1').click({ button: 'right' });
             await page.getByTestId('session-panel-activity-stop-delegated:task-1').waitFor();
           },

@@ -3,8 +3,7 @@ import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { useTranscriptScroll } from './transcript-scroll-context';
 import { useChatExtrasSelector } from '../runtime/chat-extras';
-import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
-import type { ActivitySource } from '@/features/session-panel/activity-model';
+import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel/activity-source';
 import { DisclosureStateProvider } from '@/components/ui/disclosure-state';
 import { seekingComponents, useScrollSeek } from './use-scroll-seek';
 import { useFindInChatStore } from '../find/find-in-chat-store';
@@ -70,13 +69,14 @@ function useVirtualMessageState() {
   const overscan = useSelectionOverscan(viewport);
   useEffect(() => {
     const jump = (event: Event) => {
-      const detail = (event as CustomEvent<{ chatId: string; source: ActivitySource }>).detail;
+      const detail = (event as CustomEvent<ActivityJump>).detail;
       if (detail.chatId !== chatId) return;
       interaction.current?.();
       const release = scroll?.beginInteraction() ?? (() => undefined);
       interaction.current = release;
       setTarget(detail.source.messageId);
-      void waitForMessage(detail.chatId, detail.source.messageId).then(() =>
+      const shown = detail.settled ?? waitForMessage(detail.chatId, detail.source.messageId);
+      void shown.then(() =>
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
             if (interaction.current !== release) return;
