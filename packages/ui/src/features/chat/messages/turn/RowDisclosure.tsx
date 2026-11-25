@@ -82,7 +82,7 @@ function RowLine(props: RowDisclosureProps & { open: boolean; toggle: () => void
             {target}
           </span>
         )}
-        {where && <span className="max-w-[40%] shrink-0 truncate">{where}</span>}
+        {where && <span className="max-w-[40%] shrink-0 truncate text-(--mf-tr-muted)">{where}</span>}
         <span className="min-w-1 flex-1" />
         {receipt && (
           <span
