@@ -15,6 +15,7 @@ Tell an agent what to do next, steer or queue while it runs, and answer what it 
 
 ## Constraints
 Keyboard first: Enter, ⌥↵, ⇧⇥, ⌘.. Gates are answered one at a time, oldest first, as the app's gate queue does. Draft content keeps today's segment model and highlight to quote.
+The gate slot carries `data-chat-gate`: an Activity row that needs you moves focus into it (R13).
 
 ## Direction contract
 THESIS: one calm card that carries its context with it, never a toolbar of switches. Project above the input, where it runs below it, ongoing work tucked in a strip on top.

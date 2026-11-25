@@ -1,34 +1,27 @@
 /**
  * SessionPanel — unit tests.
  *
- * D20/D21: the panel is ONE scrolling column of sections
- * (`session-panel-sections`); there is no separate rail, no per-card close
- * button, and no stack of floating cards. The mode decides how that column is
- * presented:
- *  - `inline`  — a 300px flex sibling, `<aside data-mode="inline">`, holding
- *    `session-panel` → `session-panel-sections`.
- *  - `overlay` — `session-panel-root[data-mode=overlay]` with a
- *    `session-panel-scrim` and a `session-panel-overlay` dialog
- *    (role=dialog, aria-label "Session panel") that carries `rootRef`.
- *  - `hidden`  — renders nothing at all.
+ * Behaviors covered:
+ *  - the mode decides the presentation: `inline` docks an aside beside the
+ *    transcript, `overlay` floats the same card as a dialog over a scrim, and
+ *    `hidden` renders nothing
+ *  - the "Session" title and its Sections menu, which turns sections on and
+ *    off for this viewer
+ *  - the section order, and only project-level sections before the first
+ *    message
+ *  - the floating panel ends above the composer
  *
- * Section order inside `session-panel-sections`: the Session card (a real
- * `PanelEyebrow` labelled "Session" wrapping the stubbed `SummarySection`),
- * then PullRequestsSection, ContextSection, ActivitySection, TasksSection,
- * LaunchSection, PlanSection — each stubbed since it owns its own test file.
- *
- * Mocked dependencies: every section component (`../SummarySection`,
- * `../PullRequestsSection`, `../ContextSection`, `../ActivitySection`,
- * `../TasksSection`, `../LaunchSection`, `../PlanSection`) — this suite is
- * about the shell, not their bodies.
+ * Every section is stubbed; each owns its own test file.
  */
 import { createRef } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render as rtlRender, screen } from '@testing-library/react';
+import { act, render as rtlRender, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
 import type { SessionPanelState } from '../use-session-panel-state';
+import { useUiPrefs } from '@/store/ui-prefs';
 import type { PanelMode } from '../panel-mode';
 
 const sectionCalls: Record<string, unknown[]> = {};
@@ -40,9 +33,17 @@ function sectionStub(id: string) {
   };
 }
 
-vi.mock('../SummarySection', () => ({ SummarySection: sectionStub('summary') }));
 vi.mock('../PullRequestsSection', () => ({ PullRequestsSection: sectionStub('prs') }));
-vi.mock('../ContextSection', () => ({ ContextSection: sectionStub('context') }));
+vi.mock('../ContextSections', () => ({
+  SessionContextProvider: ({ children }: { children: ReactNode }) => children,
+  MemorySection: sectionStub('memory'),
+  MentionsSection: sectionStub('mentions'),
+  SkillsSection: sectionStub('skills'),
+  AttachmentsSection: sectionStub('attachments'),
+}));
+
+let mockChatId: string | undefined = 'chat-9';
+vi.mock('@/features/sessions/use-active-identity', () => ({ useActiveIdentity: () => ({ chatId: mockChatId }) }));
 vi.mock('../ActivitySection', () => ({ ActivitySection: sectionStub('activity') }));
 vi.mock('../TasksSection', () => ({ TasksSection: sectionStub('tasks') }));
 vi.mock('../LaunchSection', () => ({ LaunchSection: sectionStub('launch') }));
@@ -82,6 +83,8 @@ function panelState(mode: PanelMode, overrides: Partial<SessionPanelState> = {})
 
 beforeEach(() => {
   document.body.innerHTML = '';
+  mockChatId = 'chat-9';
+  useUiPrefs.setState({ sessionPanelHiddenSections: [] });
   togglePanel.mockReset();
   toggleSection.mockReset();
   for (const key of Object.keys(sectionCalls)) sectionCalls[key]!.length = 0;
@@ -93,7 +96,7 @@ describe('SessionPanel — mode rendering', () => {
     const root = screen.getByTestId('session-panel-root');
     expect(root.tagName).toBe('ASIDE');
     expect(root).toHaveAttribute('data-mode', 'inline');
-    expect(root.style.width).toBe('300px');
+    expect(screen.getByTestId('session-panel').style.width).toBe('300px');
     expect(root.contains(screen.getByTestId('session-panel'))).toBe(true);
     expect(screen.queryByTestId('session-panel-overlay')).toBeNull();
     expect(screen.queryByTestId('session-panel-scrim')).toBeNull();
@@ -139,43 +142,100 @@ describe('SessionPanel — mode rendering', () => {
   });
 });
 
-describe('SessionPanel — section order', () => {
-  it('renders the Session card, then PRs, Context, Activity, Launch, Plan, and Tasks LAST (it grows to the bottom)', () => {
+const shownSections = () =>
+  Array.from(screen.getByTestId('session-panel-sections').querySelectorAll('[data-testid^="stub-"]')).map((el) =>
+    el.getAttribute('data-testid')!.replace('stub-', ''),
+  );
+
+describe('SessionPanel — sections', () => {
+  it('titles the panel and lists every section in order', () => {
     render(<SessionPanel state={panelState('inline')} />);
-    const sections = screen.getByTestId('session-panel-sections');
-    const rendered = Array.from(
-      sections.querySelectorAll('[data-testid="session-panel-card-session"],[data-testid^="stub-"]'),
-    ).map((el) => el.getAttribute('data-testid'));
-    expect(rendered).toEqual([
-      'session-panel-card-session',
-      'stub-summary',
-      'stub-prs',
-      'stub-context',
-      'stub-activity',
-      'stub-launch',
-      'stub-plan',
-      'stub-tasks',
+    expect(screen.getByRole('heading', { name: 'Session' })).toBeInTheDocument();
+    expect(shownSections()).toEqual([
+      'prs',
+      'plan',
+      'activity',
+      'launch',
+      'memory',
+      'mentions',
+      'skills',
+      'attachments',
+      'tasks',
     ]);
   });
 
-  it('puts the "Session" eyebrow and the stubbed SummarySection inside the session card', () => {
+  it('shows only project-level sections before the first message', () => {
+    mockChatId = undefined;
     render(<SessionPanel state={panelState('inline')} />);
-    const card = screen.getByTestId('session-panel-card-session');
-    expect(card).toHaveTextContent('Session');
-    expect(card.querySelector('[data-testid="stub-summary"]')).not.toBeNull();
+    expect(shownSections()).toEqual(['memory', 'skills', 'tasks']);
+  });
+
+  it('turns a section off and on from the Sections menu, which stays open', async () => {
+    const user = userEvent.setup();
+    render(<SessionPanel state={panelState('inline')} />);
+    await user.click(screen.getByRole('button', { name: 'Sections' }));
+    expect(screen.getAllByRole('menuitemcheckbox').map((item) => item.textContent)).toEqual([
+      'Pull requests',
+      'Plan',
+      'Activity',
+      'Launch',
+      'Memory files',
+      'Mentioned files',
+      'Skills',
+      'Attachments',
+      'Project tasks',
+    ]);
+    const launch = screen.getByRole('menuitemcheckbox', { name: 'Launch' });
+    expect(launch).toBeChecked();
+
+    await user.click(launch);
+    expect(shownSections()).not.toContain('launch');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Launch' })).not.toBeChecked();
+
+    await user.click(screen.getByRole('menuitemcheckbox', { name: 'Launch' }));
+    expect(shownSections()).toContain('launch');
+  });
+
+  it('says so when every section is off', () => {
+    mockChatId = undefined;
+    useUiPrefs.setState({ sessionPanelHiddenSections: ['memory', 'skills', 'tasks'] });
+    render(<SessionPanel state={panelState('inline')} />);
+    expect(screen.getByTestId('session-panel-none')).toHaveTextContent('Every section is turned off');
+  });
+});
+
+describe('SessionPanel — floating above the composer', () => {
+  const rect = (top: number, bottom: number) => ({ top, bottom, height: bottom - top }) as DOMRect;
+
+  it('ends 8px above the column footer, scrim included', () => {
+    const { rerender } = render(
+      <div data-chat-column>
+        <div data-chat-footer />
+      </div>,
+    );
+    const measured = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.hasAttribute('data-chat-column')) return rect(0, 800);
+      if (this.hasAttribute('data-chat-footer')) return rect(640, 800);
+      return rect(0, 0);
+    });
+    act(() =>
+      rerender(
+        <div data-chat-column>
+          <div data-chat-footer />
+          <SessionPanel state={panelState('overlay')} />
+        </div>,
+      ),
+    );
+    expect(screen.getByTestId('session-panel-root').style.bottom).toBe('168px');
+    measured.mockRestore();
   });
 });
 
 describe('SessionPanel — section wiring', () => {
-  it('passes the daemon port to SummarySection and LaunchSection', () => {
+  it('passes the daemon port to the sections that need it', () => {
     render(<SessionPanel state={panelState('inline')} />);
-    expect(callsFor('summary')[0]).toMatchObject({ port: 31415 });
     expect(callsFor('launch')[0]).toMatchObject({ port: 31415 });
-  });
-
-  it('mounts the context sections with just the port — they are first-class, never collapsed', () => {
-    render(<SessionPanel state={panelState('inline')} />);
-    expect(callsFor('context')[0]).toEqual({ port: 31415 });
+    expect(callsFor('attachments')[0]).toMatchObject({ port: 31415 });
   });
 
   it("derives PlanSection's open/onToggle from the state's plan section", () => {

@@ -4,8 +4,9 @@
  * Behaviors covered:
  *  - one tile per attachment, images and files alike
  *  - only images are fetched: a file tile renders from its name alone
- *  - nothing is fetched while the section is closed — Context is expanded by
- *    default, so an ungated grid would fire N base64 reads per session switch
+ *  - past four tiles the row ends in "+N", and only the images on screen are
+ *    fetched until it expands
+ *  - a preview that fails to load says so
  *  - an image tile opens the lightbox; a file tile is inert
  *
  * Replaces the retired bottom panel's `SessionAttachmentsGrid.test.tsx`.
@@ -51,26 +52,21 @@ beforeEach(() => {
 
 describe('PanelAttachmentsGrid', () => {
   it('renders one tile per attachment', () => {
-    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} enabled />);
+    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} />);
     expect(screen.getByTestId('session-panel-attachment-grid')).toBeInTheDocument();
     expect(screen.getByTestId('session-panel-attachment-att-1')).toBeInTheDocument();
     expect(screen.getByTestId('session-panel-attachment-att-2')).toBeInTheDocument();
   });
 
   it('labels a file tile with its extension and never fetches its bytes', async () => {
-    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} enabled />);
+    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} />);
     await waitFor(() => expect(getAttachment).toHaveBeenCalledTimes(1));
     expect(getAttachment).toHaveBeenCalledWith(31415, 'chat-9', 'att-1');
     expect(screen.getByTestId('session-panel-attachment-att-2')).toHaveTextContent('.pdf');
   });
 
-  it('fetches nothing while the section is closed', () => {
-    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} enabled={false} />);
-    expect(getAttachment).not.toHaveBeenCalled();
-  });
-
   it('opens the lightbox from an image tile', async () => {
-    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} enabled />);
+    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} />);
     await waitFor(() => expect(getAttachment).toHaveBeenCalled());
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open shot.png' }));
@@ -78,14 +74,43 @@ describe('PanelAttachmentsGrid', () => {
   });
 
   it('leaves a file tile inert', async () => {
-    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} enabled />);
+    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} />);
     fireEvent.click(screen.getByTestId('session-panel-attachment-att-2'));
     expect(screen.queryByTestId('image-lightbox-dialog')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Open report.pdf' })).toBeNull();
   });
 
   it('renders nothing when the session has no attachments', () => {
-    const { container } = render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={[]} enabled />);
+    const { container } = render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={[]} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('keeps one row of four, ending in "+N", and expands to all', async () => {
+    const many = Array.from({ length: 6 }, (_, i) => image(`img-${i}`, `shot-${i}.png`));
+    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={many} />);
+    const tiles = () => screen.getAllByTestId(/^session-panel-attachment-img-/);
+    expect(tiles()).toHaveLength(3);
+    await waitFor(() => expect(getAttachment).toHaveBeenCalledTimes(3));
+
+    const more = screen.getByRole('button', { name: 'Show 3 more attachments' });
+    expect(more).toHaveTextContent('+3');
+    fireEvent.click(more);
+    expect(tiles()).toHaveLength(6);
+    await waitFor(() => expect(getAttachment).toHaveBeenCalledTimes(6));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer attachments' }));
+    expect(tiles()).toHaveLength(3);
+  });
+
+  it('fits four attachments without a "+N" tile', () => {
+    const four = Array.from({ length: 4 }, (_, i) => file(`f-${i}`, `doc-${i}.pdf`));
+    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={four} />);
+    expect(screen.queryByTestId('session-panel-attachments-more')).toBeNull();
+  });
+
+  it('says when a preview could not be loaded', async () => {
+    getAttachment.mockRejectedValue(new Error('gone'));
+    render(<PanelAttachmentsGrid port={31415} chatId="chat-9" attachments={attachments} />);
+    expect(await screen.findByText(/1 preview couldn’t be loaded/)).toBeInTheDocument();
   });
 });

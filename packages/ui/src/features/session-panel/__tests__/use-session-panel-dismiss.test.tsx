@@ -7,7 +7,7 @@
  * short to dock it.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { act } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import { installPanelHarness, renderPanelState, setWidth, type PanelHarness } from './panel-state-harness';
 
 let h: PanelHarness;
@@ -100,6 +100,74 @@ describe('useSessionPanelState — light dismiss', () => {
     dialog.setAttribute('role', 'dialog');
     document.body.append(dialog);
     pointerDownOn(dialog);
+    expect(result.current.mode).toBe('overlay');
+  });
+
+  it('stays open for a press in the composer it floats above', () => {
+    const { result } = openOverlay();
+    const footer = document.createElement('div');
+    footer.setAttribute('data-chat-footer', '');
+    h.host.append(footer);
+    pointerDownOn(footer);
+    expect(result.current.mode).toBe('overlay');
+  });
+
+  it("leaves a press on the column's own toggle to the toggle", () => {
+    const { result } = openOverlay();
+    const toggle = document.createElement('button');
+    toggle.setAttribute('data-session-panel-toggle', '');
+    h.host.append(toggle);
+    pointerDownOn(toggle);
+    expect(result.current.mode).toBe('overlay');
+  });
+
+  it("closes on a press in another column's composer", () => {
+    const { result } = openOverlay();
+    const footer = document.createElement('div');
+    footer.setAttribute('data-chat-footer', '');
+    document.body.append(footer);
+    pointerDownOn(footer);
+    expect(result.current.mode).toBe('hidden');
+  });
+
+  it('puts focus back on the toggle on Escape', () => {
+    openOverlay();
+    const toggle = document.createElement('button');
+    toggle.setAttribute('data-session-panel-toggle', '');
+    h.host.append(toggle);
+    escapeOn(document);
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it('puts focus back on the toggle after a press on something that takes none', async () => {
+    openOverlay();
+    const toggle = document.createElement('button');
+    toggle.setAttribute('data-session-panel-toggle', '');
+    const scrim = document.createElement('div');
+    h.host.append(toggle, scrim);
+    pointerDownOn(scrim);
+    await waitFor(() => expect(document.activeElement).toBe(toggle));
+  });
+
+  it('leaves focus where an outside press put it', async () => {
+    openOverlay();
+    const toggle = document.createElement('button');
+    toggle.setAttribute('data-session-panel-toggle', '');
+    h.host.append(toggle);
+    const input = document.createElement('input');
+    document.body.append(input);
+    pointerDownOn(input);
+    input.focus(); // the press's own default
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("stays open for a press on a dialog's backdrop", () => {
+    const { result } = openOverlay();
+    const backdrop = document.createElement('div');
+    backdrop.setAttribute('data-slot', 'dialog-overlay');
+    document.body.append(backdrop);
+    pointerDownOn(backdrop);
     expect(result.current.mode).toBe('overlay');
   });
 

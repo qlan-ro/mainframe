@@ -44,8 +44,11 @@ export interface SessionPanelState {
   toggleSection: (id: SessionPanelOpenSectionId) => void;
 }
 
-/** Radix portals and scrollbar thumbs render outside the panel root; a click in one is not "outside". */
-const PORTAL_SELECTOR = '[data-radix-popper-content-wrapper],[role="menu"],[role="dialog"],.mf-scrollbar';
+/** Radix portals (a dialog's backdrop too) and scrollbar thumbs render outside the panel root; a click in one is not "outside". */
+const PORTAL_SELECTOR =
+  '[data-radix-popper-content-wrapper],[role="menu"],[role="dialog"],[data-slot="dialog-overlay"],.mf-scrollbar';
+/** Stays usable while the panel floats: the composer under it, and the toggle, which closes it itself. */
+const USABLE_SELECTOR = '[data-chat-footer],[data-session-panel-toggle]';
 
 /** An open dialog owns Escape; the non-modal overlay must not swallow it. */
 function hasOpenDialogOutside(root: HTMLElement | null): boolean {
@@ -115,10 +118,12 @@ export function useSessionPanelState(columnId: PanelColumnId = 'main'): SessionP
   // Light dismiss — Escape, or a pointer outside both the panel and any portal.
   useEffect(() => {
     if (mode !== 'overlay') return;
+    const focusToggle = () => hostEl?.querySelector<HTMLElement>('[data-session-panel-toggle]')?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (hasOpenDialogOutside(rootRef.current)) return;
       setOverlayOpen(false);
+      focusToggle();
     };
     const onPointerDown = (event: PointerEvent) => {
       const node = event.target;
@@ -126,7 +131,13 @@ export function useSessionPanelState(columnId: PanelColumnId = 'main'): SessionP
       if (rootRef.current?.contains(node)) return;
       const element = node instanceof Element ? node : node.parentElement;
       if (element?.closest(PORTAL_SELECTOR)) return;
+      if (hostEl?.contains(node) && element?.closest(USABLE_SELECTOR)) return;
       setOverlayOpen(false);
+      // The press moves focus after this event. Where it landed on something
+      // focusable that keeps it; otherwise focus went down with the panel.
+      setTimeout(() => {
+        if (document.activeElement === null || document.activeElement === document.body) focusToggle();
+      });
     };
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown, true);
@@ -134,7 +145,7 @@ export function useSessionPanelState(columnId: PanelColumnId = 'main'): SessionP
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('pointerdown', onPointerDown, true);
     };
-  }, [mode, setOverlayOpen]);
+  }, [mode, setOverlayOpen, hostEl]);
 
   const hostRef = useCallback((el: HTMLElement | null) => setHostEl(el), []);
 

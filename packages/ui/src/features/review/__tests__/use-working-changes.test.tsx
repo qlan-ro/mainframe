@@ -341,3 +341,31 @@ describe('toChangesSummary', () => {
     });
   });
 });
+
+describe('useWorkingChanges — what it does not read', () => {
+  afterEach(() => {
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+  });
+
+  it('leaves the branch alone for a surface that names it from another source', async () => {
+    const { result } = renderHook(() => useWorkingChanges(options({ withBranch: false })));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.files).toHaveLength(2);
+    expect(getGitBranch).not.toHaveBeenCalled();
+  });
+
+  it('waits for the window to be visible before reading what changed meanwhile, once', async () => {
+    const { result } = renderHook(() => useWorkingChanges(options()));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    act(() => emit({ type: 'context.updated', chatId: CHAT }));
+    act(() => emit({ type: 'context.updated', chatId: CHAT }));
+    expect(getGitStatus).toHaveBeenCalledOnce();
+
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+    act(() => void document.dispatchEvent(new Event('visibilitychange')));
+    await waitFor(() => expect(getGitStatus).toHaveBeenCalledTimes(2));
+    act(() => void document.dispatchEvent(new Event('visibilitychange')));
+    expect(getGitStatus).toHaveBeenCalledTimes(2);
+  });
+});

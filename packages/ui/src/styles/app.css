@@ -223,3 +223,25 @@ code {
 [data-sonner-toaster] [data-sonner-toast]:not(:has([data-icon])) [data-content] {
   grid-column: 1 / 3;
 }
+
+/* A jump marks the transcript row it lands on for about 2s: the tint is still
+   under prefers-reduced-motion, and fades out otherwise. */
+@keyframes mf-activity-flash {
+  0%,
+  35% {
+    background-color: color-mix(in srgb, var(--primary) 16%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+[data-activity-flash] {
+  border-radius: var(--radius-md);
+  background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+  animation: mf-activity-flash 2.2s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-activity-flash] {
+    animation: none;
+  }
+}

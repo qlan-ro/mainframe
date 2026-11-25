@@ -19,11 +19,20 @@ export function cancelDelegatedTask(chatId: string, taskId: string): Promise<voi
   );
 }
 
-export async function readBackgroundTaskOutput(chatId: string, taskId: string): Promise<string> {
-  const response = await fetch(`${path(chatId)}/${encodeURIComponent(taskId)}/output?bytes=8192`, {
+/** The most the daemon sends of one task's output. */
+const MAX_OUTPUT_BYTES = 1024 * 1024;
+
+export interface BackgroundTaskOutput {
+  text: string;
+  /** The start is left out: the output is longer than the 1 MB the daemon sends. */
+  truncated: boolean;
+}
+
+export async function readBackgroundTaskOutput(chatId: string, taskId: string): Promise<BackgroundTaskOutput> {
+  const response = await fetch(`${path(chatId)}/${encodeURIComponent(taskId)}/output?bytes=${MAX_OUTPUT_BYTES}`, {
     headers: authHeaders(),
   });
-  if (response.status === 409) return '';
+  if (response.status === 409) return { text: '', truncated: false };
   if (!response.ok) throw new Error(`Output request failed (${response.status})`);
-  return response.text();
+  return { text: await response.text(), truncated: response.headers.get('x-output-truncated') === 'true' };
 }

@@ -13,10 +13,10 @@ read in both directions._
 
 | Metric | Count |
 |---|---|
-| Defined | 1132 |
-| Referenced | 581 |
-| Unused | 551 |
-| Dead selectors | 19 |
+| Defined | 1150 |
+| Referenced | 597 |
+| Unused | 553 |
+| Dead selectors | 20 |
 
 ## Dead selectors
 
@@ -33,6 +33,7 @@ read in both directions._
 - `probe-input` — referenced by: windowed-history-measurement.spec.ts
 - `probe-row` — referenced by: windowed-history-measurement.spec.ts
 - `session-bar-status` — referenced by: wait.ts
+- `session-panel-section-toggle-context` — referenced by: session-panel.spec.ts
 - `tasks-board-project-${…}` — referenced by: sidebar-chrome.spec.ts
 - `tasks-surface-pick` — referenced by: sidebar-chrome.spec.ts
 - `tool-card` — referenced by: wait.ts
@@ -91,7 +92,8 @@ read in both directions._
 | raw-ws-client.ts | 0 | 0 |
 | review-panel.spec.ts | 65 | 0 |
 | selection-hold.spec.ts | 11 | 0 |
-| session-panel.spec.ts | 92 | 0 |
+| session-panel-jumps.spec.ts | 6 | 0 |
+| session-panel.spec.ts | 122 | 1 |
 | session-tabs.spec.ts | 22 | 0 |
 | sessions-draft.spec.ts | 70 | 0 |
 | sessions-filters.spec.ts | 37 | 0 |
@@ -104,7 +106,7 @@ read in both directions._
 | sidebar-chrome.spec.ts | 20 | 3 |
 | spotlight.spec.ts | 40 | 0 |
 | stress-matrix.spec.ts | 15 | 0 |
-| tasks.spec.ts | 169 | 0 |
+| tasks.spec.ts | 171 | 0 |
 | testids.ts | 3 | 0 |
 | title-bar.spec.ts | 25 | 0 |
 | tool-cards-history.spec.ts | 20 | 0 |
@@ -114,7 +116,7 @@ read in both directions._
 | wait.ts | 2 | 0 |
 | wait.ts | 0 | 7 |
 | window-states.spec.ts | 34 | 0 |
-| windowed-history-lifecycle.spec.ts | 29 | 0 |
+| windowed-history-lifecycle.spec.ts | 30 | 0 |
 | windowed-history-measurement.spec.ts | 4 | 7 |
 | windowed-history-performance.spec.ts | 0 | 0 |
 | windowed-history-protocol.spec.ts | 0 | 0 |
@@ -122,7 +124,7 @@ read in both directions._
 | windowed-history.spec.ts | 22 | 0 |
 | windowed-history.ts | 0 | 0 |
 | windowed-history.ts | 0 | 0 |
-| workspace-surface.spec.ts | 52 | 1 |
+| workspace-surface.spec.ts | 50 | 1 |
 | ws-control.ts | 0 | 0 |
 | zones.ts | 0 | 2 |
 
@@ -130,14 +132,14 @@ read in both directions._
 
 | Surface | Defined | Unused |
 |---|---|---|
-| chat | 198 | 91 |
+| chat | 198 | 89 |
 | automations | 92 | 80 |
 | tasks | 91 | 43 |
 | sessions | 97 | 29 |
+| session | 78 | 25 |
 | settings | 41 | 24 |
 | skills | 24 | 24 |
-| session | 60 | 20 |
-| composer | 50 | 18 |
+| composer | 50 | 17 |
 | external | 15 | 14 |
 | preview | 31 | 13 |
 | url | 12 | 12 |

@@ -16,6 +16,7 @@ import type { ReactNode } from 'react';
 
 let __mainThreadId: string | null = '__LOCALID_1';
 let __itemStatus: string | undefined = 'new';
+let __custom: { delegation?: object } | undefined;
 
 vi.mock('../VirtualMessages', () => ({ VirtualMessages: () => <div data-testid="tp-messages" /> }));
 vi.mock('@assistant-ui/react', () => ({
@@ -29,7 +30,7 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: unknown) => unknown) =>
     sel({
       threads: { mainThreadId: __mainThreadId },
-      threadListItem: { id: __mainThreadId, status: __itemStatus },
+      threadListItem: { id: __mainThreadId, status: __itemStatus, custom: __custom },
       thread: { isRunning: false, messages: [] },
     }),
 }));
@@ -37,6 +38,9 @@ vi.mock('@assistant-ui/react', () => ({
 vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="composer-stub" /> }));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
+vi.mock('@/features/session-panel/SessionStrip', () => ({
+  SessionStrip: () => <div data-testid="session-strip" />,
+}));
 vi.mock('../../orchestration/AgentOutboxChip', () => ({ AgentOutboxChip: () => null }));
 vi.mock('../ChatSelectionToolbar', () => ({ ChatSelectionToolbar: () => null }));
 vi.mock('../../composer/edit/composer-edit-context', () => ({
@@ -59,6 +63,7 @@ describe('ChatThread — composer gate on a projectless draft', () => {
   beforeEach(() => {
     __mainThreadId = '__LOCALID_1';
     __itemStatus = 'new';
+    __custom = undefined;
     useDraftConfigStore.setState({ drafts: new Map() });
   });
 
@@ -91,5 +96,17 @@ describe('ChatThread — composer gate on a projectless draft', () => {
     render(<ChatThread />);
 
     expect(screen.queryByTestId('composer-stub')).toBeNull();
+  });
+
+  it('keeps the branch and changes strip on a read-only delegated chat', () => {
+    __mainThreadId = 'chat-42';
+    __itemStatus = 'regular';
+    __custom = { delegation: { taskId: 't-1' } };
+
+    render(<ChatThread />);
+
+    expect(screen.getByTestId('chat-read-only-note')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-stub')).toBeNull();
+    expect(screen.getByTestId('session-strip')).toBeInTheDocument();
   });
 });

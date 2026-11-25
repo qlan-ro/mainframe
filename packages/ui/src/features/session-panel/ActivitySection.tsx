@@ -1,170 +1,149 @@
-import { useChatExtras } from '@/features/chat/runtime/chat-extras';
-import { Button } from '@/components/ui/button';
+/**
+ * ActivitySection — everything the session is running or has run: ongoing work
+ * first (needs-you, running, queued, scheduled), finished work under Earlier.
+ */
 import { useEffect, useRef, useState } from 'react';
-import { usePanelControl, type PanelColumnId } from './panel-control-store';
-import { useAui } from '@assistant-ui/react';
-import { ChevronDown } from 'lucide-react';
-import type { ActivityEntry } from './activity-model';
-import { ActivityRow } from './ActivityRow';
-import { jumpToActivitySource } from './activity-source';
-import { useActivityEntries } from './use-activity-entries';
-import { PanelEyebrow } from './PanelEyebrow';
+import { Check, ChevronRight } from 'lucide-react';
+import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { useWorkflowRun } from '@/features/chat/workflow/use-workflow-run';
-import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
-import { openInSplit } from '@/features/chat/zones/open-in-split';
+import { cn } from '@/lib/utils';
+import type { BackgroundTaskOutput } from '@/lib/api/background-tasks';
+import { isOngoing, type ActivityEntry } from './activity-model';
+import { groupActivity } from './activity-status';
+import { ActivityRow } from './ActivityRow';
+import { CommandOutputDialog } from './CommandOutputDialog';
+import { PanelEmpty, PanelRow, PanelSection } from './PanelSection';
+import { usePanelControl, type PanelColumnId } from './panel-control-store';
+import { useActivityActions } from './use-activity-actions';
+import { useActivityEntries } from './use-activity-entries';
+import { useActivityJump, type ActivityJumps } from './use-activity-jump';
+import { useFocusLoss, useRowFocus } from './use-row-focus';
 
-const active = (row: ActivityEntry) => row.state === 'running' || row.state === 'waiting';
-type HistoryView = 'closed' | 'preview' | 'all';
-
-function Entry({
-  row,
-  chatId,
-  adapterId,
-  now,
-}: {
-  row: ActivityEntry;
+interface EntryScope {
   chatId: string;
   adapterId?: string;
+  columnId: PanelColumnId;
   now: number;
-}) {
-  const [jumpState, setJumpState] = useState<string | null>(null);
-  const aui = useAui();
-  const parentThreadId = useSideAwareThreadId();
+  jumps: ActivityJumps;
+  showOutput: (row: ActivityEntry, read: () => Promise<BackgroundTaskOutput>) => void;
+  /** A row, or Earlier itself (''), is going away with the focus in it. */
+  onFocusLost: (id: string) => void;
+}
+
+function Entry({ row, scope }: { row: ActivityEntry; scope: EntryScope }) {
   const run = useWorkflowRun(row.kind === 'workflow' ? row.task?.id : undefined);
-  const childId = row.delegated?.itemId;
-  const openChild =
-    childId && parentThreadId
-      ? () => {
-          openInSplit(parentThreadId, childId);
-          aui.threads.switchToThread(childId);
-        }
-      : undefined;
+  const { readOutput, ...actions } = useActivityActions(row, scope);
+  return (
+    <ActivityRow
+      row={row}
+      now={scope.now}
+      run={run}
+      onOutput={readOutput && (() => scope.showOutput(row, readOutput))}
+      loading={scope.jumps.loadingId === row.id}
+      onFocusLost={scope.onFocusLost}
+      {...actions}
+    />
+  );
+}
+
+/** The rest of the history isn't loaded, so neither is what it started. */
+function LoadEarlierRow() {
+  const extras = useChatExtras();
+  const history = extras?.state.historyWindow;
+  if (!history?.hasMore) return null;
   return (
     <>
-      <ActivityRow
-        row={row}
-        chatId={chatId}
-        adapterId={adapterId}
-        now={now}
-        run={run}
-        onJump={() => {
-          if (!row.source) return;
-          setJumpState('Loading message...');
-          void Promise.resolve(jumpToActivitySource(chatId, row.source)).then(
-            (found) => setJumpState(found === false ? 'Not in this transcript' : null),
-            (error: unknown) => setJumpState(error instanceof Error ? error.message : 'Could not load message'),
-          );
+      <PanelRow
+        data-testid="session-panel-load-earlier"
+        disabled={history.loading}
+        onClick={() => {
+          void extras?.loadEarlier?.().catch(() => undefined /* shown from historyWindow.error */);
         }}
-        onOpenChild={openChild}
+        label="Load earlier messages"
+        labelClassName="text-muted-foreground"
       />
-      {jumpState && (
-        <p role="status" className="px-2 text-xs text-muted-foreground">
-          {jumpState}
+      {history.error && (
+        <p role="alert" className="px-4 text-xs text-fail">
+          {history.error}
         </p>
       )}
     </>
   );
 }
 
-function HistoryRows({
-  history,
-  chatId,
-  adapterId,
-  now,
-  view,
+interface EarlierProps {
+  earlier: ActivityEntry[];
+  failed: number;
+  hasMore: boolean;
+  scope: EntryScope;
+}
+
+function earlierLabel(count: number, failed: number, hasMore: boolean): string {
+  const items = `${count} ${count === 1 ? 'item' : 'items'}`;
+  return ['Earlier', hasMore ? `${items} or more` : items, failed > 0 && `${failed} failed`].filter(Boolean).join(', ');
+}
+
+function EarlierHeader({
+  earlier,
+  failed,
+  hasMore,
+  scope,
+  open,
   onToggle,
-  onShowAll,
-}: {
-  history: ActivityEntry[];
-  chatId?: string;
-  adapterId?: string;
-  now: number;
-  view: HistoryView;
-  onToggle: () => void;
-  onShowAll: () => void;
-}) {
-  if (!history.length) return null;
-  const visible = view === 'all' ? history : history.slice(0, 6);
+}: EarlierProps & { open: boolean; onToggle: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useFocusLoss(ref, () => scope.onFocusLost(''));
+  return (
+    <PanelRow
+      ref={ref}
+      data-testid="session-panel-activity-earlier"
+      data-activity-earlier
+      aria-label={earlierLabel(earlier.length, failed, hasMore)}
+      aria-expanded={open}
+      onClick={onToggle}
+      icon={
+        <ChevronRight
+          className={cn('size-3.5! transition-transform motion-reduce:transition-none', open && 'rotate-90')}
+        />
+      }
+      label="Earlier"
+      value={
+        <>
+          {failed > 0 && <span className="text-fail">{failed} failed</span>}
+          {failed > 0 && <span>·</span>}
+          <span>
+            {earlier.length}
+            {hasMore && '+'}
+          </span>
+        </>
+      }
+    />
+  );
+}
+
+function Earlier({ earlier, failed, hasMore, scope }: EarlierProps) {
+  const [openIn, setOpenIn] = useState<string>();
+  if (earlier.length === 0 && !hasMore) return null;
+  const open = openIn === scope.chatId;
   return (
     <>
-      <button
-        type="button"
-        aria-label={`Earlier, ${history.length} ${history.length === 1 ? 'item' : 'items'}`}
-        aria-expanded={view !== 'closed'}
-        onClick={onToggle}
-        className="flex items-center gap-1 px-2 pt-2 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        Earlier
-        <span className="ml-auto tabular-nums">{history.length}</span>
-        <ChevronDown className={view === 'closed' ? 'size-3 -rotate-90' : 'size-3'} aria-hidden />
-      </button>
-      {view !== 'closed' &&
-        visible.map((row) => <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />)}
-      {history.length > 6 && view === 'preview' && (
-        <button type="button" onClick={onShowAll} className="self-start px-2 py-1 text-xs text-primary hover:underline">
-          Show all {history.length}
-        </button>
+      <EarlierHeader
+        earlier={earlier}
+        failed={failed}
+        hasMore={hasMore}
+        scope={scope}
+        open={open}
+        onToggle={() => setOpenIn(open ? undefined : scope.chatId)}
+      />
+      {open && (
+        <>
+          {earlier.map((row) => (
+            <Entry key={row.id} row={row} scope={scope} />
+          ))}
+          <LoadEarlierRow />
+        </>
       )}
     </>
-  );
-}
-
-interface ActivityBodyProps {
-  running: ActivityEntry[];
-  waiting: ActivityEntry[];
-  history: ActivityEntry[];
-  chatId?: string;
-  adapterId?: string;
-  now: number;
-  historyView: HistoryView;
-  onToggleHistory: () => void;
-  onShowAll: () => void;
-  loadError: string | null;
-  sessionActive: boolean;
-}
-
-function ActivityBody({
-  running,
-  waiting,
-  history,
-  chatId,
-  adapterId,
-  now,
-  historyView,
-  onToggleHistory,
-  onShowAll,
-  loadError,
-  sessionActive,
-}: ActivityBodyProps) {
-  return (
-    <div className="flex flex-col gap-0.5 px-2 pb-2">
-      {!sessionActive && running.length === 0 && waiting.length === 0 && history.length === 0 && (
-        <p data-testid="session-panel-activity-empty" className="px-2 py-1 text-sm text-muted-foreground">
-          No background activity
-        </p>
-      )}
-      {running.map((row) => (
-        <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />
-      ))}
-      {waiting.length > 0 && <p className="px-2 pt-1 text-xs text-muted-foreground">Waiting</p>}
-      {waiting.map((row) => (
-        <Entry key={row.id} row={row} chatId={chatId ?? ''} adapterId={adapterId} now={now} />
-      ))}
-      <HistoryRows
-        history={history}
-        chatId={chatId}
-        adapterId={adapterId}
-        now={now}
-        view={historyView}
-        onToggle={onToggleHistory}
-        onShowAll={onShowAll}
-      />
-      {loadError && (
-        <p role="alert" className="px-2 text-xs text-fail">
-          Could not load earlier tasks: {loadError}
-        </p>
-      )}
-    </div>
   );
 }
 
@@ -178,67 +157,80 @@ function useActivityReveal(columnId: PanelColumnId) {
   return ref;
 }
 
-export function ActivitySection({ columnId }: { columnId: PanelColumnId }) {
-  const extras = useChatExtras();
-  const sectionRef = useActivityReveal(columnId);
-  const { entries, chatId, adapterId, loadError, now, sessionRunning, sessionWaiting } = useActivityEntries();
-  const [historyView, setHistoryView] = useState<HistoryView>('closed');
-  useEffect(() => setHistoryView('closed'), [chatId]);
-  const running = entries.filter((row) => row.state === 'running');
-  const waiting = entries.filter((row) => row.state === 'waiting');
-  const history = entries
-    .filter((row) => !active(row))
-    .sort((a, b) => (b.endedAt ?? b.startedAt) - (a.endedAt ?? a.startedAt));
-  const summary =
-    running.length || waiting.length
-      ? `${running.length} running${waiting.length ? ` · ${waiting.length} waiting` : ''}`
-      : sessionRunning
-        ? 'Session running'
-        : sessionWaiting
-          ? 'Session waiting'
-          : 'No background activity';
+interface ShownOutput {
+  chatId: string;
+  row: ActivityEntry;
+  read: () => Promise<BackgroundTaskOutput>;
+}
+
+/** The section holds the open output, not its row: the row moves to Earlier when its command ends. */
+function useShownOutput(chatId: string, entries: readonly ActivityEntry[]) {
+  const [shown, setShown] = useState<ShownOutput>();
+  const [open, setOpen] = useState(false);
+  const row = shown && (entries.find((entry) => entry.id === shown.row.id) ?? shown.row);
+  return {
+    show: (from: ActivityEntry, read: ShownOutput['read']) => {
+      setShown({ chatId, row: from, read });
+      setOpen(true);
+    },
+    output: shown && row && { row, read: shown.read, open: open && shown.chatId === chatId },
+    setOpen,
+  };
+}
+
+interface ShownOutputDialogProps {
+  output: Pick<ShownOutput, 'row' | 'read'> & { open: boolean };
+  onOpenChange: (open: boolean) => void;
+  focusRow: (id: string) => void;
+}
+
+function ShownOutputDialog({ output, onOpenChange, focusRow }: ShownOutputDialogProps) {
+  const { row, read, open } = output;
   return (
-    <section ref={sectionRef} data-testid="session-panel-card-activity" className="shrink-0 scroll-mt-1">
-      <PanelEyebrow
-        label="Activity"
-        live={sessionRunning || running.length > 0}
-        liveTestId="session-panel-activity-live"
-        action={
-          <span data-testid="session-panel-activity-counts" className="text-xs text-muted-foreground">
-            {summary}
-          </span>
-        }
-      />
-      {extras?.state.historyWindow?.hasMore && (
-        <div className="px-4 text-xs text-muted-foreground">
-          Earlier activity may exist.
-          <Button
-            data-testid="session-panel-load-earlier"
-            variant="ghost"
-            size="sm"
-            disabled={extras.state.historyWindow.loading}
-            onClick={() => {
-              void extras.loadEarlier?.().catch(() => undefined);
-            }}
-          >
-            Load earlier messages
-          </Button>
-          {extras.state.historyWindow.error && <p role="alert">{extras.state.historyWindow.error}</p>}
-        </div>
+    <CommandOutputDialog
+      title={row.title}
+      command={row.command}
+      read={read}
+      running={isOngoing(row.state)}
+      open={open}
+      onOpenChange={onOpenChange}
+      returnFocus={() => focusRow(row.id)}
+    />
+  );
+}
+
+export function ActivitySection({ columnId }: { columnId: PanelColumnId }) {
+  const sectionRef = useActivityReveal(columnId);
+  const hasMore = useChatExtras()?.state.historyWindow?.hasMore ?? false;
+  const { entries, chatId = '', adapterId, loadError, now } = useActivityEntries();
+  const { ongoing, earlier, failed } = groupActivity(entries);
+  const jumps = useActivityJump(chatId, columnId);
+  const { show, output, setOpen } = useShownOutput(chatId, entries);
+  const { focusRow, onFocusLost } = useRowFocus(sectionRef, chatId, earlier);
+  const scope: EntryScope = { chatId, adapterId, columnId, now, jumps, showOutput: show, onFocusLost };
+  return (
+    <PanelSection
+      ref={sectionRef}
+      section="activity"
+      data-testid="session-panel-card-activity"
+      // Clears the panel's sticky title.
+      className="scroll-mt-11"
+    >
+      {ongoing.length === 0 && (
+        <PanelEmpty data-testid="session-panel-activity-empty" icon={<Check />}>
+          No background activity
+        </PanelEmpty>
       )}
-      <ActivityBody
-        running={running}
-        waiting={waiting}
-        history={history}
-        chatId={chatId}
-        adapterId={adapterId}
-        now={now}
-        historyView={historyView}
-        onToggleHistory={() => setHistoryView(historyView === 'closed' ? 'preview' : 'closed')}
-        onShowAll={() => setHistoryView('all')}
-        loadError={loadError}
-        sessionActive={sessionRunning || sessionWaiting}
-      />
-    </section>
+      {ongoing.map((row) => (
+        <Entry key={row.id} row={row} scope={scope} />
+      ))}
+      <Earlier earlier={earlier} failed={failed} hasMore={hasMore} scope={scope} />
+      {loadError && (
+        <p role="alert" className="px-4 text-xs text-fail">
+          Could not load earlier tasks: {loadError}
+        </p>
+      )}
+      {output && <ShownOutputDialog output={output} onOpenChange={setOpen} focusRow={focusRow} />}
+    </PanelSection>
   );
 }

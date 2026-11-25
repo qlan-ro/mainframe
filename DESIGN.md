@@ -611,6 +611,7 @@ Motion is functional and short:
 - **Disclosure chevrons:** rotate over 0.15 s.
 - **Spinners:** 0.8 s linear.
 - **Group-header actions:** fade over 0.12 s.
+- **Jump highlight:** the transcript row a jump lands on is tinted with the accent at 16 % and fades over 2.2 s. With reduced motion it is a still 12 % tint for the same time.
 
 `prefers-reduced-motion` removes every animation and transition.
 

@@ -20,7 +20,8 @@ export interface SubagentZoneRef {
   parentChatId: string;
   parentThreadId: string;
   toolCallId: string;
-  messageId: string;
+  /** Absent while the call isn't loaded; the zone loads the history that holds it. */
+  messageId?: string;
   title: string;
 }
 
