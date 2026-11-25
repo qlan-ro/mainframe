@@ -81,7 +81,7 @@
       "title": "Chat — composer, from draft to stop",
       "w": 2772,
       "x": 0,
-      "y": 2242
+      "y": 3049
     },
     "Chat-ComposerMenus.dc.html": {
       "h": 3260,
@@ -89,7 +89,7 @@
       "title": "Chat — composer menus",
       "w": 2772,
       "x": 0,
-      "y": 3156
+      "y": 3880
     },
     "Chat-SessionPanel-ActivitySection.dc.html": {
       "h": 2054,
@@ -163,60 +163,12 @@
       "x": 0,
       "y": 0
     },
-    "Proposal-Redesign-NewSession.dc.html": {
-      "h": 3426,
-      "page": "proposals",
-      "title": "Window redesign: composer before the first message",
-      "w": 2616,
-      "x": 1460,
-      "y": 3286
-    },
-    "Proposal-Redesign-Shortcuts.dc.html": {
-      "h": 1088,
-      "page": "proposals",
-      "title": "Window redesign: keyboard shortcuts sheet",
-      "w": 1536,
-      "x": 1460,
-      "y": 18330
-    },
     "Proposal-Redesign-Spec.dc.html": {
-      "h": 11605,
+      "h": 12498,
       "page": "proposals",
       "title": "Window redesign: the decisions (spec)",
       "w": 1360,
       "x": 0,
-      "y": 960
-    },
-    "Proposal-Redesign-Window.dc.html": {
-      "h": 1106,
-      "page": "proposals",
-      "title": "Window redesign: the proposed window, light and dark",
-      "w": 3024,
-      "x": 1460,
-      "y": 2020
-    },
-    "Proposal-Redesign-Workspace.dc.html": {
-      "h": 5032,
-      "page": "proposals",
-      "title": "Window redesign: workspace surface",
-      "w": 3024,
-      "x": 1460,
-      "y": 13138
-    },
-    "Proposal-Window-Baseline.dc.html": {
-      "h": 900,
-      "page": "proposals",
-      "title": "Today (v2.15.0), light: the window before the redesign",
-      "w": 1440,
-      "x": 1460,
-      "y": 960
-    },
-    "Proposal-Window-BaselineDark.dc.html": {
-      "h": 900,
-      "page": "proposals",
-      "title": "Today (v2.15.0), dark: the window before the redesign",
-      "w": 1440,
-      "x": 2980,
       "y": 960
     },
     "Settings-Controls.dc.html": {
@@ -387,7 +339,7 @@
       "title": "Workspace — branch and worktree menus",
       "w": 1676,
       "x": 0,
-      "y": 1060
+      "y": 2148
     },
     "Workspace-Files.dc.html": {
       "h": 1088,
@@ -404,7 +356,7 @@
       "title": "Workspace — editor, review and run flow",
       "w": 1440,
       "x": 4560,
-      "y": 0
+      "y": 3308
     },
     "Workspace-Markdown.dc.html": {
       "h": 900,
@@ -412,7 +364,7 @@
       "title": "Workspace — markdown notes",
       "w": 1440,
       "x": 1520,
-      "y": 0
+      "y": 1168
     },
     "Workspace-Review.dc.html": {
       "h": 1088,
@@ -420,7 +372,7 @@
       "title": "Workspace — review changes",
       "w": 1536,
       "x": 3040,
-      "y": 0
+      "y": 2140
     },
     "Workspace-ReviewStates.dc.html": {
       "h": 900,
@@ -429,7 +381,7 @@
       "title": "Workspace — review scopes and diff states",
       "w": 1440,
       "x": 6080,
-      "y": 0
+      "y": 2140
     },
     "Workspace-Run.dc.html": {
       "h": 1280,
@@ -453,23 +405,7 @@
       "title": "Workspace — file viewers",
       "w": 1932,
       "x": 3258,
-      "y": 1060
-    },
-    "Proposal-Redesign-Transcript.dc.html": {
-      "page": "proposals",
-      "x": 1460,
-      "y": 9292,
-      "w": 3504,
-      "h": 3686,
-      "title": "Window redesign: transcript, every row and state"
-    },
-    "Proposal-Redesign-ComposerContent.dc.html": {
-      "page": "proposals",
-      "x": 1460,
-      "y": 6872,
-      "w": 2616,
-      "h": 2260,
-      "title": "Window redesign: files, captures and quotes in the composer"
+      "y": 4288
     },
     "Foundations-Behaviour.dc.html": {
       "h": 1988,
@@ -493,7 +429,7 @@
       "title": "Chat — composer focus and gates",
       "w": 2772,
       "x": 0,
-      "y": 6588
+      "y": 7220
     },
     "Chat-States-Failures.dc.html": {
       "h": 1040,
@@ -615,7 +551,7 @@
       "fill": "blue",
       "page": "proposals",
       "size": 24,
-      "text": "This page has one purpose: the UI revamp. Everything here is approved design that the app does not have yet.\n\nRead it top to bottom: the decisions spec (left column), then the boards to its right, one per area.\n\nWhen part of it ships, update that area's baseline page and remove the boards it made obsolete here. Keep whatever is not built yet.",
+      "text": "Use this page for the next proposal. No redesign states are waiting to be built. When a proposal ships, update its product page and remove the proposal frames it replaces.",
       "w": 560,
       "x": 0,
       "y": 0
@@ -624,7 +560,7 @@
       "fill": "gray",
       "page": "proposals",
       "size": 24,
-      "text": "The window redesign, final (approved 24 Nov 2026).\n\nLeft: Proposal-Redesign-Spec, every decision with an id (S shell, W workspace, G gates, H shortcuts, L sidebar, T transcript, C composer, K composer strips, R session panel). Captions on the boards cite these ids.\n\nRight, top to bottom: today's window (v2.15.0) beside the proposed window; then title bar and window states, composer before the first message, toolbar / send / stop, files, captures and quotes in the composer, queue and activity strip, bottom strip, gates, transcript (every row and state), workspace, shortcuts sheet. Every board shows light and dark.\n\nClickable prototype with every state: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn (open Prototype controls, bottom left).\n\nThe sidebar is built; its boards are on the Sidebar page.\n\nBoards are rendered from that prototype. They are reference pictures, not components: build with the app's own primitives and tokens, and take exact values from the spec.",
+      "text": "Proposal-Redesign-Spec records the approved window redesign. The product pages show the implemented design. Decision IDs refer to sections in design/redesign/DECISIONS.md.\n\nClickable prototype for historical reference: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn.",
       "w": 560,
       "x": -640,
       "y": 960
@@ -722,15 +658,7 @@
     "Tasks-Types.dc.html",
     "Tasks-Details.dc.html",
     "Tasks-Errors.dc.html",
-    "Proposal-Redesign-Spec.dc.html",
-    "Proposal-Window-Baseline.dc.html",
-    "Proposal-Window-BaselineDark.dc.html",
-    "Proposal-Redesign-Window.dc.html",
-    "Proposal-Redesign-NewSession.dc.html",
-    "Proposal-Redesign-ComposerContent.dc.html",
-    "Proposal-Redesign-Transcript.dc.html",
-    "Proposal-Redesign-Workspace.dc.html",
-    "Proposal-Redesign-Shortcuts.dc.html"
+    "Proposal-Redesign-Spec.dc.html"
   ],
   "pages": [
     {

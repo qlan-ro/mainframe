@@ -477,7 +477,7 @@ The shell uses the palette above for ground, sheet, card, chip, hairlines, hover
 ### Named Rules
 **The Native Stack Rule.** Use the system font stack and the system monospace only. No webfonts, no display sizes above 15 px, and weights only 400, 500 and 600.
 
-**The Mono Means Machine Rule.** Monospace marks strings the machine owns: code, commands, branches, paths, file names and rule patterns. UI labels such as "Worktree" or "from main" stay in the UI face.
+**The Mono Means Machine Rule.** Monospace marks strings the machine owns: code, commands, branches, paths, file names and rule patterns. UI labels such as "Worktree" stay in the UI face. The bottom strip sets the branch and its recorded `from <base>` suffix in one monospaced label.
 
 **The Steady Number Rule.** Numbers that change in place (context percent, elapsed time, change counts, sub-agent counts, usage) use tabular figures, so nothing shifts as they update.
 
@@ -547,10 +547,10 @@ The bottom-right slot of the composer always holds the action that matters now. 
 - **Stop** is an `ink` fill with a `card`-coloured square, shown while the turn or any sub-agent runs.
 - **Stopping** is a spinner in `meta`.
 
-While the agent runs with text typed, a Deep Blue pill split button appears, "Queue ↵" plus a chevron for "Send now (interrupts)". The Stop square stays to its left. Stop never confirms, and its tooltip names what it stops ("Stop the turn and 3 sub-agents ⌘.").
+While the agent runs with text typed, a Deep Blue split button shows Queue or Steer according to Settings › Chat. The chevron offers the other delivery mode. Steer adds to a running turn without interrupting it. The Stop square stays to the left. Stop never confirms, and its tooltip names what it stops ("Stop the turn and 3 sub-agents ⌘.").
 
 ### Context ring
-A 16 px gauge beside Send, with the percentage in 12 px tabular 500 weight. It always shows a full track (ink at 26 %) so it never reads as a spinner. The arc and number are `meta` below 80 %, `warn` from 80 to 94 % and `crit` at 95 % and above.
+A 16 px gauge beside Send, with the percentage in 12 px tabular 500 weight. An unsent draft shows 0%; an existing session waits for reported usage. It always shows a full track (ink at 26 %) so it never reads as a spinner. The arc and number are `meta` below 80 %, `warn` from 80 to 94 % and `crit` at 95 % and above.
 
 ### Composer card
 - **Corner Style:** 16 px.

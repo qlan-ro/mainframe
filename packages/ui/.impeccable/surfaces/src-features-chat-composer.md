@@ -21,7 +21,7 @@ The gate slot carries `data-chat-gate`: an Activity row that needs you moves foc
 
 The read dialog has a title, a labelled scroll region at least 64 px tall, and a reserved footer row. If the request text grows while the dialog is open, the reader must reach the new end. The manual confirmation appears only when the scroll region has no client rectangles. Closing returns focus to Show or the first available answer. If the request went away, focus moves to the next gate as a whole, or to the thread when none is left, never to an answer or the composer.
 
-A middle dot joins the environment and branch labels. The environment opens the worktree menu and the branch opens the branch manager.
+A decorative middle dot separates the environment and branch buttons. The environment opens the worktree menu and the branch opens the branch manager. A matching live branch with a recorded creation base includes `from <base>` inside the branch button and a From row in the worktree menu.
 
 ## Direction contract
 THESIS: one calm card that carries its context with it, never a toolbar of switches. Project above the input, where it runs below it, ongoing work tucked in a strip on top.

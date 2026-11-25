@@ -12,15 +12,16 @@ X0, GAP = 1460, 160
 d['boards']['Proposal-Redesign-Spec.dc.html'].update(x=0, y=960, w=1360, h=spec_h, page=P)
 y = 960 + 900 + GAP
 added = []
+previous = 'Proposal-Redesign-Spec.dc.html'
 for b in BOARDS:
     k = b['file'] + '.dc.html'; w, h, t = sizes[b['file']]
     entry = d['boards'].get(k, {'page': P})
     entry.update(x=X0, y=y, w=w, h=h, title=t, page=P); d['boards'][k] = entry
-    if k not in d['order']: added.append(k)
+    if k not in d['order']:
+        d['order'].insert(d['order'].index(previous) + 1, k)
+        added.append(k)
+    previous = k
     y += h + GAP
-for k in added:  # a new board goes after the one before it in BOARDS
-    prev = BOARDS[[b['file'] + '.dc.html' for b in BOARDS].index(k) - 1]['file'] + '.dc.html'
-    d['order'].insert(d['order'].index(prev) + 1, k)
 assert set(d['order']) == set(d['boards'])
 with open(INDEX, 'w') as f:
     json.dump(d, f, indent=2, ensure_ascii=False)

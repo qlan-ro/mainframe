@@ -33,7 +33,7 @@ One canvas page per area. A board belongs to the area whose board prefix matches
 | Automations | `automations` | `Automations-*` | none |
 | Tasks | `tasks` | `Tasks-*` | none |
 
-The `overview` page holds the map board (`Main`). The `proposals` page holds design that is not built yet (`Proposal-*`). Foundations is the visual system: shared primitives, theme and shared feature pieces (`components/ui`, `styles`, `features/shared`). Its brief is `DESIGN.md`, so a change there counts as that area's design file.
+The `overview` page holds the map board (`Main`). The `proposals` page holds upcoming designs and the approved redesign decision record. Foundations is the visual system: shared primitives, theme and shared feature pieces (`components/ui`, `styles`, `features/shared`). Its brief is `DESIGN.md`, so a change there counts as that area's design file.
 
 ## A PR that changes UI
 
@@ -61,7 +61,7 @@ pnpm --filter @qlan-ro/mainframe-e2e exec playwright install chromium
 bash design/canvas/proposals/run.sh
 ```
 
-`run.sh` renders every state listed in `states.py` from the prototype, writes the boards, sets the spec board's height, lays out the Proposals page and runs the check. With an unchanged prototype and `states.py` it reproduces the boards of its last run byte for byte. The prototype numbers its tool cards (`tcN`, `mkN`) with one counter that keeps counting from state to state; `number-ids.cjs` numbers them per state and prefixes the state's name, so adding, removing or reordering a state changes only its own board. `shot.cjs` previews a board locally; it needs the canvas runtime at `canvas/proposals/render/support.js` (the canvas type's `artifact-type/dc-runtime.js`, which is not committed).
+`run.sh` renders any states listed in `states.py` from the prototype, writes the boards, measures the regenerated decisions board, lays out the Proposals page and runs the check. An empty list regenerates the decisions board without opening the prototype. With an unchanged prototype and `states.py` it reproduces the boards of its last run byte for byte. The prototype numbers its tool cards (`tcN`, `mkN`) with one counter that keeps counting from state to state; `number-ids.cjs` numbers them per state and prefixes the state's name, so adding, removing or reordering a state changes only its own board. `shot.cjs` previews a board locally; it needs the canvas runtime at `canvas/proposals/render/support.js` (the canvas type's `artifact-type/dc-runtime.js`, which is not committed).
 
 ## Regenerating the other boards
 
