@@ -4,12 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { publishCommands } from '../../../commands/command-registry';
 
 const append = vi.fn();
-let mockMessages: unknown[] = [];
-vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({ thread: { append } }),
-  useAuiState: <T,>(select: (s: { thread: { messages: unknown[] } }) => T) =>
-    select({ thread: { messages: mockMessages } }),
-}));
+vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ thread: { append } }) }));
 
 let mockPercent: number | null = null;
 vi.mock('@/features/session-panel/use-context-percent', () => ({ useContextPercent: () => mockPercent }));
@@ -33,26 +28,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockPercent = 40;
   mockUsage = undefined;
-  mockMessages = [{}];
   publishCommands([{ name: 'compact', description: 'Compact', source: 'claude' }]);
 });
 
 describe('ContextRing (C2)', () => {
-  it('renders nothing in a conversation with no usage report', () => {
+  it('renders nothing before there is a usage report', () => {
     mockPercent = null;
 
     const { container } = renderRing();
 
     expect(container).toBeEmptyDOMElement();
-  });
-
-  it('reads 0% before the first message', () => {
-    mockPercent = null;
-    mockMessages = [];
-
-    renderRing();
-
-    expect(button()).toHaveTextContent('0%');
   });
 
   it('shows the percentage, and the token counts in its name when known', () => {

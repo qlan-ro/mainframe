@@ -5,7 +5,7 @@
  * above it opens "Compact conversation"; below that it only explains itself.
  */
 
-import { useAui, useAuiState } from '@assistant-ui/react';
+import { useAui } from '@assistant-ui/react';
 import { Minimize2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -46,10 +46,7 @@ function Ring({ percent }: { percent: number }) {
 }
 
 export function ContextRing() {
-  const known = useContextPercent();
-  // Before the first message nothing is in the window yet (C2: always visible).
-  const fresh = useAuiState((s) => s.thread.messages.length === 0);
-  const percent = known ?? (fresh ? 0 : null);
+  const percent = useContextPercent();
   const usage = useChatExtras()?.state.contextUsage;
   const aui = useAui();
   if (percent == null) return null;

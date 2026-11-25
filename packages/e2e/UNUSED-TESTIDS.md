@@ -281,7 +281,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1189) minus e2e ref
 - `composer-unsent-restore`
 - `composer-where`
 - `composer-worktree-busy`
-- `composer-worktree-move`
 - `composer-worktree-open-folder`
 
 ## sessions (31)
@@ -454,6 +453,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1189) minus e2e ref
 - `workspace-chat-unlisted-${…}`
 - `workspace-pane-close-${…}`
 - `workspace-pane-open-url-${…}`
+- `workspace-picker-recent-${…}`
 - `workspace-tab-state-${…}`
 - `workspace-tab-stop-${…}`
 - `workspace-tab-title-${…}`

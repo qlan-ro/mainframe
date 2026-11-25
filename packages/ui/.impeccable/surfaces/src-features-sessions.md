@@ -27,7 +27,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## Memorable moment
 A whole list where the only colour is the sessions that need you.
 
-The Chats header is 44 px tall. Its icon buttons and the New session row are 32 px tall. The scope control starts 8 px below New session.
+The Chats header is 44 px tall. Its icon buttons and the New session row are 32 px tall.
 
 Session rows use opaque hover and selection fills. Hover uses #ededf0 in light and #262628 in dark. Selection uses #ececef in light and #2f2f31 in dark.
 

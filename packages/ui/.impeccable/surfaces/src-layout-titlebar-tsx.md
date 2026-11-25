@@ -16,7 +16,7 @@ A developer running several agent sessions at once. They switch between sessions
 ## Constraints
 Native macOS window chrome: traffic lights, a full-width title bar, a drag region. The shell keeps today's structure (S1). The shared pane beside the rail has a clipped 10 px top-left corner and a single 1 px border along the top and rail edges (S2). Overlay scrollbars everywhere (S3).
 
-The usage capsule shows “Week” in the weekly row and reserves room to the right of the reset time for the cycle dots.
+The usage capsule places the cycle dots at the right edge and exposes the full provider and window name when its label lane clips.
 
 ## Direction contract
 THESIS: the frame lines up with the columns it serves. Title-bar segments sit exactly over the column edges below, instead of a generic toolbar laid across the top.
@@ -29,7 +29,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## Memorable moment
 Opening the workspace adds a third segment whose separator lands exactly on the panel's edge.
 
-The usage capsule is capped at 224 px and shrinks with a narrow sidebar. Separators use the stronger hairline. The collapsed segment places its separator 12 px after the capsule.
+The usage capsule is capped at 224 px and shrinks with a narrow sidebar. The open-sidebar segment no longer adds fixed right padding before its separator. Separators use the stronger hairline.
 
 ## Unresolved
 None.

@@ -53,6 +53,12 @@ describe('ToolBody', () => {
     expect(screen.queryByTestId('chat-read-reminder')).toBeNull();
   });
 
+  it('shows an image-only read without a generic arguments body', () => {
+    show(part('Read', { file_path: 'a.png' }, { images: [{ mimeType: 'image/png', base64: 'AA==' }] }));
+    expect(screen.getByTestId('chat-tool-images')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-call-args')).toBeNull();
+  });
+
   it('names an MCP call by its raw tool name', () => {
     show(part('mcp__claude_ai_github__get_issue', { id: 1 }, 'ok'));
     expect(screen.getByTestId('chat-call-tool')).toHaveTextContent('mcp__claude_ai_github__get_issue');

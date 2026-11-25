@@ -54,6 +54,10 @@ async function lines(page, selector, clipRange) {
 export async function windowTextDiff(proto, app, bounds) {
   const differences = [];
   for (const [region, [p, a]] of Object.entries(regions)) {
+    for (const mask of textMasks.filter((mask) => mask.region === region && mask.side === 1)) {
+      if (!(await app.locator(a).getByText(mask.text, { exact: true }).first().isVisible()))
+        throw new Error(`Expected app text before masking (${region}): ${mask.text}`);
+    }
     const depth = Math.min(...bounds.map(({ top, bottom }) => bottom - top));
     const texts = await Promise.all([proto, app].map((page, side) => {
       const { bottom } = bounds[side];

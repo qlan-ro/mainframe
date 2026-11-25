@@ -654,6 +654,12 @@ Motion is functional and short:
 
 ### Shared CSS defaults
 
-WebKit uses antialiased font smoothing on the app body in both themes. Lucide icons with the default 2-unit stroke render at 1.5 units. Icons that specify a different stroke width keep it.
+The shared UI stylesheet requests antialiased WebKit font smoothing on the body,
+including inherited text in both themes. Its base layer sets a 1.5-unit stroke
+for Lucide SVGs with a stroke-width attribute of 2. Other attribute values and
+higher-priority stroke utilities keep their own widths.
 
-The shared `cn()` function registers the named text sizes, shadows and tile radius with Tailwind Merge. A size such as `text-meta` can sit beside `text-muted-foreground`, and a later size in the same variant replaces the earlier size.
+The shared `cn()` helper recognizes the named text sizes, shadows, tile radius
+and focus outlines across all UI components and themes. Competing classes in
+the same group and modifier scope resolve in argument order. The focus outline
+utilities also participate in outline conflict resolution.

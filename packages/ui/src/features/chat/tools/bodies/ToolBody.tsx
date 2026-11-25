@@ -157,7 +157,7 @@ function MainBody({ part, status }: ToolBodyProps) {
         {truncated && <ResultText part={part} />}
       </WebBody>
     );
-  if (!text) return <CallBody part={part} status={status} />;
+  if (!text) return null;
   if (kind === 'read' && !truncated) return <ReadBody part={part} text={text} />;
   return <ResultBlock part={part} failed={false} testId="search-card-plain-body" />;
 }

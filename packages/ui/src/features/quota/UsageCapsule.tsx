@@ -59,14 +59,12 @@ function CapsuleRow({ item, now }: { item: CapsuleItemVm; now: number }) {
       className="flex h-5 items-center gap-[6px] text-meta/[1.45] whitespace-nowrap text-ink-secondary tabular-nums"
     >
       <span
-        className={cn(
-          'flex min-w-0 flex-1 items-center gap-[6px] overflow-hidden',
-          item.name !== 'Weekly' && 'truncate-fade',
-        )}
+        className="flex min-w-0 flex-1 items-center gap-[6px] truncate-fade"
+        title={`${item.providerLabel} ${item.name}`}
       >
         <span className="shrink-0">{item.providerLabel}</span>
         <span aria-hidden className="size-0.75 shrink-0 rounded-full bg-muted-foreground" />
-        <span className="shrink-0 text-muted-foreground">{item.name === 'Weekly' ? 'Week' : item.name}</span>
+        <span className="shrink-0 text-muted-foreground">{item.name}</span>
       </span>
       <Progress
         value={item.usedPercent}
