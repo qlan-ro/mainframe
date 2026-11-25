@@ -51,7 +51,7 @@ export function ModelTuning({ model, chat, providerDefaults, setEffort, setFeatu
                 disabled={locked}
                 onSelect={keepOpen}
                 className={cn(
-                  'min-h-7 flex-1 justify-center rounded-[7px] px-1.5 py-1 text-center text-small/[20px] font-medium whitespace-nowrap',
+                  'min-h-7 min-w-0 flex-1 justify-center rounded-[7px] px-1.5 py-1 text-center text-small/[20px] font-medium whitespace-nowrap',
                   // The segment's fill says which is on; the radio item's own check would push the label off-centre.
                   '[&>span:has(svg)]:hidden data-[state=checked]:bg-chrome-selected',
                 )}

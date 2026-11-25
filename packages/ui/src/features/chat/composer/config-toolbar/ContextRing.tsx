@@ -5,7 +5,7 @@
  * above it opens "Compact conversation"; below that it only explains itself.
  */
 
-import { useAui } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { Minimize2 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -46,7 +46,9 @@ function Ring({ percent }: { percent: number }) {
 }
 
 export function ContextRing() {
-  const percent = useContextPercent();
+  const reportedPercent = useContextPercent();
+  const fresh = useAuiState(({ thread }) => thread.messages.length === 0);
+  const percent = reportedPercent ?? (fresh ? 0 : null);
   const usage = useChatExtras()?.state.contextUsage;
   const aui = useAui();
   if (percent == null) return null;
@@ -80,7 +82,12 @@ export function ContextRing() {
       <ComposerHint label={`${label} · Click to compact`}>
         <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
       </ComposerHint>
-      <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-auto min-w-67.5">
+      <DropdownMenuContent
+        align="end"
+        side="top"
+        sideOffset={6}
+        className="w-auto min-w-67.5 [&_[role=menuitem]]:text-control/[1.45]"
+      >
         <DropdownMenuItem
           data-testid="composer-context-compact"
           disabled={!canCompact}

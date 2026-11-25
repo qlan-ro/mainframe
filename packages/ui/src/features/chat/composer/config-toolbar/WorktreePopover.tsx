@@ -52,13 +52,12 @@ function ActiveInfo({ chat }: { chat: Chat }) {
     <div data-testid="composer-worktree-active-info" className="flex flex-col gap-1.5 px-2 py-1.5">
       <div className="flex items-center gap-1.5">
         <span className="inline-block size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
-        <span className="text-xs font-medium text-foreground">Isolated in worktree</span>
+        <span className="text-meta/[1.45] font-semibold text-foreground">Isolated in worktree</span>
       </div>
       <Separator />
-      <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-xs">
+      <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-meta/[1.45]">
         <span className="text-muted-foreground">Branch</span>
-        {/* Branch names are UI sans, never mono (2026-08-05 decision). */}
-        <span className="truncate text-foreground">{chat.branchName ?? '—'}</span>
+        <span className="truncate font-mono text-ink-secondary">{chat.branchName ?? '—'}</span>
         <span className="text-muted-foreground">Path</span>
         <TruncatedWithTooltip text={chat.worktreePath ?? ''} className="text-foreground" contentClassName="break-all" />
       </div>

@@ -83,7 +83,7 @@ export function PreviewUrlBar({ handle, seedUrl, enabled, onCommitUrl }: Preview
             onClick={handleReload}
             disabled={!canAct}
           >
-            <RotateCw />
+            <RotateCw className="size-4" />
           </InputGroupButton>
         </Hint>
         {/* Live-address indicator: a pulse while the bar is wired to a webview. */}

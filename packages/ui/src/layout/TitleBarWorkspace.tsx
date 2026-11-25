@@ -20,7 +20,7 @@ function FilesToggle() {
       label="Files"
       hint={open ? 'Hide files' : 'Show files'}
       on={open}
-      className="mr-3 size-7 @max-[36rem]/trailing:mr-0"
+      className="size-7"
       onClick={() => setOpen(!open)}
     >
       <Folder className="size-4" />
@@ -38,9 +38,9 @@ export function TitleBarWorkspace() {
     >
       {/* Remounted per pane so an open URL entry never carries over to another session's tabs. */}
       <WorkspaceTabs key={pane?.id ?? 'empty'} pane={pane} />
+      <FilesToggle />
       {/* Plain div under the drag region: the empty part of the segment drags the window. */}
       <div className="h-full min-w-2 flex-1 @max-[36rem]/trailing:min-w-0" />
-      <FilesToggle />
     </div>
   );
 }

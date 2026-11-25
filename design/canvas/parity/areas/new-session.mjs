@@ -29,8 +29,8 @@ export default {
       shot: { p: "q('.menu')", a: "q('[role=menu]')" },
     }),
     S('branch-menu', 'Branch menu', {
-      proto: P.all(P.preset('new-session'), branch),
-      app: P.all(start, appBranch),
+      proto: P.all(P.preset('new-session'), branch, blur, P.park),
+      app: P.all(start, appBranch, blur, P.park),
       pairs: [{ ...menu, a: "tid('composer-branch-menu')" }],
       shot: { p: "q('.menu')", a: "tid('composer-branch-menu')" },
     }),

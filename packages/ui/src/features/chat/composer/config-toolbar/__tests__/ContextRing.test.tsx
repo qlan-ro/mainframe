@@ -4,7 +4,11 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { publishCommands } from '../../../commands/command-registry';
 
 const append = vi.fn();
-vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ thread: { append } }) }));
+let fresh = false;
+vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({ thread: { append } }),
+  useAuiState: () => fresh,
+}));
 
 let mockPercent: number | null = null;
 vi.mock('@/features/session-panel/use-context-percent', () => ({ useContextPercent: () => mockPercent }));
@@ -32,6 +36,16 @@ beforeEach(() => {
 });
 
 describe('ContextRing (C2)', () => {
+  it('draws 0% in a fresh thread', () => {
+    mockPercent = null;
+    fresh = true;
+    try {
+      renderRing();
+      expect(screen.getByTestId('composer-context-percent')).toHaveTextContent('0%');
+    } finally {
+      fresh = false;
+    }
+  });
   it('renders nothing before there is a usage report', () => {
     mockPercent = null;
 
