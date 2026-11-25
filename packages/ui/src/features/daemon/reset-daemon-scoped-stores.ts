@@ -25,6 +25,8 @@ import { resetQuota } from '@/store/quota';
 import { resetProviderCliStatuses } from '@/store/cli-update';
 import { resetPortTunnels } from '@/store/port-tunnels';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
+import { useDraftContent } from '@/features/chat/composer/draft-content/draft-content-store';
+import { useProjectBranches } from '@/features/chat/composer/strips/project-branches';
 import { useSetupAdvisorStore } from '@/features/setup-advisor/use-setup-advisor-store';
 import { bumpSkillsRevalidation } from '@/features/skills/use-skills-revalidation';
 
@@ -66,6 +68,10 @@ export function resetDaemonScopedStores(): void {
   resetPortTunnels();
 
   useComposerSegments.setState({ byThread: {} });
+
+  useDraftContent.setState({ byThread: {} });
+
+  useProjectBranches.setState({ byProject: {} });
 
   useSetupAdvisorStore.setState({
     report: null,

@@ -95,7 +95,10 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
     async list(): Promise<RemoteThreadListResponse> {
       // includeTemporary: the sidebar shows temporary chats (Timer glyph,
       // no pin/tag/archive) rather than hiding them (todo #346).
-      const chats = await listChats(port, { includeTemporary: true });
+      const chats = await listChats(port, { includeTemporary: true }).catch((error: unknown) => {
+        useSessionListLoadState.getState().markFailed();
+        throw error;
+      });
       // The one place that can tell a loaded list from a failed one (#312).
       useSessionListLoadState.getState().markLoaded();
       // The server never lists a side chat, but a parent carries its

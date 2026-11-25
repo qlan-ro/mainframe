@@ -8,16 +8,21 @@
  * list that never loaded drops every persisted tab and then overwrites the
  * payload with the survivors (#312).
  *
- * Latches once and stays latched; a webview reload starts a fresh run.
+ * `loaded` latches once and stays latched; a webview reload starts a fresh run.
  */
 import { create } from 'zustand';
 
 interface SessionListLoadState {
   loaded: boolean;
+  /** The last list request failed. Unlike `loaded`, this follows every request. */
+  failed: boolean;
   markLoaded: () => void;
+  markFailed: () => void;
 }
 
 export const useSessionListLoadState = create<SessionListLoadState>((set) => ({
   loaded: false,
-  markLoaded: () => set((s) => (s.loaded ? s : { loaded: true })),
+  failed: false,
+  markLoaded: () => set((s) => (s.loaded && !s.failed ? s : { loaded: true, failed: false })),
+  markFailed: () => set((s) => (s.failed ? s : { failed: true })),
 }));

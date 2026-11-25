@@ -106,6 +106,17 @@ export function stripReferenceLines(text: string): string {
 // ── Composition ───────────────────────────────────────────────────────────────
 
 /**
+ * A message as an edit shows it: the text to change, and the blocks in front
+ * of it that the edit must put back. `hidden` is empty when a block sits
+ * between the words (below a slash command), where the whole text is edited.
+ */
+export function splitHiddenPrefix(text: string): { hidden: string; visible: string } {
+  const visible = visibleMessageText(text);
+  if (visible === text || !text.endsWith(visible)) return { hidden: '', visible: text };
+  return visible === '' ? { hidden: `${text}\n\n`, visible } : { hidden: text.slice(0, -visible.length), visible };
+}
+
+/**
  * What the reader sees: every fenced block stripped. Idempotent, so it is safe on
  * text an earlier stage already cleaned (`convert-message` drops the capture block
  * before the renderer sees it). References go first: they are prepended at offset

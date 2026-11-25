@@ -28,6 +28,7 @@ import { TranscriptProjector } from '../controller/transcript-projector';
 import { buildChatExtras, isRunningFromState, useChatExtrasState } from './chat-extras';
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
+import { forgetSentCaptures, restoreSentCapture } from '../composer/draft-content/draft-content-store';
 import { captureIfMarked, handoffDraft, takeStash } from './draft-stash';
 
 // ---------------------------------------------------------------------------
@@ -59,6 +60,11 @@ async function restoreAttachments(
 
   let restored = 0;
   for (const attachment of pending) {
+    // A preview capture returns as its tile, note included. The controller may already have put it back.
+    if (restoreSentCapture(attachment.id)) {
+      restored += 1;
+      continue;
+    }
     const file = attachment.file;
     if (!file) continue;
     try {
@@ -68,6 +74,7 @@ async function restoreAttachments(
       console.warn('[chat-runtime] could not restore an attachment to the composer', error);
     }
   }
+  forgetSentCaptures(pending.map((attachment) => attachment.id));
   return restored === pending.length;
 }
 

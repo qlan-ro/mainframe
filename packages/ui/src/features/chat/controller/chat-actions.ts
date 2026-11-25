@@ -19,6 +19,7 @@ import { buildPendingMessage, parseSendInput } from './chat-reconcile';
 import { sendRefusal } from './describe-send-error';
 import { previewsById } from './local-attachments';
 import { wantsSteer } from './steer';
+import { forgetSentCaptures, restoreSentCapture } from '../composer/draft-content/draft-content-store';
 import { useHeldQueue } from '../composer/queue/held-queue-store';
 import type { ChatStateEvent, ChatThreadState, PendingUserMessage } from './chat-thread-state';
 
@@ -48,6 +49,7 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   const input = parseSendInput(message);
   if (!input) return;
   const { text, uploadItems } = input;
+  const sentIds = (message.attachments ?? []).map((attachment) => attachment.id);
 
   // A draft that is exactly `/<command>` is an invocation, not prose: the
   // daemon resolves the command by name and — for a Mainframe one —
@@ -88,9 +90,15 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
       }
       host.dispatch({ type: 'local.message.reconciled', clientId: pending.clientId });
     }
+    forgetSentCaptures(sentIds);
   } catch (error) {
     const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
     host.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage, pending });
+    // Preview captures go back to the draft with their notes; with nothing else attached that is all of it.
+    const restored = sentIds.filter(restoreSentCapture);
+    if (restored.length > 0 && restored.length === sentIds.length) {
+      host.dispatch({ type: 'local.message.attachments_restored', clientId: pending.clientId });
+    }
     throw error;
   }
 }

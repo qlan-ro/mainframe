@@ -195,6 +195,21 @@ describe('chats-remote-adapter — list latches the load flag', () => {
     await adapter.list();
     expect(useSessionListLoadState.getState().loaded).toBe(true);
   });
+
+  it('says whether the last request failed, while loaded stays latched', async () => {
+    useSessionListLoadState.setState({ loaded: false, failed: false });
+    const adapter = makeChatsRemoteAdapter(31415);
+    mockListChats.mockResolvedValueOnce([]);
+    await adapter.list();
+
+    mockListChats.mockRejectedValueOnce(new Error('daemon down'));
+    await expect(adapter.list()).rejects.toThrow('daemon down');
+    expect(useSessionListLoadState.getState()).toMatchObject({ loaded: true, failed: true });
+
+    mockListChats.mockResolvedValueOnce([]);
+    await adapter.list();
+    expect(useSessionListLoadState.getState()).toMatchObject({ loaded: true, failed: false });
+  });
 });
 
 describe('chats-remote-adapter — list maps archived chat status', () => {

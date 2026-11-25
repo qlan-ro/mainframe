@@ -20,7 +20,7 @@
  * composer-advanced.spec.ts):
  *   sidebar-action-new-thread  — the sidebar's "New session" row (the redesign retired
  *                                 the standalone sessions-new-button pill)
- *   sessions-welcome           — WelcomeState root (the draft empty state)
+ *   sessions-welcome           — NewSessionState root (the draft empty state)
  *   welcome-project            — the welcome screen's project trigger — the chat header's
  *                                 project chip died with ChatCardHeader, so this (already
  *                                 shown above a prefilled draft, since zero messages are

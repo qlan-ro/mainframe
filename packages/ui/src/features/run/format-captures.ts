@@ -13,8 +13,20 @@ export interface CaptureLike {
   type: 'element' | 'screenshot';
   imageDataUrl: string;
   selector?: string;
+  /** The size of the region the user dragged; shown on the draft's tile, not sent. */
+  region?: { w: number; h: number };
   annotation?: string;
 }
+
+/** `element1`, `screenshot1`, …: the name a capture has in the draft and in the message. */
+export function captureLabels(captures: ReadonlyArray<Pick<CaptureLike, 'type'>>): string[] {
+  let el = 0;
+  let sc = 0;
+  return captures.map((c) => (c.type === 'element' ? `element${(el += 1)}` : `screenshot${(sc += 1)}`));
+}
+
+/** A row is one line; a line break in it would end the block and spill the rest into the message. */
+const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
 export function formatCaptures(captures: ReadonlyArray<CaptureLike>): {
   markdown: string;
@@ -23,11 +35,10 @@ export function formatCaptures(captures: ReadonlyArray<CaptureLike>): {
   if (captures.length === 0) return { markdown: '', attachments: [] };
   const attachments: UploadAttachmentItem[] = [];
   const lines: string[] = [CAPTURE_HEADER_LINE];
-  let el = 0;
-  let sc = 0;
-  for (const c of captures) {
+  const labels = captureLabels(captures);
+  captures.forEach((c, index) => {
     const base64 = c.imageDataUrl.split(',')[1] ?? '';
-    const label = c.type === 'element' ? `element${(el += 1)}` : `screenshot${(sc += 1)}`;
+    const label = labels[index]!;
     const name = `${label}.png`;
     attachments.push({
       name,
@@ -37,8 +48,9 @@ export function formatCaptures(captures: ReadonlyArray<CaptureLike>): {
       data: base64,
     });
     const sel = c.selector ? ` — selector \`${c.selector}\`` : '';
-    const ann = c.annotation ? ` — "${c.annotation}"` : '';
+    const note = oneLine(c.annotation ?? '');
+    const ann = note ? ` — "${note}"` : '';
     lines.push(`> - \`${label}\`${sel}${ann}`);
-  }
+  });
   return { markdown: `${SANDBOX_CAPTURE_SENTINEL}\n${lines.join('\n')}`, attachments };
 }

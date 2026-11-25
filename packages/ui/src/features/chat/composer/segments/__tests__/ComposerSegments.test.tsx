@@ -18,7 +18,8 @@
  * this file does not exercise.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, within, act } from '@testing-library/react';
+import { fireEvent, render, screen, within, act } from '@testing-library/react';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useComposerSegments } from '../segment-store';
 import { ComposerSegments } from '../ComposerSegments';
 
@@ -26,14 +27,16 @@ const THREAD_ID = 'thread-1';
 
 function Harness() {
   return (
-    <div data-testid="chat-composer">
-      <div data-testid="composer-dropzone">
-        <ComposerSegments threadId={THREAD_ID} />
+    <TooltipProvider>
+      <div data-testid="chat-composer">
+        <div data-testid="composer-dropzone">
+          <ComposerSegments threadId={THREAD_ID} />
+        </div>
+        <div data-testid="composer-scroll-wrapper">
+          <textarea data-testid="chat-composer-input" defaultValue="typed draft" />
+        </div>
       </div>
-      <div data-testid="composer-scroll-wrapper">
-        <textarea data-testid="chat-composer-input" defaultValue="typed draft" />
-      </div>
-    </div>
+    </TooltipProvider>
   );
 }
 
@@ -160,5 +163,31 @@ describe('ComposerSegments', () => {
 
     expect(segmentInput('s1').placeholder).toBe('Add a message…');
     expect(segmentInput('s2').placeholder).toBe('Reply to the agent…');
+  });
+
+  it('a quote is one line, says where it is from, and is whole in its tooltip', async () => {
+    const quote = 'The first line of it.\nAnd a second one.';
+    render(<Harness />);
+    act(() => {
+      const { append } = useComposerSegments.getState();
+      append(THREAD_ID, { quote, liveText: '', source: 'From the reply at 11:27 PM' });
+      append(THREAD_ID, { quote: 'next', liveText: 'about the first', source: 'From your message at 11:30 PM' });
+    });
+
+    const [committed, live] = screen.getAllByTestId('composer-quote-preview');
+    expect(committed).toHaveTextContent('From the reply at 11:27 PM');
+    expect(live).toHaveTextContent('From your message at 11:30 PM');
+    const line = within(committed!).getByTestId('composer-quote-text');
+    expect(line).toHaveClass('truncate');
+    fireEvent.focus(line);
+    expect((await screen.findByRole('tooltip')).textContent).toBe(quote);
+  });
+
+  it('removing a quote can be named apart from removing a tile', () => {
+    useComposerSegments.setState({
+      byThread: { [THREAD_ID]: { committed: [], liveQuote: { id: 'live1', text: 'Q2' } } },
+    });
+    render(<Harness />);
+    expect(screen.getByRole('button', { name: 'Remove this quote' })).toBeInTheDocument();
   });
 });

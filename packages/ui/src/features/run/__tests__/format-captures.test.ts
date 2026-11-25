@@ -53,3 +53,11 @@ it('markdown starts with the sentinel', () => {
   const { markdown } = formatCaptures([{ id: '1', type: 'screenshot', imageDataUrl: 'data:image/png;base64,A' }]);
   expect(markdown.startsWith('\0__MF_SANDBOX_CAPTURE__')).toBe(true);
 });
+
+it('keeps a note of several lines, or of spaces, on the one line its row has', () => {
+  const { markdown } = formatCaptures([
+    { id: '1', type: 'screenshot', imageDataUrl: 'data:image/png;base64,A', annotation: 'one\n  two' },
+    { id: '2', type: 'screenshot', imageDataUrl: 'data:image/png;base64,B', annotation: ' \n ' },
+  ]);
+  expect(parseSandboxCaptureBlock(markdown)!.rows.map((row) => row.annotation)).toEqual(['one two', undefined]);
+});

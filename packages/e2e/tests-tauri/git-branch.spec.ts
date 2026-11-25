@@ -81,7 +81,7 @@
  *   composer-branch — the strip's branch control / menu trigger
  *   composer-worktree-trigger — "Worktree" or "Local", naming the directory to screen readers
  *   composer-branch-picker       — a new session's branch picker
- *   sessions-welcome             — WelcomeState root (the draft empty state)
+ *   sessions-welcome             — NewSessionState root (the draft empty state)
  *   git-branch-popover           — DropdownMenuContent root (name kept from the Popover era)
  *   git-branch-search            — search input (menu body)
  *   git-fetch                    — quick action; a real Button (disabled while busy)
@@ -773,7 +773,7 @@ test.describe('§git-branch — session branch popover', () => {
   });
 
   // The draft welcome screen carries the SECOND entry point to this same popover
-  // (WelcomeState.tsx), and it is read-only here on purpose: the pill passes no
+  // (the empty state), and it is read-only here on purpose: the pill passes no
   // chatId, so every write would land in the project ROOT checkout that the
   // fixtures above depend on. Last test in the file — it leaves a draft active.
   test('the welcome screen branch pill opens the same popover for the project', async () => {

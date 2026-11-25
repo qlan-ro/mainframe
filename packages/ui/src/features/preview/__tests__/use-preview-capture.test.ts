@@ -17,6 +17,7 @@ const mockSandboxGetState = {
     imageDataUrl: string;
     selector?: string;
     annotation?: string;
+    region?: { w: number; h: number };
   }>,
 };
 
@@ -27,9 +28,9 @@ vi.mock('@/store/sandbox', () => ({
   ),
 }));
 
-const mockSendCaptures = vi.fn().mockResolvedValue(undefined);
-vi.mock('../use-send-captures', () => ({
-  useSendCaptures: () => mockSendCaptures,
+const mockAddToDraft = vi.fn();
+vi.mock('@/features/chat/composer/draft-content/use-add-to-draft', () => ({
+  useAddToDraft: () => mockAddToDraft,
 }));
 
 import { usePreviewCapture } from '../use-preview-capture';
@@ -67,6 +68,7 @@ describe('usePreviewCapture', () => {
     inspectResultCallback = null;
     regionResultCallback = null;
     mockSandboxGetState.captures = [];
+    mockAddToDraft.mockReturnValue(true);
   });
 
   it('full capture: calls capture and addCapture with screenshot type', async () => {
@@ -115,7 +117,9 @@ describe('usePreviewCapture', () => {
     });
     await act(async () => {});
     expect(fakeHandle.capture).toHaveBeenCalledWith({ x: 10, y: 20, w: 30, h: 40 });
-    expect(mockAddCapture).toHaveBeenCalledWith(expect.objectContaining({ type: 'screenshot' }));
+    expect(mockAddCapture).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'screenshot', region: { w: 30, h: 40 } }),
+    );
     expect(result.current.annotationPopoverOpen).toBe(true);
     expect(result.current.regionSelectActive).toBe(false);
   });
@@ -224,20 +228,39 @@ describe('usePreviewCapture', () => {
     expect(mockAddCapture).toHaveBeenCalledWith(expect.objectContaining({ type: 'element', selector: '.btn' }));
   });
 
-  it('annotation submit: calls sendCaptures and clearCaptures and closes popover', async () => {
-    const fakeHandle = makeFakeHandle();
-    mockSandboxGetState.captures = [{ id: 'cap-1', type: 'screenshot', imageDataUrl: 'data:image/png;base64,abc' }];
-    const { result } = renderHook(() => usePreviewCapture(fakeHandle, mockSetOverlayMounted));
+  const submitWith = async (captures: typeof mockSandboxGetState.captures, notes: Record<string, string> = {}) => {
+    mockSandboxGetState.captures = captures;
+    const { result } = renderHook(() => usePreviewCapture(makeFakeHandle(), mockSetOverlayMounted));
     await act(async () => {
       result.current.onCaptureClick();
     });
-    await act(async () => {});
-    await act(async () => {
-      await result.current.onAnnotationSubmit();
-    });
-    expect(mockSendCaptures).toHaveBeenCalled();
+    for (const [id, note] of Object.entries(notes)) act(() => result.current.onAnnotationChange(id, note));
+    act(() => result.current.onAnnotationSubmit());
+    return result;
+  };
+
+  it('annotation submit: adds each capture to the message with its note, and sends nothing', async () => {
+    const image = 'data:image/png;base64,abc';
+    const result = await submitWith(
+      [
+        { id: 'cap-1', type: 'element', imageDataUrl: image, selector: '.btn', annotation: 'old' },
+        { id: 'cap-2', type: 'screenshot', imageDataUrl: image, region: { w: 30, h: 40 } },
+      ],
+      { 'cap-1': 'new note' },
+    );
+    expect(mockAddToDraft).toHaveBeenCalledExactlyOnceWith([
+      { kind: 'capture', type: 'element', imageDataUrl: image, selector: '.btn', note: 'new note' },
+      { kind: 'capture', type: 'screenshot', imageDataUrl: image, region: { w: 30, h: 40 }, note: '' },
+    ]);
     expect(mockClearCaptures).toHaveBeenCalled();
     expect(result.current.annotationPopoverOpen).toBe(false);
+  });
+
+  it('annotation submit: keeps the captures and the panel when there is no message to add to', async () => {
+    mockAddToDraft.mockReturnValue(false);
+    const result = await submitWith([{ id: 'cap-1', type: 'screenshot', imageDataUrl: 'data:image/png;base64,abc' }]);
+    expect(mockClearCaptures).not.toHaveBeenCalled();
+    expect(result.current.annotationPopoverOpen).toBe(true);
   });
 
   it('annotation cancel: calls clearCaptures and closes popover', async () => {

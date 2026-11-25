@@ -6,14 +6,12 @@
  * Context → segment-store append seam (T26, spec #280: `setQuote` is gone —
  * nothing in this file writes `metadata.custom.quote` anymore).
  *
- * Mock strategy for the Add Agent Context suite mirrors the shipped
- * precedent in ChatSelectionToolbar.test.tsx: stub `@assistant-ui/react`'s
- * `useAui`/`useAuiState` and the segment-store module, and exercise the real
- * `useAppendQuoteSegment` hook through the component rather than mocking the
- * hook itself.
+ * The Add Agent Context suite runs against a real CM6 state and the real draft
+ * store; only the app around them is stubbed.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { buildReferenceForCm } from '@/lib/editor/copy-reference';
 
@@ -36,80 +34,88 @@ describe('buildReferenceForCm', () => {
 });
 
 let __threadId: string | undefined = 'thread-1';
-const composerGetState = vi.fn(() => ({ text: 'draft text' }));
-const composerSetText = vi.fn();
-
+let __delegation: unknown;
 vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({
-    composer: {
-      __internal_getRuntime: () => ({ getState: composerGetState }),
-      getState: composerGetState,
-      setText: composerSetText,
-    },
-  }),
-  useAuiState: (sel: (s: { threadListItem: { id: string } | undefined }) => unknown) =>
-    sel({ threadListItem: __threadId ? { id: __threadId } : undefined }),
+  useAuiState: (sel: (s: unknown) => unknown) =>
+    sel({ threadListItem: __threadId ? { id: __threadId, custom: { delegation: __delegation } } : undefined }),
 }));
+const toast = vi.hoisted(() => ({ warning: vi.fn(), success: vi.fn() }));
+vi.mock('@/lib/toast', () => ({ mfToast: toast }));
 
-const appendSpy = vi.fn();
-vi.mock('../../../chat/composer/segments/segment-store', () => ({
-  useComposerSegments: (sel: (s: { append: typeof appendSpy }) => unknown) => sel({ append: appendSpy }),
-}));
-
+import { draftItemsOf, useDraftContent } from '../../../chat/composer/draft-content/draft-content-store';
 import { EditorContextMenu } from '../EditorContextMenu';
 
-// Minimal CM6 EditorView stand-in: readCursorContext only touches
-// selection.main.head, doc.lineAt, wordAt, and sliceDoc.
-function fakeView(): EditorView {
-  return {
-    state: {
-      selection: { main: { head: 20 } },
-      doc: { lineAt: () => ({ number: 5, from: 10 }) },
-      wordAt: () => ({ from: 15, to: 23 }),
-      sliceDoc: () => 'validate',
-    },
-  } as unknown as EditorView;
+const DOC = 'one\ntwo\nthree\nfour';
+
+/** A view over DOC with `from`..`to` selected. */
+function viewOf(from: number, to = from): EditorView {
+  return { state: EditorState.create({ doc: DOC, selection: { anchor: from, head: to } }) } as unknown as EditorView;
 }
 
-describe('EditorContextMenu — Add Agent Context (T26 migration off setQuote)', () => {
+function addContext(view: EditorView) {
+  render(
+    <EditorContextMenu filePath="src/auth.ts" viewRef={{ current: view }}>
+      <div>editor content</div>
+    </EditorContextMenu>,
+  );
+  fireEvent.contextMenu(screen.getByTestId('editor-context-menu'));
+  fireEvent.click(screen.getByTestId('editor-context-menu-add-context'));
+}
+
+describe('EditorContextMenu — Add Agent Context', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __threadId = 'thread-1';
+    __delegation = undefined;
+    useDraftContent.setState({ byThread: {} });
   });
 
-  it('appends a quote segment built from path:line (word), not the native setQuote', () => {
-    render(
-      <EditorContextMenu filePath="/src/auth.ts" viewRef={{ current: fakeView() }}>
-        <div>editor content</div>
-      </EditorContextMenu>,
-    );
-
-    fireEvent.contextMenu(screen.getByTestId('editor-context-menu'));
-    fireEvent.click(screen.getByTestId('editor-context-menu-add-context'));
-
-    expect(appendSpy).toHaveBeenCalledWith('thread-1', {
-      quote: '/src/auth.ts:5 (validate)',
-      liveText: 'draft text',
-    });
-    expect(composerSetText).toHaveBeenCalledWith('');
+  it('adds the selected lines to the message as a code annotation', () => {
+    addContext(viewOf(5, 10));
+    expect(draftItemsOf('thread-1')).toEqual([
+      {
+        id: expect.any(String),
+        kind: 'code',
+        filePath: 'src/auth.ts',
+        startLine: 2,
+        endLine: 3,
+        lineContent: 'two\nthree',
+        note: '',
+      },
+    ]);
   });
 
-  it('no-ops with a tagged console.warn when there is no active thread', () => {
+  it('adds the cursor’s line when nothing is selected', () => {
+    addContext(viewOf(5));
+    expect(draftItemsOf('thread-1')).toEqual([
+      expect.objectContaining({ startLine: 2, endLine: 2, lineContent: 'two' }),
+    ]);
+  });
+
+  it('says so when no composer is on screen to show it', () => {
+    addContext(viewOf(5));
+    expect(toast.success).toHaveBeenCalledExactlyOnceWith('Added to your message');
+  });
+
+  it('says nothing when the composer shows the tile', () => {
+    document.body.insertAdjacentHTML('beforeend', '<textarea data-mf-composer-input></textarea>');
+    addContext(viewOf(5));
+    expect(draftItemsOf('thread-1')).toHaveLength(1);
+    expect(toast.success).not.toHaveBeenCalled();
+    document.querySelector('[data-mf-composer-input]')!.remove();
+  });
+
+  it('warns when there is no session to write to', () => {
     __threadId = undefined;
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    addContext(viewOf(5));
+    expect(toast.warning).toHaveBeenCalledExactlyOnceWith('Open a session first', expect.anything());
+    expect(useDraftContent.getState().byThread).toEqual({});
+  });
 
-    render(
-      <EditorContextMenu filePath="/src/auth.ts" viewRef={{ current: fakeView() }}>
-        <div>editor content</div>
-      </EditorContextMenu>,
-    );
-
-    fireEvent.contextMenu(screen.getByTestId('editor-context-menu'));
-    fireEvent.click(screen.getByTestId('editor-context-menu-add-context'));
-
-    expect(appendSpy).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy.mock.calls[0]?.[0]).toContain('[use-append-quote-segment]');
-    warnSpy.mockRestore();
+  it('warns in a read-only transcript, which has no composer', () => {
+    __delegation = { taskId: 't' };
+    addContext(viewOf(5));
+    expect(toast.warning).toHaveBeenCalledExactlyOnceWith('This session is read-only', expect.anything());
+    expect(draftItemsOf('thread-1')).toEqual([]);
   });
 });

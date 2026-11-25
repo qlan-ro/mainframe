@@ -250,6 +250,32 @@ describe('jumpToActivitySource — superseded', () => {
     expect(mounts).toEqual([]);
   });
 
+  it('leaves someone who started typing while its history loaded where they are', async () => {
+    const root = transcript('');
+    document.body.insertAdjacentHTML('beforeend', '<textarea id="field"></textarea>');
+    const field = document.querySelector<HTMLTextAreaElement>('#field')!;
+    const slow = heldJump(root);
+    field.focus();
+    field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    slow.arrive();
+    expect(await slow.outcome).toBe('superseded');
+    expect(slow.onLocated).not.toHaveBeenCalled();
+    expect(mounts).toEqual([]);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('still lands when a field only has focus, and after typing from before it was asked for', async () => {
+    const root = transcript('');
+    document.body.insertAdjacentHTML('beforeend', '<textarea id="field"></textarea>');
+    const field = document.querySelector<HTMLTextAreaElement>('#field')!;
+    field.focus();
+    field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const slow = heldJump(root);
+    slow.arrive();
+    expect(await slow.outcome).toBe('shown');
+  });
+
   it.each([
     ['was stopped', false],
     ['failed', new Error('detached')],

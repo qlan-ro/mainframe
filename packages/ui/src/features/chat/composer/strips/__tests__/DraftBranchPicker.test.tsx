@@ -18,6 +18,7 @@ vi.mock('@/features/git/BranchPopover', () => ({
 }));
 
 import { DraftBranchPicker } from '../DraftBranchPicker';
+import { useProjectBranches } from '../project-branches';
 
 const DRAFT: DraftCfg = { projectId: 'p1', adapterId: 'claude' };
 const NONE = { worktreePath: undefined, branchName: undefined, pendingWorktree: undefined, temporary: false };
@@ -35,6 +36,7 @@ const pick = (testId: string) => fireEvent.click(screen.getByTestId(testId));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useProjectBranches.setState({ byProject: {} });
   checkout.mockResolvedValue(true);
   git.getGitBranch.mockResolvedValue({ branch: 'main' });
   git.getGitBranches.mockResolvedValue({
@@ -51,6 +53,14 @@ beforeEach(() => {
 });
 
 describe('DraftBranchPicker', () => {
+  it('tells the empty state which branch its menu found', async () => {
+    git.getGitBranch.mockReturnValue(new Promise(() => {}));
+    git.getGitBranches.mockResolvedValue({ current: 'feat/x', local: [{ name: 'main' }, { name: 'feat/x' }] });
+    await openPicker();
+    expect(useProjectBranches.getState().byProject['p1']).toBe('feat/x');
+    expect(screen.getByTestId('composer-branch-picker')).toHaveTextContent('feat/x');
+  });
+
   it('checks out another branch when the session runs in the checkout', async () => {
     await openPicker();
     pick('composer-branch-option-feat/x');

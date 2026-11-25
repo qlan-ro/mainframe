@@ -7,7 +7,7 @@
  * desaturate as well as dim. Parity finding 8.7 (2026-07-02-design-parity-drift-audit.md §8).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtras: () => undefined,
@@ -61,5 +61,45 @@ describe('ComposerEditMode — what it edits', () => {
     render(<ComposerEditMode edit={{ ...EDIT, save: vi.fn() }} onDone={vi.fn()} />);
     expect(screen.getByTestId('chat-composer-edit')).toHaveTextContent('not sent until you send it');
     expect(screen.getByTestId('chat-composer-edit')).not.toHaveTextContent('stays queued');
+  });
+});
+
+describe('ComposerEditMode — blocks the message carries for the agent', () => {
+  const CAPTURES = '\0__MF_SANDBOX_CAPTURE__\n> **Preview captures**\n> - `element1` — selector `.a`';
+  const edit = (content: string) => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const onDone = vi.fn();
+    render(<ComposerEditMode edit={{ messageId: 'm1', content, save }} onDone={onDone} />);
+    return { save, onDone, input: screen.getByTestId<HTMLTextAreaElement>('chat-composer-edit-input') };
+  };
+  const commit = (input: HTMLElement) => fireEvent.keyDown(input, { key: 'Enter', metaKey: true });
+
+  it('are not in the field, and go back on save', async () => {
+    const { save, onDone, input } = edit(`${CAPTURES}\n\nFix it`);
+    expect(input).toHaveValue('Fix it');
+    fireEvent.change(input, { target: { value: 'Fix it now' } });
+    commit(input);
+    expect(save).toHaveBeenCalledExactlyOnceWith(`${CAPTURES}\n\nFix it now`);
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+  });
+
+  it('stay whole when there was no text yet', () => {
+    const { save, input } = edit(CAPTURES);
+    expect(input).toHaveValue('');
+    fireEvent.change(input, { target: { value: 'Fix it' } });
+    commit(input);
+    expect(save).toHaveBeenCalledExactlyOnceWith(`${CAPTURES}\n\nFix it`);
+  });
+
+  it('are edited with the text when they sit inside it', () => {
+    const content = '/review\n\nReferenced session @session[Q]: /x\n\nmore';
+    expect(edit(content).input).toHaveValue(content);
+  });
+
+  it('do not count as a change', () => {
+    const { save, onDone, input } = edit(`${CAPTURES}\n\nFix it`);
+    commit(input);
+    expect(save).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalled();
   });
 });

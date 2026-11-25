@@ -9,7 +9,7 @@
  * one it checks the branch out, as today's branch menu does, asking first when
  * the checkout has uncommitted changes.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, FolderGit2, FolderPlus, GitBranch, Loader2, Settings2, Timer } from 'lucide-react';
 import type { BranchListResult } from '@qlan-ro/mainframe-types';
 import {
@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { getGitBranch, getGitBranches, getProjectWorktrees, type WorktreeEntry } from '@/lib/api/git';
+import { getGitBranches, getProjectWorktrees, type WorktreeEntry } from '@/lib/api/git';
 import { BranchPopover } from '@/features/git/BranchPopover';
 import { useBranchActions } from '@/features/git/use-branch-actions';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -33,6 +33,7 @@ import { patchDraftConfig, type DraftCfg } from '@/features/sessions/runtime/dra
 import { validateBranchName } from '../config-toolbar/WorktreeNewForm';
 import { ComposerHint } from '../composer-card-context';
 import { draftEnvironment, environmentPatch, suggestBranchName, type DraftEnvironment } from './draft-environment';
+import { setProjectBranch, useProjectBranch } from './project-branches';
 
 interface BranchData {
   branches: BranchListResult | null;
@@ -47,7 +48,12 @@ function useBranchData(port: number, projectId: string, open: boolean): BranchDa
     if (!open) return;
     let stale = false;
     Promise.all([getGitBranches(port, projectId), getProjectWorktrees(port, projectId)]).then(
-      ([branches, worktrees]) => !stale && setData({ branches, worktrees, error: null }),
+      ([branches, worktrees]) => {
+        if (stale) return;
+        setData({ branches, worktrees, error: null });
+        // The menu's answer is the newer one: the strip and the empty state say the same.
+        setProjectBranch(projectId, branches.current || null);
+      },
       (error: unknown) =>
         !stale &&
         setData((prev) => ({ ...prev, error: error instanceof Error ? error.message : 'Could not load branches' })),
@@ -59,19 +65,7 @@ function useBranchData(port: number, projectId: string, open: boolean): BranchDa
   return data;
 }
 
-function useCurrentBranch(port: number, projectId: string) {
-  const [branch, setBranch] = useState<string | null>(null);
-  const load = useCallback(() => {
-    getGitBranch(port, projectId).then(
-      (result) => setBranch(result.branch),
-      (error: unknown) => console.warn('[DraftBranchPicker] branch read failed', { error }),
-    );
-  }, [port, projectId]);
-  useEffect(load, [load]);
-  return { branch, reload: load };
-}
-
-function TriggerLabel({ env, branch }: { env: DraftEnvironment; branch: string | null }) {
+function TriggerLabel({ env, branch }: { env: DraftEnvironment; branch: string | null | undefined }) {
   switch (env.kind) {
     case 'temporary':
       return 'Temporary';
@@ -150,7 +144,7 @@ export function DraftBranchPicker({
   const [open, setOpen] = useState(false);
   const [managing, setManaging] = useState(false);
   const data = useBranchData(port, projectId, open);
-  const { branch, reload } = useCurrentBranch(port, projectId);
+  const { branch: current, reload } = useProjectBranch(port, projectId);
   const { handleCheckout } = useBranchActions({ port, projectId });
   const env = draftEnvironment(draft);
   const Icon = ENV_ICON[env.kind];
@@ -159,7 +153,6 @@ export function DraftBranchPicker({
   const local = useMemo(() => data.branches?.local.map((b) => b.name) ?? [], [data.branches]);
   // The project's own checkout is the "local" choice, not a worktree to attach.
   const worktrees = useMemo(() => data.worktrees.slice(1), [data.worktrees]);
-  const current = data.branches?.current ?? branch;
   const checked = env.kind === 'new-worktree' ? env.base : env.kind === 'local' ? current : null;
 
   const pickBranch = (name: string) => {
@@ -211,7 +204,7 @@ export function DraftBranchPicker({
             >
               <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 truncate">
-                <TriggerLabel env={env} branch={branch} />
+                <TriggerLabel env={env} branch={current} />
               </span>
               <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden />
             </button>

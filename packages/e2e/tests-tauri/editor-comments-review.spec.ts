@@ -73,10 +73,11 @@
  *   editor-context-menu-content    — ContextMenuContent root
  *   editor-context-menu-copy       — Copy (selection → clipboard)
  *   editor-context-menu-copy-ref   — Copy Reference ("path:line" → clipboard)
- *   editor-context-menu-add-context — Add Agent Context (→ composer quote)
+ *   editor-context-menu-add-context — Add Agent Context (→ composer code annotation)
  *   editor-context-menu-go-to-def  — Go to Definition (disabled unless LSP ready)
  *   editor-context-menu-find-refs  — Find All References (disabled unless LSP ready)
- *   composer-quote-preview / composer-quote-dismiss — composer quote pill
+ *   composer-code-tile / composer-note-add / composer-note-input / composer-draft-item-remove
+ *                                  — the annotation's tile in the composer, its note, its ×
  *   chat-user-review-comment       — the parsed review-comment message card
  *   chat-user-review-comment-L<n>  — one comment section within that card
  *
@@ -308,7 +309,7 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     expect(clipboardText).toBe('review.ts:2 (return)');
   });
 
-  test('right-click → Add Agent Context sets the composer quote to the same "path:line" reference', async () => {
+  test('right-click → Add Agent Context adds the line to the message as a code annotation', async () => {
     const { page } = app;
     const line2 = page.getByTestId('editor-code').locator('.cm-line').nth(1);
     await line2.click();
@@ -318,13 +319,18 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     await expect(page.getByTestId('editor-context-menu-content')).toBeVisible({ timeout: 5_000 });
     await page.getByTestId('editor-context-menu-add-context').click();
 
-    const preview = page.getByTestId('composer-quote-preview');
-    await expect(preview).toBeVisible({ timeout: 5_000 });
-    await expect(preview).toContainText('review.ts:2');
+    const tile = page.getByTestId('composer-code-tile');
+    await expect(tile).toBeVisible({ timeout: 5_000 });
+    await expect(tile).toContainText('review.ts:2');
 
-    // Clean up so the pill doesn't linger into the next describe's assertions.
-    await page.getByTestId('composer-quote-dismiss').click();
-    await expect(preview).toHaveCount(0);
+    await tile.getByTestId('composer-note-add').click();
+    await page.getByTestId('composer-note-input').fill('Return early here');
+    await page.getByTestId('composer-note-input').press('Enter');
+    await expect(tile).toContainText('Return early');
+
+    // Clean up so the tile doesn't linger into the next describe's assertions.
+    await tile.getByTestId('composer-draft-item-remove').click();
+    await expect(tile).toHaveCount(0);
   });
 
   test('Go to Definition / Find All References are disabled for a file type with no LSP language mapping', async () => {

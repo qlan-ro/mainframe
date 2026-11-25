@@ -47,6 +47,8 @@ import { withSteer } from '../../controller/steer';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
 import { readLiveComposerState } from '../read-live-composer-state';
 import { toCompleteAttachment } from '../attachment-adapter';
+import { composeMessage } from '../draft-content/compose-message';
+import { draftItemsOf, holdSentCaptures, useDraftContent, useDraftItems } from '../draft-content/draft-content-store';
 import { prependSessionReferences } from '../../session-references/reference-line';
 import { expandSessionMentions } from '../../session-references/session-mention';
 import { sessionReferencesFor, useSessionReferences } from '../sessions/session-reference-store';
@@ -70,16 +72,21 @@ export function useSubmitComposition(): SubmitComposition {
       quote: composition?.liveQuote?.text ?? null,
       text: state.text,
     });
-    if (text === '' && state.attachments.length === 0) return;
+    const items = draftItemsOf(threadId);
+    if (text === '' && state.attachments.length === 0 && items.length === 0) return;
 
     const references = sessionReferencesFor(threadId);
     const wireText = expandSessionMentions(text, [...references.keys()]);
-    const body = prependSessionReferences(wireText, references);
-    const attachments = state.attachments.map(toCompleteAttachment);
+    // Captures and code annotations go in last: their block must open the
+    // message, and a label inside quoted code is not a session mention.
+    const content = composeMessage(prependSessionReferences(wireText, references), items);
+    const attachments = [...content.attachments, ...state.attachments.map(toCompleteAttachment)];
+    holdSentCaptures(threadId, content.captures);
     const runConfig = mode === 'steer' ? withSteer(state.runConfig) : state.runConfig;
-    aui.thread.append({ role: 'user', content: [{ type: 'text', text: body }], attachments, runConfig });
+    aui.thread.append({ role: 'user', content: [{ type: 'text', text: content.body }], attachments, runConfig });
     composer.reset();
     useComposerSegments.getState().clear(threadId);
+    useDraftContent.getState().clear(threadId);
     useSessionReferences.getState().clear(threadId);
   };
 }
@@ -89,11 +96,12 @@ export function useCanSubmit(): boolean {
   const threadId = useActiveThreadId();
   const composition = useComposerSegments((s) => (threadId ? s.byThread[threadId] : undefined));
   const liveText = useAuiState((s) => s.composer?.text ?? '');
+  const itemCount = useDraftItems(threadId).length;
   const liveAttachmentCount = useAuiState((s) => s.composer?.attachments?.length ?? 0);
 
   const serialized = serializeComposition(composition?.committed ?? [], {
     quote: composition?.liveQuote?.text ?? null,
     text: liveText,
   });
-  return serialized !== '' || liveAttachmentCount > 0;
+  return serialized !== '' || liveAttachmentCount > 0 || itemCount > 0;
 }

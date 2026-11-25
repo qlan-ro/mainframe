@@ -84,9 +84,7 @@ vi.mock('@/features/chat/zones/SubagentZone', () => ({
   ),
 }));
 vi.mock('../ChatEmptyState', () => ({
-  ChatEmptyState: ({ variant, projectId }: { variant: string; projectId?: string }) => (
-    <div data-testid={`empty-${variant}`} data-project={projectId ?? ''} />
-  ),
+  ChatEmptyState: ({ variant }: { variant: string }) => <div data-testid={`empty-${variant}`} />,
 }));
 vi.mock('@/features/session-panel/SessionPanel', () => ({
   SessionPanel: ({ state }: { state: SessionPanelState }) => (
@@ -148,7 +146,7 @@ describe('ChatSurface', () => {
 
     expect(screen.queryByTestId('empty-firstrun')).toBeNull();
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', '');
+    expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
   });
 
   it('does not show the first-run hero while projects are still loading', () => {
@@ -162,7 +160,7 @@ describe('ChatSurface', () => {
   it('renders ChatThread with the welcome empty-state for a resolved draft', () => {
     render(<ChatSurface />);
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', 'proj-a');
+    expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
   });
 
   it('renders the welcome empty-state with no project for a projectless new local thread', () => {
@@ -172,7 +170,7 @@ describe('ChatSurface', () => {
     render(<ChatSurface />);
 
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', '');
+    expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
     // No boot-settle picker and no dead end: the welcome screen owns the choice.
     expect(screen.queryByText('Initializing session…')).toBeNull();
     expect(screen.queryByTestId('empty-firstrun')).toBeNull();
@@ -291,7 +289,7 @@ describe('ChatSurface', () => {
     // A multi-project scope is ambiguous (soleProjectId returns null), so the
     // draft is treated the same as an unresolved one: no boot-settle wait.
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', '');
+    expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
     expect(screen.queryByText('Initializing session…')).toBeNull();
   });
 

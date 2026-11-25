@@ -150,7 +150,7 @@ export function ChatSurface() {
     );
   }
 
-  const welcome = isNewLocal ? <ChatEmptyState variant="welcome" projectId={draftCfg?.projectId} /> : undefined;
+  const welcome = isNewLocal ? <ChatEmptyState variant="welcome" /> : undefined;
 
   if (subagent != null && isSubagentParentActive(subagent, mainThreadId) && splitFits) {
     return (

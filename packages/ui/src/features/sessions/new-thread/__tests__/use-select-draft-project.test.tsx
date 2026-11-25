@@ -6,7 +6,7 @@
  * openNewThreadDraft sequence — no thread switch and no return-target write, so
  * "cancel" still routes back to the previous session.
  *
- * initializeDraft, resetNewThreadDraft, the toast and the filter store are
+ * initializeDraft, rescopeNewThreadDraft, the toast and the filter store are
  * mocked; each is asserted by the exact call it receives.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -24,7 +24,7 @@ const baseInitialize = async (_args: unknown) => {
 
 const switchToNewThread = vi.fn();
 const clearProjectFilter = vi.fn();
-const resetNewThreadDraft = vi.fn((_newThreadId: string | null | undefined) => undefined);
+const rescopeNewThreadDraft = vi.fn((_newThreadId: string | null | undefined) => undefined);
 const initializeDraft = vi.fn(baseInitialize);
 const toastError = vi.fn((_message: string, _options?: { description: string }) => undefined);
 
@@ -50,7 +50,7 @@ vi.mock('@/store/settings', () => ({
 vi.mock('@/store/adapters', () => ({ useAdapters: () => [{ id: 'gemini', installed: true }] }));
 vi.mock('../initialize-draft', () => ({ initializeDraft: (args: unknown) => initializeDraft(args) }));
 vi.mock('../reset-new-thread-draft', () => ({
-  resetNewThreadDraft: (newThreadId: string | null | undefined) => resetNewThreadDraft(newThreadId),
+  rescopeNewThreadDraft: (newThreadId: string | null | undefined) => rescopeNewThreadDraft(newThreadId),
 }));
 
 import { useSelectDraftProject } from '../use-select-draft-project';
@@ -64,7 +64,7 @@ beforeEach(() => {
   __initError = null;
   switchToNewThread.mockReset();
   clearProjectFilter.mockReset();
-  resetNewThreadDraft.mockReset();
+  rescopeNewThreadDraft.mockReset();
   initializeDraft.mockReset();
   initializeDraft.mockImplementation(baseInitialize);
   toastError.mockReset();
@@ -104,7 +104,7 @@ describe('useSelectDraftProject', () => {
   it('resets the reused draft slot and initializes it for the picked project', async () => {
     await select()('proj-b');
 
-    expect(resetNewThreadDraft).toHaveBeenCalledExactlyOnceWith('__LOCALID_1');
+    expect(rescopeNewThreadDraft).toHaveBeenCalledExactlyOnceWith('__LOCALID_1');
     expect(initializeDraft).toHaveBeenCalledExactlyOnceWith({
       localId: '__LOCALID_1',
       projectId: 'proj-b',
@@ -116,7 +116,7 @@ describe('useSelectDraftProject', () => {
 
   it('resets before initializing, so the fresh config is not cleared again', async () => {
     const order: string[] = [];
-    resetNewThreadDraft.mockImplementation(() => void order.push('reset'));
+    rescopeNewThreadDraft.mockImplementation(() => void order.push('reset'));
     initializeDraft.mockImplementation(async (args: unknown) => {
       order.push('initialize');
       return baseInitialize(args);
@@ -139,7 +139,7 @@ describe('useSelectDraftProject', () => {
 
     await select()('proj-b');
 
-    expect(resetNewThreadDraft).toHaveBeenCalledExactlyOnceWith(null);
+    expect(rescopeNewThreadDraft).toHaveBeenCalledExactlyOnceWith(null);
     expect(initializeDraft).toHaveBeenCalledExactlyOnceWith({
       localId: '__LOCALID_9',
       projectId: 'proj-b',
@@ -156,7 +156,7 @@ describe('useSelectDraftProject', () => {
 
     await select()('proj-b');
 
-    expect(resetNewThreadDraft).not.toHaveBeenCalled();
+    expect(rescopeNewThreadDraft).not.toHaveBeenCalled();
     expect(initializeDraft).not.toHaveBeenCalled();
     expect(clearProjectFilter).not.toHaveBeenCalled();
   });

@@ -21,6 +21,8 @@ export interface Capture {
   type: 'element' | 'screenshot';
   imageDataUrl: string;
   selector?: string;
+  /** The size of the region the user dragged, in page pixels. */
+  region?: { w: number; h: number };
   annotation?: string;
 }
 

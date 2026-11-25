@@ -37,6 +37,7 @@ vi.mock('../../../runtime/chat-extras', () => ({
     select({ state: { chatConfig: { adapterId: mockAdapterId } } }),
 }));
 
+import { useDraftContent, type NewDraftItem } from '../../draft-content/draft-content-store';
 import { SendControls } from '../SendControls';
 
 const submit = vi.fn();
@@ -252,5 +253,32 @@ describe('SendControls — the Queue / Steer split while a turn runs', () => {
     fireEvent.pointerDown(screen.getByTestId('chat-composer-send-options'), { button: 0 });
 
     expect(await screen.findByTestId('chat-composer-send-steer')).not.toHaveTextContent('can’t take messages');
+  });
+});
+
+describe('SendControls — what Steer says about captures', () => {
+  const capture: NewDraftItem = {
+    kind: 'capture',
+    type: 'screenshot',
+    imageDataUrl: 'data:image/png;base64,A',
+    note: '',
+  };
+  const code: NewDraftItem = { kind: 'code', filePath: 'a.ts', startLine: 1, endLine: 1, lineContent: 'x', note: '' };
+  const steerRow = async (item: NewDraftItem) => {
+    useDraftContent.setState({ byThread: {} });
+    useDraftContent.getState().add('t1', [item]);
+    mockRunning = true;
+    mockCanSubmit = true;
+    renderControls();
+    fireEvent.pointerDown(screen.getByTestId('chat-composer-send-options'), { button: 0, ctrlKey: false });
+    return screen.findByTestId('chat-composer-send-steer');
+  };
+
+  it('queues with a capture, which is sent as a file', async () => {
+    expect(await steerRow(capture)).toHaveTextContent('A message with files queues');
+  });
+
+  it('steers with a code annotation, which is text', async () => {
+    expect(await steerRow(code)).toHaveTextContent('Add to the running turn without stopping it');
   });
 });

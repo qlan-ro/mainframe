@@ -4,9 +4,8 @@
  * Items:
  *   Copy              — copies the current selection to clipboard.
  *   Copy Reference    — builds `path:line (word)` and writes to clipboard.
- *   Add Agent Context — quotes `path:line` into the active thread's
- *                       multi-quote composition via `useAppendQuoteSegment()`
- *                       (spec #280, the segment-store append seam).
+ *   Add Agent Context — adds the selected lines (or the cursor's line) to the
+ *                       message being written, as a code annotation (C14).
  *   Go to Definition  — ⌘-click equivalent via providers.getDefinition.
  *   Find All Refs     — calls providers.getReferences + shows the panel.
  *
@@ -31,7 +30,8 @@ import {
 import type { LspProviders, LspLocation } from '@/lib/lsp';
 import { buildReferenceForCm, writeToClipboard } from '@/lib/editor/copy-reference';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { useAppendQuoteSegment } from '../../chat/composer/segments/use-append-quote-segment';
+import { useAddToDraft } from '../../chat/composer/draft-content/use-add-to-draft';
+import { resolveCommentRange } from '../inline-comments/resolve-comment-range';
 import { jumpHistory } from '../lsp/navigation';
 import { ReferencesPanel } from '../lsp/references-panel';
 import { fileUriToPath } from '@/lib/files/file-uri';
@@ -91,7 +91,7 @@ function readCursorContext(view: EditorView): CursorContext {
 // ---------------------------------------------------------------------------
 
 export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, children }: EditorContextMenuProps) {
-  const appendQuoteSegment = useAppendQuoteSegment();
+  const addToDraft = useAddToDraft();
   // References panel visibility state.
   const [references, setReferences] = useState<LspLocation[] | null>(null);
   const [refSymbol, setRefSymbol] = useState<string | undefined>(undefined);
@@ -132,12 +132,11 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
   // ── Add Agent Context ─────────────────────────────────────────────────────
 
   const handleAddAgentContext = useCallback(() => {
+    const view = viewRef.current;
     const ctx = cursorRef.current;
-    if (!ctx) return;
-    // Build the same `path:line (word)` string the Copy Reference command uses.
-    const ref = buildReferenceForCm(filePath, ctx.line, ctx.word);
-    appendQuoteSegment(ref);
-  }, [filePath, appendQuoteSegment]);
+    if (!view || !ctx) return;
+    addToDraft([{ kind: 'code', filePath, ...resolveCommentRange(view.state, ctx.line + 1), note: '' }]);
+  }, [filePath, viewRef, addToDraft]);
 
   // ── Go to Definition ──────────────────────────────────────────────────────
 
