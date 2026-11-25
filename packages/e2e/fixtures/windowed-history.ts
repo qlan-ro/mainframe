@@ -15,7 +15,8 @@ export function writeWindowedHistoryRecording(
   add('in', 'sendMessage', ['Fixture setup']);
   add('out', 'onInit', ['windowed-reference-session']);
   add('out', 'onResult', [{ subtype: 'success', is_error: false }]);
-  const result = `hidden-output-token\n${'x'.repeat(32768)}`;
+  const result = 'hidden-output-token\n' + 'x'.repeat(32768);
+  const multilineResult = 'hidden-output-token\n' + ('x'.repeat(127) + '\n').repeat(256);
   for (let turn = 0; turn < WINDOWED_TURNS; turn++) {
     add('in', 'sendMessage', [`Needle turn ${turn}${turn === 2 ? ' ancient landmark' : ''}`]);
     const content: object[] = [{ type: 'text', text: `History response ${turn}` }];
@@ -24,7 +25,12 @@ export function writeWindowedHistoryRecording(
       const id = `window-tool-${turn}-${tool}`;
       content.push({ type: 'tool_use', id, name: 'Read', input: { file_path: `/fixture/file-${tool}.txt` } });
       content.push({ type: 'text', text: `Tool summary ${turn}/${tool}` });
-      results.push({ type: 'tool_result', toolUseId: id, content: result, isError: false });
+      results.push({
+        type: 'tool_result',
+        toolUseId: id,
+        content: id === 'window-tool-244-1' ? multilineResult : result,
+        isError: false,
+      });
     }
     add('out', 'onMessage', [content]);
     add('out', 'onToolResult', [results]);

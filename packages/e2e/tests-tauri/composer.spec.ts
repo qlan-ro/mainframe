@@ -27,14 +27,16 @@ test.describe('§composer config selects @real', () => {
     await closeTauriApp(app);
   });
 
-  test('M5: model select opens, lists models, and closes on pick', async () => {
+  test('M5: model select opens, lists models, and stays open on pick', async () => {
     const { page } = app;
     await page.locator('[data-testid="composer-model-select"]').click();
     const options = page.locator('[data-testid^="composer-model-select-option-"]');
     await expect(options.first()).toBeVisible({ timeout: 5_000 });
     const count = await options.count();
     await options.nth(count - 1).click();
-    await expect(options.first()).toHaveCount(0); // dropdown closed after pick
+    await expect(options.first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(options.first()).toHaveCount(0);
   });
 
   // TODO(bug): the `closeMenus()` before the reset click below is a WORKAROUND for a
@@ -109,8 +111,6 @@ test.describe('§composer config selects @real', () => {
       const row = page.locator(`[data-testid="composer-model-select-option-${id}"]`);
       if (!(await row.isVisible({ timeout: 2_000 }).catch(() => false))) continue;
       await row.click();
-      await closeMenus();
-      await page.locator('[data-testid="composer-model-select"]').click();
       await expect(page.locator(`[data-testid="composer-model-${id}-tuning"]`)).toBeVisible({ timeout: 5_000 });
       return id;
     }
@@ -167,8 +167,6 @@ test.describe('§composer config selects @real', () => {
       test.skip(true, 'haiku model not found in this environment');
       return;
     }
-    await closeMenus();
-    await page.locator('[data-testid="composer-model-select"]').click();
     // No effort levels and no options, so there is nothing below the list.
     await expect(page.locator(`[data-testid="composer-model-${found}-tuning"]`)).toHaveCount(0);
     await closeMenus();

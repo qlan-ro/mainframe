@@ -85,7 +85,13 @@ export function SessionsFilterMenu({ inUse, synthetic, registry }: SessionsFilte
           </Button>
         </DropdownMenuTrigger>
       </Hint>
-      <DropdownMenuContent data-testid="sessions-tag-filter-bar" align="start" className="w-50">
+      <DropdownMenuContent
+        data-testid="sessions-tag-filter-bar"
+        align="start"
+        alignOffset={1}
+        sideOffset={8}
+        className="w-50"
+      >
         <DropdownMenuLabel>Show</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
           {STATUS_FILTERS.map((filter) => (

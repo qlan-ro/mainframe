@@ -1,10 +1,10 @@
 // Prototype | app | difference, as one PNG, drawn by the browser.
-export async function compose(browser, [proto, app], theme, title, transcript, regions) {
+export async function compose(browser, [proto, app], theme, title, transcript, regions, sideBySide) {
   const ctx = await browser.newContext({ viewport: { width: 800, height: 400 } });
   const page = await ctx.newPage();
   try {
     const result = await page.evaluate(
-      async ({ proto, app, dark, title, transcript, regions }) => {
+      async ({ proto, app, dark, title, transcript, regions, sideBySide }) => {
         const load = (b) =>
           new Promise((ok, no) => {
             const i = new Image();
@@ -17,7 +17,7 @@ export async function compose(browser, [proto, app], theme, title, transcript, r
         const h = Math.max(p.height, a.height);
         const gap = 16;
         const head = 44;
-        const stacked = w > 900;
+        const stacked = !sideBySide && w > 900;
         const canvas = document.createElement('canvas');
         canvas.width = stacked ? w + 2 * gap : 3 * w + 4 * gap;
         canvas.height = stacked ? 3 * (h + head) + gap : h + head + gap;
@@ -96,7 +96,7 @@ export async function compose(browser, [proto, app], theme, title, transcript, r
         });
         return { png: canvas.toDataURL('image/png'), stats: { pixels: w * h, different: off, regions: totals } };
       },
-      { proto: proto.toString('base64'), app: app.toString('base64'), dark: theme === 'dark', title, transcript, regions },
+      { proto: proto.toString('base64'), app: app.toString('base64'), dark: theme === 'dark', title, transcript, regions, sideBySide },
     );
     return { png: Buffer.from(result.png.split(',')[1], 'base64'), stats: result.stats };
   } finally {

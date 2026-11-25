@@ -264,7 +264,8 @@ test.describe('§files-tree — workspace Files sidebar', () => {
 
   test('the root row context menu is available from the header label', async () => {
     const { page } = app;
-    const rootLabel = page.getByTestId('file-tree').getByText(path.basename(project.projectPath), { exact: true });
+    const rootLabel = page.getByTestId('file-tree').getByText('Files', { exact: true });
+    await expect(rootLabel).toHaveAttribute('title', path.basename(project.projectPath));
     await rootLabel.click({ button: 'right' });
     await expect(page.getByTestId('file-tree-find-in-folder')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId('file-tree-reveal')).toBeVisible();

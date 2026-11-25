@@ -14,7 +14,13 @@ import type { HistorySearchResult } from '@qlan-ro/mainframe-types';
  */
 import { useAuiState } from '@assistant-ui/react';
 import { useMemo, useRef } from 'react';
-import type { ControlResponse, PromptRemedy, QueuedMessageRef, WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
+import type {
+  Chat,
+  ControlResponse,
+  PromptRemedy,
+  QueuedMessageRef,
+  WorktreeSwitchOffer,
+} from '@qlan-ro/mainframe-types';
 import type { AcpChatController } from '../controller/acp-chat-controller';
 import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-thread-state';
 
@@ -32,6 +38,7 @@ export interface ChatRuntimeExtras {
   readonly permissions: Readonly<Record<string, ChatPermissionEntry>>;
   readonly queued: Readonly<Record<string, QueuedMessageRef>>;
   readonly port: number;
+  readonly reconcileModelResponse: (chatId: string, request: () => Promise<Chat | undefined>) => Promise<void>;
   readonly loadEarlier?: (untilItemId?: string) => Promise<boolean>;
   readonly searchHistory?: (query: string) => Promise<HistorySearchResult>;
   readonly canSearchHistory?: boolean;
@@ -73,6 +80,7 @@ export function buildChatExtras(
     permissions: state.interactions.permissions,
     queued: state.interactions.queued,
     port,
+    reconcileModelResponse: (chatId, request) => controller.reconcileModelResponse(chatId, request),
     loadEarlier: (target) => controller.loadEarlier(target),
     searchHistory: (query) => controller.searchHistory(query),
     canSearchHistory: controller.canSearchHistory,

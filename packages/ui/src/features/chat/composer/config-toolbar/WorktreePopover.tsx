@@ -52,25 +52,32 @@ function ActiveInfo({ chat, branch, baseBranch }: { chat: Chat; branch?: string;
     <div data-testid="composer-worktree-active-info" className="flex flex-col gap-1.5 px-2 py-1.5">
       <div className="flex items-center gap-1.5">
         <span className="inline-block size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
-        <span className="text-xs font-medium text-foreground">Isolated in worktree</span>
+        <span className="text-meta/[1.45] font-semibold text-foreground">Isolated in worktree</span>
       </div>
       <Separator />
-      <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-xs">
+      <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-meta/[1.45]">
         <span className="text-muted-foreground">Branch</span>
-        {/* Branch names are UI sans, never mono (2026-08-05 decision). */}
         <TruncatedWithTooltip
           text={branch ?? chat.branchName ?? '—'}
-          className="text-foreground"
+          className="font-mono text-caption text-foreground"
           contentClassName="break-all"
         />
         {baseBranch && (
           <>
             <span className="text-muted-foreground">From</span>
-            <TruncatedWithTooltip text={baseBranch} className="text-foreground" contentClassName="break-all" />
+            <TruncatedWithTooltip
+              text={baseBranch}
+              className="font-mono text-caption text-foreground"
+              contentClassName="break-all"
+            />
           </>
         )}
         <span className="text-muted-foreground">Path</span>
-        <TruncatedWithTooltip text={chat.worktreePath ?? ''} className="text-foreground" contentClassName="break-all" />
+        <TruncatedWithTooltip
+          text={chat.worktreePath ?? ''}
+          className="font-mono text-caption text-foreground"
+          contentClassName="break-all"
+        />
       </div>
     </div>
   );
@@ -231,7 +238,7 @@ export function WorktreePopover({
             <ActiveInfo chat={chat} branch={branch} baseBranch={baseBranch} />
             {chat.worktreePath && <OpenFolder path={chat.worktreePath} onDone={() => setOpen(false)} />}
             <div className="flex flex-col gap-1.5">
-              <WorktreeSectionLabel>Move to another worktree</WorktreeSectionLabel>
+              <div className="px-2.5 py-1.5 text-control font-medium text-foreground">Move to another worktree</div>
               {busy && <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>}
               {loading ? (
                 <WorktreeLoading />

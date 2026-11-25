@@ -52,6 +52,11 @@ function TemporaryPart() {
 
 const directoryName = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
+const STRIP_FOCUS = 'focus-visible:bg-sidebar-accent focus-visible:focus-line-inset';
+const STRIP_OPEN = 'bg-chrome-press hover:bg-chrome-press focus-visible:bg-chrome-press';
+
+const WHERE_BUTTON = 'ml-[3px] shrink-0 px-[3px] @max-[400px]/composer:ml-0 @max-[400px]/composer:px-1.5';
+
 /** A control only with the session's own record: the list's is not enough to move it. */
 function WherePart({
   session,
@@ -88,7 +93,7 @@ function WherePart({
         data-testid="composer-where"
         aria-label={runsIn}
         title={path}
-        className={cn(BOTTOM_STRIP_BUTTON, 'pr-0 shrink-0 hover:bg-transparent')}
+        className={cn(BOTTOM_STRIP_BUTTON, WHERE_BUTTON, 'hover:bg-transparent')}
       >
         {content}
       </span>
@@ -113,7 +118,7 @@ function WherePart({
         data-isolated={isolated || undefined}
         aria-label={`${runsIn}. ${isolated ? 'Worktree options' : 'Isolate in a worktree'}`}
         title={path ?? runsIn}
-        className={cn(BOTTOM_STRIP_BUTTON, 'pr-0 shrink-0', open && 'bg-chrome-press hover:bg-chrome-press')}
+        className={cn(BOTTOM_STRIP_BUTTON, WHERE_BUTTON, STRIP_FOCUS, open && STRIP_OPEN)}
       >
         {content}
       </button>
@@ -138,28 +143,36 @@ function BranchPart({
   if (!branch) return null;
   const label = baseBranch ? `${branch} from ${baseBranch}` : branch;
   return (
-    <BranchPopover
-      port={port}
-      projectId={session.projectId}
-      chatId={session.id}
-      open={open}
-      onOpenChange={setOpen}
-      onBranchChanged={refetch}
-    >
-      <button
-        type="button"
-        data-testid="composer-branch"
-        aria-label={`Branch ${label}. Manage branches`}
-        className={cn(BOTTOM_STRIP_BUTTON, 'pl-0', open && 'bg-chrome-press hover:bg-chrome-press')}
+    <>
+      <span
+        aria-hidden
+        className={cn(
+          'shrink-0 text-small text-ink-secondary @max-[400px]/composer:hidden',
+          session.temporary ? 'mr-px' : '-mx-[1.5px]',
+        )}
       >
-        <span aria-hidden className="shrink-0 @max-[400px]/composer:hidden">
-          ·
-        </span>
-        <span className="min-w-0 truncate font-mono text-caption/[1.45]" title={label}>
-          {label}
-        </span>
-      </button>
-    </BranchPopover>
+        ·
+      </span>
+      <BranchPopover
+        port={port}
+        projectId={session.projectId}
+        chatId={session.id}
+        open={open}
+        onOpenChange={setOpen}
+        onBranchChanged={refetch}
+      >
+        <button
+          type="button"
+          data-testid="composer-branch"
+          aria-label={`Branch ${label}. Manage branches`}
+          className={cn(BOTTOM_STRIP_BUTTON, 'px-[3px] @max-[400px]/composer:px-1.5', STRIP_FOCUS, open && STRIP_OPEN)}
+        >
+          <span className="min-w-0 truncate font-mono text-caption/[1.45]" title={label}>
+            {label}
+          </span>
+        </button>
+      </BranchPopover>
+    </>
   );
 }
 

@@ -3,7 +3,7 @@
 /** The session's uncommitted changes at the end of the bottom strip (K8). Hidden when there are none. */
 import { useState } from 'react';
 import { Diff, FileText } from 'lucide-react';
-import { MENU_ITEM, MENU_LABEL, MENU_SEPARATOR } from '@/components/ui/menu-item';
+import { MENU_DETAIL, MENU_ITEM, MENU_LABEL, MENU_SEPARATOR } from '@/components/ui/menu-item';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { toChangesSummary, useWorkingChanges } from '@/features/review/use-working-changes';
@@ -29,7 +29,14 @@ export function ChangesButton({ port, projectId, chatId }: { port: number; proje
   // Loading and error both mean "unknown": the part waits rather than guessing.
   if (changes.loading || changes.error || summary.fileCount === 0) return null;
 
-  const files = `${summary.fileCount} changed file${summary.fileCount === 1 ? '' : 's'}`;
+  const suffix = summary.fileCount === 1 ? '' : 's';
+  const files = `${summary.fileCount} changed file${suffix}`;
+  const totals = [
+    summary.additions == null ? null : `+${summary.additions}`,
+    summary.deletions == null ? null : `−${summary.deletions}`,
+  ]
+    .filter((count) => count != null)
+    .join(' ');
   const rest = changes.files.length - SHOWN_FILES;
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -52,7 +59,9 @@ export function ChangesButton({ port, projectId, chatId }: { port: number; proje
         sideOffset={6}
         className="w-85 gap-0 p-1"
       >
-        <span className={MENU_LABEL}>{files}</span>
+        <span className={MENU_LABEL}>
+          Changes · {summary.fileCount} file{suffix}
+        </span>
         <div className="flex max-h-60 flex-col overflow-y-auto">
           {changes.files.slice(0, SHOWN_FILES).map((file) => (
             <div key={file.path} className="flex min-h-7 min-w-0 items-center gap-2.5 px-2.5 py-[7px]">
@@ -82,6 +91,11 @@ export function ChangesButton({ port, projectId, chatId }: { port: number; proje
           <Diff aria-hidden />
           <span className="flex min-w-0 flex-col">
             <span>Open diff</span>
+            {totals && (
+              <span className={MENU_DETAIL}>
+                {totals} across {summary.fileCount} file{suffix}
+              </span>
+            )}
           </span>
         </button>
       </PopoverContent>

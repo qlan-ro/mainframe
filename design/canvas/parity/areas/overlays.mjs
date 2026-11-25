@@ -34,7 +34,7 @@ export default {
     focused('panel row', "txt('#spanel button.pr', 'review-workflow.md')", "txt('[data-testid=session-panel] button', 'review-workflow.md')"),
     S('filter-menu', 'Filter menu', { proto: proto(P.openByKey("q('[data-id=gfilter]')")), app: app(P.openByKey("tid('sessions-filter-button')")), pairs: [menu], shot: menuShot }),
     S('sort-menu', 'Sort menu', { proto: proto(P.openByKey("q('[data-id=gsort]')")), app: app(P.openByKey("tid('sessions-sort-button')")), pairs: [menu], shot: menuShot }),
-    S('more-menu', 'More menu', { proto: proto(P.openByKey("q('[data-id=gmore]')")), app: app(P.openByKey("tid('sessions-more-button')")), pairs: [menu], shot: menuShot }),
+    S('more-menu', 'More menu', { proto: proto(P.openByKey("q('[data-id=gmore]')")), app: app(P.openByKey("tid('sessions-more-button')")), pairs: [{ ...menu, exactText: true }], shot: menuShot }),
     S('filter-on', 'Filter on', {
       proto: proto(P.click(GH), P.js("document.querySelector('[data-id=gfilter]').click()"), P.click("txt('.menu .mi', 'Running')"), P.park, P.js('document.activeElement?.blur?.()')),
       app: app(P.hover(AGH), P.click("tid('sessions-filter-button')"), P.click("tid('sessions-status-filter-running')"), P.key('Escape'), P.park, P.js('document.activeElement?.blur?.()')),

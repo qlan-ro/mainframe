@@ -19,7 +19,9 @@ beforeEach(() => {
 describe('useProviderSwitch', () => {
   it('switches the chat in place, with nothing asked first', () => {
     const { result } = renderHook(() => useProviderSwitch(CHAT, 31415));
-    act(() => result.current({ adapterId: 'codex', model: 'gpt' }));
+    act(() => {
+      void result.current({ adapterId: 'codex', model: 'gpt' });
+    });
 
     expect(api.switchChatProvider).toHaveBeenCalledExactlyOnceWith(31415, 'chat-1', {
       adapterId: 'codex',
@@ -31,7 +33,9 @@ describe('useProviderSwitch', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     api.switchChatProvider.mockRejectedValue(new Error('Send or cancel queued messages before switching providers'));
     const { result } = renderHook(() => useProviderSwitch(CHAT, 31415));
-    act(() => result.current({ adapterId: 'codex', model: 'gpt' }));
+    await act(async () => {
+      await result.current({ adapterId: 'codex', model: 'gpt' });
+    });
 
     await vi.waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith('Could not switch provider', {

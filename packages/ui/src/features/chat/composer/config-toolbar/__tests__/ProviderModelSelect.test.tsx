@@ -103,6 +103,7 @@ const ADAPTER_CODEX_UNINSTALLED: AdapterInfo = {
 
 interface RenderProps {
   chat?: Chat;
+  draftMode?: boolean;
   adapters?: AdapterInfo[];
   adapter?: AdapterInfo | null;
   model?: AdapterModel | null;
@@ -133,6 +134,7 @@ function renderSelect(props: RenderProps = {}) {
     <TooltipProvider>
       <ProviderModelSelect
         chat={chat}
+        draftMode={props.draftMode}
         adapters={adapters}
         adapter={adapter}
         model={model}
@@ -307,7 +309,7 @@ describe('ProviderModelSelect — clicking a model row calls setModel', () => {
     await userEvent.click(screen.getByTestId('composer-model-select'));
     await userEvent.click(screen.getByTestId('composer-model-select-option-haiku'));
 
-    expect(setModel).toHaveBeenCalledExactlyOnceWith('haiku');
+    expect(setModel).toHaveBeenCalledExactlyOnceWith('haiku', expect.any(Function));
   });
 
   it('does NOT call setModel when the already-active model row is clicked', async () => {
@@ -523,7 +525,7 @@ describe('ProviderModelSelect — older models group', () => {
     await userEvent.click(screen.getByTestId('composer-model-older-header'));
     await userEvent.click(screen.getByTestId('composer-model-select-option-claude-opus-4-1-20250805'));
 
-    expect(setModel).toHaveBeenCalledWith('claude-opus-4-1-20250805');
+    expect(setModel).toHaveBeenCalledWith('claude-opus-4-1-20250805', expect.any(Function));
   });
 });
 
@@ -628,7 +630,7 @@ describe('ProviderModelSelect — endpoint model group', () => {
     await userEvent.click(screen.getByTestId('composer-model-group-header-cliproxyapi'));
     await userEvent.click(screen.getByTestId('composer-model-select-option-cliproxy/kimi-k3'));
 
-    expect(setModel).toHaveBeenCalledExactlyOnceWith('cliproxy/kimi-k3');
+    expect(setModel).toHaveBeenCalledExactlyOnceWith('cliproxy/kimi-k3', expect.any(Function));
   });
 
   it('still shows the stored endpoint model when the endpoint has gone away', async () => {
@@ -808,7 +810,7 @@ describe("ProviderModelSelect — the selected model's tuning", () => {
     await user.click(screen.getByTestId('composer-model-select'));
     await user.click(screen.getByTestId('composer-model-select-option-tunable'));
 
-    expect(setModel).toHaveBeenCalledExactlyOnceWith('tunable');
+    expect(setModel).toHaveBeenCalledExactlyOnceWith('tunable', expect.any(Function));
   });
 });
 
@@ -938,4 +940,13 @@ describe('ProviderModelSelect — hideProviderSwitch (todo #344)', () => {
 
     expect(screen.getByTestId('composer-adapter-select-option-claude')).toBeInTheDocument();
   });
+});
+
+it('keeps local draft picks available immediately', async () => {
+  const { setModel } = renderSelect({ draftMode: true });
+  await userEvent.click(screen.getByTestId('composer-model-select'));
+  const haiku = screen.getByTestId('composer-model-select-option-haiku');
+  await userEvent.click(haiku);
+  expect(haiku).not.toHaveAttribute('aria-disabled');
+  expect(setModel).toHaveBeenCalledExactlyOnceWith('haiku', expect.any(Function));
 });

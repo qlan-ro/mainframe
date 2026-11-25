@@ -1,6 +1,7 @@
 'use client';
 
 import { mfToast } from '@/lib/toast';
+import { useProviderSwitch, type ProviderSwitchRequest } from './use-provider-switch';
 import { useSessionModel } from './use-session-model';
 
 import { useCallback, useRef } from 'react';
@@ -48,7 +49,8 @@ export interface ComposerTuningHook {
   providerDefaults: ProviderConfig | undefined;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
-  setModel: (model: string) => void;
+  setModel: (model: string, onSettled?: () => void) => boolean | void;
+  switchProvider: (request: ProviderSwitchRequest, onSettled?: () => void) => void;
   setAdapter: (adapterId: string) => void;
   setPermissionMode: (mode: ExecutionMode) => void;
   /** True while bound to a `__LOCALID_*` draft with no daemon chat yet. */
@@ -65,11 +67,7 @@ export interface ComposerTuningHook {
  * Resolves the current chat + its model from the adapter registry, then exposes
  * config mutators. Returns null values until the config is loaded.
  *
- * Server-authoritative, NO optimistic UI (mirrors the desktop client): `chat` is
- * read live from the controller's `state.chatConfig` (seeded from REST on load,
- * then mirrored from every `chat.updated`). A mutator just sends the PATCH; the
- * daemon's resulting `chat.updated` broadcast updates `chatConfig` and the toolbar
- * reflects it. No local copy → no optimistic-vs-broadcast race, no flicker.
+ * Live controls read the server's chat configuration.
  */
 export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const extras = useChatExtras();
@@ -90,6 +88,8 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const draft = useDraftConfig(isLocalDraft ? chatId : null);
   const draftMode = isLocalDraft && draft != null;
   const adapterInitializations = useRef(new Set<string>());
+  const reconcileModelResponse = extras?.reconcileModelResponse;
+  const switchProvider = useProviderSwitch(realChat, port, reconcileModelResponse);
   const chat: Chat | null = realChat ?? (chatId != null && draft != null ? synthesizeDraftChat(chatId, draft) : null);
 
   // Live run-state from the assistant-ui thread — stays accurate mid-run
@@ -122,7 +122,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
       if (port == null || !patchChatId) return;
       guard({ kind: 'effort', to: effort }, () => {
         const tuning: SessionTuning = { effort };
-        setChatTuning(port, patchChatId, tuning).catch((err: unknown) =>
+        void setChatTuning(port, patchChatId, tuning).catch((err: unknown) =>
           console.warn('[composer/useComposerTuning] setEffort failed', { err }),
         );
       });
@@ -140,7 +140,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
       guard({ kind: 'feature', key, to: on }, () => {
         // Write ONLY the touched field — ultracode→xhigh coercion is a daemon resolver invariant.
         const patch: SessionTuning = { [key]: on };
-        setChatTuning(port, patchChatId, patch).catch((err: unknown) =>
+        void setChatTuning(port, patchChatId, patch).catch((err: unknown) =>
           console.warn(`[composer/useComposerTuning] setFeature(${key}) failed`, { err }),
         );
       });
@@ -150,25 +150,33 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
 
   // adapter / model / permission all go through PATCH /config (or the draft).
   const patchConfig = useCallback(
-    (patch: ChatConfigPatch, label: string) => {
-      if (port == null || !patchChatId) return;
-      setChatConfig(port, patchChatId, patch).catch((err: unknown) => {
-        console.warn(`[composer/useComposerTuning] ${label} failed`, { err });
-        if (patch.model !== undefined) {
-          mfToast.error('Could not switch model', { description: err instanceof Error ? err.message : String(err) });
-        }
-      });
+    (patch: ChatConfigPatch, label: string, onSettled?: () => void) => {
+      if (port == null || !patchChatId) {
+        onSettled?.();
+        return;
+      }
+      const request = () => setChatConfig(port, patchChatId, patch);
+      void (label === 'setModel' && reconcileModelResponse ? reconcileModelResponse(patchChatId, request) : request())
+        .catch((err: unknown) => {
+          console.warn(`[composer/useComposerTuning] ${label} failed`, { err });
+          if (patch.model !== undefined) {
+            mfToast.error('Could not switch model', { description: err instanceof Error ? err.message : String(err) });
+          }
+        })
+        .finally(onSettled);
     },
-    [patchChatId, port],
+    [patchChatId, port, reconcileModelResponse],
   );
 
   const setModel = useCallback(
-    (m: string) => {
+    (model: string, onSettled?: () => void) => {
       if (draftMode && chatId) {
-        patchDraftConfig(chatId, { model: m });
+        patchDraftConfig(chatId, { model });
         return;
       }
-      guard({ kind: 'model', to: m }, () => patchConfig({ model: m }, 'setModel'));
+      return guard({ kind: 'model', to: model }, () => {
+        patchConfig({ model }, 'setModel', onSettled);
+      });
     },
     [draftMode, chatId, patchConfig, guard],
   );
@@ -220,6 +228,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
     setEffort,
     setFeature,
     setModel,
+    switchProvider,
     setAdapter,
     setPermissionMode,
     draftMode,

@@ -4,7 +4,7 @@ const near = (a, b, tol = TOL) => Math.abs(a - b) < tol;
 const norm = (s) => s.toLowerCase().replace(/[\s…]+/g, ' ').trim();
 const r = (n) => Math.round(n * 100) / 100;
 
-function pairTexts(a, b) {
+function pairTexts(a, b, exact) {
   const left = [...b];
   const pairs = [];
   const rest = [];
@@ -17,7 +17,7 @@ function pairTexts(a, b) {
   for (const t of rest) {
     let best = -1;
     let score = 60;
-    left.forEach((u, i) => {
+    if (!exact) left.forEach((u, i) => {
       const d = Math.abs(u.rect[0] - t.rect[0]) + Math.abs(u.rect[1] - t.rect[1]) * 2;
       if (d < score) [best, score] = [i, d];
     });
@@ -92,7 +92,7 @@ export function compare(p, a, opt = {}) {
   if (opt.only === 'box') return { rows: rows.filter((x) => !(x.prop === 'fill' && p.ground === a.ground)), checks };
   // Fills: compare what is seen, so a transparent box over the right ground is not a difference.
   for (const item of rows) if (item.part === 'box' && item.prop === 'fill' && p.ground === a.ground) item.drop = true;
-  for (const [t, u] of pairTexts(p.texts, a.texts)) {
+  for (const [t, u] of pairTexts(p.texts, a.texts, opt.exactText)) {
     const name = `text “${(t ?? u).text.slice(0, 48)}”`;
     if (!t || !u) {
       row(name, t ? 'missing in app' : 'only in app', t ? 'shown' : 'absent', u ? 'shown' : 'absent');

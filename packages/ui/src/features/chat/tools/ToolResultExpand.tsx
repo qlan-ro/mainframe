@@ -13,7 +13,7 @@
  * Props accept chatId/toolUseId explicitly so the component can be used
  * anywhere in the tool-card tree without requiring a full ChatRuntime.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useHost } from '@/lib/host';
 import { getToolResultContent } from '@/lib/api/chats';
 import { cn } from '@/lib/utils';
@@ -37,11 +37,18 @@ export interface ToolResultExpandProps {
   toolUseId: string;
   truncatedContent: string;
   fullBytes: number;
+  renderPreview?: (content: string) => ReactNode;
 }
 
 type FetchState = 'idle' | 'loading' | 'error';
 
-export function ToolResultExpand({ chatId, toolUseId, truncatedContent, fullBytes }: ToolResultExpandProps) {
+export function ToolResultExpand({
+  chatId,
+  toolUseId,
+  truncatedContent,
+  fullBytes,
+  renderPreview,
+}: ToolResultExpandProps) {
   const host = useHost();
   const [full, setFull] = useRetainedValue<string | null>(`full-output:${chatId}:${toolUseId}`, null);
   const [fetchState, setFetchState] = useState<FetchState>('idle');
@@ -72,6 +79,7 @@ export function ToolResultExpand({ chatId, toolUseId, truncatedContent, fullByte
   return full === null ? (
     <ToolResultPreview
       content={truncatedContent}
+      renderPreview={renderPreview}
       state={fetchState}
       disabled={port === null}
       fullBytes={fullBytes}
@@ -103,16 +111,22 @@ function ToolResultPreview({
   disabled,
   fullBytes,
   onExpand,
+  renderPreview,
 }: {
   content: string;
   state: FetchState;
   disabled: boolean;
   fullBytes: number;
   onExpand: () => void;
+  renderPreview?: ToolResultExpandProps['renderPreview'];
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <pre className="text-xs wrap-break-word whitespace-pre-wrap text-muted-foreground">{content}</pre>
+      {renderPreview ? (
+        renderPreview(content)
+      ) : (
+        <pre className="mf-tr-mono whitespace-pre text-foreground">{content}</pre>
+      )}
       {state === 'error' ? (
         <span className="text-xs text-muted-foreground">full output no longer available</span>
       ) : (
