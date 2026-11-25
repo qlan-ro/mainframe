@@ -11,6 +11,7 @@
 use crate::chat_manager::ChatShared;
 use crate::event_handler::EventHandler;
 use mainframe_types::chat::Chat;
+use mainframe_types::chat_patch::ChatPatch;
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::http_status::{HttpStatus, StatusKind};
 use mainframe_types::sync::LockExt as _;
@@ -103,6 +104,7 @@ pub(crate) async fn continue_in_project_root(
         let mut active = cell.lock_recover();
         active.chat.worktree_path = None;
         active.chat.branch_name = None;
+        active.chat.base_branch = None;
     }
     emit_updated(shared, chat_id);
     Ok(())
@@ -126,6 +128,7 @@ pub(crate) async fn recreate_chat_worktree(
     if !shared.deps.branch_exists(&project_path, &branch_name).await {
         return Err(DegradedRecoveryError::BranchGone(branch_name));
     }
+    shared.clear_missing_worktree_base(chat_id)?;
     shared
         .deps
         .add_worktree(&project_path, &worktree_path, &branch_name)
@@ -133,6 +136,87 @@ pub(crate) async fn recreate_chat_worktree(
     // enrichChat recomputes worktreeMissing from disk on read, so a plain re-emit clears the flag.
     emit_updated(shared, chat_id);
     Ok(())
+}
+
+impl ChatShared {
+    pub(crate) fn clear_missing_worktree_base(
+        &self,
+        chat_id: &str,
+    ) -> Result<bool, mainframe_types::seam_error::SeamError> {
+        let Some(chat) = self.deps.chats_get(chat_id)? else {
+            return Ok(false);
+        };
+        let cell = self.active(chat_id);
+        let mut active = cell.as_ref().map(|cell| cell.lock_recover());
+        let current = active.as_ref().map_or(&chat, |active| &active.chat);
+        if current.base_branch.is_none()
+            || current.worktree_path != chat.worktree_path
+            || current.branch_name != chat.branch_name
+            || current
+                .worktree_path
+                .as_deref()
+                .is_none_or(mainframe_services::workspace::worktree::is_worktree_present)
+        {
+            return Ok(false);
+        }
+        self.deps.chats_update(
+            chat_id,
+            &ChatPatch {
+                base_branch: Some(None),
+                ..Default::default()
+            },
+        )?;
+        if let Some(active) = &mut active {
+            active.chat.base_branch = None;
+        }
+        Ok(true)
+    }
+
+    pub(crate) async fn remove_archived_worktree(
+        &self,
+        chat_id: &str,
+        project: &str,
+        path: &str,
+        branch: &str,
+    ) {
+        let affected = self.worktree_base_candidates(chat_id, path).await;
+        self.deps.remove_worktree(project, path, branch).await;
+        self.clear_removed_worktree_bases(affected);
+    }
+
+    pub(crate) async fn worktree_base_candidates(&self, chat_id: &str, path: &str) -> Vec<String> {
+        let chats = match self.deps.chats_list_all() {
+            Ok(chats) => chats,
+            Err(error) => {
+                tracing::warn!(chat_id, %error, "failed to list chats sharing the worktree");
+                return vec![chat_id.to_string()];
+            }
+        };
+        let canonical = tokio::fs::canonicalize(path).await.ok();
+        let mut affected = Vec::new();
+        for chat in chats.into_iter().filter(|chat| chat.base_branch.is_some()) {
+            if let Some(candidate) = chat.worktree_path
+                && (candidate == path
+                    || (canonical.is_some()
+                        && tokio::fs::canonicalize(candidate).await.ok() == canonical))
+            {
+                affected.push(chat.id);
+            }
+        }
+        affected
+    }
+
+    pub(crate) fn clear_removed_worktree_bases(&self, affected: Vec<String>) {
+        for chat_id in affected {
+            match self.clear_missing_worktree_base(&chat_id) {
+                Ok(true) => emit_updated(self, &chat_id),
+                Ok(false) => {}
+                Err(error) => {
+                    tracing::warn!(chat_id, %error, "failed to clear the removed worktree's base branch")
+                }
+            }
+        }
+    }
 }
 
 fn emit_updated(shared: &ChatShared, chat_id: &str) {

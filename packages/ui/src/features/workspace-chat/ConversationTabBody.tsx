@@ -10,6 +10,7 @@ import type { RunTab } from '@/store/run-pane';
 import { ChatTabBody } from './ChatTabBody';
 import { SideChatTabBody } from './SideChatTabBody';
 import { SubagentTabBody } from './SubagentTabBody';
+import { ConversationVisibility } from '@/features/chat/runtime/conversation-visibility';
 import { useTabBodyFocus } from './tab-focus';
 
 function Body({ tab, active }: { tab: RunTab; active: boolean }) {
@@ -50,7 +51,9 @@ export function ConversationTabBody({ tab, active }: { tab: RunTab; active: bool
         !active && 'invisible',
       )}
     >
-      <Body tab={tab} active={active} />
+      <ConversationVisibility.Provider value={active}>
+        <Body tab={tab} active={active} />
+      </ConversationVisibility.Provider>
     </div>
   );
 }

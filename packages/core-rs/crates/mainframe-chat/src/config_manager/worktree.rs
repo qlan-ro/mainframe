@@ -42,6 +42,7 @@ impl ChatConfigManager {
                         },
                         worktree_path: worktree_path.to_string(),
                         branch_name,
+                        base_branch: None,
                     },
                 )
                 .await;
@@ -55,8 +56,8 @@ impl ChatConfigManager {
             Some(worktree_path.to_string()),
             branch_name,
             None,
-        )?;
-        Ok(())
+            None,
+        )
     }
 
     pub async fn disable_worktree(&self, chat_id: &str) -> Result<(), ConfigError> {
@@ -97,16 +98,26 @@ impl ChatConfigManager {
             fut.await;
         }
 
-        if let Some(project) = self.shared.deps.projects_get_path(&project_id) {
-            remove_worktree(
-                &project,
-                &worktree_path,
-                branch_name.as_deref().unwrap_or_default(),
-            )
+        self.remove_disabled_worktree(chat_id, &project_id, &worktree_path, branch_name.as_deref())
             .await;
-        }
+        self.apply_worktree_update(&cell, chat_id, None, None, None, None)
+    }
 
-        self.apply_worktree_update(&cell, chat_id, None, None, None)?;
-        Ok(())
+    async fn remove_disabled_worktree(
+        &self,
+        chat_id: &str,
+        project_id: &str,
+        worktree_path: &str,
+        branch_name: Option<&str>,
+    ) {
+        if let Some(project) = self.shared.deps.projects_get_path(project_id) {
+            let mut affected = self
+                .shared
+                .worktree_base_candidates(chat_id, worktree_path)
+                .await;
+            affected.retain(|id| id != chat_id);
+            remove_worktree(&project, worktree_path, branch_name.unwrap_or_default()).await;
+            self.shared.clear_removed_worktree_bases(affected);
+        }
     }
 }

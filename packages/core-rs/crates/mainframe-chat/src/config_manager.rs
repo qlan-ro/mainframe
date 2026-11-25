@@ -94,6 +94,7 @@ struct LiveRebind<'a> {
     active: ActiveSession<'a>,
     worktree_path: String,
     branch_name: Option<String>,
+    base_branch: Option<String>,
 }
 
 #[derive(Default)]

@@ -1,15 +1,4 @@
-/**
- * use-display-branch — the branch name a session-scoped surface should show.
- *
- * The persisted `chat.branchName` is set only for worktree sessions, so a
- * main-repo session has no branch at all without a live `getGitBranch` read.
- * Both the shell toolbar's chip and the session panel's Summary row want that
- * same answer, so the rule lives here once rather than being copied.
- *
- * `refetch` exists because a branch-popover write (checkout, rename) broadcasts
- * no `chat.updated`, so nothing else would invalidate the live read.
- */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getGitBranch } from '@/lib/api/git';
 
 export interface UseDisplayBranchOptions {
@@ -19,12 +8,16 @@ export interface UseDisplayBranchOptions {
   /** The session's persisted branch — present for worktree sessions only. */
   branchName?: string;
   isWorktree?: boolean;
+  worktreePath?: string;
+  hasRecordedBase?: boolean;
+  visible?: boolean;
   /** A non-project chat has no git repo to read a branch from (todo #346). */
   noProject?: boolean;
 }
 
 export interface DisplayBranch {
   branch: string | undefined;
+  liveBranch: string | null | undefined;
   /** A worktree draft: no chat exists yet, so a live read would answer for the project ROOT. */
   isDraftWorktree: boolean;
   refetch: () => void;
@@ -37,16 +30,28 @@ export function useDisplayBranch({
   branchName,
   isWorktree = false,
   noProject = false,
+  worktreePath,
+  hasRecordedBase = false,
+  visible = true,
 }: UseDisplayBranchOptions): DisplayBranch {
-  const [liveBranch, setLiveBranch] = useState<string | undefined>(undefined);
+  const canRead = !hasRecordedBase || visible;
+  const boundPath = hasRecordedBase ? worktreePath : undefined;
+  const [revision, setRevision] = useState(0);
+  const request = useMemo(
+    () => ({ port, projectId, chatId, branchName, noProject, boundPath, revision, canRead }),
+    [port, projectId, chatId, branchName, noProject, boundPath, revision, canRead],
+  );
+  const [live, setLive] = useState<{ request: typeof request; branch: string | null }>();
+  const liveBranch = live?.request === request ? live.branch : undefined;
+  const refetch = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
-    setLiveBranch(undefined);
-    if (!projectId || noProject) return;
+    const { port, projectId, chatId, noProject, canRead } = request;
+    if (!canRead || !projectId || noProject) return;
     let cancelled = false;
     getGitBranch(port, projectId, chatId)
       .then(({ branch }) => {
-        if (!cancelled) setLiveBranch(branch ?? undefined);
+        if (!cancelled) setLive({ request, branch });
       })
       .catch((err: unknown) => {
         if (!cancelled) console.warn('[use-display-branch] failed to read current branch', err);
@@ -54,22 +59,19 @@ export function useDisplayBranch({
     return () => {
       cancelled = true;
     };
-  }, [port, projectId, chatId, branchName, noProject]);
+  }, [request]);
 
-  const refetch = useCallback(() => {
-    if (!projectId || noProject) return;
-    getGitBranch(port, projectId, chatId)
-      .then(({ branch }) => setLiveBranch(branch ?? undefined))
-      .catch((err: unknown) => {
-        console.warn('[use-display-branch] failed to refresh branch after a write', err);
-      });
-  }, [port, projectId, chatId, noProject]);
+  useEffect(() => {
+    if (!hasRecordedBase || !visible) return;
+    window.addEventListener('focus', refetch);
+    return () => window.removeEventListener('focus', refetch);
+  }, [hasRecordedBase, visible, refetch]);
 
   // A worktree DRAFT (chat created on first send) can't resolve its branch live:
   // without a chatId the fetch reads the project root. Trust the draft's own
   // name there; every other state prefers the live read.
   const isDraftWorktree = isWorktree && !chatId;
-  const branch = isDraftWorktree ? (branchName ?? liveBranch) : (liveBranch ?? branchName);
+  const branch = isDraftWorktree ? (branchName ?? liveBranch ?? undefined) : (liveBranch ?? branchName);
 
-  return { branch, isDraftWorktree, refetch };
+  return { branch, liveBranch, isDraftWorktree, refetch };
 }

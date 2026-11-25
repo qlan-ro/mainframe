@@ -27,6 +27,10 @@ pub(crate) fn assignments(
     set.enumeration("permission_mode", patch.permission_mode.as_ref().map(Some))?;
     set.nullable_text("worktree_path", patch.worktree_path.as_ref());
     set.nullable_text("branch_name", patch.branch_name.as_ref());
+    let base_branch = patch.base_branch.as_ref().or_else(|| {
+        (patch.worktree_path.is_some() || patch.branch_name.is_some()).then_some(&None)
+    });
+    set.nullable_text("base_branch", base_branch);
     let mentions = patch.mentions.as_ref().map(serde_json::to_string);
     set.push("mentions", mentions.transpose()?.map(SqlValue::Text));
     set.enumeration(

@@ -67,6 +67,7 @@ fn find_or_create_side_chat_seeds_the_parent_fields_and_nothing_else() {
                 permission_mode: Some(ExecutionMode::AcceptEdits),
                 worktree_path: Some(Some("/tmp/wt".to_string())),
                 branch_name: Some(Some("feature/x".to_string())),
+                base_branch: Some(Some("main".to_string())),
                 plan_mode: Some(true),
                 title: Some("Parent title".to_string()),
                 pinned: Some(true),
@@ -85,6 +86,7 @@ fn find_or_create_side_chat_seeds_the_parent_fields_and_nothing_else() {
     assert_eq!(side.plan_mode, Some(true));
     assert_eq!(side.worktree_path, parent.worktree_path);
     assert_eq!(side.branch_name, parent.branch_name);
+    assert_eq!(side.base_branch.as_deref(), Some("main"));
     assert_eq!(side.scratch_path, parent.scratch_path);
     assert_eq!(side.parent_chat_id, Some(Some(parent.id.clone())));
     assert!(side.temporary);

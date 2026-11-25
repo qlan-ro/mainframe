@@ -34,6 +34,7 @@ export interface SessionCustom {
   transcriptMissing: boolean;
   /** Worktree branch — read by the shell MainToolbar identity (additive). */
   branchName?: string;
+  baseBranch?: string;
   /**
    * Fixed at creation. Excluded from default listings; never pinned, tagged
    * or archived. The sidebar's temporary glyph and any "include temporary"
@@ -118,6 +119,7 @@ export function chatToThreadCustom(chat: Chat): ThreadCustomResult {
     worktreeMissing: chat.worktreeMissing ?? false,
     transcriptMissing: chat.transcriptMissing ?? false,
     branchName: chat.branchName,
+    baseBranch: chat.baseBranch,
     temporary: chat.temporary,
     noProject: chat.noProject,
     updatedAt: new Date(chat.updatedAt).getTime(),

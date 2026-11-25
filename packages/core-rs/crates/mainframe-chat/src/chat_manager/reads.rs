@@ -147,6 +147,27 @@ impl ChatManager {
         }
     }
 
+    pub fn apply_cleared_worktree_base(&self, base: &mainframe_db::ClearedWorktreeBase) {
+        if let Some(cell) = self.get_active(&base.chat_id) {
+            let mut guard = cell.lock_recover();
+            let chat = &mut guard.chat;
+            if chat.project_id == base.project_id
+                && chat.worktree_path == base.worktree_path
+                && chat.branch_name.as_deref() == Some(base.branch_name.as_str())
+            {
+                chat.base_branch = None;
+            }
+        }
+        self.emit_chat_updated(&base.chat_id);
+    }
+
+    pub fn emit_worktree_deleted(&self, chat_id: &str) {
+        if let Err(error) = self.shared.clear_missing_worktree_base(chat_id) {
+            tracing::warn!(chat_id, %error, "failed to clear the removed worktree's base branch");
+        }
+        self.emit_chat_updated(chat_id);
+    }
+
     /// Re-reads a chat's agent lineage and delegation state into its cached
     /// cell, then announces the chat. The orchestration server calls this when
     /// a task, the lineage, or the chat's agent outbox changes; without it the
