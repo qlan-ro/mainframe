@@ -37,7 +37,10 @@ interface AgentPresentation {
 export const isCodexAgent = (call: SubagentCall): boolean => call.part.toolName === 'CollabAgent';
 
 /** Also before the result arrives. */
-const isFailed = ({ part }: SubagentCall) => isErrorResult(part.result, part.isError);
+export const isFailed = ({ part }: SubagentCall) => isErrorResult(part.result, part.isError);
+
+export const isBackgroundLaunch = ({ part }: SubagentCall): boolean =>
+  (part.args as Record<string, unknown>)['run_in_background'] === true;
 
 /** The text an envelope holds; an empty one holds none. */
 function unwrap(result: unknown): string {
@@ -132,7 +135,7 @@ function finalAnswers({ part }: SubagentCall): AgentReport[] {
 export function describeAgent(facts: Facts, live: boolean): AgentPresentation {
   const { call, tasks } = facts;
   const result = resultText(call);
-  const background = (call.part.args as Record<string, unknown>)['run_in_background'] === true;
+  const background = isBackgroundLaunch(call);
   const reports = result.trim() === '' || background ? [...taskSummaries(tasks), ...finalAnswers(call)] : [];
   return {
     status: statusOf(facts, live),

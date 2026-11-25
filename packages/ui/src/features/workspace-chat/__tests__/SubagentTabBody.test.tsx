@@ -323,15 +323,22 @@ describe('text', () => {
   const MARKED = '# Not a heading\n\n**not bold** <b>not HTML</b>\n  [no link](src/a.ts)';
 
   it.each([
-    ['of an answer', { args: ARGS, result: MARKED }],
     ['of an error', { args: ARGS, result: MARKED, isError: true }],
     ['of a launch', { args: { ...ARGS, run_in_background: true }, result: MARKED }],
-  ])('shows the call’s own result as text, not as Markdown or HTML: %s', async (_, call) => {
+  ])('shows as text, not as Markdown or HTML, the result %s', async (_, call) => {
     await show(call);
     const text = screen.getByTestId(RESULT).querySelector('p')!;
     expect(text.textContent).toBe(MARKED);
     expect(text.childElementCount).toBe(0);
     expect(text).toHaveClass('whitespace-pre-wrap');
+  });
+
+  it('shows an answer as the Markdown it is, and no HTML', async () => {
+    await show({ args: { ...ARGS, run_in_background: undefined }, result: '**Bold** <b>tag</b>\n\n- one\n- two' });
+    const result = screen.getByTestId(RESULT);
+    expect(result.querySelector('strong')).toHaveTextContent('Bold');
+    expect(result.querySelectorAll('li')).toHaveLength(2);
+    expect(result.querySelector('b')).toBeNull();
   });
 
   it('shows a task’s summary as text too', async () => {

@@ -26,7 +26,7 @@ import { useStop } from '@/features/session-panel/use-stop';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { stopBackgroundTask } from '@/lib/api/background-tasks';
-import { describeAgent, isCodexAgent } from './agent-status';
+import { describeAgent, isBackgroundLaunch, isCodexAgent, isFailed } from './agent-status';
 import { AgentStatusLabel, ConversationHeader, StopButton } from './ConversationHeader';
 import { findSubagentCall, type SubagentCall } from './find-subagent-call';
 import { useHoldConversation } from './mounted-conversations';
@@ -160,6 +160,8 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const { tasks, live } = useAgentTasks(chatId, toolCallId, state.backgroundTasks, active);
   const agent = call == null ? null : describeAgent({ call, state, tasks }, live);
   const shown = agent?.status;
+  // An answer is prose. An error, and the receipt of a call launched in the background, are shown as they came.
+  const ResultBlock = call != null && (isFailed(call) || isBackgroundLaunch(call)) ? TextBlock : ProseBlock;
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
   const shownTitle = text(args['description']) || title;
   const running = agent?.runningTask;
@@ -199,8 +201,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
           <ParentScope chatId={chatId} state={state}>
             <ProseBlock label="Brief" testId={`workspace-agent-brief-${toolCallId}`} source={text(args['prompt'])} />
             <Steps call={call} />
-            {/* Not known to be the agent's own words: it can be a launch receipt, or an error. */}
-            <TextBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
+            <ResultBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
             {agent?.reports.map(({ source, text: report }, i) => {
               // A final answer is the agent's prose by its source; a summary is the CLI's.
               const ReportBlock = source === 'Final answer' ? ProseBlock : TextBlock;
