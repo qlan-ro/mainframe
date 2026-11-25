@@ -29,8 +29,10 @@ import { ComposerHint } from '../composer-card-context';
 import { stripItems, stripSummary, type StripItem } from './activity-strip-model';
 import { TOP_STRIP } from './strip-chrome';
 
-const ROW = 'flex min-h-7 min-w-0 items-center gap-2 rounded-lg pr-0.5 pl-2 text-small';
-const TOGGLE = 'size-6 shrink-0 text-muted-foreground';
+const ROW = 'flex min-h-7 min-w-0 items-center gap-2 rounded-md pr-0.5 pl-2 text-small text-ink-secondary';
+const TOGGLE =
+  'size-6 shrink-0 rounded-sm text-muted-foreground hover:bg-sidebar-accent aria-expanded:bg-transparent aria-expanded:text-muted-foreground dark:hover:bg-sidebar-accent';
+const ACTION = 'h-6 shrink-0 rounded-sm px-[7px] text-meta/[1.45] hover:bg-sidebar-accent';
 
 /** Open what an item is doing: a task or sub-agent in the workspace (W8), else its place in the transcript. */
 function useOpen(chatId: string) {
@@ -71,7 +73,7 @@ function StopAction({ title, request }: { title: string; request: () => Promise<
       // Not `disabled`, which would drop the focus it has.
       aria-disabled={stopping}
       onClick={onStop}
-      className="h-6 shrink-0 text-foreground/80 aria-disabled:text-muted-foreground"
+      className={cn(ACTION, 'text-ink-secondary aria-disabled:text-muted-foreground')}
     >
       {stopping ? 'Stopping' : 'Stop'}
     </Button>
@@ -99,8 +101,8 @@ function ItemRow({ item, chatId, adapterId, now, trailing }: ItemRowProps) {
       data-needs-you={needsYou || undefined}
       className={ROW}
     >
-      <Icon aria-hidden className={cn('size-3.5 shrink-0', needsYou ? 'text-warning' : 'text-focus')} />
-      <span className="min-w-0 flex-1 truncate" title={entry.title}>
+      <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-foreground" title={entry.title}>
         {entry.title}
       </span>
       {needsYou ? (
@@ -119,7 +121,7 @@ function ItemRow({ item, chatId, adapterId, now, trailing }: ItemRowProps) {
           data-testid="composer-activity-open"
           aria-label={`Open ${entry.title}`}
           onClick={() => open(entry)}
-          className="h-6 shrink-0 text-accent-ink hover:text-accent-ink"
+          className={cn(ACTION, 'text-accent-ink hover:text-foreground')}
         >
           Open
         </Button>
@@ -154,7 +156,7 @@ function FoldToggle({
         onClick={onClick}
         className={TOGGLE}
       >
-        <ChevronDown className={cn('size-3.5', !open && 'rotate-180')} />
+        <ChevronDown className={cn('size-3', open && 'rotate-180')} />
       </Button>
     </ComposerHint>
   );
@@ -217,7 +219,7 @@ export function ActivityStrip() {
       />
     ) : all.length > 1 ? (
       <>
-        {folded && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">+{hidden}</span>}
+        {folded && <span className="shrink-0 text-meta/[1.45] text-muted-foreground tabular-nums">+{hidden}</span>}
         <FoldToggle
           open={!folded}
           label={folded ? `Show all ${all.length} ongoing items` : 'Collapse to one row'}

@@ -11,7 +11,7 @@ type GateAccent = 'primary' | 'warning';
  */
 const ACCENT_RING: Record<GateAccent, string> = {
   primary: 'border-primary/40 ring-3 ring-primary/15',
-  warning: 'border-warning-dot ring-3 ring-warning/15',
+  warning: 'border-warning-dot/45 ring-3 ring-warning-dot/15',
 };
 
 /**
@@ -22,7 +22,13 @@ const ACCENT_RING: Record<GateAccent, string> = {
 export const GATE_BODY_INSET = 'pl-[calc(1rem+1.5rem+0.625rem)]';
 
 /** A gate's primary answer: white text needs the deeper blue (DESIGN.md, Deep Blue Fill). */
-export const GATE_PRIMARY = 'bg-accent-fill text-white hover:bg-accent-fill/90';
+export const GATE_PRIMARY = 'bg-accent-fill text-white hover:brightness-108';
+
+/** Every answer's button, and the outlined and refusing ones (DESIGN.md, Buttons). */
+export const GATE_BUTTON = 'h-8 text-row font-medium shadow-none';
+export const GATE_OUTLINE =
+  'border-input bg-card text-foreground hover:bg-sidebar-accent dark:border-input dark:bg-card dark:hover:bg-sidebar-accent';
+export const GATE_DANGER = 'bg-red/11 text-red hover:bg-red/19 dark:bg-red/11 dark:hover:bg-red/19';
 
 export function GateCardShell({
   resolved,
@@ -37,7 +43,7 @@ export function GateCardShell({
       data-testid="chat-gate-card"
       className={cn(
         // `clip`, not `hidden`: it is no scroll container, so a sticky footer answers to the gate's slot.
-        'overflow-clip rounded-xl border bg-card',
+        'overflow-clip rounded-tile border bg-card',
         resolved ? 'border-border' : ACCENT_RING[accent],
         className,
       )}
@@ -70,7 +76,7 @@ export function GateHead({
     <div className="flex items-center gap-2.5 px-4 pt-3 pb-2">
       <span
         data-testid="gate-head-tile"
-        className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-md', tileClassName)}
+        className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-sm', tileClassName)}
       >
         {icon}
       </span>
@@ -78,18 +84,18 @@ export function GateHead({
         <span
           data-testid="gate-head-eyebrow"
           dir="ltr"
-          className={cn('stored-order text-xs font-medium', eyebrowClassName)}
+          className={cn('stored-order text-label/[1.45] font-medium', eyebrowClassName)}
         >
           {visibleLine(eyebrow)}
         </span>
         <span
           data-testid="gate-head-title"
           dir="ltr"
-          className="stored-order text-sm leading-tight font-semibold text-foreground"
+          className="stored-order text-title/[1.3] font-semibold text-foreground"
         >
           {visibleLine(title)}
         </span>
-        {subtitle != null && <span className="text-xs text-muted-foreground">{subtitle}</span>}
+        {subtitle != null && <span className="text-meta/[1.45] text-muted-foreground">{subtitle}</span>}
       </div>
       {right}
     </div>

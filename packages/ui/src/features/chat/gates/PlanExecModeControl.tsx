@@ -1,4 +1,5 @@
-import { ShieldIcon, PencilIcon, SparklesIcon, ZapIcon } from 'lucide-react';
+import { ShieldIcon } from 'lucide-react';
+import { BoltIcon, PencilIcon, SparkIcon } from '@/components/ui/glyphs';
 import { cn } from '@/lib/utils';
 import { Hint } from '@/components/ui/hint';
 import type { ComponentType } from 'react';
@@ -14,8 +15,8 @@ interface ExecModeOption {
 const EXEC_MODE_OPTIONS: ExecModeOption[] = [
   { id: 'default', label: 'Interactive', Icon: ShieldIcon, desc: 'Ask before each tool' },
   { id: 'acceptEdits', label: 'Auto-Edits', Icon: PencilIcon, desc: 'Apply edits, ask to run' },
-  { id: 'auto', label: 'Auto', Icon: SparklesIcon, desc: 'The agent decides which actions need approval' },
-  { id: 'yolo', label: 'Unattended', Icon: ZapIcon, desc: 'Run everything, no prompts' },
+  { id: 'auto', label: 'Auto', Icon: SparkIcon, desc: 'The agent decides which actions need approval' },
+  { id: 'yolo', label: 'Unattended', Icon: BoltIcon, desc: 'Run everything, no prompts' },
 ];
 
 /** Selected ink per mode; anything unlisted reads as the accent.
@@ -47,7 +48,7 @@ export function PlanExecModeControl({ value, onChange, autoAllowed }: PlanExecMo
     <div
       role="group"
       aria-label="Run the plan in"
-      className="inline-flex flex-wrap gap-0.5 rounded-md border border-border bg-muted p-0.5"
+      className="inline-flex flex-wrap gap-0.5 rounded-md border border-border bg-chrome-chip p-0.5"
     >
       {options.map(({ id, label, Icon, desc }) => {
         const selected = value === id;
@@ -60,10 +61,10 @@ export function PlanExecModeControl({ value, onChange, autoAllowed }: PlanExecMo
               aria-pressed={selected}
               onClick={() => onChange(id)}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1',
-                'text-xs font-semibold transition-colors',
+                'inline-flex min-h-6 items-center gap-1.5 rounded-sm px-2.5 py-1',
+                'text-label/[1.45] font-semibold transition-colors',
                 'focus-visible:focus-line',
-                selected && ['bg-background shadow-sm', SELECTED_INK[id] ?? 'text-accent-ink'],
+                selected && ['bg-card shadow-segment', SELECTED_INK[id] ?? 'text-accent-ink'],
                 !selected && 'text-muted-foreground hover:text-foreground',
               )}
             >

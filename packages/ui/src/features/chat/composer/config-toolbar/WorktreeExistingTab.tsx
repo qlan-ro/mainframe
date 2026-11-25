@@ -8,14 +8,16 @@
 
 import type { ReactNode } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MENU_DETAIL, MENU_ITEM, MENU_LABEL } from '@/components/ui/menu-item';
 import type { WorktreeEntry } from '@/lib/api/git';
+import { cn } from '@/lib/utils';
 
 /**
  * Section eyebrow inside the popover — the same rung GateHead's eyebrow uses.
  * Replaces the v1 `MenuLabel`, which belonged to a menu this surface is not.
  */
 export function WorktreeSectionLabel({ children }: { children: ReactNode }) {
-  return <div className="px-2 text-xs font-medium text-muted-foreground">{children}</div>;
+  return <div className={MENU_LABEL}>{children}</div>;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +69,9 @@ export interface ExistingTabProps {
 
 export function WorktreeExistingTab({ worktrees, disabled, onAttach, error }: ExistingTabProps) {
   if (worktrees.length === 0) {
-    return <p className="px-2 py-4 text-center text-xs text-muted-foreground">No existing worktrees found</p>;
+    return (
+      <p className="px-2.5 py-4 text-center text-meta/[1.45] text-muted-foreground">No existing worktrees found</p>
+    );
   }
 
   return (
@@ -81,15 +85,15 @@ export function WorktreeExistingTab({ worktrees, disabled, onAttach, error }: Ex
           data-testid={`composer-worktree-attach-${wt.path}`}
           disabled={disabled}
           onClick={() => onAttach(wt)}
-          className="flex w-full min-w-0 flex-col items-start rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+          className={cn(MENU_ITEM, 'min-w-0 flex-col gap-0')}
         >
-          <span className="max-w-full truncate text-sm text-foreground">
+          <span className="max-w-full truncate font-mono text-small/[20px] font-normal text-foreground">
             {wt.branch ? wt.branch.replace('refs/heads/', '') : 'detached'}
           </span>
-          <span className="max-w-full truncate text-xs text-muted-foreground">{wt.path}</span>
+          <span className={cn(MENU_DETAIL, 'max-w-full truncate')}>{wt.path}</span>
         </button>
       ))}
-      {error && <p className="mt-1 px-2 text-xs text-fail">{error}</p>}
+      {error && <p className="mt-1 px-2.5 text-meta/[1.45] text-fail">{error}</p>}
     </div>
   );
 }

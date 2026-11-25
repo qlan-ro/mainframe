@@ -11,7 +11,8 @@
  */
 import { useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { FolderGit2, GitBranch, Lock, Monitor, Timer } from 'lucide-react';
+import { FolderGit2, Lock, Monitor, Timer } from 'lucide-react';
+import { BranchIcon } from '@/components/ui/glyphs';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { BranchPopover } from '@/features/git/BranchPopover';
@@ -25,7 +26,7 @@ import { ComposerCardProvider, ComposerHint } from '../composer-card-context';
 import { ChangesButton } from './ChangesButton';
 
 export const BOTTOM_STRIP_BUTTON =
-  'inline-flex h-6 min-w-0 items-center gap-1.5 rounded-md px-1.5 text-xs whitespace-nowrap text-foreground/80 hover:bg-accent focus-visible:focus-line';
+  'inline-flex h-6 min-w-0 items-center gap-1.5 rounded-sm px-1.5 text-small whitespace-nowrap text-ink-secondary hover:bg-sidebar-accent focus-visible:focus-line';
 
 /** A temporary session has no worktree to move to, and the choice is fixed at creation. */
 function TemporaryPart() {
@@ -38,9 +39,10 @@ function TemporaryPart() {
         aria-label="Temporary, deleted when closed. Fixed when the session was created"
         className={cn(BOTTOM_STRIP_BUTTON, 'cursor-default hover:bg-transparent')}
       >
-        <Timer className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <Timer className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="min-w-0 truncate">
-          Temporary<span className="@max-[400px]/composer:hidden"> · deleted when closed</span>
+          <span className="font-medium">Temporary</span>
+          <span className="@max-[400px]/composer:hidden"> · deleted when closed</span>
         </span>
         <Lock className="size-3 shrink-0 text-muted-foreground" aria-hidden />
       </button>
@@ -63,7 +65,7 @@ function WherePart({ session, chat }: { session: StripSession; chat: Chat | null
   const runsIn = [isolated ? 'Runs in a worktree' : 'Runs in the local checkout', directory].filter(Boolean).join(', ');
   const content = (
     <>
-      <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <span className="font-medium @max-[400px]/composer:hidden">{isolated ? 'Worktree' : 'Local'}</span>
     </>
   );
@@ -88,7 +90,7 @@ function WherePart({ session, chat }: { session: StripSession; chat: Chat | null
         data-isolated={isolated || undefined}
         aria-label={`${runsIn}. ${isolated ? 'Worktree options' : 'Isolate in a worktree'}`}
         title={path ?? runsIn}
-        className={cn(BOTTOM_STRIP_BUTTON, 'shrink-0', open && 'bg-accent')}
+        className={cn(BOTTOM_STRIP_BUTTON, 'shrink-0', open && 'bg-chrome-press hover:bg-chrome-press')}
       >
         {content}
       </button>
@@ -119,10 +121,10 @@ function BranchPart({ session, port }: { session: StripSession; port: number }) 
         type="button"
         data-testid="composer-branch"
         aria-label={`Branch ${branch}. Manage branches`}
-        className={cn(BOTTOM_STRIP_BUTTON, open && 'bg-accent')}
+        className={cn(BOTTOM_STRIP_BUTTON, open && 'bg-chrome-press hover:bg-chrome-press')}
       >
-        <GitBranch className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0 truncate" title={branch}>
+        <BranchIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="min-w-0 truncate font-mono text-caption/[1.45]" title={branch}>
           {branch}
         </span>
       </button>

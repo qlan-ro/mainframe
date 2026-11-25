@@ -2,7 +2,8 @@
 
 /** The composer's `+` (C4): attach files, or mention a file or agent. */
 import { useRef, useState, type RefObject } from 'react';
-import { AtSignIcon, Paperclip, PlusIcon } from 'lucide-react';
+import { AtSignIcon, PlusIcon } from 'lucide-react';
+import { PaperclipIcon } from '@/components/ui/glyphs';
 import { ComposerPrimitive, useAui } from '@assistant-ui/react';
 import {
   DropdownMenu,
@@ -63,7 +64,7 @@ export function ComposerAddMenu({ textareaRef }: { textareaRef: RefObject<HTMLTe
           align="start"
           side="top"
           sideOffset={6}
-          className="w-60"
+          className="w-65"
           onCloseAutoFocus={(e) => {
             const run = afterClose.current;
             if (!run) return;
@@ -78,8 +79,8 @@ export function ComposerAddMenu({ textareaRef }: { textareaRef: RefObject<HTMLTe
               afterClose.current = () => addFiles.current?.click();
             }}
           >
-            <Paperclip />
-            Attach files
+            <PaperclipIcon />
+            Attach files…
           </DropdownMenuItem>
           <DropdownMenuItem
             data-testid="composer-add-mention"
@@ -88,7 +89,7 @@ export function ComposerAddMenu({ textareaRef }: { textareaRef: RefObject<HTMLTe
             }}
           >
             <AtSignIcon />
-            Mention a file or agent
+            Mention a file or agent…
             <DropdownMenuShortcut>@</DropdownMenuShortcut>
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -25,7 +25,7 @@ export function ComposerHint({ label, children }: ComposerHintProps) {
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       {/* The boundary clamps every side, so the card's own top edge would flip the
           tooltip under its trigger. 200px of slack keeps it above. */}
-      <TooltipContent side="top" sideOffset={4} collisionBoundary={card} collisionPadding={{ top: -200 }}>
+      <TooltipContent side="top" sideOffset={8} collisionBoundary={card} collisionPadding={{ top: -200 }}>
         {label}
       </TooltipContent>
     </Tooltip>

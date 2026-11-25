@@ -46,11 +46,11 @@ export function DraftTile({
     <ComposerHint label={<span className="wrap-anywhere">{full}</span>}>
       <div
         data-testid={testId}
-        className="group/tile relative flex h-10 w-43 shrink-0 items-center gap-2 rounded-[9px] bg-muted pr-0.5 pl-2 text-sm"
+        className="group/tile relative flex h-10 w-43 shrink-0 items-center gap-2 rounded-[9px] bg-queue-well pr-0.5 pl-2 text-sm"
       >
         {children}
         {lead}
-        <span className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span className="flex min-w-0 flex-1 flex-col">
           {typeof title === 'string' ? (
             <FadeLabel className={cn(FADE, 'text-small/tight', !monoDetail && 'font-medium')}>{title}</FadeLabel>
           ) : (
@@ -59,7 +59,7 @@ export function DraftTile({
           <FadeLabel
             className={cn(
               FADE,
-              'text-muted-foreground dark:text-foreground/65',
+              'text-muted-foreground',
               monoDetail ? 'font-mono text-[11px]/[1.3]' : 'text-caption/tight',
             )}
           >
@@ -80,10 +80,12 @@ export function ExtensionLead({ name }: { name: string }) {
   return (
     <span
       aria-hidden
-      className="grid size-7 shrink-0 place-items-center rounded-md font-semibold uppercase"
+      className="grid size-7 shrink-0 place-items-center rounded-sm font-semibold uppercase"
       // Toward the ink of the theme: the bare hue is too faint for text this small.
       style={{
         fontSize: '0.5625rem',
+        lineHeight: 1,
+        letterSpacing: '0.02em',
         color: `color-mix(in oklab, ${meta.color} 45%, var(--foreground))`,
         background: extTint(meta.color),
       }}
@@ -95,7 +97,10 @@ export function ExtensionLead({ name }: { name: string }) {
 
 export function ThumbLead({ src }: { src?: string }) {
   return (
-    <span aria-hidden className="size-8 shrink-0 overflow-hidden rounded-md bg-card ring-1 ring-border ring-inset">
+    <span
+      aria-hidden
+      className="size-8 shrink-0 overflow-hidden rounded-sm bg-background ring-1 ring-border ring-inset"
+    >
       {src && <img src={src} alt="" className="size-full object-cover" />}
     </span>
   );
@@ -109,10 +114,10 @@ export function RemoveTileButton({ label, ...props }: { label: string } & React.
       variant="ghost"
       size="icon-xs"
       aria-label={label}
-      className="relative z-20 size-6 text-muted-foreground"
+      className="relative z-20 size-6 rounded-sm text-muted-foreground hover:bg-sidebar-accent"
       {...props}
     >
-      <XIcon />
+      <XIcon className="size-4" />
     </Button>
   );
 }

@@ -8,7 +8,6 @@
 import { Check } from 'lucide-react';
 import type { AdapterModel } from '@qlan-ro/mainframe-types';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
 
 export interface ModelMenuRowProps {
   option: AdapterModel;
@@ -30,11 +29,15 @@ export function ModelMenuRow({ option, active, onSelect }: ModelMenuRowProps) {
       className="items-start"
       onSelect={() => onSelect(option.id)}
     >
-      <Check className={cn('mt-0.5 size-3.5 shrink-0 text-accent-ink', !active && 'invisible')} />
       <span className="min-w-0 flex-1">
         <span className="block font-medium">{option.label}</span>
-        {desc && <span className="block text-xs leading-snug text-muted-foreground">{desc}</span>}
+        {desc && <span className="block text-meta/[1.35] font-normal text-muted-foreground">{desc}</span>}
       </span>
+      {active && (
+        <span className="flex h-5 shrink-0 items-center">
+          <Check className="size-4 text-ink-secondary" />
+        </span>
+      )}
     </DropdownMenuItem>
   );
 }

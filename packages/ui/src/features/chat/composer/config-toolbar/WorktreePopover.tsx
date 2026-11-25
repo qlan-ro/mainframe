@@ -18,11 +18,10 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import { FolderOpen, Loader2 } from 'lucide-react';
+import { MoveIcon } from '@/components/ui/glyphs';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Separator } from '@/components/ui/separator';
-import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
+import { MENU_DETAIL, MENU_ITEM, MENU_SEPARATOR } from '@/components/ui/menu-item';
 import { enableWorktree, attachWorktree, getGitBranches, getProjectWorktrees } from '@/lib/api/git';
 import type { WorktreeEntry } from '@/lib/api/git';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -49,19 +48,15 @@ function WorktreeLoading() {
 
 function ActiveInfo({ chat }: { chat: Chat }) {
   return (
-    <div data-testid="composer-worktree-active-info" className="flex flex-col gap-1.5 px-2 py-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="inline-block size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
-        <span className="text-xs font-medium text-foreground">Isolated in worktree</span>
-      </div>
-      <Separator />
-      <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-xs">
-        <span className="text-muted-foreground">Branch</span>
-        {/* Branch names are UI sans, never mono (2026-08-05 decision). */}
-        <span className="truncate text-foreground">{chat.branchName ?? '—'}</span>
-        <span className="text-muted-foreground">Path</span>
-        <TruncatedWithTooltip text={chat.worktreePath ?? ''} className="text-foreground" contentClassName="break-all" />
-      </div>
+    <div
+      data-testid="composer-worktree-active-info"
+      className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-[3px] px-2.5 pt-2 pb-1.5 text-meta/[1.45]"
+    >
+      <span className="col-span-2 mb-0.5 font-semibold text-foreground">Isolated in worktree</span>
+      <span className="text-muted-foreground">Branch</span>
+      <span className="font-mono text-xs/[1.45] wrap-anywhere text-foreground">{chat.branchName ?? '—'}</span>
+      <span className="text-muted-foreground">Path</span>
+      <span className="font-mono text-xs/[1.45] wrap-anywhere text-foreground">{chat.worktreePath ?? ''}</span>
     </div>
   );
 }
@@ -88,11 +83,10 @@ function OpenFolder({ path, onDone }: { path: string; onDone: () => void }) {
   const host = useHost();
   if (!useDaemonIsLocal()) return null;
   return (
-    <Button
-      variant="ghost"
-      size="sm"
+    <button
+      type="button"
       data-testid="composer-worktree-open-folder"
-      className="justify-start"
+      className={MENU_ITEM}
       onClick={() => {
         onDone();
         host.fs.openPath(path).catch((error: unknown) =>
@@ -102,9 +96,9 @@ function OpenFolder({ path, onDone }: { path: string; onDone: () => void }) {
         );
       }}
     >
-      <FolderOpen data-icon="inline-start" />
+      <FolderOpen aria-hidden />
       Open folder
-    </Button>
+    </button>
   );
 }
 
@@ -123,6 +117,8 @@ export function WorktreePopover({
   const [worktrees, setWorktrees] = useState<WorktreeEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<WorktreeTab>('new');
+  // The list of other worktrees replaces the item that asks for it, for this opening.
+  const [moving, setMoving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -134,6 +130,7 @@ export function WorktreePopover({
 
     setLoading(true);
     setApiError(null);
+    setMoving(false);
 
     Promise.all([
       chat.worktreePath ? Promise.resolve(null) : getGitBranches(port, chat.projectId),
@@ -209,15 +206,30 @@ export function WorktreePopover({
         align="start"
         side="top"
         sideOffset={6}
-        // w-72 is the primitive's own width; only the compact gap/padding differ.
-        className="gap-2 p-2"
+        className={isIsolated ? 'w-auto max-w-85 min-w-72.5 gap-0 p-1' : 'gap-2 p-2'}
       >
         {isIsolated ? (
           <>
             <ActiveInfo chat={chat} />
+            <div className={MENU_SEPARATOR} />
             {chat.worktreePath && <OpenFolder path={chat.worktreePath} onDone={() => setOpen(false)} />}
-            <div className="flex flex-col gap-1.5">
-              <WorktreeSectionLabel>Move to another worktree</WorktreeSectionLabel>
+            {!moving && (
+              <button
+                type="button"
+                data-testid="composer-worktree-move"
+                aria-expanded={false}
+                className={MENU_ITEM}
+                onClick={() => setMoving(true)}
+              >
+                <MoveIcon aria-hidden />
+                <span className="flex min-w-0 flex-col">
+                  <span>Move to another worktree…</span>
+                  {busy && <span className={MENU_DETAIL}>Available once the current response finishes</span>}
+                </span>
+              </button>
+            )}
+            <div hidden={!moving}>
+              <WorktreeSectionLabel>Worktrees</WorktreeSectionLabel>
               {busy && <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>}
               {loading ? (
                 <WorktreeLoading />

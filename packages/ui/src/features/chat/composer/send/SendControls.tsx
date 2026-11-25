@@ -11,11 +11,12 @@
  */
 import { useRef, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { ArrowUpIcon, ChevronDown, CornerDownLeft, Loader2Icon } from 'lucide-react';
+import { ArrowUpIcon, ChevronDown, Clock, CornerDownLeft, Loader2Icon, type LucideIcon } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -46,13 +47,15 @@ function StopButton({ stop }: { stop: ComposerStop }) {
           ROUND,
           stop.stopping
             ? 'border-input text-muted-foreground'
-            : 'border-foreground bg-foreground text-background hover:bg-foreground/86',
+            : 'border-foreground bg-foreground text-card hover:opacity-86',
         )}
       >
         {stop.stopping ? (
           <Loader2Icon className="size-4 animate-spin motion-reduce:animate-none" />
         ) : (
-          <span aria-hidden className="size-2.5 rounded-[2px] bg-current" />
+          <svg viewBox="0 0 16 16" className="size-4" fill="currentColor" aria-hidden>
+            <rect x="3.5" y="3.5" width="9" height="9" rx="2" />
+          </svg>
         )}
       </button>
     </ComposerHint>
@@ -78,9 +81,9 @@ function SendButton({ ready }: { ready: boolean }) {
   );
 }
 
-const MODES: readonly { id: EnterWhileRunning; label: string; description?: string }[] = [
-  { id: 'queue', label: 'Queue', description: 'Send when the agent finishes' },
-  { id: 'steer', label: 'Steer' },
+const MODES: readonly { id: EnterWhileRunning; label: string; description?: string; Icon: LucideIcon }[] = [
+  { id: 'queue', label: 'Queue', description: 'Send when the agent finishes', Icon: Clock },
+  { id: 'steer', label: 'Steer', Icon: CornerDownLeft },
 ];
 
 function steerNote(canSteer: boolean, hasFiles: boolean): string {
@@ -99,7 +102,7 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
   const [open, setOpen] = useState(false);
   // White, not the focus blue: the line sits on a blue fill.
   const half =
-    'inline-flex h-7 items-center text-sm font-semibold hover:bg-white/14 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white';
+    'inline-flex h-7 items-center text-body font-semibold hover:bg-white/14 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-white';
 
   return (
     <div className="inline-flex h-7 shrink-0 overflow-hidden rounded-[14px] bg-accent-fill text-white">
@@ -112,10 +115,13 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
           data-mode={preferred}
           aria-label={preferred === 'steer' ? 'Steer: add to the running turn' : 'Queue message'}
           onClick={() => submit(preferred)}
-          className={cn(half, 'gap-1.5 rounded-l-[14px] pr-2 pl-3 @max-[400px]/composer:pl-2.5')}
+          className={cn(
+            half,
+            'gap-1.5 rounded-l-[14px] pr-2 pl-3 @max-[400px]/composer:pr-1.5 @max-[400px]/composer:pl-2.5',
+          )}
         >
           <span className="@max-[400px]/composer:hidden">{preferred === 'steer' ? 'Steer' : 'Queue'}</span>
-          <CornerDownLeft className="size-3.5" aria-hidden />
+          <CornerDownLeft className="size-4" aria-hidden />
         </button>
       </ComposerHint>
       <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -125,13 +131,13 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
               type="button"
               data-testid="chat-composer-send-options"
               aria-label="Queue or steer"
-              className={cn(half, 'w-[26px] justify-center rounded-r-[14px] border-l border-white/35')}
+              className={cn(half, 'w-[26px] justify-center rounded-r-[14px] shadow-split')}
             >
-              <ChevronDown className="size-3.5" aria-hidden />
+              <ChevronDown className="size-3" aria-hidden />
             </button>
           </DropdownMenuTrigger>
         </ComposerHint>
-        <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-72">
+        <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-auto min-w-72.5">
           {MODES.map((mode) => (
             <DropdownMenuItem
               key={mode.id}
@@ -139,15 +145,24 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
               className="items-start"
               onSelect={() => submit(mode.id)}
             >
+              <span className="flex h-5 shrink-0 items-center">
+                <mode.Icon className="size-4 text-muted-foreground" />
+              </span>
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="font-medium">{mode.label}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-meta/[1.35] font-normal text-muted-foreground">
                   {mode.id === 'steer' ? steerNote(canSteer, hasFiles) : mode.description}
                 </span>
               </span>
-              <DropdownMenuShortcut>{mode.id === preferred ? '↵' : '⌥↵'}</DropdownMenuShortcut>
+              <span className="flex h-5 shrink-0 items-center">
+                <DropdownMenuShortcut>{mode.id === preferred ? '↵' : '⌥↵'}</DropdownMenuShortcut>
+              </span>
             </DropdownMenuItem>
           ))}
+          <DropdownMenuSeparator />
+          <p className="px-2.5 pt-1.5 pb-1 text-meta/[1.45] text-muted-foreground">
+            Choose what Enter does in Settings › Chat
+          </p>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

@@ -19,7 +19,3 @@ export function providerSwitchBlockedReason(chat: Chat, queuedCount: number, fro
   }
   return null;
 }
-
-export const PROVIDER_SWITCH_FOOTER =
-  'Switching keeps this chat. The new provider gets its history with your next message.';
-export const PROVIDER_PICK_FOOTER = 'Pick a provider before your first message.';

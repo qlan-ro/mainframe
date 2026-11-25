@@ -11,7 +11,7 @@ import { gateEyebrow, type GateContext, type ReplyFn } from './gate-types';
 import { cn } from '@/lib/utils';
 import { UnattendedConfirmDialog } from '../composer/config-toolbar/UnattendedConfirmDialog';
 import { useUnattendedGuard } from '../composer/config-toolbar/use-unattended-confirm';
-import { GateCardShell, GateHead, GATE_PRIMARY } from './shared/GateShell';
+import { GateCardShell, GateHead, GATE_BUTTON, GATE_OUTLINE, GATE_PRIMARY } from './shared/GateShell';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { buildPlanResponse } from './build-control-response';
@@ -41,7 +41,7 @@ export interface PlanGateProps {
 
 function PlanBody({ plan }: { plan: string }) {
   return (
-    <div className="aui-md max-h-[300px] overflow-auto border-t border-border px-4 py-3 text-sm text-foreground">
+    <div className="aui-md max-h-[300px] overflow-auto border-t border-border px-4 py-3 text-transcript text-foreground [&_:is(h1,h2,h3,h4)]:mt-0! [&_:is(h1,h2,h3,h4)]:mb-1.5! [&_:is(h1,h2,h3,h4)]:text-transcript! [&_:is(h1,h2,h3,h4)]:font-semibold! [&_li]:my-0! [&_li+li]:mt-0.5! [&_ol]:my-0!">
       <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
         {plan}
       </Markdown>
@@ -67,7 +67,7 @@ function ControlsPanel({
   autoAllowed?: boolean;
 }) {
   return (
-    <div className="mx-4 my-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted px-3 py-2.5">
+    <div className="mx-4 my-3 flex flex-wrap items-center gap-3 rounded-md border border-border bg-queue-well px-3 py-2.5">
       <PlanExecModeControl value={execMode} onChange={setExecMode} autoAllowed={autoAllowed} />
       <div className="flex-1" />
       <PlanClearContextCheck checked={clearContext} onChange={setClearContext} />
@@ -91,20 +91,32 @@ function ActionRow({
   onReject: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 px-4 pb-3">
+    <div className="flex items-center gap-2 px-4 pt-1 pb-3">
       <Button
         size="sm"
         ref={approveRef}
         data-testid="chat-plan-approve"
         onClick={onApprove}
-        className={cn('flex-1', GATE_PRIMARY)}
+        className={cn('flex-1', GATE_BUTTON, GATE_PRIMARY)}
       >
         Approve &amp; run
       </Button>
-      <Button variant="outline" size="sm" data-testid="chat-plan-keep-planning" onClick={onKeepPlanning}>
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn(GATE_BUTTON, GATE_OUTLINE)}
+        data-testid="chat-plan-keep-planning"
+        onClick={onKeepPlanning}
+      >
         Keep planning
       </Button>
-      <Button variant="outline" size="sm" data-testid="chat-plan-reject" onClick={onReject}>
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn(GATE_BUTTON, GATE_OUTLINE)}
+        data-testid="chat-plan-reject"
+        onClick={onReject}
+      >
         Reject
       </Button>
     </div>
@@ -134,15 +146,21 @@ function ReviseRow({
         placeholder="What should be changed..."
         value={feedback}
         onChange={(e) => setFeedback(e.target.value)}
-        className="resize-none"
+        className="min-h-[77px] resize-none rounded-md border-input bg-card px-2.5 py-2 text-row md:text-row shadow-none dark:bg-card"
       />
       <div className="flex items-center justify-end gap-2">
-        <Button variant="outline" size="sm" data-testid="chat-plan-revise-cancel" onClick={onCancel}>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(GATE_BUTTON, GATE_OUTLINE)}
+          data-testid="chat-plan-revise-cancel"
+          onClick={onCancel}
+        >
           Cancel
         </Button>
         <Button
           size="sm"
-          className={GATE_PRIMARY}
+          className={cn(GATE_BUTTON, GATE_PRIMARY)}
           data-testid="chat-plan-send-feedback"
           disabled={feedback.trim() === ''}
           onClick={onSend}

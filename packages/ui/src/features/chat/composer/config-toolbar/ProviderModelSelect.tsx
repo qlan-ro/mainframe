@@ -63,7 +63,7 @@ export function ProviderModelSelect({ disabled, className, ...menu }: ProviderMo
         align="start"
         side="top"
         sideOffset={6}
-        className="w-72"
+        className="w-62.5"
       >
         <ModelMenu {...menu} onClose={() => setOpen(false)} />
       </DropdownMenuContent>

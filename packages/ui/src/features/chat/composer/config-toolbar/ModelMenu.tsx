@@ -17,12 +17,11 @@ import type {
   ProviderConfig,
 } from '@qlan-ro/mainframe-types';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { displayEffort, effortOptions, EFFORT_META } from '@/lib/model-tuning';
 import { ModelMenuRow } from './ModelMenuRow';
 import { ModelTuning } from './ModelTuning';
 import { groupSlug, modelRows, partitionModels } from './model-menu-rows';
-import { PROVIDER_PICK_FOOTER, PROVIDER_SWITCH_FOOTER } from './provider-switch';
 import { ProviderTabs } from './ProviderTabs';
 import type { ProviderSwitchRequest } from './use-provider-switch';
 
@@ -96,7 +95,7 @@ function CollapsibleModelSection({ label, testId, containsCurrent, children }: M
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <CollapsibleTrigger
         data-testid={testId}
-        className="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:focus-line-inset"
+        className="flex w-full items-center gap-1 rounded-sm px-2.5 py-1.5 text-meta/[1.45] font-medium text-muted-foreground hover:text-foreground focus-visible:focus-line-inset"
       >
         {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
         {label}
@@ -134,7 +133,7 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
       {!props.hideProviderSwitch && (
         <>
           <div
-            className="p-1 pb-1.5"
+            className="px-1.5 pt-1 pb-1.5"
             onKeyDown={(e) => {
               if (e.key !== 'Escape') e.stopPropagation();
             }}
@@ -150,16 +149,15 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
               }}
             />
             {locked && props.switchBlockedReason && (
-              <p data-testid="composer-provider-blocked" className="px-1 pt-1.5 text-xs text-muted-foreground">
+              <p data-testid="composer-provider-blocked" className="px-1 pt-1.5 text-meta/[1.45] text-muted-foreground">
                 {props.switchBlockedReason}
               </p>
             )}
           </div>
-          <DropdownMenuSeparator />
         </>
       )}
       {(showCurrentModel || runningModel) && runningModel?.id !== model?.id && (
-        <DropdownMenuLabel data-testid="composer-model-current" className="text-xs text-muted-foreground">
+        <DropdownMenuLabel data-testid="composer-model-current">
           Current: {runningModel?.label ?? 'unavailable'}
           <br />
           Selected: {model?.label ?? 'Use CLI setting'}
@@ -169,7 +167,6 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
       {/* A capped scroll region, so a long catalog scrolls instead of growing the
           bottom-anchored menu. */}
       <div className="max-h-64 overflow-y-auto">
-        <DropdownMenuLabel>{shown?.name ?? 'Models'} models</DropdownMenuLabel>
         {catalog.current.map(renderRow)}
         {catalog.older.length > 0 && (
           <CollapsibleModelSection
@@ -200,11 +197,6 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
           setEffort={props.setEffort}
           setFeature={props.setFeature}
         />
-      )}
-      {!props.hideProviderSwitch && (
-        <p data-testid="composer-provider-footer" className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
-          {locked ? PROVIDER_SWITCH_FOOTER : PROVIDER_PICK_FOOTER}
-        </p>
       )}
     </>
   );

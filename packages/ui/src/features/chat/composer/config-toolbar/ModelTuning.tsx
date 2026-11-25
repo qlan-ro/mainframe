@@ -41,7 +41,7 @@ export function ModelTuning({ model, chat, providerDefaults, setEffort, setFeatu
           <DropdownMenuRadioGroup
             value={effort}
             onValueChange={(level) => setEffort(level as EffortLevel)}
-            className="mx-1 mb-1 flex flex-wrap gap-0.5 rounded-lg bg-muted p-0.5"
+            className="flex gap-0.5 px-1 pt-0.5 pb-1"
           >
             {efforts.map((level) => (
               <DropdownMenuRadioItem
@@ -51,9 +51,9 @@ export function ModelTuning({ model, chat, providerDefaults, setEffort, setFeatu
                 disabled={locked}
                 onSelect={keepOpen}
                 className={cn(
-                  'h-6 flex-1 justify-center rounded-md px-2 py-0 text-center text-xs font-medium whitespace-nowrap text-muted-foreground',
+                  'min-h-7 flex-1 justify-center rounded-[7px] px-1.5 py-1 text-center text-small/[20px] font-medium whitespace-nowrap',
                   // The segment's fill says which is on; the radio item's own check would push the label off-centre.
-                  '[&>span:has(svg)]:hidden data-[state=checked]:bg-background data-[state=checked]:text-foreground data-[state=checked]:shadow-sm',
+                  '[&>span:has(svg)]:hidden data-[state=checked]:bg-chrome-selected',
                 )}
               >
                 {level.label}

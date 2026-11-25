@@ -10,24 +10,27 @@
  * the checkout has uncommitted changes.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, FolderGit2, FolderPlus, GitBranch, Loader2, Settings2, Timer } from 'lucide-react';
+import { ChevronDown, Folder, FolderGit2, FolderPlus, Loader2, Settings2, Timer } from 'lucide-react';
 import type { BranchListResult } from '@qlan-ro/mainframe-types';
 import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command';
+import { BranchIcon } from '@/components/ui/glyphs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { MENU_DETAIL, MENU_ITEM, MENU_LABEL, MENU_SEPARATOR } from '@/components/ui/menu-item';
+import { MenuSearch } from '@/components/ui/menu-search';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { getGitBranches, getProjectWorktrees, type WorktreeEntry } from '@/lib/api/git';
 import { BranchPopover } from '@/features/git/BranchPopover';
 import { useBranchActions } from '@/features/git/use-branch-actions';
+import { useProjects } from '@/features/sessions/use-projects';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { patchDraftConfig, type DraftCfg } from '@/features/sessions/runtime/draft-config';
 import { moveDraft } from '@/features/sessions/new-thread/move-draft';
@@ -80,7 +83,8 @@ function TriggerLabel({ env, branch }: { env: DraftEnvironment; branch: string |
     case 'new-worktree':
       return (
         <>
-          New worktree <span className="text-muted-foreground">from</span> {env.base}
+          New worktree <span className="text-muted-foreground">from</span>{' '}
+          <span className="font-medium text-foreground">{env.base}</span>
         </>
       );
     case 'worktree':
@@ -104,13 +108,22 @@ function worktreeNames({ branch, path }: WorktreeEntry): { name: string; label: 
   return { name: 'detached', label: `${folder} (detached)` };
 }
 
-const ENV_ICON = { local: GitBranch, temporary: Timer, 'new-worktree': FolderPlus, worktree: FolderGit2 } as const;
+const ENV_ICON = { local: BranchIcon, temporary: Timer, 'new-worktree': FolderPlus, worktree: FolderGit2 } as const;
+
+const GROUP =
+  'p-0 **:[[cmdk-group-heading]]:px-2.5 **:[[cmdk-group-heading]]:pt-2 **:[[cmdk-group-heading]]:pb-[3px] **:[[cmdk-group-heading]]:text-caption/[1.45] **:[[cmdk-group-heading]]:font-semibold';
+
+/** A command row that looks like a menu's. The check the row carries sits on its first line. */
+const ITEM = cn(
+  MENU_ITEM,
+  'data-selected:bg-sidebar-accent data-selected:**:[svg]:text-muted-foreground [&>svg:last-child]:text-ink-secondary data-selected:[&>svg:last-child]:text-ink-secondary',
+);
 
 function TwoLine({ title, detail }: { title: string; detail: string }) {
   return (
     <span className="flex min-w-0 flex-1 flex-col">
       <span className="truncate">{title}</span>
-      <span className="truncate text-xs text-muted-foreground">{detail}</span>
+      <span className={cn(MENU_DETAIL, 'truncate')}>{detail}</span>
     </span>
   );
 }
@@ -153,6 +166,7 @@ export function DraftBranchPicker({
   const [managing, setManaging] = useState(false);
   const data = useBranchData(port, projectId, open);
   const { branch: current, reload } = useProjectBranch(port, projectId);
+  const projectName = useProjects().projects.find((project) => project.id === projectId)?.name;
   const { handleCheckout } = useBranchActions({ port, projectId });
   const env = draftEnvironment(draft);
   const Icon = ENV_ICON[env.kind];
@@ -198,7 +212,7 @@ export function DraftBranchPicker({
         onOpenChange={setManaging}
         onBranchChanged={reload}
       >
-        <button type="button" tabIndex={-1} aria-hidden className="pointer-events-none h-7 w-0" />
+        <button type="button" tabIndex={-1} aria-hidden className="pointer-events-none -mr-1 h-7 w-0" />
       </BranchPopover>
       <Popover open={open} onOpenChange={setOpen}>
         <ComposerHint label="Branch and worktree">
@@ -209,11 +223,11 @@ export function DraftBranchPicker({
               data-env={env.kind}
               aria-label="Branch and where it runs"
               className={cn(
-                'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-lg px-2 text-sm hover:bg-accent focus-visible:focus-line',
-                open && 'bg-accent',
+                'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-md px-2 text-body text-ink-secondary hover:bg-sidebar-accent focus-visible:focus-line',
+                open && 'bg-sidebar-accent',
               )}
             >
-              <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 truncate">
                 <TriggerLabel env={env} branch={current} />
               </span>
@@ -226,11 +240,11 @@ export function DraftBranchPicker({
           align="start"
           side="top"
           sideOffset={6}
-          className="gap-0 p-0"
+          className="w-75 gap-0 p-1"
         >
-          <Command>
-            <CommandInput data-testid="composer-branch-search" placeholder="Search branches..." autoFocus />
-            <CommandList className="p-1">
+          <Command className="rounded-none bg-transparent p-0">
+            <MenuSearch data-testid="composer-branch-search" placeholder="Search branches..." autoFocus />
+            <CommandList className="max-h-[calc(100vh-8rem)]">
               {data.branches == null && !data.error && (
                 <div className="flex justify-center py-4">
                   <Loader2 className="size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none" />
@@ -238,23 +252,31 @@ export function DraftBranchPicker({
               )}
               {data.error && <p className="px-2 py-2 text-xs text-fail">{data.error}</p>}
               {data.branches && <CommandEmpty>No branch matches.</CommandEmpty>}
-              <CommandGroup>
+              <CommandGroup className={GROUP}>
+                {projectName && (
+                  <div className={cn(MENU_LABEL, 'flex items-center gap-[7px]')}>
+                    <Folder className="size-3.5" aria-hidden />
+                    {projectName}
+                  </div>
+                )}
                 {local.map((name) => (
                   <CommandItem
                     key={name}
+                    className={ITEM}
                     value={`branch:${name}`}
                     data-testid={`composer-branch-option-${name}`}
                     data-checked={name === checked}
                     onSelect={() => pickBranch(name)}
                   >
-                    <GitBranch className="text-muted-foreground" />
+                    <BranchIcon className="text-muted-foreground" />
                     <span className="min-w-0 flex-1 truncate">{name}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>
-              <CommandSeparator className="my-1" />
-              <CommandGroup>
+              <CommandSeparator className={MENU_SEPARATOR} />
+              <CommandGroup className={GROUP}>
                 <CommandItem
+                  className={ITEM}
                   value="Work in a new worktree"
                   data-testid="composer-branch-new-worktree"
                   data-checked={env.kind === 'new-worktree'}
@@ -264,6 +286,7 @@ export function DraftBranchPicker({
                   <TwoLine title="Work in a new worktree" detail="Keeps your checkout untouched" />
                 </CommandItem>
                 <CommandItem
+                  className={ITEM}
                   value="Temporary session"
                   data-testid="composer-temporary-toggle"
                   data-checked={env.kind === 'temporary'}
@@ -273,13 +296,15 @@ export function DraftBranchPicker({
                   <TwoLine title="Temporary session" detail="Deleted when closed; no worktree" />
                 </CommandItem>
               </CommandGroup>
+              {worktrees.length > 0 && <CommandSeparator className={MENU_SEPARATOR} />}
               {worktrees.length > 0 && (
-                <CommandGroup heading="Worktrees">
+                <CommandGroup heading="Previous worktrees" className={GROUP}>
                   {worktrees.map((worktree) => {
                     const { name, label } = worktreeNames(worktree);
                     return (
                       <CommandItem
                         key={worktree.path}
+                        className={ITEM}
                         value={`worktree:${name}:${worktree.path}`}
                         data-testid={`composer-branch-worktree-${label}`}
                         data-checked={env.kind === 'worktree' && env.path === worktree.path}
@@ -289,7 +314,10 @@ export function DraftBranchPicker({
                         }}
                       >
                         <FolderGit2 className="text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate" title={worktree.path}>
+                        <span
+                          className="min-w-0 flex-1 truncate font-mono text-small/[20px] font-normal"
+                          title={worktree.path}
+                        >
                           {label}
                         </span>
                       </CommandItem>
@@ -297,9 +325,14 @@ export function DraftBranchPicker({
                   })}
                 </CommandGroup>
               )}
-              <CommandSeparator className="my-1" />
-              <CommandGroup>
-                <CommandItem value="Manage branches" data-testid="composer-branch-manage" onSelect={openManager}>
+              <CommandSeparator className={MENU_SEPARATOR} />
+              <CommandGroup className={GROUP}>
+                <CommandItem
+                  className={ITEM}
+                  value="Manage branches"
+                  data-testid="composer-branch-manage"
+                  onSelect={openManager}
+                >
                   <Settings2 className="text-muted-foreground" />
                   <TwoLine title="Manage branches…" detail="Fetch, push, create, rename and more" />
                 </CommandItem>

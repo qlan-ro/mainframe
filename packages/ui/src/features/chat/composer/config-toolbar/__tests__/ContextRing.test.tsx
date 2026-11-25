@@ -4,7 +4,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { publishCommands } from '../../../commands/command-registry';
 
 const append = vi.fn();
-vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ thread: { append } }) }));
+let mockMessages: unknown[] = [];
+vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({ thread: { append } }),
+  useAuiState: <T,>(select: (s: { thread: { messages: unknown[] } }) => T) =>
+    select({ thread: { messages: mockMessages } }),
+}));
 
 let mockPercent: number | null = null;
 vi.mock('@/features/session-panel/use-context-percent', () => ({ useContextPercent: () => mockPercent }));
@@ -28,16 +33,26 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockPercent = 40;
   mockUsage = undefined;
+  mockMessages = [{}];
   publishCommands([{ name: 'compact', description: 'Compact', source: 'claude' }]);
 });
 
 describe('ContextRing (C2)', () => {
-  it('renders nothing before there is a usage report', () => {
+  it('renders nothing in a conversation with no usage report', () => {
     mockPercent = null;
 
     const { container } = renderRing();
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('reads 0% before the first message', () => {
+    mockPercent = null;
+    mockMessages = [];
+
+    renderRing();
+
+    expect(button()).toHaveTextContent('0%');
   });
 
   it('shows the percentage, and the token counts in its name when known', () => {
@@ -66,7 +81,7 @@ describe('ContextRing (C2)', () => {
     expect(button()).not.toHaveClass('text-muted-foreground');
   });
 
-  it('stays warning at 94%, and is destructive at 95%', () => {
+  it('stays warning at 94%, and is signal red at 95%', () => {
     mockPercent = 94;
     const { unmount } = renderRing();
     expect(button()).toHaveClass('text-warning');
@@ -74,7 +89,7 @@ describe('ContextRing (C2)', () => {
 
     mockPercent = 95;
     renderRing();
-    expect(button()).toHaveClass('text-destructive');
+    expect(button()).toHaveClass('text-crit');
     expect(button()).not.toHaveClass('text-warning');
   });
 
