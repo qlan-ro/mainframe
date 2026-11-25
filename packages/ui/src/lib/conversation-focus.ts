@@ -40,7 +40,6 @@ export function claimsFor(chatId: string) {
   return {
     onFocusCapture: () => {
       focused = chatId;
-      pressed = undefined;
       anyYet = true;
     },
     onPointerDownCapture: () => {

@@ -47,12 +47,14 @@ function Probe({
 }
 function mount(initial: Props = {}) {
   let shown: Shown;
+  /** What every render since `clear` showed. */
+  const renders: Shown[] = [];
   let props: Props = { events: {}, connected: true, ...initial };
   const tree = ({ connected, ...rest }: Props) => (
     <ConnectionStatusProvider
       value={{ state: connected ? 'connected' : 'reconnecting', daemonStatus: '' } as ConnectionStatus}
     >
-      <Probe {...rest} tell={(next) => (shown = next)} />
+      <Probe {...rest} tell={(next) => renders.push((shown = next))} />
     </ConnectionStatusProvider>
   );
   const view = render(tree(props));
@@ -60,6 +62,7 @@ function mount(initial: Props = {}) {
   const set = (next: Props = { events: {} }) => view.rerender(tree((props = { ...props, ...next })));
   return {
     get: () => shown,
+    renders,
     statuses: () => shown.tasks?.map((task) => task.status) ?? null,
     set,
     connect: (connected: boolean) => set({ connected }),
@@ -134,7 +137,9 @@ describe('what it lists', () => {
   it('keeps one daemon’s settled rows from another’s, whose chat has the same id', async () => {
     const hook = mount();
     await answer(0, row('failed'));
+    hook.renders.length = 0;
     daemon('remote');
+    expect(hook.renders.map(({ tasks }) => tasks)).toEqual(hook.renders.map(() => null));
     expect(hook.statuses()).toBeNull();
     expect(requests[1]).toMatchObject({ chatId: 'parent', daemonId: 'remote' });
     await answer(1, row('running'));
@@ -162,16 +167,18 @@ describe('what it lists', () => {
 });
 
 describe('two visible tabs', () => {
+  // One chat, so one object of its events.
+  const events = {};
   it('of one agent share one request, on showing, on an event, and on a retry', async () => {
-    const one = mount();
-    const two = mount();
+    const one = mount({ events });
+    const two = mount({ events });
     expect(requests).toHaveLength(1);
     await answer(0, row('running'));
     expect([one.statuses(), two.statuses()]).toEqual([['running'], ['running']]);
 
-    const events = {};
-    one.set({ events });
-    two.set({ events });
+    const next = { events: {} };
+    one.set(next);
+    two.set(next);
     expect(requests).toHaveLength(2);
     await refuse(1);
     await pass(1_000);
@@ -182,12 +189,23 @@ describe('two visible tabs', () => {
     expect([one.statuses(), two.statuses()]).toEqual([['completed'], ['completed']]);
   });
 
+  it('ask once for an event both hear of', async () => {
+    const one = mount({ events });
+    const two = mount({ events });
+    await answer(0, row('running'));
+    const next = { events: {} };
+    one.set(next);
+    two.set(next);
+    await answer(1, row('completed'));
+    expect(requests).toHaveLength(2);
+  });
+
   it.each([
     ['hidden', (hook: ReturnType<typeof mount>) => hook.set({ visible: false })],
     ['closed', (hook: ReturnType<typeof mount>) => hook.unmount()],
   ])('go on asking when one is %s, and stop with the last', async (_, leave) => {
-    const one = mount();
-    const two = mount();
+    const one = mount({ events });
+    const two = mount({ events });
     leave(one);
     expect(open()).toHaveLength(1);
     await answer(0, row('running'));
@@ -201,8 +219,8 @@ describe('two visible tabs', () => {
   });
 
   it('of different agents each have their own rows', async () => {
-    const one = mount();
-    const two = mount({ callId: 'call-2' });
+    const one = mount({ events });
+    const two = mount({ events, callId: 'call-2' });
     await answer(0, row('running'), row('failed', { id: 'bg-2', toolUseId: 'call-2' }));
     expect([one.statuses(), two.statuses()]).toEqual([['running'], ['failed']]);
   });
@@ -270,6 +288,18 @@ describe('asking again', () => {
     await refuse(9);
     await pass(1_000);
     expect(requests).toHaveLength(11);
+  });
+
+  it('waits from the start again for a tab that comes back', async () => {
+    const hook = mount();
+    await refuse(0);
+    await pass(1_000);
+    await refuse(1);
+    hook.set({ visible: false });
+    hook.set({ visible: true });
+    await refuse(2);
+    await pass(1_000);
+    expect(requests).toHaveLength(4);
   });
 
   it('lets an event wait for the retry, which answers it too', async () => {
@@ -382,6 +412,17 @@ describe('a list that cannot be confirmed', () => {
     expect(hook.get().live).toBe(true);
   });
 
+  it('stays live once a list has come within the 30 s', async () => {
+    const hook = mount();
+    await answer(0, row('running'));
+    hook.set();
+    await refuse(1);
+    await pass(1_000);
+    await answer(2, row('running'));
+    await pass(60_000);
+    expect(hook.get().live).toBe(true);
+  });
+
   it('counts the 30 s from the latest list', async () => {
     const hook = mount();
     await answer(0, row('running'));
@@ -417,10 +458,12 @@ describe('the connection', () => {
   it('keeps the list but is not live while it is gone, nor until a list has come after it', async () => {
     const hook = mount();
     await answer(0, row('running'));
+    hook.renders.length = 0;
     hook.connect(false);
-    expect(hook.get().live).toBe(false);
+    expect(hook.renders.some(({ live }) => live)).toBe(false);
     expect(hook.statuses()).toEqual(['running']);
     hook.connect(true);
+    expect(hook.renders.some(({ live }) => live)).toBe(false);
     expect(hook.get().live).toBe(false);
     expect(requests).toHaveLength(2);
     await refuse(1);

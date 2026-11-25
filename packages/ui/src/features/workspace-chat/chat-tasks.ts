@@ -6,7 +6,6 @@
  */
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import { listBackgroundTasks } from '@/lib/api/background-tasks';
-import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 
 const RETRY_MS = 1_000;
 const RETRY_MAX_MS = 10_000;
@@ -52,7 +51,6 @@ class ChatTasks {
   private expiry: Timer;
 
   constructor(
-    private readonly daemonId: string,
     private readonly chatId: string,
     private readonly forget: () => void,
   ) {}
@@ -62,7 +60,6 @@ class ChatTasks {
     return () => {
       this.listeners.delete(listener);
       if (this.listeners.size > 0) return;
-      this.halt();
       clearTimeout(this.expiry);
       this.forget();
     };
@@ -119,8 +116,6 @@ class ChatTasks {
 
   private run(): void {
     this.timer = undefined;
-    // The daemon was switched: its successor's chats are not this one's.
-    if (getActiveDaemon().id !== this.daemonId) return;
     const request = new AbortController();
     this.request = request;
     this.again = false;
@@ -180,7 +175,7 @@ const keyOf = (daemonId: string, chatId: string): string => JSON.stringify([daem
 
 export function openChatTasks(daemonId: string, chatId: string): ChatTasks {
   const key = keyOf(daemonId, chatId);
-  const found = open.get(key) ?? new ChatTasks(daemonId, chatId, () => void open.delete(key));
+  const found = open.get(key) ?? new ChatTasks(chatId, () => void open.delete(key));
   open.set(key, found);
   return found;
 }

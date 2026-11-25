@@ -185,6 +185,11 @@ beforeEach(() => {
   controller.loadEarlier.mockClear().mockResolvedValue(true);
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
 describe('what it shows', () => {
   it('names the agent, its kind and model, and draws its brief, steps and result', async () => {
     await show({ args: ARGS, result: 'No races found.', messages: [step('s-1', 't-1'), step('s-2', 't-2')] });
@@ -349,8 +354,6 @@ describe('text', () => {
     expect(status()).toBeNull();
     expect(screen.queryByTestId(STOP)).toBeNull();
     expect(screen.getByTestId(RESULT)).toHaveTextContent('agentId: a1');
-    vi.useRealTimers();
-    vi.restoreAllMocks();
   });
 
   it('shows no section with nothing to show', async () => {

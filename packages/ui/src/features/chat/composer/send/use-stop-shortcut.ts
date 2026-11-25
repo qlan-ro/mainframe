@@ -19,15 +19,14 @@ interface Owner {
 
 const owners = new Set<Owner>();
 
-const isShown = ({ anchor }: Owner) =>
-  anchor.current != null && anchor.current.closest('[data-conversation-tab="hidden"], [inert]') == null;
+const isShown = ({ anchor }: Owner) => anchor.current != null && anchor.current.closest('[inert]') == null;
 
 const inColumn = ({ anchor }: Owner) => anchor.current?.closest('[data-conversation-tab]') == null;
 
 function target(): Owner | undefined {
   const all = [...owners];
+  // Null, another surface, is none of them.
   const held = heldConversation();
-  if (held === null) return undefined;
   if (held !== undefined) return all.find((owner) => isShown(owner) && conversationOf(owner.anchor.current) === held);
   const running = all.filter((owner) => owner.running);
   return running.length === 1 ? running.find((owner) => isShown(owner) && inColumn(owner)) : undefined;
