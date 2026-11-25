@@ -37,7 +37,14 @@ let __threadId: string | undefined = 'thread-1';
 let __delegation: unknown;
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: unknown) => unknown) =>
-    sel({ threadListItem: __threadId ? { id: __threadId, custom: { delegation: __delegation } } : undefined }),
+    sel({
+      threadListItem: __threadId
+        ? {
+            id: __threadId,
+            custom: { delegation: __delegation, projectId: 'source-project', worktreePath: '/projects/worktree' },
+          }
+        : undefined,
+    }),
 }));
 const toast = vi.hoisted(() => ({ warning: vi.fn(), success: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ mfToast: toast }));
@@ -81,6 +88,11 @@ describe('EditorContextMenu — Add Agent Context', () => {
         endLine: 3,
         lineContent: 'two\nthree',
         note: '',
+        origin: expect.objectContaining({
+          daemonId: 'local',
+          projectId: 'source-project',
+          worktreePath: '/projects/worktree',
+        }),
       },
     ]);
   });

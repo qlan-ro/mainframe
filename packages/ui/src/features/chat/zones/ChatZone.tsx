@@ -16,6 +16,8 @@
  * counted on the controller), so the focused zone — also main, whose per-item
  * runtime hook holds its own — is safe, and the unfocused one stays attached.
  */
+import { ComposerSurface } from '../composer/segments/submitted-draft';
+import { sendFromComposer } from '@/features/chat/runtime/send-from-composer';
 import { useCallback, useEffect, useMemo } from 'react';
 import { AuiConfig, AuiProvider, ExternalThread, useAui, type AppendMessage } from '@assistant-ui/react';
 import { Derived } from '@assistant-ui/store';
@@ -116,7 +118,7 @@ export function ChatZone({
   // split on a draft), so send needs no createForLocal branch.
   const onNew = useCallback(
     (message: AppendMessage) => {
-      void controller.sendMessage(message);
+      void sendFromComposer(controller, message);
     },
     [controller],
   );
@@ -177,7 +179,9 @@ export function ChatZone({
             />
             <PanelColumnContext.Provider value={zoneColumnId(chatId)}>
               <div className="min-h-0 flex-1">
-                <ChatThread />
+                <ComposerSurface.Provider value="tab">
+                  <ChatThread />
+                </ComposerSurface.Provider>
               </div>
             </PanelColumnContext.Provider>
           </SideChatHost>

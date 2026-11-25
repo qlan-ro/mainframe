@@ -1,65 +1,21 @@
 // @vitest-environment jsdom
 
-/**
- * Integration test — create the daemon chat EXACTLY ONCE on first send.
- *
- * This is the test the original BLOCKER lacked: it mocks NEITHER
- * `@assistant-ui/react` NOR the new-thread coordinator. It mounts the REAL
- * sessions runtime — the same composition AppShell uses
- * (`DaemonPortProvider` → `AssistantRuntimeProvider` fed by
- * `useSessionsThreadList` → `useRemoteThreadListRuntime` → `useChatRuntimeHook`
- * → real per-chat controller + real `createForLocal`) — and stubs ONLY the
- * network boundary (`lib/api/*` + `lib/daemon/ws-client`).
- *
- * The bug: on first send to a `__LOCALID_*` thread BOTH create seams fire for
- * the same thread:
- *   (1) our external-store `onNew`  (use-chat-thread-runtime), and
- *   (2) assistant-ui's native thread-list `initialize` (the seam the library's
- *       `RemoteThreadListHookInstanceManager` drives off the thread's
- *       `"initialize"` event — i.e. `aui.threadListItem.initialize()`).
- * `createForLocal` had no idempotency guard → TWO `POST /api/chats` → two daemon
- * chats. The controller bound to chat #1; aui stamped `item.remoteId` = chat #2
- * → an orphaned empty session.
- *
- * The test drives both seams the way production does —
- * `aui.threads.thread('main').append(...)` (onNew) AND
- * `aui.threads.item('main').initialize()` (the native thread-list seam) —
- * within one act() tick, then asserts:
- *   1. `createChat` (the lib/api fn) is called EXACTLY ONCE.
- *   2. The id the controller sends the first message to (its `daemonId`, read
- *      off the captured facade `session/prompt`) === the id aui stamped as
- *      `mainItem.remoteId`. Both seams converge on the SAME chat.
- *   3. The first message targets the real daemon id, never a `__LOCALID_*`.
- *
- * To make a duplicate-create regression unmistakable, the `createChat` stub
- * returns a DIFFERENT id per call (`chat-server-1`, `chat-server-2`, …): a
- * second create would surface as both a count of 2 AND a controller/aui id
- * divergence. Verified manually: against the pre-fix coordinator this test sees
- * `createChat` called twice; against the fix it is called once.
- */
 import { act, render } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import type { FC } from 'react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import type { AssistantClient } from '@assistant-ui/react';
-
-// ---------------------------------------------------------------------------
-// Network boundary mocks ONLY — aui + coordinator stay REAL.
-// ---------------------------------------------------------------------------
 
 let createChatCallCount = 0;
 const createdIds: string[] = [];
 
 vi.mock('../../../../lib/api/chats', () => ({
-  // A distinct id per call so a duplicate create is visible as a divergence,
-  // not just an over-count.
   createChat: vi.fn(async (): Promise<Chat> => {
     createChatCallCount += 1;
     const id = `chat-server-${createChatCallCount}`;
     createdIds.push(id);
     return { id } as Chat;
   }),
-  // Benign reads the controller does on load/seed.
   getChat: vi.fn(async (_port: number, chatId: string): Promise<Chat> => ({ id: chatId }) as Chat),
   listChats: vi.fn(async (): Promise<Chat[]> => []),
   getChatWorkflowRuns: vi.fn(async () => []),
@@ -76,9 +32,7 @@ vi.mock('../../../../lib/api/attachments', () => ({
   uploadAttachments: vi.fn(async (): Promise<string[]> => []),
 }));
 
-// A daemonWs stub (side-band only) plus a facade-client stub that captures
-// every `session/prompt` so we can read which sessionId the first prompt
-// targets (that equals the controller's daemonId).
+let nextPromptError: Error | undefined;
 const sentPrompts: Array<{ sessionId: string; text: string }> = [];
 
 vi.mock('../../../../lib/daemon/ws-client', () => {
@@ -107,6 +61,11 @@ vi.mock('../../../../lib/daemon/acp-clients', () => {
     onGap: vi.fn(() => () => {}),
     prompt: vi.fn(async (sessionId: string, text: string) => {
       sentPrompts.push({ sessionId, text });
+      if (nextPromptError) {
+        const error = nextPromptError;
+        nextPromptError = undefined;
+        throw error;
+      }
       return {};
     }),
     cancel: vi.fn(),
@@ -119,10 +78,6 @@ vi.mock('../../../../lib/daemon/acp-clients', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Imports AFTER mocks — the subject + the real coordinator/registry/draft.
-// ---------------------------------------------------------------------------
-
 import { AssistantRuntimeProvider, useAui } from '@assistant-ui/react';
 import { DaemonPortProvider } from '../daemon-port-context';
 import { useSessionsThreadList } from '../use-sessions-thread-list';
@@ -130,17 +85,22 @@ import { setDraftConfig, clearDraftConfig } from '../draft-config';
 import { chatControllerRegistry } from '../chat-controller-registry';
 import { createChat } from '../../../../lib/api/chats';
 
+import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
+import { useDraftContent, draftItemsOf } from '@/features/chat/composer/draft-content/draft-content-store';
+import { useSessionReferences, sessionReferencesFor } from '@/features/chat/composer/sessions/session-reference-store';
+import { useSubmitComposition, type SubmitComposition } from '@/features/chat/composer/segments/use-submit-composition';
+
+let submit: SubmitComposition;
 const PORT = 31415;
 
 type AuiRef = { current: AssistantClient | null };
 
 const AuiCapture: FC<{ auiRef: AuiRef }> = ({ auiRef }) => {
   auiRef.current = useAui();
+  submit = useSubmitComposition();
   return null;
 };
 
-// Mounts the SAME runtime tree AppShell composes in production:
-// DaemonPortProvider → AssistantRuntimeProvider(useSessionsThreadList()).
 const SessionsRuntimeRoot: FC<{ auiRef: AuiRef }> = ({ auiRef }) => {
   const runtime = useSessionsThreadList();
   return (
@@ -158,38 +118,22 @@ function mountRuntime() {
     </DaemonPortProvider>,
   );
   if (!auiRef.current) throw new Error('aui client not captured');
-  // Read through the ref, never a snapshot: the client is re-created whenever
-  // the runtime's structure changes, and a stale one would act on a dead tree.
   return { aui: () => auiRef.current!, ...utils };
 }
 
 /** Drain microtasks + the aui optimistic-update machinery. */
 async function flush(): Promise<void> {
-  await act(async () => {
-    for (let i = 0; i < 20; i++) await Promise.resolve();
-  });
+  await act(async () => {});
 }
 
-/**
- * Mount, switch to a brand-new local thread, stash its draft, then drive BOTH
- * create seams (onNew via append + the native thread-list initialize) in one
- * tick — exactly what production does. Returns the local id + the runtime.
- */
-async function newThreadFirstSend(): Promise<{
-  aui: () => AssistantClient;
-  localId: string;
-  unmount: () => void;
-}> {
-  const { aui, unmount } = mountRuntime();
-
+async function openDraft(aui: () => AssistantClient) {
   await act(async () => {
     await aui().threads.switchToNewThread();
   });
   await flush();
+}
 
-  // The threads scope exposes ids via getState(), not as own properties.
-  const localId = aui().threads.getState().mainThreadId;
-
+function seedDraft(localId: string) {
   setDraftConfig(localId, {
     projectId: 'p1',
     adapterId: 'claude',
@@ -201,6 +145,17 @@ async function newThreadFirstSend(): Promise<{
     ultracode: false,
     adaptiveThinking: false,
   });
+}
+
+async function newThreadFirstSend(): Promise<{
+  aui: () => AssistantClient;
+  localId: string;
+  unmount: () => void;
+}> {
+  const { aui, unmount } = mountRuntime();
+  await openDraft(aui);
+  const localId = aui().threads.getState().mainThreadId;
+  seedDraft(localId);
 
   await act(async () => {
     const sendP = aui().threads.thread('main').append('hello');
@@ -213,55 +168,131 @@ async function newThreadFirstSend(): Promise<{
 }
 
 beforeEach(() => {
+  nextPromptError = undefined;
   createChatCallCount = 0;
   createdIds.length = 0;
   sentPrompts.length = 0;
   vi.clearAllMocks();
 });
 
-afterEach(() => {
-  vi.clearAllMocks();
+it('creates once and sends to the same id that assistant-ui stamps on the local thread', async () => {
+  const { aui, localId, unmount } = await newThreadFirstSend();
+  const remoteId = aui().threads.item('main').getState().remoteId;
+  expect(localId).toMatch(/^__LOCALID_/);
+  expect(createChat).toHaveBeenCalledTimes(1);
+  expect(createdIds).toEqual(['chat-server-1']);
+  expect(remoteId).toBe('chat-server-1');
+  expect(sentPrompts).toEqual([{ sessionId: remoteId, text: 'hello' }]);
+  const controller = chatControllerRegistry.getOrCreate(localId, PORT);
+  expect(controller.getThreadId()).toBe(localId);
+  expect(controller.hasRemoteId()).toBe(true);
+  clearDraftConfig(localId);
+  unmount();
 });
 
-describe('new-thread create-once — one POST /api/chats per New+send', () => {
-  it('calls createChat EXACTLY ONCE even though both onNew and aui.initialize fire', async () => {
-    const { localId, unmount } = await newThreadFirstSend();
-
-    expect(localId).toMatch(/^__LOCALID_/);
-    expect(vi.mocked(createChat)).toHaveBeenCalledTimes(1);
-    expect(createdIds).toEqual(['chat-server-1']);
-
+it.each(['Unauthorized', 'Network unavailable', 'Create timed out', 'Provider refused creation'])(
+  'restores first-send text before newer text and retries once after %s',
+  async (error) => {
+    const { aui, unmount } = mountRuntime();
+    await openDraft(aui);
+    const localId = aui().threads.getState().mainThreadId;
+    seedDraft(localId);
+    vi.mocked(createChat).mockRejectedValueOnce(new Error(error));
+    await act(async () => {
+      aui().composer.setText('first prompt');
+      submit();
+      aui().composer.setText('new text');
+    });
+    await flush();
+    expect(aui().composer.getState().text).toBe('first prompt\n\nnew text');
+    expect(sentPrompts).toHaveLength(0);
+    await act(async () => submit());
+    await flush();
+    expect(sentPrompts.map(({ text }) => text)).toEqual(['first prompt\n\nnew text']);
     clearDraftConfig(localId);
     unmount();
+  },
+);
+
+it('restores a quote, code note, capture, file and mention after the created chat refuses its first prompt', async () => {
+  const { aui, unmount } = mountRuntime();
+  await openDraft(aui);
+  const localId = aui().threads.getState().mainThreadId;
+  seedDraft(localId);
+  const segments = useComposerSegments.getState();
+  segments.append(localId, { quote: 'quoted', liveText: 'earlier', source: 'Earlier message' });
+  useDraftContent.getState().add(localId, [
+    { kind: 'code', filePath: 'src/a.ts', startLine: 1, endLine: 1, note: 'note', lineContent: 'const x = 1' },
+    { kind: 'capture', type: 'screenshot', imageDataUrl: 'data:image/png;base64,AAAA', note: 'sketch' },
+  ]);
+  const before = draftItemsOf(localId).map(({ id }) => id);
+  useSessionReferences.getState().record(localId, 'Prior', '/logs/prior.jsonl');
+  nextPromptError = new Error('Provider refused prompt');
+  await act(async () => {
+    await aui().composer.addAttachment({
+      id: 'attached',
+      type: 'document',
+      name: 'notes.txt',
+      contentType: 'text/plain',
+      content: [{ type: 'text', text: 'data:text/plain;base64,YQ==' }],
+    });
+    aui().composer.setText('first @Prior');
+    submit();
+    aui().composer.setText('typed meanwhile');
   });
+  await flush();
+  expect(aui().composer.getState().text).toBe('first @Prior\n\ntyped meanwhile');
+  expect(
+    aui()
+      .composer.getState()
+      .attachments.map(({ id }) => id),
+  ).toEqual(['attached']);
+  expect(useComposerSegments.getState().byThread[localId]?.liveQuote?.text).toBe('quoted');
+  expect(
+    draftItemsOf(localId)
+      .filter((item) => item.kind !== 'mention')
+      .map(({ id }) => id),
+  ).toEqual(before);
+  expect(sessionReferencesFor(localId).get('Prior')).toBe('/logs/prior.jsonl');
 
-  it('converges: the controller send target === the stamped item.remoteId (no orphan)', async () => {
-    const { aui, localId, unmount } = await newThreadFirstSend();
+  await act(async () => submit());
+  await flush();
+  expect(createChat).toHaveBeenCalledTimes(1);
+  expect(sentPrompts).toHaveLength(2);
+  expect(sentPrompts[1]?.text).toContain('typed meanwhile');
+  unmount();
+});
 
-    // The id aui stamped on the (now-regular) thread item after initialize.
-    const stampedRemoteId = aui().threads.item('main').getState().remoteId;
-    expect(stampedRemoteId).toBe('chat-server-1');
-
-    // The id the controller actually sent the first message to (== its daemonId).
-    const firstSend = sentPrompts[0];
-    expect(firstSend).toBeDefined();
-    expect(firstSend!.sessionId).toBe(stampedRemoteId);
-    expect(firstSend!.sessionId).not.toMatch(/^__LOCALID_/);
-
-    clearDraftConfig(localId);
-    unmount();
+it('returns a pending draft to the original composer after switching sessions', async () => {
+  const { aui, localId: previousId, unmount } = await newThreadFirstSend();
+  await openDraft(aui);
+  const localId = aui().threads.getState().mainThreadId;
+  seedDraft(localId);
+  let refuse: (error: Error) => void = () => {};
+  vi.mocked(createChat).mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        refuse = reject;
+      }),
+  );
+  await act(async () => {
+    aui().composer.setText('draft belongs here');
+    submit();
   });
-
-  it('the registry controller for the local id adopts the SAME daemon id (no id-flip)', async () => {
-    const { localId, unmount } = await newThreadFirstSend();
-
-    // The controller is keyed by the STABLE local id (S1) and has adopted its
-    // remote id via setRemoteId — hasRemoteId() is now true, threadId unchanged.
-    const controller = chatControllerRegistry.getOrCreate(localId, PORT);
-    expect(controller.getThreadId()).toBe(localId);
-    expect(controller.hasRemoteId()).toBe(true);
-
-    clearDraftConfig(localId);
-    unmount();
+  await act(async () => {
+    await aui().threads.switchToThread(previousId);
   });
+  await flush();
+  await act(async () => {
+    aui().composer.setText('different session');
+    refuse(new Error('Network unavailable'));
+  });
+  expect(aui().composer.getState().text).toBe('different session');
+  await act(async () => {
+    await aui().threads.switchToThread(localId);
+  });
+  await flush();
+  expect(aui().composer.getState().text).toBe('draft belongs here');
+  clearDraftConfig(localId);
+  unmount();
 });

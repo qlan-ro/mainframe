@@ -1,5 +1,10 @@
 'use client';
 
+import type { TriggerItem } from '@/components/trigger-engine/types';
+
+import { useDraftTarget } from '../draft-content/use-draft-target';
+import { useDraftContent } from '../draft-content/draft-content-store';
+
 /**
  * Wires our own trigger engine (`@/components/trigger-engine`) into the
  * composer:
@@ -63,6 +68,7 @@ function useComposerTriggerConfigs(): { triggers: TriggerConfig[]; refreshSessio
   const agents = useChatAgents();
   const slashAdapter = useMemo(() => buildSlashTriggerAdapter(skills, commands), [skills, commands]);
 
+  const origin = useDraftTarget();
   const mentionCache = useMemo(
     () =>
       createMentionCache({
@@ -77,7 +83,7 @@ function useComposerTriggerConfigs(): { triggers: TriggerConfig[]; refreshSessio
         browseFilesystem: (dir) =>
           port != null ? browseFilesystem(port, dir, { includeFiles: true, includeHidden: true }) : Promise.resolve([]),
       }),
-    [port, projectId, chatId],
+    [port, projectId, chatId, origin.daemonId, origin.worktreePath],
   );
 
   const sessions = useSessionMentionSource({ port, projectId, activeChatId });
@@ -88,8 +94,8 @@ function useComposerTriggerConfigs(): { triggers: TriggerConfig[]; refreshSessio
   // dropped at send.
   const threadId = useActiveThreadId() ?? null;
   const insertion = useMemo(
-    () => createSessionInsertion({ threadId, pathByChatId: sessions.pathByChatId }),
-    [threadId, sessions.pathByChatId],
+    () => createSessionInsertion({ threadId, pathByChatId: sessions.pathByChatId, origin }),
+    [threadId, sessions.pathByChatId, origin],
   );
 
   const triggers = useMemo(
@@ -109,11 +115,24 @@ function useComposerTriggerConfigs(): { triggers: TriggerConfig[]; refreshSessio
         itemTestIdPrefix: 'composer-file-item',
         itemTestId: sessionItemTestId,
         itemGlyph: sessionItemGlyph,
-        onInserted: insertion.onInserted,
+        onInserted: (item: TriggerItem) => {
+          insertion.onInserted(item);
+          if (!threadId || item.type !== 'file') return;
+          useDraftContent.getState().add(threadId, [
+            {
+              kind: 'mention',
+              token: mentionDirectiveFormatter().serialize(item),
+              label: item.id.split(/[\\/]/).pop() ?? item.label,
+              path: item.id,
+              note: '',
+              origin,
+            },
+          ]);
+        },
         closeOnInsert: shouldCloseTriggerOnInsert,
       },
     ],
-    [slashAdapter, mentionAdapter, insertion],
+    [slashAdapter, mentionAdapter, insertion, threadId, origin, chatId],
   );
 
   return { triggers, refreshSessions: sessions.refresh };

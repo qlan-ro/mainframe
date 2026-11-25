@@ -10,6 +10,9 @@ import type { CompleteAttachment } from '@assistant-ui/react';
 import { formatReview } from '@/lib/editor/format-line-comment';
 import { formatCaptures } from '@/features/run/format-captures';
 import { SANDBOX_CAPTURE_SENTINEL } from '../../markers/message-markers';
+import { prependSessionReferences } from '../../session-references/reference-line';
+import { expandSessionMentions } from '../../session-references/session-mention';
+import { partitionDraftItems, targetKey, type DraftTarget } from './draft-target';
 import type { DraftCapture, DraftCodeNote, DraftItem } from './draft-content-store';
 
 const CODE_NOTES_HEADING = '**Code annotations**';
@@ -46,6 +49,12 @@ function withCaptures(body: string, markdown: string): string {
   return `${markdown}\n\n${body}`;
 }
 
+function absoluteDraftPath(path: string, origin?: DraftTarget): string {
+  const base = origin?.worktreePath ?? origin?.projectPath;
+  if (!base || /^(?:[\\/]|[A-Za-z]:)/u.test(path)) return path;
+  return `${base.replace(/[\\/]$/u, '')}/${path}`;
+}
+
 const isCapture = (item: DraftItem): item is DraftCapture => item.kind === 'capture';
 const isCodeNote = (item: DraftItem): item is DraftCodeNote => item.kind === 'code';
 
@@ -56,13 +65,52 @@ export interface ComposedMessage {
   captures: DraftCapture[];
 }
 
-export function composeMessage(text: string, items: readonly DraftItem[]): ComposedMessage {
-  const captures = items.filter(isCapture);
+export function composeMessage(
+  text: string,
+  items: readonly DraftItem[],
+  target?: DraftTarget,
+  bindings: ReadonlyMap<string, string> = new Map(),
+): ComposedMessage {
+  const { active, setAside } = partitionDraftItems(items, target);
+  const references = new Map(bindings);
+  for (const item of setAside) {
+    if (item.kind !== 'mention') continue;
+    if (item.referenceLabel) references.delete(item.referenceLabel);
+    else text = text.split(item.token).join(item.label);
+  }
+  for (const item of active) {
+    if (
+      item.kind !== 'mention' ||
+      item.referenceLabel ||
+      !item.path ||
+      !target ||
+      !item.includedFor?.includes(targetKey(target))
+    )
+      continue;
+    const absolute = absoluteDraftPath(item.path, item.origin);
+    const token = /\s/u.test(absolute) ? `@"${absolute}"` : `@${absolute}`;
+    text = text.split(item.token).join(token);
+  }
+  const wireText = expandSessionMentions(text, [...references.keys()]);
+  text = prependSessionReferences(wireText, references);
+  const captures = active.filter(isCapture);
   const { markdown, attachments } = formatCaptures(
     captures.map(({ note, ...rest }) => ({ ...rest, annotation: note })),
   );
   return {
-    body: withCaptures(withCodeNotes(text, items.filter(isCodeNote)), markdown),
+    body: withCaptures(
+      withCodeNotes(
+        text,
+        active
+          .filter(isCodeNote)
+          .map((note) =>
+            target && note.includedFor?.includes(targetKey(target))
+              ? { ...note, filePath: absoluteDraftPath(note.filePath, note.origin) }
+              : note,
+          ),
+      ),
+      markdown,
+    ),
     attachments: attachments.map((file, index) => ({
       id: captures[index]!.id,
       type: 'image',

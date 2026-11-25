@@ -17,7 +17,7 @@ import { AttachmentPreviewDialog, useAttachmentSrc } from '@/components/ui/assis
 import { formatBytes } from '@/features/viewers/viewer-status';
 import { fileExtMeta } from '../../messages/file-ext-colors';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
-import { useDraftItems } from '../draft-content/draft-content-store';
+import { useActiveDraftItems } from '../draft-content/use-draft-target';
 import { DraftContentTiles } from '../draft-content/DraftContentTiles';
 import { DraftTile, ExtensionLead, RemoveTileButton, ThumbLead } from '../draft-content/DraftTile';
 import { useImageSize } from '../draft-content/use-image-size';
@@ -63,7 +63,7 @@ function ComposerAttachmentTile() {
 /** A new tile from the workspace brings the caret to the field below it, as a new quote does. */
 function useFocusFieldOnAdd() {
   const ref = useRef<HTMLDivElement>(null);
-  const count = useDraftItems(useActiveThreadId()).length;
+  const count = useActiveDraftItems(useActiveThreadId()).length;
   const shown = useRef(count);
   useEffect(() => {
     const added = count > shown.current;

@@ -3,6 +3,8 @@
  * its own test id, its own glyph, and the label/path recording that ties the
  * inserted `@session[label]` token to the transcript path the send will emit.
  */
+import { useDraftContent } from '../draft-content/draft-content-store';
+import type { DraftTarget } from '../draft-content/draft-target';
 import { MessageSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { TriggerItem } from '@/components/trigger-engine/types';
@@ -44,7 +46,11 @@ export function resolveDraftLabel(args: {
  * snapshot and derive the same label. Anything that lands a store write in
  * between silently desyncs the inserted token from the recorded path.
  */
-export function createSessionInsertion(args: { threadId: string | null; pathByChatId: ReadonlyMap<string, string> }): {
+export function createSessionInsertion(args: {
+  threadId: string | null;
+  pathByChatId: ReadonlyMap<string, string>;
+  origin?: DraftTarget;
+}): {
   resolveSessionLabel: (item: TriggerItem) => string;
   onInserted: (item: TriggerItem) => void;
 } {
@@ -63,7 +69,20 @@ export function createSessionInsertion(args: { threadId: string | null; pathByCh
       if (item.type !== 'session' || threadId == null) return;
       const path = pathByChatId.get(item.id);
       if (path === undefined) return;
-      useSessionReferences.getState().record(threadId, labelFor(item), path);
+      const label = labelFor(item);
+      useSessionReferences.getState().record(threadId, label, path);
+      if (args.origin)
+        useDraftContent.getState().add(threadId, [
+          {
+            kind: 'mention',
+            token: `@${label}`,
+            label,
+            path,
+            referenceLabel: label,
+            note: '',
+            origin: args.origin,
+          },
+        ]);
     },
   };
 }

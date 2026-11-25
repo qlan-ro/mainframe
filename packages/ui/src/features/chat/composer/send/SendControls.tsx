@@ -24,7 +24,7 @@ import { useShortcutAction } from '@/features/shortcuts/action-store';
 import type { EnterWhileRunning } from '@/store/ui-prefs';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
 import { ComposerHint } from '../composer-card-context';
-import { useDraftItems } from '../draft-content/draft-content-store';
+import { useActiveDraftItems } from '../draft-content/use-draft-target';
 import { useCanSubmit, type SubmitComposition } from '../segments/use-submit-composition';
 import { useCanSteer, useEnterMode } from './use-enter-mode';
 import { useComposerStop, type ComposerStop } from './use-stop';
@@ -101,7 +101,7 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
   const canSteer = useCanSteer();
   const hasAttachments = useAuiState((s) => (s.composer?.attachments?.length ?? 0) > 0);
   // A capture is sent as a file; a code annotation is text.
-  const hasCaptures = useDraftItems(useActiveThreadId()).some((item) => item.kind === 'capture');
+  const hasCaptures = useActiveDraftItems(useActiveThreadId()).some((item) => item.kind === 'capture');
   const hasFiles = hasAttachments || hasCaptures;
   const [open, setOpen] = useState(false);
   // White, not the focus blue: the line sits on a blue fill.
