@@ -2,7 +2,8 @@
 
 /** The session's uncommitted changes at the end of the bottom strip (K8). Hidden when there are none. */
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Diff, FileText } from 'lucide-react';
+import { MENU_ITEM, MENU_LABEL, MENU_SEPARATOR } from '@/components/ui/menu-item';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { toChangesSummary, useWorkingChanges } from '@/features/review/use-working-changes';
@@ -12,11 +13,11 @@ import { BOTTOM_STRIP_BUTTON } from './BottomStrip';
 
 const SHOWN_FILES = 8;
 
-function Count({ additions, deletions }: { additions?: number; deletions?: number }) {
+function Count({ additions, deletions, className }: { additions?: number; deletions?: number; className?: string }) {
   return (
-    <span className="flex shrink-0 gap-1 font-medium tabular-nums">
+    <span className={cn('flex shrink-0 gap-1.5 font-medium tabular-nums', className)}>
       {additions != null && <span className="text-success">+{additions}</span>}
-      {deletions != null && <span className="text-destructive">−{deletions}</span>}
+      {deletions != null && <span className="text-red">−{deletions}</span>}
     </span>
   );
 }
@@ -38,7 +39,7 @@ export function ChangesButton({ port, projectId, chatId }: { port: number; proje
             type="button"
             data-testid="composer-changes"
             aria-label={`Changes: ${files}`}
-            className={cn(BOTTOM_STRIP_BUTTON, 'ml-auto shrink-0', open && 'bg-accent')}
+            className={cn(BOTTOM_STRIP_BUTTON, 'ml-auto shrink-0', open && 'bg-chrome-press hover:bg-chrome-press')}
           >
             {summary.additions == null && summary.deletions == null ? files : <Count {...summary} />}
           </button>
@@ -46,34 +47,43 @@ export function ChangesButton({ port, projectId, chatId }: { port: number; proje
       </ComposerHint>
       <PopoverContent
         data-testid="composer-changes-popover"
-        align="end"
+        align="start"
         side="top"
         sideOffset={6}
-        className="gap-1 p-2"
+        className="w-85 gap-0 p-1"
       >
-        <span className="px-2 text-xs text-muted-foreground">{files}</span>
+        <span className={MENU_LABEL}>{files}</span>
         <div className="flex max-h-60 flex-col overflow-y-auto">
           {changes.files.slice(0, SHOWN_FILES).map((file) => (
-            <div key={file.path} className="flex min-h-7 min-w-0 items-center gap-2 px-2 text-xs">
-              <span className="min-w-0 flex-1 truncate font-mono" dir="rtl" title={file.path}>
+            <div key={file.path} className="flex min-h-7 min-w-0 items-center gap-2.5 px-2.5 py-[7px]">
+              <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 flex-1 truncate font-mono text-small/[20px]" dir="rtl" title={file.path}>
                 <bdi>{file.path}</bdi>
               </span>
-              <Count additions={file.additions} deletions={file.deletions} />
+              <Count
+                additions={file.additions}
+                deletions={file.deletions}
+                className="gap-2 font-mono text-meta/[1.45] font-normal"
+              />
             </div>
           ))}
-          {rest > 0 && <span className="px-2 py-1 text-xs text-muted-foreground">and {rest} more</span>}
+          {rest > 0 && <span className="px-2.5 py-1 text-meta/[1.45] text-muted-foreground">and {rest} more</span>}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
+        <div className={MENU_SEPARATOR} />
+        <button
+          type="button"
           data-testid="composer-changes-open-diff"
+          className={MENU_ITEM}
           onClick={() => {
             setOpen(false);
             emitSurfaceIntent({ type: 'open-review' });
           }}
         >
-          Open diff
-        </Button>
+          <Diff aria-hidden />
+          <span className="flex min-w-0 flex-col">
+            <span>Open diff</span>
+          </span>
+        </button>
       </PopoverContent>
     </Popover>
   );

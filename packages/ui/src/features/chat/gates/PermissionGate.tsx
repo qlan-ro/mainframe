@@ -26,12 +26,12 @@ const ALLOWED_PART = 'rounded-sm focus-visible:focus-line-inset';
 function ToolNameRow({ toolName, command }: { toolName: string; command?: string }) {
   const lines = command?.split('\n').length ?? 0;
   return (
-    <div className={cn('px-4 pb-1', GATE_BODY_INSET)}>
+    <div className={cn('px-4', GATE_BODY_INSET)}>
       <div {...allowedPart('tool')} className={ALLOWED_PART}>
         <div className="flex items-start gap-2">
-          <TerminalIcon className="mt-0.75 size-3.5 shrink-0 text-muted-foreground" />
+          <TerminalIcon className="mt-[0.5px] size-3.5 shrink-0 text-muted-foreground" />
           <span
-            className="stored-order min-w-0 font-mono text-sm font-semibold wrap-anywhere text-foreground"
+            className="stored-order min-w-0 font-mono text-control/[normal] font-semibold wrap-anywhere text-foreground"
             dir="ltr"
           >
             {visibleLine(toolName)}
@@ -39,7 +39,7 @@ function ToolNameRow({ toolName, command }: { toolName: string; command?: string
           {lines > 1 && (
             <span
               data-testid="chat-permission-command-lines"
-              className="shrink-0 text-xs leading-5 text-muted-foreground tabular-nums"
+              className="shrink-0 text-meta text-muted-foreground tabular-nums"
             >
               {lines} lines
             </span>
@@ -49,7 +49,7 @@ function ToolNameRow({ toolName, command }: { toolName: string; command?: string
           <p
             data-testid="chat-permission-command"
             dir="ltr"
-            className="stored-order mt-1 font-mono text-xs leading-normal wrap-anywhere whitespace-pre-wrap text-foreground/80"
+            className="stored-order mt-1 font-mono text-small/[1.5] wrap-anywhere whitespace-pre-wrap text-ink-secondary"
           >
             {visibleText(command)}
           </p>
@@ -62,13 +62,13 @@ function ToolNameRow({ toolName, command }: { toolName: string; command?: string
 /** Whole when open, like the command: no scroller of its own. */
 function DetailsDisclosure({ text, open, onToggle }: { text: string; open: boolean; onToggle: () => void }) {
   return (
-    <div className={cn('px-4 pb-3', GATE_BODY_INSET)}>
+    <div className={cn('px-4 pt-1.5 pb-2', GATE_BODY_INSET)}>
       <button
         data-testid="chat-permission-details-toggle"
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="flex min-h-6 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        className="-mt-[3px] -mb-[1.5px] flex min-h-6 items-center gap-1 text-meta/[1.45] text-muted-foreground hover:text-foreground"
       >
         <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
         Details
@@ -80,7 +80,7 @@ function DetailsDisclosure({ text, open, onToggle }: { text: string; open: boole
           {...allowedPart('details')}
           data-testid="chat-permission-details-pre"
           dir="ltr"
-          className="stored-order mt-2 animate-in rounded-md bg-muted p-3 font-mono text-xs wrap-anywhere whitespace-pre-wrap text-foreground duration-150 fade-in-0 focus-visible:focus-line-inset"
+          className="stored-order mt-2 animate-in rounded-sm bg-code-surface p-3 font-mono text-meta/[1.5] wrap-anywhere whitespace-pre-wrap text-foreground duration-150 fade-in-0 focus-visible:focus-line-inset"
         >
           {text}
         </pre>
@@ -124,7 +124,7 @@ function GrantList({ grants }: { grants: readonly GrantLine[] }) {
   return (
     <div
       data-testid="chat-permission-grants"
-      className={cn('pr-4 pb-2 text-xs text-muted-foreground', GATE_BODY_INSET)}
+      className={cn('pr-4 pb-2 text-meta/[1.45] text-muted-foreground', GATE_BODY_INSET)}
     >
       <div {...allowedPart('grants')} className={ALLOWED_PART}>
         <span>{grants.length === 1 ? 'Always allow saves:' : `Always allow saves ${grants.length} changes:`}</span>
@@ -134,7 +134,7 @@ function GrantList({ grants }: { grants: readonly GrantLine[] }) {
               {verb}{' '}
               <code
                 dir="ltr"
-                className="stored-order rounded-sm bg-muted box-decoration-clone px-0.5 font-mono wrap-anywhere whitespace-pre-wrap text-foreground"
+                className="stored-order rounded-sm bg-code-surface box-decoration-clone px-[5px] font-mono wrap-anywhere whitespace-pre-wrap text-foreground"
               >
                 {subject}
               </code>{' '}
@@ -153,7 +153,7 @@ function OmittedList({ omitted, offersAlways }: { omitted: readonly string[]; of
   return (
     <div
       data-testid="chat-permission-omitted"
-      className={cn('pr-4 pb-2 text-xs text-muted-foreground', GATE_BODY_INSET)}
+      className={cn('pr-4 pb-2 text-meta/[1.45] text-muted-foreground', GATE_BODY_INSET)}
     >
       <span>
         {offersAlways
@@ -230,7 +230,7 @@ export function PermissionGate({ entry, reply, context }: PermissionGateProps) {
       <GateCardShell accent="warning">
         <GateHead
           icon={<ShieldIcon className="size-3.5" />}
-          tileClassName="bg-warning/10 text-warning"
+          tileClassName="bg-warning-surface text-warning"
           eyebrow={gateEyebrow('Permission required', context)}
           title={context?.title ?? 'Permission Required'}
         />

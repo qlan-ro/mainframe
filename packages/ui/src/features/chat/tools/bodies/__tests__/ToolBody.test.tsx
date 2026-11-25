@@ -60,6 +60,12 @@ describe('ToolBody', () => {
     expect(screen.queryByTestId('chat-read-reminder')).toBeNull();
   });
 
+  it('shows an image-only read without a generic arguments body', () => {
+    show(part('Read', { file_path: 'a.png' }, { images: [{ mimeType: 'image/png', base64: 'AA==' }] }));
+    expect(screen.getByTestId('chat-tool-images')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-call-args')).toBeNull();
+  });
+
   it('names an MCP call by its raw tool name', () => {
     show(part('mcp__claude_ai_github__get_issue', { id: 1 }, 'ok'));
     expect(screen.getByTestId('chat-call-tool')).toHaveTextContent('mcp__claude_ai_github__get_issue');
@@ -175,6 +181,17 @@ describe('ToolBody', () => {
     show(part('WebFetch', { url: 'https://example.com' }, 'A page'));
     fireEvent.click(within(screen.getByTestId('web-fetch-card-url')).getByRole('link'));
     expect(opened).toHaveBeenCalledWith('https://example.com');
+  });
+
+  it('preserves the original fetched summary text', () => {
+    show(part('WebFetch', { url: 'https://example.com' }, 'Read `rate_limits` first.'));
+    const summary = screen.getByTestId('web-fetch-card-summary');
+    expect(summary).toHaveTextContent('Read `rate_limits` first.');
+  });
+
+  it('renders a call body when arguments and output are empty', () => {
+    show(part('mcp__a__b', {}, ''));
+    expect(screen.getByTestId('chat-call-args')).toHaveTextContent('{}');
   });
 
   it('shows a call’s arguments and its result, or its error', () => {

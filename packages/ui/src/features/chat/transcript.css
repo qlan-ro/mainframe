@@ -2,46 +2,35 @@
    meta 12). The app's text utilities are its chrome scale, which steps 11/13. */
 /* DESIGN.md: “keep text at 4.5:1 (`meta` is the lowest text colour)” */
 :root {
-  --mf-tr-link: #0063cc;
-  --mf-tr-ink: #1f1f1f;
-  --mf-tr-secondary: #48484a;
-  --mf-tr-hover: #ededf0;
-  --mf-tr-table-rule: #e5e5e5;
-  --mf-tr-table-header: #f5f5f7;
-  --mf-tr-add-ink: oklch(from #1d7a46 0.48148 c h);
-  --mf-tr-del-ink: oklch(from #c0392b 0.51035 c h);
-  --mf-tr-bubble: #f1f1f3;
-  --mf-tr-ok: #1d7a46;
-  --mf-tr-del: #c0392b;
-  --mf-tr-code: rgb(0 0 0 / 0.06);
-  --mf-tr-muted: #5c5c61;
-  --mf-tr-failure: #b04466;
+  --mf-tr-link: var(--accent-ink);
+  --mf-tr-ink: var(--foreground);
+  --mf-tr-secondary: var(--ink-secondary);
+  --mf-tr-hover: var(--sidebar-accent);
+  --mf-tr-table-rule: var(--border);
+  --mf-tr-table-header: var(--queue-well);
+  --mf-tr-add-ink: oklch(from var(--success) 0.48148 c h);
+  --mf-tr-del-ink: oklch(from var(--red) 0.51035 c h);
+  --mf-tr-bubble: var(--bubble-tinted);
+  --mf-tr-ok: var(--success);
+  --mf-tr-del: var(--red);
+  --mf-tr-code: var(--code-surface);
+  --mf-tr-muted: var(--muted-foreground);
+  --mf-tr-failure: var(--fail);
   --mf-tr-code-fail: var(--mf-tr-failure);
   --mf-tr-code-link: var(--mf-tr-link);
   --mf-tr-term: var(--mf-tr-code);
   --mf-tr-term-ink: var(--mf-tr-ink);
+  --mf-tr-term-muted: var(--mf-tr-muted);
   --mf-tr-term-ok: var(--mf-tr-ok);
-  --mf-tr-term-err: #c70016;
+  --mf-tr-term-err: var(--crit);
 }
 .dark {
-  --mf-tr-link: #5aaeff;
-  --mf-tr-ink: #ececec;
-  --mf-tr-secondary: #c7c7cc;
-  --mf-tr-hover: #262628;
-  --mf-tr-table-rule: #333336;
-  --mf-tr-table-header: #2d2d30;
-  --mf-tr-add-ink: oklch(from #4cc38a 0.73659 c h);
-  --mf-tr-del-ink: oklch(from #ff7b6e 0.78217 c h);
-  --mf-tr-bubble: #262626;
-  --mf-tr-ok: #4cc38a;
-  --mf-tr-del: #ff7b6e;
-  --mf-tr-code: rgb(255 255 255 / 0.09);
-  --mf-tr-muted: #aeaeb4;
-  --mf-tr-failure: #e48aa3;
-  --mf-tr-code-fail: oklch(from var(--mf-tr-failure) 0.75875 c h);
+  --mf-tr-add-ink: oklch(from var(--success) 0.73659 c h);
+  --mf-tr-del-ink: oklch(from var(--red) 0.78217 c h);
   --mf-tr-code-link: oklch(from var(--mf-tr-link) 0.74422 c h);
   --mf-tr-term: #0f0f10;
   --mf-tr-term-ink: #e4e4e7;
+  --mf-tr-term-muted: #a3a3ab;
   --mf-tr-term-ok: #7ee787;
   --mf-tr-term-err: #ff8a80;
 }
@@ -87,6 +76,9 @@
 .text-mf-tr-del {
   color: var(--mf-tr-del);
 }
+.text-mf-tr-term-muted {
+  color: var(--mf-tr-term-muted);
+}
 .text-mf-tr-term-ink {
   color: var(--mf-tr-term-ink);
 }
@@ -101,6 +93,25 @@
   color: var(--mf-tr-ink);
   font-size: 14px;
   line-height: 22px;
+}
+.mf-tr-answer .aui-md {
+  display: flow-root;
+}
+.mf-tr-answer .aui-md > .aui-md-p:last-child {
+  margin-bottom: 8px;
+}
+.mf-tr-answer .aui-md-strong {
+  font-weight: 700;
+}
+.mf-tr-answer sup:has(> [data-footnote-ref]) {
+  font-size: smaller;
+  line-height: inherit;
+  position: static;
+  vertical-align: super;
+}
+.mf-tr-answer sup > [data-footnote-ref] {
+  font-size: 11px;
+  margin-inline-start: 1px;
 }
 .mf-tr-meta {
   font-size: 12px;
@@ -207,6 +218,10 @@ div.mf-tr-del {
 .mf-link-mono {
   font-size: 0.92em;
 }
+.bg-mf-tr-code .mf-tr-fetch-link {
+  color: var(--mf-tr-link);
+  font-size: 12px;
+}
 .mf-link:hover {
   text-decoration-color: currentColor;
 }
@@ -234,4 +249,16 @@ div.mf-tr-del {
   .mf-tr-footer {
     opacity: 1;
   }
+}
+
+.mf-tr-divider {
+  margin-block: 10px 14px;
+  min-height: 22px;
+  gap: 6px;
+  font-size: var(--text-meta);
+  line-height: 22px;
+}
+
+[data-testid^='chat-provider-switch-marker-'].mf-tr-divider {
+  margin-block: 10px;
 }

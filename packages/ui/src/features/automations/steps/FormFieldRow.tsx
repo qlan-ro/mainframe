@@ -138,7 +138,7 @@ export function FormFieldRow({ field, fields, onPatch, onRemove, testId }: FormF
             type="button"
             data-testid={`${testId}-add-showwhen`}
             onClick={() => onPatch({ showWhen: { key: others[0]?.key ?? '', equals: '' } })}
-            className="ml-[20px] self-start text-xs font-medium text-muted-foreground hover:text-primary"
+            className="ml-[20px] self-start text-xs font-medium text-muted-foreground hover:text-accent-ink"
           >
             + show only when…
           </button>

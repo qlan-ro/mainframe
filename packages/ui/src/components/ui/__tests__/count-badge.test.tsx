@@ -21,9 +21,9 @@ describe('CountBadge', () => {
       'info is capsule-less muted gray',
       { variant: 'info' },
       ['text-muted-foreground', 'text-xs', 'tabular-nums'],
-      ['rounded-full', 'bg-primary'],
+      ['rounded-full', 'bg-accent-fill'],
     ],
-    ['unread uses the accent ink', { variant: 'unread' }, ['text-primary'], ['text-muted-foreground']],
+    ['unread uses the accent ink', { variant: 'unread' }, ['text-accent-ink'], ['text-muted-foreground']],
     [
       'unread + onAccent forces primary-foreground',
       { variant: 'unread', onAccent: true },
@@ -31,16 +31,16 @@ describe('CountBadge', () => {
       [],
     ],
     [
-      'alert is a filled primary capsule',
+      'alert uses the accessible accent fill',
       { variant: 'alert' },
-      ['rounded-full', 'bg-primary', 'text-primary-foreground'],
+      ['rounded-full', 'bg-accent-fill', 'text-primary-foreground'],
       ['bg-destructive'],
     ],
     [
       'alert honors the destructive tone',
       { variant: 'alert', tone: 'destructive' },
       ['bg-destructive'],
-      ['bg-primary'],
+      ['bg-accent-fill'],
     ],
   ] as [string, Record<string, unknown>, string[], string[]][])(
     'variant recipe: %s',

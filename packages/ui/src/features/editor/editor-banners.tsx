@@ -29,7 +29,7 @@ export function DiskConflictBanner({ onReload, onKeepMine }: { onReload: () => v
   return (
     <div
       data-testid="editor-tab-disk-conflict"
-      className="flex shrink-0 items-center gap-2 bg-warning/10 px-3 py-1 text-xs text-foreground"
+      className="flex shrink-0 items-center gap-2 bg-warning-surface px-3 py-1 text-xs text-foreground"
     >
       <span className="flex-1">File changed on disk</span>
       <Button data-testid="editor-tab-reload" variant="ghost" size="xs" onClick={onReload}>

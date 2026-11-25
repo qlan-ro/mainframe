@@ -4,7 +4,7 @@
  * Shared chrome frame for all file viewers.
  *
  * Layout:
- *   Header (28px, bg-muted) — folder icon, breadcrumb dir segments with
+ *   Header (32px) — folder icon, breadcrumb dir segments with
  *     chevron separators, basename; optional actions slot; separator;
  *     Reveal in file tree and Reveal in Finder buttons.
  *   Body (flex-1 overflow-hidden) — viewer content via `children`.
@@ -68,7 +68,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
   return (
     <div data-testid="viewer-shell" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header / breadcrumb */}
-      <div className="flex h-7 shrink-0 items-center gap-1 border-b border-border bg-muted pr-1.5 pl-5 text-xs">
+      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-border pr-1.5 pl-3.5 text-meta/[1.45]">
         <Folder className="size-3 shrink-0 text-muted-foreground" aria-hidden />
 
         {dirParts.map((segment, i) => (
@@ -78,7 +78,7 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
           </React.Fragment>
         ))}
 
-        <span className="font-semibold text-foreground">{basename}</span>
+        <span className="font-medium text-ink-secondary">{basename}</span>
 
         <div className="flex-1" />
 

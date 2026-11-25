@@ -73,7 +73,7 @@ export function PreviewUrlBar({ handle, seedUrl, enabled, onCommitUrl }: Preview
   }
 
   return (
-    <InputGroup className="h-7 min-w-0 flex-1">
+    <InputGroup className="ml-1 h-7 min-w-0 flex-1 rounded-md border-transparent bg-chrome-chip shadow-none dark:bg-chrome-chip">
       <InputGroupAddon className="gap-1">
         <Hint label="Reload preview">
           <InputGroupButton
@@ -106,7 +106,7 @@ export function PreviewUrlBar({ handle, seedUrl, enabled, onCommitUrl }: Preview
           setInvalid(false);
         }}
         onKeyDown={handleKeyDown}
-        className="font-mono text-sm"
+        className="text-meta/[1.45] text-ink-secondary md:text-meta/[1.45]"
       />
 
       <InputGroupAddon align="inline-end" className="gap-1">

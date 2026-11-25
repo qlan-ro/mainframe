@@ -20,7 +20,7 @@
  * subsequent remount does not re-trigger the reveal.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { PanelRightClose, RotateCw } from 'lucide-react';
+import { RotateCw, X } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { useLayoutStore } from '@/store/layout';
 import { activeFileTab } from '@/store/run-pane-file-tabs';
@@ -32,6 +32,9 @@ import { FileTreeNode } from './FileTreeNode';
 import { useFileTreeReveal } from './use-file-tree-reveal';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
 import { lastSegment, sortEntries } from './file-tree-utils';
+
+const HEADER_ACTION =
+  'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:focus-line';
 
 interface FileTreeProps {
   port: number;
@@ -53,7 +56,7 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
   // Absolute workspace base (worktree wins over project) for Reveal/Copy Path.
   const base = useActiveBasesStore((s) => s.bases.worktreePath ?? s.bases.projectPath);
 
-  const { revealPath, listings, onVerifiedRow, clearListings } = useFileTreeReveal(port, projectId, chatId);
+  const { revealPath, listings, onVerifiedRow, refreshListings } = useFileTreeReveal(port, projectId, chatId);
   const displayedRoots = listings?.get('.') ?? roots;
 
   useEffect(() => {
@@ -75,53 +78,43 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
   }, [port, projectId, chatId, refreshKey]);
 
   const refresh = useCallback(() => {
-    clearListings();
+    refreshListings();
     setRefreshKey((k) => k + 1);
-  }, [clearListings]);
+  }, [refreshListings]);
 
   if (error && displayedRoots === null) {
-    return <div className="px-3 py-4 text-xs text-muted-foreground">Couldn't load files.</div>;
+    return <div className="px-3 py-4 text-meta/[1.45] text-muted-foreground">Couldn't load files.</div>;
   }
   if (displayedRoots === null) {
-    return <div className="px-3 py-4 text-xs text-muted-foreground">Loading…</div>;
+    return <div className="px-3 py-4 text-meta/[1.45] text-muted-foreground">Loading…</div>;
   }
   if (displayedRoots.length === 0) {
-    return <div className="px-3 py-4 text-xs text-muted-foreground">No files.</div>;
+    return <div className="px-3 py-4 text-meta/[1.45] text-muted-foreground">No files.</div>;
   }
 
   return (
     <div data-testid="file-tree" className="flex min-h-0 flex-1 flex-col">
-      <SidebarHeader className="h-[20px] flex-row items-center gap-0 px-[12px] py-[4px]">
+      <SidebarHeader className="h-9 shrink-0 flex-row items-center gap-0 py-0 pr-1.5 pl-3">
         <FileTreeRowMenu entry={{ name: '.', path: '.', type: 'directory' }} fullPath={base ?? projectId}>
-          <span className="flex-1 truncate font-mono text-xs font-medium text-muted-foreground">
+          <span className="flex-1 truncate text-label/[1.45] font-medium text-muted-foreground">
             {lastSegment(base ?? projectId)}
           </span>
         </FileTreeRowMenu>
         <Hint label="Refresh">
-          <button
-            data-testid="file-tree-refresh"
-            type="button"
-            onClick={refresh}
-            className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
-          >
-            <RotateCw size={14} className="text-muted-foreground" />
+          <button data-testid="file-tree-refresh" type="button" onClick={refresh} className={HEADER_ACTION}>
+            <RotateCw size={16} />
           </button>
         </Hint>
         {onCollapse && (
           <Hint label="Collapse files">
-            <button
-              data-testid="workspace-files-collapse"
-              type="button"
-              onClick={onCollapse}
-              className="inline-flex h-[20px] w-[20px] flex-shrink-0 items-center justify-center rounded-[4px] border-none bg-transparent hover:bg-accent"
-            >
-              <PanelRightClose size={14} className="text-muted-foreground" />
+            <button data-testid="workspace-files-collapse" type="button" onClick={onCollapse} className={HEADER_ACTION}>
+              <X size={16} />
             </button>
           </Hint>
         )}
       </SidebarHeader>
       <SidebarScrollRegion>
-        <div className="py-[4px]">
+        <div className="px-1.5 pb-2">
           {sortEntries(displayedRoots).map((entry) => (
             <FileTreeNode
               key={entry.path}

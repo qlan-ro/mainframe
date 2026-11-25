@@ -165,6 +165,32 @@ it('reconciles an already expanded directory before reopening Files and scrollin
   }
 });
 
+it.each([false, true])('rechecks the nested reveal on Refresh (removed: %s)', async (removed) => {
+  show('parent');
+  fireEvent.click(screen.getByTestId('chat-row-open-file-file'));
+  expect(await screen.findByTestId('file-tree-row-src/a.ts')).toHaveAttribute('data-highlighted', 'true');
+
+  vi.mocked(getFileTree)
+    .mockClear()
+    .mockImplementation(async (_port, _project, directory) =>
+      directory === 'src' ? (removed ? [newFile] : [file]) : [{ name: 'src', path: 'src', type: 'directory' }],
+    );
+  await act(async () => fireEvent.click(screen.getByTestId('file-tree-refresh')));
+
+  expect(getFileTree).toHaveBeenCalledWith(1, 'p1', 'src', 'parent');
+  if (removed) {
+    expect(screen.queryByTestId('file-tree-row-src/a.ts')).toBeNull();
+    expect(screen.queryByTestId('file-tree-row-src/new.ts')).toBeNull();
+    fireEvent.click(screen.getByTestId('file-tree-row-src'));
+    expect(await screen.findByTestId('file-tree-row-src/new.ts')).not.toHaveAttribute('data-highlighted');
+  } else {
+    const row = await screen.findByTestId('file-tree-row-src/a.ts');
+    expect(row).toBeVisible();
+    expect(row).toHaveAttribute('data-highlighted', 'true');
+  }
+  expect(screen.getByTestId('files-panel')).toBeVisible();
+});
+
 it('discards a reveal pending when the daemon switches, even at identical paths', async () => {
   let resolveListing!: (entries: [typeof file]) => void;
   vi.mocked(getFileTree).mockImplementation(async (_port, _project, directory) =>

@@ -16,13 +16,13 @@ import { useEffect, useRef, useState } from 'react';
 import type { SessionAttachment } from '@qlan-ro/mainframe-types';
 import { Attachment, AttachmentMedia, AttachmentTrigger } from '@/components/ui/attachment';
 import { Hint } from '@/components/ui/hint';
-import { extTint, fileExtMeta } from '@/features/chat/messages/file-ext-colors';
+import { fileExtMeta } from '@/features/chat/messages/file-ext-colors';
 import { ImageLightbox, type LightboxImage } from '@/features/chat/parts/ImageLightbox';
 import { getAttachment, type LoadedAttachment } from '@/lib/api/attachments';
 
 /** 48px tiles and 8px gaps in the panel's 268px text column. */
 const TILES_PER_ROW = 4;
-const TILE = 'size-12 rounded-xl p-0!';
+const TILE = 'size-12 rounded-tile border-border bg-queue-well p-0!';
 
 interface PanelAttachmentsGridProps {
   port: number;
@@ -83,12 +83,8 @@ function Tile({
             </AttachmentMedia>
           </>
         ) : (
-          // The ext accent is decorative file-type recognition and has no
-          // token — globals.css defines none per extension.
-          <AttachmentMedia className="size-full rounded-none" style={{ background: extTint(meta.color) }}>
-            <span className="font-mono text-xs font-bold" style={{ color: meta.color }}>
-              .{meta.ext}
-            </span>
+          <AttachmentMedia className="size-full rounded-none bg-transparent">
+            <span className="font-mono text-xs font-semibold text-ink-secondary">.{meta.ext}</span>
           </AttachmentMedia>
         )}
       </Attachment>
@@ -104,7 +100,7 @@ function MoreTile({ hiddenCount, all, onToggle }: { hiddenCount: number; all: bo
       aria-expanded={all}
       aria-label={all ? 'Show fewer attachments' : `Show ${hiddenCount} more attachment${hiddenCount === 1 ? '' : 's'}`}
       onClick={onToggle}
-      className="flex size-12 items-center justify-center rounded-xl border border-border bg-muted text-xs font-medium transition-colors hover:bg-foreground/8"
+      className="flex size-12 items-center justify-center rounded-tile border border-border bg-queue-well text-meta/[1.45] font-medium transition-colors hover:bg-sidebar-accent"
     >
       {all ? 'Less' : `+${hiddenCount}`}
     </button>

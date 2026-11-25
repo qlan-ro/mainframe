@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useFilesStore, type VerifiedFileReveal } from '@/store/files';
+import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useWorkspaceFilesPanel } from '@/store/workspace-files-panel';
 
 function isCurrent(reveal: VerifiedFileReveal): boolean {
@@ -47,15 +48,23 @@ export function useFileTreeReveal(port: number, projectId: string, chatId?: stri
     [scoped],
   );
 
-  const clearListings = useCallback(() => {
+  const refreshListings = useCallback(() => {
     setCached(null);
     setSelection((current) => (typeof current === 'string' ? current : null));
-  }, []);
+    const { scopeKey } = useActiveBasesStore.getState();
+    if (scoped && scopeKey && isCurrent(scoped)) {
+      emitSurfaceIntent({
+        type: 'reveal-file',
+        path: scoped.path,
+        scope: { scopeKey, daemonId: scoped.tree.daemonId },
+      });
+    }
+  }, [scoped]);
 
   return {
     revealPath: typeof selection === 'string' ? selection : (scoped?.path ?? null),
     listings: cached?.tree === activeTree ? cached.listings : undefined,
     onVerifiedRow: scoped ? openAndScroll : undefined,
-    clearListings,
+    refreshListings,
   };
 }

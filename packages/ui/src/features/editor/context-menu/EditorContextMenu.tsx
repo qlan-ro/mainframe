@@ -264,17 +264,17 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
             <ContextMenuItem
               data-testid="editor-context-menu-add-context"
               onSelect={handleAddAgentContext}
-              className="text-primary"
+              className="text-accent-ink"
             >
-              <MessageSquare className="text-primary" />
+              <MessageSquare className="text-accent-ink" />
               Add Agent Context
             </ContextMenuItem>
             <ContextMenuItem
               data-testid="editor-context-menu-quote-ref"
               onSelect={handleQuoteReference}
-              className="text-primary"
+              className="text-accent-ink"
             >
-              <TextQuote className="text-primary" />
+              <TextQuote className="text-accent-ink" />
               Quote Reference
             </ContextMenuItem>
           </ContextMenuGroup>

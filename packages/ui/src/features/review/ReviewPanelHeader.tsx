@@ -49,7 +49,7 @@ export function ReviewPanelHeader({
     // shadcn position); the old left-side X predates the port.
     <div className="flex h-[52px] shrink-0 items-center gap-3.5 border-b bg-background px-4">
       <div className="flex items-center gap-2.5">
-        <GitCompare className="size-4 text-primary" aria-hidden />
+        <GitCompare className="size-4 text-accent-ink" aria-hidden />
         <h2 className="text-base font-semibold text-foreground">Review Changes</h2>
       </div>
 

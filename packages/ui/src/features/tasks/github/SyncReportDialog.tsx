@@ -31,7 +31,7 @@ function ReportBody({ report }: { report: Report }) {
   return (
     <>
       {report.failure ? (
-        <div className="flex items-start gap-2 rounded-md bg-warning/10 px-[11px] py-[8px] text-xs leading-relaxed text-foreground">
+        <div className="flex items-start gap-2 rounded-md bg-warning-surface px-[11px] py-[8px] text-xs leading-relaxed text-foreground">
           <AlertTriangle size={14} className="mt-px shrink-0 text-warning" aria-hidden />
           <span>{report.failure.message}</span>
         </div>

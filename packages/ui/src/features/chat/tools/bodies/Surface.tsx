@@ -3,12 +3,23 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { useRetainedValue } from '@/components/ui/disclosure-state';
 
-export function Surface({ className, children, testId }: { className?: string; children: ReactNode; testId?: string }) {
+export function Surface({
+  className,
+  children,
+  testId,
+  mono = true,
+}: {
+  className?: string;
+  children: ReactNode;
+  testId?: string;
+  mono?: boolean;
+}) {
   return (
     <div
       data-testid={testId}
       className={cn(
-        'mf-tr-mono mf-editor-selectable min-w-0 overflow-x-auto rounded-lg bg-mf-tr-code text-foreground',
+        'mf-editor-selectable min-w-0 overflow-x-auto rounded-[8px] bg-mf-tr-code text-foreground',
+        mono && 'mf-tr-mono',
         className,
       )}
     >
@@ -35,7 +46,7 @@ export function ScrollRegion({
       aria-label={label}
       tabIndex={0}
       data-testid={testId}
-      className={cn('max-h-96 overflow-auto rounded-lg focus-visible:focus-line-inset', className)}
+      className={cn('max-h-96 overflow-auto rounded-[8px] focus-visible:focus-line-inset', className)}
     >
       {children}
     </div>

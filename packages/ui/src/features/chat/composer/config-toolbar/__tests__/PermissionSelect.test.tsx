@@ -135,15 +135,15 @@ describe('PermissionSelect — D19: reverses #325 — Auto and Unattended both r
     const trigger = screen.getByTestId('composer-permission-mode-select');
     expect(trigger.className).toContain('text-warning');
     expect(trigger.className).not.toContain('text-destructive');
-    expect(trigger.className).not.toContain('bg-warning/10');
+    expect(trigger.className).not.toContain('bg-warning-surface');
   });
 
   it('tints the trigger text-warning AND gives it a warning-tinted chip when Unattended is the current mode', () => {
     renderSelect(makeChat({ permissionMode: 'yolo' }));
     const trigger = screen.getByTestId('composer-permission-mode-select');
     expect(trigger.className).toContain('text-warning');
-    expect(trigger.className).toContain('ring-warning/40');
-    expect(trigger.className).toContain('bg-warning/10');
+    expect(trigger.className).toContain('ring-warning-border');
+    expect(trigger.className).toContain('bg-warning-surface');
     expect(trigger.className).not.toContain('text-destructive');
   });
 

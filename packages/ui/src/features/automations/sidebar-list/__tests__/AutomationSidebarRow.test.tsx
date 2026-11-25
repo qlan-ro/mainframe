@@ -48,13 +48,13 @@ describe('AutomationSidebarRow — status dot', () => {
     const dot = screen.getByTestId('automations-sidebar-row-status');
     expect(dot).toHaveAttribute('data-status', 'running');
     expect(dot.className).toContain('animate-pulse');
-    expect(dot.className).toContain('bg-primary');
+    expect(dot.className).toContain('bg-live');
   });
 
   it('is warning while needing you', () => {
     renderRow(row({ status: 'needs-you' }));
     const dot = screen.getByTestId('automations-sidebar-row-status');
-    expect(dot.className).toContain('bg-warning');
+    expect(dot.className).toContain('bg-warning-dot');
   });
 
   it('is a muted ring while disabled, and dims the row text', () => {

@@ -84,7 +84,7 @@ export function SyncReportRow({ row }: { row: ReportRow }) {
           <div
             className={cn(
               'max-h-[132px] w-fit max-w-full overflow-y-auto whitespace-pre-wrap break-words',
-              'rounded-md border-[0.5px] border-warning/30 bg-warning/10 px-[11px] py-[8px]',
+              'rounded-md border-[0.5px] border-warning-border bg-warning-surface px-[11px] py-[8px]',
               'font-mono text-xs leading-relaxed text-foreground',
             )}
           >

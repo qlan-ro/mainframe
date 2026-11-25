@@ -1,20 +1,20 @@
 import { Code } from 'lucide-react';
+import { ChatIcon } from '@/components/ui/glyphs';
 import { chordHint } from '@/features/shortcuts/chord-hint';
 import type { ShortcutId } from '@/features/shortcuts/registry';
 import type { SurfaceId } from '@/store/layout';
 import { isSurfaceFloor, isSurfaceLit, useLayoutStore } from '@/store/layout';
-import { ChatGlyph } from './surface-icons';
 import { TitleBarButton } from './TitleBarButton';
 
 interface SurfaceDef {
   id: SurfaceId;
   label: string;
   shortcut: ShortcutId;
-  Icon: React.ComponentType<{ size?: number; className?: string }>;
+  Icon: React.ComponentType<{ size?: number | string; className?: string }>;
 }
 
 const SURFACES: SurfaceDef[] = [
-  { id: 'chat', label: 'Chat', shortcut: 'workspace.toggle-chat', Icon: ChatGlyph },
+  { id: 'chat', label: 'Chat', shortcut: 'workspace.toggle-chat', Icon: ChatIcon },
   { id: 'workspace', label: 'Workspace', shortcut: 'workspace.toggle-workspace', Icon: Code },
 ];
 
@@ -34,7 +34,7 @@ export function SurfaceRail() {
         // Dynamic floor: the single lit surface (whichever it is) can't be toggled
         // off. `aria-disabled`, not `disabled`, so the tooltip can say why.
         const floor = isSurfaceFloor(layout, id);
-        const hint = chord == null ? label : `${label} ${chord}`;
+        const hint = chord == null ? label : `${label}\u00a0\u00a0${chord}`;
         return (
           <TitleBarButton
             key={id}

@@ -16,7 +16,7 @@
  *   workspace-picker-launch-<config>   — a launch configuration
  */
 import { useState } from 'react';
-import { ChevronRight, Code2, Eye, FileText, GitCompare, Globe, Terminal } from 'lucide-react';
+import { ChevronRight, Eye, FileText, GitCompare, Globe, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -43,11 +43,11 @@ function PickerRow({ testid, icon, label, hint, chevron, onClick }: RowProps) {
       variant="ghost"
       size="sm"
       onClick={onClick}
-      className="w-full justify-start gap-2 font-normal"
+      className="h-8 w-full justify-start gap-2.5 rounded-md border-0 px-2 text-body font-normal text-ink-secondary hover:bg-sidebar-accent [&>svg]:size-4"
     >
       {icon}
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-      {hint && <span className="shrink-0 font-mono text-xs text-muted-foreground">{hint}</span>}
+      {hint && <span className="shrink-0 font-mono text-caption/[1.45] text-muted-foreground">{hint}</span>}
       {chevron && <ChevronRight className="size-3 shrink-0 text-muted-foreground" />}
     </Button>
   );
@@ -67,14 +67,14 @@ function FileRows() {
     <>
       <PickerRow
         testid="workspace-picker-open-file"
-        icon={<Code2 className="size-3.5 text-muted-foreground" />}
+        icon={<FileText className="text-muted-foreground" />}
         label="Open file…"
         chevron
         onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
       />
       <PickerRow
         testid="workspace-picker-view-changes"
-        icon={<GitCompare className="size-3.5 text-muted-foreground" />}
+        icon={<GitCompare className="text-muted-foreground" />}
         label="View changes…"
         chevron
         onClick={() => emitSurfaceIntent({ type: 'open-review' })}
@@ -86,7 +86,7 @@ function FileRows() {
             <PickerRow
               key={f.path}
               testid={`workspace-picker-recent-${f.path}`}
-              icon={<FileText className="size-3.5 text-muted-foreground" />}
+              icon={<FileText className="text-muted-foreground" />}
               label={f.path}
               onClick={() => emitSurfaceIntent({ type: 'open-file', path: f.path })}
             />
@@ -112,14 +112,14 @@ function RunRows() {
       ) : (
         <PickerRow
           testid="workspace-picker-open-url"
-          icon={<Globe className="size-3.5 text-muted-foreground" />}
+          icon={<Globe className="text-muted-foreground" />}
           label="Open URL…"
           onClick={() => setUrlEntryOpen(true)}
         />
       )}
       <PickerRow
         testid="workspace-picker-new-terminal"
-        icon={<Terminal className="size-3.5 text-muted-foreground" />}
+        icon={<Terminal className="text-muted-foreground" />}
         label="New terminal"
         hint="zsh"
         onClick={() => emitSurfaceIntent({ type: 'new-terminal' })}
@@ -133,11 +133,7 @@ function RunRows() {
             key={cfg.name}
             testid={`workspace-picker-launch-${cfg.name}`}
             icon={
-              cfg.preview ? (
-                <Eye className="size-3.5 text-muted-foreground" />
-              ) : (
-                <Terminal className="size-3.5 text-muted-foreground" />
-              )
+              cfg.preview ? <Eye className="text-muted-foreground" /> : <Terminal className="text-muted-foreground" />
             }
             label={cfg.name}
             hint={cfg.preview ? 'preview' : 'process'}
@@ -151,11 +147,14 @@ function RunRows() {
 
 export function WorkspaceEmptyState() {
   return (
-    <div className="flex flex-1 items-center justify-center overflow-hidden p-4">
+    <div className="flex flex-1 items-center justify-center overflow-hidden p-6">
       {/* max-h-full + min-h-0: in a short window the card must shrink and
           scroll its rows rather than clip top and bottom against the centering. */}
-      <Card data-testid="workspace-empty-state" className="max-h-full w-72 gap-0 overflow-hidden py-0">
-        <div className="flex max-h-72 min-h-0 flex-col gap-0.5 overflow-y-auto p-1">
+      <Card
+        data-testid="workspace-empty-state"
+        className="max-h-full w-[min(300px,100%)] gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0"
+      >
+        <div className="flex min-h-0 flex-col overflow-y-auto">
           <FileRows />
           <Separator className="my-1" />
           <RunRows />

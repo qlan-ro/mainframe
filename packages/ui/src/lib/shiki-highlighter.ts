@@ -88,13 +88,16 @@ function readVar(name: string): string {
 let themeVersion = 0;
 const themeListeners = new Set<() => void>();
 
-function currentThemeName(): string {
-  return `mf-warm-chrome-${themeVersion}`;
+type CodePalette = 'editor' | 'transcript';
+
+function currentThemeName(palette: CodePalette): string {
+  return `mf-${palette}-${themeVersion}`;
 }
 
-function buildWarmChromeTheme() {
+function buildWarmChromeTheme(palette: CodePalette) {
+  const transcript = palette === 'transcript';
   return {
-    name: currentThemeName(),
+    name: currentThemeName(palette),
     type: 'dark' as const,
     colors: {
       'editor.background': readVar('--mf-code-bg'),
@@ -102,7 +105,17 @@ function buildWarmChromeTheme() {
     },
     tokenColors: [
       {
-        scope: ['keyword', 'storage', 'modifier'],
+        scope: transcript
+          ? [
+              'keyword.control',
+              'storage.type.function',
+              'storage.type.rust',
+              'keyword.other.rust',
+              'keyword.other.fn.rust',
+              'storage.modifier',
+              'constant.language.boolean',
+            ]
+          : ['keyword', 'storage', 'modifier'],
         settings: { foreground: readVar('--mf-code-kw') },
       },
       {
@@ -110,16 +123,18 @@ function buildWarmChromeTheme() {
         settings: { foreground: readVar('--mf-code-str') },
       },
       {
-        scope: ['entity.name.function', 'support.function'],
-        settings: { foreground: readVar('--mf-code-fn') },
+        scope: transcript
+          ? ['entity.name.function', 'support.function', 'storage.type.function.arrow']
+          : ['entity.name.function', 'support.function'],
+        settings: { foreground: readVar(transcript ? '--mf-code-fg' : '--mf-code-fn') },
       },
       {
         scope: ['entity.name.type', 'support.type', 'entity.name.class'],
-        settings: { foreground: readVar('--mf-code-type') },
+        settings: { foreground: readVar(transcript ? '--mf-code-fg' : '--mf-code-type') },
       },
       {
-        scope: ['constant.numeric', 'constant.language'],
-        settings: { foreground: readVar('--mf-code-num') },
+        scope: transcript ? ['constant.numeric'] : ['constant.numeric', 'constant.language'],
+        settings: { foreground: readVar(transcript ? '--mf-code-fg' : '--mf-code-num') },
       },
       {
         scope: ['comment', 'punctuation.definition.comment'],
@@ -157,13 +172,15 @@ const loadedThemes = new Set<string>();
  * On a theme change the next call loads a freshly-built theme into the existing
  * engine (no WASM re-init).
  */
-export async function getShikiHighlighter(): Promise<{ highlighter: Highlighter; theme: string }> {
-  const theme = currentThemeName();
+export async function getShikiHighlighter(
+  palette: CodePalette = 'editor',
+): Promise<{ highlighter: Highlighter; theme: string }> {
+  const theme = currentThemeName(palette);
 
   if (!highlighterPromise) {
     const themeAtInit = theme;
     highlighterPromise = createHighlighter({
-      themes: [buildWarmChromeTheme()],
+      themes: [buildWarmChromeTheme(palette)],
       langs: [...SUPPORTED_SET] as BundledLanguage[],
     }).catch((err) => {
       console.warn('[shiki-highlighter] init failed', err);
@@ -177,7 +194,7 @@ export async function getShikiHighlighter(): Promise<{ highlighter: Highlighter;
 
   const highlighter = await highlighterPromise;
   if (!loadedThemes.has(theme)) {
-    await highlighter.loadTheme(buildWarmChromeTheme());
+    await highlighter.loadTheme(buildWarmChromeTheme(palette));
     loadedThemes.add(theme);
   }
   return { highlighter, theme };

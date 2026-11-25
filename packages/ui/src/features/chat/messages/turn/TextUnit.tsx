@@ -25,7 +25,7 @@ export const TextUnit = memo(function TextUnit({ unit, step = false }: { unit: T
       <div
         data-search-item-id={unit.itemId}
         data-testid={step ? 'chat-step-text' : 'chat-answer'}
-        className={cn('min-w-0 wrap-break-word', step ? 'my-1 text-sm' : 'mf-prose mt-1.5')}
+        className={cn('min-w-0 wrap-break-word', step ? 'my-1 text-sm' : 'mf-prose mf-tr-answer mt-1.5')}
       >
         <MarkdownText {...part} />
       </div>
@@ -45,7 +45,10 @@ export function ImageRow({ unit }: { unit: TurnUnit }) {
       verb="Generated image"
       receipt="1 image"
     >
-      <Picture src={unit.part.image} />
+      <ZoomableImage
+        src={unit.part.image}
+        className="size-30 max-w-full rounded-[8px] border border-border bg-queue-well object-contain"
+      />
     </RowDisclosure>
   );
 }

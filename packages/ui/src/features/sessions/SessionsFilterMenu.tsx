@@ -11,7 +11,7 @@
  * in use, because the same answer decides whether a synthetic kind is offered.
  */
 import type { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
-import { ListFilterIcon } from 'lucide-react';
+import { FilterIcon } from '@/components/ui/glyphs';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -78,14 +78,14 @@ export function SessionsFilterMenu({ inUse, synthetic, registry }: SessionsFilte
             aria-label={label}
             className={cn(
               JUMP_ACTION,
-              active && 'text-primary opacity-100 hover:text-primary aria-expanded:text-primary',
+              active && 'text-accent-ink opacity-100 hover:text-accent-ink aria-expanded:text-accent-ink',
             )}
           >
-            <ListFilterIcon />
+            <FilterIcon />
           </Button>
         </DropdownMenuTrigger>
       </Hint>
-      <DropdownMenuContent data-testid="sessions-tag-filter-bar" align="end" sideOffset={6} className="w-48">
+      <DropdownMenuContent data-testid="sessions-tag-filter-bar" align="start" className="w-50">
         <DropdownMenuLabel>Show</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
           {STATUS_FILTERS.map((filter) => (

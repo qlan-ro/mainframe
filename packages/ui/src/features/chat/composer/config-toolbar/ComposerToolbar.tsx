@@ -119,7 +119,7 @@ export function ComposerToolbar({
         data-testid="composer-permission-announcement"
         className={
           announced
-            ? 'absolute bottom-full left-0 z-10 mb-1 rounded-md bg-foreground px-3 py-1.5 text-xs whitespace-nowrap text-background'
+            ? 'absolute bottom-full left-0 z-10 mb-1 rounded-[7px] bg-tooltip px-[9px] py-[5px] text-meta whitespace-nowrap text-tooltip-foreground shadow-tooltip'
             : 'sr-only'
         }
       >

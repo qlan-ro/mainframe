@@ -13,7 +13,7 @@
  */
 
 import { useState } from 'react';
-import { ChevronDown, ClipboardList, Shield } from 'lucide-react';
+import { ChevronDown, ListChecks, Shield } from 'lucide-react';
 import type { AdapterInfo, Chat, ExecutionMode, ProviderConfig } from '@qlan-ro/mainframe-types';
 import {
   DropdownMenu,
@@ -51,7 +51,7 @@ export function permissionTone(mode: ExecutionMode, planning: boolean): string |
   if (tone == null) return undefined;
   return cn(
     'text-warning',
-    tone === 'warning' && 'bg-warning/10 ring-1 ring-warning/40 ring-inset hover:bg-warning/20',
+    tone === 'warning' && 'bg-warning-surface ring-1 ring-warning-border ring-inset hover:bg-warning-surface',
   );
 }
 
@@ -90,7 +90,7 @@ export function PermissionItems({ mode, planning, autoAllowed, onSelect }: Permi
           >
             <span className="flex min-w-0 flex-col">
               <span className={cn('font-medium', m.tone != null && 'text-warning')}>{m.label}</span>
-              <span className="text-xs leading-snug text-muted-foreground">{m.description}</span>
+              <span className="text-meta/[1.35] font-normal text-muted-foreground">{m.description}</span>
             </span>
           </DropdownMenuRadioItem>
         ))}
@@ -110,7 +110,7 @@ export function PermissionSelect({
   const mode = currentPermission(chat, providerDefaults);
   const planning = chat.planMode === true;
   const status = permissionStatus(mode, planning);
-  const Icon = planning ? ClipboardList : Shield;
+  const Icon = planning ? ListChecks : Shield;
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -124,16 +124,21 @@ export function PermissionSelect({
             aria-label={`Permission mode: ${status}`}
             className={toolbarButton(open, cn('font-medium', permissionTone(mode, planning), className))}
           >
-            <Icon className="size-3.5 shrink-0" />
+            <Icon className="size-4 shrink-0" />
             <span className="truncate">
               {planning ? 'Planning' : permissionLabel(mode)}
               {planning && <span className="font-normal text-muted-foreground"> · then {permissionLabel(mode)}</span>}
             </span>
-            <ChevronDown className="size-3 shrink-0 opacity-70" />
+            <ChevronDown
+              className={cn(
+                'size-3 shrink-0',
+                planning || toneOf(mode) == null ? 'text-muted-foreground' : 'text-warning',
+              )}
+            />
           </button>
         </DropdownMenuTrigger>
       </ComposerHint>
-      <DropdownMenuContent align="start" side="top" sideOffset={6} className="w-64">
+      <DropdownMenuContent align="start" side="top" sideOffset={6} className="w-auto min-w-72.5">
         <PermissionItems
           mode={mode}
           planning={planning}

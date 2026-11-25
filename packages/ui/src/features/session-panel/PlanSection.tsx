@@ -3,7 +3,7 @@
  * one line; open, every step shows. Hidden when the session has no todos.
  */
 import type { ReactNode } from 'react';
-import { Check, ChevronRight, Circle, LoaderCircle } from 'lucide-react';
+import { Check, ChevronRight, Clock, LoaderCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useSessionTodos } from '@/store/session-todos';
@@ -12,10 +12,10 @@ import { SECTION_LABEL } from './panel-sections';
 import { todosToPlan, type PlanStep, type PlanStepState } from './plan-view';
 
 const STEP_GLYPH: Record<PlanStepState, ReactNode> = {
-  done: <Check className="size-3.5! text-success" />,
-  running: <LoaderCircle className="size-3.5! animate-spin text-primary motion-reduce:animate-none" />,
-  next: <Circle className="size-2! text-foreground" />,
-  todo: <Circle className="size-2! text-muted-foreground" />,
+  done: <Check className="text-success" />,
+  running: <LoaderCircle className="animate-spin text-live motion-reduce:animate-none" />,
+  next: <Clock />,
+  todo: <Clock />,
 };
 const STEP_STATE_LABEL: Record<PlanStepState, string> = {
   done: 'Done',
@@ -25,16 +25,12 @@ const STEP_STATE_LABEL: Record<PlanStepState, string> = {
 };
 
 function StepRow({ step, index, folded = false }: { step: PlanStep; index: number; folded?: boolean }) {
-  const current = step.state === 'running' || step.state === 'next';
   return (
     <li
       data-testid={folded ? 'session-panel-plan-current' : `session-panel-plan-step-${index}`}
-      className={cn(
-        'mx-1.5 flex min-h-7 items-start gap-2 px-2.5 py-[5px] text-sm',
-        !current && 'text-muted-foreground',
-      )}
+      className="mx-1.5 flex min-h-7 items-start gap-2 px-2.5 py-[4.5px] text-body text-ink-secondary"
     >
-      <span className="flex h-[18px] items-center">
+      <span className="flex h-[19px] items-center">
         <RowIcon>{STEP_GLYPH[step.state]}</RowIcon>
       </span>
       <span className={cn('min-w-0 flex-1', folded ? 'truncate' : 'wrap-break-word')}>
@@ -63,10 +59,10 @@ export function PlanSection({ open, onToggle }: { open: boolean; onToggle: () =>
       >
         {SECTION_LABEL.plan}
         <ChevronRight
-          className={cn('mb-0.5 size-3 transition-transform motion-reduce:transition-none', open && 'rotate-90')}
+          className={cn('size-3 transition-transform motion-reduce:transition-none', open && 'rotate-90')}
           aria-hidden
         />
-        <span className="ml-auto tabular-nums">
+        <span className="ml-auto text-muted-foreground tabular-nums">
           {done} of {steps.length}
         </span>
       </button>
@@ -81,7 +77,7 @@ export function PlanSection({ open, onToggle }: { open: boolean; onToggle: () =>
           ))}
         </ul>
       ) : current === -1 ? (
-        <PanelEmpty icon={<Check className="size-3.5! text-success" />}>
+        <PanelEmpty icon={<Check className="text-success" />}>
           {steps.length === 1 ? 'The only step is done' : `All ${steps.length} steps done`}
         </PanelEmpty>
       ) : (

@@ -1,0 +1,257 @@
+// What each remaining difference is. The first rule that matches a row names its
+// class; a row no rule matches is OPEN and fails the report.
+//
+// SPEC   DECISIONS.md or DESIGN.md says otherwise than the prototype: the row is quoted
+// DATA   the two sides show other content
+// PROTO  the prototype's own stand-in or slip, not a design
+// APP    only the running app can tell
+//
+// A rule matches when every field it names matches the row: a string is equal, a
+// regular expression tests. `area`, `state`, `view`, `theme`, `el`, `part`, `prop`,
+// `proto` and `app` are the row's fields.
+const ANY = /./;
+const SHIFT = /^(x|y|y \(middle\)|width|height|right edge|visible width)$/;
+
+const OWNER = 'Owner, 25 Nov: pickers and behaviour as the old app.';
+
+export const RULES = [
+  { area: 'shell', state: 'window', el: /^(title bar|usage capsule)$/, part: /^inner box [12]$/, prop: 'x', delta: 1, cls: 'SPEC', why: 'S1 keeps the app capsule. UsageCapsule puts 6 px before its separator dot; the prototype .capsule uses 7 px.' },
+  { area: 'shell', state: 'window', el: 'title bar', part: /^inner box [34]$/, prop: 'x', delta: -0.52, cls: 'SPEC', why: 'S1 keeps the app capsule. UsageCapsule reserves account cycle dots and flexes the leading text lane, whereas the prototype distributes space without those dots.' },
+  { area: 'shell', state: 'window', el: 'row 9: yesterday 2', part: 'text “Trace how ask_agent picks its worktree”', prop: 'visible width', delta: 1.06, cls: 'SPEC', why: 'The retained sidebar row allocates 181 px to the clipped title. The old-app row uses its own trailing status and action lane.' },
+
+  { area: 'shell', state: 'window', el: 'bottom strip', part: 'text “from main”', prop: 'missing in app', cls: 'APP', why: 'K8 records that a chat has no base branch field.' },
+  { area: 'shell', state: 'window', el: 'bottom strip', part: /^text “(?:·|feat\/quota-reset)”$/, prop: /^(x|width)$/, cls: 'SPEC', why: 'K8 keeps the branch manager as its own control. The prototype renders an inline separator and branch in the worktree button.' },
+  { area: 'shell', state: 'window', el: 'transcript viewport', part: 'box', prop: 'height', delta: -215, cls: 'SPEC', why: 'The app scroll container includes the sticky 215 px composer footer. The prototype composer is outside its scroller.' },
+  { area: 'shell', state: 'window', el: 'work after compaction', part: /^text “fetched 1 page/, prop: 'content', cls: 'SPEC', why: 'The owner retains the app’s folded summary category order and counts (T1).' },
+  { area: 'shell', state: 'window', el: 'provider divider', part: /^(text “Switched to Mock CLI B|icon 1$|inner box [12]$)/, prop: /^(content|x|width)$/, cls: 'SPEC', why: 'T1 specifies “context handed off”. Its different label recenters the glyph and resizes the adjacent rules.' },
+  { area: 'shell', state: 'window', el: /^(other session tab|title bar)$/, part: /^(text “Reuse an existing worktree branch in automation |icon [12] at (?:158,10|666,18) 12×12$)/, prop: /^(visible width|missing in app)$/, cls: 'SPEC', why: 'SessionTabPill overlays the inactive tab close affordance on hover. The prototype reserves 24 px for its close control.' },
+
+  { area: 'shell', state: 'window', el: 'add project', part: 'box', prop: 'y', delta: 5.31, cls: 'SPEC', why: OWNER + ' The button belongs to the restored scope strip.' },
+  { area: 'shell', state: 'window', el: 'scope row', part: /^text “(?:[MCD]|All projects|3 projects)”$/, prop: /^(x|y \(middle\)|width)$/, cls: 'SPEC', why: OWNER + ' ScopeStrip keeps the old avatars, column widths, and summary.' },
+  { area: 'shell', state: 'window', el: 'scope row', part: /^text “[MCD]”$/, prop: 'size', proto: '10.5', app: '10', cls: 'SPEC', why: OWNER + ' ProjectAvatar retains its initial size.' },
+  { area: 'shell', state: 'window', el: 'scope row', part: 'text “All projects”', prop: 'weight', proto: '400', app: '500', cls: 'SPEC', why: OWNER + ' ScopeStrip keeps its medium-weight title.' },
+  { area: 'shell', state: 'window', el: 'scope row', part: 'text “3 projects”', prop: 'size', proto: '11.5', app: '11', cls: 'SPEC', why: OWNER + ' ScopeSummary keeps the original count type size.' },
+  { area: 'shell', state: 'window', el: 'scope row', part: 'icon 1', prop: 'y', delta: 5.31, cls: 'SPEC', why: OWNER + ' The add-project control moves with the old scope strip.' },
+  { area: 'shell', state: 'window', el: 'scope row', part: /^inner box [1-3]$/, prop: /^(x|y|width|height|radius)$/, cls: 'SPEC', why: OWNER + ' ScopeStrip retains the original 26 px project avatars and their spacing.' },
+  { area: 'new-session', state: 'project-menu', el: 'menu', prop: /^(height|width|x|y|y \(middle\)|content|missing in app|only in app)$/, cls: 'SPEC', why: OWNER },
+  { area: 'composer', state: 'model-menu', el: 'menu', part: /models|Pick a provider before your first message/, prop: 'only in app', cls: 'SPEC', why: OWNER },
+  { area: 'workspace', el: 'empty list', part: /View changes|Recent|No launch configs found/, prop: /^(content|missing in app|only in app)$/, cls: 'SPEC', why: OWNER },
+  { area: 'transcript', state: 'workflow row', part: 'text “3 agents · 1m 12s”', prop: /^(content|x)$/, cls: 'SPEC', why: OWNER },
+  { area: 'transcript', state: 'workspace agent body', part: 'text “Agent · code-reviewer”', prop: 'content', cls: 'SPEC', why: OWNER },
+  { area: 'new-session', el: 'draft strip', part: /project|mainframe-ui|No project/i, prop: /^(content|missing in app|only in app|x|width)$/, cls: 'SPEC', why: OWNER },
+  { area: 'shell', el: 'usage capsule', part: /5-hour|5h|Weekly|Week/, prop: /^(content|x|width|truncated|visible width)$/, cls: 'SPEC', why: OWNER },
+  { area: 'transcript', state: 'image', el: 'tool row', part: /^text “image(?: · 1280×800)?”$/, prop: /missing in app|only in app/, cls: 'SPEC', why: OWNER },
+  { area: 'transcript', state: 'image', el: 'tool body', part: 'text “screenshot-capsule.png”', prop: 'missing in app', cls: 'SPEC', why: OWNER + ' The app names the file in the row and keeps the original preview contents.' },
+  { area: 'transcript', state: 'browser-image', el: 'tool body', part: 'text “localhost:5173 · 1280×800”', prop: 'missing in app', cls: 'SPEC', why: OWNER },
+  { area: 'transcript', state: 'generated-image', part: /“usage capsule icon, flat, 3 sizes”|“Prompt: a flat usage-capsule icon in three sizes”|“1024×1024 PNG”/, prop: 'missing in app', cls: 'SPEC', why: OWNER },
+  { area: 'transcript', state: /^(image|browser-image|generated-image)$/, el: 'tool body', part: /icon 1 at .*16×16/, prop: 'missing in app', cls: 'PROTO', why: 'Prototype line 1173 draws a placeholder image glyph; the app draws the returned image bytes.' },
+  { area: 'transcript', state: 'workspace agent body', view: 'small', part: /^(box|inner box 1)$/, prop: 'width', proto: '319', app: '320', cls: 'SPEC', why: 'W4: “never under 320 px”. The prototype computes a 320 px workspace at line 1520 and takes its border out of that width.' },
+  { area: 'transcript', state: 'workspace agent body', part: /^icon [56] at .*12×12$/, prop: 'only in app', cls: 'SPEC', why: 'T1b: “every row opens”. The fixture’s search and read both return text; the sample steps at prototype line 1551 provide only receipts.' },
+  { area: 'transcript', state: 'workspace agent body', part: 'text “Review the quota reset diff”', prop: 'truncated', cls: 'SPEC', why: 'W8: the header shows the running status and Stop. Prototype line 1554 uses elapsed time and an unstyled Stop, leaving a wider title lane.' },
+  { area: 'transcript', state: 'workspace agent body', part: 'text “Running”', prop: /^(x|y \(middle\)|width|size|color)$/, cls: 'SPEC', why: 'W8 specifies “running”, so the app has both the header label and the command verb. The text matcher pairs the prototype verb with the header label.' },
+  { area: 'transcript', el: /^(workflow row|workspace agent body)$/, part: /^text/, prop: 'x', cls: 'PROTO', why: 'Prototype line 1909 places a 1 px screen-reader status within the row flex layout, adding its width and an 8 px gap before the verb.', delta: 9 },
+  { area: 'transcript', el: /^delegated row [1-3]$/, part: /Check the mobile capsule|Write the weekly-window crate test|Update the changelog for v2.15.1|to Claude|to Codex/, prop: /^(x|truncated|visible width)$/, view: 'small', cls: 'SPEC', why: 'T1c: “Stop sits at the end of a live row, left of ‘Open in workspace’, in the same 24 px action.” The extra button reduces the title lane and moves the provider at this width.' },
+  { area: 'new-session', state: /^(empty|worktree|temporary)$/, el: 'draft strip', part: /^(text “(?:main|New worktree|from|Temporary)”|icon [1-4]|inner box [12])/, prop: /^(x|missing in app|only in app)$/, cls: 'SPEC', why: OWNER + ' The chip replaces the folder sample and moves the adjacent branch control 6.07 px left.' },
+  { area: /^(shell|overlays)$/, state: /^(window|hover-group|filter-on)$/, el: /^(group |row )/, prop: /^y(?: \(middle\))?$/, cls: 'SPEC', why: OWNER + ' Restoring the scope strip moves the rows below it 2.63 px up.', delta: 2.63 },
+  { area: /^(shell|overlays)$/, state: /^(window|hover-usage capsule|collapsed)$/, el: /^(title bar|usage capsule(?:, hovered)?)$/, part: /^text “(?:Week|42%|3d 2h)”$/, prop: /^(content|x)$/, cls: 'SPEC', why: OWNER + ' “Weekly” is wider and moves the readings that follow it.' },
+  { area: 'shell', state: 'window', el: 'title bar', part: /^inner box [67]$/, prop: /^(x|width|fill|radius)$/, cls: 'SPEC', why: OWNER + ' “Weekly” moves the bar. Its fill child and track share the new origin and the comparator swaps their indices.' },
+  { area: /^(shell|overlays)$/, state: /^(window|hover-usage capsule|collapsed)$/, el: /^usage capsule(?:, hovered)?$/, part: /^inner box [23]$/, prop: /^(x|width|fill|radius)$/, cls: 'SPEC', why: OWNER + ' “Weekly” moves the bar. Its fill child and track share the new origin and the comparator swaps their indices.' },
+  { area: 'transcript', state: 'browser-image', el: 'tool body', part: /^(box|inner box [123] )/, prop: /^(height|missing in app|only in app)$/, cls: 'SPEC', why: OWNER + ' The restored MCP tool-name block adds 53 px and a 6 px gap before the 240 × 150 preview.' },
+  { area: 'transcript', state: 'generated-image', el: 'tool body', part: /^(box|inner box 1)$/, prop: /^(height|y)$/, cls: 'SPEC', why: OWNER + ' The prototype inserts the 28 px prompt line before the image. The app keeps the generated-image row and surrounding prose separate.' },
+  { area: 'transcript', state: 'workspace agent body', view: /^(mid|small)$/, part: /^text “(?:Searched|Read|"useQuota"|in mobile\/src|6 matches|mobile\/src\/quota\/capsule.tsx|48 lines|12s)”$/, prop: /^(x|visible width|truncated|only in app)$/, cls: 'PROTO', why: 'Prototype line 1909 places the 1 px screen-reader status in the flex layout. It adds a gap, shrinks alongside the target, and clips text at narrow widths. The 1 px width mismatch adds to the receipt offsets under W4.' },
+  { area: 'transcript', state: 'delegated', el: /^delegated row [245]$/, part: /^text “(?:running · 1m 04s|completed · 2m 10s|failed · 38s)”$/, prop: /^(content|x)$/, cls: 'SPEC', why: OWNER + ' The original receipt gives the status. Adding timing would widen it and move its start.' },
+  { area: 'transcript', state: 'delegated', view: 'small', el: 'delegated row 4', part: /Review the quota reset diff|to Claude/, prop: /^(x|truncated|visible width)$/, cls: 'SPEC', why: OWNER + ' The original completed receipt has no duration, freeing space for the title.' },
+  { area: 'transcript', state: 'delegated', view: 'small', el: /^delegated row [24]$/, part: 'text “Delegated”', prop: 'x', cls: 'PROTO', why: 'Prototype line 1909 places a 1 px screen-reader status within the row. It shrinks along with the target, so its displacement is slightly under 9 px.' },
+  { area: 'composer', state: 'split-menu', el: 'menu', part: /^(box|text “Choose what Enter does in Settings › Chat”|inner box 4 )/, prop: /^(y|height|missing in app)$/, cls: 'SPEC', why: OWNER + ' The sample’s footer and separator add 36.39 px to the menu. The app keeps its two actions and original copy.' },
+  { area: 'composer', state: 'perm-menu', el: 'menu', part: /^(box|text “(?:Edits applied, commands ask|The agent decides what needs approval)”|icon 1)$/, prop: /^(width|content|x)$/, cls: 'SPEC', why: OWNER + ' The original descriptions widen the menu by 33.11 px and move the trailing check with its right edge.' },
+  { area: 'composer', state: 'changes-menu', el: 'menu', part: /^(box|text “(?:Changes · 3 files|src\/codex.rs|src\/codex_tests.rs|quota\/use-quota.ts|\+22 −1 across 3 files)”)/, prop: /^(y|height|content|missing in app)$/, cls: 'SPEC', why: OWNER + ' The app keeps the full file paths and original count. The sample adds a summary to Open diff, making it 16.19 px taller.' },
+  { area: 'composer', state: 'context-menu', el: 'menu', prop: /^(height|width|x|y|y \(middle\)|missing in app)$/, cls: 'SPEC', why: OWNER + ' The prototype adds a usage summary and separator above Compact conversation. The app keeps its one item, so the menu follows that item’s width and the matcher compares its focused row with the prototype separator.' },
+  { area: 'composer', state: 'plus-menu', el: 'menu', part: 'text “Mention a file or agent…”', prop: /^(width|content)$/, cls: 'SPEC', why: 'C4 names the menu item “Mention a file or agent”. The prototype adds an ellipsis that widens the label.' },
+  { area: 'transcript', state: 'search', el: 'tool row', part: 'text “8 results”', prop: 'missing in app', cls: 'SPEC', why: OWNER + ' The original app does not turn the returned text into a count.' },
+  { area: 'transcript', state: 'search', el: 'tool body', part: /^(box|inner box [12])/, prop: /^(height|missing in app|only in app)$/, cls: 'SPEC', why: OWNER + ' The original app keeps the raw search output, whose long lines wrap at the narrow width. The prototype draws three structured cards.' },
+  { area: 'transcript', state: /^(mcp|error)$/, el: 'tool row', part: 'text “on GitHub”', prop: /^(content|width)$/, cls: 'SPEC', why: OWNER + ' The app retains the original humanized “Github” server name.' },
+  { area: 'transcript', state: /^(mcp|error)$/, el: 'tool body', part: /^text/, prop: 'y (middle)', cls: 'SPEC', why: OWNER + ' The Tool section takes 53 px plus a 1 px separator before Arguments and Result.', delta: -54 },
+  { area: 'transcript', state: /^(mcp|error)$/, el: 'tool body', part: /^(box|inner box [1-5])/, prop: /^(height|missing in app|only in app)$/, cls: 'SPEC', why: OWNER + ' Restoring the Tool name adds 54 px and changes the box matcher’s indices.' },
+  { area: 'transcript', state: 'enter-worktree', el: 'event marker', part: 'box', prop: 'width', cls: 'SPEC', why: OWNER + ' The source name takes priority over the returned branch; the shorter label reduces the pill width.' },
+  { area: 'workspace', state: 'diff', el: 'diff header', part: /^text “(?:quota.rs|crates\/quota\/src|\+6|−1|2 changes)”$/, prop: /^(x|missing in app|only in app)$/, cls: 'SPEC', why: OWNER + ' The original icon leads the file name, and a change count occupies the stats lane.' },
+  { area: 'transcript', state: 'bash', el: 'tool body', prop: /^(height|y \(middle\))$/, cls: 'SPEC', why: OWNER + ' The original terminal prints the command before its output, adding one 19 px line.', delta: -19 },
+  { area: 'workspace', state: 'add-menu', el: 'menu', prop: /^(height|y|y \(middle\))$/, cls: 'SPEC', why: OWNER + ' The original New tab heading adds 27.67 px above the same entries.', delta: -27.67 },
+  { area: 'workspace', state: 'add-menu', el: 'menu', part: /^text “(?:preview|process)”$/, prop: 'y (middle)', cls: 'SPEC', why: OWNER + ' The New tab label moves both hints down by 27.68 px after rounding.', delta: -27.68 },
+  { area: 'workspace', state: 'add-menu', el: 'menu', part: 'text “New tab”', prop: 'only in app', cls: 'SPEC', why: OWNER },
+  { area: 'workspace', state: 'add-menu', el: 'menu', part: 'text “Launch configurations”', prop: /^(content|y \(middle\))$/, cls: 'SPEC', why: OWNER + ' The original section uses the singular label.' },
+  { area: 'workspace', state: 'empty', el: 'empty list', part: 'box', prop: /^(y|height)$/, cls: 'SPEC', why: OWNER + ' The original card keeps its Recent files, launch section and explanatory footer. They increase its height, so its top moves up while it stays centred.' },
+  { area: 'workspace', state: 'empty', el: 'empty list', part: /^(text “(?:Open file…|Open URL…|New terminal|dev|preview)”|icon [1-4])$/, prop: /^(y|y \(middle\)|glyph)$/, cls: 'SPEC', why: OWNER + ' Original action order and Recent rows place the actions at different heights. The extractor’s first four matched glyphs include View changes and recent files in place of the prototype URL, terminal and launch glyphs.' },
+  { area: 'workspace', state: 'empty', el: 'empty list', part: /^(text “(?:Open in the workspace|⌘J|⌘T|packages\/|zsh|Launch configuration|files, terminals)|icon (?:[5-9]|10) at|inner box [12] \(div\))/, prop: /^(missing in app|only in app)$/, cls: 'SPEC', why: OWNER + ' The original workspace keeps its recent files, action hints, separators and footer and does not insert the prototype title or shortcut hints.' },
+  { area: 'transcript', state: 'workspace agent body', part: 'text “4m”', prop: 'missing in app', cls: 'SPEC', why: 'W8 specifies “running”, with the count when several. The live fixture returns one running task and the prototype writes its elapsed time instead.' },
+  { area: 'transcript', state: 'workspace agent body', part: 'text “Running”', prop: 'only in app', cls: 'SPEC', why: 'W8 specifies “running” for the Agent header. The app also independently shows the nested Bash step as running.' },
+  { area: 'transcript', state: 'workspace agent body', part: 'text “Stop”', prop: /^(x|y \(middle\)|color|size|weight)$/, cls: 'PROTO', why: 'The prototype assigns Stop the pdb class, which has no CSS rule. The app mounts the shared StopButton with its danger and focus styling.' },
+
+  { area: 'transcript', state: /^(work collapsed|terminal states)$/, el: 'work header', part: /^icon 1 |^inner box 1 .*4×4/, prop: /missing in app|only in app/, cls: 'SPEC', why: 'T1b: “Claude’s history, interrupted Claude turns and killed sessions end neutral.” The fixture has no recorded outcome, so the app displays its neutral dot.' },
+  { area: 'transcript', el: /^(tool row|agent row|.+ command|exploration row|exploration steps|delegated row [1-7])$/, part: /^text/, prop: 'x', cls: 'PROTO', why: 'The prototype gives its clipped screen-reader status span relative positioning in the flex row. Its 1 px width and 8 px gap displace the visible text by 9 px.', delta: 9 },
+  { area: 'transcript', el: /^delegated row [1-3]$/, part: /^text “(?:waiting on you|running · 1m 04s|queued)”$/, prop: 'x', cls: 'SPEC', why: 'T1c: “Stop sits at the end of a live row, left of ‘Open in workspace’, in the same 24 px action.” The Stop action moves the receipt 24 px.', delta: 24 },
+  { area: 'transcript', el: /^delegated row [1-3]$/, part: /^icon \d .*12×12/, prop: 'only in app', cls: 'SPEC', why: 'T1c: “The prototype draws no Stop in its transcript rows.” The app draws the live task’s Stop square.' },
+  { area: 'transcript', el: 'tool body', state: 'write', part: 'box', prop: 'height', cls: 'DATA', why: 'The fixture contains fewer source lines and does not have the prototype sample’s truncation receipt.' },
+  ...[
+    ['work collapsed', 'Worked for 1m 12s', 'content', 'Worked for 1m 12s', 'Worked'],
+    ['work collapsed', 'read 9 files, searched 4 times, edited 2 files, ', 'missing in app', 'shown', 'absent'],
+    ['work collapsed', '1 failed, retried', 'missing in app', 'shown', 'absent'],
+    ['work collapsed', 'edited 2 files, read 1 file, searched 2 patterns', 'only in app', 'absent', 'shown'],
+    ['terminal states', 'Worked for 3s', 'content', 'Worked for 3s', 'Working'],
+    ['terminal states', 'ran 1 command, 7 ways', 'content', 'ran 1 command, 7 ways', 'ran 4 commands'],
+  ].map(([state, label, prop, proto, app]) => ({
+    area: 'transcript', state, el: 'work header', part: `text “${label}”`, prop, proto, app,
+    cls: 'DATA', why: 'The fixture supplies different tool counts, end evidence, and elapsed durations.',
+  })),
+  { area: 'transcript', state: 'terminal states', el: /^(running|passed|failed|stopped) command$/, part: /^text “(12s|exit|stopped ·)/, prop: /^(content|x|missing in app)$/, cls: 'DATA', why: 'The fixture supplies a status and short output without historical timing or a structured exit receipt.' },
+  { area: 'transcript', state: 'terminal states', el: /^(passed|failed) command$/, part: /^icon 2 /, prop: 'only in app', cls: 'DATA', why: 'The fixture has output to disclose. The prototype’s status sample has no body.' },
+  { area: 'transcript', state: 'cron-list', el: 'event marker', part: 'box', prop: /^(x|width)$/, cls: 'DATA', why: 'The pill is centred and the fixture’s shorter job count reduces its width.' },
+  { area: 'transcript', state: 'cron-list', el: 'event marker', part: /^text “3 jobs”$|^icon 2$/, prop: /^(content|x)$/, cls: 'DATA', why: 'The fixture lists one job and the prototype shows three.' },
+  { area: 'transcript', state: 'skill', el: 'event marker', part: /^text “412 lines”$/, prop: 'missing in app', cls: 'DATA', why: 'The synthetic skill result does not carry source-line metadata.' },
+  { area: 'transcript', state: 'monitor', el: 'event marker', part: /^text “matched · 42s”$/, prop: 'missing in app', cls: 'DATA', why: 'The fixture provides a short monitor result without a match receipt or elapsed timing.' },
+  { area: 'transcript', state: 'enter-worktree', el: 'event marker', part: /^text “feat\/quota-reset”$/, prop: 'content', cls: 'DATA', why: 'The fixture’s input names quota-reset and the prototype prints the full branch.' },
+
+  // ── Shell ──────────────────────────────────────────────────────────────────
+  { area: 'shell', el: 'title bar', part: /inner box [123] \(i\)/, prop: 'missing in app', cls: 'APP', why: 'The three window buttons are drawn by macOS, not by the page.' },
+  { el: /usage capsule|title bar/, part: /\(span\) at \d+,\d+ 3×3/, prop: 'only in app', cls: 'SPEC', why: 'S1: "The shell matches today\'s app." The dots are the account cycle of the app\'s capsule; they sit in its right padding, so nothing else moves.' },
+  { area: 'shell', el: 'rail', part: 'box', prop: /^(width|border right)$/, cls: 'SPEC', why: 'S2: the content is a card on the chrome, its left edge one hairline. The app draws that hairline as the card\'s own border, so the rail is 55 px and the line 1 px, where the prototype\'s rail is 56 px with the line inside.' },
+  { area: 'shell', el: 'rail inspector', part: 'icon 1', prop: 'glyph', cls: 'SPEC', why: 'S1: "The shell matches today\'s app." The inspector keeps the app\'s own glyph (0.8 units apart, the same shape).' },
+  { area: 'shell', el: 'sidebar', part: 'box', prop: /^(y|height|border top)$/, cls: 'SPEC', why: 'S2: the card\'s top hairline is the card\'s border in the app and the sidebar\'s in the prototype. The line paints in the same place, and every row inside has the prototype\'s position.' },
+  { area: 'shell', el: 'scope row', part: /inner box/, prop: 'fill', cls: 'DATA', why: 'A project\'s colour is hashed from its id.' },
+
+  // ── Session panel ──────────────────────────────────────────────────────────
+  { el: 'Plan', prop: 'numerals', cls: 'SPEC', why: 'DESIGN.md, the Steady Number Rule: numbers that change in place use tabular figures.' },
+  { el: 'diff header', prop: /numerals|width/, cls: 'SPEC', why: 'DESIGN.md, the Steady Number Rule: numbers that change in place use tabular figures.' },
+  { area: 'panel', el: 'Activity', part: /24|3 failed/, prop: /content|^x$|missing|only/, state: /docked|needs/, cls: 'DATA', why: '"24+" in the prototype\'s text; the fixture has exactly 24 finished tasks, and "3 failed" stands to their left.' },
+  ...[
+    ['3 failed', 'x', '202.42', '217.55'],
+    ['· 24+', 'content', '· 24+', '· 3'],
+    ['· 24+', 'x', '252.38', '267.5'],
+  ].map(([name, prop, proto, app]) => ({
+    area: 'panel', state: 'earlier-open', el: 'Activity', part: `text “${name}”`, prop, proto, app,
+    cls: 'DATA',
+    why: 'Prototype lines 2328–2329 hardcode 24+ above three failed records. ActivitySection derives the count from the rendered records and reserves the plus for paginated history.',
+  })),
+  ...[
+    ['codex.rs', 'y (middle)', 103.58, 159.58],
+    ['edited', 'y (middle)', 103.8, 159.8],
+    ['codex_tests.rs', 'y (middle)', 131.58, 187.58],
+    ['edited', 'y (middle)', 131.8, 187.8],
+    ['quota.md', 'y (middle)', 187.58, 103.58],
+    ['mentioned', 'y (middle)', 187.8, 103.8],
+    ['use-quota.ts', 'content', 'use-quota.ts', 'usage.ts'],
+    ['use-quota.ts', 'y (middle)', 159.58, 131.58],
+    ['edited', 'missing in app', 'shown', 'absent'],
+    ['mentioned', 'only in app', 'absent', 'shown'],
+  ].map(([name, prop, proto, app]) => ({
+    area: 'panel', state: 'docked', el: 'Mentioned files', part: `text “${name}”`, prop, proto: String(proto), app: String(app),
+    cls: 'DATA',
+    why: 'Prototype line 2335 inserts the changed files between the second and third mentions. derive-session-items.ts appends modified-only files after all mentions. The six-row cutoff therefore includes usage.ts in the app and use-quota.ts in the prototype.',
+  })),
+  { area: 'panel', el: 'Launch', part: /icon/, prop: 'y', cls: 'PROTO', why: 'The prototype sets the play and stop glyphs on the text baseline (an inline svg), 1.7 px above the middle of the row; every other row icon is centred in it.' },
+  ...[
+    ["text “3 failed”", "x", "202.42", "209.98"],
+    ["text “· 24+”", "missing in app", "shown", "absent"],
+    ["text “· 24”", "only in app", "absent", "shown"],
+  ].map(([part, prop, proto, app]) => ({
+    area: 'panel', state: 'empty', el: 'Activity', part, prop, proto, app,
+    cls: 'DATA',
+    why: 'Prototype line 2328 hardcodes 24+. The app counts exactly 24 loaded tasks and appends a plus only when transcript history can be paged.',
+  })),
+  ...[
+    ["box", "height", "156", "128"],
+    ["text “Check the review-readiness workflow”", "y (middle)", "75.58", "47.58"],
+    ["text “in 52m”", "y (middle)", "75.8", "47.8"],
+    ["text “Post the review status to the PR”", "y (middle)", "103.58", "75.58"],
+    ["text “recurring”", "y (middle)", "103.8", "75.8"],
+    ["text “Earlier”", "y (middle)", "131.58", "103.58"],
+    ["text “3 failed”", "y (middle)", "131.8", "103.8"],
+    ["text “No background activity”", "missing in app", "shown", "absent"],
+    ["icon 1", "glyph", "24 points", "74 points, 5.11 units apart"],
+    ["icon 3", "y", "96", "98"],
+    ["icon 3", "width", "16", "12"],
+    ["icon 3", "height", "16", "12"],
+    ["icon 3", "stroke", "1px", "0.75px"],
+    ["icon 3", "glyph", "75 points", "18 points, 5.43 units apart"],
+    ["icon 4 at 16,126 12×12", "missing in app", "shown", "absent"],
+  ].map(([part, prop, proto, app]) => ({
+    area: 'panel', state: 'empty', el: 'Activity', part, prop, proto, app,
+    cls: 'PROTO',
+    why: 'Prototype line 2324 inserts a success row before two scheduled entries. That row shifts the following content by 28 px and offsets the positional icon comparison by one slot.',
+  })),
+  { el: 'scrim', prop: 'height', cls: 'SPEC', why: 'R11: "The floating panel ends 8 px above the composer, and so does its scrim."' },
+  { area: 'panel', el: 'scrim', prop: 'fill', cls: 'PROTO', why: 'The prototype\'s scrim stands over its own page ground.' },
+
+  { area: 'gates', state: /^(plan|question)$/, view: 'small', el: 'gate', part: 'box', prop: 'y', cls: 'SPEC', why: 'G1: “as ChatGateMount + GateCard do today” and “capped at 45 % of the height and scrolls inside.” The existing slot uses the chat container height. The prototype uses the window height, so its cap starts higher.' },
+
+  // ── Composer ───────────────────────────────────────────────────────────────
+  { area: 'composer', el: /^bottom strip$|^worktree, hovered$/, part: /“·”|feat\/quota-reset|“main”|icon 2 at|icon 3 at|^box$/, prop: /^(x|width|missing in app|only in app)$/, cls: 'SPEC', why: 'K8: the branch is a control of its own beside the place, with its glyph, and the app draws the separator inside that control.' },
+  { area: 'composer', state: /bottom/, el: 'bottom strip', part: /[+−]\d+/, prop: /^(content|x)$/, cls: 'DATA', why: 'The fixture\'s change counts.' },
+  { area: 'composer', state: 'focus', el: 'card', prop: /^border/, cls: 'SPEC', why: 'C3: the focused card has the 2 px line and "no translucent halo".' },
+  { area: 'composer', state: /perm-menu|changes-menu/, part: /inner box/, prop: /^(only in app|missing in app)$/, cls: 'PROTO', why: 'Opened from the keyboard, the prototype focuses the checked item and the app the first one that can be chosen (Radix). The focused row is drawn the same.' },
+  { area: 'composer', state: 'model-menu', el: 'menu', part: /^inner box [56] \(span\) at .* 7×7$/, prop: 'only in app', cls: 'PROTO', why: 'The prototype omits the provider dots from the tab row.' },
+  { area: 'composer', state: 'model-menu', el: 'menu', part: /^text “(?:Claude|Codex)”$/, prop: 'x', delta: -6.5, cls: 'PROTO', why: 'The provider dots move the tab labels 6.5 px.' },
+  { area: 'composer', state: 'model-menu', el: 'menu', part: /^text “(?:Use CLI setting|Use the model configured in Claude for this proj|Switching keeps this chat\. The new provider gets)”$/, prop: 'only in app', cls: 'SPEC', why: OWNER + ' The app keeps its CLI-default choice, explanation, and provider switch footer.' },
+  { area: 'composer', state: 'model-menu', el: 'menu', part: 'text “Max”', prop: 'missing in app', cls: 'SPEC', why: OWNER + ' The app labels the effort Maximum.' },
+  { area: 'composer', state: 'model-menu', el: 'menu', part: 'text “Maximum”', prop: 'only in app', cls: 'SPEC', why: OWNER + ' The app labels the effort Maximum.' },
+  { area: 'composer', state: 'model-menu', el: 'menu', part: 'box', prop: 'height', delta: -154.05, cls: 'SPEC', why: 'The catalog heading, CLI-default row, and switch footer add 154.05 px.' },
+  { area: 'composer', state: 'model-menu', el: 'menu', part: 'box', prop: 'y', delta: 154, cls: 'SPEC', why: 'The taller catalog still anchors above the model button.' },
+  { area: 'composer', state: 'model-menu', el: 'menu', part: /^text “(?:Opus 4\.5|Sonnet 4\.5|Haiku 4\.5|Effort|Low|Medium|High)”$/, prop: 'y (middle)', delta: -94.05, cls: 'SPEC', why: 'The heading and CLI-default row offset the measured model and effort labels.' },
+  { area: 'composer', state: 'confirm-unattended', prop: 'focus outline', cls: 'SPEC', why: 'C13: "Cancel (focused)". The prototype focuses it without drawing the line.' },
+  { area: 'composer', state: 'worktree-menu', el: 'menu', prop: /^(height|width|x|y|y \(middle\)|content|missing in app|only in app)$/, cls: 'SPEC', why: 'K8: no base branch ("from main") is known to the app, so the menu has no From row, the path is whole, in mono and in ink, and what is under it stands 20 px higher.' },
+  { area: 'composer', state: 'files', part: /“log”|“diff”|inner box [26]/, prop: /color|fill/, cls: 'SPEC', why: 'C14: "its extension in a small tinted square (the app\'s per-extension colour)".' },
+  { area: 'composer', state: 'captures', part: /“rs”|inner box 6/, prop: /color|fill/, cls: 'SPEC', why: 'C14: "its extension in a small tinted square (the app\'s per-extension colour)".' },
+  { area: 'composer', state: /files|captures/, part: /icon \d at .* 32×32/, prop: 'missing in app', cls: 'DATA', why: 'The prototype draws its thumbnails as an svg; the fixture\'s are images.' },
+  { area: 'composer', state: 'files', prop: 'content', cls: 'DATA', why: 'The fixture image\'s own size.' },
+  { area: 'composer', state: 'quotes', prop: 'color', cls: 'SPEC', why: 'DESIGN.md: `faint` is never used for text. The source line is `meta`.' },
+
+  // ── New session ────────────────────────────────────────────────────────────
+  { area: 'new-session', el: /empty state|row, hovered/, part: /icon|“2m”/, prop: /^(glyph|colour|x|missing in app|only in app)$/, cls: 'DATA', why: 'Which of the three recent sessions runs is the session list\'s: the same spinner, "needs you" and time stand on other rows. A spinner is `live` (DESIGN.md, Live Blue).' },
+  { area: 'new-session', state: 'project-menu', part: 'box', prop: 'height', delta: -34, cls: 'DATA', why: 'The fixture has a third project ("docs"), so the menu is one 34 px row taller.' },
+  { area: 'new-session', state: 'branch-menu', part: /Search branches/, prop: 'color', cls: 'PROTO', why: 'The prototype\'s placeholder is the browser\'s own grey, #757575; the app\'s is `meta`, as in every other field.' },
+  { area: 'new-session', state: 'branch-menu', part: 'inner box 1', prop: /^(focus outline|border (?:top|right|bottom|left)|radius)$/, cls: 'SPEC', why: 'DESIGN.md, Inputs: "Fields … focus-line-inset". The focus line is on the 30 px search well, not on the row around it.' },
+  { area: 'new-session', state: 'branch-menu', part: 'inner box 4 (div) at 4,212.67 292×50.19', prop: 'only in app', cls: 'PROTO', why: 'The field keeps focus in both; the app\'s list also marks the option Enter would choose, the branch that is checked.' },
+  { area: 'new-session', part: /icon/, prop: 'glyph', cls: 'SPEC', why: 'K7: the new-worktree glyph is the app\'s folder with a plus (0.85 units apart).' },
+  { area: 'new-session', state: 'branch-menu', part: /^(box|text “Manage branches…”)$/, prop: /^(height|only in app)$/, cls: 'SPEC', why: 'K7: "Manage branches…" ends the menu, 59.2 px that the prototype\'s does not have.' },
+  { area: 'new-session', state: 'no-project', el: 'draft strip', part: /^(box|text “Temporary”|icon \d+ at)/, prop: /^(height|width|only in app)$/, cls: 'SPEC', why: 'K7: the Temporary toggle shows with no project too.' },
+  { area: 'new-session', state: 'no-project', el: 'empty state', prop: 'content', cls: 'PROTO', why: 'The project control is below the text, not above it.' },
+
+  // ── Gates ──────────────────────────────────────────────────────────────────
+  { area: 'gates', state: /^permission/, el: 'gate', prop: /^(height|x|y|y \(middle\)|content|missing in app|only in app)$/, cls: 'SPEC', why: 'G2: the gate lists what "Always allow" would save, and the button names the rule, so the card is 45.8 px taller and its buttons stand lower.' },
+  { area: 'gates', state: 'reject-hover', prop: 'x', cls: 'SPEC', why: 'G2: the "Always allow" button before it names the rule, 41.3 px longer.' },
+  { area: 'gates', state: /plan/, part: /inner box 9 \(button\)/, prop: 'only in app', cls: 'PROTO', why: 'The prototype\'s "Clear context" is the browser\'s own checkbox; the app\'s is its checkbox.' },
+  { area: 'gates', state: /plan/, part: /What should be changed/, prop: 'color', cls: 'PROTO', why: 'The prototype\'s placeholder is the browser\'s own grey, #757575; the app\'s is `meta`, as in every other field.' },
+  { area: 'gates', state: 'plan-keep', part: 'box', prop: 'y', cls: 'SPEC', why: 'G1: the slot is "capped at 45 % of the height and scrolls inside … as `ChatGateMount` + `GateCard` do today": 45 % of the conversation in the app, of the window in the prototype, so at 900 px the last 34 px of the card scroll.' },
+
+  // ── Workspace ──────────────────────────────────────────────────────────────
+  { area: 'workspace', el: 'workspace panel', part: 'box', prop: /^(x|y|width|height|border top|border left)$/, cls: 'SPEC', why: 'W4 and S2: the panel\'s left and top hairlines are the column\'s in the app; they paint in the same place.' },
+  { area: 'workspace', state: /preview|tab-hover|panel-floating/, el: 'workspace tab 1', prop: /^(x|width|only in app)$/, cls: 'SPEC', why: 'W7: "Not changed by this prototype, keeping today\'s behaviour: … the per-tab Stop for launched processes". A running preview\'s tab has it, 30 px.' },
+  { area: 'workspace', state: /preview|tab-hover/, el: /workspace tab [234]|tab, hovered/, part: /box|text|icon [23]|inner box 1/, prop: SHIFT, cls: 'SPEC', why: 'W7: the Stop of the first tab moves and narrows the ones after it.' },
+  { area: 'workspace', state: /preview/, el: 'workspace tab 2', part: /icon/, prop: 'glyph', cls: 'DATA', why: 'A terminal needs a host, so a URL tab stands in for it; its place and size are the terminal tab\'s.' },
+  { area: 'workspace', state: /preview/, el: 'address bar', prop: /^(x|width|content|only in app|missing in app)$/, cls: 'SPEC', why: 'C14 keeps Inspect and Region, and W7 keeps Run/Stop, the device switch and the capture tools, in the preview\'s bar; the prototype draws a stand-in with Back and Forward that the app\'s preview does not have.' },
+  { area: 'workspace', state: 'code-files', el: 'file header', prop: /^(x|width|content|only in app|missing in app)$/, cls: 'SPEC', why: OWNER + ' The original viewer keeps its folder icon, breadcrumb segments and chevrons before the basename, plus the saved status and reveal buttons.' },
+  { area: 'workspace', state: 'code-files', el: 'nested row', prop: 'glyph', cls: 'DATA', why: 'The prototype\'s second row is an open folder; the app\'s is closed until it is opened.' },
+  { area: 'workspace', state: 'code', el: /code line/, prop: /^(color|content|only in app|missing in app)$/, cls: 'PROTO', why: 'The prototype colours keywords, strings and comments by hand; a grammar also colours functions, types and numbers, and splits the line into more parts.' },
+  { area: 'workspace', state: 'code', el: 'line number', prop: /^(x|y|y \(middle\)|content)$/, cls: 'PROTO', why: 'One row later in the app (the gutter counts a hidden spacer row); its 16 px on the left is the comment gutter\'s.' },
+  { area: 'workspace', state: 'diff', el: 'diff header', part: /icon/, prop: /^(x|glyph|only in app|missing in app)$/, cls: 'SPEC', why: 'W7: the previous, next and reveal buttons of the app\'s diff.' },
+
+  // ── Menus, tooltips, dialogs, states ───────────────────────────────────────
+  { area: 'overlays', state: /hover-(session|selected) row/, prop: /^(x|width|visible width|truncated|only in app)$/, cls: 'SPEC', why: 'DESIGN.md, session rows: hover adds Pin, Tags and Archive, and the title makes room for them.' },
+  { area: 'overlays', state: /^focus-/, prop: 'focus outline', cls: 'SPEC', why: 'DESIGN.md, Focus: rows and tabs draw the line inside their edge (`focus-line-inset`), where a list would clip it; same 2 px, same colour.' },
+  { area: 'overlays', state: /filter-menu|sort-menu|more-menu/, part: 'box', prop: /^(x|y)$/, cls: 'SPEC', why: 'DESIGN.md: the group header\'s buttons are 24 px (22 px in the prototype), so the menu under them starts 1 px left and 1.4 px lower.' },
+  { area: 'overlays', state: 'filter-menu', prop: /^(height|y|y \(middle\)|only in app)$/, cls: 'DATA', why: 'The fixture\'s sessions have tags, so the app\'s menu has a Tags group.' },
+  { area: 'overlays', state: /sort-menu|more-menu/, prop: /^(height|width|y|y \(middle\)|content|only in app|missing in app)$/, cls: 'SPEC', why: 'S1: "The shell matches today\'s app": the app\'s own items.' },
+  { area: 'overlays', state: 'tooltip-rail', prop: /^(x|width|content)$/, cls: 'SPEC', why: 'S1: "The shell matches today\'s app": the rail\'s tooltips stand to its right, and the destination is called Tasks.' },
+  { area: 'overlays', state: /^tooltip/, part: 'box', prop: 'x', cls: 'PROTO', why: 'Half a pixel: both are centred on the control, the prototype\'s rounded the other way.' },
+  { area: 'overlays', state: 'sheet', el: 'scrim', prop: 'fill', cls: 'PROTO', why: 'The prototype\'s scrim stands over its own page ground (#d6d6da); the scrim is the same colour.' },
+  { area: 'overlays', state: 'sheet', prop: /^(height|y|y \(middle\)|content|only in app|missing in app)$/, cls: 'SPEC', why: 'H1: the sheet "follows the app\'s registry": its labels, its order within Chat, and no "Open automations", so it is one row shorter.' },
+  { area: 'overlays', state: 'collapsed', el: 'selected session tab', prop: 'x', cls: 'SPEC', why: 'S1: "The shell matches today\'s app": with the sidebar hidden, the button that shows it stands before the tabs.' },
+  { area: 'overlays', state: 'scrollbar', prop: 'fill', cls: 'PROTO', why: 'Ink at 26 % on both sides; the prototype\'s thumb is drawn outside the panel, over its page ground.' },
+  { area: 'overlays', state: 'scrollbar', prop: /^(x|y|width|height)$/, cls: 'SPEC', why: 'S3: "2 px from the edge". The panel\'s edge is its hairline in the app and the hairline\'s outside in the prototype.' },
+];
+
+const hit = (want, have) => want === undefined || (want instanceof RegExp ? want.test(have) : want === have);
+const FIELDS = ['area', 'state', 'view', 'theme', 'el', 'part', 'prop', 'proto', 'app'];
+export function classify(row) {
+  const i = RULES.findIndex((rule) => FIELDS.every((f) => hit(rule[f], row[f])) && (rule.delta === undefined || Math.abs(Number(row.proto) - Number(row.app) - rule.delta) < 0.01));
+  return i < 0 ? { cls: 'OPEN', why: '', rule: -1 } : { cls: RULES[i].cls, why: RULES[i].why, rule: i };
+}

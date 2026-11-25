@@ -76,20 +76,10 @@ describe('design token audit', () => {
   // tiny-avatar idiom the v2 tree uses (ProjectRow's text-[10px] badge);
   // text-xs (12px) overflows the dot.
   const TYPOGRAPHY_ARBITRARY_ALLOWLIST = new Set([
-    // The composer's textarea, its highlight mirror and its segment overlay
-    // must share one 14px / 21px line box so the caret and the chips line up.
-    'features/chat/composer/Composer.tsx',
-    'features/chat/composer/highlight/ComposerHighlight.tsx',
-    'features/chat/composer/segments/ComposerSegments.tsx',
-    // `leading-[inherit]` aligns the "Not sent" label to the row's line box.
+    // The queue label shares its row's line box.
     'features/chat/composer/queue/QueuedRows.tsx',
-    // The activity strip's 12.5px rows and the question gate's 14px title come from the redesign spec.
-    'features/chat/composer/strips/ActivityStrip.tsx',
-    'features/chat/gates/AskUserQuestionGate.tsx',
-    // The draft tiles' and the empty state's sizes come from the prototype; they move to
-    // named sizes when DESIGN.md's type scale lands as tokens (#955).
+    // The prototype uses an 11px mono selector and 19px / 13.5px welcome text.
     'features/chat/composer/draft-content/DraftTile.tsx',
-    'features/chat/composer/draft-content/NoteTile.tsx',
     'features/sessions/new-thread/NewSessionState.tsx',
     'components/ui/assistant-ui/tool-group.tsx',
     'features/chat/parts/CodeHeader.tsx',

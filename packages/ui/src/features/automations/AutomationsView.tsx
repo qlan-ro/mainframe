@@ -76,7 +76,7 @@ export function AutomationsView(): React.ReactElement {
     <div data-testid="automations-view" className="flex h-full min-h-0 flex-col bg-background font-sans">
       {showDetailsHeader && (
         <div className="flex h-[52px] flex-shrink-0 items-center gap-2.5 border-b px-4">
-          <Zap size={16} className="text-primary" aria-hidden />
+          <Zap size={16} className="text-accent-ink" aria-hidden />
           <div ref={setHeaderSlot} className="flex min-w-0 flex-1 items-center gap-2.5" />
         </div>
       )}

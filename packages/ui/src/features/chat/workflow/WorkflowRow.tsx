@@ -94,7 +94,13 @@ export function WorkflowRow({ unit, part, turnKey }: ToolRowProps) {
           </PopoverTrigger>
         )
       }
-      trailing={effective && <PanelRight aria-hidden className="size-3.5!" />}
+      trailing={
+        effective && (
+          <span aria-hidden className="pointer-events-none flex w-9 shrink-0 items-center pl-px text-(--mf-tr-muted)">
+            <PanelRight className="size-3.5" />
+          </span>
+        )
+      }
       defaultOpen={failedOpen || launch.error !== undefined}
     >
       {said ? <LaunchBody part={part} failed={status === 'failed'} error={launch.error} /> : undefined}

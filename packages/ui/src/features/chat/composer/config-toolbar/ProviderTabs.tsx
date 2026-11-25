@@ -13,7 +13,7 @@ import { Lock } from 'lucide-react';
 import type { AdapterInfo } from '@qlan-ro/mainframe-types';
 import { Hint } from '@/components/ui/hint';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ProviderLogo } from '@/features/shared/ProviderLogo';
+import { ProviderDot } from '@/features/shared/ProviderDot';
 import { cn } from '@/lib/utils';
 
 export interface ProviderTabsProps {
@@ -38,7 +38,7 @@ export function ProviderTabs({ adapters, selectedId, activeId, blockedReason, on
         if (v) onSelect(v);
       }}
     >
-      <TabsList variant="line" className="w-full">
+      <TabsList className="h-8! w-full gap-0.5 rounded-[9px] bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] p-0.5">
         {adapters.map((a) => {
           const blocked = a.installed && blockedReason != null && a.id !== activeId;
           const trigger = (
@@ -48,9 +48,12 @@ export function ProviderTabs({ adapters, selectedId, activeId, blockedReason, on
               data-testid={`composer-adapter-select-option-${a.id}`}
               aria-label={`Provider: ${a.name}`}
               disabled={!a.installed || blocked}
-              className={cn(blocked && 'w-full')}
+              className={cn(
+                'h-7 min-w-0 flex-1 gap-1.5 rounded-[7px] border-0 px-1.5 py-1 text-small/[20px] font-medium text-foreground dark:text-foreground data-active:bg-card group-data-[variant=default]/tabs-list:data-active:shadow-segment dark:data-active:bg-card',
+                blocked && 'w-full',
+              )}
             >
-              <ProviderLogo adapterId={a.id} testId={`composer-adapter-logo-${a.id}`} className="size-4 shrink-0" />
+              <ProviderDot adapterId={a.id} testId={`composer-adapter-logo-${a.id}`} className="size-[7px]" />
               <span className="truncate">{a.name}</span>
               {!a.installed && <Lock className="size-3 shrink-0" />}
             </TabsTrigger>

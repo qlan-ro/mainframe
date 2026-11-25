@@ -39,7 +39,7 @@ export function FirstRunState() {
           type="button"
           data-testid="sessions-firstrun-add-project"
           onClick={() => void addProject()}
-          className="inline-flex h-[30px] items-center gap-1.5 rounded-[8px] bg-primary px-3.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          className="inline-flex h-[30px] items-center gap-1.5 rounded-[8px] bg-accent-fill px-3.5 text-xs font-semibold text-primary-foreground transition-opacity hover:brightness-95"
         >
           <FolderPlus size={14} />
           Add project…

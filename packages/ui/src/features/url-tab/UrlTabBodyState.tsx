@@ -25,7 +25,7 @@ function LoadedBody({
   const inspectBadge = inspectActive ? (
     <div
       data-testid="url-tab-inspect-active-indicator"
-      className="absolute top-2 left-2 z-10 rounded-sm bg-primary px-1.5 py-0.5 font-mono text-xs font-semibold text-primary-foreground"
+      className="absolute top-2 left-2 z-10 rounded-sm bg-accent-fill px-1.5 py-0.5 font-mono text-xs font-semibold text-primary-foreground"
     >
       Click an element
     </div>

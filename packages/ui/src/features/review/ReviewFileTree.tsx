@@ -27,9 +27,9 @@ import type { WorkingChangeFile } from './use-working-changes';
  */
 const BADGE_CLASS: Record<ReviewFile['status'], string> = {
   added: 'text-foreground bg-success/[12.16%]',
-  modified: 'text-foreground bg-warning/[12.16%]',
+  modified: 'text-foreground bg-warning-surface',
   deleted: 'text-foreground bg-destructive/[12.16%]',
-  renamed: 'text-foreground bg-warning/[12.16%]',
+  renamed: 'text-foreground bg-warning-surface',
 };
 
 interface ReviewFileTreeProps {

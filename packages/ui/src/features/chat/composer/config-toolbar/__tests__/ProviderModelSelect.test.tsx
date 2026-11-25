@@ -214,10 +214,9 @@ describe('ProviderModelSelect — popover contents after open', () => {
 
     await userEvent.click(screen.getByTestId('composer-model-select'));
 
-    const check = (testId: string) =>
-      screen.getByTestId(testId).querySelector('svg.lucide-check')?.getAttribute('class') ?? '';
-    expect(check('composer-model-select-option-sonnet')).not.toContain('invisible');
-    expect(check('composer-model-select-option-haiku')).toContain('invisible');
+    const check = (testId: string) => screen.getByTestId(testId).querySelector('svg.lucide-check');
+    expect(check('composer-model-select-option-sonnet')).not.toBeNull();
+    expect(check('composer-model-select-option-haiku')).toBeNull();
   });
 });
 

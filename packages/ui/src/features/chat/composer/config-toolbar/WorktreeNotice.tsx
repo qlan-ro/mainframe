@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function WorktreeNotice({ testId, children }: { testId: string; children: string }) {
   return (
-    <Alert data-testid={testId} className="border-warning/30 bg-warning/10 px-2.5 py-2 text-xs">
+    <Alert data-testid={testId} className="border-warning-border bg-warning-surface px-2.5 py-2 text-xs">
       <AlertTriangle className="text-warning" />
       <AlertDescription className="text-xs text-foreground">{children}</AlertDescription>
     </Alert>

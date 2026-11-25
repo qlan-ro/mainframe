@@ -11,7 +11,8 @@
  *
  * Not `SidebarRail`, which is the sidebar primitive's resize handle.
  */
-import { MessageSquare, Moon, ScanSearch, Settings, SquareKanban, Sun, Zap } from 'lucide-react';
+import { Moon, ScanSearch, Settings, SquareKanban, Sun } from 'lucide-react';
+import { BoltIcon, ChatIcon } from '@/components/ui/glyphs';
 import { useTheme } from '@/store/theme';
 import { useUiPrefs, type SidebarView } from '@/store/ui-prefs';
 import { chordHint } from '@/features/shortcuts/chord-hint';
@@ -23,15 +24,15 @@ import { DaemonSwitcher } from '@/features/daemon/DaemonSwitcher';
 interface ViewDef {
   id: SidebarView;
   label: string;
-  icon: typeof MessageSquare;
+  icon: typeof ChatIcon;
   /** First-run tour anchor; the Tasks/Automations steps point at the rail now. */
   tut?: string;
 }
 
 const VIEWS: readonly ViewDef[] = [
-  { id: 'chats', label: 'Chats', icon: MessageSquare },
+  { id: 'chats', label: 'Chats', icon: ChatIcon },
   { id: 'tasks', label: 'Tasks', icon: SquareKanban, tut: 'kanban' },
-  { id: 'automations', label: 'Automations', icon: Zap, tut: 'automations' },
+  { id: 'automations', label: 'Automations', icon: BoltIcon, tut: 'automations' },
   { id: 'advisor', label: 'Setup Advisor', icon: ScanSearch },
 ];
 
@@ -53,8 +54,12 @@ export function NavRail() {
   };
 
   return (
-    <nav data-testid="shell-rail" aria-label="Views" className="flex w-[55px] shrink-0 flex-col items-center py-2">
-      <div className="flex flex-col items-center gap-1">
+    <nav
+      data-testid="shell-rail"
+      aria-label="Views"
+      className="flex w-[55px] shrink-0 flex-col items-center gap-1.5 pt-2 pb-2.5"
+    >
+      <div className="flex flex-col items-center gap-1.5">
         {VIEWS.map(({ id, label, icon, tut }) => (
           <NavRailButton
             key={id}
@@ -70,7 +75,7 @@ export function NavRail() {
         ))}
       </div>
       <div className="flex-1" />
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-1.5">
         <RailUpdateButton />
         <DaemonSwitcher />
         <NavRailButton

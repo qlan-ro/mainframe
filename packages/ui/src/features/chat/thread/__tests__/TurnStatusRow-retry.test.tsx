@@ -69,7 +69,7 @@ describe('TurnStatusRow — Reconnecting', () => {
     expect(text).toHaveClass('text-muted-foreground');
     expect(text).not.toHaveClass('text-warning');
     expect(container.querySelector('[data-testid="chat-thread-running"] > span[aria-hidden]')).toHaveClass(
-      'bg-warning',
+      'bg-warning-dot',
     );
   });
 

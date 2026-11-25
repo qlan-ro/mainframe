@@ -40,8 +40,8 @@ export function getOrCreate(id: string): CachedTerminal {
     // The lane FitAddon leaves for the scrollbar: 2px inset + an up-to-8px thumb
     // (app.css), matching `lib/overlay-scrollbars`.
     overviewRuler: { width: 10 },
-    fontSize: 13,
-    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: 12,
+    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
     theme: {
       // Use app-tauri purpose-built terminal tokens (--mf-term-*).
       // Desktop used --mf-input-bg / --mf-text-primary / --mf-accent which

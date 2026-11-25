@@ -59,7 +59,7 @@ export function TokenCredentialField({ service, onChange, testId, connectLabel }
         size="sm"
         data-testid={`${testId}-connect`}
         onClick={() => setOpen(true)}
-        className="gap-1.5 border-[0.5px] bg-card font-semibold text-primary"
+        className="gap-1.5 border-[0.5px] bg-card font-semibold text-accent-ink"
       >
         <Plug size={12} aria-hidden />
         {connectLabel ?? `Connect ${displayName}…`}
@@ -79,7 +79,7 @@ export function TokenCredentialField({ service, onChange, testId, connectLabel }
                 href={copy.linkHref}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-0.5 text-primary underline"
+                className="inline-flex items-center gap-0.5 text-accent-ink underline"
               >
                 {copy.linkLabel}
                 <ExternalLink size={10} aria-hidden />

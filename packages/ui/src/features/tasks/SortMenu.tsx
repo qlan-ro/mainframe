@@ -68,7 +68,7 @@ export function SortMenu({ sort, onChange }: Props): React.ReactElement {
               onSelect={(e) => e.preventDefault()}
             >
               <span className="flex-1">{label}</span>
-              {sort.key === key && <span className="text-primary">{dirArrow(sort.dir)}</span>}
+              {sort.key === key && <span className="text-accent-ink">{dirArrow(sort.dir)}</span>}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

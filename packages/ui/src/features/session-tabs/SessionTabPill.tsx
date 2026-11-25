@@ -155,9 +155,9 @@ export function SessionTabPill({ tab, hintIndex = null, canOpenBeside, ...action
         )}
         style={TAB_HOVER_STYLE}
       >
-        {/* The badge takes the dot's 14px slot rather than adding one, so
+        {/* The badge overflows the dot's own 8px rather than taking a slot, so
             holding the modifier never reflows the strip under the pointer. */}
-        <span className="relative inline-flex size-3.5 shrink-0 items-center justify-center">
+        <span className="relative inline-flex size-2 shrink-0 items-center justify-center">
           {hintIndex != null ? (
             <ShortcutIndexBadge index={hintIndex} data-testid={`session-tab-hint-${tab.id}`} />
           ) : (

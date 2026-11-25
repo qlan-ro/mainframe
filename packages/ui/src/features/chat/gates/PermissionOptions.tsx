@@ -4,7 +4,7 @@ import type { VariantProps } from 'class-variance-authority';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { PermissionOption, PermissionOptionKind } from '@qlan-ro/mainframe-types';
-import { GATE_PRIMARY } from './shared/GateShell';
+import { GATE_BUTTON, GATE_DANGER, GATE_OUTLINE, GATE_PRIMARY } from './shared/GateShell';
 import type { GrantLine } from './permission-grants';
 import { PermissionReadDialog } from './PermissionReadDialog';
 import type { AllowedPart, ShownToEnd } from './use-shown-to-end';
@@ -26,9 +26,16 @@ const KIND_VARIANT: Partial<Record<PermissionOptionKind, ButtonVariant>> = {
   reject_always: 'destructive',
 };
 
+const KIND_CLASS: Partial<Record<PermissionOptionKind, string>> = {
+  allow_once: GATE_PRIMARY,
+  allow_always: GATE_OUTLINE,
+  reject_once: GATE_DANGER,
+  reject_always: GATE_DANGER,
+};
+
 /** What an "always" answer saves, on its own button: the rule, or how many changes. */
 function SavedBadge({ grants }: { grants: readonly GrantLine[] }) {
-  const badge = 'truncate rounded bg-muted px-1 text-xs text-muted-foreground';
+  const badge = 'truncate rounded-[4px] bg-code-surface px-[5px] py-px text-meta/[normal] text-ink-secondary';
   const [only] = grants;
   if (!only) return null;
   return grants.length === 1 ? (
@@ -110,9 +117,11 @@ function PermissionAnswer({
     <Button
       variant={KIND_VARIANT[option.kind as PermissionOptionKind] ?? 'secondary'}
       size="sm"
-      className={cn('aria-disabled:cursor-not-allowed aria-disabled:opacity-50', {
-        [GATE_PRIMARY]: option.kind === 'allow_once',
-      })}
+      className={cn(
+        GATE_BUTTON,
+        'aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:brightness-100',
+        KIND_CLASS[option.kind as PermissionOptionKind],
+      )}
       data-testid={`chat-permission-option-${option.optionId}`}
       aria-disabled={blocked || undefined}
       aria-describedby={blocked ? lockedId : undefined}
@@ -140,7 +149,7 @@ export function OptionsFooter({ options, grants, parts, shown, onSelect }: Foote
       ref={footer}
       data-testid="chat-permission-options"
       data-gate-answers
-      className="flex flex-wrap items-center gap-2 bg-card px-4 pb-3 [@container_(min-height:26rem)]:sticky [@container_(min-height:26rem)]:-bottom-1 [@container_(min-height:26rem)]:pt-1"
+      className="flex flex-wrap items-center gap-2 bg-card px-4 pt-1 pb-3 [@container_(min-height:26rem)]:sticky [@container_(min-height:26rem)]:-bottom-1"
     >
       {rest && (
         <ShowRest

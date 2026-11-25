@@ -34,7 +34,7 @@ export function RecentDirs({ paths, onPick }: RecentDirsProps) {
             onClick={() => onPick(path)}
             className="group flex w-full items-center gap-1.5 px-3.5 py-1 text-left hover:bg-accent hover:text-accent-foreground"
           >
-            <FolderIcon className="size-3.5 shrink-0 text-primary" fill="currentColor" />
+            <FolderIcon className="size-3.5 shrink-0 text-accent-ink" fill="currentColor" />
             <span className="shrink-0 truncate font-medium text-muted-foreground group-hover:text-accent-foreground">
               {name}
             </span>

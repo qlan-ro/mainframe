@@ -2,7 +2,7 @@
  * The option list for one AskUserQuestion question.
  *
  * The row chrome is the shadcn `questionnaire` kit's `QuestionnaireChoice`
- * recipe — hairline `border-input`, `border-primary/40 bg-muted` when chosen, a
+ * recipe — hairline `border-input`, `border-input bg-queue-well` when chosen, a
  * size-4 indicator — in compact rows aligned to the question's text (G4), but
  * NOT its primitive. See the ledger for why:
  * the kit's state model is a `<form>` whose only value surface is FormData, and
@@ -63,8 +63,10 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
         }
       }}
       className={cn(
-        'flex w-full cursor-pointer items-start gap-3 rounded-md border px-3 py-2 text-left text-sm shadow-xs transition-colors select-none focus-visible:focus-line-inset',
-        isSelected ? 'border-primary/40 bg-muted' : 'border-input bg-transparent hover:bg-muted/50 dark:bg-input/20',
+        'flex w-full cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2 text-left text-transcript/[1.45] transition-colors select-none focus-visible:focus-line-inset',
+        isSelected
+          ? 'border-primary/45 bg-queue-well hover:bg-sidebar-accent'
+          : 'border-input bg-transparent hover:bg-sidebar-accent',
       )}
     >
       {isMulti ? (
@@ -79,26 +81,23 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
         <span
           data-radio-indicator
           className={cn(
-            'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
-            isSelected ? 'border-primary bg-primary' : 'border-muted-foreground',
+            'mt-0.5 size-4 shrink-0 rounded-full transition-colors',
+            isSelected ? 'border-[5px] border-accent-fill' : 'border border-muted-foreground',
           )}
-        >
-          {isSelected && <span className="size-1.5 rounded-full bg-primary-foreground" />}
-        </span>
+        />
       )}
       <span className="min-w-0">
-        <span className="block font-medium text-foreground">
+        <span className="block text-row/[20.55px] font-medium text-foreground">
           {visibleLine(label.replace(RECOMMENDED, ''))}
           {recommended && (
-            <span
-              data-testid={`${testId}-recommended`}
-              className="ml-2 rounded-sm bg-primary/10 px-1.5 py-0.5 text-xs text-accent-ink"
-            >
+            <span data-testid={`${testId}-recommended`} className="ml-1.5 text-xs text-accent-ink">
               Recommended
             </span>
           )}
         </span>
-        {description && <span className="block text-xs text-muted-foreground">{visibleText(description)}</span>}
+        {description && (
+          <span className="mt-px block text-meta/[1.45] text-muted-foreground">{visibleText(description)}</span>
+        )}
       </span>
     </div>
   );
@@ -150,7 +149,7 @@ export function AskQuestionWizard({
           placeholder="Type your answer…"
           value={otherText}
           onChange={(e) => onOtherText(e.target.value)}
-          className="mt-1 animate-in duration-150 fade-in-0 slide-in-from-top-1"
+          className="h-8 rounded-md border-input bg-card px-2.5 text-row shadow-none animate-in duration-150 fade-in-0 slide-in-from-top-1"
           autoFocus
         />
       )}

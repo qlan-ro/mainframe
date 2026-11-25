@@ -11,7 +11,7 @@ export function ConfigConflictsWarning({ conflicts }: ConfigConflictsWarningProp
   if (conflicts.length === 0) return null;
 
   return (
-    <Alert data-testid="settings-config-conflicts-warning" className="border-warning/30 bg-warning/10">
+    <Alert data-testid="settings-config-conflicts-warning" className="border-warning-border bg-warning-surface">
       <AlertTriangle className="text-warning" />
       <AlertDescription className="text-xs text-foreground">
         Claude Code settings.json defines {conflicts.join(', ')}. Mainframe flags will take precedence when launching

@@ -12,7 +12,7 @@
 import { useMemo } from 'react';
 import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
 import { SYNTHETIC_TAGS } from '@qlan-ro/mainframe-types';
-import { PenLine, Plus, SearchIcon } from 'lucide-react';
+import { Plus, SearchIcon, SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import {
@@ -49,19 +49,17 @@ import { FadeLabel } from '@/components/ui/fade-label';
 export function NewSessionRow() {
   const newThread = useStartNewSession();
   return (
-    <SidebarMenu>
+    <SidebarMenu className="mt-0.5">
       <SidebarMenuItem>
-        {/* `pl-1`: the pen lines up with "Chats" and the scope avatars (all 12px
-            in); the hover fill still starts on the rows' 8px edge. */}
         <SidebarMenuButton
-          className="pl-1"
+          className="gap-2.5 pr-1.5 text-body"
           data-testid="sidebar-action-new-thread"
           data-tut="new-session"
           onClick={newThread}
         >
-          <PenLine />
+          <SquarePen className="text-ink-secondary" />
           <FadeLabel className="flex-1">New session</FadeLabel>
-          <Plus aria-hidden className="shrink-0 text-muted-foreground" />
+          <Plus aria-hidden className="shrink-0 text-ink-secondary" />
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
@@ -122,16 +120,15 @@ export function SessionSidebar() {
       {/* The scope strip lives here, not in the scrolling body: shadcn
           documents the header as the home for a workspace switcher, and it is
           the one thing a long session list must not scroll away. */}
-      <SidebarHeader className="gap-3">
-        {/* The title bar owns the traffic lights and the app chrome now; this
-            52px row is the view's own name, search and its collapse. */}
-        <div className="flex h-9 items-center justify-between pl-1">
-          <span className="text-base font-semibold">Chats</span>
+      <SidebarHeader className="gap-0 pt-0 pb-1">
+        <div className="-mr-0.5 flex h-11 items-center justify-between pl-1">
+          <span className="text-headline font-semibold">Chats</span>
           <span className="flex items-center text-muted-foreground">
             <Hint label={searchChord == null ? 'Search' : `Search (${searchChord})`}>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
+                className="size-8 rounded-md"
                 data-testid="sidebar-search"
                 aria-label="Search"
                 onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
@@ -140,7 +137,7 @@ export function SessionSidebar() {
               </Button>
             </Hint>
             <Hint label="Hide sidebar">
-              <SidebarTrigger data-testid="sidebar-collapse" />
+              <SidebarTrigger className="size-8 rounded-md" data-testid="sidebar-collapse" />
             </Hint>
           </span>
         </div>

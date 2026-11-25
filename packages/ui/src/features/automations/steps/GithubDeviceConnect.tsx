@@ -188,7 +188,7 @@ export function GithubDeviceConnect({ onChange, testId }: GithubDeviceConnectPro
           size="sm"
           data-testid={`${testId}-retry`}
           onClick={() => void start()}
-          className="w-fit gap-1.5 border-[0.5px] bg-card font-semibold text-primary"
+          className="w-fit gap-1.5 border-[0.5px] bg-card font-semibold text-accent-ink"
         >
           <Plug size={12} aria-hidden />
           Try again

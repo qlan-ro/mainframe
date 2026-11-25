@@ -1,20 +1,15 @@
 /** An event tool on the spine: its pill, or an answered question's card (T1g). */
 import { useContext, useMemo } from 'react';
+import { Activity, Bell, FolderGit2, type LucideIcon } from 'lucide-react';
+import { BoltIcon } from '@/components/ui/glyphs';
 import {
-  Activity,
-  AlarmClock,
-  Bell,
-  CalendarClock,
-  CalendarDays,
-  CalendarX,
-  ClipboardCheck,
-  ClipboardList,
-  FolderGit2,
-  FolderOutput,
-  FolderX,
-  Zap,
-  type LucideIcon,
-} from 'lucide-react';
+  AlarmIcon,
+  CalendarClockIcon,
+  CalendarJobsIcon,
+  CalendarRemoveIcon,
+  PlanIcon,
+  ApprovedPlanIcon,
+} from '../../messages/turn/transcript-glyphs';
 import { useOwnChatState } from '../../runtime/own-chat-state';
 import { EXECUTION_MODE_LABELS } from '../../messages/execution-mode-labels';
 import { useStepDuration } from '../../messages/turn/StepClock';
@@ -31,17 +26,17 @@ import { MarkerPill } from './MarkerPill';
 import { QuestionCard } from './QuestionCard';
 
 export const MARKER_ICONS: Record<MarkerIcon, LucideIcon> = {
-  skill: Zap,
-  plan: ClipboardList,
-  'plan-approved': ClipboardCheck,
-  wakeup: AlarmClock,
-  'cron-create': CalendarClock,
-  'cron-delete': CalendarX,
-  'cron-list': CalendarDays,
+  skill: BoltIcon,
+  plan: PlanIcon,
+  'plan-approved': ApprovedPlanIcon,
+  wakeup: AlarmIcon,
+  'cron-create': CalendarClockIcon,
+  'cron-delete': CalendarRemoveIcon,
+  'cron-list': CalendarJobsIcon,
   monitor: Activity,
   'worktree-enter': FolderGit2,
-  'worktree-leave': FolderOutput,
-  'worktree-remove': FolderX,
+  'worktree-leave': FolderGit2,
+  'worktree-remove': FolderGit2,
   notification: Bell,
 };
 

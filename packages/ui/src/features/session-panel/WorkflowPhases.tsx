@@ -152,7 +152,7 @@ export function WorkflowPhases({
   const view = neutralizedRun(run, now);
   const { all: phases, orphans } = runTimeline(view);
   return (
-    <div className="mx-1.5 mb-1.5 pt-0.5 pr-2.5 pb-1 pl-[34px] text-xs text-muted-foreground">
+    <div className="mx-1.5 mb-1.5 pt-0.5 pr-2.5 pb-1 pl-[34px] text-meta text-muted-foreground">
       {phases.length === 0 && orphans.length === 0 && (
         <p className="py-1">{isTerminalRunStatus(run.status) ? 'No phases were reported' : 'No phases reported yet'}</p>
       )}

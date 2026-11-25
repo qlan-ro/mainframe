@@ -53,7 +53,7 @@ export function TunnelStatusRow({ state, url, onRetryVerify }: TunnelStatusRowPr
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 p-2.5 bg-card border border-border rounded-md">
-          <span className="size-2 rounded-full bg-warning shrink-0" />
+          <span className="size-2 rounded-full bg-warning-dot shrink-0" />
           <code className="text-xs text-muted-foreground truncate flex-1">{url}</code>
           <CopyButton text={url} testId="tunnel-url-copy-unreachable" />
         </div>

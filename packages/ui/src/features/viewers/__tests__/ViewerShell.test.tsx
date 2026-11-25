@@ -87,10 +87,10 @@ describe('ViewerShell', () => {
     const texts = allSpans.map((s) => s.textContent);
     expect(texts).toContain('a');
     expect(texts).toContain('b');
-    // The basename is in its own semibold span.
+    // The basename is in its own medium-weight span.
     const basename = allSpans.find((s) => s.textContent === 'file.png');
     expect(basename).toBeDefined();
-    expect(basename?.className).toContain('font-semibold');
+    expect(basename?.className).toContain('font-medium');
   });
 
   it('renders only basename for a no-dir path', () => {

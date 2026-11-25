@@ -36,9 +36,8 @@ export function TitleBarButton({
         variant="ghost"
         size={size}
         className={cn(
-          // Over the title bar's ground, where `muted` would barely show.
-          'text-muted-foreground hover:bg-foreground/5 hover:text-foreground dark:hover:bg-foreground/5',
-          on && 'bg-foreground/8 text-foreground hover:bg-foreground/8 dark:hover:bg-foreground/8',
+          'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground dark:hover:bg-sidebar-accent',
+          on && 'bg-chrome-chip text-foreground hover:bg-chrome-chip dark:hover:bg-chrome-chip',
           className,
         )}
         {...props}

@@ -84,7 +84,7 @@ describe('what each pill says', () => {
     const args = { command: 'pnpm dev' };
     expect(facts('Monitor', args, {}, { monitoring: true })).toMatchObject({ label: 'Monitoring', state: 'running' });
     expect(facts('Monitor', args)).toMatchObject({ label: 'Monitored', state: 'done', target: 'pnpm dev', mono: true });
-    expect(facts('Monitor', { ...args, description: 'the build' })).toMatchObject({ target: 'the build', mono: false });
+    expect(facts('Monitor', { ...args, description: 'the build' })).toMatchObject({ target: 'the build', mono: true });
   });
 
   it('tells the three worktree operations apart', () => {

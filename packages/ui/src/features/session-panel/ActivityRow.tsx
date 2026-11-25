@@ -4,18 +4,9 @@
  * action; only a workflow unfolds, because its phases show nowhere else.
  */
 import { useRef, useState, type ReactNode } from 'react';
-import {
-  Activity,
-  Binoculars,
-  Bot,
-  Clock3,
-  LocateFixed,
-  Route,
-  Square,
-  SquareTerminal,
-  TextAlignStart,
-} from 'lucide-react';
+import { Activity, Binoculars, Bot, Clock3, LocateFixed, Square, SquareTerminal, TextAlignStart } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { RouteIcon } from '@/components/ui/glyphs';
 import type { ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Button } from '@/components/ui/button';
@@ -30,7 +21,7 @@ import { useFocusLoss, useFocusReturn } from './use-row-focus';
 import { WorkflowPhases } from './WorkflowPhases';
 
 export const ACTIVITY_ICON: Record<ActivityKind, LucideIcon> = {
-  workflow: Route,
+  workflow: RouteIcon,
   subagent: Bot,
   delegated: BotFilled,
   monitor: Binoculars,

@@ -22,8 +22,8 @@ function useColumnTitle(): string {
 export function ChatColumnHeader() {
   const title = useColumnTitle();
   return (
-    <div data-testid="chat-header" className="flex h-11 shrink-0 items-center gap-2 pr-2 pl-4">
-      <span data-testid="chat-header-title" className="min-w-0 flex-initial truncate text-sm font-semibold">
+    <div data-testid="chat-header" className="flex h-11 shrink-0 items-center gap-3 pr-3 pl-4">
+      <span data-testid="chat-header-title" className="min-w-0 flex-initial truncate text-title font-semibold">
         {title}
       </span>
       <ChatHeaderParentLink />

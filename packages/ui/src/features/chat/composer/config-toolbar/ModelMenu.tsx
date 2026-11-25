@@ -17,7 +17,7 @@ import type {
   ProviderConfig,
 } from '@qlan-ro/mainframe-types';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { displayEffort, effortOptions, EFFORT_META } from '@/lib/model-tuning';
 import { ModelMenuRow } from './ModelMenuRow';
 import { ModelTuning } from './ModelTuning';
@@ -96,7 +96,7 @@ function CollapsibleModelSection({ label, testId, containsCurrent, children }: M
     <Collapsible open={expanded} onOpenChange={setExpanded}>
       <CollapsibleTrigger
         data-testid={testId}
-        className="flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:focus-line-inset"
+        className="flex w-full items-center gap-1 rounded-sm px-2.5 py-1.5 text-meta/[1.45] font-medium text-muted-foreground hover:text-foreground focus-visible:focus-line-inset"
       >
         {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
         {label}
@@ -134,7 +134,7 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
       {!props.hideProviderSwitch && (
         <>
           <div
-            className="p-1 pb-1.5"
+            className="px-1.5 pt-1 pb-1.5"
             onKeyDown={(e) => {
               if (e.key !== 'Escape') e.stopPropagation();
             }}
@@ -150,16 +150,15 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
               }}
             />
             {locked && props.switchBlockedReason && (
-              <p data-testid="composer-provider-blocked" className="px-1 pt-1.5 text-xs text-muted-foreground">
+              <p data-testid="composer-provider-blocked" className="px-1 pt-1.5 text-meta/[1.45] text-muted-foreground">
                 {props.switchBlockedReason}
               </p>
             )}
           </div>
-          <DropdownMenuSeparator />
         </>
       )}
       {(showCurrentModel || runningModel) && runningModel?.id !== model?.id && (
-        <DropdownMenuLabel data-testid="composer-model-current" className="text-xs text-muted-foreground">
+        <DropdownMenuLabel data-testid="composer-model-current">
           Current: {runningModel?.label ?? 'unavailable'}
           <br />
           Selected: {model?.label ?? 'Use CLI setting'}

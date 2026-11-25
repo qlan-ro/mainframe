@@ -48,7 +48,7 @@ export function QuickTaskDialog({ port, projectId, projects, filterProjectId, on
         <DialogHeader className={projectId === null ? undefined : 'shrink-0 border-b px-4 py-3 pr-12'}>
           <div className="flex min-w-0 items-center gap-2">
             <DialogTitle className="flex shrink-0 items-center gap-1.5">
-              <Zap size={13} className="text-primary shrink-0" aria-hidden />
+              <Zap size={13} className="text-accent-ink shrink-0" aria-hidden />
               Quick Task
             </DialogTitle>
             {projectId !== null && (

@@ -58,9 +58,9 @@ export function Sidebar({
       style={{ width: collapsed ? collapsedWidth(collapsible) : 'var(--sidebar-width)', ...style }}
       {...props}
     >
-      {/* Pinned to the panel's full width so the contents don't reflow while it
-          animates shut — they slide out of the clip instead. */}
-      <div className="flex h-full w-(--sidebar-width) min-w-(--sidebar-width) flex-col group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:min-w-0">
+      {/* Pinned to the panel's full width, less its hairline, so the contents don't
+          reflow while it animates shut — they slide out of the clip instead. */}
+      <div className="flex h-full w-[calc(var(--sidebar-width)-1px)] min-w-[calc(var(--sidebar-width)-1px)] flex-col group-data-[collapsible=icon]:w-auto group-data-[collapsible=icon]:min-w-0">
         {children}
       </div>
     </div>

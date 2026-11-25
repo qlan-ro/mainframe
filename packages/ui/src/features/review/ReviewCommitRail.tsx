@@ -87,7 +87,7 @@ export function ReviewCommitRail({
           {unviewedCount > 0 && (
             <Alert
               data-testid="review-commit-unviewed-warning"
-              className="mb-3 border-warning/30 bg-warning/10 px-2.5 py-2"
+              className="mb-3 border-warning-border bg-warning-surface px-2.5 py-2"
             >
               <TriangleAlert className="text-warning" aria-hidden />
               <AlertDescription className="text-xs leading-snug text-foreground">

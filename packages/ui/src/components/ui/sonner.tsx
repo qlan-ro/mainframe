@@ -24,8 +24,8 @@ function Toaster({ ...props }: ToasterProps) {
       toastOptions={{
         classNames: {
           toast: 'text-popover-foreground',
-          title: 'truncate text-sm font-medium text-popover-foreground',
-          description: 'text-xs',
+          title: 'truncate text-small/[1.45]! font-normal! text-popover-foreground',
+          description: 'text-meta/[1.45]!',
         },
       }}
       style={

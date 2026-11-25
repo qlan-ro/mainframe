@@ -94,7 +94,7 @@ export function BranchListView({
           so their busy spinners stay visible; New branch closes it and opens
           the dialog. */}
       <DropdownMenuItem data-testid="git-new-branch" onSelect={onNewBranch}>
-        <Plus className="size-3.5 text-primary" />
+        <Plus className="size-3.5 text-accent-ink" />
         <span className="min-w-0 flex-1 truncate">{search ? `Create branch "${search}"` : 'New branch…'}</span>
       </DropdownMenuItem>
       <DropdownMenuItem

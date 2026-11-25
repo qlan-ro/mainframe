@@ -15,9 +15,9 @@ const LABELS: Record<SessionTabStatus, string | undefined> = {
 };
 
 const DOTS: Record<SessionTabStatus, string> = {
-  waiting: 'border-[1.5px] border-warning',
-  working: 'bg-primary',
-  idle: 'bg-muted-foreground/50',
+  waiting: 'border-[1.5px] border-warning-dot',
+  working: 'bg-live',
+  idle: 'bg-faint',
 };
 
 export function SessionTabDot({ id, status }: { id: string; status: SessionTabStatus }) {

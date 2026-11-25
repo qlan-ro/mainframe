@@ -32,7 +32,7 @@ function pairedAffordance(pair: Pair): { icon: React.ReactNode; hint: string } {
   switch (pair.pairState) {
     case 'overwritten':
       return {
-        icon: <span className="size-1.5 rounded-full bg-warning shrink-0" aria-hidden />,
+        icon: <span className="size-1.5 rounded-full bg-warning-dot shrink-0" aria-hidden />,
         hint: 'Overwritten in the last run — open the report',
       };
     case 'errored':

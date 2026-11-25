@@ -104,7 +104,7 @@ function ComposerInputField({
       placeholder={placeholder}
       rows={1}
       autoFocus
-      className="relative block w-full resize-none overflow-hidden bg-transparent px-1 pt-0.5 pb-2 font-sans text-[0.875rem] leading-[1.3125rem] text-transparent caret-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      className="relative block w-full resize-none overflow-hidden bg-transparent px-1 pt-0.5 pb-2 font-sans text-composer-input text-transparent caret-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
       {...triggerAria}
     />
   );
@@ -204,12 +204,12 @@ function ComposerCard({
         // that content rather than letting it paint past the card's border.
         // `z-1` keeps it over the strip tucked behind its top edge. The focus
         // line is the FIELD's: a focused toolbar control draws its own.
-        className="relative z-1 min-h-0 min-w-60 overflow-y-auto rounded-2xl border border-input bg-card shadow-sm transition-colors has-[textarea:focus-visible]:focus-line-inset"
+        className="relative z-1 min-h-0 min-w-60 overflow-y-auto rounded-[16px] bg-card shadow-card transition-colors has-[textarea:focus-visible]:focus-line-inset"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"
           className={cn(
-            'rounded-2xl px-2.5 pt-2.5 pb-2 transition-colors @max-[400px]/composer:px-2 @max-[400px]/composer:pt-2 @max-[400px]/composer:pb-1.5',
+            'rounded-[16px] px-2.5 pt-2.5 pb-2 transition-colors @max-[400px]/composer:px-2 @max-[400px]/composer:pt-2 @max-[400px]/composer:pb-1.5',
             '[&[data-dragging]]:ring-2 [&[data-dragging]]:ring-primary [&[data-dragging]]:ring-offset-1',
             '[&[data-dragging]]:bg-sidebar-selection',
           )}
@@ -232,13 +232,13 @@ function ComposerCard({
 
           <div
             data-testid="chat-composer-toolbar"
-            className="flex min-w-0 items-center gap-0.5 @max-[320px]/composer:flex-wrap @max-[320px]/composer:gap-y-1"
+            className="flex min-w-0 items-center gap-0.5 @max-[320px]/composer:flex-wrap @max-[320px]/composer:gap-x-0 @max-[320px]/composer:gap-y-2"
           >
             <ComposerAddMenu textareaRef={textareaRef} />
             <ComposerToolbar ref={toolbarRef} variant={variant} />
             <span className="min-w-0 flex-1" aria-hidden />
             {/* Below 320px this group wraps onto its own row, so nothing truncates. */}
-            <div className="flex shrink-0 items-center gap-1.5 @max-[320px]/composer:ml-auto">
+            <div className="flex shrink-0 items-center gap-0.5 @max-[320px]/composer:ml-auto @max-[320px]/composer:gap-0">
               <ContextRing />
               <SendControls submit={submit} />
             </div>

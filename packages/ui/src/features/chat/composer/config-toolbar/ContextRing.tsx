@@ -6,6 +6,7 @@
  */
 
 import { useAui } from '@assistant-ui/react';
+import { Minimize2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,8 +63,8 @@ export function ContextRing() {
       className={toolbarButton(
         false,
         cn(
-          'shrink-0 px-1.5 text-xs font-medium tabular-nums @max-[320px]/composer:px-1',
-          full ? 'text-destructive' : percent >= WARN_AT ? 'text-warning' : 'text-muted-foreground',
+          'shrink-0 px-1.5 text-meta/[1.45] font-medium tabular-nums @max-[320px]/composer:px-1',
+          full ? 'text-crit' : percent >= WARN_AT ? 'text-warning' : 'text-muted-foreground',
         ),
       )}
     >
@@ -79,15 +80,20 @@ export function ContextRing() {
       <ComposerHint label={`${label} · Click to compact`}>
         <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
       </ComposerHint>
-      <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-56">
+      <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-auto min-w-67.5">
         <DropdownMenuItem
           data-testid="composer-context-compact"
           disabled={!canCompact}
           onSelect={() => aui.thread.append({ role: 'user', content: [{ type: 'text', text: COMPACT_COMMAND }] })}
         >
+          <Minimize2 />
           <span className="flex flex-col">
             <span>Compact conversation</span>
-            {!canCompact && <span className="text-xs text-muted-foreground">This agent has no compact command</span>}
+            {!canCompact && (
+              <span className="text-meta/[1.35] font-normal text-muted-foreground">
+                This agent has no compact command
+              </span>
+            )}
           </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
