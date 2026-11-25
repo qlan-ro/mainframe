@@ -15,16 +15,18 @@ const RETRY_MAX_MS = 30_000;
 /**
  * Which call started each running background task: only the daemon's list says.
  * Asked again while it fails or doesn't name a running task yet, since an agent
- * nobody placed holds every turn open.
+ * nobody placed holds every turn open; and once more when the last one ends, for
+ * how it ended. `launched`: an agent was started, whose call says only that.
  */
 function useListedTasks(
   chatId: string | undefined,
   live: Readonly<Record<string, BackgroundActivityTask>>,
+  launched: boolean,
 ): readonly BackgroundTask[] {
   const [listed, setListed] = useState<readonly BackgroundTask[]>([]);
   const ids = Object.keys(live).sort().join(' ');
   useEffect(() => {
-    if (!chatId || !ids || chatId.startsWith('__LOCALID_')) return;
+    if (!chatId || (!ids && !launched) || chatId.startsWith('__LOCALID_')) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let wait = RETRY_MS;
@@ -38,7 +40,7 @@ function useListedTasks(
         if (!active) return;
         setListed(tasks);
         const named = new Set(tasks.map((task) => task.id));
-        if (ids.split(' ').some((id) => !named.has(id))) retry();
+        if (ids && ids.split(' ').some((id) => !named.has(id))) retry();
       } catch (error) {
         console.warn('[transcript] background task list failed', error);
         if (active) retry();
@@ -49,7 +51,7 @@ function useListedTasks(
       active = false;
       clearTimeout(timer);
     };
-  }, [chatId, ids]);
+  }, [chatId, ids, launched]);
   return listed;
 }
 
@@ -57,7 +59,11 @@ function useListedTasks(
 export function useLiveChildren(model: TurnModel, chatId: string | undefined): LiveChildren {
   const sessions = useSessionItems();
   const live = useChatExtrasSelector((extras) => extras?.state.backgroundTasks) ?? NO_TASKS;
-  const listed = useListedTasks(chatId, live);
+  const launched = useMemo(
+    () => [...model.turns.values()].some((turn) => turn.children.some((child) => child.launched)),
+    [model],
+  );
+  const listed = useListedTasks(chatId, live, launched);
   const next = useMemo(() => liveChildren(model, { sessions, live, listed }), [model, sessions, live, listed]);
   const [kept, setKept] = useState(next);
   if (kept !== next && !sameLive(kept, next)) setKept(next);

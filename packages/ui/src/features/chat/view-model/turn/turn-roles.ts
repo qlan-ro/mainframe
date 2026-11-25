@@ -4,7 +4,7 @@ import { resolveResultText } from '../../tools/shared/result';
 import { parseWorkflowLaunch } from '../../workflow/workflow-progress';
 import { isChildWork, isMarkerTool, toolKind } from './tool-kind';
 import { settledStatus } from './tool-status';
-import { retryKey } from './tool-values';
+import { agentLaunched, launchedOnly, retryKey } from './tool-values';
 import { isMarkerUnit, isTextUnit } from './turn-units';
 import type { ToolPart, TurnChild, TurnUnit } from './types';
 
@@ -30,7 +30,10 @@ export function answerUnits(units: readonly TurnUnit[], running: boolean): Reado
   return [...answer].some((unit) => unit.part.type === 'text') || running ? answer : new Set();
 }
 
-/** A failed step is retried when a later step ran the same tool on the same target and succeeded (T1b). */
+/**
+ * A failed step is retried when a later step made the same call and it succeeded
+ * (T1b). One that only started in the background proves nothing.
+ */
 export function failedSteps(
   tools: readonly ToolPart[],
   pending: ReadonlySet<string>,
@@ -42,7 +45,7 @@ export function failedSteps(
   for (let index = tools.length - 1; index >= 0; index--) {
     const tool = tools[index]!;
     const status = settledStatus(tool, pending, live);
-    if (status === 'success') recovered.add(retryKey(tool));
+    if (status === 'success' && !launchedOnly(tool)) recovered.add(retryKey(tool));
     else if (status === 'failed') (recovered.has(retryKey(tool)) ? retried : failed).unshift(tool.toolCallId);
   }
   return { failed, retried };
@@ -68,7 +71,7 @@ function childOf(tool: ToolPart, pending: ReadonlySet<string>, live: boolean): T
     const launch = parseDelegateResult(text);
     return { ...base, taskChatId: launch?.childChatId, taskId: launch?.taskId, taskStatus: launch?.status };
   }
-  return base;
+  return agentLaunched(text) ? { ...base, launched: true } : base;
 }
 
 export function turnChildren(tools: readonly ToolPart[], pending: ReadonlySet<string>, live: boolean): TurnChild[] {

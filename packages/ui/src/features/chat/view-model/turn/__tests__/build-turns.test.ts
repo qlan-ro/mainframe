@@ -5,6 +5,13 @@ import { TurnCache } from '../turn-cache';
 import type { TurnModel, TurnScope, TurnUnit } from '../types';
 import { assistant, bash, call, presented, scope, sources, system, text, thought, user } from './fixtures';
 
+const timed = (totalStreamTime: number, mainframe: object) => ({
+  metadata: {
+    custom: { mainframe },
+    timing: { streamStartTime: 0, totalStreamTime, totalChunks: 0, toolCallCount: 0 },
+  },
+});
+
 const NOW = 1_700_000_100_000;
 const build = (messages: ThreadMessage[], options: Partial<TurnScope> = {}, cache?: TurnCache) =>
   buildTurns(messages, scope(options), cache, NOW);
@@ -246,6 +253,57 @@ describe('a different call is no retry', () => {
     expect(turn.retried).toEqual([]);
   });
 
+  it.each([
+    [
+      'a command that only started in the background',
+      bash('', { args: { command: 'vitest' }, ...fail, toolCallId: 'bad' }),
+      bash('', {
+        args: { command: 'vitest', run_in_background: true },
+        result: 'Command running in background with ID: b1',
+      }),
+    ],
+    [
+      'a command the CLI moved to the background by itself',
+      bash('vitest', { ...fail, toolCallId: 'bad' }),
+      bash('vitest', { result: 'Command did not complete within 120s and was moved to the background' }),
+    ],
+    [
+      'an agent that only started in the background',
+      call('Task', { prompt: 'x' }, { ...fail, toolCallId: 'bad' }),
+      call('Task', { prompt: 'x' }, { result: 'Async agent launched successfully.' }),
+    ],
+    [
+      'an MCP call with another description',
+      call('mcp__jira__create', { title: 'x', description: 'a' }, { ...fail, toolCallId: 'bad' }),
+      call('mcp__jira__create', { title: 'x', description: 'b' }),
+    ],
+    [
+      'an MCP call with another timeout',
+      call('mcp__db__query', { sql: 'x', timeout: 1 }, { ...fail, toolCallId: 'bad' }),
+      call('mcp__db__query', { sql: 'x', timeout: 60 }),
+    ],
+    [
+      'an unknown call with another description',
+      call('Publish', { description: 'a' }, { ...fail, toolCallId: 'bad' }),
+      call('Publish', { description: 'b' }),
+    ],
+    [
+      'an unknown call with another timeout',
+      call('Wait', { for: 'x', timeout: 1 }, { ...fail, toolCallId: 'bad' }),
+      call('Wait', { for: 'x', timeout: 2 }),
+    ],
+  ])('%s does not', (_name, bad, good) => {
+    const turn = only(build([user('u1'), assistant('a1', [bad, good, text('ok')])]));
+    expect([turn.failed, turn.retried]).toEqual([['bad'], []]);
+  });
+  it.each([
+    ['in the foreground, after a launch that failed', { run_in_background: true }, {}],
+    ['with another timeout', { timeout: 1 }, { timeout: 60_000 }],
+  ])('the same command %s is', (_name, first, then) => {
+    const bad = bash('', { args: { command: 'vitest', ...first }, ...fail, toolCallId: 'bad' });
+    const good = bash('', { args: { command: 'vitest', ...then } });
+    expect(only(build([user('u1'), assistant('a1', [bad, good])])).retried).toEqual(['bad']);
+  });
   it('the same edit again is, whatever order its arguments came in', () => {
     const bad = call('Edit', { file_path: 'a', old_string: 'x', new_string: 'y' }, { ...fail, toolCallId: 'bad' });
     const good = call('Edit', { new_string: 'y', file_path: 'a', old_string: 'x' });
@@ -311,11 +369,16 @@ describe('a turn that waits on the viewer', () => {
     expect(roles(model, 'a1')).toEqual({ work: ['I will write it', 'Write'], markers: [], answer: [] });
   });
 
-  it('is the newest turn while the call itself has not arrived', () => {
+  it.each([
+    ['is the turn that runs while the call itself has not arrived', true, [false, true]],
+    // A background agent's request, whose call is in the history that isn't loaded.
+    ['is no turn when nothing runs: the newest one has finished', false, [false, false]],
+  ])('%s', (_name, isRunning, needsYou) => {
     const model = build([user('u1'), assistant('a1', [text('A')]), user('u2'), assistant('a2', [text('B')])], {
-      pendingToolIds: new Set(['not-here-yet']),
+      pendingToolIds: new Set(['not-here']),
+      isRunning,
     });
-    expect([...model.turns.values()].map((turn) => turn.needsYou)).toEqual([false, true]);
+    expect([...model.turns.values()].map((turn) => turn.needsYou)).toEqual(needsYou);
   });
 
   it('is not the newest turn when the request is a background agent’s of an earlier one', () => {
@@ -408,6 +471,50 @@ describe('messages another element stands for', () => {
   it('keeps a batch when any of its tasks has no card', () => {
     const model = build([user('u1'), assistant('a1', [card('t1')]), user('r1', `${result('t1')}\n${result('t2')}`)]);
     expect(model.absorbed.size).toBe(0);
+  });
+});
+
+describe('what the footer reads', () => {
+  it('takes the cost and the end of the turn from whichever message has them', () => {
+    const turn = only(
+      build([
+        user('u1'),
+        assistant('a1', [text('Done')], { cost: 0.25 }),
+        assistant('a2', [bash('git status')], {}, timed(2000, { cost: 0.5 })),
+      ]),
+    );
+    expect(turn).toMatchObject({ costUsd: 0.75, durationMs: 2000, lastMessageId: 'a2' });
+  });
+});
+
+describe('a turn’s standing is part of what its rows read', () => {
+  const going = { result: undefined, providerMetadata: { mainframe: { acpStatus: 'in_progress' } } };
+  const codex = presented({ provider: 'codex', state: 'running' });
+
+  it('changes when the run ends, though nothing else of the turn does', () => {
+    const cache = new TurnCache();
+    // Its only step is a marker, so neither its summary nor its children say anything.
+    const messages = [
+      user('u1'),
+      assistant('a1', [call('Monitor', {}, going), text('Watching')], { partSources: sources(2, codex) }),
+      user('u2'),
+    ];
+    expect(only(build(messages, { isRunning: true }, cache)).live).toBe(true);
+    expect(only(build(messages, { isRunning: false }, cache)).live).toBe(false);
+  });
+
+  it('changes when the request turns out to be another turn’s', () => {
+    const cache = new TurnCache();
+    const agent = (messages: ThreadMessage[]) =>
+      call('Task', {}, { toolCallId: 'agent', messages, result: 'Async agent launched successfully.' } as never);
+    const latest = [user('u2'), assistant('a2', [call('ExitPlanMode', {}, going)])];
+    const thread = (nested: ThreadMessage[]) => [user('u1'), assistant('a1', [agent(nested)]), ...latest];
+    const options = { isRunning: true, pendingToolIds: new Set(['write']) };
+    const needsYou = (nested: ThreadMessage[]) =>
+      [...build(thread(nested), options, cache).turns.values()].map((turn) => turn.needsYou);
+    expect(needsYou([])).toEqual([false, true]);
+    // The request turns out to be the background agent's.
+    expect(needsYou([assistant('n', [call('Write', {}, { ...going, toolCallId: 'write' })])])).toEqual([false, false]);
   });
 });
 

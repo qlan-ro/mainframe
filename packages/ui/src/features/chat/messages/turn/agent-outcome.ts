@@ -9,7 +9,3 @@ export function agentOutcome(status: RowStatus): AgentOutcome {
   if (status === 'stopped' || status === 'interrupted' || status === 'declined') return 'stopped';
   return status === 'success' || status === 'unknown' ? 'done' : 'going';
 }
-
-/** What the CLI answers when it starts an agent in the background: not a result. */
-export const agentLaunched = (result: string): boolean =>
-  /^(?:Async agent launched|Agent (?:is )?(?:running|started))/i.test(result);

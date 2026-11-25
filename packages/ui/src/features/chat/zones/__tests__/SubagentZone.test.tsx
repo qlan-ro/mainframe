@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { controller, childMessages } = vi.hoisted(() => ({
+const { controller, childMessages, call } = vi.hoisted(() => ({
   controller: {
     load: vi.fn(async () => undefined),
     loadEarlier: vi.fn(async () => true),
@@ -11,6 +11,7 @@ const { controller, childMessages } = vi.hoisted(() => ({
     holdActive: vi.fn(() => vi.fn()),
   },
   childMessages: { current: [] as ThreadMessage[] },
+  call: { current: {} as object },
 }));
 
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
@@ -31,7 +32,7 @@ vi.mock('../../runtime/use-native-thread-messages', () => ({
     {
       id: 'parent-message',
       role: 'assistant',
-      content: [{ type: 'tool-call', toolCallId: 'task-1', messages: childMessages.current }],
+      content: [{ type: 'tool-call', toolCallId: 'task-1', messages: childMessages.current, ...call.current }],
     },
   ],
 }));
@@ -40,8 +41,8 @@ vi.mock('../../messages/turn/transcript-scope', () => ({
   useTranscriptScope: () => ({ rootThreadId: '', ancestors: [], pendingToolIds: new Set() }),
 }));
 vi.mock('../../messages/turn/AgentSteps', () => ({
-  AgentSteps: ({ messages, messageId }: { messages: readonly ThreadMessage[]; messageId: string }) => (
-    <div data-testid="transcript-stub" data-message={messageId}>
+  AgentSteps: ({ messages, messageId, outcome, result }: StubProps) => (
+    <div data-testid="transcript-stub" data-message={messageId} data-outcome={outcome} data-result={result}>
       {messages.map((message) => message.id).join(',')}
     </div>
   ),
@@ -49,6 +50,13 @@ vi.mock('../../messages/turn/AgentSteps', () => ({
 vi.mock('@/components/ui/hint', () => ({ Hint: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 
 import { SubagentZone } from '../SubagentZone';
+
+interface StubProps {
+  messages: readonly ThreadMessage[];
+  messageId: string;
+  outcome: string;
+  result: string;
+}
 
 const said = (id: string) =>
   ({ id, role: 'assistant', content: [{ type: 'text', text: id }] }) as unknown as ThreadMessage;
@@ -92,7 +100,7 @@ it('loads the complete subagent transcript when its row was supplied as context'
 });
 
 it('finds the message of a sub-agent opened before its call was loaded', () => {
-  childMessages.current = [{ id: 'first' } as ThreadMessage];
+  childMessages.current = [said('first')];
   render(<SubagentZone subagent={{ ...subagent, messageId: undefined }} grow={0.5} onClose={vi.fn()} />);
   expect(screen.getByTestId('transcript-stub')).toHaveAttribute('data-message', 'parent-message');
 });
@@ -108,4 +116,19 @@ it('loads the history for a sub-agent whose call is not in it', async () => {
   );
   await waitFor(() => expect(controller.loadEarlier).toHaveBeenCalledWith('task-gone'));
   expect(screen.queryByText('Not in this transcript')).toBeNull();
+});
+
+it.each([
+  ['an agent that came back', { result: 'All good.' }, 'done', 'All good.'],
+  ['one that failed', { result: 'Boom', isError: true }, 'failed', 'Boom'],
+  // Cut short: nothing runs, and the call has no outcome.
+  ['one a killed session left', { providerMetadata: { mainframe: { acpStatus: 'in_progress' } } }, 'stopped', ''],
+  ['one that was only launched', { result: 'Async agent launched successfully.' }, 'done', ''],
+])('tells the steps how %s ended', (_who, over, outcome, result) => {
+  childMessages.current = [said('first')];
+  call.current = over;
+  render(<SubagentZone subagent={subagent} grow={0.5} onClose={vi.fn()} />);
+  expect(screen.getByTestId('transcript-stub')).toHaveAttribute('data-outcome', outcome);
+  expect(screen.getByTestId('transcript-stub')).toHaveAttribute('data-result', result);
+  call.current = {};
 });

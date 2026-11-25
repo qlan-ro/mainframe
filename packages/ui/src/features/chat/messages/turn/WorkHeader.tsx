@@ -118,7 +118,7 @@ export function WorkHeader({ turn }: { turn: Turn }) {
   const live = useTurnSelector((state) => state.children, NO_CHILDREN);
   const { rowRef, beforeToggle } = useRowAnchor(open);
   useLayoutEffect(() => register(turn.key, beforeToggle), [register, turn.key, beforeToggle]);
-  const going = turn.children.some((child) => childGoing(child, live));
+  const going = turn.unfinished || turn.children.some((child) => childGoing(child, live));
   const counts = childCounts(turn.children, live);
   const failed = failedSteps(turn, live);
   const word = stateWord(turn, going);

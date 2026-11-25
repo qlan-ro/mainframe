@@ -79,8 +79,13 @@ export function toolTarget(part: ToolPart): ToolTarget {
   }
 }
 
-/** Arguments that don't change what a call does. */
+/**
+ * Arguments that don't change what a command or an agent does. Any other call is
+ * compared whole: what `timeout` or `description` mean to a tool we don't know,
+ * nobody says.
+ */
 const INCIDENTAL: ReadonlySet<string> = new Set(['description', 'timeout', 'run_in_background']);
+const labelled = (part: ToolPart) => ['shell', 'subagent'].includes(toolKind(part.toolName));
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -97,7 +102,7 @@ function canonical(value: unknown): unknown {
  * workflow, never passes for a retry. A call that names nothing matches no other.
  */
 export function retryKey(part: ToolPart): string {
-  const args = Object.entries(record(part.args) ?? {}).filter(([key]) => !INCIDENTAL.has(key));
+  const args = Object.entries(record(part.args) ?? {}).filter(([key]) => !labelled(part) || !INCIDENTAL.has(key));
   if (!args.length) return JSON.stringify([part.toolName, part.toolCallId]);
   return JSON.stringify([part.toolName, canonical(Object.fromEntries(args))]);
 }
@@ -114,6 +119,17 @@ export function runsInBackground(part: ToolPart): boolean {
   return (
     record(part.args)?.run_in_background === true || BACKGROUNDED.test(extractResultContent(part.result).trimStart())
   );
+}
+
+/** What the CLI answers when it starts an agent in the background: not a result. */
+export const agentLaunched = (result: string): boolean =>
+  /^(?:Async agent launched|Agent (?:is )?(?:running|started))/i.test(result);
+
+/** A call that returned once its work had started: it says nothing of how that went. */
+export function launchedOnly(part: ToolPart): boolean {
+  const kind = toolKind(part.toolName);
+  if (kind === 'shell') return runsInBackground(part);
+  return kind === 'subagent' && agentLaunched(resolveResultText(part.result).text);
 }
 
 /** The exit code a command reported. A call that did not fail exited 0; a failed one states its code or stays unknown. */

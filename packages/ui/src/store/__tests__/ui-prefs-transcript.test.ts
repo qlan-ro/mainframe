@@ -40,12 +40,34 @@ it('persists both choices across a fresh module', async () => {
   expect((await reloadStore()).getState()).toMatchObject(chosen);
 });
 
-it.each([7, 8])('defaults both in v%i storage without losing preferences', async (version) => {
-  // `transcriptMode` is the retired cards-or-rows choice: it no longer decides anything.
-  const state = { ...savedPreferences, transcriptMode: 'verbose' };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, version }));
+/** What main's partializer writes for `transcriptMode`: always, so `verbose` is the default too. */
+it.each([
+  [7, { transcriptMode: 'verbose' }, 'open'],
+  [8, { transcriptMode: 'verbose' }, 'open'],
+  [7, { transcriptMode: 'compact' }, 'fold'],
+  [8, { transcriptMode: 'compact' }, 'fold'],
+  [7, {}, 'fold'],
+  [8, {}, 'fold'],
+  // The new choice, once made, wins over what an older build may write beside it.
+  [8, { transcriptMode: 'verbose', finishedWork: 'fold' }, 'fold'],
+  [8, { transcriptMode: 'compact', finishedWork: 'open' }, 'open'],
+])('carries the retired choice of v%i storage over: %o starts on %s', async (version, stored, finishedWork) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { ...savedPreferences, ...stored }, version }));
   const store = await reloadStore();
-  expect(store.getState()).toMatchObject({ ...savedPreferences, finishedWork: 'fold', openLinksIn: 'workspace' });
+  expect(store.getState()).toMatchObject({ ...savedPreferences, finishedWork, openLinksIn: 'workspace' });
+  expect(store.getState()).not.toHaveProperty('transcriptMode');
+  // The next write keeps the choice, without the field it came from.
+  store.getState().setSidebarWidth(330);
+  const written = JSON.parse(localStorage.getItem(STORAGE_KEY)!).state;
+  expect(written).toMatchObject({ finishedWork });
+  expect(written).not.toHaveProperty('transcriptMode');
+  expect((await reloadStore()).getState()).toMatchObject({ finishedWork });
+});
+
+it('carries it over from storage older than v7', async () => {
+  const state = { sidebarWidth: 320, transcriptMode: 'verbose' };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, version: 4 }));
+  expect((await reloadStore()).getState()).toMatchObject({ sidebarWidth: 320, finishedWork: 'open' });
 });
 
 const invalidValues = ['invalid', '', null, { mode: 'open' }, ['open'], false, 0];

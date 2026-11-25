@@ -135,25 +135,6 @@ div.mf-tr-del {
   text-decoration-color: currentColor;
 }
 
-/* A jump from the session panel or a count marks the row it lands on. */
-@keyframes mf-activity-flash {
-  from {
-    background: color-mix(in srgb, var(--focus) 16%, transparent);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus) 60%, transparent);
-  }
-}
-[data-activity-flash] {
-  border-radius: 6px;
-  animation: mf-activity-flash 2200ms ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  /* Still marked, without the fade. */
-  [data-activity-flash] {
-    animation: none;
-    box-shadow: 0 0 0 1px var(--focus);
-  }
-}
-
 /* The footer keeps its height and shows on hover or keyboard focus. */
 .mf-tr-footer {
   opacity: 0;

@@ -162,6 +162,8 @@ test.describe('§session-panel — jumps in a windowed session', () => {
 
   test('a row taller than the viewport lands on its top, with focus on it', async () => {
     const { page } = app;
+    // A row's body scrolls in itself past 384px, so it takes a short window.
+    await page.setViewportSize({ width: DOCKED.width, height: 400 });
     await row(page, 'recent-monitor').click();
     const landed = target(page, 'window-tool-244-1');
     await expect(landed).toHaveAttribute('data-activity-flash', '', { timeout: 10_000 });

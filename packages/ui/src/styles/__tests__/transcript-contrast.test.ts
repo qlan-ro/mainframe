@@ -39,6 +39,14 @@ function tintShare(selector: string): number {
   return Number(share) / 100;
 }
 
+/** The share of `--muted` a row's hover fills with, as its component states it. */
+function hoverShare(component: string): number {
+  const source = readFileSync(new URL(`../../features/chat/messages/turn/${component}.tsx`, import.meta.url), 'utf8');
+  const covers = [...source.matchAll(/absolute inset-0[^'"]*hover:bg-muted(?:\/(\d+))?(?=[ '"])/g)];
+  if (covers.length !== 1) throw new Error(`${component} has ${covers.length} hover fills`);
+  return Number(covers[0]![1] ?? 100) / 100;
+}
+
 const CSS = readFileSync(new URL('../../features/chat/transcript.css', import.meta.url), 'utf8');
 
 it('re-points the app’s inks on every surface that tints its ground', () => {
@@ -50,8 +58,11 @@ it('re-points the app’s inks on every surface that tints its ground', () => {
 });
 
 it('marks the row a jump lands on, and still does without motion', () => {
-  expect(CSS).toMatch(/\[data-activity-flash\] \{[^}]*animation: mf-activity-flash 2200ms/);
-  expect(CSS).toMatch(/prefers-reduced-motion: reduce\) \{[^@]*\[data-activity-flash\] \{[^}]*box-shadow/);
+  const app = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
+  // One rule, the session panel's: a second one here would fight it over the same name.
+  expect(CSS).not.toContain('mf-activity-flash');
+  expect(app).toMatch(/\[data-activity-flash\] \{[^}]*background-color[^}]*animation: mf-activity-flash 2\.2s/);
+  expect(app).toMatch(/prefers-reduced-motion: reduce\) \{\s*\[data-activity-flash\] \{\s*animation: none;/);
 });
 
 describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (theme) => {
@@ -59,8 +70,6 @@ describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (them
   const background = color('--background');
   const grounds = { thread: background, card: color('--card') };
   const bubble = over(color('--muted'), background);
-  // A row's hover fill (`hover:bg-muted/60`).
-  const hovered = over(tint('--muted', 0.6), background);
   const codeOn = (ground: RGBA) => over(color('--mf-tr-code'), ground);
 
   const check = (ink: string, surface: string, ground: RGBA) =>
@@ -81,7 +90,9 @@ describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (them
   it('reads on the thread and on a card', () => {
     for (const [name, ground] of Object.entries(grounds)) all(INKS, name, ground);
   });
-  it('reads on a hovered row', () => all(INKS, 'a hovered row', hovered));
+  it.each(['RowDisclosure', 'WorkHeader'])('reads on a hovered row of %s', (component) => {
+    all(INKS, `a hovered ${component}`, over(tint('--muted', hoverShare(component)), background));
+  });
   it('reads in the user’s bubble', () => all(['--foreground', '--mf-tr-muted', '--mf-tr-link'], 'the bubble', bubble));
 
   it('reads on a code surface', () => {

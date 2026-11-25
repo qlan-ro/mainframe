@@ -4,6 +4,8 @@ import { AlertTriangleIcon, Loader2Icon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/chat-extras';
+import { messageCount } from '../view-model/placeholder';
+
 export function LoadErrorBanner() {
   const extras = useChatExtras();
   if (extras?.state.loadState.type !== 'error') return null;
@@ -26,9 +28,10 @@ export function LoadErrorBanner() {
 export function ChatThreadLoadingSpinner() {
   const extras = useChatExtras();
   const threadId = useSideAwareThreadId();
-  const messageCount = useAuiState((s: { thread: { messages: readonly unknown[] } }) => s.thread.messages.length);
+  // assistant-ui's stand-in for the coming reply is no history.
+  const messages = useAuiState((s) => messageCount(s.thread.messages));
   const isDraft = threadId?.startsWith('__LOCALID_') === true;
-  if (extras?.state.loadState.type !== 'loading' || messageCount > 0 || isDraft) return null;
+  if (extras?.state.loadState.type !== 'loading' || messages > 0 || isDraft) return null;
   return (
     <div
       data-testid="chat-thread-loading"

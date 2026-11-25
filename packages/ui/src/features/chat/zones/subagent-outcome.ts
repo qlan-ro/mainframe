@@ -1,9 +1,10 @@
 /** How a sub-agent's work stands, for the zone that shows it alone: the turn that started it is not drawn there. Pure. */
 import type { ToolCallMessagePart } from '@assistant-ui/react';
 import type { ChatThreadState } from '../controller/chat-thread-state';
-import { agentLaunched, agentOutcome, type AgentOutcome } from '../messages/turn/agent-outcome';
+import { agentOutcome, type AgentOutcome } from '../messages/turn/agent-outcome';
 import { resolveResultText } from '../tools/shared';
 import { nestedPending } from '../view-model/turn/turn-roles';
+import { agentLaunched } from '../view-model/turn/tool-values';
 import { settledStatus } from '../view-model/turn/tool-status';
 import type { ToolPart } from '../view-model/turn/types';
 

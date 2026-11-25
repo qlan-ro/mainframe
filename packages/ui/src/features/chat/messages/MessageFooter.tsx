@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { formatTurnDuration } from '../format-step';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { MessageActionBar } from './MessageActionBar';
+import { useTurnSelector } from './turn/turn-context';
 
 function formatCostUsd(usd: number): string {
   if (usd < 0.0001) return '<$0.0001';
@@ -18,10 +19,21 @@ function formatCostUsd(usd: number): string {
 
 export const formatClock = (date: Date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
+/** What the turn took, which its provider may say on another of its messages. */
+function useTook(): { totalMs?: number; cost?: number } {
+  const id = useAuiState((s) => s.message.id);
+  const turn = useTurnSelector(({ model }) => {
+    const key = model.slices.get(id)?.turnKey;
+    return key === undefined ? undefined : model.turns.get(key);
+  }, undefined);
+  const ownMs = useMessageTiming()?.totalStreamTime;
+  const ownCost = useMainframeMeta().cost;
+  return { totalMs: turn?.durationMs ?? ownMs, cost: turn?.costUsd ?? ownCost };
+}
+
 export function MessageTime() {
   const createdAt = useAuiState((s) => s.message.createdAt as Date | undefined);
-  const totalMs = useMessageTiming()?.totalStreamTime;
-  const cost = useMainframeMeta().cost;
+  const { totalMs, cost } = useTook();
   if (!createdAt) return null;
   const date = createdAt.toLocaleString([], {
     weekday: 'short',
@@ -37,7 +49,9 @@ export function MessageTime() {
         <time
           dateTime={createdAt.toISOString()}
           data-testid="chat-message-timestamp"
-          className="mf-tr-meta px-1 text-muted-foreground tabular-nums"
+          // The date, duration and cost are in its tooltip, which focus opens too.
+          tabIndex={0}
+          className="mf-tr-meta rounded-md px-1 text-muted-foreground tabular-nums focus-visible:focus-line"
         >
           {formatClock(createdAt)}
         </time>

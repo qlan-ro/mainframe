@@ -9,6 +9,7 @@ import { useForkChat } from '@/features/sessions/use-fork-chat';
 import { useAdaptersStore } from '@/store/adapters';
 import { ActionIconButton } from './action-icon-button';
 import { assistantForkAvailability, assistantForkPoint, type AssistantForkPoint } from './assistant-fork-point';
+import { useTurnSelector } from './turn/turn-context';
 import { useIsNestedTranscript } from './nested-transcript-context';
 
 function forkBaseInput(custom: SessionCustom, adapter?: AdapterInfo): ForkBaseInput {
@@ -51,8 +52,16 @@ function ForkButton({
 
 export function AssistantForkAction() {
   const nested = useIsNestedTranscript();
-  const messageId = useAuiState((s) => s.message.id);
-  const messageStatus = useAuiState((s) => s.message.status?.type);
+  const ownId = useAuiState((s) => s.message.id);
+  // The footer can sit on an earlier message of the turn than its last: the fork keeps the whole turn.
+  const messageId = useTurnSelector(({ model }) => {
+    const key = model.slices.get(ownId)?.turnKey;
+    return (key === undefined ? undefined : model.turns.get(key)?.lastMessageId) ?? ownId;
+  }, ownId);
+  const messageStatus = useAuiState((s) => {
+    const end = messageId === s.message.id ? s.message : s.thread.messages.find(({ id }) => id === messageId);
+    return end?.status?.type;
+  });
   const hasMoreHistory = useChatExtrasSelector((extras) => extras?.state.historyWindow?.hasMore);
   const messages = useAuiState((s) => s.thread.messages);
   const threadRunning = useAuiState((s) => s.thread.isRunning);

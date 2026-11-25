@@ -85,3 +85,27 @@ it.each([
   fireEvent.click(screen.getByRole('button', { name: optionId === 'allow-once' ? 'Allow once' : 'Reject' }));
   expect(reply).toHaveBeenCalledWith(expect.objectContaining({ requestId: 'request' }), optionId);
 });
+
+it.each([
+  ['running', /^Waiting on you/],
+  ['cancelling', /^Waiting on you/],
+  // A background agent's request, whose call isn't loaded: the newest turn has finished.
+  ['idle', /^Finished/],
+] as const)('reads a request whose call is not here by the run, %s, not by the thread', (type, name) => {
+  const state = createChatThreadState('chat-fixture');
+  const extras = buildChatExtras({} as AcpChatController, 31415, {
+    ...state,
+    runState: { type },
+    interactions: { ...state.interactions, permissions: { request: entry } },
+  });
+  render(
+    <TurnFixture
+      rootId={`gate-${roots}`}
+      messages={[user('Hi'), assistant([bash('b', 'ls'), text('One moment')], 'a')]}
+      extras={extras}
+      isRunning={false}
+      pending={['guarded']}
+    />,
+  );
+  expect(header()).toHaveAccessibleName(name);
+});

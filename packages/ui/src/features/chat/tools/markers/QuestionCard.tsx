@@ -3,8 +3,9 @@
  * composer; what stays in the transcript is the record: the question, the
  * chosen answers, the note.
  */
-import { Check, MessageCircleQuestion } from 'lucide-react';
+import { Check, MessageCircleQuestion, Pencil } from 'lucide-react';
 import type { AskUserQuestionAnswer } from '@qlan-ro/mainframe-types';
+import { cn } from '@/lib/utils';
 import { useTranscriptScope, type TranscriptScope } from '../../messages/turn/transcript-scope';
 import { resolveResultText } from '../shared';
 import { settledStatus } from '../../view-model/turn/tool-status';
@@ -15,6 +16,7 @@ import { MarkerCard } from './MarkerPill';
 interface QuestionArg {
   question: string;
   header?: string;
+  options?: { label: string }[];
 }
 
 function answersOf(part: ToolPart): AskUserQuestionAnswer[] {
@@ -27,7 +29,32 @@ function questionsOf(part: ToolPart): QuestionArg[] {
   return Array.isArray(questions) ? (questions as QuestionArg[]) : [];
 }
 
-function Answer({ entry, header }: { entry: AskUserQuestionAnswer; header: string }) {
+/** A chosen option, or the viewer's own words, which the agent never offered. */
+function AnswerChip({ label, listed }: { label: string; listed: boolean }) {
+  return (
+    <span
+      data-testid="chat-ask-answer"
+      data-listed={listed}
+      title={listed ? undefined : 'Written by you'}
+      className={cn(
+        'inline-flex min-h-6 items-center gap-1.5 rounded-md border px-2',
+        listed ? 'border-border bg-muted' : 'border-dashed border-input',
+      )}
+    >
+      {listed ? (
+        <Check aria-hidden className="size-3.5 shrink-0 text-mf-tr-ok" />
+      ) : (
+        <Pencil aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+      )}
+      {!listed && <span className="sr-only">Written by you: </span>}
+      {label}
+    </span>
+  );
+}
+
+function Answer({ entry, question }: { entry: AskUserQuestionAnswer; question: QuestionArg | undefined }) {
+  const header = question?.header ?? 'Question';
+  const listed = (label: string) => question?.options?.some((option) => option.label === label) ?? true;
   return (
     <div role="group" aria-label={`Question, answered: ${entry.question}`} className="flex flex-col gap-1.5">
       <div data-testid="chat-ask-header" className="mf-tr-meta flex items-center gap-1.5 text-muted-foreground">
@@ -39,14 +66,7 @@ function Answer({ entry, header }: { entry: AskUserQuestionAnswer; header: strin
       </p>
       <div className="flex flex-wrap gap-1.5">
         {entry.answer.map((label) => (
-          <span
-            key={label}
-            data-testid="chat-ask-answer"
-            className="inline-flex min-h-6 items-center gap-1.5 rounded-md border border-border bg-muted px-2"
-          >
-            <Check aria-hidden className="size-3.5 shrink-0 text-mf-tr-ok" />
-            {label}
-          </span>
+          <AnswerChip key={label} label={label} listed={listed(label)} />
         ))}
       </div>
       {entry.notes && (
@@ -82,26 +102,34 @@ function unansweredState(part: ToolPart, scope: TranscriptScope): string {
   return status === 'running' || status === 'awaiting-approval' ? 'waiting for your answer' : 'stopped, not answered';
 }
 
+/** Each answer with the question it answers, and the questions left without one. */
+function matchAnswers(answers: readonly AskUserQuestionAnswer[], questions: readonly QuestionArg[]) {
+  const asked = (text: string) => questions.find(({ question }) => question === text);
+  // A question the CLI reworded is the one in its place, unless that one has its own answer.
+  const taken = new Set(answers.map((entry) => asked(entry.question)));
+  const answered = answers.map((entry, index) => {
+    const inPlace = taken.has(questions[index]) ? undefined : questions[index];
+    return { entry, question: asked(entry.question) ?? inPlace };
+  });
+  const matched = new Set(answered.map(({ question }) => question));
+  return { answered, open: questions.filter((question) => !matched.has(question)) };
+}
+
 export function QuestionCard({ part }: { part: ToolPart }) {
   const state = unansweredState(part, useTranscriptScope());
   const answers = answersOf(part);
-  const questions = questionsOf(part);
+  const { answered, open } = matchAnswers(answers, questionsOf(part));
   const reply = resolveResultText(part.result).text;
   return (
     <div data-activity-id={part.toolCallId} className="flex w-full justify-center">
       <MarkerCard testId="chat-ask-card">
         <div className="flex flex-col gap-3">
-          {answers.length > 0
-            ? answers.map((entry, index) => (
-                <Answer
-                  key={entry.question}
-                  entry={entry}
-                  header={
-                    (questions.find((q) => q.question === entry.question) ?? questions[index])?.header ?? 'Question'
-                  }
-                />
-              ))
-            : questions.map((question) => <Unanswered key={question.question} question={question} state={state} />)}
+          {answered.map(({ entry, question }) => (
+            <Answer key={entry.question} entry={entry} question={question} />
+          ))}
+          {open.map((question) => (
+            <Unanswered key={question.question} question={question} state={state} />
+          ))}
           {!answers.length && reply && (
             <p data-testid="chat-ask-reply" className="mf-tr-meta wrap-break-word text-muted-foreground">
               {reply}

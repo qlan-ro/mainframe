@@ -13,7 +13,7 @@ import { ResultBlock, ResultText } from './ResultText';
 import { BodyNote, KeyValue, Surface } from './Surface';
 import { TerminalBody } from './TerminalBody';
 import { WebBody } from './WebBody';
-import { parseReadLines, plainLines } from './code-lines';
+import { parseRead, plainLines } from './code-lines';
 
 export interface ToolBodyProps {
   part: ToolPart;
@@ -102,6 +102,11 @@ function CallBody({ part, status }: ToolBodyProps) {
   const args = record(part.args) ?? {};
   return (
     <Surface testId="chat-call-body">
+      {toolKind(part.toolName) === 'mcp' && (
+        <KeyValue label="Tool" testId="chat-call-tool">
+          {part.toolName}
+        </KeyValue>
+      )}
       {Object.keys(args).length > 0 && (
         <KeyValue label="Arguments" testId="chat-call-args">
           {JSON.stringify(args, null, 2)}
@@ -120,6 +125,23 @@ function CallBody({ part, status }: ToolBodyProps) {
   );
 }
 
+/** The file, then what the CLI told the agent about it. */
+function ReadBody({ part, text }: { part: ToolPart; text: string }) {
+  const { lines, reminders } = parseRead(text);
+  return (
+    <>
+      <CodeBody id={part.toolCallId} path={argText(part, 'file_path')} lines={lines} testId="read-card-code-preview" />
+      {reminders.length > 0 && (
+        <Surface className="mt-1.5">
+          <KeyValue label="Reminder to the agent" testId="chat-read-reminder">
+            {reminders.join('\n\n')}
+          </KeyValue>
+        </Surface>
+      )}
+    </>
+  );
+}
+
 function MainBody({ part, status }: ToolBodyProps) {
   const { text, truncated } = resolveResultText(part.result);
   const kind = toolKind(part.toolName);
@@ -134,15 +156,7 @@ function MainBody({ part, status }: ToolBodyProps) {
       </WebBody>
     );
   if (!text) return null;
-  if (kind === 'read' && !truncated)
-    return (
-      <CodeBody
-        id={part.toolCallId}
-        path={argText(part, 'file_path')}
-        lines={parseReadLines(text)}
-        testId="read-card-code-preview"
-      />
-    );
+  if (kind === 'read' && !truncated) return <ReadBody part={part} text={text} />;
   return <ResultBlock part={part} failed={false} testId="search-card-plain-body" />;
 }
 

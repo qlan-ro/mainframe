@@ -7,6 +7,7 @@
  */
 import type { ThreadMessage } from '@assistant-ui/react';
 import { toMessagePartStatus } from '@assistant-ui/core/internal';
+import { isPlaceholder } from '../view-model/placeholder';
 import { resolveToolStatus } from '../view-model/turn/tool-status';
 import type { ToolPart } from '../view-model/turn/types';
 import type { MainframeMessageMeta } from '../view-model/message-meta';
@@ -28,10 +29,14 @@ export const outranksReconnect = (inputs: Omit<TurnPhaseInputs, 'reconnecting'>)
 const isQueued = (message: ThreadMessage) =>
   (message.metadata?.custom?.mainframe as MainframeMessageMeta | undefined)?.queued === true;
 
-/** The message the row follows: the newest one that is not a queued, not-yet-sent prompt. */
+/**
+ * The message the row follows: the newest one that is not a queued, not-yet-sent
+ * prompt. Never assistant-ui's stand-in: its id is new on every update, which
+ * would restart the row, and it comes after the queued prompts.
+ */
 export function statusAnchorId(messages: readonly ThreadMessage[]): string | null {
   for (let index = messages.length - 1; index >= 0; index--) {
-    if (!isQueued(messages[index]!)) return messages[index]!.id;
+    if (!isQueued(messages[index]!) && !isPlaceholder(messages[index])) return messages[index]!.id;
   }
   return null;
 }

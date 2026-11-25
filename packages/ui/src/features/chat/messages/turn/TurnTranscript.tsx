@@ -2,18 +2,17 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { DisclosureScope } from '@/components/ui/disclosure-state';
-import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
-import type { ActivitySource } from '@/features/session-panel/activity-model';
+import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel/activity-source';
 import { useChatExtrasSelector } from '../../runtime/chat-extras';
 import { VirtualMessages } from '../../thread/VirtualMessages';
 import { TurnCache } from '../../view-model/turn/turn-cache';
 import { buildTurns } from '../../view-model/turn/build-turns';
 import type { TurnModel } from '../../view-model/turn/types';
+import { isPlaceholder } from '../../view-model/placeholder';
 import { boundedMessageComponents } from '../bounded-messages';
 import { MessageRenderBoundary } from '../MessageRenderBoundary';
 import { AssistantMessage } from '../AssistantMessage';
 import { TurnSlice } from './TurnSlice';
-import { sliceOfCall } from './reveal-step';
 import { useTranscriptScope } from './transcript-scope';
 import { TurnProvider, useTurnSelector, type TurnContextValue } from './turn-context';
 import { turnDisclosureStore } from './turn-disclosure-store';
@@ -33,6 +32,9 @@ function AssistantSlice() {
   // re-renders only the slice whose message moved.
   const slice = useTurnSelector(({ model }) => model.slices.get(id), undefined);
   const failed = useAuiState((s) => hasErrorText(s.message.metadata));
+  // Nothing to say yet: the status row above it does. Never zero-height, which the list can't measure.
+  const placeholder = useAuiState((s) => isPlaceholder(s.message));
+  if (placeholder) return <div data-testid="chat-reply-placeholder" aria-hidden className="h-px" />;
   return (
     <MessageRenderBoundary>
       <DisclosureScope id={id}>{!slice || failed ? <AssistantMessage /> : <TurnSlice slice={slice} />}</DisclosureScope>
@@ -75,12 +77,8 @@ const components = { UserMessage: UserSlice, AssistantMessage: AssistantSlice, S
 function useJumps(model: TurnModel, chatId: string | undefined): void {
   useEffect(() => {
     const onJump = (event: Event) => {
-      const { chatId: target, source } = (event as CustomEvent<{ chatId: string; source: ActivitySource }>).detail;
+      const { chatId: target, source } = (event as CustomEvent<ActivityJump>).detail;
       if (target !== chatId) return;
-      for (const call of model.absorbedBy.get(source.messageId) ?? []) {
-        const shown = sliceOfCall(model, call);
-        if (shown) turnDisclosureStore.set(shown.turnKey, 'open');
-      }
       const slice = model.slices.get(source.messageId);
       if (!slice?.work.length) return;
       const holds = slice.work.some(({ part }) => part.type === 'tool-call' && part.toolCallId === source.toolCallId);

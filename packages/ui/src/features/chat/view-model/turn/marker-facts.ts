@@ -113,8 +113,8 @@ export function approvedPlan(plan: string, mode: string | undefined, clearedCont
   };
 }
 
-function jobsOf(value: unknown): ScheduledJob[] {
-  return (Array.isArray(value) ? value : []).map((entry) => {
+function jobsOf(entries: readonly unknown[]): ScheduledJob[] {
+  return entries.map((entry) => {
     const job = record(entry) ?? {};
     return {
       id: displayText(job.id),
@@ -151,7 +151,11 @@ function scheduleMarker(part: ToolPart): Draft {
     case 'CronDelete':
       return { icon: 'cron-delete', label: 'Removed schedule', target: argText(part, 'id'), mono: true };
     default: {
-      const jobs = jobsOf(result);
+      const entries = Array.isArray(result) ? result : record(result)?.jobs;
+      // Prose: the CLI's own list, or that there is none.
+      if (!Array.isArray(entries))
+        return { icon: 'cron-list', label: 'Listed schedules', body: note(resolveResultText(part.result).text) };
+      const jobs = jobsOf(entries);
       return {
         icon: 'cron-list',
         label: 'Listed schedules',

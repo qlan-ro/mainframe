@@ -12,8 +12,10 @@ export interface LiveChildren {
   readonly byCall: ReadonlyMap<string, ChildState>;
   /** Call → when the background command or monitor it started began, while that still runs. */
   readonly background: ReadonlyMap<string, number>;
-  /** Delegated tasks whose call went through and whose work then failed. */
+  /** Agents and delegated tasks whose call went through and whose work then failed. */
   readonly failed: ReadonlySet<string>;
+  /** Background agents that were stopped or failed after their call had returned. */
+  readonly ended: ReadonlyMap<string, 'stopped' | 'failed'>;
   /** A background agent is running and the daemon hasn't said yet which call started it. */
   readonly unplacedAgents: boolean;
 }
@@ -66,11 +68,17 @@ export function liveChildren(model: TurnModel, given: Omit<ChildSources, 'result
   const sources: ChildSources = { ...given, results: model.taskResults };
   const byCall = new Map<string, ChildState>();
   const failed = new Set<string>();
+  const ended = new Map<string, 'stopped' | 'failed'>();
+  // A recovered task's status is a guess the daemon made when it started.
+  for (const task of sources.listed)
+    if (task.kind === 'agent' && !task.recovered && (task.status === 'stopped' || task.status === 'failed'))
+      ended.set(task.toolUseId, task.status);
   for (const turn of model.turns.values())
     for (const child of turn.children) {
       const state = childState(child, sources, turn.live);
+      const agentFailed = child.launched && ended.get(child.toolCallId) === 'failed';
       if (state) byCall.set(child.toolCallId, state);
-      else if (taskFailed(child, sources)) failed.add(child.toolCallId);
+      else if (agentFailed || taskFailed(child, sources)) failed.add(child.toolCallId);
     }
   const background = new Map<string, number>();
   for (const task of sources.listed)
@@ -78,13 +86,14 @@ export function liveChildren(model: TurnModel, given: Omit<ChildSources, 'result
       background.set(task.toolUseId, task.startedAt);
   const placed = new Set(sources.listed.map((task) => task.id));
   const unplacedAgents = Object.values(sources.live).some((task) => task.kind === 'agent' && !placed.has(task.id));
-  return { byCall, background, failed, unplacedAgents };
+  return { byCall, background, failed, ended, unplacedAgents };
 }
 
 export const NO_CHILDREN: LiveChildren = {
   byCall: new Map(),
   background: new Map(),
   failed: new Set(),
+  ended: new Map(),
   unplacedAgents: false,
 };
 
@@ -92,6 +101,8 @@ export function sameLive(a: LiveChildren, b: LiveChildren): boolean {
   if (a.unplacedAgents !== b.unplacedAgents || a.byCall.size !== b.byCall.size) return false;
   if (a.background.size !== b.background.size || a.failed.size !== b.failed.size) return false;
   for (const id of a.failed) if (!b.failed.has(id)) return false;
+  if (a.ended.size !== b.ended.size) return false;
+  for (const [id, status] of a.ended) if (b.ended.get(id) !== status) return false;
   for (const [id, state] of a.byCall) if (b.byCall.get(id) !== state) return false;
   for (const [id, startedAt] of a.background) if (b.background.get(id) !== startedAt) return false;
   return true;

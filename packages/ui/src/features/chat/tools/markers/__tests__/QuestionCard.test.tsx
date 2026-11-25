@@ -36,9 +36,36 @@ it('records each question, the chosen answers and the note', () => {
     'Reset order · answered',
     'Question · answered',
   ]);
-  expect(screen.getAllByTestId('chat-ask-answer').map((el) => el.textContent)).toEqual(['Weekly', 'Daily', 'Yes']);
+  expect(screen.getAllByTestId('chat-ask-answer').map((el) => el.textContent)).toEqual([
+    'Weekly',
+    'Written by you: Daily',
+    'Written by you: Yes',
+  ]);
+  expect(screen.getAllByTestId('chat-ask-answer').map((el) => el.dataset.listed)).toEqual(['true', 'false', 'false']);
   expect(screen.getByTestId('chat-ask-answer-notes')).toHaveTextContent('Note: “in that order”');
   expect(screen.getByTestId('chat-ask-card').parentElement).toHaveAttribute('data-activity-id', 'q');
+});
+
+it.each([
+  ['the first', { question: 'Which window first?', answer: ['Weekly'] }, 'Ship today?'],
+  ['the second', { question: 'Ship today?', answer: ['Yes'] }, 'Which window first?'],
+])('keeps the question left open when only %s was answered', (_which, entry, left) => {
+  render(<QuestionCard part={part({ content: '', askUserQuestion: [entry] })} />);
+  expect(screen.getByRole('group', { name: `Question, answered: ${entry.question}` })).toBeVisible();
+  expect(screen.getByText(left)).toBeVisible();
+  expect(screen.getAllByTestId('chat-ask-header')[1]).toHaveTextContent('not answered');
+});
+
+it('takes a reworded question for the one in its place', () => {
+  const askUserQuestion = [
+    { question: 'Which first?', answer: ['Weekly'] },
+    { question: 'Ship today?', answer: ['Yes'] },
+  ];
+  render(<QuestionCard part={part({ content: '', askUserQuestion })} />);
+  expect(screen.getAllByTestId('chat-ask-header').map((el) => el.textContent)).toEqual([
+    'Reset order · answered',
+    'Question · answered',
+  ]);
 });
 
 it.each<[string, Partial<TranscriptScope>, string]>([

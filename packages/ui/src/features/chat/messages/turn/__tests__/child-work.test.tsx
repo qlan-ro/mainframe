@@ -12,8 +12,11 @@ import { TurnFixture, assistant, bash, running, text, tool, user } from './fixtu
 vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
 vi.mock('@/lib/api/background-tasks', () => ({
   listBackgroundTasks: vi.fn(),
-  readBackgroundTaskOutput: vi.fn().mockResolvedValue('output so far'),
+  readBackgroundTaskOutput: vi.fn().mockResolvedValue({ text: 'output so far', truncated: false }),
 }));
+
+// The task's own chat has no daemon here; its row and its Result are the real ones.
+vi.mock('../../../orchestration/TaskChatSteps', () => ({ TaskChatSteps: () => <div data-testid="task-steps" /> }));
 
 const agent = (overrides: Partial<ToolCallMessagePart> = {}) =>
   tool({
@@ -158,6 +161,80 @@ it('reads the output of a finished command the CLI moved to the background itsel
   fireEvent.click(screen.getByTestId('chat-row-cmd-toggle'));
   expect(await screen.findByText('output so far')).toBeVisible();
   await act(async () => {});
+});
+
+it.each([
+  ['stopped', 'stopped', 'Stopped'],
+  ['failed', 'failed', 'Failed'],
+] as const)('reads a background agent that %s after its call as that, never as done', async (status, word, name) => {
+  vi.mocked(listBackgroundTasks).mockResolvedValue([
+    { id: 'bg', kind: 'agent', toolUseId: 'agent', status, startedAt: 1 },
+  ] as never);
+  const launched = agent({ result: 'Async agent launched successfully.' });
+  render(
+    <TurnFixture
+      rootId={`cw-${roots}`}
+      messages={[user('Hi'), assistant([launched, text('Started')])]}
+      extras={extrasWith({})}
+    />,
+  );
+  fireEvent.click(header());
+  await waitFor(() => expect(screen.getByTestId('chat-row-agent-receipt')).toHaveTextContent(word));
+  expect(screen.getByTestId('chat-row-agent')).toHaveTextContent(`${name}: code-reviewer`);
+  if (status === 'failed') expect(header()).toHaveAccessibleName(/1 failed/);
+});
+
+it('asks how the last background agent ended, once nothing runs', async () => {
+  const running = { id: 'bg', kind: 'agent', toolUseId: 'agent', status: 'running', startedAt: 1 };
+  vi.mocked(listBackgroundTasks).mockResolvedValue([running] as never);
+  const messages = [user('Hi'), assistant([agent({ result: 'Async agent launched successfully.' }), text('Started')])];
+  const view = render(<TurnFixture rootId={`cw-${roots}`} messages={messages} extras={extrasWith(background)} />);
+  await waitFor(() => expect(header()).toHaveAccessibleName(/Still going/));
+  vi.mocked(listBackgroundTasks).mockResolvedValue([{ ...running, status: 'stopped' }] as never);
+  view.rerender(<TurnFixture rootId={`cw-${roots}`} messages={messages} extras={extrasWith({})} />);
+  await waitFor(() => expect(isOpen()).toBe(false));
+  fireEvent.click(header());
+  await waitFor(() => expect(screen.getByTestId('chat-row-agent-receipt')).toHaveTextContent('stopped'));
+});
+
+it('opens a delegated task that failed by itself, and only that one', async () => {
+  const task = (id: string, status: string) =>
+    tool({
+      toolCallId: id,
+      toolName: 'mcp__mainframe__delegate_task',
+      args: { task: id },
+      result: JSON.stringify({ taskId: `t-${id}`, childChatId: `kid-${id}`, status }),
+    });
+  render(
+    <TurnFixture
+      rootId={`cw-${roots}`}
+      messages={[user('Hi'), assistant([task('bad', 'failed'), task('good', 'completed'), text('Done')])]}
+    />,
+  );
+  expect(header()).toHaveAccessibleName(/1 failed/);
+  fireEvent.click(header());
+  const [bad, good] = screen.getAllByTestId('chat-tool-delegate-task-card-toggle');
+  expect(bad).toHaveAttribute('aria-expanded', 'true');
+  expect(good).toHaveAttribute('aria-expanded', 'false');
+  expect(await screen.findByTestId('task-steps')).toBeVisible();
+});
+
+it('names the model an agent ran on in its row, when the call chose one', () => {
+  const args = { subagent_type: 'code-reviewer', prompt: 'Review it' };
+  render(
+    <TurnFixture
+      rootId={`cw-${roots}`}
+      messages={[
+        user('Hi'),
+        assistant([agent({ args: { ...args, model: 'opus' } }), agent({ toolCallId: 'plain', args }), text('Done')]),
+      ]}
+    />,
+  );
+  fireEvent.click(header());
+  fireEvent.click(screen.getByTestId('chat-row-agent-toggle'));
+  expect(screen.getByTestId('chat-agent-model')).toHaveTextContent('Model opus');
+  fireEvent.click(screen.getByTestId('chat-row-plain-toggle'));
+  expect(screen.getAllByTestId('chat-agent-model')).toHaveLength(1);
 });
 
 it('holds nothing open for an agent whose session was killed', () => {

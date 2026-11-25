@@ -40,10 +40,41 @@ const show = (value: ToolPart, status: ToolStatus = 'success') =>
   );
 
 describe('ToolBody', () => {
-  it('numbers a read file as the CLI numbered it, without its reminders', () => {
-    show(part('Read', { file_path: 'a.ts' }, '     8→const a = 1;\n     9→\n\n<system-reminder>x</system-reminder>'));
-    expect(screen.getByTestId('read-card-code-preview')).toHaveTextContent('8const a = 1;9');
+  it('numbers a read file as the CLI numbered it, its reminders apart', () => {
+    const reminder = '<system-reminder>\nMind the license.\n</system-reminder>';
+    show(part('Read', { file_path: 'a.ts' }, `     8→const a = 1;\n     9→\n\n${reminder}`));
+    expect(screen.getByTestId('read-card-code-preview').textContent).toBe('8const a = 1;9');
+    expect(screen.getByTestId('chat-read-reminder')).toHaveTextContent('Mind the license.');
     expect(screen.queryByText(/system-reminder/)).toBeNull();
+  });
+
+  it('says nothing of reminders where there are none', () => {
+    show(part('Read', { file_path: 'a.ts' }, '     1→a\n     2→b'));
+    expect(screen.queryByTestId('chat-read-reminder')).toBeNull();
+  });
+
+  it('names an MCP call by its raw tool name', () => {
+    show(part('mcp__claude_ai_github__get_issue', { id: 1 }, 'ok'));
+    expect(screen.getByTestId('chat-call-tool')).toHaveTextContent('mcp__claude_ai_github__get_issue');
+  });
+
+  it('offers the whole of a structured result the daemon cut short', () => {
+    const result = { content: 'Error: …', structuredPatch: [], truncated: true, fullBytes: 51_191 };
+    show(part('Edit', { file_path: 'a', old_string: 'a', new_string: 'b' }, result), 'failed');
+    expect(screen.getByTestId('expand')).toHaveTextContent('call:51191');
+  });
+
+  it('leaves no escape sequence in a command’s output', () => {
+    const esc = '\u001b';
+    const output = [
+      `${esc}]0;building${esc}\\${esc}[32mok${esc}[0m`,
+      `${esc}]8;;https://example.com\u0007docs${esc}]8;;\u0007`,
+      `${esc}(B${esc}7plain${esc}8`,
+      `${esc}]0;cut`,
+      'last',
+    ].join('\n');
+    show(part('Bash', { command: 'x' }, output));
+    expect(screen.getByTestId('chat-bash-output').textContent).toBe('$ xokdocsplainlast');
   });
 
   it('clamps a long file and shows the rest on request', () => {

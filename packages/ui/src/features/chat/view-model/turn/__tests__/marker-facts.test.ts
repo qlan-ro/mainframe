@@ -70,6 +70,14 @@ describe('what each pill says', () => {
       body: { jobs: [{ id: 'c1', schedule: '0 9 * * *', cadence: 'recurring', prompt: 'Post' }] },
     });
     expect(facts('CronList', {}, json([]))).toMatchObject({ receipt: '0 jobs', body: undefined });
+    expect(facts('CronList', {}, json({ jobs: [{ id: 'c1' }] }))).toMatchObject({ receipt: '1 job' });
+  });
+
+  it('keeps a list that came as prose, and counts nothing in it', () => {
+    const result = 'c1: daily at 9 (recurring)\nc2: hourly';
+    const listed = facts('CronList', {}, { result });
+    expect(listed.body).toEqual({ type: 'note', text: result });
+    expect(listed.receipt).toBeUndefined();
   });
 
   it('keeps a monitor running while its background task does', () => {

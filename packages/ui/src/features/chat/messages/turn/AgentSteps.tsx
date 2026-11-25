@@ -98,7 +98,8 @@ interface Nested {
   readonly absorbed: ReadonlySet<string>;
   readonly skills: ReadonlyMap<string, LoadedSkill>;
   readonly answer: ReadonlySet<TurnUnit>;
-  readonly answerText: string;
+  /** The answer's texts, in order. */
+  readonly answerTexts: readonly string[];
 }
 
 function nest(messages: readonly ThreadMessage[], scope: TurnScope): Nested {
@@ -115,15 +116,13 @@ function nest(messages: readonly ThreadMessage[], scope: TurnScope): Nested {
   const tail = messages.slice(start).flatMap((message) => units.get(message.id)!);
   // A picture the agent answered with stays among its steps; only text moves to the Result block.
   const answer = new Set([...answerUnits(tail, false)].filter(({ part }) => part.type === 'text'));
-  const answerText = tail
-    .flatMap((unit) => (answer.has(unit) && unit.part.type === 'text' ? [unit.part.text] : []))
-    .join('\n\n');
+  const answerTexts = tail.flatMap((unit) => (answer.has(unit) && unit.part.type === 'text' ? [unit.part.text] : []));
   return {
     units,
     absorbed: new Set([...skills.absorbedBy.keys(), ...absorbedTaskResults(messages).keys()]),
     skills: skills.byCall,
     answer,
-    answerText,
+    answerTexts,
   };
 }
 
@@ -160,24 +159,42 @@ function NestedAssistant() {
 }
 const components = { UserMessage: NestedUser, AssistantMessage: NestedAssistant, SystemMessage: NestedSystem };
 
-/** What the Result block says, and whether the transcript's own last words are it. */
-function outcomeText(
-  outcome: AgentOutcome,
-  answerText: string,
-  result: string,
-): { text: string; fromAnswer: boolean; label: string } {
+/** Whether the agent's own last words say all that was delivered: it is their end, block for block. */
+function saysAll(own: readonly string[], delivered: string): boolean {
+  return own.some((_, start) => normal(own.slice(start).join('\n\n')) === delivered);
+}
+
+interface ResultView {
+  readonly text: string;
+  /** The text is the transcript's own, so it leaves the steps. */
+  readonly own: boolean;
+  /** The text is what was delivered. */
+  readonly delivered: boolean;
+  readonly label: string;
+}
+
+/**
+ * What the Result block says. What was delivered is never hidden: the agent's
+ * own words replace it only when they say all of it, and leave the steps only
+ * when the block repeats them from its start.
+ */
+function resultView(outcome: AgentOutcome, answer: readonly string[], result: string): ResultView {
   const label = outcome === 'failed' ? 'Error' : 'Result';
-  if (outcome === 'done' && answerText) {
-    const [own, delivered] = [normal(answerText), normal(result)];
-    if (!delivered || delivered.includes(own) || own.includes(delivered))
-      return { text: answerText, fromAnswer: true, label };
+  const text = answer.join('\n\n');
+  const [own, delivered] = [normal(text), normal(result)];
+  if (outcome === 'done' && own) {
+    if (!delivered || saysAll(answer, delivered)) return { text, own: true, delivered: false, label };
+    return { text: result, own: delivered.startsWith(`${own} `), delivered: true, label };
   }
   // Going again after it once finished: what it brought back then stays readable.
-  if (outcome === 'going') {
-    const known = normal(answerText).includes(normal(result));
-    return { text: known ? '' : result, fromAnswer: false, label: 'Earlier result' };
-  }
-  return { text: result, fromAnswer: false, label };
+  if (outcome === 'going')
+    return {
+      text: saysAll(answer, delivered) ? '' : result,
+      own: false,
+      delivered: true,
+      label: 'Earlier result',
+    };
+  return { text: result, own: false, delivered: true, label };
 }
 
 function Steps({ messages, outcome, prompt, promptLabel = 'Prompt', result = '', ...rest }: AgentStepsProps) {
@@ -185,13 +202,13 @@ function Steps({ messages, outcome, prompt, promptLabel = 'Prompt', result = '',
   const nested = useMemo(() => nest(messages, scope), [messages, scope]);
   const first = useMemo(() => promptMessage(messages, prompt), [messages, prompt]);
   const asked = prompt || (first ? userText(first) : '');
-  const { text, fromAnswer, label } = outcomeText(outcome, nested.answerText, result);
+  const { text, own, delivered, label } = resultView(outcome, nested.answerTexts, result);
   const view = useMemo<NestedView>(() => {
     const steps = [...nested.units].map(
-      ([id, units]) => [id, fromAnswer ? units.filter((unit) => !nested.answer.has(unit)) : units] as const,
+      ([id, units]) => [id, own ? units.filter((unit) => !nested.answer.has(unit)) : units] as const,
     );
     return { steps: new Map(steps), hidden: new Set([...nested.absorbed, ...(first ? [first.id] : [])]) };
-  }, [nested, fromAnswer, first]);
+  }, [nested, own, first]);
   return (
     <div data-testid="chat-agent-steps" className="flex min-w-0 flex-col">
       {asked && (
@@ -210,7 +227,7 @@ function Steps({ messages, outcome, prompt, promptLabel = 'Prompt', result = '',
       {rest.after}
       {text && (
         <Block label={label} tone={label === 'Error' ? 'fail' : undefined} testId="chat-agent-result">
-          {!fromAnswer && rest.resultBody ? rest.resultBody : <Prose text={text} />}
+          {delivered && rest.resultBody ? rest.resultBody : <Prose text={text} />}
         </Block>
       )}
     </div>

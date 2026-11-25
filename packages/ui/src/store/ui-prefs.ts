@@ -182,11 +182,22 @@ function sanitizeHiddenSections(value: unknown): SessionPanelSectionKey[] {
   return Array.isArray(value) ? SESSION_PANEL_SECTION_KEYS.filter((key) => value.includes(key)) : [];
 }
 
+/**
+ * The retired cards-or-rows choice carries over until this one is made: Verbose
+ * kept everything in sight. Main wrote `verbose` for the default too, so a
+ * viewer who never chose it also starts on Keep open; nothing stored is Fold.
+ */
+function sanitizeFinishedWork({ finishedWork, transcriptMode }: Record<string, unknown>): FinishedWork {
+  if (finishedWork === 'open' || finishedWork === 'fold') return finishedWork;
+  return transcriptMode === 'verbose' ? 'open' : 'fold';
+}
+
 function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPrefs> {
-  const state = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
+  const stored = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
+  const { transcriptMode: _retired, ...state } = stored;
   return {
     ...state,
-    finishedWork: state.finishedWork === 'open' ? 'open' : 'fold',
+    finishedWork: sanitizeFinishedWork(stored),
     openLinksIn: state.openLinksIn === 'browser' ? 'browser' : 'workspace',
     transcriptWidth:
       typeof state.transcriptWidth === 'number'

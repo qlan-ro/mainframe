@@ -12,6 +12,16 @@ vi.mock('@/lib/api/background-tasks', () => ({
   readBackgroundTaskOutput: vi.fn().mockResolvedValue(''),
 }));
 
+// The task's own chat has no daemon here; its row and its Result are the real ones.
+vi.mock('../../../orchestration/TaskChatSteps', async () => {
+  const { AgentSteps: Steps } = await import('../AgentSteps');
+  return {
+    TaskChatSteps: ({ chatId, ...props }: AgentStepsProps & { chatId: string }) => (
+      <Steps {...props} chatId={chatId} messages={[]} />
+    ),
+  };
+});
+
 let roots = 0;
 beforeEach(() => roots++);
 
@@ -127,6 +137,22 @@ it('does not draw a result’s markup as the prompt of a window without one', ()
   expect(agent().getByTestId('chat-task-result-t1')).toBeVisible();
 });
 
+it('shows a result in the row of the task it belongs to, and nowhere else', async () => {
+  const task = tool({
+    toolCallId: 'kid',
+    toolName: 'mcp__mainframe__delegate_task',
+    args: { task: 'Race review' },
+    result: JSON.stringify({ taskId: 't1', childChatId: 'kid-chat', status: 'running' }),
+  });
+  show([user(PROMPT, 'p'), assistant([task], 'a'), user(result('t1'), 'r'), assistant([text('Ok.')], 'a2')], {
+    prompt: PROMPT,
+  });
+  expect(agent().queryByTestId('chat-task-result-t1')).toBeNull();
+  expect(agent().queryByText('No races.')).toBeNull();
+  fireEvent.click(agent().getByTestId('chat-tool-delegate-task-card-toggle'));
+  expect(await agent().findByText('No races.')).toBeVisible();
+});
+
 it('shows a skill’s text in its marker, once', () => {
   const skill = { skillName: 'design', path: '/s/SKILL.md', content: '# Design' };
   const call = tool({ toolCallId: 'sk', toolName: 'Skill', args: { skill: 'design' }, result: 'ok' });
@@ -154,6 +180,15 @@ it('keeps what it brought back before while it works again', () => {
   expect(agent().getByTestId('chat-agent-result')).toHaveTextContent('Earlier resultNo races.');
 });
 
+it('keeps what it brought back before though its words now only contain it', () => {
+  show([user('More', 'late'), assistant([text('Not Done yet.')], 'a')], {
+    prompt: PROMPT,
+    outcome: 'going',
+    result: 'Done',
+  });
+  expect(agent().getByTestId('chat-agent-result').textContent).toBe('Earlier resultDone');
+});
+
 it.each([
   ['failed', 'Error'],
   ['stopped', 'Result'],
@@ -171,6 +206,40 @@ it('keeps a result that differs from its last words', () => {
   show([user(PROMPT, 'p'), assistant([text('See above.')], 'a')], { prompt: PROMPT, result: 'Two races found.' });
   expect(agent().getByText('See above.')).toBeVisible();
   expect(agent().getByTestId('chat-agent-result')).toHaveTextContent('Two races found.');
+});
+
+it.each([
+  ['Done.', 'Done. Also: 3 tests FAILED'],
+  ['Done', 'Not Done: 3 tests FAILED'],
+  ['Not Done: 3 tests FAILED', 'Done'],
+  ['Done: see the log', 'Done'],
+])('never hides what was delivered: it last said “%s”, and “%s” came back', (said, result) => {
+  show([user(PROMPT, 'p'), assistant([bash('b', 'ls'), text(said)], 'a')], { prompt: PROMPT, result });
+  expect(agent().getByTestId('chat-agent-result').textContent).toBe(`Result${result}`);
+});
+
+it('repeats its last words once when they begin, or are, what came back', () => {
+  const view = show([user(PROMPT, 'p'), assistant([text('All good.')], 'a')], {
+    prompt: PROMPT,
+    result: 'All good.\n\nagentId: 1',
+  });
+  expect(screen.getByTestId('agent').textContent!.match(/All good\./g)).toHaveLength(1);
+  view.unmount();
+  show([user(PROMPT, 'p'), assistant([text('First.'), text('All good.')], 'a')], {
+    prompt: PROMPT,
+    result: 'All good.',
+  });
+  expect(screen.getByTestId('agent').textContent!.match(/All good\./g)).toHaveLength(1);
+  expect(agent().getByTestId('chat-agent-result')).toHaveTextContent('First.');
+});
+
+it('offers the whole of a result the daemon cut short, though its last words begin it', () => {
+  show([user(PROMPT, 'p'), assistant([text('All good.')], 'a')], {
+    prompt: PROMPT,
+    result: 'All good. More',
+    resultBody: <button>Show full output</button>,
+  });
+  expect(agent().getByRole('button', { name: 'Show full output' })).toBeVisible();
 });
 
 it('keeps a picture it answered with', () => {

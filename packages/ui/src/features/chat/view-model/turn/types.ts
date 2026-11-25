@@ -43,6 +43,8 @@ export interface TurnChild {
   readonly taskId?: string;
   /** How the task stood when its call returned: final for a call that waited. */
   readonly taskStatus?: TaskStatus;
+  /** Its call returned once the agent had started in the background. */
+  readonly launched?: boolean;
   /** A workflow run's background task, once the call returned. */
   readonly workflowTaskId?: string;
 }
@@ -52,10 +54,15 @@ export interface Turn {
   readonly running: boolean;
   /** It runs, or a step of it can still be going: the viewer wrote into a turn that goes on. */
   readonly live: boolean;
+  /** The agent went on after the viewer wrote, and a step of this part still runs. */
+  readonly unfinished: boolean;
   /** It stands still until the viewer answers a request. */
   readonly needsYou: boolean;
   readonly end: TurnEnd;
   readonly durationMs?: number;
+  readonly costUsd?: number;
+  /** Where the turn ends, whichever message carries its footer. */
+  readonly lastMessageId: string;
   /** "read 2 files, searched 1 pattern": the steps, without the agents the header names itself. */
   readonly summary: string;
   readonly hasWork: boolean;

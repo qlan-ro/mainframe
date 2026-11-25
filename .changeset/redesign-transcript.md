@@ -13,5 +13,5 @@ Redesigned transcript
 - Times are in each message's footer, shown on hover or focus, with a time marker at the start and after a 30-minute gap.
 - Links share one style and open where Settings › General › "Open links in" says: the workspace browser or the system's. A `0.0.0.0` address counts as a local server.
 - A running background command's output is readable in its row.
-- Settings › General › Transcript (Verbose/Compact) became "Finished work" (Fold/Keep open).
+- Settings › General › Transcript (Verbose/Compact) became "Finished work" (Fold/Keep open). A stored Verbose choice starts as Keep open, Compact as Fold.
 - Code in the transcript is syntax-highlighted again.

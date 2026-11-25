@@ -709,9 +709,11 @@ test.describe('§tool-cards — a realistic thread (transcript-rows)', () => {
     const skill = page.getByTestId('chat-marker-skill');
     // The rows opened above may have pushed this turn out of the rendered window.
     await page.getByTestId('chat-thread-viewport').evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
-    // It leads its turn's pills, above the last turn: how far up depends on the fonts.
-    await skill.scrollIntoViewIfNeeded();
-    await expect(skill).toBeInViewport();
+    // On the spine, outside the folded work: centred in its message, above its turn's answer.
+    const message = page.getByTestId('chat-assistant-message').filter({ has: skill });
+    const [pill, column] = [(await skill.boundingBox())!, (await message.boundingBox())!];
+    expect(Math.abs(pill.x + pill.width / 2 - (column.x + column.width / 2))).toBeLessThan(2);
+    await expect(message.locator('[data-work-turn]').filter({ has: skill })).toHaveCount(0);
     await expect(skill).toContainText('Used skill /mainframe-design-system');
     await expect(page.getByTestId('chat-system-message')).toHaveCount(0);
     await skill.click();

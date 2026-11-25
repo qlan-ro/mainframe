@@ -108,6 +108,21 @@ describe('liveChildren', () => {
     expect([...liveChildren(waited, sources()).failed]).toEqual(['call']);
   });
 
+  it('says how an agent ended that outlived its call, and counts one that failed', () => {
+    const agent = child({ status: 'success', launched: true });
+    const how = (status: string, over = {}) =>
+      liveChildren(
+        model([agent]),
+        sources({ listed: [{ ...listed('a', 'call'), kind: 'agent', status, ...over } as BackgroundTask] }),
+      );
+    expect([...how('stopped').ended]).toEqual([['call', 'stopped']]);
+    expect(how('stopped').failed.size).toBe(0);
+    expect([...how('failed').failed]).toEqual(['call']);
+    expect(how('completed').ended.size).toBe(0);
+    // After a restart the daemon guesses.
+    expect(how('stopped', { recovered: true }).ended.size).toBe(0);
+  });
+
   it('holds every turn open while an agent’s call is not known yet', () => {
     expect(liveChildren(model([]), sources({ live: { a: task('a') } })).unplacedAgents).toBe(true);
     const placed = sources({ live: { a: task('a') }, listed: [listed('a', 'x')] });
@@ -124,6 +139,7 @@ it('counts child work, needs-you first', () => {
     ]),
     background: new Map(),
     failed: new Set(),
+    ended: new Map(),
     unplacedAgents: false,
   };
   const children = ['a', 'b', 'c', 'd'].map((toolCallId) => child({ toolCallId }));

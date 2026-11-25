@@ -71,7 +71,7 @@ export function useTurnState(model: TurnModel, live: LiveChildren, root: RefObje
     const held = heldTurns(root.current, model.turns);
     const next = new Set(folded);
     for (const [key, turn] of model.turns) {
-      const going = turn.children.some((child) => childGoing(child, live));
+      const going = turn.unfinished || turn.children.some((child) => childGoing(child, live));
       const unknownAgent = live.unplacedAgents && !folded.has(key);
       const fold = !keepOpen && !turn.running && !going && !unknownAgent && (folded.has(key) || !held.has(key));
       if (turnDisclosureStore.get(key) !== undefined || fold === next.has(key)) continue;

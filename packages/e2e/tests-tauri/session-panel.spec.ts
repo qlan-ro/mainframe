@@ -896,14 +896,14 @@ test.describe('§session-panel — Activity section (background-command)', () =>
 
   const commandRow = (page: Page) => page.getByTestId('session-panel-activity-task:mock-toolu_bg_1');
 
-  test('a background command goes to its transcript row, opened on its result', async () => {
+  test('a background command goes to its transcript row, opened on its output', async () => {
     const { page } = app;
     const target = page.locator('[data-activity-id="toolu_bg_1"]');
     await expect(commandRow(page)).toHaveAttribute('data-activity-state', 'completed');
     await commandRow(page).click();
     await expect(target).toHaveAttribute('data-activity-flash', '');
     await expect(target).toBeInViewport();
-    await expect(target).toContainText('Command running in background with ID: bg_1');
+    await expect(target.getByTestId('chat-bash-output')).toContainText('12 tests passed');
     await expect(target.locator('[aria-expanded="true"]').first()).toBeFocused();
   });
 

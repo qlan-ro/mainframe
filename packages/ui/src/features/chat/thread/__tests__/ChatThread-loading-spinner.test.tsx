@@ -86,6 +86,13 @@ describe('ChatThread — cold-reload loading spinner', () => {
     expect(screen.getByTestId('chat-thread-loading')).toBeInTheDocument();
   });
 
+  it('keeps the spinner while a run that is still loading has only assistant-ui’s stand-in', () => {
+    testState.extrasState.loadState = { type: 'loading' };
+    testState.messages = [{ id: 'p', role: 'assistant', content: [], metadata: { isOptimistic: true } }];
+    render(<ChatThread />);
+    expect(screen.getByTestId('chat-thread-loading')).toBeInTheDocument();
+  });
+
   it('hides the spinner once the load settles to ready', () => {
     testState.extrasState.loadState = { type: 'ready' };
 

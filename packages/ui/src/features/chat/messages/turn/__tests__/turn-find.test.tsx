@@ -100,6 +100,12 @@ it('shows a match in a delivered result in its task’s row', async () => {
   expect(screen.queryByText('All quiet')).toBeNull();
   await waitFor(() => expect(useFindInChatStore.getState().loading).toBe(false));
   expect(useFindInChatStore.getState().error).toBeNull();
+  // It stays on the row: the message itself draws nothing to go to.
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const absorbed = screen.getByTestId('chat-absorbed-message');
+  const shown = vi.mocked(Element.prototype.scrollIntoView).mock.instances as unknown as Element[];
+  expect(shown.some((element) => element === absorbed || element.contains(absorbed))).toBe(false);
+  expect(toggle()).toHaveAttribute('aria-expanded', 'true');
 });
 
 it('shows a match in a skill’s text in its marker', async () => {

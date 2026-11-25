@@ -6,6 +6,7 @@
  * how long it ran.
  */
 import type { ThreadMessage } from '@assistant-ui/react';
+import { isPlaceholder } from '../placeholder';
 import { verifiedTurnTiming, turnDuration } from './turn-timing';
 import { answerUnits, failedSteps, nestedPending, turnChildren, workTools } from './turn-roles';
 import { turnSummary } from './turn-summary';
@@ -14,7 +15,8 @@ import { settledStatus } from './tool-status';
 import { isMarkerUnit, messageMeta } from './turn-units';
 import { absorbedTaskResults, taskResultStatuses } from './task-results';
 import { SkillMatcher } from './skill-matcher';
-import type { MessageSlice, Turn, TurnEnd, TurnModel, TurnScope, TurnUnit } from './types';
+import { isChildWork } from './tool-kind';
+import type { MessageSlice, ToolPart, Turn, TurnEnd, TurnModel, TurnScope, TurnUnit } from './types';
 
 interface Draft {
   readonly key: string;
@@ -29,14 +31,27 @@ function providerTurnOf(units: readonly TurnUnit[]): string | undefined {
   return undefined;
 }
 
+/**
+ * Whether a user message ends the turn before it. A queued prompt waits for the
+ * turn to end; a send that failed reached nobody; and one the daemon has not
+ * confirmed yet, sent while the turn ran, has not ended it either. Only a turn
+ * the last build saw ended is over.
+ */
+function endsTurn(message: ThreadMessage, open: Draft | undefined, scope: TurnScope, cache: TurnCache): boolean {
+  const meta = messageMeta(message);
+  if (meta?.queued === true || meta?.error !== undefined) return false;
+  return !(meta?.pending === true && scope.isRunning === true && open && cache.wentOn(open.key) !== false);
+}
+
 /** Groups the messages into turns, and collects what another element stands for. */
 function draftTurns(messages: readonly ThreadMessage[], scope: TurnScope, cache: TurnCache) {
   const drafts: Draft[] = [];
   const skills = new SkillMatcher();
   let open: Draft | undefined;
   for (const message of messages) {
+    if (isPlaceholder(message)) continue;
     if (message.role === 'user') {
-      if (messageMeta(message)?.queued !== true) open = undefined;
+      if (endsTurn(message, open, scope, cache)) open = undefined;
       continue;
     }
     if (message.role === 'system') {
@@ -84,12 +99,28 @@ function pendingIn(draft: Draft, pending: ReadonlySet<string>): { own: Set<strin
 }
 
 /**
+ * The newest turn, with the viewer's message after it and nothing of the agent's
+ * yet. The provider says when a turn ended; whether it goes on it says too (Codex),
+ * or not while the viewer writes into it (Claude): then it goes on if it did just now.
+ */
+function goesOn(draft: Draft, cache: TurnCache): boolean {
+  const states = new Set(draft.units.flat().map((unit) => unit.presentation?.state));
+  if (states.has('completed') || states.has('cancelled') || states.has('failed')) return false;
+  return cache.wentOn(draft.key) ?? states.has('running');
+}
+
+/**
  * How each turn stands. A thread that waits on the viewer reports itself idle,
  * so a turn that holds the request is told by the request; one whose call has
- * not arrived yet belongs to the newest turn. A background agent's request
+ * not arrived yet belongs to the turn that runs. A background agent's request
  * (`nested`, in an earlier turn) only holds its turn open, as child work.
  */
-function standings(drafts: readonly Draft[], last: Draft | undefined, scope: TurnScope): Map<Draft, Standing> {
+function standings(
+  drafts: readonly Draft[],
+  last: Draft | undefined,
+  scope: TurnScope,
+  cache: TurnCache,
+): Map<Draft, Standing> {
   const held = new Map(drafts.map((draft) => [draft, pendingIn(draft, scope.pendingToolIds)]));
   const placed = [...held.values()].some(({ own, nested }) => own.size > 0 || nested);
   const newest = drafts[drafts.length - 1];
@@ -97,13 +128,13 @@ function standings(drafts: readonly Draft[], last: Draft | undefined, scope: Tur
   return new Map(
     drafts.map((draft) => {
       const { own, nested } = held.get(draft)!;
-      const unplaced = draft === last && scope.pendingToolIds.size > 0 && !placed;
+      const unplaced = running && draft === last && scope.pendingToolIds.size > 0 && !placed;
       const needsYou = own.size > 0 || unplaced || (draft === last && nested);
       const isRunning = needsYou || (running && draft === last);
       // The viewer can write into a turn that goes on: its calls outlive the split.
       const steered = last
         ? draft.providerTurn !== undefined && draft.providerTurn === last.providerTurn
-        : draft === newest && draft.units.flat().some((unit) => unit.presentation?.state === 'running');
+        : draft === newest && goesOn(draft, cache);
       return [draft, { running: isRunning, needsYou, live: isRunning || (running && steered) }];
     }),
   );
@@ -128,6 +159,15 @@ function durationOf(draft: Draft, units: readonly TurnUnit[], now: number): numb
   return streamed.length ? streamed.reduce((sum, ms) => sum + ms, 0) : undefined;
 }
 
+/** What the provider charged, wherever in the turn it said so. */
+function costOf(draft: Draft): number | undefined {
+  const costs = draft.messages.flatMap((message) => messageMeta(message)?.cost ?? []);
+  return costs.length ? costs.reduce((sum, usd) => sum + usd, 0) : undefined;
+}
+
+const stillRuns = (tools: readonly ToolPart[], scope: TurnScope): boolean =>
+  tools.some((tool) => !isChildWork(tool.toolName) && settledStatus(tool, scope.pendingToolIds, true) === 'running');
+
 function turnOf(draft: Draft, { running, live, needsYou }: Standing, scope: TurnScope, now: number): Turn {
   const units = draft.units.flat();
   const answer = answerUnits(units, running);
@@ -137,9 +177,12 @@ function turnOf(draft: Draft, { running, live, needsYou }: Standing, scope: Turn
     key: draft.key,
     running,
     live,
+    unfinished: live && !running && stillRuns(tools, scope),
     needsYou,
     end: endOf(draft, units, scope, live),
     durationMs: running ? undefined : durationOf(draft, units, now),
+    costUsd: costOf(draft),
+    lastMessageId: draft.messages[draft.messages.length - 1]!.id,
     summary: turnSummary(tools, work.filter((unit) => unit.part.type === 'image').length),
     hasWork: work.length > 0,
     ...failedSteps(tools, scope.pendingToolIds, live),
@@ -170,6 +213,12 @@ function slicesOf(draft: Draft, running: boolean): MessageSlice[] {
   }));
 }
 
+/** What the next build is told of a turn: it went on, it had ended, or nobody could say. */
+function wentOn(live: boolean, isLast: boolean, scope: TurnScope, before: boolean | undefined): boolean | undefined {
+  if (live) return true;
+  return scope.isRunning === true || isLast || before !== undefined ? false : undefined;
+}
+
 export function buildTurns(
   messages: readonly ThreadMessage[],
   scope: TurnScope,
@@ -180,7 +229,7 @@ export function buildTurns(
   const { drafts, last, skills } = draftTurns(messages, scope, cache);
   const turns = new Map<string, Turn>();
   const slices = new Map<string, MessageSlice>();
-  const standing = standings(drafts, last, scope);
+  const standing = standings(drafts, last, scope, cache);
   for (const draft of drafts) {
     const stand = standing.get(draft)!;
     const state = JSON.stringify([stand, draft.failed]);
@@ -191,7 +240,12 @@ export function buildTurns(
     turns.set(draft.key, built.turn);
     for (const slice of built.slices) slices.set(slice.messageId, slice);
   }
-  cache.finish();
+  cache.finish(
+    drafts.map((draft) => {
+      const { live } = standing.get(draft)!;
+      return [draft.key, wentOn(live, draft === last, scope, cache.wentOn(draft.key))] as const;
+    }),
+  );
   const absorbedBy = new Map([...skills.absorbedBy, ...absorbedTaskResults(messages)]);
   return {
     turns,

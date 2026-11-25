@@ -9,7 +9,7 @@ import { useControllerState } from '../runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
 import { AgentSteps } from '../messages/turn/AgentSteps';
 import { RootTranscriptScope } from '../messages/turn/transcript-scope';
-import { agentLaunched } from '../messages/turn/agent-outcome';
+import { agentLaunched } from '../view-model/turn/tool-values';
 import { resolveResultText } from '../tools/shared';
 import type { SubagentZoneRef } from './zones-store';
 import { findSubagentCall } from './find-subagent-transcript';

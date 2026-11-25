@@ -2,7 +2,12 @@
 import { cn } from '@/lib/utils';
 import { ScrollRegion } from './Surface';
 
-const ANSI = /\u001b\[[0-?]*[ -/]*[@-~]/g;
+/**
+ * Escape sequences: OSC (a window title, a hyperlink's address) up to its BEL or
+ * ST, or to the line's end when it was cut; CSI (colours, cursor); the two- and
+ * three-character ones.
+ */
+const ESCAPES = /\u001b\][^\u0007\u001b\n]*(?:\u0007|\u001b\\)?|\u001b\[[0-?]*[ -/]*[@-~]|\u001b[ -/]*[0-~]/g;
 
 function lineClass(line: string): string | undefined {
   if (/[✓✔]/.test(line) || /\b(?:pass(?:ed|ing)?|ok)\b/i.test(line)) return 'text-mf-tr-term-ok';
@@ -11,7 +16,7 @@ function lineClass(line: string): string | undefined {
 }
 
 export function TerminalBody({ command, output }: { command: string; output: string }) {
-  const lines = output.replace(ANSI, '').replace(/\n$/, '').split('\n');
+  const lines = output.replace(ESCAPES, '').replace(/\n$/, '').split('\n');
   return (
     <ScrollRegion label="Command output" testId="chat-bash-region" className="bg-mf-tr-term">
       <pre data-testid="chat-bash-output" className="mf-tr-mono px-3 py-2 text-mf-tr-term-ink">
