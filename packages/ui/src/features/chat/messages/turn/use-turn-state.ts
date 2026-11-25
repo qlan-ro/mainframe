@@ -29,8 +29,11 @@ function heldTurns(root: HTMLDivElement | null, turns: ReadonlyMap<string, Turn>
       ? Array.from({ length: selection.rangeCount }, (_, index) => selection.getRangeAt(index))
       : [];
   const active = root.ownerDocument.activeElement;
+  const focusedInside = root.contains(active);
+  const selectedInside = ranges.filter((range) => range.intersectsNode(root));
+  if (!focusedInside && selectedInside.length === 0) return held;
   for (const element of root.querySelectorAll<HTMLElement>('[data-work-turn]'))
-    if (element.contains(active) || ranges.some((range) => range.intersectsNode(element)))
+    if ((focusedInside && element.contains(active)) || selectedInside.some((range) => range.intersectsNode(element)))
       held.add(element.dataset.workTurn!);
   return held;
 }
