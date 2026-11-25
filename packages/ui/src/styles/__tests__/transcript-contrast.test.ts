@@ -49,6 +49,13 @@ function hoverShare(component: string): number {
 
 const CSS = readFileSync(new URL('../../features/chat/transcript.css', import.meta.url), 'utf8');
 
+/** What the bubble re-points one of the app's tokens to: its fill (`bg-muted`) and its inks. */
+function bubbleToken(token: string): string {
+  const target = new RegExp(`\\.mf-tr-bubble \\{[^}]*?\\s${token}: var\\((--[\\w-]+)\\)`).exec(CSS)?.[1];
+  if (!target) throw new Error(`the bubble leaves ${token} alone`);
+  return target;
+}
+
 it('re-points the app’s inks on every surface that tints its ground', () => {
   expect(CSS).toMatch(
     /\.bg-mf-tr-code,\s*\.bg-mf-tr-term \{\s*--muted-foreground: var\(--mf-tr-muted\);\s*--fail: var\(--mf-tr-code-fail\);/,
@@ -69,7 +76,7 @@ describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (them
   const { color, over, tint } = palette(theme);
   const background = color('--background');
   const grounds = { thread: background, card: color('--card') };
-  const bubble = over(color('--muted'), background);
+  const bubble = over(color(bubbleToken('--muted')), background);
   const codeOn = (ground: RGBA) => over(color('--mf-tr-code'), ground);
 
   const check = (ink: string, surface: string, ground: RGBA) =>
@@ -97,7 +104,8 @@ describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (them
       over(tint('--mf-tr-hover', hoverShare(component)), background),
     );
   });
-  it('reads in the user’s bubble', () => all(['--foreground', '--mf-tr-muted', '--mf-tr-link'], 'the bubble', bubble));
+  const BUBBLE_INKS = ['--foreground', '--muted-foreground', '--primary'].map(bubbleToken);
+  it('reads in the user’s bubble', () => all(BUBBLE_INKS, 'the bubble', bubble));
 
   it('reads on a code surface', () => {
     for (const [name, ground] of Object.entries(grounds))
@@ -106,7 +114,7 @@ describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (them
         `code on ${name}`,
         codeOn(ground),
       );
-    check('--foreground', 'inline code in the bubble', codeOn(bubble));
+    check(bubbleToken('--foreground'), 'inline code in the bubble', codeOn(bubble));
   });
 
   it('reads on a changed line', () => {

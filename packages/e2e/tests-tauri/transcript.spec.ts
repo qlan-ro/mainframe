@@ -68,11 +68,12 @@ const LONG_TEXT = Array.from(
  *  bubble renders UNCLAMPED (a collapsed clamp sets overflow:hidden and would hide
  *  the very spill this measures). */
 const UNBREAKABLE = 'A'.repeat(200);
+const LINKS = [`https://example.com/${'segment'.repeat(10)}`, 'https://two.test/', 'https://three.test/'];
 const OVERFLOW_TEXT = [
   UNBREAKABLE,
-  `https://example.com/${'segment'.repeat(10)}`,
   `/Users/dev/${'deeply-nested-directory/'.repeat(4)}file.ts`,
   `\`${'x'.repeat(80)}\``,
+  ...LINKS,
 ].join(' ');
 
 async function scrollViewportToTop(page: Page): Promise<void> {
@@ -254,15 +255,48 @@ test.describe('§transcript — thread turn', () => {
       clientWidth: el.clientWidth,
       width: el.getBoundingClientRect().width,
       clamped: el.querySelector('[data-clamp]') !== null,
+      // The reading column, whose width is the viewer's to drag.
+      column: el.closest('[data-testid="chat-transcript"]')!.getBoundingClientRect().width,
     }));
     expect(box.clamped).toBe(false);
-    // At most 85% of the 640px column.
-    expect(box.width).toBeLessThanOrEqual(545);
+    expect(box.width).toBeLessThanOrEqual(box.column * 0.85 + 1);
     // scrollWidth includes content painted past the padding box — this is the
     // containment assertion itself.
     expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);
 
     await waitForIdle(page, 60_000);
+  });
+
+  // The turn above sent the links.
+  test('Tab goes from a link to its Copy, to the next link and on', async () => {
+    const { page } = app;
+    const bubble = page.getByTestId('chat-user-bubble').filter({ hasText: UNBREAKABLE });
+    const copy = page.getByTestId('chat-link-copy-url');
+    const link = (url: string) => bubble.locator(`[data-testid="chat-link"][href="${url}"]`);
+
+    await link(LINKS[0]!).focus();
+    for (const url of LINKS) {
+      await expect(link(url)).toBeFocused();
+      await expect(copy).toHaveCount(1);
+      await page.keyboard.press('Tab');
+      await expect(copy).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(copy).toHaveText('Copied');
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+      await page.keyboard.press('Tab');
+    }
+    // Past the last link: on to what follows it, with no tooltip left behind.
+    await expect(copy).toHaveCount(0);
+    const onward = await bubble.evaluate((el) => {
+      const active = document.activeElement!;
+      const follows = el.compareDocumentPosition(active) & Node.DOCUMENT_POSITION_FOLLOWING;
+      return active !== document.body && !el.contains(active) && Boolean(follows);
+    });
+    expect(onward).toBe(true);
+
+    await link(LINKS[1]!).focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(link(LINKS[0]!)).toBeFocused();
   });
 });
 

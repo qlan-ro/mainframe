@@ -2,7 +2,8 @@
  * A web link (T1d, #341): where a click opens it, and its context menu.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -189,11 +190,63 @@ it('logs only scheme and host when opening a link fails', async () => {
   }
 });
 
-it('offers a Copy button when the link receives keyboard focus', async () => {
-  mountLink('https://example.com');
-  const link = screen.getByRole('link', { name: 'link text' });
-  act(() => link.focus());
-  const button = await screen.findByRole('button', { name: 'Copy' });
-  fireEvent.keyDown(link, { key: 'Tab' });
-  expect(button).toHaveFocus();
+describe('the keyboard', () => {
+  const hrefs = ['https://one.test', 'https://two.test', 'https://three.test'];
+  function mountThree() {
+    render(
+      <HostProvider host={new FakeHostBridge()}>
+        <TooltipProvider>
+          <button>before</button>
+          <p>
+            {hrefs.map((href) => (
+              <A key={href} href={href}>
+                {href}/
+              </A>
+            ))}
+          </p>
+          <button>after</button>
+        </TooltipProvider>
+      </HostProvider>,
+    );
+    return userEvent.setup();
+  }
+  const focused = () => document.activeElement?.textContent;
+
+  it('tabs through every link, its Copy and what follows, and back', async () => {
+    const keys = mountThree();
+    const stops: (string | null | undefined)[] = [];
+    for (let step = 0; step < 8; step++) {
+      await keys.tab();
+      stops.push(focused());
+      // Copy belongs to the link before it.
+      if (focused() === 'Copy') expect(screen.getByRole('tooltip')).toHaveTextContent(hrefs[(step - 2) / 2]!);
+    }
+    const [one, two, three] = hrefs.map((href) => `${href}/`);
+    expect(stops).toEqual(['before', one, 'Copy', two, 'Copy', three, 'Copy', 'after']);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    const back: (string | null | undefined)[] = [];
+    for (let step = 0; step < 4; step++) {
+      await keys.tab({ shift: true });
+      back.push(focused());
+    }
+    expect(back).toEqual([three, two, one, 'before']);
+  });
+
+  it('copies, and goes back from Copy to its link with Shift+Tab or Escape', async () => {
+    const keys = mountThree();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    await keys.tab();
+    await keys.tab();
+    await keys.tab();
+    await keys.keyboard('{Enter}');
+    expect(writeText).toHaveBeenCalledWith(hrefs[0]);
+    await keys.tab({ shift: true });
+    expect(focused()).toBe(`${hrefs[0]}/`);
+    await keys.tab();
+    await keys.keyboard('{Escape}');
+    expect(focused()).toBe(`${hrefs[0]}/`);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    await keys.tab();
+    expect(focused()).toBe(`${hrefs[1]}/`);
+  });
 });

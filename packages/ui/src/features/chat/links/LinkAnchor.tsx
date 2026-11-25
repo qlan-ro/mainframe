@@ -74,15 +74,15 @@ export function LinkAnchor({
   menu,
   className,
   children,
-  onBlur,
-  onKeyDown,
   ...props
 }: LinkAnchorProps): ReactElement {
   const { onMouseDown, endedDrag } = useLinkDragSelect();
   const feedback = useMenuCopyFeedback();
   const { copied, copy } = useCopyHref(href);
   const [tipOpen, setTipOpen] = useState(false);
-  const copyButton = useRef<HTMLButtonElement>(null);
+  // The tooltip is mounted right after its link, so Tab goes link, Copy, next link by itself.
+  const [place, setPlace] = useState<HTMLElement | null>(null);
+  const link = useRef<HTMLAnchorElement>(null);
   const handleClick = (event: MouseEvent) => {
     event.preventDefault();
     if (!endedDrag()) onOpen();
@@ -96,6 +96,7 @@ export function LinkAnchor({
           <ContextMenuTrigger asChild className="select-text">
             <a
               {...props}
+              ref={link}
               href={href}
               data-testid="chat-link"
               className={cn(
@@ -104,16 +105,9 @@ export function LinkAnchor({
                 className,
               )}
               onClick={handleClick}
+              // The tooltip closes on a blur that isn't prevented; Tab into it must find it open.
               onBlur={(event) => {
-                onBlur?.(event);
-                if (copyButton.current && event.relatedTarget === copyButton.current) event.preventDefault();
-              }}
-              onKeyDown={(event) => {
-                onKeyDown?.(event);
-                if (!event.defaultPrevented && event.key === 'Tab' && !event.shiftKey && copyButton.current) {
-                  event.preventDefault();
-                  copyButton.current.focus();
-                }
+                if (place?.contains(event.relatedTarget)) event.preventDefault();
               }}
               // stopPropagation only, never preventDefault: Radix composes a
               // nested trigger's own onContextMenu with checkForDefaultPrevented,
@@ -129,14 +123,20 @@ export function LinkAnchor({
         </TooltipTrigger>
         <LinkMenu href={href} onOpenIn={onOpenIn} menu={menu} feedback={feedback} />
       </ContextMenu>
-      <TooltipContent className="max-w-sm flex-col items-start gap-0.5 break-all">
+      <span ref={setPlace} />
+      <TooltipContent
+        container={place}
+        className="max-w-sm flex-col items-start gap-0.5 font-sans font-normal break-all not-italic select-none"
+        onEscapeKeyDown={() => {
+          if (place?.contains(document.activeElement)) link.current?.focus();
+        }}
+      >
         <div className="flex w-full items-center gap-2">
           <span className="min-w-0 truncate">{href}</span>
           <button
-            ref={copyButton}
             type="button"
             data-testid="chat-link-copy-url"
-            onBlur={() => setTipOpen(false)}
+            onBlur={(event) => event.relatedTarget !== link.current && setTipOpen(false)}
             onClick={(event) => void copy(event)}
             className="shrink-0 rounded-sm bg-accent px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:focus-line"
           >
