@@ -32,6 +32,7 @@
  * forward into the next New.
  */
 import { useDraftContent } from '@/features/chat/composer/draft-content/draft-content-store';
+import { dropUnsentOf } from '@/features/chat/composer/unsent/unsent-store';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 import { useSessionReferences } from '@/features/chat/composer/sessions/session-reference-store';
 import { useLayoutStore } from '@/store/layout';
@@ -39,20 +40,24 @@ import { clearDraftConfig } from '../runtime/draft-config';
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { abandonCreateForLocal } from '../runtime/new-thread-coordinator';
 import { clearDraftDiscarded } from './discarded-drafts';
+import { startDraftGeneration } from './draft-generation';
 
 export function resetNewThreadDraft(newThreadId: string | null | undefined): void {
   if (!newThreadId) return;
   rescopeNewThreadDraft(newThreadId);
+  startDraftGeneration(newThreadId);
   useComposerSegments.getState().clear(newThreadId);
   useDraftContent.getState().clear(newThreadId);
   useSessionReferences.getState().clear(newThreadId);
 }
 
-/**
- * The same reset for a draft that goes on in another project: what was written
- * in it (quotes and their prose, captures, code annotations, mentions) is the
- * user's, and stays.
- */
+/** The user closed the draft: its unsent messages go with it. A New, or leaving it, keeps them. */
+export function discardNewThreadDraft(newThreadId: string): void {
+  resetNewThreadDraft(newThreadId);
+  dropUnsentOf(newThreadId);
+}
+
+/** The same reset for a draft that goes on in another project (`move-draft.ts`): what was written in it stays. */
 export function rescopeNewThreadDraft(newThreadId: string | null | undefined): void {
   if (!newThreadId) return;
   abandonCreateForLocal(newThreadId);

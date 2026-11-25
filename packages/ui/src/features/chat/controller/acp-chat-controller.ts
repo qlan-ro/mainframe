@@ -15,6 +15,7 @@ import { reconcilePendings } from './chat-reconcile';
 import {
   acceptWorktreeOffer,
   dismissWorktreeOffer,
+  dropFailedMessage,
   markAttachmentsRestoredForFailure,
   holdQueuedMessages,
   retryChatMessage,
@@ -234,6 +235,11 @@ export class AcpChatController {
   /** Re-send a failed optimistic user message, applying its `remedy` first. */
   public retryMessage(clientId: string, remedy?: PromptRemedy): Promise<void> {
     return retryChatMessage(this.actionHost, clientId, remedy);
+  }
+
+  /** Take the failed bubble of a draft's first message off the transcript. */
+  public dropFailedMessage(unsentId: string): void {
+    dropFailedMessage(this.actionHost, unsentId);
   }
 
   public async cancel(): Promise<void> {

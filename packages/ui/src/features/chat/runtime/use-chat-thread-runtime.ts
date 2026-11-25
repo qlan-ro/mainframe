@@ -29,6 +29,8 @@ import { buildChatExtras, isRunningFromState, useChatExtrasState } from './chat-
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
 import { forgetSentCaptures, restoreSentCapture } from '../composer/draft-content/draft-content-store';
+import { failUnsent, moveUnsent, unsentIdOf } from '../composer/unsent/unsent-store';
+import { reportUnsent } from '../composer/unsent/report-unsent';
 import { captureIfMarked, handoffDraft, takeStash } from './draft-stash';
 
 // ---------------------------------------------------------------------------
@@ -144,14 +146,23 @@ export function useChatThreadRuntime(
   // (pre-existing chat, or one created earlier this session) just sends.
   const onNew = useCallback(
     async (message: AppendMessage): Promise<void> => {
+      const unsentId = unsentIdOf(message);
       // createChat can 401 before a pending bubble exists, after the composer reset.
       try {
         if (!controller.hasRemoteId()) {
           const { remoteId } = await createForLocal(controller.getThreadId(), port);
           chatControllerRegistry.adopt(controller, remoteId);
         }
+        moveUnsent(unsentId, controller.getDaemonId());
         await controller.sendMessage(message);
+        reportUnsent(unsentId);
       } catch (error) {
+        // A draft's first message is kept whole for the user to restore.
+        if (unsentId) {
+          failUnsent(unsentId, error);
+          reportUnsent(unsentId);
+          return;
+        }
         // Safe against the composer reset: sendMessage cannot reject before its
         // first await (the upload fetch), so this lands after append() has
         // dropped this promise and use-submit-composition has reset the composer.

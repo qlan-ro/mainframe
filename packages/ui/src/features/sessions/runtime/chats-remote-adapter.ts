@@ -31,6 +31,7 @@ import { sameData } from '../view-model/same-data';
 import { isSideChat, recordSideChatsFromList } from '../../side-chat/side-chat-ids';
 import { takeArchiveChoice, takeDiscard, takeLocalOnlyRemoval } from './archive-confirm-bridge';
 import { useSessionListLoadState } from './list-load-state';
+import { dropUnsentOf } from '@/features/chat/composer/unsent/unsent-store';
 import { createForLocal } from './new-thread-coordinator';
 import { chatControllerRegistry } from './chat-controller-registry';
 
@@ -122,9 +123,11 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
     },
     async archive(remoteId: string): Promise<void> {
       await archiveWithStagedChoice(port, remoteId);
+      dropUnsentOf(remoteId);
     },
     async delete(remoteId: string): Promise<void> {
       await archiveWithStagedChoice(port, remoteId);
+      dropUnsentOf(remoteId);
     },
     async unarchive(remoteId: string): Promise<void> {
       await unarchiveChat(port, remoteId);

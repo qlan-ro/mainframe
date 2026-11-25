@@ -104,7 +104,7 @@ describe('tiles', () => {
     expect(note).toHaveFocus();
     await user.keyboard('Last capture{Escape}');
     await waitFor(() => expect(screen.queryByTestId('composer-note-input')).toBeNull());
-    expect(notes().at(-1)).toBe('Last capture');
+    expect(notes().pop()).toBe('Last capture');
 
     const remove = screen.getByRole('button', { name: 'Remove screenshot50' });
     remove.focus();

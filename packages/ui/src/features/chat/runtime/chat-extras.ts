@@ -44,6 +44,8 @@ export interface ChatRuntimeExtras {
   /** Re-send a failed optimistic user message (the "Failed to send" indicator),
    *  applying the failure's `remedy` (Unarchive) first when given. */
   readonly retryMessage: (clientId: string, remedy?: PromptRemedy) => Promise<void>;
+  /** Take the failed bubble of a draft's first message off the transcript. */
+  readonly dropFailedMessage: (unsentId: string) => void;
   /** Re-run the history load — used to retry after `state.loadState.type === 'error'`. */
   readonly retry: () => Promise<void>;
   readonly acceptWorktreeOffer: (worktreePath: string) => Promise<void>;
@@ -80,6 +82,7 @@ export function buildChatExtras(
     cancelQueued: (messageId) => controller.cancelQueued(messageId),
     editQueued: (messageId, content) => controller.editQueued(messageId, content),
     retryMessage: (clientId, remedy) => controller.retryMessage(clientId, remedy),
+    dropFailedMessage: (unsentId) => controller.dropFailedMessage(unsentId),
     retry: () => controller.refresh(),
     acceptWorktreeOffer: (worktreePath) => controller.acceptWorktreeOffer(worktreePath),
     dismissWorktreeOffer: (worktreePath) => controller.dismissWorktreeOffer(worktreePath),

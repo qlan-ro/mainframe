@@ -71,7 +71,7 @@ export function isCreateInFlight(localId: string): boolean {
 function requireOwnedWorkflow(localId: string, workflow: CreateWorkflow): void {
   if (!workflow.abandoned && workflows.get(localId) === workflow) return;
   archiveAbandonedWorkflow(workflow);
-  throw new Error(`new-thread-coordinator: workflow abandoned for ${localId}`);
+  throw new Error('The new session was closed before it started.');
 }
 
 async function runWorkflow(localId: string, workflow: CreateWorkflow): Promise<{ remoteId: string }> {

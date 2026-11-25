@@ -6,34 +6,17 @@ import type { PreviewHandle, InspectResult, RegionSelectResult } from '@qlan-ro/
 let inspectResultCallback: ((result: InspectResult) => void) | null = null;
 let regionResultCallback: ((result: RegionSelectResult) => void) | null = null;
 
-const mockAddCapture = vi.fn();
-const mockClearCaptures = vi.fn();
-const mockSandboxGetState = {
-  addCapture: mockAddCapture,
-  clearCaptures: mockClearCaptures,
-  captures: [] as Array<{
-    id: string;
-    type: 'screenshot' | 'element';
-    imageDataUrl: string;
-    selector?: string;
-    annotation?: string;
-    region?: { w: number; h: number };
-  }>,
-};
-
-vi.mock('@/store/sandbox', () => ({
-  useSandboxStore: Object.assign(
-    (selector: (s: typeof mockSandboxGetState) => unknown) => selector(mockSandboxGetState),
-    { getState: () => mockSandboxGetState },
-  ),
-}));
-
 const mockAddToDraft = vi.fn();
 vi.mock('@/features/chat/composer/draft-content/use-add-to-draft', () => ({
   useAddToDraft: () => mockAddToDraft,
 }));
 
+import { useSandboxStore, type Capture } from '@/store/sandbox';
 import { usePreviewCapture } from '../use-preview-capture';
+
+const store = useSandboxStore.getState();
+const mockAddCapture = vi.fn(store.addCapture);
+const mockClearCaptures = vi.fn(store.clearCaptures);
 
 function makeFakeHandle(): PreviewHandle {
   return {
@@ -67,7 +50,7 @@ describe('usePreviewCapture', () => {
     vi.clearAllMocks();
     inspectResultCallback = null;
     regionResultCallback = null;
-    mockSandboxGetState.captures = [];
+    useSandboxStore.setState({ captures: [], addCapture: mockAddCapture, clearCaptures: mockClearCaptures });
     mockAddToDraft.mockReturnValue(true);
   });
 
@@ -228,12 +211,13 @@ describe('usePreviewCapture', () => {
     expect(mockAddCapture).toHaveBeenCalledWith(expect.objectContaining({ type: 'element', selector: '.btn' }));
   });
 
-  const submitWith = async (captures: typeof mockSandboxGetState.captures, notes: Record<string, string> = {}) => {
-    mockSandboxGetState.captures = captures;
-    const { result } = renderHook(() => usePreviewCapture(makeFakeHandle(), mockSetOverlayMounted));
+  const submitWith = async (captures: Capture[], notes: Record<string, string> = {}) => {
+    const handle = makeFakeHandle();
+    const { result } = renderHook(() => usePreviewCapture(handle, mockSetOverlayMounted));
     await act(async () => {
       result.current.onCaptureClick();
     });
+    act(() => useSandboxStore.setState({ captures }));
     for (const [id, note] of Object.entries(notes)) act(() => result.current.onAnnotationChange(id, note));
     act(() => result.current.onAnnotationSubmit());
     return result;
@@ -261,6 +245,23 @@ describe('usePreviewCapture', () => {
     const result = await submitWith([{ id: 'cap-1', type: 'screenshot', imageDataUrl: 'data:image/png;base64,abc' }]);
     expect(mockClearCaptures).not.toHaveBeenCalled();
     expect(result.current.annotationPopoverOpen).toBe(true);
+  });
+
+  it('closes the panel when a project switch takes the captures, and gives notes back with them', async () => {
+    const handle = makeFakeHandle();
+    const { result, unmount } = renderHook(() => usePreviewCapture(handle, mockSetOverlayMounted));
+    await act(async () => {
+      result.current.onCaptureClick();
+    });
+    const { id } = result.current.pendingCaptures[0]!;
+    act(() => result.current.onAnnotationChange(id, 'half a note'));
+    const taken = useSandboxStore.getState().captures;
+    act(() => useSandboxStore.setState({ captures: [] }));
+    expect(result.current).toMatchObject({ annotationPopoverOpen: false, annotationBackdrop: null });
+    expect(mockSetOverlayMounted).toHaveBeenLastCalledWith(false);
+
+    unmount();
+    expect(taken).toEqual([expect.objectContaining({ id, annotation: 'half a note' })]);
   });
 
   it('annotation cancel: calls clearCaptures and closes popover', async () => {

@@ -42,8 +42,11 @@
  * without an adapter round-trip.
  */
 import { useAui, useAuiState } from '@assistant-ui/react';
+import { isDraftSessionId } from '@/store/layout-persist';
 import type { EnterWhileRunning } from '@/store/ui-prefs';
 import { withSteer } from '../../controller/steer';
+import { getDraftConfig } from '@/features/sessions/runtime/draft-config';
+import { useChatExtras } from '../../runtime/chat-extras';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
 import { readLiveComposerState } from '../read-live-composer-state';
 import { toCompleteAttachment } from '../attachment-adapter';
@@ -52,6 +55,7 @@ import { draftItemsOf, holdSentCaptures, useDraftContent, useDraftItems } from '
 import { prependSessionReferences } from '../../session-references/reference-line';
 import { expandSessionMentions } from '../../session-references/session-mention';
 import { sessionReferencesFor, useSessionReferences } from '../sessions/session-reference-store';
+import { holdUnsent, unsentMetadata } from '../unsent/unsent-store';
 import { useComposerSegments } from './segment-store';
 import { serializeComposition } from './serialize-composition';
 
@@ -61,6 +65,7 @@ export type SubmitComposition = (mode?: EnterWhileRunning) => void;
 export function useSubmitComposition(): SubmitComposition {
   const aui = useAui();
   const threadId = useActiveThreadId();
+  const extras = useChatExtras();
 
   return (mode) => {
     if (threadId == null) return;
@@ -81,9 +86,32 @@ export function useSubmitComposition(): SubmitComposition {
     // message, and a label inside quoted code is not a session mention.
     const content = composeMessage(prependSessionReferences(wireText, references), items);
     const attachments = [...content.attachments, ...state.attachments.map(toCompleteAttachment)];
-    holdSentCaptures(threadId, content.captures);
     const runConfig = mode === 'steer' ? withSteer(state.runConfig) : state.runConfig;
-    aui.thread.append({ role: 'user', content: [{ type: 'text', text: content.body }], attachments, runConfig });
+    const chatId = extras?.state.chatId;
+    // A draft's first message is kept whole; in a session only its captures need keeping.
+    const unsentId =
+      chatId && isDraftSessionId(chatId)
+        ? holdUnsent({
+            threadId: chatId,
+            draft: {
+              text: state.text,
+              composition,
+              items: [...items],
+              attachments: [...state.attachments],
+              references: Object.fromEntries(references),
+            },
+            setup: getDraftConfig(chatId),
+            sent: attachments,
+          })
+        : undefined;
+    if (!unsentId) holdSentCaptures(threadId, content.captures);
+    aui.thread.append({
+      role: 'user',
+      content: [{ type: 'text', text: content.body }],
+      attachments,
+      runConfig,
+      ...(unsentId ? { metadata: unsentMetadata(unsentId) } : {}),
+    });
     composer.reset();
     useComposerSegments.getState().clear(threadId);
     useDraftContent.getState().clear(threadId);

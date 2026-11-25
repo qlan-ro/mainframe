@@ -6,8 +6,8 @@
  * Context → segment-store append seam (T26, spec #280: `setQuote` is gone —
  * nothing in this file writes `metadata.custom.quote` anymore).
  *
- * The Add Agent Context suite runs against a real CM6 state and the real draft
- * store; only the app around them is stubbed.
+ * The Add Agent Context and Quote Reference suites run against a real CM6 state
+ * and the real stores; only the app around them is stubbed.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -35,7 +35,9 @@ describe('buildReferenceForCm', () => {
 
 let __threadId: string | undefined = 'thread-1';
 let __delegation: unknown;
+const composer = vi.hoisted(() => ({ getState: () => ({ text: 'typed' }), setText: vi.fn() }));
 vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({ composer }),
   useAuiState: (sel: (s: unknown) => unknown) =>
     sel({ threadListItem: __threadId ? { id: __threadId, custom: { delegation: __delegation } } : undefined }),
 }));
@@ -43,6 +45,7 @@ const toast = vi.hoisted(() => ({ warning: vi.fn(), success: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ mfToast: toast }));
 
 import { draftItemsOf, useDraftContent } from '../../../chat/composer/draft-content/draft-content-store';
+import { useComposerSegments } from '../../../chat/composer/segments/segment-store';
 import { EditorContextMenu } from '../EditorContextMenu';
 
 const DOC = 'one\ntwo\nthree\nfour';
@@ -52,15 +55,32 @@ function viewOf(from: number, to = from): EditorView {
   return { state: EditorState.create({ doc: DOC, selection: { anchor: from, head: to } }) } as unknown as EditorView;
 }
 
-function addContext(view: EditorView) {
+const addContext = (view: EditorView) => choose(view, 'editor-context-menu-add-context');
+
+function choose(view: EditorView, item: string) {
   render(
     <EditorContextMenu filePath="src/auth.ts" viewRef={{ current: view }}>
       <div>editor content</div>
     </EditorContextMenu>,
   );
   fireEvent.contextMenu(screen.getByTestId('editor-context-menu'));
-  fireEvent.click(screen.getByTestId('editor-context-menu-add-context'));
+  fireEvent.click(screen.getByTestId(item));
 }
+
+describe('EditorContextMenu — Quote Reference', () => {
+  it('quotes path:line (word), after what was typed, and adds no annotation', () => {
+    __threadId = 'thread-1';
+    useComposerSegments.setState({ byThread: {} });
+    useDraftContent.setState({ byThread: {} });
+    choose(viewOf(5), 'editor-context-menu-quote-ref');
+    expect(useComposerSegments.getState().byThread['thread-1']).toMatchObject({
+      committed: [{ text: 'typed' }],
+      liveQuote: { text: 'src/auth.ts:2 (two)' },
+    });
+    expect(composer.setText).toHaveBeenCalledExactlyOnceWith('');
+    expect(draftItemsOf('thread-1')).toEqual([]);
+  });
+});
 
 describe('EditorContextMenu — Add Agent Context', () => {
   beforeEach(() => {

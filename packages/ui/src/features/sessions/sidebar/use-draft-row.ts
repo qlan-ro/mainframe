@@ -4,7 +4,7 @@ import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { draftRowVisible, type DraftRowModel } from '../new-thread/draft-row';
 import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
 import { useDraftConfigStore } from '../runtime/draft-config';
-import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
+import { discardNewThreadDraft } from '../new-thread/reset-new-thread-draft';
 import { markDraftDiscarded } from '../new-thread/discarded-drafts';
 import { useDraftNavigationCleanup } from './use-draft-navigation-cleanup';
 
@@ -35,7 +35,7 @@ export function useDraftRow(allItems: SessionItem[], filterProjectIds: ReadonlyS
 
   const onDiscard = useCallback(() => {
     if (newThreadId == null) return;
-    resetNewThreadDraft(newThreadId);
+    discardNewThreadDraft(newThreadId);
     markDraftDiscarded(newThreadId);
     const { returnThreadId, clear } = useDraftReturnTarget.getState();
     const target = returnThreadId ?? allItems[0]?.id ?? null;

@@ -16,9 +16,10 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
   const [annotationPopoverOpen, setAnnotationPopoverOpen] = useState(false);
   const [annotationBackdrop, setAnnotationBackdrop] = useState<string | null>(null);
   const [inspectActive, setInspectActive] = useState(false);
-  const [annotations, setAnnotations] = useState<Map<string, string>>(new Map());
   const pendingCaptures = useSandboxStore((s) => s.captures);
   const addToDraft = useAddToDraft();
+  // Nothing left to annotate: a project switch took the captures (`bound-content.ts`).
+  const annotating = annotationPopoverOpen && pendingCaptures.length > 0;
 
   const openAnnotation = useCallback(async () => {
     if (handle?.compositesAboveDom) {
@@ -82,8 +83,8 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
   }, [handle, openAnnotation]);
 
   useEffect(() => {
-    setOverlayMounted(annotationPopoverOpen);
-  }, [annotationPopoverOpen, setOverlayMounted]);
+    setOverlayMounted(annotating);
+  }, [annotating, setOverlayMounted]);
 
   const onCaptureClick = useCallback(() => {
     handle
@@ -133,15 +134,15 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
   }, [handle, inspectActive, regionSelectActive]);
 
   const onAnnotationChange = useCallback((id: string, annotation: string) => {
-    setAnnotations((prev) => new Map(prev).set(id, annotation));
+    useSandboxStore.getState().annotateCapture(id, annotation);
   }, []);
 
   const onAnnotationSubmit = useCallback(() => {
     const added = addToDraft(
-      pendingCaptures.map(({ id, annotation, ...capture }) => ({
+      pendingCaptures.map(({ id: _id, annotation, ...capture }) => ({
         kind: 'capture' as const,
         ...capture,
-        note: annotations.get(id) ?? annotation ?? '',
+        note: annotation ?? '',
       })),
     );
     // With no message to add to, the captures and their notes stay here.
@@ -149,21 +150,19 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
     useSandboxStore.getState().clearCaptures();
     setAnnotationPopoverOpen(false);
     setAnnotationBackdrop(null);
-    setAnnotations(new Map());
-  }, [pendingCaptures, annotations, addToDraft]);
+  }, [pendingCaptures, addToDraft]);
 
   const onAnnotationCancel = useCallback(() => {
     useSandboxStore.getState().clearCaptures();
     setAnnotationPopoverOpen(false);
     setAnnotationBackdrop(null);
-    setAnnotations(new Map());
   }, []);
 
   return {
     pendingCaptures,
     regionSelectActive,
-    annotationPopoverOpen,
-    annotationBackdrop,
+    annotationPopoverOpen: annotating,
+    annotationBackdrop: annotating ? annotationBackdrop : null,
     inspectActive,
     onCaptureClick,
     onRegionClick,

@@ -25,12 +25,12 @@ export function captureLabels(captures: ReadonlyArray<Pick<CaptureLike, 'type'>>
   return captures.map((c) => (c.type === 'element' ? `element${(el += 1)}` : `screenshot${(sc += 1)}`));
 }
 
-function escapeRowField(text: string): string {
+/** A row is one line: page text must not start another. */
+function oneLine(text: string): string {
   return text
     .replace(/\s+/g, ' ')
     .replace(/\p{Cc}|\p{Bidi_Control}/gu, '')
-    .trim()
-    .replace(/[\x60"|]/g, (character) => '\\u' + character.charCodeAt(0).toString(16).padStart(4, '0'));
+    .trim();
 }
 
 export function formatCaptures(captures: ReadonlyArray<CaptureLike>): {
@@ -52,9 +52,10 @@ export function formatCaptures(captures: ReadonlyArray<CaptureLike>): {
       kind: 'image',
       data: base64,
     });
-    const selector = escapeRowField(c.selector ?? '');
+    // The selector ends at a backtick, the note at the last quote of its line.
+    const selector = oneLine(c.selector ?? '').replace(/`/g, '\\u0060');
     const sel = selector ? ` — selector \`${selector}\`` : '';
-    const note = escapeRowField(c.annotation ?? '');
+    const note = oneLine(c.annotation ?? '');
     const ann = note ? ` — "${note}"` : '';
     lines.push(`> - \`${label}\`${sel}${ann}`);
   });

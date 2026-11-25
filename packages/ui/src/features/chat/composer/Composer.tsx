@@ -33,6 +33,7 @@ import { useComposerSegments } from './segments/segment-store';
 import { useSubmitComposition } from './segments/use-submit-composition';
 import { SendControls } from './send/SendControls';
 import { useEnterMode } from './send/use-enter-mode';
+import { UnsentNotices } from './unsent/UnsentNotices';
 import { TopStrip } from './strips/TopStrip';
 
 /**
@@ -214,6 +215,7 @@ function ComposerCard({
           )}
         >
           <QueuedRows />
+          <UnsentNotices />
           {/* Pending attachment tiles — the strip owns its own empty:hidden. */}
           <ComposerAttachments />
 

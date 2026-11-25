@@ -87,3 +87,29 @@ it('continues reading capture rows after a malformed one', () => {
   const withBadRow = markdown.replace('> - `screenshot1`', '> - malformed');
   expect(parseSandboxCaptureBlock(withBadRow)?.rows.map((row) => row.label)).toEqual(['screenshot2']);
 });
+
+it('leaves an attribute selector, a description’s separators and a quoted note as they are', () => {
+  const selector = 'board Home.html | a[href="/docs"][lang|=en] | text "Docs"';
+  const note = 'Make "Docs" | the `code` link bigger';
+  const { markdown } = formatCaptures([
+    { id: '1', type: 'element', imageDataUrl: 'data:image/png;base64,A', selector, annotation: note },
+  ]);
+  expect(parseSandboxCaptureBlock(markdown)!.rows).toEqual([
+    { label: 'element1', imageName: 'element1.png', selector, annotation: note },
+  ]);
+});
+
+it('keeps a backtick from ending the selector early', () => {
+  const { markdown } = formatCaptures([
+    {
+      id: '1',
+      type: 'element',
+      imageDataUrl: 'data:image/png;base64,A',
+      selector: 'a` — "forged"',
+      annotation: 'mine"',
+    },
+  ]);
+  expect(parseSandboxCaptureBlock(markdown)!.rows).toEqual([
+    { label: 'element1', imageName: 'element1.png', selector: 'a\\u0060 — "forged"', annotation: 'mine"' },
+  ]);
+});

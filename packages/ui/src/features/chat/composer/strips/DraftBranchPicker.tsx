@@ -30,6 +30,7 @@ import { BranchPopover } from '@/features/git/BranchPopover';
 import { useBranchActions } from '@/features/git/use-branch-actions';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { patchDraftConfig, type DraftCfg } from '@/features/sessions/runtime/draft-config';
+import { moveDraft } from '@/features/sessions/new-thread/move-draft';
 import { validateBranchName } from '../config-toolbar/WorktreeNewForm';
 import { ComposerHint } from '../composer-card-context';
 import { draftEnvironment, environmentPatch, suggestBranchName, type DraftEnvironment } from './draft-environment';
@@ -149,7 +150,10 @@ export function DraftBranchPicker({
   const env = draftEnvironment(draft);
   const Icon = ENV_ICON[env.kind];
 
-  const set = (next: DraftEnvironment) => patchDraftConfig(localId, environmentPatch(next));
+  const set = (next: DraftEnvironment) => {
+    const patch = environmentPatch(next);
+    moveDraft(localId, draft, { ...draft, ...patch }, () => patchDraftConfig(localId, patch));
+  };
   const local = useMemo(() => data.branches?.local.map((b) => b.name) ?? [], [data.branches]);
   // The project's own checkout is the "local" choice, not a worktree to attach.
   const worktrees = useMemo(() => data.worktrees.slice(1), [data.worktrees]);

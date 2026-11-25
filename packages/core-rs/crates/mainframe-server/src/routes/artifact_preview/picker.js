@@ -68,11 +68,16 @@
     return singleLine(text).replace(/[\x60"|]/g, (character) => '\\u' + character.charCodeAt(0).toString(16).padStart(4, '0'));
   }
 
+  // The same characters as CSS spells them, so the path still selects.
+  function selectorField(path) {
+    return singleLine(path).replace(/\\?([\x60"|])/g, (_, character) => `\\${character.charCodeAt(0).toString(16)} `);
+  }
+
   // Escape fields before joining them so page text cannot imitate a field boundary.
   function describe(element) {
     const { slug, page } = pageParts();
     const text = descriptionField(singleLine(element.innerText || element.textContent || '').slice(0, MAX_TEXT));
-    const parts = [`artifact https://claude.ai/artifact/${slug}`, `board ${page}`, descriptionField(cssPath(element))];
+    const parts = [`artifact https://claude.ai/artifact/${slug}`, `board ${descriptionField(page)}`, selectorField(cssPath(element))];
     if (text) parts.push(`text "${text}"`);
     return singleLine(parts.join(' | '));
   }

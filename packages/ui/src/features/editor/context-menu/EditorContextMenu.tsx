@@ -6,6 +6,7 @@
  *   Copy Reference    — builds `path:line (word)` and writes to clipboard.
  *   Add Agent Context — adds the selected lines (or the cursor's line) to the
  *                       message being written, as a code annotation (C14).
+ *   Quote Reference   — quotes `path:line (word)` in the message being written.
  *   Go to Definition  — ⌘-click equivalent via providers.getDefinition.
  *   Find All Refs     — calls providers.getReferences + shows the panel.
  *
@@ -17,7 +18,7 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
-import { Copy, Quote, Code2, Search, MessageSquare } from 'lucide-react';
+import { Copy, Quote, Code2, Search, MessageSquare, TextQuote } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -31,6 +32,7 @@ import type { LspProviders, LspLocation } from '@/lib/lsp';
 import { buildReferenceForCm, writeToClipboard } from '@/lib/editor/copy-reference';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useAddToDraft } from '../../chat/composer/draft-content/use-add-to-draft';
+import { useAppendQuoteSegment } from '../../chat/composer/segments/use-append-quote-segment';
 import { resolveCommentRange } from '../inline-comments/resolve-comment-range';
 import { jumpHistory } from '../lsp/navigation';
 import { ReferencesPanel } from '../lsp/references-panel';
@@ -92,6 +94,7 @@ function readCursorContext(view: EditorView): CursorContext {
 
 export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, children }: EditorContextMenuProps) {
   const addToDraft = useAddToDraft();
+  const appendQuoteSegment = useAppendQuoteSegment();
   // References panel visibility state.
   const [references, setReferences] = useState<LspLocation[] | null>(null);
   const [refSymbol, setRefSymbol] = useState<string | undefined>(undefined);
@@ -137,6 +140,15 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
     if (!view || !ctx) return;
     addToDraft([{ kind: 'code', filePath, ...resolveCommentRange(view.state, ctx.line + 1), note: '' }]);
   }, [filePath, viewRef, addToDraft]);
+
+  // ── Quote Reference ───────────────────────────────────────────────────────
+
+  const handleQuoteReference = useCallback(() => {
+    const ctx = cursorRef.current;
+    if (!ctx) return;
+    // The same `path:line (word)` string the Copy Reference command uses.
+    appendQuoteSegment(buildReferenceForCm(filePath, ctx.line, ctx.word));
+  }, [filePath, appendQuoteSegment]);
 
   // ── Go to Definition ──────────────────────────────────────────────────────
 
@@ -248,7 +260,7 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
           <ContextMenuSeparator />
 
           <ContextMenuGroup>
-            {/* The one accent-ink item: it writes into the composer, not the editor. */}
+            {/* The accent-ink items write into the composer, not the editor. */}
             <ContextMenuItem
               data-testid="editor-context-menu-add-context"
               onSelect={handleAddAgentContext}
@@ -256,6 +268,14 @@ export function EditorContextMenu({ filePath, viewRef, providers, lspConfig, chi
             >
               <MessageSquare className="text-primary" />
               Add Agent Context
+            </ContextMenuItem>
+            <ContextMenuItem
+              data-testid="editor-context-menu-quote-ref"
+              onSelect={handleQuoteReference}
+              className="text-primary"
+            >
+              <TextQuote className="text-primary" />
+              Quote Reference
             </ContextMenuItem>
           </ContextMenuGroup>
         </ContextMenuContent>
