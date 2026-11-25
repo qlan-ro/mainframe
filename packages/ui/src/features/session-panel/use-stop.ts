@@ -41,6 +41,7 @@ export function useStop(title: string, request: (() => Promise<void>) | undefine
     if (!stoppable && offered.current !== undefined) release(offered.current);
     offered.current = stoppable ? key : undefined;
   }, [stoppable, key]);
+  useEffect(() => () => release(own), [own]);
   const stop = async () => {
     if (!request || pending.has(key)) return;
     const mine = setTimeout(() => release(key), STOP_RETRY_MS);
