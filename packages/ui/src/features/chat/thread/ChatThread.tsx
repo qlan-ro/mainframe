@@ -3,6 +3,7 @@ import { useRef, type ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { ChatSelectionToolbar } from './ChatSelectionToolbar';
 import { ComposerEditProvider } from '../composer/edit/composer-edit-context';
+import { ThreadComposerProvider } from '../composer/thread-composer';
 import { SkillsProvider } from '@/features/skills/use-chat-skills';
 import { FindBar } from '../find/FindBar';
 import { useFindInChatStore } from '../find/find-in-chat-store';
@@ -20,21 +21,23 @@ export function ChatThread({
   const findOwner = focused && variant === 'main';
   const rootRef = useRef<HTMLDivElement>(null);
   return (
-    <ComposerEditProvider>
-      <SkillsProvider>
-        <RootTranscriptScope>
-          <ThreadPrimitive.Root
-            ref={rootRef}
-            data-testid="chat-thread"
-            className="flex h-full flex-col overflow-hidden bg-background text-foreground"
-          >
-            {findOwner && <ThreadFind />}
-            <ChatThreadViewport emptyState={emptyState} variant={variant} />
-            <ChatSelectionToolbar scopeRef={rootRef} />
-          </ThreadPrimitive.Root>
-        </RootTranscriptScope>
-      </SkillsProvider>
-    </ComposerEditProvider>
+    <ThreadComposerProvider>
+      <ComposerEditProvider>
+        <SkillsProvider>
+          <RootTranscriptScope>
+            <ThreadPrimitive.Root
+              ref={rootRef}
+              data-testid="chat-thread"
+              className="flex h-full flex-col overflow-hidden bg-background text-foreground"
+            >
+              {findOwner && <ThreadFind />}
+              <ChatThreadViewport emptyState={emptyState} variant={variant} />
+              <ChatSelectionToolbar scopeRef={rootRef} />
+            </ThreadPrimitive.Root>
+          </RootTranscriptScope>
+        </SkillsProvider>
+      </ComposerEditProvider>
+    </ThreadComposerProvider>
   );
 }
 

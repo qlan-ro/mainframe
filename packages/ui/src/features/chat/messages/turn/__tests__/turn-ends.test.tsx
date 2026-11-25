@@ -177,6 +177,7 @@ describe('a sub-agent that outlives the turn', () => {
     const over = turn(claude('completed'), launched, text('Started'));
     await session.apply({ type: 'background.upsert', task: live }, transcript(over), IDLE);
     await waitFor(() => expect([states(), opened()]).toEqual([['going'], [true]]));
+    vi.mocked(listBackgroundTasks).mockResolvedValue([{ ...task, status: 'completed' }] as never);
     await session.apply({ type: 'background.ended', taskId: 'bg' });
     await waitFor(() => expect([states(), opened()]).toEqual([['finished'], [false]]));
   });

@@ -20,11 +20,11 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
-import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useMenuCopyFeedback } from '@/lib/ui/use-menu-copy-feedback';
 import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
 import { toFileRef } from '@/lib/files/file-ref';
+import { useFileBases } from '../tools/chat-file-bases';
 import { useOpenFile } from '../tools/chat-tool-context';
 
 /**
@@ -46,7 +46,7 @@ function suppressRadixTrigger(event: React.MouseEvent): void {
 
 export function MessagePathContextMenu({ children }: { children: ReactNode }) {
   const [path, setPath] = useState<string | null>(null);
-  const bases = useActiveBasesStore((s) => s.bases);
+  const bases = useFileBases();
   const { openFile } = useOpenFile();
   const { statusFor, handleOpenChange, onCopySelect } = useMenuCopyFeedback();
 

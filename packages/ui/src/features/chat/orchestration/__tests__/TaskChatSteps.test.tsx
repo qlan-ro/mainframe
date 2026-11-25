@@ -18,6 +18,15 @@ vi.mock('../../messages/turn/AgentSteps', () => ({
   ),
 }));
 
+vi.mock('@/features/workspace-chat/OwnFiles', () => ({
+  OwnFiles: ({ chatId, children }: { chatId: string; children: ReactNode }) => (
+    <div data-testid="own-files" data-chat={chatId}>
+      {children}
+    </div>
+  ),
+}));
+
+import { createChatThreadState } from '../../controller/chat-thread-state';
 import { TaskChatSteps } from '../TaskChatSteps';
 
 function show(overrides: Partial<TaskChatView>, onOpen?: () => void) {
@@ -26,6 +35,8 @@ function show(overrides: Partial<TaskChatView>, onOpen?: () => void) {
     hiddenCount: 0,
     loadState: { type: 'ready' },
     pendingToolIds: new Set(),
+    state: createChatThreadState('kid'),
+    world: { runs: false, tasks: null, live: true },
     ...overrides,
   });
   render(
@@ -48,6 +59,12 @@ beforeEach(() => {
 });
 
 describe('TaskChatSteps', () => {
+  it('reads its files as the task’s chat has them, which can be another worktree’s', () => {
+    show({ messages: messages('m1') });
+    expect(screen.getByTestId('own-files')).toHaveAttribute('data-chat', 'kid');
+    expect(screen.getByTestId('own-files')).toContainElement(screen.getByTestId('stub-steps'));
+  });
+
   it.each([
     [{ type: 'loading' } as const, "Loading the task's chat…"],
     [{ type: 'error', error: new Error('boom') } as const, "Couldn't load the task's chat."],

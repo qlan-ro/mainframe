@@ -1,71 +1,49 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
-import { listBackgroundTasks } from '@/lib/api/background-tasks';
+import { useMemo, useState } from 'react';
+import type { BackgroundActivityTask } from '@qlan-ro/mainframe-types';
+import { useChatTasks } from '@/features/workspace-chat/use-chat-tasks';
 import { useChatExtrasSelector } from '../../runtime/chat-extras';
 import { useSessionItems } from '../../orchestration/use-session-items';
 import type { TurnModel } from '../../view-model/turn/types';
+import type { AgentWorld } from './agent-world';
 import { liveChildren, sameLive, type LiveChildren } from './live-children';
 
 const NO_TASKS: Readonly<Record<string, BackgroundActivityTask>> = {};
 
-/** First wait before asking again; doubles up to the last. */
-const RETRY_MS = 1000;
-const RETRY_MAX_MS = 30_000;
-
 /**
- * Which call started each running background task: only the daemon's list says.
- * Asked again while it fails or doesn't name a running task yet, since an agent
- * nobody placed holds every turn open; and once more when the last one ends, for
- * how it ended. `launched`: an agent was started, whose call says only that.
+ * What the chat knows of its agents. The daemon's list says which call started
+ * each background task, and is asked for once there is one to place: a running
+ * task, or a sub-agent's call.
  */
-export function useListedTasks(
+export function useAgentWorld(
   chatId: string | undefined,
-  live: Readonly<Record<string, BackgroundActivityTask>>,
-  launched: boolean,
-): readonly BackgroundTask[] {
-  const [listed, setListed] = useState<readonly BackgroundTask[]>([]);
-  const ids = Object.keys(live).sort().join(' ');
-  useEffect(() => {
-    if (!chatId || (!ids && !launched) || chatId.startsWith('__LOCALID_')) return;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let wait = RETRY_MS;
-    const retry = () => {
-      timer = setTimeout(() => void ask(), wait);
-      wait = Math.min(wait * 2, RETRY_MAX_MS);
-    };
-    const ask = async () => {
-      try {
-        const tasks = await listBackgroundTasks(chatId);
-        if (!active) return;
-        setListed(tasks);
-        const named = new Set(tasks.map((task) => task.id));
-        if (ids && ids.split(' ').some((id) => !named.has(id))) retry();
-      } catch (error) {
-        console.warn('[transcript] background task list failed', error);
-        if (active) retry();
-      }
-    };
-    void ask();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [chatId, ids, launched]);
-  return listed;
+  events: Readonly<Record<string, BackgroundActivityTask>>,
+  agents: boolean,
+  runs: boolean,
+): AgentWorld {
+  const listed = chatId !== undefined && !chatId.startsWith('__LOCALID_');
+  const { tasks, live } = useChatTasks(chatId ?? '', events, listed && (agents || Object.keys(events).length > 0));
+  return useMemo(() => ({ runs, tasks, live }), [runs, tasks, live]);
 }
 
 /** Where each turn's child work stands; the same object until one of them moves. */
-export function useLiveChildren(model: TurnModel, chatId: string | undefined): LiveChildren {
+export function useLiveChildren(
+  model: TurnModel,
+  chatId: string | undefined,
+  runs: boolean,
+): { children: LiveChildren; world: AgentWorld } {
   const sessions = useSessionItems();
   const live = useChatExtrasSelector((extras) => extras?.state.backgroundTasks) ?? NO_TASKS;
-  const launched = useMemo(
-    () => [...model.turns.values()].some((turn) => turn.children.some((child) => child.launched)),
+  const agents = useMemo(
+    () => [...model.turns.values()].some((turn) => turn.children.some((child) => child.call)),
     [model],
   );
-  const listed = useListedTasks(chatId, live, launched);
-  const next = useMemo(() => liveChildren(model, { sessions, live, listed }), [model, sessions, live, listed]);
+  const world = useAgentWorld(chatId, live, agents, runs);
+  const { tasks: listed, live: listLive } = world;
+  const next = useMemo(
+    () => liveChildren(model, { sessions, live, listed, listLive, runs }),
+    [model, sessions, live, listed, listLive, runs],
+  );
   const [kept, setKept] = useState(next);
   if (kept !== next && !sameLive(kept, next)) setKept(next);
-  return kept;
+  return { children: kept, world };
 }

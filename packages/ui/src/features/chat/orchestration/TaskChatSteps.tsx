@@ -7,8 +7,11 @@
  */
 import { PanelRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { OwnFiles } from '@/features/workspace-chat/OwnFiles';
+import { AgentWorldProvider } from '../messages/turn/agent-world';
 import { AgentSteps, type AgentStepsProps } from '../messages/turn/AgentSteps';
 import { BodyNote } from '../tools/bodies/Surface';
+import { OwnChatStateProvider } from '../runtime/own-chat-state';
 import { useTaskChat, type TaskChatView } from './use-task-chat';
 
 export interface TaskChatStepsProps extends Omit<AgentStepsProps, 'messages' | 'before' | 'after'> {
@@ -49,18 +52,24 @@ export function TaskChatSteps({ chatId, taskId, onOpen, ...steps }: TaskChatStep
   const note = view.messages.length === 0 || view.loadState.type === 'error' ? emptyText(view.loadState) : undefined;
   return (
     <div data-testid={`chat-tool-delegate-task-transcript-${taskId}`} className="min-w-0">
-      <AgentSteps
-        {...steps}
-        messages={view.messages}
-        chatId={chatId}
-        pendingToolIds={view.pendingToolIds}
-        before={
-          <>
-            {view.hiddenCount > 0 && <EarlierMessages count={view.hiddenCount} taskId={taskId} onOpen={onOpen} />}
-            {note && <BodyNote testId={`chat-tool-delegate-task-empty-${taskId}`}>{note}</BodyNote>}
-          </>
-        }
-      />
+      <AgentWorldProvider value={view.world}>
+        <OwnChatStateProvider value={view.state}>
+          <OwnFiles chatId={chatId}>
+            <AgentSteps
+              {...steps}
+              messages={view.messages}
+              chatId={chatId}
+              pendingToolIds={view.pendingToolIds}
+              before={
+                <>
+                  {view.hiddenCount > 0 && <EarlierMessages count={view.hiddenCount} taskId={taskId} onOpen={onOpen} />}
+                  {note && <BodyNote testId={`chat-tool-delegate-task-empty-${taskId}`}>{note}</BodyNote>}
+                </>
+              }
+            />
+          </OwnFiles>
+        </OwnChatStateProvider>
+      </AgentWorldProvider>
     </div>
   );
 }

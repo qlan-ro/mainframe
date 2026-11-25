@@ -12,6 +12,7 @@ import { isPlaceholder } from '../../view-model/placeholder';
 import { boundedMessageComponents } from '../bounded-messages';
 import { MessageRenderBoundary } from '../MessageRenderBoundary';
 import { AssistantMessage } from '../AssistantMessage';
+import { AgentWorldProvider } from './agent-world';
 import { TurnSlice } from './TurnSlice';
 import { useTranscriptScope } from './transcript-scope';
 import { TurnProvider, useTurnSelector, type TurnContextValue } from './turn-context';
@@ -108,15 +109,17 @@ export function TurnTranscript() {
     () => buildTurns(messages, { ...scope, isRunning, runAfter }, cache),
     [messages, scope, isRunning, runAfter, cache],
   );
-  const children = useLiveChildren(model, chatId);
+  const { children, world } = useLiveChildren(model, chatId, isRunning);
   useJumps(model, chatId);
   const state = useTurnState(model, children, root);
   const value: TurnContextValue = { model, children, ...state };
   return (
     <TurnProvider value={value}>
-      <div ref={root} data-testid="chat-transcript">
-        <VirtualMessages components={components} />
-      </div>
+      <AgentWorldProvider value={world}>
+        <div ref={root} data-testid="chat-transcript">
+          <VirtualMessages components={components} />
+        </div>
+      </AgentWorldProvider>
     </TurnProvider>
   );
 }

@@ -1,10 +1,11 @@
 /** Splits a turn's units into steps, markers and the answer, and reads how its steps went. Pure. */
+import { callFacts } from '@/features/workspace-chat/agent-status';
 import { parseDelegateResult } from '../../orchestration/delegate-result';
 import { resolveResultText } from '../../tools/shared/result';
 import { parseWorkflowLaunch } from '../../workflow/workflow-progress';
 import { isChildWork, isMarkerTool, toolKind } from './tool-kind';
 import { settledStatus } from './tool-status';
-import { agentLaunched, launchedOnly, retryKey } from './tool-values';
+import { launchedOnly, retryKey } from './tool-values';
 import { isMarkerUnit, isTextUnit } from './turn-units';
 import type { ToolPart, TurnChild, TurnUnit } from './types';
 
@@ -71,7 +72,7 @@ function childOf(tool: ToolPart, pending: ReadonlySet<string>, live: boolean): T
     const launch = parseDelegateResult(text);
     return { ...base, taskChatId: launch?.childChatId, taskId: launch?.taskId, taskStatus: launch?.status };
   }
-  return agentLaunched(text) ? { ...base, launched: true } : base;
+  return { ...base, call: callFacts({ part: tool, messageId: '' }, pending) };
 }
 
 export function turnChildren(tools: readonly ToolPart[], pending: ReadonlySet<string>, live: boolean): TurnChild[] {

@@ -9,7 +9,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { PanelRight } from 'lucide-react';
 import { useAui } from '@assistant-ui/react';
 import type { TaskStatus } from '@qlan-ro/mainframe-types';
-import { openInSplit } from '@/features/chat/zones/open-in-split';
+import { openTaskTab } from '@/features/workspace-chat/open-session';
 import { useAdaptersStore } from '@/store/adapters';
 import { AgentSteps } from '../messages/turn/AgentSteps';
 import { RowAction, RowDisclosure } from '../messages/turn/RowDisclosure';
@@ -61,24 +61,15 @@ const NOTES: Partial<Record<RowStatus, string>> = {
 
 /**
  * The child's list row, whether it (or a task below it) waits on the user, and
- * how to open it: beside the parent, via the same `openInSplit` gesture the tab
- * strip's ⌘-click uses, never a plain `switchToThread` that would replace the
- * parent on screen. `switchToThread` then only moves focus onto it, which also
- * unarchives an archived child.
+ * how to open it: as a workspace tab beside the parent, which stays the
+ * conversation (W8). Opening an archived child restores it.
  */
 function useTaskChild(childChatId: string | undefined) {
   const aui = useAui();
   const items = useSessionItems();
   const child = childChatId == null ? undefined : findSession(items, childChatId);
   const needsYou = child != null && (child.custom.hasPending || child.custom.delegatedWaiting === true);
-  const openChild =
-    child == null
-      ? undefined
-      : () => {
-          const { mainThreadId } = aui.threads.getState();
-          openInSplit(mainThreadId, child.id);
-          aui.threads.switchToThread(child.id);
-        };
+  const openChild = child == null ? undefined : () => openTaskTab(aui.threads, child.id);
   return { child, needsYou, openChild };
 }
 
@@ -188,7 +179,7 @@ export function DelegateRow({ unit, part, turnKey }: ToolRowProps) {
       actions={
         parsed && openChild ? (
           <RowAction
-            label={archived ? `Restore and open ${title} beside this chat` : `Open ${title} beside this chat`}
+            label={archived ? `Restore ${title} and open it in the workspace` : `Open ${title} in the workspace`}
             testId={`chat-tool-delegate-task-open-${parsed.taskId}`}
             onClick={openChild}
           >

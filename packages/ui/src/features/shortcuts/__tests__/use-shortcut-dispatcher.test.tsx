@@ -90,7 +90,7 @@ describe('AC 2 — every shipped chord fires its id exactly once and prevents de
     { name: '⌘B', id: 'sessions.toggle-sidebar', init: { code: 'KeyB', metaKey: true } },
     { name: '⌘⇧T', id: 'app.quick-task', init: { code: 'KeyT', metaKey: true, shiftKey: true } },
     { name: '⌘⇧A in dev', id: 'app.automations', init: { code: 'KeyA', metaKey: true, shiftKey: true }, dev: true },
-    { name: '⌘\\', id: 'sessions.close-split', init: { code: 'Backslash', metaKey: true } },
+    { name: '⌘\\', id: 'sessions.close-beside', init: { code: 'Backslash', metaKey: true } },
   ];
 
   for (const { name, id, init, dev } of cases) {
@@ -238,7 +238,7 @@ describe('AC 8 — matching is on the physical key, not the printed character', 
 
     press(window, { code: 'Backslash', key: '|', metaKey: true, shiftKey: true });
 
-    expect(spies['sessions.open-in-split']).toHaveBeenCalledTimes(1);
+    expect(spies['sessions.open-beside']).toHaveBeenCalledTimes(1);
     unmount();
   });
 

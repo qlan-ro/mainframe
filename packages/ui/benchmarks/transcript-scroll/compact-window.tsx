@@ -7,7 +7,7 @@ import { useMemo, type ReactNode } from 'react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import { TooltipProvider } from '../../src/components/ui/tooltip';
 import { CompactTranscript } from '../../src/features/chat/messages/compact/CompactTranscript';
-import { TranscriptScopeProvider } from '../../src/features/chat/messages/compact/transcript-scope';
+import { TranscriptScopeProvider } from '../../src/features/chat/messages/turn/transcript-scope';
 import {
   TranscriptScrollProvider,
   type TranscriptScrollController,

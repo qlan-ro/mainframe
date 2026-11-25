@@ -789,9 +789,9 @@ test.describe('§session-panel — Activity section (task-subagent)', () => {
     await expect(row).toBeVisible();
     await expect(row).toHaveAttribute('data-activity-state', 'completed');
 
-    // The row opens the sub-agent's transcript beside the chat.
+    // The row opens the sub-agent's tab in the workspace.
     await row.click();
-    await expect(page.locator('[data-testid^="chat-subagent-zone-"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid^="workspace-conversation-agent-"]')).toBeVisible({ timeout: 10_000 });
   });
 });
 

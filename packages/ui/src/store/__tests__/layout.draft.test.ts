@@ -12,7 +12,7 @@ vi.mock('../url-tunnel-cleanup', () => ({ releaseUrlTunnels: (ids: string[]) => 
 
 import { useLayoutStore, type WorkspaceLayout } from '../layout';
 
-const FRESH: WorkspaceLayout = { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+const FRESH: WorkspaceLayout = { top: ['chat'], topFlex: {} };
 
 function resetStores() {
   useLayoutStore.setState({ layout: { ...FRESH }, run: null, sessions: new Map(), activeSessionId: null });

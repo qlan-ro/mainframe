@@ -8,7 +8,8 @@
  * Testid reference:
  *   session-panel-activity-<entryId>  — an Activity row
  *   chat-message-list[data-loaded-count] — how many messages are loaded
- *   chat-subagent-zone-<toolCallId>   — a sub-agent's transcript beside the chat
+ *   workspace-conversation-agent-<toolCallId> — a sub-agent's tab in the workspace
+ *   workspace-tab-agent-<toolCallId> / workspace-tab-close-agent-<toolCallId> — its pill and close button
  *   [data-activity-id]                — a transcript row, by the tool calls it stands for
  */
 import { test, expect, type Page } from '@playwright/test';
@@ -104,17 +105,23 @@ test.describe('§session-panel — jumps in a windowed session', () => {
     await expect(landed.locator(':focus')).toHaveCount(1);
   });
 
-  test('a sub-agent started before the loaded history opens its own transcript', async () => {
+  test('a sub-agent started before the loaded history opens its own tab', async () => {
     const { page } = app;
     await row(page, 'earlier-agent').click();
-    const zone = page.getByTestId('chat-subagent-zone-window-tool-239-2');
-    await expect(zone).toBeVisible({ timeout: 10_000 });
-    await expect(zone.getByText('Loading subagent transcript...')).toHaveCount(0);
-    await expect(zone.getByText('Not in this transcript')).toHaveCount(0);
+    const body = page.getByTestId('workspace-conversation-agent-window-tool-239-2');
+    await expect(body).toBeVisible({ timeout: 10_000 });
+    // It has a status once its call is loaded; until then it says that it is loading, or is not there.
+    await expect(body.getByTestId('workspace-agent-status-window-tool-239-2')).toBeVisible({ timeout: 10_000 });
+    await expect(body.getByText('Not in this transcript')).toHaveCount(0);
     await expect(page.getByTestId('chat-message-list')).not.toHaveAttribute(
       'data-loaded-count',
       String(WINDOWED_PAGE_CONTAINERS),
     );
+
+    // Open tabs outlive a reload, and an open workspace parks the panel the other tests click in.
+    await page.getByTestId('workspace-tab-agent-window-tool-239-2').hover();
+    await page.getByTestId('workspace-tab-close-agent-window-tool-239-2').click();
+    await expect(page.getByTestId('workspace-surface')).toHaveCount(0);
   });
 
   test('a monitor the history does not hold says so and stays put', async () => {

@@ -397,7 +397,12 @@ describe('child work', () => {
       ]),
     );
     expect(turn.children).toEqual([
-      { toolCallId: 'agent', kind: 'agent', status: 'success' },
+      {
+        toolCallId: 'agent',
+        kind: 'agent',
+        status: 'success',
+        call: { pending: false, open: false, failed: false, cancelled: false },
+      },
       // In a turn that ended, a call with no outcome was cut short.
       { toolCallId: 'task', kind: 'agent', status: 'stopped' },
       { toolCallId: 'flow', kind: 'workflow', status: 'success' },

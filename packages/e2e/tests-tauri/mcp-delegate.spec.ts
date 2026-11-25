@@ -28,7 +28,7 @@
  *   sessions-row (data-chat-id) — a sidebar row; the child never gets one
  *   chat-absorbed-message — the delivered result message, which the row shows instead (T1f)
  *   chat-header-parent-link     — the child's "Delegated by" link
- *   chat-zone-<chatId>          — a split zone, one per chat shown side by side
+ *   workspace-conversation-chat-<chatId> — the task's chat as a workspace tab
  */
 
 import { test, expect, type Locator } from '@playwright/test';
@@ -85,24 +85,29 @@ test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
     await expect(transcript).toContainText('No data races found', { timeout: 15_000 });
   });
 
-  test('the row opens the child in a split beside the parent, which links back to its delegator', async () => {
+  test('the row opens the child as an agent tab in the workspace, beside the parent', async () => {
     const { page } = app;
     const card = page.getByTestId('chat-tool-delegate-task-card');
     await expect(card).toBeVisible();
 
     await page.locator('[data-testid^="chat-tool-delegate-task-open-"]').click();
 
-    // Opened beside the parent, not instead of it: two zones on screen, and
-    // the parent's own task row is still visible in its zone. Scoped to
-    // `data-focused` (only each zone's own root carries it) so it doesn't also
-    // pick up that zone's `chat-zone-strip-<id>` header and `chat-zone-close-<id>` button.
-    await expect(page.locator('[data-testid^="chat-zone-"][data-focused]')).toHaveCount(2);
-    await expect(card).toBeVisible();
+    // Beside the parent, not instead of it: the parent's row is still in the
+    // chat column, and the task's whole transcript is in its tab.
+    const tab = page.locator('[data-testid^="workspace-conversation-chat-"]');
+    await expect(tab).toContainText('No data races found', { timeout: 15_000 });
+    await expect(page.locator('[data-surface="chat"]').getByTestId('chat-tool-delegate-task-card')).toBeVisible();
 
-    const parentLink = page.getByTestId('chat-header-parent-link').first();
-    await expect(parentLink).toContainText('Delegated by', { timeout: 15_000 });
+    const header = tab.locator('[data-testid^="workspace-chat-header-"]');
+    await expect(header).toContainText('Delegated task');
+    await expect(header.locator('[data-testid^="workspace-chat-status-"]')).toHaveAttribute('data-status', 'completed');
+    await expect(header.locator('[data-testid^="workspace-chat-stop-"]')).toHaveCount(0);
     await expect(page.getByTestId('sessions-row')).toHaveCount(1);
 
+    // Moved to the chat column, it links back to its delegator.
+    await header.locator('[data-testid^="workspace-chat-promote-"]').click();
+    const parentLink = page.getByTestId('chat-header').getByTestId('chat-header-parent-link');
+    await expect(parentLink).toContainText('Delegated by', { timeout: 15_000 });
     await parentLink.click();
     await expect(page.getByTestId('chat-tool-delegate-task-card')).toBeVisible({ timeout: 15_000 });
   });

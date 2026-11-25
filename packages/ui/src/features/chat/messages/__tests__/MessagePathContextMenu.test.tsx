@@ -14,6 +14,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 const emitSurfaceIntent = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (intent: unknown) => emitSurfaceIntent(intent) }));
 
+import { ChatFileBasesContext } from '../../tools/chat-file-bases';
 import { MessagePathContextMenu } from '../MessagePathContextMenu';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 
@@ -210,5 +211,31 @@ describe('MessagePathContextMenu — nothing to offer: no menu, native menu pres
 
     expect(notPrevented).toBe(false);
     expect(screen.getByTestId('tool-card-path-copy-absolute')).toBeInTheDocument();
+  });
+});
+
+describe('MessagePathContextMenu — in a chat tab of another worktree', () => {
+  it('copies this chat’s own paths', async () => {
+    render(
+      <ChatFileBasesContext.Provider value={{ worktreePath: '/wt/kid', projectPath: '/p' }}>
+        <Fixture filePath="src/a.ts" />
+      </ChatFileBasesContext.Provider>,
+    );
+    fireEvent.contextMenu(screen.getByText('nested text'));
+    fireEvent.click(screen.getByTestId('tool-card-path-copy-absolute'));
+    await flushCopy();
+    expect(writeText).toHaveBeenLastCalledWith('/wt/kid/src/a.ts');
+  });
+
+  it('shortens them against its own worktree', async () => {
+    render(
+      <ChatFileBasesContext.Provider value={{ worktreePath: '/wt/kid', projectPath: '/p' }}>
+        <Fixture filePath="/wt/kid/src/a.ts" />
+      </ChatFileBasesContext.Provider>,
+    );
+    fireEvent.contextMenu(screen.getByText('nested text'));
+    fireEvent.click(screen.getByTestId('tool-card-path-copy-relative'));
+    await flushCopy();
+    expect(writeText).toHaveBeenLastCalledWith('src/a.ts');
   });
 });

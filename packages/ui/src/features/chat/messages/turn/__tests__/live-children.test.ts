@@ -24,28 +24,32 @@ const sources = (overrides: Partial<ChildSources> = {}): ChildSources => ({
   sessions: [],
   live: {},
   listed: [],
+  listLive: true,
+  runs: true,
   ...overrides,
 });
+const call = (over: object = {}) => ({ pending: false, open: false, failed: false, cancelled: false, ...over });
 
 describe('a sub-agent', () => {
-  it('is going while its call runs, and done once it came back', () => {
-    expect(childState(child({ status: 'running' }), sources(), true)).toBe('running');
-    expect(childState(child(), sources(), false)).toBeUndefined();
+  const agent = (over: object = {}) => child({ call: call(over) });
+  const open = agent({ open: true });
+  it('is going while its call is open, and done once it came back', () => {
+    expect(childState(open, sources(), true)).toBe('running');
+    expect(childState(agent(), sources(), true)).toBeUndefined();
   });
-  it('is not going when its call never came back and its turn ended', () => {
-    expect(childState(child({ status: 'running' }), sources(), false)).toBeUndefined();
-    const live = { bg: task('bg') };
-    expect(childState(child({ status: 'running' }), sources({ live, listed: [listed('bg', 'call')] }), false)).toBe(
-      'running',
-    );
+  it('is not going when its call never came back and its turn, or the session, ended', () => {
+    expect(childState(open, sources(), false)).toBeUndefined();
+    expect(childState(open, sources({ runs: false }), true)).toBeUndefined();
+    expect(childState(open, sources({ listed: [listed('bg', 'call')] }), false)).toBe('running');
   });
   it('needs you while a call inside it waits for approval', () => {
-    expect(childState(child({ status: 'awaiting-approval' }), sources(), true)).toBe('needs-you');
+    expect(childState(agent({ pending: true }), sources(), true)).toBe('needs-you');
   });
-  it('is going while it runs in the background, after its call returned', () => {
-    const live = { bg: task('bg') };
-    expect(childState(child(), sources({ live, listed: [listed('bg', 'call')] }), false)).toBe('running');
-    expect(childState(child(), sources({ listed: [listed('bg', 'call')] }), false)).toBeUndefined();
+  it('is going while the list says so, after its call returned, as its row and its tab read it', () => {
+    const running = sources({ runs: false, listed: [listed('bg', 'call')] });
+    expect(childState(agent(), running, false)).toBe('running');
+    expect(childState(agent(), { ...running, listLive: false }, false)).toBeUndefined();
+    expect(childState(agent(), { ...running, listed: [listed('bg', 'other')] }, false)).toBeUndefined();
   });
 });
 
@@ -108,25 +112,28 @@ describe('liveChildren', () => {
     expect([...liveChildren(waited, sources()).failed]).toEqual(['call']);
   });
 
-  it('says how an agent ended that outlived its call, and counts one that failed', () => {
-    const agent = child({ status: 'success', launched: true });
-    const how = (status: string, over = {}) =>
-      liveChildren(
-        model([agent]),
-        sources({ listed: [{ ...listed('a', 'call'), kind: 'agent', status, ...over } as BackgroundTask] }),
-      );
-    expect([...how('stopped').ended]).toEqual([['call', 'stopped']]);
-    expect(how('stopped').failed.size).toBe(0);
-    expect([...how('failed').failed]).toEqual(['call']);
-    expect(how('completed').ended.size).toBe(0);
-    // After a restart the daemon guesses.
-    expect(how('stopped', { recovered: true }).ended.size).toBe(0);
+  it('counts an agent whose task failed, once: a call that says so itself is a failed step', () => {
+    const how = (status: string, over = {}) => {
+      const ended = { ...listed('a', 'call'), status } as BackgroundTask;
+      return liveChildren(model([child({ call: call(over) })]), sources({ listed: [ended] })).failed.size;
+    };
+    expect(how('failed')).toBe(1);
+    expect(how('failed', { failed: true })).toBe(0);
+    expect(how('stopped')).toBe(0);
+    expect(how('completed')).toBe(0);
   });
 
   it('holds every turn open while an agent’s call is not known yet', () => {
     expect(liveChildren(model([]), sources({ live: { a: task('a') } })).unplacedAgents).toBe(true);
     const placed = sources({ live: { a: task('a') }, listed: [listed('a', 'x')] });
     expect(liveChildren(model([]), placed).unplacedAgents).toBe(false);
+    expect(liveChildren(model([]), sources({ live: { a: task('a') }, listed: null })).unplacedAgents).toBe(true);
+  });
+
+  it('and while the list that says an agent runs has stopped counting', () => {
+    const stale = sources({ listed: [listed('a', 'x')], listLive: false });
+    expect(liveChildren(model([]), stale).unplacedAgents).toBe(true);
+    expect(liveChildren(model([]), { ...stale, listed: [listed('b', 'x', 'bash')] }).unplacedAgents).toBe(false);
   });
 });
 
@@ -139,7 +146,6 @@ it('counts child work, needs-you first', () => {
     ]),
     background: new Map(),
     failed: new Set(),
-    ended: new Map(),
     unplacedAgents: false,
   };
   const children = ['a', 'b', 'c', 'd'].map((toolCallId) => child({ toolCallId }));

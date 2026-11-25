@@ -26,7 +26,7 @@ in the 1.63-alpha the CLI bundles, and the suite pins 1.61.
 | `github/b-gate.demo.js` | `ask-question` | the inline question gate, answered without leaving |
 | `github/d-threads.demo.js` | `workflow` | quote from the transcript, session rail, a **live workflow run**, quick task |
 | `github/c-surfaces.demo.js` | any | worktree, board, automations, remote pairing, review + inline comment |
-| `github/e-tabs-split.demo.js` | `tool-group` | tabs and split chat — **not in the cut**, `session-tab-ctx-open-split` is disabled unless two *committed* sessions exist |
+| `github/e-tabs-split.demo.js` | `tool-group` | tabs and a session in the workspace — **not in the cut**, `session-tab-ctx-open-workspace` is disabled unless two *committed* sessions exist |
 
 ## Recording a take
 

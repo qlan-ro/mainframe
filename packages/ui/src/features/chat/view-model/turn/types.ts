@@ -6,6 +6,7 @@
  */
 import type { MessagePartState, ThreadMessage } from '@assistant-ui/react';
 import type { TaskStatus, TranscriptPresentation } from '@qlan-ro/mainframe-types';
+import type { AgentCallFacts } from '@/features/workspace-chat/agent-status';
 
 export type ToolPart = Extract<MessagePartState, { type: 'tool-call' }>;
 export type ToolStatus = 'running' | 'success' | 'failed' | 'stopped' | 'declined' | 'awaiting-approval' | 'unknown';
@@ -59,8 +60,8 @@ export interface TurnChild {
   readonly taskId?: string;
   /** How the task stood when its call returned: final for a call that waited. */
   readonly taskStatus?: TaskStatus;
-  /** Its call returned once the agent had started in the background. */
-  readonly launched?: boolean;
+  /** What a sub-agent's call says of it. */
+  readonly call?: AgentCallFacts;
   /** A workflow run's background task, once the call returned. */
   readonly workflowTaskId?: string;
 }

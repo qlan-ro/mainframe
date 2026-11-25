@@ -15,7 +15,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
-import { useChatExtrasSelector } from '../../runtime/chat-extras';
+import { useOwnChatState } from '../../runtime/own-chat-state';
 import { EXECUTION_MODE_LABELS } from '../../messages/execution-mode-labels';
 import { useStepDuration } from '../../messages/turn/StepClock';
 import { useBackgroundStart } from '../../messages/turn/use-background-start';
@@ -45,7 +45,7 @@ export const MARKER_ICONS: Record<MarkerIcon, LucideIcon> = {
 };
 
 export function usePlanMode(): string | undefined {
-  const mode = useChatExtrasSelector((extras) => extras?.state.chatConfig?.permissionMode);
+  const mode = useOwnChatState((state) => state.chatConfig?.permissionMode);
   return mode ? EXECUTION_MODE_LABELS[mode] : undefined;
 }
 

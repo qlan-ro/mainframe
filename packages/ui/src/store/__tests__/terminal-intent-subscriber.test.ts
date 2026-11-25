@@ -32,7 +32,7 @@ describe('subscribeToTerminalIntents', () => {
     setHostForTesting(new FakeHostBridge({ app: { getHomedir: '/Users/me' } }));
     useActiveBasesStore.setState({ bases: {}, scopeKey: null });
     useLayoutStore.setState({
-      layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+      layout: { top: ['chat'], topFlex: {} },
       run: null,
       sessions: new Map(),
       activeSessionId: null,

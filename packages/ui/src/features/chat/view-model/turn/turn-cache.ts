@@ -43,7 +43,7 @@ function sameTurn(a: Turn, b: Turn): boolean {
         child.taskChatId === other.taskChatId &&
         child.taskId === other.taskId &&
         child.taskStatus === other.taskStatus &&
-        child.launched === other.launched &&
+        JSON.stringify(child.call) === JSON.stringify(other.call) &&
         child.workflowTaskId === other.workflowTaskId
       );
     })

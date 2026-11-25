@@ -11,7 +11,7 @@ import {
   type ChatThreadState,
 } from '../../../controller/chat-thread-state';
 import { TranscriptProjector } from '../../../controller/transcript-projector';
-import { zoneScope } from '../../../zones/subagent-outcome';
+import { chatTurnScope } from '../../../messages/turn/chat-turns';
 import { buildTurns, partState } from '../build-turns';
 import { TurnCache } from '../turn-cache';
 import { assistant, bash, presented, sources, system, text, user } from './fixtures';
@@ -90,7 +90,7 @@ const loaded = (messages: readonly ThreadMessage[]): ChatThreadState =>
 
 /** Each part's state by its last message, as the chat's own transcript reads it. */
 function statesOf(state: ChatThreadState, projector = new TranscriptProjector(), cache = new TurnCache()) {
-  const { turns } = buildTurns(projector.projectMessages(state), zoneScope(state), cache);
+  const { turns } = buildTurns(projector.projectMessages(state), chatTurnScope(state), cache);
   return Object.fromEntries([...turns.values()].map((part) => [part.lastMessageId, partState(part, false)]));
 }
 const size = TRANSCRIPT.length;

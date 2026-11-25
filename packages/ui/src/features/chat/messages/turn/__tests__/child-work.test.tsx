@@ -66,6 +66,9 @@ it('stays open, with a live count, while an agent runs in the background', async
     'running',
   );
 
+  vi.mocked(listBackgroundTasks).mockResolvedValue([
+    { id: 'bg', kind: 'agent', toolUseId: 'agent', status: 'completed', startedAt: 1 },
+  ] as never);
   view.rerender(<TurnFixture rootId={`cw-${roots}`} messages={messages} extras={extrasWith({})} />);
   await waitFor(() => expect(isOpen()).toBe(false));
 });

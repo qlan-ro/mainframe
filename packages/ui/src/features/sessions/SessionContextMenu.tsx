@@ -7,9 +7,9 @@
 import type { ReactNode } from 'react';
 import {
   ArchiveIcon,
-  Columns2,
   CopyIcon,
   MessageSquarePlus,
+  PanelRight,
   PencilIcon,
   PinIcon,
   PinOffIcon,
@@ -42,7 +42,7 @@ interface SessionContextMenuProps {
   onCloseAutoFocus?: () => boolean;
   onTags: () => void;
   onArchive: () => void;
-  onOpenInSplit: () => void;
+  onOpenBeside: () => void;
   forkAvailability: ForkAvailability;
   onFork: () => void;
   /**
@@ -66,7 +66,7 @@ export function SessionContextMenu({
   onCloseAutoFocus,
   onTags,
   onArchive,
-  onOpenInSplit,
+  onOpenBeside,
   forkAvailability,
   onFork,
   canOpenSideChat,
@@ -103,9 +103,9 @@ export function SessionContextMenu({
             Tags
           </ContextMenuItem>
         )}
-        <ContextMenuItem data-testid="sessions-ctx-open-split" onSelect={onOpenInSplit}>
-          <Columns2 />
-          Open in Split
+        <ContextMenuItem data-testid="sessions-ctx-open-workspace" onSelect={onOpenBeside}>
+          <PanelRight />
+          Open in Workspace
         </ContextMenuItem>
         {forkAvailability.enabled ? (
           <ContextMenuItem data-testid="sessions-ctx-fork" onSelect={onFork}>

@@ -5,8 +5,7 @@
  * Formerly `chat-header.spec.ts` (Cluster B, spec #14 of
  * docs/plans/2026-07-03-tauri-e2e-test-plan.md). Retargeted whole for the shell
  * redesign (docs/plans/2026-10-04-mainframe-redesign-adoption.md D7): `ChatCardHeader`
- * is gone — `ChatZone`/`ChatSurface` start at the transcript, with no header row of
- * their own. Its controls moved:
+ * is gone. Its controls moved:
  *   - the model chip is DROPPED (capability moved to the composer's own model chip,
  *     which already carries model · context · effort — composer.spec.ts's territory);
  *   - Hide Chat is an item on every session tab's right-click context menu
@@ -14,9 +13,8 @@
  *     Down were removed — the title bar's surface toggle lights the workspace;
  *   - the Review entry point moved into the session panel's Changes row (its own
  *     worktree-gating coverage lives in session-panel.spec.ts / review-panel.spec.ts);
- *   - the fork-parent link and side-chat toggle moved into `title-bar-actions`
- *     (single view) or each zone's `ZoneStrip` (visible split) — side-chat.spec.ts /
- *     fork specs cover those testids at their new mounts;
+ *   - the fork-parent link and side-chat toggle are in the chat column's header —
+ *     workspace-chats.spec.ts / fork specs cover them;
  *   - the session-details toggle moved again: it lives in each chat column's
  *     header (`session-panel-toggle`) — session-panel.spec.ts covers it.
  *

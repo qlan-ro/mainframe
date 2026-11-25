@@ -61,6 +61,8 @@ export interface AgentStepsProps extends Omit<NestedScope, 'live'> {
   /** Between the steps and the result: a pending request, an earlier-messages line. */
   before?: ReactNode;
   after?: ReactNode;
+  /** The steps alone: what was asked and what came back are shown around them. */
+  bare?: boolean;
 }
 
 const normal = (text: string) => text.replace(/\s+/g, ' ').trim();
@@ -197,12 +199,23 @@ function resultView(outcome: AgentOutcome, answer: readonly string[], result: st
   return { text: result, own: false, delivered: true, label };
 }
 
-function Steps({ messages, outcome, prompt, promptLabel = 'Prompt', result = '', ...rest }: AgentStepsProps) {
+/** The steps of a tab that shows the call's own text itself (W8): only words that text repeats whole leave them. */
+function bareView(answer: readonly string[], result: string): ResultView {
+  const own = normal(answer.join('\n\n'));
+  return { text: '', own: own !== '' && own === normal(result), delivered: true, label: '' };
+}
+
+function Steps({ messages, outcome, prompt, promptLabel = 'Prompt', result = '', bare, ...rest }: AgentStepsProps) {
   const scope = useTranscriptScope();
   const nested = useMemo(() => nest(messages, scope), [messages, scope]);
-  const first = useMemo(() => promptMessage(messages, prompt), [messages, prompt]);
+  const first = useMemo(
+    () => (bare && !prompt ? undefined : promptMessage(messages, prompt)),
+    [messages, prompt, bare],
+  );
   const asked = prompt || (first ? userText(first) : '');
-  const { text, own, delivered, label } = resultView(outcome, nested.answerTexts, result);
+  const { text, own, delivered, label } = bare
+    ? bareView(nested.answerTexts, result)
+    : resultView(outcome, nested.answerTexts, result);
   const view = useMemo<NestedView>(() => {
     const steps = [...nested.units].map(
       ([id, units]) => [id, own ? units.filter((unit) => !nested.answer.has(unit)) : units] as const,
@@ -211,7 +224,7 @@ function Steps({ messages, outcome, prompt, promptLabel = 'Prompt', result = '',
   }, [nested, own, first]);
   return (
     <div data-testid="chat-agent-steps" className="flex min-w-0 flex-col">
-      {asked && (
+      {asked && !bare && (
         <Block label={promptLabel} testId="chat-agent-prompt">
           <Prose text={asked} />
         </Block>

@@ -6,12 +6,13 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 
 let mockChat: Partial<Chat> | null;
 let mockListed: object | undefined;
+let mockColumn: string;
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (select: (s: unknown) => unknown) =>
     select({
       thread: { messages: [{}], isRunning: false },
-      threadListItem: mockListed && { id: 'chat-1', remoteId: 'chat-1', status: 'regular', custom: mockListed },
-      threads: { threadItems: [] },
+      threadListItem: { id: 'chat-1', remoteId: mockListed && 'chat-1', status: 'regular', custom: mockListed },
+      threads: { threadItems: [], mainThreadId: mockColumn },
     }),
 }));
 vi.mock('../../../runtime/chat-extras', () => ({
@@ -62,6 +63,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockChat = CHAT;
   mockListed = undefined;
+  mockColumn = 'chat-1';
   mockBranch = 'feat/quota';
   mockChanges = { files: [], loading: false, error: false };
 });
@@ -102,6 +104,14 @@ describe('BottomStrip', () => {
     renderStrip();
     expect(screen.queryByTestId('composer-branch')).toBeNull();
     expect(screen.getByTestId('composer-worktree-trigger')).toBeInTheDocument();
+  });
+
+  it('in a workspace tab, it keeps the branch but not the changes: the review is the chat column’s', () => {
+    mockChanges = { files: [{ path: 'a.ts' }], totalAdditions: 1, totalDeletions: 0, loading: false, error: false };
+    mockColumn = 'another-chat';
+    renderStrip();
+    expect(screen.getByTestId('composer-branch')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-changes')).toBeNull();
   });
 
   it('fixed, it names where the session runs, offers no move, and keeps the branch and the changes', () => {

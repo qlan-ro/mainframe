@@ -7,8 +7,8 @@
  *
  * Renders outside the chat providers too (user message, plan bubble,
  * review-comment card, plan gate): only `useOpenFile` (bare `useCallback` +
- * `emitSurfaceIntent`) and `useActiveBasesStore` (a provider-less zustand
- * store) are used, both safe there.
+ * `emitSurfaceIntent`) and `useFileBases` (a context with a default, over a
+ * provider-less zustand store) are used, both safe there.
  */
 import type { AnchorHTMLAttributes, MouseEvent, ReactElement } from 'react';
 import { FolderOpen } from 'lucide-react';
@@ -26,7 +26,7 @@ import { CopyMenuItem } from '@/lib/ui/CopyMenuItem';
 import { writeToClipboard } from '@/lib/editor/copy-reference';
 import { toFileRef } from '@/lib/files/file-ref';
 import type { FileHrefTarget } from '@/lib/files/file-href';
-import { useActiveBasesStore } from '@/store/active-bases-store';
+import { useFileBases } from '../tools/chat-file-bases';
 import { useOpenFile } from '../tools/chat-tool-context';
 import { useLinkDragSelect } from './link-drag-select';
 
@@ -80,7 +80,7 @@ interface FileRefLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
 }
 
 export function FileRefLink({ href, fileTarget, className, children, ...props }: FileRefLinkProps): ReactElement {
-  const bases = useActiveBasesStore((s) => s.bases);
+  const bases = useFileBases();
   const { openFile } = useOpenFile();
   const copyFeedback = useMenuCopyFeedback();
   const { onMouseDown, endedDrag } = useLinkDragSelect();

@@ -16,7 +16,7 @@ import { useExternalStoreRuntime } from '@assistant-ui/react';
 import { createAttachmentAdapter } from '../composer/attachment-adapter';
 
 /** Stateless — the per-chat daemon upload happens in the controller on send.
- *  Exported for the split-view zone mount (ChatZone), which builds an
+ *  Exported for the workspace tabs (`use-conversation-thread`), which build an
  *  ExternalThread client with the same adapter. */
 export const CHAT_ATTACHMENT_ADAPTER = createAttachmentAdapter();
 const ATTACHMENT_ADAPTER = CHAT_ATTACHMENT_ADAPTER;
@@ -78,7 +78,7 @@ async function restoreAttachments(
 export function useChatThreadRuntime(
   controller: AcpChatController,
   port: number,
-  opts?: { active?: boolean; chatId?: string; skipDraftRestore?: boolean; isVisibleSplitZone?: boolean },
+  opts?: { active?: boolean; chatId?: string; ownsComposer?: boolean; shownInTab?: boolean },
 ): AssistantRuntime {
   const state = useControllerState(controller); // uses controller.subscribeState (always)
 
@@ -175,17 +175,12 @@ export function useChatThreadRuntime(
   // controller registry header) is restored into the composer once, mirroring
   // the load-once effect above.
   //
-  // `skipDraftRestore` (set by `useChatRuntimeHook` when this id is NOT the
-  // instance ChatSurface actually displays — a split zone's member, or its
-  // queued pending-pair target) defers the take to `ChatZone`'s own restore
-  // effect instead. Without it, this hook's hidden kept-warm instance —
-  // mounted by aui's RemoteThreadListHookInstanceManager well before the zone
-  // itself renders — always wins the one-shot take and seeds a composer
-  // nobody displays, leaving the visible zone's composer empty.
-  const skipDraftRestore = opts?.skipDraftRestore ?? false;
+  // Only the composer the user sees takes it (`useChatRuntimeHook`): a chat open
+  // in a workspace tab restores there instead (`DraftKeeper`).
+  const ownsComposer = opts?.ownsComposer ?? true;
   const tookDraftRef = useRef(false);
   useEffect(() => {
-    if (skipDraftRestore) return;
+    if (!ownsComposer) return;
     const draft = takeStash(stashKey);
     if (draft == null) return;
     tookDraftRef.current = true;
@@ -197,38 +192,18 @@ export function useChatThreadRuntime(
         console.warn('[chat-runtime] could not restore a stashed attachment', error);
       });
     }
-  }, [stashKey, skipDraftRestore]);
+  }, [stashKey, ownsComposer]);
 
-  // Handoff: `splitFits` lags `zones` by a render or more (its ResizeObserver
-  // settles after the workspace panel parks to free the width), so this
-  // instance can correctly be the one displayed, take the stash above, and
-  // THEN lose that status to `ChatZone` once the split catches up — before
-  // the user ever saw it render there. If this composer holds a draft and the chat is
-  // now BECOMING a visible split-zone member (`isVisibleSplitZone` flips
-  // false → true — `useChatRuntimeHook` computes it as
-  // `isVisibleZone(zones, chatId) && splitFits`), hand the composer's CURRENT
-  // content (a restored draft or text typed directly into the single view)
-  // back to the stash so `ChatZone`'s own restore picks up the
-  // latest state instead of a now-empty composer. Clears the local composer
-  // too, so a later unsplit back to this same instance doesn't resurrect it
-  // stale.
-  //
-  // Gated on `isVisibleSplitZone`, NOT `skipDraftRestore`: the latter also
-  // flips true on an ORDINARY focus change (`skipDraftRestore = pendingPair
-  // || !isDisplayedHere` — simply switching to another chat flips
-  // `isDisplayedHere` false for every other warm instance). Reacting to that
-  // used to stash-and-clear a chat's draft every time the user looked away
-  // from it, so `OffloadRelease`'s later `captureIfMarked` on actual eviction
-  // overwrote the real draft with the already-cleared (empty) composer — the
-  // draft was lost. A plain focus change never makes this chat a split-zone
-  // member, so `isVisibleSplitZone` stays false and the handoff correctly
-  // does nothing.
-  const isVisibleSplitZone = opts?.isVisibleSplitZone ?? false;
-  const wasVisibleSplitZoneRef = useRef(isVisibleSplitZone);
+  // Handoff: the chat just opened in a workspace tab, which has its own
+  // composer. Whatever this one holds (a restored draft, or text typed in the
+  // chat column) goes to the stash for the tab, and is cleared here so it cannot
+  // come back stale.
+  const shownInTab = opts?.shownInTab ?? false;
+  const wasShownInTabRef = useRef(shownInTab);
   useEffect(() => {
-    const wasVisibleSplitZone = wasVisibleSplitZoneRef.current;
-    wasVisibleSplitZoneRef.current = isVisibleSplitZone;
-    if (wasVisibleSplitZone || !isVisibleSplitZone) return;
+    const wasShownInTab = wasShownInTabRef.current;
+    wasShownInTabRef.current = shownInTab;
+    if (wasShownInTab || !shownInTab) return;
     const composer = runtimeRef.current?.thread?.composer;
     if (composer == null) return;
     const composerState = composer.getState();
@@ -239,7 +214,8 @@ export function useChatThreadRuntime(
     handoffDraft(stashKey, { text: composerState.text, attachments });
     tookDraftRef.current = false;
     composer.setText('');
-  }, [stashKey, isVisibleSplitZone]);
+    void composer.clearAttachments();
+  }, [stashKey, shownInTab]);
 
   // Capture the composer draft on unmount, but only when OffloadRelease marked
   // this thread first (markForStash) — an unmount from delete/archive never

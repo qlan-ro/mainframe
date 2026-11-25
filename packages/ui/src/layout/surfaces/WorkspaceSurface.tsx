@@ -1,18 +1,21 @@
 /**
- * layout/surfaces/WorkspaceSurface.tsx — the single non-chat surface: files,
- * terminals, consoles, previews and URL tabs in one pane model.
+ * layout/surfaces/WorkspaceSurface.tsx — everything that is not the conversation:
+ * files, terminals, consoles, previews, URL tabs, and every secondary chat or
+ * sub-agent (W8, W9), in one pane model.
  * 1 or 2 panes laid out along `run.dir`. The first pane's tabs are in the title
  * bar (W2); a second pane has its own `WorkspaceTabStrip`. A preview-config tab shows the webview (`PreviewInstance`); a
  * process-config tab shows a full-space console (`ConsolePane variant="full"`);
  * a terminal tab shows the PTY; a `url` tab shows an arbitrary address in the
  * same webview (`UrlTabInstance`); a file tab shows the editor/diff/viewer
- * (`EditorTabBody`). The surface is a drop target for a tab drag
+ * (`EditorTabBody`); a chat or agent tab shows a conversation
+ * (`ConversationTabBody`). The surface is a drop target for a tab drag
  * (`data-drop-surface="workspace"`).
  */
 import { TerminalInstance } from '@/features/terminal/TerminalInstance';
 import { PreviewInstance } from '@/features/preview/PreviewInstance';
 import { UrlTabInstance } from '@/features/url-tab/UrlTabInstance';
 import { ConsolePane } from '@/features/run/ConsolePane';
+import { ConversationTabBody } from '@/features/workspace-chat/ConversationTabBody';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useSandboxStore } from '@/store/sandbox';
 import { useActiveBasesStore } from '@/store/active-bases-store';
@@ -22,7 +25,7 @@ import { WorkspaceEmptyState } from '../WorkspaceEmptyState';
 import { WorkspaceTabStrip } from '../WorkspaceTabStrip';
 import { EditorTabBody } from './EditorTabBody';
 import { useScopedRun } from './use-scoped-run';
-import type { RunPane, RunTab } from '@/store/run-pane';
+import { isConversationTab, type RunPane, type RunTab } from '@/store/run-pane';
 
 interface WorkspacePaneViewProps {
   pane: RunPane;
@@ -85,6 +88,7 @@ function WorkspaceTabBody({
       </div>
     );
   }
+  if (isConversationTab(tab)) return <ConversationTabBody tab={tab} active={active} />;
   // File tabs (code/diff/skill/viewer) mount lazily and only while active: the
   // editor and viewers are heavy, and a hidden CodeMirror can't be measured.
   if (!active) return null;
@@ -114,7 +118,8 @@ function WorkspacePaneView({ pane, primary, scopeKey, projectId }: WorkspacePane
   );
 }
 
-export function WorkspaceSurface() {
+/** `leaving`: the panel is sliding out, so an emptied one shows nothing rather than the empty state (W5). */
+export function WorkspaceSurface({ leaving = false }: { leaving?: boolean } = {}) {
   const { run, scopeKey: activeScopeKey, projectId } = useScopedRun();
   const processStatuses = useSandboxStore((s) => s.processStatuses);
   const hasContent = run && run.panes.some((p) => p.tabs.length > 0);
@@ -150,7 +155,7 @@ export function WorkspaceSurface() {
             ))}
           </div>
         ) : (
-          <WorkspaceEmptyState />
+          !leaving && <WorkspaceEmptyState />
         )}
       </div>
       <WorkspaceFilesPanel />

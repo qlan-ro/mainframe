@@ -26,6 +26,7 @@ vi.mock('@assistant-ui/react', () => ({
     Messages: () => <div data-testid="tp-messages" />,
   },
   // No bound threadListItem at all — the scope is the only source of an id.
+  useAui: () => ({}),
   useAuiState: (sel: (s: { thread: { isRunning: boolean; messages: unknown[] } }) => unknown) =>
     sel({ thread: { isRunning: false, messages: [] } }),
 }));

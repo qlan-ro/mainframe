@@ -8,18 +8,21 @@ import type { TaskResultMarker } from '../../markers/agent-message';
 import { TranscriptScopeProvider } from '../../messages/turn/transcript-scope';
 import { auiState, entry, setSessions, switchToThread } from './fixtures';
 
-const { openInSplit, result } = vi.hoisted(() => ({
-  openInSplit: vi.fn(() => true),
+const { unarchive, result } = vi.hoisted(() => ({
+  unarchive: vi.fn().mockResolvedValue(undefined),
   result: { current: undefined as TaskResultMarker | undefined },
 }));
 
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: typeof auiState) => unknown) => sel(auiState),
   useAui: () => ({
-    threads: { switchToThread, getState: () => ({ mainThreadId: auiState.threadListItem?.id }) },
+    threads: {
+      switchToThread,
+      item: () => ({ unarchive }),
+      getState: () => ({ mainThreadId: auiState.threadListItem?.id, threadItems: auiState.threads.threadItems }),
+    },
   }),
 }));
-vi.mock('@/features/chat/zones/open-in-split', () => ({ openInSplit }));
 vi.mock('../use-task-result', () => ({ useTaskResult: () => result.current }));
 vi.mock('../../messages/turn/AgentSteps', () => ({
   AgentSteps: (props: { prompt?: string; result?: string; outcome: string }) => (
@@ -34,10 +37,13 @@ vi.mock('../TaskChatSteps', () => ({
   ),
 }));
 
+import { useLayoutStore } from '@/store/layout';
 import { DelegateRow } from '../DelegateRow';
 
 const ARGS = { task: 'Review the diff for races', role: 'review' };
 const RESULT = JSON.stringify({ taskId: 'task_kid', childChatId: 'kid', title: 'Task: Review', status: 'running' });
+
+const workspaceTabs = () => useLayoutStore.getState().run?.panes.flatMap((pane) => pane.tabs) ?? [];
 
 let rows = 0;
 let key = '';
@@ -72,7 +78,13 @@ beforeEach(() => {
   key = `row-${++rows}`;
   result.current = undefined;
   switchToThread.mockReset();
-  openInSplit.mockReset().mockReturnValue(true);
+  unarchive.mockClear();
+  useLayoutStore.setState({
+    layout: { top: ['chat'], topFlex: {} },
+    run: null,
+    sessions: new Map(),
+    activeSessionId: 'parent',
+  });
 });
 
 describe('the row', () => {
@@ -86,9 +98,12 @@ describe('the row', () => {
     expect(card).toHaveAttribute('data-activity-id', 'tu-1');
 
     await userEvent.click(screen.getByTestId('chat-tool-delegate-task-open-task_kid'));
-    // Beside the parent rather than in its place; `switchToThread` only moves focus.
-    expect(openInSplit).toHaveBeenCalledWith('parent', 'kid');
-    expect(switchToThread).toHaveBeenCalledWith('kid');
+    // Beside the parent, in the workspace; the parent stays the conversation.
+    expect(workspaceTabs()).toEqual([
+      { id: 'chat-kid', kind: 'chat', title: 'Race review', chatId: 'kid', role: 'task' },
+    ]);
+    expect(switchToThread).not.toHaveBeenCalled();
+    expect(unarchive).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -150,12 +165,14 @@ describe('the row', () => {
     expect(status()).toHaveTextContent('no result');
   });
 
-  it('offers to restore an archived child', () => {
+  it('restores an archived child as it opens it', async () => {
     withChild({}, 'archived');
     render(row({ result: RESULT }));
-    expect(screen.getByTestId('chat-tool-delegate-task-open-task_kid')).toHaveAccessibleName(
-      'Restore and open Race review beside this chat',
-    );
+    const open = screen.getByTestId('chat-tool-delegate-task-open-task_kid');
+    expect(open).toHaveAccessibleName('Restore Race review and open it in the workspace');
+    await userEvent.click(open);
+    expect(unarchive).toHaveBeenCalledOnce();
+    expect(workspaceTabs().map((tab) => tab.chatId)).toEqual(['kid']);
   });
 
   it('falls back to the call’s result while the child is not in the list', () => {

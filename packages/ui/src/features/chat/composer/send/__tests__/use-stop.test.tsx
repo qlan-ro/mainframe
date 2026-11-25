@@ -16,7 +16,7 @@ vi.mock('@/lib/api/background-tasks', () => ({
   cancelDelegatedTask: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/toast', () => ({ mfToast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('../../focus-composer', () => ({ focusVisibleComposer: vi.fn() }));
+vi.mock('../../focus-composer', () => ({ focusComposerOf: vi.fn() }));
 vi.mock('../../../orchestration/use-session-items', () => ({ useSessionItems: () => [] }));
 
 let mockDelegated: Array<{ taskId: string; status: string; resumedState?: string }> = [];
@@ -27,6 +27,7 @@ vi.mock('../../../runtime/chat-extras', () => ({ useChatExtras: () => mockExtras
 
 import { mfToast } from '@/lib/toast';
 import { cancelDelegatedTask, stopBackgroundTask } from '@/lib/api/background-tasks';
+import { focusComposerOf } from '../../focus-composer';
 import { useHeldQueue } from '../../queue/held-queue-store';
 import { useComposerStop } from '../use-stop';
 
@@ -130,7 +131,7 @@ describe('useComposerStop — stopping', () => {
       delegated: [{ taskId: 't1', status: 'running' }],
     });
 
-    act(() => result.current.stop());
+    act(() => result.current.stop(null));
 
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(stopBackgroundTask).toHaveBeenCalledExactlyOnceWith('chat-1', 'a');
@@ -138,10 +139,19 @@ describe('useComposerStop — stopping', () => {
     await vi.waitFor(() => expect(toast.success).toHaveBeenCalledExactlyOnceWith('Stopped · 2 sub-agents stopped'));
   });
 
+  it('leaves the keyboard in the composer it was asked from', () => {
+    const from = document.createElement('button');
+    const { result } = setup({ running: true });
+
+    act(() => result.current.stop(from));
+
+    expect(focusComposerOf).toHaveBeenCalledExactlyOnceWith(from);
+  });
+
   it('stops sub-agents without cancelling a turn when only they run', async () => {
     const { result } = setup({ running: false, delegated: [{ taskId: 't1', status: 'running' }] });
 
-    act(() => result.current.stop());
+    act(() => result.current.stop(null));
 
     expect(cancel).not.toHaveBeenCalled();
     expect(cancelDelegatedTask).toHaveBeenCalledTimes(1);
@@ -159,7 +169,7 @@ describe('useComposerStop — stopping', () => {
     useHeldQueue.getState().claimFrom('chat-1', 'm1', 'p1');
     const { result } = setup({ running: false, delegated: [{ taskId: 't1', status: 'running' }] });
 
-    act(() => result.current.stop());
+    act(() => result.current.stop(null));
 
     expect(useHeldQueue.getState().startSending('chat-1', 'm1', 'p1')).toBe(false);
   });
@@ -167,7 +177,7 @@ describe('useComposerStop — stopping', () => {
   it('does nothing when nothing runs', () => {
     const { result } = setup({});
 
-    act(() => result.current.stop());
+    act(() => result.current.stop(null));
 
     expect(cancel).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
@@ -176,7 +186,7 @@ describe('useComposerStop — stopping', () => {
   it('does nothing again while already stopping', () => {
     const { result } = setup({ running: true, runState: 'cancelling' });
 
-    act(() => result.current.stop());
+    act(() => result.current.stop(null));
 
     expect(cancel).not.toHaveBeenCalled();
   });
@@ -186,7 +196,7 @@ describe('useComposerStop — stopping', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { result } = setup({ running: true });
 
-    await act(async () => result.current.stop());
+    await act(async () => result.current.stop(null));
 
     expect(toast.error).toHaveBeenCalledExactlyOnceWith('Could not stop everything', { description: 'daemon gone' });
   });

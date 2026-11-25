@@ -1,26 +1,38 @@
 import { useEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
 
 interface Props {
-  axis: 'x' | 'y';
   containerRef: React.RefObject<HTMLDivElement | null>;
+  /** The left panel's current share of the row. */
+  frac: number;
+  /** The smallest the panels can be, in px; the right one wins when the row cannot hold both. */
+  minLeft: number;
+  minRight: number;
+  /** A drag or a key press is about to move it. */
+  onGrab?: () => void;
   onFrac: (frac: number) => void;
-  /** Layout thickness in px; the hairline is centred in it. */
-  gutter?: number;
 }
 
 /** The drag target's thickness, however thin the divider itself is. */
 const HIT_SIZE = 9;
 
+/** How far an arrow key moves it. */
+const KEY_STEP = 0.02;
+
+function clampFrac(frac: number, width: number, { minLeft, minRight }: Pick<Props, 'minLeft' | 'minRight'>): number {
+  if (width <= 0) return frac;
+  return Math.max(0, Math.min(1 - minRight / width, Math.max(minLeft / width, frac)));
+}
+
 /**
- * Drag handle between surface panels: a 1px hairline with a 9px drag target. The
- * vertical one's target lies over the left panel only: the right one can hold a
- * native webview, which sits above the DOM and would swallow the press.
- * `data-edge-handle` lets the left panel's scrollbar thumb share those pixels. On hover: a 2px accent line appears.
- * On drag: calls onFrac(0.18–0.82) so the caller can update flex weights.
+ * Drag handle between the chat and the workspace: a 1px hairline with a 9px drag target. The
+ * target lies over the left panel only: the right one can hold a native webview, which sits
+ * above the DOM and would swallow the press. `data-edge-handle` lets the left panel's scrollbar
+ * thumb share those pixels; it is also the keyboard's handle. On hover a 2px accent line appears. Dragging, or
+ * an arrow key, calls onFrac with a share both panels' minimums allow.
  */
-export function SurfDivider({ axis, containerRef, onFrac, gutter = 1 }: Props) {
+export function SurfDivider({ containerRef, frac, minLeft, minRight, onGrab, onFrac }: Props) {
   const [hot, setHot] = useState(false);
-  const isX = axis === 'x';
 
   // Holds the teardown for an in-flight drag so it can run on unmount too —
   // pointerup alone can't clean up if the divider unmounts mid-drag.
@@ -28,17 +40,21 @@ export function SurfDivider({ axis, containerRef, onFrac, gutter = 1 }: Props) {
 
   useEffect(() => () => dragCleanup.current?.(), []);
 
+  const commit = (next: number) => {
+    const width = containerRef.current?.getBoundingClientRect().width ?? 0;
+    onFrac(clampFrac(next, width, { minLeft, minRight }));
+  };
+
   const onDown = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    document.body.style.cursor = isX ? 'col-resize' : 'row-resize';
+    onGrab?.();
+    document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
 
     const move = (ev: PointerEvent) => {
       const r = containerRef.current?.getBoundingClientRect();
-      if (!r) return;
-      const frac = isX ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
-      onFrac(Math.max(0.18, Math.min(0.82, frac)));
+      if (r) commit((ev.clientX - r.left) / r.width);
     };
 
     const up = () => {
@@ -54,31 +70,39 @@ export function SurfDivider({ axis, containerRef, onFrac, gutter = 1 }: Props) {
     window.addEventListener('pointerup', up);
   };
 
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    onGrab?.();
+    commit(frac + (e.key === 'ArrowLeft' ? -KEY_STEP : KEY_STEP));
+  };
+
   return (
     <div
-      data-testid={`surf-divider-${axis}`}
+      data-testid="surf-divider-x"
       onPointerDown={onDown}
       onMouseEnter={() => setHot(true)}
       onMouseLeave={() => setHot(false)}
-      style={{ flexShrink: 0, [isX ? 'width' : 'height']: gutter }}
-      className={`relative z-[6] flex items-center justify-center self-stretch ${isX ? 'cursor-col-resize' : 'cursor-row-resize'}`}
+      className="relative z-[6] flex w-px shrink-0 cursor-col-resize items-center justify-center self-stretch"
     >
-      <div style={{ [isX ? 'width' : 'height']: 1, [isX ? 'height' : 'width']: '100%' }} className="bg-border" />
+      <div className="h-full w-px bg-border" />
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize the workspace"
+        aria-valuenow={Math.round(frac * 100)}
+        tabIndex={0}
+        data-edge-handle=""
+        onKeyDown={onKeyDown}
+        style={{ top: 0, bottom: 0, right: 0, width: HIT_SIZE }}
+        className="absolute focus-visible:focus-line-inset"
+      />
       <div
         aria-hidden
-        data-edge-handle=""
-        style={isX ? { top: 0, bottom: 0, right: 0, width: HIT_SIZE } : { left: 0, right: 0, top: 0, height: HIT_SIZE }}
-        className="absolute"
-      />
-      {/* Hover accent: 2px primary line that fades in on hover/drag. */}
-      <div
-        style={{
-          position: 'absolute',
-          [isX ? 'width' : 'height']: hot ? 2 : 0,
-          [isX ? 'height' : 'width']: '100%',
-          transition: 'all 0.12s',
-        }}
-        className="rounded-sm bg-primary"
+        className={cn(
+          'pointer-events-none absolute h-full rounded-sm bg-primary transition-[width] duration-100',
+          hot ? 'w-0.5' : 'w-0',
+        )}
       />
     </div>
   );

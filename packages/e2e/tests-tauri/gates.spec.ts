@@ -32,7 +32,7 @@ import { writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { openWorkspaceAtRest, sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 
 // Minimal 1x1 red PNG — valid image, tiny payload (mirrors composer.spec.ts's fixture).
 const TINY_PNG_BASE64 =
@@ -143,7 +143,7 @@ test.describe('§permission gate details', () => {
     await expect(page.locator('[data-testid="chat-permission-option-allow-always"]')).toBeVisible();
 
     // Narrow surface: lighting the workspace alongside chat shrinks the column in the same window.
-    await page.getByTestId('surface-rail-workspace').click();
+    await openWorkspaceAtRest(page);
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
     await expectGateMatchesComposerWidth(page);
     const column = await page.getByTestId('chat-thread-footer').boundingBox();

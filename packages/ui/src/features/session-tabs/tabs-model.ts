@@ -8,7 +8,7 @@
  * boot's runtime ids by matching either field.
  */
 import type { ThreadListEntry } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { canOpenInSplit } from '@/features/chat/zones/open-in-split';
+import { canOpenBeside } from '@/features/workspace-chat/open-session';
 
 export const SESSION_TABS_STORAGE_KEY = 'mf:session-tabs';
 
@@ -201,70 +201,9 @@ function reconcileDraftId(draftId: string | null, items: readonly ThreadListEntr
   return isDraftThread(draftId, items) ? draftId : null;
 }
 
-/**
- * The strip's DISPLAYED order (fact 17): pinned tabs, then the preview, then
- * the draft, with a visible split pair regrouped adjacently at the first
- * member's position — the same computation `SessionTabs.tsx` renders, moved
- * here so the shortcut helpers below and the strip read one function instead
- * of two copies. `_mainThreadId` mirrors the call site's `activeTabId` but
- * the grouping itself only consults `zones` and the displayed set — kept for
- * signature parity with Task 16's call site.
- */
-export function displayedTabIds(
-  state: TabsState,
-  zones: [string, string] | null,
-  _mainThreadId: string | null,
-): string[] {
-  const displayed = [...state.tabIds, state.previewId, state.draftId].filter((id): id is string => id !== null);
-  const zoneMembers = zones == null ? [] : zones.filter((id) => displayed.includes(id));
-  if (zoneMembers.length !== 2) return displayed;
-  const firstAt = displayed.findIndex((id) => zoneMembers.includes(id));
-  const rest = displayed.filter((id) => !zoneMembers.includes(id));
-  return [...rest.slice(0, firstAt), ...zoneMembers, ...rest.slice(firstAt)];
-}
-
-/** What the strip renders: lone tabs, and the split pair as ONE fused entry. */
-export type StripEntry =
-  | { kind: 'tab'; id: string }
-  | {
-      kind: 'pair';
-      ids: [string, string];
-      /** Which segment holds `mainThreadId`; meaningful only while `visible`. */
-      focused: 0 | 1;
-      /** The split is on screen — a parked pair renders with neither segment filled. */
-      visible: boolean;
-    };
-
-/**
- * The displayed order with the pair DERIVED, not owned: `zones-store` stays the
- * owner, and this just folds its two members into one entry at the first
- * member's position. ⌘1-9 / ⌃Tab keep counting members individually — they
- * read `displayedTabIds`, not this.
- */
-export function stripEntries(
-  state: TabsState,
-  zones: [string, string] | null,
-  active: string | null,
-  /** The surface fits two zones (`splitFits`); a pair that can't render reads as parked. */
-  fits = true,
-): StripEntry[] {
-  const displayed = displayedTabIds(state, zones, active);
-  if (zones == null || zones.filter((id) => displayed.includes(id)).length !== 2) {
-    return displayed.map((id) => ({ kind: 'tab', id }));
-  }
-  const entries: StripEntry[] = [];
-  for (const id of displayed) {
-    if (!zones.includes(id)) entries.push({ kind: 'tab', id });
-    else if (id === zones[0]) {
-      entries.push({
-        kind: 'pair',
-        ids: zones,
-        focused: active === zones[1] ? 1 : 0,
-        visible: fits && active != null && zones.includes(active),
-      });
-    }
-  }
-  return entries;
+/** The strip's displayed order: pinned tabs, then the preview, then the draft. */
+export function displayedTabIds(state: TabsState): string[] {
+  return [...state.tabIds, state.previewId, state.draftId].filter((id): id is string => id !== null);
 }
 
 /** The tab at a keyboard index (⌘1…⌘9), or null past the end (AC 10). */
@@ -293,21 +232,21 @@ export function nextTabId(displayed: readonly string[], activeId: string, direct
 }
 
 /**
- * The nearest tab, in displayed order and wrapping, that `canOpenInSplit`
- * accepts as the active session's split partner — the keyboard's ⌘⇧\ walks
- * the same guard the tab strip's ⌘-click and context menu use (fact 18), so
- * they can never disagree about what is splittable (AC 12).
+ * The nearest tab, in displayed order and wrapping, that can open beside the
+ * conversation and is not there already (`opened`) — the keyboard's ⌘⇧\ walks
+ * the same guard the tab strip's ⌘-click and context menu use, so they can never
+ * disagree (AC 12).
  */
-export function nextSplitPartner(
+export function nextBesideId(
   displayed: readonly string[],
   activeId: string,
-  zones: [string, string] | null,
+  opened: (id: string) => boolean = () => false,
 ): string | null {
   const start = displayed.indexOf(activeId);
   if (start === -1) return null;
   for (let step = 1; step < displayed.length; step++) {
     const candidate = displayed[(start + step) % displayed.length] as string;
-    if (canOpenInSplit(zones, activeId, candidate)) return candidate;
+    if (canOpenBeside(activeId, candidate) && !opened(candidate)) return candidate;
   }
   return null;
 }

@@ -3,23 +3,29 @@
  * Reads the pending request from useConfirmBridge and renders a ConfirmDialog
  * that resolves the bridge promise on confirm or cancel.
  */
+import { useMemo } from 'react';
 import { ConfirmDialog } from '@/features/shared/ConfirmDialog';
 import { useConfirmBridge } from '@/lib/confirm-bridge';
+import { claimsFor, heldConversation } from '@/lib/conversation-focus';
 
 export function ConfirmDialogHost() {
   const pending = useConfirmBridge((s) => s.pending);
   const resolve = useConfirmBridge((s) => s.resolve);
+  // Who asked, read before the dialog takes the focus: it counts as that conversation.
+  const asker = useMemo(() => (pending ? heldConversation() : null), [pending]);
   return (
-    <ConfirmDialog
-      open={pending != null}
-      title={pending?.title ?? ''}
-      body={pending?.body}
-      confirmLabel={pending?.confirmLabel}
-      cancelLabel={pending?.cancelLabel}
-      destructive={pending?.destructive}
-      onConfirm={() => resolve(true)}
-      onCancel={() => resolve(false)}
-      testid={pending?.testid ?? 'confirm-dialog'}
-    />
+    <div className="contents" {...(asker ? claimsFor(asker) : undefined)}>
+      <ConfirmDialog
+        open={pending != null}
+        title={pending?.title ?? ''}
+        body={pending?.body}
+        confirmLabel={pending?.confirmLabel}
+        cancelLabel={pending?.cancelLabel}
+        destructive={pending?.destructive}
+        onConfirm={() => resolve(true)}
+        onCancel={() => resolve(false)}
+        testid={pending?.testid ?? 'confirm-dialog'}
+      />
+    </div>
   );
 }

@@ -25,7 +25,7 @@ const SECOND: RunPane = { id: 'pane-2', tabs: [{ id: 'b', kind: 'code', title: '
 
 beforeEach(() => {
   useLayoutStore.setState({
-    layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['chat', 'workspace'], topFlex: {} },
     run: { dir: 'v', flex: [1, 1], panes: [FIRST, SECOND] },
     sessions: new Map(),
     activeSessionId: null,

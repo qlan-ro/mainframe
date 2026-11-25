@@ -2,7 +2,7 @@
  * OffloadRelease — renderer half of the idle whole-chat offload (#178).
  *
  * On `chat.offloaded`, releases the chat's controller and thread subtree
- * UNLESS the chat is on screen (main thread or a zones-pair member), in which
+ * UNLESS the chat is on screen (the main thread, or open in a workspace tab), in which
  * case the release is deferred until a later screen change makes it eligible
  * (see `recheck`), or dropped if the chat's CLI respawns first
  * (`process.started`). Mirrors SessionListRouter's DI'd-class shape so the class
@@ -32,7 +32,8 @@ export interface ThreadItemRef {
 export interface OffloadReleaseDeps {
   getThreadItems: () => readonly ThreadItemRef[];
   getMainThreadId: () => string | null;
-  getZones: () => readonly [string, string] | null;
+  /** Every chat a workspace tab of the session on screen holds, by any id it answers to. */
+  getTabChats: () => ReadonlySet<string>;
   /** Stops the item's runtime and unmounts its subtree (aui `detach()`). */
   detachItem: (id: string) => void;
   /** Drops the controller under every key it's registered at (registry `dispose`). */
@@ -43,7 +44,7 @@ export interface OffloadReleaseDeps {
    * The registered parent of a side chat, or `undefined` for an ordinary chat
    * (todo #344). A side chat is never in `getThreadItems()` — the server
    * never lists it (AC 5) — so it would otherwise always resolve as off
-   * screen and get disposed while its parent, and the docked panel reading
+   * screen and get disposed while its parent, and the header toggle reading
    * its controller, are still on screen. Optional so existing test doubles
    * that predate side chats keep compiling; defaults to "no parent".
    */
@@ -54,13 +55,9 @@ function resolveItems(items: readonly ThreadItemRef[], chatId: string): ThreadIt
   return items.filter((item) => item.id === chatId || item.remoteId === chatId);
 }
 
-function isOnScreen(
-  item: ThreadItemRef,
-  mainThreadId: string | null,
-  zones: readonly [string, string] | null,
-): boolean {
+function isOnScreen(item: ThreadItemRef, mainThreadId: string | null, tabChats: ReadonlySet<string>): boolean {
   if (mainThreadId != null && item.id === mainThreadId) return true;
-  return zones != null && zones.includes(item.id);
+  return tabChats.has(item.id);
 }
 
 export class OffloadRelease {
@@ -90,9 +87,13 @@ export class OffloadRelease {
   private considerRelease(chatId: string): void {
     const items = resolveItems(this.deps.getThreadItems(), chatId);
     const mainThreadId = this.deps.getMainThreadId();
-    const zones = this.deps.getZones();
+    const tabChats = this.deps.getTabChats();
+    // By id too: a side chat is in no thread list, but a tab can hold it, and a
+    // sub-agent's tab reads its parent's controller.
     const onScreen =
-      items.some((item) => isOnScreen(item, mainThreadId, zones)) || this.parentOnScreen(chatId, mainThreadId, zones);
+      tabChats.has(chatId) ||
+      items.some((item) => isOnScreen(item, mainThreadId, tabChats)) ||
+      this.parentOnScreen(chatId, mainThreadId, tabChats);
 
     if (onScreen) {
       this.deferred.add(chatId);
@@ -106,18 +107,14 @@ export class OffloadRelease {
   /**
    * A side chat is never in `getThreadItems()`, so its own on-screen check is
    * always false. Defer its offload while its parent is on screen instead —
-   * the docked panel and toggle read the same controller, keyed by the side
+   * its tab and the header toggle read the same controller, keyed by the side
    * chat's id, for as long as the parent is visible (todo #344).
    */
-  private parentOnScreen(
-    chatId: string,
-    mainThreadId: string | null,
-    zones: readonly [string, string] | null,
-  ): boolean {
+  private parentOnScreen(chatId: string, mainThreadId: string | null, tabChats: ReadonlySet<string>): boolean {
     const parentChatId = this.deps.getParentOfSideChat?.(chatId);
     if (parentChatId == null) return false;
     const parentItems = resolveItems(this.deps.getThreadItems(), parentChatId);
-    return parentItems.some((item) => isOnScreen(item, mainThreadId, zones));
+    return parentItems.some((item) => isOnScreen(item, mainThreadId, tabChats));
   }
 
   private release(chatId: string, items: readonly ThreadItemRef[]): void {
@@ -129,7 +126,7 @@ export class OffloadRelease {
   }
 
   /** Re-check every deferred chat — call whenever the on-screen set changes
-   *  (main thread switch or a zones-pair edit). */
+   *  (main thread switch, or a workspace tab opening or closing). */
   recheck(): void {
     if (this.disposed) return;
     for (const chatId of [...this.deferred]) this.considerRelease(chatId);

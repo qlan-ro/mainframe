@@ -261,17 +261,6 @@ const area: CaptureArea = {
         railState('advisor'),
         railState('settings'),
         railState('chats'),
-        {
-          id: 'split-pair',
-          caption: '**Split.** Two sessions side by side share one fused tab.',
-          setup: async ({ page, vars }) => {
-            await escape(page);
-            await page.getByTestId(`session-tab-${vars['previous']}`).click({ button: 'right' });
-            await page.getByTestId('session-tab-ctx-open-split').click();
-            await parkPointer(page);
-          },
-          wait: 900,
-        },
       ],
     },
   ],

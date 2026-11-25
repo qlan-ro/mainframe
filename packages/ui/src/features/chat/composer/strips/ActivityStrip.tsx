@@ -21,10 +21,10 @@ import type { ActivityEntry } from '@/features/session-panel/activity-model';
 import { stopRequest } from '@/features/session-panel/use-activity-actions';
 import { useActivityEntries } from '@/features/session-panel/use-activity-entries';
 import { useStop } from '@/features/session-panel/use-stop';
-import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
+import { openSubagentTab } from '@/features/workspace-chat/conversation-tabs';
+import { openTaskTab } from '@/features/workspace-chat/open-session';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useGateQueue } from '../../gates/use-gate-queue';
-import { openInSplit } from '../../zones/open-in-split';
 import { ComposerHint } from '../composer-card-context';
 import { stripItems, stripSummary, type StripItem } from './activity-strip-model';
 import { TOP_STRIP } from './strip-chrome';
@@ -32,20 +32,23 @@ import { TOP_STRIP } from './strip-chrome';
 const ROW = 'flex min-h-7 min-w-0 items-center gap-2 rounded-lg pr-0.5 pl-2 text-[0.78125rem]';
 const TOGGLE = 'size-6 shrink-0 text-muted-foreground';
 
-/** Open what an item is doing: a delegated task's chat, else its place in the transcript. */
+/** Open what an item is doing: a task or sub-agent in the workspace (W8), else its place in the transcript. */
 function useOpen(chatId: string) {
   const aui = useAui();
-  const parentThreadId = useSideAwareThreadId();
   return (entry: ActivityEntry) => {
     const childId = entry.delegated?.itemId;
     // A jump still on its way would move the transcript under what this opens.
     cancelActivityJump();
-    if (childId && parentThreadId) {
-      openInSplit(parentThreadId, childId);
-      aui.threads.switchToThread(childId);
+    if (childId) {
+      openTaskTab(aui.threads, childId, { focus: true });
       return;
     }
     if (!entry.source) return;
+    if (entry.kind === 'subagent' && entry.source.toolCallId) {
+      const { toolCallId, messageId } = entry.source;
+      openSubagentTab({ chatId, toolCallId, messageId, title: entry.title }, { focus: true });
+      return;
+    }
     jumpToActivitySource(chatId, entry.source).then(
       (outcome) => {
         if (outcome === 'missing') mfToast.info(`“${entry.title}” started before the history shown here`);

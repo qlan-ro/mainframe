@@ -42,7 +42,7 @@ import type { FileTabKind } from './run-pane-file-tabs';
 function ensureWorkspaceActive(): void {
   const state = useLayoutStore.getState();
   const { layout } = state;
-  if (!layout.top.includes('workspace') && layout.bottom !== 'workspace') state.toggleSurface('workspace');
+  if (!layout.top.includes('workspace')) state.toggleSurface('workspace');
 }
 
 /** The active session's launch scope, stamped onto every tab this subscriber opens. */
@@ -163,7 +163,7 @@ export function subscribeToFileIntents(): () => void {
       const { openByScope, setOpen } = useWorkspaceFilesPanel.getState();
       const open = isWorkspaceFilesPanelOpen(openByScope, activeScopeKey() ?? null);
       const { layout } = useLayoutStore.getState();
-      const workspaceLit = layout.top.includes('workspace') || layout.bottom === 'workspace';
+      const workspaceLit = layout.top.includes('workspace');
       if (open && workspaceLit) {
         setOpen(false);
       } else {

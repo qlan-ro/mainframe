@@ -11,6 +11,8 @@ class FakeController {
   readonly listeners = new Set<() => void>();
   readonly release = vi.fn();
   readonly holdActive = vi.fn(() => this.release);
+  readonly unsubscribe = vi.fn();
+  readonly subscribeLive = vi.fn(() => this.unsubscribe);
   getState = () => this.state;
   subscribeState = (listener: () => void) => {
     this.listeners.add(listener);
@@ -21,6 +23,9 @@ class FakeController {
     this.listeners.forEach((fn) => fn());
   }
 }
+
+const list = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/api/background-tasks', () => ({ listBackgroundTasks: list }));
 
 const controllers = new Map<string, FakeController>();
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
@@ -46,7 +51,10 @@ function message(i: number): ThreadMessageLike {
   return { id: `m${i}`, role: 'assistant', createdAt: new Date(i), content: [{ type: 'text', text: `m${i}` }] };
 }
 
-beforeEach(() => controllers.clear());
+beforeEach(() => {
+  controllers.clear();
+  list.mockReset().mockResolvedValue([]);
+});
 
 describe('useTaskChat', () => {
   it("holds the child's stream only while mounted", () => {
@@ -56,6 +64,33 @@ describe('useTaskChat', () => {
     expect(controller.release).not.toHaveBeenCalled();
     unmount();
     expect(controller.release).toHaveBeenCalledTimes(1);
+    expect(controller.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('knows its own sub-agents: what runs, what is listed, and which of its parts are over', async () => {
+    list.mockResolvedValue([{ id: 'bg', toolUseId: 'late', status: 'running', startedAt: 1 }]);
+    const { result } = renderHook(() => useTaskChat('kid'), { wrapper });
+    expect(result.current.world).toMatchObject({ runs: false, tasks: null });
+    expect(list).not.toHaveBeenCalled();
+    const agent = (id: string): ThreadMessageLike => ({
+      id: `a-${id}`,
+      role: 'assistant',
+      createdAt: new Date(1),
+      content: [{ type: 'tool-call', toolCallId: id, toolName: 'Task', args: {} }],
+      status: { type: 'complete', reason: 'stop' },
+    });
+    const prompt: ThreadMessageLike = { id: 'u', role: 'user', content: [{ type: 'text', text: 'Go on' }] };
+    const controller = controllers.get('kid')!;
+    await act(async () =>
+      controller.set({
+        ...controller.state,
+        runState: { type: 'running' } as never,
+        messages: [agent('early'), prompt, agent('late')],
+      }),
+    );
+    expect(result.current.world).toMatchObject({ runs: true, live: true, tasks: [{ id: 'bg' }] });
+    expect(result.current.world.over).toEqual(new Set(['early']));
+    expect(list).toHaveBeenCalledWith('kid', expect.anything());
   });
 
   it('shows the latest messages and counts the rest', () => {
@@ -68,7 +103,7 @@ describe('useTaskChat', () => {
     expect(result.current.messages[0]!.id).toBe('m5');
   });
 
-  it('exposes the pending tool ID without a second gate or reply handler', () => {
+  it('exposes the pending tool ID, and no reply handler', () => {
     const { result } = renderHook(() => useTaskChat('kid'), { wrapper });
     const controller = controllers.get('kid')!;
     act(() =>
@@ -82,7 +117,7 @@ describe('useTaskChat', () => {
       ),
     );
 
-    expect(Object.keys(result.current).sort()).toEqual(['hiddenCount', 'loadState', 'messages', 'pendingToolIds']);
+    expect(result.current).not.toHaveProperty('reply');
     expect(result.current.pendingToolIds).toEqual(new Set(['cmd']));
   });
 });

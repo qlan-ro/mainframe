@@ -42,7 +42,7 @@ const TOUR_STEPS: readonly TourStep[] = [
     also: ['session-tabs'],
     side: 'right',
     title: 'Sessions and their tabs',
-    body: 'Every session lives in this list and opens as a tab up top. Right-click either one to pin it — or to open a second session beside the first as a split.',
+    body: 'Every session lives in this list and opens as a tab up top. Right-click either one to pin it — or to open a second session beside the first, in the workspace.',
   },
   {
     target: 'session-rail',

@@ -428,6 +428,17 @@ describe('keyboard', () => {
     expect(useSessionTabsStore.getState().tabIds).toEqual(['chat-a', 'chat-b']);
   });
 
+  it('takes keyboard focus off a tab when another is pressed, so Backspace cannot close the first one', () => {
+    seed('chat-a');
+    render();
+    tab('chat-a').focus();
+
+    fireEvent.mouseDown(tab('chat-b'));
+
+    expect(tab('chat-a')).not.toHaveFocus();
+    expect(tab('chat-b')).toHaveAttribute('aria-keyshortcuts', 'Delete Backspace');
+  });
+
   it('moves focus back to the previous tab when the last one closes', () => {
     seed('chat-a');
     render();

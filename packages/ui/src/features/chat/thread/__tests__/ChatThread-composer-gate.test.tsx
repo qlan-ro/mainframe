@@ -27,6 +27,7 @@ vi.mock('@assistant-ui/react', () => ({
     ScrollToBottom: ({ children }: { children?: ReactNode }) => <>{children}</>,
     Messages: () => <div data-testid="tp-messages" />,
   },
+  useAui: () => ({}),
   useAuiState: (sel: (s: unknown) => unknown) =>
     sel({
       threads: { mainThreadId: __mainThreadId },

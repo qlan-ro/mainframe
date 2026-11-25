@@ -57,8 +57,8 @@ function isChatRuntimeExtras(extras: unknown): extras is ChatRuntimeExtras {
 
 /**
  * The one place extras are assembled — shared by the native runtime hook and
- * the split-view zone mount so `useChatExtras()` consumers behave identically
- * in a zone. Lives here because the brand symbol is module-private on purpose.
+ * the workspace tabs' mount so `useChatExtras()` consumers behave identically
+ * in a tab. Lives here because the brand symbol is module-private on purpose.
  */
 export function buildChatExtras(
   controller: AcpChatController,
@@ -121,9 +121,8 @@ export function useChatExtrasState(state: ChatThreadState): ChatThreadState {
  * idle while it waits, and `run.started` follows the answer. This keeps that
  * cue even though `isRunning:false` is now ignored while the facade is
  * attached (`handle-daemon-event.ts`) — the gate-time dip doesn't depend on
- * the side-band backstop, it is derived here, in the ONE place this used to
- * be duplicated three ways (`ChatZone.tsx`, `SideChatPanel.tsx`, and this
- * file).
+ * the side-band backstop, it is derived here, for every place
+ * a chat shows.
  */
 export function isRunningFromState(state: ChatThreadState): boolean {
   if (Object.keys(state.interactions.permissions).length > 0) return false;

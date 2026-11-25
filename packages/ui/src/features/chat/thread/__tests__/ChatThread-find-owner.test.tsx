@@ -6,6 +6,7 @@ const Focus = createContext('one');
 const Scope = createContext('one');
 vi.mock('@assistant-ui/react', () => ({
   ThreadPrimitive: { Root: ({ children }: { children: ReactNode }) => <div>{children}</div> },
+  useAui: () => ({}),
   useAuiState: (select: (state: unknown) => unknown) =>
     select({ threads: { mainThreadId: useContext(Focus) }, threadListItem: { id: useContext(Scope) } }),
 }));

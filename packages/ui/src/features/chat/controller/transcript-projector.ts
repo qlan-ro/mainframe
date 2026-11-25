@@ -71,7 +71,7 @@ export class TranscriptProjector {
   private readonly native = new WeakMap<ThreadMessageLike, ThreadMessage>();
   private previous = new Map<string, Projected>();
 
-  /** The native message list — the `ExternalThread({ messages })` shape the split-view zones feed. */
+  /** The native message list — the `ExternalThread({ messages })` shape the workspace tabs feed. */
   projectMessages(state: ChatThreadState): ThreadMessage[] {
     const likes = stampServerStatuses(state.messages, state, this.stamps);
     const next = new Map<string, Projected>();

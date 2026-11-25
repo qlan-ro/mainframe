@@ -4,10 +4,10 @@
  * Covers:
  *  - hidden for a draft and for a non-regular (e.g. archived) thread;
  *  - opens a side chat when the parent has none;
- *  - toggles collapse when one exists;
+ *  - shows and hides its workspace tab when one exists, keeping the side chat;
  *  - `data-side-chat-status` reflects none/idle/running/waiting.
  */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 let __threadListItem: { id: string; status: string } | undefined = { id: 'parent-1', status: 'regular' };
@@ -35,7 +35,7 @@ vi.mock('../use-side-chat-controller', () => ({
 }));
 
 import { SideChatToggle } from '../SideChatToggle';
-import { useSideChatCollapseStore } from '../side-chat-collapse-store';
+import { useLayoutStore } from '@/store/layout';
 
 beforeEach(() => {
   __threadListItem = { id: 'parent-1', status: 'regular' };
@@ -44,7 +44,12 @@ beforeEach(() => {
   __runState = { type: 'idle' };
   openSideChat.mockReset();
   window.localStorage.clear();
-  useSideChatCollapseStore.setState({ collapsedByParent: {} });
+  useLayoutStore.setState({
+    layout: { top: ['chat'], topFlex: {} },
+    run: null,
+    sessions: new Map(),
+    activeSessionId: 'parent-1',
+  });
 });
 
 describe('SideChatToggle — visibility (AC 19)', () => {
@@ -78,14 +83,33 @@ describe('SideChatToggle — opening', () => {
 });
 
 describe('SideChatToggle — with an existing side chat', () => {
-  it('toggles collapse instead of opening again', () => {
+  const toggle = () => screen.getByTestId('side-chat-toggle-parent-1');
+  const openTabs = () => useLayoutStore.getState().run?.panes.flatMap((p) => p.tabs.map((t) => t.chatId)) ?? [];
+
+  it('shows its tab, then hides it again, and never opens another side chat', () => {
     __custom = { sideChatId: 'side-1' };
     render(<SideChatToggle />);
 
-    fireEvent.click(screen.getByTestId('side-chat-toggle-parent-1'));
+    fireEvent.click(toggle());
+    expect(openTabs()).toEqual(['side-1']);
+    expect(toggle()).toHaveAttribute('aria-pressed', 'true');
 
+    fireEvent.click(toggle());
+    expect(openTabs()).toEqual([]);
+    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
     expect(openSideChat).not.toHaveBeenCalled();
-    expect(useSideChatCollapseStore.getState().isCollapsed('parent-1')).toBe(true);
+  });
+
+  it('brings the tab forward rather than hiding it while another tab covers it', () => {
+    __custom = { sideChatId: 'side-1' };
+    render(<SideChatToggle />);
+    fireEvent.click(toggle());
+    act(() => void useLayoutStore.getState().addRunTab({ id: 'term', kind: 'terminal', title: 'zsh' }));
+    expect(toggle()).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(toggle());
+
+    expect(useLayoutStore.getState().run!.panes[0]!.active).toBe('chat-side-1');
   });
 
   it('shows a running status', () => {

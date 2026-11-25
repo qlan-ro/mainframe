@@ -2,8 +2,8 @@
 import { memo, useMemo } from 'react';
 import { FileInput, GitCompare } from 'lucide-react';
 import { toFileRef } from '@/lib/files/file-ref';
-import { useActiveBasesStore } from '@/store/active-bases-store';
 import { ToolBody, hasToolBody } from '../../tools/bodies/ToolBody';
+import { useFileBases } from '../../tools/chat-file-bases';
 import { useOpenFile } from '../../tools/chat-tool-context';
 import { useOpenEdit } from '../../tools/use-open-edit';
 import { settledStatus } from '../../view-model/turn/tool-status';
@@ -46,7 +46,7 @@ const FILE_KINDS = new Set(['read', 'edit', 'write']);
 
 /** A path as the project knows it. */
 function useRowTarget(part: ToolPart, facts: ToolRowFacts): { target: string; filePath?: string } {
-  const bases = useActiveBasesStore((state) => state.bases);
+  const bases = useFileBases();
   if (!FILE_KINDS.has(facts.kind) || !facts.target) return { target: facts.target };
   return { target: toFileRef(facts.target, bases).relative, filePath: argText(part, 'file_path') };
 }
