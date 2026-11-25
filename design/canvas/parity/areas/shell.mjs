@@ -48,7 +48,30 @@ const header = [
 export default {
   id: 'shell',
   states: [
-    { id: 'window', title: 'Window, nothing hovered', ...base, pairs: [...titleBar, ...railPairs, ...sidebar, ...header], shot: true },
+    {
+      id: 'window',
+      title: 'Window, nothing hovered',
+      ...base,
+      scenario: { windowTranscript: true, panelTaskTitles: true },
+      pairs: [
+        ...titleBar,
+        ...railPairs,
+        ...sidebar,
+        ...header,
+        { id: 'transcript viewport', p: "q('#thread')", a: "tid('chat-thread-viewport')", only: 'box' },
+        {
+          id: 'last user message',
+          p: "qa('#thread .bubble').at(-1)",
+          a: "qa('[data-testid=chat-user-bubble]').at(-1)",
+        },
+        {
+          id: 'last assistant answer',
+          p: "qa('#thread .ans').at(-1)",
+          a: "qa('[data-testid=chat-answer]').at(-1)",
+        },
+      ],
+      shot: true,
+    },
     { id: 'sidebar', title: 'Sidebar', ...base, views: ['wide'], pairs: [], shot: { p: "q('#side')", a: "q('[data-slot=sidebar]')" } },
   ],
 };

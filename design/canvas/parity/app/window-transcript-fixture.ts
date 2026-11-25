@@ -1,0 +1,37 @@
+export const windowAnswers = {
+  investigation: [
+    'Found it. Two things together freeze the capsule:',
+    '',
+    '- `useQuota` stops polling once every window reads **100%** (`refetchInterval` returns `false`)',
+    '- `snapshot()` in `codex.rs` returns the last `rate_limits` event as-is, and Codex only sends one while a turn runs',
+    '- so after the reset nothing refreshes the cached `used_percent`',
+    '',
+    '| Window | Capsule shows | After reset |',
+    '| --- | ---: | ---: |',
+    '| 5-hour | 100% | 0% |',
+    '| Weekly | 100% | 12% |',
+    '',
+    'The daemon should treat a window as reset once `resets_at` has passed:',
+    '',
+    '```rust',
+    'match w.resets_at {',
+    '    Some(at) if at <= now => QuotaWindow::reset(w.window),',
+    '    _ => w.clone().into(),',
+    '}',
+    '```',
+    '',
+    'The UI can then keep polling on a slow interval instead of stopping.',
+  ].join('\n'),
+  fix: [
+    'Fixed in both places:',
+    '',
+    '1. **Daemon:** `snapshot()` reports a window as reset once `resets_at` has passed, covered by two new tests in `codex_tests.rs`.',
+    '2. **UI:** `useQuota` keeps polling every 5 minutes while exhausted, so the capsule picks up the reset.',
+    '',
+    'The crate suite passes (4/4). The hook test now asserts the slower interval instead of no polling.',
+  ].join('\n'),
+  references:
+    "The docs confirm it: **no event is sent at reset time**, so the daemon has to infer the reset from `resets_in_seconds`, which is what the fix does. Issue #847 is open and labelled `area:quota`; I'll reference it as `Closes #847`.",
+  review:
+    'Both checks are back. The diff is correct, with one nit: `QuotaWindow::reset` drops `resets_at`, so the tooltip loses the next reset time until the following turn. The mobile capsule reads the same snapshot, so it picks up the fix without a change of its own.',
+};
