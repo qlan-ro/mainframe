@@ -447,7 +447,7 @@ Built so far in the base theme of `packages/ui`, each with a light and a dark va
 | Meta (12 px) | `--text-meta` | `text-meta` on group labels and shared tooltips |
 | Tooltip shadow | `--shadow-tooltip` | `shadow-tooltip` |
 
-`crit` maps to `--crit` for the critical context ring. `red` maps to `--red` for deletion counts and diff text. Transcript diff text adjusts its ink on tinted rows to meet the contrast floor. The xterm terminal uses its own ANSI palette.
+`crit` maps to `--crit` for the critical context ring. `red` maps to `--red` for deletion counts and diff text. Transcript diff text adjusts its ink on tinted rows to meet the contrast floor. The workspace terminal uses a 16-colour ANSI palette for each theme. Each colour has at least 4.5:1 contrast on the workspace surface.
 
 Text in `fail` may sit on a `fail` tint of 6 % at most (`bg-fail/6`), at full strength; a stronger tint is for icons and `foreground` text. `contrast.test.ts` measures it (4.60:1 at worst in light, 4.96:1 in dark) and refuses a stronger one.
 
@@ -595,7 +595,7 @@ A `card` surface with 10 px radius, the float shadow and 4 px padding. Items hav
 - **Folded turns:** one 28 px row per turn ("✓ Worked for 2m 14s · edited 3 files…") that expands to 26 px tool rows with mono targets. The row carries the turn's agents and "N failed" (Muted Rose; grey once retried). This replaces the tool cards and their primitives.
 - **Markers:** events (skills, plans, schedules, monitors, worktrees, notifications) are 26 px pills centred on the spine, outside the fold. One with content opens a 12 px card under it, at most 600 px wide.
 - **Links:** one style, Blue Ink with an underline; a raw URL or a file path is in mono, with no glyph.
-- **Changed lines:** ink on the tint; colour only in the +/− column. The terminal follows the theme.
+- **Changed lines:** ink on the tint; colour only in the +/− column. The workspace terminal fills its pane with the workspace surface, uses secondary ink for text and cursor, and keeps 10 px vertical and 14 px horizontal padding. Open terminals follow theme changes in place.
 - **Dividers:** hairlines with a centred 12 px `meta` label ("Context compacted").
 - **Code blocks:** 8 px radius on the `code` tint.
 

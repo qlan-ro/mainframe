@@ -79,7 +79,7 @@ export function TerminalInstance({ terminalId, visible }: Props): React.ReactEle
     <div
       ref={containerRef}
       data-testid={`run-terminal-${terminalId}`}
-      className="absolute inset-0"
+      className="absolute inset-0 bg-background px-[14px] py-[10px]"
       style={{ visibility: visible ? 'visible' : 'hidden' }}
     />
   );
