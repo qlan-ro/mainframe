@@ -2,9 +2,8 @@ import { execSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, rmSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-import { DAEMON_PORT } from '../../fixtures/daemon.js';
+import { daemonFetch } from '../../fixtures/daemon.js';
 
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 const DEFAULT_CLAUDE_MD =
   '# E2E Test Project\n\nAutomated test environment. Do not use plan mode. Execute tool calls directly.\n';
 
@@ -29,7 +28,7 @@ export async function createHeadlessProject(): Promise<HeadlessProject> {
   );
   writeFileSync(path.join(projectPath, 'CLAUDE.md'), DEFAULT_CLAUDE_MD);
 
-  const res = await fetch(`${DAEMON_BASE}/api/projects`, {
+  const res = await daemonFetch('/api/projects', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: projectPath, name: path.basename(projectPath) }),
@@ -48,7 +47,7 @@ export async function createHeadlessChat(
   adapterId = 'mock-cli',
   permissionMode: 'default' | 'acceptEdits' | 'plan' | 'yolo' = 'default',
 ): Promise<string> {
-  const res = await fetch(`${DAEMON_BASE}/api/chats`, {
+  const res = await daemonFetch('/api/chats', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ projectId, adapterId, permissionMode }),

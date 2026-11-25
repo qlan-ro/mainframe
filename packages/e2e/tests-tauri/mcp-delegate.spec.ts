@@ -36,7 +36,7 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 import { openRow, openWork, workRows } from '../helpers/tauri/transcript.js';
-import { DAEMON_BASE } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 
 const taskStatus = (card: Locator) => card.getByTestId('chat-tool-delegate-task-card-receipt').locator('[data-status]');
 
@@ -179,7 +179,7 @@ test.describe('§mcp-delegate Stop cascade', () => {
     // (`routes/chat_commands.rs::interrupt` → `ChatManager::interrupt_chat`),
     // not `FakePort`: this exercises the real `OrchestrationHooks::
     // on_chat_stopping` → `cascade_stop` path end to end.
-    const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/interrupt`, { method: 'POST' });
+    const res = await daemonFetch(`/api/chats/${chatId}/interrupt`, { method: 'POST' });
     expect(res.ok).toBe(true);
 
     // Nothing holds the turn open any more, so it folds.

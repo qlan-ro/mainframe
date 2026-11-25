@@ -12,7 +12,7 @@
     "test:real": "MF_E2E_ALLOW_REAL_ADAPTER=1 playwright test",
     "testids": "node scripts/testid-inventory/cli.mjs",
     "testids:check": "node scripts/testid-inventory/cli.mjs --check",
-    "test:tools": "node --test 'scripts/testid-inventory/**/*.test.mjs'"
+    "test:tools": "node --test 'scripts/testid-inventory/**/*.test.mjs' 'fixtures/*.test.mjs'"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
