@@ -155,8 +155,8 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         onSettled?.();
         return;
       }
-      void setChatConfig(port, patchChatId, patch)
-        .then((chat) => (label === 'setModel' ? reconcileModelResponse?.(patchChatId, chat) : undefined))
+      const request = () => setChatConfig(port, patchChatId, patch);
+      void (label === 'setModel' && reconcileModelResponse ? reconcileModelResponse(patchChatId, request) : request())
         .catch((err: unknown) => {
           console.warn(`[composer/useComposerTuning] ${label} failed`, { err });
           if (patch.model !== undefined) {

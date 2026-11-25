@@ -40,7 +40,7 @@ export class AcpChatController {
   private readonly loader: ChatPlaneLoader;
   private disposed = false;
   private readonly targetId = getActiveDaemon().id;
-  private latestConfigTime = -Infinity;
+  private configBroadcasts = 0;
   // The id for all network ops: the daemon chat id for pre-existing threads; for a
   // new (__LOCALID_*) thread it starts local and setRemoteId() swaps in the real id
   // once createChat resolves. Neither plane opens while this is still local.
@@ -104,7 +104,10 @@ export class AcpChatController {
       getChatId: () => this.daemonId,
       getPort: () => this.port,
       getWs: () => this.ws,
-      dispatch: (event) => this.dispatch(event),
+      dispatch: (event) => {
+        if (event.type === 'chat.config.updated') this.configBroadcasts += 1;
+        this.dispatch(event);
+      },
       isFacadeAttached: () => this.plane.isAttached,
     });
   }
@@ -316,26 +319,25 @@ export class AcpChatController {
     this.dispatch(event);
   }
 
-  public async reconcileModelResponse(chatId: string, response: Chat | undefined): Promise<void> {
+  public async reconcileModelResponse(chatId: string, request: () => Promise<Chat | undefined>): Promise<void> {
     const matches = () => !this.disposed && this.daemonId === chatId && getActiveDaemon().id === this.targetId;
     const usable = (chat: Chat | undefined): chat is Chat =>
       chat?.id === chatId &&
       typeof chat.adapterId === 'string' &&
       (chat.model === undefined || typeof chat.model === 'string');
     if (!matches()) return;
-    const chat = usable(response) ? response : await getChat(this.port, chatId);
+    const atStart = this.configBroadcasts;
+    const response = await request();
     if (!matches()) return;
+    const beforeRead = this.configBroadcasts;
+    const chat = beforeRead === atStart && usable(response) ? response : await getChat(this.port, chatId);
+    if (!matches() || this.configBroadcasts !== beforeRead) return;
     if (!usable(chat)) throw new Error('Could not reload the chat configuration');
     this.dispatch({ type: 'chat.config.updated', chat });
   }
 
   /** Single dispatch choke point. `run.started` (any source) and `run.failed` both cancel the plane's deferred `run.stopped` (D7 finding 10) — a failure inside the settle delay must not be clobbered by the stale deferred idle. */
   private dispatch(event: ChatStateEvent): void {
-    if (event.type === 'chat.config.updated') {
-      const time = Date.parse(event.chat.updatedAt);
-      if (time < this.latestConfigTime) return;
-      if (Number.isFinite(time)) this.latestConfigTime = time;
-    }
     if (event.type === 'run.started' || event.type === 'run.failed') this.plane.cancelPendingStop();
     const nextState = reduceChatThreadState(this.state, event);
     if (nextState === this.state) return;

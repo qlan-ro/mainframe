@@ -45,7 +45,7 @@ const { fakeAuiState, fakeExtras } = vi.hoisted(() => ({
       contextUsage: null as { percentage: number; totalTokens: number; maxTokens: number } | null,
     },
     port: 31415 as number | null,
-    reconcileModelResponse: vi.fn<(chatId: string, chat: Chat | undefined) => Promise<void>>(),
+    reconcileModelResponse: vi.fn<(chatId: string, request: () => Promise<Chat | undefined>) => Promise<void>>(),
   },
 }));
 
@@ -142,7 +142,8 @@ function renderToolbar() {
     </TooltipProvider>,
   );
   const activeChat = fakeExtras.state.chatId;
-  fakeExtras.reconcileModelResponse.mockImplementation(async (chatId, chat) => {
+  fakeExtras.reconcileModelResponse.mockImplementation(async (chatId, request) => {
+    const chat = await request();
     if (chat && chatId === activeChat && fakeExtras.state.chatId === activeChat) confirmServerModel(view, chat);
   });
   return view;
@@ -554,7 +555,7 @@ describe('ComposerToolbar — model menu stays open', () => {
     expect(screen.getByTestId('composer-model-select-option-sonnet')).toHaveAccessibleName(/selected/);
   });
 
-  it.each(['chat', 'daemon', 'reopen'])('drops pending state on %s', async (change) => {
+  it.each(['chat', 'daemon', 'reopen'])('late settlement keeps the second pick locked after %s', async (change) => {
     const finishOld = deferredModel();
     const view = renderToolbar();
     await openModelPicker();

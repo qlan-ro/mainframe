@@ -19,7 +19,7 @@ export interface ProviderSwitchRequest {
 export function useProviderSwitch(
   chat: Chat | null,
   port: number | null,
-  reconcile?: (chatId: string, response: Chat) => Promise<void>,
+  reconcile?: (chatId: string, request: () => Promise<Chat>) => Promise<void>,
 ): (req: ProviderSwitchRequest, onSettled?: () => void) => void {
   const chatId = chat?.id ?? null;
   return useCallback(
@@ -28,8 +28,8 @@ export function useProviderSwitch(
         onSettled?.();
         return;
       }
-      void switchChatProvider(port, chatId, req)
-        .then((chat) => reconcile?.(chatId, chat))
+      const request = () => switchChatProvider(port, chatId, req);
+      void (reconcile ? reconcile(chatId, request) : request())
         .catch((err: unknown) => {
           console.warn('[composer/useProviderSwitch] switch failed', { err });
           mfToast.error('Could not switch provider', { description: err instanceof Error ? err.message : String(err) });
