@@ -170,19 +170,15 @@ it.each(['none', 'permission', 'locked permission', 'plan'] as const)(
     rerender(ui());
     await act(async () => vi.runAllTimersAsync());
     expect(screen.queryByRole('dialog')).toBeNull();
-    if (replacement === 'none') {
-      expect(screen.getByRole('textbox', { name: 'Composer' })).toHaveFocus();
-      return;
-    }
-    // The request as a whole: a key meant for the text just read answers nothing.
-    const slot = screen.getByTestId('chat-thread-gate-slot');
-    expect(slot).toHaveFocus();
+    // The request as a whole, or the thread: a key meant for the text just read answers and sends nothing.
+    const target = screen.getByTestId(replacement === 'none' ? 'chat-thread' : 'chat-thread-gate-slot');
+    expect(target).toHaveFocus();
     await act(async () => vi.advanceTimersByTimeAsync(2000));
     for (const key of [' ', 'Enter']) {
       fireEvent.keyDown(document.activeElement!, { key });
       fireEvent.keyUp(document.activeElement!, { key });
     }
-    expect(slot).toHaveFocus();
+    expect(target).toHaveFocus();
     expect(reply).not.toHaveBeenCalled();
   },
 );

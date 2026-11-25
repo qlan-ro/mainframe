@@ -66,15 +66,15 @@ function focusAnswer(root: HTMLDivElement | null) {
 
 /**
  * The request may be gone, or replaced, by the time the reader closes. Focus then
- * goes to the next request as a whole, never to one of its answers: a key pressed
- * for the text just read must not answer one that wasn't.
+ * goes to the next request as a whole, or to the thread: never to an answer or the
+ * composer, where a key pressed for the text just read would answer or send.
  */
-function restoreReadFocus(footer: HTMLDivElement | null, thread: Element | null) {
+function restoreReadFocus(footer: HTMLDivElement | null, thread: HTMLElement | null) {
   if (footer) return focusAnswer(footer);
   if (!thread?.isConnected || document.activeElement !== document.body) return;
-  const next = thread.querySelector<HTMLElement>('[data-chat-gate]');
-  if (next) next.tabIndex = -1;
-  (next ?? thread.querySelector<HTMLElement>('[data-mf-composer-input]'))?.focus();
+  const target = thread.querySelector<HTMLElement>('[data-chat-gate]') ?? thread;
+  target.tabIndex = -1;
+  target.focus();
 }
 
 function ShowRest({ part, onShow }: { part: AllowedPart; onShow: () => void }) {
@@ -130,7 +130,7 @@ export function OptionsFooter({ options, grants, parts, shown, onSelect }: Foote
   const lockedId = useId();
   const { rest, locked } = shown;
   const footer = useRef<HTMLDivElement>(null);
-  const thread = useRef<Element | null>(null);
+  const thread = useRef<HTMLElement | null>(null);
   const [readingId, setReadingId] = useState<string>();
   const reading = parts.find((part) => part.id === readingId);
   return (
@@ -147,7 +147,7 @@ export function OptionsFooter({ options, grants, parts, shown, onSelect }: Foote
           part={rest}
           onShow={() => {
             if (!shown.showRest()) {
-              thread.current = footer.current?.closest('[data-testid="chat-thread"]') ?? null;
+              thread.current = footer.current?.closest<HTMLElement>('[data-testid="chat-thread"]') ?? null;
               setReadingId(rest.id);
             }
           }}
