@@ -6,8 +6,8 @@
  * row only through a reload on reconnect — over the real thread-list runtime and
  * chats adapter, with only the REST layer and the socket stubbed.
  *
- * At boot the socket opens while the first load is running. That one connect does
- * not ask again; any other first connect does.
+ * At boot the socket opens while the first load is running. The answer to that
+ * load can be older than the socket, so the first connect asks again too.
  */
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { useMemo, type FC } from 'react';
@@ -139,23 +139,20 @@ it('stops the spinner of a run that ended with the daemon', async () => {
   await waitFor(() => expect(rowStatus()).toBe('idle'));
 });
 
-it('asks once at boot, when the socket opens while the list is loading', async () => {
+it('shows a gate that opened between the boot answer and the socket', async () => {
   ws.connected = false;
   let respond = (_chats: Chat[]) => {};
   listChatsMock.mockImplementationOnce(() => new Promise<Chat[]>((resolve) => (respond = resolve)));
   render(<Harness />);
   await waitFor(() => expect(listChatsMock).toHaveBeenCalledTimes(1));
 
+  // The daemon built its first answer, then the gate opened, then the socket did.
+  listChatsMock.mockResolvedValue([chat({ displayStatus: 'waiting' })]);
   setConnected(true);
   await act(async () => respond([chat({})]));
 
-  await waitFor(() => expect(rowStatus()).toBe('running'));
-  expect(listChatsMock).toHaveBeenCalledTimes(1);
-
-  listChatsMock.mockResolvedValue([chat({ displayStatus: 'waiting' })]);
-  setConnected(false);
-  setConnected(true);
   await waitFor(() => expect(rowStatus()).toBe('needs-you'));
+  expect(listChatsMock).toHaveBeenCalledTimes(2);
 });
 
 it('asks again when the list had already loaded before the socket first opened', async () => {

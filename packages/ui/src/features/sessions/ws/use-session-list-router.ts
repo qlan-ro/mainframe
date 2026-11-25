@@ -165,15 +165,10 @@ export function useSessionListRouter(): void {
     });
     // Events are not replayed: a gate opened, a run ended or a chat created while
     // the socket was down reaches the list only by asking again.
-    // At boot the socket opens while the runtime's own first load is running, and
-    // asking again would request the list twice. Only that one connect is skipped:
-    // a load that already finished (or failed) or a drop before it can have missed
-    // something.
-    let booting = !daemonWs.connected;
+    // The first connect asks too: the runtime's own first load can have been answered
+    // before the socket opened, so boot may request the list twice.
     const unsubscribeConnection = daemonWs.subscribeConnection(() => {
-      const bootLoadRunning = booting && threads.getState().isLoading;
-      booting = false;
-      if (daemonWs.connected && !bootLoadRunning) scheduleReload();
+      if (daemonWs.connected) scheduleReload();
     });
     return () => {
       if (cooling != null) clearTimeout(cooling);
