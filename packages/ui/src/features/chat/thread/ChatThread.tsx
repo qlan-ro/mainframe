@@ -8,10 +8,10 @@ import { SkillsProvider } from '@/features/skills/use-chat-skills';
 import { FindBar } from '../find/FindBar';
 import { useFindInChatStore } from '../find/find-in-chat-store';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
-import { RootTranscriptScope } from '../messages/compact/transcript-scope';
+import { RootTranscriptScope } from '../messages/turn/transcript-scope';
 import { ChatThreadViewport } from './ChatThreadViewport';
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
-import '../tools/register-cards';
+import '../transcript.css';
 
 export type ChatThreadVariant = 'main' | 'side';
 export function ChatThread({

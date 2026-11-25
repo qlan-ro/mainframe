@@ -73,7 +73,7 @@ describe('dragging from a web link (#396)', () => {
     dragAcross(link, 8, 19);
 
     expect(window.getSelection()?.toString()).toBe('example.com');
-    expect(openExternal).not.toHaveBeenCalled();
+    expect(emitSurfaceIntent).not.toHaveBeenCalled();
   });
 
   it('still opens on a plain click', () => {
@@ -82,7 +82,7 @@ describe('dragging from a web link (#396)', () => {
     fireEvent.mouseUp(link, { clientX: 5, clientY: 0 });
     fireEvent.click(link);
 
-    expect(openExternal).toHaveBeenCalledWith('https://example.com/a/b');
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-url-tab', url: 'https://example.com/a/b' });
   });
 
   it('opens on the next click once a drag has ended', () => {
@@ -91,7 +91,7 @@ describe('dragging from a web link (#396)', () => {
     act(() => vi.runAllTimers());
     fireEvent.click(link);
 
-    expect(openExternal).toHaveBeenCalledTimes(1);
+    expect(emitSurfaceIntent).toHaveBeenCalledTimes(1);
   });
 });
 

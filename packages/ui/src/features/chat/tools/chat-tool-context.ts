@@ -5,7 +5,7 @@
  * - `useOpenFile` emits surface intents; only `layout/` subscribes.
  */
 import { useCallback } from 'react';
-import { useTranscriptScope } from '../messages/compact/transcript-scope';
+import { useTranscriptScope } from '../messages/turn/transcript-scope';
 import { useChatExtras } from '../runtime/chat-extras';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import { useIntentPath } from './chat-file-bases';

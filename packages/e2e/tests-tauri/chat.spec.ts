@@ -8,7 +8,7 @@
  *   chat-thread-running          — present while AI is working; absent/hidden when idle
  *   chat-user-message            — user turn bubble
  *   chat-assistant-message       — assistant reply bubble
- *   chat-bash-card               — rendered Bash tool card
+ *   [data-tool="Bash"]           — a Bash step, inside its turn's work row
  *   chat-permission-gate         — permission gate container
  *   chat-permission-option-{optionId} — one button per adapter-supplied option; the daemon
  *     offers allow-once / allow-always / reject-once on every gate (mainframe-acp gates.rs
@@ -30,6 +30,7 @@ import { test, expect } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { openWork, toolRow } from '../helpers/tauri/transcript.js';
 
 // ─── §5 Messaging ─────────────────────────────────────────────────────────────
 
@@ -65,8 +66,9 @@ test.describe('§messaging', () => {
     const { page } = app;
     await sendMessage(page, 'List the files in this project using bash ls.');
     await waitForIdle(page, 90_000);
-    // Recording: the AI calls Bash("ls -la"). BashCard renders with data-testid="chat-bash-card".
-    await expect(page.locator('[data-testid="chat-bash-card"]').first()).toBeVisible({ timeout: 10_000 });
+    // Recording: the AI calls Bash("ls -la").
+    await openWork(page);
+    await expect(toolRow(page, 'Bash').first()).toContainText('ls -la');
   });
 });
 

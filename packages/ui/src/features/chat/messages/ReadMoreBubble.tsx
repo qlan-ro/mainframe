@@ -31,7 +31,7 @@ export function ReadMoreBubble({ children, className }: ReadMoreBubbleProps) {
       measureText={extractText(children)}
       threshold={600}
       clampLines={4}
-      fadeColor="var(--bubble-tinted)"
+      fadeColor="var(--mf-bubble-fill, var(--bubble-tinted))"
       fadeOffsetClass="bottom-6"
       contentClassName="aui-md"
       contentProps={{ 'data-text-part': '' }}

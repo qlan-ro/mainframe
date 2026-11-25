@@ -3,13 +3,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EarlierMessages, HISTORY_PREPEND_EVENT } from '../EarlierMessages';
 import { TranscriptScrollProvider } from '../transcript-scroll-context';
 
-const f = vi.hoisted(() => ({ first: 'old', floor: 'old-item', load: vi.fn() }));
+const f = vi.hoisted(() => ({ first: 'old', floor: 'old-item', hasMore: true, load: vi.fn() }));
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (select: (state: unknown) => unknown) => select({ thread: { messages: [{ id: f.first }] } }),
 }));
 vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({
-    state: { chatId: 'chat', historyWindow: { hasMore: true, loading: false, floorItemId: f.floor } },
+    state: { chatId: 'chat', historyWindow: { hasMore: f.hasMore, loading: false, floorItemId: f.floor } },
     loadEarlier: f.load,
   }),
 }));
@@ -18,6 +18,7 @@ let viewport: HTMLDivElement;
 beforeEach(() => {
   f.first = 'old';
   f.floor = 'old-item';
+  f.hasMore = true;
   f.load.mockReset().mockResolvedValue(true);
   viewport = document.createElement('div');
   viewport.style.overflowAnchor = 'none';
@@ -65,6 +66,12 @@ it('keeps the reading anchor in place with native anchoring disabled', () => {
   view.prepend();
   expect(viewport.scrollTop).toBe(400);
   expect(view.release).toHaveBeenCalledTimes(1);
+});
+
+it('says where the conversation begins, once there is nothing earlier', () => {
+  expect(harness().queryByText('Beginning of conversation')).toBeNull();
+  f.hasMore = false;
+  expect(harness().getByText('Beginning of conversation')).toBeVisible();
 });
 
 it('keeps the bottom pin after an explicit page load', () => {

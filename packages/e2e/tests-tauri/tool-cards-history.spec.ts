@@ -49,22 +49,24 @@ test.describe('§tool-cards — Plan revision (plan-revision)', () => {
     await page.getByTestId('chat-plan-gate').waitFor({ timeout: 45_000 });
 
     await readEarlierTools(page);
-    const planCard = page.getByTestId('chat-plan-card').first();
-    await expect(planCard).toBeVisible({ timeout: 10_000 });
-    await expect(planCard.getByTestId('chat-plan-label')).toHaveText('Updated plan');
-    await expect(planCard.getByTestId('chat-plan-trigger')).toBeEnabled();
-    await expect(planCard.getByTestId('chat-plan-trigger').locator('..')).toHaveClass(/border-fail/);
-    await expect(planCard.getByTestId('chat-plan-body')).toContainText(
-      "The user doesn't want to proceed with this tool use",
-    );
-    await expect(planCard.getByTestId('chat-plan-body')).toContainText('Please also add a divide function');
+    const marker = page.getByTestId('chat-marker-exitplanmode').first();
+    await expect(marker).toContainText('Updated plan', { timeout: 10_000 });
+    await expect(marker).toContainText('failed');
+    await expect(marker).toHaveAttribute('data-state', 'failed');
+    await expect(marker).toBeEnabled();
+    await marker.click();
+    const body = page.getByTestId('chat-marker-exitplanmode-body').first();
+    await expect(body).toContainText("The user doesn't want to proceed with this tool use");
+    await expect(body).toContainText('Please also add a divide function');
+    // The plan itself stays, over what was said about it.
+    await expect(body.getByRole('heading', { name: 'Add multiply() function to utils.ts' })).toBeVisible();
 
     await page.getByTestId('chat-plan-reject').click();
     await waitForIdle(page, 5_000).catch(() => {});
   });
 });
 
-test.describe('§tool-cards — Skill + SkillLoaded (chat-status)', () => {
+test.describe('§tool-cards — Skill (chat-status)', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -79,7 +81,7 @@ test.describe('§tool-cards — Skill + SkillLoaded (chat-status)', () => {
     await closeTauriApp(app);
   });
 
-  test('Skill tool call renders the slash-command row; onSkillLoaded renders an expandable system pill', async () => {
+  test('a skill is one pill: the call, and the text the CLI loaded for it', async () => {
     const { page } = app;
 
     await sendMessage(page, 'Explain what TypeScript generics are in two sentences.');
@@ -92,21 +94,16 @@ test.describe('§tool-cards — Skill + SkillLoaded (chat-status)', () => {
 
     await waitForIdle(page, 60_000);
     await readEarlierTools(page);
-    const slashRow = page.getByTestId('chat-slash-command-row').first();
-    await slashRow.waitFor({ timeout: 60_000 });
-    await expect(slashRow).toContainText('/writing-clearly-and-concisely');
+    const pill = page.getByTestId('chat-marker-skill').first();
+    await pill.waitFor({ timeout: 60_000 });
+    await expect(pill).toContainText('Used skill /writing-clearly-and-concisely');
+    await expect(page.getByTestId('chat-skill-loaded-pill')).toHaveCount(0);
 
-    const pill = page.getByTestId('chat-skill-loaded-pill').first();
-    await pill.waitFor({ timeout: 15_000 });
-    await expect(pill).toBeEnabled();
-
-    await expect(page.getByTestId('marker-body')).toHaveCount(0);
+    const body = page.getByTestId('chat-marker-skill-body');
+    await expect(body).toHaveCount(0);
     await pill.click();
-    const body = page.getByTestId('marker-body');
-    await expect(body).toBeVisible({ timeout: 5_000 });
     await expect(body).toContainText('Writing Clearly and Concisely');
-
     await pill.click();
-    await expect(page.getByTestId('marker-body')).toHaveCount(0);
+    await expect(body).toHaveCount(0);
   });
 });

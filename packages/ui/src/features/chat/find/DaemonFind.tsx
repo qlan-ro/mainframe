@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useAuiState, type ThreadMessage } from '@assistant-ui/react';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useFindInChatStore, type FindMatch } from './find-in-chat-store';
+import { showAbsorbedMatch } from './absorbed-match';
 import { paintDaemonMatch, messageElement, waitForMessage } from './daemon-highlights';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 import type { HistorySearchResult } from '@qlan-ro/mainframe-types';
@@ -29,7 +30,7 @@ export function DaemonFind() {
     };
   }, [chatId, enabled]);
   useDaemonSearch(enabled, chatId, revision, extras?.searchHistory);
-  useDaemonStep(enabled, chatId, extras?.loadEarlier);
+  useDaemonStep(enabled, chatId, messages, extras?.loadEarlier);
   return null;
 }
 
@@ -98,8 +99,13 @@ function useDaemonSearch(
 function useDaemonStep(
   enabled: boolean,
   chatId: string | undefined,
+  messages: readonly ThreadMessage[],
   load: ((target?: string) => Promise<boolean>) | undefined,
 ) {
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const { isOpen, query, matches, activeIndex, navigation } = useFindInChatStore();
   const [paint, setPaint] = useState(0);
   const lastNavigation = useRef(navigation);
@@ -116,6 +122,8 @@ function useDaemonStep(
     void revealMatch(
       chatId,
       match,
+      query,
+      () => messagesRef.current,
       loadRef.current,
       () => cancelled,
       () => setPaint((value) => value + 1),
@@ -156,6 +164,8 @@ function applySearchResult(result: HistorySearchResult, chatId: string | undefin
 async function revealMatch(
   chatId: string,
   match: FindMatch,
+  query: string,
+  messages: () => readonly ThreadMessage[],
   load: ((target?: string) => Promise<boolean>) | undefined,
   isCancelled: () => boolean,
   paint: () => void,
@@ -175,6 +185,12 @@ async function revealMatch(
     window.dispatchEvent(
       new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId, source: { messageId: match.messageId } } }),
     );
+    const row = await showAbsorbedMatch(chatId, message, query, messages());
+    if (isCancelled()) return;
+    if (row) {
+      paint();
+      return;
+    }
     message.querySelector<HTMLButtonElement>('button[aria-label="Read more"]')?.click();
     requestAnimationFrame(() => {
       if (!isCancelled()) {

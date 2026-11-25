@@ -96,10 +96,13 @@ test.describe('§plan gate clear-context', () => {
     expect(replayed).toContain(POST_CLEAR_ANSWER);
 
     // UI half: the pre-approval turn is gone and the restart's auto-sent turn is a
-    // plan bubble (UserMessage strips the "Implement the following plan:" prefix and
-    // renders PlanBubble in its place) plus its answer — never a queued badge. The
+    // plan marker (UserMessage strips the "Implement the following plan:" prefix and
+    // renders the approved plan's marker in its place) plus its answer — never a queued badge. The
     // mock's kill() reports on_exit like the real CLI, so the daemon is idle first.
-    await expect(page.getByTestId('chat-plan-bubble').filter({ hasText: 'Add a greet function' })).toHaveCount(1);
+    const approved = page.getByTestId('chat-plan-approved');
+    await expect(approved).toHaveCount(1);
+    await approved.click();
+    await expect(page.getByTestId('chat-plan-approved-body')).toContainText('Add a greet function');
     await expect(page.getByTestId('chat-queued-message')).toHaveCount(0);
     await expect(thread.assistantMessages().filter({ hasText: PRE_CLEAR_ANSWER })).toHaveCount(0);
     await expect(thread.userMessages().filter({ hasText: PROMPT })).toHaveCount(0);

@@ -104,13 +104,13 @@ describe('SmartLink — file-reference context menu', () => {
 });
 
 describe('SmartLink — genuine web links are unaffected', () => {
-  it('an https href still routes to LinkWithPreview: external open + chat-link-copy', () => {
+  it('an https href is a web link: a workspace tab, and the link menu', () => {
     render(<SmartLink href="https://example.com">example</SmartLink>);
     const anchor = screen.getByRole('link', { name: 'example' });
 
     fireEvent.click(anchor);
-    expect(openExternal).toHaveBeenCalledWith('https://example.com');
-    expect(emitSurfaceIntent).not.toHaveBeenCalled();
+    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-url-tab', url: 'https://example.com' });
+    expect(openExternal).not.toHaveBeenCalled();
 
     fireEvent.contextMenu(anchor);
     expect(screen.getByTestId('chat-link-copy')).toBeInTheDocument();

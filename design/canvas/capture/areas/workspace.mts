@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { sendMessage, waitForIdle } from '../../../../packages/e2e/helpers/tauri/wait.js';
 import { createTauriChat } from '../../../../packages/e2e/helpers/tauri/setup.js';
+import { openWork } from '../../../../packages/e2e/helpers/tauri/transcript.js';
 import {
   escape,
   fail,
@@ -230,6 +231,7 @@ const area: CaptureArea = {
           id: 'subagent-done',
           caption: '**A sub-agent.** From “Open in workspace” on its row, or from the Activity section. Read-only.',
           setup: async ({ page }) => {
+            await openWork(page, 0);
             await page.locator('[data-testid^="chat-task-open-"]').click();
             await page.locator('[data-testid^="workspace-agent-result-"]').waitFor({ timeout: 15_000 });
             await parkPointer(page);
@@ -249,7 +251,7 @@ const area: CaptureArea = {
         const id = await createTauriChat(page, atlas, 'acceptEdits');
         await sendMessage(page, 'Delegate a long task, I will stop you after');
         await page
-          .locator('[data-testid="chat-tool-delegate-task-status"][data-status="running"]')
+          .locator('[data-testid="chat-tool-delegate-task-card-receipt"] [data-status="running"]')
           .waitFor({ timeout: 60_000 });
         await renameChat(page, id, 'Race review of the diff');
       },
@@ -289,7 +291,7 @@ const area: CaptureArea = {
         const { atlas } = await seedWorkbench(page, WORKSPACE_FILES);
         const id = await createTauriChat(page, atlas, 'acceptEdits');
         await sendMessage(page, 'Delegate a race review of the diff to a child chat');
-        await page.locator('[data-testid^="chat-task-result-card-"]').waitFor({ timeout: 60_000 });
+        await page.getByTestId('chat-absorbed-message').waitFor({ state: 'attached', timeout: 60_000 });
         await waitForIdle(page, 60_000);
         await renameChat(page, id, 'Race review of the diff');
       },
@@ -299,6 +301,7 @@ const area: CaptureArea = {
           caption:
             '**A delegated task, done.** Its own chat: the prompt it was given is the brief, its last message the result.',
           setup: async ({ page }) => {
+            await openWork(page, 0);
             await page.locator('[data-testid^="chat-tool-delegate-task-open-"]').first().click();
             await page
               .locator('[data-testid^="workspace-chat-status-"][data-status="completed"]')

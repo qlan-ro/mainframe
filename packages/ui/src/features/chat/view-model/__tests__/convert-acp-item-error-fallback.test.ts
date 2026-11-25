@@ -1,5 +1,5 @@
 /**
- * convertAcpItems — error-container fallback text, and partGroups edge cases
+ * convertAcpItems — error-container fallback text
  * not covered by convert-acp-item.test.ts's single happy-path scenarios.
  * Split into its own file to keep convert-acp-item.test.ts under the 300-line
  * cap (it was already at 589 before this file existed).
@@ -68,60 +68,5 @@ describe('convertAcpItems — error container: errorText fallback chain', () => 
     ];
     const container = convertAcpItems(items, stampFor)[0]!;
     expect(mainframeMeta(container)?.errorText).toBe('CLI died');
-  });
-});
-
-describe('convertAcpItems — partGroups edge cases', () => {
-  it('a standalone tool-call outside any group has no partGroups entry, and metadata is absent entirely', () => {
-    const items: AccumulatedItem[] = [
-      {
-        kind: 'tool-call',
-        id: 'solo',
-        title: 'Bash',
-        status: 'completed',
-        content: [],
-        meta: itemMeta({ containerId: 'c1' }),
-      },
-    ];
-    const container = convertAcpItems(items, stampFor)[0]!;
-    expect(container.metadata).toBeUndefined();
-  });
-
-  it('a nested subagent tool-group carries its own partGroups on the child assistant turn', () => {
-    const taskId = 'task-1';
-    const items: AccumulatedItem[] = [
-      {
-        kind: 'tool-call',
-        id: taskId,
-        title: 'Investigate',
-        status: 'completed',
-        content: [],
-        rawInput: { prompt: 'go' },
-        meta: itemMeta({ subagent: true }),
-      },
-      {
-        kind: 'tool-call',
-        id: 'n1',
-        title: 'Read',
-        status: 'completed',
-        content: [],
-        meta: itemMeta({ parentToolCallId: taskId, groupId: 'n1' }),
-      },
-      {
-        kind: 'tool-call',
-        id: 'n2',
-        title: 'Glob',
-        status: 'completed',
-        content: [],
-        meta: itemMeta({ parentToolCallId: taskId, groupId: 'n1' }),
-      },
-    ];
-
-    const container = convertAcpItems(items, stampFor)[0]!;
-    const part = container.content[0] as { messages: readonly ThreadMessageLike[] };
-    const assistantTurn = part.messages.find((m) => m.role === 'assistant')!;
-    const partGroups = mainframeMeta(assistantTurn)?.partGroups;
-
-    expect(partGroups).toEqual({ n1: 'n1', n2: 'n1' });
   });
 });

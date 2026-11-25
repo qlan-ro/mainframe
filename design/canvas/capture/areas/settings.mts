@@ -16,6 +16,12 @@ const area: CaptureArea = {
       subtitle: 'A focused field, and a setting that could not be saved.',
       width: 2400,
     },
+    {
+      file: 'Settings-General-Links',
+      title: 'Settings — links and finished work',
+      subtitle: 'Where a link in a reply opens (T1d), and whether finished work folds (T1b).',
+      width: 2400,
+    },
   ],
   groups: [
     {
@@ -72,6 +78,32 @@ const area: CaptureArea = {
           setup: async ({ page }) => {
             await page.getByTestId('settings-worktree-dir-save').click();
             await page.getByText('could not write').waitFor();
+            await parkPointer(page);
+          },
+        },
+      ],
+    },
+    {
+      board: 'Settings-General-Links',
+      before: stubUsage,
+      seed: async ({ page }) => {
+        await seedWorkbench(page);
+        await page.getByTestId('shell-rail-settings').click();
+        await page.getByTestId('settings-pane-general').waitFor();
+        await parkPointer(page);
+      },
+      states: [
+        {
+          id: 'defaults',
+          caption: '**Defaults.** Links open in the workspace; finished work folds.',
+          crop: [317, 48, 1123, 560],
+        },
+        {
+          id: 'browser',
+          caption: '**In the browser.** Every link of a reply opens in the system’s default browser.',
+          crop: [317, 48, 1123, 560],
+          setup: async ({ page }) => {
+            await page.getByTestId('settings-links-open-in-browser').click();
             await parkPointer(page);
           },
         },

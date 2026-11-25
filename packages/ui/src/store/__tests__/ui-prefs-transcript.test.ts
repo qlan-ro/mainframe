@@ -32,62 +32,71 @@ async function reloadStore() {
 
 beforeEach(() => localStorage.clear());
 
-it('defaults to verbose with clean storage', async () => {
+it('folds finished work and opens links in the workspace with clean storage', async () => {
   const store = await reloadStore();
-  expect(store.getState().transcriptMode).toBe('verbose');
+  expect(store.getState()).toMatchObject({ finishedWork: 'fold', openLinksIn: 'workspace' });
 });
 
-it('persists compact across a fresh module and can return to verbose', async () => {
+it('persists both choices across a fresh module', async () => {
   const store = await reloadStore();
   store.setState(savedPreferences);
-  store.getState().setTranscriptMode('compact');
-  expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual({
-    version: 9,
-    state: { ...savedPreferences, transcriptMode: 'compact' },
-  });
-  const fresh = await reloadStore();
-  expect(fresh.getState()).toMatchObject({ ...savedPreferences, transcriptMode: 'compact' });
-  fresh.getState().setTranscriptMode('verbose');
-  expect((await reloadStore()).getState()).toMatchObject({ ...savedPreferences, transcriptMode: 'verbose' });
+  store.getState().setFinishedWork('open');
+  store.getState().setOpenLinksIn('browser');
+  const chosen = { ...savedPreferences, finishedWork: 'open', openLinksIn: 'browser' };
+  expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).state).toMatchObject(chosen);
+  expect((await reloadStore()).getState()).toMatchObject(chosen);
 });
 
-it.each([7, 8])('defaults a missing transcript field in v%i without losing preferences', async (version) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: legacyPreferences, version }));
-  const store = await reloadStore();
-  expect(store.getState()).toMatchObject({ ...savedPreferences, transcriptMode: 'verbose' });
-});
-
+/** What main's partializer writes for `transcriptMode`: always, so `verbose` is the default too. */
 it.each([
-  [7, 'verbose'],
-  [7, 'compact'],
-  [8, 'verbose'],
-  [8, 'compact'],
-])('preserves a valid v%i transcript value %s', async (version, transcriptMode) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { ...legacyPreferences, transcriptMode }, version }));
+  [7, { transcriptMode: 'verbose' }, 'open'],
+  [8, { transcriptMode: 'verbose' }, 'open'],
+  [7, { transcriptMode: 'compact' }, 'fold'],
+  [8, { transcriptMode: 'compact' }, 'fold'],
+  [9, { transcriptMode: 'verbose' }, 'open'],
+  [9, { transcriptMode: 'compact' }, 'fold'],
+  [7, {}, 'fold'],
+  [8, {}, 'fold'],
+  // The new choice, once made, wins over what an older build may write beside it.
+  [8, { transcriptMode: 'verbose', finishedWork: 'fold' }, 'fold'],
+  [8, { transcriptMode: 'compact', finishedWork: 'open' }, 'open'],
+])('carries the retired choice of v%i storage over: %o starts on %s', async (version, stored, finishedWork) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { ...savedPreferences, ...stored }, version }));
   const store = await reloadStore();
-  expect(store.getState()).toMatchObject({ ...savedPreferences, transcriptMode });
+  expect(store.getState()).toMatchObject({ ...savedPreferences, finishedWork, openLinksIn: 'workspace' });
+  expect(store.getState()).not.toHaveProperty('transcriptMode');
+  // The next write keeps the choice, without the field it came from.
+  store.getState().setSidebarWidth(330);
+  const written = JSON.parse(localStorage.getItem(STORAGE_KEY)!).state;
+  expect(written).toMatchObject({ finishedWork });
+  expect(written).not.toHaveProperty('transcriptMode');
+  expect((await reloadStore()).getState()).toMatchObject({ finishedWork });
 });
 
-const invalidValues = ['invalid', '', null, { mode: 'compact' }, ['compact'], false, 0];
+it('carries it over from storage older than v7', async () => {
+  const state = { sidebarWidth: 320, transcriptMode: 'verbose' };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, version: 4 }));
+  expect((await reloadStore()).getState()).toMatchObject({ sidebarWidth: 320, finishedWork: 'open' });
+});
+
+const invalidValues = ['invalid', '', null, { mode: 'open' }, ['open'], false, 0];
 it.each([7, 8].flatMap((version) => invalidValues.map((value) => ({ version, value }))))(
-  'sanitizes v$version transcript value $value while retaining other preferences',
+  'sanitizes $value in v$version while retaining other preferences',
   async ({ version, value }) => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ state: { ...legacyPreferences, transcriptMode: value }, version }),
-    );
+    const state = { ...savedPreferences, transcriptMode: value, finishedWork: value, openLinksIn: value };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, version }));
     const store = await reloadStore();
-    expect(store.getState()).toMatchObject({ ...savedPreferences, transcriptMode: 'verbose' });
     store.getState().setSidebarWidth(330);
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).state).toEqual({
       ...savedPreferences,
       sidebarWidth: 330,
-      transcriptMode: 'verbose',
+      finishedWork: 'fold',
+      openLinksIn: 'workspace',
     });
   },
 );
 
-it('keeps older section migrations when adding the transcript default', async () => {
+it('keeps older section migrations when adding the transcript defaults', async () => {
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
@@ -103,7 +112,7 @@ it('keeps older section migrations when adding the transcript default', async ()
   const store = await reloadStore();
   expect(store.getState()).toMatchObject({
     sidebarWidth: 320,
-    transcriptMode: 'verbose',
+    finishedWork: 'fold',
     sidebarView: 'chats',
     // v5 folds the legacy per-card bits into one map, v8 collapses that map to
     // ONE boolean: open because the 'activity' card was open.

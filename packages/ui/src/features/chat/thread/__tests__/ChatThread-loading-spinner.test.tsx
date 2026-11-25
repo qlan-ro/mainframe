@@ -48,7 +48,7 @@ vi.mock('@assistant-ui/react', () => {
   };
 });
 
-vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
+vi.mock('../../messages/turn/TurnTranscript', () => ({ TurnTranscript: () => <div data-testid="messages-stub" /> }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="chat-composer" /> }));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
 vi.mock('../../composer/strips/BottomStrip', () => ({ BottomStrip: () => null }));
@@ -84,6 +84,13 @@ describe('ChatThread — cold-reload loading spinner', () => {
 
     render(<ChatThread />);
 
+    expect(screen.getByTestId('chat-thread-loading')).toBeInTheDocument();
+  });
+
+  it('keeps the spinner while a run that is still loading has only assistant-ui’s stand-in', () => {
+    testState.extrasState.loadState = { type: 'loading' };
+    testState.messages = [{ id: 'p', role: 'assistant', content: [], metadata: { isOptimistic: true } }];
+    render(<ChatThread />);
     expect(screen.getByTestId('chat-thread-loading')).toBeInTheDocument();
   });
 

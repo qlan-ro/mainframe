@@ -6,7 +6,7 @@ import { expect, it, vi } from 'vitest';
 vi.mock('../../runtime/chat-extras', () => ({ useChatExtras: () => ({ state: { chatId: 'column' } }) }));
 vi.mock('@/features/side-chat/side-chat-scope', () => ({ useSideAwareThreadId: () => null }));
 
-import { TranscriptScopeProvider } from '../../messages/compact/transcript-scope';
+import { TranscriptScopeProvider } from '../../messages/turn/transcript-scope';
 import { useChatId } from '../chat-tool-context';
 
 it('is the transcript’s own chat, where a sub-agent tab shows another than the conversation', () => {

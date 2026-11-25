@@ -4,6 +4,8 @@ export interface SubagentCall {
   part: ToolCallMessagePart;
   /** The top-level message the call is in: what nested disclosure keys and history loads go by. */
   messageId: string;
+  /** The agents' calls it lies in, the outermost first. */
+  ancestors?: readonly ToolCallMessagePart[];
 }
 
 /** A sub-agent's call anywhere in a transcript, nested agents included. */
@@ -13,7 +15,7 @@ export function findSubagentCall(messages: readonly ThreadMessage[], toolCallId:
       if (part.type !== 'tool-call') continue;
       if (part.toolCallId === toolCallId) return { part, messageId: message.id };
       const nested = findSubagentCall(part.messages ?? [], toolCallId);
-      if (nested) return { part: nested.part, messageId: message.id };
+      if (nested) return { ...nested, messageId: message.id, ancestors: [part, ...(nested.ancestors ?? [])] };
     }
   }
   return null;

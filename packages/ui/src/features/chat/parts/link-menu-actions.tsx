@@ -1,11 +1,7 @@
 /**
- * Shared row-set source for every http(s) link's menu (todo #341): the
- * localhost tunnel chip (`UrlChip`, a dropdown) and the plain preview link
- * (`LinkWithPreview`, a context menu) both render the same in-app / browser
- * rows from here, in the same order, so the two menus can't drift apart.
- *
- * "Copy link" is not described here — `CopyMenuItem` owns its own
- * status-driven icon and label, and both renderers already share it directly.
+ * The rows of every http(s) link's context menu (todo #341): in-app open, then
+ * browser open. "Copy link" is not described here: `CopyMenuItem` owns its own
+ * status-driven icon and label.
  */
 import { useCallback, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';

@@ -7,7 +7,7 @@
  * a one-item menu whose only item is dead is worse than no menu, and the
  * right-click falls through to the webview's own menu exactly as before.
  *
- * The trigger gets no `onContextMenu` guard, unlike `link-with-preview.tsx`.
+ * The trigger gets no `onContextMenu` guard, unlike `LinkAnchor.tsx`.
  * This trigger nests inside `MessagePathContextMenu`, and React carries the
  * synthetic event through the Dialog portal to it — but the inner trigger runs
  * first and Radix's own handler ends with `preventDefault()`, which the outer

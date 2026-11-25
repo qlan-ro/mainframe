@@ -1,0 +1,6 @@
+{"dir":"in","method":"sendMessage","args":["List the files"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-turn-finished-sess-1"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"tool_use","id":"toolu_finished_1","name":"Bash","input":{"command":"ls","description":"List the files"},"caller":{"type":"direct"}}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}},{"version":1,"provider":"claude","turnId":"turn-finished-1","state":"completed","finalEligible":false,"phase":"work"}],"delayMs":40}
+{"dir":"out","method":"onToolResult","args":[[{"type":"tool_result","toolUseId":"toolu_finished_1","content":"CLAUDE.md\nindex.ts","isError":false}]],"delayMs":60}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Two files."}],{"model":"claude-haiku-4-5-20251001","usage":{"input_tokens":10,"output_tokens":8}},{"version":1,"provider":"claude","turnId":"turn-finished-1","state":"completed","finalEligible":true,"phase":"final_answer"}],"delayMs":80}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.001,"usage":{"input_tokens":10,"output_tokens":8},"subtype":"success","is_error":false}],"delayMs":100}

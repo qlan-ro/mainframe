@@ -37,7 +37,7 @@ describe('handleDaemonEvent — chat.updated isRunning, facadeAttached gating', 
     expect(result).toEqual({ kind: 'event', event: { type: 'run.stopped' } });
   });
 
-  it('isRunning: true maps to run.started regardless of facadeAttached', () => {
+  it('isRunning: true maps to run.started regardless of facadeAttached, which says whether the run may be older', () => {
     const attached = handleDaemonEvent(
       { type: 'chat.updated', chat: { id: CHAT_ID, isRunning: true } } as never,
       CHAT_ID,
@@ -50,7 +50,7 @@ describe('handleDaemonEvent — chat.updated isRunning, facadeAttached gating', 
     );
 
     expect(attached).toEqual({ kind: 'event', event: { type: 'run.started' } });
-    expect(detached).toEqual({ kind: 'event', event: { type: 'run.started' } });
+    expect(detached).toEqual({ kind: 'event', event: { type: 'run.started', replayed: true } });
   });
 });
 

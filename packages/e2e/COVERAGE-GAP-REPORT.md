@@ -13,9 +13,9 @@ read in both directions._
 
 | Metric | Count |
 |---|---|
-| Defined | 1192 |
-| Referenced | 634 |
-| Unused | 558 |
+| Defined | 1189 |
+| Referenced | 626 |
+| Unused | 563 |
 | Dead selectors | 20 |
 
 ## Dead selectors
@@ -48,8 +48,7 @@ read in both directions._
 | app-tauri.ts | 0 | 0 |
 | automations-library.spec.ts | 28 | 0 |
 | background-client.ts | 0 | 0 |
-| chat.spec.ts | 29 | 0 |
-| compact-transcript.spec.ts | 21 | 0 |
+| chat.spec.ts | 28 | 0 |
 | composer-advanced.spec.ts | 88 | 0 |
 | composer-catalog.spec.ts | 5 | 0 |
 | composer-providers.spec.ts | 15 | 2 |
@@ -57,8 +56,8 @@ read in both directions._
 | daemon-picker.spec.ts | 66 | 0 |
 | daemon.ts | 0 | 0 |
 | directory-picker.spec.ts | 42 | 0 |
-| editor-comments-review.spec.ts | 45 | 0 |
-| editor-diff.spec.ts | 33 | 0 |
+| editor-comments-review.spec.ts | 53 | 0 |
+| editor-diff.spec.ts | 31 | 0 |
 | editor.spec.ts | 45 | 0 |
 | facade-protocol-partial.spec.ts | 0 | 0 |
 | facade-protocol-streaming.spec.ts | 0 | 0 |
@@ -66,7 +65,7 @@ read in both directions._
 | facade-protocol.spec.ts | 0 | 0 |
 | facade-queued-prompt.spec.ts | 0 | 0 |
 | facade-reconnect-mid-stream.spec.ts | 1 | 0 |
-| facade-streaming-segments.spec.ts | 1 | 0 |
+| facade-streaming-segments.spec.ts | 0 | 0 |
 | files-tree.spec.ts | 49 | 3 |
 | find-in-path.spec.ts | 55 | 0 |
 | focus-line.spec.ts | 6 | 0 |
@@ -80,12 +79,12 @@ read in both directions._
 | history-performance.ts | 13 | 0 |
 | layout.spec.ts | 44 | 0 |
 | live-adapter.spec.ts | 1 | 0 |
-| mcp-delegate.spec.ts | 27 | 0 |
+| mcp-delegate.spec.ts | 24 | 0 |
 | menus.ts | 0 | 0 |
 | new-session-prefill.spec.ts | 15 | 0 |
 | overlay-scrollbars.spec.ts | 10 | 0 |
 | page-objects.ts | 20 | 0 |
-| plan-clear-context.spec.ts | 6 | 0 |
+| plan-clear-context.spec.ts | 7 | 0 |
 | port-guard.ts | 0 | 0 |
 | preview.spec.ts | 49 | 0 |
 | provider-switch.spec.ts | 7 | 0 |
@@ -93,9 +92,9 @@ read in both directions._
 | review-panel.spec.ts | 65 | 0 |
 | selection-hold.spec.ts | 11 | 0 |
 | session-panel-jumps.spec.ts | 10 | 0 |
-| session-panel.spec.ts | 123 | 1 |
+| session-panel.spec.ts | 126 | 1 |
 | session-tabs.spec.ts | 22 | 0 |
-| sessions-draft.spec.ts | 70 | 0 |
+| sessions-draft.spec.ts | 80 | 0 |
 | sessions-filters.spec.ts | 37 | 0 |
 | sessions-list.spec.ts | 26 | 0 |
 | sessions-rows.spec.ts | 36 | 0 |
@@ -105,26 +104,28 @@ read in both directions._
 | setup.ts | 1 | 0 |
 | sidebar-chrome.spec.ts | 20 | 3 |
 | spotlight.spec.ts | 40 | 0 |
-| stress-matrix.spec.ts | 15 | 0 |
+| stress-matrix.spec.ts | 12 | 0 |
 | tasks.spec.ts | 171 | 0 |
 | testids.ts | 3 | 0 |
 | title-bar.spec.ts | 25 | 0 |
-| tool-cards-history.spec.ts | 20 | 0 |
-| tool-cards.spec.ts | 95 | 0 |
-| transcript.spec.ts | 20 | 0 |
+| tool-cards-history.spec.ts | 14 | 0 |
+| tool-cards.spec.ts | 58 | 0 |
+| transcript-work.spec.ts | 13 | 0 |
+| transcript.spec.ts | 29 | 0 |
+| transcript.ts | 0 | 0 |
 | viewers.spec.ts | 55 | 0 |
 | wait.ts | 3 | 0 |
 | wait.ts | 0 | 7 |
 | window-states.spec.ts | 34 | 0 |
-| windowed-history-lifecycle.spec.ts | 30 | 0 |
+| windowed-history-lifecycle.spec.ts | 26 | 0 |
 | windowed-history-measurement.spec.ts | 4 | 7 |
 | windowed-history-performance.spec.ts | 0 | 0 |
 | windowed-history-protocol.spec.ts | 0 | 0 |
-| windowed-history-virtualization.spec.ts | 27 | 0 |
+| windowed-history-virtualization.spec.ts | 23 | 0 |
 | windowed-history.spec.ts | 22 | 0 |
 | windowed-history.ts | 0 | 0 |
 | windowed-history.ts | 0 | 0 |
-| workspace-chats.spec.ts | 40 | 0 |
+| workspace-chats.spec.ts | 39 | 0 |
 | workspace-surface.spec.ts | 50 | 1 |
 | ws-control.ts | 0 | 0 |
 | zones.ts | 0 | 2 |
@@ -133,11 +134,11 @@ read in both directions._
 
 | Surface | Defined | Unused |
 |---|---|---|
-| chat | 207 | 85 |
+| chat | 213 | 99 |
 | automations | 92 | 80 |
 | tasks | 91 | 43 |
-| composer | 78 | 32 |
-| sessions | 97 | 28 |
+| composer | 91 | 41 |
+| sessions | 103 | 31 |
 | settings | 42 | 25 |
 | skills | 24 | 24 |
 | session | 72 | 22 |
@@ -149,30 +150,26 @@ read in both directions._
 | shell | 13 | 9 |
 | usage | 10 | 9 |
 | viewer | 27 | 9 |
-| editor | 28 | 7 |
+| editor | 29 | 7 |
 | run | 8 | 7 |
-| search | 16 | 7 |
-| artifact | 6 | 6 |
 | image | 8 | 6 |
 | title | 9 | 6 |
 | automation | 5 | 5 |
 | git | 35 | 5 |
-| push | 5 | 5 |
 | review | 26 | 5 |
-| smart | 5 | 5 |
 | toast | 8 | 5 |
 | worktree | 5 | 5 |
 | error | 4 | 4 |
 | html | 4 | 4 |
+| search | 12 | 4 |
+| artifact | 3 | 3 |
 | gate | 3 | 3 |
 | pairing | 3 | 3 |
 | shortcuts | 3 | 3 |
-| tool | 10 | 3 |
 | tunnel | 3 | 3 |
 | app | 2 | 2 |
 | csv | 2 | 2 |
 | directory | 14 | 2 |
-| edit | 2 | 2 |
 | file | 14 | 2 |
 | idle | 2 | 2 |
 | md | 2 | 2 |
@@ -180,18 +177,17 @@ read in both directions._
 | project | 2 | 2 |
 | remote | 2 | 2 |
 | sidebar | 6 | 2 |
-| web | 6 | 2 |
+| smart | 2 | 2 |
+| tool | 6 | 2 |
 | confirm | 1 | 1 |
 | content | 1 | 1 |
 | dialog | 2 | 1 |
 | find | 9 | 1 |
 | new | 1 | 1 |
-| read | 4 | 1 |
 | setup | 1 | 1 |
 | thread | 3 | 1 |
 | transcript | 1 | 1 |
 | trigger | 1 | 1 |
-| welcome | 4 | 1 |
 | advisor | 2 | 0 |
 | archived | 1 | 0 |
 | connection | 1 | 0 |
@@ -199,11 +195,13 @@ read in both directions._
 | import | 1 | 0 |
 | main | 2 | 0 |
 | markdown | 3 | 0 |
-| marker | 1 | 0 |
 | quick | 1 | 0 |
+| read | 1 | 0 |
 | restore | 1 | 0 |
 | show | 1 | 0 |
 | side | 4 | 0 |
 | surf | 1 | 0 |
 | surface | 2 | 0 |
 | tour | 8 | 0 |
+| web | 2 | 0 |
+| welcome | 4 | 0 |

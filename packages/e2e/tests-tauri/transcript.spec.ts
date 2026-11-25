@@ -28,7 +28,7 @@
  *   chat-message-copy / chat-message-more / chat-message-export — MessageActionBar.
  *     `data-copied` is set by the native ActionBarPrimitive.Copy (asChild → our Button),
  *     not by us — see @assistant-ui/react's ActionBarCopy.
- *   chat-message-timestamp / chat-message-timing — assistant footer row
+ *   chat-message-timestamp / chat-message-time-detail — the footer's time and its tooltip
  *   chat-code-copy — CodeHeader's Copy/Copied button (fenced code blocks only)
  *   chat-scroll-to-bottom — ThreadPrimitive.ScrollToBottom (native `disabled` at-bottom state)
  *   find-bar / thread-find-input / thread-find-prev / thread-find-next / thread-find-close
@@ -51,6 +51,7 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
+import { openWork, toolRow } from '../helpers/tauri/transcript.js';
 
 /** A single sentence repeated 12x (803 chars) — comfortably over ReadMoreBubble's
  *  600-char CHAR_THRESHOLD, and "deliberately" appears in it exactly 12 times
@@ -67,11 +68,12 @@ const LONG_TEXT = Array.from(
  *  bubble renders UNCLAMPED (a collapsed clamp sets overflow:hidden and would hide
  *  the very spill this measures). */
 const UNBREAKABLE = 'A'.repeat(200);
+const LINKS = [`https://example.com/${'segment'.repeat(10)}`, 'https://two.test/', 'https://three.test/'];
 const OVERFLOW_TEXT = [
   UNBREAKABLE,
-  `https://example.com/${'segment'.repeat(10)}`,
   `/Users/dev/${'deeply-nested-directory/'.repeat(4)}file.ts`,
   `\`${'x'.repeat(80)}\``,
+  ...LINKS,
 ].join(' ');
 
 async function scrollViewportToTop(page: Page): Promise<void> {
@@ -126,12 +128,13 @@ test.describe('§transcript — thread turn', () => {
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test('assistant reply renders markdown (bold list) and a Bash tool card', async () => {
+  test('assistant reply renders markdown (bold list) and a Bash row', async () => {
     const { page } = app;
     await sendMessage(page, "Use the Bash tool to run 'ls' and show me the files.");
     await waitForIdle(page, 90_000);
 
-    await expect(page.getByTestId('chat-bash-card').first()).toBeVisible({ timeout: 10_000 });
+    await openWork(page);
+    await expect(toolRow(page, 'Bash').first()).toBeVisible();
 
     const lastAssistant = page.getByTestId('chat-assistant-message').last();
     await expect(lastAssistant.locator('strong').filter({ hasText: 'CLAUDE.md' })).toBeVisible();
@@ -141,7 +144,8 @@ test.describe('§transcript — thread turn', () => {
     const { page } = app;
     const lastAssistant = page.getByTestId('chat-assistant-message').last();
 
-    // autohide="not-last" — the LAST assistant message's bar is visible without hover.
+    // The footer shows on hover or keyboard focus, and keeps its height either way.
+    await lastAssistant.hover();
     const copyBtn = lastAssistant.getByTestId('chat-message-copy');
     await expect(copyBtn).toBeVisible();
     await expect(copyBtn).not.toHaveAttribute('data-copied', 'true');
@@ -160,26 +164,27 @@ test.describe('§transcript — thread turn', () => {
     await expect(timestamp).toHaveText(/^\d{1,2}:\d{2}\s?(AM|PM)$/i);
   });
 
-  // Previously: MessageTiming.tsx reads `useMessageTiming()?.totalStreamTime`,
-  // sourced from a `system`-type message's `metadata.turnDurationMs`, but
-  // nothing in packages/core ever wrote that field — `chat-message-timing`
-  // could never render. Fixed by the product-bug-fix campaign:
-  // `event-handler.ts`'s `onResult` now computes `turnDurationMs` from
-  // `active.turnStartedAt` and emits a transient system message carrying it,
-  // which `groupMessages` merges onto the preceding assistant message.
-  test('assistant message action bar: timing pill shows total duration on hover', async () => {
+  test("the time's tooltip has the full date and what the reply took", async () => {
     const { page } = app;
-    const lastAssistant = page.getByTestId('chat-assistant-message').last();
-    const timingPill = lastAssistant.getByTestId('chat-message-timing');
-    await expect(timingPill).toBeVisible({ timeout: 10_000 });
-    // formatDurationMs: "412ms" / "8.94s" / "1m 15s" / "2h 15m".
-    await expect(timingPill).toHaveText(/^(\d+ms|\d+\.\d{2}s|\d+m \d{2}s|\d+h \d{2}m)$/);
+    await page.getByTestId('chat-assistant-message').last().getByTestId('chat-message-timestamp').hover();
+    const detail = page.getByTestId('chat-message-time-detail').first();
+    await expect(detail).toContainText(String(new Date().getFullYear()));
+    // formatTurnDuration: "1s" / "1m 15s" / "2h 15m".
+    await expect(detail).toContainText(/Took (\d+s|\d+m \d{2}s|\d+h \d{2}m)/);
+  });
 
-    // Hovering reveals the tooltip's "Total" breakdown row. Radix Tooltip
-    // portals content twice (an aria-live announcer copy plus the visible
-    // one) — scope to the first match rather than the ambiguous bare text.
-    await timingPill.hover();
-    await expect(page.getByText('Total').first()).toBeVisible({ timeout: 5_000 });
+  test("the user's own message has a footer, and the conversation opens with its time", async () => {
+    const { page } = app;
+    const message = page.getByTestId('chat-user-message').last();
+    await message.hover();
+    await expect(message.getByTestId('chat-message-copy')).toBeVisible();
+    await expect(message.getByTestId('chat-message-timestamp')).toBeVisible();
+    await scrollViewportToTop(page);
+    await expect(page.getByTestId('chat-time-marker').first()).toContainText('Today, ');
+    // Back to the tail, where the next test starts: a reader who scrolled up is left there.
+    await page.getByTestId('chat-thread-viewport').evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
   });
 
   test('scroll-to-bottom button appears when scrolled up and returns to the tail on click', async () => {
@@ -250,15 +255,48 @@ test.describe('§transcript — thread turn', () => {
       clientWidth: el.clientWidth,
       width: el.getBoundingClientRect().width,
       clamped: el.querySelector('[data-clamp]') !== null,
+      // The reading column, whose width is the viewer's to drag.
+      column: el.closest('[data-testid="chat-transcript"]')!.getBoundingClientRect().width,
     }));
     expect(box.clamped).toBe(false);
-    // 470px cap + the 0.5px hairline border on each side.
-    expect(box.width).toBeLessThanOrEqual(471);
+    expect(box.width).toBeLessThanOrEqual(box.column * 0.85 + 1);
     // scrollWidth includes content painted past the padding box — this is the
     // containment assertion itself.
     expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);
 
     await waitForIdle(page, 60_000);
+  });
+
+  // The turn above sent the links.
+  test('Tab goes from a link to its Copy, to the next link and on', async () => {
+    const { page } = app;
+    const bubble = page.getByTestId('chat-user-bubble').filter({ hasText: UNBREAKABLE });
+    const copy = page.getByTestId('chat-link-copy-url');
+    const link = (url: string) => bubble.locator(`[data-testid="chat-link"][href="${url}"]`);
+
+    await link(LINKS[0]!).focus();
+    for (const url of LINKS) {
+      await expect(link(url)).toBeFocused();
+      await expect(copy).toHaveCount(1);
+      await page.keyboard.press('Tab');
+      await expect(copy).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(copy).toHaveText('Copied');
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+      await page.keyboard.press('Tab');
+    }
+    // Past the last link: on to what follows it, with no tooltip left behind.
+    await expect(copy).toHaveCount(0);
+    const onward = await bubble.evaluate((el) => {
+      const active = document.activeElement!;
+      const follows = el.compareDocumentPosition(active) & Node.DOCUMENT_POSITION_FOLLOWING;
+      return active !== document.body && !el.contains(active) && Boolean(follows);
+    });
+    expect(onward).toBe(true);
+
+    await link(LINKS[1]!).focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(link(LINKS[0]!)).toBeFocused();
   });
 });
 

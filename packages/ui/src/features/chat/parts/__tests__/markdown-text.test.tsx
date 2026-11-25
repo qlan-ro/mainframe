@@ -18,6 +18,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { SyntaxHighlighterProps } from '@assistant-ui/react-markdown';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useUiPrefs } from '@/store/ui-prefs';
 import { HostProvider } from '@/lib/host';
 import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
@@ -67,21 +68,18 @@ describe('markdownComponents.a (LinkWithPreview)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 2. Click — openExternal is called with the href; default navigation is
-  //    prevented (the click handler calls e.preventDefault()).
+  // 2. Click — opens where the setting says; default navigation is prevented.
   // -------------------------------------------------------------------------
 
-  it('clicking the anchor calls openExternal with the href', () => {
+  it('a click opens the link itself, without navigating the app', () => {
+    useUiPrefs.setState({ openLinksIn: 'browser' });
     wrap(<A href="https://example.com">link text</A>);
-
-    const anchor = screen.getByRole('link', { name: 'link text' });
-
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
-    anchor.dispatchEvent(clickEvent);
-
+    screen.getByRole('link', { name: 'link text' }).dispatchEvent(clickEvent);
     expect(fake.shell.openExternal).toHaveBeenCalledTimes(1);
     expect(fake.shell.openExternal).toHaveBeenCalledWith('https://example.com');
     expect(clickEvent.defaultPrevented).toBe(true);
+    useUiPrefs.setState({ openLinksIn: 'workspace' });
   });
 });
 
@@ -94,7 +92,7 @@ describe('fenced code block container', () => {
   it('CodeHeader forms the rounded, bordered top of the container', () => {
     const { container } = render(<CodeHeader language="ts" code="const x = 1;" />);
     const root = container.firstElementChild as HTMLElement;
-    expect(root.className).toContain('rounded-t-md');
+    expect(root.className).toContain('rounded-t-lg');
     expect(root.className).toContain('border-border');
   });
 
@@ -104,10 +102,15 @@ describe('fenced code block container', () => {
     const { container } = render(<SyntaxHighlighter code="const x = 1;" language="ts" components={components} />);
     const pre = container.querySelector('pre');
     expect(pre).not.toBeNull();
-    expect(pre!.className).toContain('rounded-b-md');
+    expect(pre!.className).toContain('rounded-b-lg');
     expect(pre!.className).toContain('border-border');
     // header's bottom border is the divider — the pre must not double it
     expect(pre!.className).toContain('border-t-0');
+  });
+
+  it('CodeHeader names the language as written', () => {
+    const { container } = render(<CodeHeader language="ts" code="const x = 1;" />);
+    expect(container.querySelector('span')).toHaveTextContent('ts');
   });
 
   it('SyntaxHighlighter renders a line-number gutter cell per line', () => {
@@ -116,14 +119,7 @@ describe('fenced code block container', () => {
       <SyntaxHighlighter code={'line one\nline two'} language="ts" components={components} />,
     );
     const numbers = container.querySelectorAll('[data-slot="code-line-number"]');
-    expect(numbers.length).toBeGreaterThan(0);
-  });
-
-  it('CodeHeader language label is uppercase, not lowercase', () => {
-    const { container } = render(<CodeHeader language="ts" code="const x = 1;" />);
-    const label = container.querySelector('span');
-    expect(label!.className).toContain('uppercase');
-    expect(label!.className).not.toContain('lowercase');
+    expect([...numbers].map((cell) => cell.textContent)).toEqual(['1', '2']);
   });
 
   it('CodeHeader copy button shows a visible "Copy" text label', () => {
@@ -158,47 +154,29 @@ describe('markdownComponents task-list checkbox', () => {
     expect(box!.getAttribute('data-checked')).toBe('false');
   });
 
-  it('a task-list <li> applies line-through styling to its checked label via data attribute', () => {
+  it('a done task-list <li> strikes its label through, an ordinary one does not', () => {
+    const item = (className?: string) => {
+      const { container } = render(
+        <ul>
+          <Li className={className}>thing</Li>
+        </ul>,
+      );
+      return container.querySelector('li')!.className;
+    };
+    expect(item('task-list-item')).toMatch(/has-\[.*data-checked=true.*\]:line-through/);
+    expect(item()).not.toContain('line-through');
+  });
+
+  it('says each state to assistive tech, and is not a control', () => {
     const Comp = MdInput as React.ComponentType<React.InputHTMLAttributes<HTMLInputElement>>;
     const { container } = render(
-      <ul>
-        <Li className="task-list-item">
-          <Comp type="checkbox" checked readOnly disabled />
-          done thing
-        </Li>
-      </ul>,
+      <>
+        <Comp type="checkbox" checked readOnly disabled />
+        <Comp type="checkbox" checked={false} readOnly disabled />
+      </>,
     );
-    const li = container.querySelector('li');
-    expect(li!.className).toContain('aui-md-li-task');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Ordered/unordered list markers — custom mono index / dot, not browser markers.
-// ---------------------------------------------------------------------------
-
-describe('markdownComponents list markers', () => {
-  const Ul = markdownComponents.ul as React.ComponentType<React.HTMLAttributes<HTMLUListElement>>;
-  const Ol = markdownComponents.ol as React.ComponentType<React.OlHTMLAttributes<HTMLOListElement>>;
-
-  it('ul does not use browser list-disc markers (replaced by a custom dot)', () => {
-    const { container } = render(
-      <Ul>
-        <Li>item</Li>
-      </Ul>,
-    );
-    const ul = container.querySelector('ul');
-    expect(ul!.className).not.toContain('list-disc');
-  });
-
-  it('ol does not use browser list-decimal markers (replaced by a custom mono index)', () => {
-    const { container } = render(
-      <Ol>
-        <Li>item</Li>
-      </Ol>,
-    );
-    const ol = container.querySelector('ol');
-    expect(ol!.className).not.toContain('list-decimal');
+    expect(container).toHaveTextContent('Done: Not done:');
+    expect(screen.queryByRole('checkbox')).toBeNull();
   });
 });
 
@@ -232,30 +210,6 @@ describe('markdownComponents list item flow (regression: no flex on li)', () => 
     expect(li.textContent).toBe('before text inline code after text');
     expect(li.querySelector('code')).not.toBeNull();
   });
-
-  it('MarkdownLi uses a hung-marker gutter (relative + pl-[22px]) instead of a flex gap', () => {
-    const { container } = render(<Li>item</Li>);
-    const li = container.querySelector('li');
-    expect(li!.className).toContain('relative');
-    expect(li!.className).toContain('pl-[22px]');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Link underline — faint accent-toned decoration, not a solid full-opacity one.
-// ---------------------------------------------------------------------------
-
-describe('markdownComponents link underline', () => {
-  it('LinkWithPreview with no href uses a faint border-bottom rule, not a solid text-decoration underline', () => {
-    const A = markdownComponents.a as React.ComponentType<React.AnchorHTMLAttributes<HTMLAnchorElement>>;
-    const { container } = render(<A>bare</A>);
-    const a = container.querySelector('a');
-    expect(a!.className).toContain('border-b');
-    expect(a!.className).toContain('border-primary/40');
-    expect(a!.className).toContain('no-underline');
-    const classTokens = a!.className.split(/\s+/);
-    expect(classTokens).not.toContain('underline');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -277,7 +231,7 @@ describe('MarkdownText container tracking', () => {
 // the item must preventDefault, show feedback, then close itself on a delay.
 // ---------------------------------------------------------------------------
 
-describe('LinkWithPreview context-menu copy feedback', () => {
+describe('link context-menu copy feedback', () => {
   // NOTE: deliberately uses fireEvent, not userEvent — userEvent.setup()
   // installs its own real clipboard stub on `navigator.clipboard`, silently
   // shadowing the mock this suite defines below (confirmed by direct

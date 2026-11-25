@@ -20,7 +20,6 @@ const testState = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../VirtualMessages', () => ({ VirtualMessages: () => <div data-testid="tp-messages" /> }));
 vi.mock('@assistant-ui/react', () => {
   type DivProps = HTMLAttributes<HTMLDivElement> & { children?: ReactNode };
   return {
@@ -43,7 +42,7 @@ vi.mock('@assistant-ui/react', () => {
   };
 });
 
-vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
+vi.mock('../../messages/turn/TurnTranscript', () => ({ TurnTranscript: () => <div data-testid="tp-messages" /> }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="chat-composer" /> }));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
 vi.mock('../../composer/strips/BottomStrip', () => ({

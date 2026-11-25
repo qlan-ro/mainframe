@@ -1,94 +1,157 @@
 'use client';
 
 /**
- * MessageActionBar — assistant-turn actions for Copy, ExportMarkdown, and Fork.
+ * MessageActionBar — Copy, Fork and More for an agent's reply; Copy and More
+ * for the user's own message (T1b). Native ActionBarPrimitive: the footer it
+ * sits in owns showing and hiding. Reload, Edit, Feedback and Speak are NOT
+ * rendered: they need daemon endpoints or agent capabilities we don't have.
  *
- * Adopts native ActionBarPrimitive (autohide=not-last) with
- * our Button ghost/icon-sm sizing. Reload, Edit, Feedback and Speak are NOT
- * rendered — they require daemon endpoints or agent capabilities we don't have
- * yet (inventory decision: omit, not disable).
- *
- * ExportMarkdown lives in the ActionBarMore overflow menu so the bar stays
- * compact. The overflow is a native ActionBarMorePrimitive (DropdownMenu-backed)
- * which keeps the interaction-lock handshake so autohide doesn't collapse while
- * the menu is open.
+ * More quotes the message into the composer and exports it as Markdown.
  */
 
-import type { FC } from 'react';
-import { ActionBarPrimitive, ActionBarMorePrimitive, AuiIf, useAuiState } from '@assistant-ui/react';
-import { CheckIcon, CopyIcon, DownloadIcon, MoreHorizontalIcon } from 'lucide-react';
+import { useEffect, useRef, useState, type FC } from 'react';
+import { ActionBarPrimitive, ActionBarMorePrimitive, useAuiState } from '@assistant-ui/react';
+import { CheckIcon, CopyIcon, DownloadIcon, MoreHorizontalIcon, QuoteIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { quoteSource } from '../thread/quote-source';
+import { useQuoteMessage } from './use-quote-message';
+import { useTurnSelector } from './turn/turn-context';
+import { useReplyText } from './use-reply-text';
 import { ActionIconButton } from './action-icon-button';
 import { AssistantForkAction } from './AssistantForkAction';
 
 // ── Copy button — shows check icon while in copied state ─────────────────────
 
-const CopyButton: FC = () => (
-  <ActionBarPrimitive.Copy asChild>
-    <ActionIconButton tooltip="Copy" data-testid="chat-message-copy">
-      <AuiIf condition={(s) => s.message.isCopied}>
-        <CheckIcon />
-      </AuiIf>
-      <AuiIf condition={(s) => !s.message.isCopied}>
-        <CopyIcon />
-      </AuiIf>
-    </ActionIconButton>
-  </ActionBarPrimitive.Copy>
-);
+const COPIED_MS = 3000;
 
-// ── More overflow — ExportMarkdown item ──────────────────────────────────────
-
-const MoreMenu: FC = () => (
-  <ActionBarMorePrimitive.Root>
-    <ActionBarMorePrimitive.Trigger asChild>
-      <ActionIconButton
-        tooltip="More"
-        data-testid="chat-message-more"
-        className="data-[state=open]:bg-muted data-[state=open]:text-foreground"
-      >
-        <MoreHorizontalIcon />
-      </ActionIconButton>
-    </ActionBarMorePrimitive.Trigger>
-
-    <ActionBarMorePrimitive.Content
-      side="bottom"
-      align="start"
-      className={cn(
-        'z-50 min-w-36 overflow-hidden rounded-md border border-border p-1',
-        'bg-popover text-popover-foreground shadow-md',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out',
-        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-        'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-      )}
+/** Copies the whole reply, which the primitive can't: it knows one message. */
+const CopyButton: FC = () => {
+  const replyText = useReplyText();
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(replyText());
+    } catch (error) {
+      console.warn('[MessageActionBar] clipboard write failed', error);
+      return;
+    }
+    setCopied(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setCopied(false), COPIED_MS);
+  };
+  const hasText = useAuiState((s) => s.message.content.some((part) => part.type === 'text' && part.text.length > 0));
+  return (
+    <ActionIconButton
+      tooltip="Copy"
+      aria-label="Copy message"
+      data-testid="chat-message-copy"
+      data-copied={copied ? 'true' : undefined}
+      disabled={!hasText}
+      onClick={() => void copy()}
     >
-      <ActionBarPrimitive.ExportMarkdown asChild>
-        <ActionBarMorePrimitive.Item
-          data-testid="chat-message-export"
-          className={cn(
-            'flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5',
-            'text-sm outline-none transition-colors focus:bg-muted focus:text-foreground',
-            'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-            "[&_svg:not([class*='size-'])]:size-4",
-          )}
-        >
-          <DownloadIcon className="shrink-0" />
-          Export as Markdown
-        </ActionBarMorePrimitive.Item>
-      </ActionBarPrimitive.ExportMarkdown>
-    </ActionBarMorePrimitive.Content>
-  </ActionBarMorePrimitive.Root>
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </ActionIconButton>
+  );
+};
+
+function download(content: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `message-${Date.now()}.md`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 40_000);
+}
+
+// ── More overflow ────────────────────────────────────────────────────────────
+
+const ITEM_CLASS = cn(
+  'flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5',
+  'text-sm transition-colors focus:bg-muted focus:text-foreground focus-visible:focus-line-inset',
+  'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+  "[&_svg:not([class*='size-'])]:size-4",
 );
+
+function QuoteItem() {
+  const quote = useQuoteMessage();
+  const content = useAuiState((s) => s.message.content);
+  const role = useAuiState((s) => s.message.role);
+  const createdAt = useAuiState((s) => s.message.createdAt as Date | undefined);
+  const replyText = useReplyText();
+  const hasText = content.some((part) => part.type === 'text' && part.text.trim());
+  return (
+    <ActionBarMorePrimitive.Item
+      data-testid="chat-message-quote"
+      disabled={!hasText}
+      onSelect={() => quote(replyText(), quoteSource({ role, createdAt }))}
+      className={ITEM_CLASS}
+    >
+      <QuoteIcon className="shrink-0" />
+      Quote in reply
+    </ActionBarMorePrimitive.Item>
+  );
+}
+
+const MoreMenu: FC<{ user: boolean }> = ({ user }) => {
+  const replyText = useReplyText();
+  return (
+    <ActionBarMorePrimitive.Root>
+      <ActionBarMorePrimitive.Trigger asChild>
+        <ActionIconButton
+          tooltip="More"
+          aria-label="More actions"
+          data-testid="chat-message-more"
+          className="data-[state=open]:bg-muted data-[state=open]:text-foreground"
+        >
+          <MoreHorizontalIcon />
+        </ActionIconButton>
+      </ActionBarMorePrimitive.Trigger>
+
+      <ActionBarMorePrimitive.Content
+        side="bottom"
+        align={user ? 'end' : 'start'}
+        className={cn(
+          'z-50 min-w-36 overflow-hidden rounded-md border border-border p-1',
+          'bg-popover text-popover-foreground shadow-md',
+          'data-[state=open]:animate-in data-[state=closed]:animate-out',
+          'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+          'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+        )}
+      >
+        <QuoteItem />
+        {!user && (
+          <ActionBarPrimitive.ExportMarkdown asChild onExport={() => download(replyText())}>
+            <ActionBarMorePrimitive.Item data-testid="chat-message-export" className={ITEM_CLASS}>
+              <DownloadIcon className="shrink-0" />
+              Export as Markdown
+            </ActionBarMorePrimitive.Item>
+          </ActionBarPrimitive.ExportMarkdown>
+        )}
+      </ActionBarMorePrimitive.Content>
+    </ActionBarMorePrimitive.Root>
+  );
+};
 
 // ── Root export ──────────────────────────────────────────────────────────────
 
-export const MessageActionBar: FC = () => {
-  const running = useAuiState((s) => s.message.status?.type === 'running' || (s.thread.isRunning && s.message.isLast));
-  if (running) return null;
+export const MessageActionBar: FC<{ user?: boolean }> = ({ user = false }) => {
+  const running = useAuiState(
+    (s) => !user && (s.message.status?.type === 'running' || (s.thread.isRunning && s.message.isLast)),
+  );
+  const id = useAuiState((s) => s.message.id);
+  // A turn that waits on a request has not ended, though the thread reports itself idle.
+  const going = useTurnSelector(({ model }) => {
+    const key = model.slices.get(id)?.turnKey;
+    return key !== undefined && model.turns.get(key)?.running === true;
+  }, false);
+  if (running || (!user && going)) return null;
   return (
-    <ActionBarPrimitive.Root autohide="not-last" className="flex items-center gap-0.5 text-muted-foreground">
+    <ActionBarPrimitive.Root autohide="never" className="flex items-center gap-0.5 text-muted-foreground">
       <CopyButton />
-      <MoreMenu />
-      <AssistantForkAction />
+      {!user && <AssistantForkAction />}
+      <MoreMenu user={user} />
     </ActionBarPrimitive.Root>
   );
 };

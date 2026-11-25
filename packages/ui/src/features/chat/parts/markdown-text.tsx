@@ -1,4 +1,5 @@
 import { searchItemId } from '../find/search-item';
+import '../transcript.css';
 /**
  * Markdown renderer for assistant text parts.
  *
@@ -75,12 +76,7 @@ function Code({ className, children, ...props }: React.ComponentProps<'code'>) {
   return (
     <code
       className={cn(
-        'aui-md-inline-code',
-        // `mf-code-inline-fg` stays: the code palette is deliberately
-        // bridge-owned (see the v2 ledger), unlike the surface it sits on.
-        'bg-muted text-mf-code-inline-fg',
-        'rounded-sm border border-border px-1.5 py-0.5',
-        'font-mono text-xs',
+        'aui-md-inline-code mf-tr-code rounded-[5px] bg-mf-tr-code px-[5px] py-px font-mono text-foreground',
         className,
       )}
       {...props}
@@ -109,33 +105,17 @@ function SmartActionSpan({ children, ...props }: React.ComponentProps<'span'>) {
 // ── Component map ─────────────────────────────────────────────────────────────
 
 export const markdownComponents = unstable_memoizeMarkdownComponents({
-  // All heading levels share one flat top margin (mt-0.5). On the v2 scale the
-  // top two levels carry the size step (18/16) and the bottom two the weight
-  // step, since `text-sm` (13px) is the body rung and nothing sits between.
-  h1: ({ className, ...props }) => (
-    <h1 className={cn('aui-md-h1 text-lg font-bold mt-0.5 mb-2 first:mt-0', className)} {...props} />
-  ),
-  h2: ({ className, ...props }) => (
-    <h2 className={cn('aui-md-h2 text-base font-bold mt-0.5 mb-1.5 first:mt-0', className)} {...props} />
-  ),
-  h3: ({ className, ...props }) => (
-    <h3 className={cn('aui-md-h3 text-sm font-bold mt-0.5 mb-1 first:mt-0', className)} {...props} />
-  ),
-  h4: ({ className, ...props }) => (
-    <h4 className={cn('aui-md-h4 text-sm font-semibold mt-0.5 mb-1 first:mt-0', className)} {...props} />
-  ),
-  p: ({ className, ...props }) => (
-    <p className={cn('aui-md-p my-2.5 leading-relaxed first:mt-0 last:mb-0', className)} {...props} />
-  ),
+  // Sizes stay on the native scale: no heading above 15 px (T1b).
+  h1: ({ className, ...props }) => <h1 className={cn('aui-md-h1 mf-tr-h1 first:mt-0', className)} {...props} />,
+  h2: ({ className, ...props }) => <h2 className={cn('aui-md-h2 mf-tr-h2 first:mt-0', className)} {...props} />,
+  h3: ({ className, ...props }) => <h3 className={cn('aui-md-h3 mf-tr-h3 first:mt-0', className)} {...props} />,
+  h4: ({ className, ...props }) => <h4 className={cn('aui-md-h4 mf-tr-h4 first:mt-0', className)} {...props} />,
+  p: ({ className, ...props }) => <p className={cn('aui-md-p my-2 first:mt-0 last:mb-0', className)} {...props} />,
   a: SmartLink as FC<React.AnchorHTMLAttributes<HTMLAnchorElement>>,
   img: MarkdownImage,
   blockquote: ({ className, ...props }) => (
     <blockquote
-      className={cn(
-        'aui-md-blockquote border-s-[3px] border-primary/40 text-muted-foreground',
-        'my-2.5 ps-3.5 italic',
-        className,
-      )}
+      className={cn('aui-md-blockquote my-2.5 border-s-[3px] border-input ps-3.5 text-muted-foreground', className)}
       {...props}
     />
   ),
@@ -143,7 +123,7 @@ export const markdownComponents = unstable_memoizeMarkdownComponents({
   ol: MarkdownOl,
   li: MarkdownLi,
   input: MarkdownTaskCheckbox as FC<React.ComponentProps<'input'>>,
-  hr: ({ className, ...props }) => <hr className={cn('aui-md-hr border-border my-0.5', className)} {...props} />,
+  hr: ({ className, ...props }) => <hr className={cn('aui-md-hr mt-4 mb-2 border-border', className)} {...props} />,
   table: MarkdownTable,
   thead: MarkdownThead,
   th: MarkdownTh,

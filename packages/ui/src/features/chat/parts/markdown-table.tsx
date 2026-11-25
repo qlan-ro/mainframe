@@ -6,8 +6,14 @@ import type { ComponentProps } from 'react';
 
 export function MarkdownTable({ children, ...props }: ComponentProps<'table'>) {
   return (
-    <div data-testid="chat-markdown-table-scroll" className="rounded-md border border-border overflow-x-auto my-3">
-      <table className="w-full table-fixed border-collapse text-sm [overflow-wrap:anywhere]" {...props}>
+    <div
+      role="region"
+      aria-label="Table"
+      tabIndex={0}
+      data-testid="chat-markdown-table-scroll"
+      className="mf-tr-table my-3 overflow-x-auto rounded-[8px] focus-visible:focus-line-inset"
+    >
+      <table className="w-full border-collapse text-sm/5" {...props}>
         {children}
       </table>
     </div>
@@ -15,16 +21,12 @@ export function MarkdownTable({ children, ...props }: ComponentProps<'table'>) {
 }
 
 export function MarkdownThead({ children, ...props }: ComponentProps<'thead'>) {
-  return (
-    <thead className="bg-muted" {...props}>
-      {children}
-    </thead>
-  );
+  return <thead {...props}>{children}</thead>;
 }
 
 export function MarkdownTh({ children, ...props }: ComponentProps<'th'>) {
   return (
-    <th className="px-3 py-2 text-left font-sans text-xs font-bold text-muted-foreground" {...props}>
+    <th className="bg-(--mf-tr-table-header) px-3 py-[7px] text-left font-medium" {...props}>
       {children}
     </th>
   );
@@ -32,16 +34,12 @@ export function MarkdownTh({ children, ...props }: ComponentProps<'th'>) {
 
 export function MarkdownTd({ children, ...props }: ComponentProps<'td'>) {
   return (
-    <td className="border-t border-border px-3 py-2 font-sans text-xs text-foreground" {...props}>
+    <td className="px-3 py-[7px]" {...props}>
       {children}
     </td>
   );
 }
 
 export function MarkdownTr({ children, ...props }: ComponentProps<'tr'>) {
-  return (
-    <tr className="even:bg-muted/50" {...props}>
-      {children}
-    </tr>
-  );
+  return <tr {...props}>{children}</tr>;
 }

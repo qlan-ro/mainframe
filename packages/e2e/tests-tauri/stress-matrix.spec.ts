@@ -24,6 +24,7 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { sendMessage, waitForIdle, waitConnected } from '../helpers/tauri/wait.js';
 import { chatThread, composer } from '../helpers/tauri/page-objects.js';
 import { installWsControl, type WsControl } from '../helpers/tauri/ws-control.js';
+import { openRow, openWork, toolRow } from '../helpers/tauri/transcript.js';
 
 async function waitForFacadeReconnect(page: Page, ws: WsControl, prevFacadeCount: number): Promise<void> {
   // 30s, not 15: AcpFacadeClient backs off 1s→15s, and a hold-down window burns the
@@ -96,16 +97,16 @@ test.describe('§ADR stress matrix — combined run', () => {
     await expect(page.getByText('SUBAGENT-DONE', { exact: false })).toBeVisible({ timeout: 30_000 });
     await waitForIdle(page);
 
-    // Nested transcript renders: expand the Task card, nested Bash card inside.
-    const taskCard = page.getByTestId('chat-task-card').first();
-    await expect(taskCard).toBeVisible();
-    await taskCard.getByTestId('chat-task-toggle').click();
-    await expect(taskCard.getByTestId('chat-bash-card').first()).toBeVisible({ timeout: 10_000 });
+    // The sub-agent's steps render inside its row.
+    await openWork(page);
+    const taskCard = toolRow(page, 'Task').first();
+    await openRow(taskCard);
+    await expect(toolRow(taskCard, 'Bash').first()).toBeVisible({ timeout: 10_000 });
     // Exactly one gate was mounted for the whole turn (no duplicate permission part).
     await expect(page.locator('[data-testid="chat-permission-gate"]')).toHaveCount(0);
 
     // ── Phase 3: reconnect MID-STREAM (checklist 1, 2, 12, 13, 14) ──
-    // Leave the Task card OPEN, then park a composer draft AFTER the send (sendMessage fills
+    // Leave the Task row OPEN, then park a composer draft AFTER the send (sendMessage fills
     // and submits, which clears the input) — the mid-stream draft must survive the replay.
     await sendMessage(page, 'Stream a long twelve-part answer');
     await composer(page).type('draft that must survive the re-seed');
@@ -143,8 +144,8 @@ test.describe('§ADR stress matrix — combined run', () => {
 
     // Wholesale-replacement tolerance (the ADR's flagged must-validate risk — the projection
     // still replaces the message list per transcript update):
-    // (12) open tool card is still open, (14) composer draft intact, (13) not yanked to bottom.
-    await expect(taskCard.getByTestId('chat-bash-card').first()).toBeVisible();
+    // (12) the opened row is still open, (14) composer draft intact, (13) not yanked to bottom.
+    await expect(toolRow(taskCard, 'Bash').first()).toBeVisible();
     await expect(composer(page).input()).toHaveValue('draft that must survive the re-seed');
     const stuckToBottom = await viewport.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight < 4);
     expect(stuckToBottom, 'reconnect replay must not yank a scrolled-up viewport to the bottom').toBe(false);
@@ -171,11 +172,10 @@ test.describe('§ADR stress matrix — combined run', () => {
     await expect(probe).toHaveCount(1);
 
     // ── Final ledger: full-transcript integrity + no REST history refetch (checklist 1, 15) ──
-    // 6 top-level sends. The subagent's prompt also renders as a `chat-user-message` — but
-    // NESTED inside the Task card (part of the subagent transcript), so it is excluded here
-    // and asserted in its place explicitly.
+    // 6 top-level sends. The subagent's prompt is not one of them: it opens its row's steps.
     await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-user-count', '6');
-    await expect(taskCard.locator('[data-testid="chat-user-message"]')).toHaveCount(1);
+    await expect(taskCard.getByTestId('chat-agent-prompt')).toHaveCount(1);
+    await expect(taskCard.getByTestId('chat-user-message')).toHaveCount(0);
     await page.keyboard.press('ControlOrMeta+f');
     for (const text of ['Reply one', 'Reply two', 'Reply three', 'SUBAGENT-DONE', 'STREAM-COMPLETE', 'DEDUP-ACK']) {
       await page.getByTestId('thread-find-input').fill(text);

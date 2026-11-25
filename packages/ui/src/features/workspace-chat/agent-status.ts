@@ -1,7 +1,7 @@
 /**
- * What an agent tab says of its call (W8). It repeats what the transcript and
- * the daemon's task list state, and is silent otherwise: there is no label for
- * an agent that finished.
+ * What an agent tab says of its call (W8), and the call's transcript row with it
+ * (T1c). It repeats what the transcript and the daemon's task list state, and is
+ * silent otherwise: there is no label for an agent that finished.
  */
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
@@ -24,14 +24,49 @@ interface Facts {
   /** The parent chat. */
   state: ChatThreadState;
   tasks: AgentTasks;
+  /** The part of the turn that holds the call can be going, and so can every agent around it. */
+  partLive: boolean;
+}
+
+/** What the transcript says of a call, as it stands. */
+export interface AgentCallFacts {
+  /** A request of it, or of anything it started, waits for the viewer. */
+  readonly pending: boolean;
+  /** It has no result, and nothing says it ended. */
+  readonly open: boolean;
+  readonly failed: boolean;
+  readonly cancelled: boolean;
+}
+
+export interface AgentEvidence {
+  readonly facts: AgentCallFacts;
+  /** The call's own. */
+  readonly tasks: AgentTasks;
+  /** The session runs, and the call's part of it with it. */
+  readonly goes: boolean;
+  /** The list is the daemon's latest over a connection that still stands. */
+  readonly live: boolean;
+}
+
+export interface AgentStanding {
+  readonly status: Extract<AgentStatus, 'needs-you' | 'running' | 'failed' | 'stopped'>;
+  readonly label?: string;
 }
 
 interface AgentPresentation {
-  status: { status: AgentStatus; label?: string } | null;
+  status: AgentStanding | null;
   /** The call's own text. */
   result: string;
   reports: AgentReport[];
-  runningTask?: BackgroundTask;
+}
+
+/** The only CLI that can stop one background agent on its own. */
+const STOP_ADAPTER = 'claude';
+
+/** The task a Stop for one call ends, while a list that counts says it runs. */
+export function stoppableTask(tasks: AgentTasks, live: boolean, adapterId: string | undefined) {
+  if (!live || adapterId !== STOP_ADAPTER) return undefined;
+  return tasks?.find((task) => task.status === 'running');
 }
 
 export const isCodexAgent = (call: SubagentCall): boolean => call.part.toolName === 'CollabAgent';
@@ -65,37 +100,49 @@ function resultText(call: SubagentCall): string {
 const lifecycleOf = ({ part }: SubagentCall) =>
   (part.providerMetadata?.mainframe as { acpStatus?: string } | undefined)?.acpStatus;
 
-/** The call has no result and nothing says it ended, in a session that runs. */
-function isOpen(call: SubagentCall, { runState }: ChatThreadState): boolean {
-  const settled = isFailed(call) || ['completed', 'failed', 'cancelled'].includes(lifecycleOf(call) ?? '');
-  const sessionRuns = runState.type === 'running' || runState.type === 'cancelling';
-  return call.part.result === undefined && !settled && sessionRuns;
+/** A request waits for the viewer, or the call's own steps hold one. */
+function isPending({ part }: SubagentCall, pending: ReadonlySet<string>): boolean {
+  return pending.size > 0 && [part.toolCallId, ...toolCallIdsOf(part.messages ?? [])].some((id) => pending.has(id));
 }
 
-function needsYou(call: SubagentCall, state: ChatThreadState): boolean {
-  const pending = new Set(Object.values(state.interactions.permissions).map((entry) => entry.request.toolUseId));
-  return toolCallIdsOf(call.part.messages ?? []).some((id) => pending.has(id));
+export function callFacts(call: SubagentCall, pending: ReadonlySet<string>): AgentCallFacts {
+  const lifecycle = lifecycleOf(call) ?? '';
+  const failed = isFailed(call);
+  const settled = failed || ['completed', 'failed', 'cancelled'].includes(lifecycle);
+  return {
+    pending: isPending(call, pending),
+    open: call.part.result === undefined && !settled,
+    failed,
+    cancelled: lifecycle === 'cancelled',
+  };
 }
 
-function statusOf({ call, state, tasks }: Facts, live: boolean): AgentPresentation['status'] {
+export const sessionRuns = ({ runState }: Pick<ChatThreadState, 'runState'>): boolean =>
+  runState.type === 'running' || runState.type === 'cancelling';
+
+export const pendingCalls = ({ interactions }: Pick<ChatThreadState, 'interactions'>): ReadonlySet<string> =>
+  new Set(Object.values(interactions.permissions).flatMap(({ request }) => request.toolUseId ?? []));
+
+/** The one rule for how a call stands: its tab's and its row's. */
+export function agentStanding({ facts, tasks, goes, live }: AgentEvidence): AgentStanding | null {
   const listed = tasks ?? [];
   const count = (status: BackgroundTask['status']) => listed.filter((task) => task.status === status).length;
-  const show = (status: AgentStatus, n = 1, several = n > 1) => ({
+  const show = (status: AgentStanding['status'], n = 1, several = n > 1) => ({
     status,
     label: several ? `${n} ${status}` : undefined,
   });
 
-  if (needsYou(call, state)) return show('needs-you');
+  if (facts.pending) return show('needs-you');
   const running = count('running');
   if (running > 0) return live ? show('running', running) : null;
   // A settled task speaks for its call, whatever the transcript still lacks.
-  if (listed.length === 0 && isOpen(call, state)) return live ? show('running') : null;
+  if (listed.length === 0 && facts.open && goes) return live ? show('running') : null;
   for (const status of ['failed', 'stopped'] as const) {
     const n = count(status);
     if (n > 0) return show(status, n, listed.length > 1);
   }
-  if (isFailed(call)) return show('failed');
-  return lifecycleOf(call) === 'cancelled' ? show('stopped') : null;
+  if (facts.failed) return show('failed');
+  return facts.cancelled ? show('stopped') : null;
 }
 
 function taskSummaries(tasks: AgentTasks): AgentReport[] {
@@ -133,14 +180,18 @@ function finalAnswers({ part }: SubagentCall): AgentReport[] {
 
 /** `live`: the list is the daemon's latest over a connection that still stands. */
 export function describeAgent(facts: Facts, live: boolean): AgentPresentation {
-  const { call, tasks } = facts;
+  const { call, state, tasks, partLive } = facts;
   const result = resultText(call);
   const background = isBackgroundLaunch(call);
   const reports = result.trim() === '' || background ? [...taskSummaries(tasks), ...finalAnswers(call)] : [];
   return {
-    status: statusOf(facts, live),
+    status: agentStanding({
+      facts: callFacts(call, pendingCalls(state)),
+      tasks,
+      goes: sessionRuns(state) && partLive,
+      live,
+    }),
     result,
     reports: reports.filter(({ text }) => text !== ''),
-    runningTask: live ? tasks?.find((task) => task.status === 'running') : undefined,
   };
 }

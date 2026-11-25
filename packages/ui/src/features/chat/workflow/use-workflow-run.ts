@@ -4,9 +4,8 @@
  * with the launch result and some snapshots.
  */
 import type { ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
-import { useChatExtras } from '../runtime/chat-extras';
+import { useOwnChatState } from '../runtime/own-chat-state';
 
 export function useWorkflowRun(taskId: string | undefined): ClaudeWorkflowRun | undefined {
-  const extras = useChatExtras();
-  return taskId ? extras?.state.workflowRuns[taskId] : undefined;
+  return useOwnChatState((state) => (taskId ? state.workflowRuns[taskId] : undefined));
 }
