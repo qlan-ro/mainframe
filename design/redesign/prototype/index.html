@@ -1469,16 +1469,25 @@ function renderSide(){
   if(UI.sq) h+=`<div class="sq"><input id="sqin" type="search" aria-label="Search sessions" placeholder="Search sessions" value="${esc(UI.q)}"></div>`;
   h+=`<button type="button" class="newrow" data-id="newsess" aria-label="New session">${ic('newchat')}<span>New session</span>${ic('plus')}</button>`;
   h+=`<div class="scope"><button type="button" class="scopeb" data-id="scope" aria-haspopup="menu" aria-expanded="false" aria-label="Project scope: ${sc||'All projects'}"><span class="avs" aria-hidden="true">${sc?`<span class="av" style="background:${PCOL[sc]}">${sc[0].toUpperCase()}</span>`:avs}</span><span class="tx"><span>${sc||'All projects'}</span><span>${sc?'1 project':'3 projects'}</span></span></button><button type="button" class="ib32" data-id="addproj" aria-label="Add project" data-tip="Add project">${ic('folderplus')}</button></div><div class="slist">`;
-  SIDEGROUPS.forEach((g,gi)=>{
-    let ids=g.ids.slice();
-    if(UI.filter==='running') ids=ids.filter(id=>['run','sub'].includes(statusOf(id)));
-    if(UI.filter==='need') ids=ids.filter(id=>statusOf(id)==='need');
-    if(sc) ids=ids.filter(id=>sessOf(id).project===sc);
-    if(UI.q) ids=ids.filter(id=>sessOf(id).title.toLowerCase().includes(UI.q.toLowerCase()));
-    if(UI.sort==='project') ids.sort((a,b)=>(TPL[a].project||'').localeCompare(TPL[b].project||''));
-    if(UI.sort==='status') ids.sort((a,b)=>Number(!!TPL[b].running)-Number(!!TPL[a].running));
-    if(!ids.length&&(sc||UI.q)&&g.g==='No project') return;
-    h+=`<div class="gh"><span>${g.g}</span>${gi===0?`<button type="button" class="iconbtn${UI.filter!=='all'?' on':''}" data-id="gfilter" aria-haspopup="menu" aria-expanded="false" aria-label="Filter sessions" data-tip="Filter">${ic('filter','sm')}</button><button type="button" class="iconbtn" data-id="gsort" aria-haspopup="menu" aria-expanded="false" aria-label="Sort sessions" data-tip="Sort">${ic('sort','sm')}</button><button type="button" class="iconbtn" data-id="gmore" aria-haspopup="menu" aria-expanded="false" aria-label="More session actions" data-tip="More">${ic('dots','sm')}</button>`:''}</div>`;
+  const matches=id=>(UI.filter!=='running'||['run','sub'].includes(statusOf(id)))
+    &&(UI.filter!=='need'||statusOf(id)==='need')
+    &&(!sc||sessOf(id).project===sc)
+    &&(!UI.q||sessOf(id).title.toLowerCase().includes(UI.q.toLowerCase()));
+  const groups=SIDEGROUPS.map(({g,ids})=>({g,ids:ids.filter(matches)}));
+  const all=groups.flatMap(({ids})=>ids);
+  let arranged=groups;
+  if(UI.sort==='project'){
+    const projects=[...new Set([...PROJECTS,...all.map(id=>sessOf(id).project).filter(Boolean),null])];
+    arranged=projects.map(project=>({g:project||'No project',ids:all.filter(id=>sessOf(id).project===project)}))
+      .filter(({ids})=>ids.length);
+  }else if(UI.sort==='status'){
+    const rank=id=>({need:0,run:1,sub:1}[statusOf(id)]??2);
+    arranged=[{g:'By status',ids:all.sort((a,b)=>rank(a)-rank(b))}];
+  }
+  if(!arranged.length) arranged=[{g:'By project',ids:[]}];
+  arranged.forEach(({g,ids},gi)=>{
+    if(!ids.length&&(sc||UI.q)&&g==='No project') return;
+    h+=`<div class="gh"><span>${esc(g)}</span>${gi===0?`<button type="button" class="iconbtn${UI.filter!=='all'?' on':''}" data-id="gfilter" aria-haspopup="menu" aria-expanded="false" aria-label="Filter sessions" data-tip="Filter">${ic('filter','sm')}</button><button type="button" class="iconbtn" data-id="gsort" aria-haspopup="menu" aria-expanded="false" aria-label="Sort sessions" data-tip="Sort">${ic('sort','sm')}</button><button type="button" class="iconbtn" data-id="gmore" aria-haspopup="menu" aria-expanded="false" aria-label="More session actions" data-tip="More">${ic('dots','sm')}</button>`:''}</div>`;
     if(!ids.length) h+='<div class="sempty">No sessions match</div>';
     for(const id of ids){
       const st=statusOf(id),m=sessOf(id);
