@@ -1,11 +1,10 @@
 /**
  * ChatSurface — chooses what the right pane shows for the active thread.
  *
- * - Zero projects, once useProjects has finished its initial load → the
- *   first-run hero (no ChatThread, no composer) — there is nowhere to send a
- *   message yet. Gated on `!loading` so a cold-boot render (projects still
- *   `[]` while the fetch is in flight) falls through to ChatThread instead of
- *   flashing the hero.
+ * - Zero projects, once the daemon has said so → the first-run hero (no
+ *   ChatThread, no composer) — there is nowhere to send a message yet. Gated on
+ *   `listed` so neither a cold boot nor a failed request (after a daemon switch,
+ *   say) takes a draft's composer away.
  * - A brand-new local thread (__LOCALID_* / status 'new' / no messages) whose
  *   draft already resolved a project (seeded by useNewThreadAutoConfig when a
  *   project pill is active, or by the ChatEmptyState welcome flow itself —
@@ -79,7 +78,7 @@ export function ChatSurface() {
   const itemStatus = useAuiState((s) => s.threadListItem?.status);
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const draftCfg = useDraftConfigStore((s) => (mainThreadId ? s.drafts.get(mainThreadId) : undefined));
-  const { projects, loading } = useProjects();
+  const { projects, listed } = useProjects();
   // Paired with use-new-thread-auto-config's seed condition: both read the SOLE
   // scoped project, so a multi-project scope can never show "Initializing…" for
   // a seed that will not fire.
@@ -100,7 +99,7 @@ export function ChatSurface() {
   // must fall through to the normal welcome + live composer below, even with
   // zero real projects — the hero is only for a draft that hasn't been
   // pointed at "No project" (undecided, or resolved to a real project id).
-  if (isNewLocal && !loading && projects.length === 0 && draftCfg?.projectId !== null) {
+  if (isNewLocal && listed && projects.length === 0 && draftCfg?.projectId !== null) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-6">

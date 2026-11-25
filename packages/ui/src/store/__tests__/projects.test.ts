@@ -18,7 +18,7 @@ describe('ui projects store', () => {
   });
 
   it('starts empty and loading', () => {
-    expect(useProjectsStore.getState()).toEqual({ projects: [], loading: true });
+    expect(useProjectsStore.getState()).toEqual({ projects: [], loading: true, listed: false });
   });
 
   it('reloadProjects fetches and applies the list', async () => {
@@ -34,6 +34,15 @@ describe('ui projects store', () => {
     await reloadProjects(31415);
     expect(useProjectsStore.getState().projects).toEqual([]);
     expect(useProjectsStore.getState().loading).toBe(false);
+  });
+
+  it('knows the list is the daemon’s only once it has answered', async () => {
+    vi.mocked(getProjects).mockRejectedValueOnce(new Error('daemon down'));
+    await reloadProjects(1);
+    expect(useProjectsStore.getState()).toMatchObject({ projects: [], listed: false });
+    vi.mocked(getProjects).mockResolvedValueOnce([]);
+    await reloadProjects(1);
+    expect(useProjectsStore.getState()).toMatchObject({ projects: [], listed: true });
   });
 
   it('removeProjectFromList drops the matching id', async () => {

@@ -85,7 +85,7 @@ beforeEach(() => {
   aui.threads = { threadItems: [], isLoading: false };
   projects.list = [
     { id: 'p1', name: 'mainframe' },
-    { id: 'p2', name: 'contabil' },
+    { id: 'p2', name: 'ledger-api' },
   ];
   api.listTodos.mockResolvedValue([]);
   api.getGitBranch.mockResolvedValue({ branch: 'main' });
@@ -149,7 +149,7 @@ describe('the project and where the session will run', () => {
     expect(rows('sessions-welcome-recent')).toEqual(['Session a1d']);
     setProject('p2');
     await flush();
-    expect(screen.getByRole('heading')).toHaveTextContent('What’s next for contabil?');
+    expect(screen.getByRole('heading')).toHaveTextContent('What’s next for ledger-api?');
     expect(rows('sessions-welcome-recent')).toEqual(['Session b1d']);
   });
 

@@ -36,9 +36,13 @@ import { getProjects } from '@/lib/api/projects';
 interface ProjectsState {
   projects: Project[];
   loading: boolean;
+  /** The daemon has answered: an empty list is its answer, not a failed request. */
+  listed: boolean;
 }
 
-export const useProjectsStore = create<ProjectsState>(() => ({ projects: [], loading: true }));
+const UNLISTED: ProjectsState = { projects: [], loading: true, listed: false };
+
+export const useProjectsStore = create<ProjectsState>(() => UNLISTED);
 
 export function removeProjectFromList(projectId: string): void {
   useProjectsStore.setState((s) => ({ projects: s.projects.filter((p) => p.id !== projectId) }));
@@ -57,7 +61,7 @@ export async function reloadProjects(port: number): Promise<void> {
     try {
       const projects = await getProjects(port);
       if (inFlight?.token === token && getActiveDaemon().id === daemonId)
-        useProjectsStore.setState({ projects, loading: false });
+        useProjectsStore.setState({ projects, loading: false, listed: true });
     } catch (e: unknown) {
       console.warn('[store/projects] getProjects failed', e);
       if (inFlight?.token === token && getActiveDaemon().id === daemonId) useProjectsStore.setState({ loading: false });
@@ -71,5 +75,5 @@ export async function reloadProjects(port: number): Promise<void> {
 
 export function resetProjectsStore(): void {
   inFlight = null;
-  useProjectsStore.setState({ projects: [], loading: true });
+  useProjectsStore.setState(UNLISTED);
 }

@@ -15,11 +15,14 @@ import {
   reloadProjects as reloadProjectsAction,
   removeProjectFromList as removeProjectFromListAction,
 } from '@/store/projects';
+import { daemonWs } from '@/lib/daemon/ws-client';
 import { useDaemonPort } from './runtime/daemon-port-context';
 
 export interface UseProjectsResult {
   projects: Project[];
   loading: boolean;
+  /** The daemon has answered once; without it an empty list may be a failed request. */
+  listed: boolean;
   reloadProjects: () => Promise<void>;
   removeProjectFromList: (projectId: string) => void;
 }
@@ -28,14 +31,23 @@ export function useProjects(): UseProjectsResult {
   const port = useDaemonPort();
   const projects = useProjectsStore((s) => s.projects);
   const loading = useProjectsStore((s) => s.loading);
+  const listed = useProjectsStore((s) => s.listed);
 
   useEffect(() => {
     void reloadProjectsAction(port);
   }, [port]);
 
+  useEffect(() => {
+    if (listed) return;
+    return daemonWs.subscribeConnection(() => {
+      if (daemonWs.connected) void reloadProjectsAction(port);
+    });
+  }, [port, listed]);
+
   return {
     projects,
     loading,
+    listed,
     reloadProjects: () => reloadProjectsAction(port),
     removeProjectFromList: removeProjectFromListAction,
   };

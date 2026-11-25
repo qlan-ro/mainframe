@@ -31,7 +31,7 @@ let __remoteId: string | undefined;
 let __itemStatus: string | undefined = 'new';
 let __messageCount = 0;
 let __projects: { id: string }[] = [{ id: 'proj-a' }];
-let __loading = false;
+let __listed = true;
 let __draftMap = new Map<string, { projectId: string | null; adapterId: string }>([
   ['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }],
 ]);
@@ -51,7 +51,9 @@ vi.mock('@assistant-ui/react', () => ({
   // The workspace shortcuts need the client; no case here uses them.
   useAui: () => ({ threads: { switchToThread: () => {} } }),
 }));
-vi.mock('../../use-projects', () => ({ useProjects: () => ({ projects: __projects, loading: __loading }) }));
+vi.mock('../../use-projects', () => ({
+  useProjects: () => ({ projects: __projects, loading: !__listed, listed: __listed }),
+}));
 vi.mock('../../runtime/draft-config', () => ({
   useDraftConfigStore: (sel: (s: unknown) => unknown) => sel({ drafts: __draftMap }),
 }));
@@ -119,7 +121,7 @@ describe('ChatSurface', () => {
     __itemStatus = 'new';
     __messageCount = 0;
     __projects = [{ id: 'proj-a' }];
-    __loading = false;
+    __listed = true;
     __filterProjectIds = new Set();
     __pendingProjectId = null;
     __draftMap = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
@@ -140,7 +142,7 @@ describe('ChatSurface', () => {
 
   it('renders the first-run hero (no ChatThread) when there are no projects', () => {
     __projects = [];
-    __loading = false;
+    __listed = true;
     render(<ChatSurface />);
     expect(screen.getByTestId('empty-firstrun')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-thread')).toBeNull();
@@ -148,7 +150,7 @@ describe('ChatSurface', () => {
 
   it('does not show the first-run hero once the draft is set to "No project" (todo #346)', () => {
     __projects = [];
-    __loading = false;
+    __listed = true;
     __draftMap = new Map([['__LOCALID_1', { projectId: null, adapterId: 'claude' }]]);
     render(<ChatSurface />);
 
@@ -157,9 +159,9 @@ describe('ChatSurface', () => {
     expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
   });
 
-  it('does not show the first-run hero while projects are still loading', () => {
+  it('does not show the first-run hero until the daemon has listed its projects', () => {
     __projects = [];
-    __loading = true;
+    __listed = false;
     render(<ChatSurface />);
     expect(screen.queryByTestId('empty-firstrun')).toBeNull();
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
@@ -308,7 +310,7 @@ describe('ChatSurface', () => {
 
   it('does not mount the session panel in the first-run branch', () => {
     __projects = [];
-    __loading = false;
+    __listed = true;
     render(<ChatSurface />);
 
     expect(screen.queryByTestId('session-panel-root')).toBeNull();
