@@ -91,14 +91,20 @@ function ShellBody({ part, status }: ToolBodyProps) {
       {background ? (
         <BackgroundOutput toolCallId={part.toolCallId} command={command} launch={text} />
       ) : truncated ? (
-        <Surface className="px-3 py-2">
-          <ResultText part={part} />
-        </Surface>
+        <ResultText part={part} renderPreview={(output) => <TerminalBody output={output} />} />
       ) : (
         <TerminalBody command={command} output={text || (status === 'running' ? '' : '(no output)')} />
       )}
     </>
   );
+}
+
+function compactArguments(args: Record<string, unknown>) {
+  const compact = JSON.stringify(args);
+  if (compact.length > 120) return JSON.stringify(args, null, 2);
+  const fields = Object.entries(JSON.parse(compact) as Record<string, unknown>);
+  if (fields.length === 0) return '{}';
+  return `{ ${fields.map(([name, value]) => `${JSON.stringify(name)}: ${JSON.stringify(value)}`).join(', ')} }`;
 }
 
 function CallBody({ part, status }: ToolBodyProps) {
@@ -112,7 +118,7 @@ function CallBody({ part, status }: ToolBodyProps) {
         </KeyValue>
       )}
       <KeyValue label="Arguments" testId="chat-call-args">
-        {JSON.stringify(args, null, 2)}
+        {compactArguments(args)}
       </KeyValue>
       {text && (
         <KeyValue

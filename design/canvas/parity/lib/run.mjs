@@ -56,6 +56,7 @@ export async function runArea({
   views = Object.keys(VIEWS),
   only,
   screenshots = true,
+  sideBySide = false,
 }) {
   const problems = [];
   const counts = { states: 0, elements: 0, checks: 0 };
@@ -194,7 +195,7 @@ export async function runArea({
           writeFileSync(`${prefix}-bounds.json`, JSON.stringify(bounds));
           writeFileSync(`${prefix}-blocks.json`, JSON.stringify({ transcript, blocks }, null, 2));
         }
-        const { png, stats } = await compose(browser, shots, theme, `${state.title ?? state.id}, ${view.join('×')}, ${theme}`, transcript, bounds);
+        const { png, stats } = await compose(browser, shots, theme, `${state.title ?? state.id}, ${view.join('×')}, ${theme}`, transcript, bounds, sideBySide);
         if (transcript) writeFileSync(join(outDir, area.id, `${state.id}-${viewName}-${theme}-pixels.json`), JSON.stringify(stats));
         writeFileSync(join(outDir, area.id, `${state.id}-${viewName}-${theme}.png`), png);
       }

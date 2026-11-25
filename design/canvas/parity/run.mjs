@@ -29,6 +29,7 @@ try {
       area,
       outDir: out,
       screenshots: !process.argv.includes('--no-screenshots'),
+      sideBySide: process.argv.includes('--side-by-side'),
       only: arg('only') && new RegExp(arg('only')),
       themes: arg('themes')?.split(','),
       views: arg('views')?.split(','),

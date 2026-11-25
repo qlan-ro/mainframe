@@ -72,7 +72,7 @@ export function KeyValue({
         {label}
       </div>
       {typeof children === 'string' ? (
-        <pre data-testid={testId} className="wrap-break-word whitespace-pre-wrap">
+        <pre data-testid={testId} className="whitespace-pre">
           {children}
         </pre>
       ) : (

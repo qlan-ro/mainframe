@@ -238,8 +238,8 @@ window.__extract = (root, local = false) => {
           const text = part.replace(/\u200b/g, '').replace(/\s+/g, ' ').trim();
           if (!text) continue;
           const range = document.createRange();
-          range.setStart(node, start);
-          range.setEnd(node, start + part.length);
+          range.setStart(node, start + part.length - part.trimStart().length);
+          range.setEnd(node, start + part.trimEnd().length);
           const rects = [...range.getClientRects()];
           if (!rects.length) continue;
           const full = range.getBoundingClientRect();
