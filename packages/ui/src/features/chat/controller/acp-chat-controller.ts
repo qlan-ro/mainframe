@@ -22,6 +22,7 @@ import {
   sendHeldMessages,
   type ChatActionHost,
 } from './chat-actions';
+import { matchQueued } from '../composer/queue/sent-order';
 import { useHeldQueue } from '../composer/queue/held-queue-store';
 import { ChatPlaneLoader } from './chat-plane-loader';
 import { ChatActivation } from './chat-activation';
@@ -270,6 +271,8 @@ export class AcpChatController {
   }
 
   public async editQueued(messageId: string, content: string): Promise<void> {
+    // Its place in the held queue goes by its text until its id is known: learn that first.
+    matchQueued(this.daemonId, Object.values(this.getState().interactions.queued));
     await editQueuedMessage(this.port, this.daemonId, messageId, content);
   }
 

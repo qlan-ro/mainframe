@@ -8,8 +8,10 @@
  * and a change in one window reaches the others, so two windows neither
  * overwrite each other nor send the same row.
  *
- * A row being sent stays, claimed by the window that sends it, until the daemon
- * has it: quitting in between loses nothing. A claim ends with its window, or
+ * A row being sent stays, claimed by the press that sends it, until the daemon
+ * has it: quitting in between loses nothing. A press sends only what it still
+ * holds, so one that was stopped, or whose claim ran out, sends nothing when it
+ * wakes up, and gives back nothing of a later one's. A claim ends with its window, or
  * after `CLAIM_MS` when the window went without saying so. A row whose prompt had
  * gone out by then may have reached the agent, so it comes back `unconfirmed`,
  * unless it was refused (`refuse`): then it keeps the reason.
@@ -18,6 +20,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { getActiveDaemon } from '@/lib/daemon/active-daemon';
+import { forgetSent } from './sent-order';
 
 const STORAGE_KEY = 'mf:held-queue';
 
@@ -30,8 +33,8 @@ export interface HeldMessage {
   daemon?: string;
   /** From a temporary session: kept in memory only. */
   unsaved?: true;
-  /** Being sent, by this window. `started` once its own prompt has gone out. */
-  claim?: { by: string; at: number; started?: true };
+  /** Being sent: by which window, and which press of "Send now" there. `started` once its own prompt has gone out. */
+  claim?: { by: string; press: string; at: number; started?: true };
   /** Why its last send was refused: it certainly did not reach the agent. */
   refused?: string;
   /** Its prompt went out and nothing came back: the agent may have it. */
@@ -46,20 +49,26 @@ type Rows = readonly HeldMessage[];
 
 interface HeldQueueState {
   byChat: Readonly<Record<string, Rows>>;
-  hold: (chatId: string, ref: QueuedMessageRef, options?: { temporary?: boolean }) => void;
+  /** `timestamp`: where it stood before, when it was held and sent already. */
+  hold: (chatId: string, ref: QueuedMessageRef, options?: { temporary?: boolean; timestamp?: string }) => void;
   /** False when there is no such row, or it is being sent. */
   edit: (chatId: string, messageId: string, content: string) => boolean;
   remove: (chatId: string, messageId: string) => void;
-  /** Claims a row and everything behind it for this window; nothing while a send is under way. */
-  claimFrom: (chatId: string, messageId: string) => Rows;
-  /** Right before a claimed row's prompt goes out. False when it is not this window's to send any more. */
-  startSending: (chatId: string, messageId: string) => boolean;
+  /** Claims a row and everything behind it for one press; nothing while a send is under way. */
+  claimFrom: (chatId: string, messageId: string, press: string) => Rows;
+  /**
+   * Right before a claimed row's prompt goes out. False when it is not this
+   * press's to send any more, or has gone out already.
+   */
+  startSending: (chatId: string, messageId: string, press: string) => boolean;
   /** A send that certainly did not reach the agent: the row comes back with the reason. */
-  refuse: (chatId: string, messageId: string, reason: string) => void;
+  refuse: (chatId: string, messageId: string, press: string, reason: string) => void;
   /** Gives back the claimed rows this window has not sent: a Stop, while "Send now" is under way. */
   releaseUnsent: (chatId: string) => void;
-  /** Gives this window's claims back, in one chat or all of them. */
-  releaseClaims: (chatId?: string) => void;
+  /** Gives back what a press still has, and no other press's. */
+  releasePress: (chatId: string, press: string) => void;
+  /** Gives this window's claims back, in every chat. */
+  releaseClaims: () => void;
   clearChat: (chatId: string) => void;
 }
 
@@ -80,6 +89,7 @@ function released({ claim, ...row }: HeldMessage): HeldMessage {
 }
 
 const mine = (row: HeldMessage): boolean => row.claim?.by === WINDOW_ID;
+const pressed = (row: HeldMessage, press: string): boolean => row.claim?.press === press;
 const unsent = (row: HeldMessage): boolean => mine(row) && row.claim?.started !== true;
 
 /** What another window stored, plus this window's own unsaved rows. */
@@ -107,14 +117,14 @@ export const useHeldQueue = create<HeldQueueState>()(
       };
       return {
         byChat: {},
-        hold: (chatId, ref, { temporary = false } = {}) =>
+        hold: (chatId, ref, { temporary = false, timestamp = ref.timestamp } = {}) =>
           update(chatId, (rows) =>
             merged(rows, [
               {
                 messageId: ref.messageId,
                 content: ref.content,
                 ...(ref.attachmentIds && { attachmentIds: ref.attachmentIds }),
-                timestamp: ref.timestamp,
+                timestamp,
                 daemon: getActiveDaemon().id,
                 ...(temporary && { unsaved: true as const }),
               },
@@ -132,37 +142,39 @@ export const useHeldQueue = create<HeldQueueState>()(
           return edited;
         },
         remove: (chatId, messageId) => update(chatId, (rows) => rows.filter((row) => row.messageId !== messageId)),
-        claimFrom: (chatId, messageId) => {
+        claimFrom: (chatId, messageId, press) => {
           let claimed: Rows = [];
           update(chatId, (rows) => {
             const from = rows.findIndex((row) => row.messageId === messageId);
             if (from < 0 || rows.some((row) => row.claim)) return rows;
-            const claim = { by: WINDOW_ID, at: Date.now() };
+            const claim = { by: WINDOW_ID, press, at: Date.now() };
             claimed = rows.slice(from).map((row) => ({ ...row, claim }));
             return [...rows.slice(0, from), ...claimed];
           });
           return claimed;
         },
-        startSending: (chatId, messageId) => {
+        startSending: (chatId, messageId, press) => {
           let started = false;
           update(chatId, (rows) => {
-            if (!rows.some((row) => row.messageId === messageId && mine(row))) return rows;
+            const row = rows.find((candidate) => candidate.messageId === messageId);
+            if (!row || !pressed(row, press) || row.claim?.started) return rows;
             started = true;
-            const claim = { by: WINDOW_ID, at: Date.now() };
+            const claim = { by: WINDOW_ID, press, at: Date.now() };
             // The rows still to come stay claimed for as long as this one takes.
-            return rows.map((row) => {
-              if (!mine(row)) return row;
-              if (row.messageId !== messageId) return { ...row, claim };
-              const { refused: _, ...rest } = row;
+            return rows.map((other) => {
+              if (!pressed(other, press)) return other;
+              if (other.messageId !== messageId) return { ...other, claim };
+              const { refused: _, ...rest } = other;
               return { ...rest, claim: { ...claim, started: true } };
             });
           });
           return started;
         },
-        refuse: (chatId, messageId, reason) =>
+        refuse: (chatId, messageId, press, reason) =>
           update(chatId, (rows) =>
             rows.map((row) => {
-              if (row.messageId !== messageId) return row;
+              // Another press has it by now: what it finds out is newer.
+              if (row.messageId !== messageId || (row.claim && !pressed(row, press))) return row;
               const { claim: _, ...rest } = row;
               return { ...rest, refused: reason };
             }),
@@ -171,13 +183,20 @@ export const useHeldQueue = create<HeldQueueState>()(
           if (!get().byChat[chatId]?.some(unsent)) return;
           update(chatId, (rows) => rows.map((row) => (unsent(row) ? released(row) : row)));
         },
-        releaseClaims: (only) => {
-          for (const chatId of only === undefined ? Object.keys(get().byChat) : [only]) {
+        releasePress: (chatId, press) => {
+          if (!get().byChat[chatId]?.some((row) => pressed(row, press))) return;
+          update(chatId, (rows) => rows.map((row) => (pressed(row, press) ? released(row) : row)));
+        },
+        releaseClaims: () => {
+          for (const chatId of Object.keys(get().byChat)) {
             if (!get().byChat[chatId]?.some(mine)) continue;
             update(chatId, (rows) => rows.map((row) => (mine(row) ? released(row) : row)));
           }
         },
-        clearChat: (chatId) => update(chatId, () => []),
+        clearChat: (chatId) => {
+          forgetSent(chatId);
+          update(chatId, () => []);
+        },
       };
     },
     {

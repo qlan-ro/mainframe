@@ -222,8 +222,8 @@ describe('QueuedRows — held rows after a Stop', () => {
   it('shows a row on its way, and nothing to press on it or behind it', () => {
     hold('h1', 1);
     hold('h2', 2);
-    useHeldQueue.getState().claimFrom('chat-1', 'h1');
-    useHeldQueue.getState().startSending('chat-1', 'h1');
+    useHeldQueue.getState().claimFrom('chat-1', 'h1', 'p1');
+    useHeldQueue.getState().startSending('chat-1', 'h1', 'p1');
 
     renderRows();
 
@@ -234,10 +234,20 @@ describe('QueuedRows — held rows after a Stop', () => {
     expect(screen.queryAllByRole('button')).toEqual([]);
   });
 
+  it('what "Send now" has not sent yet stands behind what the agent already has', () => {
+    hold('h3', 3);
+    useHeldQueue.getState().claimFrom('chat-1', 'h3', 'p1');
+    mockQueued = queue(ref('b', 9));
+
+    renderRows();
+
+    expect(rows().map((row) => row.dataset.queuedId)).toEqual(['b', 'h3']);
+  });
+
   it('offers no second send while a row behind is on its way', () => {
     hold('h1', 1);
     hold('h2', 2);
-    useHeldQueue.getState().claimFrom('chat-1', 'h2');
+    useHeldQueue.getState().claimFrom('chat-1', 'h2', 'p1');
 
     renderRows();
 
@@ -247,8 +257,8 @@ describe('QueuedRows — held rows after a Stop', () => {
 
   it('a row that may have gone out says so and offers to send it again', () => {
     hold('h1', 1);
-    useHeldQueue.getState().claimFrom('chat-1', 'h1');
-    useHeldQueue.getState().startSending('chat-1', 'h1');
+    useHeldQueue.getState().claimFrom('chat-1', 'h1', 'p1');
+    useHeldQueue.getState().startSending('chat-1', 'h1', 'p1');
     useHeldQueue.getState().releaseClaims();
 
     renderRows();
@@ -260,13 +270,13 @@ describe('QueuedRows — held rows after a Stop', () => {
 
   it('a row the daemon refused says why, offers Send now, and not that it may have arrived', () => {
     hold('h1', 1);
-    useHeldQueue.getState().claimFrom('chat-1', 'h1');
-    useHeldQueue.getState().startSending('chat-1', 'h1');
-    useHeldQueue.getState().refuse('chat-1', 'h1', 'Chat chat-1 not running');
+    useHeldQueue.getState().claimFrom('chat-1', 'h1', 'p1');
+    useHeldQueue.getState().startSending('chat-1', 'h1', 'p1');
+    useHeldQueue.getState().refuse('chat-1', 'h1', 'p1', 'the session is not running.');
 
     renderRows();
 
-    expect(rows()[0]).toHaveTextContent('Not sent: Chat chat-1 not running');
+    expect(rows()[0]).toHaveTextContent('Not sent: the session is not running.');
     expect(rows()[0]).not.toHaveTextContent('may already have reached');
     expect(screen.getByTestId('chat-queued-send-now')).toHaveTextContent('Send now');
   });
@@ -274,8 +284,8 @@ describe('QueuedRows — held rows after a Stop', () => {
   it('a refused send says why in the toast too', async () => {
     sendHeld.mockRejectedValueOnce({
       code: -32002,
-      message: 'session unavailable: too large',
-      data: { '_mainframe.dev': { reason: 'too large', neverDelivered: true } },
+      message: 'session unavailable: Chat chat-1 not running',
+      data: { '_mainframe.dev': { reason: 'Chat chat-1 not running', neverDelivered: true } },
     });
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     hold('h1', 1);
@@ -285,7 +295,7 @@ describe('QueuedRows — held rows after a Stop', () => {
     await act(async () => {});
 
     expect(mfToast.error).toHaveBeenCalledExactlyOnceWith('Could not send the queued message', {
-      description: 'too large',
+      description: 'the session is not running.',
     });
   });
 
@@ -293,8 +303,8 @@ describe('QueuedRows — held rows after a Stop', () => {
     vi.useFakeTimers();
     try {
       hold('h1', 1);
-      useHeldQueue.getState().claimFrom('chat-1', 'h1');
-      useHeldQueue.getState().startSending('chat-1', 'h1');
+      useHeldQueue.getState().claimFrom('chat-1', 'h1', 'p1');
+      useHeldQueue.getState().startSending('chat-1', 'h1', 'p1');
       renderRows();
       expect(rows()[0]).toHaveAttribute('data-sending');
 
@@ -312,7 +322,7 @@ describe('QueuedRows — held rows after a Stop', () => {
     renderRows();
     fireEvent.click(screen.getByTestId('chat-queued-edit'));
     const [edit] = startEdit.mock.calls[0] as [{ save: (next: string) => Promise<void> }];
-    act(() => void useHeldQueue.getState().claimFrom('chat-1', 'h1'));
+    act(() => void useHeldQueue.getState().claimFrom('chat-1', 'h1', 'p1'));
 
     await expect(edit.save('reworded')).rejects.toThrow('being sent');
   });

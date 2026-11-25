@@ -17,7 +17,8 @@ vi.mock('@/lib/toast', () => ({ mfToast: { error: vi.fn(), success: vi.fn(), war
 import { cancelQueuedMessage } from '../../../../lib/api/chats';
 import { publishCommands } from '../../commands/command-registry';
 import { NotSentError } from '../../../../lib/daemon/not-sent-error';
-import { useHeldQueue } from '../../composer/queue/held-queue-store';
+import { CLAIM_MS, useHeldQueue } from '../../composer/queue/held-queue-store';
+import { forgetSent } from '../../composer/queue/sent-order';
 import { holdQueuedMessages, sendChatMessage, sendHeldMessages, type ChatActionHost } from '../chat-actions';
 import { createChatThreadState, reduceChatThreadState, type ChatStateEvent } from '../chat-thread-state';
 import { withSteer } from '../steer';
@@ -73,6 +74,7 @@ beforeEach(() => {
   publishCommands([{ name: 'compact', description: 'Compact', source: 'claude' }]);
   localStorage.clear();
   useHeldQueue.setState({ byChat: {} });
+  forgetSent(CHAT);
 });
 
 afterEach(() => vi.useRealTimers());
@@ -396,13 +398,183 @@ describe('sendHeldMessages (C10)', () => {
     expect(sendPrompt.mock.calls.map((call) => call[0])).toEqual(['text m1', 'text m2']);
   });
 
+  /** A session whose load waits until told. */
+  function loadLater(host: ChatActionHost) {
+    const waiting: (() => void)[] = [];
+    host.load = () => new Promise((resolve) => void waiting.push(resolve));
+    return () => waiting.forEach((resolve) => resolve());
+  }
+
+  it('Send now, Stop, Send now while the session loads sends each row once', async () => {
+    hold('m1', 1);
+    hold('m2', 2);
+    const { host, sendPrompt } = makeHost();
+    const loaded = loadLater(host);
+    const first = sendHeldMessages(host, 'm1');
+    await holdQueuedMessages(host);
+    const second = sendHeldMessages(host, 'm1');
+
+    loaded();
+    await Promise.all([first, second]);
+
+    expect(sendPrompt.mock.calls.map((call) => call[0])).toEqual(['text m1', 'text m2']);
+    expect(useHeldQueue.getState().byChat).toEqual({});
+  });
+
+  it('so does a second Send now after the first one’s claim ran out', async () => {
+    vi.useFakeTimers({ now: Date.parse('2026-11-24T10:00:00.000Z'), toFake: ['Date'] });
+    hold('m1', 1);
+    hold('m2', 2);
+    const { host, sendPrompt } = makeHost();
+    const loaded = loadLater(host);
+    const first = sendHeldMessages(host, 'm1');
+    vi.setSystemTime(Date.now() + CLAIM_MS);
+    const second = sendHeldMessages(host, 'm1');
+
+    loaded();
+    await Promise.all([first, second]);
+
+    expect(sendPrompt.mock.calls.map((call) => call[0])).toEqual(['text m1', 'text m2']);
+  });
+
+  it('a press that was stopped sends nothing when its session loads', async () => {
+    hold('m1', 1);
+    const { host, sendPrompt } = makeHost();
+    const loaded = loadLater(host);
+    const sending = sendHeldMessages(host, 'm1');
+    await holdQueuedMessages(host);
+
+    loaded();
+    await sending;
+
+    expect(sendPrompt).not.toHaveBeenCalled();
+    expect(row('m1')).not.toHaveProperty('unconfirmed');
+  });
+
+  describe('the order, through a send and a Stop', () => {
+    /** The daemon: what it queues gets a new id and a new time. */
+    function queueingDaemon() {
+      const made = makeHost({ running: true });
+      const queue: QueuedMessageRef[] = [];
+      const enqueue = (content: string, attachmentIds?: string[]) => {
+        queue.push(
+          ref(`q${queue.length + 1}`, 0, {
+            content,
+            attachmentIds,
+            timestamp: `2026-11-24T11:00:0${queue.length}.000Z`,
+          }),
+        );
+        made.host.dispatch({ type: 'queued.snapshot', refs: queue });
+      };
+      made.sendPrompt.mockImplementation(async (content: string, meta: { attachmentIds?: string[] }) => {
+        enqueue(content, meta.attachmentIds);
+        return { queued: true };
+      });
+      return { ...made, enqueue };
+    }
+    const heldTexts = () => useHeldQueue.getState().byChat[CHAT]!.map((held) => held.content);
+
+    it('a row the agent queued comes back before the ones that never went out', async () => {
+      hold('a', 1, 'A');
+      hold('b', 2, 'B');
+      hold('c', 3, 'C');
+      const { host, sendPrompt, enqueue } = queueingDaemon();
+      sendPrompt
+        .mockResolvedValueOnce({ queued: false })
+        .mockImplementationOnce(async () => {
+          enqueue('B');
+          return { queued: true };
+        })
+        .mockRejectedValueOnce(new NotSentError('connection closed'));
+
+      await sendHeldMessages(host, 'a').catch(() => {});
+      await holdQueuedMessages(host);
+
+      expect(heldTexts()).toEqual(['B', 'C']);
+    });
+
+    it('and before one typed meanwhile, which goes last', async () => {
+      hold('b', 2, 'B');
+      hold('c', 3, 'C');
+      const { host, sendPrompt, enqueue } = queueingDaemon();
+      sendPrompt
+        .mockImplementationOnce(async () => {
+          enqueue('B');
+          enqueue('D');
+          return { queued: true };
+        })
+        .mockRejectedValueOnce(new NotSentError('connection closed'));
+
+      await sendHeldMessages(host, 'b').catch(() => {});
+      await holdQueuedMessages(host);
+
+      expect(heldTexts()).toEqual(['B', 'C', 'D']);
+    });
+
+    it('stays through several sends and stops', async () => {
+      hold('a', 1, 'A');
+      hold('b', 2, 'B');
+      hold('c', 3, 'C');
+      for (let round = 0; round < 2; round++) {
+        const { host } = queueingDaemon();
+        await sendHeldMessages(host, useHeldQueue.getState().byChat[CHAT]![0]!.messageId);
+        await holdQueuedMessages(host);
+        expect(heldTexts()).toEqual(['A', 'B', 'C']);
+      }
+    });
+
+    it('goes by attachments where the agent’s text is not the one sent', async () => {
+      useHeldQueue.getState().hold(CHAT, ref('b', 2, { content: 'see', attachmentIds: ['a1'] }));
+      hold('c', 3, 'C');
+      const { host, sendPrompt, enqueue } = queueingDaemon();
+      sendPrompt
+        .mockImplementationOnce(async () => {
+          enqueue('see\n[a1]', ['a1']);
+          return { queued: true };
+        })
+        .mockRejectedValueOnce(new NotSentError('connection closed'));
+
+      await sendHeldMessages(host, 'b').catch(() => {});
+      await holdQueuedMessages(host);
+
+      expect(heldTexts()).toEqual(['see\n[a1]', 'C']);
+    });
+
+    it('a message with the same text, typed once the first was taken, is not taken for it', async () => {
+      hold('b', 2, 'again');
+      hold('c', 3, 'C');
+      const { host, sendPrompt } = queueingDaemon();
+      sendPrompt
+        .mockImplementationOnce(async () => {
+          host.dispatch({ type: 'queued.snapshot', refs: [ref('q1', 1, { content: 'again' })] });
+          return { queued: true };
+        })
+        .mockRejectedValueOnce(new NotSentError('connection closed'));
+      await sendHeldMessages(host, 'b').catch(() => {});
+      // Queued, then taken by the agent; its twin is typed later.
+      const twin = ref('q2', 0, { content: 'again', timestamp: '2026-11-24T11:00:00.000Z' });
+      host.dispatch({ type: 'queued.snapshot', refs: [twin] });
+
+      await holdQueuedMessages(host);
+
+      expect(heldTexts()).toEqual(['C', 'again']);
+    });
+  });
+
   it('a Stop leaves another window’s claims alone', async () => {
     localStorage.setItem(
       'mf:held-queue',
       JSON.stringify({
         state: {
           byChat: {
-            [CHAT]: [{ messageId: 'm1', content: 'x', timestamp: 't', claim: { by: 'another', at: Date.now() } }],
+            [CHAT]: [
+              {
+                messageId: 'm1',
+                content: 'x',
+                timestamp: 't',
+                claim: { by: 'another', press: 'theirs', at: Date.now() },
+              },
+            ],
           },
         },
         version: 1,
@@ -435,21 +607,55 @@ describe('sendHeldMessages (C10)', () => {
     data: { '_mainframe.dev': { reason: 'Chat chat-1 not running', ...extra } },
   });
 
-  it.each([
-    ['the daemon refused', refusal({ neverDelivered: true }), 'Chat chat-1 not running'],
-    ['the daemon could not read', { code: -32602, message: 'invalid params: prompt' }, 'invalid params: prompt'],
-    ['never left', new NotSentError('connection closed'), 'connection closed'],
-  ])('a row %s keeps the reason, and is not said to have reached the agent', async (_what, error, reason) => {
-    hold('m1', 1);
-    const { host, sendPrompt } = makeHost();
-    sendPrompt.mockRejectedValueOnce(error);
-
-    await expect(sendHeldMessages(host, 'm1')).rejects.toBe(error);
-
-    expect(row('m1')).toEqual(expect.objectContaining({ refused: reason }));
-    expect(row('m1')).not.toHaveProperty('unconfirmed');
-    expect(row('m1')).not.toHaveProperty('claim');
+  const refusedWith = (reason: string, extra: object = {}) => ({
+    ...refusal({ neverDelivered: true, ...extra }),
+    data: { '_mainframe.dev': { reason, neverDelivered: true, ...extra } },
   });
+
+  it.each([
+    ['a session that is not running', refusedWith('Chat chat-1 not running'), 'the session is not running.'],
+    ['a process that is gone', refusedWith('Session s9 not spawned'), 'the session is not running.'],
+    ['a full queue', refusedWith('Session s9 stdin queue is full'), 'the agent has too many messages waiting.'],
+    [
+      'a missing folder',
+      refusedWith('Project directory does not exist or is not accessible: /tmp/x'),
+      'the session’s folder is missing.',
+    ],
+    ['the agent', refusedWith('-32600: thread_4f2 not found'), 'the agent refused it.'],
+    [
+      'a message too large for the handoff',
+      refusedWith('This message is too large to send with Codex’s context handoff. Shorten it.'),
+      'This message is too large to send with Codex’s context handoff. Shorten it.',
+    ],
+    [
+      'an archived provider session',
+      refusedWith('Codex archived this thread. Unarchive it to continue.', { remedy: 'unarchive_native_session' }),
+      'Codex archived this thread. Unarchive it to continue.',
+    ],
+    [
+      'a daemon that could not read it',
+      { code: -32602, message: 'invalid params: prompt' },
+      'the daemon could not read it.',
+    ],
+    ['a closed connection', new NotSentError('connection closed'), 'the connection to the daemon was lost.'],
+  ])(
+    'a row refused by %s says so in plain words, logs the rest, and is not said to have arrived',
+    async (_what, error, reason) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      hold('m1', 1);
+      const { host, sendPrompt } = makeHost();
+      sendPrompt.mockRejectedValueOnce(error);
+
+      await expect(sendHeldMessages(host, 'm1')).rejects.toBe(error);
+
+      expect(row('m1')).toEqual(expect.objectContaining({ refused: reason }));
+      expect(row('m1')).not.toHaveProperty('unconfirmed');
+      expect(row('m1')).not.toHaveProperty('claim');
+      const raw = 'data' in error ? error.data['_mainframe.dev'].reason : error.message;
+      expect(warn).toHaveBeenCalledWith('[chat] held message refused', { chatId: CHAT, messageId: 'm1', raw });
+      warn.mockRestore();
+    },
+  );
 
   it.each([
     ['timed out', { code: -32000, message: 'request timed out' }],

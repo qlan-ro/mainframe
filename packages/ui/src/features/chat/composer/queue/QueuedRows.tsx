@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
 import { useChatExtras } from '../../runtime/chat-extras';
-import { sendErrorMessage } from '../../controller/describe-send-error';
+import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-error';
 import { visibleMessageText } from '../../markers/message-markers';
 import { ComposerHint } from '../composer-card-context';
 import { useComposerEdit } from '../edit/composer-edit-context';
@@ -30,6 +30,8 @@ interface QueueRow {
   failure?: string;
   action?: { label: string; testId: string; onClick: () => void; icon?: ReactNode };
   note?: string;
+  /** Claimed by a "Send now": it goes out behind what the agent already has. */
+  leaving?: boolean;
   /** On its way to the agent. */
   sending?: boolean;
   onEdit?: () => void;
@@ -44,7 +46,7 @@ const DELIVERY_FAILURE: Record<string, string> = {
 const report = (what: string) => (error: unknown) => {
   console.warn(`[queue] ${what} failed`, { error });
   mfToast.error(`Could not ${what} the queued message`, {
-    description: sendErrorMessage(error),
+    description: sendRefusal(error) ?? sendErrorMessage(error),
   });
 };
 
@@ -194,7 +196,10 @@ function useHeldRows(): QueueRow[] {
   return rows.map((row, index) => {
     const base = { messageId: row.messageId, content: row.content, attachments: row.attachmentIds?.length ?? 0 };
     // On its way, or about to be: nothing to press until it is sent or comes back.
-    if (row.claim) return { ...base, note: row.claim.started ? 'Sending…' : 'Waiting', sending: row.claim.started };
+    if (row.claim) {
+      const { started } = row.claim;
+      return { ...base, note: started ? 'Sending…' : 'Waiting', leaving: true, sending: started };
+    }
     return {
       ...base,
       failure: heldFailure(row, index),
@@ -245,7 +250,8 @@ function useClaimClock(held: readonly HeldMessage[]): number {
 }
 
 export function QueuedRows() {
-  const rows = [...useHeldRows(), ...useQueuedRows()];
+  const held = useHeldRows();
+  const rows = [...held.filter((row) => !row.leaving), ...useQueuedRows(), ...held.filter((row) => row.leaving)];
   if (rows.length === 0) return null;
   return (
     <div

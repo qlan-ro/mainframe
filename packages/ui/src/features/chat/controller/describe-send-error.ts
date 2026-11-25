@@ -40,14 +40,31 @@ export function sendErrorMessage(error: unknown): string {
   return promptFailureOf(error)?.reason ?? errorMessage(error);
 }
 
-/** Why a prompt was refused, when it certainly did not reach the agent; undefined when it may have. */
+/**
+ * The daemon's refusals that name a chat, a process or a queue, in plain words.
+ * Its own sentences to the user pass as they are; any other text is the agent's
+ * or the protocol's, and is logged instead of shown.
+ */
+const REFUSALS: readonly (readonly [RegExp, string])[] = [
+  [/^Chat \S+ not running$|^Session \S+ not spawned$/, 'the session is not running.'],
+  [/^Session \S+ stdin queue is full$/, 'the agent has too many messages waiting.'],
+  [/^Project directory does not exist or is not accessible/, 'the session’s folder is missing.'],
+];
+const WRITTEN_FOR_THE_USER = /^This message is too large to send with /;
+
+function refusalInWords(error: unknown, failure: PromptFailure | undefined): string {
+  if (error instanceof NotSentError) return 'the connection to the daemon was lost.';
+  if (!failure) return 'the daemon could not read it.';
+  if (failure.remedy || WRITTEN_FOR_THE_USER.test(failure.reason)) return failure.reason;
+  return REFUSALS.find(([raw]) => raw.test(failure.reason))?.[1] ?? 'the agent refused it.';
+}
+
+/** Why a prompt was refused, in plain words, when it certainly did not reach the agent; undefined when it may have. */
 export function sendRefusal(error: unknown): string | undefined {
   const code = (error as { code?: unknown } | null | undefined)?.code;
-  const refused =
-    error instanceof NotSentError ||
-    promptFailureOf(error)?.neverDelivered === true ||
-    PROTOCOL_REFUSALS.includes(code);
-  return refused ? sendErrorMessage(error) : undefined;
+  const failure = promptFailureOf(error);
+  const refused = error instanceof NotSentError || failure?.neverDelivered === true || PROTOCOL_REFUSALS.includes(code);
+  return refused ? refusalInWords(error, failure) : undefined;
 }
 
 /** The action a refused prompt offers before retrying, if any. */
