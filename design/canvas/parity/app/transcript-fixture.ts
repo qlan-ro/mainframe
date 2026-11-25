@@ -1,15 +1,16 @@
 type Item = Record<string, unknown>;
 type Turn = (question: string, answer: string, minutes: number, calls?: Item[]) => void;
-type Call = (id: string, title: string, input: Item, output: unknown, minutes: number) => Item;
+type Call = (id: string, title: string, input: Item, output: unknown, minutes: number, extra?: Item) => Item;
 export type TranscriptFixture = keyof typeof fixtures;
 
 function markers(turn: Turn, call: Call) {
   const question = 'Which window should reset first?';
   turn(
     'Next: plans, questions, skills, schedules, worktrees and notifications.',
-    'Plans and answers stay visible when work folds.',
+    '**Plans, questions, skills, schedules, worktrees and notifications.** These are markers: pills on the spine that stay visible when the work folds. An answered question stays outside the work too.',
     13,
     [
+      eventCalls(call)[0],
       call(
         'parity-plan',
         'ExitPlanMode',
@@ -40,25 +41,30 @@ function markers(turn: Turn, call: Call) {
           },
         ],
       },
-      ...eventCalls(call),
+      ...eventCalls(call).slice(1),
     ],
   );
 }
 function agent(turn: Turn, call: Call) {
-  turn('Now tool calls, images and agents.', 'Sub-agents list their steps as rows.', 13, [
-    call(
-      'parity-agent',
-      'Task',
-      {
-        description: 'Review the quota reset diff',
-        prompt: 'Review it',
-        subagent_type: 'code-reviewer',
-        run_in_background: true,
-      },
-      undefined,
-      12.9,
-    ),
-  ]);
+  turn(
+    'Now tool calls, images and agents.',
+    '**Tool calls, images and agents.** MCP and tools with no card share one row. A failed call opens by itself. Sub-agents list their steps as rows.',
+    13,
+    [
+      call(
+        'parity-agent',
+        'Task',
+        {
+          description: 'Review the quota reset diff',
+          prompt: 'Review it',
+          subagent_type: 'code-reviewer',
+          run_in_background: true,
+        },
+        undefined,
+        12.9,
+      ),
+    ],
+  );
 }
 function links(turn: Turn) {
   turn(
@@ -68,8 +74,8 @@ function links(turn: Turn) {
   );
 }
 function states(turn: Turn, call: Call) {
-  const run = (id: string, status: string, result?: string) => ({
-    ...call(id, 'Bash', { command: 'pnpm exec vitest run use-quota' }, result, 12.9),
+  const run = (id: string, status: string, result?: string, toolCallTiming?: Item) => ({
+    ...call(id, 'Bash', { command: 'pnpm exec vitest run use-quota' }, result, 12.9, { toolCallTiming }),
     status,
   });
   turn(
@@ -78,9 +84,10 @@ function states(turn: Turn, call: Call) {
     13,
     [
       run('parity-running', 'in_progress'),
-      run('parity-passed', 'completed', '4 passed'),
-      run('parity-failed', 'failed', 'Lint failed'),
-      run('parity-stopped', 'cancelled'),
+      run('parity-passed', 'completed', '4 passed', { durationMs: 3100 }),
+      run('parity-failed', 'failed', 'Exit code 1\nLint failed', { durationMs: 3100 }),
+      run('parity-stopped', 'cancelled', undefined, { durationMs: 48000 }),
+      run('parity-no-result', 'completed'),
     ],
   );
 }
@@ -94,7 +101,16 @@ function tools(turn: Turn, call: Call) {
         'parity-read',
         'Read',
         { file_path: 'quota/use-quota.ts' },
-        'export function useQuota(adapterId: string) {\n  return null;\n}',
+        [
+          'export function useQuota(adapterId: string) {',
+          '  return useQuery({',
+          "    queryKey: ['quota', adapterId],",
+          '    queryFn: () => api.quota.snapshot(adapterId),',
+          '    refetchInterval: pollInterval,',
+          '    staleTime: minute,',
+          '  });',
+          '}',
+        ].join('\n'),
         12.9,
       ),
       call(
@@ -122,7 +138,7 @@ function tools(turn: Turn, call: Call) {
         'parity-glob',
         'Glob',
         { pattern: '**/quota*.rs', path: 'packages/core-rs' },
-        'crates/mainframe-quota/src/quota.rs',
+        ['quota.rs', 'quota_window.rs', 'routes/quota.rs', 'quota_tests.rs'].join('\n'),
         12.5,
       ),
       ...shellAndExternalCalls(call),
@@ -132,7 +148,7 @@ function tools(turn: Turn, call: Call) {
 function eventCalls(call: Call): Item[] {
   return [
     call('parity-skill', 'Skill', { skill: 'mainframe-design-system' }, 'Loaded the design-system skill', 12.7),
-    call('parity-wakeup', 'ScheduleWakeup', { delaySeconds: 1200, reason: 'Check the review' }, '{}', 12.6),
+    call('parity-wakeup', 'ScheduleWakeup', { delaySeconds: 1200 }, '{}', 12.6),
     call(
       'parity-cron-create',
       'CronCreate',
@@ -145,7 +161,11 @@ function eventCalls(call: Call): Item[] {
       'parity-cron-list',
       'CronList',
       {},
-      '[{"id":"cron_7f3a","cron":"0 9 * * 1-5","recurring":true,"prompt":"Post the review status"}]',
+      JSON.stringify([
+        { id: 'cron_7f3a', humanSchedule: 'weekdays 09:00', recurring: true, prompt: 'Post the review status' },
+        { id: 'cron_91c2', humanSchedule: 'in 52m', prompt: 'Check the review-readiness run' },
+        { id: 'cron_04de', humanSchedule: 'every 6h', recurring: true, prompt: 'Refresh the release notes' },
+      ]),
       12.3,
     ),
     call(

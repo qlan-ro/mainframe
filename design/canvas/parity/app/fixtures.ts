@@ -607,7 +607,10 @@ function transcript(): Json[] {
     out.push(user(q, minutes));
     seq++;
     out.push(
-      ...calls.map((c) => ({ ...c, _meta: stamp(minutes - 0.5) })),
+      ...calls.map((c) => ({
+        ...c,
+        _meta: stamp(minutes - 0.5, { ...c._meta?.[MF], containerId: `c${seq}` }),
+      })),
       ...(minutes === 13 ? asking : []),
       agent(a, minutes - 1),
     );
