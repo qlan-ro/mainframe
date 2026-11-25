@@ -171,13 +171,18 @@ impl ChatManager {
         // Unfiltered `ChatsRepository::list` (via `chats_list`), so a temporary
         // chat's live state and row are torn down along with the project.
         let chats = self.shared.deps.chats_list(project_id)?;
-        for chat in chats {
-            self.teardown_live_chat(&chat).await;
+        for chat in &chats {
+            self.teardown_live_chat(chat).await;
         }
         self.shared
             .deps
             .projects_remove(project_id)
             .map_err(RemoveProjectError::Store)?;
+        // The rows are gone for good: clients drop what they kept for these chats.
+        for chat in chats {
+            self.shared
+                .emit(DaemonEvent::ChatEnded { chat_id: chat.id });
+        }
         info!(project_id, "project removed");
         Ok(())
     }

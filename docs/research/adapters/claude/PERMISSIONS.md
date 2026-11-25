@@ -295,10 +295,11 @@ behavior — note Bash suggestions arrive with `destination: 'localSettings'`
 forwards each suggestion's declared destination verbatim, so an ephemeral
 grant is whatever the CLI itself scoped as `session`.
 
-> **Fixed in #283.** Mainframe's `permission_updates.rs::keep_mode_changes_session_scoped`
+> **Fixed in #283.** Mainframe's `permission_updates.rs::forwardable_updates`
 > forwards each update's declared destination as-is, with one added invariant: a
 > `setMode` update is always forwarded `session`-scoped, so a permission-mode
-> change is never persisted as the project default. See finding 7 in the
+> change is never persisted as the project default. Since #946 a mode wider than
+> `acceptEdits`, and an update Mainframe cannot read, are not forwarded at all. See finding 7 in the
 > [research doc](../../research/2026-07-25-todo-241-claude-cli-reverse-engineer.md)
 > for the mismatch this closed.
 

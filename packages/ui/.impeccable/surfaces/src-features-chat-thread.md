@@ -14,7 +14,7 @@ Operate. Messages, turns, tool rows, markers, sub-agents and delegated tasks, ma
 Follow what an agent did and why, find the step that failed, and copy or quote what matters.
 
 ## Constraints
-Long threads, streamed. Every tool the app renders has a row or a marker (T1a). Times live in hover footers.
+Queued messages are not in the transcript: they are rows in the composer. A steered message is, with "Steered into the running turn" under its bubble. Requests are answered above the composer, so a delegated task's card carries none. Long threads, streamed. Every tool the app renders has a row or a marker (T1a). Times live in hover footers.
 
 Every row, marker and card for a tool call carries `data-activity-id` with the call's id (space-separated when a row stands for several), and its own disclosure is the first `aria-expanded` control inside it. A group that renders its rows only once opened lists their ids in `data-activity-group`. The session panel's jump (R13) relies on both.
 

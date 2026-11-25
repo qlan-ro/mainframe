@@ -2,9 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ThreadMessage } from '@assistant-ui/react';
-import type { PermissionOption } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 import type { TaskChatView } from '../use-task-chat';
 
 const view = vi.fn<() => TaskChatView>();
@@ -17,26 +15,11 @@ vi.mock('../../tools/cards/SubagentTranscript', () => ({
 
 import { TaskChatTranscript } from '../TaskChatTranscript';
 
-const reply = vi.fn<TaskChatView['reply']>(async () => {});
-const OPTIONS: PermissionOption[] = [
-  { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
-  { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
-];
-const GATE: ChatPermissionEntry = {
-  requestId: 'r1',
-  askedAt: 1,
-  request: { requestId: 'r1', toolName: 'Bash', toolUseId: 'tu1', input: { command: 'ls' }, suggestions: [] },
-  options: OPTIONS,
-};
-
 function viewWith(overrides: Partial<TaskChatView>): TaskChatView {
   return {
     messages: [],
     hiddenCount: 0,
     loadState: { type: 'ready' },
-    gate: undefined,
-    reply,
-    adapterId: 'claude',
     ...overrides,
   };
 }
@@ -51,7 +34,6 @@ function renderBody(onOpen?: () => void) {
 
 beforeEach(() => {
   view.mockReset();
-  reply.mockClear();
 });
 
 describe('TaskChatTranscript', () => {
@@ -83,14 +65,11 @@ describe('TaskChatTranscript', () => {
     expect(screen.queryByTestId('chat-tool-delegate-task-open-full-task_kid')).toBeNull();
   });
 
-  it("answers the child's gate with the main thread's gate card", async () => {
-    view.mockReturnValue(viewWith({ gate: GATE }));
+  it('shows no gate card: a child’s request is answered above the parent’s composer', () => {
+    view.mockReturnValue(viewWith({}));
     renderBody();
 
-    const slot = screen.getByTestId('chat-tool-delegate-task-gate-task_kid');
-    expect(slot.querySelector('[data-testid="chat-permission-gate"]')).toBeTruthy();
-    await userEvent.click(screen.getByTestId('chat-permission-option-reject-once'));
-    expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply.mock.calls[0]![1]).toBe('reject-once');
+    expect(screen.queryByTestId('chat-permission-gate')).toBeNull();
+    expect(screen.queryByTestId('chat-tool-delegate-task-gate-task_kid')).toBeNull();
   });
 });

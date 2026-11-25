@@ -1,11 +1,10 @@
 'use client';
 
 /**
- * WorktreePopover — composer control that isolates the active session into a
- * new or existing git worktree in-place (enable-worktree / attach-worktree).
- *
- * Distinct from the MainToolbar BranchPopover, which spawns a *new* session.
- * This control modifies the *current* session.
+ * WorktreePopover — isolates the active session into a new or existing git
+ * worktree in place (enable-worktree / attach-worktree), or moves it to
+ * another one. Opened from the bottom strip (K8); a draft picks its worktree in
+ * the branch picker instead (K7).
  *
  * Three states:
  *  1. Active-info — chat.worktreePath is set (already isolated), plus the other
@@ -17,22 +16,23 @@
  * name, validation), and forms never live inside a Radix menu.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+import { FolderOpen, Loader2 } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { Popover, PopoverContent } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
 import { enableWorktree, attachWorktree, getGitBranches, getProjectWorktrees } from '@/lib/api/git';
 import type { WorktreeEntry } from '@/lib/api/git';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
-import { useDraftConfig, patchDraftConfig } from '@/features/sessions/runtime/draft-config';
-import { WorktreeDraftPanel } from './WorktreeDraftPanel';
+import { useHost } from '@/lib/host';
+import { useDaemonIsLocal } from '@/lib/daemon/use-daemon-is-local';
+import { mfToast } from '@/lib/toast';
 import { WorktreeNotice } from './WorktreeNotice';
 import { WorktreeNewForm } from './WorktreeNewForm';
 import { WorktreeTabBar, WorktreeExistingTab, WorktreeSectionLabel } from './WorktreeExistingTab';
 import type { WorktreeTab } from './WorktreeExistingTab';
-import { WorktreeTrigger } from './WorktreeTrigger';
 
 /** Centered spinner for the first-open fetch. */
 function WorktreeLoading() {
@@ -77,28 +77,46 @@ export interface WorktreePopoverProps {
   hasMessages: boolean;
   /** A turn is in flight; every rebind restarts the CLI, so all of them wait. */
   busy: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The bare trigger element. */
+  children: ReactElement;
 }
 
-export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProps) {
+/** Opens the worktree's folder, on the machine the daemon runs on. */
+function OpenFolder({ path, onDone }: { path: string; onDone: () => void }) {
+  const host = useHost();
+  if (!useDaemonIsLocal()) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      data-testid="composer-worktree-open-folder"
+      className="justify-start"
+      onClick={() => {
+        onDone();
+        host.fs.openPath(path).catch((error: unknown) =>
+          mfToast.error('Could not open the folder', {
+            description: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }}
+    >
+      <FolderOpen data-icon="inline-start" />
+      Open folder
+    </Button>
+  );
+}
+
+export function WorktreePopover({
+  chat,
+  hasMessages,
+  busy,
+  open,
+  onOpenChange: setOpen,
+  children,
+}: WorktreePopoverProps) {
   const port = useDaemonPort();
-
-  // Draft mode (todo #223): a __LOCALID_* thread has no daemon chat, so the
-  // choice is stashed in the draft config — an existing-worktree attach rides
-  // the createChat payload; a new worktree is created by the coordinator right
-  // after createChat on first send. Never call the chat-scoped endpoints here.
-  const isLocalDraft = chat.id.startsWith('__LOCALID_');
-  const draft = useDraftConfig(isLocalDraft ? chat.id : null);
-  const pendingWorktree = draft?.pendingWorktree;
-
-  // A no-project chat (or draft) has no project to branch from — worktrees
-  // are disabled with an explanation and never call the daemon (todo #346).
-  const noProjectDisabled = chat.noProject;
-  // Temporary and worktree are mutually exclusive (todo #346): the
-  // daemon discard only removes the chat's scratch path, so a temporary chat
-  // with a worktree would orphan it. Covers both a temporary draft and a real
-  // temporary chat — `chat.temporary` reflects both via synthesizeDraftChat.
-  const temporaryDisabled = chat.temporary === true;
-  const worktreeDisabled = noProjectDisabled || temporaryDisabled;
 
   const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState('');
@@ -107,12 +125,11 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
   const [tab, setTab] = useState<WorktreeTab>('new');
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
 
   // Fetch on popover open (not mount). An isolated chat only lists worktrees to
   // move between, so it skips the branch fetch the New form would need.
   useEffect(() => {
-    if (!open || worktreeDisabled) return;
+    if (!open) return;
     let cancelled = false;
 
     setLoading(true);
@@ -141,19 +158,10 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
     return () => {
       cancelled = true;
     };
-  }, [open, chat.worktreePath, chat.projectId, port, worktreeDisabled]);
+  }, [open, chat.worktreePath, chat.projectId, port]);
 
   const handleEnable = useCallback(
     async (baseBranch: string, branchName: string) => {
-      // Defensive backstop (todo #346) — the trigger is disabled for
-      // a temporary chat/draft so this form should be unreachable, but never
-      // stage a worktree onto one regardless.
-      if (temporaryDisabled) return;
-      if (isLocalDraft) {
-        patchDraftConfig(chat.id, { pendingWorktree: { baseBranch, branchName } });
-        setOpen(false);
-        return;
-      }
       setSubmitting(true);
       setApiError(null);
       try {
@@ -165,19 +173,12 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
         setSubmitting(false);
       }
     },
-    [port, chat.id, isLocalDraft, temporaryDisabled],
+    [port, chat.id, setOpen],
   );
 
   const handleAttach = useCallback(
     async (wt: WorktreeEntry) => {
-      // Same defensive backstop as handleEnable (todo #346).
-      if (temporaryDisabled) return;
       const branch = wt.branch ? wt.branch.replace('refs/heads/', '') : 'detached';
-      if (isLocalDraft) {
-        patchDraftConfig(chat.id, { worktreePath: wt.path, branchName: branch });
-        setOpen(false);
-        return;
-      }
       setSubmitting(true);
       setApiError(null);
       try {
@@ -189,13 +190,8 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
         setSubmitting(false);
       }
     },
-    [port, chat.id, isLocalDraft, temporaryDisabled],
+    [port, chat.id, setOpen],
   );
-
-  // Cancel a stashed draft choice — the session starts in the main repo instead.
-  const handleDraftCancel = useCallback(() => {
-    patchDraftConfig(chat.id, { worktreePath: undefined, branchName: undefined, pendingWorktree: undefined });
-  }, [chat.id]);
 
   const isIsolated = Boolean(chat.worktreePath);
   // The chat's own worktree is already the destination — never offer it as one.
@@ -203,18 +199,10 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
     () => worktrees.filter((wt) => wt.path !== chat.worktreePath),
     [worktrees, chat.worktreePath],
   );
-  const isPendingDraft = isLocalDraft && pendingWorktree != null;
-  const showIsolated = isIsolated || isPendingDraft;
-  const branchLabel = isIsolated ? (chat.branchName ?? 'Worktree') : isPendingDraft ? pendingWorktree.branchName : null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <WorktreeTrigger
-        noProjectDisabled={noProjectDisabled}
-        temporaryDisabled={temporaryDisabled}
-        showIsolated={showIsolated}
-        branchLabel={branchLabel}
-      />
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
 
       <PopoverContent
         data-testid="composer-worktree-popover"
@@ -224,11 +212,10 @@ export function WorktreePopover({ chat, hasMessages, busy }: WorktreePopoverProp
         // w-72 is the primitive's own width; only the compact gap/padding differ.
         className="gap-2 p-2"
       >
-        {isLocalDraft && draft != null && showIsolated ? (
-          <WorktreeDraftPanel draft={draft} onCancel={handleDraftCancel} />
-        ) : isIsolated ? (
+        {isIsolated ? (
           <>
             <ActiveInfo chat={chat} />
+            {chat.worktreePath && <OpenFolder path={chat.worktreePath} onDone={() => setOpen(false)} />}
             <div className="flex flex-col gap-1.5">
               <WorktreeSectionLabel>Move to another worktree</WorktreeSectionLabel>
               {busy && <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>}

@@ -4,12 +4,13 @@ import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { GateCardShell, GateHead, GATE_BODY_INSET } from './shared/GateShell';
+import { GateCardShell, GATE_BODY_INSET, GATE_PRIMARY } from './shared/GateShell';
 import { buildAskUserQuestionResponse } from './build-control-response';
 import { AskQuestionWizard } from './AskQuestionWizard';
 import { assembleAnswers, resolveChosen } from './answers';
 import type { AskQuestion } from './answers';
-import type { ReplyFn } from './gate-types';
+import { askerParts, type GateContext, type ReplyFn } from './gate-types';
+import { visibleLine, visibleText } from './visible-text';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -18,6 +19,7 @@ import type { ReplyFn } from './gate-types';
 export interface AskUserQuestionGateProps {
   entry: ChatPermissionEntry;
   reply: ReplyFn;
+  context?: GateContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +71,7 @@ function WizardFooter({ current, total, isAnswered, onSkip, onBack, onNext, onSu
   const isLast = current === total - 1;
 
   return (
-    <div className="flex items-center gap-2 px-4 pt-1 pb-3">
+    <div className={cn('flex items-center gap-2 pt-1 pr-4 pb-3', GATE_BODY_INSET)}>
       <Button variant="outline" size="sm" data-testid="chat-question-skip" onClick={onSkip}>
         Skip
       </Button>
@@ -80,12 +82,24 @@ function WizardFooter({ current, total, isAnswered, onSkip, onBack, onNext, onSu
       )}
       <div className="flex-1" />
       {!isLast && (
-        <Button size="sm" data-testid="chat-question-next" disabled={!isAnswered} onClick={onNext}>
+        <Button
+          size="sm"
+          className={GATE_PRIMARY}
+          data-testid="chat-question-next"
+          disabled={!isAnswered}
+          onClick={onNext}
+        >
           Next
         </Button>
       )}
       {isLast && (
-        <Button size="sm" data-testid="chat-question-submit" disabled={!isAnswered} onClick={onSubmit}>
+        <Button
+          size="sm"
+          className={GATE_PRIMARY}
+          data-testid="chat-question-submit"
+          disabled={!isAnswered}
+          onClick={onSubmit}
+        >
           Submit
         </Button>
       )}
@@ -97,7 +111,7 @@ function WizardFooter({ current, total, isAnswered, onSkip, onBack, onNext, onSu
 // AskUserQuestionGate
 // ---------------------------------------------------------------------------
 
-export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) {
+export function AskUserQuestionGate({ entry, reply, context }: AskUserQuestionGateProps) {
   const questions = (entry.request.input.questions as AskQuestion[] | undefined) ?? [];
 
   const [current, setCurrent] = useState(0);
@@ -143,35 +157,45 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
     void reply(buildAskUserQuestionResponse(entry, answers));
   }, [entry, questions, reply, selections, otherText]);
 
-  const eyebrow = isMulti ? 'Question · select all that apply' : 'Question';
-  // Title with the model's short `header` label when present (e.g. "Auth method"),
-  // mirroring desktop; the question text then drops to a body line so it isn't lost.
-  // Without a header, the question text stays the title (current behavior).
-  const headerTitle = activeQuestion?.header ?? questions[0]?.header;
-  const title = headerTitle ?? activeQuestion?.question ?? '';
-  const questionBody = headerTitle ? activeQuestion?.question : undefined;
+  // The agent's words: nothing in them hides. Reading order is the language's own, kept apart from the rest.
+  const title = visibleText(activeQuestion?.question ?? '');
+  const header = activeQuestion?.header && visibleLine(activeQuestion.header);
+  const details = [header, isMulti ? 'select all that apply' : undefined].filter(Boolean).join(' · ');
+  const asker = visibleLine(askerParts(context, true).join(' · '));
 
   return (
-    <div data-testid="chat-question-gate">
+    <div data-testid="chat-question-gate" role="group" aria-label="Question from the agent">
       <GateCardShell>
-        <GateHead
-          icon={<MessageCircleQuestionIcon className="size-3.5" />}
-          tileClassName="bg-primary/10 text-primary"
-          eyebrow={eyebrow}
-          title={title}
-          right={
-            questions.length > 1 ? (
-              <Badge variant="outline" className="shrink-0 font-mono tabular-nums">
-                {current + 1} of {questions.length}
-              </Badge>
-            ) : undefined
-          }
-        />
-        {questionBody && (
-          <p data-testid="chat-question-text" className={cn('pr-4 pb-1 text-sm text-foreground', GATE_BODY_INSET)}>
-            {questionBody}
-          </p>
-        )}
+        {/* The question is the title; its context sits under it, with no label above (G4). */}
+        <div className="flex items-start gap-2.5 px-4 pt-3 pb-2">
+          <span
+            data-testid="gate-head-tile"
+            className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-accent-ink"
+          >
+            <MessageCircleQuestionIcon className="size-3.5" />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col pt-0.5">
+            <h3 data-testid="chat-question-text" className="text-[0.875rem] leading-5 font-semibold text-foreground">
+              <bdi>{title}</bdi>
+            </h3>
+            {(details || asker) && (
+              <span data-testid="chat-question-context" className="text-xs text-muted-foreground">
+                {details && <bdi>{details}</bdi>}
+                {details && asker && ' · '}
+                {asker && (
+                  <span dir="ltr" className="stored-order">
+                    {asker}
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+          {questions.length > 1 && (
+            <Badge variant="outline" className="shrink-0 font-mono tabular-nums">
+              {current + 1} of {questions.length}
+            </Badge>
+          )}
+        </div>
         {activeQuestion && (
           <AskQuestionWizard
             question={activeQuestion}

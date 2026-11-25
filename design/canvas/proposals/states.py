@@ -10,7 +10,6 @@ TRWT=(316,48,816,1902)          # the same, 1440x1950, for a whole thread
 TRW=(316,48,816,1452)           # transcript column of a 1440x1500 window, header to composer
 def JS_SCROLL_MSG(k): return {'js':f"(()=>{{const m=document.querySelectorAll('#thread .inner > .msg')[{k}];thread.scrollTop+=m.getBoundingClientRect().top-thread.getBoundingClientRect().top-12}})()",'wait':200}
 def JS_PANEL_ROW(title): return {'js':f"(()=>{{const r=[...document.querySelectorAll('.pr')].find(x=>x.getBoundingClientRect().x>1100&&x.querySelector('.t')&&x.querySelector('.t').textContent.trim()==={title!r});r&&r.click()}})()",'wait':300}
-JS_STRIP_OPEN={'js':"(()=>{const b=[...document.querySelectorAll('#actstrip button')].find(x=>x.textContent.trim()==='Open');b&&b.click()})()",'wait':300}
 JS_CLICK_MI=lambda label:{'js':f"(()=>{{const m=[...document.querySelectorAll('.menu .mi')].find(b=>b.querySelector('.mi-l')&&b.querySelector('.mi-l').textContent.trim()==={label!r});m&&m.click()}})()",'wait':250}
 BOARDS=[
  dict(file='Proposal-Redesign-Window',title='Window redesign: the proposed window, light and dark',cols=2,states=[
@@ -29,30 +28,6 @@ BOARDS=[
    S('ns-temp','temporary-chosen','**Temporary chosen.** No worktree; deleted when closed.',COMPN),
    S('ns-branch-d','branch-menu','**Dark, branch menu.**',(316,250,808,650),theme='dark'),
  ]),
- dict(file='Proposal-Redesign-Composer',title='Window redesign: composer toolbar, send and stop',cols=3,states=[
-   S('c-idle-empty','idle-quiet','**Idle, empty (C8).** Send is outline and disabled. Context ring with a full track (C2).'),
-   S('c-ready','idle-quiet','**Text typed.** Send turns accent.',actions=[{'click':'#field'},{'type':'Also check the weekly window'}]),
-   S('c-run','running-activity','**Running, empty field (C8, K4).** Dark Stop. Its label names the scope: “Stop the turn and 3 sub-agents ⌘.”. Placeholder “Queue a message for when the agent finishes…”.'),
-   S('c-run-typed','running-typed-split','**Running with text (C9).** Stop stays a separate square; Send becomes the split “Queue ↵” + chevron.'),
-   S('c-split-menu','split-menu','**Split menu (C9).** Queue ↵ / Steer ⌥↵ (adds to the running turn without stopping it). Settings › Chat › “Enter while running” swaps which one Enter does.',COMPM),
-   S('c-stopping','stopping','**Stopping.** Spinner in the Stop slot; the transcript says “Stopping…”.'),
-   S('c-subs','idle','**Turn ended, sub-agents still running (C8).** Stop stays (“Stop 3 sub-agents”); with text typed, Send sits beside it.',actions=[{'click':'#field'},{'type':'Then open a PR'}]),
-   S('c-planning','planning','**Planning (C1).** No Plan toggle: the permissions control reads “Planning · then Auto-Edits”.',COMPM),
-   S('c-cycle','idle-quiet','**⇧⇥ cycles Interactive ↔ Auto-Edits (C12).** A tooltip names the new mode; screen readers hear it.',actions=[{'click':'#field'},{'press':'Shift+Tab','wait':150}]),
-   S('c-model','idle-quiet','**Model menu (C5).** Provider tabs as in today’s app, the selected provider’s models, then the inline Effort segment.',COMPM,actions=[{'click':'[data-id=model]','wait':250}]),
-   S('c-locked','running-activity','**Model locked during a turn (C5).** “Model changes apply after this turn”.',actions=[{'click':'[data-id=model]','wait':250}]),
-   S('c-switch','idle-quiet','**Browsing the Codex tab (C5).** Lists Codex’s models without changing anything. Picking one switches the chat in place, no confirmation.',COMPM,actions=[{'click':'[data-id=model]','wait':250},JS_CLICK_MI('Codex')]),
-   S('c-perm','idle-quiet','**Permissions menu (C6).** Interactive, Auto-Edits, Auto (Claude only, amber), Unattended (amber chip).',COMPM,actions=[{'click':'[data-id=perm]','wait':250}]),
-   S('c-unatt','idle-quiet','**Turning on Unattended asks once per session (C13).** Cancel is focused.',COMPM,actions=[{'click':'[data-id=perm]','wait':250},JS_CLICK_MI('Unattended')]),
-   S('c-unatt-on','perm-unattended','**Unattended on.** Amber chip on the permissions control.'),
-   S('c-ctx85','context-85','**Context 85 % (C2).** Warning ink from 80 %.'),
-   S('c-ctx97','context-97','**Context 97 %.** Critical ink; clicking offers “Compact conversation”.',COMPM,actions=[{'click':'[data-id=ring]','wait':250}]),
-   S('c-360','width-360','**Composer 360 px (C6).** Model and permissions merge into one chip; only the model name truncates.',COMP),
-   S('c-240','width-240','**Composer 240 px.** The chip shows only the status; ring, Stop and Queue wrap to a second toolbar row.',(316,520,808,380)),
-   S('c-idle-d','idle-quiet','**Dark, idle.**',theme='dark'),
-   S('c-run-typed-d','running-typed-split','**Dark, running with text.**',theme='dark'),
-   S('c-perm-d','idle-quiet','**Dark, permissions menu.**',COMPM,theme='dark',actions=[{'click':'[data-id=perm]','wait':250}]),
- ]),
  dict(file='Proposal-Redesign-ComposerContent',title='Window redesign: files, captures and quotes in the composer',cols=3,states=[
    S('cc-files','composer-files','**Files and images (C14).** Every tile is the same size, 172 × 40: a file shows its extension in a tinted square, an image its thumbnail and dimensions. A longer name fades at the edge and shows whole in the tooltip.',COMPM),
    S('cc-caps','composer-captures','**Captures and code annotations (C14).** Same tile size: thumbnail (or the file’s extension for code), the note as the title, `element1 · selector` or `codex.rs:32–38` in mono, faded when long. The pencil appears on hover; one without a note offers “Add a note”.',COMPM),
@@ -63,40 +38,6 @@ BOARDS=[
    S('cc-all','composer-everything','**Everything at once.** Attachments wrap above the quotes; Send enables with any of them.',COMPM),
    S('cc-all-d','composer-everything','**Dark.**',COMPM,theme='dark'),
    S('cc-quotes-d','composer-quotes','**Dark, quotes.**',COMPM,theme='dark'),
- ]),
- dict(file='Proposal-Redesign-Activity',title='Window redesign: queue and activity strip',cols=3,states=[
-   S('a-expanded','running-activity','**Activity strip (K2, K4, R13).** The top drawer: same surface as the card, inset 12 px, tucked under it. Every ongoing item is a row: kind icon, title, then a small spinner with the elapsed time, and Stop.'),
-   S('a-needs','needs-you','**Needs you (K4, G5, K10).** The request shows above the composer on its own and the strip steps back to one line: “Also ongoing · 3 running”. Expanding it lists the rest; a needs-you row’s “Open” opens that agent in the workspace (W8).',(316,200,808,700)),
-   S('a-collapsed','activity-collapsed','**Collapsed to one row (K5).** First item plus “+N”; remembered per viewer.'),
-   S('a-many','activity-many','**Five ongoing.** Capped at six rows, scrolls inside.',COMPM),
-   S('a-stopped','running-activity','**Stop on a row is immediate (K4).** Toast “Stopped “Map diff scopes in the daemon””.',(316,48,808,852),actions=[{'click':'[data-act-stop="a1"]','wait':100}],wait=80),
-   S('q-two','queue-two','**Queue of two (C10).** Rows inside the card’s top, each with edit and remove.'),
-   S('q-failed','failed-queue','**After a Stop (C10).** The first row turns error-toned: “Not sent: the session stopped.” with Send now, edit, remove; later rows wait.'),
-   S('a-expanded-d','running-activity','**Dark, activity strip.**',theme='dark'),
-   S('q-failed-d','failed-queue','**Dark, failed queue.**',theme='dark'),
-   S('a-every','every-activity','**Every kind, expanded under a request (K4, K10, R13).** Sub-agent (Bot), delegated task (Bot, filled), workflow (Route), monitor (Binoculars), background command (SquareTerminal). Needs-you first with Open (opens it in the workspace); everything else Stop, never Cancel (T1c).',(316,48,808,852),actions=[{'click':'[data-gate-strip]'}]),
-   S('a-gate','every-activity','**While a request shows, the strip steps back (K10, G5).** The oldest request shows on its own; its eyebrow says how many more wait. The item being answered leaves the strip; the rest shrink to one line with a chevron to expand.',(316,200,808,700)),
-   S('a-jump','every-activity','**Activity row → transcript (R13).** Clicking a monitor, background command or schedule row scrolls the transcript to its row, opens it and highlights it. Agents, delegated tasks and workflows open instead (W8, R13).',(316,48,1124,852),actions=[JS_PANEL_ROW('pnpm dev until "ready"')]),
-   S('a-every-d','every-activity','**Dark.**',(316,200,808,700),theme='dark'),
- ]),
- dict(file='Proposal-Redesign-BottomStrip',title='Window redesign: where it runs, branch and changes',cols=3,states=[
-   S('b-wt','idle-quiet','**Worktree (K6, K8).** A bare row under the card: “Worktree · feat/quota-reset from main”; changes pushed right.'),
-   S('b-local','idle-local','**Local checkout.**'),
-   S('b-temp','bottom-strip-temporary','**Temporary.** Locked; deleted when closed.'),
-   S('b-none','idle-nochanges','**No changes.** The changes part is hidden.'),
-   S('b-chg','changes-popover','**Changes popover.** Changed files with counts and “Open diff”.',COMPM),
-   S('b-wtpop','idle-quiet','**Worktree popover.** Branch, from, path; Open folder, Move to another worktree…',COMPM,actions=[{'click':'[data-id=wt]','wait':250}]),
- ]),
- dict(file='Proposal-Redesign-Gates',title='Window redesign: permission, plan and question gates',cols=3,states=[
-   S('g-perm','gate-permission','**Permission (G1, G2).** Pinned above the composer. Tool and command; Allow once is primary; Always allow names its rule; Reject.',COMPM),
-   S('g-perm-det','gate-permission','**Details open.** The raw input as JSON.',(316,300,808,600),actions=[{'click':'[data-g="det"]'}]),
-   S('g-sub','needs-you-open','**A sub-agent’s gate (G5).** Shows on its own, oldest request first; the eyebrow names the agent. The strip steps back to one line while it shows (K10).',(316,240,808,660)),
-   S('g-plan','planning','**Plan (G3).** Plan body, mode segment preselected to the composer’s mode, Clear context, Approve & run / Keep planning / Reject.',(316,300,808,600)),
-   S('g-plan-rev','plan-revise','**Keep planning.** Feedback box with Cancel / Send feedback.',(316,300,808,600)),
-   S('g-q','gate-question','**Question (G4).** The question is the title, context under it; compact options aligned to the text column; “Recommended” tag.',(316,200,808,700)),
-   S('g-q-other','gate-question','**Other… selected.** A text field appears; Submit enables.',(316,200,808,700),actions=[{'click':'[data-gq="__other"]'},{'type':'Rename only the public members'}]),
-   S('g-perm-d','gate-permission','**Dark, permission.**',COMPM,theme='dark'),
-   S('g-q-d','gate-question','**Dark, question.**',(316,200,808,700),theme='dark'),
  ]),
  dict(file='Proposal-Redesign-Transcript',title='Window redesign: transcript, every row and state',cols=4,states=[
    S('tr-files','every-tool','**Files, searches, edits, commands, the web (T1, T1a).** Glyph, verb, target, receipt. Edits carry +/− and open in the diff editor; a failed step that later passed is grey.',TRW,h=1500,actions=[JS_SCROLL_MSG(0)]),

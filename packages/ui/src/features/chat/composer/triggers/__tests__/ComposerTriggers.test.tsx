@@ -59,7 +59,7 @@ vi.mock('../../sessions/use-session-mention-source', () => ({
 }));
 
 import { ComposerTriggers } from '../ComposerTriggers';
-import { ComposerAddMention } from '../../attachments/ComposerAttachmentStrip';
+import { ComposerAddMenu } from '../../attachments/ComposerAddMenu';
 import { useSessionReferences } from '../../sessions/session-reference-store';
 import { useTriggerFieldAria } from '../trigger-field-aria-context';
 
@@ -92,7 +92,7 @@ function typeInto(input: HTMLElement, value: string) {
  * Harness for the add-mention BUTTON (todo #316), not typed input: the same
  * `ComposerPrimitive.Root` form and trigger wiring as `Harness`, plus a real
  * `textareaRef` shared between `ComposerPrimitive.Input` and
- * `ComposerAddMention` — the seam the button's click handler must drive — and
+ * `ComposerAddMenu` — the seam the button's click handler must drive — and
  * an `onNew` spy to prove a click never reaches the runtime as a submit.
  *
  * `Root` nests INSIDE `ComposerTriggers` the way Composer.tsx nests it: the
@@ -112,7 +112,7 @@ function ButtonHarness({ onNew }: { onNew: () => Promise<void> }) {
         <ComposerTriggers textareaRef={textareaRef}>
           <ComposerPrimitive.Root>
             <ComposerPrimitive.Input ref={textareaRef} data-testid="composer-input" />
-            <ComposerAddMention textareaRef={textareaRef} />
+            <ComposerAddMenu textareaRef={textareaRef} />
           </ComposerPrimitive.Root>
         </ComposerTriggers>
       </AssistantRuntimeProvider>
@@ -329,7 +329,13 @@ describe('ComposerTriggers — session mention rows', () => {
 // the "typing still works" guard for this fix.
 // ---------------------------------------------------------------------------
 
-describe('ComposerAddMention — click opens the picker without submitting (todo #316)', () => {
+/** Opens the `+` menu and picks "Mention a file or agent". */
+async function pickMention() {
+  fireEvent.pointerDown(screen.getByTestId('composer-add-menu'), { button: 0 });
+  fireEvent.click(await screen.findByTestId('composer-add-mention'));
+}
+
+describe('ComposerAddMenu — mention item opens the picker without submitting (todo #316)', () => {
   beforeEach(() => {
     __skills = [];
     getFileTreeMock.mockReset().mockResolvedValue([]);
@@ -343,7 +349,7 @@ describe('ComposerAddMention — click opens the picker without submitting (todo
     const onNew = vi.fn(async () => {});
     render(<ButtonHarness onNew={onNew} />);
 
-    fireEvent.click(screen.getByTestId('composer-add-mention'));
+    await pickMention();
 
     expect(await screen.findByTestId('composer-trigger-popover')).toBeInTheDocument();
     expect(await screen.findByTestId('composer-mention-session-chat-2')).toBeInTheDocument();
@@ -361,7 +367,7 @@ describe('ComposerAddMention — click opens the picker without submitting (todo
     const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
     typeInto(input, 'hello');
 
-    fireEvent.click(screen.getByTestId('composer-add-mention'));
+    await pickMention();
 
     await waitFor(() => expect(input.value).toBe('hello @'));
     expect(screen.getByTestId('composer-trigger-popover')).toBeInTheDocument();
@@ -374,7 +380,7 @@ describe('ComposerAddMention — click opens the picker without submitting (todo
     render(<ButtonHarness onNew={onNew} />);
     const input = screen.getByTestId('composer-input') as HTMLTextAreaElement;
 
-    fireEvent.click(screen.getByTestId('composer-add-mention'));
+    await pickMention();
     await screen.findByTestId('composer-trigger-popover');
 
     fireEvent.keyDown(input, { key: 'Escape' });

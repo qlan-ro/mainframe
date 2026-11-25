@@ -25,7 +25,6 @@ function renderPicker(models: AdapterModel[], savedId = 'opus') {
   const actions = {
     setAdapter: vi.fn(),
     setModel: vi.fn(),
-    setModelTuning: vi.fn(),
     setEffort: vi.fn(),
     setFeature: vi.fn(),
   };
@@ -47,22 +46,26 @@ function renderPicker(models: AdapterModel[], savedId = 'opus') {
 
 it('shows one readable native-1M choice and tunes the saved bare alias', async () => {
   const actions = renderPicker([large, base]);
-  expect(screen.getByTestId('composer-model-select')).toHaveTextContent('Opus 5.5 · 1M · Low');
+  expect(screen.getByTestId('composer-model-select')).toHaveAttribute(
+    'aria-label',
+    'Provider and model: Opus 5.5 · 1M Low',
+  );
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   await user.click(screen.getByTestId('composer-model-select'));
   expect(screen.queryByTestId('composer-model-select-option-opus[1m]')).not.toBeInTheDocument();
-  await user.hover(screen.getByTestId('composer-model-select-option-opus'));
   await screen.findByTestId('composer-model-opus-tuning');
   fireEvent.click(screen.getByTestId('composer-model-opus-effort-high'));
   expect(actions.setEffort).toHaveBeenCalledExactlyOnceWith('high');
   expect(actions.setModel).not.toHaveBeenCalled();
-  expect(actions.setModelTuning).not.toHaveBeenCalled();
   expect(actions.chat.model).toBe('opus');
 });
 
 it('keeps distinct reported context windows selectable by their exact IDs', async () => {
   const actions = renderPicker([large, { ...base, contextWindow: 250_000 }]);
-  expect(screen.getByTestId('composer-model-select')).toHaveTextContent('Opus 5.5 · 250K · Low');
+  expect(screen.getByTestId('composer-model-select')).toHaveAttribute(
+    'aria-label',
+    'Provider and model: Opus 5.5 · 250K Low',
+  );
   await userEvent.click(screen.getByTestId('composer-model-select'));
   expect(screen.getByTestId('composer-model-select-option-opus')).toHaveTextContent('Opus 5.5 · 250K');
   expect(screen.getByTestId('composer-model-select-option-opus[1m]')).toHaveTextContent('Opus 5.5 · 1M');

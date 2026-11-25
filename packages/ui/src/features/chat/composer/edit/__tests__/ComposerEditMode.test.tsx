@@ -17,6 +17,10 @@ vi.mock('../../config-toolbar/ComposerToolbar', () => ({
   ComposerToolbar: () => null,
 }));
 
+vi.mock('../../send/SendControls', () => ({
+  StopControl: () => <button data-testid="chat-composer-cancel" />,
+}));
+
 import { ComposerEditMode } from '../ComposerEditMode';
 import type { QueuedEdit } from '../composer-edit-context';
 
@@ -39,5 +43,23 @@ describe('ComposerEditMode — amber edit-ring glow', () => {
     const card = screen.getByTestId('chat-composer-edit');
     expect(card.className).toContain('shadow-[var(--mf-shadow-edit-ring)]');
     expect(card.className).not.toContain('shadow-sm');
+  });
+});
+
+describe('ComposerEditMode — what it edits', () => {
+  it('keeps Stop on screen: the turn runs on while a queued message is edited', () => {
+    render(<ComposerEditMode edit={EDIT} onDone={vi.fn()} />);
+    expect(screen.getByTestId('chat-composer-cancel')).toBeInTheDocument();
+  });
+
+  it('says a queued message stays queued', () => {
+    render(<ComposerEditMode edit={EDIT} onDone={vi.fn()} />);
+    expect(screen.getByTestId('chat-composer-edit')).toHaveTextContent('stays queued until the run finishes');
+  });
+
+  it('does not say that of a message a Stop held back', () => {
+    render(<ComposerEditMode edit={{ ...EDIT, save: vi.fn() }} onDone={vi.fn()} />);
+    expect(screen.getByTestId('chat-composer-edit')).toHaveTextContent('not sent until you send it');
+    expect(screen.getByTestId('chat-composer-edit')).not.toHaveTextContent('stays queued');
   });
 });

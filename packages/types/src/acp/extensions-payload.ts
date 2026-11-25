@@ -46,6 +46,7 @@ export type RetryMarker = z.infer<typeof RetryMarkerSchema>;
 export const QueuedPromptStateSchema = z
   .object({
     position: z.number().int(),
+    messageId: z.string().optional(),
   })
   .loose();
 export type QueuedPromptState = z.infer<typeof QueuedPromptStateSchema>;
@@ -65,6 +66,8 @@ export const PromptFailureSchema = z
   .object({
     reason: z.string(),
     remedy: PromptRemedySchema.optional().catch(undefined),
+    /** The agent certainly did not get the prompt. Absent, it may have. */
+    neverDelivered: z.boolean().optional().catch(undefined),
   })
   .loose();
 export type PromptFailure = z.infer<typeof PromptFailureSchema>;
@@ -175,6 +178,8 @@ export const PromptSendMetaSchema = z
   .object({
     attachmentIds: z.array(z.string()).optional(),
     command: z.object({ name: z.string(), source: z.string(), args: z.string().optional() }).loose().optional(),
+    /** Fold the prompt into the running turn; the daemon queues it when it can't. */
+    steer: z.boolean().optional(),
   })
   .loose();
 export type PromptSendMeta = z.infer<typeof PromptSendMetaSchema>;

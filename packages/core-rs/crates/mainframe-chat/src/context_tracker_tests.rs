@@ -53,9 +53,9 @@ impl mainframe_adapter_api::Adapter for CtxAdapter {
     fn capabilities(&self) -> mainframe_types::adapter::AdapterCapabilities {
         mainframe_types::adapter::AdapterCapabilities {
             plan_mode: false,
-            auto_mode: false,
             no_persistence: false,
             fork: false,
+            ..mainframe_types::adapter::AdapterCapabilities::default()
         }
     }
     fn is_installed(

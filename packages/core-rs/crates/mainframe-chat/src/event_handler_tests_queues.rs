@@ -17,6 +17,7 @@ fn moves_the_acked_message_to_the_end_strips_metadata_and_deletes_the_ref() {
         content: "q".to_string(),
         attachment_ids: None,
         timestamp: String::new(),
+        steered: None,
     }];
     let h = Harness::with_queue(cell(ProcessState::Working, None), refs, messages.clone());
     let surface = Arc::new(QueueSurface::default());

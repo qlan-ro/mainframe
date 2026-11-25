@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { expect, it, onTestFinished, vi } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { buildChatExtras } from '../../../runtime/chat-extras';
 import { createChatThreadState } from '../../../controller/chat-thread-state';
@@ -7,6 +7,7 @@ import type { AcpChatController } from '../../../controller/acp-chat-controller'
 import { RootTranscriptScope } from '../transcript-scope';
 import { AssistantMessage } from '../../AssistantMessage';
 import { ChatGateMount } from '../../../gates/ChatGateMount';
+import { installGateLayout } from '../../../gates/__tests__/gate-layout';
 import { CompactFixture, fixtureMessage, fixtureTool } from './fixtures';
 
 vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
@@ -37,6 +38,8 @@ const entry = {
 it.each(['allow-once', 'reject-once'])(
   'retains usable %s permission controls while switching modes and expanding',
   async (optionId) => {
+    installGateLayout();
+    onTestFinished(() => void vi.restoreAllMocks());
     const reply = vi.fn().mockResolvedValue(undefined);
     const state = createChatThreadState('permission-chat');
     const extras = buildChatExtras({ replyToPermission: reply } as unknown as AcpChatController, 31415, {
@@ -71,6 +74,8 @@ it.each(['allow-once', 'reject-once'])(
     act(() => useUiPrefs.getState().setTranscriptMode('verbose'));
     expect(screen.getByTestId('chat-thread-gate-slot')).toBeInTheDocument();
     act(() => useUiPrefs.getState().setTranscriptMode('compact'));
+    // A new gate takes no input for its first half second.
+    await waitFor(() => expect(screen.getByTestId('chat-gate-guard')).toHaveAttribute('data-armed'));
     fireEvent.click(screen.getByRole('button', { name: optionId === 'allow-once' ? 'Allow once' : 'Reject' }));
     expect(reply).toHaveBeenCalledWith(expect.objectContaining({ requestId: 'request' }), optionId);
   },

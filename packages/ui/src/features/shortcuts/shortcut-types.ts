@@ -45,6 +45,9 @@ export interface ShortcutDescriptor {
    *  action — a chord held past the OS key-repeat delay is one trigger, not
    *  many (todo #365). Other entries repeat as they do today. */
   ignoreRepeat?: boolean;
+  /** Handled by the surface that owns the focused field: listed in the cheat
+   *  sheet, never dispatched globally and not rebindable. */
+  fixed?: boolean;
 }
 
 /** `chordIndex` is the position of the matched chord in a multi-chord entry (D3). */

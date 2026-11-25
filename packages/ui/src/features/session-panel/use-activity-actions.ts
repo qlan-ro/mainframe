@@ -29,7 +29,8 @@ export interface ActivityActions {
   stopping: boolean;
 }
 
-function stopRequest(row: ActivityEntry, chatId: string, adapterId: string | undefined) {
+/** Undefined when this work can't be stopped on its own. */
+export function stopRequest(row: ActivityEntry, chatId: string, adapterId: string | undefined) {
   if (!isOngoing(row.state)) return undefined;
   const { task, delegated } = row;
   // A resumed child is a chat of its own again; its finished task can't be cancelled.

@@ -61,10 +61,6 @@ vi.mock('../../controller/transcript-projector', () => ({
   },
 }));
 
-vi.mock('../../gates/select-front', () => ({
-  selectPermissionFront: () => undefined,
-}));
-
 import { createForLocal } from '../../../sessions/runtime/new-thread-coordinator';
 import { useChatThreadRuntime as _useChatThreadRuntime } from '../use-chat-thread-runtime';
 import { createChatThreadState } from '../../controller/chat-thread-state';

@@ -53,6 +53,30 @@ async fn steer_folds_into_a_working_turn_and_refuses_an_idle_one() {
     assert!(idle.steer_calls.lock().unwrap().is_empty());
 }
 
+/// Maintenance (idle compaction) owns the chat's input: a message has to wait
+/// behind it, so a steer must not slip past.
+#[tokio::test]
+async fn steer_waits_its_turn_while_maintenance_owns_the_input() {
+    let mgr = ChatManager::new(FakeDeps::arc());
+    let session = RecSession::new("c1", true, true);
+    seed_active(
+        &mgr,
+        "c1",
+        working_chat("c1", Some("t"), true),
+        session.clone(),
+    );
+    mgr.shared
+        .maintenance
+        .reserved
+        .lock()
+        .unwrap()
+        .insert("c1".into());
+
+    let err = mgr.steer_message("c1", "x").await.unwrap_err();
+    assert!(err.never_delivered(), "the caller may queue it instead");
+    assert!(session.steer_calls.lock().unwrap().is_empty());
+}
+
 /// A steer that races the turn's own end (Codex rejects `turn/steer` once the
 /// `expectedTurnId` it names has ended, `turn_steer.rs`) must not leave the
 /// chat falsely marked Working: nothing else will ever flip it back, since
@@ -124,6 +148,7 @@ async fn a_queued_steer_records_a_ref_instead_of_restarting_the_turn() {
         1,
         "a steer the adapter also replay-acks must record a queued ref"
     );
+    assert_eq!(mgr.get_queued_for_chat("c1")[0].steered, Some(true));
     assert!(
         mgr.get_messages("c1").await.iter().any(|m| {
             m.content.iter().any(|c| {
@@ -168,10 +193,12 @@ async fn cancel_success_removes_the_bubble_and_emits_cancelled() {
         .await
         .unwrap();
     let r = mgr.get_queued_for_chat("c1")[0].clone();
-    mgr.cancel_queued_message("c1", &r.message_id)
+    let won = mgr
+        .cancel_queued_message("c1", &r.message_id)
         .await
         .unwrap();
 
+    assert!(won, "the cancel took the message back");
     assert_eq!(
         session.cancel_calls.lock().unwrap().as_slice(),
         std::slice::from_ref(&r.uuid)
@@ -190,10 +217,12 @@ async fn cancel_lost_race_emits_nothing_and_keeps_the_ref() {
     let r = mgr.get_queued_for_chat("c1")[0].clone();
     deps.emitter.events.lock().unwrap().clear();
 
-    mgr.cancel_queued_message("c1", &r.message_id)
+    let won = mgr
+        .cancel_queued_message("c1", &r.message_id)
         .await
         .unwrap();
 
+    assert!(!won, "the agent already had it");
     assert_eq!(mgr.get_queued_for_chat("c1").len(), 1);
     assert_eq!(deps.events().len(), 0);
 }

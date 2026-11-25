@@ -70,7 +70,9 @@ function reduceInteraction(state: ChatThreadState, event: InteractionEvent): Cha
       const entry = {
         requestId: event.requestId,
         request: event.request,
-        askedAt: Date.now(),
+        // A reconnect delivers every open request again: keep the first time it was
+        // seen, or the queue would reorder under the pointer.
+        askedAt: state.interactions.permissions[event.requestId]?.askedAt ?? Date.now(),
         options: event.options,
         synthesizedRequest: event.synthesizedRequest,
       };

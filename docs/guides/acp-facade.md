@@ -76,6 +76,8 @@ The daemon joins the text blocks with newlines. Image blocks in `prompt` are not
 
 `command` records a slash-command invocation. `name` must match `^[a-zA-Z0-9_-]+$` and `source` must be non-empty; `GET /api/commands` lists the built-ins.
 
+`"steer": true` asks the daemon to fold the prompt into the running turn instead of queueing it. Only plain text can be steered: a prompt with `attachmentIds` or `command` ignores it. When the turn certainly cannot take the prompt (no turn is running, the adapter has no steer, the provider refused it, or maintenance owns the chat's input), the daemon sends it the ordinary way, so it queues or starts a turn. When the daemon cannot tell whether the agent received it, the request fails instead, so the prompt is never delivered twice; tell the user to check before sending again. `AdapterInfo.capabilities.steer` (REST) says whether an adapter can be steered.
+
 The reply means the prompt was accepted, not that the turn finished. If a turn is already running, the prompt is queued and the reply says where:
 
 ```json
@@ -180,13 +182,13 @@ Updates keep streaming while the gate is open. Answer with a JSON-RPC response u
 
 Rules that matter:
 
-- Render the options the daemon offers and send back one of their ids. Do not infer what an option does from its `kind` or `name`; the adapter owns the effect. `allow-always` is only offered when the adapter has something durable to save, which for Claude means a non-empty `suggestions` list as in the example above.
+- Render the options the daemon offers and send back one of their ids. Do not infer what an option does from its `kind` or `name`; the adapter owns the effect. `allow-always` is only offered when the adapter has something durable to save, which for Claude means at least one entry of `suggestions` that an answer may save (see below), as in the example above. The list can hold shapes you do not know; skip them.
 - A plain answer with an `optionId` the daemon did not offer is logged and ignored. The gate stays open and you receive nothing back, so validate against the offered list before sending.
 - An error response (`"error": {...}`) under the gate id denies the request.
 - `{ "outcome": { "outcome": "cancelled" } }` only withdraws the gate from your connection. It does not resolve it for the agent; send `session/cancel` for that.
 - Unknown `kind` values may appear from a newer daemon. Render them neutrally and treat them as deny, never as approval.
 
-A Mainframe-aware client can attach a rich answer under `_meta["_mainframe.dev"].controlResponse`: the full `ControlResponse` (behavior, `updatedInput`, `updatedPermissions`, `executionMode`, `clearContext`). It must repeat the request's `requestId` and `toolUseId` or it is ignored in favor of the plain `optionId`. This is how the desktop app edits a command before allowing it, or answers plan-approval and question gates that have no clickable option.
+A Mainframe-aware client can attach a rich answer under `_meta["_mainframe.dev"].controlResponse`: the full `ControlResponse` (behavior, `updatedInput`, `updatedPermissions`, `executionMode`, `clearContext`). It must repeat the request's `requestId` and `toolUseId` or it is ignored in favor of the plain `optionId`. This is how the desktop app edits a command before allowing it, or answers plan-approval and question gates that have no clickable option. From `updatedPermissions` the daemon takes out a `setMode` wider than `acceptEdits` and any update it cannot read, whichever client sent it, and adds a line to the session saying what was not saved.
 
 Gates are shared. Every connection observing the session receives the same request under the same id; the first answer wins. When a gate resolves elsewhere (another client, or the CLI itself), everyone still holding it gets:
 
@@ -208,7 +210,7 @@ Prompts accepted mid-turn wait in a queue the daemon owns. Queued prompts are no
       "content": "Continue with the fix", "timestamp": "2026-07-08T10:15:30.000Z" } ] } }
 ```
 
-Replace your local queue with `refs` each time. Editing or cancelling a queued prompt is REST: `PATCH` or `DELETE /api/chats/{id}/queue/{messageId}`.
+Replace your local queue with `refs` each time. A ref with `"steered": true` is a steered prompt the agent has not picked up yet: it belongs to the conversation, not to the queue, and its item carries `messageMeta.steered` once it does. That mark is live only; history rebuilt from the provider's transcript does not have it. Editing or cancelling a queued prompt is REST: `PATCH` or `DELETE /api/chats/{id}/queue/{messageId}`.
 
 ## Stay in sync
 

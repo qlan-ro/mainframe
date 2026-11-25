@@ -203,9 +203,9 @@ impl Adapter for MockCliAdapter {
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {
             plan_mode: true,
-            auto_mode: false,
             no_persistence: self.no_persistence,
             fork: self.fork_capable,
+            ..AdapterCapabilities::default()
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {

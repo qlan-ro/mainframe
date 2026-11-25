@@ -1,0 +1,7 @@
+{"dir":"in","method":"sendMessage","args":["(the daemon sends the delegated task prompt here)"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-delegate-gate-child-2"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Reading the diff..."}],null],"delayMs":40}
+{"dir":"out","method":"onPermission","args":[{"requestId":"e2e-delegate-gate-req-2","toolName":"Bash","toolUseId":"toolu_gate_bash_2","input":{"command":"git diff main...HEAD","description":"Read the diff"},"suggestions":[]}],"delayMs":2120}
+{"dir":"in","method":"respondToPermission","args":[{"requestId":"e2e-delegate-gate-req-2","behavior":"allow"}],"delayMs":2140}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"No races found."}],null],"delayMs":2160}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.002,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":2200}

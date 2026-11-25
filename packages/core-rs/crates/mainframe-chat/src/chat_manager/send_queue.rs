@@ -29,6 +29,7 @@ impl ChatManager {
         post: &Arc<Mutex<ActiveChat>>,
         session: &Arc<dyn AdapterSession>,
         attachment_previews: &[serde_json::Value],
+        delivery: &Delivery<'_>,
     ) -> (HashMap<String, serde_json::Value>, String, bool) {
         let adapter_acks_replay = session.supports_replay_ack();
         let is_queued = adapter_acks_replay
@@ -39,6 +40,9 @@ impl ChatManager {
                 "attachments".to_string(),
                 serde_json::Value::Array(attachment_previews.to_vec()),
             );
+        }
+        if matches!(delivery, Delivery::Steer) {
+            transient_metadata.insert("steered".to_string(), serde_json::json!(true));
         }
         let message_uuid = nanoid::nanoid!();
         if is_queued {
@@ -64,6 +68,11 @@ impl ChatManager {
             content: content.to_string(),
             attachment_ids: attachment_ids.filter(|a| !a.is_empty()).map(|a| a.to_vec()),
             timestamp: message.timestamp.clone(),
+            steered: message
+                .metadata
+                .as_ref()
+                .is_some_and(|md| md.contains_key("steered"))
+                .then_some(true),
         };
         self.shared.queued_refs.lock_recover().push(r);
         self.notify_queue_changed(chat_id);

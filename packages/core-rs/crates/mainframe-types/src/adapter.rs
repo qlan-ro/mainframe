@@ -5,7 +5,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::chat::ResolvedTuning;
-use crate::settings::{ExecutionMode, PermissionMode};
+use crate::settings::ExecutionMode;
+
+mod control_update;
+
+pub use control_update::{ControlDestination, ControlRule, ControlUpdate, RuleBehavior};
 
 /// Token usage sub-object. Fields are snake_case on the wire (they mirror the
 /// CLI's own usage payload) — no camelCase rename.
@@ -164,70 +168,6 @@ pub enum ControlBehavior {
     Deny,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ControlDestination {
-    UserSettings,
-    ProjectSettings,
-    LocalSettings,
-    Session,
-    CliArg,
-}
-
-/// Behavior selector on rule-mutating `ControlUpdate` variants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuleBehavior {
-    Allow,
-    Deny,
-    Ask,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ControlRule {
-    pub tool_name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rule_content: Option<String>,
-}
-
-/// A control rule update to save for future tool uses.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum ControlUpdate {
-    AddRules {
-        rules: Vec<ControlRule>,
-        behavior: RuleBehavior,
-        destination: ControlDestination,
-    },
-    ReplaceRules {
-        rules: Vec<ControlRule>,
-        behavior: RuleBehavior,
-        destination: ControlDestination,
-    },
-    RemoveRules {
-        rules: Vec<ControlRule>,
-        behavior: RuleBehavior,
-        destination: ControlDestination,
-    },
-    SetMode {
-        mode: PermissionMode,
-        destination: ControlDestination,
-    },
-    AddDirectories {
-        directories: Vec<String>,
-        destination: ControlDestination,
-    },
-    RemoveDirectories {
-        directories: Vec<String>,
-        destination: ControlDestination,
-    },
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlRequest {
@@ -356,23 +296,23 @@ pub enum CatalogSource {
     Fallback,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AdapterCapabilities {
     pub plan_mode: bool,
     /// Whether this adapter supports the CLI's native `auto` permission mode.
     pub auto_mode: bool,
-    /// The adapter's CLI has a native mechanism to run a session without writing
-    /// a vendor transcript (Claude `--no-session-persistence`, Codex
-    /// `thread/start.ephemeral`), verified interactively.
-    /// `#[serde(default)]` so a payload recorded before this field existed still
-    /// deserializes, defaulting to false (no mechanism).
+    /// Can run a session without writing a vendor transcript (Claude
+    /// `--no-session-persistence`, Codex `thread/start.ephemeral`).
     #[serde(default)]
     pub no_persistence: bool,
     /// Whether this adapter can branch a chat's conversation into a new chat.
     /// Absent on the wire (older daemon) deserializes to `false`.
     #[serde(default)]
     pub fork: bool,
+    /// Can fold a message into a running turn (`AdapterSession::steer`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub steer: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

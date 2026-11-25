@@ -1,5 +1,6 @@
 import { useSettingsStore } from '../../store/settings';
 import { GeneralPane } from './panes/general/GeneralPane';
+import { ChatPane } from './panes/chat/ChatPane';
 import { NotificationsPane } from './panes/notifications/NotificationsPane';
 import { AboutPane } from './panes/about/AboutPane';
 import { ProvidersPane } from './panes/providers/ProvidersPane';
@@ -12,6 +13,8 @@ export function SettingsContent({ port }: { port: number }) {
   switch (activeTab) {
     case 'general':
       return <GeneralPane port={port} />;
+    case 'chat':
+      return <ChatPane />;
     case 'providers':
       return <ProvidersPane port={port} />;
     case 'keybindings':

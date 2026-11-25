@@ -15,7 +15,6 @@ beforeEach(() => {
     sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
     sidebarView: 'chats',
     dontWarnOnTuningChange: false,
-    dontConfirmProviderSwitch: false,
     sessionPanelOpen: true,
     sessionPanelSections: {},
     dialogSizes: {},
@@ -180,9 +179,10 @@ describe('useUiPrefs persistence', () => {
     expect(parsed.state.sidebarWidth).toBe(300);
     expect(Object.keys(parsed.state).sort()).toEqual(
       [
+        'activityStripCollapsed',
         'dialogSizes',
-        'dontConfirmProviderSwitch',
         'dontWarnOnTuningChange',
+        'enterWhileRunning',
         'sessionPanelHiddenSections',
         'sessionPanelOpen',
         'sessionPanelSections',

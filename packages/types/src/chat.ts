@@ -243,4 +243,6 @@ export interface QueuedMessageRef {
   content: string;
   attachmentIds?: string[];
   timestamp: string;
+  /** Folded into the running turn instead of waiting for it to end. */
+  steered?: boolean;
 }

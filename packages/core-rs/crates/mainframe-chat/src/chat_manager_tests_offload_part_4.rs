@@ -113,6 +113,7 @@ async fn a_queued_message_blocks_offload_of_an_unspawned_backdated_cell() {
             content: "queued".to_string(),
             attachment_ids: None,
             timestamp: String::new(),
+            steered: None,
         });
 
     mgr.scan_idle_sessions().await;

@@ -46,7 +46,11 @@ vi.mock('@assistant-ui/react', () => {
 vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="chat-composer" /> }));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
-vi.mock('@/features/session-panel/SessionStrip', () => ({ SessionStrip: () => null }));
+vi.mock('../../composer/strips/BottomStrip', () => ({
+  BottomStrip: ({ fixed }: { fixed?: boolean }) => (
+    <div data-testid="bottom-strip" data-fixed={String(fixed === true)} />
+  ),
+}));
 vi.mock('../../orchestration/AgentOutboxChip', () => ({ AgentOutboxChip: () => null }));
 vi.mock('../ChatSelectionToolbar', () => ({ ChatSelectionToolbar: () => null }));
 vi.mock('../../composer/edit/composer-edit-context', () => ({
@@ -98,6 +102,15 @@ describe('ChatThread — degraded card footer placement', () => {
     render(<ChatThread />);
 
     expect(screen.queryAllByTestId('chat-composer')).toHaveLength(0);
+  });
+
+  it('keeps the branch and changes strip there, with where it runs fixed', () => {
+    testState.extrasState.chatConfig = chat({ directoryMissing: true, missingDirectoryPath: '/gone/proj' });
+
+    render(<ChatThread />);
+
+    expect(screen.getAllByTestId('bottom-strip')).toHaveLength(1);
+    expect(screen.getByTestId('bottom-strip')).toHaveAttribute('data-fixed', 'true');
   });
 
   it('keeps the composer for transcript-only degradation and places the card in the footer', () => {

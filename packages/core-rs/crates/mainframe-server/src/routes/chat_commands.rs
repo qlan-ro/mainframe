@@ -201,7 +201,7 @@ async fn queue_cancel(
     }
     let cm = &ctx.chat.chat_manager;
     match cm.cancel_queued_message(&id, &message_id).await {
-        Ok(()) => ok_empty(),
+        Ok(cancelled) => ok(serde_json::json!({ "cancelled": cancelled })),
         Err(err) => crate::respond::fail_internal(
             format!("queue.cancel failed chat_id={}", id),
             &err,

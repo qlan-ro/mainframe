@@ -27,9 +27,9 @@ fn codex(installed: bool) -> AdapterInfo {
         catalog_source: None,
         capabilities: AdapterCapabilities {
             plan_mode: true,
-            auto_mode: false,
             no_persistence: true,
             fork: true,
+            ..AdapterCapabilities::default()
         },
         fork_unavailable_reason: None,
     }

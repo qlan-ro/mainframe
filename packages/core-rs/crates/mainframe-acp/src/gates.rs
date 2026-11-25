@@ -20,7 +20,9 @@ use mainframe_types::acp::permission::{
     RequestPermissionResponse, RequestPermissionSubject, ToolCallPermissionSubject,
 };
 use mainframe_types::acp::tool_call::ToolCallUpdate;
-use mainframe_types::adapter::{ControlBehavior, ControlRequest, ControlResponse, PermissionScope};
+use mainframe_types::adapter::{
+    ControlBehavior, ControlRequest, ControlResponse, ControlUpdate, PermissionScope,
+};
 
 pub const OPTION_ALLOW_ONCE: &str = "allow-once";
 pub const OPTION_ALLOW_ALWAYS: &str = "allow-always";
@@ -57,9 +59,8 @@ fn reject_option() -> PermissionOption {
 }
 
 /// Claude offers allow-once and reject-once always, plus allow-always only when
-/// the CLI sent rule suggestions to save it against (non-empty
-/// `request.suggestions`) — there is nothing to make "always" durable
-/// otherwise.
+/// the CLI sent a suggestion that may be saved (`ControlUpdate::grantable`) —
+/// there is nothing to make "always" durable otherwise.
 fn claude_default_options(request: &ControlRequest) -> Vec<PermissionOption> {
     let mut options = vec![PermissionOption {
         option_id: OPTION_ALLOW_ONCE.into(),
@@ -67,7 +68,7 @@ fn claude_default_options(request: &ControlRequest) -> Vec<PermissionOption> {
         kind: PermissionOptionKind::AllowOnce,
         meta: None,
     }];
-    if !request.suggestions.is_empty() {
+    if request.suggestions.iter().any(ControlUpdate::grantable) {
         options.push(PermissionOption {
             option_id: OPTION_ALLOW_ALWAYS.into(),
             name: "Always allow".into(),
@@ -232,7 +233,9 @@ pub fn parse_answer(
 /// A rich answer is validated against the request it claims to resolve — a
 /// mismatched `requestId`/`toolUseId` is dropped in favor of the plain
 /// `optionId` mapping rather than trusted as-is, so a stale or forged rich
-/// answer can't resolve a different pending gate.
+/// answer can't resolve a different pending gate. What it asks to save is not
+/// judged here: the chat layer takes out what no answer may save, for every way
+/// an answer can arrive, and says so (`ControlResponse::withhold_ungrantable`).
 fn rich_answer(
     request: &ControlRequest,
     response: &RequestPermissionResponse,

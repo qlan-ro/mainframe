@@ -117,11 +117,31 @@ describe('PlanGate', () => {
 
   // --- Behavior 3: select yolo then approve ---
 
-  it('selecting yolo exec-mode then approving calls reply with executionMode yolo', () => {
-    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+  it('approving into Unattended asks first, and a refusal approves nothing (C13)', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} chatId="plan-ask" />);
+    fireEvent.click(screen.getByTestId('chat-plan-execmode-yolo'));
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    expect(reply).not.toHaveBeenCalled();
+    expect(screen.getByTestId('composer-unattended-confirm')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('composer-unattended-confirm-cancel'));
+    expect(reply).not.toHaveBeenCalled();
+  });
+
+  it('asks once per session: a chat already running unattended is not asked again', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} chatId="plan-yolo" composerMode="yolo" />);
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    expect(screen.queryByTestId('composer-unattended-confirm')).toBeNull();
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ executionMode: 'yolo' }));
+  });
+
+  it('selecting yolo exec-mode, approving and confirming calls reply with executionMode yolo', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} chatId="plan-confirm" />);
 
     fireEvent.click(screen.getByTestId('chat-plan-execmode-yolo'));
     fireEvent.click(screen.getByTestId('chat-plan-approve'));
+    fireEvent.click(screen.getByTestId('composer-unattended-confirm-confirm'));
 
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply).toHaveBeenCalledWith({
@@ -268,5 +288,73 @@ describe('PlanGate', () => {
 
     // reply must NOT have been called.
     expect(reply).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlanGate — preselects the composer mode (G3)', () => {
+  const reply = vi.fn<ReplyFn>();
+  const pressed = (mode: string) => screen.getByTestId(`chat-plan-execmode-${mode}`).getAttribute('aria-pressed');
+
+  it('preselects Auto-Edits when the composer says "then Auto-Edits"', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} composerMode="acceptEdits" />);
+
+    expect(pressed('acceptEdits')).toBe('true');
+    expect(pressed('default')).toBe('false');
+  });
+
+  it('preselects Auto only when the adapter allows it', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} composerMode="auto" autoAllowed />);
+
+    expect(pressed('auto')).toBe('true');
+  });
+
+  it('falls back to Interactive when the composer is on Auto but the adapter does not offer it', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} composerMode="auto" autoAllowed={false} />);
+
+    expect(screen.queryByTestId('chat-plan-execmode-auto')).toBeNull();
+    expect(pressed('default')).toBe('true');
+  });
+
+  it('defaults to Interactive with no composer mode', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} />);
+
+    expect(pressed('default')).toBe('true');
+  });
+
+  it('approves into the preselected mode', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} composerMode="yolo" />);
+
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ executionMode: 'yolo' }));
+  });
+
+  it('eyebrow names what a delegated task is working on, so two askers read apart', () => {
+    wrap(
+      <PlanGate
+        entry={makeEntry()}
+        reply={reply}
+        context={{ asker: 'Codex task', title: 'Fix the login flow', more: 0 }}
+      />,
+    );
+
+    expect(screen.getByText('Plan · Codex task · Fix the login flow')).toBeInTheDocument();
+    expect(screen.getByText('Ready to implement')).toBeInTheDocument();
+  });
+
+  it('refusing Unattended puts focus back on Approve', async () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} chatId="focus-chat" />);
+    fireEvent.click(screen.getByTestId('chat-plan-execmode-yolo'));
+    fireEvent.click(screen.getByTestId('chat-plan-approve'));
+
+    fireEvent.click(screen.getByTestId('composer-unattended-confirm-cancel'));
+
+    await vi.waitFor(() => expect(screen.getByTestId('chat-plan-approve')).toHaveFocus());
+  });
+
+  it('eyebrow names the asker and how many more wait', () => {
+    wrap(<PlanGate entry={makeEntry()} reply={reply} context={{ asker: 'planner', more: 1 }} />);
+
+    expect(screen.getByText('Plan · planner · 1 more waiting')).toBeInTheDocument();
   });
 });
