@@ -34,7 +34,7 @@ import { useDeclareConversation } from './mounted-conversations';
 import { useConversationThread } from './use-conversation-thread';
 import { OwnFiles } from './OwnFiles';
 
-/** How long a chat may take to reach the session list (a new fork's reload) before its tab calls it gone. */
+/** How long a chat may take to reach a loaded session list (a new fork's reload) before its tab calls it gone. */
 const LISTING_GRACE_MS = 5_000;
 
 const GLYPH: Record<Exclude<ChatTabRole, 'side'>, React.ReactNode> = {
@@ -49,34 +49,53 @@ export interface ChatTabBodyProps {
   active: boolean;
 }
 
-/** Whether the list on screen is the daemon's answer, rather than one still loading or out of reach. */
-function useListSettled(): boolean {
-  const isLoading = useAuiState((s) => s.threads.isLoading);
-  return useSessionListLoadState((s) => s.loaded) && !isLoading;
-}
-
-function Unlisted({ chatId }: { chatId: string }) {
-  const connected = useIsConnected();
-  const settled = useListSettled() && connected;
-  const [late, setLate] = useState(false);
-  useEffect(() => {
-    if (!settled) return undefined;
-    const timer = setTimeout(() => setLate(true), LISTING_GRACE_MS);
-    return () => {
-      clearTimeout(timer);
-      setLate(false);
-    };
-  }, [settled]);
-  const waiting = connected ? 'Opening the chat…' : 'Waiting for the connection…';
+function Notice({ chatId, text, children }: { chatId: string; text: string; children?: React.ReactNode }) {
   return (
     <div
       data-testid={`workspace-chat-unlisted-${chatId}`}
-      role="status"
-      className="grid h-full place-items-center p-4 text-center text-sm text-muted-foreground"
+      className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground"
     >
-      {late && settled ? 'This chat is no longer here.' : waiting}
+      <p role="status">{text}</p>
+      {children}
     </div>
   );
+}
+
+/** Whether the chat had its time to reach a list that was loaded. A reload on the way changes nothing. */
+function useOverdue(listed: boolean): boolean {
+  const [overdue, setOverdue] = useState(false);
+  useEffect(() => {
+    if (!listed) return undefined;
+    const timer = setTimeout(() => setOverdue(true), LISTING_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [listed]);
+  return overdue;
+}
+
+function Missing({ chatId }: { chatId: string }) {
+  const aui = useAui();
+  const { loaded, failed } = useSessionListLoadState();
+  const overdue = useOverdue(loaded && !failed);
+  if (overdue) return <Notice chatId={chatId} text="This chat is no longer here." />;
+  if (!failed) return <Notice chatId={chatId} text="Opening the chat…" />;
+  return (
+    <Notice chatId={chatId} text="The session list could not be loaded.">
+      <Button
+        data-testid={`workspace-chat-retry-${chatId}`}
+        variant="outline"
+        size="xs"
+        onClick={() => void aui.threads.reload()}
+      >
+        Try again
+      </Button>
+    </Notice>
+  );
+}
+
+/** A chat the list does not hold. The list is asked again on reconnecting, and the chat gets its time again. */
+function Unlisted({ chatId }: { chatId: string }) {
+  if (!useIsConnected()) return <Notice chatId={chatId} text="Waiting for the connection…" />;
+  return <Missing chatId={chatId} />;
 }
 
 function taskStatus(custom: SessionCustom): AgentStatus {

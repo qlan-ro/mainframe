@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { layoutPersistOptions, sanitizeRun, serializeSessions, reviveSessions } from '../layout-persist';
 import { useLayoutStore } from '../layout';
@@ -382,6 +382,80 @@ describe('conversation tabs', () => {
     await restart();
     expect(panes()).toEqual([{ tabs: ['c1'], active: 'c1' }]);
     warn.mockRestore();
+  });
+
+  it.each([
+    ['missing', null],
+    ['not JSON', '{not json'],
+    ['not an object', '"nope"'],
+    ['without a state', '{"version":2}'],
+    ['a list', '[]'],
+    ['missing this session', JSON.stringify({ state: { sessions: {} }, version: 2 })],
+    ['garbage for this session', JSON.stringify({ state: { sessions: { 'chat-1': 'x' } }, version: 2 })],
+  ])('outlive a layout that is %s, and the next write', async (_, layoutRaw) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    useLayoutStore.getState().addRunTab(fork);
+    const tabs = localStorage.getItem(TABS_KEY)!;
+    useLayoutStore.setState({ sessions: new Map(), activeSessionId: null, run: null });
+    if (layoutRaw == null) localStorage.removeItem(LAYOUT_SCOPED_KEY);
+    else localStorage.setItem(LAYOUT_SCOPED_KEY, layoutRaw);
+    localStorage.setItem(TABS_KEY, tabs);
+    await useLayoutStore.persist.rehydrate();
+
+    useLayoutStore.getState().setActiveSession('chat-2');
+    useLayoutStore.getState().addRunTab(file);
+    expect(stored(TABS_KEY)['chat-1'].panes[0].tabs).toEqual([fork]);
+
+    useLayoutStore.getState().setActiveSession('chat-1');
+    expect(panes()).toEqual([{ tabs: ['chat-f'], active: 'chat-f' }]);
+    expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
+    warn.mockRestore();
+  });
+
+  it('make no session of their own out of nothing readable', async () => {
+    localStorage.setItem(TABS_KEY, JSON.stringify({ ghost: { panes: [{ id: 'p', tabs: [] }] } }));
+    await useLayoutStore.persist.rehydrate();
+    expect(useLayoutStore.getState().sessions.has('ghost')).toBe(false);
+  });
+
+  describe('when one key is over quota', () => {
+    /** Refuses writes to one key, as a full store does. */
+    function full(key: string) {
+      const write = localStorage.setItem.bind(localStorage);
+      vi.spyOn(localStorage, 'setItem').mockImplementation((name, value) => {
+        if (name === key) throw new Error('QuotaExceededError');
+        write(name, value);
+      });
+    }
+    beforeEach(() => void vi.spyOn(console, 'warn').mockImplementation(() => undefined));
+    afterEach(() => void vi.restoreAllMocks());
+
+    it('the chat tabs are still written, and the app goes on', () => {
+      full(LAYOUT_SCOPED_KEY);
+      expect(() => useLayoutStore.getState().addRunTab(fork)).not.toThrow();
+      expect(stored(TABS_KEY)['chat-1'].panes[0].tabs).toEqual([fork]);
+    });
+
+    it('the layout is still written, and the app goes on', () => {
+      full(TABS_KEY);
+      expect(() => useLayoutStore.getState().addRunTab(file)).not.toThrow();
+      expect(stored().state.sessions['chat-1'].run.panes[0].tabs).toEqual([file]);
+    });
+  });
+
+  it.each([
+    ['hologram', 'session'],
+    [7, 'session'],
+    ['toString', 'session'],
+    ['side', 'side'],
+    [undefined, undefined],
+  ])('with the role %s read as %s', async (role, read) => {
+    useLayoutStore.getState().addRunTab(fork);
+    const tabs = stored(TABS_KEY);
+    tabs['chat-1'].panes[0].tabs[0].role = role;
+    localStorage.setItem(TABS_KEY, JSON.stringify(tabs));
+    await restart();
+    expect(useLayoutStore.getState().run!.panes[0]!.tabs[0]!.role).toBe(read);
   });
 });
 

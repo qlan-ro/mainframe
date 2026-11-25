@@ -6,7 +6,9 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 
-export type AgentStatus = 'running' | 'needs-you' | 'queued' | 'completed' | 'failed' | 'stopped' | 'cancelled';
+/** `no-result`: whether it still runs is not known, only that it has answered nothing. */
+export type AgentStatus =
+  'running' | 'needs-you' | 'queued' | 'completed' | 'failed' | 'stopped' | 'cancelled' | 'no-result';
 
 const STATUS: Record<AgentStatus, { label: string; className: string }> = {
   running: { label: 'running', className: 'text-muted-foreground' },
@@ -16,6 +18,7 @@ const STATUS: Record<AgentStatus, { label: string; className: string }> = {
   failed: { label: 'failed', className: 'text-fail' },
   stopped: { label: 'stopped', className: 'text-muted-foreground' },
   cancelled: { label: 'stopped', className: 'text-muted-foreground' },
+  'no-result': { label: 'no result', className: 'text-muted-foreground' },
 };
 
 export function AgentStatusLabel({ status, testId }: { status: AgentStatus; testId: string }) {

@@ -3,9 +3,11 @@
  * quiet controls under the composer: the branch manager on the left, the
  * working changes pushed right. It carries what the session panel's Session
  * section held (R2) and is the start of the composer's bottom strip (K6, K8).
- * Hidden before the first message.
+ * Hidden before the first message. In a workspace tab it has no changes: they open
+ * the review panel, which is the chat column's.
  */
 import { useState } from 'react';
+import { useAuiState } from '@assistant-ui/react';
 import { GitBranch, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
@@ -101,11 +103,12 @@ function ChangesControl({ port }: { port: number }) {
 export function SessionStrip() {
   const port = useDaemonPort();
   const { chatId, projectId } = useActiveIdentity();
+  const inColumn = useAuiState((s) => s.threadListItem?.id === s.threads.mainThreadId);
   if (chatId == null || projectId == null) return null;
   return (
     <div data-testid="session-strip" className="flex h-7 shrink-0 items-end gap-2 px-1.5">
       <BranchControl port={port} />
-      <ChangesControl port={port} />
+      {inColumn && <ChangesControl port={port} />}
     </div>
   );
 }

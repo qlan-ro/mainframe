@@ -53,19 +53,51 @@ it('is ready again when the work goes on in spite of it', async () => {
   expect(request).toHaveBeenCalledTimes(2);
 });
 
-it('does not let an earlier Stop end a later one', async () => {
-  let settle = () => undefined as void;
-  request.mockImplementationOnce(() => new Promise<void>((resolve) => (settle = resolve)) as Promise<undefined>);
+/** A request answered by hand. */
+function held() {
+  const answer = { settle: () => undefined as void, fail: (_error: unknown) => undefined as void };
+  request.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        answer.settle = resolve;
+        answer.fail = reject;
+      }) as Promise<undefined>,
+  );
+  return answer;
+}
+
+it('is ready again when the request never answers', async () => {
+  held();
   const hook = mount();
   await press(hook);
-  hook.rerender({ ask: undefined as Request });
-  hook.rerender({ ask: request });
-  await act(async () => settle());
-  act(() => vi.advanceTimersByTime(5_000));
-  await press(hook);
-  act(() => vi.advanceTimersByTime(6_000));
+  act(() => vi.advanceTimersByTime(9_999));
   expect(hook.result.current.stopping).toBe(true);
+  act(() => vi.advanceTimersByTime(1));
+  expect(hook.result.current.stopping).toBe(false);
+  await press(hook);
+  expect(request).toHaveBeenCalledTimes(2);
 });
+
+it.each(['succeeds', 'fails', 'never answers'] as const)(
+  'does not let an earlier Stop that %s end a later one',
+  async (outcome) => {
+    const answer = held();
+    const hook = mount();
+    await press(hook);
+    hook.rerender({ ask: undefined as Request });
+    hook.rerender({ ask: request });
+    act(() => vi.advanceTimersByTime(5_000));
+    await press(hook);
+    if (outcome === 'succeeds') await act(async () => answer.settle());
+    if (outcome === 'fails') await act(async () => answer.fail(new Error('task is gone')));
+    act(() => vi.advanceTimersByTime(6_000));
+    expect(hook.result.current.stopping).toBe(true);
+    await press(hook);
+    expect(request).toHaveBeenCalledTimes(2);
+    act(() => vi.advanceTimersByTime(4_000));
+    expect(hook.result.current.stopping).toBe(false);
+  },
+);
 
 it('says why it failed and is ready at once', async () => {
   // A JSON-RPC rejection is a plain object.

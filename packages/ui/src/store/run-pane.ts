@@ -13,7 +13,8 @@ export type RunTabKind =
   'preview' | 'console' | 'terminal' | 'code' | 'diff' | 'skill' | 'viewer' | 'url' | 'chat' | 'agent';
 
 /** Why a chat is open beside the conversation (W9): how it relates to the chat in the column. */
-export type ChatTabRole = 'fork' | 'side' | 'task' | 'session';
+export const CHAT_TAB_ROLES = ['fork', 'side', 'task', 'session'] as const;
+export type ChatTabRole = (typeof CHAT_TAB_ROLES)[number];
 
 /** Preview = the single italic replace-me slot per pane; permanent = pinned. File tabs only. */
 export type TabMode = 'preview' | 'permanent';

@@ -18,6 +18,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
 
 // ── mocks ────────────────────────────────────────────────────────────────────
+let mockItemId = 'item-9';
+vi.mock('@assistant-ui/react', () => ({
+  useAuiState: (select: (s: unknown) => unknown) =>
+    select({ threadListItem: { id: mockItemId }, threads: { mainThreadId: 'item-9' } }),
+}));
+
 let mockIdentity = {
   projectId: 'proj-1' as string | undefined,
   chatId: 'chat-9' as string | undefined,
@@ -98,6 +104,7 @@ const renderStrip = () => rtlRender(<SessionStrip />, { wrapper: Wrapper });
 
 beforeEach(() => {
   mockIdentity = { projectId: 'proj-1', chatId: 'chat-9', noProject: false };
+  mockItemId = 'item-9';
   mockIsWorktree = false;
   mockWorktreePath = undefined;
   mockBranch = 'feat/session-panel';
@@ -159,6 +166,13 @@ describe('SessionStrip — changes', () => {
   ])('hides for %s', (_case, status) => {
     mockChanges = { files: [], totalAdditions: 0, totalDeletions: 0, ...status };
     renderStrip();
+    expect(screen.queryByTestId('session-strip-changes')).toBeNull();
+  });
+
+  it('keeps the branch but not the changes in a workspace tab: the review is the chat column’s', () => {
+    mockItemId = 'item-in-a-tab';
+    renderStrip();
+    expect(screen.getByTestId('session-strip-branch')).toBeInTheDocument();
     expect(screen.queryByTestId('session-strip-changes')).toBeNull();
   });
 

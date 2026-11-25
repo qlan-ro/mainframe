@@ -33,16 +33,18 @@ function App() {
         )}
       </div>
       {layout.top.includes('chat') && <textarea data-mf-composer-input="" aria-label="column" />}
-      {run?.panes.map((pane) =>
-        pane.tabs
-          .filter((t) => t.kind === 'chat')
-          .map((t) => (
-            <div key={t.id} data-conversation-tab={t.id === pane.active ? 'active' : 'hidden'}>
-              <button type="button">{`Open ${t.chatId}`}</button>
-              <textarea data-mf-composer-input="" aria-label={t.chatId} />
-            </div>
-          )),
-      )}
+      {run?.panes.map((pane) => (
+        <section key={pane.id}>
+          {pane.tabs
+            .filter((t) => t.kind === 'chat')
+            .map((t) => (
+              <div key={t.id} data-conversation-tab={t.id === pane.active ? 'active' : 'hidden'}>
+                <button type="button">{`Open ${t.chatId}`}</button>
+                <textarea data-mf-composer-input="" aria-label={t.chatId} />
+              </div>
+            ))}
+        </section>
+      ))}
     </>
   );
 }
@@ -88,4 +90,32 @@ it('leaves the keyboard alone when it was elsewhere', () => {
   screen.getByText('Workspace').focus();
   close();
   expect(screen.getByText('Workspace')).toHaveFocus();
+});
+
+it('leaves a keyboard that was nowhere alone', () => {
+  show(['chat', 'workspace'], [chat('fork')]);
+  expect(document.body).toHaveFocus();
+  close();
+  expect(useLayoutStore.getState().run).toBeNull();
+  expect(document.body).toHaveFocus();
+});
+
+it('leaves the keyboard in another pane’s chat', () => {
+  show(['chat', 'workspace'], [chat('fork')]);
+  act(() =>
+    useLayoutStore.setState({
+      run: {
+        dir: 'v',
+        flex: [1, 1],
+        panes: [
+          { id: 'p', tabs: [chat('fork')], active: 'chat-fork' },
+          { id: 'q', tabs: [chat('task')], active: 'chat-task' },
+        ],
+      },
+    }),
+  );
+  screen.getByText('Open task').focus();
+  close();
+  expect(screen.queryByLabelText('fork')).toBeNull();
+  expect(screen.getByText('Open task')).toHaveFocus();
 });

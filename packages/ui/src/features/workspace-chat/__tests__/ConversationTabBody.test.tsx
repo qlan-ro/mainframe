@@ -10,9 +10,13 @@ vi.mock('../ChatTabBody', () => ({
     return <input aria-label="Message" data-active={active} value={text} onChange={(e) => setText(e.target.value)} />;
   },
 }));
-vi.mock('../SideChatTabBody', () => ({ SideChatTabBody: () => <div data-testid="side" /> }));
+vi.mock('../SideChatTabBody', () => ({
+  SideChatTabBody: ({ active }: { active: boolean }) => <div data-testid="side" data-active={active} />,
+}));
 vi.mock('../SubagentTabBody', () => ({
-  SubagentTabBody: ({ toolCallId }: { toolCallId: string }) => <div data-testid={`agent-${toolCallId}`} />,
+  SubagentTabBody: ({ toolCallId, active }: { toolCallId: string; active: boolean }) => (
+    <div data-testid={`agent-${toolCallId}`} data-active={active} />
+  ),
 }));
 
 import { ConversationTabBody } from '../ConversationTabBody';
@@ -32,6 +36,21 @@ it('keeps its content while another tab is in front, out of reach', () => {
   rerender(<ConversationTabBody tab={fork} active />);
   expect(body()).not.toHaveAttribute('inert');
   expect(field().value).toBe('half a thought');
+});
+
+it.each([
+  ['a chat', fork, () => field()],
+  ['a side chat', { ...fork, role: 'side' } as RunTab, () => screen.getByTestId('side')],
+  [
+    'an agent',
+    { id: 'agent-c', kind: 'agent', title: 'Agent', chatId: 'p', toolCallId: 'c' } as RunTab,
+    () => screen.getByTestId('agent-c'),
+  ],
+])('tells the body of %s whether it is in front', (_, tab, shown) => {
+  const { rerender } = render(<ConversationTabBody tab={tab} active />);
+  expect(shown()).toHaveAttribute('data-active', 'true');
+  rerender(<ConversationTabBody tab={tab} active={false} />);
+  expect(shown()).toHaveAttribute('data-active', 'false');
 });
 
 it('mounts nothing for a tab that was never shown', () => {

@@ -21,9 +21,10 @@ let items: Item[] = [];
 let mainThreadId = 'main';
 let isLoading = false;
 const switchToThread = vi.fn();
+const reload = vi.fn();
 vi.mock('@assistant-ui/react', () => ({
   AuiProvider: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-  useAui: () => ({ threads: { switchToThread } }),
+  useAui: () => ({ threads: { switchToThread, reload } }),
   useAuiState: (select: (s: unknown) => unknown) =>
     select({ threads: { threadItems: items, mainThreadId, isLoading }, threadListItem: items[0] }),
 }));
@@ -95,8 +96,9 @@ beforeEach(() => {
   items = [];
   mainThreadId = 'main';
   isLoading = false;
-  useSessionListLoadState.setState({ loaded: true });
+  useSessionListLoadState.setState({ loaded: true, failed: false });
   switchToThread.mockClear();
+  reload.mockClear();
   cancelDelegatedTask.mockClear();
   getOrCreate.mockClear();
 });
@@ -176,25 +178,35 @@ describe('with no chat to show', () => {
     const wait = () => act(() => vi.advanceTimersByTime(60_000));
     beforeEach(() => vi.useFakeTimers());
 
-    it('while the list is loading', () => {
-      isLoading = true;
-      const view = render(body('connected'));
+    it('until the list has loaded and the chat had its time to reach it', () => {
+      useSessionListLoadState.setState({ loaded: false });
+      render(body('connected'));
       wait();
       expect(screen.getByRole('status')).toHaveTextContent('Opening the chat…');
 
-      isLoading = false;
-      view.rerender(body('connected'));
+      act(() => useSessionListLoadState.setState({ loaded: true }));
       act(() => vi.advanceTimersByTime(4_999));
       expect(screen.getByRole('status')).toHaveTextContent('Opening the chat…');
       act(() => vi.advanceTimersByTime(1));
       expect(screen.getByRole('status')).toHaveTextContent('This chat is no longer here.');
     });
 
-    it('when the list never loaded', () => {
-      useSessionListLoadState.setState({ loaded: false });
+    it.each([
+      ['the first request', false],
+      ['a reload', true],
+    ])('when %s for the list fails, and offers to ask again', (_, loaded) => {
+      useSessionListLoadState.setState({ loaded, failed: true });
       render(body('connected'));
       wait();
+      expect(screen.getByRole('status')).toHaveTextContent('The session list could not be loaded.');
+      fireEvent.click(screen.getByTestId('workspace-chat-retry-kid'));
+      expect(reload).toHaveBeenCalledOnce();
+
+      act(() => useSessionListLoadState.setState({ loaded: true, failed: false }));
+      expect(screen.queryByTestId('workspace-chat-retry-kid')).toBeNull();
       expect(screen.getByRole('status')).toHaveTextContent('Opening the chat…');
+      act(() => vi.advanceTimersByTime(5_000));
+      expect(screen.getByRole('status')).toHaveTextContent('This chat is no longer here.');
     });
 
     it.each(['disconnected', 'connecting'] as const)('while the app is %s', (state) => {
@@ -209,6 +221,49 @@ describe('with no chat to show', () => {
 
       view.rerender(body(state));
       expect(screen.getByRole('status')).toHaveTextContent('Waiting for the connection…');
+
+      // The list is asked again: what it said before is not its answer.
+      view.rerender(body('connected'));
+      expect(screen.getByRole('status')).toHaveTextContent('Opening the chat…');
+    });
+  });
+
+  describe('through a reload of the list', () => {
+    const body = () => (
+      <TooltipProvider>
+        <ChatTabBody tab={tab('fork')} chatId="kid" active />
+      </TooltipProvider>
+    );
+    const status = () => screen.getByRole('status');
+    /** One request for the list, from its start to its answer. */
+    function reloadList(view: ReturnType<typeof render>, answer: { failed: boolean }) {
+      isLoading = true;
+      view.rerender(body());
+      act(() => vi.advanceTimersByTime(1_000));
+      isLoading = false;
+      act(() => useSessionListLoadState.setState(answer));
+      view.rerender(body());
+    }
+    beforeEach(() => vi.useFakeTimers());
+
+    it('does not start waiting over', () => {
+      const view = render(body());
+      for (let i = 0; i < 4; i++) reloadList(view, { failed: false });
+      expect(status()).toHaveTextContent('Opening the chat…');
+      reloadList(view, { failed: false });
+      expect(status()).toHaveTextContent('This chat is no longer here.');
+    });
+
+    it('stays gone, whatever came of the reload', () => {
+      const view = render(body());
+      act(() => vi.advanceTimersByTime(5_000));
+      for (const failed of [false, true]) {
+        isLoading = true;
+        view.rerender(body());
+        expect(status()).toHaveTextContent('This chat is no longer here.');
+        reloadList(view, { failed });
+        expect(status()).toHaveTextContent('This chat is no longer here.');
+      }
     });
   });
 

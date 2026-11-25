@@ -9,7 +9,7 @@
  * place among the files. Everything read back may be missing, malformed or out
  * of step with the layout.
  */
-import { isConversationTab, MAX_PANES, type RunPane, type RunState, type RunTab } from './run-pane';
+import { CHAT_TAB_ROLES, isConversationTab, MAX_PANES, type RunPane, type RunState, type RunTab } from './run-pane';
 
 interface StoredPane {
   id: string;
@@ -32,12 +32,15 @@ export const isRecord = (value: unknown): value is Record<string, unknown> =>
 const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 
-/** A tab as stored, or null for anything else. */
+const isRole = (value: unknown): boolean => CHAT_TAB_ROLES.some((role) => role === value);
+
+/** A tab as stored, or null for anything else. A role this build does not know reads as any session's. */
 export function readTab(value: unknown): RunTab | null {
   if (!isRecord(value)) return null;
-  const { id, kind, title } = value;
+  const { id, kind, title, role } = value;
   if (typeof id !== 'string' || typeof kind !== 'string' || typeof title !== 'string') return null;
-  return value as unknown as RunTab;
+  const known = role === undefined || isRole(role) ? value : { ...value, role: 'session' };
+  return known as unknown as RunTab;
 }
 
 export function readTabs(value: unknown): RunTab[] {

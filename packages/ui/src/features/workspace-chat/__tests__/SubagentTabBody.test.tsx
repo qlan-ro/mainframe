@@ -11,6 +11,7 @@ import { useActiveBasesStore } from '@/store/active-bases-store';
 import { onSurfaceIntent } from '@/store/surface-intents';
 
 interface Call {
+  toolName?: string;
   args: Record<string, unknown>;
   result?: unknown;
   isError?: boolean;
@@ -29,6 +30,7 @@ const { controller, world } = vi.hoisted(() => ({
   world: {
     call: null as Call | null,
     running: false,
+    runState: undefined as string | undefined,
     permissions: {} as Record<string, { request: { toolUseId: string } }>,
     tasks: [] as Partial<BackgroundTask>[],
     hasMore: false,
@@ -76,7 +78,7 @@ vi.mock('@/lib/api/background-tasks', () => ({
 vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
   useControllerState: () => ({
     loadState: { type: 'ready' },
-    runState: { type: world.running ? 'running' : 'idle' },
+    runState: { type: world.runState ?? (world.running ? 'running' : 'idle') },
     historyWindow: { hasMore: world.hasMore },
     interactions: { permissions: world.permissions },
     backgroundTasks: world.backgroundTasks,
@@ -149,6 +151,7 @@ beforeEach(() => {
   Object.assign(world, {
     call: null,
     running: false,
+    runState: undefined,
     permissions: {},
     tasks: [],
     hasMore: false,
@@ -208,15 +211,29 @@ describe('status', () => {
       metadata: { custom },
     }) as unknown as ThreadMessage;
 
-  it.each([
-    ['the next turn runs', [said()]],
-    [
-      'a later turn than the next runs',
-      [{ id: 'a', role: 'assistant', content: [] } as unknown as ThreadMessage, said()],
-    ],
-  ])('is stopped, not running, when it was interrupted and %s', async (_, after) => {
+  const later: [string, Partial<ThreadMessage>[]][] = [
+    ['right after it', [said()]],
+    ['after more work', [{ id: 'a', role: 'assistant', content: [] }, said()]],
+  ];
+
+  it.each(later)('says only that there is no result when the user spoke %s', async (_, after) => {
     world.running = true;
     world.after = after;
+    await show({ args: ARGS });
+    expect(status()).toBe('no-result');
+    expect(screen.getByTestId('workspace-agent-status-call-1')).toHaveTextContent('no result');
+  });
+
+  it.each(later)('is running while its task is, though the user spoke %s', async (_, after) => {
+    world.running = true;
+    world.after = after;
+    world.tasks = [{ id: 'bg-1', toolUseId: 'call-1', status: 'running' }];
+    await show({ args: ARGS, toolName: 'CollabAgent' });
+    expect(status()).toBe('running');
+  });
+
+  it('is stopped, whatever was said since, once nothing runs', async () => {
+    world.after = [said()];
     await show({ args: ARGS });
     expect(status()).toBe('stopped');
   });
@@ -227,6 +244,19 @@ describe('status', () => {
   ])('stays running while a message is %s behind it', async (_, custom) => {
     world.running = true;
     world.after = [said(custom)];
+    await show({ args: ARGS });
+    expect(status()).toBe('running');
+  });
+
+  it('stays running until a cancelled turn has ended', async () => {
+    world.runState = 'cancelling';
+    await show({ args: ARGS });
+    expect(status()).toBe('running');
+  });
+
+  it('stays running while another call waits for an answer', async () => {
+    world.running = true;
+    world.permissions = { req: { request: { toolUseId: 'elsewhere' } } };
     await show({ args: ARGS });
     expect(status()).toBe('running');
   });
@@ -248,6 +278,51 @@ describe('status', () => {
     await show({ args: ARGS, result: 'Async agent launched' });
     expect(status()).toBe('running');
     expect(screen.queryByTestId('workspace-agent-result-call-1')).toBeNull();
+  });
+
+  const ended = { id: 'bg-1', toolUseId: 'call-1', status: 'completed' as const, startedAt: 1, summary: '' };
+  const going = { id: 'bg-2', toolUseId: 'call-1', status: 'running' as const, startedAt: 2 };
+
+  it.each([
+    ['', [ended, going]],
+    [', listed first', [going, ended]],
+  ])('follows the task still running, for an agent talked to again%s', async (_, tasks) => {
+    world.tasks = tasks;
+    await show({ args: ARGS, toolName: 'CollabAgent', result: 'First answer.' });
+    expect(status()).toBe('running');
+  });
+
+  it.each([
+    ['', [0, 1]],
+    [', listed first', [1, 0]],
+  ])('follows the last of its tasks once all have ended%s', async (_, order) => {
+    const tasks = [
+      { ...ended, status: 'stopped' as const },
+      { ...ended, id: 'bg-2', startedAt: 2 },
+    ];
+    world.tasks = order.map((i) => tasks[i]!);
+    await show({ args: ARGS, result: 'Async agent launched' });
+    expect(status()).toBe('completed');
+  });
+
+  it('reads a Codex agent’s end from its result, which its task has no word of', async () => {
+    world.tasks = [ended];
+    await show({ args: ARGS, toolName: 'CollabAgent', result: 'Sub-agent interrupted', isError: true });
+    expect(status()).toBe('failed');
+    expect(screen.getByTestId('workspace-agent-result-call-1')).toHaveTextContent('Sub-agent interrupted');
+  });
+
+  it('says only that there is no result for a Codex agent that was closed', async () => {
+    world.running = true;
+    world.tasks = [ended];
+    await show({ args: ARGS, toolName: 'CollabAgent' });
+    expect(status()).toBe('no-result');
+  });
+
+  it('takes no word from another call’s task', async () => {
+    world.tasks = [{ ...going, toolUseId: 'call-2' }];
+    await show({ args: ARGS, result: 'No races found.' });
+    expect(status()).toBe('completed');
   });
 
   it('shows a finished background task’s own summary as the result', async () => {

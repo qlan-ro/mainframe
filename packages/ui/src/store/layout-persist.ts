@@ -168,41 +168,61 @@ function readRun(value: unknown): RunState | null {
 /**
  * The sessions as any build stored them. An entry that can't be read costs only
  * itself: the next write replaces the whole record, so one that threw would take
- * every session's layout with it.
+ * every session's layout with it. For the same reason a session keeps its chat
+ * and agent tabs when its layout is gone: behind a closed workspace.
  */
 export function reviveSessions(stored: unknown, conversations?: unknown): Map<string, SessionWorkspace> {
   const sessions = new Map<string, SessionWorkspace>();
+  const layouts = isRecord(stored) ? stored : {};
   const tabs = isRecord(conversations) ? conversations : {};
-  for (const [id, entry] of Object.entries(isRecord(stored) ? stored : {})) {
-    if (!isRecord(entry)) continue;
-    sessions.set(id, { layout: readLayout(entry.layout), run: restoreConversations(readRun(entry.run), tabs[id]) });
+  for (const id of new Set([...Object.keys(layouts), ...Object.keys(tabs)])) {
+    const entry = layouts[id];
+    if (isRecord(entry)) {
+      sessions.set(id, { layout: readLayout(entry.layout), run: restoreConversations(readRun(entry.run), tabs[id]) });
+      continue;
+    }
+    const run = restoreConversations(null, tabs[id]);
+    if (run) sessions.set(id, { layout: readLayout(undefined), run });
   }
   return sessions;
 }
 
-function readConversations(): unknown {
-  const raw = localStorage.getItem(daemonScopedKey(CONVERSATIONS_BASE_KEY));
-  if (raw == null) return {};
+/** What a key holds; undefined when it holds nothing that can be read. */
+function readKey(baseKey: string): unknown {
+  const raw = localStorage.getItem(daemonScopedKey(baseKey));
+  if (raw == null) return undefined;
   try {
     return JSON.parse(raw);
   } catch (error) {
-    console.warn('[layout] could not read the chat tabs', error);
-    return {};
+    console.warn(`[layout] could not read ${baseKey}`, error);
+    return undefined;
+  }
+}
+
+/** A key that can't be written costs only itself: neither the other key nor what the user was doing. */
+function writeKey(baseKey: string, value: unknown): void {
+  try {
+    localStorage.setItem(daemonScopedKey(baseKey), JSON.stringify(value));
+  } catch (error) {
+    console.warn(`[layout] could not write ${baseKey}`, error);
   }
 }
 
 /** Two keys, one state: an older build reads the first and never sees the second. */
 const layoutStorage: PersistStorage<PersistedLayout> = {
   getItem(name) {
-    const raw = localStorage.getItem(daemonScopedKey(name));
-    if (raw == null) return null;
-    const { state, version } = JSON.parse(raw) as StorageValue<PersistedLayout>;
-    const conversations = readConversations() as PersistedLayout['conversations'];
-    return { state: { sessions: state?.sessions, conversations }, version };
+    const layout = readKey(name);
+    const { state, version } = isRecord(layout) ? layout : {};
+    const sessions = isRecord(state) ? state.sessions : undefined;
+    // `merge` reads both as unknown.
+    return {
+      state: { sessions, conversations: readKey(CONVERSATIONS_BASE_KEY) },
+      version,
+    } as StorageValue<PersistedLayout>;
   },
   setItem(name, { state: { sessions, conversations }, version }) {
-    localStorage.setItem(daemonScopedKey(name), JSON.stringify({ state: { sessions }, version }));
-    localStorage.setItem(daemonScopedKey(CONVERSATIONS_BASE_KEY), JSON.stringify(conversations));
+    writeKey(name, { state: { sessions }, version });
+    writeKey(CONVERSATIONS_BASE_KEY, conversations);
   },
   removeItem(name) {
     localStorage.removeItem(daemonScopedKey(name));

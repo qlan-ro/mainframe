@@ -18,7 +18,6 @@ import remarkGfm from 'remark-gfm';
 import { TranscriptScopeProvider } from '@/features/chat/messages/compact/transcript-scope';
 import { markdownComponents } from '@/features/chat/parts/markdown-text';
 import { remarkAppLinks, urlTransform } from '@/features/chat/parts/markdown-url-transform';
-import { isRunningFromState } from '@/features/chat/runtime/chat-extras';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
 import { useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
@@ -40,7 +39,15 @@ const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 /** The only CLI that can stop one background agent on its own. */
 const STOP_ADAPTER = 'claude';
 
+const CODEX_AGENT = 'CollabAgent';
+
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+/** The call's latest task: a Codex agent that is talked to again gets another for the same call. */
+function taskOf(tasks: readonly BackgroundTask[], toolCallId: string): BackgroundTask | null {
+  const own = tasks.filter((task) => task.toolUseId === toolCallId);
+  return own.reduce<BackgroundTask | null>((a, b) => (a != null && a.startedAt >= b.startedAt ? a : b), null);
+}
 
 /**
  * The background task behind the call, when the sub-agent runs in the background.
@@ -59,7 +66,7 @@ function useBackgroundTask(
     let current = true;
     listBackgroundTasks(chatId).then(
       (tasks) => {
-        if (current) setTask(tasks.find((t) => t.toolUseId === toolCallId) ?? null);
+        if (current) setTask(taskOf(tasks, toolCallId));
       },
       (error: unknown) => console.warn('[workspace-chat] could not list background tasks', error),
     );
@@ -81,15 +88,20 @@ function isDelivered(message: ThreadMessage): boolean {
   return meta?.queued !== true && meta?.pending !== true;
 }
 
+/** The run that could still answer the call: a request waiting on the user pauses it, but doesn't end it. */
+const isRunGoing = ({ runState }: ChatThreadState) => runState.type === 'running' || runState.type === 'cancelling';
+
 /**
- * A call with no result is still going only while its own turn is. An interrupted
- * one never gets a result, and the chat runs on with the next message.
+ * A call with no answer, whose agent no task reports on. It goes on in the turn
+ * that made it. A user message after it may have ended that turn or steered it,
+ * so past one there is only the missing result to tell.
  */
-function isInterrupted(call: SubagentCall, messages: readonly ThreadMessage[]): boolean {
+function unansweredStatus(call: SubagentCall, state: ChatThreadState, messages: readonly ThreadMessage[]): AgentStatus {
   const lifecycle = call.part.providerMetadata?.mainframe as { acpStatus?: string } | undefined;
-  if (lifecycle?.acpStatus === 'cancelled') return true;
+  if (lifecycle?.acpStatus === 'cancelled' || !isRunGoing(state)) return 'stopped';
   const at = messages.findIndex((message) => message.id === call.messageId);
-  return messages.slice(at + 1).some((message) => message.role === 'user' && isDelivered(message));
+  const spokenTo = messages.slice(at + 1).some((message) => message.role === 'user' && isDelivered(message));
+  return spokenTo ? 'no-result' : 'running';
 }
 
 function callStatus(
@@ -99,11 +111,11 @@ function callStatus(
   task: BackgroundTask | null,
 ): AgentStatus {
   if (waitsOnUser(state, call.part.messages ?? [])) return 'needs-you';
-  if (task != null) return task.status;
-  if (call.part.result === undefined) {
-    return isRunningFromState(state) && !isInterrupted(call, messages) ? 'running' : 'stopped';
-  }
-  return isErrorResult(call.part.result, call.part.isError) ? 'failed' : 'completed';
+  // A Codex task ends as completed however its agent ended; only the result knows better.
+  if (task != null && task.status !== 'completed') return task.status;
+  if (call.part.result !== undefined)
+    return isErrorResult(call.part.result, call.part.isError) ? 'failed' : 'completed';
+  return task != null ? 'no-result' : unansweredStatus(call, state, messages);
 }
 
 /** Pages history back until the call is loaded. The text to show when it is not there, or null. */
@@ -191,13 +203,13 @@ function ParentScope({ chatId, state, children }: { chatId: string; state: ChatT
 function kindLine(call: SubagentCall | null): string {
   if (call == null) return 'Sub-agent';
   const args = call.part.args as Record<string, unknown>;
-  const name = call.part.toolName === 'CollabAgent' ? 'Codex agent' : text(args['subagent_type']);
+  const name = call.part.toolName === CODEX_AGENT ? 'Codex agent' : text(args['subagent_type']);
   return ['Sub-agent', name, text(args['model'])].filter(Boolean).join(' · ');
 }
 
-/** The result a finished call carries. A background call's own result is only the launch receipt. */
+/** The result a finished call carries. A Claude background call's own result is only the launch receipt. */
 function resultText(call: SubagentCall, task: BackgroundTask | null): string {
-  if (task != null) return task.status === 'running' ? '' : text(task.summary);
+  if (task != null && call.part.toolName !== CODEX_AGENT) return task.status === 'running' ? '' : text(task.summary);
   return call.part.result === undefined ? '' : resolveResultText(call.part.result).text.trim();
 }
 
