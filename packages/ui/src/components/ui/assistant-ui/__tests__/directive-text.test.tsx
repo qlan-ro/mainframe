@@ -56,7 +56,7 @@ describe('createDirectiveText — plainTypes render mode', () => {
     render(<Text type="text" text="hi" status={{ type: 'complete' }} />);
 
     const mention = screen.getByText('@a.ts');
-    expect(mention.className).toContain('text-primary');
+    expect(mention.className).toContain('text-accent-ink');
     expect(mention.className).toContain('font-semibold');
   });
 
@@ -119,7 +119,7 @@ describe('createDirectiveText — per-type renderers', () => {
 
     expect(screen.getByTestId('session-marker-Foo')).toBeInTheDocument();
     // The type with no renderer keeps its plain treatment.
-    expect(screen.getByText('@a.ts').className).toContain('text-primary');
+    expect(screen.getByText('@a.ts').className).toContain('text-accent-ink');
   });
 
   it('leaves types with no renderer entry on their existing treatment', () => {
