@@ -254,6 +254,10 @@ test.describe('§mcp-delegate wait mode', () => {
     // call's answer, inside the parent's first and only turn.
     await workRows(page).last().waitFor({ timeout: 60_000 });
     await waitForIdle(page, 60_000);
+    // The child's end reaches the session list a moment after the answer. Until it does the work
+    // is going, and it folds when it isn't, so opening it before would not keep it open.
+    const work = workRows(page).last();
+    await expect(work.locator('xpath=..')).not.toHaveAttribute('data-work-state', 'going', { timeout: 15_000 });
     await openWork(page);
     const card = page.getByTestId('chat-tool-delegate-task-card');
     await expect(taskStatus(card)).toHaveAttribute('data-status', 'success', { timeout: 15_000 });
