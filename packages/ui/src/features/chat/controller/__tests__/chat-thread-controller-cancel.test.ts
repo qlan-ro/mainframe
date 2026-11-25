@@ -24,12 +24,14 @@ vi.mock('@/lib/toast', () => ({
 
 import { cancelQueuedMessage } from '../../../../lib/api/chats';
 import { useHeldQueue } from '../../composer/queue/held-queue-store';
+import { forgetSent, noteQueued } from '../../composer/queue/sent-order';
 import { CHAT_ID, makeController } from './acp-test-kit';
 
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   useHeldQueue.setState({ byChat: {} });
+  forgetSent(CHAT_ID);
 });
 
 describe('AcpChatController.cancel — idle guard', () => {
@@ -104,14 +106,31 @@ describe('AcpChatController.cancel — holds the queue first (C10)', () => {
   it('a Stop gives back the held rows Send now has not sent, whether or not a turn shows yet', async () => {
     useHeldQueue.getState().hold(CHAT_ID, queuedRef('m1', 1));
     useHeldQueue.getState().hold(CHAT_ID, queuedRef('m2', 2));
-    useHeldQueue.getState().claimFrom(CHAT_ID, 'm1');
-    useHeldQueue.getState().startSending(CHAT_ID, 'm1');
+    useHeldQueue.getState().claimFrom(CHAT_ID, 'm1', 'p1');
+    useHeldQueue.getState().startSending(CHAT_ID, 'm1', 'p1');
     const { ctrl } = makeController();
 
     await ctrl.cancel();
 
     expect(useHeldQueue.getState().byChat[CHAT_ID]!.map((row) => row.claim?.started)).toEqual([true, undefined]);
     expect(useHeldQueue.getState().byChat[CHAT_ID]![1]).not.toHaveProperty('claim');
+  });
+
+  it('a held row sent, queued and edited there comes back in its place', async () => {
+    useHeldQueue.getState().hold(CHAT_ID, { ...queuedRef('b', 1), content: 'B' });
+    useHeldQueue.getState().hold(CHAT_ID, { ...queuedRef('c', 2), content: 'C' });
+    noteQueued(CHAT_ID, { queuedMessageId: 'q', timestamp: useHeldQueue.getState().byChat[CHAT_ID]![0]!.timestamp });
+    useHeldQueue.getState().remove(CHAT_ID, 'b');
+    const { ctrl, acpClient } = makeController();
+    await ctrl.load();
+    acpClient.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'running' });
+    acpClient.emitQueueState(CHAT_ID, [{ ...queuedRef('q', 9), content: 'B' }]);
+    await ctrl.editQueued('q', 'B, reworded');
+    acpClient.emitQueueState(CHAT_ID, [{ ...queuedRef('q', 9), content: 'B, reworded' }]);
+
+    await ctrl.cancel();
+
+    expect(useHeldQueue.getState().byChat[CHAT_ID]!.map((row) => row.content)).toEqual(['B, reworded', 'C']);
   });
 
   it('sendHeld sends the held message through the session', async () => {

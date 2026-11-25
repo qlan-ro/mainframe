@@ -3,7 +3,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { DAEMON_BASE } from '../../../packages/e2e/fixtures/daemon.js';
+import { daemonFetch } from '../../../packages/e2e/fixtures/daemon.js';
 import { waitConnected } from '../../../packages/e2e/helpers/tauri/wait.js';
 import { workspace } from '../../../packages/e2e/helpers/tauri/page-objects.js';
 import { createTauriChat } from '../../../packages/e2e/helpers/tauri/setup.js';
@@ -19,7 +19,7 @@ export const PATH_ALIASES: [string, string][] = [
 ];
 
 async function api<T>(method: string, route: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${DAEMON_BASE}${route}`, {
+  const res = await daemonFetch(route, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),

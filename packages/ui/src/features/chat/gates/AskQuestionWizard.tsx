@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { GATE_BODY_INSET } from './shared/GateShell';
+import { visibleLine, visibleText } from './visible-text';
 import { OTHER } from './answers';
 import type { AskQuestion } from './answers';
 
@@ -87,7 +88,7 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
       )}
       <span className="min-w-0">
         <span className="block font-medium text-foreground">
-          {label.replace(RECOMMENDED, '')}
+          {visibleLine(label.replace(RECOMMENDED, ''))}
           {recommended && (
             <span
               data-testid={`${testId}-recommended`}
@@ -97,7 +98,7 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
             </span>
           )}
         </span>
-        {description && <span className="block text-xs text-muted-foreground">{description}</span>}
+        {description && <span className="block text-xs text-muted-foreground">{visibleText(description)}</span>}
       </span>
     </div>
   );
@@ -121,7 +122,7 @@ export function AskQuestionWizard({
   return (
     <div
       role={isMulti ? 'group' : 'radiogroup'}
-      aria-label={question.question}
+      aria-label={visibleText(question.question ?? '')}
       className={cn('flex flex-col gap-1.5 pr-4 pb-3', GATE_BODY_INSET)}
     >
       {question.options.map((opt) => (

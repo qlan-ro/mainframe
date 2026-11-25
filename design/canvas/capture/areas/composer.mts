@@ -1,6 +1,6 @@
 // Composer & gates: the card, its strips, its menus, the flow of a running turn, and the gates above it.
 import type { Page } from '../../../../packages/e2e/node_modules/@playwright/test/index.mjs';
-import { DAEMON_BASE } from '../../../../packages/e2e/fixtures/daemon.js';
+import { daemonFetch, fetchRoute } from '../../../../packages/e2e/fixtures/daemon.js';
 import { sendMessage, waitForIdle } from '../../../../packages/e2e/helpers/tauri/wait.js';
 import { escape, openWorkspaceFiles, parkPointer, seedWorkbench, stub, stubUsage } from '../seed.mts';
 import type { CaptureArea, CaptureContext, CaptureState, Crop } from '../types.mts';
@@ -21,7 +21,7 @@ const around =
 /** The daemon's own adapters, with the given capabilities on: the mock can neither steer nor run `auto`. */
 async function stubCapabilities(page: Page): Promise<void> {
   await page.route(/\/api\/adapters$/, async (route) => {
-    const response = await route.fetch();
+    const response = await fetchRoute(route);
     const body = await response.json();
     for (const adapter of body.data) adapter.capabilities = { ...adapter.capabilities, steer: true, autoMode: true };
     await route.fulfill({ response, json: body });
@@ -321,7 +321,7 @@ const area: CaptureArea = {
           caption: '**Planning** is a status on the permissions, with the mode that follows the plan (C1).',
           crop: around(16),
           setup: async (ctx) => {
-            await fetch(`${DAEMON_BASE}/api/chats/${ctx.vars['chat']}/config`, {
+            await daemonFetch(`/api/chats/${ctx.vars['chat']}/config`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ planMode: true, permissionMode: 'acceptEdits' }),
@@ -334,7 +334,7 @@ const area: CaptureArea = {
           caption: '**Context at 84 %**: warning colour from 80 % (C2).',
           crop: around(16),
           setup: async ({ page, vars }) => {
-            await fetch(`${DAEMON_BASE}/api/chats/${vars['chat']}/config`, {
+            await daemonFetch(`/api/chats/${vars['chat']}/config`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ planMode: false, permissionMode: 'default' }),
@@ -739,7 +739,7 @@ const area: CaptureArea = {
       before,
       seed: async (ctx) => {
         await seed(ctx);
-        await fetch(`${DAEMON_BASE}/api/chats/${ctx.vars['chat']}/config`, {
+        await daemonFetch(`/api/chats/${ctx.vars['chat']}/config`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ planMode: true, permissionMode: 'acceptEdits' }),

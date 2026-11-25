@@ -39,10 +39,8 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 import { TOAST } from '../helpers/tauri/testids.js';
-
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 function baseName(p: string): string {
   const parts = p.split('/');
@@ -51,7 +49,7 @@ function baseName(p: string): string {
 
 /** `GET /api/chats?project=<id>` — mirrors sessions-draft.spec.ts's identically-named helper. */
 async function fetchProjectChatIds(projectId: string): Promise<string[]> {
-  const res = await fetch(`${DAEMON_BASE}/api/chats?project=${encodeURIComponent(projectId)}`);
+  const res = await daemonFetch(`/api/chats?project=${encodeURIComponent(projectId)}`);
   expect(res.ok).toBe(true);
   const body = (await res.json()) as { data?: { id: string }[] };
   return (body.data ?? []).map((chat) => chat.id);
@@ -100,7 +98,7 @@ function capturePrompts(page: Page): Array<{ sessionId: string; prompt: Array<{ 
 }
 
 async function expectUnarchivedChat(chatId: string): Promise<void> {
-  const response = await fetch(`${DAEMON_BASE}/api/chats/${chatId}`);
+  const response = await daemonFetch(`/api/chats/${chatId}`);
   expect(response.ok).toBe(true);
   const body = (await response.json()) as { data: { id: string; status: string } };
   expect(body.data.id).toBe(chatId);

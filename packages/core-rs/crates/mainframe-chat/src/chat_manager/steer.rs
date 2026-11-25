@@ -27,5 +27,6 @@ impl ChatManager {
         info!(chat_id, "steer message sent");
         self.send_plain_text(&post, &session, chat_id, content, None, Delivery::Steer)
             .await
+            .map(|_| ())
     }
 }

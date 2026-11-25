@@ -46,6 +46,7 @@ export type RetryMarker = z.infer<typeof RetryMarkerSchema>;
 export const QueuedPromptStateSchema = z
   .object({
     position: z.number().int(),
+    messageId: z.string().optional(),
   })
   .loose();
 export type QueuedPromptState = z.infer<typeof QueuedPromptStateSchema>;

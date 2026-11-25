@@ -14,7 +14,7 @@ import { createThumb, type Thumb } from './thumb';
 
 /** How long a thumb stays after the last scroll, and after the pointer leaves. */
 const HIDE_AFTER_MS = 900;
-/** Catches moves no event reports: animated panels, unmounts, newly opened dialogs. */
+/** Catches moves no event reports (animated panels, unmounts, newly opened dialogs) and looks again at what covers a thumb. */
 const RECHECK_MS = 250;
 
 const AXES: Axis[] = ['y', 'x'];
@@ -29,8 +29,8 @@ class ScrollerBars {
     private readonly isHovered: () => boolean,
   ) {}
 
-  place(): void {
-    for (const thumb of this.thumbs.values()) thumb.place();
+  place(refresh: boolean): void {
+    for (const thumb of this.thumbs.values()) thumb.place(refresh);
   }
 
   show(): void {
@@ -42,7 +42,7 @@ class ScrollerBars {
         createThumb(this.scroller, axis, { onEnter: () => this.show(), onLeave: () => this.hideSoon() }),
       );
     }
-    this.place();
+    this.place(!this.visible);
     this.setVisible(true);
   }
 
@@ -83,22 +83,27 @@ export function installOverlayScrollbars(): () => void {
     return entry;
   };
 
-  const placeVisible = (): void => {
+  const placeVisible = (refresh: boolean): void => {
     for (const [scroller, entry] of bars) {
       if (!scroller.isConnected) {
         entry.dispose();
         bars.delete(scroller);
         if (hovered === scroller) hovered = null;
-      } else if (entry.visible) entry.place();
+      } else if (entry.visible) entry.place(refresh);
     }
   };
-  const schedulePlace = (): void => {
+  let refreshNext = false;
+  const schedulePlace = (refresh: boolean): void => {
+    refreshNext ||= refresh;
     if (!frame)
       frame = requestAnimationFrame(() => {
         frame = 0;
-        placeVisible();
+        placeVisible(refreshNext);
+        refreshNext = false;
       });
   };
+  // A resize moves what covers a thumb; a scroll moves the thumb, and what covers it is looked at again soon enough.
+  const onResize = (): void => schedulePlace(true);
 
   const hover = (scroller: Element | null): void => {
     if (scroller === hovered) return;
@@ -111,7 +116,7 @@ export function installOverlayScrollbars(): () => void {
   const onScroll = (event: Event): void => {
     const scroller = event.target;
     // A scroll moves nested scrollers too, so every visible thumb is re-placed.
-    schedulePlace();
+    schedulePlace(false);
     if (!(scroller instanceof Element) || !scrollsAnyAxis(scroller)) return;
     const entry = barsFor(scroller);
     if (!entry.visible) entry.show();
@@ -130,14 +135,14 @@ export function installOverlayScrollbars(): () => void {
   document.addEventListener('scroll', onScroll, { capture: true, passive: true });
   document.addEventListener('pointerover', onPointerOver, { passive: true });
   document.documentElement.addEventListener('pointerleave', onPointerLeave);
-  window.addEventListener('resize', schedulePlace);
-  const recheck = setInterval(placeVisible, RECHECK_MS);
+  window.addEventListener('resize', onResize);
+  const recheck = setInterval(() => placeVisible(true), RECHECK_MS);
 
   return () => {
     document.removeEventListener('scroll', onScroll, { capture: true });
     document.removeEventListener('pointerover', onPointerOver);
     document.documentElement.removeEventListener('pointerleave', onPointerLeave);
-    window.removeEventListener('resize', schedulePlace);
+    window.removeEventListener('resize', onResize);
     clearInterval(recheck);
     cancelAnimationFrame(frame);
     for (const entry of bars.values()) entry.dispose();

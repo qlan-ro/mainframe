@@ -16,7 +16,7 @@ Tell an agent what to do next, steer or queue while it runs, and answer what it 
 ## Constraints
 Keyboard first: Enter, ⌥↵, ⇧⇥, ⌘.. Gates are answered one at a time, oldest first, whoever asks: the session, a sub-agent or a delegated task. Steer needs an adapter that can take a message mid-turn; otherwise both choices queue and the menu says so. Draft content keeps today's segment model and highlight to quote. The workspace adds to the draft and never sends for the user: a preview capture or a code annotation becomes a tile, its note edited there, and a failed send returns the draft, ahead of any newer edits. A target change keeps prose and quotes. Set-aside items show their source project and offer Include, Remove, and Include all. Send counts only active items. Returning to the source target automatically makes its items active again.
 The empty state claims only what it knows: no branch until it is read, nothing of one project under another's name, and a list that failed says so. A task's text goes under what was typed.
-Text a gate asks the user to approve shows whole, with nothing hidden, in stored order (`stored-order`, `visible-text.ts`). The bottom strip belongs to the thread footer, so a chat with no composer keeps it.
+Text a gate asks the user to approve shows whole, with nothing hidden, in stored order (`stored-order`, `visible-text.ts`). What overflows is not allowed unread: the allowing answers are locked until its end was in view (`use-shown-to-end.ts`). The bottom strip belongs to the thread footer, so a chat with no composer keeps it.
 The gate slot carries `data-chat-gate`: an Activity row that needs you moves focus into it (R13).
 
 ## Direction contract

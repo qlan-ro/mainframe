@@ -156,12 +156,12 @@ describe('useComposerStop — stopping', () => {
       content: 'held',
       timestamp: '2026-11-24T10:00:01.000Z',
     });
-    useHeldQueue.getState().claimFrom('chat-1', 'm1');
+    useHeldQueue.getState().claimFrom('chat-1', 'm1', 'p1');
     const { result } = setup({ running: false, delegated: [{ taskId: 't1', status: 'running' }] });
 
     act(() => result.current.stop());
 
-    expect(useHeldQueue.getState().startSending('chat-1', 'm1')).toBe(false);
+    expect(useHeldQueue.getState().startSending('chat-1', 'm1', 'p1')).toBe(false);
   });
 
   it('does nothing when nothing runs', () => {

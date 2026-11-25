@@ -1,6 +1,7 @@
 // node capture.cjs states.json out.json — renders each prototype state and serialises the window DOM for canvas boards
 const {chromium}=require(require('path').resolve(__dirname,'../../../packages/e2e/node_modules/@playwright/test'));
 const fs=require('fs');
+const {numberIds}=require('./number-ids.cjs');
 const PROTO='file://'+require('path').resolve(__dirname,'../../redesign/prototype/index.html');
 const states=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 const out={};const errs=[];
@@ -59,7 +60,7 @@ const out={};const errs=[];
         const ks=document.querySelector('#ksheet');if(ks&&!ks.hidden){parts.push(document.querySelector('#kscrim').outerHTML);parts.push(ks.outerHTML)}
         return parts.join('\n');
       });
-      out[s.id]={html,w,h};
+      out[s.id]={html:numberIds(html,s.id),w,h};
       process.stdout.write('.');
     }
     await p.close();

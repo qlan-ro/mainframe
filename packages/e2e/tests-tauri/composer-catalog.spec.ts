@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { launchTauriApp, closeTauriApp } from '../fixtures/app-tauri.js';
-import { DAEMON_BASE } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject } from '../helpers/tauri/setup.js';
 
 test('Sonnet effort choices follow the adapter catalog @real', async () => {
@@ -24,8 +24,8 @@ test('Sonnet effort choices follow the adapter catalog @real', async () => {
     await app.page.getByTestId('composer-model-select').click();
     await expect(app.page.getByTestId(`composer-model-${id}-tuning`)).toBeVisible();
 
-    const response = await app.page.request.get(`${DAEMON_BASE}/api/adapters`);
-    expect(response.ok()).toBe(true);
+    const response = await daemonFetch('/api/adapters');
+    expect(response.ok).toBe(true);
     const body = (await response.json()) as {
       data: { id: string; models: { id: string; supportedEfforts?: string[] }[] }[];
     };

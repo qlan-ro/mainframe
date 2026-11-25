@@ -141,7 +141,7 @@ describe('held queue store — what it keeps, and for whom', () => {
     useHeldQueue.getState().hold('chat-1', ref());
     localStorage.setItem('mf:held-queue', JSON.stringify({ state: { byChat: {} }, version: 1 }));
 
-    expect(useHeldQueue.getState().claimFrom('chat-1', 'm1')).toEqual([]);
+    expect(useHeldQueue.getState().claimFrom('chat-1', 'm1', 'p1')).toEqual([]);
   });
 
   it('follows another window as it changes', async () => {
@@ -175,8 +175,8 @@ describe('held queue store — a row being sent', () => {
   it('stays stored while its prompt is out, so quitting does not lose it', () => {
     holdTwo();
     const { claimFrom, startSending } = useHeldQueue.getState();
-    claimFrom('chat-1', 'm1');
-    startSending('chat-1', 'm1');
+    claimFrom('chat-1', 'm1', 'p1');
+    startSending('chat-1', 'm1', 'p1');
 
     expect(stored().map((row) => row.messageId)).toEqual(['m1', 'm2']);
   });
@@ -184,8 +184,8 @@ describe('held queue store — a row being sent', () => {
   it('a window that quits gives its rows back: the one that went out as unconfirmed', () => {
     holdTwo();
     const { claimFrom, startSending } = useHeldQueue.getState();
-    claimFrom('chat-1', 'm1');
-    startSending('chat-1', 'm1');
+    claimFrom('chat-1', 'm1', 'p1');
+    startSending('chat-1', 'm1', 'p1');
 
     window.dispatchEvent(new Event('pagehide'));
 
@@ -198,8 +198,8 @@ describe('held queue store — a row being sent', () => {
   it('a window that went without a word loses its claim after a while', () => {
     holdTwo();
     const { claimFrom, startSending } = useHeldQueue.getState();
-    claimFrom('chat-1', 'm1');
-    startSending('chat-1', 'm1');
+    claimFrom('chat-1', 'm1', 'p1');
+    startSending('chat-1', 'm1', 'p1');
     const row = useHeldQueue.getState().byChat['chat-1']![0]!;
 
     expect(settled(row, NOW + CLAIM_MS - 1)).toBe(row);
@@ -210,50 +210,87 @@ describe('held queue store — a row being sent', () => {
   it('is not claimed twice, nor is any other row of the chat meanwhile', () => {
     holdTwo();
     const { claimFrom } = useHeldQueue.getState();
-    expect(claimFrom('chat-1', 'm2').map((row) => row.messageId)).toEqual(['m2']);
+    expect(claimFrom('chat-1', 'm2', 'p1').map((row) => row.messageId)).toEqual(['m2']);
 
-    expect(claimFrom('chat-1', 'm1')).toEqual([]);
-    expect(claimFrom('chat-1', 'm2')).toEqual([]);
+    expect(claimFrom('chat-1', 'm1', 'p1')).toEqual([]);
+    expect(claimFrom('chat-1', 'm2', 'p1')).toEqual([]);
   });
 
   it('is not sent by a window that lost its claim', () => {
     holdTwo();
     const { claimFrom, startSending } = useHeldQueue.getState();
-    claimFrom('chat-1', 'm1');
+    claimFrom('chat-1', 'm1', 'p1');
     vi.setSystemTime(NOW + CLAIM_MS);
 
-    expect(startSending('chat-1', 'm1')).toBe(false);
+    expect(startSending('chat-1', 'm1', 'p1')).toBe(false);
   });
 
   it('keeps the rows behind it claimed for as long as each one takes', () => {
     holdTwo();
     const { claimFrom, startSending, remove } = useHeldQueue.getState();
-    claimFrom('chat-1', 'm1');
+    claimFrom('chat-1', 'm1', 'p1');
     vi.setSystemTime(NOW + 30_000);
-    startSending('chat-1', 'm1');
+    startSending('chat-1', 'm1', 'p1');
     vi.setSystemTime(NOW + 60_000);
     remove('chat-1', 'm1');
 
-    expect(startSending('chat-1', 'm2')).toBe(true);
+    expect(startSending('chat-1', 'm2', 'p1')).toBe(true);
   });
 
   it('is not edited while it is sent', () => {
     holdTwo();
-    const { claimFrom, edit, releaseClaims } = useHeldQueue.getState();
-    claimFrom('chat-1', 'm1');
+    const { claimFrom, edit, releasePress } = useHeldQueue.getState();
+    claimFrom('chat-1', 'm1', 'p1');
 
     expect(edit('chat-1', 'm1', 'changed')).toBe(false);
-    releaseClaims('chat-1');
+    releasePress('chat-1', 'p1');
     expect(edit('chat-1', 'm1', 'changed')).toBe(true);
     expect(useHeldQueue.getState().byChat['chat-1']![0]!.content).toBe('changed');
   });
 
   it('what a temporary session sends is still never written down', () => {
     useHeldQueue.getState().hold('chat-temp', ref({ content: 'private words' }), { temporary: true });
-    useHeldQueue.getState().claimFrom('chat-temp', 'm1');
-    useHeldQueue.getState().startSending('chat-temp', 'm1');
+    useHeldQueue.getState().claimFrom('chat-temp', 'm1', 'p1');
+    useHeldQueue.getState().startSending('chat-temp', 'm1', 'p1');
 
     expect(localStorage.getItem('mf:held-queue')).not.toContain('private words');
     expect(useHeldQueue.getState().byChat['chat-temp']).toHaveLength(1);
+  });
+
+  it('goes out once: a row already started is refused, to its own press too', () => {
+    holdTwo();
+    const { claimFrom, startSending } = useHeldQueue.getState();
+    claimFrom('chat-1', 'm1', 'p1');
+
+    expect(startSending('chat-1', 'm1', 'p1')).toBe(true);
+    expect(startSending('chat-1', 'm1', 'p1')).toBe(false);
+  });
+
+  it('claims nothing for a press that did not: the rows before the one pressed stay free', () => {
+    holdTwo();
+    const { claimFrom, startSending } = useHeldQueue.getState();
+    claimFrom('chat-1', 'm2', 'p1');
+    startSending('chat-1', 'm2', 'p1');
+
+    expect(stored()[0]).not.toHaveProperty('claim');
+  });
+
+  it('is sent only by the press that claimed it, and given back only by it', () => {
+    holdTwo();
+    const { claimFrom, startSending, releaseUnsent, releasePress, refuse } = useHeldQueue.getState();
+    claimFrom('chat-1', 'm1', 'p1');
+    releaseUnsent('chat-1');
+    claimFrom('chat-1', 'm1', 'p2');
+
+    expect(startSending('chat-1', 'm1', 'p1')).toBe(false);
+    releasePress('chat-1', 'p1');
+    refuse('chat-1', 'm1', 'p1', 'too late');
+    expect(stored().map((row) => row.claim)).toEqual([
+      expect.objectContaining({ press: 'p2' }),
+      expect.objectContaining({ press: 'p2' }),
+    ]);
+    expect(stored()[0]).not.toHaveProperty('refused');
+    expect(startSending('chat-1', 'm1', 'p2')).toBe(true);
+    expect(startSending('chat-1', 'm2', 'p1')).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ControlUpdate } from '@qlan-ro/mainframe-types';
 import type { GateContext } from '../gate-types';
 import { PermissionGate } from '../PermissionGate';
+import { installGateLayout } from './gate-layout';
 
 const rules = (ruleContent: string): ControlUpdate => ({
   type: 'addRules',
@@ -22,22 +23,25 @@ function renderGate(
   { toolName = 'Bash', context }: { toolName?: string; context?: GateContext } = {},
 ) {
   const reply = vi.fn().mockResolvedValue(undefined);
+  installGateLayout();
   render(
     <TooltipProvider>
-      <PermissionGate
-        reply={reply}
-        context={context}
-        entry={{
-          requestId: 'r1',
-          askedAt: 1,
-          options: [
-            { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
-            { optionId: 'allow-always', name: 'Always allow', kind: 'allow_always' },
-            { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
-          ],
-          request: { requestId: 'r1', toolName, toolUseId: 'tu1', input, suggestions },
-        }}
-      />
+      <div data-chat-gate>
+        <PermissionGate
+          reply={reply}
+          context={context}
+          entry={{
+            requestId: 'r1',
+            askedAt: 1,
+            options: [
+              { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+              { optionId: 'allow-always', name: 'Always allow', kind: 'allow_always' },
+              { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+            ],
+            request: { requestId: 'r1', toolName, toolUseId: 'tu1', input, suggestions },
+          }}
+        />
+      </div>
     </TooltipProvider>,
   );
   return reply;

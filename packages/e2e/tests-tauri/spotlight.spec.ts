@@ -42,16 +42,18 @@ import { test, expect, type Page } from '@playwright/test';
 import { writeFileSync } from 'fs';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
 
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
-
 /** `renameChat` does not broadcast `chat.updated` — callers must reload to see it. */
-async function renameChat(page: Page, chatId: string, title: string): Promise<void> {
-  const res = await page.request.patch(`${DAEMON_BASE}/api/chats/${chatId}/title`, { data: { title } });
-  if (!res.ok()) throw new Error(`renameChat failed (${res.status()}): ${await res.text()}`);
+async function renameChat(chatId: string, title: string): Promise<void> {
+  const res = await daemonFetch(`/api/chats/${chatId}/title`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error(`renameChat failed (${res.status}): ${await res.text()}`);
 }
 
 /** Open the palette via the deterministic toolbar-click path (⌘K covered separately). */
@@ -96,8 +98,8 @@ test.describe('§spotlight', () => {
 
     chatAId = await createTauriChat(app.page, project.projectId, 'default');
     chatBId = await createTauriChat(app.page, project.projectId, 'default');
-    await renameChat(app.page, chatAId, CHAT_A_TITLE);
-    await renameChat(app.page, chatBId, CHAT_B_TITLE);
+    await renameChat(chatAId, CHAT_A_TITLE);
+    await renameChat(chatBId, CHAT_B_TITLE);
 
     await app.page.reload();
     await waitConnected(app.page);

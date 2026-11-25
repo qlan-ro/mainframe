@@ -2,7 +2,7 @@ import { expect, type Page } from '@playwright/test';
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { DAEMON_BASE } from '../../fixtures/daemon.js';
+import { daemonFetch } from '../../fixtures/daemon.js';
 import { launchTauriApp, closeTauriApp } from '../../fixtures/app-tauri.js';
 import { WINDOWED_RECORDING_KEY, WINDOWED_PAGE_CONTAINERS } from '../../fixtures/windowed-history.js';
 import { composer, sessionsSidebar } from './page-objects.js';
@@ -124,7 +124,7 @@ async function launchMeasurement(seed: Seed, dataDir: string, wire: HistoryPerfo
       await wire.install(page);
       await installHistoryPaintProbe(page);
       if (warm) {
-        const response = await fetch(`${DAEMON_BASE}/api/chats/${seed.chatId}/messages`);
+        const response = await daemonFetch(`/api/chats/${seed.chatId}/messages`);
         expect(response.ok).toBe(true);
         await response.arrayBuffer();
       }

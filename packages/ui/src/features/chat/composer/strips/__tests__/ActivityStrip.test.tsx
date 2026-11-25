@@ -141,6 +141,8 @@ describe('ActivityStrip — rows', () => {
 
     expect(openInSplit).toHaveBeenCalledExactlyOnceWith('parent-thread', 'child-1');
     expect(switchToThread).toHaveBeenCalledExactlyOnceWith('child-1');
+    // A jump still on its way would move the transcript behind it.
+    expect(cancelActivityJump).toHaveBeenCalledBefore(openInSplit);
   });
 
   it('Open on a sub-agent row jumps to its place in the transcript', () => {

@@ -53,7 +53,7 @@ export function NavRail() {
   };
 
   return (
-    <nav data-testid="shell-rail" aria-label="Views" className="flex w-14 shrink-0 flex-col items-center border-r py-2">
+    <nav data-testid="shell-rail" aria-label="Views" className="flex w-[55px] shrink-0 flex-col items-center py-2">
       <div className="flex flex-col items-center gap-1">
         {VIEWS.map(({ id, label, icon, tut }) => (
           <NavRailButton

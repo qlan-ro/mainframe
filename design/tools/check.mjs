@@ -7,7 +7,7 @@
 //
 // DESIGN_CHECK_SKIP=1 skips the area check (the PR carries the `design: none` label: no visible change).
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -84,24 +84,53 @@ export function checkCanvas(cfg, repo = REPO) {
 }
 
 const LOCAL = JSON.parse(readFileSync(join(REPO, 'design/canvas/lib/local-paths.json'), 'utf8'));
+const ENCODED = new RegExp(LOCAL.encoded, 'g');
+const BASE64 = new RegExp(LOCAL.base64, 'g');
+const WRAP = new RegExp(LOCAL.wrap, 'g');
 const ENCODED_SLASH = new RegExp(LOCAL.encodedSlash, 'g');
-const LOCAL_PATH = new RegExp(LOCAL.path, 'g');
+const BREAKS = new RegExp(LOCAL.breaks, 'g');
+const LOCAL_PATH = new RegExp(
+  `(?:${LOCAL.exempt.join('|')})|((?:${[LOCAL.paths, ...LOCAL.more].join('|')})${LOCAL.end})`,
+  'g',
+);
 
-/** Home and temp paths of a machine in `text`, encoded ones included. `lib/boards.py` holds new boards to the same rule. */
+const decoded = (_, byHex, entityHex, entity, octal, slash) => {
+  if (byHex || entityHex) return String.fromCharCode(parseInt(byHex || entityHex, 16));
+  if (entity || octal) return String.fromCharCode(entity ? Number(entity) : parseInt(octal, 8));
+  return slash ? '/' : '\\';
+};
+
+/** What a base64 run says. Dropping the NULs reads UTF-16 as well. */
+const unbase64 = (run) => Buffer.from(run, 'base64').toString('latin1').replaceAll('\0', '');
+
+/** Home and temp paths of a machine in `text`, escaped and base64 ones included. `lib/boards.py` holds new boards to the same rule. */
 export function localPaths(text) {
-  return [...new Set(text.replace(ENCODED_SLASH, '/').match(LOCAL_PATH) ?? [])].sort();
+  const runs = new Set([text, text.replace(WRAP, '')].flatMap((t) => t.match(BASE64) ?? []));
+  const texts = [text, ...[...runs].map(unbase64)].flatMap((t) => [
+    t.replace(ENCODED_SLASH, '/'),
+    t.replace(ENCODED, decoded).replace(BREAKS, '\n'),
+  ]);
+  const found = texts.flatMap((t) => [...t.matchAll(LOCAL_PATH)].map(([, path]) => path).filter(Boolean));
+  return [...new Set(found)].sort();
 }
 
-/** The published design files (boards, index, design system, spec and prototype) name no machine's paths. */
+/** What is published or describes it: boards, index, design system, spec, prototype, briefs and the two guides. */
+const PUBLISHED = [CANVAS, 'design/redesign', 'packages/ui/.impeccable', 'DESIGN.md', 'design/README.md'];
+
+const filesIn = (path) =>
+  statSync(path).isFile()
+    ? [path]
+    : readdirSync(path, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => join(entry.parentPath, entry.name));
+
+/** The published design files name no machine's paths. */
 export function checkLocalPaths(repo = REPO) {
   const problems = [];
-  for (const dir of [CANVAS, 'design/redesign']) {
-    for (const entry of readdirSync(join(repo, dir), { recursive: true, withFileTypes: true })) {
-      if (!entry.isFile() || !/\.(?:html|json|css|js|md|svg)$/.test(entry.name)) continue;
-      const file = join(entry.parentPath, entry.name);
-      const found = localPaths(readFileSync(file, 'utf8'));
-      if (found.length) problems.push(`${relative(repo, file)} holds local paths: ${found.slice(0, 5).join(', ')}`);
-    }
+  for (const file of PUBLISHED.flatMap((path) => filesIn(join(repo, path)))) {
+    if (!/\.(?:html|json|css|js|md|svg)$/.test(file)) continue;
+    const found = localPaths(readFileSync(file, 'utf8'));
+    if (found.length) problems.push(`${relative(repo, file)} holds local paths: ${found.slice(0, 5).join(', ')}`);
   }
   return problems;
 }

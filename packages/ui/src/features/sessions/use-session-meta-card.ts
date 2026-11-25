@@ -46,7 +46,11 @@ export function useSessionMetaCard(rowRef: RefObject<HTMLElement | null>): Sessi
   const onOpenChange = useCallback(
     (next: boolean) => {
       if (next) {
-        setOpen(!menuOpen.current && !dismissed.current && canOpenMetaCard(rowRef.current, document.activeElement));
+        // Radix starts a second open timer when the row is hovered and focused, and
+        // clears only the last: the other fires after the row, or the page, is gone.
+        const row = rowRef.current;
+        if (row == null) return;
+        setOpen(!menuOpen.current && !dismissed.current && canOpenMetaCard(row, document.activeElement));
       } else if (!crossing.current && !cardRef.current?.contains(document.activeElement)) {
         setOpen(false);
       }

@@ -5,6 +5,7 @@
  * branch, with the changes at the end of the row. No box, just quiet controls.
  * Nothing before the first message (K7). A chat with no composer, read-only or
  * with its directory missing, keeps the strip; where it runs is then `fixed`.
+ * Until the session's own record loads, the strip shows what the list knows.
  */
 import { useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
@@ -13,6 +14,7 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { BranchPopover } from '@/features/git/BranchPopover';
 import { useDisplayBranch } from '@/features/sessions/use-display-branch';
+import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useChatExtrasSelector } from '../../runtime/chat-extras';
@@ -46,13 +48,14 @@ function TemporaryPart() {
 
 const directoryName = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
-function WherePart({ chat, fixed }: { chat: Chat; fixed: boolean }) {
+/** A control only with the session's own record: the list's is not enough to move it. */
+function WherePart({ session, chat }: { session: StripSession; chat: Chat | null }) {
   const [open, setOpen] = useState(false);
   const hasMessages = useAuiState((s) => s.thread.messages.length > 0);
   const busy = useAuiState((s) => s.thread.isRunning);
   const { projectPath } = useActiveIdentity();
-  const isolated = chat.worktreePath != null;
-  const path = chat.worktreePath ?? projectPath;
+  const isolated = session.worktreePath != null;
+  const path = session.worktreePath ?? projectPath;
   const directory = path && directoryName(path);
   const Icon = isolated ? FolderGit2 : Monitor;
   const runsIn = [isolated ? 'Runs in a worktree' : 'Runs in the local checkout', directory].filter(Boolean).join(', ');
@@ -62,7 +65,7 @@ function WherePart({ chat, fixed }: { chat: Chat; fixed: boolean }) {
       <span className="font-medium @max-[400px]/composer:hidden">{isolated ? 'Worktree' : 'Local'}</span>
     </>
   );
-  if (fixed) {
+  if (!chat) {
     return (
       <span
         role="note"
@@ -91,21 +94,21 @@ function WherePart({ chat, fixed }: { chat: Chat; fixed: boolean }) {
   );
 }
 
-function BranchPart({ chat, port }: { chat: Chat; port: number }) {
+function BranchPart({ session, port }: { session: StripSession; port: number }) {
   const [open, setOpen] = useState(false);
   const { branch, refetch } = useDisplayBranch({
     port,
-    projectId: chat.projectId,
-    chatId: chat.id,
-    branchName: chat.branchName,
-    isWorktree: chat.worktreePath != null,
+    projectId: session.projectId,
+    chatId: session.id,
+    branchName: session.branchName,
+    isWorktree: session.worktreePath != null,
   });
   if (!branch) return null;
   return (
     <BranchPopover
       port={port}
-      projectId={chat.projectId}
-      chatId={chat.id}
+      projectId={session.projectId}
+      chatId={session.id}
       open={open}
       onOpenChange={setOpen}
       onBranchChanged={refetch}
@@ -125,12 +128,25 @@ function BranchPart({ chat, port }: { chat: Chat; port: number }) {
   );
 }
 
+/** What the strip needs of the session, from its own record or, until that loads, from the session list's. */
+type StripSession = Pick<Chat, 'id' | 'projectId' | 'temporary' | 'noProject' | 'worktreePath' | 'branchName'>;
+
+function useListedSession(): StripSession | null {
+  const custom = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems));
+  const id = useAuiState((s) => s.threadListItem?.remoteId);
+  if (!custom || id === undefined) return null;
+  const { projectId, temporary, noProject, worktreePath, branchName } = custom;
+  return { id, projectId, temporary, noProject, worktreePath, branchName };
+}
+
 export function BottomStrip({ fixed = false }: { fixed?: boolean }) {
   const port = useDaemonPort();
   const [strip, setStrip] = useState<HTMLElement | null>(null);
   const chat = useChatExtrasSelector((extras) => extras?.state.chatConfig ?? null);
-  if (chat == null || chat.id.startsWith('__LOCALID_')) return null;
-  if (!chat.temporary && chat.noProject) return null;
+  const listed = useListedSession();
+  const session = chat ?? listed;
+  if (session == null || session.id.startsWith('__LOCALID_')) return null;
+  if (!session.temporary && session.noProject) return null;
 
   return (
     <ComposerCardProvider value={strip}>
@@ -139,11 +155,9 @@ export function BottomStrip({ fixed = false }: { fixed?: boolean }) {
         data-testid="composer-bottom-strip"
         className="@container/composer flex min-h-7.5 min-w-0 shrink-0 items-center gap-0.5 px-1.5 pt-1.5"
       >
-        {chat.temporary ? <TemporaryPart /> : <WherePart chat={chat} fixed={fixed} />}
-        {!chat.noProject && <BranchPart chat={chat} port={port} />}
-        {!chat.noProject && !chat.temporary && (
-          <ChangesButton port={port} projectId={chat.projectId} chatId={chat.id} />
-        )}
+        {session.temporary ? <TemporaryPart /> : <WherePart session={session} chat={fixed ? null : chat} />}
+        {!session.noProject && <BranchPart session={session} port={port} />}
+        {!session.noProject && <ChangesButton port={port} projectId={session.projectId} chatId={session.id} />}
       </div>
     </ComposerCardProvider>
   );

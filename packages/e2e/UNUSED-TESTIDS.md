@@ -1,14 +1,14 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e references
-(581). Unused: 551._
+_Generated 2026-08-11. Source: packages/ui/src data-testids (1150) minus e2e references
+(597). Unused: 553._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
 > buttons via getByRole), so this lists selector gaps, not necessarily untested behavior. `${…}`
 > marks templated id families.
 
-## chat (91)
+## chat (89)
 
 - `chat-agent-message-card-${…}`
 - `chat-ask-answer-notes`
@@ -59,7 +59,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `chat-slash-command-args`
 - `chat-split-divider`
 - `chat-subagent-close-${…}`
-- `chat-subagent-zone-${…}`
 - `chat-system-message`
 - `chat-task-open-${…}`
 - `chat-thread-area`
@@ -88,7 +87,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `chat-workflow-agent-toggle-${…}`
 - `chat-workflow-launcher-${…}`
 - `chat-workflow-launcher-dot`
-- `chat-workflow-panel-${…}`
 - `chat-workflow-phase-${…}`
 - `chat-workflow-phase-toggle-${…}`
 - `chat-workflow-phase-unassigned`
@@ -262,6 +260,34 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `sessions-tag-filter-synthetic-${…}`
 - `sessions-tag-popover-error`
 
+## session (25)
+
+- `session-panel-activity-jump-${…}`
+- `session-panel-activity-stop-${…}`
+- `session-panel-attachments-more`
+- `session-panel-context-file-${…}`
+- `session-panel-launch-spinner-${…}`
+- `session-panel-mentions-all`
+- `session-panel-none`
+- `session-panel-section-prs`
+- `session-panel-sections`
+- `session-panel-summary-pr-${…}`
+- `session-panel-tasks-attachments`
+- `session-panel-tasks-attachments-clear`
+- `session-panel-toggle-${…}`
+- `session-panel-workflow-phaseless`
+- `session-tab-controls-${…}`
+- `session-tab-ctx-close`
+- `session-tab-ctx-close-split`
+- `session-tab-ctx-fork`
+- `session-tab-ctx-open-split`
+- `session-tab-ctx-side-chat`
+- `session-tab-hint-${…}`
+- `session-tab-status-${…}`
+- `session-tab-waiting-${…}`
+- `session-tabs`
+- `session-tabs-zone-group`
+
 ## settings (24)
 
 - `settings-about-homedir`
@@ -316,36 +342,12 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1132) minus e2e ref
 - `skills-section-source`
 - `skills-section-source-error`
 
-## session (20)
-
-- `session-panel-context-file-${…}`
-- `session-panel-launch-spinner-${…}`
-- `session-panel-section-prs`
-- `session-panel-sections`
-- `session-panel-summary-empty`
-- `session-panel-summary-pr-${…}`
-- `session-panel-tasks-attachments`
-- `session-panel-tasks-attachments-clear`
-- `session-panel-toggle-${…}`
-- `session-tab-controls-${…}`
-- `session-tab-ctx-close`
-- `session-tab-ctx-close-split`
-- `session-tab-ctx-fork`
-- `session-tab-ctx-open-split`
-- `session-tab-ctx-side-chat`
-- `session-tab-hint-${…}`
-- `session-tab-status-${…}`
-- `session-tab-waiting-${…}`
-- `session-tabs`
-- `session-tabs-zone-group`
-
-## composer (18)
+## composer (17)
 
 - `composer-adapter-logo-${…}`
 - `composer-adapter-switch-blocked-${…}`
 - `composer-attachments`
 - `composer-command-item-${…}`
-- `composer-context-percent`
 - `composer-dropzone`
 - `composer-mention-session-${…}`
 - `composer-model-current`

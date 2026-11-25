@@ -1,6 +1,6 @@
 import { chromium, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { startDaemon, stopDaemon, type DaemonHandle } from './daemon.js';
-import { PREVIEW_BASE } from './global-setup.js';
+import { PREVIEW_BASE, assertOwnPreview } from './global-setup.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 
 export interface TauriAppFixture {
@@ -85,6 +85,7 @@ export async function launchTauriApp(opts?: {
     });
     page.on('pageerror', (error) => console.log(`[browser:pageerror] ${error.message}`));
     await opts?.beforeNavigate?.(page);
+    assertOwnPreview();
     await page.goto(PREVIEW_BASE, { waitUntil: 'domcontentloaded' });
     await waitConnected(page);
 

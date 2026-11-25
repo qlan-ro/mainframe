@@ -390,6 +390,35 @@ describe('AskUserQuestionGate', () => {
     expect(screen.getByText(/a⟨U\+202E⟩b/)).toHaveClass('stored-order');
   });
 
+  it('spells out what hides in the agent’s question, header and options, and answers with them as written', () => {
+    const entry = single();
+    entry.request.input = {
+      questions: [
+        {
+          question: 'Delete \u202Egnihton\u202C?',
+          header: 'Cle\u200Ban',
+          options: [{ label: 'Ye\u200Bs', description: 'all\u2066' }, { label: 'No' }],
+        },
+      ],
+    };
+    const reply = vi.fn().mockResolvedValue(undefined);
+    wrap(<AskUserQuestionGate entry={entry} reply={reply} />);
+
+    expect(screen.getByTestId('chat-question-text')).toHaveTextContent('Delete ⟨U+202E⟩gnihton⟨U+202C⟩?');
+    expect(screen.getByTestId('chat-question-context')).toHaveTextContent('Cle⟨U+200B⟩an');
+    expect(screen.getByRole('radiogroup')).toHaveAccessibleName('Delete ⟨U+202E⟩gnihton⟨U+202C⟩?');
+    const [yes] = screen.getAllByRole('radio');
+    expect(yes).toHaveTextContent('Ye⟨U+200B⟩sall⟨U+2066⟩');
+
+    fireEvent.click(yes!);
+    fireEvent.click(screen.getByTestId('chat-question-submit'));
+    expect(reply).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        updatedInput: expect.objectContaining({ answers: { 'Delete \u202Egnihton\u202C?': 'Ye\u200Bs' } }),
+      }),
+    );
+  });
+
   it('tags an option ending in "(Recommended)" and drops the suffix from its label', () => {
     const entry = single();
     (entry.request.input.questions as { options: { label: string }[] }[])[0]!.options = [

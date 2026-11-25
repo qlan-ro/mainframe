@@ -40,7 +40,6 @@ impl PromptPort for ManagerPorts {
     ) -> BoxFuture<'a, Result<PromptAcceptance, PromptError>> {
         Box::pin(async move {
             let manager = self.require()?;
-            let is_command = send_meta.command.is_some();
             if send_meta.wants_steer()
                 && let Some(acceptance) = steer_prompt(manager, session_id, text).await?
             {
@@ -51,8 +50,8 @@ impl PromptPort for ManagerPorts {
                 source: c.source,
                 args: c.args,
             });
-            manager
-                .send_message(
+            let queued_message_id = manager
+                .send_message_with_queue_id(
                     session_id,
                     text,
                     send_meta.attachment_ids.as_deref(),
@@ -60,18 +59,11 @@ impl PromptPort for ManagerPorts {
                 )
                 .await
                 .map_err(prompt_error)?;
-            // A command bypasses the queue and always dispatches immediately —
-            // it never adds itself to `queued_message_count`, so that count
-            // (when non-zero) belongs entirely to OTHER, unrelated queued
-            // prompts and must not be reported as this command's own queue
-            // position.
-            let queued = if is_command {
-                0
-            } else {
-                manager.queued_message_count(session_id)
-            };
             Ok(PromptAcceptance {
-                queued_position: (queued > 0).then_some(queued as i64),
+                queued_position: queued_message_id
+                    .as_ref()
+                    .map(|_| manager.queued_message_count(session_id).max(1) as i64),
+                queued_message_id,
             })
         })
     }
@@ -100,6 +92,7 @@ async fn steer_prompt(
     let queued = manager.queued_message_count(chat_id);
     Ok(Some(PromptAcceptance {
         queued_position: (queued > 0).then_some(queued as i64),
+        queued_message_id: None,
     }))
 }
 

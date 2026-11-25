@@ -1,5 +1,25 @@
 {
-  "about": "What a local path looks like, read by lib/boards.py (before a board is written) and tools/check.mjs (on committed files). Keep both to the regex syntax Python and JavaScript share.",
-  "path": "(?:/Users/|/private/(?:tmp|var|etc)\\b|(?<![\\w.-])/(?:private|home)/|/var/folders/|\\b[A-Za-z]:[\\\\/]+Users[\\\\/]|/tmp/claude-\\d|/tmp/[^\\s\"'<>&;)]*-(?:Users|home)-|(?<![\\w-])-(?:Users|home|private-tmp|private-var|var-folders)-(?=\\w))[^\\s\"'<>&;)]*",
-  "encodedSlash": "(?:%(?:25)*2[fF]|\\\\u002[fF]|\\\\x2[fF]|\\\\/|&#[xX]0*2[fF];|&#0*47;|&sol;)"
+  "about": "What a local path looks like, read by lib/boards.py (before a board is written) and tools/check.mjs (on committed files). Keep all of it to the regex syntax Python and JavaScript share. The text is searched for `paths` and `more`, unless one of `exempt` matches first, twice: with `encodedSlash` characters alone decoded, and with every `encoded` character decoded and the `breaks` before a path (escapes of line breaks and terminal colours) taken for line breaks. So is what each `base64` run holds, with the line breaks of a wrapped one (`wrap`) taken out. `more` may be narrow, because a shape in it has an innocent twin; `paths` may not, and only a whole name that a board is known to need goes into `exempt`.",
+  "paths": "/Users/|/private/(?:tmp|var|etc)\\b|(?<![\\w.-])/(?:private|home)/|/var/folders/|\\b[A-Za-z]:[\\\\/]+Users[\\\\/]|/tmp/claude-\\d|/tmp/[^\\s\"'<>&;)]*-(?:Users|home)-|(?<![\\w-])-(?:Users|home|private-tmp|private-var|var-folders)-(?=\\w)",
+  "more": [
+    "\\\\Users\\\\+(?=\\w)",
+    "(?<=-[A-Z])/(?:private|home)/(?=\\w)",
+    "(?<![\\w./~-])Users/(?!(?:components?|hooks|pages?|api|src|assets|lib|utils?|features?|settings|panels?|sections?|views?|widgets|screens?|layouts?|ui|common|shared|styles?|types|state|stores?|context|tests?|__tests__|config|routes?|models?|services|images|icons|cards|lists?|tables?|forms?|details?)/)(?=[\\w.-]+/)",
+    "(?<![\\w./~-])home/(?!(?:components?|hooks|pages?|api|src|assets|lib|utils?|features?|settings|panels?|sections?|views?|widgets|screens?|layouts?|ui|common|shared|styles?|types|state|stores?|context|tests?|__tests__|config|routes?|models?|services|images|icons|cards|lists?|tables?|forms?|details?)/|[\\w-]+/[\\w-]+\\.(?:tsx?|jsx?|s?css|vue|svelte)(?![\\w./-]))(?=[\\w.-]+/\\w)",
+    "(?<![\\w./~-])(?:private/(?:tmp|var/folders)|var/folders)/(?=\\w)",
+    "(?<!-)-+Users-(?!(?:per|and|or|of|in|by|to|for|with|from|at|on|as|if|but|so|than|then|only|also|too|all|any|each|every|no|not|are|is|was|were|be|been|can|could|should|must|have|has|had|do|does|did|who|whose|what|when|where|which|how|why|that|this|these|those|here|there|now|today|tomorrow|yesterday|online|offline|active|total|page|pages|list|lists|table|menu|count|limit|panel|view|tab|group|groups|role|roles|row|rows|card|form|icon|button|section|header|footer|filter|search|select|picker|modal|dialog|settings|profile|id|ids|name|names)\\b)(?=\\w)",
+    "-{2,}home-(?!(?:page|screen|button|icon|card|tab|link|view|nav|header|footer|hero|menu|panel|section|row|title|dir|path|indicator|x|width|height|size|gap|padding|margin|radius|border|color|colour|bg|background|fg|foreground|font|shadow|offset|inset|top|left|right|bottom|min|max|active|hover|open|grid|column|columns|rail|sidebar)\\b)(?=[\\w.]+-\\w)",
+    "-private-tmp-(?=\\w)",
+    "-(?:private-)?var-folders-(?=[\\w.]+-\\w)"
+  ],
+  "exempt": [
+    "(?:^|(?<=[ \\t\\n\"'<>(\\[,`]))src/(?:components/)?Users/[Ll]ist(?:\\.tsx)?(?=$|[ \\t\\n\"'<>)\\],;:`]|\\.(?:$|[ \\t\\n\"'<>)]))",
+    "(?<![\\w/\\\\-])-home-page-(?:card|header|hero|title|link|layout)(?![\\w/\\\\-]|\\.\\w)"
+  ],
+  "end": "[^\\s\"'<>&;)]*",
+  "encodedSlash": "(?:%(?:25)*2[fF]|\\\\u002[fF]|\\\\x2[fF]|\\\\/|&#[xX]0*2[fF];|&#0*47;|&sol;)",
+  "encoded": "(?:%(?:25)*|\\\\u00|\\\\x)([2-7][0-9a-fA-F])|(?:&#[xX]0*|\\\\u\\{0*)([2-7][0-9a-fA-F])(?![0-9a-fA-F])[;}]?|&#0*([0-9]{2,3})(?![0-9]);?|\\\\0{0,2}([01][0-7]{2})(?![0-7])|(&sol;|\\\\/)|(&bsol;)",
+  "breaks": "(?:\\\\[abefnrtv]|%(?:25)*0[0-9a-fA-F]|\\[[0-9;]*m|&#(?:0*9|0*1[0-3]|[xX]0*[9a-dA-D]);?)(?=/)",
+  "base64": "[A-Za-z0-9+/_-]{12,}",
+  "wrap": "(?<=[A-Za-z0-9+/_-]{16})(?:\\\\[rn]|\\s)+(?=[A-Za-z0-9+/_-])"
 }

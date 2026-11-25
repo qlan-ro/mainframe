@@ -16,11 +16,12 @@ import {
 import { mfToast } from '@/lib/toast';
 import { matchCommandInvocation } from '../commands/command-registry';
 import { buildPendingMessage, parseSendInput } from './chat-reconcile';
-import { sendRefusal } from './describe-send-error';
+import { sendErrorMessage, sendRefusal } from './describe-send-error';
 import { previewsById } from './local-attachments';
 import { wantsSteer } from './steer';
 import { forgetSentCaptures, restoreSentCapture } from '../composer/draft-content/draft-content-store';
 import { useHeldQueue } from '../composer/queue/held-queue-store';
+import { heldTimestamp, matchQueued, noteQueued } from '../composer/queue/sent-order';
 import type { ChatStateEvent, ChatThreadState, PendingUserMessage } from './chat-thread-state';
 
 export interface ChatActionHost {
@@ -31,7 +32,7 @@ export interface ChatActionHost {
   dispatch(event: ChatStateEvent): void;
   /** The controller's deduped load — resolves instantly once seeded. */
   load(): Promise<void>;
-  sendPrompt(text: string, meta: PromptSendMeta): Promise<{ queued: boolean }>;
+  sendPrompt(text: string, meta: PromptSendMeta): Promise<{ queued: boolean; queuedMessageId?: string }>;
 }
 
 function refuseIfDirectoryMissing(host: ChatActionHost): boolean {
@@ -148,12 +149,18 @@ export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
   const refs = Object.values(host.getState().interactions.queued).filter((ref) => ref.delivery == null);
   if (refs.length === 0) return;
   const chatId = host.getDaemonId();
-  const temporary = host.getState().chatConfig?.temporary === true;
+  const chat = host.getState().chatConfig;
+  const temporary = chat?.temporary === true;
+  matchQueued(chatId, refs);
   const cancels = refs.map((ref) =>
     cancelQueuedMessage(host.getPort(), chatId, ref.messageId).then(
       (takenBack) => {
         // The agent already had it: it is in the conversation, not held.
-        if (takenBack) useHeldQueue.getState().hold(chatId, ref, { temporary });
+        if (!takenBack) return;
+        const timestamp = heldTimestamp(chatId, ref.messageId);
+        useHeldQueue
+          .getState()
+          .hold(chatId, ref, { temporary, projectId: chat?.projectId, ...(timestamp && { timestamp }) });
       },
       (error: unknown) => console.warn('[chat] queued message could not be held', { error }),
     ),
@@ -172,26 +179,36 @@ export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
 export async function sendHeldMessages(host: ChatActionHost, firstId: string): Promise<void> {
   const chatId = host.getDaemonId();
   const held = useHeldQueue.getState();
-  const rows = held.claimFrom(chatId, firstId);
+  const press = crypto.randomUUID();
+  const rows = held.claimFrom(chatId, firstId, press);
   // Another press holds the claims, and gives them back itself.
   if (rows.length === 0) return;
   try {
     // The prompt needs the facade client; failing here, nothing has gone out.
     await host.load();
-    for (const { messageId, content, attachmentIds } of rows) {
-      // Removed meanwhile, with its chat say, stopped, or no longer this window's: not sent.
-      if (!held.startSending(chatId, messageId)) continue;
+    for (const row of rows) {
+      const { messageId, content, attachmentIds } = row;
+      // Removed meanwhile, with its chat say, stopped, or no longer this press's: not sent.
+      if (!held.startSending(chatId, messageId, press)) continue;
+      let queuedMessageId: string | undefined;
       try {
-        await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {});
+        ({ queuedMessageId } = await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {}));
       } catch (error) {
         const reason = sendRefusal(error);
-        if (reason !== undefined) held.refuse(chatId, messageId, reason);
+        if (reason !== undefined) {
+          console.warn('[chat] held message refused', { chatId, messageId, raw: sendErrorMessage(error) });
+          held.refuse(chatId, messageId, press, reason);
+        }
         throw error;
+      }
+      if (queuedMessageId) {
+        noteQueued(chatId, { queuedMessageId, timestamp: row.timestamp });
+        matchQueued(chatId, Object.values(host.getState().interactions.queued));
       }
       held.remove(chatId, messageId);
     }
   } finally {
-    held.releaseClaims(chatId);
+    held.releasePress(chatId, press);
   }
 }
 

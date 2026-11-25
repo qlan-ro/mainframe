@@ -28,6 +28,7 @@ import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
 import { useHeldQueuePrune } from '../use-held-queue-prune';
 
 const LOCAL = getActiveDaemon();
+const PAIRED = { ...LOCAL, id: 'paired', kind: 'remote' as const };
 const hold = (chatId: string) =>
   useHeldQueue
     .getState()
@@ -42,7 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   useHeldQueue.setState({ byChat: {} });
-  setActiveDaemon(LOCAL);
+  setActiveDaemon(PAIRED);
   ws.connected = false;
   ws.listeners.clear();
   chatExists.mockImplementation(async (chatId: string) => chatId !== 'gone');
@@ -97,9 +98,9 @@ describe('held rows of a session that is gone', () => {
   });
 
   it('another daemon’s rows are not this one’s to judge', async () => {
-    setActiveDaemon({ ...LOCAL, id: 'remote', kind: 'remote' });
+    setActiveDaemon({ ...PAIRED, id: 'another' });
     hold('gone');
-    setActiveDaemon(LOCAL);
+    setActiveDaemon(PAIRED);
     renderHook(() => useHeldQueuePrune());
 
     await connect(true);
@@ -115,9 +116,20 @@ describe('held rows of a session that is gone', () => {
     renderHook(() => useHeldQueuePrune());
     await connect(true);
 
-    setActiveDaemon({ ...LOCAL, id: 'remote', kind: 'remote' });
+    setActiveDaemon({ ...PAIRED, id: 'another' });
     await act(async () => answer(false));
 
+    expect(heldChats()).toEqual(['gone']);
+  });
+
+  it('stay where the daemon is on this machine: another data directory answers as the same one', async () => {
+    setActiveDaemon(LOCAL);
+    hold('gone');
+    renderHook(() => useHeldQueuePrune());
+
+    await connect(true);
+
+    expect(chatExists).not.toHaveBeenCalled();
     expect(heldChats()).toEqual(['gone']);
   });
 });
