@@ -32,7 +32,7 @@ describe('SessionModeRadio', () => {
   it('tints Auto as a caution and keeps the destructive treatment for Unattended', () => {
     render(<SessionModeRadio adapterId="claude" adapter={withAuto} config={config} onChange={vi.fn()} />);
     const auto = screen.getByTestId('settings-claude-mode-option-auto');
-    expect(auto.className).toContain('border-warning/50');
+    expect(auto.className).toContain('border-warning-border');
     // The primitive's own base classes carry aria-invalid rings, so
     // pin the tone classes the row adds rather than the substring.
     expect(auto.className).not.toContain('border-destructive/50');

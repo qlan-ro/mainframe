@@ -32,5 +32,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## Memorable moment
 Clicking a monitor row scrolls the transcript to its pill, opens it and highlights it.
 
+The floating panel uses the updated two-layer menu shadow. The Sections button uses the compact slider glyph and the Session heading uses the body type size.
+
 ## Unresolved
 None.

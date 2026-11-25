@@ -34,8 +34,8 @@ function CreationCard({
   onClick,
   disabled,
 }: CreationCardProps): React.ReactElement {
-  const tint = accent === 'primary' ? 'bg-primary/10 text-primary' : 'bg-muted text-foreground';
-  const ctaColor = accent === 'primary' ? 'text-primary' : 'text-foreground';
+  const tint = accent === 'primary' ? 'bg-primary/10 text-accent-ink' : 'bg-muted text-foreground';
+  const ctaColor = accent === 'primary' ? 'text-accent-ink' : 'text-foreground';
   return (
     <button
       type="button"
@@ -75,7 +75,7 @@ export function BlankState({ onDescribe, onBuild, describeEnabled }: BlankStateP
     >
       <div className="text-center">
         <div className="mx-auto mb-[12px] inline-flex size-[52px] items-center justify-center rounded-xl bg-primary/10">
-          <Zap size={26} className="text-primary" aria-hidden />
+          <Zap size={26} className="text-accent-ink" aria-hidden />
         </div>
         <div className="text-lg font-semibold tracking-tight text-foreground">Create an automation</div>
         <div className="mt-[4px] text-sm text-muted-foreground">Automate the repetitive parts of your day.</div>

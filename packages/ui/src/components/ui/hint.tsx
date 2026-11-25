@@ -16,7 +16,7 @@ interface HintProps {
  * No `TooltipProvider` of its own: shadcn documents that as an app-root concern,
  * and `SidebarProvider` already mounts one at the stock zero delay.
  */
-export function Hint({ label, children, side, sideOffset }: HintProps) {
+export function Hint({ label, children, side, sideOffset = 8 }: HintProps) {
   // Empty label → bare child, so `label={cond ? 'x' : undefined}` call sites skip the tooltip.
   if (label === null || label === undefined || label === '') return children;
   return (

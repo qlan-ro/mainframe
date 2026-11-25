@@ -39,7 +39,7 @@ export function CountBadge({
         className={cn(
           'inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1',
           'text-xs font-semibold tabular-nums',
-          tone === 'destructive' ? 'bg-destructive' : 'bg-primary',
+          tone === 'destructive' ? 'bg-destructive' : 'bg-accent-fill',
           'text-primary-foreground',
           className,
         )}
@@ -54,7 +54,7 @@ export function CountBadge({
     <span
       className={cn(
         'text-xs font-semibold tabular-nums',
-        variant === 'unread' ? 'text-primary' : 'text-muted-foreground',
+        variant === 'unread' ? 'text-accent-ink' : 'text-muted-foreground',
         onAccent && 'text-primary-foreground',
         className,
       )}

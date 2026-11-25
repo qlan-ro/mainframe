@@ -6,5 +6,5 @@ import { cn } from '@/lib/utils';
  * on a panel.
  */
 export function TitleBarSeparator({ className, testId }: { className?: string; testId: string }) {
-  return <span aria-hidden data-testid={testId} className={cn('h-4 w-px shrink-0 bg-foreground/18', className)} />;
+  return <span aria-hidden data-testid={testId} className={cn('h-4 w-px shrink-0 bg-hairline-strong', className)} />;
 }

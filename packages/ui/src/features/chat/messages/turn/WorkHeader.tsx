@@ -171,7 +171,7 @@ export function WorkHeader({ turn }: { turn: Turn }) {
       <ChevronRight
         aria-hidden
         className={cn(
-          'pointer-events-none relative size-3 shrink-0 transition-transform duration-150 motion-reduce:transition-none',
+          'pointer-events-none relative size-3 shrink-0 text-muted-foreground transition-transform duration-150 motion-reduce:transition-none',
           open && 'rotate-90',
         )}
       />

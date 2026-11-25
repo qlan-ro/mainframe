@@ -9,7 +9,7 @@ import type { PhaseStatus } from './workflow-phase-view';
 const FILL: Record<PhaseStatus, string> = {
   done: 'bg-success',
   failed: 'bg-fail',
-  running: 'bg-primary motion-safe:animate-pulse',
+  running: 'bg-live motion-safe:animate-pulse',
   unknown: 'border border-muted-foreground',
   pending: 'border border-muted-foreground/60',
 };

@@ -441,12 +441,17 @@ Built so far in the base theme of `packages/ui`, each with a light and a dark va
 | --- | --- | --- |
 | `fail` | `--fail` | `text-fail`, `bg-fail`, `border-fail` |
 | `focus` | `--focus` (`--ring` and `--sidebar-ring` alias it) | `focus-line`, `focus-line-inset`, `*-focus` |
+| `live` | `--live` | `text-live` on the session row spinner |
+| `accent-ink` | `--accent-ink` | `text-accent-ink` on the active sidebar filter |
+| `tipbg`, `tipink` | `--tooltip`, `--tooltip-foreground` | `bg-tooltip`, `text-tooltip-foreground` on shared tooltips |
+| Meta (12 px) | `--text-meta` | `text-meta` on group labels and shared tooltips |
+| Tooltip shadow | `--shadow-tooltip` | `shadow-tooltip` |
 
-`crit` and `red` are not built. The app has one red, `--destructive` (`#e7000b` light, `#ff6467` dark, against `#c70016` and `#ff8080` for `crit`, `#c0392b` and `#ff7b6e` for `red`), and it does the work of both: irreversible actions, Reject, Stop, context and plan usage at 90 % and above, the Unattended permission, error output in tool bodies and the run console, and diff deletions (`--mf-diff-del-text` aliases it). The xterm terminal's red is its own ANSI palette. The split into two reds and the 95 % threshold come with the PRs that build those areas.
+`crit` maps to `--crit` for the critical context ring. `red` maps to `--red` for deletion counts and diff text. Transcript diff text adjusts its ink on tinted rows to meet the contrast floor. The xterm terminal uses its own ANSI palette.
 
 Text in `fail` may sit on a `fail` tint of 6 % at most (`bg-fail/6`), at full strength; a stronger tint is for icons and `foreground` text. `contrast.test.ts` measures it (4.60:1 at worst in light, 4.96:1 in dark) and refuses a stronger one.
 
-The other names keep their stock tokens (`--background`, `--primary`, `--warning`, …) until the PR that builds their area.
+The shell uses the palette above for ground, sheet, card, chip, hairlines, hover, press, selection, foreground, metadata, warning and success. The neutral row selection is separate from the legacy blue tint used for drag targets and engaged controls.
 
 ## Typography
 
@@ -520,7 +525,7 @@ Radii are soft but not round, and they nest: the outer container is always round
 
 The composer's top strip is the one silhouette worth naming. It is a drawer with the card's surface and outline, inset 12 px each side, rounded on top only, with its bottom tucked 17 px under the card so the seam disappears. Strips are never a frame around the composer.
 
-Icons are a 16 px outline set (12 px small, 20 px in the rail) with a 1.5 px stroke and round caps and joins, drawn in `meta` and turning `ink` on hover.
+Icons are a 16 px outline set (12 px small, 20 px in the rail) with a 1.5 px stroke and round caps and joins, drawn in `meta` and turning `ink` on hover. The app applies that stroke to Lucide icons using the default width and preserves explicitly set widths.
 
 ## Components
 
@@ -646,3 +651,15 @@ Motion is functional and short:
 - **Don't** hide a control at narrow widths; merge, shorten or iconify it.
 - **Don't** confirm Stop; the one confirmation in the composer is turning on Unattended, once per session.
 - **Don't** use `faint` for text, draw a scrollbar track, or let a native scrollbar take width; scrollbars are overlay thumbs.
+
+### Shared CSS defaults
+
+The shared UI stylesheet requests antialiased WebKit font smoothing on the body,
+including inherited text in both themes. Its base layer sets a 1.5-unit stroke
+for Lucide SVGs with a stroke-width attribute of 2. Other attribute values and
+higher-priority stroke utilities keep their own widths.
+
+The shared `cn()` helper recognizes the named text sizes, shadows, tile radius
+and focus outlines across all UI components and themes. Competing classes in
+the same group and modifier scope resolve in argument order. The focus outline
+utilities also participate in outline conflict resolution.

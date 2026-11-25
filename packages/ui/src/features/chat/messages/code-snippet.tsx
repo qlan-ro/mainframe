@@ -81,7 +81,7 @@ export function SnippetBlock({ id, lines, start }: { id: string; lines: readonly
           data-testid={`chat-user-snippet-expand-${id}`}
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-px flex w-full items-center justify-center gap-1 border-t border-border bg-card py-1.5 text-xs font-semibold text-primary hover:bg-muted"
+          className="mt-px flex w-full items-center justify-center gap-1 border-t border-border bg-card py-1.5 text-xs font-semibold text-accent-ink hover:bg-muted"
         >
           {expanded ? 'Collapse' : `Show all ${lines.length} lines`}
           {expanded ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}

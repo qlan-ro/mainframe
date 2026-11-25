@@ -30,7 +30,7 @@ import { useHoverPin } from './use-hover-pin';
 
 const CYCLE_INTERVAL_MS = 4_000;
 /** The capsule's width while the sidebar is collapsed; the narrowest open sidebar gives it about this much too. */
-export const USAGE_CAPSULE_WIDTH = 176;
+export const USAGE_CAPSULE_WIDTH = 224;
 /** One capsule row; the track slides by this much per step. */
 const ROW_PX = 20;
 
@@ -56,30 +56,38 @@ function CapsuleRow({ item, now }: { item: CapsuleItemVm; now: number }) {
   return (
     <span
       data-testid={`usage-capsule-item-${item.key}`}
-      className="flex h-5 items-center gap-1.5 text-xs whitespace-nowrap tabular-nums"
+      className="flex h-5 items-center gap-[6px] text-meta/[1.45] whitespace-nowrap text-ink-secondary tabular-nums"
     >
-      <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate-fade">
+      <span
+        className="flex min-w-0 flex-1 items-center gap-[6px] truncate-fade"
+        title={`${item.providerLabel} ${item.name}`}
+      >
         <span className="shrink-0">{item.providerLabel}</span>
-        <span aria-hidden className="size-0.75 shrink-0 rounded-full bg-foreground" />
+        <span aria-hidden className="size-0.75 shrink-0 rounded-full bg-muted-foreground" />
         <span className="shrink-0 text-muted-foreground">{item.name}</span>
       </span>
       <Progress
         value={item.usedPercent}
-        className={cn('h-0.75 w-8 shrink-0 bg-foreground/10', QUOTA_BAR_FILL[item.severity])}
+        className={cn(
+          'h-1 w-8 shrink-0 bg-[color-mix(in_srgb,var(--foreground)_16%,transparent)]',
+          QUOTA_BAR_FILL[item.severity],
+        )}
       />
-      <span className={cn('w-6.5 shrink-0 text-right', QUOTA_PERCENT_TEXT[item.severity])}>
+      <span className={cn('shrink-0 font-semibold', QUOTA_PERCENT_TEXT[item.severity])}>
         {formatUsedPercent(item.usedPercent)}%
       </span>
-      <span className="w-11 shrink-0 text-right text-muted-foreground">
-        {formatRelativeReset(item.resetsAt, now) ?? '—'}
-      </span>
+      <span className="ml-auto shrink-0 text-muted-foreground">{formatRelativeReset(item.resetsAt, now) ?? '—'}</span>
     </span>
   );
 }
 
 function CycleDots({ count, active }: { count: number; active: number }) {
   return (
-    <span data-testid="usage-capsule-dots" aria-hidden className="ml-0.5 flex shrink-0 flex-col gap-0.5">
+    <span
+      data-testid="usage-capsule-dots"
+      aria-hidden
+      className="absolute top-1/2 right-1 flex -translate-y-1/2 flex-col gap-0.5"
+    >
       {Array.from({ length: count }, (_, i) => (
         <span
           key={i}
@@ -127,8 +135,8 @@ export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: numbe
           onPointerLeave={hover.onPointerLeave}
           style={{ width }}
           className={cn(
-            'flex h-7 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg bg-sidebar-accent pr-1.5 pl-2.5',
-            'outline-none hover:bg-foreground/15 focus-visible:focus-line',
+            'relative flex h-7 shrink-0 items-center gap-[7px] overflow-hidden rounded-lg bg-chrome-chip px-3',
+            'outline-none hover:bg-chrome-press focus-visible:focus-line',
             hover.open && 'bg-foreground/15',
           )}
         >
@@ -146,11 +154,7 @@ export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: numbe
               </span>
             )}
           </span>
-          {pinnedIndex == null && items.length > 1 ? (
-            <CycleDots count={items.length} active={shown} />
-          ) : (
-            <span aria-hidden className="w-0.75 shrink-0" />
-          )}
+          {pinnedIndex == null && items.length > 1 && <CycleDots count={items.length} active={shown} />}
         </button>
       </PopoverAnchor>
       <PopoverContent

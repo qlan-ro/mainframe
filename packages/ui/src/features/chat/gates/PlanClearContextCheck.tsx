@@ -18,7 +18,7 @@ export function PlanClearContextCheck({ checked, onChange }: PlanClearContextChe
         checked={checked}
         onCheckedChange={(val) => onChange(val === true)}
       />
-      <Label htmlFor={id} className="cursor-pointer text-xs text-muted-foreground">
+      <Label htmlFor={id} className="cursor-pointer text-meta/[1.45] font-normal text-muted-foreground">
         Clear context
       </Label>
     </div>

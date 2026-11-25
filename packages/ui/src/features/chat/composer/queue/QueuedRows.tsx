@@ -7,7 +7,8 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { useAuiState } from '@assistant-ui/react';
-import { CircleAlert, Loader2, PencilIcon, RotateCcwIcon, XIcon } from 'lucide-react';
+import { CircleAlert, Loader2, RotateCcwIcon, XIcon } from 'lucide-react';
+import { PencilIcon } from '@/components/ui/glyphs';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -70,7 +71,7 @@ function IconAction({
         data-testid={testId}
         aria-label={`${label} queued message`}
         onClick={onClick}
-        className="size-6 text-muted-foreground"
+        className="size-6 rounded-sm text-muted-foreground hover:bg-sidebar-accent"
       >
         {children}
       </Button>
@@ -89,15 +90,12 @@ function Row({ row }: { row: QueueRow }) {
       data-failed={row.failure ? true : undefined}
       data-sending={row.sending || undefined}
       className={cn(
-        'flex min-h-8 min-w-0 items-center gap-2 rounded-lg py-0.5 pr-0.5 pl-2.5 text-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1',
-        row.failure ? 'bg-fail/6 ring-1 ring-fail/28 ring-inset' : 'bg-muted',
+        'flex min-h-8 min-w-0 items-center gap-2 rounded-md py-0.5 pr-0.5 pl-2.5 text-body motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1',
+        row.failure ? 'bg-fail/6 ring-1 ring-fail/28 ring-inset' : 'bg-queue-well',
       )}
     >
       {row.sending && (
-        <Loader2
-          className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
-          aria-hidden
-        />
+        <Loader2 className="size-3.5 shrink-0 animate-spin text-live motion-reduce:animate-none" aria-hidden />
       )}
       {row.failure && <CircleAlert className="size-4 shrink-0 text-fail" aria-hidden />}
       <span className="flex min-w-0 flex-1 flex-col">
@@ -105,7 +103,7 @@ function Row({ row }: { row: QueueRow }) {
           {!row.failure && (
             <span
               role={row.sending ? 'status' : undefined}
-              className="shrink-0 text-xs leading-[inherit] font-semibold text-muted-foreground"
+              className="shrink-0 self-center text-caption/[1.45] font-semibold text-muted-foreground"
             >
               {row.note ?? 'Queued'}
             </span>
@@ -114,7 +112,7 @@ function Row({ row }: { row: QueueRow }) {
             {[text, files].filter(Boolean).join(' · ')}
           </span>
         </span>
-        {row.failure && <span className="text-xs text-fail">{row.failure}</span>}
+        {row.failure && <span className="text-meta/[1.3] text-fail">{row.failure}</span>}
       </span>
       {row.action && (
         <Button
@@ -131,12 +129,12 @@ function Row({ row }: { row: QueueRow }) {
       )}
       {row.onEdit && (
         <IconAction label="Edit" testId="chat-queued-edit" onClick={row.onEdit}>
-          <PencilIcon />
+          <PencilIcon className="size-4" />
         </IconAction>
       )}
       {row.onRemove && (
         <IconAction label="Remove" testId="chat-queued-cancel" onClick={row.onRemove}>
-          <XIcon />
+          <XIcon className="size-4" />
         </IconAction>
       )}
     </div>

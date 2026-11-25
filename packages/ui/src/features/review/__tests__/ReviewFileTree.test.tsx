@@ -56,9 +56,9 @@ describe('ReviewFileTree', () => {
   // exactly what this catches.
   it.each([
     ['added', 'A', 'bg-success/[12.16%]'],
-    ['modified', 'M', 'bg-warning/[12.16%]'],
+    ['modified', 'M', 'bg-warning-surface'],
     ['deleted', 'D', 'bg-destructive/[12.16%]'],
-    ['renamed', 'R', 'bg-warning/[12.16%]'],
+    ['renamed', 'R', 'bg-warning-surface'],
   ])('tints the %s badge with the v2 status hue', (_status, label, expected) => {
     render(<ReviewFileTree files={FILES} selectedFile={null} onSelectFile={vi.fn()} />);
     expect(screen.getByText(label).className).toContain(expected);

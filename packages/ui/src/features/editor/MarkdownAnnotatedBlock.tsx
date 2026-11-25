@@ -62,7 +62,7 @@ export function MarkdownAnnotatedBlock({ node, children }: MarkdownAnnotatedBloc
           data-testid={`md-note-add-${rangeKey}`}
           aria-label="Add note"
           onClick={handleAdd}
-          className="md-note-reveal absolute -right-8 top-0.5 flex size-5 items-center justify-center text-muted-foreground opacity-0 transition-opacity hover:text-primary"
+          className="md-note-reveal absolute -right-8 top-0.5 flex size-5 items-center justify-center text-muted-foreground opacity-0 transition-opacity hover:text-accent-ink"
         >
           <MessageSquarePlus className="size-3.5" />
         </button>
@@ -73,7 +73,7 @@ export function MarkdownAnnotatedBlock({ node, children }: MarkdownAnnotatedBloc
           data-testid={`md-note-marker-${rangeKey}`}
           aria-label="Open note"
           onClick={() => ctx.openNote(overlapping[0]!.id)}
-          className="absolute -right-8 top-0.5 flex size-5 items-center justify-center text-primary"
+          className="absolute -right-8 top-0.5 flex size-5 items-center justify-center text-accent-ink"
         >
           <Sparkles className="size-3.5" />
         </button>

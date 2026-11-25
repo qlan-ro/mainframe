@@ -41,7 +41,7 @@ export function DescribeFlow() {
             <ChevronLeft size={15} aria-hidden />
           </button>
         </Hint>
-        <Wand2 size={16} className="text-primary" aria-hidden />
+        <Wand2 size={16} className="text-accent-ink" aria-hidden />
         <span className="text-base font-semibold tracking-tight text-foreground">Describe your automation</span>
       </div>
 
@@ -62,7 +62,7 @@ export function DescribeFlow() {
         {draft ? (
           <div className="flex flex-col gap-3.5">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Sparkles size={12} className="text-primary" aria-hidden />
+              <Sparkles size={12} className="text-accent-ink" aria-hidden />
               Here's a draft. Open it to tweak anything.
             </div>
             <DraftPreview draft={draft} catalog={catalog} />

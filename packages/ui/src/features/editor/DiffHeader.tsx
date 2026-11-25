@@ -47,11 +47,11 @@ export function DiffHeader({ fileName, changeCount, additions, deletions, filePa
     <div
       role="toolbar"
       aria-label="Diff navigation"
-      className="flex h-7 shrink-0 items-center gap-2 border-b border-border bg-card px-3"
+      className="flex h-8 shrink-0 items-center gap-1.5 border-b border-border pr-1.5 pl-3.5 text-meta/[1.45]"
     >
       <GitBranch className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
 
-      <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{fileName}</span>
+      <span className="min-w-0 flex-1 truncate font-medium text-ink-secondary">{fileName}</span>
 
       {additions !== undefined && (
         <span className="text-xs font-semibold text-mf-diff-add-text tabular-nums">+{additions}</span>

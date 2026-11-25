@@ -105,7 +105,7 @@ describe('GateCardShell', () => {
       </GateCardShell>,
     );
     const el = screen.getByTestId('shell-accent-warning');
-    expect(el).toHaveClass('ring-warning/15');
+    expect(el).toHaveClass('ring-warning-dot/15');
     expect(el).not.toHaveClass('ring-primary/15');
   });
 

@@ -61,7 +61,7 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
         <p className="text-lg font-semibold text-foreground mt-[14px] tracking-tight">Something went wrong</p>
 
         {/* Reassurance */}
-        <p className="text-xs text-muted-foreground mt-[5px] leading-normal">
+        <p className="text-xs text-ink-secondary mt-[5px] leading-normal">
           This view hit an error and stopped rendering. Your session and files are unaffected.
         </p>
 
@@ -110,7 +110,7 @@ export function ErrorState({ error, onRetry, embedded = false, componentStack }:
             onClick={onRetry}
             className={[
               'h-[28px] px-[14px] rounded-[8px]',
-              'bg-primary text-primary-foreground',
+              'bg-accent-fill text-primary-foreground',
               'text-xs font-medium',
               'cursor-pointer',
             ].join(' ')}

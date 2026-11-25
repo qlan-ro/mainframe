@@ -153,7 +153,7 @@ describe('PermissionGate', () => {
     fireEvent.click(screen.getByTestId('chat-permission-details-toggle'));
 
     const pre = screen.getByTestId('chat-permission-details-pre');
-    expect(pre).toHaveClass('bg-muted', 'text-foreground');
+    expect(pre).toHaveClass('bg-code-surface', 'text-foreground');
   });
 
   // --- Details reveal mounts with an enter transition ---

@@ -49,7 +49,7 @@ export function BranchRow({ branch, isCurrent, isRemote = false, grouped = false
       <DropdownMenuSubTrigger data-testid={`git-branch-row-${name}`} className={cn(grouped && 'pl-4')}>
         {/* Checkmark gutter — fixed width so names align across rows */}
         <span className="inline-flex w-3.5 shrink-0 items-center justify-center">
-          {isCurrent && <Check className="size-3 text-primary" />}
+          {isCurrent && <Check className="size-3 text-accent-ink" />}
         </span>
         {/* Status dot — 6px */}
         <span className={cn('size-1.5 shrink-0 rounded-full', isCurrent ? 'bg-success' : 'bg-muted-foreground/40')} />

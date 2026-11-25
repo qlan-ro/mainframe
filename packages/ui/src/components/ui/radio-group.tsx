@@ -12,7 +12,7 @@ function RadioGroupItem({ className, ...props }: React.ComponentProps<typeof Rad
     <RadioGroupPrimitive.Item
       data-slot="radio-group-item"
       className={cn(
-        'border-input text-primary focus-visible:focus-line aria-invalid:ring-fail/20 dark:aria-invalid:ring-fail/40 aria-invalid:border-fail dark:bg-input/30 aspect-square size-4 shrink-0 rounded-full border shadow-xs transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50',
+        'border-input text-accent-ink focus-visible:focus-line aria-invalid:ring-fail/20 dark:aria-invalid:ring-fail/40 aria-invalid:border-fail dark:bg-input/30 aspect-square size-4 shrink-0 rounded-full border shadow-xs transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50',
         className,
       )}
       {...props}

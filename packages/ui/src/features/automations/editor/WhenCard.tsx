@@ -80,7 +80,7 @@ export function WhenCard({ triggers, onChange, automationId }: WhenCardProps) {
             <button
               type="button"
               data-testid="automations-when-add"
-              className="self-start text-xs font-semibold text-primary"
+              className="self-start text-xs font-semibold text-accent-ink"
             >
               + Add a trigger
             </button>

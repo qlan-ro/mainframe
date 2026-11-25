@@ -20,7 +20,7 @@ function ExploreRow({ step, turnKey }: { step: ExploreStep; turnKey?: string }) 
       testId={`chat-explore-${parts[0]!.toolCallId}`}
       name={`Explored ${summary}`}
       statusWord="Done"
-      icon={<FolderSearch aria-hidden />}
+      icon={<FolderSearch aria-hidden className="text-muted-foreground" />}
       verb="Explored"
       target={summary}
       receipt={`${parts.length} steps`}

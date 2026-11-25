@@ -92,9 +92,9 @@ function useLoadCall(
 
 function Block({ label, testId, children }: { label: string; testId: string; children: React.ReactNode }) {
   return (
-    <section data-testid={testId} className="min-w-0">
-      <h3 className="pb-1 text-xs font-medium text-muted-foreground">{label}</h3>
-      <div className="aui-md text-sm break-words">{children}</div>
+    <section data-testid={testId} className="mt-0.5 mb-1.5 min-w-0">
+      <h3 className="text-control font-medium text-(--mf-tr-secondary)">{label}</h3>
+      <div className="aui-md text-control text-(--mf-tr-secondary) break-words">{children}</div>
     </section>
   );
 }
@@ -250,7 +250,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
         role="region"
         aria-label={shownTitle}
         tabIndex={-1}
-        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pt-3 pb-4 outline-none focus-visible:focus-line-inset"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[22px] pt-3 pb-4 outline-none focus-visible:focus-line-inset [&_.mf-tr-mono]:translate-y-0"
       >
         {call == null || place == null ? (
           <p role="status" className="text-sm text-muted-foreground">

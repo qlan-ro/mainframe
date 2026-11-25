@@ -6,7 +6,7 @@ export function Spinner({ className }: { className?: string }) {
   return (
     <Loader2
       aria-hidden
-      className={cn('size-3.5 shrink-0 animate-spin text-focus motion-reduce:animate-none', className)}
+      className={cn('size-3.5 shrink-0 animate-spin text-live motion-reduce:animate-none', className)}
     />
   );
 }
@@ -22,6 +22,7 @@ export function RowGlyph({ icon: Icon, status }: { icon: RowIcon; status: RowSta
         'size-3.5 shrink-0',
         status === 'failed' && 'text-fail',
         (status === 'awaiting-approval' || status === 'needs-you') && 'text-warning',
+        status !== 'failed' && status !== 'awaiting-approval' && status !== 'needs-you' && 'text-muted-foreground',
       )}
     />
   );

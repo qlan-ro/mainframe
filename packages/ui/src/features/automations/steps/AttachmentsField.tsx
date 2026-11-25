@@ -73,7 +73,7 @@ export function AttachmentsField({ value, onChange, testId }: AttachmentsFieldPr
         type="button"
         data-testid={`${testId}-add`}
         onClick={add}
-        className="inline-flex h-[24px] items-center gap-1 rounded-full border border-dashed border-input px-[10px] text-xs font-semibold text-primary hover:bg-accent"
+        className="inline-flex h-[24px] items-center gap-1 rounded-full border border-dashed border-input px-[10px] text-xs font-semibold text-accent-ink hover:bg-accent"
       >
         <Paperclip size={11} aria-hidden />
         Add image or file…

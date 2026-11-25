@@ -88,7 +88,7 @@ export function ProjectAvatar({
         <span
           aria-hidden
           data-testid="project-avatar-check"
-          className="absolute -right-1 -bottom-1 inline-flex size-3 items-center justify-center rounded-full bg-primary text-primary-foreground"
+          className="absolute -right-1 -bottom-1 inline-flex size-3 items-center justify-center rounded-full bg-accent-fill text-primary-foreground"
           style={{ border: `1.5px solid var(${ground})` }}
         >
           <CheckIcon className="size-2" strokeWidth={4} />

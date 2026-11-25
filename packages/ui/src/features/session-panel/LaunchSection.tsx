@@ -10,7 +10,8 @@
  * worktree path from it, and the scope key is itself chatId-dependent, so a
  * stop issued without one looks up a different manager and finds no process.
  */
-import { Eye, LoaderCircle, Play, Square, Terminal } from 'lucide-react';
+import { Eye, LoaderCircle, Terminal } from 'lucide-react';
+import { PlayIcon, StopIcon } from '@/components/ui/glyphs';
 import { Hint } from '@/components/ui/hint';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
@@ -25,17 +26,17 @@ function LaunchValue({ row }: { row: LaunchRow }) {
       {status === 'starting' && (
         <LoaderCircle
           data-testid={`session-panel-launch-spinner-${name}`}
-          className="size-3 animate-spin text-primary motion-reduce:animate-none"
+          className="size-3 animate-spin text-live motion-reduce:animate-none"
           aria-hidden
         />
       )}
       {/* The glyph is what the row does; the whole row acts. */}
       <span data-testid={`session-panel-launch-${live ? 'stop' : 'start'}-${name}`}>
         {live ? (
-          <Square className="size-3 text-destructive" fill="currentColor" aria-hidden />
+          <StopIcon className="size-3 text-crit" fill="currentColor" aria-hidden />
         ) : (
-          <Play
-            className="size-3 transition-colors group-hover/launch:text-primary group-focus-visible/launch:text-primary"
+          <PlayIcon
+            className="size-3 transition-colors group-hover/launch:text-accent-ink group-focus-visible/launch:text-accent-ink"
             fill="currentColor"
             aria-hidden
           />
@@ -85,7 +86,7 @@ export function LaunchSection({ port }: { port: number }) {
                 className="group/launch"
                 icon={row.config.preview ? <Eye /> : <Terminal />}
                 label={row.name}
-                labelClassName={row.selected ? 'font-semibold' : undefined}
+                labelClassName={row.selected ? 'font-semibold text-foreground' : undefined}
                 value={<LaunchValue row={row} />}
               />
             </Hint>

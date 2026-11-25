@@ -25,7 +25,7 @@ const PILL_TINT: Record<ClaudeWorkflowRunStatus, string> = {
 const RAIL_FILL: Record<PhaseStatus, string> = {
   done: 'bg-success',
   failed: 'bg-fail',
-  running: 'bg-primary motion-safe:animate-pulse',
+  running: 'bg-live motion-safe:animate-pulse',
   unknown: 'bg-muted-foreground/40',
   pending: 'bg-muted',
 };
@@ -39,9 +39,7 @@ function StatusPill({ status }: { status: ClaudeWorkflowRunStatus }) {
         PILL_TINT[status],
       )}
     >
-      {status === 'running' && (
-        <span aria-hidden className="size-1 rounded-full bg-primary motion-safe:animate-pulse" />
-      )}
+      {status === 'running' && <span aria-hidden className="size-1 rounded-full bg-live motion-safe:animate-pulse" />}
       {statusChipLabel(status)}
     </span>
   );

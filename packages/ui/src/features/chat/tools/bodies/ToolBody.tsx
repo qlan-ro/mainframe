@@ -20,7 +20,7 @@ export interface ToolBodyProps {
   status: ToolStatus;
 }
 
-/** Whether the row has anything to open on. `background`: the daemon holds a task the call started. */
+/** Whether there is content for the tool-specific renderer. */
 export function hasToolBody(part: ToolPart, status: ToolStatus, background = false): boolean {
   const { text } = resolveResultText(part.result);
   if (text || resultImages(part.result).length) return true;
@@ -44,7 +44,7 @@ function ChangeBody({ part }: { part: ToolPart }) {
   const kind = toolKind(part.toolName) === 'edit' ? 'Edit' : 'Write';
   const { hunks } = resolveToolDiff(kind, part.args, part.result);
   if (hunks?.length && !(kind === 'Write' && createsFile(part)))
-    return <DiffBody id={part.toolCallId} hunks={hunks} testId="chat-edit-diff" />;
+    return <DiffBody id={part.toolCallId} hunks={hunks} path={argText(part, 'file_path')} testId="chat-edit-diff" />;
   const content = argText(part, 'content');
   if (!content) return null;
   return (
@@ -83,7 +83,11 @@ function ShellBody({ part, status }: ToolBodyProps) {
   const description = argText(part, 'description');
   return (
     <>
-      {description && <BodyNote testId="chat-bash-description">{description}</BodyNote>}
+      {description && (
+        <p data-testid="chat-bash-description" className="mb-1.5 text-meta/5.5 text-muted-foreground">
+          {description}
+        </p>
+      )}
       {background ? (
         <BackgroundOutput toolCallId={part.toolCallId} command={command} launch={text} />
       ) : truncated ? (
@@ -107,11 +111,9 @@ function CallBody({ part, status }: ToolBodyProps) {
           {part.toolName}
         </KeyValue>
       )}
-      {Object.keys(args).length > 0 && (
-        <KeyValue label="Arguments" testId="chat-call-args">
-          {JSON.stringify(args, null, 2)}
-        </KeyValue>
-      )}
+      <KeyValue label="Arguments" testId="chat-call-args">
+        {JSON.stringify(args, null, 2)}
+      </KeyValue>
       {text && (
         <KeyValue
           label={status === 'failed' ? 'Error' : 'Result'}
@@ -160,16 +162,26 @@ function MainBody({ part, status }: ToolBodyProps) {
   return <ResultBlock part={part} failed={false} testId="search-card-plain-body" />;
 }
 
+function imagePreview(part: ToolPart): 'file' | 'browser' | undefined {
+  if (toolKind(part.toolName) === 'read') return 'file';
+  return /(?:^|__)browser_take_screenshot$/.test(part.toolName) ? 'browser' : undefined;
+}
+
 export function ToolBody({ part, status }: ToolBodyProps) {
+  const background = useBackgroundStart(part.toolCallId) !== undefined;
   const images = resultImages(part.result);
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="min-w-0 empty:hidden">
-        <MainBody part={part} status={status} />
+        {hasToolBody(part, status, background) ? (
+          <MainBody part={part} status={status} />
+        ) : (
+          <CallBody part={part} status={status} />
+        )}
       </div>
       {images.length > 0 && (
         <div data-testid="chat-tool-images">
-          <ToolResultImageThumbs toolCallId={part.toolCallId} images={images} />
+          <ToolResultImageThumbs toolCallId={part.toolCallId} images={images} preview={imagePreview(part)} />
         </div>
       )}
     </div>

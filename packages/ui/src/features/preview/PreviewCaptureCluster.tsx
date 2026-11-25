@@ -20,7 +20,7 @@ interface PreviewCaptureClusterProps {
  * tooltip's own.
  */
 const TOGGLE_SIZE = "size-6 min-w-6 p-0 [&_svg:not([class*='size-'])]:size-3";
-const TOGGLE_ON = 'bg-accent text-primary';
+const TOGGLE_ON = 'bg-accent text-accent-ink';
 
 export function PreviewCaptureCluster({
   isRunning,
@@ -38,8 +38,8 @@ export function PreviewCaptureCluster({
         isRunning ? 'border border-primary/20 bg-primary/5' : 'pointer-events-none opacity-40',
       )}
     >
-      <ArrowUp className="size-3 text-primary" aria-hidden />
-      <span className="mr-0.5 text-xs font-medium text-primary">Chat</span>
+      <ArrowUp className="size-3 text-accent-ink" aria-hidden />
+      <span className="mr-0.5 text-xs font-medium text-accent-ink">Chat</span>
 
       <Hint label="Inspect element">
         <Toggle

@@ -24,7 +24,7 @@ const MIN_WORKSPACE = 320;
  * less the divider when the row itself is narrower. In `cqw` of the row, so the
  * panel's content keeps its final width while the panel slides.
  */
-const PANEL_WIDTH = 'w-[min(100cqw-1px,max(20rem,min(var(--mf-workspace-frac)*100cqw,100cqw-22.5rem-1px)))]';
+const PANEL_WIDTH = 'w-[min(100cqw-1px,max(20rem,min(var(--mf-workspace-frac)*100cqw-1px,100cqw-22.5rem-1px)))]';
 
 /** Reports where the panel's left edge comes to rest, so the title bar does not chase the slide. */
 function RestingEdge() {

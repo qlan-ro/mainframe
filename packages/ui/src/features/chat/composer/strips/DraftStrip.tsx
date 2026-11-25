@@ -31,11 +31,11 @@ function TemporaryToggle({ localId, on }: { localId: string; on: boolean }) {
       aria-pressed={on}
       onClick={() => patchDraftConfig(localId, { temporary: !on })}
       className={cn(
-        'inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-sm hover:bg-accent focus-visible:focus-line',
-        on ? 'bg-accent text-foreground' : 'text-muted-foreground',
+        'inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-body hover:bg-sidebar-accent focus-visible:focus-line',
+        on ? 'bg-chrome-selected text-foreground' : 'text-muted-foreground',
       )}
     >
-      <Timer className="size-3.5" aria-hidden />
+      <Timer className="size-4" aria-hidden />
       Temporary
     </button>
   );
@@ -59,7 +59,7 @@ export function DraftStrip({ standalone = false }: { standalone?: boolean }) {
         onSelect={(id) => void selectProject(id)}
         open={open}
         onOpenChange={setOpen}
-        className="h-7 rounded-lg px-2 hover:bg-accent"
+        className="h-7 rounded-lg px-2 hover:bg-sidebar-accent"
       />
       {threadId != null && draft?.projectId != null && (
         <DraftBranchPicker key={draft.projectId} localId={threadId} projectId={draft.projectId} draft={draft} />

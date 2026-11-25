@@ -41,7 +41,7 @@ function MemoryFileRow({ row }: { row: ContextFileRow }) {
           <>
             {/* The tilde marks an estimate. */}
             {formatTokens(row.tokens)}
-            <span className="w-12 text-right">{row.scope}</span>
+            <span className="w-13 text-right">{row.scope}</span>
           </>
         }
       />

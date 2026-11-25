@@ -89,7 +89,10 @@ export function SkillPicker({
               isSelected ? 'bg-accent' : 'hover:bg-accent',
             )}
           >
-            <Check className={cn('size-3.5 shrink-0', isSelected ? 'text-primary' : 'text-transparent')} aria-hidden />
+            <Check
+              className={cn('size-3.5 shrink-0', isSelected ? 'text-accent-ink' : 'text-transparent')}
+              aria-hidden
+            />
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{skill.name}</span>
             {skill.description ? (
               <span className="min-w-0 flex-[2] truncate text-xs text-muted-foreground">{skill.description}</span>

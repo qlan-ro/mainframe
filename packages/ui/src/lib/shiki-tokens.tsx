@@ -35,7 +35,11 @@ function useShikiThemeVersion(): number {
  * Returns null while loading or when the language is unknown / unsupported.
  * Re-tokenizes whenever the shiki theme is invalidated (e.g., after a mode/scheme change).
  */
-export function useShikiTokens(code: string, langHint: string | undefined): ThemedToken[][] | null {
+export function useShikiTokens(
+  code: string,
+  langHint: string | undefined,
+  palette: Parameters<typeof getShikiHighlighter>[0] = 'editor',
+): ThemedToken[][] | null {
   const [lines, setLines] = useState<ThemedToken[][] | null>(null);
   const mountedRef = useRef(true);
   const themeVersion = useShikiThemeVersion();
@@ -54,7 +58,7 @@ export function useShikiTokens(code: string, langHint: string | undefined): Them
       return;
     }
 
-    getShikiHighlighter()
+    getShikiHighlighter(palette)
       .then(({ highlighter, theme }) => {
         if (!mountedRef.current) return;
         try {
@@ -69,7 +73,7 @@ export function useShikiTokens(code: string, langHint: string | undefined): Them
         console.warn('[shiki-tokens] highlight failed', { lang: langHint, err: String(err) });
         if (mountedRef.current) setLines(null);
       });
-  }, [code, langHint, themeVersion]);
+  }, [code, langHint, palette, themeVersion]);
 
   return lines;
 }
@@ -81,7 +85,7 @@ export function TokenLine({ tokens, addNewline }: { tokens: ThemedToken[]; addNe
   return (
     <span className="block">
       {tokens.map((tok, i) => (
-        <span key={i} style={{ color: tok.color }}>
+        <span key={i} style={{ color: tok.color, fontStyle: (tok.fontStyle ?? 0) & 1 ? 'italic' : undefined }}>
           {tok.content}
         </span>
       ))}

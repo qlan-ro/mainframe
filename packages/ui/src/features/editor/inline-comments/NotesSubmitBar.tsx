@@ -22,7 +22,7 @@ export function NotesSubmitBar({ total, filled, onSubmit }: NotesSubmitBarProps)
       data-testid="editor-submit-review"
       className="flex h-7.5 shrink-0 items-center gap-2 border-b border-border bg-card px-3"
     >
-      <MessageSquare className="size-3 shrink-0 text-primary" aria-hidden />
+      <MessageSquare className="size-3 shrink-0 text-accent-ink" aria-hidden />
       <span className="text-xs text-muted-foreground">
         {filled} of {total} agent {total === 1 ? 'note' : 'notes'} filled
       </span>

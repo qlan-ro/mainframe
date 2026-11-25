@@ -61,7 +61,7 @@ function PickerRow({ node, selectedPath, onSelect, onToggle }: PickerRowProps) {
       )}
       {isDirectory ? (
         <FolderIcon
-          className="size-3.5 shrink-0 text-primary"
+          className="size-3.5 shrink-0 text-accent-ink"
           fill={folderState ? 'currentColor' : 'none'}
           // lucide has no filled FolderIcon variant; 0.2 approximates the solid
           // glyph without swallowing the outline.

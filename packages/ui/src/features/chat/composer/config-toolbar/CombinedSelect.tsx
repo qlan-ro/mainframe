@@ -49,13 +49,13 @@ export function CombinedSelect({ disabled, setPermissionMode, className, ...menu
             data-testid="composer-model-permission-select"
             data-permissions-control
             aria-label={`Model and permissions: ${summary}`}
-            className={toolbarButton(open, cn(permissionTone(mode, planning), 'text-foreground/90', className))}
+            className={toolbarButton(open, cn(permissionTone(mode, planning), 'text-ink-secondary', className))}
           >
             <ProviderDot adapterId={activeId} className="@max-[320px]/composer:hidden" />
             <span className="flex min-w-0 items-baseline">
               <span className="min-w-0 truncate @max-[320px]/composer:hidden">{modelLabel}</span>
-              <span className="shrink-0 text-muted-foreground @max-[320px]/composer:hidden">&nbsp;·&nbsp;</span>
-              <span className={cn('shrink-0 font-medium', permissionTone(mode, planning), 'bg-transparent ring-0')}>
+              <span className="shrink-0 @max-[320px]/composer:hidden">&nbsp;·&nbsp;</span>
+              <span className={cn('shrink-0', permissionTone(mode, planning), 'bg-transparent ring-0')}>
                 {planning ? 'Planning' : permissionLabel(mode)}
               </span>
             </span>
@@ -63,9 +63,9 @@ export function CombinedSelect({ disabled, setPermissionMode, className, ...menu
           </button>
         </DropdownMenuTrigger>
       </ComposerHint>
-      <DropdownMenuContent align="start" side="top" sideOffset={6} className="w-72">
+      <DropdownMenuContent align="start" side="top" sideOffset={6} className="w-65">
         {disabled ? (
-          <DropdownMenuLabel className="text-xs font-normal">{MODEL_LOCKED_HINT}</DropdownMenuLabel>
+          <DropdownMenuLabel className="text-meta font-normal">{MODEL_LOCKED_HINT}</DropdownMenuLabel>
         ) : (
           <ModelMenu {...menu} onClose={() => setOpen(false)} />
         )}

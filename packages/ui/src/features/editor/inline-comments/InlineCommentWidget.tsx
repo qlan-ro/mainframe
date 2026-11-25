@@ -93,7 +93,7 @@ export function InlineCommentWidget({
     <div data-testid="editor-comment-widget" className="flex py-[5px] pl-[14px] pr-[14px] font-sans">
       {/* Sparkles gutter indicator */}
       <div className="mr-[10px] flex w-[12px] shrink-0 items-start pt-[9px]">
-        <Sparkles size={12} className="text-primary" aria-hidden />
+        <Sparkles size={12} className="text-accent-ink" aria-hidden />
       </div>
 
       {/* Card */}

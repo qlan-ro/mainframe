@@ -150,8 +150,8 @@ describe('token sources', () => {
       ([selector, decls]) => selector.startsWith(':root') && Object.keys(decls).length > 0 && !known.has(selector),
     );
     expect(unread.map(([selector]) => selector)).toEqual([]);
-    expect(resolve('light')['--sidebar-accent']).toBe('oklch(0.945 0.004 286)');
-    expect(resolve('dark')['--sidebar-accent']).toBe('oklch(0.35 0 0)');
+    expect(resolve('light')['--sidebar-accent']).toBe('#ededf0');
+    expect(resolve('dark')['--sidebar-accent']).toBe('#262628');
   });
 
   it('both sheets parse, and each contributes the tokens this guardrail reads', () => {

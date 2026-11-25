@@ -37,7 +37,6 @@ import { SidebarLeftGlyph } from './surface-icons';
 const TRAFFIC_LIGHTS_WIDTH = 80;
 /** Between the usage capsule and the separator that follows it. */
 const CAPSULE_GAP = 12;
-/** Below this the capsule is no use; the narrowest sidebar still leaves it more. */
 const MIN_CAPSULE_WIDTH = 160;
 
 /**
@@ -59,8 +58,8 @@ function SidebarSegment({ open, separator }: { open: boolean; separator: boolean
       }
     >
       <div aria-hidden className="shrink-0" style={{ width: TRAFFIC_LIGHTS_WIDTH }} />
-      <div className={cn('flex min-w-0', aligned && 'flex-1')} style={{ paddingRight: CAPSULE_GAP }}>
-        <UsageCapsule width={aligned ? '100%' : USAGE_CAPSULE_WIDTH} />
+      <div className={cn('flex min-w-0', aligned && 'flex-1')} style={{ paddingRight: aligned ? 0 : CAPSULE_GAP }}>
+        <UsageCapsule width={aligned ? `min(100%, ${USAGE_CAPSULE_WIDTH}px)` : USAGE_CAPSULE_WIDTH} />
       </div>
       {separator ? (
         <TitleBarSeparator testId="title-bar-separator-sidebar" />

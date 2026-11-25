@@ -51,22 +51,26 @@ function Pill(props: MarkerPillProps & { open: boolean; toggle: () => void; body
           {target && (
             <>
               {' '}
-              <span className={cn('text-foreground', props.mono ? 'mf-tr-mono' : 'font-medium')}>{target}</span>
+              <span className={cn('text-(--mf-tr-secondary)', props.mono ? 'mf-tr-mono font-normal' : 'font-medium')}>
+                {target}
+              </span>
             </>
           )}
         </span>
         {(receipt || state === 'running') && (
           <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
-            <span aria-hidden>·</span>
+            <span aria-hidden className="mr-0.5">
+              ·
+            </span>
             {state === 'running' && <Spinner className="size-3" />}
-            {receipt}
+            {receipt && <span>{receipt}</span>}
           </span>
         )}
         {expandable && (
           <ChevronRight
             aria-hidden
             className={cn(
-              'size-3! shrink-0 transition-transform duration-150 motion-reduce:transition-none',
+              'shrink-0 transition-transform duration-150 motion-reduce:transition-none',
               open && 'rotate-90',
             )}
           />
@@ -102,7 +106,7 @@ export function MarkerCard({ id, testId, children }: { id?: string; testId: stri
     <div
       id={id}
       data-testid={testId}
-      className="mb-1 w-full max-w-[600px] min-w-0 rounded-xl border border-border bg-card px-3.5 py-2.5 mf-tr-marker-body"
+      className="mb-1 w-full max-w-[600px] min-w-0 rounded-[12px] bg-card px-3.5 py-2.5 mf-tr-marker-body shadow-[inset_0_0_0_1px_var(--border)]"
     >
       {children}
     </div>

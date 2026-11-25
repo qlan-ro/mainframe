@@ -13,18 +13,22 @@
    styles/); the v2 sheet points at its own tree, this points at the rest. */
 @source "../";
 
-/* App theme overrides on top of the stock v2 preset. The preset's light
-   sidebar is a zero-chroma gray, which reads yellowish beside blue-leaning
-   content; a violet-leaning cool gray (#F5F5F8, hover #ECECEF — the
-   Linear/macOS chrome family) keeps it cool. Dark keeps the stock values.
-   MUST stay scoped to light: a bare `:root` ties the v2 `.dark` block on
-   specificity, and stylesheet order (which HMR reshuffles) then decides the
-   winner — the dark sidebar rendered light whenever this sheet came last. */
-:root:not(.dark) {
-  --sidebar: oklch(0.97 0.004 286);
-  --sidebar-accent: oklch(0.945 0.004 286);
-  /* The preset's 0.556 is 4.36:1 on that sidebar. */
-  --muted-foreground: oklch(0.546 0 0);
+::selection {
+  background: var(--text-selection);
+}
+
+/* Glyphs are drawn as the prototype draws them, without macOS's heavier subpixel weight. */
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Icons carry a 1.5 stroke on Lucide's 24-unit grid (DESIGN.md, Shapes), not its own
+   2: 1px in a 16px icon, 1.25px in the rail. An icon that names another width, as
+   attribute or utility, keeps it. */
+@layer base {
+  .lucide[stroke-width='2'] {
+    stroke-width: 1.5;
+  }
 }
 
 /* Native form controls must be painted for the active mode. */
@@ -117,7 +121,6 @@ code {
 }
 .mf-scrollbar:is(:hover, [data-dragging]) > span {
   width: 8px;
-  border-radius: 4px;
   background: color-mix(in srgb, var(--foreground) 42%, transparent);
 }
 .mf-scrollbar[data-axis='x']:is(:hover, [data-dragging]) > span {
@@ -174,6 +177,26 @@ code {
   -webkit-app-region: no-drag;
 }
 
+/* Toasts carry the tooltip's inverted palette (DESIGN.md, Tooltips and toasts). The
+   tokens what sits on one reads are re-pointed here, so its text, icons and buttons
+   follow the surface rather than the theme. */
+[data-sonner-toaster] [data-sonner-toast] {
+  --popover: var(--tooltip);
+  --popover-foreground: var(--tooltip-foreground);
+  --foreground: var(--tooltip-foreground);
+  --muted-foreground: color-mix(in srgb, var(--tooltip-foreground) 75%, var(--tooltip));
+  --sidebar-accent: color-mix(in srgb, var(--tooltip-foreground) 14%, var(--tooltip));
+  --success: #4cc38a;
+  --warning: #f0b35a;
+  --fail: #e48aa3;
+  font-family: var(--font-sans);
+}
+.dark [data-sonner-toaster] [data-sonner-toast] {
+  --success: #1d7a46;
+  --warning: #8a4b00;
+  --fail: #b04466;
+}
+
 /* Toasts: a themed grid card. Header row `icon | content | close`, then a
    full-width footer for buttons. Selectors out-rank sonner's injected
    `[data-sonner-toast][data-styled='true']` rules; its `--gray*` palette is
@@ -186,12 +209,30 @@ code {
   row-gap: 8px;
   padding: 12px;
   border: 0;
-  border-radius: var(--radius-md);
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent),
-    0 4px 12px rgb(0 0 0 / 0.1);
+  border-radius: 9px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.2);
   background: var(--popover);
   color: var(--popover-foreground);
+}
+/* One line that reports what was done: the pill, its text alone. */
+[data-sonner-toaster]
+  [data-sonner-toast][data-styled='true']:is([data-type='success'], [data-type='info']):not(
+    :has([data-description], [data-toast-footer], [data-toast-close])
+  ) {
+  display: block;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 7px 14px;
+}
+[data-sonner-toaster]
+  [data-sonner-toast]:is([data-type='success'], [data-type='info']):not(
+    :has([data-description], [data-toast-footer], [data-toast-close])
+  )
+  [data-icon] {
+  display: none;
 }
 /* Unlayered sonner rules beat Tailwind utilities, so the muted colour lives here. */
 [data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled='true'] [data-description] {

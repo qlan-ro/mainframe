@@ -140,7 +140,7 @@ export function TokenPicker({ tokens, onInsert, testId }: TokenPickerProps) {
             type="button"
             data-testid={testId}
             disabled={!hasTokens}
-            className="inline-flex h-[24px] shrink-0 items-center gap-[4px] rounded-full border-[0.5px] border-border bg-card px-[8px] text-xs font-semibold text-primary transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-[24px] shrink-0 items-center gap-[4px] rounded-full border-[0.5px] border-border bg-card px-[8px] text-xs font-semibold text-accent-ink transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
           >
             <span className="font-mono text-xs">⟨⟩</span>
             Insert

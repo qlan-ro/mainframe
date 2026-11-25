@@ -56,7 +56,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
       // means wrong-but-not-broken, and an edit in flight is neither.
       className="relative z-1 overflow-hidden rounded-2xl border border-warning bg-card shadow-[var(--mf-shadow-edit-ring)] has-[textarea:focus-visible]:focus-line-inset"
     >
-      <div className="flex items-center gap-2 bg-warning/10 py-1.5 pr-3 pl-2.5">
+      <div className="flex items-center gap-2 bg-warning-surface py-1.5 pr-3 pl-2.5">
         <PencilIcon size={12} className="shrink-0 text-warning" />
         <span className="text-xs font-semibold text-foreground">Editing queued message</span>
         {saveError ? (

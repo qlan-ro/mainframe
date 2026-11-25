@@ -42,7 +42,7 @@ function SettingsNavItem({ label, icon: Icon, active, onClick, testId }: NavItem
           : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
       )}
     >
-      <Icon size={14} className={cn('flex-shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
+      <Icon size={14} className={cn('flex-shrink-0', active ? 'text-accent-ink' : 'text-muted-foreground')} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </button>
   );

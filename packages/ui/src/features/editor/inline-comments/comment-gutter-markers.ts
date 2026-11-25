@@ -11,7 +11,7 @@
  *   the add button reads this field to decide whether to render visibly.
  *
  * Add-marker design:
- *   15×15px rounded-[4px] bg-primary button containing a white chat/comment glyph
+ *   15×15px rounded-[4px] accent-fill button containing a white chat/comment glyph
  *   at 9px — matches the prototype (03-content.jsx line 988).
  *
  * Exports:
@@ -100,7 +100,7 @@ export class AddCommentMarker extends GutterMarker {
       'padding:0',
       'border:none',
       'border-radius:4px',
-      'background:var(--primary)',
+      'background:var(--accent-fill)',
       'cursor:pointer',
       'display:inline-flex',
       'align-items:center',

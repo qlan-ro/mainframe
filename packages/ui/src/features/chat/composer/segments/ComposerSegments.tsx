@@ -39,7 +39,7 @@ function ComposerSegmentTextarea({
     const el = ref.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.max(el.scrollHeight, 22)}px`;
+    el.style.height = `${Math.max(el.scrollHeight, 21)}px`;
   }, [value]);
 
   return (
@@ -51,7 +51,7 @@ function ComposerSegmentTextarea({
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       rows={1}
-      className="w-full resize-none overflow-hidden bg-transparent font-sans text-[0.875rem] leading-[1.3125rem] text-foreground outline-none placeholder:text-muted-foreground"
+      className="w-full resize-none overflow-hidden bg-transparent font-sans text-composer-input text-foreground outline-none placeholder:text-muted-foreground"
     />
   );
 }
@@ -74,7 +74,7 @@ export function ComposerSegments({ threadId }: { threadId: string }) {
   if (composition.committed.length === 0 && !composition.liveQuote) return null;
 
   return (
-    <div data-testid="composer-segments" ref={containerRef} className="flex flex-col gap-2 px-1 pb-2">
+    <div data-testid="composer-segments" ref={containerRef} className="flex flex-col gap-2 px-1 pt-0.5 pb-2">
       {composition.committed.map((segment) => (
         <div
           key={segment.id}

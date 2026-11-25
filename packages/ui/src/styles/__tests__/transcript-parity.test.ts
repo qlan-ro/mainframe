@@ -7,8 +7,12 @@ const chat = (file: string) => read(`../../features/chat/${file}`);
 
 it('uses the prototype inks in both themes', () => {
   const css = chat('transcript.css');
-  expect(css.match(/--mf-tr-ok: (#[a-f0-9]+);/g)).toEqual(['--mf-tr-ok: #1d7a46;', '--mf-tr-ok: #4cc38a;']);
-  expect(css.match(/--mf-tr-del: (#[a-f0-9]+);/g)).toEqual(['--mf-tr-del: #c0392b;', '--mf-tr-del: #ff7b6e;']);
+  const globals = read('../globals.css');
+  const domain = read('../domain-tokens.css');
+  expect(css).toContain('--mf-tr-ok: var(--success);');
+  expect(css).toContain('--mf-tr-del: var(--red);');
+  expect(globals.match(/--success: (#[a-f0-9]+);/g)).toEqual(['--success: #1d7a46;', '--success: #4cc38a;']);
+  expect(domain.match(/--red: (#[a-f0-9]+);/g)).toEqual(['--red: #c0392b;', '--red: #ff7b6e;']);
 });
 
 it('matches the frame, work header, and marker geometry', () => {

@@ -28,9 +28,9 @@ import { findSessionMentions } from '@/features/chat/session-references/session-
  * only signal available, which puts these in the same class as `mf-code-*`.
  */
 const colorClass: Record<string, string> = {
-  command: 'text-primary',
-  mention: 'text-primary',
-  file: 'text-primary',
+  command: 'text-accent-ink',
+  mention: 'text-accent-ink',
+  file: 'text-accent-ink',
   skill: 'text-mf-directive-skill',
   session: 'text-mf-directive-session',
 };
@@ -50,7 +50,7 @@ function pushFormatted(nodes: ReactNode[], text: string, base: number): void {
     }
     // mention segment — use label (includes the leading @ or /)
     nodes.push(
-      <span key={offset} className={colorClass[seg.type] ?? 'text-primary'}>
+      <span key={offset} className={colorClass[seg.type] ?? 'text-accent-ink'}>
         {seg.label}
       </span>,
     );

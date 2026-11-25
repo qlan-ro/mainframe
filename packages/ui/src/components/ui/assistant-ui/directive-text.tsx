@@ -72,7 +72,7 @@ interface DirectivePlainProps {
 /** Accent-colored inline text, no box/border/icon — e.g. @mentions. */
 function DirectivePlain({ type, label, id }: DirectivePlainProps) {
   return (
-    <span data-directive-type={type} data-directive-id={id} className="font-semibold text-primary">
+    <span data-directive-type={type} data-directive-id={id} className="font-semibold text-accent-ink">
       {label}
     </span>
   );

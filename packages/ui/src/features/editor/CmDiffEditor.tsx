@@ -39,13 +39,17 @@ export interface LineSelection {
 
 const diffTheme = EditorView.theme({
   '.cm-insertedLine': {
-    backgroundColor: 'var(--mf-diff-add-bg)',
+    backgroundColor: 'color-mix(in srgb, var(--success) 15%, transparent)',
   },
   '.cm-deletedLine': {
-    backgroundColor: 'var(--mf-diff-del-bg)',
+    backgroundColor: 'color-mix(in srgb, var(--red) 15%, transparent)',
   },
-  '.cm-changedLine': {
-    backgroundColor: 'var(--mf-diff-add-bg)',
+  // The merge extension's own rules name the side, so these do too.
+  '&.cm-merge-b .cm-changedLine': {
+    backgroundColor: 'color-mix(in srgb, var(--success) 15%, transparent)',
+  },
+  '&.cm-merge-a .cm-changedLine': {
+    backgroundColor: 'color-mix(in srgb, var(--red) 15%, transparent)',
   },
   '.cm-changedText': {
     backgroundColor: 'color-mix(in srgb, var(--mf-diff-add-bg) 60%, transparent)',

@@ -11,10 +11,10 @@ import { cn } from '@/lib/utils';
 
 export function tabShape(selected: boolean, className?: string): string {
   return cn(
-    'group/tab relative flex h-8 cursor-pointer items-center rounded-[9px] text-sm select-none focus-visible:focus-line-inset',
+    'group/tab relative flex h-8 cursor-pointer items-center rounded-[9px] text-small select-none focus-visible:focus-line-inset',
     selected
       ? 'bg-background text-foreground shadow-xs inset-ring inset-ring-border'
-      : 'text-foreground/80 hover:bg-(--tab-hover) hover:text-foreground',
+      : 'text-ink-secondary hover:bg-(--tab-hover)',
     className,
   );
 }
@@ -24,15 +24,16 @@ export function tabShape(selected: boolean, className?: string): string {
  * control overlaying the title's tail can paint exactly the pill's own ground.
  */
 export const TAB_HOVER_STYLE = {
-  '--tab-hover': 'color-mix(in srgb, var(--foreground) 5%, var(--sidebar))',
+  '--tab-hover': 'var(--sidebar-accent)',
 } as CSSProperties;
 
 /** A close control overlaying the end of the title: out of flow, so a hidden ✕ takes no room. */
 export const TAB_CLOSE_OVERLAY =
-  'absolute inset-y-0 right-1 flex items-center before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-r before:from-transparent';
+  'absolute top-1 right-1 flex rounded-sm bg-(--tab-hover) shadow-[-10px_0_8px_-2px_var(--tab-hover)]';
 
 /** A 24px close button: small enough for the pill, large enough to hit. */
-export const TAB_CLOSE_BUTTON = 'size-6 rounded-sm text-muted-foreground hover:bg-foreground/8 hover:text-foreground';
+export const TAB_CLOSE_BUTTON =
+  'size-6 rounded-sm text-muted-foreground hover:bg-chrome-press hover:text-foreground dark:hover:bg-chrome-press';
 
 /** Marks the button `Delete` or `Backspace` presses on a focused tab. */
 export const TAB_CLOSE_ATTR = { 'data-tab-close': '' } as const;

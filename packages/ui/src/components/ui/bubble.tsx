@@ -14,14 +14,12 @@ const bubbleVariants = cva(
     variants: {
       variant: {
         default:
-          '*:data-[slot=bubble-content]:bg-primary *:data-[slot=bubble-content]:text-primary-foreground [&>[data-slot=bubble-content]:is(button,a):hover]:bg-primary/80',
+          '*:data-[slot=bubble-content]:bg-accent-fill *:data-[slot=bubble-content]:text-primary-foreground [&>[data-slot=bubble-content]:is(button,a):hover]:brightness-95',
         secondary:
           '*:data-[slot=bubble-content]:bg-secondary *:data-[slot=bubble-content]:text-secondary-foreground [&>[data-slot=bubble-content]:is(button,a):hover]:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]',
         muted:
           '*:data-[slot=bubble-content]:bg-muted [&>[data-slot=bubble-content]:is(button,a):hover]:bg-[color-mix(in_oklch,var(--muted),var(--foreground)_5%)]',
-        // Upstream inlines the fill as a bare `oklch(from …)` twice, once per
-        // mode. `--bubble-tinted` names it so a consumer (the user bubble's
-        // read-more fade) can END on the same fill in either mode.
+        queued: '*:data-[slot=bubble-content]:bg-queue-well *:data-[slot=bubble-content]:text-foreground',
         tinted:
           '*:data-[slot=bubble-content]:bg-bubble-tinted *:data-[slot=bubble-content]:text-foreground [&>[data-slot=bubble-content]:is(button,a):hover]:bg-[oklch(from_var(--bubble-tinted)_calc(l_-_0.05)_calc(c*1.25)_h)]',
         outline:

@@ -43,7 +43,9 @@ export function SessionDropLayer() {
         <span
           className={cn(
             'pointer-events-none flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium shadow-md',
-            hovered ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-popover text-foreground',
+            hovered
+              ? 'border-primary bg-accent-fill text-primary-foreground'
+              : 'border-border bg-popover text-foreground',
           )}
         >
           <PanelRight className="size-3.5" aria-hidden />

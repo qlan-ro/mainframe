@@ -11,9 +11,8 @@
  *   shortcuts-cheat-sheet-row-<id>        — one row per shortcut, keyed by id
  */
 import { useMemo } from 'react';
-import { Keyboard } from 'lucide-react';
+import { KeyboardIcon } from '@/components/ui/glyphs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { SectionHeader } from '@/components/ui/section-header';
 import type { ShortcutDescriptor, ShortcutGroup } from './shortcut-types';
 import { SHORTCUTS, visibleShortcuts } from './registry';
 import { renderEntryChord } from './render-chord';
@@ -30,15 +29,15 @@ function ShortcutRow({ binding, isMac }: { binding: EffectiveBinding; isMac: boo
   return (
     <div
       data-testid={`shortcuts-cheat-sheet-row-${entry.id}`}
-      className="flex min-h-7 items-center justify-between gap-3 rounded-md px-2 py-1 hover:bg-muted"
+      className="flex items-center justify-between gap-3 rounded-sm px-2 py-1 hover:bg-sidebar-accent"
     >
-      <span className="min-w-0 flex-1 truncate text-sm">{entry.label}</span>
+      <span className="min-w-0 flex-1 truncate text-row">{entry.label}</span>
       {chord === null ? (
         // An unassigned action still earns a row: it is a thing you can bind,
         // and hiding it would make the cheat sheet disagree with Settings.
-        <span className="shrink-0 text-xs text-muted-foreground">Unassigned</span>
+        <span className="shrink-0 text-meta/[1.45] text-muted-foreground">Unassigned</span>
       ) : (
-        <kbd className="shrink-0 rounded border bg-muted px-1 py-0.5 font-mono text-xs text-foreground/80">
+        <kbd className="shrink-0 rounded-[4px] border bg-queue-well px-[5px] py-px font-mono text-meta/[normal] text-ink-secondary">
           {renderEntryChord({ ...entry, chord }, isMac)}
         </kbd>
       )}
@@ -75,12 +74,13 @@ export function ShortcutsCheatSheet({ entries = SHORTCUTS, dev = import.meta.env
         data-testid="shortcuts-cheat-sheet"
         aria-describedby={undefined}
         className="flex max-h-[90vh] w-full max-w-md flex-col gap-0 p-0"
-        closeButtonClassName="top-1.5"
+        overlayClassName="bg-black/32 supports-backdrop-filter:backdrop-blur-none"
+        closeButtonClassName="top-3 right-2 size-6 rounded-sm text-accent-ink hover:bg-sidebar-accent [&_svg]:size-3.5!"
       >
         {/* pr-12 clears the stock close button. */}
-        <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
+        <DialogHeader className="shrink-0 border-b px-4 py-3.5 pr-12">
           <DialogTitle className="flex items-center gap-1.5">
-            <Keyboard size={13} className="shrink-0 text-primary" aria-hidden />
+            <KeyboardIcon size={14} className="shrink-0 text-accent-ink" aria-hidden />
             Keyboard Shortcuts
           </DialogTitle>
         </DialogHeader>
@@ -88,7 +88,7 @@ export function ShortcutsCheatSheet({ entries = SHORTCUTS, dev = import.meta.env
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {sections.map(({ group, rows }) => (
             <section key={group} aria-label={group} data-testid={`shortcuts-cheat-sheet-group-${group.toLowerCase()}`}>
-              <SectionHeader>{group}</SectionHeader>
+              <h3 className="px-2 pt-2 pb-1 text-label/[1.45] font-medium text-muted-foreground">{group}</h3>
               {rows.map((binding) => (
                 <ShortcutRow key={binding.entry.id} binding={binding} isMac={isMac} />
               ))}

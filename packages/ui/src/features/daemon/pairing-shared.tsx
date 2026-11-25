@@ -27,7 +27,7 @@ export function StepRail({ current }: { current: 0 | 1 }) {
                 className={cn(
                   'flex size-4.5 items-center justify-center rounded-full text-xs font-bold transition-colors',
                   done && 'bg-success text-primary-foreground',
-                  active && 'bg-primary text-primary-foreground',
+                  active && 'bg-accent-fill text-primary-foreground',
                   !done && !active && 'bg-muted text-muted-foreground',
                 )}
               >

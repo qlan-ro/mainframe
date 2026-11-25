@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
-import { MessageCircleQuestionIcon } from 'lucide-react';
+import { QuestionIcon } from '@/components/ui/glyphs';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { GateCardShell, GATE_BODY_INSET, GATE_PRIMARY } from './shared/GateShell';
+import { GateCardShell, GATE_BODY_INSET, GATE_BUTTON, GATE_OUTLINE, GATE_PRIMARY } from './shared/GateShell';
 import { buildAskUserQuestionResponse } from './build-control-response';
 import { AskQuestionWizard } from './AskQuestionWizard';
 import { assembleAnswers, resolveChosen } from './answers';
@@ -71,12 +71,24 @@ function WizardFooter({ current, total, isAnswered, onSkip, onBack, onNext, onSu
   const isLast = current === total - 1;
 
   return (
-    <div className={cn('flex items-center gap-2 pt-1 pr-4 pb-3', GATE_BODY_INSET)}>
-      <Button variant="outline" size="sm" data-testid="chat-question-skip" onClick={onSkip}>
+    <div className={cn('flex items-center gap-2 pr-4 pb-3.5', GATE_BODY_INSET)}>
+      <Button
+        variant="outline"
+        size="sm"
+        className={cn(GATE_BUTTON, GATE_OUTLINE)}
+        data-testid="chat-question-skip"
+        onClick={onSkip}
+      >
         Skip
       </Button>
       {current > 0 && (
-        <Button variant="outline" size="sm" data-testid="chat-question-back" onClick={onBack}>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(GATE_BUTTON, GATE_OUTLINE)}
+          data-testid="chat-question-back"
+          onClick={onBack}
+        >
           Back
         </Button>
       )}
@@ -84,7 +96,7 @@ function WizardFooter({ current, total, isAnswered, onSkip, onBack, onNext, onSu
       {!isLast && (
         <Button
           size="sm"
-          className={GATE_PRIMARY}
+          className={cn(GATE_BUTTON, GATE_PRIMARY)}
           data-testid="chat-question-next"
           disabled={!isAnswered}
           onClick={onNext}
@@ -95,7 +107,7 @@ function WizardFooter({ current, total, isAnswered, onSkip, onBack, onNext, onSu
       {isLast && (
         <Button
           size="sm"
-          className={GATE_PRIMARY}
+          className={cn(GATE_BUTTON, GATE_PRIMARY)}
           data-testid="chat-question-submit"
           disabled={!isAnswered}
           onClick={onSubmit}
@@ -167,19 +179,19 @@ export function AskUserQuestionGate({ entry, reply, context }: AskUserQuestionGa
     <div data-testid="chat-question-gate" role="group" aria-label="Question from the agent">
       <GateCardShell>
         {/* The question is the title; its context sits under it, with no label above (G4). */}
-        <div className="flex items-start gap-2.5 px-4 pt-3 pb-2">
+        <div className="flex items-start gap-2.5 px-4 pt-3.5 pb-2.5">
           <span
             data-testid="gate-head-tile"
-            className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-accent-ink"
+            className="mt-px inline-flex size-6 shrink-0 items-center justify-center rounded-sm bg-primary/12 text-accent-ink"
           >
-            <MessageCircleQuestionIcon className="size-3.5" />
+            <QuestionIcon className="size-3.5" />
           </span>
-          <div className="flex min-w-0 flex-1 flex-col pt-0.5">
-            <h3 data-testid="chat-question-text" className="text-[0.875rem] leading-5 font-semibold text-foreground">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <h3 data-testid="chat-question-text" className="text-title font-semibold text-foreground">
               <bdi>{title}</bdi>
             </h3>
             {(details || asker) && (
-              <span data-testid="chat-question-context" className="text-xs text-muted-foreground">
+              <span data-testid="chat-question-context" className="mt-0.5 text-meta/[1.45] text-muted-foreground">
                 {details && <bdi>{details}</bdi>}
                 {details && asker && ' · '}
                 {asker && (
@@ -191,7 +203,10 @@ export function AskUserQuestionGate({ entry, reply, context }: AskUserQuestionGa
             )}
           </div>
           {questions.length > 1 && (
-            <Badge variant="outline" className="shrink-0 font-mono tabular-nums">
+            <Badge
+              variant="outline"
+              className="h-auto shrink-0 rounded-sm border-input px-1.5 py-px font-mono text-caption/[normal] font-medium text-ink-secondary tabular-nums"
+            >
               {current + 1} of {questions.length}
             </Badge>
           )}

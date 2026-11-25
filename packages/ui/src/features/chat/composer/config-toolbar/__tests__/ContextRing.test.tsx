@@ -66,7 +66,7 @@ describe('ContextRing (C2)', () => {
     expect(button()).not.toHaveClass('text-muted-foreground');
   });
 
-  it('stays warning at 94%, and is destructive at 95%', () => {
+  it('stays warning at 94%, and is signal red at 95%', () => {
     mockPercent = 94;
     const { unmount } = renderRing();
     expect(button()).toHaveClass('text-warning');
@@ -74,7 +74,7 @@ describe('ContextRing (C2)', () => {
 
     mockPercent = 95;
     renderRing();
-    expect(button()).toHaveClass('text-destructive');
+    expect(button()).toHaveClass('text-crit');
     expect(button()).not.toHaveClass('text-warning');
   });
 

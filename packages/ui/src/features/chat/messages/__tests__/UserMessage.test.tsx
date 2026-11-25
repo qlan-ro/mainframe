@@ -267,7 +267,7 @@ describe('UserMessage — MT: @mention renders as plain text, not a chip', () =>
     });
     renderUserMessage();
     const mention = screen.getByText('@Layout.tsx');
-    expect(mention.className).toContain('text-primary');
+    expect(mention.className).toContain('text-accent-ink');
     expect(mention.className).toContain('font-semibold');
   });
 });

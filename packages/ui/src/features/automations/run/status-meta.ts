@@ -18,7 +18,7 @@ export interface StepStatusMeta {
 
 export const STEP_STATUS_META: Record<AutomationStepStatus, StepStatusMeta> = {
   running: { label: 'Running', dotClass: 'bg-primary/14', iconClass: 'text-primary', Icon: null },
-  waiting: { label: 'Waiting', dotClass: 'bg-warning/14', iconClass: 'text-warning', Icon: Clock },
+  waiting: { label: 'Waiting', dotClass: 'bg-warning-surface', iconClass: 'text-warning', Icon: Clock },
   succeeded: { label: 'Succeeded', dotClass: 'bg-success/14', iconClass: 'text-success', Icon: Check },
   failed: { label: 'Failed', dotClass: 'bg-fail/14', iconClass: 'text-fail', Icon: TriangleAlert },
   skipped: { label: 'Skipped', dotClass: 'bg-muted', iconClass: 'text-muted-foreground', Icon: ChevronDown },

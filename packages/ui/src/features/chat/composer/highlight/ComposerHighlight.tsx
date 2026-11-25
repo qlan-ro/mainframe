@@ -37,7 +37,7 @@ export function ComposerHighlight(): ReactElement {
     <div
       data-testid="composer-prompt-highlight"
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 break-words whitespace-pre-wrap px-1 pt-0.5 pb-2 font-sans text-[0.875rem] leading-[1.3125rem] text-foreground"
+      className="pointer-events-none absolute inset-0 break-words whitespace-pre-wrap px-1 pt-0.5 pb-2 font-sans text-composer-input text-foreground"
     >
       {text ? renderHighlights(text + '​', labels) : null}
     </div>

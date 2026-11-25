@@ -15,7 +15,7 @@ export function CodeBody({
   testId: string;
 }) {
   const { shown, hidden, showAll } = useClampedLines(id, lines);
-  const tokens = useShikiTokens(shown.map((line) => line.text).join('\n'), path.split('.').pop());
+  const tokens = useShikiTokens(shown.map((line) => line.text).join('\n'), path.split('.').pop(), 'transcript');
   return (
     <>
       <Surface className="py-2" testId={testId}>

@@ -73,26 +73,37 @@ function RowLine(props: RowDisclosureProps & { open: boolean; toggle: () => void
           {props.verb}
         </span>
         {target && (
-          <span className={cn('min-w-0 truncate', props.mono ? 'mf-tr-mono text-foreground' : 'text-muted-foreground')}>
+          <span
+            className={cn(
+              'min-w-0 truncate',
+              props.mono ? 'mf-tr-mono translate-y-[0.5px] text-foreground' : 'text-muted-foreground',
+            )}
+          >
             {target}
           </span>
         )}
-        {where && <span className="max-w-[40%] shrink-0 truncate">{where}</span>}
+        {where && <span className="max-w-[40%] shrink-0 truncate text-(--mf-tr-muted)">{where}</span>}
         <span className="min-w-1 flex-1" />
         {receipt && (
           <span
             data-testid={`${props.testId}-receipt`}
-            className={cn('mf-tr-meta shrink-0 whitespace-nowrap tabular-nums', props.tone && TONES[props.tone])}
+            className={cn(
+              'mf-tr-meta shrink-0 whitespace-nowrap tabular-nums',
+              props.tone ? TONES[props.tone] : 'text-(--mf-tr-muted)',
+            )}
           >
             {receipt}
           </span>
         )}
       </span>
-      {props.actions && <span className="relative -my-1 flex shrink-0 items-center">{props.actions}</span>}
+      {props.actions && <span className="relative -mx-1 -my-1 flex shrink-0 items-center">{props.actions}</span>}
       {expandable ? (
         <ChevronRight
           aria-hidden
-          className={cn('size-3! transition-transform duration-150 motion-reduce:transition-none', open && 'rotate-90')}
+          className={cn(
+            'size-3! text-muted-foreground transition-transform duration-150 motion-reduce:transition-none',
+            open && 'rotate-90',
+          )}
         />
       ) : (
         (props.trailing ?? <span aria-hidden className="size-3 shrink-0" />)

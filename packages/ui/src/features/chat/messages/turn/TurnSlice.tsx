@@ -59,6 +59,7 @@ function useEntries(slice: MessageSlice): ReactNode[] {
 
 function SliceBody({ slice }: { slice: MessageSlice }) {
   const entries = useEntries(slice);
+  const final = useAuiState(({ thread: { messages } }) => messages[messages.length - 1]?.id === slice.messageId);
   const empty = entries.length === 0 && !slice.footer;
   return (
     <MessagePrimitive.Root
@@ -66,7 +67,12 @@ function SliceBody({ slice }: { slice: MessageSlice }) {
       data-message-id={slice.messageId}
       data-tr-message
       // Never empty for real: the virtualized list can't measure a zero-height row.
-      className={cn('flex min-w-0 flex-col', empty && 'h-px', slice.footer && 'pb-1')}
+      className={cn(
+        'flex min-w-0 flex-col',
+        empty && 'h-px',
+        slice.footer && !final && 'pb-1',
+        final && slice.header && 'pt-3',
+      )}
     >
       <MessagePathContextMenu>{entries}</MessagePathContextMenu>
       {slice.footer && <MessageFooter />}

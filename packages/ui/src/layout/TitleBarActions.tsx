@@ -18,7 +18,7 @@ export function TitleBarActions() {
         testId="main-toolbar-search"
         data-tut="search"
         label="Search"
-        hint={searchChord == null ? 'Search' : `Search ${searchChord}`}
+        hint={searchChord == null ? 'Search' : `Search\u00a0\u00a0${searchChord}`}
         onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
       >
         <Search className="size-4" />

@@ -77,7 +77,7 @@ export function TaskSidebarRow({ todo, project, onCycle, onEdit, onStart }: Task
           <StatusGlyph status={todo.status} />
         </button>
       </Hint>
-      <span className="w-8 shrink-0 font-mono text-xs text-primary tabular-nums">#{todo.number}</span>
+      <span className="w-8 shrink-0 font-mono text-xs text-accent-ink tabular-nums">#{todo.number}</span>
       {project != null && <TaskProjectBadge project={project} testId={`tasks-sidebar-row-project-${todo.number}`} />}
       <FadeLabel className={cn('flex-1', done ? 'text-muted-foreground line-through' : 'text-foreground')}>
         {todo.title}
@@ -91,7 +91,7 @@ export function TaskSidebarRow({ todo, project, onCycle, onEdit, onStart }: Task
               size="icon-xs"
               data-testid={`tasks-sidebar-start-${todo.number}`}
               aria-label="Start session"
-              className="text-primary"
+              className="text-accent-ink"
               onClick={(event) => {
                 event.stopPropagation();
                 onStart(todo);

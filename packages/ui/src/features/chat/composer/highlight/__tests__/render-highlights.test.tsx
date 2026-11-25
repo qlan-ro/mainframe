@@ -18,21 +18,21 @@ function html(text: string, sessionLabels: string[] = []) {
 describe('renderHighlights', () => {
   it('wraps an @mention in an accent span and leaves surrounding text plain', () => {
     const c = html('see @src/app.ts now');
-    const span = c.querySelector('span.text-primary');
+    const span = c.querySelector('span.text-accent-ink');
     expect(span?.textContent).toBe('@src/app.ts');
     expect(c.textContent).toBe('see @src/app.ts now'); // full text preserved char-for-char
   });
 
   it('highlights a leading /skill command', () => {
     const c = html('/review the diff');
-    const span = c.querySelector('span.text-primary');
+    const span = c.querySelector('span.text-accent-ink');
     expect(span?.textContent).toBe('/review');
     expect(c.textContent).toBe('/review the diff');
   });
 
   it('returns the text unchanged when there are no directives', () => {
     const c = html('plain message');
-    expect(c.querySelector('span.text-primary')).toBeNull();
+    expect(c.querySelector('span.text-accent-ink')).toBeNull();
     expect(c.textContent).toBe('plain message');
   });
 
@@ -40,7 +40,7 @@ describe('renderHighlights', () => {
     const input = '/deploy @src/main.ts and @tests/foo.ts';
     const c = html(input);
     expect(c.textContent).toBe(input);
-    const spans = c.querySelectorAll('span.text-primary');
+    const spans = c.querySelectorAll('span.text-accent-ink');
     expect(spans).toHaveLength(3); // /deploy, @src/main.ts, @tests/foo.ts
   });
 
@@ -54,7 +54,7 @@ describe('renderHighlights', () => {
     const c = html('look at @session[Fix foo handling] now');
     const span = c.querySelector('span.text-mf-directive-session');
     expect(span?.textContent).toBe('@session[Fix foo handling]');
-    expect(c.querySelector('span.text-primary')).toBeNull();
+    expect(c.querySelector('span.text-accent-ink')).toBeNull();
     expect(c.querySelector('span.text-mf-directive-skill')).toBeNull();
   });
 
@@ -81,7 +81,7 @@ describe('renderHighlights', () => {
   it('still highlights the leading /command with a bare label mention after it', () => {
     const input = '/review @Model Identity please';
     const c = html(input, ['Model Identity']);
-    expect(c.querySelector('span.text-primary')?.textContent).toBe('/review');
+    expect(c.querySelector('span.text-accent-ink')?.textContent).toBe('/review');
     expect(c.querySelector('span.text-mf-directive-session')?.textContent).toBe('@Model Identity');
     expect(c.textContent).toBe(input);
   });

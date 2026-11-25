@@ -54,7 +54,7 @@ export function SkillListRow({ row, running, disabled, onInstall, onUninstall }:
       onBlur={() => setFocusWithin(false)}
     >
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{row.name}</span>
-      {row.isOfficial ? <BadgeCheck className="size-3.5 shrink-0 text-primary" aria-label="Official" /> : null}
+      {row.isOfficial ? <BadgeCheck className="size-3.5 shrink-0 text-accent-ink" aria-label="Official" /> : null}
       {row.source ? (
         <span className="min-w-0 max-w-[180px] truncate font-mono text-xs text-muted-foreground">{row.source}</span>
       ) : null}

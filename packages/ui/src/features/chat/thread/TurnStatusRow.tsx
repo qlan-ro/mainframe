@@ -90,7 +90,7 @@ function RunningStatus() {
       {attention || reconnecting ? (
         <span
           aria-hidden
-          className="size-1.5 shrink-0 animate-pulse rounded-full bg-warning motion-reduce:animate-none"
+          className="size-1.5 shrink-0 animate-pulse rounded-full bg-warning-dot motion-reduce:animate-none"
         />
       ) : (
         <Spinner />

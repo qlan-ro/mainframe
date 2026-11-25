@@ -46,7 +46,7 @@ describe('ComposerHighlight', () => {
     const overlay = screen.getByTestId('composer-prompt-highlight');
     expect(overlay).toHaveAttribute('aria-hidden', 'true');
     expect(overlay.className).toContain('pointer-events-none');
-    expect(overlay.querySelector('span.text-primary')?.textContent).toBe('@a/b.ts');
+    expect(overlay.querySelector('span.text-accent-ink')?.textContent).toBe('@a/b.ts');
   });
 
   it('renders nothing inside the overlay when composer text is empty', () => {
@@ -56,7 +56,7 @@ describe('ComposerHighlight', () => {
     const overlay = screen.getByTestId('composer-prompt-highlight');
     expect(overlay).toHaveAttribute('aria-hidden', 'true');
     // No highlight spans when there's nothing to highlight
-    expect(overlay.querySelector('span.text-primary')).toBeNull();
+    expect(overlay.querySelector('span.text-accent-ink')).toBeNull();
     expect(overlay.textContent).toBe('');
   });
 

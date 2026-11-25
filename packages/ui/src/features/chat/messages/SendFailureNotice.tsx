@@ -39,7 +39,7 @@ export function SendFailureNotice({ error, clientId, remedy, attachmentsRestored
             data-testid="chat-user-message-unarchive"
             title="Unarchive this chat's thread in the provider, then send again"
             onClick={() => void resend(remedy)}
-            className="text-xs font-medium text-primary hover:underline"
+            className="text-xs font-medium text-accent-ink hover:underline"
           >
             Unarchive
           </button>
@@ -49,7 +49,7 @@ export function SendFailureNotice({ error, clientId, remedy, attachmentsRestored
             type="button"
             data-testid="chat-user-message-retry"
             onClick={() => void resend()}
-            className="text-xs font-medium text-primary hover:underline"
+            className="text-xs font-medium text-accent-ink hover:underline"
           >
             Retry
           </button>
