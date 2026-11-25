@@ -4,7 +4,7 @@
 #   test-env.sh prepare [tauri|browser]  install + types + sidecar + ports, no launch
 #   test-env.sh up [tauri|browser]       prepare (idempotent) then launch; default: tauri
 #   test-env.sh down [port ...]          port-scoped; defaults to the target's .env ports
-#   test-env.sh reset                    fleet-wide sweep of the test port ranges
+#   test-env.sh reset                    stop this checkout's stale test processes, the tauri and CDP ports included
 # Every verb accepts `--worktree <path>` to act on another checkout.
 # Targets: tauri = native shell via tauri-mcp bridge (max 1);
 # tauri-qa = packaged build via tauri-mcp bridge, isolated port/data dir (max 1);

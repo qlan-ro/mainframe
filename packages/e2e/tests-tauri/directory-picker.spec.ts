@@ -69,13 +69,11 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
 import { TOAST } from '../helpers/tauri/testids.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
-
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
+import { daemonFetch } from '../fixtures/daemon.js';
 
 /** Number of projects currently registered with the daemon. */
-async function projectCount(page: Page): Promise<number> {
-  const res = await page.request.get(`${DAEMON_BASE}/api/projects`);
+async function projectCount(): Promise<number> {
+  const res = await daemonFetch('/api/projects');
   const body = (await res.json()) as { data?: unknown[] };
   return body.data?.length ?? 0;
 }
@@ -176,12 +174,12 @@ test.describe('§directory-picker Open, browse, select, confirm', () => {
 
   test('Cancel closes the dialog without registering a project', async () => {
     const { page } = app;
-    const before = await projectCount(page);
+    const before = await projectCount();
 
     await page.getByTestId('directory-picker-cancel').click();
 
     await expect(page.getByTestId('directory-picker')).toHaveCount(0, { timeout: 5_000 });
-    expect(await projectCount(page)).toBe(before);
+    expect(await projectCount()).toBe(before);
   });
 
   test('confirming a directory registers it as a project and adds it to Recents', async () => {
@@ -291,14 +289,14 @@ test.describe('§directory-picker Path-crumb edge cases + dismiss', () => {
   // dialog in the app, hence the scoping to the picker root.
   test('the built-in Close button dismisses without registering a project', async () => {
     const { page } = app;
-    const before = await projectCount(page);
+    const before = await projectCount();
 
     await openPicker(page);
     const picker = page.getByTestId('directory-picker');
     await picker.getByTestId('dialog-close').click();
 
     await expect(page.getByTestId('directory-picker')).toHaveCount(0, { timeout: 5_000 });
-    expect(await projectCount(page)).toBe(before);
+    expect(await projectCount()).toBe(before);
   });
 
   test('shows a loading indicator while a browse request is in flight', async () => {

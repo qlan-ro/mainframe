@@ -1,4 +1,4 @@
-import { DAEMON_PORT } from '../../fixtures/daemon.js';
+import { DAEMON_PORT, assertOwnDaemon } from '../../fixtures/daemon.js';
 
 /**
  * Headless WS helpers for protocol-level specs (todo #350 group H) that assert on wire
@@ -8,6 +8,7 @@ import { DAEMON_PORT } from '../../fixtures/daemon.js';
 
 /** Open a WS connection to the daemon and resolve once it is OPEN. */
 export async function openSocket(path: string): Promise<WebSocket> {
+  assertOwnDaemon();
   const ws = new WebSocket(`ws://127.0.0.1:${DAEMON_PORT}${path}`);
   await new Promise<void>((resolve, reject) => {
     ws.addEventListener('open', () => resolve(), { once: true });
