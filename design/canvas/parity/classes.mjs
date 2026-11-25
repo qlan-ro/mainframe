@@ -220,7 +220,7 @@ export const RULES = [
   { area: 'gates', state: /^(plan|question)$/, view: 'small', el: 'gate', part: 'box', prop: 'y', cls: 'SPEC', why: 'G1: “as ChatGateMount + GateCard do today” and “capped at 45 % of the height and scrolls inside.” The existing slot uses the chat container height. The prototype uses the window height, so its cap starts higher.' },
 
   // ── Composer ───────────────────────────────────────────────────────────────
-  { area: 'composer', el: /^bottom strip$|^worktree, hovered$/, part: /“·”|feat\/quota-reset|“main”|icon 2 at|icon 3 at|^box$/, prop: /^(x|width|missing in app|only in app)$/, cls: 'SPEC', why: 'K8: the branch is a control of its own beside the place, with its glyph, and the app draws the separator inside that control.' },
+  { area: 'composer', el: /^bottom strip$|^worktree, hovered$/, part: /“·”|feat\/quota-reset|“main”|icon 2 at|icon 3 at|^box$/, prop: /^(x|width|missing in app|only in app)$/, cls: 'SPEC', why: 'K8: the branch is a control of its own beside the place, with its glyph, and the app draws an independent separator between the two controls.' },
   { area: 'composer', state: /bottom/, el: 'bottom strip', part: /[+−]\d+/, prop: /^(content|x)$/, cls: 'DATA', why: 'The fixture\'s change counts.' },
   { area: 'composer', state: 'focus', el: 'card', prop: /^border/, cls: 'SPEC', why: 'C3: the focused card has the 2 px line and "no translucent halo".' },
   { area: 'composer', state: /perm-menu|changes-menu/, part: /inner box/, prop: /^(only in app|missing in app)$/, cls: 'PROTO', why: 'Opened from the keyboard, the prototype focuses the checked item and the app the first one that can be chosen (Radix). The focused row is drawn the same.' },

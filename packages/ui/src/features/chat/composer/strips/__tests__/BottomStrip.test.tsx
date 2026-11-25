@@ -90,6 +90,17 @@ describe('BottomStrip', () => {
     expect(screen.getByTestId('composer-branch')).toHaveTextContent('feat/quota');
   });
 
+  it('puts the decorative separator between the controls, outside both accessible names', () => {
+    renderStrip();
+    const where = screen.getByTestId('composer-worktree-trigger');
+    const branch = screen.getByTestId('composer-branch');
+    const dot = screen.getByText('·');
+    expect(where.nextElementSibling).toBe(dot);
+    expect(dot.nextElementSibling).toBe(branch);
+    expect(dot).toHaveAttribute('aria-hidden', 'true');
+    expect(branch).toHaveAccessibleName('Branch feat/quota. Manage branches');
+  });
+
   it('names a worktree', () => {
     mockChat = { ...CHAT, worktreePath: '/repo/.worktrees/q' };
     renderStrip();
@@ -103,6 +114,7 @@ describe('BottomStrip', () => {
     mockBranch = undefined;
     renderStrip();
     expect(screen.queryByTestId('composer-branch')).toBeNull();
+    expect(screen.queryByText('·')).toBeNull();
     expect(screen.getByTestId('composer-worktree-trigger')).toBeInTheDocument();
   });
 
