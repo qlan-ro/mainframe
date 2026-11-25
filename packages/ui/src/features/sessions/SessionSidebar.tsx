@@ -122,7 +122,7 @@ export function SessionSidebar() {
           the one thing a long session list must not scroll away. */}
       <SidebarHeader className="gap-0 pt-0 pr-[6px] pb-1">
         <div className="flex h-11 items-center justify-between pl-1">
-          <span className="text-[15px] font-semibold leading-[1.45]">Chats</span>
+          <span className="text-headline font-semibold">Chats</span>
           <span className="flex items-center text-muted-foreground">
             <Hint label={searchChord == null ? 'Search' : `Search (${searchChord})`}>
               <Button
