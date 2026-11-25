@@ -188,22 +188,17 @@ impl ChatManager {
         );
         let handoff = match delivery {
             Delivery::Steer => {
-                return self
-                    .deliver_steer(
-                        post,
-                        session,
-                        SteerMessage {
-                            chat_id,
-                            content,
-                            attachment_ids,
-                            message,
-                            message_uuid,
-                            is_queued,
-                            text: outgoing.text,
-                        },
-                    )
-                    .await
-                    .map(|_| None);
+                let steer = SteerMessage {
+                    chat_id,
+                    content,
+                    attachment_ids,
+                    message,
+                    message_uuid,
+                    is_queued,
+                    text: outgoing.text,
+                };
+                self.deliver_steer(post, session, steer).await?;
+                return Ok(None);
             }
             Delivery::Turn { handoff } => handoff,
         };
