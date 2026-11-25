@@ -49,6 +49,8 @@ export function ModelTuning({ model, chat, providerDefaults, setEffort, setFeatu
                 value={level.id}
                 data-testid={`composer-model-${model.id}-effort-${level.id}`}
                 disabled={locked}
+                aria-label={level.label}
+                title={level.id === 'max' ? level.label : undefined}
                 onSelect={keepOpen}
                 className={cn(
                   'min-h-7 min-w-0 flex-1 justify-center rounded-[7px] px-1.5 py-1 text-center text-small/[20px] font-medium whitespace-nowrap',
@@ -56,7 +58,7 @@ export function ModelTuning({ model, chat, providerDefaults, setEffort, setFeatu
                   '[&>span:has(svg)]:hidden data-[state=checked]:bg-chrome-selected',
                 )}
               >
-                {level.label}
+                {level.id === 'max' ? 'Max' : level.label}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>

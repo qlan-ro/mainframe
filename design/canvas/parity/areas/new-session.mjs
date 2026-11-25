@@ -31,7 +31,11 @@ export default {
     S('branch-menu', 'Branch menu', {
       proto: P.all(P.preset('new-session'), branch, blur, P.park),
       app: P.all(start, appBranch, blur, P.park),
-      pairs: [{ ...menu, a: "tid('composer-branch-menu')" }],
+      pairs: [{
+        ...menu,
+        a: "tid('composer-branch-menu')",
+        anchor: { p: "q('[data-id=pill]')", a: "tid('composer-branch-picker')" },
+      }],
       shot: { p: "q('.menu')", a: "tid('composer-branch-menu')" },
     }),
     S('worktree', 'New worktree chosen', {

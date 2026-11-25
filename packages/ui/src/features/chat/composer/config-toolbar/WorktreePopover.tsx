@@ -57,9 +57,13 @@ function ActiveInfo({ chat }: { chat: Chat }) {
       <Separator />
       <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-meta/[1.45]">
         <span className="text-muted-foreground">Branch</span>
-        <span className="truncate font-mono text-ink-secondary">{chat.branchName ?? '—'}</span>
+        <span className="truncate font-mono text-[0.92em] text-foreground">{chat.branchName ?? '—'}</span>
         <span className="text-muted-foreground">Path</span>
-        <TruncatedWithTooltip text={chat.worktreePath ?? ''} className="text-foreground" contentClassName="break-all" />
+        <TruncatedWithTooltip
+          text={chat.worktreePath ?? ''}
+          className="font-mono text-[0.92em] text-foreground"
+          contentClassName="break-all"
+        />
       </div>
     </div>
   );
@@ -216,7 +220,7 @@ export function WorktreePopover({
             <ActiveInfo chat={chat} />
             {chat.worktreePath && <OpenFolder path={chat.worktreePath} onDone={() => setOpen(false)} />}
             <div className="flex flex-col gap-1.5">
-              <WorktreeSectionLabel>Move to another worktree</WorktreeSectionLabel>
+              <div className="px-2.5 py-1.5 text-control font-medium text-foreground">Move to another worktree</div>
               {busy && <WorktreeNotice testId="composer-worktree-busy">{BUSY_NOTE}</WorktreeNotice>}
               {loading ? (
                 <WorktreeLoading />
