@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 use mainframe_types::content::LeafContent;
+use mainframe_types::orchestration::DelegatedTask;
 use mainframe_types::settings::ExecutionMode;
 use serde_json::{Value, json};
 
@@ -64,4 +65,10 @@ pub(crate) async fn delegate(f: &Fixture, ctx: &CallCtx, task: &str) -> Value {
         .run(&f.svc, ctx, json!({ "task": task }))
         .await
         .unwrap()
+}
+
+/// Delegates one task from the parent and returns it.
+pub(crate) async fn delegated(f: &Fixture) -> DelegatedTask {
+    delegate(f, &f.ctx, "t").await;
+    f.tasks.all().remove(0)
 }

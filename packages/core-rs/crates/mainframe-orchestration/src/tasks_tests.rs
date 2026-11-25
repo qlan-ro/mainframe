@@ -2,19 +2,13 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use mainframe_types::events::ChatUpdatedReason;
-use mainframe_types::orchestration::DelegatedTask;
 use serde_json::json;
 
 use super::*;
 use crate::calls::CallCtx;
-use crate::test_fixture::{Fixture, delegate, finish, fixture};
+use crate::test_fixture::{Fixture, delegate, delegated, finish, fixture};
 use crate::test_support::{announce, call_ctx, wire_chat};
 use crate::tools::Tool;
-
-async fn delegated(f: &Fixture) -> DelegatedTask {
-    delegate(f, &f.ctx, "t").await;
-    f.tasks.all().remove(0)
-}
 
 fn status_of(f: &Fixture, id: &str) -> TaskStatus {
     f.tasks.find(id).unwrap().status
@@ -165,22 +159,6 @@ async fn a_retry_that_returns_a_finished_result_acknowledges_it() {
     assert!(!f.svc.outbox.has_for("parent"));
 }
 
-/// The sweep below a task happens after the task itself is stopping: its agent
-/// may still be running and must not delegate behind the sweep.
-#[tokio::test]
-async fn a_task_being_cancelled_can_no_longer_delegate() {
-    let f = fixture();
-    let task = delegated(&f).await;
-    let child_ctx = call_ctx(&f.svc, &task.child_chat_id);
-    f.svc.begin_stop(&task.child_chat_id).await;
-    let args = json!({ "task": "behind the sweep" });
-    let err = Tool::DelegateTask
-        .run(&f.svc, &child_ctx, args)
-        .await
-        .unwrap_err();
-    assert_eq!(err.code, ErrorCode::CallerNotActive);
-}
-
 #[tokio::test]
 async fn owed_results_survive_a_restart_but_wake_the_parent_only_after_it_spawns() {
     let f = fixture();
@@ -238,32 +216,6 @@ async fn an_unreadable_child_does_not_fail_its_task() {
     f.port.lock().chat_reads_fail = true;
     announce(&f.svc, &task.child_chat_id).await;
     assert_eq!(status_of(&f, &task.id), TaskStatus::Running);
-}
-
-/// The child's own idle event may arrive while the cancel is under way.
-#[tokio::test]
-async fn a_task_is_cancelled_before_its_child_is_interrupted() {
-    let f = fixture();
-    let task = delegated(&f).await;
-    f.port.lock().before_interrupt = Some(Arc::new({
-        let tasks = f.tasks.clone();
-        move || {
-            let task = tasks.all().remove(0);
-            assert_eq!(task.status, TaskStatus::Cancelled);
-        }
-    }));
-    assert_eq!(f.svc.cancel_task(task, None).await.len(), 1);
-    assert_eq!(f.port.lock().interrupted.len(), 1);
-}
-
-#[tokio::test]
-async fn a_cancel_that_returns_a_finished_result_acknowledges_it() {
-    let f = fixture();
-    let task = delegated(&f).await;
-    finish(&f, &task.child_chat_id, "answer").await;
-    let out = run(&f, &f.ctx, Tool::TaskCancel, json!({ "taskId": task.id })).await;
-    assert_eq!(out["summary"], "answer");
-    assert!(!f.svc.outbox.has_for("parent"));
 }
 
 /// The result has left the outbox and the child's turn has not started yet:

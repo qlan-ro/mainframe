@@ -195,3 +195,7 @@ impl OrchestrationService {
         Ok((self.acknowledge(ctx, task).await?, returned))
     }
 }
+
+#[cfg(test)]
+#[path = "tasks_ops_tests.rs"]
+mod tests;
