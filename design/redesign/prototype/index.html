@@ -73,7 +73,11 @@ code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.92em}
 /* page + window */
 .stage{height:100vh;display:grid;place-items:center}
 .win{width:min(var(--ww,1440px),100vw);height:100vh;display:flex;flex-direction:column;background:var(--ground);position:relative;overflow:hidden}
-.shell{flex:1;min-height:0;display:flex}
+.shell{flex:1;min-height:0;display:flex;background:var(--ground)}
+.content-pane{--sheet:oklch(1 0 0);--side:var(--sheet);--pane-hair:oklch(.922 0 0);flex:1;min-width:0;display:flex;overflow:hidden;border:solid var(--pane-hair);border-width:1px 0 0 1px;border-top-left-radius:10px;background:var(--sheet)}
+:root:not([data-theme=dark]) :is(.titlebar,.shell){--ground:oklch(.97 .004 286)}
+:root[data-theme=dark] :is(.titlebar,.shell){--ground:oklch(.285 0 0)}
+:root[data-theme=dark] .content-pane{--sheet:oklch(.235 0 0);--side:var(--sheet);--pane-hair:oklch(1 0 0 / 12%)}
 .win.framed{height:calc(100vh - 24px);border-radius:12px;box-shadow:var(--win-shadow)}
 
 /* icon rail (own column, hairline) */
@@ -136,7 +140,7 @@ code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.92em}
 .segsw button:hover{background:var(--hover);color:var(--ink)}
 .segsw button[aria-pressed=true]{background:var(--chip);color:var(--ink)}
 /* rail */
-.rail{width:56px;flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 10px;background:var(--ground);border-right:1px solid var(--hair)}
+.rail{width:55px;flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 10px;background:var(--ground)}
 .rb{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--meta);position:relative}
 .rb .ic{width:20px;height:20px}
 .rb:hover{background:var(--hover);color:var(--ink)}
@@ -163,7 +167,7 @@ code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.92em}
 .scopeb .tx span:last-child{font-size:11.5px;color:var(--meta)}
 
 /* sidebar */
-.side{width:260px;flex:none;background:var(--side);border-right:1px solid var(--hair);border-top:1px solid var(--hair);display:flex;flex-direction:column;min-height:0}
+.side{width:260px;flex:none;background:var(--side);border-right:1px solid var(--hair);display:flex;flex-direction:column;min-height:0}
 .slist{flex:1;min-height:0;overflow-y:auto;padding:0 8px 8px}
 /* Session list rhythm (L4, picked in Live mode): groups breathe, rows tighten, group actions wait for hover. */
 .gh{position:sticky;top:0;z-index:2;display:flex;align-items:flex-end;gap:2px;height:24px;margin-top:14px;padding:0 2px 4px 8px;background:var(--side);font-size:12px;font-weight:500;color:var(--meta)}
@@ -187,7 +191,7 @@ code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.92em}
 .sempty{padding:8px;font-size:12px;color:var(--meta)}
 
 /* sheet, header */
-.sheet{flex:1;min-width:0;display:flex;background:var(--sheet);border-top:1px solid var(--hair);position:relative}
+.sheet{flex:1;min-width:0;display:flex;background:var(--sheet);position:relative}
 /* Session panel floating over a chat column too narrow to dock it (R11), as in the app. */
 .spanel.float{position:absolute;top:52px;right:8px;margin:0;z-index:25;box-shadow:var(--shadow-menu);max-height:calc(100% - 52px - var(--pbot,8px))}
 .pscrim{position:absolute;inset:44px 0 calc(var(--pbot,8px) - 8px) 0;z-index:24;background:color-mix(in srgb,var(--sheet) 40%,transparent)}
@@ -554,7 +558,7 @@ button.tile:hover{background:var(--hover)}
 .pbtn[aria-current=true]{background:var(--sel);color:var(--ink);font-weight:600}
 input[type=range]{width:100%;accent-color:var(--accent);height:24px}
 /* workspace panel (W4): slides in from the right, pushing the chat column */
-.wsp{flex:none;width:0;position:relative;overflow:hidden;background:var(--sheet);border-top:1px solid var(--hair);transition:width .32s cubic-bezier(.22,1,.36,1)}
+.wsp{flex:none;width:0;position:relative;overflow:hidden;background:var(--sheet);transition:width .32s cubic-bezier(.22,1,.36,1)}
 .win.ws .wsp{width:var(--wsw);border-left:1px solid var(--hair)}
 .win.noanim .wsp,.win.noanim .tw,.win.noanim #wsep{transition:none}
 .wsin{position:absolute;top:0;bottom:0;left:0;width:calc(var(--wsw) - 1px);display:flex}
@@ -1015,6 +1019,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:24px}
       <button type="button" class="rb" id="themebtn" aria-label="Switch theme" data-tip="Switch theme"></button>
       <button type="button" class="rb" aria-label="Settings" data-tip="Settings" data-nav="Settings"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg></button>
     </nav>
+    <div class="content-pane">
     <aside class="side" id="side" aria-label="Sessions"></aside>
     <div class="sheet">
       <div class="workcol">
@@ -1070,6 +1075,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:24px}
         <div class="wsfiles" id="wsfiles" hidden></div>
       </div>
     </section>
+    </div>
     </div>
   </div>
 

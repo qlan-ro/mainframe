@@ -14,7 +14,7 @@ Operate. The window frame: title bar segments (usage capsule, session tabs, Sear
 A developer running several agent sessions at once. They switch between sessions and see usage at a glance, without the frame competing with the work.
 
 ## Constraints
-Native macOS window chrome: traffic lights, a full-width title bar, a drag region. The shell keeps today's structure (S1). Overlay scrollbars everywhere (S3).
+Native macOS window chrome: traffic lights, a full-width title bar, a drag region. The shell keeps today's structure (S1). The shared pane beside the rail has a clipped 10 px top-left corner and a single 1 px border along the top and rail edges (S2). Overlay scrollbars everywhere (S3).
 
 ## Direction contract
 THESIS: the frame lines up with the columns it serves. Title-bar segments sit exactly over the column edges below, instead of a generic toolbar laid across the top.
