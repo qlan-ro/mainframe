@@ -20,6 +20,16 @@ import { buildPendingMessage, parseSendInput } from './chat-reconcile';
 import { sendErrorMessage, sendRefusal } from './describe-send-error';
 import { previewsById } from './local-attachments';
 import { wantsSteer } from './steer';
+import { forgetSentCaptures, restoreSentCapture } from '../composer/draft-content/draft-content-store';
+import { toUploadItems } from '../composer/attachment-adapter';
+import {
+  dropUnsent,
+  failUnsent,
+  getUnsent,
+  markPrompted,
+  markRetrying,
+  unsentIdOf,
+} from '../composer/unsent/unsent-store';
 import { useHeldQueue } from '../composer/queue/held-queue-store';
 import { heldTimestamp, matchQueued, noteQueued } from '../composer/queue/sent-order';
 import type { ChatStateEvent, ChatThreadState, PendingUserMessage } from './chat-thread-state';
@@ -45,11 +55,19 @@ function refuseIfDirectoryMissing(host: ChatActionHost): boolean {
 }
 
 export async function sendChatMessage(host: ChatActionHost, message: AppendMessage): Promise<void> {
-  if (refuseIfDirectoryMissing(host)) return;
+  const unsentId = unsentIdOf(message);
+  if (refuseIfDirectoryMissing(host)) {
+    failUnsent(unsentId, new Error('The working directory is missing.'));
+    return;
+  }
 
   const input = parseSendInput(message);
-  if (!input) return;
+  if (!input) {
+    failUnsent(unsentId, new Error('There is nothing in it to send.'));
+    return;
+  }
   const { text, uploadItems } = input;
+  const sentIds = (message.attachments ?? []).map((attachment) => attachment.id);
 
   // A draft that is exactly `/<command>` is an invocation, not prose: the
   // daemon resolves the command by name and — for a Mainframe one —
@@ -65,6 +83,7 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   const pending: PendingUserMessage = {
     ...buildPendingMessage(host.getDaemonId(), text, sendMeta, uploadItems),
     ...(running && !command && !sendMeta.steer ? { queueing: true } : {}),
+    ...(unsentId ? { unsentId } : {}),
   };
   host.dispatch({ type: 'local.message.queued', pending });
   host.dispatch({ type: 'run.started', optimistic: true });
@@ -76,6 +95,7 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
     await host.load();
     attachmentIds =
       uploadItems.length > 0 ? await uploadAttachments(host.getPort(), host.getDaemonId(), uploadItems) : undefined;
+    markPrompted(unsentId);
     const { queued } = await host.sendPrompt(text, {
       ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
       ...sendMeta,
@@ -90,9 +110,16 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
       }
       host.dispatch({ type: 'local.message.reconciled', clientId: pending.clientId });
     }
+    forgetSentCaptures(sentIds);
+    dropUnsent(unsentId);
   } catch (error) {
     const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
     host.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage, pending });
+    // Preview captures go back to the draft with their notes; with nothing else attached that is all of it.
+    const restored = sentIds.filter(restoreSentCapture);
+    if (restored.length > 0 && restored.length === sentIds.length) {
+      host.dispatch({ type: 'local.message.attachments_restored', clientId: pending.clientId });
+    }
     throw error;
   }
 }
@@ -101,24 +128,42 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
  * Re-send a failed optimistic user message (the "Failed to send" indicator).
  * Text-only: attachments are not re-uploaded — the common failure is the live
  * send, and re-deriving the original upload items isn't tracked on the pending.
+ * A draft's first message is kept whole (`unsent-store.ts`), so it goes out whole.
  * `remedy` (the failed send's own) runs first: `unarchive_native_session`
  * unarchives the chat's provider session before the resend.
  */
 export async function retryChatMessage(host: ChatActionHost, clientId: string, remedy?: PromptRemedy): Promise<void> {
   const pending = host.getState().pendingUserMessages[clientId];
-  if (!pending) return;
+  if (pending?.status !== 'failed') return;
   if (refuseIfDirectoryMissing(host)) return;
 
+  const { unsentId } = pending;
+  const entry = getUnsent(unsentId);
+  if (entry && !entry.failure) return;
+  const uploadItems = toUploadItems(entry?.sent ?? []);
+  markRetrying(unsentId);
   host.dispatch({ type: 'local.message.retrying', clientId });
   host.dispatch({ type: 'run.started', optimistic: true });
 
   try {
     if (remedy === 'unarchive_native_session') await unarchiveNativeSession(host.getPort(), host.getDaemonId());
     await host.load();
-    await host.sendPrompt(pending.text, pending.sendMeta ?? {});
+    const attachmentIds =
+      uploadItems.length > 0 ? await uploadAttachments(host.getPort(), host.getDaemonId(), uploadItems) : undefined;
+    markPrompted(unsentId);
+    await host.sendPrompt(pending.text, { ...(attachmentIds ? { attachmentIds } : {}), ...pending.sendMeta });
+    dropUnsent(unsentId);
   } catch (error) {
     host.dispatch({ type: 'local.message.failed', clientId, error, stage: 'send', pending });
+    failUnsent(unsentId, error);
     throw error;
+  }
+}
+
+/** The user restored or discarded a draft's first message: its failed bubble, and the Retry on it, go too. */
+export function dropFailedMessage(host: ChatActionHost, unsentId: string): void {
+  for (const { clientId, status, unsentId: id } of Object.values(host.getState().pendingUserMessages)) {
+    if (id === unsentId && status === 'failed') host.dispatch({ type: 'local.message.reconciled', clientId });
   }
 }
 

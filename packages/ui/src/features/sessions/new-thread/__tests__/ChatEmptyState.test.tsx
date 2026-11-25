@@ -1,31 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-vi.mock('../WelcomeState', () => ({
-  WelcomeState: ({ projectId }: { projectId?: string }) => (
-    <div data-testid="welcome" data-project={projectId ?? ''}>
-      {projectId}
-    </div>
-  ),
-}));
+vi.mock('../NewSessionState', () => ({ NewSessionState: () => <div data-testid="welcome" /> }));
 vi.mock('../FirstRunState', () => ({ FirstRunState: () => <div data-testid="firstrun" /> }));
 
 import { ChatEmptyState } from '../ChatEmptyState';
 
 describe('ChatEmptyState', () => {
-  it('renders WelcomeState with the projectId for the welcome variant', () => {
-    render(<ChatEmptyState variant="welcome" projectId="proj-a" />);
-    expect(screen.getByTestId('welcome')).toHaveTextContent('proj-a');
-  });
-
-  it('renders WelcomeState in its choose-a-project form when the draft has no project', () => {
+  it('is the new session’s empty state for a draft', () => {
     render(<ChatEmptyState variant="welcome" />);
-    const welcome = screen.getByTestId('welcome');
-    expect(welcome).toBeInTheDocument();
-    expect(welcome).toHaveAttribute('data-project', '');
+    expect(screen.getByTestId('welcome')).toBeInTheDocument();
   });
 
-  it('renders FirstRunState for the firstrun variant', () => {
+  it('is the first-run hero while there are no projects', () => {
     render(<ChatEmptyState variant="firstrun" />);
     expect(screen.getByTestId('firstrun')).toBeInTheDocument();
   });

@@ -149,6 +149,9 @@ describe('ActiveDaemonProvider — switchTo calls disposeDaemonSession once', ()
       await user.click(screen.getByTestId('switch-btn'));
     });
 
+    await act(async () => {
+      await user.click(screen.getByTestId('switch-btn'));
+    });
     expect(disposeDaemonSessionMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -106,7 +106,27 @@ export function cancelActivityJump(): void {
   latestJump++;
 }
 
-/** `missing`: the history doesn't hold it. `superseded`: something else was asked for, or the session was left. */
+/**
+ * True once the user writes something. A jump that had to load history lands
+ * when they may be typing: it must not take their focus or their place.
+ */
+function watchForTyping(): { typed: () => boolean; stop: () => void } {
+  let typed = false;
+  const onInput = () => {
+    typed = true;
+  };
+  document.addEventListener('beforeinput', onInput, true);
+  document.addEventListener('input', onInput, true);
+  return {
+    typed: () => typed,
+    stop: () => {
+      document.removeEventListener('beforeinput', onInput, true);
+      document.removeEventListener('input', onInput, true);
+    },
+  };
+}
+
+/** `missing`: the history doesn't hold it. `superseded`: something else was asked for, the user started typing, or the session was left. */
 export type JumpOutcome = 'shown' | 'missing' | 'superseded';
 
 async function showSource(
@@ -152,7 +172,8 @@ export async function jumpToActivitySource(
   onLocated?: () => void,
 ): Promise<JumpOutcome> {
   const jump = ++latestJump;
-  const isCurrent = () => jump === latestJump && transcript(chatId) !== undefined;
+  const typing = watchForTyping();
+  const isCurrent = () => jump === latestJump && !typing.typed() && transcript(chatId) !== undefined;
   let settle = () => {};
   const settled = new Promise<void>((resolve) => {
     settle = resolve;
@@ -167,6 +188,7 @@ export async function jumpToActivitySource(
     if (!isCurrent()) return 'superseded';
     throw error;
   } finally {
+    typing.stop();
     settle();
   }
 }

@@ -10,6 +10,7 @@ import { useFindInChatStore } from '../find/find-in-chat-store';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { RootTranscriptScope } from '../messages/turn/transcript-scope';
 import { ChatThreadViewport } from './ChatThreadViewport';
+import { useActiveThreadId } from '../runtime/use-active-thread-id';
 import '../transcript.css';
 
 export type ChatThreadVariant = 'main' | 'side';
@@ -18,11 +19,12 @@ export function ChatThread({
   variant = 'main',
 }: { emptyState?: ReactNode; variant?: ChatThreadVariant } = {}) {
   const focused = useAuiState((s) => s.threads?.mainThreadId === s.threadListItem?.id);
+  const scope = useActiveThreadId();
   const findOwner = focused && variant === 'main';
   const rootRef = useRef<HTMLDivElement>(null);
   return (
     <ThreadComposerProvider>
-      <ComposerEditProvider>
+      <ComposerEditProvider scope={scope}>
         <SkillsProvider>
           <RootTranscriptScope>
             <ThreadPrimitive.Root

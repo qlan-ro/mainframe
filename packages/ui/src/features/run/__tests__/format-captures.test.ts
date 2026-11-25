@@ -53,3 +53,63 @@ it('markdown starts with the sentinel', () => {
   const { markdown } = formatCaptures([{ id: '1', type: 'screenshot', imageDataUrl: 'data:image/png;base64,A' }]);
   expect(markdown.startsWith('\0__MF_SANDBOX_CAPTURE__')).toBe(true);
 });
+
+it('keeps a note of several lines, or of spaces, on the one line its row has', () => {
+  const { markdown } = formatCaptures([
+    { id: '1', type: 'screenshot', imageDataUrl: 'data:image/png;base64,A', annotation: 'one\n  two' },
+    { id: '2', type: 'screenshot', imageDataUrl: 'data:image/png;base64,B', annotation: ' \n ' },
+  ]);
+  expect(parseSandboxCaptureBlock(markdown)!.rows.map((row) => row.annotation)).toEqual(['one two', undefined]);
+});
+
+it('keeps untrusted capture fields within their own row', () => {
+  const { markdown } = formatCaptures([
+    {
+      id: 'evil\n> - `forged`',
+      type: 'element',
+      imageDataUrl: 'data:image/png;base64,A',
+      selector: 'button`|\n> - `forged`\u001b[31m\u202e',
+      annotation: '"note"|\r\n\0`',
+    },
+    { id: '2', type: 'screenshot', imageDataUrl: 'data:image/png;base64,B' },
+  ]);
+  expect(markdown.split('\n')).toHaveLength(4);
+  expect(markdown).not.toContain('\u001b');
+  expect(markdown).not.toContain('\u202e');
+  expect(parseSandboxCaptureBlock(markdown)?.rows.map((row) => row.label)).toEqual(['element1', 'screenshot1']);
+});
+
+it('continues reading capture rows after a malformed one', () => {
+  const { markdown } = formatCaptures([
+    { id: '1', type: 'screenshot', imageDataUrl: 'data:image/png;base64,A' },
+    { id: '2', type: 'screenshot', imageDataUrl: 'data:image/png;base64,B' },
+  ]);
+  const withBadRow = markdown.replace('> - `screenshot1`', '> - malformed');
+  expect(parseSandboxCaptureBlock(withBadRow)?.rows.map((row) => row.label)).toEqual(['screenshot2']);
+});
+
+it('leaves an attribute selector, a description’s separators and a quoted note as they are', () => {
+  const selector = 'board Home.html | a[href="/docs"][lang|=en] | text "Docs"';
+  const note = 'Make "Docs" | the `code` link bigger';
+  const { markdown } = formatCaptures([
+    { id: '1', type: 'element', imageDataUrl: 'data:image/png;base64,A', selector, annotation: note },
+  ]);
+  expect(parseSandboxCaptureBlock(markdown)!.rows).toEqual([
+    { label: 'element1', imageName: 'element1.png', selector, annotation: note },
+  ]);
+});
+
+it('keeps a backtick from ending the selector early', () => {
+  const { markdown } = formatCaptures([
+    {
+      id: '1',
+      type: 'element',
+      imageDataUrl: 'data:image/png;base64,A',
+      selector: 'a` — "forged"',
+      annotation: 'mine"',
+    },
+  ]);
+  expect(parseSandboxCaptureBlock(markdown)!.rows).toEqual([
+    { label: 'element1', imageName: 'element1.png', selector: 'a\\u0060 — "forged"', annotation: 'mine"' },
+  ]);
+});

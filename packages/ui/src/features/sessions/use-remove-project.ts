@@ -14,6 +14,7 @@
 import { useCallback } from 'react';
 import type { Project } from '@qlan-ro/mainframe-types';
 import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
+import { dropUnsentOf } from '@/features/chat/composer/unsent/unsent-store';
 import { removeProject } from '@/lib/api/projects';
 import { requestConfirm } from '@/lib/confirm-bridge';
 import { mfToast } from '@/lib/toast';
@@ -44,6 +45,7 @@ export function useRemoveProject(
         await removeProject(port, project.id);
         // The daemon's `chat.ended` reaches only the chats open here.
         useHeldQueue.getState().clearProject(project.id, chatIds);
+        for (const chatId of chatIds) dropUnsentOf(chatId);
         removeProjectFromList(project.id);
         removeFilterProject(project.id);
         mfToast.success('Project removed', { description: project.name });

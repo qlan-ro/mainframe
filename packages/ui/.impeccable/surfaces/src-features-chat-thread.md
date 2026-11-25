@@ -20,6 +20,8 @@ Queued messages are not in the transcript: they are rows in the composer. A stee
 
 Every row, marker and card for a tool call carries `data-activity-id` with the call's id (space-separated when a row stands for several), and its own disclosure is the first `aria-expanded` control inside it. A group that renders its rows only once opened lists their ids in `data-activity-group`. The session panel's jump (R13) relies on both.
 
+A failed first message can show Retry or Unarchive in the transcript beside its composer recovery notice. Starting either action hides the remedies during the resend. Restoring or discarding the message removes its failed bubble.
+
 ## Direction contract
 THESIS: one work row per turn, folded once the answer starts. Events are pills on the spine. This replaces a stack of tool cards.
 OWN-WORLD: rows of glyph, verb, target and receipt. Pills for skills, plans, schedules, monitors, worktrees and notifications. Failures in muted rose. Answered questions are small cards outside the fold.

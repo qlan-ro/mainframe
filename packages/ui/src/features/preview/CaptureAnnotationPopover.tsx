@@ -5,12 +5,12 @@ import { Textarea } from '@/components/ui/textarea';
 interface CaptureAnnotationPopoverProps {
   captures: Capture[];
   onAnnotationChange: (id: string, annotation: string) => void;
-  onSubmit: () => Promise<void>;
+  onSubmit: () => void;
   onCancel: () => void;
 }
 
 /**
- * Floating panel for annotating sandbox captures before sending.
+ * Floating panel for annotating preview captures before they join the message being written (C14).
  *
  * A form, so it stays a plain panel rather than a menu: it is pinned to the
  * preview's bottom-right with no trigger, and Radix menus never hold inputs.
@@ -52,14 +52,8 @@ export function CaptureAnnotationPopover({
         <Button data-testid="preview-annotation-cancel" variant="outline" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button
-          data-testid="preview-annotation-submit"
-          size="sm"
-          onClick={() => {
-            void onSubmit();
-          }}
-        >
-          Send
+        <Button data-testid="preview-annotation-submit" size="sm" onClick={onSubmit}>
+          Add to message
         </Button>
       </div>
     </div>

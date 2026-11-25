@@ -48,6 +48,8 @@ export interface PendingUserMessage {
   queueing?: boolean;
   /** The composer's attachment bytes, previewed while the send is in flight. */
   attachments?: LocalAttachmentPreview[];
+  /** A draft's first message: its copy in `unsent-store.ts`. */
+  unsentId?: string;
 }
 
 export interface ChatPermissionEntry {

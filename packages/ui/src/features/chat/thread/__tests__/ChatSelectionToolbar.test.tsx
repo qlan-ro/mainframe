@@ -17,6 +17,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
 let __threadId: string | undefined = 'thread-1';
+let __messages: { id: string; role: string }[] = [];
 let __chatConfig: { projectId: string } | undefined = { projectId: 'proj-1' };
 
 const composerGetState = vi.fn(() => ({ text: 'draft text' }));
@@ -29,6 +30,7 @@ vi.mock('@assistant-ui/react', () => ({
       getState: composerGetState,
       setText: composerSetText,
     },
+    thread: { getState: () => ({ messages: __messages }) },
   }),
   useAuiState: (sel: (s: { threadListItem: { id: string } | undefined }) => unknown) =>
     sel({ threadListItem: __threadId ? { id: __threadId } : undefined }),
@@ -63,6 +65,7 @@ describe('ChatSelectionToolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __threadId = 'thread-1';
+    __messages = [];
     __chatConfig = { projectId: 'proj-1' };
   });
 
@@ -90,6 +93,29 @@ describe('ChatSelectionToolbar', () => {
     expect(appendSpy).toHaveBeenCalledWith('thread-1', { quote: 'quoted text', liveText: 'draft text' });
     expect(composerSetText).toHaveBeenCalledWith('');
     expect(removeAllRanges).toHaveBeenCalled();
+  });
+
+  it('Quote says which message it is from', () => {
+    stubSelection('quoted text');
+    document.body.insertAdjacentHTML('beforeend', '<div data-message-id="m1">quoted text</div>');
+    const anchorNode = document.querySelector('[data-message-id="m1"]')!.firstChild;
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'quoted text',
+      anchorNode,
+      removeAllRanges: vi.fn(),
+    } as unknown as Selection);
+    __messages = [
+      { id: 'm0', role: 'assistant' },
+      { id: 'm1', role: 'user' },
+    ];
+    render(<ChatSelectionToolbar />);
+    fireEvent.click(screen.getByTestId('chat-selection-quote'));
+    expect(appendSpy).toHaveBeenCalledWith('thread-1', {
+      quote: 'quoted text',
+      liveText: 'draft text',
+      source: 'From your message',
+    });
+    document.querySelector('[data-message-id="m1"]')!.remove();
   });
 
   it('New session opens a draft on the source chat’s project, prefilled with the raw selection, and does not append a segment', () => {

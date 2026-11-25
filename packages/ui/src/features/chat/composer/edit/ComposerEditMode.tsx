@@ -4,7 +4,8 @@
  * Composer edit mode — editing a QUEUED message reuses the one composer.
  *
  * Amber header marks the mode ("Editing queued message · stays queued until the
- * run finishes" + esc-to-cancel). The text is loaded + editable; the config
+ * run finishes" + esc-to-cancel). The blocks a message carries for the agent
+ * (captures, session references) are kept out of the field and put back. The text is loaded + editable; the config
  * toolbar is shown MUTED (the queue-edit contract is content-only — `PATCH
  * /queue/:id { content }`). Save updates the queued item; Cancel-edit discards
  * and leaves it queued.
@@ -15,6 +16,7 @@
 import { useState, useCallback } from 'react';
 import { PencilIcon, CheckIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { splitHiddenPrefix } from '../../markers/message-markers';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { ComposerToolbar } from '../config-toolbar/ComposerToolbar';
 import { StopControl } from '../send/SendControls';
@@ -22,20 +24,21 @@ import type { QueuedEdit } from './composer-edit-context';
 
 export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: () => void }) {
   const extras = useChatExtras();
-  const [text, setText] = useState(edit.content);
+  const { hidden, visible } = splitHiddenPrefix(edit.content);
+  const [text, setText] = useState(visible);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSave = useCallback(() => {
     const trimmed = text.trim();
     const save = edit.save ?? ((content: string) => extras?.editQueued(edit.messageId, content) ?? Promise.resolve());
-    if (!trimmed || trimmed === edit.content) {
+    if (!trimmed || trimmed === visible) {
       onDone();
       return;
     }
     setSaving(true);
     setSaveError(null);
-    save(trimmed)
+    save(hidden + trimmed)
       .then(() => {
         onDone();
       })
@@ -44,7 +47,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
         setSaving(false);
         setSaveError('Save failed — please try again.');
       });
-  }, [text, extras, edit, onDone]);
+  }, [text, extras, edit, onDone, hidden, visible]);
 
   return (
     <div

@@ -21,7 +21,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import type { EnterWhileRunning } from '@/store/ui-prefs';
+import { useActiveThreadId } from '../../runtime/use-active-thread-id';
 import { ComposerHint } from '../composer-card-context';
+import { useDraftItems } from '../draft-content/draft-content-store';
 import { useCanSubmit, type SubmitComposition } from '../segments/use-submit-composition';
 import { useCanSteer, useEnterMode } from './use-enter-mode';
 import { useComposerStop, type ComposerStop } from './use-stop';
@@ -92,7 +94,10 @@ function steerNote(canSteer: boolean, hasFiles: boolean): string {
 function QueueSplit({ submit }: { submit: SubmitComposition }) {
   const preferred = useEnterMode();
   const canSteer = useCanSteer();
-  const hasFiles = useAuiState((s) => (s.composer?.attachments?.length ?? 0) > 0);
+  const hasAttachments = useAuiState((s) => (s.composer?.attachments?.length ?? 0) > 0);
+  // A capture is sent as a file; a code annotation is text.
+  const hasCaptures = useDraftItems(useActiveThreadId()).some((item) => item.kind === 'capture');
+  const hasFiles = hasAttachments || hasCaptures;
   const [open, setOpen] = useState(false);
   // White, not the focus blue: the line sits on a blue fill.
   const half =

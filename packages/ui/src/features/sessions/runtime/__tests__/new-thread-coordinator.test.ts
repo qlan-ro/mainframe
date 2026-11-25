@@ -523,7 +523,7 @@ describe('new-thread-coordinator — abandoned workflows cannot leak into reused
     resetNewThreadDraft('__LOCALID_a');
     setDraftConfig('__LOCALID_a', { projectId: 'fresh', adapterId: 'codex', model: 'fresh-model' });
     resolveOld({ id: 'chat-old-inflight' } as Chat);
-    await expect(oldResult).rejects.toThrow(/abandoned/);
+    await expect(oldResult).rejects.toThrow(/closed before it started/);
 
     expect(getDraftConfig('__LOCALID_a')).toMatchObject({ projectId: 'fresh', adapterId: 'codex' });
     expect(useNewThreadReady.getState().isReady('__LOCALID_a')).toBe(true);

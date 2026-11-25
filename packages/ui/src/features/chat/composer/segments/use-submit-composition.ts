@@ -42,14 +42,20 @@
  * without an adapter round-trip.
  */
 import { useAui, useAuiState } from '@assistant-ui/react';
+import { isDraftSessionId } from '@/store/layout-persist';
 import type { EnterWhileRunning } from '@/store/ui-prefs';
 import { withSteer } from '../../controller/steer';
+import { getDraftConfig } from '@/features/sessions/runtime/draft-config';
+import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
 import { readLiveComposerState } from '../read-live-composer-state';
 import { toCompleteAttachment } from '../attachment-adapter';
+import { composeMessage } from '../draft-content/compose-message';
+import { draftItemsOf, holdSentCaptures, useDraftContent, useDraftItems } from '../draft-content/draft-content-store';
 import { prependSessionReferences } from '../../session-references/reference-line';
 import { expandSessionMentions } from '../../session-references/session-mention';
 import { sessionReferencesFor, useSessionReferences } from '../sessions/session-reference-store';
+import { holdUnsent, unsentMetadata } from '../unsent/unsent-store';
 import { useComposerSegments } from './segment-store';
 import { serializeComposition } from './serialize-composition';
 
@@ -70,16 +76,43 @@ export function useSubmitComposition(): SubmitComposition {
       quote: composition?.liveQuote?.text ?? null,
       text: state.text,
     });
-    if (text === '' && state.attachments.length === 0) return;
+    const items = draftItemsOf(threadId);
+    if (text === '' && state.attachments.length === 0 && items.length === 0) return;
 
     const references = sessionReferencesFor(threadId);
     const wireText = expandSessionMentions(text, [...references.keys()]);
-    const body = prependSessionReferences(wireText, references);
-    const attachments = state.attachments.map(toCompleteAttachment);
+    // Captures and code annotations go in last: their block must open the
+    // message, and a label inside quoted code is not a session mention.
+    const content = composeMessage(prependSessionReferences(wireText, references), items);
+    const attachments = [...content.attachments, ...state.attachments.map(toCompleteAttachment)];
     const runConfig = mode === 'steer' ? withSteer(state.runConfig) : state.runConfig;
-    aui.thread.append({ role: 'user', content: [{ type: 'text', text: body }], attachments, runConfig });
+    // A draft's first message is kept whole; in a session only its captures need keeping.
+    const unsentId =
+      isDraftSessionId(threadId) && !chatControllerRegistry.get(threadId)?.hasRemoteId()
+        ? holdUnsent({
+            threadId,
+            draft: {
+              text: state.text,
+              composition,
+              items: [...items],
+              attachments: [...state.attachments],
+              references: Object.fromEntries(references),
+            },
+            setup: getDraftConfig(threadId),
+            sent: attachments,
+          })
+        : undefined;
+    if (!unsentId) holdSentCaptures(threadId, content.captures);
+    aui.thread.append({
+      role: 'user',
+      content: [{ type: 'text', text: content.body }],
+      attachments,
+      runConfig,
+      ...(unsentId ? { metadata: unsentMetadata(unsentId) } : {}),
+    });
     composer.reset();
     useComposerSegments.getState().clear(threadId);
+    useDraftContent.getState().clear(threadId);
     useSessionReferences.getState().clear(threadId);
   };
 }
@@ -89,11 +122,12 @@ export function useCanSubmit(): boolean {
   const threadId = useActiveThreadId();
   const composition = useComposerSegments((s) => (threadId ? s.byThread[threadId] : undefined));
   const liveText = useAuiState((s) => s.composer?.text ?? '');
+  const itemCount = useDraftItems(threadId).length;
   const liveAttachmentCount = useAuiState((s) => s.composer?.attachments?.length ?? 0);
 
   const serialized = serializeComposition(composition?.committed ?? [], {
     quote: composition?.liveQuote?.text ?? null,
     text: liveText,
   });
-  return serialized !== '' || liveAttachmentCount > 0;
+  return serialized !== '' || liveAttachmentCount > 0 || itemCount > 0;
 }

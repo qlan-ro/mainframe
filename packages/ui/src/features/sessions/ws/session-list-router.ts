@@ -30,6 +30,7 @@
  * <AssistantRuntimeProvider>.
  */
 import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
+import { dropUnsentOf } from '@/features/chat/composer/unsent/unsent-store';
 import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import { isRegisteredSideChatId, isSideChat } from '../../side-chat/side-chat-ids';
@@ -75,6 +76,7 @@ export class SessionListRouter {
       case 'chat.ended':
         // Deleted or closed: nothing it held may outlive it.
         useHeldQueue.getState().clearChat(event.chatId);
+        dropUnsentOf(event.chatId);
         this.deps.onReload();
         return;
 

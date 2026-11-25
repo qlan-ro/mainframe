@@ -250,6 +250,45 @@ describe('jumpToActivitySource — superseded', () => {
     expect(mounts).toEqual([]);
   });
 
+  it('leaves someone who started typing while its history loaded where they are', async () => {
+    const root = transcript('');
+    document.body.insertAdjacentHTML('beforeend', '<textarea id="field"></textarea>');
+    const field = document.querySelector<HTMLTextAreaElement>('#field')!;
+    const slow = heldJump(root);
+    field.focus();
+    field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    slow.arrive();
+    expect(await slow.outcome).toBe('superseded');
+    expect(slow.onLocated).not.toHaveBeenCalled();
+    expect(mounts).toEqual([]);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('stops watching for typing once it is over', async () => {
+    const added = vi.spyOn(document, 'addEventListener');
+    const removed = vi.spyOn(document, 'removeEventListener');
+    transcript('<div data-activity-id="call-1"></div>');
+    await jump('call-1');
+    expect(added.mock.calls.length).toBeGreaterThan(0);
+    for (const [type, listener] of added.mock.calls) {
+      expect(removed.mock.calls.some((call) => call[0] === type && call[1] === listener)).toBe(true);
+    }
+    added.mockRestore();
+    removed.mockRestore();
+  });
+
+  it('still lands when a field only has focus, and after typing from before it was asked for', async () => {
+    const root = transcript('');
+    document.body.insertAdjacentHTML('beforeend', '<textarea id="field"></textarea>');
+    const field = document.querySelector<HTMLTextAreaElement>('#field')!;
+    field.focus();
+    field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    const slow = heldJump(root);
+    slow.arrive();
+    expect(await slow.outcome).toBe('shown');
+  });
+
   it.each([
     ['was stopped', false],
     ['failed', new Error('detached')],

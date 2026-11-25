@@ -6,7 +6,7 @@
  * active filter pill wins, else the project of the session that was active at
  * click time, else the draft opens projectless. Only the last case shows the
  * welcome screen's choose-project state — a `welcome-project` trigger over a
- * dropdown of `welcome-project-<id>` rows — with no draft row, no suggestions
+ * dropdown of `welcome-project-<id>` rows — with no draft row, no sessions or tasks
  * and no composer until one is picked (the first send needs a project to
  * create the chat in). Whenever a project resolves up front (pill OR active
  * session), the welcome screen opens with `welcome-project` already showing
@@ -14,7 +14,7 @@
  * picker, so a different project is still one click away.
  *
  * The rest of the surface is unchanged: DraftSessionRow (sidebar synthetic row)
- * → WelcomeState (repo suggestions) / FirstRunState (zero projects), the chat
+ * → the empty state (NewSessionState) / FirstRunState (zero projects), the chat
  * created ONLY on first send (D3), and no cross-project draft leak on repeated
  * New cycles (the historical slot-reuse regression).
  *
@@ -28,7 +28,7 @@
  *   sidebar-action-new-thread        — the sidebar header's full-width "New session" row
  *                                      (replaced the standalone `SessionsNewButton` pill);
  *                                      one click, whether or not a project is in scope
- *   sessions-welcome                 — WelcomeState root (ChatEmptyState variant='welcome')
+ *   sessions-welcome                 — NewSessionState root (ChatEmptyState variant='welcome')
  *   welcome-project                  — the welcome screen's project trigger: "Choose a
  *                                      project" until one is picked, the ProjectChip after.
  *                                      Now the ONLY place a draft's project is named — the
@@ -54,7 +54,8 @@
  *                                      DraftSessionRow renders a `ProjectAvatar`), so the
  *                                      project a draft belongs to is asserted on the welcome
  *                                      screen's `welcome-project` chip instead.
- *   sessions-welcome-suggestion-<i>  — one repo-derived suggestion row (SuggestionRow.tsx)
+ *   sessions-welcome-where           — where the session will run (NewSessionState.tsx)
+ *   sessions-welcome-session-<id> / sessions-welcome-task-<n> — a recent session, an open task
  *   sessions-firstrun                — FirstRunState root (zero projects)
  *   sessions-firstrun-add-project    — FirstRunState's "Add project…" CTA
  *   directory-picker                 — DirectoryPickerModal root (opened by add-project)
@@ -160,19 +161,6 @@ async function ensureDraftRow(page: Page, project: TauriProject): Promise<void> 
     await openDraftInheritingProject(page, project);
   }
   await expect(draftRow).toBeVisible({ timeout: 10_000 });
-}
-
-interface SuggestionDto {
-  title: string;
-  meta: string;
-  prefill: string;
-}
-
-async function fetchSuggestions(projectId: string): Promise<SuggestionDto[]> {
-  const res = await daemonFetch(`/api/projects/${projectId}/suggestions`);
-  expect(res.ok).toBe(true);
-  const body = (await res.json()) as { data?: SuggestionDto[] };
-  return body.data ?? [];
 }
 
 /** `GET /api/chats?project=<id>` — the same route `lib/api/chats.ts` `listChats`
@@ -631,19 +619,25 @@ test.describe('§sessions-draft — ⌘N takes the same one-click path as "+"', 
   });
 });
 
-// ─── §sessions-draft — WelcomeState repo suggestions ──────────────────────────
+// ─── §sessions-draft — the new session's empty state (K11) ───────────────────
 
-test.describe('§sessions-draft — WelcomeState suggestions', () => {
+test.describe('§sessions-draft — empty state', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
+  let chatId: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
-    // createTauriProject's temp repo has one commit plus two untracked files
-    // (CLAUDE.md, index.ts) — a dirty working tree the daemon's churn signal
-    // picks up (verified live: GET /suggestions returns exactly the "Review the
-    // working changes" churn suggestion for this fixture).
     project = await createTauriProject(app.page);
+    chatId = await createTauriChat(app.page, project.projectId, 'default');
+    for (const title of ['Keep the retry timer', 'Round the export totals']) {
+      const res = await daemonFetch('/api/plugins/todos/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.projectId, title }),
+      });
+      expect(res.ok).toBe(true);
+    }
   });
 
   test.afterAll(async () => {
@@ -651,37 +645,47 @@ test.describe('§sessions-draft — WelcomeState suggestions', () => {
     await closeTauriApp(app);
   });
 
-  test('suggestions render for a project with git history; row count matches the daemon response', async () => {
+  test('asks for a project when there is none, and is about the one that is picked', async () => {
     const { page } = app;
-    const suggestions = await fetchSuggestions(project.projectId);
-    // Presence-level, not content: the fixture repo has a dirty working tree, so
-    // the churn signal must produce at least one suggestion — an empty list would
-    // mean the daemon signal broke, which this test must catch.
-    expect(suggestions.length).toBeGreaterThan(0);
-
-    await openProjectlessDraft(page);
-    const rows = page.locator('[data-testid^="sessions-welcome-suggestion-"]:not([data-testid*="insert"])');
-    // Suggestions are repo-derived, so the choose-project state has none to show.
-    await expect(rows).toHaveCount(0);
+    await openDraftInheritingProject(page, project);
+    const welcome = page.getByTestId('sessions-welcome');
+    await page.getByTestId('welcome-project').click();
+    await page.getByTestId('welcome-project-picker-no-project').click();
+    await expect(welcome).toContainText('Pick a project below', { timeout: 10_000 });
+    await expect(page.getByTestId('sessions-welcome-recent')).toHaveCount(0);
 
     await pickProjectFromWelcome(page, project.projectId);
 
-    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
-    await expect(rows).toHaveCount(suggestions.length, { timeout: 10_000 });
+    await expect(welcome.getByRole('heading')).toContainText(`What’s next for ${baseName(project.projectPath)}`, {
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId('sessions-welcome-where')).toContainText('Local checkout on');
+    await expect(page.getByTestId(`sessions-welcome-session-${chatId}`)).toBeVisible();
+    await expect(page.getByTestId('sessions-welcome-task-2')).toContainText('Round the export totals');
   });
 
-  test('clicking a suggestion inserts its exact prefill text into the composer', async () => {
+  test('follows the branch picker', async () => {
     const { page } = app;
-    const suggestions = await fetchSuggestions(project.projectId);
-    test.skip(suggestions.length === 0, 'no suggestions available for this fixture');
+    await page.getByTestId('composer-branch-picker').click();
+    await page.getByTestId('composer-branch-new-worktree').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('sessions-welcome-where')).toContainText('New worktree from');
+  });
 
-    // Continues from the previous test's welcome state.
-    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+  test('a task goes under what was typed, and replaces nothing', async () => {
+    const { page } = app;
     const input = composer(page).input();
-    await expect(input).toHaveValue('');
+    await input.fill('Careful with the cache');
+    await page.getByTestId('sessions-welcome-task-1').click();
+    await expect(input).toHaveValue('Careful with the cache\n\nWork on task #1: Keep the retry timer');
+    await expect(input).toBeFocused();
+  });
 
-    await page.getByTestId('sessions-welcome-suggestion-0').click();
-    await expect(input).toHaveValue(suggestions[0]!.prefill, { timeout: 5_000 });
+  test('a recent session opens on a click', async () => {
+    const { page } = app;
+    await page.getByTestId(`sessions-welcome-session-${chatId}`).click();
+    await expect(page.getByTestId('sessions-welcome')).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.locator(`[data-mf-chat-id="${chatId}"]`)).toBeVisible({ timeout: 10_000 });
   });
 });
 

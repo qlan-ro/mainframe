@@ -67,6 +67,28 @@ export function sendRefusal(error: unknown): string | undefined {
   return refused ? refusalInWords(error, failure) : undefined;
 }
 
+/** The connection's own failures (`acp-rpc-connection.ts`). */
+const CONNECTION_FAILURES: Readonly<Record<string, string>> = {
+  'request timed out': 'The daemon did not answer in time.',
+  'connection closed': 'The connection to the daemon was lost.',
+  'acp connection failed to open': UNREACHABLE_SENTENCE,
+  'acp connection closed before opening': UNREACHABLE_SENTENCE,
+};
+
+/** What went wrong with a send, as a sentence, whatever failed: creating the session, an upload or the prompt. */
+export function sendFailureReason(error: unknown): string {
+  const failure = promptFailureOf(error);
+  if (failure) return capitalized(REFUSALS.find(([raw]) => raw.test(failure.reason))?.[1] ?? failure.reason);
+  const message = errorMessage(error);
+  if (CONNECTION_FAILURES[message]) return CONNECTION_FAILURES[message];
+  if (PROTOCOL_REFUSALS.includes((error as { code?: unknown } | null | undefined)?.code)) {
+    return 'The daemon could not read the message.';
+  }
+  return capitalized(error instanceof Error ? describeSendError(error, { attachmentsRestored: false }) : message);
+}
+
+const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 /** The action a refused prompt offers before retrying, if any. */
 export function sendRemedyOf(error: unknown): PromptRemedy | undefined {
   return promptFailureOf(error)?.remedy;
