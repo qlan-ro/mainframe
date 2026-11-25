@@ -28,6 +28,7 @@ fn chat_with(model: &str, effort: EffortLevel) -> Chat {
         modified_files: None,
         worktree_path: None,
         branch_name: None,
+        base_branch: None,
         process_state: None,
         display_status: None,
         is_running: None,

@@ -202,6 +202,7 @@ impl ChatStore for FakeDeps {
         if let Some(c) = self.store.chats.lock_recover().get_mut(chat_id) {
             c.worktree_path = None;
             c.branch_name = None;
+            c.base_branch = None;
         }
 
         Ok(())

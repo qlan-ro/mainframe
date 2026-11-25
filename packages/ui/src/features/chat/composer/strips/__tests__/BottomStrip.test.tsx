@@ -21,7 +21,7 @@ vi.mock('../../../runtime/chat-extras', () => ({
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 let mockBranch: string | undefined;
 vi.mock('@/features/sessions/use-display-branch', () => ({
-  useDisplayBranch: () => ({ branch: mockBranch, refetch: vi.fn() }),
+  useDisplayBranch: () => ({ branch: mockBranch, liveBranch: mockBranch, refetch: vi.fn() }),
 }));
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectPath: '/Users/me/repo' }),
@@ -99,6 +99,31 @@ describe('BottomStrip', () => {
     expect(dot.nextElementSibling).toBe(branch);
     expect(dot).toHaveAttribute('aria-hidden', 'true');
     expect(branch).toHaveAccessibleName('Branch feat/quota. Manage branches');
+  });
+
+  it('shows the stored base only while the worktree is on its recorded branch', () => {
+    mockChat = { ...CHAT, worktreePath: '/wt/q', branchName: 'feat/quota', baseBranch: 'release/stable' };
+    const view = renderStrip();
+    const branch = screen.getByTestId('composer-branch');
+    expect(branch).toHaveAccessibleName('Branch feat/quota from release/stable. Manage branches');
+    expect(branch).toHaveTextContent('feat/quota from release/stable');
+    expect(screen.getByTitle('feat/quota from release/stable')).toBeVisible();
+
+    mockBranch = 'feat/other';
+    view.rerender(
+      <TooltipProvider>
+        <BottomStrip />
+      </TooltipProvider>,
+    );
+    expect(branch).toHaveTextContent('feat/other');
+    expect(branch).not.toHaveTextContent('from release/stable');
+  });
+
+  it('omits From for a worktree without a recorded base', () => {
+    mockChat = { ...CHAT, worktreePath: '/wt/q', branchName: 'feat/quota' };
+    renderStrip();
+    expect(screen.getByTestId('composer-branch')).toHaveTextContent('feat/quota');
+    expect(screen.getByTestId('composer-branch')).not.toHaveTextContent('from');
   });
 
   it('names a worktree', () => {

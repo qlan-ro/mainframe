@@ -71,6 +71,7 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
             adaptive_thinking: Some(true),
             worktree_path: Some("/tmp/worktree"),
             branch_name: Some("feature/fork"),
+            base_branch: Some("release"),
             title: Some("Parent title (fork)"),
             pending_fork: &pf,
             segments: None,
@@ -89,6 +90,7 @@ fn create_fork_round_trips_every_inherited_field_and_parent_chat_id() {
     assert_eq!(fork.tuning.adaptive_thinking, Some(Some(true)));
     assert_eq!(fork.worktree_path.as_deref(), Some("/tmp/worktree"));
     assert_eq!(fork.branch_name.as_deref(), Some("feature/fork"));
+    assert_eq!(fork.base_branch.as_deref(), Some("release"));
     assert_eq!(fork.title.as_deref(), Some("Parent title (fork)"));
     assert_eq!(fork.vendor_session_id, None);
     assert_eq!(fork.total_cost, 0.0);
@@ -124,6 +126,7 @@ fn parent_chat_id_survives_archive_and_unarchive() {
             adaptive_thinking: None,
             worktree_path: None,
             branch_name: None,
+            base_branch: None,
             title: None,
             pending_fork: &pending_fork("parent-session-2"),
             segments: None,
@@ -176,6 +179,7 @@ fn list_filtered_and_get_return_parent_chat_id() {
             adaptive_thinking: None,
             worktree_path: None,
             branch_name: None,
+            base_branch: None,
             title: None,
             pending_fork: &pending_fork("parent-session-3"),
             segments: None,
@@ -210,6 +214,7 @@ fn pending_fork_get_and_clear() {
             adaptive_thinking: None,
             worktree_path: None,
             branch_name: None,
+            base_branch: None,
             title: None,
             pending_fork: &pf,
             segments: None,

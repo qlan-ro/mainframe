@@ -18,6 +18,7 @@ pub struct ForkCreateInput {
     pub adaptive_thinking: Option<bool>,
     pub worktree_path: Option<String>,
     pub branch_name: Option<String>,
+    pub base_branch: Option<String>,
     pub title: Option<String>,
     pub pending_fork: PendingFork,
     /// A multi-segment parent's segments, as the fork copies them. `None`
@@ -40,6 +41,7 @@ impl ForkCreateInput {
             adaptive_thinking: self.adaptive_thinking,
             worktree_path: self.worktree_path.as_deref(),
             branch_name: self.branch_name.as_deref(),
+            base_branch: self.base_branch.as_deref(),
             title: self.title.as_deref(),
             pending_fork: &self.pending_fork,
             segments: self.segments.as_ref(),

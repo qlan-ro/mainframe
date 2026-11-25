@@ -90,10 +90,30 @@ function makeChat(overrides?: Partial<Chat>): Chat {
 // Render helper
 // ---------------------------------------------------------------------------
 
-function Harness({ chat, hasMessages, busy }: { chat: Chat; hasMessages: boolean; busy: boolean }) {
+function Harness({
+  chat,
+  hasMessages,
+  busy,
+  branch,
+  baseBranch,
+}: {
+  chat: Chat;
+  hasMessages: boolean;
+  busy: boolean;
+  branch?: string;
+  baseBranch?: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
-    <WorktreePopover chat={chat} hasMessages={hasMessages} busy={busy} open={open} onOpenChange={setOpen}>
+    <WorktreePopover
+      chat={chat}
+      branch={branch}
+      baseBranch={baseBranch}
+      hasMessages={hasMessages}
+      busy={busy}
+      open={open}
+      onOpenChange={setOpen}
+    >
       <button type="button" data-testid="composer-worktree-trigger" />
     </WorktreePopover>
   );
@@ -139,6 +159,23 @@ describe('WorktreePopover — active-info state', () => {
     const matches = await screen.findAllByText('feat/c1');
     expect(matches.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByTestId('composer-worktree-active-info')).toBeInTheDocument();
+    expect(screen.queryByText('From')).not.toBeInTheDocument();
+  });
+
+  it('shows From while on the recorded branch and drops it after a checkout', async () => {
+    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1', baseBranch: 'release/stable' });
+    const show = (branch: string, baseBranch?: string) => (
+      <TooltipProvider>
+        <Harness chat={chat} hasMessages={false} busy={false} branch={branch} baseBranch={baseBranch} />
+      </TooltipProvider>
+    );
+    const view = render(show('feat/c1', 'release/stable'));
+    openPopover();
+    expect(await screen.findByText('From')).toBeVisible();
+    expect(screen.getByText('release/stable')).toBeVisible();
+    view.rerender(show('feat/other'));
+    expect(screen.getByText('feat/other')).toBeVisible();
+    expect(screen.queryByText('From')).not.toBeInTheDocument();
   });
 
   it('does NOT show a branch-name input in the active-info state', async () => {

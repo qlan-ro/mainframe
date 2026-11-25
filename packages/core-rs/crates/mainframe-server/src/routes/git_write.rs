@@ -27,6 +27,9 @@ use crate::routes::body::parse_json_body;
 
 use super::git::{ChatIdQuery, get_effective_path, git_error_message};
 
+mod branch_identity;
+use branch_identity::{delete_branch, rename_branch};
+
 // ── body schemas ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -63,19 +66,6 @@ struct PushBody {
 struct BranchArgBody {
     branch: String,
 }
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RenameBranchBody {
-    old_name: String,
-    new_name: String,
-}
-#[derive(Debug, Deserialize)]
-struct DeleteBranchBody {
-    name: String,
-    force: Option<bool>,
-    remote: Option<bool>,
-}
-
 /// Branch-name rule: `^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$`.
 fn is_valid_branch_name(s: &str) -> bool {
     let mut chars = s.chars();
@@ -387,64 +377,6 @@ async fn abort(
         Err(r) => return r.into_response(),
     };
     git_result(ctx.core.git.for_project(path).abort().await, "abort")
-}
-
-async fn rename_branch(
-    State(ctx): State<Arc<AppCtx>>,
-    Path(id): Path<String>,
-    Query(q): Query<ChatIdQuery>,
-    body: Bytes,
-) -> Response {
-    let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
-        Ok(v) => v,
-        Err(r) => return r.into_response(),
-    };
-    let data: RenameBranchBody = match body_of(val) {
-        Ok(d) => d,
-        Err(m) => return fail_with(&m),
-    };
-    if data.old_name.is_empty() || !is_valid_branch_name(&data.new_name) {
-        return fail(StatusCode::BAD_REQUEST, "Invalid branch name");
-    }
-    git_empty(
-        ctx.core
-            .git
-            .for_project(path)
-            .rename_branch(&data.old_name, &data.new_name)
-            .await,
-        "renameBranch",
-    )
-}
-
-async fn delete_branch(
-    State(ctx): State<Arc<AppCtx>>,
-    Path(id): Path<String>,
-    Query(q): Query<ChatIdQuery>,
-    body: Bytes,
-) -> Response {
-    let (path, val) = match resolve(&ctx, &id, q.chat_id.as_deref(), &body).await {
-        Ok(v) => v,
-        Err(r) => return r.into_response(),
-    };
-    let data: DeleteBranchBody = match body_of(val) {
-        Ok(d) => d,
-        Err(m) => return fail_with(&m),
-    };
-    if data.name.is_empty() {
-        return fail(StatusCode::BAD_REQUEST, "name must not be empty");
-    }
-    git_result(
-        ctx.core
-            .git
-            .for_project(path)
-            .delete_branch(
-                &data.name,
-                data.force.unwrap_or(false),
-                data.remote.unwrap_or(false),
-            )
-            .await,
-        "deleteBranch",
-    )
 }
 
 async fn update_all(

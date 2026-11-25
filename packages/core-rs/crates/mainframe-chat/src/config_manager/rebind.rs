@@ -7,6 +7,7 @@ impl ChatConfigManager {
         chat_id: &str,
         worktree_path: Option<String>,
         branch_name: Option<String>,
+        base_branch: Option<String>,
         session_file_path: Option<String>,
     ) -> Result<(), ConfigError> {
         let update = self.shared.prepare_update(
@@ -14,6 +15,7 @@ impl ChatConfigManager {
             &ChatPatch {
                 worktree_path: Some(worktree_path.clone()),
                 branch_name: Some(branch_name.clone()),
+                base_branch: Some(base_branch.clone()),
                 session_file_path: session_file_path.clone(),
                 ..Default::default()
             },
@@ -22,6 +24,7 @@ impl ChatConfigManager {
             let mut guard = cell.lock_recover();
             guard.chat.worktree_path = worktree_path.clone();
             guard.chat.branch_name = branch_name;
+            guard.chat.base_branch = base_branch;
             if session_file_path.is_some() {
                 guard.chat.session_file_path = session_file_path;
             }
@@ -54,6 +57,7 @@ impl ChatConfigManager {
             chat_id,
             Some(rebind.worktree_path.clone()),
             rebind.branch_name.clone(),
+            rebind.base_branch.clone(),
             moved_transcript.clone(),
         );
         if result.is_err()
@@ -64,6 +68,7 @@ impl ChatConfigManager {
                 chat_id,
                 rebind.worktree_path,
                 rebind.branch_name,
+                rebind.base_branch,
                 path,
             );
         }
@@ -108,12 +113,14 @@ impl ChatConfigManager {
         chat_id: &str,
         worktree_path: String,
         branch_name: Option<String>,
+        base_branch: Option<String>,
         session_file_path: String,
     ) {
         let chat = {
             let mut guard = cell.lock_recover();
             guard.chat.worktree_path = Some(worktree_path.clone());
             guard.chat.branch_name = branch_name;
+            guard.chat.base_branch = base_branch;
             guard.chat.session_file_path = Some(session_file_path);
             guard.chat.clone()
         };
@@ -123,6 +130,7 @@ impl ChatConfigManager {
                 &ChatPatch {
                     worktree_path: Some(chat.worktree_path.clone()),
                     branch_name: Some(chat.branch_name.clone()),
+                    base_branch: Some(chat.base_branch.clone()),
                     session_file_path: chat.session_file_path.clone(),
                     ..Default::default()
                 },

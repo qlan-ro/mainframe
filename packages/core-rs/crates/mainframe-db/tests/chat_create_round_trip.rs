@@ -45,6 +45,7 @@ fn fork_of(db: &DatabaseManager, parent: &Chat, pending: &PendingFork) -> Chat {
             adaptive_thinking: None,
             worktree_path: Some("/tmp/fork-worktree"),
             branch_name: Some("feature/fork"),
+            base_branch: None,
             title: Some("Parent (fork)"),
             pending_fork: pending,
             segments: None,

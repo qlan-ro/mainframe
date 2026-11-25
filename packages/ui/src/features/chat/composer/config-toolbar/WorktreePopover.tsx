@@ -47,7 +47,7 @@ function WorktreeLoading() {
 // Active-info panel (chat already isolated into a worktree)
 // ---------------------------------------------------------------------------
 
-function ActiveInfo({ chat }: { chat: Chat }) {
+function ActiveInfo({ chat, branch, baseBranch }: { chat: Chat; branch?: string; baseBranch?: string }) {
   return (
     <div data-testid="composer-worktree-active-info" className="flex flex-col gap-1.5 px-2 py-1.5">
       <div className="flex items-center gap-1.5">
@@ -57,7 +57,21 @@ function ActiveInfo({ chat }: { chat: Chat }) {
       <Separator />
       <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-meta/[1.45]">
         <span className="text-muted-foreground">Branch</span>
-        <span className="truncate font-mono text-caption text-foreground">{chat.branchName ?? '—'}</span>
+        <TruncatedWithTooltip
+          text={branch ?? chat.branchName ?? '—'}
+          className="font-mono text-caption text-foreground"
+          contentClassName="break-all"
+        />
+        {baseBranch && (
+          <>
+            <span className="text-muted-foreground">From</span>
+            <TruncatedWithTooltip
+              text={baseBranch}
+              className="font-mono text-caption text-foreground"
+              contentClassName="break-all"
+            />
+          </>
+        )}
         <span className="text-muted-foreground">Path</span>
         <TruncatedWithTooltip
           text={chat.worktreePath ?? ''}
@@ -77,6 +91,8 @@ const BUSY_NOTE = 'Available once the current response finishes — rebinding no
 
 export interface WorktreePopoverProps {
   chat: Chat;
+  branch?: string;
+  baseBranch?: string;
   hasMessages: boolean;
   /** A turn is in flight; every rebind restarts the CLI, so all of them wait. */
   busy: boolean;
@@ -113,6 +129,8 @@ function OpenFolder({ path, onDone }: { path: string; onDone: () => void }) {
 
 export function WorktreePopover({
   chat,
+  branch,
+  baseBranch,
   hasMessages,
   busy,
   open,
@@ -217,7 +235,7 @@ export function WorktreePopover({
       >
         {isIsolated ? (
           <>
-            <ActiveInfo chat={chat} />
+            <ActiveInfo chat={chat} branch={branch} baseBranch={baseBranch} />
             {chat.worktreePath && <OpenFolder path={chat.worktreePath} onDone={() => setOpen(false)} />}
             <div className="flex flex-col gap-1.5">
               <div className="px-2.5 py-1.5 text-control font-medium text-foreground">Move to another worktree</div>

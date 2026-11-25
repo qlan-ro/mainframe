@@ -22,6 +22,7 @@ async fn repoints_the_stored_session_file_path_at_the_new_worktree() {
         &[ChatPatch {
             worktree_path: Some(Some("/new/wt".to_string())),
             branch_name: Some(Some("feat".to_string())),
+            base_branch: Some(None),
             session_file_path: Some(expected.clone()),
             ..Default::default()
         }]
@@ -78,6 +79,7 @@ async fn keeps_the_old_binding_when_moving_session_files_fails() {
     let chat = cell.lock().unwrap().chat.clone();
     assert_eq!(chat.worktree_path.as_deref(), Some("/old/wt"));
     assert_eq!(chat.branch_name.as_deref(), Some("old-branch"));
+    assert_eq!(chat.base_branch.as_deref(), Some("old-base"));
 }
 
 #[test]
@@ -104,6 +106,7 @@ async fn attaching_without_a_branch_name_persists_a_cleared_branch() {
         &[ChatPatch {
             worktree_path: Some(Some("/new/wt".to_string())),
             branch_name: Some(None),
+            base_branch: Some(None),
             ..Default::default()
         }]
     );
@@ -183,6 +186,8 @@ async fn enabling_a_worktree_on_a_live_chat_binds_it_and_restarts_it() {
     };
     assert_eq!(update.worktree_path, Some(Some(worktree.clone())));
     assert_eq!(update.branch_name, Some(Some("feat/x".to_string())));
+    assert_eq!(update.base_branch, Some(None));
+    assert_eq!(cell.lock().unwrap().chat.base_branch, None);
     let transcript = update.session_file_path.clone().unwrap();
     let projects_dir = dirs::home_dir().unwrap().join(".claude/projects");
     assert!(

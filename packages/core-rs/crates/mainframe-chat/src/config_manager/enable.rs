@@ -101,7 +101,7 @@ impl ChatConfigManager {
         // Pre-session path: kill any untracked process and create worktree
         self.detach_session(&cell).await?;
 
-        let info = self
+        let (info, base_branch) = self
             .create_chat_worktree(&project, branch_name, source)
             .await?;
         self.relocate_new_worktree(chat_id, &adapter, &project, &info.worktree_path)
@@ -111,6 +111,7 @@ impl ChatConfigManager {
             chat_id,
             Some(info.worktree_path),
             Some(info.branch_name),
+            base_branch,
             None,
         )?;
         Ok(())
@@ -122,8 +123,12 @@ impl ChatConfigManager {
         project_id: &str,
         project: &str,
         active: ActiveSession<'_>,
-        info: mainframe_services::workspace::worktree::WorktreeInfo,
+        info: (
+            mainframe_services::workspace::worktree::WorktreeInfo,
+            Option<String>,
+        ),
     ) -> Result<(), ConfigError> {
+        let (info, base_branch) = info;
         self.rebind_live_session(
             cell,
             chat_id,
@@ -134,6 +139,7 @@ impl ChatConfigManager {
                 active,
                 worktree_path: info.worktree_path.clone(),
                 branch_name: Some(info.branch_name),
+                base_branch,
             },
         )
         .await
@@ -190,14 +196,27 @@ impl ChatConfigManager {
         project: &str,
         branch_name: &str,
         source: WorktreeSource<'_>,
-    ) -> Result<mainframe_services::workspace::worktree::WorktreeInfo, WorktreeError> {
+    ) -> Result<
+        (
+            mainframe_services::workspace::worktree::WorktreeInfo,
+            Option<String>,
+        ),
+        WorktreeError,
+    > {
         let dir_name = self.worktree_dir().await;
         match source {
             WorktreeSource::NewBranch { base_branch } => {
-                create_worktree(project, &dir_name, base_branch, branch_name).await
+                let recorded =
+                    mainframe_services::workspace::is_branch_start_point(project, base_branch)
+                        .await
+                        .then(|| base_branch.to_string());
+                let worktree =
+                    create_worktree(project, &dir_name, base_branch, branch_name).await?;
+                Ok((worktree, recorded))
             }
             WorktreeSource::ExistingBranch => {
-                checkout_worktree(project, &dir_name, branch_name).await
+                let worktree = checkout_worktree(project, &dir_name, branch_name).await?;
+                Ok((worktree, None))
             }
         }
     }

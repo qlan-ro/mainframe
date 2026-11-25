@@ -184,6 +184,7 @@ impl ChatManager {
             adaptive_thinking: parent.tuning.adaptive_thinking.flatten(),
             worktree_path: parent.worktree_path.clone(),
             branch_name: parent.branch_name.clone(),
+            base_branch: parent.base_branch.clone(),
             title: Some(provisional_title.clone()),
             pending_fork: PendingForkState {
                 fork_source,

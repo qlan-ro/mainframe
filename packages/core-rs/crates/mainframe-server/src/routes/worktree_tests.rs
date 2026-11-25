@@ -79,3 +79,70 @@ fn branch_name_validation() {
     assert!(!branch_name_ok("-leading"));
     assert!(!branch_name_ok(""));
 }
+
+#[tokio::test]
+async fn worktree_base_enable_and_fork_routes_persist_the_selected_base() {
+    use crate::worktree_base_tests::{project, stored_chat};
+    use mainframe_types::chat::NewChat;
+
+    let (ctx, project_id, _repo) = project().await;
+    let chat = ctx
+        .chat
+        .chat_manager
+        .create_chat(NewChat {
+            project_id: project_id.clone(),
+            adapter_id: "claude".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let (status, _) = read(
+        enable_worktree(
+            State(ctx.clone()),
+            Path(chat.id.clone()),
+            axum::body::Bytes::from_static(
+                br#"{"baseBranch":"release","branchName":"draft/topic"}"#,
+            ),
+        )
+        .await,
+    )
+    .await
+    .unwrap();
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        stored_chat(&ctx, &chat.id).await.base_branch.as_deref(),
+        Some("release")
+    );
+
+    let (status, body) = read(
+        fork_worktree(
+            State(ctx.clone()),
+            Path(chat.id),
+            axum::body::Bytes::from_static(
+                br#"{"baseBranch":"release","branchName":"fork/topic"}"#,
+            ),
+        )
+        .await,
+    )
+    .await
+    .unwrap();
+    assert_eq!(status, StatusCode::OK);
+    let id = body["data"]["chatId"].as_str().unwrap();
+    let fork = stored_chat(&ctx, id).await;
+    assert_eq!(fork.base_branch.as_deref(), Some("release"));
+    let request = serde_json::json!({ "worktreePath": fork.worktree_path });
+    let (status, _) = read(
+        delete_worktree(
+            State(ctx.clone()),
+            Path(project_id),
+            axum::body::Bytes::from(request.to_string()),
+        )
+        .await,
+    )
+    .await
+    .unwrap();
+    assert_eq!(status, StatusCode::OK);
+    let deleted = stored_chat(&ctx, id).await;
+    assert_eq!(deleted.base_branch, None);
+    assert_eq!(deleted.worktree_path, fork.worktree_path);
+}

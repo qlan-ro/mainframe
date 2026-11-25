@@ -95,3 +95,29 @@ async fn lifecycle_flows_match_recorded_base_sequences() {
         include_str!("../tests/fixtures/flow_events.json").trim()
     );
 }
+
+#[tokio::test]
+async fn fork_to_worktree_records_its_new_base_and_disabling_clears_it() {
+    let project = project();
+    let deps = FakeDeps::arc();
+    deps.set_project_path(project.path().to_str().unwrap());
+    let manager = ChatManager::new(deps.clone());
+    let chat = manager
+        .create_chat(NewChat {
+            project_id: "p1".into(),
+            adapter_id: "claude".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    let fork = manager
+        .fork_to_worktree(&chat.id, "main", "feature")
+        .await
+        .unwrap();
+    let bound = manager.get_chat(&fork).unwrap();
+    assert_eq!(bound.branch_name.as_deref(), Some("feature"));
+    assert_eq!(bound.base_branch.as_deref(), Some("main"));
+    manager.disable_worktree(&fork).await.unwrap();
+    assert_eq!(manager.get_chat(&fork).unwrap().base_branch, None);
+}

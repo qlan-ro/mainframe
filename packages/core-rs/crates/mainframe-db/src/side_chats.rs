@@ -32,10 +32,10 @@ impl ChatsRepository {
         tx.execute(
             "INSERT INTO chats (
                 id, adapter_id, project_id, model, permission_mode, plan_mode,
-                worktree_path, branch_name, scratch_path,
+                worktree_path, branch_name, base_branch, scratch_path,
                 parent_chat_id, temporary,
                 status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'active', ?, ?)",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'active', ?, ?)",
             rusqlite::params![
                 id,
                 parent.adapter_id,
@@ -45,6 +45,7 @@ impl ChatsRepository {
                 i64::from(parent.plan_mode.unwrap_or(false)),
                 parent.worktree_path,
                 parent.branch_name,
+                parent.base_branch,
                 parent.scratch_path,
                 parent.id,
                 now,

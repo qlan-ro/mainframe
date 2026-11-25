@@ -69,6 +69,7 @@ export interface Chat {
   modifiedFiles?: string[];
   worktreePath?: string;
   branchName?: string;
+  baseBranch?: string;
   processState?: 'working' | 'idle' | null;
   displayStatus?: 'idle' | 'working' | 'waiting';
   isRunning?: boolean;

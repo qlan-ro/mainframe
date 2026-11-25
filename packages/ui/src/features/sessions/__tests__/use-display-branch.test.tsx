@@ -84,6 +84,39 @@ describe('useDisplayBranch', () => {
     await waitFor(() => expect(result.current.branch).toBe('feat/after'));
   });
 
+  it('retains a detached result separately from the stored fallback name', async () => {
+    getGitBranch.mockResolvedValue({ branch: null });
+    const { result } = renderHook(() =>
+      useDisplayBranch({ port: 1, projectId: 'project', chatId: 'chat', branchName: 'topic', worktreePath: '/wt' }),
+    );
+    await waitFor(() => expect(result.current.liveBranch).toBeNull());
+    expect(result.current.branch).toBe('topic');
+  });
+
+  it('reads the worktree only when the conversation becomes visible', async () => {
+    const { result, rerender } = renderHook(
+      ({ visible, chatId }) =>
+        useDisplayBranch({
+          port: 1,
+          projectId: 'project',
+          chatId,
+          branchName: 'topic',
+          worktreePath: '/wt',
+          hasRecordedBase: true,
+          visible,
+        }),
+      { initialProps: { visible: false, chatId: 'first' } },
+    );
+    act(() => result.current.refetch());
+    expect(getGitBranch).not.toHaveBeenCalled();
+    rerender({ visible: true, chatId: 'first' });
+    await waitFor(() => expect(result.current.liveBranch).toBe('main'));
+    expect(getGitBranch).toHaveBeenCalledExactlyOnceWith(1, 'project', 'first');
+    rerender({ visible: false, chatId: 'second' });
+    expect(getGitBranch).toHaveBeenCalledTimes(1);
+    expect(result.current.liveBranch).toBeUndefined();
+  });
+
   it('reports null from the daemon as no branch', async () => {
     getGitBranch.mockResolvedValue({ branch: null });
     const { result } = renderHook(() => useDisplayBranch({ port: 31415, projectId: 'p1', chatId: 'c1' }));

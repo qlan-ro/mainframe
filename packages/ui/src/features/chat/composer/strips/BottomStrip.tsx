@@ -9,7 +9,7 @@
  * A workspace tab has no changes: they open the review panel, which is the chat
  * column's.
  */
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { FolderGit2, Lock, Monitor, Timer } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
@@ -19,6 +19,7 @@ import { useDisplayBranch } from '@/features/sessions/use-display-branch';
 import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { ConversationVisibility } from '../../runtime/conversation-visibility';
 import { useChatExtrasSelector } from '../../runtime/chat-extras';
 import { WorktreePopover } from '../config-toolbar/WorktreePopover';
 import { ComposerCardProvider, ComposerHint } from '../composer-card-context';
@@ -57,7 +58,19 @@ const STRIP_OPEN = 'bg-chrome-press hover:bg-chrome-press focus-visible:bg-chrom
 const WHERE_BUTTON = 'ml-[3px] shrink-0 px-[3px] @max-[400px]/composer:ml-0 @max-[400px]/composer:px-1.5';
 
 /** A control only with the session's own record: the list's is not enough to move it. */
-function WherePart({ session, chat }: { session: StripSession; chat: Chat | null }) {
+function WherePart({
+  session,
+  chat,
+  branch,
+  baseBranch,
+  onOpen,
+}: {
+  session: StripSession;
+  chat: Chat | null;
+  branch?: string;
+  baseBranch?: string;
+  onOpen?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const hasMessages = useAuiState((s) => s.thread.messages.length > 0);
   const busy = useAuiState((s) => s.thread.isRunning);
@@ -87,7 +100,18 @@ function WherePart({ session, chat }: { session: StripSession; chat: Chat | null
     );
   }
   return (
-    <WorktreePopover chat={chat} hasMessages={hasMessages} busy={busy} open={open} onOpenChange={setOpen}>
+    <WorktreePopover
+      chat={chat}
+      branch={branch}
+      baseBranch={baseBranch}
+      hasMessages={hasMessages}
+      busy={busy}
+      open={open}
+      onOpenChange={(next) => {
+        if (next) onOpen?.();
+        setOpen(next);
+      }}
+    >
       <button
         type="button"
         data-testid="composer-worktree-trigger"
@@ -102,16 +126,22 @@ function WherePart({ session, chat }: { session: StripSession; chat: Chat | null
   );
 }
 
-function BranchPart({ session, port }: { session: StripSession; port: number }) {
+function BranchPart({
+  session,
+  port,
+  branch,
+  baseBranch,
+  refetch,
+}: {
+  session: StripSession;
+  port: number;
+  branch?: string;
+  baseBranch?: string;
+  refetch: () => void;
+}) {
   const [open, setOpen] = useState(false);
-  const { branch, refetch } = useDisplayBranch({
-    port,
-    projectId: session.projectId,
-    chatId: session.id,
-    branchName: session.branchName,
-    isWorktree: session.worktreePath != null,
-  });
   if (!branch) return null;
+  const label = baseBranch ? `${branch} from ${baseBranch}` : branch;
   return (
     <>
       <span
@@ -134,11 +164,11 @@ function BranchPart({ session, port }: { session: StripSession; port: number }) 
         <button
           type="button"
           data-testid="composer-branch"
-          aria-label={`Branch ${branch}. Manage branches`}
+          aria-label={`Branch ${label}. Manage branches`}
           className={cn(BOTTOM_STRIP_BUTTON, 'px-[3px] @max-[400px]/composer:px-1.5', STRIP_FOCUS, open && STRIP_OPEN)}
         >
-          <span className="min-w-0 truncate font-mono text-caption/[1.45]" title={branch}>
-            {branch}
+          <span className="min-w-0 truncate font-mono text-caption/[1.45]" title={label}>
+            {label}
           </span>
         </button>
       </BranchPopover>
@@ -147,14 +177,53 @@ function BranchPart({ session, port }: { session: StripSession; port: number }) 
 }
 
 /** What the strip needs of the session, from its own record or, until that loads, from the session list's. */
-type StripSession = Pick<Chat, 'id' | 'projectId' | 'temporary' | 'noProject' | 'worktreePath' | 'branchName'>;
+type StripSession = Pick<
+  Chat,
+  'id' | 'projectId' | 'temporary' | 'noProject' | 'worktreePath' | 'branchName' | 'baseBranch'
+>;
 
 function useListedSession(): StripSession | null {
   const custom = useAuiState((s) => activeSessionCustom(s.threadListItem, s.threads.threadItems));
   const id = useAuiState((s) => s.threadListItem?.remoteId);
   if (!custom || id === undefined) return null;
-  const { projectId, temporary, noProject, worktreePath, branchName } = custom;
-  return { id, projectId, temporary, noProject, worktreePath, branchName };
+  const { projectId, temporary, noProject, worktreePath, branchName, baseBranch } = custom;
+  return { id, projectId, temporary, noProject, worktreePath, branchName, baseBranch };
+}
+
+function SessionLocation({ session, chat, port }: { session: StripSession; chat: Chat | null; port: number }) {
+  const visible = useContext(ConversationVisibility);
+  const hasRecordedBase = Boolean(session.worktreePath && session.baseBranch);
+  const { branch, liveBranch, refetch } = useDisplayBranch({
+    port,
+    projectId: session.projectId,
+    chatId: session.id,
+    branchName: session.branchName,
+    isWorktree: session.worktreePath != null,
+    noProject: session.noProject,
+    worktreePath: session.worktreePath,
+    hasRecordedBase,
+    visible,
+  });
+  const baseBranch =
+    session.worktreePath && branch && liveBranch === session.branchName ? session.baseBranch : undefined;
+  return (
+    <>
+      {session.temporary ? (
+        <TemporaryPart />
+      ) : (
+        <WherePart
+          session={session}
+          chat={chat}
+          branch={branch}
+          baseBranch={baseBranch}
+          onOpen={visible && hasRecordedBase ? refetch : undefined}
+        />
+      )}
+      {!session.noProject && (
+        <BranchPart session={session} port={port} branch={branch} baseBranch={baseBranch} refetch={refetch} />
+      )}
+    </>
+  );
 }
 
 export function BottomStrip({ fixed = false }: { fixed?: boolean }) {
@@ -174,8 +243,7 @@ export function BottomStrip({ fixed = false }: { fixed?: boolean }) {
         data-testid="composer-bottom-strip"
         className="@container/composer flex min-h-7.5 min-w-0 shrink-0 items-center gap-0.5 px-1.5 pt-1.5"
       >
-        {session.temporary ? <TemporaryPart /> : <WherePart session={session} chat={fixed ? null : chat} />}
-        {!session.noProject && <BranchPart session={session} port={port} />}
+        <SessionLocation session={session} chat={fixed ? null : chat} port={port} />
         {!session.noProject && inColumn && (
           <ChangesButton port={port} projectId={session.projectId} chatId={session.id} />
         )}
