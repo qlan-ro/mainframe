@@ -58,6 +58,7 @@ export default {
         windowTranscript: prototypeWindow.turns,
         projectColors: prototypeWindow.projectColors,
         panelTaskTitles: true,
+        earlierRows: 24,
       },
       proto: async (page) => {
         await base.proto(page);
@@ -77,6 +78,11 @@ export default {
         ...railPairs,
         ...sidebar,
         ...header,
+        { id: 'compaction divider', p: "txt('#thread .div', 'Context compacted')", a: "tid('chat-compaction-pill')", box: [null, 'y', null, 'height'] },
+        { id: 'provider divider', p: "txt('#thread .div', 'Switched to')", a: "q('[data-testid^=chat-provider-switch-marker-]')", box: [null, 'y', null, 'height'] },
+        { id: 'work after compaction', p: "txt('#thread .wk', 'Worked for 41s')", a: "txt('[data-testid^=chat-work-header-]', 'Worked for 41s')", box: [null, 'y', null, 'height'] },
+        { id: 'reply before switch', p: "txt('#thread .ans', 'The docs confirm it')", a: "txt('[data-testid=chat-answer]', 'The docs confirm it')", box: [null, 'y', null, 'height'] },
+        { id: 'bottom strip', p: "q('.bstrip')", a: "tid('composer-bottom-strip')" },
         { id: 'transcript viewport', p: "q('#thread')", a: "tid('chat-thread-viewport')", only: 'box' },
         {
           id: 'last user message',

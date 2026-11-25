@@ -161,6 +161,25 @@ export async function runArea({
           await proto.screenshot({ clip: c ?? pc, animations: 'disabled' }),
           await app.page.screenshot({ clip: c ?? ac, animations: 'disabled' }),
         ];
+        if (state.compareWindowText) {
+          const prefix = join(outDir, area.id, `${state.id}-${viewName}-${theme}`);
+          const selectors = [
+            { title: '.titlebar', rail: '#rail', sidebar: '#side', picker: '.scope', panel: '#spanel', strip: '.bstrip', activity: '#actstrip', divider: '#thread .div:has(use[href="#i-repeat"])' },
+            { title: '[data-testid=title-bar]', rail: '[data-testid=shell-rail]', sidebar: '[data-slot=sidebar]', picker: '[data-testid=sessions-scope-strip]', panel: '[data-testid=session-panel-root]', strip: '[data-testid=composer-bottom-strip]', activity: '[data-testid=composer-activity-strip]', divider: '[data-testid^=chat-provider-switch-marker-]' },
+          ];
+          const bounds = await Promise.all([proto, app.page].map((page, index) => page.evaluate(
+            (regions) => Object.fromEntries(Object.entries(regions).flatMap(([name, selector]) => {
+              const el = document.querySelector(selector);
+              if (!el?.getClientRects().length) return [];
+              const { x, y, width, height } = el.getBoundingClientRect();
+              return [[name, [x, y, x + width, y + height]]];
+            })),
+            selectors[index],
+          )));
+          writeFileSync(`${prefix}-prototype.png`, shots[0]);
+          writeFileSync(`${prefix}-app.png`, shots[1]);
+          writeFileSync(`${prefix}-bounds.json`, JSON.stringify(bounds));
+        }
         const png = await compose(browser, shots, theme, `${state.title ?? state.id}, ${view.join('×')}, ${theme}`);
         writeFileSync(join(outDir, area.id, `${state.id}-${viewName}-${theme}.png`), png);
       }

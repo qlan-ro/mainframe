@@ -209,7 +209,7 @@ const ended = (id: string, kind: string, text: string, status: string, minutes: 
 const EARLIER = [
   ended('f0', 'agent', 'Review the scope diff', 'failed', 60),
   ended('f1', 'workflow', 'Check the readiness gate', 'failed', 61),
-  ended('f2', 'bash', 'Rerun the typecheck', 'failed', 62),
+  ended('f2', 'agent', 'Rerun the typecheck', 'failed', 62),
   ...Array.from({ length: 21 }, (_, i) =>
     ended(`d${i}`, 'agent', `Explore the rate-limit sources ${i + 1}`, 'completed', 70 + i),
   ),
@@ -393,7 +393,10 @@ const EXT = ['csv', 'png', 'log', 'pdf', 'diff', 'md', 'json', 'txt'];
 const CONTEXT = () => ({
   globalFiles: [{ path: '/Users/dev/.codex/AGENTS.md', content: bytes(418), source: 'global' }],
   projectFiles: [{ path: 'AGENTS.md', content: bytes(53), source: 'project' }],
-  mentions: ['docs/review-workflow.md', 'src/git.ts', 'docs/quota.md', 'src/usage.ts'].map(mention),
+  mentions: (scenario.windowTranscript
+    ? ['docs/review-workflow.md', 'src/git.ts']
+    : ['docs/review-workflow.md', 'src/git.ts', 'docs/quota.md', 'src/usage.ts']
+  ).map(mention),
   attachments: EXT.slice(0, scenario.attachments ?? 2).map((ext, i) => ({
     id: `att${i}`,
     name: `file.${ext}`,
@@ -607,11 +610,37 @@ const call = (
   _meta: stamp(minutes, extra),
 });
 
+function scheduleCalls(): Json[] {
+  return [
+    call(
+      'w1',
+      'ScheduleWakeup',
+      {
+        delaySeconds: (52 + 12.5) * 60 + 20,
+        reason: 'Check the review-readiness workflow',
+        prompt: 'Check the review-readiness workflow',
+      },
+      JSON.stringify({ nextRunAtMs: NOW + (52 * 60 + 20) * 1000 }),
+      12.6,
+    ),
+    call(
+      'w2',
+      'CronCreate',
+      { prompt: 'Post the review status to the PR', cron: '0 9 * * 1-5', recurring: true },
+      '{"id":"c1","humanSchedule":"Every weekday at 09:00","recurring":true}',
+      12.6,
+    ),
+  ];
+}
+
 function transcript(): Json[] {
   seq = 0;
   if (scenario.blank) return [];
   if (scenario.windowTranscript)
-    return windowTranscript(scenario.windowTranscript, { user, agent, call, stamp, next: () => ++seq, now: NOW });
+    return [
+      ...scheduleCalls(),
+      ...windowTranscript(scenario.windowTranscript, { user, agent, call, stamp, next: () => ++seq, now: NOW }),
+    ];
   const out: Json[] = [];
   /** A sub-agent's own call, waiting on a request above the composer. */
   const asking: Json[] =
@@ -693,24 +722,7 @@ function transcript(): Json[] {
         'started',
         12.6,
       ),
-      call(
-        'w1',
-        'ScheduleWakeup',
-        {
-          delaySeconds: (52 + 12.5) * 60 + 20,
-          reason: 'Check the review-readiness workflow',
-          prompt: 'Check the review-readiness workflow',
-        },
-        JSON.stringify({ nextRunAtMs: NOW + (52 * 60 + 20) * 1000 }),
-        12.6,
-      ),
-      call(
-        'w2',
-        'CronCreate',
-        { prompt: 'Post the review status to the PR', cron: '0 9 * * 1-5', recurring: true },
-        '{"id":"c1","humanSchedule":"Every weekday at 09:00","recurring":true}',
-        12.6,
-      ),
+      ...scheduleCalls(),
     ],
   );
   turn('Makes sense. Fix it in the daemon and add a test.', 'Fixed in both places.', 11);

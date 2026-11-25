@@ -3,7 +3,7 @@
  * just enough of the ACP facade for a transcript to load. Anything the fixtures
  * don't know is recorded in `__PARITY_MISSES__`, and the runner fails on it.
  */
-import { respond, sessionState, FAKE_PORT, TODOS_EVENT } from './fixtures';
+import { respond, sessionState, scenario, FAKE_PORT, TODOS_EVENT } from './fixtures';
 
 const misses: string[] = [];
 const log: string[] = [];
@@ -93,6 +93,7 @@ class FakeSocket extends EventTarget {
             heartbeatIntervalMs: 600_000,
             itemCreationMarkers: true,
             replayComplete: true,
+            windowedHistory: Boolean(scenario.windowTranscript),
           },
         },
       });
@@ -101,13 +102,26 @@ class FakeSocket extends EventTarget {
     } else if (frame.method === 'session/resume') {
       const sessionId = String(frame.params?.sessionId);
       const state = sessionState(sessionId);
-      reply({});
-      for (const update of state.updates) note('session/update', { sessionId, update });
-      note('_mainframe.dev/replay_complete', { sessionId });
-      if (state.queue.length > 0) note('_mainframe.dev/queue_state', { sessionId, refs: state.queue });
-      state.permissions.forEach((params, i) =>
-        this.push({ jsonrpc: '2.0', id: `gate-${sessionId}-${i}`, method: 'session/request_permission', params: { sessionId, ...params } }),
+      reply(
+        sessionId === 's1' && scenario.windowTranscript
+          ? { _meta: { '_mainframe.dev': { fullReplay: true, history: { hasMore: true, floorItemId: 'w1' } } } }
+          : {},
       );
+      const replay = () => {
+        for (const update of state.updates) note('session/update', { sessionId, update });
+        note('_mainframe.dev/replay_complete', { sessionId });
+        if (state.queue.length > 0) note('_mainframe.dev/queue_state', { sessionId, refs: state.queue });
+        state.permissions.forEach((params, i) =>
+          this.push({
+            jsonrpc: '2.0',
+            id: `gate-${sessionId}-${i}`,
+            method: 'session/request_permission',
+            params: { sessionId, ...params },
+          }),
+        );
+      };
+      if (scenario.windowTranscript) setTimeout(replay, 0);
+      else replay();
     } else if (frame.method === 'session/prompt') {
       reply({});
     } else {
