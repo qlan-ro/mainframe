@@ -1,3 +1,4 @@
+import { prototypeWindow } from '../prototype-data.mjs';
 import { P, PREFS, TABS, base, closeWorkspace } from './common.mjs';
 
 const rail = (n) => `document.querySelectorAll('#rail .rb')[${n}]`;
@@ -50,9 +51,27 @@ export default {
   states: [
     {
       id: 'window',
+      compareWindowText: true,
       title: 'Window, nothing hovered',
       ...base,
-      scenario: { windowTranscript: true, panelTaskTitles: true },
+      scenario: {
+        windowTranscript: prototypeWindow.turns,
+        projectColors: prototypeWindow.projectColors,
+        panelTaskTitles: true,
+      },
+      proto: async (page) => {
+        await base.proto(page);
+        await page.addStyleTag({ content: '.lights i { visibility: hidden; }' });
+      },
+      app: async (page) => {
+        await base.app(page);
+        await page.evaluate(() => {
+          for (const toggle of document.querySelectorAll('[data-testid^=chat-work-toggle-][aria-expanded=true]')) {
+            toggle.click();
+          }
+          document.activeElement?.blur?.();
+        });
+      },
       pairs: [
         ...titleBar,
         ...railPairs,

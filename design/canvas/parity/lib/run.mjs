@@ -1,3 +1,4 @@
+import { scrollTranscriptToBottom, windowTextDiff } from './window-text.mjs';
 // Walks the states of an area, measures both sides, writes rows and images.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -86,6 +87,14 @@ export async function runArea({
       await state.app?.(app.page);
       await settle(proto);
       await settle(app.page);
+      if (state.compareWindowText) {
+        await Promise.all([scrollTranscriptToBottom(proto, 0), scrollTranscriptToBottom(app.page, 1)]);
+        await Promise.all([settle(proto), settle(app.page)]);
+        const differences = await windowTextDiff(proto, app.page);
+        writeFileSync(join(outDir, area.id, `window-${viewName}-${theme}.txt`), differences.join('\n'));
+        if (differences.length)
+          problems.push(`${where}: ${differences.length} text differences\n${differences.slice(0, 8).join('\n')}`);
+      }
       for (const pair of state.pairs) {
         const pull = (page, expr) =>
           page.evaluate(

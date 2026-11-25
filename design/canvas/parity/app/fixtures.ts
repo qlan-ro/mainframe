@@ -1,4 +1,4 @@
-import { windowAnswers } from './window-transcript-fixture';
+import { windowTranscript, type WindowPart } from './window-transcript-fixture';
 import { parityReviewWorkflow } from './transcript-extra-fixture';
 /**
  * The prototype's own data (design/redesign/prototype/index.html), as the daemon
@@ -31,7 +31,7 @@ export interface Scenario {
   env?: 'worktree' | 'local' | 'temp';
   attachments?: number;
   panelTaskTitles?: boolean;
-  windowTranscript?: boolean;
+  windowTranscript?: WindowPart[];
   earlierRows?: number;
   /** The workspace's own two launch configurations, running or not. */
   launch?: 'one-stopped' | 'two' | 'two-stopped';
@@ -610,6 +610,8 @@ const call = (
 function transcript(): Json[] {
   seq = 0;
   if (scenario.blank) return [];
+  if (scenario.windowTranscript)
+    return windowTranscript(scenario.windowTranscript, { user, agent, call, stamp, next: () => ++seq, now: NOW });
   const out: Json[] = [];
   /** A sub-agent's own call, waiting on a request above the composer. */
   const asking: Json[] =
@@ -663,7 +665,7 @@ function transcript(): Json[] {
   }
   turn(
     'The usage capsule stays at 100% after the Codex window resets. Can you find out why?',
-    scenario.windowTranscript ? windowAnswers.investigation : 'Found it. Two things together freeze the capsule.',
+    'Found it. Two things together freeze the capsule.',
     13,
     [
       call('call-f2', 'Bash', { command: 'pnpm typecheck', run_in_background: true }, 'Typecheck failed', 65),
@@ -710,31 +712,13 @@ function transcript(): Json[] {
         12.6,
       ),
     ],
-    scenario.windowTranscript ? 18_000 : undefined,
   );
-  turn(
-    'Makes sense. Fix it in the daemon and add a test.',
-    scenario.windowTranscript ? windowAnswers.fix : 'Fixed in both places.',
-    11,
-    [],
-    scenario.windowTranscript ? 134_000 : undefined,
-    scenario.windowTranscript ? 9 : 10,
-  );
-  if (scenario.windowTranscript) {
-    turn(
-      'Check the Codex docs on how rate limits reset, and pull up issue #847 so the PR can close it.',
-      windowAnswers.references,
-      8,
-      [],
-      41_000,
-    );
-  }
+  turn('Makes sense. Fix it in the daemon and add a test.', 'Fixed in both places.', 11);
   turn(
     'Get a second opinion: have one agent review the diff and another check the mobile capsule.',
-    scenario.windowTranscript ? windowAnswers.review : 'Both checks are back. The diff is correct, with one nit.',
+    'Both checks are back. The diff is correct, with one nit.',
     5,
     [],
-    scenario.windowTranscript ? 74_000 : undefined,
   );
   if (scenario.running) {
     out.push(user('Now cover the weekly window too.', 0.5));
