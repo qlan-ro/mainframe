@@ -5,18 +5,22 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ mfToast: toast }));
 
+import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import type { ActivityEntry } from '../activity-model';
 import { stopKeyOf } from '../use-activity-actions';
-import { stopKey, useStop } from '../use-stop';
+import { backgroundStopKey, delegatedStopKey, resetStops, useStop } from '../use-stop';
 
 type Request = (() => Promise<void>) | undefined;
 const request = vi.fn(async () => undefined);
 const mount = (initial: Request = request) =>
-  renderHook(({ ask }: { ask: Request }) => useStop('reviewer', ask), { initialProps: { ask: initial as Request } });
+  renderHook(({ ask, run = 1 }: { ask: Request; run?: number }) => useStop('reviewer', ask, `run ${run}`), {
+    initialProps: { ask: initial } as { ask: Request; run?: number },
+  });
 const press = async (hook: ReturnType<typeof mount>) => act(async () => hook.result.current.onStop?.());
 
 beforeEach(() => {
   vi.useFakeTimers();
+  resetStops();
   request.mockReset().mockResolvedValue(undefined);
   toast.success.mockClear();
   toast.error.mockClear();
@@ -38,7 +42,7 @@ it('is ready again when the work ended and started over', async () => {
   hook.rerender({ ask: undefined as Request });
   expect(hook.result.current).toEqual({ onStop: undefined, stopping: false });
 
-  hook.rerender({ ask: request });
+  hook.rerender({ ask: request, run: 2 });
   expect(hook.result.current.stopping).toBe(false);
   await press(hook);
   expect(request).toHaveBeenCalledTimes(2);
@@ -87,7 +91,7 @@ it.each(['succeeds', 'fails', 'never answers'] as const)(
     const hook = mount();
     await press(hook);
     hook.rerender({ ask: undefined as Request });
-    hook.rerender({ ask: request });
+    hook.rerender({ ask: request, run: 2 });
     act(() => vi.advanceTimersByTime(5_000));
     await press(hook);
     if (outcome === 'succeeds') await act(async () => answer.settle());
@@ -110,26 +114,46 @@ it('says why it failed and is ready at once', async () => {
   expect(hook.result.current.stopping).toBe(false);
 });
 
+const bg = (id: string, startedAt = 1) => ({ id, startedAt }) as BackgroundTask;
+
 it('asks once for a task that several controls can stop, and shows it on all of them', async () => {
-  const at = (ask: Request) => renderHook(() => useStop('reviewer', ask, stopKey('chat-1', 'task-1')));
-  let answer = () => {};
-  request.mockImplementation(() => new Promise<undefined>((resolve) => (answer = () => resolve(undefined))));
+  const at = (ask: Request) =>
+    renderHook(({ asked }: { asked: Request }) => useStop('reviewer', asked, backgroundStopKey('chat-1', bg('t1'))), {
+      initialProps: { asked: ask },
+    });
+  request.mockImplementation(() => new Promise<undefined>(() => {}));
   const row = at(request);
   const panel = at(request);
-  const other = renderHook(() => useStop('builder', request, stopKey('chat-1', 'task-2')));
+  const other = renderHook(() => useStop('builder', request, backgroundStopKey('chat-1', bg('t2'))));
 
   await act(async () => row.result.current.onStop?.());
   await act(async () => panel.result.current.onStop?.());
   expect(request).toHaveBeenCalledTimes(1);
   expect([row, panel, other].map((hook) => hook.result.current.stopping)).toEqual([true, true, false]);
-  await act(async () => answer());
 
+  // One that no longer offers it, having lost its evidence, frees nobody else's.
+  row.rerender({ asked: undefined });
+  await act(async () => panel.result.current.onStop?.());
+  expect(request).toHaveBeenCalledTimes(1);
   await act(async () => other.result.current.onStop?.());
   expect(request).toHaveBeenCalledTimes(2);
 });
 
+it('is offered at once for a later run of the same task', async () => {
+  const hook = renderHook(
+    ({ startedAt }) => useStop('reviewer', request, backgroundStopKey('c', bg('t1', startedAt))),
+    {
+      initialProps: { startedAt: 1 },
+    },
+  );
+  await act(async () => hook.result.current.onStop?.());
+  expect(hook.result.current.stopping).toBe(true);
+  hook.rerender({ startedAt: 2 });
+  expect(hook.result.current.stopping).toBe(false);
+});
+
 it('names an Activity row as the transcript row and the tab of the same task do', () => {
   const row = { id: 'r1', title: 'reviewer' } as ActivityEntry;
-  expect(stopKeyOf({ ...row, task: { id: 'bg-1' } } as ActivityEntry, 'chat-1')).toBe(stopKey('chat-1', 'bg-1'));
-  expect(stopKeyOf({ ...row, delegated: { taskId: 't-1' } } as ActivityEntry, 'chat-1')).toBe(stopKey('chat-1', 't-1'));
+  expect(stopKeyOf({ ...row, task: bg('t1') }, 'c')).toBe(backgroundStopKey('c', bg('t1')));
+  expect(stopKeyOf({ ...row, delegated: { taskId: 't' } } as ActivityEntry, 'c')).toBe(delegatedStopKey('c', 't'));
 });

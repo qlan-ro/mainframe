@@ -4,7 +4,7 @@
  * does (T1c). Without a provider nothing is known, and no agent reads as running.
  */
 import { createContext, useContext, useMemo } from 'react';
-import { stopKey, useStop } from '@/features/session-panel/use-stop';
+import { backgroundStopKey, useStop } from '@/features/session-panel/use-stop';
 import {
   agentStanding,
   callFacts,
@@ -84,5 +84,5 @@ export function useAgentStop(toolCallId: string, title: string) {
   const { chatId } = useTranscriptScope();
   const { tasks, live, adapterId } = useContext(Context);
   const task = chatId === undefined ? undefined : stoppableTask(ownTasks(tasks, toolCallId), live, adapterId);
-  return useStop(title, task && (() => stopBackgroundTask(chatId!, task.id)), stopKey(chatId, task?.id ?? toolCallId));
+  return useStop(title, task && (() => stopBackgroundTask(chatId!, task.id)), backgroundStopKey(chatId, task));
 }

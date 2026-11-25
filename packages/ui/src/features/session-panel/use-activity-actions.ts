@@ -16,7 +16,7 @@ import { isOngoing, type ActivityEntry } from './activity-model';
 import { focusPendingRequest } from './activity-source';
 import { usePanelControl, type PanelColumnId } from './panel-control-store';
 import type { ActivityJumps } from './use-activity-jump';
-import { stopKey, useStop } from './use-stop';
+import { backgroundStopKey, delegatedStopKey, useStop } from './use-stop';
 
 export interface ActivityActions {
   onActivate: () => void;
@@ -29,9 +29,6 @@ export interface ActivityActions {
 }
 
 /** Undefined when this work can't be stopped on its own. */
-export const stopKeyOf = (row: ActivityEntry, chatId: string): string =>
-  stopKey(chatId, row.delegated?.taskId ?? row.task?.id ?? row.id);
-
 export function stopRequest(row: ActivityEntry, chatId: string, adapterId: string | undefined) {
   if (!isOngoing(row.state)) return undefined;
   const { task, delegated } = row;
@@ -39,6 +36,9 @@ export function stopRequest(row: ActivityEntry, chatId: string, adapterId: strin
   if (delegated) return delegated.resumedState ? undefined : () => cancelDelegatedTask(chatId, delegated.taskId);
   return task && adapterId === 'claude' ? () => stopBackgroundTask(chatId, task.id) : undefined;
 }
+
+export const stopKeyOf = ({ delegated, task }: ActivityEntry, chatId: string): string =>
+  delegated ? delegatedStopKey(chatId, delegated.taskId) : backgroundStopKey(chatId, task);
 
 function useReadOutput(row: ActivityEntry, chatId: string) {
   const taskId = row.kind === 'command' ? row.task?.id : undefined;

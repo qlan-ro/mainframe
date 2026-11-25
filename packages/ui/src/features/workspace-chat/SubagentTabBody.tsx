@@ -31,7 +31,7 @@ import {
 import { asToolPart, chatTurns, holderLive } from '@/features/chat/messages/turn/chat-turns';
 import { OwnChatStateProvider } from '@/features/chat/runtime/own-chat-state';
 import { TurnCache } from '@/features/chat/view-model/turn/turn-cache';
-import { stopKey, useStop } from '@/features/session-panel/use-stop';
+import { backgroundStopKey, useStop } from '@/features/session-panel/use-stop';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { stopBackgroundTask } from '@/lib/api/background-tasks';
@@ -224,7 +224,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const { onStop, stopping } = useStop(
     shownTitle,
     task ? () => stopBackgroundTask(chatId, task.id) : undefined,
-    stopKey(chatId, task?.id ?? toolCallId),
+    backgroundStopKey(chatId, task),
   );
 
   return (

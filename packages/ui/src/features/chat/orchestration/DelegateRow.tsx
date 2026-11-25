@@ -9,7 +9,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { PanelRight } from 'lucide-react';
 import { useAui } from '@assistant-ui/react';
 import { isTerminalTaskStatus, type TaskStatus } from '@qlan-ro/mainframe-types';
-import { stopKey, useStop } from '@/features/session-panel/use-stop';
+import { delegatedStopKey, useStop } from '@/features/session-panel/use-stop';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { openTaskTab } from '@/features/workspace-chat/open-session';
 import { cancelDelegatedTask } from '@/lib/api/background-tasks';
@@ -81,7 +81,7 @@ function useTaskChild(childChatId: string | undefined) {
 function useTaskStop(title: string, task: TaskStatus | undefined, taskId = '', custom?: SessionCustom) {
   const parent = custom?.delegation?.taskId === taskId ? custom.parentChatId : undefined;
   const live = parent != null && task !== undefined && !isTerminalTaskStatus(task);
-  return useStop(title, live ? () => cancelDelegatedTask(parent, taskId) : undefined, stopKey(parent, taskId));
+  return useStop(title, live ? () => cancelDelegatedTask(parent, taskId) : undefined, delegatedStopKey(parent, taskId));
 }
 
 interface Standing {

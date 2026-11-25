@@ -22,7 +22,7 @@ import { useSessionListLoadState } from '@/features/sessions/runtime/list-load-s
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
-import { stopKey, useStop } from '@/features/session-panel/use-stop';
+import { delegatedStopKey, useStop } from '@/features/session-panel/use-stop';
 import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
 import { useSideChatTab } from '@/features/side-chat/use-side-chat-tab';
 import { cancelDelegatedTask } from '@/lib/api/background-tasks';
@@ -116,7 +116,7 @@ function TaskControls({ chatId, title, custom }: { chatId: string; title: string
     delegation != null && parentChatId != null && !isTerminalTaskStatus(delegation.status)
       ? () => cancelDelegatedTask(parentChatId, delegation.taskId)
       : undefined,
-    stopKey(parentChatId, delegation?.taskId ?? chatId),
+    delegatedStopKey(parentChatId, delegation?.taskId),
   );
   return (
     <>
