@@ -161,6 +161,21 @@ const PATHS = [
   ['<p>src/Users/jane</p>', '/Users/jane'],
   ['<p>src/Users/jane/Documents</p>', '/Users/jane/Documents'],
   ['<p>src/Users/list/jane</p>', '/Users/list/jane'],
+  ['<p>src/Users/list.tsx/jane</p>', '/Users/list.tsx/jane'],
+  ['<p>src/Users/list.ts</p>', '/Users/list.ts'],
+  ['<p>src/Users/jane.ts</p>', '/Users/jane.ts'],
+  ['<p>src/Users/page</p>', '/Users/page'],
+  ['<p>src/Users/list@jane</p>', '/Users/list@jane'],
+  ['<p>src/Users/list\\jane</p>', '/Users/list\\jane'],
+  ['<p>C:\\src/Users/list</p>', '/Users/list'],
+  ['<p>src/jane/Users/list</p>', '/Users/list'],
+  // A real path that ends in a folder called Users.
+  ['<p>src/Users/jane/components/Users/List.tsx</p>', '/Users/jane/components/Users/List.tsx'],
+  ['<p>src/private/tmp/Users/list</p>', '/private/tmp/Users/list'],
+  ['<p>src/Users/jane/work/Users/Form</p>', '/Users/jane/work/Users/Form'],
+  ['<p>src/components/Users/jane/Users/list</p>', '/Users/jane/Users/list'],
+  ['<p>src/home/jane/Users/list</p>', '/Users/list'],
+  ['<p>src/var/folders/y6/Users/list</p>', '/var/folders/y6/Users/list'],
   ['<p>/src/Users/list</p>', '/Users/list'],
   ['{"text":"done\\n/home/jane/work"}', '/home/jane/work'],
   ['<a href="x?p=a%0A/home/jane">x</a>', '/home/jane'],
@@ -264,30 +279,42 @@ test('a user name that may be a word counts only where it names a user', () => {
   assert.deepEqual(leaks('<p>/Users/alex/Code</p>', ['alex']), ['/Users/alex/Code']);
 });
 
+/** The only texts of the first version's that are let through: a component's file, named in full. */
+const LET_THROUGH = /^["( ]?src\/(?:components\/)?Users\/[Ll]ist(?:\.tsx)?(?: x|["), ]|\.)?$/;
+
 /** What main's check found before this file learned more shapes, in every context it can stand in. */
 test('nothing the first version of the check found is let through, but src/Users/list', () => {
   const slash = /(?:%(?:25)*2[fF]|\\u002[fF]|\\x2[fF]|\\\/|&#[xX]0*2[fF];|&#0*47;|&sol;)/g;
   const first =
     /(?:\/Users\/|\/private\/(?:tmp|var|etc)\b|(?<![\w.-])\/(?:private|home)\/|\/var\/folders\/|\b[A-Za-z]:[\\/]+Users[\\/]|\/tmp\/claude-\d|\/tmp\/[^\s"'<>&;)]*-(?:Users|home)-|(?<![\w-])-(?:Users|home|private-tmp|private-var|var-folders)-(?=\w))[^\s"'<>&;)]*/;
   const befores = ['', ' ', 'x', '.', '-', '_', '/', '~', '"', '\\n', '\\t', '%0A', '%41', '&#65;', '-I', '\u001b[0m', '\\033[0m', 'src', 'src/', 'a/src', 'file://host', '/Volumes/B', 'é', '(', '=', ':', '\\', '\\x41', '\\u0041', '&#x2e'];
-  const names = ['jane', 'list', 'per', 'page', 'are', 'today', 'x', 'settings', 'width', 'list.tsx'];
+  const names = ['jane', 'list', 'per', 'page', 'are', 'today', 'x', 'settings', 'width', 'list.tsx', 'jane.ts'];
   const paths = names.flatMap((name) =>
     [`/Users/${name}`, `/home/${name}/`, `/home/${name}`, `/private/tmp/${name}`, `/private/${name}/`, `/var/folders/${name}`, `C:\\Users\\${name}`, `/tmp/a-Users-${name}`,
       `-Users-${name}`, `-home-${name}`, `-private-tmp-${name}`, `-private-var-${name}`, `-var-folders-${name}`, `%2FUsers%2F${name}`, `%252Fhome%252F${name}`, `&#x2F;Users&#47;${name}`, `\\/Users\\/${name}`],
   );
-  let checked = 0;
-  for (const before of befores) {
-    for (const path of paths) {
-      for (const after of ['', '/Code', '-Code', ' x', '.', '"']) {
-        const text = `${before}${path}${after}`;
-        if (!first.test(text.replace(slash, '/'))) continue;
-        checked++;
-        const known = /^(?:a\/)?src\/Users\/(?:list(?:\.tsx)?|page)[ ."]?x?$/.test(text.replace(slash, '/'));
-        if (!known) assert.notDeepEqual(localPaths(text), [], text);
-      }
+  const texts = befores.flatMap((before) => paths.flatMap((path) => ['', '/Code', '-Code', ' x', '.', '"'].map((after) => before + path + after)));
+
+  // Every path of up to four segments below what the exemption starts with, roots repeated and nested.
+  const segments = ['Users', 'home', 'private', 'var', 'tmp', 'folders', 'components', 'jane', 'List.tsx', 'list', 'Form', 'jane.ts'];
+  let nested = [''];
+  for (let depth = 0; depth < 4; depth++) {
+    nested = nested.flatMap((path) => segments.map((segment) => `${path}/${segment}`));
+    for (const path of nested) {
+      texts.push(`src${path}`, `src/components${path}`);
+      if (depth === 3) continue;
+      texts.push(path, `"src${path}"`, `src${path} x`, `src${path}/work/Users/list`, `src/Users/jane${path}`, `a/src${path}`, `src${path.replaceAll('/', '%2F')}`);
     }
   }
-  assert.ok(checked > 15_000, String(checked));
+
+  const found = texts.filter((text) => first.test(text.replace(slash, '/')));
+  assert.ok(found.length > 30_000, String(found.length));
+  const wanted = found.filter((text) => LET_THROUGH.test(text.replace(slash, '/')));
+  assert.ok(wanted.length > 10, String(wanted.length));
+  assert.deepEqual(found.filter((text) => localPaths(text).length === 0), wanted);
+  // By the board writers as well, in one call for all of them. Python counts é as a letter, as it did on main.
+  const through = 'import json,sys; from boards import local_paths; print(json.dumps([t for t in json.load(sys.stdin) if not local_paths(t)]))';
+  assert.deepEqual(JSON.parse(python(through, JSON.stringify(found.filter((text) => !text.includes('é'))))), wanted);
 });
 
 test('tool cards and markers are numbered within their own state', () => {

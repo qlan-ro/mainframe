@@ -13,7 +13,7 @@
     "-(?:private-)?var-folders-(?=[\\w.]+-\\w)"
   ],
   "exempt": [
-    "(?<![\\w./~-])src/(?:[\\w-]+/)*Users/(?:[\\w-]+\\.(?:tsx?|jsx?|s?css|vue|svelte)|[Ll]ist|[Ii]ndex|[Tt]able|[Pp]age|[Ff]orm|[Dd]etails?)(?![\\w/-]|\\.\\w)",
+    "(?:^|(?<=[ \\t\\n\"'<>(\\[,`]))src/(?:components/)?Users/[Ll]ist(?:\\.tsx)?(?=$|[ \\t\\n\"'<>)\\],;:`]|\\.(?:$|[ \\t\\n\"'<>)]))",
     "(?<![\\w/\\\\-])-home-page-(?:card|header|hero|title|link|layout)(?![\\w/\\\\-]|\\.\\w)"
   ],
   "end": "[^\\s\"'<>&;)]*",
