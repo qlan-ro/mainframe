@@ -186,11 +186,8 @@ async fn enabling_a_worktree_on_a_live_chat_binds_it_and_restarts_it() {
     };
     assert_eq!(update.worktree_path, Some(Some(worktree.clone())));
     assert_eq!(update.branch_name, Some(Some("feat/x".to_string())));
-    assert_eq!(update.base_branch, Some(Some("HEAD".to_string())));
-    assert_eq!(
-        cell.lock().unwrap().chat.base_branch.as_deref(),
-        Some("HEAD")
-    );
+    assert_eq!(update.base_branch, Some(None));
+    assert_eq!(cell.lock().unwrap().chat.base_branch, None);
     let transcript = update.session_file_path.clone().unwrap();
     let projects_dir = dirs::home_dir().unwrap().join(".claude/projects");
     assert!(

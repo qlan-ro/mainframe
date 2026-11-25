@@ -147,6 +147,21 @@ impl ChatManager {
         }
     }
 
+    pub fn refresh_worktree_base(&self, chat_id: &str) {
+        if let Some(cell) = self.get_active(chat_id)
+            && let Some(row) =
+                storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id))
+        {
+            let mut guard = cell.lock_recover();
+            if guard.chat.worktree_path == row.worktree_path
+                && guard.chat.branch_name == row.branch_name
+            {
+                guard.chat.base_branch = row.base_branch;
+            }
+        }
+        self.emit_chat_updated(chat_id);
+    }
+
     pub fn emit_worktree_deleted(&self, chat_id: &str) {
         if let Err(error) = self.shared.clear_missing_worktree_base(chat_id) {
             tracing::warn!(chat_id, %error, "failed to clear the removed worktree's base branch");

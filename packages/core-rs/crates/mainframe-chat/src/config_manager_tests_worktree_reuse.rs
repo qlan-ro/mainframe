@@ -88,12 +88,47 @@ async fn reusing_a_branch_that_does_not_exist_creates_it_from_the_base() {
         .unwrap();
 
     assert_created_worktree(&repo);
-    assert_eq!(
-        cell.lock().unwrap().chat.base_branch.as_deref(),
-        Some("HEAD")
-    );
+    assert_eq!(cell.lock().unwrap().chat.base_branch, None);
     assert_eq!(
         cell.lock().unwrap().chat.branch_name.as_deref(),
         Some("feat/x")
     );
+}
+
+#[tokio::test]
+async fn stores_only_named_branch_start_points() {
+    let (repo, project) = git_project();
+    git(&repo, &["branch", "release"]);
+    git(
+        &repo,
+        &["update-ref", "refs/remotes/origin/release", "HEAD"],
+    );
+    git(&repo, &["tag", "snapshot"]);
+    git(&repo, &["checkout", "--detach"]);
+    let commit = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    let sha = String::from_utf8(commit.stdout).unwrap();
+
+    for (branch, start, expected) in [
+        ("local", "release", Some("release")),
+        ("remote", "origin/release", Some("origin/release")),
+        ("head", "HEAD", None),
+        ("tag", "snapshot", None),
+        ("commit", sha.trim(), None),
+        ("expression", "release~0", None),
+    ] {
+        let cell = Arc::new(Mutex::new(ActiveChat::new(test_chat("c1"), None)));
+        let manager = Harness::new(Setup::with_project(cell.clone(), project.clone()));
+        manager.enable_worktree("c1", start, branch).await.unwrap();
+        let binding = &cell.lock().unwrap().chat;
+        assert_eq!(binding.branch_name.as_deref(), Some(branch));
+        assert_eq!(
+            binding.base_branch.as_deref(),
+            expected,
+            "start point: {start}"
+        );
+    }
 }

@@ -93,7 +93,7 @@ impl ChatConfigManager {
                         adapter_id: &adapter,
                         session_id: Some(&session_id),
                     },
-                    (info, source.base_branch()),
+                    info,
                 )
                 .await;
         }
@@ -101,7 +101,7 @@ impl ChatConfigManager {
         // Pre-session path: kill any untracked process and create worktree
         self.detach_session(&cell).await?;
 
-        let info = self
+        let (info, base_branch) = self
             .create_chat_worktree(&project, branch_name, source)
             .await?;
         self.relocate_new_worktree(chat_id, &adapter, &project, &info.worktree_path)
@@ -111,7 +111,7 @@ impl ChatConfigManager {
             chat_id,
             Some(info.worktree_path),
             Some(info.branch_name),
-            source.base_branch(),
+            base_branch,
             None,
         )?;
         Ok(())
@@ -196,14 +196,27 @@ impl ChatConfigManager {
         project: &str,
         branch_name: &str,
         source: WorktreeSource<'_>,
-    ) -> Result<mainframe_services::workspace::worktree::WorktreeInfo, WorktreeError> {
+    ) -> Result<
+        (
+            mainframe_services::workspace::worktree::WorktreeInfo,
+            Option<String>,
+        ),
+        WorktreeError,
+    > {
         let dir_name = self.worktree_dir().await;
         match source {
             WorktreeSource::NewBranch { base_branch } => {
-                create_worktree(project, &dir_name, base_branch, branch_name).await
+                let recorded =
+                    mainframe_services::workspace::is_branch_start_point(project, base_branch)
+                        .await
+                        .then(|| base_branch.to_string());
+                let worktree =
+                    create_worktree(project, &dir_name, base_branch, branch_name).await?;
+                Ok((worktree, recorded))
             }
             WorktreeSource::ExistingBranch => {
-                checkout_worktree(project, &dir_name, branch_name).await
+                let worktree = checkout_worktree(project, &dir_name, branch_name).await?;
+                Ok((worktree, None))
             }
         }
     }
@@ -216,13 +229,4 @@ enum WorktreeSource<'a> {
     NewBranch { base_branch: &'a str },
     /// Check out a branch that already exists.
     ExistingBranch,
-}
-
-impl WorktreeSource<'_> {
-    fn base_branch(self) -> Option<String> {
-        match self {
-            Self::NewBranch { base_branch } => Some(base_branch.to_string()),
-            Self::ExistingBranch => None,
-        }
-    }
 }

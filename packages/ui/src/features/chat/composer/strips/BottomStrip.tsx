@@ -9,7 +9,7 @@
  * A workspace tab has no changes: they open the review panel, which is the chat
  * column's.
  */
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { FolderGit2, Lock, Monitor, Timer } from 'lucide-react';
 import type { Chat } from '@qlan-ro/mainframe-types';
@@ -19,6 +19,7 @@ import { useDisplayBranch } from '@/features/sessions/use-display-branch';
 import { activeSessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import { ConversationVisibility } from '../../runtime/conversation-visibility';
 import { useChatExtrasSelector } from '../../runtime/chat-extras';
 import { WorktreePopover } from '../config-toolbar/WorktreePopover';
 import { ComposerCardProvider, ComposerHint } from '../composer-card-context';
@@ -57,13 +58,11 @@ function WherePart({
   chat,
   branch,
   baseBranch,
-  refetch,
 }: {
   session: StripSession;
   chat: Chat | null;
   branch?: string;
   baseBranch?: string;
-  refetch: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const hasMessages = useAuiState((s) => s.thread.messages.length > 0);
@@ -101,10 +100,7 @@ function WherePart({
       hasMessages={hasMessages}
       busy={busy}
       open={open}
-      onOpenChange={(next) => {
-        if (next && session.baseBranch) refetch();
-        setOpen(next);
-      }}
+      onOpenChange={setOpen}
     >
       <button
         type="button"
@@ -177,6 +173,7 @@ function useListedSession(): StripSession | null {
 }
 
 function SessionLocation({ session, chat, port }: { session: StripSession; chat: Chat | null; port: number }) {
+  const visible = useContext(ConversationVisibility);
   const { branch, liveBranch, refetch } = useDisplayBranch({
     port,
     projectId: session.projectId,
@@ -184,7 +181,8 @@ function SessionLocation({ session, chat, port }: { session: StripSession; chat:
     branchName: session.branchName,
     isWorktree: session.worktreePath != null,
     noProject: session.noProject,
-    watchWorktreePath: session.baseBranch ? session.worktreePath : undefined,
+    worktreePath: session.worktreePath,
+    visible,
   });
   const baseBranch =
     session.worktreePath && branch && liveBranch === session.branchName ? session.baseBranch : undefined;
@@ -193,7 +191,7 @@ function SessionLocation({ session, chat, port }: { session: StripSession; chat:
       {session.temporary ? (
         <TemporaryPart />
       ) : (
-        <WherePart session={session} chat={chat} branch={branch} baseBranch={baseBranch} refetch={refetch} />
+        <WherePart session={session} chat={chat} branch={branch} baseBranch={baseBranch} />
       )}
       {!session.noProject && (
         <BranchPart session={session} port={port} branch={branch} baseBranch={baseBranch} refetch={refetch} />
