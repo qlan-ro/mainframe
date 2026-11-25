@@ -8,7 +8,8 @@ import type { LoadedSkill, TurnUnit } from './types';
 const bare = (name: string) => name.replace(/^\//, '').replace(/^.*:/, '');
 
 export class SkillMatcher {
-  readonly absorbed = new Set<string>();
+  /** The absorbed message → the call that shows it. */
+  readonly absorbedBy = new Map<string, readonly string[]>();
   readonly byCall = new Map<string, LoadedSkill>();
 
   claim(messageId: string, skill: LoadedSkill, units: readonly TurnUnit[]): void {
@@ -23,6 +24,6 @@ export class SkillMatcher {
       );
     if (call?.part.type !== 'tool-call') return;
     this.byCall.set(call.part.toolCallId, skill);
-    this.absorbed.add(messageId);
+    this.absorbedBy.set(messageId, [call.part.toolCallId]);
   }
 }

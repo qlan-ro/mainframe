@@ -13,16 +13,18 @@ import { boundedMessageComponents } from '../bounded-messages';
 import { MessageRenderBoundary } from '../MessageRenderBoundary';
 import { AssistantMessage } from '../AssistantMessage';
 import { TurnSlice } from './TurnSlice';
+import { sliceOfCall } from './reveal-step';
 import { useTranscriptScope } from './transcript-scope';
 import { TurnProvider, useTurnSelector, type TurnContextValue } from './turn-context';
 import { turnDisclosureStore } from './turn-disclosure-store';
 import { useLiveChildren } from './use-live-children';
 import { useTurnState } from './use-turn-state';
 
-/** A message another element stands for renders nothing (T1f, T1a). */
-function useAbsorbed(): boolean {
+/** The calls whose rows stand for this message, or undefined when it is drawn itself (T1f, T1a). */
+function useAbsorbed(): readonly string[] | undefined {
   const id = useAuiState((s) => s.message.id);
-  return useTurnSelector(({ model }) => model.absorbed.has(id), false);
+  const calls = useTurnSelector(({ model }) => model.absorbedBy.get(id)?.join(' '), undefined);
+  return useMemo(() => calls?.split(' '), [calls]);
 }
 
 function AssistantSlice() {
@@ -42,14 +44,30 @@ function hasErrorText(metadata: { custom?: Record<string, unknown> } | undefined
   return Boolean((metadata?.custom?.mainframe as { errorText?: string } | undefined)?.errorText);
 }
 
-/** The virtualized list can't measure a zero-height row. */
-const absorbed = <div data-testid="chat-absorbed-message" className="h-px" />;
+/**
+ * Keeps the message's place: Find jumps to it, and is sent on to the rows that
+ * show it. The virtualized list can't measure a zero-height row.
+ */
+function Absorbed({ calls }: { calls: readonly string[] }) {
+  const id = useAuiState((s) => s.message.id);
+  return (
+    <div
+      data-testid="chat-absorbed-message"
+      data-message-id={id}
+      data-absorbed-by={calls.join(' ')}
+      aria-hidden
+      className="h-px"
+    />
+  );
+}
 
 function UserSlice() {
-  return useAbsorbed() ? absorbed : <boundedMessageComponents.UserMessage />;
+  const calls = useAbsorbed();
+  return calls ? <Absorbed calls={calls} /> : <boundedMessageComponents.UserMessage />;
 }
 function SystemSlice() {
-  return useAbsorbed() ? absorbed : <boundedMessageComponents.SystemMessage />;
+  const calls = useAbsorbed();
+  return calls ? <Absorbed calls={calls} /> : <boundedMessageComponents.SystemMessage />;
 }
 const components = { UserMessage: UserSlice, AssistantMessage: AssistantSlice, SystemMessage: SystemSlice };
 
@@ -58,7 +76,12 @@ function useJumps(model: TurnModel, chatId: string | undefined): void {
   useEffect(() => {
     const onJump = (event: Event) => {
       const { chatId: target, source } = (event as CustomEvent<{ chatId: string; source: ActivitySource }>).detail;
-      const slice = target === chatId ? model.slices.get(source.messageId) : undefined;
+      if (target !== chatId) return;
+      for (const call of model.absorbedBy.get(source.messageId) ?? []) {
+        const shown = sliceOfCall(model, call);
+        if (shown) turnDisclosureStore.set(shown.turnKey, 'open');
+      }
+      const slice = model.slices.get(source.messageId);
       if (!slice?.work.length) return;
       const holds = slice.work.some(({ part }) => part.type === 'tool-call' && part.toolCallId === source.toolCallId);
       if (!source.toolCallId || holds) turnDisclosureStore.set(slice.turnKey, 'open');
@@ -68,9 +91,16 @@ function useJumps(model: TurnModel, chatId: string | undefined): void {
   }, [model, chatId]);
 }
 
+/** A thread that waits on a request reports itself idle; its run state still says whether the agent works on. */
+function useTurnRunning(): boolean {
+  const running = useAuiState((s) => s.thread.isRunning);
+  const runState = useChatExtrasSelector((extras) => extras?.state.runState.type);
+  return running || runState === 'running' || runState === 'cancelling';
+}
+
 export function TurnTranscript() {
   const messages = useAuiState((s) => s.thread.messages);
-  const isRunning = useAuiState((s) => s.thread.isRunning);
+  const isRunning = useTurnRunning();
   const scope = useTranscriptScope();
   const chatId = useChatExtrasSelector((extras) => extras?.state.chatId);
   const root = useRef<HTMLDivElement>(null);

@@ -1,7 +1,8 @@
 /** Where a turn's child work stands right now: an agent, a delegated task or a workflow (T1e). Pure. */
-import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
+import type { BackgroundActivityTask, BackgroundTask, TaskStatus } from '@qlan-ro/mainframe-types';
 import { isTerminalTaskStatus } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { resumed, taskStatusOf } from '../../orchestration/task-standing';
 import { findSession } from '../../orchestration/use-session-items';
 import type { TurnChild, TurnModel } from '../../view-model/turn/types';
 
@@ -21,27 +22,39 @@ export interface ChildSources {
   readonly sessions: readonly SessionItem[];
   readonly live: Readonly<Record<string, BackgroundActivityTask>>;
   readonly listed: readonly BackgroundTask[];
+  /** Delegated task → the status of the result delivered for it. */
+  readonly results?: ReadonlyMap<string, TaskStatus>;
 }
 
-function delegatedState(chatId: string, sessions: readonly SessionItem[]): ChildState | undefined {
-  const custom = findSession(sessions, chatId)?.custom;
-  const status = custom?.delegation?.status;
-  if (!custom || !status) return undefined;
-  if (custom.hasPending || custom.delegatedWaiting === true) return 'needs-you';
-  // A finished task's chat can be resumed, and is going again while it runs. A stopped one only winds down.
-  if (isTerminalTaskStatus(status)) return custom.isRunning && status !== 'cancelled' ? 'running' : undefined;
+function listedStatus(child: TurnChild, sources: ChildSources): TaskStatus | undefined {
+  const status = child.taskChatId && findSession(sources.sessions, child.taskChatId)?.custom.delegation?.status;
+  const delivered = child.taskId ? sources.results?.get(child.taskId) : undefined;
+  return taskStatusOf({ delivered, listed: status || undefined, launched: child.taskStatus });
+}
+
+function delegatedState(child: TurnChild, chatId: string, sources: ChildSources): ChildState | undefined {
+  const custom = findSession(sources.sessions, chatId)?.custom;
+  if (custom?.hasPending || custom?.delegatedWaiting === true) return 'needs-you';
+  const status = listedStatus(child, sources);
+  // A launch whose chat nothing lists any more proves nothing about now.
+  if (!status) return undefined;
+  if (isTerminalTaskStatus(status)) return resumed(status, custom?.isRunning === true) ? 'running' : undefined;
   if (status === 'queued') return 'queued';
   return status === 'waiting' ? 'needs-you' : 'running';
 }
 
-function taskFailed(child: TurnChild, sessions: readonly SessionItem[]): boolean {
-  return !!child.taskChatId && findSession(sessions, child.taskChatId)?.custom.delegation?.status === 'failed';
-}
+const taskFailed = (child: TurnChild, sources: ChildSources): boolean =>
+  child.taskChatId !== undefined && listedStatus(child, sources) === 'failed';
 
-export function childState(child: TurnChild, sources: ChildSources): ChildState | undefined {
+/**
+ * A call that says it runs is believed only while its turn does, which `turnLive`
+ * says (the turn settled the call's status too), or while the daemon holds a live
+ * background task for it.
+ */
+export function childState(child: TurnChild, sources: ChildSources, turnLive: boolean): ChildState | undefined {
   if (child.status === 'awaiting-approval') return 'needs-you';
-  if (child.taskChatId) return delegatedState(child.taskChatId, sources.sessions);
-  if (child.status === 'running') return 'running';
+  if (child.taskChatId) return delegatedState(child, child.taskChatId, sources);
+  if (child.status === 'running' && turnLive) return 'running';
   if (child.workflowTaskId) return sources.live[child.workflowTaskId] ? 'running' : undefined;
   const background = sources.listed.some(
     (task) => task.toolUseId === child.toolCallId && task.status === 'running' && sources.live[task.id],
@@ -49,14 +62,15 @@ export function childState(child: TurnChild, sources: ChildSources): ChildState 
   return background ? 'running' : undefined;
 }
 
-export function liveChildren(model: TurnModel, sources: ChildSources): LiveChildren {
+export function liveChildren(model: TurnModel, given: Omit<ChildSources, 'results'>): LiveChildren {
+  const sources: ChildSources = { ...given, results: model.taskResults };
   const byCall = new Map<string, ChildState>();
   const failed = new Set<string>();
   for (const turn of model.turns.values())
     for (const child of turn.children) {
-      const state = childState(child, sources);
+      const state = childState(child, sources, turn.live);
       if (state) byCall.set(child.toolCallId, state);
-      else if (taskFailed(child, sources.sessions)) failed.add(child.toolCallId);
+      else if (taskFailed(child, sources)) failed.add(child.toolCallId);
     }
   const background = new Map<string, number>();
   for (const task of sources.listed)

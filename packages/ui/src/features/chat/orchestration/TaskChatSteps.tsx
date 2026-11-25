@@ -41,25 +41,26 @@ function EarlierMessages({ count, taskId, onOpen }: { count: number; taskId: str
   );
 }
 
-function emptyText(loadState: TaskChatView['loadState']): string | undefined {
+function emptyText(loadState: TaskChatView['loadState']): string {
   if (loadState.type === 'error') return "Couldn't load the task's chat.";
-  return loadState.type === 'ready' ? undefined : "Loading the task's chat…";
+  return loadState.type === 'ready' ? 'No messages yet.' : "Loading the task's chat…";
 }
 
 export function TaskChatSteps({ chatId, taskId, onOpen, ...steps }: TaskChatStepsProps) {
   const view = useTaskChat(chatId);
-  const empty = view.messages.length === 0 ? emptyText(view.loadState) : undefined;
+  const note = view.messages.length === 0 || view.loadState.type === 'error' ? emptyText(view.loadState) : undefined;
   return (
     <div data-testid={`chat-tool-delegate-task-transcript-${taskId}`} className="min-w-0">
       <AgentSteps
         {...steps}
         messages={view.messages}
+        chatId={chatId}
+        pendingToolIds={view.pendingToolIds}
         before={
-          view.hiddenCount > 0 ? (
-            <EarlierMessages count={view.hiddenCount} taskId={taskId} onOpen={onOpen} />
-          ) : (
-            empty && <BodyNote testId={`chat-tool-delegate-task-empty-${taskId}`}>{empty}</BodyNote>
-          )
+          <>
+            {view.hiddenCount > 0 && <EarlierMessages count={view.hiddenCount} taskId={taskId} onOpen={onOpen} />}
+            {note && <BodyNote testId={`chat-tool-delegate-task-empty-${taskId}`}>{note}</BodyNote>}
+          </>
         }
         after={
           view.gate != null && (

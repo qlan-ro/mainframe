@@ -79,6 +79,7 @@ describe('AgentMessageCard', () => {
             results: [
               { taskId: 't1', chatId: 'c1', status: 'completed', body: 'Done **well**' },
               { taskId: 't2', chatId: 'c2', status: 'cancelled', body: '' },
+              { taskId: 't3', chatId: 'c3', status: 'waiting_for_children', body: '' },
             ],
           }}
         />
@@ -92,5 +93,6 @@ describe('AgentMessageCard', () => {
     // Stopped, never cancelled (T1c); nothing came back to open.
     expect(screen.getByTestId('chat-task-result-t2')).toHaveTextContent('c2·stopped');
     expect(screen.getByTestId('chat-task-result-t2')).toBeDisabled();
+    expect(screen.getByTestId('chat-task-result-t3')).toHaveTextContent('c3·waiting for children');
   });
 });

@@ -51,6 +51,11 @@ describe('verb, target and receipt by tool', () => {
       bash('', { args: { command: 'pnpm dev', run_in_background: true } }),
       { receipt: 'in the background' },
     ],
+    [
+      'moved to the background by the CLI',
+      bash('pnpm dev', { result: 'Command running in background with ID: b1. Output is being written to: /tmp/o' }),
+      { receipt: 'in the background' },
+    ],
     ['web search', call('WebSearch', { query: 'codex' }), { verb: 'Searched the web', target: '"codex"' }],
     ['fetch', call('WebFetch', { url: 'https://example.com/a' }), { verb: 'Fetched', target: 'example.com/a' }],
     ['mcp', call('mcp__github__get_issue', {}), { verb: 'Called', target: 'get_issue', where: 'on Github' }],

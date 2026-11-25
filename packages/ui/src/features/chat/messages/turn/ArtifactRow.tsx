@@ -3,7 +3,8 @@ import { AppWindow, ExternalLink } from 'lucide-react';
 import { useOpenArtifact } from '@/features/artifacts/use-open-artifact';
 import { useOpenExternal } from '../../links/use-open-link';
 import { describeArtifactCall } from '../../tools/cards/artifact-call';
-import { BodyNote, KeyValue, Surface } from '../../tools/bodies/Surface';
+import { ResultBlock } from '../../tools/bodies/ResultText';
+import { BodyNote } from '../../tools/bodies/Surface';
 import { resolveResultText } from '../../tools/shared';
 import { record } from '../../view-model/turn/values';
 import { RowAction, RowDisclosure } from './RowDisclosure';
@@ -11,6 +12,7 @@ import { RowGlyph } from './RowGlyph';
 import { receiptText, useToolFacts, type ToolRowProps } from './ToolRow';
 import { useStepDuration } from './StepClock';
 import { KIND_ICONS, STATUS_WORDS } from './tool-icons';
+import { useFailedOpen } from './use-failed-open';
 
 function OpenActions({ url }: { url: string }) {
   const { open } = useOpenArtifact();
@@ -27,12 +29,13 @@ function OpenActions({ url }: { url: string }) {
   );
 }
 
-export function ArtifactRow({ unit, part }: ToolRowProps) {
+export function ArtifactRow({ unit, part, turnKey }: ToolRowProps) {
   const facts = useToolFacts(part);
   const { status } = facts;
   const { text } = resolveResultText(part.result);
   const call = describeArtifactCall(record(part.args) ?? {}, text);
   const failed = status === 'failed';
+  const failedOpen = useFailedOpen(turnKey, part.toolCallId);
   const duration = useStepDuration({ ...facts, running: status === 'running' });
   const showText = text && (failed || call.showResult);
   return (
@@ -47,19 +50,12 @@ export function ArtifactRow({ unit, part }: ToolRowProps) {
       receipt={receiptText(facts.receipt, duration)}
       tone={failed ? 'fail' : undefined}
       actions={status === 'success' && call.url ? <OpenActions url={call.url} /> : undefined}
+      defaultOpen={failedOpen}
       tool={part.toolName}
       anchor={{ 'data-activity-id': part.toolCallId }}
     >
       {showText ? (
-        <Surface>
-          <KeyValue
-            label={failed ? 'Error' : 'Result'}
-            tone={failed ? 'fail' : undefined}
-            testId="artifact-card-result"
-          >
-            {text}
-          </KeyValue>
-        </Surface>
+        <ResultBlock part={part} failed={failed} testId="artifact-card-result" />
       ) : status === 'success' && !call.url ? (
         <BodyNote>The CLI reported no address for it.</BodyNote>
       ) : undefined}

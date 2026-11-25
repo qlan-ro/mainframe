@@ -3,7 +3,7 @@ import type { MarkerBody } from '../../view-model/turn/marker-facts';
 import { BackgroundOutput } from '../bodies/BackgroundOutput';
 import { CodeBody } from '../bodies/CodeBody';
 import { BodyNote, KeyValue, Surface } from '../bodies/Surface';
-import { parseCodeLines } from '../bodies/code-lines';
+import { plainLines } from '../bodies/code-lines';
 
 function SkillBody({ body, id }: { body: Extract<MarkerBody, { type: 'skill' }>; id: string }) {
   return (
@@ -14,7 +14,7 @@ function SkillBody({ body, id }: { body: Extract<MarkerBody, { type: 'skill' }>;
         </BodyNote>
       )}
       {body.args && <BodyNote>Arguments: {body.args}</BodyNote>}
-      <CodeBody id={id} path="SKILL.md" lines={parseCodeLines(body.content)} testId="chat-skill-content" />
+      <CodeBody id={id} path="SKILL.md" lines={plainLines(body.content)} testId="chat-skill-content" />
     </>
   );
 }
@@ -43,13 +43,27 @@ export function MarkerBodyView({ body, id }: { body: MarkerBody; id: string }) {
       return <Jobs body={body} />;
     case 'output':
       return <BackgroundOutput toolCallId={id} command={body.command} launch={body.text} />;
-    case 'error':
+    case 'answered':
       return (
-        <Surface>
-          <KeyValue label="Error" tone="fail">
-            {body.text}
-          </KeyValue>
-        </Surface>
+        <>
+          {body.body && body.body.type !== 'output' && (
+            <div className="mb-2">
+              <MarkerBodyView body={body.body} id={id} />
+            </div>
+          )}
+          {body.body?.type === 'output' && body.body.command && (
+            <p className="mf-tr-mono mb-2 wrap-break-word whitespace-pre-wrap">{body.body.command}</p>
+          )}
+          <Surface>
+            <KeyValue
+              label={body.failed ? 'Error' : 'Answer'}
+              tone={body.failed ? 'fail' : undefined}
+              testId="chat-marker-answer"
+            >
+              {body.text}
+            </KeyValue>
+          </Surface>
+        </>
       );
     case 'note':
       return (

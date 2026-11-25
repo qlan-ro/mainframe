@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import type { ThreadMessage } from '@assistant-ui/react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
@@ -8,8 +9,11 @@ import { useControllerState } from '../runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
 import { AgentSteps } from '../messages/turn/AgentSteps';
 import { RootTranscriptScope } from '../messages/turn/transcript-scope';
+import { agentLaunched } from '../messages/turn/agent-outcome';
+import { resolveResultText } from '../tools/shared';
 import type { SubagentZoneRef } from './zones-store';
-import { findSubagentTranscript } from './find-subagent-transcript';
+import { findSubagentCall } from './find-subagent-transcript';
+import { pendingToolIds, subagentOutcome } from './subagent-outcome';
 import { findToolCall } from '@/features/session-panel/activity-model';
 
 function SubagentZoneHeader({
@@ -40,6 +44,8 @@ function SubagentZoneHeader({
   );
 }
 
+const NO_MESSAGES: readonly ThreadMessage[] = [];
+
 export function SubagentZone({
   subagent,
   grow,
@@ -53,9 +59,13 @@ export function SubagentZone({
   const controller = useChatController(subagent.parentChatId, port);
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
-  const transcript = findSubagentTranscript(messages, subagent.toolCallId);
+  const call = findSubagentCall(messages, subagent.toolCallId);
+  const transcript = call && (call.messages ?? NO_MESSAGES);
   const messageId = subagent.messageId ?? findToolCall(messages, subagent.toolCallId)?.messageId;
   const partial = controller.isHistoryContext(subagent.toolCallId);
+  const pending = useMemo(() => pendingToolIds(state), [state]);
+  const outcome = call ? subagentOutcome(call, state) : 'done';
+  const result = resolveResultText(call?.result).text;
   const root = useRef<HTMLDivElement>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
@@ -108,9 +118,17 @@ export function SubagentZone({
     >
       <SubagentZoneHeader title={subagent.title} toolCallId={subagent.toolCallId} onClose={onClose} />
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        {transcript ? (
+        {call && transcript ? (
           <RootTranscriptScope>
-            <AgentSteps messages={transcript} messageId={messageId ?? ''} toolCallId={subagent.toolCallId} />
+            <AgentSteps
+              messages={transcript}
+              messageId={messageId ?? ''}
+              toolCallId={subagent.toolCallId}
+              chatId={subagent.parentChatId}
+              pendingToolIds={pending}
+              outcome={outcome}
+              result={outcome === 'done' && agentLaunched(result) ? '' : result}
+            />
           </RootTranscriptScope>
         ) : (
           <p className="text-sm text-muted-foreground">{historyError ?? 'Loading subagent transcript...'}</p>

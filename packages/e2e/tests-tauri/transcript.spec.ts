@@ -168,7 +168,8 @@ test.describe('§transcript — thread turn', () => {
     await page.getByTestId('chat-assistant-message').last().getByTestId('chat-message-timestamp').hover();
     const detail = page.getByTestId('chat-message-time-detail').first();
     await expect(detail).toContainText(String(new Date().getFullYear()));
-    await expect(detail).toContainText('Took ');
+    // formatTurnDuration: "1s" / "1m 15s" / "2h 15m".
+    await expect(detail).toContainText(/Took (\d+s|\d+m \d{2}s|\d+h \d{2}m)/);
   });
 
   test("the user's own message has a footer, and the conversation opens with its time", async () => {
@@ -179,6 +180,10 @@ test.describe('§transcript — thread turn', () => {
     await expect(message.getByTestId('chat-message-timestamp')).toBeVisible();
     await scrollViewportToTop(page);
     await expect(page.getByTestId('chat-time-marker').first()).toContainText('Today, ');
+    // Back to the tail, where the next test starts: a reader who scrolled up is left there.
+    await page.getByTestId('chat-thread-viewport').evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
   });
 
   test('scroll-to-bottom button appears when scrolled up and returns to the tail on click', async () => {

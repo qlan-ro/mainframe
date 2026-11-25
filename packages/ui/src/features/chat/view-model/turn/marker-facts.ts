@@ -1,7 +1,7 @@
 /** What an event tool's pill says and opens on (T1g). Pure. */
 import { parseApprovedPlanResult } from '../../messages/plan-message';
 import { extractResultContent, resolveResultText } from '../../tools/shared/result';
-import { resolveToolStatus } from './tool-status';
+import { settledStatus } from './tool-status';
 import { argText } from './tool-values';
 import type { LoadedSkill, ToolPart } from './types';
 import { displayText, record } from './values';
@@ -33,7 +33,8 @@ export type MarkerBody =
   | { readonly type: 'jobs'; readonly jobs: readonly ScheduledJob[] }
   | { readonly type: 'output'; readonly command: string; readonly text: string }
   | { readonly type: 'note'; readonly text: string; readonly detail?: string }
-  | { readonly type: 'error'; readonly text: string };
+  /** What the call answered instead of doing it, under what it was going to do. */
+  | { readonly type: 'answered'; readonly failed: boolean; readonly text: string; readonly body?: MarkerBody };
 
 export interface MarkerFacts {
   readonly icon: MarkerIcon;
@@ -49,6 +50,8 @@ type Draft = Omit<MarkerFacts, 'state'>;
 
 export interface MarkerContext {
   readonly pending: ReadonlySet<string>;
+  /** Whether the turn can still be going. Left out: yes. */
+  readonly live?: boolean;
   readonly skill?: LoadedSkill;
   /** "Auto-Edits": how an approved plan is being carried out. */
   readonly mode?: string;
@@ -224,14 +227,19 @@ const RUNNING: Partial<Record<string, string>> = {
 };
 
 export function markerFacts(part: ToolPart, context: MarkerContext): MarkerFacts {
-  const status = resolveToolStatus(part, context.pending);
+  const status = settledStatus(part, context.pending, context.live !== false);
   const running = status === 'running' || status === 'awaiting-approval' || context.monitoring === true;
   const facts = draft(part, context, running);
-  if (status === 'failed') {
-    const text = resolveResultText(part.result).text;
-    return { ...facts, receipt: 'failed', state: 'failed', body: text ? { type: 'error', text } : undefined };
-  }
+  const text = resolveResultText(part.result).text;
+  const answered = (failed: boolean): MarkerBody | undefined =>
+    text ? { type: 'answered', failed, text, body: facts.body } : facts.body;
+  // Nothing came of it, so it isn't told as done.
+  const tried = facts.icon === 'plan' ? facts : { ...facts, label: RUNNING[part.toolName] ?? facts.label };
+  if (status === 'failed') return { ...tried, receipt: 'failed', state: 'failed', body: answered(true) };
   if (running) return { ...facts, label: RUNNING[part.toolName] ?? facts.label, receipt: undefined, state: 'running' };
-  if (status === 'stopped' || status === 'declined') return { ...facts, receipt: status, state: 'done' };
+  if (status === 'stopped' || status === 'declined')
+    return { ...tried, receipt: status, state: 'done', body: answered(false) };
+  // A plan that isn't approved comes back with what to change.
+  if (facts.icon === 'plan') return { ...facts, state: 'done', body: answered(false) };
   return { ...facts, state: 'done' };
 }

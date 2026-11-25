@@ -77,7 +77,8 @@ function SliceBody({ slice }: { slice: MessageSlice }) {
 export const TurnSlice = memo(function TurnSlice({ slice }: { slice: MessageSlice }) {
   const parent = useTranscriptScope();
   const messageId = useAuiState((s) => s.message.id);
-  const scope = useMemo(() => ({ ...parent, messageId }), [parent, messageId]);
+  const live = useTurnSelector(({ model }) => model.turns.get(slice.turnKey)?.live ?? false, true);
+  const scope = useMemo(() => ({ ...parent, messageId, live }), [parent, messageId, live]);
   return (
     <TranscriptScopeProvider value={scope}>
       <SliceBody slice={slice} />

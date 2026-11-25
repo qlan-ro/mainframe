@@ -20,10 +20,10 @@ describe('what each pill says', () => {
   });
 
   it('shows a plan as its markdown, and says how an approved one is carried out', () => {
-    expect(facts('ExitPlanMode', { plan: '# Plan' }, { result: 'Keep planning' })).toMatchObject({
-      icon: 'plan',
-      label: 'Updated plan',
-      body: { type: 'markdown', text: '# Plan' },
+    expect(facts('ExitPlanMode', { plan: '# Plan' })).toMatchObject({ icon: 'plan', label: 'Updated plan' });
+    expect(facts('ExitPlanMode', { plan: '# Plan' }, { result: '' }).body).toEqual({
+      type: 'markdown',
+      text: '# Plan',
     });
     const approved = { result: 'User has approved your plan.\n\n## Approved Plan:\n# Do it' };
     expect(facts('ExitPlanMode', {}, approved, { mode: 'Auto-Edits' })).toMatchObject({
@@ -115,7 +115,29 @@ describe('how a pill stands', () => {
     expect(facts('EnterWorktree', { name: 'x' }, { isError: true, result: 'no such branch' })).toMatchObject({
       state: 'failed',
       receipt: 'failed',
-      body: { type: 'error', text: 'no such branch' },
+      label: 'Entering worktree',
+      body: { type: 'answered', failed: true, text: 'no such branch', body: undefined },
+    });
+  });
+
+  it('keeps a rejected plan, with what was said about it', () => {
+    const plan = { type: 'markdown', text: '# Plan' };
+    expect(facts('ExitPlanMode', { plan: '# Plan' }, { isError: true, result: 'Add tests first' })).toMatchObject({
+      label: 'Updated plan',
+      state: 'failed',
+      body: { type: 'answered', failed: true, text: 'Add tests first', body: plan },
+    });
+    expect(facts('ExitPlanMode', { plan: '# Plan' }, { result: 'Keep planning' })).toMatchObject({
+      state: 'done',
+      body: { type: 'answered', failed: false, text: 'Keep planning', body: plan },
+    });
+  });
+
+  it('is stopped, not running, once nothing can finish its call', () => {
+    const cut = { result: undefined, providerMetadata: { mainframe: { acpStatus: 'in_progress' } } };
+    expect(facts('EnterWorktree', { name: 'x' }, cut, { live: false })).toMatchObject({
+      state: 'done',
+      receipt: 'stopped',
     });
   });
 });

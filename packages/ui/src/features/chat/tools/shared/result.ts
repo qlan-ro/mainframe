@@ -132,7 +132,8 @@ export interface ResolvedResult {
  */
 export function resolveResultText(result: unknown): ResolvedResult {
   if (isStructuredResult(result)) {
-    return { text: stripErrorXml(result.content), truncated: false, fullBytes: 0 };
+    const cut = isTruncatedResult(result) ? result.fullBytes : 0;
+    return { text: stripErrorXml(result.content), truncated: cut > 0, fullBytes: cut };
   }
   if (isTruncatedResult(result)) {
     return { text: stripErrorXml(result.content), truncated: true, fullBytes: result.fullBytes };

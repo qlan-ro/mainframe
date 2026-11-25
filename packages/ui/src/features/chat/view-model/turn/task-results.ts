@@ -5,14 +5,20 @@
  * history. A result without one keeps a line of its own.
  */
 import type { ThreadMessage } from '@assistant-ui/react';
+import type { TaskStatus } from '@qlan-ro/mainframe-types';
 import { parseTaskResults, type TaskResultMarker } from '../../markers/agent-message';
-import { parseDelegateResult } from '../../orchestration/delegate-result';
+import { isTaskStatus, parseDelegateResult } from '../../orchestration/delegate-result';
 import { resolveResultText } from '../../tools/shared/result';
 import { toolKind } from './tool-kind';
 
+interface TaskCard {
+  readonly taskId: string;
+  readonly toolCallId: string;
+}
+
 /** Messages keep their identity while they don't change, so each is parsed once. */
 const resultsOf = new WeakMap<ThreadMessage, readonly TaskResultMarker[]>();
-const cardsOf = new WeakMap<ThreadMessage, readonly string[]>();
+const cardsOf = new WeakMap<ThreadMessage, readonly TaskCard[]>();
 const NONE: readonly never[] = [];
 
 function memo<T>(cache: WeakMap<ThreadMessage, T>, message: ThreadMessage, build: () => T): T {
@@ -31,28 +37,34 @@ export function taskResultsIn(message: ThreadMessage): readonly TaskResultMarker
   });
 }
 
-function taskCardsIn(message: ThreadMessage): readonly string[] {
+function taskCardsIn(message: ThreadMessage): readonly TaskCard[] {
   if (message.role !== 'assistant') return NONE;
   return memo(cardsOf, message, () =>
     message.content.flatMap((part) => {
       if (part.type !== 'tool-call' || toolKind(part.toolName) !== 'delegate' || part.isError) return [];
       const parsed = parseDelegateResult(resolveResultText(part.result).text);
-      return parsed ? [parsed.taskId] : [];
+      return parsed ? [{ taskId: parsed.taskId, toolCallId: part.toolCallId }] : [];
     }),
   );
 }
 
-export function taskCardIds(messages: readonly ThreadMessage[]): ReadonlySet<string> {
-  return new Set(messages.flatMap(taskCardsIn));
+/** Result messages whose every task has its card in the loaded history, with the cards' calls. */
+export function absorbedTaskResults(messages: readonly ThreadMessage[]): Map<string, readonly string[]> {
+  const cards = new Map(messages.flatMap(taskCardsIn).map((card) => [card.taskId, card.toolCallId]));
+  const absorbed = new Map<string, readonly string[]>();
+  for (const message of messages) {
+    const calls = taskResultsIn(message).map((result) => cards.get(result.taskId));
+    if (calls.length && calls.every((call) => call !== undefined)) absorbed.set(message.id, calls);
+  }
+  return absorbed;
 }
 
-/** Result messages whose every task has its card in the loaded history. */
-export function absorbedTaskResults(messages: readonly ThreadMessage[]): string[] {
-  const cards = taskCardIds(messages);
-  return messages.flatMap((message) => {
-    const results = taskResultsIn(message);
-    return results.length > 0 && results.every((result) => cards.has(result.taskId)) ? [message.id] : [];
-  });
+/** Each task's status as its latest delivered result carries it. */
+export function taskResultStatuses(messages: readonly ThreadMessage[]): Map<string, TaskStatus> {
+  const statuses = new Map<string, TaskStatus>();
+  for (const message of messages)
+    for (const { taskId, status } of taskResultsIn(message)) if (isTaskStatus(status)) statuses.set(taskId, status);
+  return statuses;
 }
 
 /** A task's latest delivered result. */

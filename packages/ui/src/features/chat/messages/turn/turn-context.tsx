@@ -8,8 +8,16 @@
  * and each consumer selects the piece it reads, so a chunk re-renders only the
  * consumers whose piece moved.
  */
-import { createContext, useContext, useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
-import type { TurnModel } from '../../view-model/turn/types';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
+import type { LoadedSkill, TurnModel } from '../../view-model/turn/types';
 import type { LiveChildren } from './live-children';
 
 export interface TurnContextValue {
@@ -54,6 +62,9 @@ export function TurnProvider({ value, children }: { value: TurnContextValue; chi
   return <Context.Provider value={store}>{children}</Context.Provider>;
 }
 
+/** The skill texts of a nested transcript, whose messages are no part of the turn model. */
+export const NestedSkills = createContext<ReadonlyMap<string, LoadedSkill> | null>(null);
+
 const noSubscription = () => () => undefined;
 
 /**
@@ -71,4 +82,21 @@ export function useTurnActions(): Pick<TurnContextValue, 'toggle' | 'reveal' | '
   const store = useContext(Context);
   if (!store) throw new Error('Turn transcript scope is missing');
   return store;
+}
+
+/** The text of the answer a message belongs to, across the turn's messages; empty outside a turn. */
+export function useAnswerText(): (messageId: string) => string {
+  const store = useContext(Context);
+  return useCallback(
+    (messageId) => {
+      const slices = store?.model().slices;
+      const turnKey = slices?.get(messageId)?.turnKey;
+      if (!slices || turnKey === undefined) return '';
+      return [...slices.values()]
+        .filter((slice) => slice.turnKey === turnKey)
+        .flatMap(({ answer }) => answer.flatMap(({ part }) => (part.type === 'text' ? [part.text] : [])))
+        .join('\n\n');
+    },
+    [store],
+  );
 }

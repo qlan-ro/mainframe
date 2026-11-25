@@ -162,7 +162,85 @@ describe('streaming', () => {
   });
 });
 
+describe('a manual choice', () => {
+  it('outlives a step that turns out failed', async () => {
+    const view = show([user('Hi'), assistant([bash('b', 'ls'), text('Done')])]);
+    fireEvent.click(header());
+    fireEvent.click(header());
+    view.update([user('Hi'), assistant([bash('b', 'ls', failed), text('Done')])]);
+    await act(async () => {});
+    expect(isOpen()).toBe(false);
+    expect(screen.getByRole('button', { name: '1 failed: show the failed step' })).toBeVisible();
+  });
+});
+
+describe('the path menu', () => {
+  it('wraps a message once, and none wraps the error a turn ended on', () => {
+    show([user('Hi'), assistant([bash('b', 'ls'), text('Done')])]);
+    expect(screen.getAllByTestId('chat-message-menu-trigger')).toHaveLength(1);
+  });
+  it('is not on an error', () => {
+    show([user('Hi'), assistant([text('Boom')], 'e', { custom: { errorText: 'Provider disconnected' } })]);
+    expect(screen.getByTestId('chat-error-block')).toHaveTextContent('Provider disconnected');
+    expect(screen.queryByTestId('chat-message-menu-trigger')).toBeNull();
+  });
+});
+
+describe('copying a reply', () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  beforeEach(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } }));
+  const lastCopy = () => {
+    const buttons = screen.getAllByTestId('chat-message-copy');
+    return buttons[buttons.length - 1]!;
+  };
+  const copyReply = async () => {
+    fireEvent.click(lastCopy());
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    return writeText.mock.lastCall![0] as string;
+  };
+
+  it('takes the whole answer when it spans messages', async () => {
+    show([
+      user('Hi'),
+      assistant([bash('b', 'ls'), text('First 🛠️ half.')], 'a1'),
+      system('s', { isCompacted: true }),
+      assistant([text('Second half é.')], 'a2'),
+    ]);
+    expect(await copyReply()).toBe('First 🛠️ half.\n\nSecond half é.');
+    await waitFor(() => expect(lastCopy()).toHaveAttribute('data-copied', 'true'));
+  });
+
+  it('leaves out the lines between steps', async () => {
+    show([user('Hi'), assistant([text('Looking'), bash('b', 'ls'), text('Done')], 'a1')]);
+    expect(await copyReply()).toBe('Done');
+  });
+
+  it('takes the viewer’s own message as it is', async () => {
+    show([user('Hi there'), assistant([text('Done')])]);
+    fireEvent.click(screen.getAllByTestId('chat-message-copy')[0]!);
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith('Hi there'));
+  });
+
+  it('is not offered while the turn runs', () => {
+    show([user('Hi'), assistant([text('Wor')], 'a', { running: true })]);
+    expect(screen.getAllByTestId('chat-message-copy')).toHaveLength(1);
+  });
+});
+
 describe('failures', () => {
+  it('open by themselves in an artifact’s row', () => {
+    const publish = tool({
+      toolCallId: 'art',
+      toolName: 'Artifact',
+      args: { title: 'Plan' },
+      ...failed,
+      result: 'Denied',
+    });
+    show([user('Hi'), assistant([publish, text('Hm')])]);
+    fireEvent.click(header());
+    expect(screen.getByTestId('artifact-card-result')).toHaveTextContent('Denied');
+  });
+
   it('counts an unresolved failure in the header and opens the turn on it', async () => {
     show([user('Hi'), assistant([bash('bad', 'vitest', failed), text('Hm')])]);
     const count = screen.getByRole('button', { name: '1 failed: show the failed step' });

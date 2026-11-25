@@ -13,6 +13,7 @@ import {
   exitCode,
   lineCount,
   nonBlankLines,
+  runsInBackground,
   toolTarget,
   type ToolTarget,
 } from './tool-values';
@@ -98,7 +99,7 @@ function doneReceipt(part: ToolPart, kind: ToolKind): string | undefined {
     case 'list':
       return whole ? count(nonBlankLines(whole), 'entry', 'entries') : undefined;
     case 'shell': {
-      if (record(part.args)?.run_in_background === true) return 'in the background';
+      if (runsInBackground(part)) return 'in the background';
       const code = commandSummary(part) ? undefined : exitCode(part, false);
       return code === undefined ? undefined : `exit ${code}`;
     }

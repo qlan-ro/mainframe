@@ -11,11 +11,29 @@ import { RowDisclosure } from '../messages/turn/RowDisclosure';
 import { RowGlyph } from '../messages/turn/RowGlyph';
 import { KIND_ICONS, STATUS_WORDS, type RowStatus } from '../messages/turn/tool-icons';
 import { useToolFacts, type ToolRowProps } from '../messages/turn/ToolRow';
+import { useFailedOpen } from '../messages/turn/use-failed-open';
+import { useTranscriptScope } from '../messages/turn/transcript-scope';
+import { useTurnSelector } from '../messages/turn/turn-context';
+import { ResultBlock } from '../tools/bodies/ResultText';
+import { KeyValue, Surface } from '../tools/bodies/Surface';
 import { resolveResultText } from '../tools/shared';
+import type { ToolPart } from '../view-model/turn/types';
 import { neutralizedRun } from './workflow-agent-view';
 import { parseWorkflowLaunch, runMetaString, unavailableRun } from './workflow-progress';
 import { useWorkflowRun } from './use-workflow-run';
 import { WorkflowRunPanel } from './WorkflowRunPanel';
+
+function LaunchBody({ part, failed, error }: { part: ToolPart; failed: boolean; error?: string }) {
+  const testId = `chat-workflow-launcher-result-${part.toolCallId}`;
+  if (!error) return <ResultBlock part={part} failed={failed} testId={testId} />;
+  return (
+    <Surface>
+      <KeyValue label="Error" tone="fail" testId={testId}>
+        {error}
+      </KeyValue>
+    </Surface>
+  );
+}
 
 /** A run with failed agents still completed; its receipt counts them. */
 const RUN_STATUS: Record<ClaudeWorkflowRunStatus, RowStatus> = {
@@ -27,8 +45,17 @@ const RUN_STATUS: Record<ClaudeWorkflowRunStatus, RowStatus> = {
   unavailable: 'unknown',
 };
 
-export function WorkflowRow({ unit, part }: ToolRowProps) {
+/** A run the record left running is believed only while its turn runs or the daemon still holds its task. */
+function useCutShort(toolCallId: string, turnKey: string | undefined): boolean {
+  const { live } = useTranscriptScope();
+  const going = useTurnSelector(({ children }) => children.byCall.has(toolCallId), true);
+  return turnKey !== undefined && live === false && !going;
+}
+
+export function WorkflowRow({ unit, part, turnKey }: ToolRowProps) {
   const facts = useToolFacts(part);
+  const cutShort = useCutShort(part.toolCallId, turnKey);
+  const failedOpen = useFailedOpen(turnKey, part.toolCallId);
   const launch = parseWorkflowLaunch(resolveResultText(part.result).text);
   const run = useWorkflowRun(launch.taskId);
   const now = useNow();
@@ -36,8 +63,11 @@ export function WorkflowRow({ unit, part }: ToolRowProps) {
   const started = launch.runId !== undefined && !launch.error;
   const effective = started ? (run ?? unavailableRun(launch)) : undefined;
   const view = effective && neutralizedRun(effective, now);
-  const status: RowStatus = launch.error ? 'failed' : view ? RUN_STATUS[view.status] : facts.status;
-  const receipt = launch.error ?? (view ? runMetaString(view, now) : (facts.receipt ?? 'Starting…'));
+  const standing = view && (view.status === 'running' && cutShort ? 'stopped' : RUN_STATUS[view.status]);
+  const status: RowStatus = launch.error ? 'failed' : (standing ?? facts.status);
+  const receipt = view ? runMetaString(view, now) : launch.error ? 'failed' : (facts.receipt ?? 'Starting…');
+  // No run came of it: whatever the call answered is all there is.
+  const said = effective ? '' : resolveResultText(part.result).text;
   const row = (
     <RowDisclosure
       rowKey={unit.key}
@@ -64,7 +94,10 @@ export function WorkflowRow({ unit, part }: ToolRowProps) {
         )
       }
       trailing={effective && <PanelRight aria-hidden className="size-3.5!" />}
-    />
+      defaultOpen={failedOpen || launch.error !== undefined}
+    >
+      {said ? <LaunchBody part={part} failed={status === 'failed'} error={launch.error} /> : undefined}
+    </RowDisclosure>
   );
   if (!effective) return row;
   return (

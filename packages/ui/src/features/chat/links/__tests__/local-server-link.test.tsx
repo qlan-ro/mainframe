@@ -33,10 +33,14 @@ vi.mock('@/lib/api/tunnel-ports', () => ({
 vi.mock('@/lib/daemon/ws-client', () => ({ daemonWs: { onEvent: () => () => {} } }));
 
 const LOCAL_DAEMON_PORT = 31415;
+let daemonPort: number | null = LOCAL_DAEMON_PORT;
 let daemonIsLocal = false;
 let chatId: string | undefined = 'chat-1';
 
-vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => LOCAL_DAEMON_PORT }));
+vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
+  useDaemonPort: () => LOCAL_DAEMON_PORT,
+  useKnownDaemonPort: () => daemonPort,
+}));
 vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => daemonIsLocal }));
 vi.mock('@/features/chat/tools/chat-tool-context', () => ({ useChatId: () => chatId }));
 
@@ -44,7 +48,7 @@ const emitSurfaceIntent = vi.fn();
 vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (intent: unknown) => emitSurfaceIntent(intent) }));
 
 import { SmartLink } from '../../smart-actions/SmartLink';
-import { SmartActionsProvider } from '../../smart-actions/smart-actions-context';
+import { Prose } from '../../messages/turn/Prose';
 import {
   applyPortTunnelEvent,
   applyPortTunnelSnapshot,
@@ -59,13 +63,11 @@ const TUNNEL_URL = 'https://blue-sky-1234.trycloudflare.com';
 function renderLinks(...hrefs: string[]) {
   return render(
     <TooltipProvider>
-      <SmartActionsProvider>
-        {hrefs.map((href) => (
-          <SmartLink key={href} href={href}>
-            {href}
-          </SmartLink>
-        ))}
-      </SmartActionsProvider>
+      {hrefs.map((href) => (
+        <SmartLink key={href} href={href}>
+          {href}
+        </SmartLink>
+      ))}
     </TooltipProvider>,
   );
 }
@@ -84,6 +86,7 @@ function pendingStart(): void {
 }
 
 beforeEach(() => {
+  daemonPort = LOCAL_DAEMON_PORT;
   daemonIsLocal = false;
   chatId = 'chat-1';
   startPortTunnel.mockReset();
@@ -270,4 +273,26 @@ describe('eligibility', () => {
     ['http://localhost:5173/app', true],
     ['http://0.0.0.0:5173/', true],
   ])('%s → %s', (href, expected) => expect(tunnels(href)).toBe(expected));
+});
+
+describe('outside a reply', () => {
+  it('goes through the tunnel from a prompt, a result or a plan too', async () => {
+    pendingStart();
+    render(
+      <TooltipProvider>
+        <Prose text={`It runs at ${HREF}`} />
+      </TooltipProvider>,
+    );
+    await userEvent.click(link());
+    expect(startPortTunnel).toHaveBeenCalledWith(LOCAL_DAEMON_PORT, { port: 5173, chatId: 'chat-1' });
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it('is a plain link on a surface with no daemon to open it through', async () => {
+    daemonPort = null;
+    renderLink();
+    await userEvent.click(link());
+    expect(openExternal).toHaveBeenCalledWith(HREF);
+    expect(startPortTunnel).not.toHaveBeenCalled();
+  });
 });

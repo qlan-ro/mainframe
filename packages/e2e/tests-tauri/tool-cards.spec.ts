@@ -112,7 +112,7 @@ test.describe('§tool-cards — Write (permissions-interactive)', () => {
     await expect(row).toContainText('new · 1 line');
     await expectRowClosed(row);
     await openRow(row);
-    await expect(row.getByTestId('chat-write-code')).toContainText('hello');
+    await expect(row.getByTestId('chat-write-code').getByText('hello', { exact: true })).toBeVisible();
   });
 });
 
@@ -709,6 +709,8 @@ test.describe('§tool-cards — a realistic thread (transcript-rows)', () => {
     const skill = page.getByTestId('chat-marker-skill');
     // The rows opened above may have pushed this turn out of the rendered window.
     await page.getByTestId('chat-thread-viewport').evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
+    // It leads its turn's pills, above the last turn: how far up depends on the fonts.
+    await skill.scrollIntoViewIfNeeded();
     await expect(skill).toBeInViewport();
     await expect(skill).toContainText('Used skill /mainframe-design-system');
     await expect(page.getByTestId('chat-system-message')).toHaveCount(0);

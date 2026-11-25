@@ -175,6 +175,7 @@ test.describe('§ADR stress matrix — combined run', () => {
     // 6 top-level sends. The subagent's prompt is not one of them: it opens its row's steps.
     await expect(page.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-user-count', '6');
     await expect(taskCard.getByTestId('chat-agent-prompt')).toHaveCount(1);
+    await expect(taskCard.getByTestId('chat-user-message')).toHaveCount(0);
     await page.keyboard.press('ControlOrMeta+f');
     for (const text of ['Reply one', 'Reply two', 'Reply three', 'SUBAGENT-DONE', 'STREAM-COMPLETE', 'DEDUP-ACK']) {
       await page.getByTestId('thread-find-input').fill(text);

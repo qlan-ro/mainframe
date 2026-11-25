@@ -29,8 +29,8 @@ export async function openWork(page: Page, index = -1): Promise<void> {
   const toggle = index < 0 ? workRows(page).last() : workRows(page).nth(index);
   await toggle.waitFor({ timeout: 60_000 });
   // A turn that has just ended is open for a moment more, unless something in it holds it open.
-  const running = (await toggle.locator('xpath=..').getAttribute('data-work-end')) === 'running';
-  if (!running)
+  const end = await toggle.locator('xpath=..').getAttribute('data-work-end');
+  if (end !== 'running' && end !== 'needs-you')
     await expect(toggle)
       .toHaveAttribute('aria-expanded', 'false', { timeout: 2_000 })
       .catch(() => {});

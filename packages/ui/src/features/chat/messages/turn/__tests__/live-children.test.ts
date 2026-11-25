@@ -29,16 +29,23 @@ const sources = (overrides: Partial<ChildSources> = {}): ChildSources => ({
 
 describe('a sub-agent', () => {
   it('is going while its call runs, and done once it came back', () => {
-    expect(childState(child({ status: 'running' }), sources())).toBe('running');
-    expect(childState(child(), sources())).toBeUndefined();
+    expect(childState(child({ status: 'running' }), sources(), true)).toBe('running');
+    expect(childState(child(), sources(), false)).toBeUndefined();
+  });
+  it('is not going when its call never came back and its turn ended', () => {
+    expect(childState(child({ status: 'running' }), sources(), false)).toBeUndefined();
+    const live = { bg: task('bg') };
+    expect(childState(child({ status: 'running' }), sources({ live, listed: [listed('bg', 'call')] }), false)).toBe(
+      'running',
+    );
   });
   it('needs you while a call inside it waits for approval', () => {
-    expect(childState(child({ status: 'awaiting-approval' }), sources())).toBe('needs-you');
+    expect(childState(child({ status: 'awaiting-approval' }), sources(), true)).toBe('needs-you');
   });
   it('is going while it runs in the background, after its call returned', () => {
     const live = { bg: task('bg') };
-    expect(childState(child(), sources({ live, listed: [listed('bg', 'call')] }))).toBe('running');
-    expect(childState(child(), sources({ listed: [listed('bg', 'call')] }))).toBeUndefined();
+    expect(childState(child(), sources({ live, listed: [listed('bg', 'call')] }), false)).toBe('running');
+    expect(childState(child(), sources({ listed: [listed('bg', 'call')] }), false)).toBeUndefined();
   });
 });
 
@@ -54,22 +61,29 @@ describe('a delegated task', () => {
     ['failed', {}, undefined],
     ['completed', { isRunning: true }, 'running'],
     ['cancelled', { isRunning: true }, undefined],
+    ['failed', { isRunning: true }, undefined],
   ] as const)('%s %o → %s', (status, custom, expected) =>
-    expect(childState(kid, sources({ sessions: [session(status, custom)] }))).toBe(expected),
+    expect(childState(kid, sources({ sessions: [session(status, custom)] }), false)).toBe(expected),
   );
+  it('is done once its result came back, whatever the list still says', () => {
+    const results = new Map([['t', 'failed' as const]]);
+    const sessions = [session('running')];
+    expect(childState({ ...kid, taskId: 't' }, sources({ sessions, results }), true)).toBeUndefined();
+  });
   it('holds nothing open when its chat is not in the list', () => {
-    expect(childState(kid, sources())).toBeUndefined();
+    expect(childState(kid, sources(), false)).toBeUndefined();
   });
 });
 
 it('a workflow is going while its run is', () => {
   const flow = child({ kind: 'workflow', workflowTaskId: 'w1' });
-  expect(childState(flow, sources({ live: { w1: task('w1', 'workflow') } }))).toBe('running');
-  expect(childState(flow, sources())).toBeUndefined();
+  expect(childState(flow, sources({ live: { w1: task('w1', 'workflow') } }), false)).toBe('running');
+  expect(childState(flow, sources(), false)).toBeUndefined();
 });
 
 describe('liveChildren', () => {
-  const model = (children: TurnChild[]) => ({ turns: new Map([['t', { children }]]) }) as unknown as TurnModel;
+  const model = (children: TurnChild[]) =>
+    ({ turns: new Map([['t', { children, live: false }]]), taskResults: new Map() }) as unknown as TurnModel;
 
   it('maps running background commands to the call that started them', () => {
     const live = liveChildren(
@@ -84,6 +98,14 @@ describe('liveChildren', () => {
     const kid = child({ taskChatId: 'kid' });
     expect([...liveChildren(model([kid]), sources({ sessions: [session('failed')] })).failed]).toEqual(['call']);
     expect(liveChildren(model([kid]), sources({ sessions: [session('completed')] })).failed.size).toBe(0);
+  });
+
+  it('counts a task as failed by its delivered result, or by what a call that waited returned', () => {
+    const delivered = child({ taskChatId: 'kid', taskId: 't' });
+    const results = { ...model([delivered]), taskResults: new Map([['t', 'failed']]) } as unknown as TurnModel;
+    expect([...liveChildren(results, sources({ sessions: [session('completed')] })).failed]).toEqual(['call']);
+    const waited = model([child({ taskChatId: 'gone', taskStatus: 'failed' })]);
+    expect([...liveChildren(waited, sources()).failed]).toEqual(['call']);
   });
 
   it('holds every turn open while an agent’s call is not known yet', () => {

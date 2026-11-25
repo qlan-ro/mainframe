@@ -52,10 +52,14 @@ test.describe('§tool-cards — Plan revision (plan-revision)', () => {
     const marker = page.getByTestId('chat-marker-exitplanmode').first();
     await expect(marker).toContainText('Updated plan', { timeout: 10_000 });
     await expect(marker).toContainText('failed');
+    await expect(marker).toHaveAttribute('data-state', 'failed');
+    await expect(marker).toBeEnabled();
     await marker.click();
     const body = page.getByTestId('chat-marker-exitplanmode-body').first();
     await expect(body).toContainText("The user doesn't want to proceed with this tool use");
     await expect(body).toContainText('Please also add a divide function');
+    // The plan itself stays, over what was said about it.
+    await expect(body.getByRole('heading', { name: 'Add multiply() function to utils.ts' })).toBeVisible();
 
     await page.getByTestId('chat-plan-reject').click();
     await waitForIdle(page, 5_000).catch(() => {});

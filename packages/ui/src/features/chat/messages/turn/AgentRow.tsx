@@ -4,7 +4,11 @@ import { useZonesStore } from '../../zones/zones-store';
 import { argText } from '../../view-model/turn/tool-values';
 import { rowName } from '../../view-model/turn/tool-row';
 import { resolveResultText } from '../../tools/shared';
+import type { ToolPart } from '../../view-model/turn/types';
+import { ResultText } from '../../tools/bodies/ResultText';
+import { BodyNote } from '../../tools/bodies/Surface';
 import { AgentSteps } from './AgentSteps';
+import { agentLaunched, agentOutcome } from './agent-outcome';
 import { RowAction, RowDisclosure } from './RowDisclosure';
 import { RowGlyph } from './RowGlyph';
 import { useStepDuration } from './StepClock';
@@ -14,10 +18,14 @@ import { useTranscriptScope } from './transcript-scope';
 import { useTurnSelector } from './turn-context';
 import { useFailedOpen } from './use-failed-open';
 
-/** What the CLI answers when it starts an agent in the background: not a result. */
-const LAUNCHED = /^(?:Async agent launched|Agent (?:is )?(?:running|started))/i;
-
 const WORDS: Partial<Record<RowStatus, string>> = { 'needs-you': 'waiting on you', queued: 'queued' };
+
+/** Whether the agent's own transcript says anything. */
+const answered = (part: ToolPart): boolean =>
+  (part.messages ?? []).some(
+    (message) =>
+      message.role === 'assistant' && message.content.some((entry) => entry.type === 'text' && entry.text.trim()),
+  );
 
 function useAgentStatus(toolCallId: string, own: RowStatus): RowStatus {
   const live = useTurnSelector(({ children }) => children.byCall.get(toolCallId), undefined);
@@ -33,7 +41,8 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
   const openSubagent = useZonesStore((state) => state.openSubagent);
   const failed = useFailedOpen(turnKey, part.toolCallId);
   const title = facts.target || facts.verb;
-  const text = resolveResultText(part.result).text;
+  const { text, truncated } = resolveResultText(part.result);
+  const launched = agentLaunched(text);
   const open = () =>
     openSubagent({
       parentChatId: chatId!,
@@ -77,8 +86,11 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
         messageId={unit.messageId}
         toolCallId={part.toolCallId}
         prompt={argText(part, 'prompt')}
-        result={LAUNCHED.test(text) ? '' : text}
-        failed={status === 'failed'}
+        outcome={agentOutcome(status)}
+        result={launched ? '' : text}
+        resultBody={truncated && <ResultText part={part} />}
+        // Started and never heard of again: all there is to say.
+        after={launched && status !== 'running' && !answered(part) && <BodyNote>{text}</BodyNote>}
       />
     </RowDisclosure>
   );

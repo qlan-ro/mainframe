@@ -16,6 +16,11 @@ export function DaemonPortProvider({ port, children }: { port: number; children:
   return <DaemonPortContext.Provider value={port}>{children}</DaemonPortContext.Provider>;
 }
 
+/** The daemon port, or null on a surface that can render without a daemon. */
+export function useKnownDaemonPort(): number | null {
+  return useContext(DaemonPortContext);
+}
+
 export function useDaemonPort(): number {
   const port = useContext(DaemonPortContext);
   if (port === null) {

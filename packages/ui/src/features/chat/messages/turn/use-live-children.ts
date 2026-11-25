@@ -8,7 +8,15 @@ import { liveChildren, sameLive, type LiveChildren } from './live-children';
 
 const NO_TASKS: Readonly<Record<string, BackgroundActivityTask>> = {};
 
-/** Which call started each running background task: only the daemon's list says. */
+/** First wait before asking again; doubles up to the last. */
+const RETRY_MS = 1000;
+const RETRY_MAX_MS = 30_000;
+
+/**
+ * Which call started each running background task: only the daemon's list says.
+ * Asked again while it fails or doesn't name a running task yet, since an agent
+ * nobody placed holds every turn open.
+ */
 function useListedTasks(
   chatId: string | undefined,
   live: Readonly<Record<string, BackgroundActivityTask>>,
@@ -18,12 +26,28 @@ function useListedTasks(
   useEffect(() => {
     if (!chatId || !ids || chatId.startsWith('__LOCALID_')) return;
     let active = true;
-    listBackgroundTasks(chatId).then(
-      (tasks) => active && setListed(tasks),
-      (error: unknown) => console.warn('[transcript] background task list failed', error),
-    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let wait = RETRY_MS;
+    const retry = () => {
+      timer = setTimeout(() => void ask(), wait);
+      wait = Math.min(wait * 2, RETRY_MAX_MS);
+    };
+    const ask = async () => {
+      try {
+        const tasks = await listBackgroundTasks(chatId);
+        if (!active) return;
+        setListed(tasks);
+        const named = new Set(tasks.map((task) => task.id));
+        if (ids.split(' ').some((id) => !named.has(id))) retry();
+      } catch (error) {
+        console.warn('[transcript] background task list failed', error);
+        if (active) retry();
+      }
+    };
+    void ask();
     return () => {
       active = false;
+      clearTimeout(timer);
     };
   }, [chatId, ids]);
   return listed;

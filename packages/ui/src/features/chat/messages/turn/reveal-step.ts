@@ -5,6 +5,7 @@
  */
 import { useCallback } from 'react';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
+import type { MessageSlice, TurnModel } from '../../view-model/turn/types';
 import { useTurnActions } from './turn-context';
 import { useTranscriptScope } from './transcript-scope';
 
@@ -36,11 +37,35 @@ function transcriptOf(chatId: string | undefined): ParentNode {
   return own ?? document;
 }
 
+/** The message whose steps or markers hold a call. */
+export function sliceOfCall(model: TurnModel, toolCallId: string): MessageSlice | undefined {
+  return [...model.slices.values()].find(({ work, markers }) =>
+    [...work, ...markers].some(({ part }) => part.type === 'tool-call' && part.toolCallId === toolCallId),
+  );
+}
+
 function flash(row: HTMLElement): void {
   delete row.dataset.activityFlash;
   void row.offsetWidth; // restarts the animation on a second press
   row.dataset.activityFlash = '';
   setTimeout(() => delete row.dataset.activityFlash, FLASH_MS);
+}
+
+/** Opens a step's row, brings it to the middle and marks it. */
+export async function showStep(
+  chatId: string | undefined,
+  toolCallId: string,
+  { open, focus }: { open: boolean; focus: boolean },
+): Promise<HTMLElement | undefined> {
+  const row = await awaitStep(transcriptOf(chatId), toolCallId);
+  if (!row) return undefined;
+  const trigger = row.querySelector<HTMLElement>('[aria-expanded]');
+  if (open && trigger?.getAttribute('aria-expanded') === 'false') trigger.click();
+  await nextFrame();
+  row.scrollIntoView({ block: 'center' });
+  flash(row);
+  if (focus) trigger?.focus({ preventScroll: true });
+  return row;
 }
 
 export function useRevealStep(turnKey: string) {
@@ -49,23 +74,14 @@ export function useRevealStep(turnKey: string) {
   return useCallback(
     async (toolCallId: string, { open }: { open: boolean }) => {
       reveal(turnKey);
-      const slice = [...model().slices.values()].find(({ work }) =>
-        work.some(({ part }) => part.type === 'tool-call' && part.toolCallId === toolCallId),
-      );
+      const slice = sliceOfCall(model(), toolCallId);
       if (chatId && slice)
         window.dispatchEvent(
           new CustomEvent(ACTIVITY_JUMP_EVENT, {
             detail: { chatId, source: { messageId: slice.messageId, toolCallId } },
           }),
         );
-      const row = await awaitStep(transcriptOf(chatId), toolCallId);
-      if (!row) return;
-      const trigger = row.querySelector<HTMLElement>('[aria-expanded]');
-      if (open && trigger?.getAttribute('aria-expanded') === 'false') trigger.click();
-      await nextFrame();
-      row.scrollIntoView({ block: 'center' });
-      flash(row);
-      trigger?.focus({ preventScroll: true });
+      await showStep(chatId, toolCallId, { open, focus: true });
     },
     [reveal, turnKey, chatId, model],
   );

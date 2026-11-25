@@ -140,3 +140,36 @@ it('shows a background command as running and its output in its row', async () =
   expect(await screen.findByTestId('chat-bash-output')).toHaveTextContent('output so far');
   await act(async () => {});
 });
+
+it('reads the output of a finished command the CLI moved to the background itself', async () => {
+  vi.mocked(listBackgroundTasks).mockResolvedValue([
+    { id: 'bg', kind: 'bash', toolUseId: 'cmd', status: 'completed', startedAt: 1 },
+  ] as never);
+  const launch = 'Command running in background with ID: bg. Output is being written to: /tmp/bg.output';
+  render(
+    <TurnFixture
+      rootId={`cw-${roots}`}
+      messages={[user('Hi'), assistant([bash('cmd', 'pnpm test', { result: launch }), text('Started')])]}
+      extras={extrasWith({})}
+    />,
+  );
+  fireEvent.click(header());
+  expect(screen.getByTestId('chat-row-cmd-receipt')).toHaveTextContent('in the background');
+  fireEvent.click(screen.getByTestId('chat-row-cmd-toggle'));
+  expect(await screen.findByText('output so far')).toBeVisible();
+  await act(async () => {});
+});
+
+it('holds nothing open for an agent whose session was killed', () => {
+  render(
+    <TurnFixture
+      rootId={`cw-${roots}`}
+      messages={[user('Hi'), assistant([text('On it'), agent(running), text('Hm')])]}
+    />,
+  );
+  expect(isOpen()).toBe(false);
+  expect(header()).not.toHaveAccessibleName(/running|Still going/);
+  fireEvent.click(header());
+  expect(screen.getByTestId('chat-row-agent-receipt')).toHaveTextContent('stopped');
+  expect(screen.getByTestId('chat-row-agent').querySelector('.animate-spin')).toBeNull();
+});

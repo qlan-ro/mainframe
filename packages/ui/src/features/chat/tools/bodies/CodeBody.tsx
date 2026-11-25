@@ -20,7 +20,7 @@ export function CodeBody({
     <>
       <Surface className="py-2" testId={testId}>
         {shown.map((line, index) => (
-          <div key={line.number} className="flex w-max min-w-full pr-3">
+          <div key={index} className="flex w-max min-w-full pr-3">
             <span className="w-10 shrink-0 pr-3 text-right text-muted-foreground tabular-nums select-none">
               {line.number}
             </span>

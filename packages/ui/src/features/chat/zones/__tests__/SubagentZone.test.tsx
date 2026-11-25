@@ -18,7 +18,13 @@ vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
   chatControllerRegistry: { getOrCreate: () => controller },
 }));
 vi.mock('../../runtime/use-chat-thread-runtime', () => ({
-  useControllerState: () => ({ loadState: { type: 'ready' }, historyWindow: { hasMore: true, floorItemId: 'child' } }),
+  useControllerState: () => ({
+    loadState: { type: 'ready' },
+    historyWindow: { hasMore: true, floorItemId: 'child' },
+    interactions: { permissions: {} },
+    runState: { type: 'idle' },
+    backgroundTasks: {},
+  }),
 }));
 vi.mock('../../runtime/use-native-thread-messages', () => ({
   useNativeThreadMessages: () => [
@@ -31,6 +37,7 @@ vi.mock('../../runtime/use-native-thread-messages', () => ({
 }));
 vi.mock('../../messages/turn/transcript-scope', () => ({
   RootTranscriptScope: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useTranscriptScope: () => ({ rootThreadId: '', ancestors: [], pendingToolIds: new Set() }),
 }));
 vi.mock('../../messages/turn/AgentSteps', () => ({
   AgentSteps: ({ messages, messageId }: { messages: readonly ThreadMessage[]; messageId: string }) => (
@@ -43,6 +50,8 @@ vi.mock('@/components/ui/hint', () => ({ Hint: ({ children }: { children: React.
 
 import { SubagentZone } from '../SubagentZone';
 
+const said = (id: string) =>
+  ({ id, role: 'assistant', content: [{ type: 'text', text: id }] }) as unknown as ThreadMessage;
 const subagent = {
   parentChatId: 'parent',
   parentThreadId: 'parent',
@@ -53,13 +62,13 @@ const subagent = {
 
 describe('SubagentZone', () => {
   it('follows parent transcript updates and has no composer', () => {
-    childMessages.current = [{ id: 'first' } as ThreadMessage];
+    childMessages.current = [said('first')];
     const onClose = vi.fn();
     const view = render(<SubagentZone subagent={subagent} grow={0.5} onClose={onClose} />);
     expect(screen.getByTestId('transcript-stub')).toHaveTextContent('first');
     expect(controller.subscribeLive).toHaveBeenCalledOnce();
 
-    childMessages.current = [{ id: 'first' } as ThreadMessage, { id: 'latest' } as ThreadMessage];
+    childMessages.current = [said('first'), said('latest')];
     view.rerender(<SubagentZone subagent={subagent} grow={0.5} onClose={onClose} />);
     expect(screen.getByTestId('transcript-stub')).toHaveTextContent('first,latest');
     expect(screen.getByText('Subagent transcript · read-only')).toBeInTheDocument();
@@ -77,7 +86,7 @@ afterEach(() => {
 
 it('loads the complete subagent transcript when its row was supplied as context', async () => {
   controller.isHistoryContext.mockReturnValue(true);
-  childMessages.current = [{ id: 'later-child' } as ThreadMessage];
+  childMessages.current = [said('later-child')];
   render(<SubagentZone subagent={subagent} grow={0.5} onClose={vi.fn()} />);
   await waitFor(() => expect(controller.loadEarlier).toHaveBeenCalledWith('task-1'));
 });

@@ -1,5 +1,5 @@
 /** An event tool on the spine: its pill, or an answered question's card (T1g). */
-import { useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import {
   Activity,
   AlarmClock,
@@ -20,7 +20,7 @@ import { EXECUTION_MODE_LABELS } from '../../messages/execution-mode-labels';
 import { useStepDuration } from '../../messages/turn/StepClock';
 import { useBackgroundStart } from '../../messages/turn/use-background-start';
 import { useTranscriptScope } from '../../messages/turn/transcript-scope';
-import { useTurnSelector } from '../../messages/turn/turn-context';
+import { NestedSkills, useTurnSelector } from '../../messages/turn/turn-context';
 import { markerFacts, type MarkerFacts, type MarkerIcon } from '../../view-model/turn/marker-facts';
 import { isQuestionTool } from '../../view-model/turn/tool-kind';
 import { toolRowFacts } from '../../view-model/turn/tool-row';
@@ -50,14 +50,16 @@ export function usePlanMode(): string | undefined {
 }
 
 function useMarkerFacts(part: ToolPart): { facts: MarkerFacts; duration?: string } {
-  const { pendingToolIds } = useTranscriptScope();
-  const skill = useTurnSelector(({ model }) => model.skills.get(part.toolCallId), undefined);
+  const { pendingToolIds, live } = useTranscriptScope();
+  const ownSkill = useContext(NestedSkills)?.get(part.toolCallId);
+  const turnSkill = useTurnSelector(({ model }) => model.skills.get(part.toolCallId), undefined);
+  const skill = ownSkill ?? turnSkill;
   const mode = usePlanMode();
   const startedAt = useBackgroundStart(part.toolCallId);
   const monitoring = part.toolName === 'Monitor' && startedAt !== undefined;
   const facts = useMemo(
-    () => markerFacts(part, { pending: pendingToolIds, skill, mode, monitoring }),
-    [part, pendingToolIds, skill, mode, monitoring],
+    () => markerFacts(part, { pending: pendingToolIds, live, skill, mode, monitoring }),
+    [part, pendingToolIds, live, skill, mode, monitoring],
   );
   const { timing } = toolRowFacts(part, 'success');
   const running = facts.state === 'running';

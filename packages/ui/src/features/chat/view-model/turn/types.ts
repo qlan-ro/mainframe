@@ -5,7 +5,7 @@
  * virtualized and a streamed chunk re-renders only the message it touched.
  */
 import type { MessagePartState, ThreadMessage } from '@assistant-ui/react';
-import type { TranscriptPresentation } from '@qlan-ro/mainframe-types';
+import type { TaskStatus, TranscriptPresentation } from '@qlan-ro/mainframe-types';
 
 export type ToolPart = Extract<MessagePartState, { type: 'tool-call' }>;
 export type ToolStatus = 'running' | 'success' | 'failed' | 'stopped' | 'declined' | 'awaiting-approval' | 'unknown';
@@ -16,6 +16,8 @@ export interface TurnScope {
   readonly ancestors: readonly string[];
   readonly pendingToolIds: ReadonlySet<string>;
   readonly isRunning?: boolean;
+  /** Whether these messages' work can still be going. Left out: yes. */
+  readonly live?: boolean;
 }
 
 /** One visible part of one message. */
@@ -38,6 +40,9 @@ export interface TurnChild {
   readonly status: ToolStatus;
   /** A delegated task's own chat, once the call returned. */
   readonly taskChatId?: string;
+  readonly taskId?: string;
+  /** How the task stood when its call returned: final for a call that waited. */
+  readonly taskStatus?: TaskStatus;
   /** A workflow run's background task, once the call returned. */
   readonly workflowTaskId?: string;
 }
@@ -45,6 +50,10 @@ export interface TurnChild {
 export interface Turn {
   readonly key: string;
   readonly running: boolean;
+  /** It runs, or a step of it can still be going: the viewer wrote into a turn that goes on. */
+  readonly live: boolean;
+  /** It stands still until the viewer answers a request. */
+  readonly needsYou: boolean;
   readonly end: TurnEnd;
   readonly durationMs?: number;
   /** "read 2 files, searched 1 pattern": the steps, without the agents the header names itself. */
@@ -83,6 +92,10 @@ export interface TurnModel {
   readonly slices: ReadonlyMap<string, MessageSlice>;
   /** Messages another element stands for: a skill's text, a task's result. */
   readonly absorbed: ReadonlySet<string>;
+  /** Absorbed message → the calls whose rows or markers show it, in its own order. */
+  readonly absorbedBy: ReadonlyMap<string, readonly string[]>;
+  /** Delegated task → the status its latest delivered result carries. */
+  readonly taskResults: ReadonlyMap<string, TaskStatus>;
   /** Skill tool call → the text the CLI loaded for it. */
   readonly skills: ReadonlyMap<string, LoadedSkill>;
   /** The turn the transcript ends in, while the thread runs. */

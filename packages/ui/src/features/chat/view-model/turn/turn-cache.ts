@@ -22,6 +22,8 @@ function sameSlice(a: MessageSlice, b: MessageSlice): boolean {
 function sameTurn(a: Turn, b: Turn): boolean {
   return (
     a.running === b.running &&
+    a.live === b.live &&
+    a.needsYou === b.needsYou &&
     a.end === b.end &&
     a.durationMs === b.durationMs &&
     a.summary === b.summary &&
@@ -36,6 +38,8 @@ function sameTurn(a: Turn, b: Turn): boolean {
         child.toolCallId === other.toolCallId &&
         child.status === other.status &&
         child.taskChatId === other.taskChatId &&
+        child.taskId === other.taskId &&
+        child.taskStatus === other.taskStatus &&
         child.workflowTaskId === other.workflowTaskId
       );
     })

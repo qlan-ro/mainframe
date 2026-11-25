@@ -8,7 +8,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { PanelRight } from 'lucide-react';
 import { useAui } from '@assistant-ui/react';
-import { isTerminalTaskStatus, type TaskStatus } from '@qlan-ro/mainframe-types';
+import type { TaskStatus } from '@qlan-ro/mainframe-types';
 import { openInSplit } from '@/features/chat/zones/open-in-split';
 import { useAdaptersStore } from '@/store/adapters';
 import { AgentSteps } from '../messages/turn/AgentSteps';
@@ -23,8 +23,13 @@ import { resolveResultText } from '../tools/shared';
 import { argText } from '../view-model/turn/tool-values';
 import { rowName } from '../view-model/turn/tool-row';
 import type { ToolPart } from '../view-model/turn/types';
-import { parseDelegateResult, type DelegateResult } from './delegate-result';
+import { isTaskStatus, parseDelegateResult, type DelegateResult } from './delegate-result';
+import { resumed, taskStatusOf } from './task-standing';
 import { useTaskResult } from './use-task-result';
+import type { TaskResultMarker } from '../markers/agent-message';
+import { agentOutcome } from '../messages/turn/agent-outcome';
+import { ResultText } from '../tools/bodies/ResultText';
+import { useTranscriptScope } from '../messages/turn/transcript-scope';
 import { findSession, useSessionItems } from './use-session-items';
 
 const TaskChatSteps = lazy(() => import('./TaskChatSteps').then((module) => ({ default: module.TaskChatSteps })));
@@ -46,6 +51,7 @@ const RECEIPTS: Partial<Record<RowStatus, string>> = {
   failed: 'failed',
   stopped: 'stopped',
   interrupted: 'interrupted',
+  unknown: 'no result',
 };
 const NOTES: Partial<Record<RowStatus, string>> = {
   queued: 'Starts when a slot frees up.',
@@ -76,12 +82,23 @@ function useTaskChild(childChatId: string | undefined) {
   return { child, needsYou, openChild };
 }
 
-function rowStatus(call: RowStatus, task: TaskStatus | undefined, needsYou: boolean, going: boolean): RowStatus {
+interface Standing {
+  call: RowStatus;
+  parsed: DelegateResult | null;
+  task: TaskStatus | undefined;
+  needsYou: boolean;
+  /** The task's chat runs. */
+  going: boolean;
+  /** The turn that delegated it does. */
+  live: boolean;
+}
+
+function rowStatus({ call, parsed, task, needsYou, going, live }: Standing): RowStatus {
   if (needsYou) return 'needs-you';
-  if (!task) return call;
-  // A finished task's chat can be resumed. A stopped one is stopped, even while its chat winds down.
-  if (isTerminalTaskStatus(task) && task !== 'cancelled' && going) return 'running';
-  return STATUSES[task];
+  if (task) return resumed(task, going) ? 'running' : STATUSES[task];
+  if (!parsed) return call;
+  // Launched, and nothing says how it stands: its chat is not listed (yet) and no result came back.
+  return live ? STATUSES[parsed.status ?? 'running'] : 'unknown';
 }
 
 /** Opened again each time the task starts waiting on the user; the viewer can still close it. */
@@ -98,21 +115,29 @@ interface TaskBodyProps {
   parsed: DelegateResult | null;
   status: RowStatus;
   messageId: string;
+  result: TaskResultMarker | undefined;
   onOpen?: () => void;
 }
 
-function TaskBody({ part, parsed, status, messageId, onOpen }: TaskBodyProps) {
-  const result = useTaskResult(parsed?.taskId);
-  const failed = status === 'failed';
-  const text = result?.body ?? (failed && !parsed ? resolveResultText(part.result).text : undefined);
+/** What the task brought back: delivered, returned by a call that waited, or why it was refused. */
+function resultText({ part, parsed, result, status }: TaskBodyProps): string | undefined {
+  if (result?.body) return result.body;
+  if (parsed) return [parsed.error, parsed.summary].filter(Boolean).join('\n\n') || undefined;
+  return status === 'failed' ? resolveResultText(part.result).text : undefined;
+}
+
+function TaskBody(props: TaskBodyProps) {
+  const { part, parsed, status, messageId, onOpen } = props;
+  const refused = !parsed && resolveResultText(part.result).truncated;
   const note = NOTES[status];
   const shared = {
     messageId,
     toolCallId: part.toolCallId,
     promptLabel: 'Task',
     prompt: argText(part, 'task'),
-    result: text,
-    failed,
+    outcome: agentOutcome(status),
+    result: resultText(props),
+    resultBody: refused && <ResultText part={part} />,
   };
   return (
     <div data-testid={parsed ? `chat-tool-delegate-task-body-${parsed.taskId}` : 'chat-tool-delegate-task-prompt'}>
@@ -132,8 +157,15 @@ export function DelegateRow({ unit, part, turnKey }: ToolRowProps) {
   const facts = useToolFacts(part);
   const parsed = part.isError ? null : parseDelegateResult(resolveResultText(part.result).text);
   const { child, needsYou, openChild } = useTaskChild(parsed?.childChatId);
-  const task = child?.custom.delegation?.status ?? parsed?.status;
-  const status = rowStatus(facts.status, task, needsYou, child?.custom.isRunning === true);
+  const result = useTaskResult(parsed?.taskId);
+  const live = useTranscriptScope().live !== false;
+  const task = taskStatusOf({
+    delivered: isTaskStatus(result?.status) ? result.status : undefined,
+    listed: child?.custom.delegation?.status,
+    launched: parsed?.status,
+  });
+  const going = child?.custom.isRunning === true;
+  const status = rowStatus({ call: facts.status, parsed, task, needsYou, going, live });
   const adapterId = child?.custom.adapterId ?? argText(part, 'adapterId');
   const provider = useAdaptersStore((state) => state.byId[adapterId]?.name ?? adapterId);
   const title = child?.title ?? parsed?.title ?? (facts.target || 'Task');
@@ -169,7 +201,14 @@ export function DelegateRow({ unit, part, turnKey }: ToolRowProps) {
       tool={part.toolName}
       anchor={{ 'data-activity-id': part.toolCallId }}
     >
-      <TaskBody part={part} parsed={parsed} status={status} messageId={unit.messageId} onOpen={openChild} />
+      <TaskBody
+        part={part}
+        parsed={parsed}
+        status={status}
+        messageId={unit.messageId}
+        result={result}
+        onOpen={openChild}
+      />
     </RowDisclosure>
   );
 }

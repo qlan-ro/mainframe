@@ -42,11 +42,19 @@ function show(overrides: Partial<TaskChatView>, onOpen?: () => void) {
     gate: undefined,
     reply,
     adapterId: 'claude',
+    pendingToolIds: new Set(),
     ...overrides,
   });
   render(
     <TooltipProvider>
-      <TaskChatSteps chatId="kid" taskId="task_kid" messageId="m-parent" toolCallId="tu-1" onOpen={onOpen} />
+      <TaskChatSteps
+        chatId="kid"
+        taskId="task_kid"
+        messageId="m-parent"
+        toolCallId="tu-1"
+        outcome="going"
+        onOpen={onOpen}
+      />
     </TooltipProvider>,
   );
 }
@@ -61,6 +69,7 @@ describe('TaskChatSteps', () => {
   it.each([
     [{ type: 'loading' } as const, "Loading the task's chat…"],
     [{ type: 'error', error: new Error('boom') } as const, "Couldn't load the task's chat."],
+    [{ type: 'ready' } as const, 'No messages yet.'],
   ])('says why there are no steps yet (%o)', (loadState, text) => {
     show({ loadState });
     expect(screen.getByTestId('chat-tool-delegate-task-empty-task_kid')).toHaveTextContent(text);
@@ -73,6 +82,12 @@ describe('TaskChatSteps', () => {
     expect(screen.getByTestId('chat-tool-delegate-task-transcript-task_kid')).toHaveTextContent('21 earlier messages');
     await userEvent.click(screen.getByTestId('chat-tool-delegate-task-open-full-task_kid'));
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('says that the chat could not be loaded over the messages it has', () => {
+    show({ messages: messages('m1'), loadState: { type: 'error', error: new Error('boom') } });
+    expect(screen.getByTestId('stub-steps')).toHaveTextContent('m1');
+    expect(screen.getByTestId('chat-tool-delegate-task-empty-task_kid')).toHaveTextContent("Couldn't load");
   });
 
   it('says nothing about earlier messages when they all fit', () => {

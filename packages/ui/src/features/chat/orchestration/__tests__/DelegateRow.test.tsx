@@ -5,6 +5,7 @@ import type { SessionCustom } from '@/features/sessions/view-model/chat-to-threa
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ToolPart, TurnUnit } from '../../view-model/turn/types';
 import type { TaskResultMarker } from '../../markers/agent-message';
+import { TranscriptScopeProvider } from '../../messages/turn/transcript-scope';
 import { auiState, entry, setSessions, switchToThread } from './fixtures';
 
 const { openInSplit, result } = vi.hoisted(() => ({
@@ -21,8 +22,8 @@ vi.mock('@assistant-ui/react', () => ({
 vi.mock('@/features/chat/zones/open-in-split', () => ({ openInSplit }));
 vi.mock('../use-task-result', () => ({ useTaskResult: () => result.current }));
 vi.mock('../../messages/turn/AgentSteps', () => ({
-  AgentSteps: (props: { prompt?: string; result?: string; failed?: boolean }) => (
-    <div data-testid="stub-steps" data-failed={String(props.failed)}>
+  AgentSteps: (props: { prompt?: string; result?: string; outcome: string }) => (
+    <div data-testid="stub-steps" data-outcome={props.outcome}>
       {props.prompt}|{props.result}
     </div>
   ),
@@ -40,7 +41,7 @@ const RESULT = JSON.stringify({ taskId: 'task_kid', childChatId: 'kid', title: '
 
 let rows = 0;
 let key = '';
-function row(props: { result?: unknown; isError?: boolean }) {
+function row(props: { result?: unknown; isError?: boolean }, live = true) {
   const part = {
     type: 'tool-call',
     toolCallId: 'tu-1',
@@ -53,7 +54,9 @@ function row(props: { result?: unknown; isError?: boolean }) {
   const unit: TurnUnit = { key, messageId: 'm', index: 0, part };
   return (
     <TooltipProvider>
-      <DelegateRow unit={unit} part={part} />
+      <TranscriptScopeProvider value={{ rootThreadId: 'parent', ancestors: [], pendingToolIds: new Set(), live }}>
+        <DelegateRow unit={unit} part={part} />
+      </TranscriptScopeProvider>
     </TooltipProvider>
   );
 }
@@ -108,6 +111,45 @@ describe('the row', () => {
     expect(status()).toHaveAttribute('data-status', 'running');
   });
 
+  it.each([
+    ['still listed as running', { delegation: { taskId: 'task_kid', role: 'review', status: 'running' } }],
+    ['listed as completed', { delegation: { taskId: 'task_kid', role: 'review', status: 'completed' } }],
+    [
+      'whose chat still winds down',
+      { delegation: { taskId: 'task_kid', role: 'review', status: 'failed' }, isRunning: true },
+    ],
+  ] as const)('reads a task that came back failed as failed, %s', (_how, custom) => {
+    result.current = { taskId: 'task_kid', chatId: 'kid', status: 'failed', body: 'Out of budget' };
+    withChild(custom);
+    render(row({ result: RESULT }));
+    expect(status()).toHaveAttribute('data-status', 'failed');
+    expect(screen.getByTestId('chat-tool-delegate-task-card').querySelector('.animate-spin')).toBeNull();
+  });
+
+  it('reads the failure a call that waited returned, with no chat in the list', async () => {
+    setSessions(entry('parent'));
+    const failed = {
+      taskId: 'task_kid',
+      childChatId: 'kid',
+      status: 'failed',
+      error: 'Out of budget',
+      summary: 'Half done',
+    };
+    render(row({ result: JSON.stringify(failed) }, false));
+    expect(status()).toHaveAttribute('data-status', 'failed');
+    await userEvent.click(toggle());
+    const body = await screen.findByTestId('stub-task-chat');
+    expect(body).toHaveTextContent('Out of budget');
+    expect(body).toHaveTextContent('Half done');
+  });
+
+  it('claims nothing of a launch nothing reports on any more', () => {
+    setSessions(entry('parent'));
+    render(row({ result: RESULT }, false));
+    expect(status()).toHaveAttribute('data-status', 'unknown');
+    expect(status()).toHaveTextContent('no result');
+  });
+
   it('offers to restore an archived child', () => {
     withChild({}, 'archived');
     render(row({ result: RESULT }));
@@ -154,7 +196,7 @@ describe('what it opens on', () => {
     render(row({ result: 'Too many delegated tasks for this chat.', isError: true }));
     await userEvent.click(toggle());
     expect(screen.getByTestId('stub-steps')).toHaveTextContent('Too many delegated tasks');
-    expect(screen.getByTestId('stub-steps')).toHaveAttribute('data-failed', 'true');
+    expect(screen.getByTestId('stub-steps')).toHaveAttribute('data-outcome', 'failed');
   });
 });
 

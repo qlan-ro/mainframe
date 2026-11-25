@@ -79,11 +79,41 @@ export function toolTarget(part: ToolPart): ToolTarget {
   }
 }
 
-/** Same tool on the same target: what "retried" compares (T1b). */
+/** Arguments that don't change what a call does. */
+const INCIDENTAL: ReadonlySet<string> = new Set(['description', 'timeout', 'run_in_background']);
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  const fields = record(value);
+  if (!fields) return value;
+  return Object.keys(fields)
+    .sort()
+    .map((key) => [key, canonical(fields[key])]);
+}
+
+/**
+ * The call itself: what "retried" compares (T1b). Two calls are the same only
+ * when they ask for the same thing, so another edit of the same file, or another
+ * workflow, never passes for a retry. A call that names nothing matches no other.
+ */
 export function retryKey(part: ToolPart): string {
-  const { target, where } = toolTarget(part);
-  const generic = ['mcp', 'unknown', 'subagent', 'delegate'].includes(toolKind(part.toolName));
-  return JSON.stringify([part.toolName, generic ? part.args : target, where]);
+  const args = Object.entries(record(part.args) ?? {}).filter(([key]) => !INCIDENTAL.has(key));
+  if (!args.length) return JSON.stringify([part.toolName, part.toolCallId]);
+  return JSON.stringify([part.toolName, canonical(Object.fromEntries(args))]);
+}
+
+/**
+ * The CLI's own words for a command it moved to the background by itself: the
+ * call carries no `run_in_background` then.
+ */
+const BACKGROUNDED =
+  /^Command (?:is )?(?:still )?running in (?:the )?background with ID|^Command did not complete within .* and was moved to the background|^Command was (?:automatically |manually )?(?:backgrounded|moved to the background)/i;
+
+/** A command whose output goes on after its call returned. */
+export function runsInBackground(part: ToolPart): boolean {
+  return (
+    record(part.args)?.run_in_background === true || BACKGROUNDED.test(extractResultContent(part.result).trimStart())
+  );
 }
 
 /** The exit code a command reported. A call that did not fail exited 0; a failed one states its code or stays unknown. */
@@ -91,7 +121,7 @@ export function exitCode(part: ToolPart, failed: boolean): number | undefined {
   const output = resolveResultText(part.result).text;
   const stated = /^(?:Exit code|exit)\s+(\d+)\b/im.exec(output.slice(0, 200)) ?? /\bexit\s+(\d+)\s*$/i.exec(output);
   if (stated) return Number(stated[1]);
-  return failed || record(part.args)?.run_in_background === true ? undefined : 0;
+  return failed || runsInBackground(part) ? undefined : 0;
 }
 
 export const nonBlankLines = (value: string): number => value.split('\n').filter((line) => line.trim()).length;

@@ -8,6 +8,8 @@ export interface TranscriptScope {
   messageId?: string;
   ancestors: readonly string[];
   pendingToolIds: ReadonlySet<string>;
+  /** Whether these messages' work can still be going. Left out: yes. */
+  live?: boolean;
 }
 const empty: TranscriptScope = { rootThreadId: '', ancestors: [], pendingToolIds: new Set() };
 const Context = createContext<TranscriptScope>(empty);
@@ -39,19 +41,34 @@ export function RootTranscriptScope({ children }: { children: ReactNode }) {
   return <TranscriptScopeProvider value={value}>{children}</TranscriptScopeProvider>;
 }
 
+export interface NestedScope {
+  messageId: string;
+  toolCallId: string;
+  /** Whether the agent whose transcript this is still works. */
+  live: boolean;
+  /** A delegated task's own chat, and the requests pending in it. A sub-agent's are its parent's. */
+  chatId?: string;
+  pendingToolIds?: ReadonlySet<string>;
+}
+
 export function NestedTranscriptScope({
   messageId,
   toolCallId,
+  live,
+  chatId,
+  pendingToolIds,
   children,
-}: {
-  messageId: string;
-  toolCallId: string;
-  children: ReactNode;
-}) {
+}: NestedScope & { children: ReactNode }) {
   const parent = useTranscriptScope();
   const value = useMemo(
-    () => ({ ...parent, ancestors: [...parent.ancestors, JSON.stringify([messageId, toolCallId])] }),
-    [parent, messageId, toolCallId],
+    () => ({
+      ...parent,
+      live,
+      chatId: chatId ?? parent.chatId,
+      pendingToolIds: pendingToolIds ?? parent.pendingToolIds,
+      ancestors: [...parent.ancestors, JSON.stringify([messageId, toolCallId])],
+    }),
+    [parent, messageId, toolCallId, live, chatId, pendingToolIds],
   );
   return <TranscriptScopeProvider value={value}>{children}</TranscriptScopeProvider>;
 }

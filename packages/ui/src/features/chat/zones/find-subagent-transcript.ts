@@ -1,16 +1,16 @@
-import type { ThreadMessage } from '@assistant-ui/react';
+import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
 
-export function findSubagentTranscript(
+export function findSubagentCall(
   messages: readonly ThreadMessage[],
   toolCallId: string,
-): readonly ThreadMessage[] | null {
+): ToolCallMessagePart | undefined {
   for (const message of messages) {
     for (const part of message.content) {
       if (part.type !== 'tool-call') continue;
-      if (part.toolCallId === toolCallId) return part.messages ?? [];
-      const nested = findSubagentTranscript(part.messages ?? [], toolCallId);
+      if (part.toolCallId === toolCallId) return part;
+      const nested = findSubagentCall(part.messages ?? [], toolCallId);
       if (nested) return nested;
     }
   }
-  return null;
+  return undefined;
 }

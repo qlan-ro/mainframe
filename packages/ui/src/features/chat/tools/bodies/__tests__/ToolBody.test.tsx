@@ -1,10 +1,15 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolPart, ToolStatus } from '../../../view-model/turn/types';
 import { ToolBody, hasToolBody } from '../ToolBody';
 
 vi.mock('../../chat-tool-context', () => ({ useChatId: () => 'chat', useOpenFile: () => ({}) }));
-vi.mock('../../../links/use-open-link', () => ({ useOpenLink: () => ({ open: opened }) }));
+vi.mock('../../../links/use-open-link', () => ({ useOpenLink: () => ({ open: opened, openIn: opened }) }));
+vi.mock('../../../messages/turn/use-background-start', () => ({ useBackgroundStart: () => background.startedAt }));
+vi.mock('../BackgroundOutput', () => ({
+  BackgroundOutput: ({ launch }: { launch: string }) => <div data-testid="background">{launch}</div>,
+}));
 vi.mock('@/lib/shiki-tokens', () => ({ useShikiTokens: () => null, TokenLine: () => null }));
 vi.mock('../../ToolResultExpand', () => ({
   ToolResultExpand: ({ toolUseId, fullBytes }: { toolUseId: string; fullBytes: number }) => (
@@ -12,6 +17,10 @@ vi.mock('../../ToolResultExpand', () => ({
   ),
 }));
 const opened = vi.fn();
+const { background } = vi.hoisted(() => ({ background: { startedAt: undefined as number | undefined } }));
+beforeEach(() => {
+  background.startedAt = undefined;
+});
 
 const part = (toolName: string, args: object, result?: unknown) =>
   ({
@@ -23,7 +32,12 @@ const part = (toolName: string, args: object, result?: unknown) =>
     result,
     status: { type: 'complete' },
   }) as unknown as ToolPart;
-const show = (value: ToolPart, status: ToolStatus = 'success') => render(<ToolBody part={value} status={status} />);
+const show = (value: ToolPart, status: ToolStatus = 'success') =>
+  render(
+    <TooltipProvider>
+      <ToolBody part={value} status={status} />
+    </TooltipProvider>,
+  );
 
 describe('ToolBody', () => {
   it('numbers a read file as the CLI numbered it, without its reminders', () => {
@@ -50,10 +64,56 @@ describe('ToolBody', () => {
     ]);
   });
 
-  it('shows why an edit failed, and no diff', () => {
+  it('shows why an edit failed, and what it tried to change', () => {
     show(part('Edit', { file_path: 'a', old_string: 'a', new_string: 'b' }, 'String not found'), 'failed');
     expect(screen.getByTestId('chat-tool-error')).toHaveTextContent('String not found');
-    expect(screen.queryByTestId('chat-edit-diff')).toBeNull();
+    expect(screen.getByTestId('chat-edit-diff')).toHaveTextContent('−a');
+  });
+
+  it.each([
+    ['Read', { file_path: 'a' }],
+    ['Grep', { pattern: 'x' }],
+    ['Edit', { file_path: 'a', old_string: 'a', new_string: 'b' }],
+    ['Write', { file_path: 'a', content: 'x' }],
+    ['Bash', { command: 'x' }],
+    ['WebFetch', { url: 'https://example.com' }],
+    ['mcp__a__b', { q: 1 }],
+  ])('offers the whole of a failed %s the daemon cut short', (name, args) => {
+    show(part(name, args, { content: 'boom', truncated: true, fullBytes: 9000 }), 'failed');
+    expect(screen.getByTestId('expand')).toHaveTextContent('call:9000');
+  });
+
+  it.each([['1\tone\n2\ttwo\nplain'], ['1→a\n\n<system-reminder>kept</system-reminder>\nend'], ['first\n2\tsecond']])(
+    'shows a written file whole, however its lines look (%j)',
+    (content) => {
+      show(part('Write', { file_path: 'a.tsv', content }, 'File created successfully at: a.tsv'));
+      const shown = [...screen.getByTestId('chat-write-code').children].map(
+        (line) => line.lastElementChild!.textContent,
+      );
+      expect(shown.join('\n')).toBe(content);
+    },
+  );
+
+  it('keeps every line of a read whose file starts with a number of its own', () => {
+    show(part('Read', { file_path: 'a.tsv' }, '7\tone\n12\ttwo\nplain'));
+    const shown = [...screen.getByTestId('read-card-code-preview').children].map(
+      (l) => l.lastElementChild!.textContent,
+    );
+    expect(shown.join('\n')).toBe('7\tone\n12\ttwo\nplain');
+  });
+
+  it.each([
+    'Command running in background with ID: b1. Output is being written to: /tmp/b1.output',
+    'Command did not complete within its 120s timeout and was moved to the background (ID: b1). Output is being written to: /tmp/b1.output',
+  ])('reads the output of a command the CLI moved to the background itself (%s)', (launch) => {
+    show(part('Bash', { command: 'pnpm dev' }, launch));
+    expect(screen.getByTestId('background')).toHaveTextContent('b1');
+  });
+
+  it('reads the output of a command the daemon lists as a running task, whatever the call said', () => {
+    background.startedAt = 1000;
+    show(part('Bash', { command: 'pnpm dev' }, 'ok'), 'running');
+    expect(screen.getByTestId('background')).toBeVisible();
   });
 
   it('shows a written file’s content', () => {
@@ -75,7 +135,7 @@ describe('ToolBody', () => {
 
   it('opens a fetched page where links open', () => {
     show(part('WebFetch', { url: 'https://example.com' }, 'A page'));
-    fireEvent.click(screen.getByTestId('web-fetch-card-url'));
+    fireEvent.click(within(screen.getByTestId('web-fetch-card-url')).getByRole('link'));
     expect(opened).toHaveBeenCalledWith('https://example.com');
   });
 
@@ -83,7 +143,11 @@ describe('ToolBody', () => {
     const { rerender } = show(part('mcp__a__b', { q: 1 }, 'fine'));
     expect(screen.getByTestId('chat-call-args')).toHaveTextContent('{ "q": 1 }');
     expect(within(screen.getByTestId('chat-call-body')).getByText('Result')).toBeVisible();
-    rerender(<ToolBody part={part('mcp__a__b', { q: 1 }, '404')} status="failed" />);
+    rerender(
+      <TooltipProvider>
+        <ToolBody part={part('mcp__a__b', { q: 1 }, '404')} status="failed" />
+      </TooltipProvider>,
+    );
     expect(within(screen.getByTestId('chat-call-body')).getByText('Error')).toHaveClass('text-fail');
   });
 });

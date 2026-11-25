@@ -31,6 +31,8 @@ export interface TaskChatView {
   gate: ChatPermissionEntry | undefined;
   reply: (response: ControlResponse, selectedOptionId?: string) => Promise<void>;
   adapterId: string | undefined;
+  /** The calls of the child's that wait on a request. */
+  pendingToolIds: ReadonlySet<string>;
 }
 
 export function useTaskChat(chatId: string): TaskChatView {
@@ -44,6 +46,10 @@ export function useTaskChat(chatId: string): TaskChatView {
   const bounded = useMemo(() => latestMessages(all), [all]);
   const permissions = state.interactions.permissions;
   const gate = useMemo(() => selectPermissionFront(permissions), [permissions]);
+  const pendingToolIds = useMemo(
+    () => new Set(Object.values(permissions).flatMap(({ request }) => (request.toolUseId ? [request.toolUseId] : []))),
+    [permissions],
+  );
   const reply = useCallback(
     (response: ControlResponse, selectedOptionId?: string) => controller.replyToPermission(response, selectedOptionId),
     [controller],
@@ -56,5 +62,6 @@ export function useTaskChat(chatId: string): TaskChatView {
     gate,
     reply,
     adapterId: state.chatConfig?.adapterId,
+    pendingToolIds,
   };
 }

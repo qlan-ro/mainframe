@@ -3,7 +3,7 @@ import { parseDelegateResult } from '../../orchestration/delegate-result';
 import { resolveResultText } from '../../tools/shared/result';
 import { parseWorkflowLaunch } from '../../workflow/workflow-progress';
 import { isChildWork, isMarkerTool, toolKind } from './tool-kind';
-import { resolveToolStatus } from './tool-status';
+import { settledStatus } from './tool-status';
 import { retryKey } from './tool-values';
 import { isMarkerUnit, isTextUnit } from './turn-units';
 import type { ToolPart, TurnChild, TurnUnit } from './types';
@@ -34,13 +34,14 @@ export function answerUnits(units: readonly TurnUnit[], running: boolean): Reado
 export function failedSteps(
   tools: readonly ToolPart[],
   pending: ReadonlySet<string>,
+  live: boolean,
 ): { failed: string[]; retried: string[] } {
   const recovered = new Set<string>();
   const failed: string[] = [];
   const retried: string[] = [];
   for (let index = tools.length - 1; index >= 0; index--) {
     const tool = tools[index]!;
-    const status = resolveToolStatus(tool, pending);
+    const status = settledStatus(tool, pending, live);
     if (status === 'success') recovered.add(retryKey(tool));
     else if (status === 'failed') (recovered.has(retryKey(tool)) ? retried : failed).unshift(tool.toolCallId);
   }
@@ -48,7 +49,7 @@ export function failedSteps(
 }
 
 /** A sub-agent waits on the viewer when any call in its own transcript does. */
-function nestedPending(part: ToolPart, pending: ReadonlySet<string>): boolean {
+export function nestedPending(part: ToolPart, pending: ReadonlySet<string>): boolean {
   return (part.messages ?? []).some((message) =>
     message.content.some(
       (entry) =>
@@ -57,16 +58,19 @@ function nestedPending(part: ToolPart, pending: ReadonlySet<string>): boolean {
   );
 }
 
-function childOf(tool: ToolPart, pending: ReadonlySet<string>): TurnChild {
-  const status = nestedPending(tool, pending) ? 'awaiting-approval' : resolveToolStatus(tool, pending);
+function childOf(tool: ToolPart, pending: ReadonlySet<string>, live: boolean): TurnChild {
+  const status = nestedPending(tool, pending) ? 'awaiting-approval' : settledStatus(tool, pending, live);
   const kind = toolKind(tool.toolName);
   const base = { toolCallId: tool.toolCallId, kind: kind === 'workflow' ? 'workflow' : 'agent', status } as const;
   const text = resolveResultText(tool.result).text;
   if (kind === 'workflow') return { ...base, workflowTaskId: parseWorkflowLaunch(text).taskId };
-  if (kind === 'delegate') return { ...base, taskChatId: parseDelegateResult(text)?.childChatId };
+  if (kind === 'delegate') {
+    const launch = parseDelegateResult(text);
+    return { ...base, taskChatId: launch?.childChatId, taskId: launch?.taskId, taskStatus: launch?.status };
+  }
   return base;
 }
 
-export function turnChildren(tools: readonly ToolPart[], pending: ReadonlySet<string>): TurnChild[] {
-  return tools.filter((tool) => isChildWork(tool.toolName)).map((tool) => childOf(tool, pending));
+export function turnChildren(tools: readonly ToolPart[], pending: ReadonlySet<string>, live: boolean): TurnChild[] {
+  return tools.filter((tool) => isChildWork(tool.toolName)).map((tool) => childOf(tool, pending, live));
 }

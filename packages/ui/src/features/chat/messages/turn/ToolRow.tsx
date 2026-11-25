@@ -6,7 +6,7 @@ import { useActiveBasesStore } from '@/store/active-bases-store';
 import { ToolBody, hasToolBody } from '../../tools/bodies/ToolBody';
 import { useOpenFile } from '../../tools/chat-tool-context';
 import { useOpenEdit } from '../../tools/use-open-edit';
-import { resolveToolStatus } from '../../view-model/turn/tool-status';
+import { settledStatus } from '../../view-model/turn/tool-status';
 import { argText } from '../../view-model/turn/tool-values';
 import { rowName, toolRowFacts, type ToolRowFacts } from '../../view-model/turn/tool-row';
 import { toolKind } from '../../view-model/turn/tool-kind';
@@ -31,8 +31,11 @@ export interface ToolRowProps {
 }
 
 export function useToolFacts(part: ToolPart): ToolRowFacts {
-  const { pendingToolIds } = useTranscriptScope();
-  return useMemo(() => toolRowFacts(part, resolveToolStatus(part, pendingToolIds)), [part, pendingToolIds]);
+  const { pendingToolIds, live } = useTranscriptScope();
+  return useMemo(
+    () => toolRowFacts(part, settledStatus(part, pendingToolIds, live !== false)),
+    [part, pendingToolIds, live],
+  );
 }
 
 export function receiptText(...parts: (string | undefined)[]): string | undefined {
@@ -118,7 +121,7 @@ function StandardRow({ unit, part, turnKey }: ToolRowProps) {
       tool={part.toolName}
       anchor={{ 'data-activity-id': part.toolCallId }}
     >
-      {hasToolBody(part, status) ? <ToolBody part={part} status={status} /> : undefined}
+      {hasToolBody(part, status, startedAt !== undefined) ? <ToolBody part={part} status={status} /> : undefined}
     </RowDisclosure>
   );
 }

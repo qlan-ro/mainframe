@@ -216,6 +216,121 @@ describe('failed steps', () => {
   });
 });
 
+describe('a different call is no retry', () => {
+  const fail = { isError: true } as const;
+  it.each([
+    [
+      'another edit of the same file',
+      call('Edit', { file_path: 'a', old_string: 'x', new_string: 'y' }, { ...fail, toolCallId: 'bad' }),
+      call('Edit', { file_path: 'a', old_string: 'p', new_string: 'q' }),
+    ],
+    [
+      'another workflow, which names none',
+      call('Workflow', { script: 'one' }, { ...fail, toolCallId: 'bad' }),
+      call('Workflow', { script: 'two' }),
+    ],
+    ['a workflow with no arguments', call('Workflow', {}, { ...fail, toolCallId: 'bad' }), call('Workflow', {})],
+    [
+      'another part of the same file',
+      call('Read', { file_path: 'a', offset: 1 }, { ...fail, toolCallId: 'bad' }),
+      call('Read', { file_path: 'a', offset: 900 }),
+    ],
+    [
+      'other content for the same file',
+      call('Write', { file_path: 'a', content: 'x' }, { ...fail, toolCallId: 'bad' }),
+      call('Write', { file_path: 'a', content: 'y' }),
+    ],
+  ])('%s', (_name, bad, good) => {
+    const turn = only(build([user('u1'), assistant('a1', [bad, good, text('ok')])]));
+    expect(turn.failed).toEqual(['bad']);
+    expect(turn.retried).toEqual([]);
+  });
+
+  it('the same edit again is, whatever order its arguments came in', () => {
+    const bad = call('Edit', { file_path: 'a', old_string: 'x', new_string: 'y' }, { ...fail, toolCallId: 'bad' });
+    const good = call('Edit', { new_string: 'y', file_path: 'a', old_string: 'x' });
+    expect(only(build([user('u1'), assistant('a1', [bad, good])])).retried).toEqual(['bad']);
+  });
+  it('the same command with another description is', () => {
+    const bad = bash('', { args: { command: 'vitest', description: 'Test' }, ...fail, toolCallId: 'bad' });
+    const good = bash('', { args: { command: 'vitest', description: 'Test again' } });
+    expect(only(build([user('u1'), assistant('a1', [bad, good])])).retried).toEqual(['bad']);
+  });
+});
+
+describe('a call with no outcome', () => {
+  const going = { result: undefined, providerMetadata: { mainframe: { acpStatus: 'in_progress' } } };
+  const agent = call('Task', { description: 'x' }, { ...going, toolCallId: 'agent' });
+
+  it('runs while its turn does', () => {
+    const turn = only(build([user('u1'), assistant('a1', [agent])], { isRunning: true }));
+    expect(turn).toMatchObject({ running: true, live: true });
+    expect(turn.children[0]!.status).toBe('running');
+  });
+
+  it('is stopped, and so is its turn, once the session was killed', () => {
+    const turn = only(build([user('u1'), assistant('a1', [agent])]));
+    expect(turn).toMatchObject({ running: false, live: false, end: 'stopped' });
+    expect(turn.children[0]!.status).toBe('stopped');
+  });
+
+  it('is stopped in an earlier turn while a new one runs', () => {
+    const model = build([user('u1'), assistant('a1', [agent]), user('u2'), assistant('a2', [text('Hi')])], {
+      isRunning: true,
+    });
+    expect([...model.turns.values()].map((turn) => turn.live)).toEqual([false, true]);
+  });
+
+  it('still runs when the viewer wrote into the turn that goes on', () => {
+    const same = (count: number) => ({ partSources: sources(count, presented({ state: 'running' })) });
+    const steered = [user('u1'), assistant('a1', [agent], same(1)), user('u2')];
+    expect(only(build(steered, { isRunning: true })).live).toBe(true);
+    const went = build([...steered, assistant('a2', [text('Sure')], same(1))], { isRunning: true });
+    expect([...went.turns.values()].map(({ running, live }) => [running, live])).toEqual([
+      [false, true],
+      [true, true],
+    ]);
+  });
+});
+
+describe('a turn that waits on the viewer', () => {
+  const pendingWrite = call(
+    'Write',
+    { file_path: 'a', content: 'x' },
+    { toolCallId: 'w', result: undefined, providerMetadata: { mainframe: { acpStatus: 'in_progress' } } },
+  );
+  const asked = [user('u1'), assistant('a1', [text('I will write it'), pendingWrite])];
+
+  it('has not ended, though the thread reports itself idle', () => {
+    const turn = only(build(asked, { pendingToolIds: new Set(['w']) }));
+    expect(turn).toMatchObject({ running: true, needsYou: true, live: true });
+  });
+
+  it('keeps its words among the steps: there is no answer yet', () => {
+    const model = build(asked, { pendingToolIds: new Set(['w']) });
+    expect(roles(model, 'a1')).toEqual({ work: ['I will write it', 'Write'], markers: [], answer: [] });
+  });
+
+  it('is the newest turn while the call itself has not arrived', () => {
+    const model = build([user('u1'), assistant('a1', [text('A')]), user('u2'), assistant('a2', [text('B')])], {
+      pendingToolIds: new Set(['not-here-yet']),
+    });
+    expect([...model.turns.values()].map((turn) => turn.needsYou)).toEqual([false, true]);
+  });
+
+  it('is not the newest turn when the request is a background agent’s of an earlier one', () => {
+    const agent = call('Task', {}, { messages: [assistant('n', [{ ...pendingWrite }])] as never });
+    const model = build([user('u1'), assistant('a1', [agent]), user('u2'), assistant('a2', [text('B')])], {
+      pendingToolIds: new Set(['w']),
+    });
+    expect([...model.turns.values()].map(({ running, needsYou }) => [running, needsYou])).toEqual([
+      [false, false],
+      [false, false],
+    ]);
+    expect([...model.turns.values()][0]!.children[0]!.status).toBe('awaiting-approval');
+  });
+});
+
 describe('child work', () => {
   it('lists agents, delegated tasks and workflows, never monitors or commands', () => {
     const turn = only(
@@ -236,7 +351,8 @@ describe('child work', () => {
     );
     expect(turn.children).toEqual([
       { toolCallId: 'agent', kind: 'agent', status: 'success' },
-      { toolCallId: 'task', kind: 'agent', status: 'running' },
+      // In a turn that ended, a call with no outcome was cut short.
+      { toolCallId: 'task', kind: 'agent', status: 'stopped' },
       { toolCallId: 'flow', kind: 'workflow', status: 'success' },
     ]);
     expect(turn.summary).toBe('ran 1 command');
@@ -263,6 +379,7 @@ describe('messages another element stands for', () => {
     ]);
     only(model);
     expect([...model.absorbed]).toEqual(['s1']);
+    expect(model.absorbedBy.get('s1')).toEqual(['skill']);
     expect(model.skills.get('skill')).toEqual(skill);
   });
 
@@ -279,6 +396,7 @@ describe('messages another element stands for', () => {
       assistant('a2', [text('It is back')]),
     ]);
     expect([...model.absorbed]).toEqual(['r1']);
+    expect(model.taskResults.get('t1')).toBe('completed');
     expect(model.turns.size).toBe(2);
   });
 

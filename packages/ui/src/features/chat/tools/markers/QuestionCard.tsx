@@ -5,7 +5,9 @@
  */
 import { Check, MessageCircleQuestion } from 'lucide-react';
 import type { AskUserQuestionAnswer } from '@qlan-ro/mainframe-types';
+import { useTranscriptScope, type TranscriptScope } from '../../messages/turn/transcript-scope';
 import { resolveResultText } from '../shared';
+import { settledStatus } from '../../view-model/turn/tool-status';
 import { record } from '../../view-model/turn/values';
 import type { ToolPart } from '../../view-model/turn/types';
 import { MarkerCard } from './MarkerPill';
@@ -73,10 +75,17 @@ function Unanswered({ question, state }: { question: QuestionArg; state: string 
   );
 }
 
+/** What an unanswered question's state is: only a live turn or a pending request still waits for the viewer. */
+function unansweredState(part: ToolPart, scope: TranscriptScope): string {
+  if (part.result !== undefined) return 'not answered';
+  const status = settledStatus(part, scope.pendingToolIds, scope.live !== false);
+  return status === 'running' || status === 'awaiting-approval' ? 'waiting for your answer' : 'stopped, not answered';
+}
+
 export function QuestionCard({ part }: { part: ToolPart }) {
+  const state = unansweredState(part, useTranscriptScope());
   const answers = answersOf(part);
   const questions = questionsOf(part);
-  const waiting = part.result === undefined;
   const reply = resolveResultText(part.result).text;
   return (
     <div data-activity-id={part.toolCallId} className="flex w-full justify-center">
@@ -92,13 +101,7 @@ export function QuestionCard({ part }: { part: ToolPart }) {
                   }
                 />
               ))
-            : questions.map((question) => (
-                <Unanswered
-                  key={question.question}
-                  question={question}
-                  state={waiting ? 'waiting for your answer' : 'not answered'}
-                />
-              ))}
+            : questions.map((question) => <Unanswered key={question.question} question={question} state={state} />)}
           {!answers.length && reply && (
             <p data-testid="chat-ask-reply" className="mf-tr-meta wrap-break-word text-muted-foreground">
               {reply}

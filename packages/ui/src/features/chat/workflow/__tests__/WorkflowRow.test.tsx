@@ -16,6 +16,13 @@ vi.mock('../use-workflow-run', () => ({
   useWorkflowRun: () => __run,
 }));
 
+vi.mock('../../tools/chat-tool-context', () => ({ useChatId: () => undefined }));
+vi.mock('../../messages/turn/turn-context', async (original) => ({
+  ...(await original<object>()),
+  useTurnSelector: (_select: unknown, fallback: unknown) => (typeof fallback === 'boolean' ? false : fallback),
+}));
+
+import { TranscriptScopeProvider } from '../../messages/turn/transcript-scope';
 import { WorkflowRow } from '../WorkflowRow';
 import type { ToolPart } from '../../view-model/turn/types';
 
@@ -49,17 +56,28 @@ function run(overrides: Partial<ClaudeWorkflowRun> = {}): ClaudeWorkflowRun {
 }
 
 let rows = 0;
-function Row({ result }: { result?: unknown }) {
+interface RowProps {
+  result?: unknown;
+  isError?: boolean;
+  turnKey?: string;
+  live?: boolean;
+}
+function Row({ result, isError, turnKey, live = true }: RowProps) {
   const part = {
     type: 'tool-call',
     toolName: 'Workflow',
     toolCallId: 'tc-wf-1',
     argsText: '',
     args: {},
+    isError,
     status: { type: 'complete' },
     ...(result === undefined ? { providerMetadata: { mainframe: { acpStatus: 'in_progress' } } } : { result }),
   } as unknown as ToolPart;
-  return <WorkflowRow unit={{ key: `row-${++rows}`, messageId: 'm', index: 0, part }} part={part} />;
+  return (
+    <TranscriptScopeProvider value={{ rootThreadId: 'r', ancestors: [], pendingToolIds: new Set(), live }}>
+      <WorkflowRow unit={{ key: `row-${++rows}`, messageId: 'm', index: 0, part }} part={part} turnKey={turnKey} />
+    </TranscriptScopeProvider>
+  );
 }
 const glyphWord = (id: string) => screen.getByTestId(id).querySelector('.sr-only')!.textContent;
 
@@ -127,12 +145,28 @@ describe('WorkflowRow', () => {
     expect(screen.queryByTestId('chat-workflow-back-run_1')).not.toBeInTheDocument();
   });
 
-  it('shows why a launch failed, with nothing to open', () => {
+  it('shows why a launch failed, with no run to open', () => {
     render(<Row result={JSON.stringify({ error: 'workflow script not found' })} />);
     const row = screen.getByTestId('chat-workflow-launcher-tc-wf-1');
     expect(row.textContent).toContain('workflow script not found');
     expect(glyphWord('chat-workflow-launcher-tc-wf-1')).toBe('Failed: ');
-    expect(row.querySelector('button')).toBeNull();
+    expect(row.querySelector('[data-testid^="chat-workflow-launcher-open-"]')).toBeNull();
+  });
+
+  it('opens a launch that failed in prose on what it said', async () => {
+    render(<Row result="Permission to use Workflow was denied" isError />);
+    const row = screen.getByTestId('chat-workflow-launcher-tc-wf-1');
+    expect(glyphWord('chat-workflow-launcher-tc-wf-1')).toBe('Failed: ');
+    await userEvent.click(screen.getByTestId('chat-workflow-launcher-tc-wf-1-toggle'));
+    expect(row).toHaveTextContent('Permission to use Workflow was denied');
+  });
+
+  it('is stopped when its record says running but its turn ended and no task is left', () => {
+    __run = run({ status: 'running' });
+    const { rerender } = render(<Row result={launchResult()} turnKey="t" live={false} />);
+    expect(glyphWord('chat-workflow-launcher-run_1')).toBe('Stopped: ');
+    rerender(<Row result={launchResult()} turnKey="t" live />);
+    expect(glyphWord('chat-workflow-launcher-run_1')).toBe('Running: ');
   });
 
   it('renders at once while the call is in flight', () => {

@@ -1,29 +1,27 @@
 /** What a tool's row opens on, by kind. */
-import { useChatId } from '../chat-tool-context';
-import { ToolResultExpand } from '../ToolResultExpand';
+import { useBackgroundStart } from '../../messages/turn/use-background-start';
 import { ToolResultImageThumbs, resolveResultText, resultImages } from '../shared';
 import { resolveToolDiff } from '../shared/diff-data';
-import { argText, createsFile } from '../../view-model/turn/tool-values';
+import { argText, createsFile, runsInBackground } from '../../view-model/turn/tool-values';
 import { toolKind } from '../../view-model/turn/tool-kind';
 import type { ToolPart, ToolStatus } from '../../view-model/turn/types';
 import { record } from '../../view-model/turn/values';
 import { BackgroundOutput } from './BackgroundOutput';
 import { CodeBody } from './CodeBody';
 import { DiffBody } from './DiffBody';
+import { ResultBlock, ResultText } from './ResultText';
 import { BodyNote, KeyValue, Surface } from './Surface';
 import { TerminalBody } from './TerminalBody';
 import { WebBody } from './WebBody';
-import { parseCodeLines } from './code-lines';
+import { parseReadLines, plainLines } from './code-lines';
 
 export interface ToolBodyProps {
   part: ToolPart;
   status: ToolStatus;
 }
 
-const isBackground = (part: ToolPart) => record(part.args)?.run_in_background === true;
-
-/** Whether the row has anything to open on. */
-export function hasToolBody(part: ToolPart, status: ToolStatus): boolean {
+/** Whether the row has anything to open on. `background`: the daemon holds a task the call started. */
+export function hasToolBody(part: ToolPart, status: ToolStatus, background = false): boolean {
   const { text } = resolveResultText(part.result);
   if (text || resultImages(part.result).length) return true;
   switch (toolKind(part.toolName)) {
@@ -32,7 +30,7 @@ export function hasToolBody(part: ToolPart, status: ToolStatus): boolean {
     case 'write':
       return Boolean(argText(part, 'content'));
     case 'shell':
-      return isBackground(part) || status === 'success' || status === 'failed';
+      return background || runsInBackground(part) || status === 'success' || status === 'failed';
     case 'mcp':
     case 'unknown':
       return Object.keys(record(part.args) ?? {}).length > 0;
@@ -41,68 +39,57 @@ export function hasToolBody(part: ToolPart, status: ToolStatus): boolean {
   }
 }
 
-/** A result the daemon cut short, with the whole of it on request. */
-function Truncated({ part, text, fullBytes }: { part: ToolPart; text: string; fullBytes: number }) {
-  const chatId = useChatId();
-  return (
-    <Surface className="px-3 py-2">
-      {chatId ? (
-        <ToolResultExpand chatId={chatId} toolUseId={part.toolCallId} truncatedContent={text} fullBytes={fullBytes} />
-      ) : (
-        <pre className="wrap-break-word whitespace-pre-wrap">{text}</pre>
-      )}
-    </Surface>
-  );
-}
-
-function ErrorBody({ text }: { text: string }) {
-  return (
-    <Surface>
-      <KeyValue label="Error" tone="fail" testId="chat-tool-error">
-        {text}
-      </KeyValue>
-    </Surface>
-  );
-}
-
+/** The change a call made, or tried to make. */
 function ChangeBody({ part }: { part: ToolPart }) {
   const kind = toolKind(part.toolName) === 'edit' ? 'Edit' : 'Write';
   const { hunks } = resolveToolDiff(kind, part.args, part.result);
   if (hunks?.length && !(kind === 'Write' && createsFile(part)))
     return <DiffBody id={part.toolCallId} hunks={hunks} testId="chat-edit-diff" />;
   const content = argText(part, 'content');
-  if (content)
-    return (
-      <CodeBody
-        id={part.toolCallId}
-        path={argText(part, 'file_path')}
-        lines={parseCodeLines(content)}
-        testId="chat-write-code"
-      />
-    );
+  if (!content) return null;
+  return (
+    <CodeBody
+      id={part.toolCallId}
+      path={argText(part, 'file_path')}
+      lines={plainLines(content)}
+      testId="chat-write-code"
+    />
+  );
+}
+
+function EditBody({ part, status }: ToolBodyProps) {
   const { text } = resolveResultText(part.result);
+  const { hunks } = resolveToolDiff(toolKind(part.toolName) === 'edit' ? 'Edit' : 'Write', part.args, part.result);
+  const change = hunks?.length || argText(part, 'content') ? <ChangeBody part={part} /> : null;
+  if (status === 'failed')
+    return (
+      <div className="flex min-w-0 flex-col gap-1.5">
+        {change}
+        {text && <ResultBlock part={part} failed testId="chat-tool-error" />}
+      </div>
+    );
+  if (change) return change;
   return text ? (
-    <Surface>
-      <KeyValue label="Result" testId="chat-edit-raw">
-        {text}
-      </KeyValue>
-    </Surface>
+    <ResultBlock part={part} failed={false} testId="chat-edit-raw" />
   ) : (
     <BodyNote testId="chat-edit-unavailable">Diff unavailable</BodyNote>
   );
 }
 
 function ShellBody({ part, status }: ToolBodyProps) {
-  const { text, truncated, fullBytes } = resolveResultText(part.result);
+  const { text, truncated } = resolveResultText(part.result);
+  const background = useBackgroundStart(part.toolCallId) !== undefined || runsInBackground(part);
   const command = argText(part, 'command') || argText(part, 'input');
   const description = argText(part, 'description');
   return (
     <>
       {description && <BodyNote testId="chat-bash-description">{description}</BodyNote>}
-      {isBackground(part) ? (
+      {background ? (
         <BackgroundOutput toolCallId={part.toolCallId} command={command} launch={text} />
       ) : truncated ? (
-        <Truncated part={part} text={text} fullBytes={fullBytes} />
+        <Surface className="px-3 py-2">
+          <ResultText part={part} />
+        </Surface>
       ) : (
         <TerminalBody command={command} output={text || (status === 'running' ? '' : '(no output)')} />
       )}
@@ -126,7 +113,7 @@ function CallBody({ part, status }: ToolBodyProps) {
           tone={status === 'failed' ? 'fail' : undefined}
           testId="chat-call-result"
         >
-          {text}
+          <ResultText part={part} />
         </KeyValue>
       )}
     </Surface>
@@ -134,38 +121,29 @@ function CallBody({ part, status }: ToolBodyProps) {
 }
 
 function MainBody({ part, status }: ToolBodyProps) {
-  const { text, truncated, fullBytes } = resolveResultText(part.result);
+  const { text, truncated } = resolveResultText(part.result);
   const kind = toolKind(part.toolName);
   if (kind === 'shell') return <ShellBody part={part} status={status} />;
   if (kind === 'mcp' || kind === 'unknown') return <CallBody part={part} status={status} />;
-  const error = status === 'failed' && text ? <ErrorBody text={text} /> : null;
-  if (kind === 'edit' || kind === 'write')
+  if (kind === 'edit' || kind === 'write') return <EditBody part={part} status={status} />;
+  if (status === 'failed' && text) return <ResultBlock part={part} failed testId="chat-tool-error" />;
+  if (kind === 'fetch' || kind === 'web-search')
     return (
-      <>
-        {status !== 'failed' && <ChangeBody part={part} />}
-        {error}
-      </>
+      <WebBody url={argText(part, 'url') || undefined} text={truncated ? undefined : text}>
+        {truncated && <ResultText part={part} />}
+      </WebBody>
     );
-  if (error) return error;
-  if (truncated) return <Truncated part={part} text={text} fullBytes={fullBytes} />;
-  if (kind === 'fetch' || kind === 'web-search') return <WebBody url={argText(part, 'url') || undefined} text={text} />;
   if (!text) return null;
-  if (kind === 'read')
+  if (kind === 'read' && !truncated)
     return (
       <CodeBody
         id={part.toolCallId}
         path={argText(part, 'file_path')}
-        lines={parseCodeLines(text)}
+        lines={parseReadLines(text)}
         testId="read-card-code-preview"
       />
     );
-  return (
-    <Surface className="max-h-96 overflow-y-auto">
-      <KeyValue label="Result" testId="search-card-plain-body">
-        {text}
-      </KeyValue>
-    </Surface>
-  );
+  return <ResultBlock part={part} failed={false} testId="search-card-plain-body" />;
 }
 
 export function ToolBody({ part, status }: ToolBodyProps) {
