@@ -13,12 +13,12 @@ export function TitleBarActions() {
   const searchChord = chordHint('app.search-palette');
 
   return (
-    <div data-testid="title-bar-actions" className="flex shrink-0 items-center gap-3 @max-[36rem]/trailing:gap-1">
+    <div data-testid="title-bar-actions" className="flex shrink-0 items-center gap-3 @max-[34rem]/trailing:gap-1">
       <TitleBarButton
         testId="main-toolbar-search"
         data-tut="search"
         label="Search"
-        hint={searchChord == null ? 'Search' : `Search ${searchChord}`}
+        hint={searchChord == null ? 'Search' : `Search\u00a0\u00a0${searchChord}`}
         onClick={() => emitSurfaceIntent({ type: 'open-search-palette' })}
       >
         <Search className="size-4" />

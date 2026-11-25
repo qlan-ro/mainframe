@@ -5,7 +5,7 @@
  * behavior (lazy expand, reveal auto-expand/scroll/highlight) is unchanged.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronRight, File, Folder } from 'lucide-react';
+import { FileText, Folder, FolderOpen } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import type { TabMode } from '@/store/run-pane';
@@ -15,6 +15,9 @@ import { FileTreeRowMenu } from './FileTreeRowMenu';
 import { openModeForMouseEvent } from './open-mode-from-mouse';
 import { isAncestorOf, sortEntries, toFullPath } from './file-tree-utils';
 import './file-tree.css';
+
+const ROW =
+  'flex h-[26px] w-full items-center gap-1.5 rounded-sm pr-2 text-left text-small text-ink-secondary focus-visible:focus-line-inset';
 
 /** Emits `open-file`, adding `mode` only when it isn't the default preview — keeps existing exact-shape assertions green. */
 function emitOpenFile(path: string, mode: TabMode): void {
@@ -39,7 +42,7 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
   const [open, setOpen] = useState(false);
   const [children, setChildren] = useState<FileTreeEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const indent = 8 + depth * 12;
+  const indent = 6 + depth * 14;
 
   const isRevealTarget = revealPath !== null && entry.path === revealPath;
   const isRevealAncestor = entry.type === 'directory' && revealPath !== null && isAncestorOf(entry.path, revealPath);
@@ -109,15 +112,13 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
           }}
           style={{ paddingLeft: indent }}
           className={[
-            'flex h-[22px] w-full items-center gap-[5px] border-l-2 border-solid pr-[12px] text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground',
-            isSelected ? 'border-l-primary bg-accent font-semibold text-foreground' : 'border-l-transparent',
-            isRevealTarget ? 'bg-accent/60 text-foreground' : 'bg-transparent',
+            ROW,
+            isSelected || isRevealTarget ? 'bg-chrome-selected text-foreground' : 'hover:bg-sidebar-accent',
           ]
             .filter(Boolean)
             .join(' ')}
         >
-          <span className="w-[9px] flex-shrink-0" />
-          <File size={12} className="flex-shrink-0 text-muted-foreground" />
+          <FileText size={16} className="flex-shrink-0 text-muted-foreground" />
           <TruncatedWithTooltip
             text={entry.name}
             tooltip={fullPath}
@@ -132,6 +133,7 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
     );
   }
 
+  const Icon = open ? FolderOpen : Folder;
   return (
     <>
       <FileTreeRowMenu entry={entry} fullPath={fullPath}>
@@ -141,13 +143,10 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
           type="button"
           onClick={toggle}
           style={{ paddingLeft: indent }}
-          className="flex h-[22px] w-full items-center gap-[5px] border-none bg-transparent pr-[12px] text-left text-xs font-medium text-foreground hover:bg-accent"
+          aria-expanded={open}
+          className={`${ROW} hover:bg-sidebar-accent`}
         >
-          <ChevronRight
-            size={12}
-            className={`flex-shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
-          />
-          <Folder size={12} className="flex-shrink-0 fill-current text-accent-ink" />
+          <Icon size={16} className="flex-shrink-0 text-muted-foreground" />
           <TruncatedWithTooltip
             text={entry.name}
             tooltip={fullPath}

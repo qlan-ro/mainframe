@@ -13,7 +13,7 @@
  */
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Eye, FileCode, Globe, Plus, Terminal } from 'lucide-react';
+import { Eye, FileText, Globe, Plus, Terminal } from 'lucide-react';
 import type { LaunchConfiguration } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,7 +33,7 @@ import { emitSurfaceIntent } from '@/store/surface-intents';
 /** A row's trailing kind hint ("preview" / "process") — not a keyboard
  *  shortcut, so it stays a plain mono span rather than DropdownMenuShortcut. */
 function RowHint({ children }: { children: ReactNode }) {
-  return <span className="shrink-0 font-mono text-xs text-muted-foreground">{children}</span>;
+  return <span className="shrink-0 font-mono text-xs font-normal text-ink-secondary">{children}</span>;
 }
 
 interface WorkspaceAddMenuProps {
@@ -63,8 +63,8 @@ export function WorkspaceAddMenu({ paneId: pane, configs, onLaunch, onOpenUrl }:
             variant="ghost"
             size="icon-xs"
             className={cn(
-              'ml-1.5 size-7 shrink-0 text-muted-foreground hover:bg-foreground/5 dark:hover:bg-foreground/5',
-              open && 'bg-foreground/8 text-foreground',
+              'ml-1.5 size-7 shrink-0 rounded-md text-muted-foreground hover:bg-sidebar-accent',
+              open && 'text-foreground',
             )}
           >
             <Plus className="size-4" />
@@ -73,35 +73,34 @@ export function WorkspaceAddMenu({ paneId: pane, configs, onLaunch, onOpenUrl }:
       </Hint>
       <DropdownMenuContent
         data-testid={`workspace-add-menu-${paneId}`}
-        className="w-56"
+        className="w-auto min-w-62.5"
         align="start"
         collisionPadding={8}
       >
-        <DropdownMenuLabel>New tab</DropdownMenuLabel>
         <DropdownMenuItem
           data-testid={`workspace-pane-open-file-${paneId}`}
           onSelect={() => emitSurfaceIntent({ type: 'open-file-picker' })}
         >
-          <FileCode className="size-3.5 text-muted-foreground" />
+          <FileText />
           <span className="min-w-0 flex-1 truncate">Open file…</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           data-testid={`workspace-pane-new-terminal-${paneId}`}
           onSelect={() => emitSurfaceIntent({ type: 'new-terminal', paneId: pane })}
         >
-          <Terminal className="size-3.5 text-muted-foreground" />
+          <Terminal />
           <span className="min-w-0 flex-1 truncate">New terminal</span>
           {terminalChord != null && <DropdownMenuShortcut>{terminalChord}</DropdownMenuShortcut>}
         </DropdownMenuItem>
         <DropdownMenuItem data-testid={`workspace-pane-open-url-${paneId}`} onSelect={onOpenUrl}>
-          <Globe className="size-3.5 text-muted-foreground" />
+          <Globe />
           <span className="min-w-0 flex-1 truncate">URL…</span>
           {urlChord != null && <DropdownMenuShortcut>{urlChord}</DropdownMenuShortcut>}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Launch configuration</DropdownMenuLabel>
+        <DropdownMenuLabel>Launch configurations</DropdownMenuLabel>
         {configs.length === 0 ? (
-          <div className="px-2 py-4 text-center text-xs text-muted-foreground">No launch configs found.</div>
+          <div className="px-2.5 py-4 text-center text-meta/[1.45] text-muted-foreground">No launch configs found.</div>
         ) : (
           configs.map((cfg) => (
             <DropdownMenuItem
@@ -109,11 +108,7 @@ export function WorkspaceAddMenu({ paneId: pane, configs, onLaunch, onOpenUrl }:
               data-testid={`workspace-pane-launch-${cfg.name}-${paneId}`}
               onSelect={() => onLaunch(cfg)}
             >
-              {cfg.preview ? (
-                <Eye className="size-3.5 text-muted-foreground" />
-              ) : (
-                <Terminal className="size-3.5 text-muted-foreground" />
-              )}
+              {cfg.preview ? <Eye /> : <Terminal />}
               <span className="min-w-0 flex-1 truncate">{cfg.name}</span>
               <RowHint>{cfg.preview ? 'preview' : 'process'}</RowHint>
             </DropdownMenuItem>

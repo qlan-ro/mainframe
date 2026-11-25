@@ -90,13 +90,27 @@ const CM6_THEME_SPEC = {
   '.cm-content': {
     fontFamily: 'var(--font-mono, ui-monospace, monospace)',
     caretColor: 'var(--mf-code-fg)',
-    padding: '4px 0',
+    padding: '8px 0',
+    lineHeight: '20px',
+  },
+  '.cm-line': {
+    padding: '0 16px 0 0',
   },
   '.cm-gutters': {
     backgroundColor: 'var(--background)',
-    color: 'color-mix(in oklch, var(--muted-foreground) 50%, transparent)',
+    color: 'var(--muted-foreground)',
     border: 'none',
-    paddingRight: '8px',
+    fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+    lineHeight: '20px',
+  },
+  // 16px before the numbers (the comment gutter, where there is one) and the
+  // fold gutter's 14px after them.
+  '.cm-lineNumbers .cm-gutterElement': {
+    minWidth: '0',
+    padding: '0',
+  },
+  '.cm-lineNumbers:first-child .cm-gutterElement': {
+    paddingLeft: '16px',
   },
   '.cm-activeLineGutter': {
     backgroundColor: 'transparent',
@@ -128,6 +142,7 @@ const CM6_THEME_SPEC = {
     overflow: 'auto',
   },
   '.cm-foldGutter': {
+    width: '14px',
     color: 'var(--mf-code-cmt)',
   },
 } as const;

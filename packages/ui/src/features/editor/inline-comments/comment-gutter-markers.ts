@@ -21,7 +21,7 @@
  *   buildCommentGutter    — factory that returns the full CM6 Extension array
  */
 import { GutterMarker, gutter, EditorView } from '@codemirror/view';
-import { StateField, StateEffect } from '@codemirror/state';
+import { Prec, StateField, StateEffect } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
 import { commentField } from './comment-gutter-state';
 
@@ -190,29 +190,31 @@ export function buildCommentGutter(callbacks: CommentGutterCallbacks): Extension
         return false;
       },
     }),
-    gutter({
-      class: 'cm-comment-gutter',
-      lineMarker(view, line) {
-        const { anchors } = view.state.field(commentField);
-        const lineInfo = view.state.doc.lineAt(line.from);
-        const hit = anchors.find((a) => {
-          const commentLine = view.state.doc.lineAt(a.pos);
-          return commentLine.number === lineInfo.number;
-        });
-        if (hit) {
-          // Line has a comment — show the ● open-marker.
-          return new CommentGutterMarker(hit.id, onOpenComment);
-        }
-        // Line has no comment — show the add-marker (visible only when hovered).
-        const hoveredLine = view.state.field(hoveredLineField);
-        const visible = hoveredLine === lineInfo.number;
-        return new AddCommentMarker(lineInfo.number, onAddComment, visible);
-      },
-    }),
+    // First in the gutters: it fills the 16px before the line numbers.
+    Prec.highest(
+      gutter({
+        class: 'cm-comment-gutter',
+        lineMarker(view, line) {
+          const { anchors } = view.state.field(commentField);
+          const lineInfo = view.state.doc.lineAt(line.from);
+          const hit = anchors.find((a) => {
+            const commentLine = view.state.doc.lineAt(a.pos);
+            return commentLine.number === lineInfo.number;
+          });
+          if (hit) {
+            // Line has a comment — show the ● open-marker.
+            return new CommentGutterMarker(hit.id, onOpenComment);
+          }
+          // Line has no comment — show the add-marker (visible only when hovered).
+          const hoveredLine = view.state.field(hoveredLineField);
+          const visible = hoveredLine === lineInfo.number;
+          return new AddCommentMarker(lineInfo.number, onAddComment, visible);
+        },
+      }),
+    ),
     EditorView.theme({
       '.cm-comment-gutter': {
-        width: '22px',
-        borderRight: '1px solid var(--border)',
+        width: '16px',
       },
       '.cm-comment-gutter .cm-gutterElement': {
         display: 'flex',

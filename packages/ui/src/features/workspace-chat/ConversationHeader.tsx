@@ -29,7 +29,7 @@ interface AgentStatusLabelProps {
 export function AgentStatusLabel({ status, label, testId }: AgentStatusLabelProps) {
   const { label: word, className } = STATUS[status];
   return (
-    <span data-testid={testId} data-status={status} className={`shrink-0 text-xs ${className}`}>
+    <span data-testid={testId} data-status={status} className={`shrink-0 text-meta/[1.45] ${className}`}>
       {label ?? word}
     </span>
   );
@@ -71,14 +71,14 @@ export function ConversationHeader({ testId, glyph, title, kind, children }: Con
   return (
     <div
       data-testid={testId}
-      className="flex min-h-12 shrink-0 items-center gap-2.5 border-b border-border py-2 pr-2 pl-4 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground"
+      className="flex shrink-0 items-center gap-2.5 border-b border-border px-4 py-3 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground"
     >
       {glyph}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-semibold" title={title}>
+        <span className="truncate text-body font-semibold" title={title}>
           {title}
         </span>
-        <span className="truncate text-xs text-muted-foreground">{kind}</span>
+        <span className="truncate text-meta/[1.45] text-muted-foreground">{kind}</span>
       </span>
       {children}
     </div>

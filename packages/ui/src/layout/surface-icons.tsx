@@ -15,25 +15,6 @@ interface GlyphProps {
 
 const STROKE = 1.6;
 
-export function ChatGlyph({ size = 12, className }: GlyphProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 18 18"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={STROKE}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M3 4.5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H7.5L4.5 15v-3z" />
-    </svg>
-  );
-}
-
 export function EditorGlyph({ size = 12, className }: GlyphProps) {
   return (
     <svg

@@ -21,6 +21,7 @@
  *
  * data-testid: workspace-files-panel (present only while open).
  */
+import type { CSSProperties } from 'react';
 import { Sidebar } from '@/components/ui/sidebar';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
@@ -36,10 +37,14 @@ export function WorkspaceFilesPanel() {
   const setOpen = useWorkspaceFilesPanel((s) => s.setOpen);
 
   return (
-    <Sidebar side="right" collapsible="offcanvas">
+    <Sidebar
+      side="right"
+      collapsible="offcanvas"
+      style={{ '--sidebar-width': '224px', '--sidebar': 'var(--background)' } as CSSProperties}
+    >
       <div data-testid={open ? 'workspace-files-panel' : undefined} className="flex min-h-0 flex-1 flex-col">
         {!projectId ? (
-          <div className="px-3 py-4 text-xs text-muted-foreground">Open a session to browse its files.</div>
+          <div className="px-3 py-4 text-meta/[1.45] text-muted-foreground">Open a session to browse its files.</div>
         ) : (
           <FileTree port={port} projectId={projectId} chatId={chatId} onCollapse={() => setOpen(false)} />
         )}

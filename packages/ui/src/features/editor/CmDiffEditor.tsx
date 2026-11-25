@@ -15,7 +15,7 @@
  * (nextChange / prevChange in diff-nav.ts) always hold the live MergeView.
  */
 import { useEffect, useRef } from 'react';
-import { EditorState, type Extension } from '@codemirror/state';
+import { EditorState, type Extension, type Text } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { MergeView } from '@codemirror/merge';
 import type { LangPackId } from '@/lib/editor/file-types';
@@ -39,13 +39,17 @@ export interface LineSelection {
 
 const diffTheme = EditorView.theme({
   '.cm-insertedLine': {
-    backgroundColor: 'var(--mf-diff-add-bg)',
+    backgroundColor: 'color-mix(in srgb, var(--success) 15%, transparent)',
   },
   '.cm-deletedLine': {
-    backgroundColor: 'var(--mf-diff-del-bg)',
+    backgroundColor: 'color-mix(in srgb, var(--red) 15%, transparent)',
   },
-  '.cm-changedLine': {
-    backgroundColor: 'var(--mf-diff-add-bg)',
+  // The merge extension's own rules name the side, so these do too.
+  '&.cm-merge-b .cm-changedLine': {
+    backgroundColor: 'color-mix(in srgb, var(--success) 15%, transparent)',
+  },
+  '&.cm-merge-a .cm-changedLine': {
+    backgroundColor: 'color-mix(in srgb, var(--red) 15%, transparent)',
   },
   '.cm-changedText': {
     backgroundColor: 'color-mix(in srgb, var(--mf-diff-add-bg) 60%, transparent)',
@@ -55,6 +59,11 @@ const diffTheme = EditorView.theme({
     borderRight: '1px solid var(--mf-diff-del-border)',
   },
 });
+
+/** A chunk's lines on one side; a chunk with nothing on that side has none. */
+function lineCount(doc: Text, from: number, to: number, end: number): number {
+  return from === to ? 0 : doc.lineAt(end).number - doc.lineAt(from).number + 1;
+}
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -232,8 +241,8 @@ export function CmDiffEditor({
       let additions = 0;
       let deletions = 0;
       for (const chunk of mv.chunks) {
-        additions += chunk.toB - chunk.fromB;
-        deletions += chunk.toA - chunk.fromA;
+        additions += lineCount(mv.b.state.doc, chunk.fromB, chunk.toB, chunk.endB);
+        deletions += lineCount(mv.a.state.doc, chunk.fromA, chunk.toA, chunk.endA);
       }
       onStats({ additions, deletions });
     }

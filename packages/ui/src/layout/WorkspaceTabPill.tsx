@@ -27,21 +27,8 @@
  *
  * data-testid: workspace-tab-<id> / workspace-tab-title-<id> / workspace-tab-stop-<id> / workspace-tab-close-<id>.
  */
-import {
-  Bot,
-  Code2,
-  Eye,
-  FileText,
-  GitCompare,
-  Globe,
-  MessageSquare,
-  MessagesSquare,
-  Split,
-  Square,
-  SquareTerminal,
-  Terminal,
-  X,
-} from 'lucide-react';
+import { Bot, Code, Diff, Eye, FileText, Globe, Split, Square, SquareTerminal, Terminal, X } from 'lucide-react';
+import { ChatIcon, ChatsIcon } from '@/components/ui/glyphs';
 import type { LaunchConfiguration, LaunchProcessStatus } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { FadeLabel } from '@/components/ui/fade-label';
@@ -66,9 +53,9 @@ const GLYPHS: Record<Exclude<RunTab['kind'], 'chat'>, typeof Eye> = {
   url: Globe,
   console: SquareTerminal,
   terminal: Terminal,
-  code: Code2,
-  skill: Code2,
-  diff: GitCompare,
+  code: Code,
+  skill: Code,
+  diff: Diff,
   viewer: FileText,
   agent: Bot,
 };
@@ -76,9 +63,9 @@ const GLYPHS: Record<Exclude<RunTab['kind'], 'chat'>, typeof Eye> = {
 /** A delegated task is the sub-agent's robot, filled (T1c). */
 const CHAT_GLYPHS: Record<ChatTabRole, { glyph: typeof Eye; className?: string }> = {
   fork: { glyph: Split, className: 'rotate-90' },
-  side: { glyph: MessagesSquare },
+  side: { glyph: ChatsIcon },
   task: { glyph: Bot, className: 'fill-current/25' },
-  session: { glyph: MessageSquare },
+  session: { glyph: ChatIcon },
 };
 
 function tabGlyph(tab: RunTab): { glyph: typeof Eye; className?: string } {
@@ -162,14 +149,14 @@ function TabPill({ pane, tab, title, configs, scopeStatuses, onStop }: Workspace
               onStop(config);
             }}
           >
-            <Square className="text-destructive" fill="currentColor" />
+            <Square className="text-crit" fill="currentColor" />
           </Button>
         </Hint>
       )}
       <span
         className={cn(
           !isActive && TAB_CLOSE_OVERLAY,
-          !isActive && 'bg-(--tab-hover) opacity-0 before:to-(--tab-hover)',
+          !isActive && 'opacity-0',
           !isActive && 'group-focus-within/tab:opacity-100 group-hover/tab:opacity-100',
           // Left of the Stop, which stays reachable.
           !isActive && live && 'right-8.5',

@@ -76,21 +76,20 @@ describe('ViewerShell', () => {
     expect(screen.getByTestId('viewer-shell')).toBeInTheDocument();
   });
 
-  it('renders the dir portion "a/b" and basename "file.png" as separate text nodes', () => {
+  it('renders the folder "a/b" and basename "file.png" as separate text nodes', () => {
     const { container } = render(
       <ViewerShell path="/a/b/file.png" status="PNG · 10×10 · 1 KB">
         <div>body</div>
       </ViewerShell>,
     );
-    // The dir segments "a" and "b" render as individual spans.
+    // The folder is one muted path beside the name.
     const allSpans = Array.from(container.querySelectorAll('span'));
     const texts = allSpans.map((s) => s.textContent);
-    expect(texts).toContain('a');
-    expect(texts).toContain('b');
-    // The basename is in its own semibold span.
+    expect(texts).toContain('a/b');
+    // The basename is in its own medium span.
     const basename = allSpans.find((s) => s.textContent === 'file.png');
     expect(basename).toBeDefined();
-    expect(basename?.className).toContain('font-semibold');
+    expect(basename?.className).toContain('font-medium');
   });
 
   it('renders only basename for a no-dir path', () => {

@@ -41,7 +41,7 @@ export function NavRailButton({
         aria-pressed={selected || undefined}
         className={cn(
           'relative flex size-9.5 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors',
-          'hover:bg-sidebar-accent hover:text-foreground',
+          'hover:bg-sidebar-accent hover:text-foreground focus-visible:focus-line',
           selected && 'bg-chrome-chip text-foreground',
           className,
         )}

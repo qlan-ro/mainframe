@@ -32,7 +32,7 @@ export function PreviewRunControl({ status, onRun, onStop, onRestart }: PreviewR
   return (
     <div className="flex shrink-0 items-center gap-px">
       <Button data-testid="preview-run-stop" variant="outline" size="xs" onClick={onStop}>
-        <Square data-icon="inline-start" className="fill-current text-destructive" />
+        <Square data-icon="inline-start" className="fill-current text-crit" />
         Stop
       </Button>
       <Hint label="Restart server">
