@@ -29,7 +29,9 @@ const state = (id, proto = [], app = [], pairs = work, transcript = 'tools') => 
   scenario: {
     transcript,
     act: 'none',
-    ...(transcript === 'live command' || transcript === 'awaitingApproval' ? { running: true } : {}),
+    ...(transcript === 'live command' || transcript === 'awaitingApproval' || transcript === 'workspaceAgent'
+      ? { running: true }
+      : {}),
   },
   proto: P.all(P.preset('every-tool'), ...proto),
   app: P.all(closeWorkspace, ...app),
@@ -158,7 +160,7 @@ export default {
         [open(secondaryTools), P.js("q('.tca[data-wsagent=agent]')?.click()")],
         [open(appWork), P.js("tid('chat-task-open-parity-agent')?.click()")],
         [{ id: 'workspace agent body', p: "q('.agw')", a: "tid('workspace-agent-parity-agent')", local: true }],
-        'agent',
+        'workspaceAgent',
       ),
       shot: { p: "q('#wsp')", a: "tid('workspace-surface')", own: true },
     },

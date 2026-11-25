@@ -16,9 +16,10 @@ interface ThumbProps {
   onResolve: (uri: string, value: ResolvedToolImage) => void;
   onRetry: () => void;
   caption?: string;
+  preview?: boolean;
 }
 
-function ToolResultImageThumb({ image, testId, onOpen, active, onResolve, onRetry, caption }: ThumbProps) {
+function ToolResultImageThumb({ image, testId, onOpen, active, onResolve, onRetry, caption, preview }: ThumbProps) {
   const [state, setState] = useState<ThumbState>('pending');
   const { ref, src, error } = useToolImage(image, active, onResolve);
   const failed = error || state === 'error';
@@ -32,16 +33,17 @@ function ToolResultImageThumb({ image, testId, onOpen, active, onResolve, onRetr
       size="xs"
       className={cn(
         'min-w-0 has-data-[slot=attachment-media]:p-0',
-        caption
-          ? 'aspect-[8/5] w-[200px] flex-col gap-0 border-0 bg-muted shadow-[inset_0_0_0_1px_var(--border)]'
+        caption || preview
+          ? 'aspect-[8/5] flex-col gap-0 rounded-[8px] border-0 bg-muted shadow-[inset_0_0_0_1px_var(--border)]'
           : 'border-0 bg-transparent',
+        preview ? 'w-[240px]' : caption && 'w-[200px]',
       )}
     >
       {(state === 'done' || failed) && <ImageTrigger failed={!!failed} activate={activate} />}
       <AttachmentMedia
         variant="image"
         className={
-          caption &&
+          (caption || preview) &&
           'h-full w-full bg-transparent group-data-[size=xs]/attachment:w-full *:[img]:h-full *:[img]:object-contain'
         }
       >
@@ -86,10 +88,11 @@ export interface ToolResultImageThumbsProps {
   toolCallId: string;
   images: ToolResultImage[];
   caption?: string;
+  preview?: boolean;
 }
 
 /** Renders nothing when `images` is empty, so callers can pass it unconditionally. */
-export function ToolResultImageThumbs({ toolCallId, images, caption }: ToolResultImageThumbsProps) {
+export function ToolResultImageThumbs({ toolCallId, images, caption, preview }: ToolResultImageThumbsProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const { resolved, attempts, onResolve, retry } = useImageResolution(images);
   if (images.length === 0) return null;
@@ -101,6 +104,7 @@ export function ToolResultImageThumbs({ toolCallId, images, caption }: ToolResul
           key={`${image.uri ?? index}:${attempts[index] ?? 0}`}
           image={image}
           caption={caption}
+          preview={preview}
           testId={`tool-result-image-${toolCallId}-${index}`}
           onOpen={() => setOpenIndex(index)}
           active={openIndex === index}

@@ -222,6 +222,9 @@ const ALL = [
   ended('e10', 'agent', 'Profile the capsule render', 'stopped', 63),
 ];
 const live = (): Json[] => {
+  if (scenario.transcript === 'workspaceAgent') {
+    return [task('parity-review-agent', 'agent', 'Review the quota reset diff', 4, { toolUseId: 'parity-agent' })];
+  }
   switch (act()) {
     case 'none':
       return [];

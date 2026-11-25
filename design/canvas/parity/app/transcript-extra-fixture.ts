@@ -62,3 +62,45 @@ export function extraTools(turn: Turn, call: Call) {
     ),
   ]);
 }
+
+export function workspaceAgent(turn: Turn, call: Call) {
+  turn(
+    'Now tool calls, images and agents.',
+    '**Tool calls, images and agents.** MCP and tools with no card share one row. A failed call opens by itself. Sub-agents list their steps as rows.',
+    13,
+    [
+      call(
+        'parity-agent',
+        'Task',
+        {
+          description: 'Review the quota reset diff',
+          prompt: 'Review the uncommitted quota changes for correctness and test coverage.',
+          subagent_type: 'code-reviewer',
+        },
+        undefined,
+        12.9,
+        { subagent: true, toolCallTiming: { startedAt: Date.now() - 240_000 } },
+      ),
+      call(
+        'parity-agent-search',
+        'Grep',
+        { pattern: 'useQuota', path: 'mobile/src' },
+        Array.from({ length: 6 }, (_, i) => `mobile/src/quota/capsule.tsx:${i + 1}:useQuota`).join('\n'),
+        12.8,
+        { parentToolCallId: 'parity-agent' },
+      ),
+      call(
+        'parity-agent-read',
+        'Read',
+        { file_path: 'mobile/src/quota/capsule.tsx' },
+        Array.from({ length: 48 }, (_, i) => `${i + 1}\t// quota capsule`).join('\n'),
+        12.7,
+        { parentToolCallId: 'parity-agent' },
+      ),
+      call('parity-agent-step', 'Bash', { command: 'pnpm test capsule' }, undefined, 12.6, {
+        parentToolCallId: 'parity-agent',
+        toolCallTiming: { startedAt: Date.now() - 12_000 },
+      }),
+    ],
+  );
+}

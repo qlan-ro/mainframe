@@ -1,4 +1,4 @@
-import { extraTools } from './transcript-extra-fixture';
+import { extraTools, workspaceAgent } from './transcript-extra-fixture';
 import { exploration, tools } from './transcript-tools-fixture';
 
 type Item = Record<string, unknown>;
@@ -227,6 +227,7 @@ const fixtures = {
   todo,
   markers,
   agent,
+  workspaceAgent,
   delegated,
   links,
   states,

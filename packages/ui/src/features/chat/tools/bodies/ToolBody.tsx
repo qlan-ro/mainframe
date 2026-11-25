@@ -186,6 +186,7 @@ export function ToolBody({ part, status }: ToolBodyProps) {
           <ToolResultImageThumbs
             toolCallId={part.toolCallId}
             images={images}
+            preview={/(?:^|__)browser_take_screenshot$/.test(part.toolName)}
             caption={toolKind(part.toolName) === 'read' ? argText(part, 'file_path').split(/[\\/]/).pop() : undefined}
           />
         </div>

@@ -13,6 +13,10 @@ const ANY = /./;
 const SHIFT = /^(x|y|y \(middle\)|width|height|right edge|visible width)$/;
 
 export const RULES = [
+  { area: 'transcript', state: 'workspace agent body', part: 'text “4m”', prop: 'missing in app', cls: 'SPEC', why: 'W8 specifies “running”, with the count when several. The live fixture returns one running task and the prototype writes its elapsed time instead.' },
+  { area: 'transcript', state: 'workspace agent body', part: 'text “Running”', prop: 'only in app', cls: 'SPEC', why: 'W8 specifies “running” for the Agent header. The app also independently shows the nested Bash step as running.' },
+  { area: 'transcript', state: 'workspace agent body', part: 'text “Stop”', cls: 'PROTO', why: 'The prototype assigns Stop the pdb class, which has no CSS rule. The app mounts the shared StopButton with its danger and focus styling.' },
+
   { area: 'transcript', state: /^(work collapsed|terminal states)$/, el: 'work header', part: /^icon 1 |^inner box 1 .*4×4/, prop: /missing in app|only in app/, cls: 'SPEC', why: 'T1b: “Claude’s history, interrupted Claude turns and killed sessions end neutral.” The fixture has no recorded outcome, so the app displays its neutral dot.' },
   { area: 'transcript', el: /^(tool row|agent row|.+ command|exploration row|exploration steps|delegated row [1-7])$/, part: /^text/, prop: 'x', cls: 'PROTO', why: 'The prototype gives its clipped screen-reader status span relative positioning in the flex row. Its 1 px width and 8 px gap displace the visible text by 9 px.', delta: 9 },
   { area: 'transcript', el: /^delegated row [1-3]$/, part: /^text “(?:waiting on you|running · 1m 04s|queued)”$/, prop: 'x', cls: 'SPEC', why: 'T1c: “Stop sits at the end of a live row, left of ‘Open in workspace’, in the same 24 px action.” The Stop action moves the receipt 24 px.', delta: 24 },
