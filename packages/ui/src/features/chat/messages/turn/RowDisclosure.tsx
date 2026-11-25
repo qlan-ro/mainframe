@@ -73,7 +73,12 @@ function RowLine(props: RowDisclosureProps & { open: boolean; toggle: () => void
           {props.verb}
         </span>
         {target && (
-          <span className={cn('min-w-0 truncate', props.mono ? 'mf-tr-mono text-foreground' : 'text-muted-foreground')}>
+          <span
+            className={cn(
+              'min-w-0 truncate',
+              props.mono ? 'mf-tr-mono translate-y-[0.5px] text-foreground' : 'text-muted-foreground',
+            )}
+          >
             {target}
           </span>
         )}
@@ -84,14 +89,14 @@ function RowLine(props: RowDisclosureProps & { open: boolean; toggle: () => void
             data-testid={`${props.testId}-receipt`}
             className={cn(
               'mf-tr-meta shrink-0 whitespace-nowrap tabular-nums',
-              props.tone ? TONES[props.tone] : 'text-muted-foreground',
+              props.tone ? TONES[props.tone] : 'text-(--mf-tr-muted)',
             )}
           >
             {receipt}
           </span>
         )}
       </span>
-      {props.actions && <span className="relative -my-1 flex shrink-0 items-center">{props.actions}</span>}
+      {props.actions && <span className="relative -mx-1 -my-1 flex shrink-0 items-center">{props.actions}</span>}
       {expandable ? (
         <ChevronRight
           aria-hidden
