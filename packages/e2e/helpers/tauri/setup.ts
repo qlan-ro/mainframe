@@ -86,7 +86,7 @@ export async function createTauriChat(
   if (wantsPlanMode) {
     // Plan mode has no toggle in the composer: a chat enters it from the provider
     // setting or the agent, so the suite sets it on the chat and waits for the status.
-    const patched = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/config`, {
+    const patched = await daemonFetch(`/api/chats/${chatId}/config`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ planMode: true }),
