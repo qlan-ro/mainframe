@@ -172,6 +172,21 @@ describe('ToolBody', () => {
     expect(summary.querySelector('code')).toHaveTextContent('rate_limits');
   });
 
+  it('shows web search titles and sources with the full output available', () => {
+    const text =
+      'Web search results for query: "quota"\n\nLinks: [{"title":"Quota","url":"https://example.com/quota"}]';
+    show(part('WebSearch', { query: 'quota' }, text));
+    expect(screen.getByText('Quota')).toBeVisible();
+    expect(screen.getByText('example.com')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Full search output' }));
+    expect(screen.getByText(text.replace(/\s+/g, ' '))).toBeVisible();
+  });
+
+  it('keeps an unstructured web search result readable', () => {
+    show(part('WebSearch', { query: 'quota' }, 'No matching results'));
+    expect(screen.getByText('No matching results')).toBeVisible();
+  });
+
   it('highlights literal grep matches and preserves output indentation', () => {
     show(part('Grep', { pattern: 'a+b' }, 'src/quota.ts:21:    a+b = 1;'));
     const body = screen.getByTestId('search-card-plain-body');

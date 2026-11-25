@@ -14,6 +14,7 @@ import { ResultBlock, ResultText } from './ResultText';
 import { BodyNote, KeyValue, Surface } from './Surface';
 import { TerminalBody } from './TerminalBody';
 import { WebBody } from './WebBody';
+import { WebSearchBody } from './WebSearchBody';
 import { parseRead, plainLines } from './code-lines';
 
 export interface ToolBodyProps {
@@ -158,7 +159,8 @@ function MainBody({ part, status }: ToolBodyProps) {
   if (kind === 'mcp' || kind === 'unknown') return <CallBody part={part} status={status} />;
   if (kind === 'edit' || kind === 'write') return <EditBody part={part} status={status} />;
   if (status === 'failed' && text) return <ResultBlock part={part} failed testId="chat-tool-error" />;
-  if (kind === 'fetch' || kind === 'web-search')
+  if (kind === 'web-search' && text && !truncated) return <WebSearchBody text={text} />;
+  if (kind === 'fetch' || (kind === 'web-search' && truncated))
     return (
       <WebBody url={argText(part, 'url') || undefined} text={truncated ? undefined : text}>
         {truncated && <ResultText part={part} />}

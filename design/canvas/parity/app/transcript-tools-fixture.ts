@@ -141,15 +141,17 @@ function shellAndExternalCalls(call: Call): Item[] {
       'parity-search',
       'WebSearch',
       { query: 'codex rate limit reset' },
-      [
-        'Rate limits · OpenAI Codex docs',
-        'developers.openai.com',
-        'Usage stuck at 100% after reset',
-        'github.com · issue',
-        'Codex CLI changelog 0.62',
-        'github.com',
-        '5 more results',
-      ].join('\n'),
+      `Web search results for query: "codex rate limit reset"
+
+Links: ${JSON.stringify([
+        { title: 'Rate limits · OpenAI Codex docs', url: 'https://developers.openai.com/codex/rate-limits' },
+        { title: 'Usage stuck at 100% after reset', url: 'https://github.com/example/codex/issues/1' },
+        { title: 'Codex CLI changelog 0.62', url: 'https://github.com/example/codex/releases/tag/0.62' },
+        ...Array.from({ length: 5 }, (_, index) => ({
+          title: `Additional result ${index + 1}`,
+          url: `https://example.com/results/${index + 1}`,
+        })),
+      ])}`,
       12.2,
     ),
     call(
