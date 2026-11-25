@@ -76,7 +76,7 @@ export function hasUnsent(threadId: string): boolean {
 }
 
 /** The draft became a session. */
-export function moveUnsent(id: string | undefined, threadId: string): void {
+export function moveUnsent(id: string, threadId: string): void {
   update(id, (entry) => ({ ...entry, threadId }));
 }
 

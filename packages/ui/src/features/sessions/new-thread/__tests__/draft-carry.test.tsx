@@ -245,6 +245,32 @@ it('opens the last session as ever when there was nothing to bring', async () =>
   expect(toast.info).not.toHaveBeenCalled();
 });
 
+it('brings nothing from a session', async () => {
+  listChats.mockResolvedValue([{ id: 'chat-9', title: 'Other', projectId: 'p9' } as Chat]);
+  await openDraft();
+  await act(async () => void (await client.threads.switchToThread('chat-9')));
+  await flush();
+  await act(async () => client.composer.setText('to the session'));
+  act(() =>
+    useDraftContent
+      .getState()
+      .add('chat-9', [{ kind: 'code', filePath: 'a', startLine: 1, endLine: 1, lineContent: 'a', note: 'n' }]),
+  );
+  listChats.mockResolvedValue([]);
+  await go(REMOTE);
+  expect(prose().text).toBe('');
+  expect(toast.info).not.toHaveBeenCalled();
+});
+
+it('leaves a draft alone when its own daemon is chosen again', async () => {
+  const id = await openDraft();
+  await fill();
+  await go(LOCAL);
+  expect(main()).toBe(id);
+  expect(prose()).toMatchObject({ text: 'compare @Prior', files: ['notes.txt'] });
+  expect(toast.info).not.toHaveBeenCalled();
+});
+
 it('leaves an unsent message on its daemon, for the draft opened on return', async () => {
   const id = await openDraft();
   act(() => {

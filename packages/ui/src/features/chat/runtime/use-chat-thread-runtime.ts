@@ -153,7 +153,7 @@ export function useChatThreadRuntime(
           const { remoteId } = await createForLocal(controller.getThreadId(), port);
           chatControllerRegistry.adopt(controller, remoteId);
         }
-        moveUnsent(unsentId, controller.getDaemonId());
+        if (unsentId) moveUnsent(unsentId, controller.getDaemonId());
         await controller.sendMessage(message);
         reportUnsent(unsentId);
       } catch (error) {

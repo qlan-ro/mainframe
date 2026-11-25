@@ -39,6 +39,7 @@ const undo = () => lastToast()[1].action.onClick();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  endDraftGenerations();
   create.isCreatePending.mockReturnValue(false);
   adopted.mockReturnValue(false);
   useDraftContent.setState({ byThread: {} });

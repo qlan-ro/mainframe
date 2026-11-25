@@ -67,12 +67,10 @@ export function sendRefusal(error: unknown): string | undefined {
   return refused ? refusalInWords(error, failure) : undefined;
 }
 
-const CONNECTION_LOST = 'The connection to the daemon was lost.';
-
 /** The connection's own failures (`acp-rpc-connection.ts`). */
 const CONNECTION_FAILURES: Readonly<Record<string, string>> = {
   'request timed out': 'The daemon did not answer in time.',
-  'connection closed': CONNECTION_LOST,
+  'connection closed': 'The connection to the daemon was lost.',
   'acp connection failed to open': UNREACHABLE_SENTENCE,
   'acp connection closed before opening': UNREACHABLE_SENTENCE,
 };
@@ -80,7 +78,6 @@ const CONNECTION_FAILURES: Readonly<Record<string, string>> = {
 /** What went wrong with a send, as a sentence, whatever failed: creating the session, an upload or the prompt. */
 export function sendFailureReason(error: unknown): string {
   const failure = promptFailureOf(error);
-  if (error instanceof NotSentError) return CONNECTION_LOST;
   if (failure) return capitalized(REFUSALS.find(([raw]) => raw.test(failure.reason))?.[1] ?? failure.reason);
   const message = errorMessage(error);
   if (CONNECTION_FAILURES[message]) return CONNECTION_FAILURES[message];

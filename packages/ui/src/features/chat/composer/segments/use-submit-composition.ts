@@ -8,7 +8,7 @@
  *
  * The two are split because only the enabled/disabled predicate needs the
  * live draft text: `useSubmitComposition` subscribes to nothing but the active
- * thread id and the chat's extras, so typing a character no longer re-renders the whole composer —
+ * thread id, so typing a character no longer re-renders the whole composer —
  * `useCanSubmit` is consumed inside the send button alone.
  *
  * `submit()`'s imperative read of text/attachments/runConfig goes through
@@ -46,7 +46,7 @@ import { isDraftSessionId } from '@/store/layout-persist';
 import type { EnterWhileRunning } from '@/store/ui-prefs';
 import { withSteer } from '../../controller/steer';
 import { getDraftConfig } from '@/features/sessions/runtime/draft-config';
-import { useChatExtras } from '../../runtime/chat-extras';
+import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
 import { readLiveComposerState } from '../read-live-composer-state';
 import { toCompleteAttachment } from '../attachment-adapter';
@@ -65,7 +65,6 @@ export type SubmitComposition = (mode?: EnterWhileRunning) => void;
 export function useSubmitComposition(): SubmitComposition {
   const aui = useAui();
   const threadId = useActiveThreadId();
-  const extras = useChatExtras();
 
   return (mode) => {
     if (threadId == null) return;
@@ -87,12 +86,11 @@ export function useSubmitComposition(): SubmitComposition {
     const content = composeMessage(prependSessionReferences(wireText, references), items);
     const attachments = [...content.attachments, ...state.attachments.map(toCompleteAttachment)];
     const runConfig = mode === 'steer' ? withSteer(state.runConfig) : state.runConfig;
-    const chatId = extras?.state.chatId;
     // A draft's first message is kept whole; in a session only its captures need keeping.
     const unsentId =
-      chatId && isDraftSessionId(chatId)
+      isDraftSessionId(threadId) && !chatControllerRegistry.get(threadId)?.hasRemoteId()
         ? holdUnsent({
-            threadId: chatId,
+            threadId,
             draft: {
               text: state.text,
               composition,
@@ -100,7 +98,7 @@ export function useSubmitComposition(): SubmitComposition {
               attachments: [...state.attachments],
               references: Object.fromEntries(references),
             },
-            setup: getDraftConfig(chatId),
+            setup: getDraftConfig(threadId),
             sent: attachments,
           })
         : undefined;

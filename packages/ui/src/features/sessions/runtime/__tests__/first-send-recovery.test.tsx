@@ -320,11 +320,11 @@ describe('creating the session fails', () => {
     vi.mocked(createChat).mockRejectedValueOnce(new Error('no'));
     await type('first');
     await send();
-    act(() => useComposerSegments.getState().append(id, { quote: 'later quote', liveText: '' }));
+    act(() => useComposerSegments.getState().append(id, { quote: 'later quote', liveText: 'typed before' }));
     await type('about it');
     await press('restore');
     await send();
-    expect(prompts()).toEqual(['first\n\n> later quote\n\nabout it']);
+    expect(prompts()).toEqual(['first\n\ntyped before\n\n> later quote\n\nabout it']);
   });
 
   it('keeps a mention on its own session when its label now names another', async () => {
@@ -332,12 +332,14 @@ describe('creating the session fails', () => {
     const id = await openDraft();
     vi.mocked(createChat).mockRejectedValueOnce(new Error('no'));
     act(() => useSessionReferences.getState().record(id, 'Prior', '/logs/one.jsonl'));
+    act(() => useComposerSegments.getState().append(id, { quote: 'q', liveText: 'first @Prior' }));
     await type('see @Prior');
     await send();
     act(() => useSessionReferences.getState().record(id, 'Prior', '/logs/two.jsonl'));
     await type('and @Prior');
     await press('restore');
     expect(text()).toBe('see @Prior (2)\n\nand @Prior');
+    expect(useComposerSegments.getState().byThread[id]?.committed[0]?.text).toBe('first @Prior (2)');
     expect(Object.fromEntries(sessionReferencesFor(id))).toEqual({
       Prior: '/logs/two.jsonl',
       'Prior (2)': '/logs/one.jsonl',
