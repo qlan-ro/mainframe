@@ -1,0 +1,140 @@
+import { P, base, closeWorkspace } from './common.mjs';
+
+const work = [{ id: 'work header', p: "q('#thread .wk')", a: "q('[data-testid^=chat-work-header-]')" }];
+const show = (selector) => P.js(`(${selector})?.scrollIntoView({ block: 'center' })`);
+const open = (selector) =>
+  P.js(`(() => {
+  const button = ${selector};
+  if (button?.getAttribute('aria-expanded') === 'false') button.click();
+})()`);
+const protoWork = "q('#thread .wkt')";
+const appWork = "q('[data-testid^=chat-work-toggle-]')";
+const statsToggle = `q('.wkt[aria-label*="ran 1 command, 7 ways"]')`;
+const statsRows = `${statsToggle}?.parentElement?.nextElementSibling`;
+const statsRow = (index) => `${statsRows}?.querySelectorAll('.tcr')[${index}]`;
+const shot = { p: "q('#thread')", a: "tid('chat-thread-viewport')" };
+const state = (id, proto = [], app = [], pairs = work, transcript = 'tools') => ({
+  ...base,
+  id,
+  title: id,
+  shot,
+  scenario: {
+    transcript,
+    act: 'none',
+    ...(transcript === 'agent' || transcript === 'states' ? { running: true } : {}),
+  },
+  proto: P.all(P.preset('every-tool'), ...proto),
+  app: P.all(closeWorkspace, ...app),
+  pairs,
+});
+const tool = (id, label, protoHeader = protoWork) => {
+  const protoToggle = `q('.tct[aria-label^="${label}"]')`;
+  const appRoot = `tid('chat-row-parity-${id}')`;
+  const appToggle = `tid('chat-row-parity-${id}-toggle')`;
+  return state(
+    id,
+    [open(protoHeader), open(protoToggle), show(protoToggle)],
+    [open(appWork), open(appToggle), show(appRoot)],
+    [
+      { id: 'tool row', p: `${protoToggle}?.parentElement`, a: `${appRoot}?.firstElementChild` },
+      {
+        id: 'tool body',
+        p: `${protoToggle}?.closest('.tc')?.querySelector('.tcb')`,
+        a: `tid('chat-row-parity-${id}-body')`,
+      },
+    ],
+  );
+};
+
+const secondaryTools = "qa('#thread .wkt')[1]";
+const marker = (id, label, name) => {
+  const p = `txt('.mkp', ${JSON.stringify(label)})`;
+  const a = `tid('chat-marker-${name}')`;
+  return state(id, [show(p)], [show(a)], [{ id: 'event marker', p, a }], 'markers');
+};
+
+export default {
+  id: 'transcript',
+  states: [
+    state(
+      'work collapsed',
+      [],
+      [],
+      [
+        ...work,
+        { id: 'user bubble', p: "q('#thread .bubble')", a: "tid('chat-user-bubble')" },
+        { id: 'reply', p: "q('#thread .ans')", a: "tid('chat-answer')" },
+      ],
+    ),
+    tool('read', 'Read quota/use-quota.ts'),
+    tool('write', 'Wrote src/codex_tests.rs'),
+    tool('edit', 'Edited src/codex.rs'),
+    tool('grep', 'Searched'),
+    tool('glob', 'Found'),
+    tool('bash', 'Ran cargo test -p mainframe-quota codex'),
+    tool('fetch', 'Fetched'),
+    tool('search', 'Searched the web'),
+    tool('list', 'Listed packages/core-rs/crates'),
+    tool('mcp', 'Called get_issue', secondaryTools),
+    tool('lsp', 'Called LSP', secondaryTools),
+    tool('dynamic', 'Called docs__search', secondaryTools),
+    marker('skill', 'Used skill', 'skill'),
+    marker('wakeup', 'Scheduled a wakeup', 'schedulewakeup'),
+    marker('cron-create', 'Scheduled weekdays', 'croncreate'),
+    marker('cron-delete', 'Removed schedule', 'crondelete'),
+    marker('cron-list', 'Listed schedules', 'cronlist'),
+    marker('monitor', 'Monitored', 'monitor'),
+    marker('enter-worktree', 'Entered worktree', 'enterworktree'),
+    marker('exit-worktree', 'Left worktree', 'exitworktree'),
+    marker('notification', 'Notified', 'pushnotification'),
+    state(
+      'agent',
+      [open("qa('#thread .wkt')[1]"), show("q('.tca[data-wsagent=agent]')")],
+      [open(appWork), show("tid('chat-row-parity-agent')")],
+      [
+        {
+          id: 'agent row',
+          p: "q('.tca[data-wsagent=agent]')?.closest('.tcr')",
+          a: "tid('chat-row-parity-agent')?.firstElementChild",
+        },
+        { id: 'agent Stop', p: "q('.tca[aria-label^=Stop]')", a: "tid('chat-task-stop-parity-agent')" },
+      ],
+      'agent',
+    ),
+    state(
+      'plan',
+      [show("txt('.mkp', 'Updated plan')")],
+      [show("tid('chat-marker-exitplanmode')")],
+      [{ id: 'plan marker', p: "txt('.mkp', 'Updated plan')", a: "tid('chat-marker-exitplanmode')" }],
+      'markers',
+    ),
+    state(
+      'question',
+      [show("q('#thread .qa')")],
+      [show("tid('chat-ask-card')")],
+      [{ id: 'question card', p: "q('#thread .qa')", a: "tid('chat-ask-card')" }],
+      'markers',
+    ),
+    state(
+      'links',
+      [show("q('#thread .ans .mdlink')")],
+      [show("q('[data-testid=chat-answer] .mf-link')")],
+      [{ id: 'web link', p: "q('#thread .ans .mdlink')", a: "q('[data-testid=chat-answer] .mf-link')" }],
+      'links',
+    ),
+    state(
+      'terminal states',
+      [open(statsToggle), show(statsToggle)],
+      [open(appWork)],
+      [
+        { id: 'work header', p: `${statsToggle}?.parentElement`, a: work[0].a },
+        ...['running', 'passed', 'failed', 'stopped'].map((status, index) => ({
+          id: `${status} command`,
+          p: statsRow(index),
+          a: `tid('chat-row-parity-${status}')?.firstElementChild`,
+        })),
+      ],
+      'states',
+    ),
+  ],
+};

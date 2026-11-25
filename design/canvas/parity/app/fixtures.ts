@@ -3,6 +3,8 @@
  * would serve it. `window.__PARITY__` picks the state: the runner sets it before
  * the page loads, with the same vocabulary as the prototype's presets.
  */
+import { addTranscriptFixture, type TranscriptFixture } from './transcript-fixture';
+
 export const FAKE_PORT = 1;
 /** 24 Nov 2026 at 23:31 UTC, when the prototype's conversation ends. The runner pins the clock to it. */
 export const NOW = Date.UTC(2026, 10, 24, 23, 31, 0);
@@ -25,6 +27,7 @@ export interface Scenario {
   projects?: 'none';
   /** A session with no transcript rows (the transcript area is #948's). */
   blank?: boolean;
+  transcript?: TranscriptFixture;
 }
 export const scenario: Scenario = (window as unknown as { __PARITY__?: Scenario }).__PARITY__ ?? {};
 
@@ -83,7 +86,13 @@ const worktree = (branch: string): Json => ({
   branchName: branch,
 });
 
-const PR = { url: 'https://github.com/qlan-ro/mainframe/pull/912', owner: 'qlan-ro', repo: 'mainframe', number: 912, source: 'created' };
+const PR = {
+  url: 'https://github.com/qlan-ro/mainframe/pull/912',
+  owner: 'qlan-ro',
+  repo: 'mainframe',
+  number: 912,
+  source: 'created',
+};
 
 const main = (): Json => {
   const ctx = scenario.ctx ?? 41;
@@ -107,7 +116,11 @@ const act = (): NonNullable<Scenario['act']> => scenario.act ?? 'run';
 const PLAN = [
   { content: 'Read the quota and capsule code', activeForm: 'Reading the quota and capsule code', status: 'completed' },
   { content: 'Fix snapshot() in the daemon', activeForm: 'Fixing snapshot() in the daemon', status: 'completed' },
-  { content: 'Adding the scope helper to the UI lib', activeForm: 'Adding the scope helper to the UI lib', status: 'in_progress' },
+  {
+    content: 'Adding the scope helper to the UI lib',
+    activeForm: 'Adding the scope helper to the UI lib',
+    status: 'in_progress',
+  },
   { content: 'Write the hook test', activeForm: 'Writing the hook test', status: 'pending' },
   { content: 'Open the PR', activeForm: 'Opening the PR', status: 'pending' },
 ];
@@ -120,10 +133,25 @@ export const chats = (): Json[] => [
     displayStatus: 'working',
   }),
   chat('s3', 'Add a scope switcher to the review header', 31, { branchName: 'main', displayStatus: 'waiting' }),
-  chat('s4', 'Session panel sections for side chat', 33, { ...worktree('feat/panel-sections'), displayStatus: 'waiting', planMode: true }),
-  chat('s5', 'Prepare release v2.15.0', 33.2, { adapterId: 'codex', model: 'gpt-5.1-codex', effort: 'medium', permissionMode: 'default', branchName: 'main' }),
+  chat('s4', 'Session panel sections for side chat', 33, {
+    ...worktree('feat/panel-sections'),
+    displayStatus: 'waiting',
+    planMode: true,
+  }),
+  chat('s5', 'Prepare release v2.15.0', 33.2, {
+    adapterId: 'codex',
+    model: 'gpt-5.1-codex',
+    effort: 'medium',
+    permissionMode: 'default',
+    branchName: 'main',
+  }),
   chat('s6', 'Label Claude models by displayName', 33.4, { temporary: true, model: 'sonnet-4.5' }),
-  chat('s7', 'e-Factura SPV retry', 60, { projectId: 'contact-ui', branchName: 'main', isRunning: true, displayStatus: 'working' }),
+  chat('s7', 'e-Factura SPV retry', 60, {
+    projectId: 'contact-ui',
+    branchName: 'main',
+    isRunning: true,
+    displayStatus: 'working',
+  }),
   chat('s8', 'Draft dividend checks', 1441, { projectId: 'contact-ui', branchName: 'main' }),
   chat('s9', 'Trace how ask_agent picks its worktree', 1442, { branchName: 'main' }),
   chat('s10', 'Resizable transcript width', 1443, { branchName: 'main' }),
@@ -156,8 +184,12 @@ const NEED = task('a0', 'agent', 'Review the quota reset diff', 36);
 const ended = (id: string, kind: string, text: string, status: string, minutes: number) =>
   task(id, kind, text, minutes + 3, { status, endedAt: atMs(minutes) });
 const EARLIER = [
-  ...['Review the scope diff', 'Check the readiness gate', 'Rerun the typecheck'].map((text, i) => ended(`f${i}`, 'agent', text, 'failed', 60 + i)),
-  ...Array.from({ length: 21 }, (_, i) => ended(`d${i}`, 'agent', `Explore the rate-limit sources ${i + 1}`, 'completed', 70 + i)),
+  ...['Review the scope diff', 'Check the readiness gate', 'Rerun the typecheck'].map((text, i) =>
+    ended(`f${i}`, 'agent', text, 'failed', 60 + i),
+  ),
+  ...Array.from({ length: 21 }, (_, i) =>
+    ended(`d${i}`, 'agent', `Explore the rate-limit sources ${i + 1}`, 'completed', 70 + i),
+  ),
 ];
 const ALL = [
   task('v2', 'agent', 'Accessibility review of the capsule', 5),
@@ -171,6 +203,14 @@ const ALL = [
   ended('e10', 'agent', 'Profile the capsule render', 'stopped', 63),
 ];
 const live = (): Json[] => {
+  if (scenario.transcript === 'agent') {
+    return [
+      task('parity-agent', 'agent', 'Review the quota reset diff', 12.9, {
+        toolName: 'Task',
+        toolUseId: 'parity-agent',
+      }),
+    ];
+  }
   switch (act()) {
     case 'none':
       return [];
@@ -189,7 +229,14 @@ const activity = () => {
   return {
     total: tasks.length,
     byKind: {},
-    tasks: tasks.map((t) => ({ id: t.id, kind: t.kind, description: t.description, startedAt: t.startedAt, workflowName: t.workflowName, runId: t.runId })),
+    tasks: tasks.map((t) => ({
+      id: t.id,
+      kind: t.kind,
+      description: t.description,
+      startedAt: t.startedAt,
+      workflowName: t.workflowName,
+      runId: t.runId,
+    })),
   };
 };
 
@@ -213,15 +260,25 @@ const adapter = (id: string, name: string, models: unknown[], autoMode: boolean)
   capabilities: { planMode: true, autoMode, fork: true, steer: true, noPersistence: true },
 });
 const ADAPTERS = [
-  adapter('claude', 'Claude', [
-    model('opus-4.5', 'Opus 4.5', ['low', 'medium', 'high', 'max'], { isDefault: true }),
-    model('sonnet-4.5', 'Sonnet 4.5', ['low', 'medium', 'high']),
-    model('haiku-4.5', 'Haiku 4.5', ['low', 'medium', 'high']),
-  ], true),
-  adapter('codex', 'Codex', [
-    model('gpt-5.1-codex', 'GPT-5.1 Codex', ['low', 'medium', 'high'], { isDefault: true }),
-    model('gpt-5.1-codex-mini', 'GPT-5.1 Codex Mini', ['low', 'medium', 'high']),
-  ], false),
+  adapter(
+    'claude',
+    'Claude',
+    [
+      model('opus-4.5', 'Opus 4.5', ['low', 'medium', 'high', 'max'], { isDefault: true }),
+      model('sonnet-4.5', 'Sonnet 4.5', ['low', 'medium', 'high']),
+      model('haiku-4.5', 'Haiku 4.5', ['low', 'medium', 'high']),
+    ],
+    true,
+  ),
+  adapter(
+    'codex',
+    'Codex',
+    [
+      model('gpt-5.1-codex', 'GPT-5.1 Codex', ['low', 'medium', 'high'], { isDefault: true }),
+      model('gpt-5.1-codex-mini', 'GPT-5.1 Codex Mini', ['low', 'medium', 'high']),
+    ],
+    false,
+  ),
 ];
 const QUOTA: Record<string, Json> = {
   claude: {
@@ -267,7 +324,11 @@ const todo = (number: number, title: string) => ({
   created_at: ago(4000),
   updated_at: ago(4000),
 });
-const TODOS = [todo(24, 'claude: --permission-mode auto is ignored after resume'), todo(23, 'Remember file tree expansion state per project'), todo(22, 'Preview captures do not include native scrollbars')];
+const TODOS = [
+  todo(24, 'claude: --permission-mode auto is ignored after resume'),
+  todo(23, 'Remember file tree expansion state per project'),
+  todo(22, 'Preview captures do not include native scrollbars'),
+];
 const BRANCHES = ['main', 'develop', 'release/2.15', 'refactor/daemon-baseline'];
 const WORKTREES = ['feat/quota-reset', 'feat/composer-v2', 'fix/ws-reconnect'];
 const CHANGES = [
@@ -276,7 +337,13 @@ const CHANGES = [
   { path: 'packages/ui/src/features/quota/use-quota.ts', additions: 2, deletions: 0 },
 ];
 const changes = () => (scenario.changes === false ? [] : CHANGES);
-const LAUNCH = (scenario.launch === 'one-stopped' ? ['dev'] : scenario.launch ? ['dev', 'daemon'] : ['ui-dev', 'daemon', 'typecheck', 'storybook-design-system-preview…']).map((name, i) => ({
+const LAUNCH = (
+  scenario.launch === 'one-stopped'
+    ? ['dev']
+    : scenario.launch
+      ? ['dev', 'daemon']
+      : ['ui-dev', 'daemon', 'typecheck', 'storybook-design-system-preview…']
+).map((name, i) => ({
   name,
   runtimeExecutable: 'pnpm',
   runtimeArgs: ['dev'],
@@ -285,13 +352,26 @@ const LAUNCH = (scenario.launch === 'one-stopped' ? ['dev'] : scenario.launch ? 
   preview: i === 0,
 }));
 const bytes = (tokens: number) => 'x'.repeat(tokens * 4);
-const mention = (path: string, i: number) => ({ id: `m${i}`, kind: 'file', source: 'user', name: path.split('/').pop(), path, timestamp: ago(20 + i) });
+const mention = (path: string, i: number) => ({
+  id: `m${i}`,
+  kind: 'file',
+  source: 'user',
+  name: path.split('/').pop(),
+  path,
+  timestamp: ago(20 + i),
+});
 const EXT = ['csv', 'png', 'log', 'pdf', 'diff', 'md', 'json', 'txt'];
 const CONTEXT = () => ({
   globalFiles: [{ path: '/Users/dev/.codex/AGENTS.md', content: bytes(418), source: 'global' }],
   projectFiles: [{ path: 'AGENTS.md', content: bytes(53), source: 'project' }],
   mentions: ['docs/review-workflow.md', 'src/git.ts', 'docs/quota.md', 'src/usage.ts'].map(mention),
-  attachments: EXT.slice(0, scenario.attachments ?? 2).map((ext, i) => ({ id: `att${i}`, name: `file.${ext}`, mediaType: 'text/plain', sizeBytes: 100, kind: 'file' })),
+  attachments: EXT.slice(0, scenario.attachments ?? 2).map((ext, i) => ({
+    id: `att${i}`,
+    name: `file.${ext}`,
+    mediaType: 'text/plain',
+    sizeBytes: 100,
+    kind: 'file',
+  })),
   modifiedFiles: changes().map((c) => c.path),
   skillFiles: [
     { path: '/Users/dev/.agents/skills/mainframe-design-system/SKILL.md', displayName: 'mainframe-design-system' },
@@ -299,8 +379,15 @@ const CONTEXT = () => ({
   ],
 });
 const TREE: Record<string, [string, 'directory' | 'file'][]> = {
-  '.': [['packages', 'directory'], ['PRODUCT.md', 'file'], ['package.json', 'file']],
-  packages: [['core-rs', 'directory'], ['ui', 'directory']],
+  '.': [
+    ['packages', 'directory'],
+    ['PRODUCT.md', 'file'],
+    ['package.json', 'file'],
+  ],
+  packages: [
+    ['core-rs', 'directory'],
+    ['ui', 'directory'],
+  ],
 };
 const CODE = [
   "import { useUsage } from '@/features/usage/use-usage';",
@@ -321,8 +408,31 @@ const CODE = [
   '  );',
   '}',
 ].join('\n');
-const SWITCH_ORIGINAL = ['impl QuotaWindow {', '    pub fn percent(&self, now: DateTime<Utc>) -> u8 {', '        self.cached_percent', '    }', '', '    fn stale(&self) -> bool { false }', '}', ''].join('\n');
-const SWITCH_MODIFIED = ['impl QuotaWindow {', '    pub fn percent(&self, now: DateTime<Utc>) -> u8 {', '        if now >= self.resets_at {', '            return 0;', '        }', '        self.cached_percent', '    }', '', '    fn stale(&self, now: DateTime<Utc>) -> bool {', '        now >= self.resets_at', '    }', '}', ''].join('\n');
+const SWITCH_ORIGINAL = [
+  'impl QuotaWindow {',
+  '    pub fn percent(&self, now: DateTime<Utc>) -> u8 {',
+  '        self.cached_percent',
+  '    }',
+  '',
+  '    fn stale(&self) -> bool { false }',
+  '}',
+  '',
+].join('\n');
+const SWITCH_MODIFIED = [
+  'impl QuotaWindow {',
+  '    pub fn percent(&self, now: DateTime<Utc>) -> u8 {',
+  '        if now >= self.resets_at {',
+  '            return 0;',
+  '        }',
+  '        self.cached_percent',
+  '    }',
+  '',
+  '    fn stale(&self, now: DateTime<Utc>) -> bool {',
+  '        now >= self.resets_at',
+  '    }',
+  '}',
+  '',
+].join('\n');
 
 /* ---------- HTTP ---------- */
 const ok = (data: unknown) => ({ success: true, data });
@@ -339,10 +449,12 @@ export function respond(method: string, url: URL, _body: unknown): unknown {
     if (path === '/api/tags') return ok([]);
     if (path === '/api/commands') return ok([{ name: 'compact', description: 'Compact', source: 'claude' }]);
     if (path === '/api/settings/general') return ok(GENERAL);
-    if (path === '/api/settings/providers') return ok({ claude: { defaultModel: 'opus-4.5', defaultMode: 'acceptEdits', defaultEffort: 'high' }, codex: {} });
+    if (path === '/api/settings/providers')
+      return ok({ claude: { defaultModel: 'opus-4.5', defaultMode: 'acceptEdits', defaultEffort: 'high' }, codex: {} });
     if (path === '/api/providers/cli-status') return ok([]);
     if (path === '/api/tunnel/ports') return ok({ daemonPort: FAKE_PORT, tunnels: [] });
-    if (path === '/api/plugins/todos/todos') return { todos: url.searchParams.get('projectId') === 'mainframe-ui' ? TODOS : [] };
+    if (path === '/api/plugins/todos/todos')
+      return { todos: url.searchParams.get('projectId') === 'mainframe-ui' ? TODOS : [] };
     if (path.startsWith('/api/plugins/todos/github')) return { link: null, pairs: [], remotes: [] };
     if (path.startsWith('/api/automation')) return ok([]);
     if ((m = is(/^\/api\/providers\/(\w+)\/quota$/))) return ok(QUOTA[m[1]!]);
@@ -351,23 +463,58 @@ export function respond(method: string, url: URL, _body: unknown): unknown {
     if (is(/^\/api\/adapters\/\w+\/effective-model$/)) return ok(null);
     if ((m = is(/^\/api\/chats\/([\w-]+)$/))) return ok(chats().find((c) => c.id === m![1]));
     if (is(/^\/api\/chats\/[\w-]+\/workflow-runs$/)) return ok([]);
-    if ((m = is(/^\/api\/chats\/([\w-]+)\/background-tasks$/))) return ok({ tasks: m[1] === 's1' ? [...live(), ...EARLIER] : [] });
+    if ((m = is(/^\/api\/chats\/([\w-]+)\/background-tasks$/)))
+      return ok({ tasks: m[1] === 's1' ? [...live(), ...EARLIER] : [] });
     if (is(/^\/api\/chats\/[\w-]+\/context$/)) return ok(CONTEXT());
     if (is(/^\/api\/chats\/[\w-]+\/segments$/)) return ok([]);
     if (is(/^\/api\/chats\/[\w-]+\/session-files$/)) return ok({ files: changes() });
     if ((m = is(/^\/api\/projects\/[\w-]+\/git\/([\w-]+)$/))) {
-      const branch = url.searchParams.get('chatId') === 's1' && (scenario.env ?? 'worktree') === 'worktree' ? 'feat/quota-reset' : 'main';
+      const branch =
+        url.searchParams.get('chatId') === 's1' && (scenario.env ?? 'worktree') === 'worktree'
+          ? 'feat/quota-reset'
+          : 'main';
       if (m[1] === 'branch') return ok({ branch });
       if (m[1] === 'branches')
-        return ok({ current: branch, local: BRANCHES.map((name) => ({ name, current: name === branch, worktree: WORKTREES.includes(name) ? `/Users/dev/.mainframe/worktrees/${name.replace('/', '-')}` : undefined })), remote: [], worktrees: WORKTREES });
-      if (m[1] === 'working-stat') return ok({ files: changes(), totalAdditions: changes().reduce((n, c) => n + c.additions, 0), totalDeletions: changes().reduce((n, c) => n + c.deletions, 0) });
+        return ok({
+          current: branch,
+          local: BRANCHES.map((name) => ({
+            name,
+            current: name === branch,
+            worktree: WORKTREES.includes(name)
+              ? `/Users/dev/.mainframe/worktrees/${name.replace('/', '-')}`
+              : undefined,
+          })),
+          remote: [],
+          worktrees: WORKTREES,
+        });
+      if (m[1] === 'working-stat')
+        return ok({
+          files: changes(),
+          totalAdditions: changes().reduce((n, c) => n + c.additions, 0),
+          totalDeletions: changes().reduce((n, c) => n + c.deletions, 0),
+        });
       if (m[1] === 'status') return ok({ files: changes().map((c) => ({ status: 'M', path: c.path })) });
-      if (m[1] === 'worktrees') return ok({ worktrees: [{ path: '/Users/dev/mainframe-ui', branch: 'refs/heads/main' }, ...WORKTREES.map((branch) => ({ path: `/Users/dev/.mainframe/worktrees/${branch.replace('/', '-')}`, branch: `refs/heads/${branch}` }))] });
+      if (m[1] === 'worktrees')
+        return ok({
+          worktrees: [
+            { path: '/Users/dev/mainframe-ui', branch: 'refs/heads/main' },
+            ...WORKTREES.map((branch) => ({
+              path: `/Users/dev/.mainframe/worktrees/${branch.replace('/', '-')}`,
+              branch: `refs/heads/${branch}`,
+            })),
+          ],
+        });
       if (m[1] === 'branch-diffs') return ok({ branch, baseBranch: 'main', mergeBase: 'abc', files: changes() });
       if (m[1] === 'diff') return ok({ original: SWITCH_ORIGINAL, modified: SWITCH_MODIFIED, diff: '', status: 'M' });
       if (m[1] === 'github-remotes') return ok({ remotes: [] });
     }
-    if (is(/^\/api\/projects\/[\w-]+\/launch\/status$/)) return ok({ statuses: scenario.launch?.endsWith('-stopped') ? {} : { [LAUNCH[0]!.name]: 'running' }, tunnelUrls: {}, outputs: {}, effectivePath: scenario.launch ? '/Users/dev/.mainframe/worktrees/feat-quota-reset' : '/Users/dev/mainframe-ui' });
+    if (is(/^\/api\/projects\/[\w-]+\/launch\/status$/))
+      return ok({
+        statuses: scenario.launch?.endsWith('-stopped') ? {} : { [LAUNCH[0]!.name]: 'running' },
+        tunnelUrls: {},
+        outputs: {},
+        effectivePath: scenario.launch ? '/Users/dev/.mainframe/worktrees/feat-quota-reset' : '/Users/dev/mainframe-ui',
+      });
     if (is(/^\/api\/projects\/[\w-]+\/launch\/configs$/)) return ok(LAUNCH);
     if (is(/^\/api\/projects\/[\w-]+\/tree$/)) {
       const dir = url.searchParams.get('path') ?? '.';
@@ -389,10 +536,17 @@ export function respond(method: string, url: URL, _body: unknown): unknown {
 /* ---------- ACP ---------- */
 const MF = '_mainframe.dev';
 let seq = 0;
-const stamp = (minutes: number, extra: Json = {}) => ({ [MF]: { created: true, timestamp: ago(minutes), containerId: `c${seq}`, ...extra } });
+const stamp = (minutes: number, extra: Json = {}) => ({
+  [MF]: { created: true, timestamp: ago(minutes), containerId: `c${seq}`, ...extra },
+});
 const user = (text: string, minutes: number): Json => {
   seq++;
-  return { sessionUpdate: 'user_message', messageId: `u${seq}`, content: [{ type: 'text', text }], _meta: stamp(minutes) };
+  return {
+    sessionUpdate: 'user_message',
+    messageId: `u${seq}`,
+    content: [{ type: 'text', text }],
+    _meta: stamp(minutes),
+  };
 };
 const agent = (text: string, minutes: number): Json => ({
   sessionUpdate: 'agent_message',
@@ -400,14 +554,23 @@ const agent = (text: string, minutes: number): Json => ({
   content: [{ type: 'text', text }],
   _meta: stamp(minutes),
 });
-const call = (id: string, title: string, rawInput: Json, rawOutput: unknown, minutes: number, extra: Json = {}): Json => ({
+const call = (
+  id: string,
+  title: string,
+  rawInput: Json,
+  rawOutput: unknown,
+  minutes: number,
+  extra: Json = {},
+): Json => ({
   sessionUpdate: 'tool_call_update',
   toolCallId: id,
   title,
   kind: 'other',
   status: rawOutput === undefined ? 'in_progress' : 'completed',
   rawInput,
-  ...(rawOutput === undefined ? {} : { rawOutput, content: [{ type: 'content', content: { type: 'text', text: String(rawOutput) } }] }),
+  ...(rawOutput === undefined
+    ? {}
+    : { rawOutput, content: [{ type: 'content', content: { type: 'text', text: String(rawOutput) } }] }),
   _meta: stamp(minutes, extra),
 });
 
@@ -419,23 +582,95 @@ function transcript(): Json[] {
   const asking: Json[] =
     act() === 'need' || act() === 'many'
       ? [
-          { ...call('call-a0', 'Task', { description: 'Review the quota reset diff', prompt: 'Review it', subagent_type: 'code-reviewer', run_in_background: true }, 'started', 12.6), _meta: stamp(12.5, { subagent: true }) },
-          { ...call('gate-sub', 'Bash', { command: 'git diff main...HEAD' }, undefined, 12.6), _meta: stamp(12.5, { parentToolCallId: 'call-a0' }) },
+          {
+            ...call(
+              'call-a0',
+              'Task',
+              {
+                description: 'Review the quota reset diff',
+                prompt: 'Review it',
+                subagent_type: 'code-reviewer',
+                run_in_background: true,
+              },
+              'started',
+              12.6,
+            ),
+            _meta: stamp(12.5, { subagent: true }),
+          },
+          {
+            ...call('gate-sub', 'Bash', { command: 'git diff main...HEAD' }, undefined, 12.6),
+            _meta: stamp(12.5, { parentToolCallId: 'call-a0' }),
+          },
         ]
       : [];
   const turn = (q: string, a: string, minutes: number, calls: Json[] = []) => {
     out.push(user(q, minutes));
     seq++;
-    out.push(...calls.map((c) => ({ ...c, _meta: stamp(minutes - 0.5) })), ...(minutes === 13 ? asking : []), agent(a, minutes - 1));
+    out.push(
+      ...calls.map((c) => ({ ...c, _meta: stamp(minutes - 0.5) })),
+      ...(minutes === 13 ? asking : []),
+      agent(a, minutes - 1),
+    );
   };
-  turn('The usage capsule stays at 100% after the Codex window resets. Can you find out why?', 'Found it. Two things together freeze the capsule.', 13, [
-    call('call-a1', 'Task', { description: 'Map diff scopes in the daemon', prompt: 'Map them', subagent_type: 'general-purpose', run_in_background: true }, 'started', 12.6),
-    call('call-a3', 'Task', { description: 'Accessibility review of the scope switcher', prompt: 'Review it', subagent_type: 'general-purpose', run_in_background: true }, 'started', 12.6),
-    call('w1', 'ScheduleWakeup', { delaySeconds: (52 + 12.5) * 60 + 20, reason: 'Check the review-readiness workflow', prompt: 'Check the review-readiness workflow' }, '{}', 12.6),
-    call('w2', 'CronCreate', { prompt: 'Post the review status to the PR', cron: '0 9 * * 1-5', recurring: true }, '{"id":"c1","humanSchedule":"Every weekday at 09:00","recurring":true}', 12.6),
-  ]);
+  if (scenario.transcript) {
+    addTranscriptFixture(scenario.transcript, turn, call);
+    return out;
+  }
+  turn(
+    'The usage capsule stays at 100% after the Codex window resets. Can you find out why?',
+    'Found it. Two things together freeze the capsule.',
+    13,
+    [
+      call(
+        'call-a1',
+        'Task',
+        {
+          description: 'Map diff scopes in the daemon',
+          prompt: 'Map them',
+          subagent_type: 'general-purpose',
+          run_in_background: true,
+        },
+        'started',
+        12.6,
+      ),
+      call(
+        'call-a3',
+        'Task',
+        {
+          description: 'Accessibility review of the scope switcher',
+          prompt: 'Review it',
+          subagent_type: 'general-purpose',
+          run_in_background: true,
+        },
+        'started',
+        12.6,
+      ),
+      call(
+        'w1',
+        'ScheduleWakeup',
+        {
+          delaySeconds: (52 + 12.5) * 60 + 20,
+          reason: 'Check the review-readiness workflow',
+          prompt: 'Check the review-readiness workflow',
+        },
+        '{}',
+        12.6,
+      ),
+      call(
+        'w2',
+        'CronCreate',
+        { prompt: 'Post the review status to the PR', cron: '0 9 * * 1-5', recurring: true },
+        '{"id":"c1","humanSchedule":"Every weekday at 09:00","recurring":true}',
+        12.6,
+      ),
+    ],
+  );
   turn('Makes sense. Fix it in the daemon and add a test.', 'Fixed in both places.', 11);
-  turn('Get a second opinion: have one agent review the diff and another check the mobile capsule.', 'Both checks are back. The diff is correct, with one nit.', 5);
+  turn(
+    'Get a second opinion: have one agent review the diff and another check the mobile capsule.',
+    'Both checks are back. The diff is correct, with one nit.',
+    5,
+  );
   if (scenario.running) {
     out.push(user('Now cover the weekly window too.', 0.5));
     seq++;
@@ -444,8 +679,18 @@ function transcript(): Json[] {
 }
 
 const option = (optionId: string, name: string, kind: string) => ({ optionId, name, kind });
-const TRIAD = [option('allow_once', 'Allow once', 'allow_once'), option('allow_always', 'Always allow', 'allow_always'), option('reject_once', 'Reject', 'reject_once')];
-const gate = (toolName: string, input: Json, options: unknown[], suggestions: unknown[] = [], id = 'gate-call'): Json => ({
+const TRIAD = [
+  option('allow_once', 'Allow once', 'allow_once'),
+  option('allow_always', 'Always allow', 'allow_always'),
+  option('reject_once', 'Reject', 'reject_once'),
+];
+const gate = (
+  toolName: string,
+  input: Json,
+  options: unknown[],
+  suggestions: unknown[] = [],
+  id = 'gate-call',
+): Json => ({
   title: toolName,
   subject: { type: 'tool_call', toolCall: { toolCallId: id, title: toolName, rawInput: input } },
   options,
@@ -456,9 +701,19 @@ function permissions(): Json[] {
     return [
       gate(
         'Bash',
-        { command: 'cargo test -p mainframe-quota -- --include-ignored', description: 'Run the quota tests, including the ignored network ones' },
+        {
+          command: 'cargo test -p mainframe-quota -- --include-ignored',
+          description: 'Run the quota tests, including the ignored network ones',
+        },
         TRIAD,
-        [{ type: 'addRules', rules: [{ toolName: 'Bash', ruleContent: 'cargo test *' }], behavior: 'allow', destination: 'localSettings' }],
+        [
+          {
+            type: 'addRules',
+            rules: [{ toolName: 'Bash', ruleContent: 'cargo test *' }],
+            behavior: 'allow',
+            destination: 'localSettings',
+          },
+        ],
       ),
     ];
   if (scenario.gate === 'question')
@@ -472,7 +727,10 @@ function permissions(): Json[] {
               question: 'Rename the ReviewScope members before adding the switcher?',
               multiSelect: false,
               options: [
-                { label: 'Rename first (Recommended)', description: 'Cleaner diff, touches the 6 files that import ReviewScope' },
+                {
+                  label: 'Rename first (Recommended)',
+                  description: 'Cleaner diff, touches the 6 files that import ReviewScope',
+                },
                 { label: 'Add the switcher first', description: 'Smaller change now, rename in a follow-up' },
               ],
             },
@@ -485,7 +743,9 @@ function permissions(): Json[] {
     return [
       gate(
         'ExitPlanMode',
-        { plan: '#### Session panel sections in the side chat\n\n1. Add a Sections menu to the panel header, one toggle per section.\n2. Persist the choice per user in ui-prefs.\n3. Mount the same panel in the side chat, reading the same prefs.' },
+        {
+          plan: '#### Session panel sections in the side chat\n\n1. Add a Sections menu to the panel header, one toggle per section.\n2. Persist the choice per user in ui-prefs.\n3. Mount the same panel in the side chat, reading the same prefs.',
+        },
         TRIAD,
       ),
     ];
@@ -493,7 +753,10 @@ function permissions(): Json[] {
     return [
       gate(
         'Bash',
-        { command: 'git diff main...HEAD -- packages/core-rs/crates/mainframe-quota', description: 'Read the quota changes for the review' },
+        {
+          command: 'git diff main...HEAD -- packages/core-rs/crates/mainframe-quota',
+          description: 'Read the quota changes for the review',
+        },
         [TRIAD[0], TRIAD[2]],
         [],
         'gate-sub',
@@ -510,11 +773,26 @@ export function sessionState(id: string): { updates: Json[]; queue: Json[]; perm
   return {
     updates: [
       ...transcript(),
-      { sessionUpdate: 'state_update', state: running ? 'running' : 'idle', ...(running ? { _meta: { [MF]: { startedAtMs: NOW - 30_000 } } } : { stopReason: 'end_turn' }) },
-      { sessionUpdate: 'usage_update', used: (scenario.ctx ?? 41) * 2000, size: 200_000, _meta: { [MF]: { percentage: scenario.ctx ?? 41 } } },
+      {
+        sessionUpdate: 'state_update',
+        state: running ? 'running' : 'idle',
+        ...(running ? { _meta: { [MF]: { startedAtMs: NOW - 30_000 } } } : { stopReason: 'end_turn' }),
+      },
+      {
+        sessionUpdate: 'usage_update',
+        used: (scenario.ctx ?? 41) * 2000,
+        size: 200_000,
+        _meta: { [MF]: { percentage: scenario.ctx ?? 41 } },
+      },
     ],
     queue: scenario.queue
-      ? ['Then rerun the quota tests on Codex.', 'Open a PR when they pass.'].map((content, i) => ({ messageId: `q${i}`, chatId: 's1', uuid: `q${i}`, content, timestamp: ago(1) }))
+      ? ['Then rerun the quota tests on Codex.', 'Open a PR when they pass.'].map((content, i) => ({
+          messageId: `q${i}`,
+          chatId: 's1',
+          uuid: `q${i}`,
+          content,
+          timestamp: ago(1),
+        }))
       : [],
     permissions: permissions(),
   };

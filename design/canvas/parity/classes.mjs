@@ -4,7 +4,6 @@
 // SPEC   DECISIONS.md or DESIGN.md says otherwise than the prototype: the row is quoted
 // DATA   the two sides show other content
 // PROTO  the prototype's own stand-in or slip, not a design
-// FILES  measured here, owned by a file of #948 (the transcript)
 // APP    only the running app can tell
 //
 // A rule matches when every field it names matches the row: a string is equal, a
@@ -14,13 +13,18 @@ const ANY = /./;
 const SHIFT = /^(x|y|y \(middle\)|width|height|right edge|visible width)$/;
 
 export const RULES = [
-  // ── Shell ──────────────────────────────────────────────────────────────────
-  { area: 'shell', el: 'title bar', part: /inner box [123] \(i\)/, cls: 'APP', why: 'The three window buttons are drawn by macOS, not by the page.' },
-  { el: /usage capsule|title bar/, part: /\(span\) at \d+,\d+ 3×3/, cls: 'SPEC', why: 'S1: "The shell matches today\'s app." The dots are the account cycle of the app\'s capsule; they sit in its right padding, so nothing else moves.' },
-  { area: 'shell', el: 'rail', cls: 'SPEC', why: 'S2: the content is a card on the chrome, its left edge one hairline. The app draws that hairline as the card\'s own border, so the rail is 55 px and the line 1 px, where the prototype\'s rail is 56 px with the line inside.' },
-  { area: 'shell', el: 'rail inspector', part: 'icon 1', prop: 'glyph', cls: 'SPEC', why: 'S1: "The shell matches today\'s app." The inspector keeps the app\'s own glyph (0.8 units apart, the same shape).' },
-  { area: 'shell', el: 'sidebar', cls: 'SPEC', why: 'S2: the card\'s top hairline is the card\'s border in the app and the sidebar\'s in the prototype. The line paints in the same place, and every row inside has the prototype\'s position.' },
-  { area: 'shell', el: 'scope row', part: /inner box/, prop: 'fill', cls: 'DATA', why: 'A project\'s colour is hashed from its id.' },
+  { area: 'transcript', state: 'work collapsed', el: 'work header', part: /^icon 1 |^inner box 1 .*4×4/, prop: /missing in app|only in app/, cls: 'SPEC', why: 'T1b: “Claude’s history, interrupted Claude turns and killed sessions end neutral.” The fixture has no recorded outcome, so the app displays its neutral dot.' },
+  { area: 'transcript', state: 'agent', el: 'agent row', part: /^icon 4 .*12×12/, prop: 'only in app', cls: 'SPEC', why: 'T1c: “Both use Stop.” This square is the live sub-agent’s Stop action.' },
+  { area: 'transcript', el: 'agent Stop', prop: 'present', proto: 'no', app: 'yes', cls: 'SPEC', why: 'T1c: “Both use Stop”, including in the transcript.' },
+  { area: 'transcript', el: /^(tool row|agent row|.+ command)$/, part: /^text/, prop: 'x', cls: 'PROTO', why: 'The prototype gives its clipped screen-reader status span relative positioning in the flex row. Its 1 px width and 8 px gap displace the visible text by 9 px.', delta: 9 },
+  { area: 'transcript', part: 'box', prop: 'y', cls: 'DATA', why: 'The fixture uses separate short conversations and the reference is one long conversation. Their preceding rows and scroll offsets differ.' },
+  { area: 'transcript', el: 'tool body', part: /^text/, prop: /^(content|missing in app|only in app)$/, cls: 'DATA', why: 'The tool outputs use shorter fixture contents. Code highlighting may also split a string across different token boundaries.' },
+  { area: 'transcript', el: 'tool body', state: /^(read|write)$/, part: 'box', prop: 'height', cls: 'DATA', why: 'The fixture contains fewer source lines and does not have the prototype sample’s truncation receipt.' },
+  { area: 'transcript', el: 'work header', part: /^text/, prop: /^(content|missing in app|only in app)$/, cls: 'DATA', why: 'The fixture supplies different tool counts, end evidence, and elapsed durations.' },
+  { area: 'transcript', state: 'terminal states', el: 'work header', part: 'icon 1', cls: 'DATA', why: 'The fixture is actively running and the prototype’s sample turn is finished.' },
+  { area: 'transcript', state: 'agent', el: 'agent row', part: /^(icon 1|text “1 step · 38s”)$/, prop: /^(content|x|glyph|colour)$/, cls: 'DATA', why: 'The app fixture shows an active sub-agent. The prototype’s first code-reviewer sample shows completed work.' },
+  { area: 'transcript', state: 'terminal states', el: /^(running|passed|failed|stopped) command$/, part: /^text “(12s|exit|stopped ·)/, prop: /^(content|x|missing in app)$/, cls: 'DATA', why: 'The fixture supplies a status and short output without historical timing or a structured exit receipt.' },
+  { area: 'transcript', state: 'terminal states', el: /^(passed|failed) command$/, part: /^icon 2 /, prop: 'only in app', cls: 'DATA', why: 'The fixture has output to disclose. The prototype’s status sample has no body.' },
 
   // ── Session panel ──────────────────────────────────────────────────────────
   { el: 'Plan', prop: 'numerals', cls: 'SPEC', why: 'DESIGN.md, the Steady Number Rule: numbers that change in place use tabular figures.' },
@@ -34,11 +38,7 @@ export const RULES = [
   { el: 'scrim', prop: 'height', cls: 'SPEC', why: 'R11: "The floating panel ends 8 px above the composer, and so does its scrim."' },
   { area: 'panel', el: 'scrim', prop: 'fill', cls: 'PROTO', why: 'The prototype\'s scrim stands over its own page ground.' },
 
-  // ── Gutters at narrow widths ───────────────────────────────────────────────
-  { area: /composer|gates|new-session/, view: /mid|small/, el: /card|strip|gate|empty state|button|model|permissions|ring/, part: ANY, prop: /^(x|width)$/, cls: 'FILES', why: '`ChatThreadViewport.tsx`: the column\'s gutter is 20 px, the prototype\'s 24 px, so from 1100 px down the column is 4 to 8 px wider.' },
-  { area: 'gates', state: 'question', view: 'small', el: 'gate', cls: 'FILES', why: '`ChatThreadViewport.tsx`: in the column 8 px wider the question fits on one line, and what follows stands 20 px higher.' },
-  { area: 'gates', view: 'small', el: 'gate', part: 'box', prop: 'y', cls: 'FILES', why: '`ChatThreadViewport.tsx`: the thread\'s footer ends at its own gutter, and the gate\'s height follows its wider text.' },
-  { area: 'new-session', view: /mid|small/, el: 'empty state', part: /icon/, prop: SHIFT, cls: 'FILES', why: '`ChatThreadViewport.tsx`: the column\'s gutter.' },
+  { area: 'gates', state: /^(plan|question)$/, view: 'small', el: 'gate', part: 'box', prop: 'y', cls: 'SPEC', why: 'G1: “as ChatGateMount + GateCard do today” and “capped at 45 % of the height and scrolls inside.” The existing slot uses the chat container height. The prototype uses the window height, so its cap starts higher.' },
 
   // ── Composer ───────────────────────────────────────────────────────────────
   { area: 'composer', el: /^bottom strip$|^worktree, hovered$/, part: /from main|“·”|feat\/quota-reset|“main”|icon 2 at|icon 3 at|^box$/, cls: 'SPEC', why: 'K8: the branch is a control of its own beside the place, with its glyph, so there is no "·" and no "from main" between them.' },
@@ -103,6 +103,6 @@ export const RULES = [
 const hit = (want, have) => want === undefined || (want instanceof RegExp ? want.test(have) : want === have);
 const FIELDS = ['area', 'state', 'view', 'theme', 'el', 'part', 'prop', 'proto', 'app'];
 export function classify(row) {
-  const i = RULES.findIndex((rule) => FIELDS.every((f) => hit(rule[f], row[f])));
+  const i = RULES.findIndex((rule) => FIELDS.every((f) => hit(rule[f], row[f])) && (rule.delta === undefined || Math.abs(Number(row.proto) - Number(row.app) - rule.delta) < 0.01));
   return i < 0 ? { cls: 'OPEN', why: '', rule: -1 } : { cls: RULES[i].cls, why: RULES[i].why, rule: i };
 }

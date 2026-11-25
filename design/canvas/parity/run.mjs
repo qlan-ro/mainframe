@@ -32,7 +32,7 @@ try {
       views: arg('views')?.split(','),
     });
     writeFileSync(join(out, `${name}.json`), JSON.stringify(rows, null, 1));
-    writeFileSync(join(out, `${name}.counts.json`), JSON.stringify(counts));
+    writeFileSync(join(out, `${name}.counts.json`), JSON.stringify({ ...counts, problems }));
     console.log(`${name}: ${rows.length} differing rows, ${problems.length} problems`);
     for (const p of problems) console.log(`  ! ${p}`);
     if (problems.length) failed = true;
