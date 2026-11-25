@@ -1,6 +1,6 @@
 // The fixtures in throwaway worktrees, against stand-ins for the daemon and vite, on ports the system handed out.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import {
   chmodSync,
@@ -253,6 +253,28 @@ test('a server that takes the port while ours starts is never asked anything', a
       assert.ok(act === 'exit' || output.includes(`pid ${process.pid}, `), output);
       await assertGone(pidOf(dir, name));
     }
+  }
+});
+
+test('a server that cannot be recorded does not outlive its start', async () => {
+  for (const [name, code] of [
+    ['daemon', `${START_DAEMON} await startDaemon().catch((e) => console.log(e.message)); endRun(); process.exit();`],
+    ['vite', `${SETUP} await setup().catch((e) => console.log(e.message)); process.exit();`],
+  ]) {
+    const dir = worktree(`unrecorded-${name}`);
+    const bin = path.join(dir, 'bin');
+    mkdirSync(bin);
+    // Knows the harness alone.
+    const script = `#!/bin/sh\ncase " $* " in *" $PPID "*) exec /bin/ps "$@";; esac\nexit 2\n`;
+    writeFileSync(path.join(bin, 'ps'), script);
+    chmodSync(path.join(bin, 'ps'), 0o755);
+    const { env } = await ports(dir);
+    const { output } = await run(dir, code, { ...env, PATH: `${bin}:${process.env.PATH}` });
+    assert.match(output, /Cannot tell [^]*ps .*exit 2/);
+    // Killed before it wrote its first line, or after.
+    if (pidOf(dir, name)) await assertGone(pidOf(dir, name));
+    const left = execFileSync('/bin/ps', ['-Aww', '-o', 'command='], { encoding: 'utf8' });
+    assert.ok(!left.split('\n').some((line) => line.includes(dir)), left);
   }
 });
 

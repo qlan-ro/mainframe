@@ -45,28 +45,55 @@ export function harnessPort(envName: string, fallback: string): number {
   return Number(value);
 }
 
+/** Longer than either program takes on a loaded machine. One that hangs must not hang the run. */
+const LOOKUP_TIMEOUT = 10_000;
+
+/**
+ * What ps or lsof prints, or '' when it found nothing: exit 1 without output. Throws when it cannot tell, because it
+ * is missing, took too long, or failed. lsof also exits 1 after printing some of what it was asked for, so its list
+ * may lack the very process a caller must know of.
+ */
 function output(file: string, args: string[]): string {
   try {
     return execFileSync(file, args, {
       encoding: 'utf8',
       env: { ...process.env, LC_ALL: 'C' },
       stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: LOOKUP_TIMEOUT,
+      killSignal: 'SIGKILL',
     });
-  } catch {
-    return ''; /* expected: ps and lsof exit 1 when they find nothing */
+  } catch (err) {
+    const { code, status, stdout } = err as { code?: string; status?: number | null; stdout?: string };
+    if (status === 1 && !stdout?.trim()) return '';
+    const printed = stdout?.trim() ? ` and printed: ${stdout.trim().slice(0, 300)}` : '';
+    throw new Error(
+      `Cannot tell what runs here, so nothing will be used or stopped: ${[file, ...args].join(' ')} failed ` +
+        `(${code ?? `exit ${status}`})${printed}`,
+    );
   }
 }
 
 function processOf(pid: number): Process | undefined {
   const line = output('ps', ['-ww', '-p', String(pid), '-o', 'ppid=,lstart=,command=']).trim();
-  const match = /^(\d+)\s+(\w+\s+\w+\s+\d+\s+[\d:]+\s+\d{4})\s+(.*)$/s.exec(line);
-  if (!match) return undefined;
+  if (!line) return undefined;
+  const match = /^(\d+)\s+(\w+\s+\w+\s+\d+\s+[\d:]+\s+\d{4})\s*(.*)$/s.exec(line);
+  if (!match) throw new Error(`Cannot tell what pid ${pid} is. ps printed: ${line.slice(0, 300)}`);
   return { pid, ppid: Number(match[1]), started: match[2]!, command: match[3]! };
 }
 
 function cwdOf(pid: number): string | undefined {
   const fields = output('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn']).split('\n');
   return fields.find((field) => field.startsWith('n'))?.slice(1);
+}
+
+/** Whether `isOwn` holds for the process or one it descends from. A parent that has exited ends the line. */
+function descendsFrom(found: Process, isOwn: (each: Process) => boolean): boolean {
+  let each: Process | undefined = found;
+  while (each) {
+    if (isOwn(each)) return true;
+    each = each.ppid > 1 ? processOf(each.ppid) : undefined;
+  }
+  return false;
 }
 
 /** Only listeners: without the state filter lsof also names the port's clients, browsers included. */
@@ -162,7 +189,16 @@ export function beginRun(dir = RUNS_DIR): () => void {
   const self = processOf(process.pid);
   if (self) append(ledger, { run: true, pid: self.pid, started: self.started });
   return () => {
-    read(ledger).forEach(kill);
+    const failures = read(ledger).flatMap((own) => {
+      try {
+        kill(own);
+        return [];
+      } catch (err) {
+        return [err]; // the others are stopped all the same
+      }
+    });
+    // Kept otherwise: it lets the next run stop what this one could not.
+    if (failures.length > 0) throw new AggregateError(failures, failures.map(String).join('\n'));
     rmSync(ledger, { force: true });
   };
 }
@@ -177,13 +213,19 @@ export function recordStarted(child: ChildProcess, port: number): void {
 
 function describe({ pid, command, started }: Process): string {
   const shown = command.length > 300 ? `${command.slice(0, 300)}…` : command;
-  return `  pid ${pid}, started ${started}, in ${cwdOf(pid) ?? 'an unknown directory'}:\n    ${shown}`;
+  let cwd: string | undefined;
+  try {
+    cwd = cwdOf(pid);
+  } catch {
+    /* expected: lsof could not tell; the refusal names the rest */
+  }
+  return `  pid ${pid}, started ${started}, in ${cwd ?? 'an unknown directory'}:\n    ${shown}`;
 }
 
 const taken = (port: number, foreign: Process[], remedy: string): Error =>
   new Error(
     `Port ${port} is taken by a process this run did not start, so it will not be used or stopped:\n` +
-      (foreign.map(describe).join('\n') || '  a process lsof cannot name (another user’s, or lsof is missing)') +
+      (foreign.map(describe).join('\n') || '  a process lsof cannot name (another user’s)') +
       `\n${remedy}`,
   );
 
@@ -210,10 +252,11 @@ export async function ensurePortFree(port: number, own: OwnProcess | undefined, 
 /**
  * Whether the server on `port` is `child`: false while nothing listens yet. Throws when the child has exited or
  * something else listens. Call it before a request, so that none reaches a server this run did not start.
+ * A process the child starts holds its listener too, until it execs, so a descendant is the child's as well.
  */
 export function isServing(child: ChildProcess, port: number, remedy: string): boolean {
   const holders = listenersOn(port);
-  const foreign = holders.filter(({ pid }) => pid !== child.pid);
+  const foreign = holders.filter((found) => !descendsFrom(found, ({ pid }) => pid === child.pid));
   if (foreign.length > 0) throw taken(port, foreign, remedy);
   if (child.exitCode !== null || child.signalCode !== null) {
     throw new Error(`The server started for port ${port} exited (${child.signalCode ?? `code ${child.exitCode}`}).`);
@@ -222,12 +265,13 @@ export function isServing(child: ChildProcess, port: number, remedy: string): bo
 }
 
 /**
- * Throws unless every listener on `port` is one this run recorded. For a server another process of the run started:
- * the workers', say, of the preview.
+ * Throws unless every listener on `port` is one this run recorded, or descends from it as above. For a server another
+ * process of the run started: the workers', say, of the preview.
  */
 export function assertRunServes(port: number, remedy: string): void {
   const holders = listenersOn(port);
-  const foreign = holders.filter((found) => !startedOn(port, found, process.env[LEDGER_ENV]));
+  const ledger = process.env[LEDGER_ENV];
+  const foreign = holders.filter((found) => !descendsFrom(found, (each) => startedOn(port, each, ledger)));
   if (foreign.length > 0) throw taken(port, foreign, remedy);
   if (holders.length === 0) throw new Error(`Nothing listens on port ${port} any more.`);
 }

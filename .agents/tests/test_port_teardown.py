@@ -116,6 +116,75 @@ class TeardownTests(unittest.TestCase):
             self.assertIn(f'port {port} is held by pid {child.pid}', result.stderr)
             self.assert_survives(child)
 
+    def test_only_nodes_own_script_makes_a_server_ours(self):
+        inside = self.root / 'checkout/server.cjs'
+        preload = self.root / 'checkout/preload.cjs'
+        outside = self.root / 'server.cjs'
+        link = self.root / 'checkout/link.cjs'
+        (self.root / 'checkout/docs').mkdir()
+        preload.write_text('')
+        for script in [inside, outside]:
+            script.write_text(SERVER)
+        link.symlink_to(outside)
+        (self.root / 'checkout/.worktrees/nested/a b').mkdir()
+        spaced = self.root / 'checkout/.worktrees/nested/a b/server.cjs'
+        spaced.write_text(SERVER)
+        (self.root / 'checkout/x y').mkdir()
+        (self.root / 'checkout/x').write_text('')
+        (self.root / 'checkout/x y/server.cjs').write_text(SERVER)
+        # A package of the checkout whose main is outside it.
+        (self.root / 'checkout/package').mkdir()
+        (self.root / 'checkout/package/package.json').write_text('{"main":"../../server.cjs"}')
+        inline = SERVER.replace('argv[2]', 'argv[1]')
+
+        ours = [
+            ['node', inside, '{port}'],
+            ['node', '--enable-source-maps', '--no-warnings', inside, '{port}'],
+            ['node', '--max-old-space-size=512', inside, '{port}'],
+        ]
+        # A script outside the checkout, whatever else of the checkout its command line names. The last ones are in
+        # doubt: a flag whose value ps does not delimit, or a path that ps splits.
+        not_ours = [
+            ['node', outside, '{port}', '--root', self.root / 'checkout/docs'],
+            ['node', outside, '{port}', inside],
+            ['node', '-r', preload, outside, '{port}'],
+            ['node', '--require', preload, outside, '{port}'],
+            ['node', '--import', preload, outside, '{port}'],
+            ['node', '--require=' + str(preload), outside, '{port}'],
+            ['node', '--title', inside, outside, '{port}'],
+            ['node', '--title', f'a {inside}', outside, '{port}'],
+            ['node', f'--title=a {inside}', outside, '{port}'],
+            ['node', '-e', inline, '{port}', inside],
+            ['node', f'--env-file-if-exists={self.root}/none', '-e', inline, '{port}', inside],
+            ['node', link, '{port}'],
+            ['node', self.root / 'checkout/package', '{port}'],
+            ['node', f'{self.root}/checkout/../server.cjs', '{port}'],
+            ['node', spaced, '{port}'],
+            ['node', '-r', preload, inside, '{port}'],
+            ['node', f'{self.root}/checkout/x y/server.cjs', '{port}'],
+        ]
+        for expected, commands in [(True, ours), (False, not_ours)]:
+            for command in commands:
+                port = free_port()
+                child = self.start('checkout', *[str(port) if word == '{port}' else word for word in command])
+                result = self.script('stop-test.sh', port)
+                if expected:
+                    self.assertEqual(result.returncode, 0, command)
+                    self.assertEqual(child.wait(5), -9, command)
+                else:
+                    self.assertEqual(result.returncode, 1, command)
+                    self.assertIn(f'port {port} is held by pid {child.pid}', result.stderr)
+                    self.assert_survives(child)
+
+    @unittest.skipUnless(shutil.which('cc'), 'needs a C compiler')
+    def test_a_node_kept_in_this_checkout_proves_nothing_by_itself(self):
+        binary = self.root / 'checkout/node'
+        subprocess.run(['cc', '-x', 'c', '-', '-o', str(binary)], input=SERVE, text=True, check=True)
+        port = free_port()
+        child = self.start('checkout', binary, port)
+        self.assertEqual(self.script('stop-test.sh', port).returncode, 1)
+        self.assert_survives(child)
+
     @unittest.skipUnless(shutil.which('cc'), 'needs a C compiler')
     def test_stops_a_listener_built_in_this_checkout_and_no_other(self):
         for checkout, ours in [('checkout', True), ('checkout/.worktrees/nested', False), ('elsewhere', False)]:

@@ -117,9 +117,9 @@ async function startPreview(): Promise<ChildProcess> {
     env: { ...process.env, VITE_DAEMON_PORT: DAEMON_PORT },
     stdio: 'ignore',
   });
-  recordStarted(preview, PREVIEW_PORT);
   const deadline = Date.now() + 15_000;
   try {
+    recordStarted(preview, PREVIEW_PORT);
     while (Date.now() < deadline) {
       if (isServing(preview, PREVIEW_PORT, REMEDY) && (await isPreviewServing())) return preview;
       await new Promise((r) => setTimeout(r, 200));

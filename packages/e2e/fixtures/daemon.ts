@@ -198,12 +198,12 @@ export async function startDaemon(opts?: {
     env: { ...daemonBaseEnv(opts?.home), MAINFRAME_DATA_DIR: testDataDir, DAEMON_PORT, ...e2eEnv },
     stdio: ['ignore', daemonLogFd, daemonLogFd],
   });
-  recordStarted(daemon, PORT);
   closeSync(daemonLogFd); // parent no longer needs the fd; child keeps it open
 
   // If any post-spawn step throws, kill the daemon before rethrowing so a failed beforeAll never
   // leaks a process holding the port (a worker that dies here leaves it to the run's record, see port-guard.ts).
   try {
+    recordStarted(daemon, PORT);
     await waitForDaemon(daemon);
     if (E2E_MODE === 'mock') await waitForMockAdapter(daemon);
 

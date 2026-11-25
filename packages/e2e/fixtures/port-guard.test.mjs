@@ -4,6 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
   mkdtempSync,
   readdirSync,
@@ -258,4 +259,156 @@ test('a server is ours only while the child we started is the one listening', as
   child.kill('SIGKILL');
   await exited;
   assert.throws(() => isServing(child, port, REMEDY), /exited \(SIGKILL\)/);
+});
+
+/** A server, and a child of it that holds its listener too, as a fork does until it execs. */
+async function startForking(port) {
+  const held =
+    "const { spawn } = require('node:child_process');" +
+    `const server = require('node:net').createServer().listen(${port}, '127.0.0.1', () => {` +
+    // The child inherits the socket as its fd 3 and does nothing with it.
+    "const kid = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: ['ignore', 'ignore', 'ignore', server._handle.fd] });" +
+    `kid.on('spawn', () => { console.log(kid.pid); });` +
+    '}); setTimeout(() => process.exit(), 60000);';
+  const child = spawn(process.execPath, ['-e', held], { stdio: ['ignore', 'pipe', 'ignore'] });
+  started.add(child);
+  const [line] = await once(child.stdout, 'data');
+  return { child, kid: Number(String(line).trim()) };
+}
+
+const listeners = (port) =>
+  execFileSync('lsof', ['-nP', '-t', `-iTCP:${port}`, '-sTCP:LISTEN'], { encoding: 'utf8' })
+    .trim()
+    .split('\n')
+    .map(Number);
+
+test('a process our server started, which holds its listener, is not somebody else', async () => {
+  const endRun = beginRun(runs);
+  const port = await freePort();
+  const { child, kid } = await startForking(port);
+  assert.deepEqual(listeners(port).sort(), [child.pid, kid].sort());
+  assert.throws(() => assertRunServes(port, REMEDY), new RegExp(`Port ${port} is taken`));
+  assert.equal(isServing(child, port, REMEDY), true);
+  recordStarted(child, port);
+  assertRunServes(port, REMEDY);
+
+  // Neither for another child of ours, nor once the process it descends from has gone.
+  const other = await startListener(await freePort());
+  assert.throws(
+    () => isServing(other, port, REMEDY),
+    new RegExp(`pid ${child.pid}, [^]*pid ${kid}, |pid ${kid}, [^]*pid ${child.pid}, `),
+  );
+  const exited = once(child, 'exit');
+  child.kill('SIGKILL');
+  await exited;
+  try {
+    await until(() => identityOf(kid)?.ppid === 1, 'the child was never orphaned');
+    assert.throws(() => isServing(child, port, REMEDY), new RegExp(`Port ${port} is taken[^]*pid ${kid}, `));
+    assert.throws(() => assertRunServes(port, REMEDY), new RegExp(`Port ${port} is taken[^]*pid ${kid}, `));
+  } finally {
+    process.kill(kid, 'SIGKILL'); // ours: this test started it, and it was alive just now
+  }
+  endRun();
+});
+
+test('a sibling of our server and the process that started it are somebody else', async () => {
+  const endRun = beginRun(runs);
+  const port = await freePort();
+  const { child, kid } = await startForking(port);
+  // Recorded: the kid. Its parent listens too, and is not a descendant of it.
+  writeFileSync(process.env.MF_E2E_RUN_LEDGER, recordLine({ pid: kid, started: identityOf(kid).started, port }));
+  assert.throws(() => assertRunServes(port, REMEDY), new RegExp(`Port ${port} is taken[^]*pid ${child.pid}, `));
+  writeFileSync(
+    process.env.MF_E2E_RUN_LEDGER,
+    recordLine({ pid: child.pid, started: 'Mon Jan  1 00:00:00 2024', port }),
+  );
+  assert.throws(() => assertRunServes(port, REMEDY), /is taken/);
+  writeFileSync(
+    process.env.MF_E2E_RUN_LEDGER,
+    recordLine({ pid: child.pid, started: identityOf(child.pid).started, port: port + 1 }),
+  );
+  assert.throws(() => assertRunServes(port, REMEDY), /is taken/);
+  endRun();
+});
+
+/** Puts a program in place of `name` while `use` runs. */
+async function withFake(name, script, use) {
+  const bin = mkdtempSync(path.join(dir, 'bin-'));
+  writeFileSync(path.join(bin, name), `#!/bin/sh\n${script}\n`);
+  chmodSync(path.join(bin, name), 0o755);
+  const before = process.env.PATH;
+  process.env.PATH = `${bin}${path.delimiter}${before}`;
+  try {
+    return await use();
+  } finally {
+    process.env.PATH = before;
+  }
+}
+
+const CANNOT_TELL = /Cannot tell /;
+
+test('a lookup that fails or answers in part uses nothing and stops nothing', async () => {
+  const endRun = beginRun(runs);
+  const port = await freePort();
+  const child = await startListener(port);
+  recordStarted(child, port);
+  const refuses = async (what) => {
+    assert.throws(() => isServing(child, port, REMEDY), CANNOT_TELL, what);
+    assert.throws(() => assertRunServes(port, REMEDY), CANNOT_TELL, what);
+    await assert.rejects(ensurePortFree(port, { command: commandOn(port), cwd: dir }, REMEDY), CANNOT_TELL, what);
+  };
+  for (const [what, script] of [
+    ['lsof', `echo ${child.pid}; exit 1`], // as when it read only some of what it was to read
+    ['lsof', 'exit 2'],
+    ['lsof', 'kill -9 $$'],
+    ['ps', 'echo 1; exit 1'],
+    ['ps', 'exit 127'],
+    ['ps', 'echo what'],
+  ]) {
+    await withFake(what, script, () => refuses(`${what}: ${script}`));
+    await assertSurvives(child.pid);
+  }
+  endRun();
+  await assertGone(child.pid);
+});
+
+test('a lookup that finds nothing, with exit 1 and no output, finds nothing', async () => {
+  const port = await freePort();
+  await withFake('lsof', 'exit 1', () => ensurePortFree(port, undefined, REMEDY));
+  const child = await startListener(port);
+  await withFake('lsof', 'exit 1', async () => {
+    assert.equal(isServing(child, port, REMEDY), false);
+    await assert.rejects(ensurePortFree(port, undefined, REMEDY), /is taken/);
+  });
+  await assertSurvives(child.pid);
+});
+
+test('a lookup that hangs is given up', { timeout: 60_000 }, async () => {
+  const port = await freePort();
+  const child = await startListener(port);
+  for (const program of ['lsof', 'ps']) {
+    const since = Date.now();
+    await withFake(program, 'exec sleep 40', async () => {
+      assert.throws(() => isServing(child, port, REMEDY), /Cannot tell [^]*ETIMEDOUT/);
+    });
+    assert.ok(Date.now() - since < 20_000, program);
+  }
+});
+
+test('the end of a run stops what it can tell, and keeps the record of what it cannot', async () => {
+  const endRun = beginRun(runs);
+  const [first, second] = [await freePort(), await freePort()];
+  const unknown = await startListener(first);
+  const known = await startListener(second);
+  recordStarted(unknown, first);
+  recordStarted(known, second);
+  const real = execFileSync('/bin/sh', ['-c', 'command -v ps'], { encoding: 'utf8' }).trim();
+  const script = `case "$*" in *" ${unknown.pid} "*) exit 2;; esac; exec ${real} "$@"`;
+  await withFake('ps', script, () => assert.throws(endRun, CANNOT_TELL));
+  await assertGone(known.pid);
+  await assertSurvives(unknown.pid);
+  assert.equal(readdirSync(runs).length, 1);
+  endRun();
+  await assertGone(unknown.pid);
+  assert.deepEqual(readdirSync(runs), []);
 });
