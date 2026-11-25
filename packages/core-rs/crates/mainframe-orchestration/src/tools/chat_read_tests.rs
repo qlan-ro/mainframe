@@ -3,8 +3,8 @@ use mainframe_types::content::LeafContent;
 use serde_json::json;
 
 use super::*;
+use crate::calls::CallCtx;
 use crate::input::golden::{fixture_keys, schema_properties};
-use crate::service::CallCtx;
 use crate::state::{AgentMessageKind, wrap_agent_message};
 use crate::test_support::{FakePort, service_with};
 
@@ -208,4 +208,48 @@ async fn lineage_scope_reaches_through_a_chain_of_plain_launches() {
         .await
         .unwrap();
     assert_eq!(out["chatId"], "target");
+}
+
+/// Both views render this message, at different lengths: an offset counted in
+/// one is meaningless in the other.
+#[tokio::test]
+async fn continuing_an_item_renders_the_view_its_offset_was_counted_in() {
+    let mut message = text_message("turn:1", ChatMessageType::Assistant, &"a".repeat(250));
+    message.content.insert(
+        0,
+        serde_json::from_value(json!({
+            "type": "tool_use", "id": "t1", "name": "Bash", "input": {}
+        }))
+        .unwrap(),
+    );
+    let (svc, ctx, _) = setup(vec![message]);
+    for (view, text) in [
+        ("messages", "a".repeat(250)),
+        (
+            "activity",
+            format!("[tool call Bash] {{}}\n{}", "a".repeat(250)),
+        ),
+    ] {
+        let first = run(
+            &svc,
+            &ctx,
+            json!({ "chatId": "target", "view": view, "maxChars": 200 }),
+        )
+        .await
+        .unwrap();
+        let rest = run(
+            &svc,
+            &ctx,
+            json!({
+                "chatId": "target", "view": view, "messageId": "turn:1",
+                "textOffset": first["items"][0]["nextTextOffset"]
+            }),
+        )
+        .await
+        .unwrap();
+        let joined = [&first, &rest]
+            .map(|page| page["items"][0]["text"].as_str().unwrap().to_string())
+            .concat();
+        assert_eq!(joined, text, "{view}");
+    }
 }

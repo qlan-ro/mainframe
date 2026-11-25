@@ -4,22 +4,23 @@ use mainframe_types::chat::ChatStatus;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use super::launch_common::resolve_project;
 use super::{ToolDef, chat_summary};
-use crate::errors::{ErrorCode, ToolError};
+use crate::calls::CallCtx;
+use crate::errors::ToolError;
 use crate::input::{
     Validate, check_opt_id, check_opt_len, check_range, id_schema, object_schema, parse_args,
     string_schema,
 };
 use crate::policy::{RESULT_BUDGET_BYTES, TITLE_MAX};
 use crate::ports::ChatView;
-use crate::service::{CallCtx, OrchestrationService};
+use crate::service::OrchestrationService;
 
 const DEFAULT_LIMIT: u64 = 50;
 const MAX_LIMIT: u64 = 100;
 
 pub(super) fn definition() -> ToolDef {
     ToolDef {
-        name: "chat_list",
         title: "List Mainframe chats",
         description: "List chats in a project (default: the caller's), most recently updated \
             first. Side chats, temporary chats, and automation chats are never listed. Use this \
@@ -27,7 +28,7 @@ pub(super) fn definition() -> ToolDef {
             before retrying it.",
         input_schema: object_schema(
             json!({
-                "projectId": id_schema("Project id; defaults to the caller's project."),
+                "projectId": id_schema("Project id, or \"no-project\". Default: the caller's."),
                 "status": { "enum": ["active", "archived", "all"], "description": "Default active." },
                 "titleContains": string_schema(TITLE_MAX, "Case-insensitive title filter."),
                 "includeDelegated": { "type": "boolean", "description": "Default true." },
@@ -81,35 +82,30 @@ pub(super) async fn run(
 ) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
     let caller = svc.caller_chat(ctx).await?;
-    let project_id = input.project_id.clone().unwrap_or(caller.project_id);
-    if !svc.port.project_exists(&project_id).await {
-        return Err(ToolError::new(
-            ErrorCode::ProjectNotFound,
-            format!("No project {project_id}."),
-        ));
-    }
+    let project_id = resolve_project(svc, input.project_id.as_deref(), &caller).await?;
     let include_archived = input.status != StatusFilter::Active;
+    let title_needle = input.title_contains.as_deref().map(str::to_lowercase);
     let mut chats: Vec<ChatView> = svc
         .port
         .list_chats(&project_id, include_archived)
         .await?
         .into_iter()
-        .filter(|c| input.keeps(c))
+        .filter(|c| input.keeps(c, title_needle.as_deref()))
         .collect();
     chats.sort_by(|a, b| b.updated_at.cmp(&a.updated_at).then(b.id.cmp(&a.id)));
     Ok(page(svc, &project_id, &chats, &input))
 }
 
 impl Input {
-    fn keeps(&self, chat: &ChatView) -> bool {
+    fn keeps(&self, chat: &ChatView, title_needle: Option<&str>) -> bool {
         let status_ok = match self.status {
             StatusFilter::Active => chat.status != ChatStatus::Archived,
             StatusFilter::Archived => chat.status == ChatStatus::Archived,
             StatusFilter::All => true,
         };
-        let title_ok = self.title_contains.as_deref().is_none_or(|needle| {
-            let title = chat.title.as_deref().unwrap_or_default().to_lowercase();
-            title.contains(&needle.to_lowercase())
+        let title_ok = title_needle.is_none_or(|needle| {
+            let title = chat.title.as_deref().unwrap_or_default();
+            title.to_lowercase().contains(needle)
         });
         let lineage_ok = self.include_delegated.unwrap_or(true) || chat.task_id.is_none();
         chat.is_agent_addressable() && status_ok && title_ok && lineage_ok

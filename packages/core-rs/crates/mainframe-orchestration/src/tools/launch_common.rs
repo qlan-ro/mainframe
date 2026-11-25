@@ -224,16 +224,14 @@ pub(super) fn resolve_workspace(
 pub(super) async fn admit_creation(
     svc: &OrchestrationService,
     caller: &ChatView,
-) -> Result<u32, ToolError> {
-    let depth = svc.depth_of(caller).await + 1;
-    if depth > MAX_DEPTH {
+) -> Result<(), ToolError> {
+    if svc.depth_of(caller).await? >= MAX_DEPTH {
         return Err(ToolError::new(
             ErrorCode::DepthLimitExceeded,
             format!("Chats may be started at most {MAX_DEPTH} levels deep."),
         ));
     }
-    svc.limiter.try_acquire(&caller.id)?;
-    Ok(depth)
+    svc.limiter.try_acquire(&caller.id)
 }
 
 #[cfg(test)]

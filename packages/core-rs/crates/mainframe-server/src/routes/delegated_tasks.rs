@@ -17,15 +17,21 @@ async fn cancel(
     if check_id("chatId", &chat_id).is_err() || check_id("taskId", &task_id).is_err() {
         return fail(StatusCode::BAD_REQUEST, "Invalid id");
     }
-    if ctx
+    match ctx
         .chat
         .orchestration
         .cancel_task_for_parent(&chat_id, &task_id)
         .await
     {
-        ok_empty()
-    } else {
-        fail(StatusCode::NOT_FOUND, "Task not found for this chat")
+        Ok(true) => ok_empty(),
+        Ok(false) => fail(StatusCode::NOT_FOUND, "Task not found for this chat"),
+        Err(err) => {
+            tracing::error!(chat_id, task_id, error = %err, "failed to cancel a delegated task");
+            fail(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not cancel the task",
+            )
+        }
     }
 }
 

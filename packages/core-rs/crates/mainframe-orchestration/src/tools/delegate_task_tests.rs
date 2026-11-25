@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
-use mainframe_types::content::LeafContent;
+use mainframe_types::events::DaemonEvent;
 use mainframe_types::orchestration::{TaskDelivery, TaskStatus};
 use serde_json::json;
 
@@ -9,65 +8,8 @@ use super::*;
 use crate::errors::ErrorCode;
 use crate::input::golden::{fixture_keys, schema_properties};
 use crate::ports::PendingPermissionView;
-use crate::test_support::{FakePort, call_ctx, service_with_tasks};
-use crate::test_tasks::FakeTasks;
-
-pub(crate) struct Fixture {
-    pub svc: Arc<OrchestrationService>,
-    pub ctx: CallCtx,
-    pub port: FakePort,
-    pub tasks: FakeTasks,
-}
-
-pub(crate) fn fixture() -> Fixture {
-    let port = FakePort::new();
-    let mut parent = port.add_chat("parent");
-    parent.working = true;
-    parent.permission_mode = ExecutionMode::AcceptEdits;
-    port.put(parent);
-    let tasks = FakeTasks::default();
-    let (svc, ctx) = service_with_tasks(port.clone(), tasks.clone(), "parent");
-    Fixture {
-        svc,
-        ctx,
-        port,
-        tasks,
-    }
-}
-
-/// Makes `chat_id` finish its turn with `text` as its answer.
-pub(crate) async fn finish(f: &Fixture, chat_id: &str, text: &str) {
-    let answer = ChatMessage {
-        id: format!("{chat_id}-answer"),
-        chat_id: chat_id.into(),
-        r#type: ChatMessageType::Assistant,
-        content: vec![MessageContent::Leaf(LeafContent::Text {
-            text: text.into(),
-            parent_tool_use_id: None,
-        })],
-        timestamp: "t".into(),
-        metadata: None,
-    };
-    f.port
-        .lock()
-        .messages
-        .entry(chat_id.into())
-        .or_default()
-        .push(answer);
-    f.port.update(chat_id, |c| c.working = false);
-    f.svc
-        .on_event(&DaemonEvent::ChatUpdated {
-            chat: crate::test_support::wire_chat(chat_id),
-            reason: None,
-        })
-        .await;
-}
-
-pub(crate) async fn delegate(f: &Fixture, ctx: &CallCtx, task: &str) -> Value {
-    run(&f.svc, ctx, json!({ "task": task })).await.unwrap()
-}
-
-use mainframe_types::events::DaemonEvent;
+use crate::test_fixture::{delegate, finish, fixture};
+use crate::test_support::{announce, call_ctx};
 
 #[test]
 fn schema_matches_the_input_struct() {
@@ -147,12 +89,7 @@ async fn sibling_results_are_held_until_the_parent_is_idle_then_batched() {
     );
 
     f.port.update("parent", |c| c.working = false);
-    f.svc
-        .on_event(&DaemonEvent::ChatUpdated {
-            chat: crate::test_support::wire_chat("parent"),
-            reason: None,
-        })
-        .await;
+    announce(&f.svc, "parent").await;
     let (to, body) = f.port.lock().sent[2].clone();
     assert_eq!(to, "parent");
     assert!(body.contains("answer A") && body.contains("answer B"));
@@ -195,12 +132,7 @@ async fn a_directly_interrupted_child_still_delivers_to_an_async_waiting_parent(
     assert_eq!(task.delivery, TaskDelivery::Owed);
 
     f.port.update("parent", |c| c.working = false);
-    f.svc
-        .on_event(&DaemonEvent::ChatUpdated {
-            chat: crate::test_support::wire_chat("parent"),
-            reason: None,
-        })
-        .await;
+    announce(&f.svc, "parent").await;
     let (to, body) = f.port.lock().sent.last().unwrap().clone();
     assert_eq!(to, "parent");
     assert!(body.contains("status=\"interrupted\""), "{body}");
@@ -234,7 +166,8 @@ async fn a_child_with_open_subtasks_waits_for_their_results() {
     let view = f
         .svc
         .task_result(&f.tasks.find(&task_id).unwrap(), None)
-        .await;
+        .await
+        .unwrap();
     assert_eq!(view["workState"], "waiting_for_children");
 
     finish(&f, &grandchild, "sub done").await;
@@ -296,7 +229,7 @@ async fn limits_and_ceilings_hold() {
 
 /// Concurrent calls with the same `clientRequestId` must create exactly one
 /// task: the idempotency check and the insert run under one lock
-/// (`OrchestrationService::tree_lock`), so a second caller that raced past
+/// (`OrchestrationService::tree_locks`), so a second caller that raced past
 /// the first's check (widened by `FakePort::launch_chat`'s deliberate
 /// `yield_now`) still finds the first's row once it is its own turn.
 #[tokio::test]
@@ -354,9 +287,7 @@ async fn concurrent_calls_cannot_together_exceed_the_per_parent_limit() {
 #[tokio::test]
 async fn a_stop_that_lands_while_queued_for_the_tree_lock_cancels_nothing_new() {
     let f = fixture();
-    let root = f.svc.tree_root(&f.ctx.caller.chat_id).await;
-    let lock = f.svc.tree_lock(&root);
-    let guard = lock.clone().lock_owned().await;
+    let guard = f.svc.tree_locks.acquire(&f.ctx.caller.chat_id).await;
 
     // Simulates call A holding the lock during its own launch_chat: while
     // this call (B, below) queues for the lock, the user stops the parent,

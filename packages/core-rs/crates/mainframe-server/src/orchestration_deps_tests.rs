@@ -182,7 +182,7 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     assert_eq!(parent_chat.display_status, Some(DisplayStatus::Working));
     assert_eq!(parent_chat.is_running, Some(false));
 
-    let view = port.chat(&child.id).await.unwrap();
+    let view = port.chat(&child.id).await.unwrap().unwrap();
     assert_eq!(view.task_id.as_deref(), Some("task_1"));
     assert_eq!(view.parent_chat_id.as_deref(), Some(caller.as_str()));
     let listed = port.list_chats(&project_id, false).await.unwrap();
@@ -190,7 +190,7 @@ async fn a_delegated_child_reports_its_task_and_boot_interrupts_open_tasks() {
     assert_eq!(row.task_id.as_deref(), Some("task_1"));
 
     ctx.chat.orchestration.clone().reconcile_boot().await;
-    let after = store.get("task_1").await.unwrap();
+    let after = store.get("task_1").await.unwrap().unwrap();
     assert_eq!(after.status, TaskStatus::Interrupted);
     assert_eq!(after.delivery, TaskDelivery::Dropped);
     assert_eq!(
@@ -229,8 +229,8 @@ async fn interrupting_a_chat_through_the_real_hook_cascades_through_its_whole_ta
     // call into the service and not `FakePort`.
     chats.interrupt_chat(&caller).await;
 
-    let task_1 = store.get("task_1").await.unwrap();
-    let task_2 = store.get("task_2").await.unwrap();
+    let task_1 = store.get("task_1").await.unwrap().unwrap();
+    let task_2 = store.get("task_2").await.unwrap().unwrap();
     assert_eq!(task_1.status, TaskStatus::Cancelled);
     assert_eq!(task_2.status, TaskStatus::Cancelled);
     assert_eq!(task_1.delivery, TaskDelivery::Dropped);

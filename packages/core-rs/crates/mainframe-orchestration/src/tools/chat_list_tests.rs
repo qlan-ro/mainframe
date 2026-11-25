@@ -1,6 +1,8 @@
+use mainframe_types::chat::NO_PROJECT_ID;
 use serde_json::json;
 
 use super::*;
+use crate::errors::ErrorCode;
 use crate::input::golden::{fixture_keys, schema_properties};
 use crate::test_support::{FakePort, service_with};
 
@@ -58,4 +60,19 @@ async fn unknown_project_is_reported() {
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::ProjectNotFound);
+}
+
+/// `chat_launch` takes this alias, and tells the agent to look for a lost
+/// launch here before retrying it.
+#[tokio::test]
+async fn the_no_project_alias_lists_chats_without_a_project() {
+    let port = FakePort::new();
+    port.add_chat("caller");
+    port.add_chat("loose");
+    port.update("loose", |c| c.project_id = NO_PROJECT_ID.into());
+    let (svc, ctx) = service_with(port, "caller");
+    let out = run(&svc, &ctx, json!({ "projectId": "no-project" }))
+        .await
+        .unwrap();
+    assert_eq!(out["chats"][0]["chatId"], "loose");
 }

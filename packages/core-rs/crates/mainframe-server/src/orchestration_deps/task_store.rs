@@ -17,20 +17,12 @@ impl DbTaskStore {
         Self { db }
     }
 
-    /// A read that cannot fail the caller: a DB error is logged and reads as
-    /// "nothing there".
-    async fn read<T, F>(&self, what: &'static str, f: F) -> T
+    async fn call<T, F>(&self, f: F) -> Result<T, PortError>
     where
-        T: Default + Send + 'static,
+        T: Send + 'static,
         F: FnOnce(&mainframe_db::DatabaseManager) -> Result<T, DbError> + Send + 'static,
     {
-        match self.db.call(f).await {
-            Ok(value) => value,
-            Err(err) => {
-                tracing::warn!(what, error = %err, "delegated task read failed");
-                T::default()
-            }
-        }
+        self.db.call(f).await.map_err(internal)
     }
 }
 
@@ -40,67 +32,57 @@ fn internal(err: DbError) -> PortError {
 
 impl TaskStore for DbTaskStore {
     fn insert(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>> {
-        Box::pin(async move {
-            self.db
-                .call(move |d| d.delegated_tasks.insert(&task))
-                .await
-                .map_err(internal)
-        })
+        Box::pin(self.call(move |d| d.delegated_tasks.insert(&task)))
     }
 
     fn update(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>> {
-        Box::pin(async move {
-            self.db
-                .call(move |d| d.delegated_tasks.update(&task))
-                .await
-                .map_err(internal)
-        })
+        Box::pin(self.call(move |d| d.delegated_tasks.update(&task)))
     }
 
-    fn get<'a>(&'a self, task_id: &'a str) -> BoxFuture<'a, Option<DelegatedTask>> {
+    fn get<'a>(
+        &'a self,
+        task_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<DelegatedTask>, PortError>> {
         let id = task_id.to_string();
-        Box::pin(self.read("get", move |d| d.delegated_tasks.get(&id)))
+        Box::pin(self.call(move |d| d.delegated_tasks.get(&id)))
     }
 
-    fn by_child<'a>(&'a self, child_chat_id: &'a str) -> BoxFuture<'a, Option<DelegatedTask>> {
+    fn by_child<'a>(
+        &'a self,
+        child_chat_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<DelegatedTask>, PortError>> {
         let id = child_chat_id.to_string();
-        Box::pin(self.read("by_child", move |d| d.delegated_tasks.get_by_child(&id)))
+        Box::pin(self.call(move |d| d.delegated_tasks.get_by_child(&id)))
     }
 
     fn by_request<'a>(
         &'a self,
         parent_chat_id: &'a str,
         client_request_id: &'a str,
-    ) -> BoxFuture<'a, Option<DelegatedTask>> {
+    ) -> BoxFuture<'a, Result<Option<DelegatedTask>, PortError>> {
         let (parent, key) = (parent_chat_id.to_string(), client_request_id.to_string());
-        Box::pin(self.read("by_request", move |d| {
-            d.delegated_tasks.find_by_request(&parent, &key)
-        }))
+        Box::pin(self.call(move |d| d.delegated_tasks.find_by_request(&parent, &key)))
     }
 
     fn by_parent<'a>(
         &'a self,
         parent_chat_id: &'a str,
         limit: u32,
-    ) -> BoxFuture<'a, Vec<DelegatedTask>> {
+    ) -> BoxFuture<'a, Result<Vec<DelegatedTask>, PortError>> {
         let parent = parent_chat_id.to_string();
-        Box::pin(self.read("by_parent", move |d| {
-            d.delegated_tasks.list_by_parent(&parent, limit)
-        }))
+        Box::pin(self.call(move |d| d.delegated_tasks.list_by_parent(&parent, limit)))
     }
 
-    fn nonterminal(&self) -> BoxFuture<'_, Vec<DelegatedTask>> {
-        Box::pin(self.read("nonterminal", |d| d.delegated_tasks.list_nonterminal()))
+    fn nonterminal(&self) -> BoxFuture<'_, Result<Vec<DelegatedTask>, PortError>> {
+        Box::pin(self.call(|d| d.delegated_tasks.list_nonterminal()))
     }
 
-    fn owed(&self) -> BoxFuture<'_, Vec<DelegatedTask>> {
-        Box::pin(self.read("owed", |d| d.delegated_tasks.list_owed()))
+    fn owed(&self) -> BoxFuture<'_, Result<Vec<DelegatedTask>, PortError>> {
+        Box::pin(self.call(|d| d.delegated_tasks.list_owed()))
     }
 
-    fn interrupt_unfinished(&self) -> BoxFuture<'_, usize> {
+    fn interrupt_unfinished(&self) -> BoxFuture<'_, Result<usize, PortError>> {
         let now = now_iso8601();
-        Box::pin(self.read("interrupt_unfinished", move |d| {
-            d.delegated_tasks.interrupt_unfinished(&now)
-        }))
+        Box::pin(self.call(move |d| d.delegated_tasks.interrupt_unfinished(&now)))
     }
 }

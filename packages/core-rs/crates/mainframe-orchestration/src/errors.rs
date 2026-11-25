@@ -95,6 +95,8 @@ impl fmt::Display for ToolError {
     }
 }
 
+impl std::error::Error for ToolError {}
+
 /// A port failure: either a reason the model may read, or an internal one
 /// that [`ToolError::internal`] logs and hides.
 #[derive(Debug)]
@@ -102,6 +104,17 @@ pub enum PortError {
     Public(ToolError),
     Internal(String),
 }
+
+impl fmt::Display for PortError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Public(err) => err.fmt(f),
+            Self::Internal(detail) => f.write_str(detail),
+        }
+    }
+}
+
+impl std::error::Error for PortError {}
 
 impl From<PortError> for ToolError {
     fn from(err: PortError) -> Self {

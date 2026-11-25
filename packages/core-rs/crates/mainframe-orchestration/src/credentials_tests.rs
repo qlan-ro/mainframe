@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn issue_revokes_the_previous_credential_and_cancels_its_calls() {
-    let reg = CredentialRegistry::new();
+    let reg = CredentialRegistry::default();
     let first = reg.issue("chat", "s1");
     let caller = reg.resolve(first.expose()).unwrap();
     let second = reg.issue("chat", "s2");
@@ -13,7 +13,7 @@ fn issue_revokes_the_previous_credential_and_cancels_its_calls() {
 
 #[test]
 fn resolve_matches_only_the_exact_token() {
-    let reg = CredentialRegistry::new();
+    let reg = CredentialRegistry::default();
     let token = reg.issue("chat", "s1");
     assert!(reg.resolve("not-the-token").is_none());
     let mut tampered = token.expose().to_string();
@@ -24,7 +24,7 @@ fn resolve_matches_only_the_exact_token() {
 
 #[test]
 fn revoke_cancels_inflight_tokens() {
-    let reg = CredentialRegistry::new();
+    let reg = CredentialRegistry::default();
     let token = reg.issue("chat", "s1");
     let caller = reg.resolve(token.expose()).unwrap();
     reg.revoke_chat("chat");
@@ -34,7 +34,7 @@ fn revoke_cancels_inflight_tokens() {
 
 #[test]
 fn a_stale_session_exit_does_not_revoke_its_successor() {
-    let reg = CredentialRegistry::new();
+    let reg = CredentialRegistry::default();
     reg.issue("chat", "old");
     let token = reg.issue("chat", "new");
     reg.revoke_by_session_id("old");
@@ -45,7 +45,7 @@ fn a_stale_session_exit_does_not_revoke_its_successor() {
 
 #[test]
 fn cancel_inflight_keeps_the_credential_usable() {
-    let reg = CredentialRegistry::new();
+    let reg = CredentialRegistry::default();
     let token = reg.issue("chat", "s1");
     let before = reg.resolve(token.expose()).unwrap();
     reg.cancel_inflight("chat");
@@ -56,20 +56,23 @@ fn cancel_inflight_keeps_the_credential_usable() {
 
 #[test]
 fn wait_slots_are_bounded_and_released_on_drop() {
-    let reg = CredentialRegistry::new();
+    let reg = CredentialRegistry::default();
     let token = reg.issue("chat", "s1");
     let caller = reg.resolve(token.expose()).unwrap();
     let slots: Vec<_> = (0..MAX_CONCURRENT_WAITS)
-        .map(|_| caller.try_begin_wait().unwrap())
+        .map(|_| caller.begin_wait().unwrap())
         .collect();
-    assert!(caller.try_begin_wait().is_none());
+    assert_eq!(
+        caller.begin_wait().unwrap_err().code,
+        ErrorCode::RateLimited
+    );
     drop(slots);
-    assert!(caller.try_begin_wait().is_some());
+    assert!(caller.begin_wait().is_ok());
 }
 
 #[test]
 fn debug_output_never_contains_the_raw_token() {
-    let reg = CredentialRegistry::new();
+    let reg = CredentialRegistry::default();
     let token = reg.issue("chat", "s1");
     let caller = reg.resolve(token.expose()).unwrap();
     assert!(!format!("{token:?} {caller:?}").contains(token.expose()));

@@ -126,3 +126,28 @@ async fn a_chat_the_caller_launched_into_another_project_is_still_sendable() {
     .await;
     assert_eq!(result.unwrap()["delivery"], "started");
 }
+
+#[tokio::test]
+async fn steering_a_chat_that_only_has_held_messages_finds_no_turn() {
+    let (svc, ctx, _) = setup(|_| {});
+    svc.outbox
+        .push("target", "x", OutboxKind::Send, "hi".into(), "hi");
+    let args = json!({ "chatId": "target", "message": "hi", "mode": "steer" });
+    let result = run(&svc, &ctx, args).await;
+    assert_eq!(code(&result), Some(ErrorCode::NoActiveTurn));
+}
+
+#[tokio::test]
+async fn a_new_message_retries_the_targets_failed_delivery() {
+    let (svc, ctx, port) = setup(|_| {});
+    port.lock().send_fails.insert("target".into());
+    svc.outbox
+        .push("target", "x", OutboxKind::Notice, "first".into(), "first");
+    svc.try_flush("target").await;
+    port.lock().send_fails.clear();
+    let args = json!({ "chatId": "target", "message": "second" });
+    assert_eq!(run(&svc, &ctx, args).await.unwrap()["delivery"], "queued");
+    svc.try_flush("target").await;
+    let sent = port.lock().sent.clone();
+    assert!(sent[0].1.starts_with("first") && sent[0].1.contains("second"));
+}

@@ -1,6 +1,7 @@
 //! In-memory `TaskStore` for the tool tests.
 
 use mainframe_types::sync::LockExt as _;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use mainframe_types::orchestration::DelegatedTask;
@@ -11,6 +12,10 @@ use crate::ports::{BoxFuture, TaskStore};
 #[derive(Clone, Default)]
 pub struct FakeTasks {
     pub rows: Arc<Mutex<Vec<DelegatedTask>>>,
+    /// Reads fail while set, as on a locked or broken database.
+    pub fail_reads: Arc<AtomicBool>,
+    /// Writes fail while set.
+    pub fail_writes: Arc<AtomicBool>,
 }
 
 impl FakeTasks {
@@ -22,6 +27,21 @@ impl FakeTasks {
         self.all().into_iter().find(|t| t.id == id)
     }
 
+    fn readable(&self) -> Result<(), PortError> {
+        Self::check(&self.fail_reads)
+    }
+
+    fn writable(&self) -> Result<(), PortError> {
+        Self::check(&self.fail_writes)
+    }
+
+    fn check(broken: &AtomicBool) -> Result<(), PortError> {
+        if broken.load(Ordering::SeqCst) {
+            return Err(PortError::Internal("database is locked".into()));
+        }
+        Ok(())
+    }
+
     fn select(&self, f: impl Fn(&DelegatedTask) -> bool) -> Vec<DelegatedTask> {
         self.all().into_iter().filter(|t| f(t)).collect()
     }
@@ -30,6 +50,7 @@ impl FakeTasks {
 impl TaskStore for FakeTasks {
     fn insert(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>> {
         Box::pin(async move {
+            self.writable()?;
             self.rows.lock_recover().push(task);
             Ok(())
         })
@@ -37,6 +58,7 @@ impl TaskStore for FakeTasks {
 
     fn update(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>> {
         Box::pin(async move {
+            self.writable()?;
             let mut rows = self.rows.lock_recover();
             if let Some(row) = rows.iter_mut().find(|t| t.id == task.id) {
                 *row = task;
@@ -45,49 +67,71 @@ impl TaskStore for FakeTasks {
         })
     }
 
-    fn get<'a>(&'a self, task_id: &'a str) -> BoxFuture<'a, Option<DelegatedTask>> {
-        Box::pin(async move { self.find(task_id) })
+    fn get<'a>(
+        &'a self,
+        task_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<DelegatedTask>, PortError>> {
+        Box::pin(async move {
+            self.readable()?;
+            Ok(self.find(task_id))
+        })
     }
 
-    fn by_child<'a>(&'a self, child: &'a str) -> BoxFuture<'a, Option<DelegatedTask>> {
-        Box::pin(async move { self.select(|t| t.child_chat_id == child).into_iter().next() })
+    fn by_child<'a>(
+        &'a self,
+        child: &'a str,
+    ) -> BoxFuture<'a, Result<Option<DelegatedTask>, PortError>> {
+        Box::pin(async move {
+            self.readable()?;
+            Ok(self.select(|t| t.child_chat_id == child).into_iter().next())
+        })
     }
 
     fn by_request<'a>(
         &'a self,
         parent: &'a str,
         key: &'a str,
-    ) -> BoxFuture<'a, Option<DelegatedTask>> {
+    ) -> BoxFuture<'a, Result<Option<DelegatedTask>, PortError>> {
         Box::pin(async move {
-            self.select(|t| {
-                t.parent_chat_id == parent && t.client_request_id.as_deref() == Some(key)
-            })
-            .into_iter()
-            .next()
+            self.readable()?;
+            Ok(self
+                .select(|t| {
+                    t.parent_chat_id == parent && t.client_request_id.as_deref() == Some(key)
+                })
+                .into_iter()
+                .next())
         })
     }
 
-    fn by_parent<'a>(&'a self, parent: &'a str, limit: u32) -> BoxFuture<'a, Vec<DelegatedTask>> {
+    fn by_parent<'a>(
+        &'a self,
+        parent: &'a str,
+        limit: u32,
+    ) -> BoxFuture<'a, Result<Vec<DelegatedTask>, PortError>> {
         Box::pin(async move {
+            self.readable()?;
             let mut rows = self.select(|t| t.parent_chat_id == parent);
             rows.reverse();
             rows.truncate(limit as usize);
-            rows
+            Ok(rows)
         })
     }
 
-    fn nonterminal(&self) -> BoxFuture<'_, Vec<DelegatedTask>> {
-        Box::pin(async move { self.select(|t| !t.status.is_terminal()) })
+    fn nonterminal(&self) -> BoxFuture<'_, Result<Vec<DelegatedTask>, PortError>> {
+        Box::pin(async move {
+            self.readable()?;
+            Ok(self.select(|t| !t.status.is_terminal()))
+        })
     }
 
-    fn owed(&self) -> BoxFuture<'_, Vec<DelegatedTask>> {
+    fn owed(&self) -> BoxFuture<'_, Result<Vec<DelegatedTask>, PortError>> {
         Box::pin(async move {
             use mainframe_types::orchestration::TaskDelivery;
-            self.select(|t| t.delivery == TaskDelivery::Owed)
+            Ok(self.select(|t| t.delivery == TaskDelivery::Owed))
         })
     }
 
-    fn interrupt_unfinished(&self) -> BoxFuture<'_, usize> {
+    fn interrupt_unfinished(&self) -> BoxFuture<'_, Result<usize, PortError>> {
         Box::pin(async move {
             use mainframe_types::orchestration::{TaskDelivery, TaskStatus};
             let mut rows = self.rows.lock_recover();
@@ -97,7 +141,7 @@ impl TaskStore for FakeTasks {
                 row.delivery = TaskDelivery::Dropped;
                 n += 1;
             }
-            n
+            Ok(n)
         })
     }
 }
