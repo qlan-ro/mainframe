@@ -59,15 +59,18 @@ export function UnattendedConfirmDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-row justify-end">
-          <AlertDialogCancel data-testid="composer-unattended-confirm-cancel" className="h-7 px-3">
-            Cancel
+          <AlertDialogCancel
+            data-testid="composer-unattended-confirm-cancel"
+            className="h-7 rounded-[8px] border-0 bg-transparent px-3 shadow-none ring-1 ring-hairline-strong ring-inset dark:bg-transparent dark:hover:bg-sidebar-accent"
+          >
+            <span className="relative top-px">Cancel</span>
           </AlertDialogCancel>
           <AlertDialogAction
             data-testid="composer-unattended-confirm-confirm"
-            className="h-7 border border-warning/40 px-3 bg-warning/10 text-warning hover:bg-warning/20"
+            className="h-7 rounded-[8px] border-0 bg-warning-surface px-3 text-warning shadow-none ring-1 ring-warning/35 ring-inset hover:bg-warning/20 dark:ring-warning/38"
             onClick={confirm.confirm}
           >
-            Run unattended
+            <span className="relative top-px">Run unattended</span>
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

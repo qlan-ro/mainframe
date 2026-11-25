@@ -64,7 +64,7 @@ describe('ComposerAddMenu', () => {
 
     await openMenu();
 
-    expect(screen.getByTestId('composer-add-attachment')).toHaveTextContent('Attach files');
+    expect(screen.getByTestId('composer-add-attachment')).toHaveTextContent('Attach files…');
     expect(screen.getByTestId('composer-add-mention')).toHaveTextContent('Mention a file or agent');
   });
 

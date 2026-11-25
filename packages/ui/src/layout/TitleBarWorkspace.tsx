@@ -40,7 +40,7 @@ export function TitleBarWorkspace() {
       <WorkspaceTabs key={pane?.id ?? 'empty'} pane={pane} />
       <FilesToggle />
       {/* Plain div under the drag region: the empty part of the segment drags the window. */}
-      <div className="h-full min-w-3 flex-1 @max-[24rem]/trailing:min-w-0" />
+      <div className="h-full min-w-3 flex-1 @max-[23rem]/trailing:min-w-0" />
     </div>
   );
 }

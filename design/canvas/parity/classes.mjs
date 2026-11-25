@@ -1,3 +1,5 @@
+import { MEASURED_EXCEPTIONS } from './measured-exceptions.mjs';
+
 // What each remaining difference is. The first rule that matches a row names its
 // class; a row no rule matches is OPEN and fails the report.
 //
@@ -15,6 +17,7 @@ const SHIFT = /^(x|y|y \(middle\)|width|height|right edge|visible width)$/;
 const OWNER = 'Owner, 25 Nov: pickers and behaviour as the old app.';
 
 export const RULES = [
+  ...MEASURED_EXCEPTIONS,
   { area: 'transcript', state: /^(cron-create|cron-list|exit-worktree|notification)$/, el: 'event marker', part: 'text “·”', prop: 'only in app', cls: 'PROTO', why: 'The comparator reads text nodes. The prototype draws the same receipt separator in .mkv::before and MarkerPill renders its separator as aria-hidden text.' },
   { area: 'transcript', state: 'truncated', el: 'tool row', part: 'text “exit 1 · 3.1s”', prop: 'content', proto: 'exit 1 · 3.1s', app: 'failed · 3.1s', cls: 'APP', why: 'The app row has a failed outcome and elapsed time. The fixture supplies no recorded numeric exit code for its truncated result.' },
   { area: 'transcript', state: 'dynamic', el: 'tool body', part: /^text “(?:A Codex dynamic tool \(|namespace__tool|\) has no card of its own and uses this row\.)”$/, prop: 'missing in app', cls: 'PROTO', why: 'The prototype adds a sample explanation of dynamic tools above the response. CallBody renders the actual arguments and result.' },
