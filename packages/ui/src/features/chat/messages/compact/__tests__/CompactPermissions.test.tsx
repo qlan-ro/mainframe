@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { expect, it, vi } from 'vitest';
+import { expect, it, onTestFinished, vi } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { buildChatExtras } from '../../../runtime/chat-extras';
 import { createChatThreadState } from '../../../controller/chat-thread-state';
@@ -7,6 +7,7 @@ import type { AcpChatController } from '../../../controller/acp-chat-controller'
 import { RootTranscriptScope } from '../transcript-scope';
 import { AssistantMessage } from '../../AssistantMessage';
 import { ChatGateMount } from '../../../gates/ChatGateMount';
+import { installGateLayout } from '../../../gates/__tests__/gate-layout';
 import { CompactFixture, fixtureMessage, fixtureTool } from './fixtures';
 
 vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
@@ -37,6 +38,8 @@ const entry = {
 it.each(['allow-once', 'reject-once'])(
   'retains usable %s permission controls while switching modes and expanding',
   async (optionId) => {
+    installGateLayout();
+    onTestFinished(() => vi.restoreAllMocks());
     const reply = vi.fn().mockResolvedValue(undefined);
     const state = createChatThreadState('permission-chat');
     const extras = buildChatExtras({ replyToPermission: reply } as unknown as AcpChatController, 31415, {

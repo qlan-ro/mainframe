@@ -83,13 +83,14 @@ export function ChatGateMount() {
       <DelegatedGateProbes />
       {front && (
         <div
+          // Keyed by request: the next one starts at its top, with nothing chosen, and arms itself.
+          key={front.key}
           data-testid="chat-thread-gate-slot"
           // Where an Activity row that needs you moves focus (`session-panel/activity-source`).
           data-chat-gate
           className="-mx-1 mb-2 min-h-24 max-h-[45cqh] shrink-[100] overflow-y-auto px-1 py-1"
         >
-          {/* Keyed by request: the next one starts with nothing chosen, and arms itself. */}
-          <FrontGate key={front.key} gate={front} more={more} />
+          <FrontGate gate={front} more={more} />
         </div>
       )}
     </>

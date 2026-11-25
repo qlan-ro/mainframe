@@ -14,6 +14,7 @@
  *
  * Testid reference (new beyond chat.spec's list):
  *   chat-permission-details-toggle    — "Details" disclosure trigger on the permission gate
+ *   chat-permission-show-rest         — scrolls to the end of what is allowed; until it was in view the allowing answers are aria-disabled
  *   chat-permission-details-pre       — raw JSON.stringify(request.input), shown when open
  *   chat-question-option-{q}-__other__ — the "Other…" option row for question index q
  *   chat-question-other-input-{q}     — free-text input, shown once "Other…" is selected
@@ -46,6 +47,16 @@ async function expectGateMatchesComposerWidth(page: Page) {
   expect(composer, 'composer must be mounted').not.toBeNull();
   expect(Math.abs(gate!.x - composer!.x)).toBeLessThanOrEqual(1);
   expect(Math.abs(gate!.x + gate!.width - (composer!.x + composer!.width))).toBeLessThanOrEqual(1);
+}
+
+/** Reads an overflowing request to its end, which unlocks the answers that allow it. */
+async function showAllOfTheRequest(page: Page): Promise<void> {
+  const rest = page.getByTestId('chat-permission-show-rest');
+  // One press per part: the command, the details, what "Always allow" saves.
+  for (let part = 0; part < 3 && (await rest.count()) > 0; part++) {
+    await rest.evaluate((button: HTMLElement) => button.click());
+  }
+  await expect(rest).toHaveCount(0);
 }
 
 /** Mirrors transcript.spec.ts's `scrollViewportToTop` recipe (not exported there). */
@@ -266,17 +277,49 @@ test.describe('§permission gate tall command', () => {
     await expect(allow).toBeInViewport({ ratio: 1 });
   }
 
-  test('a ten-line gap does not hide the last line, and 200 lines scroll to theirs with the answers in view', async () => {
+  /** Opened at its top, locked: pressing Allow does nothing until the end was shown. */
+  async function expectLockedUntilShown(page: Page): Promise<void> {
+    const slot = page.getByTestId('chat-thread-gate-slot');
+    const allow = page.getByTestId('chat-permission-option-allow-once');
+    const rest = page.getByTestId('chat-permission-show-rest');
+    expect(await slot.evaluate((el) => el.scrollTop)).toBe(0);
+    await expect(allow).toHaveAttribute('aria-disabled', 'true');
+    await expect(rest).toHaveText('Show the rest of the command');
+    await expect(rest).toBeInViewport({ ratio: 1 });
+
+    const lines = await page.getByTestId('chat-permission-command-lines').textContent();
+    await allow.click({ force: true });
+    await allow.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Space');
+    // Long enough for an answer to have brought up the next request.
+    await page.waitForTimeout(500);
+    await expect(page.getByTestId('chat-permission-command-lines')).toHaveText(lines!);
+  }
+
+  test('a ten-line gap and 200 lines open at their top, locked until their end was shown, and reach it with the answers in view', async () => {
     const { page } = app;
+    await page.setViewportSize({ width: 1000, height: 700 });
     await sendMessage(page, 'Run the two long scripts');
     const guard = page.locator('[data-testid="chat-gate-guard"][data-armed]');
+    const allow = page.getByTestId('chat-permission-option-allow-once');
+    const rest = page.getByTestId('chat-permission-show-rest');
     await guard.waitFor({ timeout: 45_000 });
     await expect(page.getByTestId('chat-permission-command-lines')).toHaveText('12 lines');
+    await expectLockedUntilShown(page);
+    // Scrolling to the end unlocks it.
     await expectEndReachable(page);
+    await expect(allow).not.toHaveAttribute('aria-disabled');
+    await expect(rest).toHaveCount(0);
     await page.getByTestId('chat-permission-option-reject-once').click();
 
     await expect(page.getByTestId('chat-permission-command-lines')).toHaveText('200 lines');
     await guard.waitFor({ timeout: 5_000 });
+    await expectLockedUntilShown(page);
+    // So does the button, which scrolls there.
+    await rest.click();
+    await expect(rest).toHaveCount(0);
+    await expect(allow).not.toHaveAttribute('aria-disabled');
     await expectEndReachable(page);
     // The path's Hebrew part stands in stored order, so nothing around it trades places.
     const inStoredOrder = await page.evaluate(() => {
@@ -603,6 +646,7 @@ test.describe('§gate pinned slot', () => {
     await expectGateMatchesComposerWidth(page);
 
     // Drain the queue (this recording raises a second, Bash gate) and leave idle.
+    await showAllOfTheRequest(page);
     await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
     await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
@@ -707,6 +751,7 @@ test.describe('§gate slot cap under a tall composer draft', () => {
     await assertGateFooterInvariants(page);
 
     // Drain the queue (this recording raises a second, Bash gate) and leave idle.
+    await showAllOfTheRequest(page);
     await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
     await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
@@ -784,6 +829,7 @@ test.describe('§gate slot cap with the find bar open', () => {
     await scrollViewportToBottom(page);
     await assertGateFooterInvariants(page);
 
+    await showAllOfTheRequest(page);
     await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
     await page.locator('[data-testid="chat-permission-option-reject-once"]').click();

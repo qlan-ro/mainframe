@@ -74,14 +74,11 @@ function useHeldKeys() {
       if (event.key === 'Meta') held.clear();
       else held.delete(event.key);
     };
-    const clear = () => held.clear();
     window.addEventListener('keydown', down, true);
     window.addEventListener('keyup', up);
-    window.addEventListener('blur', clear);
     return () => {
       window.removeEventListener('keydown', down, true);
       window.removeEventListener('keyup', up);
-      window.removeEventListener('blur', clear);
     };
   }, []);
   return heldKeys;

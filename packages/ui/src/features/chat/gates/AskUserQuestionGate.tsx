@@ -10,7 +10,7 @@ import { AskQuestionWizard } from './AskQuestionWizard';
 import { assembleAnswers, resolveChosen } from './answers';
 import type { AskQuestion } from './answers';
 import { askerParts, type GateContext, type ReplyFn } from './gate-types';
-import { visibleLine } from './visible-text';
+import { visibleLine, visibleText } from './visible-text';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -157,8 +157,10 @@ export function AskUserQuestionGate({ entry, reply, context }: AskUserQuestionGa
     void reply(buildAskUserQuestionResponse(entry, answers));
   }, [entry, questions, reply, selections, otherText]);
 
-  const title = activeQuestion?.question ?? '';
-  const details = [activeQuestion?.header, isMulti ? 'select all that apply' : undefined].filter(Boolean).join(' · ');
+  // The agent's words: nothing in them hides. Reading order is the language's own, kept apart from the rest.
+  const title = visibleText(activeQuestion?.question ?? '');
+  const header = activeQuestion?.header && visibleLine(activeQuestion.header);
+  const details = [header, isMulti ? 'select all that apply' : undefined].filter(Boolean).join(' · ');
   const asker = visibleLine(askerParts(context, true).join(' · '));
 
   return (
@@ -174,7 +176,7 @@ export function AskUserQuestionGate({ entry, reply, context }: AskUserQuestionGa
           </span>
           <div className="flex min-w-0 flex-1 flex-col pt-0.5">
             <h3 data-testid="chat-question-text" className="text-[0.875rem] leading-5 font-semibold text-foreground">
-              {title}
+              <bdi>{title}</bdi>
             </h3>
             {(details || asker) && (
               <span data-testid="chat-question-context" className="text-xs text-muted-foreground">

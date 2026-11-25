@@ -47,6 +47,7 @@ vi.mock('../DelegatedGateProbes', () => ({ DelegatedGateProbes: () => null }));
 vi.mock('../GateGuard', () => ({ GateGuard: ({ children }: { children: React.ReactNode }) => children }));
 import { useGateQueue, type GateQueue } from '../use-gate-queue';
 import { ChatGateMount } from '../ChatGateMount';
+import { installGateLayout } from './gate-layout';
 
 const mockQueue = vi.mocked(useGateQueue);
 
@@ -121,6 +122,7 @@ function wrap(ui: React.ReactElement) {
 describe('ChatGateMount', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installGateLayout();
     // clearAllMocks does not drop a mockReturnValue, so each case restates it.
     resetAdapters();
   });

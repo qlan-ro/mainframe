@@ -12,6 +12,7 @@ vi.mock('../use-gate-queue', () => ({ useGateQueue: vi.fn() }));
 vi.mock('../DelegatedGateProbes', () => ({ DelegatedGateProbes: () => null }));
 import { useGateQueue, type PendingGate } from '../use-gate-queue';
 import { ChatGateMount } from '../ChatGateMount';
+import { installGateLayout } from './gate-layout';
 
 const ownReply = vi.fn().mockResolvedValue(undefined);
 const taskReply = vi.fn().mockResolvedValue(undefined);
@@ -63,6 +64,7 @@ function enter(element: HTMLElement, { repeat = false } = {}) {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  installGateLayout();
   ownReply.mockResolvedValue(undefined);
   taskReply.mockResolvedValue(undefined);
 });

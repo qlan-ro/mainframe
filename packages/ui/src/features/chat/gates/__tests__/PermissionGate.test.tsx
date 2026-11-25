@@ -26,13 +26,18 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ControlUpdate, PermissionOption, PermissionOptionKind } from '@qlan-ro/mainframe-types';
 import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
 import { PermissionGate, type ReplyFn } from '../PermissionGate';
+import { installGateLayout } from './gate-layout';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function wrap(ui: React.ReactElement) {
-  return render(<TooltipProvider>{ui}</TooltipProvider>);
+  return render(
+    <TooltipProvider>
+      <div data-chat-gate>{ui}</div>
+    </TooltipProvider>,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +86,7 @@ describe('PermissionGate', () => {
 
   beforeEach(() => {
     reply = vi.fn<ReplyFn>();
+    installGateLayout();
   });
 
   describe('an Artifact request', () => {
