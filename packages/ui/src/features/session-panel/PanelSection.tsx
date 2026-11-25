@@ -78,7 +78,7 @@ export function PanelRow({ icon, smallIcon, label, labelClassName, value, classN
       type="button"
       className={cn(
         ROW,
-        'relative transition-colors hover:bg-sidebar-accent focus-visible:z-10 focus-visible:focus-line disabled:pointer-events-none disabled:opacity-50',
+        'transition-colors hover:bg-sidebar-accent focus-visible:focus-line-inset disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
       {...props}

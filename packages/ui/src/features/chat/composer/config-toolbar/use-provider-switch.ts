@@ -19,19 +19,20 @@ export interface ProviderSwitchRequest {
 export function useProviderSwitch(
   chat: Chat | null,
   port: number | null,
-): (req: ProviderSwitchRequest, onFailure?: () => void) => void {
+): (req: ProviderSwitchRequest, onSettled?: () => void) => void {
   const chatId = chat?.id ?? null;
   return useCallback(
-    (req, onFailure) => {
+    (req, onSettled) => {
       if (chatId == null || port == null) {
-        onFailure?.();
+        onSettled?.();
         return;
       }
-      void switchChatProvider(port, chatId, req).catch((err: unknown) => {
-        console.warn('[composer/useProviderSwitch] switch failed', { err });
-        mfToast.error('Could not switch provider', { description: err instanceof Error ? err.message : String(err) });
-        onFailure?.();
-      });
+      void switchChatProvider(port, chatId, req)
+        .catch((err: unknown) => {
+          console.warn('[composer/useProviderSwitch] switch failed', { err });
+          mfToast.error('Could not switch provider', { description: err instanceof Error ? err.message : String(err) });
+        })
+        .finally(onSettled);
     },
     [chatId, port],
   );

@@ -52,7 +52,7 @@ export function NewSessionRow() {
     <SidebarMenu className="mt-0.5">
       <SidebarMenuItem>
         <SidebarMenuButton
-          className="relative gap-2.5 pr-1.5 text-body focus-visible:z-10 focus-visible:[outline-offset:2px]"
+          className="gap-2.5 pr-1.5 text-body"
           data-testid="sidebar-action-new-thread"
           data-tut="new-session"
           onClick={newThread}

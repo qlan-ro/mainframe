@@ -49,8 +49,8 @@ export interface ComposerTuningHook {
   providerDefaults: ProviderConfig | undefined;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
-  setModel: (model: string, onFailure?: () => void) => boolean | void;
-  switchProvider: (request: ProviderSwitchRequest, onFailure?: () => void) => void;
+  setModel: (model: string, onSettled?: () => void) => boolean | void;
+  switchProvider: (request: ProviderSwitchRequest, onSettled?: () => void) => void;
   setAdapter: (adapterId: string) => void;
   setPermissionMode: (mode: ExecutionMode) => void;
   /** True while bound to a `__LOCALID_*` draft with no daemon chat yet. */
@@ -149,32 +149,34 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
 
   // adapter / model / permission all go through PATCH /config (or the draft).
   const patchConfig = useCallback(
-    (patch: ChatConfigPatch, label: string, onFailure?: () => void) => {
-      if (port == null || !patchChatId) return Promise.resolve(null);
-      return setChatConfig(port, patchChatId, patch).catch((err: unknown) => {
-        console.warn(`[composer/useComposerTuning] ${label} failed`, { err });
-        if (patch.model !== undefined) {
-          mfToast.error('Could not switch model', { description: err instanceof Error ? err.message : String(err) });
-        }
-        onFailure?.();
-        return null;
-      });
+    (patch: ChatConfigPatch, label: string, onSettled?: () => void) => {
+      if (port == null || !patchChatId) {
+        onSettled?.();
+        return;
+      }
+      void setChatConfig(port, patchChatId, patch)
+        .catch((err: unknown) => {
+          console.warn(`[composer/useComposerTuning] ${label} failed`, { err });
+          if (patch.model !== undefined) {
+            mfToast.error('Could not switch model', { description: err instanceof Error ? err.message : String(err) });
+          }
+        })
+        .finally(onSettled);
     },
     [patchChatId, port],
   );
 
   const setModel = useCallback(
-    (model: string, onFailure?: () => void) => {
+    (model: string, onSettled?: () => void) => {
       if (draftMode && chatId) {
         patchDraftConfig(chatId, { model });
         return;
       }
       return guard({ kind: 'model', to: model }, () => {
-        if (port == null || !patchChatId) onFailure?.();
-        else void patchConfig({ model }, 'setModel', onFailure);
+        patchConfig({ model }, 'setModel', onSettled);
       });
     },
-    [draftMode, chatId, port, patchChatId, patchConfig, guard],
+    [draftMode, chatId, patchConfig, guard],
   );
   const setAdapter = useCallback(
     (id: string) => {

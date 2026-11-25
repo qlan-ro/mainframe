@@ -441,7 +441,7 @@ describe('ComposerToolbar — R3: chat switch drops a pending tuning change', ()
 describe('ComposerToolbar — model menu stays open', () => {
   it.each(['mouse', 'Enter'] as const)('keeps the menu open with the picked model after %s', async (method) => {
     const user = userEvent.setup();
-    vi.mocked(setChatConfig).mockResolvedValueOnce(makeChat({ model: 'opus' }));
+    vi.mocked(setChatConfig).mockImplementationOnce(() => new Promise(() => undefined));
     const view = renderToolbar();
     await openModelPicker();
     const row = screen.getByTestId('composer-model-select-option-opus');
@@ -476,6 +476,7 @@ describe('ComposerToolbar — model menu stays open', () => {
   );
 
   it('ignores a second pick and tuning while pending, then sends tuning for the confirmed model', async () => {
+    vi.mocked(setChatConfig).mockImplementationOnce(() => new Promise(() => undefined));
     const view = renderToolbar();
     await openModelPicker();
     const opus = screen.getByTestId('composer-model-select-option-opus');
@@ -504,6 +505,27 @@ describe('ComposerToolbar — model menu stays open', () => {
     expect(setChatTuning).toHaveBeenCalledExactlyOnceWith(31415, 'chat-a', { effort: 'max' });
   });
 
+  it('unlocks when default is reported as a concrete model before the request settles', async () => {
+    vi.mocked(setChatConfig).mockImplementationOnce(() => new Promise(() => undefined));
+    const view = renderToolbar();
+    await openModelPicker();
+    await userEvent.click(screen.getByTestId('composer-model-select-option-default'));
+    expect(screen.getByTestId('composer-model-select-option-default')).toHaveAttribute('aria-disabled', 'true');
+    confirmServerModel(view, makeChat({ model: 'opus' }));
+    expect(screen.getByTestId('composer-model-select-option-opus')).toHaveAccessibleName(/selected/);
+    expect(screen.getByTestId('composer-model-select-option-opus')).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('unlocks on success without a chat update and leaves the reported model checked', async () => {
+    vi.mocked(setChatConfig).mockResolvedValueOnce(makeChat({ model: 'opus' }));
+    renderToolbar();
+    await openModelPicker();
+    await userEvent.click(screen.getByTestId('composer-model-select-option-opus'));
+    expect(screen.getByTestId('composer-model-select-option-opus')).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByTestId('composer-model-select-option-sonnet')).toHaveAccessibleName(/selected/);
+    expect(screen.getByTestId('composer-model-sonnet-tuning')).toBeVisible();
+  });
+
   it('re-enables the old model after a refused request', async () => {
     vi.mocked(setChatConfig).mockRejectedValueOnce(new Error('Model unavailable'));
     renderToolbar();
@@ -516,6 +538,7 @@ describe('ComposerToolbar — model menu stays open', () => {
   });
 
   it.each(['chat', 'daemon', 'reopen'])('drops pending state on %s', async (change) => {
+    vi.mocked(setChatConfig).mockImplementationOnce(() => new Promise(() => undefined));
     const view = renderToolbar();
     await openModelPicker();
     const id = 'composer-model-select-option-opus';

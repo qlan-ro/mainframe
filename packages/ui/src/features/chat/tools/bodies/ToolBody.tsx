@@ -169,16 +169,42 @@ function highlightedSearchText(text: string, query: string) {
   });
 }
 
-function grepExcerpt(text: string, query: string) {
-  let offset = 0;
-  const lines = text.split(/(?<=\n)/).map((line) => {
+const MAX_GREP_LINES = 200;
+const MAX_GREP_LINE_LENGTH = 2_000;
+const MAX_GREP_MARKS = 500;
+const MAX_GREP_LOCATION_LENGTH = 80;
+
+function grepLines(text: string, query: string) {
+  if (text.length > MAX_GREP_LINES * (MAX_GREP_LINE_LENGTH + 2)) return null;
+  const lines = text.split(/(?<=\n)/, MAX_GREP_LINES + 1);
+  if (lines.length > MAX_GREP_LINES) return null;
+
+  let marks = 0;
+  const parsed = [];
+  for (const line of lines) {
+    if (line.replace(/\r?\n$/, '').length > MAX_GREP_LINE_LENGTH) return null;
     const location = /^[^:\r\n]+:\d+:/.exec(line)?.[0];
-    return { line, location };
-  });
+    if (location && location.length > MAX_GREP_LOCATION_LENGTH) return null;
+    const source = line.slice(location?.length ?? 0);
+    for (let start = 0; query;) {
+      const match = source.indexOf(query, start);
+      if (match < 0) break;
+      if (++marks > MAX_GREP_MARKS) return null;
+      start = match + query.length;
+    }
+    parsed.push({ line, location, source });
+  }
+  return parsed;
+}
+
+function grepExcerpt(text: string, query: string) {
+  const lines = grepLines(text, query);
+  if (!lines) return <pre className="whitespace-pre">{text}</pre>;
+  let offset = 0;
   const column = lines.reduce((max, { location }) => Math.max(max, (location?.length ?? 0) - 1), 0);
   return (
     <pre className="whitespace-pre">
-      {lines.map(({ line, location }) => {
+      {lines.map(({ line, location, source }) => {
         const key = offset;
         offset += line.length;
         return location ? (
@@ -186,7 +212,7 @@ function grepExcerpt(text: string, query: string) {
             <span className="mr-4 inline-block text-muted-foreground" style={{ width: `${column}ch` }}>
               {location}
             </span>
-            {highlightedSearchText(line.slice(location.length), query)}
+            {highlightedSearchText(source, query)}
           </span>
         ) : (
           <span key={key}>{highlightedSearchText(line, query)}</span>
@@ -216,6 +242,7 @@ function MainBody({ part, status }: ToolBodyProps) {
       part={part}
       failed={false}
       testId="search-card-plain-body"
+      preserveText={kind === 'grep'}
       renderPreview={kind === 'grep' ? (result) => grepExcerpt(result, argText(part, 'pattern')) : undefined}
     />
   );

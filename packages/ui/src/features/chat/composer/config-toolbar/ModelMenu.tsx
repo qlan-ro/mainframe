@@ -6,7 +6,7 @@
  * combined chip that replaces it in a narrow composer (C6).
  */
 
-import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type {
   AdapterInfo,
@@ -40,10 +40,10 @@ export interface ModelMenuProps {
   locked: boolean;
   /** Why switching providers is unavailable right now (shown on the tabs), or null. */
   switchBlockedReason?: string | null;
-  onSwitchProvider?: (request: ProviderSwitchRequest, onFailure?: () => void) => void;
+  onSwitchProvider?: (request: ProviderSwitchRequest, onSettled?: () => void) => void;
   providerDefaults?: ProviderConfig;
   setAdapter: (adapterId: string) => void;
-  setModel: (model: string, onFailure?: () => void) => boolean | void;
+  setModel: (model: string, onSettled?: () => void) => boolean | void;
   draftMode?: boolean;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
@@ -120,15 +120,12 @@ function ModelMenuBody(props: ModelMenuProps) {
   // Mid-session, a tab only browses: which provider's catalog the menu shows.
   const [browseId, setBrowseId] = useState<string | null>(null);
   const { activeId, active, currentModelId } = activeModel(props);
-  const [pending, setPending] = useState<{ adapterId: string; model: string } | null>(null);
-  const inFlight = useRef<typeof pending>(null);
-  useLayoutEffect(() => {
-    inFlight.current = pending;
-  }, [pending]);
-  if (pending && chat.adapterId === pending.adapterId && (chat.model || 'default') === pending.model) {
-    setPending(null);
-    setBrowseId(null);
-  }
+  const [pending, setPending] = useState(false);
+  const pendingPick = useRef<{ adapterId: Chat['adapterId']; model: Chat['model']; settle: () => void } | null>(null);
+  useEffect(() => {
+    const pick = pendingPick.current;
+    if (pick && (pick.adapterId !== chat.adapterId || pick.model !== chat.model)) pick.settle();
+  }, [chat.adapterId, chat.model]);
   const shownId = locked ? (browseId ?? activeId) : activeId;
   const browsingOther = shownId !== activeId;
   const shown = browsingOther ? (adapters.find((a) => a.id === shownId) ?? active) : active;
@@ -136,29 +133,29 @@ function ModelMenuBody(props: ModelMenuProps) {
   const tuned = browsingOther ? null : model;
 
   const onPickModel = (id: string): boolean => {
-    if (inFlight.current || (!browsingOther && id === currentModelId)) return true;
+    if (pendingPick.current || (!browsingOther && id === currentModelId)) return true;
     const target = { adapterId: shownId, model: id };
-    const failed = () => {
-      if (inFlight.current !== target) return;
-      inFlight.current = null;
-      setPending(null);
+    const settled = () => {
+      if (pendingPick.current?.settle !== settled) return;
+      pendingPick.current = null;
+      setPending(false);
       if (browsingOther) setBrowseId(null);
     };
     if (!props.draftMode) {
-      inFlight.current = target;
-      setPending(target);
+      pendingPick.current = { adapterId: chat.adapterId, model: chat.model, settle: settled };
+      setPending(true);
     }
     if (browsingOther) {
-      if (props.onSwitchProvider) props.onSwitchProvider(target, failed);
-      else failed();
-    } else if (props.setModel(id, failed)) return false;
+      if (props.onSwitchProvider) props.onSwitchProvider(target, settled);
+      else settled();
+    } else if (props.setModel(id, settled)) return false;
     return true;
   };
   const renderRow = (m: AdapterModel) => (
     <ModelMenuRow
       key={m.id}
       option={m}
-      inactive={pending != null}
+      inactive={pending}
       active={!browsingOther && m.id === currentModelId}
       onSelect={onPickModel}
     />
@@ -181,7 +178,7 @@ function ModelMenuBody(props: ModelMenuProps) {
               adapters={adapters}
               selectedId={shownId}
               activeId={activeId}
-              pending={pending != null}
+              pending={pending}
               blockedReason={locked ? (props.switchBlockedReason ?? null) : null}
               onSelect={(id) => {
                 if (pending) return;
@@ -234,7 +231,7 @@ function ModelMenuBody(props: ModelMenuProps) {
       {tuned && (
         <ModelTuning
           model={tuned}
-          disabled={pending != null}
+          disabled={pending}
           chat={chat}
           providerDefaults={providerDefaults}
           setEffort={props.setEffort}

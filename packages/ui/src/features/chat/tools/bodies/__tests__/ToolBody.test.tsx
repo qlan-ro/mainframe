@@ -203,6 +203,18 @@ describe('ToolBody', () => {
     expect(preview?.querySelector('mark')).toHaveTextContent('x');
   });
 
+  it.each([
+    ['over 200 lines', 'a.ts:1: x\r\n'.repeat(201)],
+    ['a line over 2,000 characters', 'a.ts:1: x' + 'a'.repeat(2_000) + '\n'],
+    ['over 500 matches', 'a.ts:1: ' + 'x'.repeat(501) + '\n  '],
+    ['an overwide location', 'a.ts:1: x\n' + 'a'.repeat(80) + '.ts:2: x\n'],
+  ])('preserves the raw text without decorating %s', (_case, result) => {
+    show(part('Grep', { pattern: 'x' }, result));
+    const preview = screen.getByTestId('search-card-plain-body').querySelector('pre');
+    expect(preview?.textContent).toBe(result);
+    expect(preview?.children).toHaveLength(0);
+  });
+
   it('opens a fetched page where links open', () => {
     show(part('WebFetch', { url: 'https://example.com' }, 'A page'));
     fireEvent.click(within(screen.getByTestId('web-fetch-card-url')).getByRole('link'));

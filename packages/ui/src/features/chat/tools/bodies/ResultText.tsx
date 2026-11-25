@@ -6,16 +6,20 @@ import { ToolResultExpand } from '../ToolResultExpand';
 import type { ToolPart } from '../../view-model/turn/types';
 import { KeyValue, Surface } from './Surface';
 
+const rawText = (text: string) => text;
+
 /** The text alone, where a surface already holds it. */
 export function ResultText({
   part,
   renderPreview,
+  preserveText,
 }: {
   part: ToolPart;
   renderPreview?: (content: string) => ReactNode;
+  preserveText?: boolean;
 }) {
   const chatId = useChatId();
-  const { text, truncated, fullBytes } = resolveResultText(part.result);
+  const { text, truncated, fullBytes } = resolveResultText(part.result, preserveText ? rawText : undefined);
   if (truncated && chatId)
     return (
       <ToolResultExpand
@@ -34,11 +38,13 @@ export function ResultBlock({
   failed,
   testId,
   renderPreview,
+  preserveText,
 }: {
   part: ToolPart;
   failed: boolean;
   testId: string;
   renderPreview?: (content: string) => ReactNode;
+  preserveText?: boolean;
 }) {
   return (
     <Surface className="max-h-96 overflow-y-auto">
@@ -48,7 +54,7 @@ export function ResultBlock({
         tone={failed ? 'fail' : undefined}
         testId={testId}
       >
-        <ResultText part={part} renderPreview={renderPreview} />
+        <ResultText part={part} renderPreview={renderPreview} preserveText={preserveText} />
       </KeyValue>
     </Surface>
   );
