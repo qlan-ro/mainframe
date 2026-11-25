@@ -303,6 +303,15 @@ describe('another surface with the focus since', () => {
     expectStopped('a');
   });
 
+  it('is the focused one again once the pressed one is behind another tab', () => {
+    const view = show(BESIDE);
+    focus('message a');
+    fireEvent.pointerDown(screen.getByText('transcript b'));
+    view.set({ tabs: [{ chat: 'a' }, { chat: 'b', hidden: true }] });
+    expect(screen.getByLabelText('message a')).toHaveFocus();
+    expectStopped('a');
+  });
+
   it('is the chat that takes the place of a pressed one, where the focus stayed', () => {
     const view = show({ column: 'a', tabs: [] });
     focus('message a');

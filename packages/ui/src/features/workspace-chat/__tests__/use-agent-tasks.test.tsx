@@ -234,6 +234,19 @@ describe('two visible tabs', () => {
     expect(hook.get().live).toBe(true);
   });
 
+  it('hiding the tab gives a list the daemon refuses to renew no more time', async () => {
+    const hook = mount({ events });
+    await answer(0, row('running'));
+    await pass(28_000);
+    hook.set({ events: {} });
+    await refuse(1);
+    expect(hook.get().live).toBe(true);
+    hook.set({ visible: false });
+    await pass(17_000);
+    hook.set({ visible: true });
+    expect(hook.get().live).toBe(false);
+  });
+
   it('of different agents each have their own rows', async () => {
     const one = mount({ events });
     const two = mount({ events, callId: 'call-2' });

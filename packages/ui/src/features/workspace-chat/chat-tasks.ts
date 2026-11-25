@@ -48,7 +48,10 @@ class ChatTasks {
   private lost = false;
   private stale = false;
   private confirmedAt = -Infinity;
+  /** Counts down while the daemon refuses another list. */
   private expiry: Timer;
+  /** Counts down while no tab is in front. */
+  private unseen: Timer;
 
   constructor(
     private readonly chatId: string,
@@ -61,6 +64,7 @@ class ChatTasks {
       this.listeners.delete(listener);
       if (this.listeners.size > 0) return;
       clearTimeout(this.expiry);
+      clearTimeout(this.unseen);
       this.forget();
     };
   }
@@ -74,8 +78,7 @@ class ChatTasks {
       if (this.watchers > 0) return;
       this.halt();
       // Nobody asks while none is in front: what runs now may be over by then.
-      clearTimeout(this.expiry);
-      this.expiry = setTimeout(() => this.expire(), CONFIRMED_MS);
+      this.unseen = setTimeout(() => this.expire(), CONFIRMED_MS);
     };
   }
 
@@ -104,7 +107,7 @@ class ChatTasks {
   private start(): void {
     if (!this.asking) return;
     this.refusals = 0;
-    clearTimeout(this.expiry);
+    clearTimeout(this.unseen);
     this.run();
   }
 

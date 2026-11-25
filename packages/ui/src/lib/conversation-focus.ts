@@ -69,12 +69,16 @@ export function conversationOf(element: Element | null): string | undefined {
   return element?.closest<HTMLElement>('[data-conversation]')?.dataset.conversation;
 }
 
+function shows(chatId: string): boolean {
+  const drawn = document.querySelectorAll(`[data-conversation="${CSS.escape(chatId)}"]`);
+  return [...drawn].some((element) => element.closest('[inert]') === null);
+}
+
 /** The chat worked in; null while that is another surface, undefined while no conversation has been. */
 export function heldConversation(): string | null | undefined {
   const at = document.activeElement;
   const inside = at === null || at === document.body ? undefined : conversationOf(at);
-  const left = pressed != null && document.querySelector(`[data-conversation="${CSS.escape(pressed)}"]`) === null;
-  if (anyYet && pressed !== undefined && !left) return pressed;
+  if (anyYet && pressed !== undefined && (pressed === null || shows(pressed))) return pressed;
   // The chat shown there now: the chat column's changes under the focus, and under a press.
   if (inside !== undefined) return inside;
   return anyYet ? (focused ?? null) : undefined;
