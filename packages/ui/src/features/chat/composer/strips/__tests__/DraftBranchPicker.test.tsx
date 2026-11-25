@@ -12,11 +12,14 @@ const { git, checkout, patch } = vi.hoisted(() => ({
 vi.mock('@/lib/api/git', () => git);
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/features/sessions/runtime/draft-config', () => ({ patchDraftConfig: (...a: unknown[]) => patch(...a) }));
+const toastInfo = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/toast', () => ({ mfToast: { info: toastInfo, error: vi.fn() } }));
 vi.mock('@/features/git/use-branch-actions', () => ({ useBranchActions: () => ({ handleCheckout: checkout }) }));
 vi.mock('@/features/git/BranchPopover', () => ({
   BranchPopover: ({ open }: { open: boolean }) => (open ? <div data-testid="git-branch-popover" /> : null),
 }));
 
+import { draftItemsOf, useDraftContent } from '../../draft-content/draft-content-store';
 import { DraftBranchPicker } from '../DraftBranchPicker';
 import { useProjectBranches } from '../project-branches';
 
@@ -50,6 +53,35 @@ beforeEach(() => {
     { path: '/repo/.worktrees/old', branch: 'refs/heads/feat/old' },
     { path: '/repo/.worktrees/loose', branch: null },
   ]);
+});
+
+describe('what belongs to the checkout', () => {
+  const note = { kind: 'code', filePath: 'a', startLine: 1, endLine: 1, lineContent: 'a', note: 'n' } as const;
+  const left = () => draftItemsOf('local-1').length;
+  beforeEach(() => {
+    useDraftContent.setState({ byThread: {} });
+    useDraftContent.getState().add('local-1', [note]);
+  });
+
+  it.each([['composer-branch-new-worktree'], ['composer-branch-worktree-feat/old']])(
+    'goes when the session moves to a worktree: %s',
+    async (option) => {
+      await openPicker();
+      pick(option);
+      expect(left()).toBe(0);
+      expect(toastInfo).toHaveBeenCalledExactlyOnceWith('Removed 1 code note', expect.anything());
+    },
+  );
+
+  it('stays when it runs in the same checkout: another branch, or temporary', async () => {
+    await openPicker();
+    pick('composer-branch-option-feat/x');
+    fireEvent.click(screen.getByTestId('composer-branch-picker'));
+    await screen.findByTestId('composer-temporary-toggle');
+    pick('composer-temporary-toggle');
+    expect(left()).toBe(1);
+    expect(toastInfo).not.toHaveBeenCalled();
+  });
 });
 
 describe('DraftBranchPicker', () => {

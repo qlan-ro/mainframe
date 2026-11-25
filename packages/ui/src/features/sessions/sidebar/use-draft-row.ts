@@ -1,10 +1,11 @@
 import { useCallback } from 'react';
 import { useAui, useAuiState } from '@assistant-ui/react';
+import { dropUnsentOf } from '@/features/chat/composer/unsent/unsent-store';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { draftRowVisible, type DraftRowModel } from '../new-thread/draft-row';
 import { useDraftReturnTarget } from '../new-thread/use-draft-return-target';
 import { useDraftConfigStore } from '../runtime/draft-config';
-import { discardNewThreadDraft } from '../new-thread/reset-new-thread-draft';
+import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
 import { markDraftDiscarded } from '../new-thread/discarded-drafts';
 import { useDraftNavigationCleanup } from './use-draft-navigation-cleanup';
 
@@ -35,7 +36,9 @@ export function useDraftRow(allItems: SessionItem[], filterProjectIds: ReadonlyS
 
   const onDiscard = useCallback(() => {
     if (newThreadId == null) return;
-    discardNewThreadDraft(newThreadId);
+    resetNewThreadDraft(newThreadId);
+    // A New, or leaving the draft, keeps what did not go out.
+    dropUnsentOf(newThreadId);
     markDraftDiscarded(newThreadId);
     const { returnThreadId, clear } = useDraftReturnTarget.getState();
     const target = returnThreadId ?? allItems[0]?.id ?? null;

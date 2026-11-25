@@ -2,6 +2,7 @@
 /** A send that fails gives the draft its preview captures back (C14), over a fake `ChatActionHost`. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppendMessage } from '@assistant-ui/react';
+import type { Chat } from '@qlan-ro/mainframe-types';
 
 const upload = vi.hoisted(() => vi.fn());
 vi.mock('../../../../lib/api/attachments', () => ({ uploadAttachments: upload }));
@@ -15,6 +16,7 @@ import {
   useDraftContent,
   type DraftCapture,
 } from '../../composer/draft-content/draft-content-store';
+import { getUnsent, holdUnsent, unsentMetadata } from '../../composer/unsent/unsent-store';
 import { sendChatMessage, type ChatActionHost } from '../chat-actions';
 import { createChatThreadState, reduceChatThreadState } from '../chat-thread-state';
 
@@ -35,8 +37,8 @@ const FILE = {
   status: { type: 'complete' },
 };
 
-function makeHost(sendPrompt = vi.fn().mockResolvedValue({ queued: false })) {
-  let state = createChatThreadState('chat-1');
+function makeHost(sendPrompt = vi.fn().mockResolvedValue({ queued: false }), chatConfig?: object) {
+  let state = { ...createChatThreadState('chat-1'), ...(chatConfig ? { chatConfig: chatConfig as Chat } : {}) };
   const host: ChatActionHost = {
     getPort: () => 1,
     getDaemonId: () => 'chat-1',
@@ -111,5 +113,24 @@ describe('sendChatMessage with captures', () => {
     } as unknown as AppendMessage;
     await expect(sendChatMessage(host, plain)).rejects.toThrow();
     expect(pending()?.attachmentsRestored).toBeUndefined();
+  });
+});
+
+describe('a draft’s first message that stops before it is sent', () => {
+  const first = (text: string) => {
+    const draft = { text, items: [], attachments: [], references: {} };
+    const id = holdUnsent({ threadId: 'chat-1', draft, sent: [] });
+    const content = text ? [{ type: 'text', text }] : [];
+    const parts = { role: 'user', content, attachments: [], metadata: unsentMetadata(id) };
+    return { id, message: parts as unknown as AppendMessage };
+  };
+
+  it.each([
+    ['hi', { directoryMissing: true }, 'The working directory is missing.'],
+    ['', undefined, 'There is nothing in it to send.'],
+  ])('is kept, with the reason', async (text, chatConfig, reason) => {
+    const { id, message: parts } = first(text);
+    await sendChatMessage(makeHost(undefined, chatConfig).host, parts);
+    expect(getUnsent(id)?.failure).toEqual({ reason, delivery: 'none' });
   });
 });

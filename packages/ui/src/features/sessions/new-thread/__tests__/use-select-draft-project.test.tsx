@@ -36,8 +36,12 @@ vi.mock('@assistant-ui/react', () => ({
     },
   }),
 }));
+const toastInfo = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/toast', () => ({
-  mfToast: { error: (message: string, options?: { description: string }) => toastError(message, options) },
+  mfToast: {
+    info: toastInfo,
+    error: (message: string, options?: { description: string }) => toastError(message, options),
+  },
 }));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/store/session-filters', () => ({
@@ -68,6 +72,7 @@ beforeEach(() => {
   initializeDraft.mockReset();
   initializeDraft.mockImplementation(baseInitialize);
   toastError.mockReset();
+  toastInfo.mockReset();
 });
 
 describe('useSelectDraftProject — preserves temporary across a project re-pick (todo #346)', () => {
@@ -97,6 +102,32 @@ describe('useSelectDraftProject — preserves temporary across a project re-pick
 
     const call = initializeDraft.mock.calls[0]![0] as Record<string, unknown>;
     expect('temporary' in call).toBe(false);
+  });
+});
+
+describe('useSelectDraftProject — what belongs to the old project', () => {
+  const pickFrom = async (from: string | null, to: string | null) => {
+    const { setDraftConfig, clearDraftConfig } = await import('@/features/sessions/runtime/draft-config');
+    const { draftItemsOf, useDraftContent } =
+      await import('@/features/chat/composer/draft-content/draft-content-store');
+    useDraftContent.setState({ byThread: {} });
+    setDraftConfig('__LOCALID_1', { projectId: from, adapterId: 'claude' });
+    useDraftContent
+      .getState()
+      .add('__LOCALID_1', [{ kind: 'code', filePath: 'a', startLine: 1, endLine: 1, lineContent: 'a', note: 'n' }]);
+    await select()(to);
+    clearDraftConfig('__LOCALID_1');
+    return draftItemsOf('__LOCALID_1').length;
+  };
+
+  it('goes when another is picked, and the toast offers Undo', async () => {
+    expect(await pickFrom('proj-a', 'proj-b')).toBe(0);
+    expect(toastInfo).toHaveBeenCalledExactlyOnceWith('Removed 1 code note', expect.anything());
+  });
+
+  it('stays when the same one is picked again', async () => {
+    expect(await pickFrom('proj-a', 'proj-a')).toBe(1);
+    expect(toastInfo).not.toHaveBeenCalled();
   });
 });
 

@@ -32,7 +32,6 @@
  * forward into the next New.
  */
 import { useDraftContent } from '@/features/chat/composer/draft-content/draft-content-store';
-import { dropUnsentOf } from '@/features/chat/composer/unsent/unsent-store';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 import { useSessionReferences } from '@/features/chat/composer/sessions/session-reference-store';
 import { useLayoutStore } from '@/store/layout';
@@ -49,12 +48,6 @@ export function resetNewThreadDraft(newThreadId: string | null | undefined): voi
   useComposerSegments.getState().clear(newThreadId);
   useDraftContent.getState().clear(newThreadId);
   useSessionReferences.getState().clear(newThreadId);
-}
-
-/** The user closed the draft: its unsent messages go with it. A New, or leaving it, keeps them. */
-export function discardNewThreadDraft(newThreadId: string): void {
-  resetNewThreadDraft(newThreadId);
-  dropUnsentOf(newThreadId);
 }
 
 /** The same reset for a draft that goes on in another project (`move-draft.ts`): what was written in it stays. */
