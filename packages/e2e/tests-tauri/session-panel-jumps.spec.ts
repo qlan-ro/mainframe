@@ -2,7 +2,7 @@
  * §session-panel — where a click on an Activity row takes you in a long session.
  *
  * The windowed-history fixture loads only the newest turns, and its tool
- * results are 32 KB, taller than the viewport. The task list is answered on the
+ * results are 32 KB, with multiline output on the tall-row target. The task list is answered on the
  * network boundary: the mock adapter tracks only background work of its own.
  *
  * Testid reference:

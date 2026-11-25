@@ -12,7 +12,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 export interface ModelMenuRowProps {
   option: AdapterModel;
   active: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string) => boolean;
 }
 
 function rowDescription(option: AdapterModel): string | undefined {
@@ -27,7 +27,9 @@ export function ModelMenuRow({ option, active, onSelect }: ModelMenuRowProps) {
       data-testid={`composer-model-select-option-${option.id}`}
       aria-label={active ? `${option.label}, selected` : option.label}
       className="items-start"
-      onSelect={() => onSelect(option.id)}
+      onSelect={(event) => {
+        if (onSelect(option.id)) event.preventDefault();
+      }}
     >
       <span className="min-w-0 flex-1">
         <span className="block font-medium">{option.label}</span>

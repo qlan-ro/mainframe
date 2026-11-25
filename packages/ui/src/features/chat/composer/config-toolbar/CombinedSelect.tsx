@@ -49,6 +49,7 @@ export function CombinedSelect({ disabled, setPermissionMode, className, ...menu
             data-testid="composer-model-permission-select"
             data-permissions-control
             aria-label={`Model and permissions: ${summary}`}
+            style={open ? { pointerEvents: 'auto' } : undefined}
             className={toolbarButton(open, cn(permissionTone(mode, planning), 'text-ink-secondary', className))}
           >
             <ProviderDot adapterId={activeId} className="@max-[320px]/composer:hidden" />
@@ -67,7 +68,7 @@ export function CombinedSelect({ disabled, setPermissionMode, className, ...menu
         {disabled ? (
           <DropdownMenuLabel className="text-meta font-normal">{MODEL_LOCKED_HINT}</DropdownMenuLabel>
         ) : (
-          <ModelMenu {...menu} onClose={() => setOpen(false)} />
+          <ModelMenu {...menu} />
         )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Permissions</DropdownMenuLabel>

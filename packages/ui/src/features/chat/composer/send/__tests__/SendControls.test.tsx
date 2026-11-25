@@ -226,6 +226,7 @@ describe('SendControls — the Queue / Steer split while a turn runs', () => {
     const queue = await screen.findByTestId('chat-composer-send-queue');
     const steer = screen.getByTestId('chat-composer-send-steer');
 
+    expect(screen.getByText('Choose what Enter does in Settings › Chat')).not.toHaveAttribute('role', 'menuitem');
     expect(queue).toHaveTextContent('Queue');
     expect(queue).toHaveTextContent('Send when the agent finishes');
     expect(queue).toHaveTextContent('↵');
@@ -259,6 +260,7 @@ describe('SendControls — the Queue / Steer split while a turn runs', () => {
     fireEvent.pointerDown(screen.getByTestId('chat-composer-send-options'), { button: 0 });
     const steer = await screen.findByTestId('chat-composer-send-steer');
 
+    expect(screen.queryByText('Choose what Enter does in Settings › Chat')).toBeNull();
     expect(steer).toHaveTextContent('This agent can’t take messages mid-turn, so it will queue');
     expect(steer).not.toHaveTextContent('Add to the running turn without stopping it');
   });

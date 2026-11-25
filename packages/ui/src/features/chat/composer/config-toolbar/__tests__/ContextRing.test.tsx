@@ -108,7 +108,9 @@ describe('ContextRing (C2)', () => {
     expect(button()).toHaveAttribute('aria-label', 'Context 95% used. Compact conversation');
 
     fireEvent.pointerDown(button(), { button: 0 });
-    fireEvent.click(await screen.findByTestId('composer-context-compact'));
+    const compact = await screen.findByTestId('composer-context-compact');
+    expect(screen.getByText('Context 95% used').nextElementSibling).toHaveAttribute('role', 'separator');
+    fireEvent.click(compact);
 
     expect(append).toHaveBeenCalledExactlyOnceWith({ role: 'user', content: [{ type: 'text', text: '/compact' }] });
   });

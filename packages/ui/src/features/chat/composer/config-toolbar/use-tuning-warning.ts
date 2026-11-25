@@ -32,7 +32,7 @@ export interface TuningWarningHook {
   pending: TuningChange | null;
   suppressChecked: boolean;
   setSuppressChecked: (value: boolean) => void;
-  guard: (request: TuningChangeRequest, apply: () => void) => void;
+  guard: (request: TuningChangeRequest, apply: () => void) => boolean;
   confirm: () => void;
   cancel: () => void;
 }
@@ -82,9 +82,10 @@ export function useTuningWarning(ctx: TuningWarningContext): TuningWarningHook {
         !shouldWarnTuningChange({ change, hasMessages: live.hasMessages, suppressed: suppressedRef.current })
       ) {
         apply();
-        return;
+        return false;
       }
       park({ change, apply, originChatId: live.chat?.id ?? null });
+      return true;
     },
     [park],
   );

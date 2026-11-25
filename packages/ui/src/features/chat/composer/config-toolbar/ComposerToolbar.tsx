@@ -25,7 +25,6 @@ import { ProviderModelSelect } from './ProviderModelSelect';
 import { providerSwitchBlockedReason } from './provider-switch';
 import { TuningWarningDialog } from './TuningWarningDialog';
 import { UnattendedConfirmDialog } from './UnattendedConfirmDialog';
-import { useProviderSwitch } from './use-provider-switch';
 import { useUnattendedGuard } from './use-unattended-confirm';
 
 const ANNOUNCE_MS = 1400;
@@ -62,7 +61,6 @@ export function ComposerToolbar({
   const { chat, adapter, model, runningModel, providerDefaults, setPermissionMode, disabled } = tuning;
   const extras = useChatExtras();
   const queuedCount = Object.values(extras?.queued ?? {}).filter((q) => q != null).length;
-  const switchProvider = useProviderSwitch(chat, extras?.port ?? null);
   const mode: ExecutionMode = chat ? currentPermission(chat, providerDefaults) : 'default';
   const unattended = useUnattendedGuard(chat?.id ?? null);
   const choosePermission = (next: ExecutionMode) => unattended.run(next, mode, () => setPermissionMode(next));
@@ -107,7 +105,7 @@ export function ComposerToolbar({
     setFeature: tuning.setFeature,
     hideProviderSwitch: variant === 'side',
     switchBlockedReason: providerSwitchBlockedReason(chat, queuedCount, fromName),
-    onSwitchProvider: switchProvider,
+    onSwitchProvider: tuning.switchProvider,
   };
 
   return (

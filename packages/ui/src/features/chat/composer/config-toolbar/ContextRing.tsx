@@ -11,6 +11,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -88,6 +90,10 @@ export function ContextRing() {
         sideOffset={6}
         className="w-auto min-w-67.5 [&_[role=menuitem]]:text-control/[1.45]"
       >
+        <DropdownMenuLabel className="pb-[5px] text-control/[1.45] font-medium text-foreground">
+          {label}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="-translate-y-px" />
         <DropdownMenuItem
           data-testid="composer-context-compact"
           disabled={!canCompact}

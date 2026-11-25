@@ -42,7 +42,7 @@ export interface ModelMenuProps {
   onSwitchProvider?: (request: ProviderSwitchRequest) => void;
   providerDefaults?: ProviderConfig;
   setAdapter: (adapterId: string) => void;
-  setModel: (model: string) => void;
+  setModel: (model: string) => boolean | void;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
   /** Hides the provider tabs (side chats: the adapter is a copy of the parent's). */
@@ -106,7 +106,7 @@ function CollapsibleModelSection({ label, testId, containsCurrent, children }: M
   );
 }
 
-export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () => void }) {
+export function ModelMenu(props: ModelMenuProps) {
   const { chat, adapters, model, runningModel = null, showCurrentModel = false, locked, providerDefaults } = props;
   // Mid-session, a tab only browses: which provider's catalog the menu shows.
   const [browseId, setBrowseId] = useState<string | null>(null);
@@ -117,10 +117,14 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
   const catalog = partitionModels(modelRows(shown, browsingOther ? '' : currentModelId));
   const tuned = browsingOther ? null : model;
 
-  const onPickModel = (id: string): void => {
-    if (browsingOther) props.onSwitchProvider?.({ adapterId: shownId, model: id });
-    else if (id !== currentModelId) props.setModel(id);
-    onClose();
+  const onPickModel = (id: string): boolean => {
+    if (browsingOther) {
+      props.onSwitchProvider?.({ adapterId: shownId, model: id });
+      setBrowseId(null);
+    } else if (id !== currentModelId && props.setModel(id)) {
+      return false;
+    }
+    return true;
   };
   const renderRow = (m: AdapterModel) => (
     <ModelMenuRow key={m.id} option={m} active={!browsingOther && m.id === currentModelId} onSelect={onPickModel} />

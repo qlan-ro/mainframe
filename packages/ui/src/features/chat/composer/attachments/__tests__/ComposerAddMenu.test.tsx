@@ -59,13 +59,13 @@ describe('ComposerAddMenu', () => {
     expect(trigger).toHaveAttribute('aria-label', 'Attach or mention');
   });
 
-  it('offers "Attach files" and "Mention a file or agent"', async () => {
+  it('offers "Attach files" and "Mention a file or agent…"', async () => {
     render(<Host initialText="" />);
 
     await openMenu();
 
     expect(screen.getByTestId('composer-add-attachment')).toHaveTextContent('Attach files…');
-    expect(screen.getByTestId('composer-add-mention')).toHaveTextContent('Mention a file or agent');
+    expect(screen.getByTestId('composer-add-mention')).toHaveTextContent('Mention a file or agent…');
   });
 
   it('opens the file dialog after the menu closes when "Attach files" is picked', async () => {

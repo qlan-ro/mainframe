@@ -34,6 +34,12 @@ async function switchTo(page: Page, adapterId: string) {
   await page.getByTestId('composer-model-select').first().click();
   await page.getByTestId(`composer-adapter-select-option-${adapterId}`).click();
   await page.getByTestId(`composer-model-select-option-${MODEL}`).click();
+  await expect(page.getByTestId(`composer-model-select-option-${MODEL}`)).toHaveAttribute('aria-label', /, selected$/);
+  await expect(page.getByTestId(`composer-adapter-select-option-${adapterId}`)).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.keyboard.press('Escape');
   await expect(page.getByTestId('composer-provider-model-popover')).toHaveCount(0);
 }
 

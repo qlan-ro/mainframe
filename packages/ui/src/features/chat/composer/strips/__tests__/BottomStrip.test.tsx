@@ -225,7 +225,9 @@ describe('ChangesButton', () => {
     expect(button).toHaveAttribute('aria-label', 'Changes: 2 changed files');
 
     fireEvent.click(button);
-    expect(screen.getByText('src/b.ts')).toBeInTheDocument();
+    expect(screen.getByText('src/b.ts').closest('[title]')).toHaveAttribute('title', 'src/b.ts');
+    expect(screen.getByText('Changes · 2 files')).toBeInTheDocument();
+    expect(screen.getByText('+22 −1 across 2 files')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('composer-changes-open-diff'));
     expect(emit).toHaveBeenCalledExactlyOnceWith({ type: 'open-review' });
   });
