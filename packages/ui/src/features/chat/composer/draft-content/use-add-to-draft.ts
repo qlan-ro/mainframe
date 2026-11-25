@@ -8,11 +8,9 @@ import { useAuiState } from '@assistant-ui/react';
 import { mfToast } from '@/lib/toast';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
-import { useDraftTarget } from './use-draft-target';
 import { useDraftContent, type NewDraftItem } from './draft-content-store';
 
 export function useAddToDraft(): (items: readonly NewDraftItem[]) => boolean {
-  const origin = useDraftTarget();
   const threadId = useActiveThreadId();
   const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
 
@@ -25,14 +23,11 @@ export function useAddToDraft(): (items: readonly NewDraftItem[]) => boolean {
         });
         return false;
       }
-      useDraftContent.getState().add(
-        threadId,
-        items.map((item) => ({ ...item, origin })),
-      );
+      useDraftContent.getState().add(threadId, items);
       // Its tile says so when the composer is on screen.
       if (document.querySelector('[data-mf-composer-input]') == null) mfToast.success('Added to your message');
       return true;
     },
-    [threadId, readOnly, origin],
+    [threadId, readOnly],
   );
 }

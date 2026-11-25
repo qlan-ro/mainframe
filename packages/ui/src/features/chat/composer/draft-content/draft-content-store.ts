@@ -7,9 +7,8 @@
  * new session. Choosing another project for the same draft keeps it.
  */
 import { create } from 'zustand';
-import { targetKey, type DraftProvenance, type DraftTarget } from './draft-target';
 
-interface ItemBase extends DraftProvenance {
+interface ItemBase {
   id: string;
   note: string;
 }
@@ -31,26 +30,14 @@ export interface DraftCodeNote extends ItemBase {
   lineContent: string;
 }
 
-export interface DraftMention extends ItemBase {
-  kind: 'mention';
-  token: string;
-  label: string;
-  path: string;
-  referenceLabel?: string;
-  removed?: boolean;
-}
-
-export type DraftItem = DraftCapture | DraftCodeNote | DraftMention;
-export type NewDraftItem = Omit<DraftCapture, 'id'> | Omit<DraftCodeNote, 'id'> | Omit<DraftMention, 'id'>;
+export type DraftItem = DraftCapture | DraftCodeNote;
+export type NewDraftItem = Omit<DraftCapture, 'id'> | Omit<DraftCodeNote, 'id'>;
 
 interface DraftContentState {
   byThread: Readonly<Record<string, readonly DraftItem[]>>;
   add: (threadId: string, items: readonly NewDraftItem[]) => void;
   /** Puts back items a failed send had taken. */
   restore: (threadId: string, items: readonly DraftItem[]) => void;
-  include: (threadId: string, itemIds: readonly string[], target: DraftTarget) => void;
-  bindLegacy: (threadId: string, target: DraftTarget, references: ReadonlyMap<string, string>) => void;
-  removeBinding: (threadId: string, itemId: string) => void;
   setNote: (threadId: string, itemId: string, note: string) => void;
   remove: (threadId: string, itemId: string) => void;
   clear: (threadId: string) => void;
@@ -71,45 +58,10 @@ export const useDraftContent = create<DraftContentState>((set) => {
     add: (threadId, items) =>
       update(threadId, (current) => [...current, ...items.map((item) => ({ ...item, id: crypto.randomUUID() }))]),
     restore: (threadId, items) =>
-      update(threadId, (current) => {
-        const currentById = new Map(current.map((item) => [item.id, item]));
-        const restoredIds = new Set(items.map(({ id }) => id));
-        return [
-          ...items.map((item) => currentById.get(item.id) ?? item),
-          ...current.filter(({ id }) => !restoredIds.has(id)),
-        ];
-      }),
-    include: (threadId, itemIds, target) =>
-      update(threadId, (current) =>
-        current.map((item) =>
-          itemIds.includes(item.id)
-            ? { ...item, includedFor: [...new Set([...(item.includedFor ?? []), targetKey(target)])] }
-            : item,
-        ),
-      ),
-    bindLegacy: (threadId, origin, references) =>
-      update(threadId, (current) => {
-        const legacy: DraftMention[] = [];
-        for (const [label, path] of references) {
-          if (current.some((item) => item.kind === 'mention' && item.referenceLabel === label)) continue;
-          legacy.push({
-            id: crypto.randomUUID(),
-            kind: 'mention',
-            token: `@${label}`,
-            label,
-            path,
-            referenceLabel: label,
-            note: '',
-            origin,
-          });
-        }
-        if (legacy.length === 0 && current.every((item) => item.origin)) return current;
-        return [...current.map((item) => (item.origin ? item : { ...item, origin })), ...legacy];
-      }),
-    removeBinding: (threadId, itemId) =>
-      update(threadId, (current) =>
-        current.map((item) => (item.kind === 'mention' && item.id === itemId ? { ...item, removed: true } : item)),
-      ),
+      update(threadId, (current) => [
+        ...items.filter((item) => !current.some((kept) => kept.id === item.id)),
+        ...current,
+      ]),
     setNote: (threadId, itemId, note) =>
       update(threadId, (current) => current.map((item) => (item.id === itemId ? { ...item, note } : item))),
     remove: (threadId, itemId) => update(threadId, (current) => current.filter((item) => item.id !== itemId)),

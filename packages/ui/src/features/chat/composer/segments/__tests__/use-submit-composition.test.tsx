@@ -1,14 +1,115 @@
-import { THREAD_ID, appendSpy, resetSpy, callOrder, live } from './submit-composition-fixture';
-import { describe, it, expect } from 'vitest';
+/**
+ * useSubmitComposition — the one submit path shared by all three composer
+ * entry points (spec §2.3, 280-A6/A7). What we verify:
+ *
+ *  - append fires exactly once with the serialized composition + the LIVE
+ *    attachments (resolved to `CompleteAttachment`, mirroring what native
+ *    `composer.send()` would have produced via the attachment adapter) and
+ *    runConfig, wrapped in the shape `aui.thread.append` expects;
+ *  - runConfig/attachments are read BEFORE `composer.reset()` runs — reset()
+ *    clears the composer's entire state including runConfig, so reading it
+ *    after would silently drop a per-send run config (spec Risks #1). Pinned
+ *    with a fake whose `reset()` nulls the live runConfig cell; the asserted
+ *    append argument must still be the pre-reset object;
+ *  - reset() and segmentStore.clear(threadId) both run, synchronously, right
+ *    after append — submit() never awaits reset()'s promise first;
+ *  - empty serialization + no attachments → complete no-op (no append, no
+ *    reset, no clear);
+ *  - empty serialization + attachments → append still fires (parity with
+ *    parseSendInput's attachment-only sends);
+ *  - the predicate is "non-empty serialization OR attachments" — never
+ *    `composer.getState().canSend`, which this suite pins by setting canSend
+ *    to a value that would give the wrong answer if it were consulted.
+ *
+ * `useSubmitComposition` returns the submit function itself and subscribes to
+ * nothing: the same predicate is exposed separately as `useCanSubmit`, which
+ * DOES subscribe to the live draft and is consumed only inside the send button
+ * (hoisting it re-renders the whole composer on every keystroke).
+ *
+ * Mocking strategy
+ * ----------------
+ * `@assistant-ui/react` is stubbed with a fake `useAui`/`useAuiState` pair,
+ * following the precedent in `ChatSelectionToolbar.test.tsx`: `composer`
+ * exposes `__internal_getRuntime().getState()` (the live, non-stale read —
+ * see `use-append-quote-segment.ts`) alongside the plain `getState()`, and
+ * `thread` exposes an `append` spy. The segment store itself is the REAL
+ * `useComposerSegments` (seeded directly), not mocked — its own pure
+ * transitions are already pinned by segment-model.test.ts/segment-store.test.ts;
+ * this file only needs to pin the submit wiring.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useSubmitComposition, useCanSubmit } from '../use-submit-composition';
 import { useComposerSegments } from '../segment-store';
+
+const THREAD_ID = 'thread-1';
+
+let liveText = '';
+let liveAttachments: unknown[] = [];
+let liveRunConfig: unknown = { custom: { effort: 'high' } };
+let liveCanSend = false;
+
+const appendSpy = vi.fn();
+const resetSpy = vi.fn();
+const callOrder: string[] = [];
+
+const runtimeGetState = vi.fn(() => ({
+  text: liveText,
+  attachments: liveAttachments,
+  runConfig: liveRunConfig,
+  canSend: liveCanSend,
+}));
+
+vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({
+    thread: {
+      append: (...args: unknown[]) => {
+        callOrder.push('append');
+        appendSpy(...args);
+      },
+    },
+    composer: {
+      __internal_getRuntime: () => ({ getState: runtimeGetState }),
+      getState: runtimeGetState,
+      reset: () => {
+        callOrder.push('reset');
+        resetSpy();
+        // Mirrors the real ComposerRuntime: reset() clears the composer's
+        // entire state, including runConfig, for any FUTURE read.
+        liveRunConfig = null;
+        liveAttachments = [];
+        liveText = '';
+        return Promise.resolve();
+      },
+    },
+  }),
+  useAuiState: (sel: (s: Record<string, unknown>) => unknown) =>
+    sel({
+      threadListItem: { id: THREAD_ID },
+      composer: { text: liveText, attachments: liveAttachments },
+    }),
+}));
+
+import { useSubmitComposition, useCanSubmit } from '../use-submit-composition';
+import { useSessionReferences } from '../../sessions/session-reference-store';
+import { draftItemsOf, restoreSentCapture, useDraftContent } from '../../draft-content/draft-content-store';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  callOrder.length = 0;
+  liveText = '';
+  liveAttachments = [];
+  liveRunConfig = { custom: { effort: 'high' } };
+  liveCanSend = false;
+  useComposerSegments.setState({ byThread: {} });
+  useSessionReferences.setState({ byThread: {} });
+  useDraftContent.setState({ byThread: {} });
+});
 
 describe('useSubmitComposition — append shape', () => {
   it('appends once with the serialized composition, resolved attachments, and live runConfig', () => {
     useComposerSegments.getState().append(THREAD_ID, { quote: 'Q1', liveText: '' });
-    live.text = 'hello there';
-    live.attachments = [
+    liveText = 'hello there';
+    liveAttachments = [
       {
         id: 'att-1',
         type: 'document',
@@ -36,15 +137,14 @@ describe('useSubmitComposition — append shape', () => {
         },
       ],
       runConfig: { custom: { effort: 'high' } },
-      metadata: { custom: { mainframeSubmittedDraft: expect.any(String) } },
     });
   });
 });
 
 describe('useSubmitComposition — runConfig/attachments are read before reset()', () => {
   it('the appended runConfig is the PRE-reset value, not the post-reset null', () => {
-    live.text = 'draft text';
-    const preResetRunConfig = live.runConfig;
+    liveText = 'draft text';
+    const preResetRunConfig = liveRunConfig;
 
     const { result } = renderHook(() => useSubmitComposition());
     act(() => result.current());
@@ -55,8 +155,8 @@ describe('useSubmitComposition — runConfig/attachments are read before reset()
   });
 
   it('the appended attachments are resolved from the PRE-reset value, not the post-reset empty array', () => {
-    live.text = 'draft text';
-    live.attachments = [
+    liveText = 'draft text';
+    liveAttachments = [
       {
         id: 'att-keep',
         type: 'document',
@@ -86,7 +186,7 @@ describe('useSubmitComposition — runConfig/attachments are read before reset()
 
 describe('useSubmitComposition — reset() and clear() run synchronously right after append', () => {
   it('calls append, then reset, in that order, without awaiting', () => {
-    live.text = 'draft text';
+    liveText = 'draft text';
 
     const { result } = renderHook(() => useSubmitComposition());
     act(() => result.current());
@@ -97,7 +197,7 @@ describe('useSubmitComposition — reset() and clear() run synchronously right a
 
   it("clears the addressed thread's segment store synchronously", () => {
     useComposerSegments.getState().append(THREAD_ID, { quote: 'Q1', liveText: '' });
-    live.text = 'draft text';
+    liveText = 'draft text';
 
     const { result } = renderHook(() => useSubmitComposition());
     act(() => result.current());
@@ -119,7 +219,7 @@ describe('useSubmitComposition — empty serialization, no attachments: complete
 
 describe('useSubmitComposition — empty serialization with attachments: append still fires', () => {
   it('appends with an empty text part when only resolved attachments are present', () => {
-    live.attachments = [
+    liveAttachments = [
       {
         id: 'att-only',
         type: 'image',
@@ -147,7 +247,6 @@ describe('useSubmitComposition — empty serialization with attachments: append 
         },
       ],
       runConfig: { custom: { effort: 'high' } },
-      metadata: { custom: { mainframeSubmittedDraft: expect.any(String) } },
     });
   });
 });
@@ -159,7 +258,7 @@ describe('useCanSubmit — the send button gate, split out of useSubmitCompositi
   });
 
   it('is true on live text alone', () => {
-    live.text = 'typed';
+    liveText = 'typed';
     const { result } = renderHook(() => useCanSubmit());
     expect(result.current).toBe(true);
   });
@@ -171,13 +270,13 @@ describe('useCanSubmit — the send button gate, split out of useSubmitCompositi
   });
 
   it('is true on attachments alone', () => {
-    live.attachments = [{ id: 'att-only', type: 'image', name: 'shot.png', contentType: 'image/png', content: [] }];
+    liveAttachments = [{ id: 'att-only', type: 'image', name: 'shot.png', contentType: 'image/png', content: [] }];
     const { result } = renderHook(() => useCanSubmit());
     expect(result.current).toBe(true);
   });
 
   it('ignores canSend', () => {
-    live.canSend = true;
+    liveCanSend = true;
     const { result } = renderHook(() => useCanSubmit());
     expect(result.current).toBe(false);
   });
@@ -185,8 +284,8 @@ describe('useCanSubmit — the send button gate, split out of useSubmitCompositi
 
 describe('useSubmitComposition — predicate never reads canSend', () => {
   it('submits on non-empty serialization even though canSend is false', () => {
-    live.text = 'typed without canSend';
-    live.canSend = false;
+    liveText = 'typed without canSend';
+    liveCanSend = false;
 
     const { result } = renderHook(() => useSubmitComposition());
     act(() => result.current());
@@ -195,7 +294,7 @@ describe('useSubmitComposition — predicate never reads canSend', () => {
   });
 
   it('does not submit on empty serialization + no attachments even though canSend is true', () => {
-    live.canSend = true;
+    liveCanSend = true;
 
     const { result } = renderHook(() => useSubmitComposition());
     act(() => result.current());
@@ -209,3 +308,103 @@ describe('useSubmitComposition — predicate never reads canSend', () => {
 // the optimistic echo renders, so the reference lines are prepended ONCE, here,
 // before append. Only labels the draft actually still mentions survive.
 // ---------------------------------------------------------------------------
+
+describe('useSubmitComposition — session reference lines', () => {
+  it('prepends one reference line per referenced label and clears the store', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Foo refactor', '/tmp/a.jsonl');
+    liveText = 'compare with @session[Foo refactor] please';
+
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+
+    const [callArg] = appendSpy.mock.calls[0] as [{ content: { text: string }[] }];
+    expect(callArg.content[0]!.text).toBe(
+      'Referenced session @session[Foo refactor]: /tmp/a.jsonl\n\ncompare with @session[Foo refactor] please',
+    );
+    expect(useSessionReferences.getState().byThread[THREAD_ID]).toEqual({});
+  });
+
+  it('drops a recorded reference whose token the user deleted from the draft', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Foo refactor', '/tmp/a.jsonl');
+    liveText = 'never mind';
+
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+
+    const [callArg] = appendSpy.mock.calls[0] as [{ content: { text: string }[] }];
+    expect(callArg.content[0]!.text).toBe('never mind');
+  });
+
+  it('does not send on a draft that is nothing but a stale reference record', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Foo refactor', '/tmp/a.jsonl');
+
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+
+    expect(appendSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('captures and code annotations (C14)', () => {
+  const sent = () => appendSpy.mock.calls[0]![0] as { content: { text: string }[]; attachments: { id: string }[] };
+  const submit = () => {
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+  };
+  const addCapture = () =>
+    useDraftContent
+      .getState()
+      .add(THREAD_ID, [
+        { kind: 'capture', type: 'element', imageDataUrl: 'data:image/png;base64,AA', selector: '.btn', note: 'wide' },
+      ]);
+  const addCode = () =>
+    useDraftContent
+      .getState()
+      .add(THREAD_ID, [
+        { kind: 'code', filePath: 'a.ts', startLine: 1, endLine: 1, lineContent: 'see @Quota', note: 'why' },
+      ]);
+
+  it('go with the text, the captures’ images ahead of the files, and the draft is empty after', () => {
+    addCapture();
+    const { id } = draftItemsOf(THREAD_ID)[0]!;
+    liveText = 'Fix it';
+    liveAttachments = [
+      { id: 'file', type: 'document', name: 'a.txt', content: [], status: { type: 'requires-action' } },
+    ];
+    submit();
+    expect(sent().attachments.map((a) => a.id)).toEqual([id, 'file']);
+    expect(sent().content[0]!.text).toContain('> - `element1` — selector `.btn` — "wide"\n\nFix it');
+    expect(draftItemsOf(THREAD_ID)).toEqual([]);
+  });
+
+  it('are enough on their own', () => {
+    addCode();
+    submit();
+    expect(sent().content[0]!.text).toContain('File: `a.ts`');
+  });
+
+  it('make Send ready', () => {
+    expect(renderHook(() => useCanSubmit()).result.current).toBe(false);
+    addCode();
+    expect(renderHook(() => useCanSubmit()).result.current).toBe(true);
+  });
+
+  it('are not read as session mentions, and the text’s mentions still are', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Quota', '/x/quota.jsonl');
+    addCode();
+    liveText = 'Like @Quota';
+    submit();
+    const { text } = sent().content[0]!;
+    expect(text).toContain('Like @session[Quota]');
+    expect(text).toContain('see @Quota');
+    expect(text.startsWith('Referenced session @session[Quota]: /x/quota.jsonl')).toBe(true);
+  });
+
+  it('are kept until the send settles, so a failed one gives the captures back', () => {
+    addCapture();
+    const [item] = draftItemsOf(THREAD_ID);
+    submit();
+    expect(restoreSentCapture(item!.id)).toBe(true);
+    expect(draftItemsOf(THREAD_ID)).toEqual([item]);
+  });
+});

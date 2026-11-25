@@ -29,8 +29,6 @@ import { buildChatExtras, isRunningFromState, useChatExtrasState } from './chat-
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
 import { forgetSentCaptures, restoreSentCapture } from '../composer/draft-content/draft-content-store';
-import { recoverComposerSubmission } from './send-from-composer';
-import { settleSubmittedDraft } from '../composer/segments/submitted-draft';
 import { captureIfMarked, handoffDraft, takeStash } from './draft-stash';
 
 // ---------------------------------------------------------------------------
@@ -153,9 +151,7 @@ export function useChatThreadRuntime(
           chatControllerRegistry.adopt(controller, remoteId);
         }
         await controller.sendMessage(message);
-        settleSubmittedDraft(message);
       } catch (error) {
-        if (recoverComposerSubmission(controller, message, error)) return;
         // Safe against the composer reset: sendMessage cannot reject before its
         // first await (the upload fetch), so this lands after append() has
         // dropped this promise and use-submit-composition has reset the composer.

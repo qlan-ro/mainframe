@@ -45,17 +45,10 @@ function refuseIfDirectoryMissing(host: ChatActionHost): boolean {
 }
 
 export async function sendChatMessage(host: ChatActionHost, message: AppendMessage): Promise<void> {
-  const fromComposer = typeof message.metadata?.custom?.mainframeSubmittedDraft === 'string';
-  if (refuseIfDirectoryMissing(host)) {
-    if (fromComposer) throw new Error('The working directory is missing');
-    return;
-  }
+  if (refuseIfDirectoryMissing(host)) return;
 
   const input = parseSendInput(message);
-  if (!input) {
-    if (fromComposer) throw new Error('The message has no sendable text or attachments');
-    return;
-  }
+  if (!input) return;
   const { text, uploadItems } = input;
   const sentIds = (message.attachments ?? []).map((attachment) => attachment.id);
 

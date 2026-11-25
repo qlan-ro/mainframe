@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { convertUserContainer } from '../../../view-model/convert-acp-user';
 import { visibleMessageText } from '../../../markers/message-markers';
 import { composeMessage } from '../compose-message';
-import { targetKey } from '../draft-target';
-
 import type { DraftCapture, DraftCodeNote } from '../draft-content-store';
 
 const element = (over: Partial<DraftCapture> = {}): DraftCapture => ({
@@ -144,38 +142,4 @@ describe('composeMessage', () => {
     expect(text.startsWith('Both')).toBe(true);
     expect(text).toContain('Keep resets_at');
   });
-});
-
-it('excludes annotations and capture images belonging to a different target from a slash command', () => {
-  const origin = { daemonId: 'daemon', projectId: 'alpha', worktreePath: '/projects/alpha' };
-  const target = { ...origin, projectId: 'beta', worktreePath: '/projects/beta' };
-  const items = [
-    { ...code({ filePath: '/projects/alpha/private.ts' }), origin },
-    { ...element(), origin },
-  ];
-  expect(composeMessage('/review', items, target)).toEqual({ body: '/review', attachments: [], captures: [] });
-});
-
-it.each([
-  ['another daemon', { daemonId: 'remote', projectId: 'alpha', worktreePath: '/projects/alpha' }],
-  ['another worktree', { daemonId: 'local', projectId: 'alpha', worktreePath: '/branches/alpha' }],
-  ['no project', { daemonId: 'local', projectId: null }],
-] as const)('makes a bound file mention plain text in %s until explicitly included', (_name, target) => {
-  const origin = { daemonId: 'local', projectId: 'alpha', worktreePath: '/projects/alpha' };
-  const file = {
-    id: 'file',
-    kind: 'mention',
-    token: '@src/entry.ts',
-    label: 'entry.ts',
-    path: 'src/entry.ts',
-    note: '',
-    origin,
-  } as const;
-  expect(composeMessage('Review @src/entry.ts', [file], target).body).toBe('Review entry.ts');
-  expect(composeMessage('Review @src/entry.ts', [file], origin).body).toBe('Review @src/entry.ts');
-  const selected = { ...file, includedFor: [targetKey(target)] };
-  expect(composeMessage('Review @src/entry.ts', [selected], target).body).toBe('Review @/projects/alpha/src/entry.ts');
-  expect(composeMessage('Review @src/entry.ts', [selected], { ...target, daemonId: 'other' }).body).toBe(
-    'Review entry.ts',
-  );
 });

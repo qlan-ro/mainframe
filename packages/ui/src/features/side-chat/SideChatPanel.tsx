@@ -20,7 +20,6 @@
  * second, unloaded, non-subscribed controller while the host keeps the stale
  * one (todo #344, single-owner fix).
  */
-import { sendFromComposer } from '@/features/chat/runtime/send-from-composer';
 import { useCallback, useMemo } from 'react';
 import { AuiConfig, AuiProvider, ExternalThread, useAui, type AppendMessage } from '@assistant-ui/react';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -46,7 +45,7 @@ function useSideChatThreadConfig(controller: AcpChatController) {
 
   const onNew = useCallback(
     (message: AppendMessage) => {
-      void sendFromComposer(controller, message);
+      void controller.sendMessage(message);
     },
     [controller],
   );

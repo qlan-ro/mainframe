@@ -5,13 +5,11 @@ import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({ composer: { getState: () => ({ text: '' }), setText: vi.fn() } }),
   useAuiState: (sel: (s: unknown) => unknown) => sel({ threadListItem: { id: 't1' } }),
   ComposerPrimitive: { Attachments: () => null },
   AttachmentPrimitive: { Remove: ({ children }: { children: React.ReactNode }) => <>{children}</> },
 }));
 
-import { setDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { ComposerAttachments } from '../../attachments/ComposerAttachmentStrip';
 import { draftItemsOf, useDraftContent, type NewDraftItem } from '../draft-content-store';
 
@@ -106,7 +104,7 @@ describe('tiles', () => {
     expect(note).toHaveFocus();
     await user.keyboard('Last capture{Escape}');
     await waitFor(() => expect(screen.queryByTestId('composer-note-input')).toBeNull());
-    expect(notes().pop()).toBe('Last capture');
+    expect(notes().at(-1)).toBe('Last capture');
 
     const remove = screen.getByRole('button', { name: 'Remove screenshot50' });
     remove.focus();
@@ -191,20 +189,4 @@ describe('a tile from the workspace', () => {
     act(() => useDraftContent.getState().remove('t1', draftItemsOf('t1')[0]!.id));
     expect(screen.getByTestId('chat-composer-input')).not.toHaveFocus();
   });
-});
-
-it('names the origin and restores set-aside tiles by switching back or choosing Include all', () => {
-  const origin = { daemonId: 'local', projectId: 'alpha', projectName: 'Alpha' };
-  setDraftConfig('t1', { projectId: 'beta', adapterId: 'claude' });
-  add({ ...ELEMENT, origin }, { ...CODE, origin });
-  strip();
-  expect(screen.getAllByText(/from Alpha/u)).toHaveLength(2);
-  expect(screen.queryByTestId('composer-capture-tile')).toBeNull();
-
-  act(() => setDraftConfig('t1', { projectId: 'alpha', adapterId: 'claude' }));
-  expect(screen.getByTestId('composer-capture-tile')).toBeVisible();
-  act(() => setDraftConfig('t1', { projectId: 'beta', adapterId: 'claude' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Include all' }));
-  expect(screen.getByTestId('composer-capture-tile')).toBeVisible();
-  expect(screen.getByTestId('composer-code-tile')).toBeVisible();
 });

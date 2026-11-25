@@ -7,7 +7,6 @@ let attachment: { name: string; type: string; file?: { size: number } };
 let src: string | undefined;
 
 vi.mock('@assistant-ui/react', () => ({
-  useAui: () => ({}),
   useAuiState: (selector: (s: unknown) => unknown) => selector({ attachment, threadListItem: { id: 't1' } }),
   ComposerPrimitive: {
     Attachments: ({ children }: { children: () => React.ReactNode }) => <>{children()}</>,
