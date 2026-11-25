@@ -53,6 +53,18 @@ describe('RunInlineForm — rendering', () => {
   });
 });
 
+describe('RunInlineForm — required mark', () => {
+  it('marks a required field in the label’s own colour, not the failed-work one', () => {
+    render(<RunInlineForm interaction={INTERACTION} testId="automations-run-form-ix-1" />);
+    const mark = screen.getByText('*');
+    expect(mark.className).toBe('');
+    expect(mark).not.toHaveAttribute('style');
+    expect(mark.parentElement).toHaveTextContent('Action *');
+    expect(mark.parentElement).toHaveClass('text-muted-foreground');
+    expect(screen.getAllByText('*')).toHaveLength(1);
+  });
+});
+
 describe('RunInlineForm — show-when', () => {
   it('hides a showWhen field until its controlling field matches', async () => {
     const user = userEvent.setup();
