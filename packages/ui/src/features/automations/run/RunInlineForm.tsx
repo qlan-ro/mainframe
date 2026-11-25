@@ -50,7 +50,9 @@ function PillOption({
       onClick={onClick}
       className={cn(
         'h-[28px] rounded-full border-[0.5px] px-[12px] text-xs font-medium',
-        active ? 'border-primary/40 bg-primary/10 text-accent-ink' : 'border-border text-muted-foreground hover:bg-accent',
+        active
+          ? 'border-primary/40 bg-primary/10 text-accent-ink'
+          : 'border-border text-muted-foreground hover:bg-accent',
       )}
     >
       {label}

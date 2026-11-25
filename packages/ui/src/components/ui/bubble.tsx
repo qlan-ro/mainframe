@@ -19,8 +19,7 @@ const bubbleVariants = cva(
           '*:data-[slot=bubble-content]:bg-secondary *:data-[slot=bubble-content]:text-secondary-foreground [&>[data-slot=bubble-content]:is(button,a):hover]:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]',
         muted:
           '*:data-[slot=bubble-content]:bg-muted [&>[data-slot=bubble-content]:is(button,a):hover]:bg-[color-mix(in_oklch,var(--muted),var(--foreground)_5%)]',
-        queued:
-          '*:data-[slot=bubble-content]:bg-queue-well *:data-[slot=bubble-content]:text-foreground',
+        queued: '*:data-[slot=bubble-content]:bg-queue-well *:data-[slot=bubble-content]:text-foreground',
         tinted:
           '*:data-[slot=bubble-content]:bg-bubble-tinted *:data-[slot=bubble-content]:text-foreground [&>[data-slot=bubble-content]:is(button,a):hover]:bg-[oklch(from_var(--bubble-tinted)_calc(l_-_0.05)_calc(c*1.25)_h)]',
         outline:

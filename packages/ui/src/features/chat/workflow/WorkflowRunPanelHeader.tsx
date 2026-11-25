@@ -39,9 +39,7 @@ function StatusPill({ status }: { status: ClaudeWorkflowRunStatus }) {
         PILL_TINT[status],
       )}
     >
-      {status === 'running' && (
-        <span aria-hidden className="size-1 rounded-full bg-live motion-safe:animate-pulse" />
-      )}
+      {status === 'running' && <span aria-hidden className="size-1 rounded-full bg-live motion-safe:animate-pulse" />}
       {statusChipLabel(status)}
     </span>
   );
