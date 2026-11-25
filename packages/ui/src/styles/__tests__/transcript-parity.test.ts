@@ -15,9 +15,9 @@ it('matches the frame, work header, and marker geometry', () => {
   const header = chat('messages/turn/WorkHeader.tsx');
   expect(header.match(/rounded-\[7px\]/g)).toHaveLength(2);
   const table = chat('parts/markdown-table.tsx');
-  expect(table).toContain('border border-border');
+  expect(table).toContain('mf-tr-table');
   expect(table).toContain('text-sm/5');
-  expect(table.match(/py-\[3px\] pl-0 pr-6/g)).toHaveLength(2);
+  expect(table.match(/px-3 py-\[7px\]/g)).toHaveLength(2);
   expect(chat('tools/markers/MarkerPill.tsx')).toMatch(/h-6\.5 .*rounded-\[13px\].*px-\[11px\] mf-tr-marker-label/);
 });
 

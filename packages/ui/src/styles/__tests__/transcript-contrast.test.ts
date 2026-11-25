@@ -39,10 +39,10 @@ function tintShare(selector: string): number {
   return Number(share) / 100;
 }
 
-/** The share of `--muted` a row's hover fills with, as its component states it. */
+/** The share of `--mf-tr-hover` a row's hover fills with, as its component states it. */
 function hoverShare(component: string): number {
   const source = readFileSync(new URL(`../../features/chat/messages/turn/${component}.tsx`, import.meta.url), 'utf8');
-  const covers = [...source.matchAll(/absolute inset-0[^'"]*hover:bg-muted(?:\/(\d+))?(?=[ '"])/g)];
+  const covers = [...source.matchAll(/absolute inset-0[^'"]*hover:bg-\(--mf-tr-hover\)(?:\/(\d+))?(?=[ '"])/g)];
   if (covers.length !== 1) throw new Error(`${component} has ${covers.length} hover fills`);
   return Number(covers[0]![1] ?? 100) / 100;
 }
@@ -91,7 +91,11 @@ describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (them
     for (const [name, ground] of Object.entries(grounds)) all(INKS, name, ground);
   });
   it.each(['RowDisclosure', 'WorkHeader'])('reads on a hovered row of %s', (component) => {
-    all(INKS, `a hovered ${component}`, over(tint('--muted', hoverShare(component)), background));
+    all(
+      INKS.map((ink) => (ink === '--muted-foreground' ? '--mf-tr-muted' : ink)),
+      `a hovered ${component}`,
+      over(tint('--mf-tr-hover', hoverShare(component)), background),
+    );
   });
   it('reads in the user’s bubble', () => all(['--foreground', '--mf-tr-muted', '--mf-tr-link'], 'the bubble', bubble));
 
@@ -106,11 +110,11 @@ describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (them
   });
 
   it('reads on a changed line', () => {
-    for (const [line, ink] of [
-      ['mf-tr-add', '--mf-tr-ok'],
-      ['mf-tr-del', '--mf-tr-del'],
+    for (const [line, tintInk, ink] of [
+      ['mf-tr-add', '--mf-tr-ok', '--mf-tr-add-ink'],
+      ['mf-tr-del', '--mf-tr-del', '--mf-tr-del-ink'],
     ] as const) {
-      const ground = over(tint(ink, tintShare(line)), codeOn(background));
+      const ground = over(tint(tintInk, tintShare(line)), codeOn(background));
       all([ink, '--foreground', '--mf-tr-muted'], line, ground);
     }
   });

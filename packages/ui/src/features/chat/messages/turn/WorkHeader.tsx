@@ -150,7 +150,7 @@ export function WorkHeader({ turn }: { turn: Turn }) {
       ref={rowRef}
       data-testid={`chat-work-header-${encodeURIComponent(turn.key)}`}
       data-work-state={state}
-      className="relative flex min-h-7 w-full min-w-0 items-center gap-2 rounded-[7px] px-1 text-sm/[22px] text-(--mf-tr-secondary) [--muted:var(--mf-tr-hover)]"
+      className="relative flex min-h-7 w-full min-w-0 items-center gap-2 rounded-[7px] px-1 text-sm/[22px] text-(--mf-tr-secondary) [--muted-foreground:var(--mf-tr-muted)]"
     >
       <button
         type="button"
@@ -159,7 +159,7 @@ export function WorkHeader({ turn }: { turn: Turn }) {
         aria-expanded={open}
         aria-controls={open ? workId(turn.key) : undefined}
         onClick={() => toggle(turn.key)}
-        className="absolute inset-0 rounded-[7px] hover:bg-muted focus-visible:focus-line-inset"
+        className="absolute inset-0 rounded-[7px] hover:bg-(--mf-tr-hover) focus-visible:focus-line-inset"
       />
       <span className="pointer-events-none relative grid size-4 shrink-0 place-items-center">
         <EndGlyph state={state} />

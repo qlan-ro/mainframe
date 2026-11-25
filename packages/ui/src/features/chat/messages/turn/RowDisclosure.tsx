@@ -41,7 +41,7 @@ export interface RowDisclosureProps {
   anchor?: { 'data-activity-id'?: string; 'data-activity-group'?: string };
 }
 
-const COVER = 'absolute inset-0 rounded-[6px] hover:bg-muted focus-visible:focus-line-inset';
+const COVER = 'absolute inset-0 rounded-[6px] hover:bg-(--mf-tr-hover) focus-visible:focus-line-inset';
 const TONES = { fail: 'text-fail', warn: 'font-medium text-warning' } as const;
 
 function RowLine(props: RowDisclosureProps & { open: boolean; toggle: () => void; bodyId: string }) {
@@ -51,7 +51,7 @@ function RowLine(props: RowDisclosureProps & { open: boolean; toggle: () => void
     <div
       // A right-click on the row, not on its body, offers the file's paths.
       data-file-path={props.filePath}
-      className="relative -mx-1.5 flex min-h-6.5 min-w-0 items-center gap-2 rounded-[6px] px-1.5 [--muted:var(--mf-tr-hover)] text-sm/[22px] text-(--mf-tr-secondary) [&>svg]:pointer-events-none [&>svg]:relative [&>svg]:size-3.5 [&>svg]:shrink-0"
+      className="relative -mx-1.5 flex min-h-6.5 min-w-0 items-center gap-2 rounded-[6px] px-1.5 text-sm/[22px] text-(--mf-tr-secondary) [--muted-foreground:var(--mf-tr-muted)] [&>svg]:pointer-events-none [&>svg]:relative [&>svg]:size-3.5 [&>svg]:shrink-0"
     >
       {expandable && (
         <button
