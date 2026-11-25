@@ -110,7 +110,7 @@ describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (them
   it('reads on a code surface', () => {
     for (const [name, ground] of Object.entries(grounds))
       all(
-        ['--foreground', '--mf-tr-muted', '--mf-tr-code-link', '--mf-tr-code-fail'],
+        ['--foreground', '--mf-tr-muted', '--mf-tr-code-link', '--mf-tr-link', '--mf-tr-code-fail'],
         `code on ${name}`,
         codeOn(ground),
       );

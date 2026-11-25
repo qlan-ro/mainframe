@@ -133,7 +133,7 @@ function shellAndExternalCalls(call: Call): Item[] {
       'parity-fetch',
       'WebFetch',
       { url: 'https://developers.openai.com/codex/rate-limits', prompt: 'Find the rate limits' },
-      'Codex enforces a rolling 5-hour window and a weekly window per account. Usage is reported in rate_limits events attached to each turn, with used_percent and resets_in_seconds. Windows reset automatically; no event is sent at reset time.',
+      `Codex enforces a rolling 5-hour window and a weekly window per account. Usage is reported in \`rate_limits\` events attached to each turn, with \`used_percent\` and \`resets_in_seconds\`. Windows reset automatically; no event is sent at reset time.`,
       12.3,
       timing(1200),
     ),

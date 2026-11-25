@@ -165,6 +165,13 @@ describe('ToolBody', () => {
     expect(opened).toHaveBeenCalledWith('https://example.com');
   });
 
+  it('renders backtick-delimited code in a fetched summary', () => {
+    show(part('WebFetch', { url: 'https://example.com' }, 'Read `rate_limits` first.'));
+    const summary = screen.getByTestId('web-fetch-card-summary');
+    expect(summary).toHaveTextContent('Read rate_limits first.');
+    expect(summary.querySelector('code')).toHaveTextContent('rate_limits');
+  });
+
   it('highlights literal grep matches and preserves output indentation', () => {
     show(part('Grep', { pattern: 'a+b' }, 'src/quota.ts:21:    a+b = 1;'));
     const body = screen.getByTestId('search-card-plain-body');
