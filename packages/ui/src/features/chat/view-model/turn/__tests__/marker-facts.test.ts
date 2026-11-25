@@ -88,16 +88,24 @@ describe('what each pill says', () => {
   });
 
   it('tells the three worktree operations apart', () => {
-    expect(facts('EnterWorktree', {}, json({ worktreeBranch: 'feat/x' }))).toMatchObject({
+    expect(
+      facts('EnterWorktree', {}, json({ worktreeBranch: 'feat/x', worktreePath: '/repo/worktrees/x' })),
+    ).toMatchObject({
       icon: 'worktree-enter',
       label: 'Entered worktree',
       target: 'feat/x',
+      hint: '/repo/worktrees/x',
     });
     expect(facts('ExitWorktree', { action: 'keep' })).toMatchObject({ icon: 'worktree-leave', receipt: 'kept' });
     expect(facts('ExitWorktree', { action: 'remove' })).toMatchObject({
       icon: 'worktree-remove',
       label: 'Removed worktree',
     });
+  });
+
+  it('keeps the path tooltip when the worktree path is also the target', () => {
+    const path = '/repo/worktrees/x';
+    expect(facts('EnterWorktree', {}, json({ worktreePath: path }))).toMatchObject({ target: path, hint: path });
   });
 
   it('shows a notification’s message and where it went', () => {

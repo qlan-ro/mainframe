@@ -29,53 +29,64 @@ export interface MarkerPillProps {
 function Pill(props: MarkerPillProps & { open: boolean; toggle: () => void; bodyId: string }) {
   const { target, receipt, state = 'done', children, open } = props;
   const expandable = Boolean(children);
-  return (
-    <Hint label={props.hint}>
-      <button
-        type="button"
-        data-testid={props.testId}
-        data-state={state}
-        disabled={!expandable}
-        aria-expanded={expandable ? open : undefined}
-        aria-controls={expandable && open ? props.bodyId : undefined}
-        onClick={props.toggle}
-        className={cn(
-          'inline-flex h-6.5 max-w-full min-w-0 items-center gap-1.5 rounded-[13px] bg-card px-[11px] mf-tr-marker-label shadow-[inset_0_0_0_1px_var(--border)] text-(--mf-tr-muted) focus-visible:focus-line [&>svg]:size-3.5',
-          expandable && 'hover:bg-muted hover:text-foreground',
-          state === 'failed' && 'text-fail',
-        )}
-      >
-        <RowGlyph icon={props.icon} status={state === 'failed' ? 'failed' : 'success'} />
-        <span className="min-w-0 truncate">
-          {props.label}
-          {target && (
-            <>
-              {' '}
-              <span className={cn('text-(--mf-tr-secondary)', props.mono ? 'mf-tr-mono font-normal' : 'font-medium')}>
-                {target}
-              </span>
-            </>
-          )}
-        </span>
-        {(receipt || state === 'running') && (
-          <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
-            <span aria-hidden className="mr-0.5">
-              ·
+  const button = (
+    <button
+      type="button"
+      data-testid={props.testId}
+      data-state={state}
+      disabled={!expandable}
+      aria-expanded={expandable ? open : undefined}
+      aria-controls={expandable && open ? props.bodyId : undefined}
+      onClick={props.toggle}
+      className={cn(
+        'inline-flex h-6.5 max-w-full min-w-0 items-center gap-1.5 rounded-[13px] bg-card px-[11px] mf-tr-marker-label shadow-[inset_0_0_0_1px_var(--border)] text-(--mf-tr-muted) focus-visible:focus-line [&>svg]:size-3.5',
+        expandable && 'hover:bg-muted hover:text-foreground',
+        !expandable && props.hint && 'pointer-events-none',
+        state === 'failed' && 'text-fail',
+      )}
+    >
+      <RowGlyph icon={props.icon} status={state === 'failed' ? 'failed' : 'success'} />
+      <span className="min-w-0 truncate">
+        {props.label}
+        {target && (
+          <>
+            {' '}
+            <span className={cn('text-(--mf-tr-secondary)', props.mono ? 'mf-tr-mono font-normal' : 'font-medium')}>
+              {target}
             </span>
-            {state === 'running' && <Spinner className="size-3" />}
-            {receipt && <span>{receipt}</span>}
+          </>
+        )}
+      </span>
+      {(receipt || state === 'running') && (
+        <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+          <span aria-hidden className="mr-0.5">
+            ·
           </span>
-        )}
-        {expandable && (
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              'shrink-0 transition-transform duration-150 motion-reduce:transition-none',
-              open && 'rotate-90',
-            )}
-          />
-        )}
-      </button>
+          {state === 'running' && <Spinner className="size-3" />}
+          {receipt && <span>{receipt}</span>}
+        </span>
+      )}
+      {expandable && (
+        <ChevronRight
+          aria-hidden
+          className={cn(
+            'shrink-0 transition-transform duration-150 motion-reduce:transition-none',
+            open && 'rotate-90',
+          )}
+        />
+      )}
+    </button>
+  );
+  if (!props.hint) return button;
+  return (
+    <Hint label={<span className="block max-w-xs break-all">{props.hint}</span>}>
+      {expandable ? (
+        button
+      ) : (
+        <span tabIndex={0} className="inline-flex max-w-full rounded-[13px] focus-visible:focus-line">
+          {button}
+        </span>
+      )}
     </Hint>
   );
 }

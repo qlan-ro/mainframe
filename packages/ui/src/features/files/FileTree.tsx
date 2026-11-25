@@ -22,7 +22,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RotateCw, X } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
-import { useFilesStore } from '@/store/files';
 import { useLayoutStore } from '@/store/layout';
 import { activeFileTab } from '@/store/run-pane-file-tabs';
 import { useActiveBasesStore } from '@/store/active-bases-store';
@@ -30,6 +29,7 @@ import { SidebarHeader } from '@/components/ui/sidebar';
 import { Hint } from '@/components/ui/hint';
 import { FileTreeRowMenu } from './FileTreeRowMenu';
 import { FileTreeNode } from './FileTreeNode';
+import { useFileTreeReveal } from './use-file-tree-reveal';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
 import { lastSegment, sortEntries } from './file-tree-utils';
 
@@ -56,18 +56,8 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
   // Absolute workspace base (worktree wins over project) for Reveal/Copy Path.
   const base = useActiveBasesStore((s) => s.bases.worktreePath ?? s.bases.projectPath);
 
-  // Subscribe reactively so reveals fired while this component is already
-  // mounted (e.g. the ViewerShell "Reveal" button) are picked up live.
-  // The effect mirrors the store value into local state and clears the store
-  // entry immediately, preventing a subsequent remount from re-triggering.
-  const storeTarget = useFilesStore((s) => s.revealTarget);
-  const [revealPath, setRevealPath] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (storeTarget === null) return;
-    setRevealPath(storeTarget);
-    useFilesStore.getState().consumeRevealTarget();
-  }, [storeTarget]);
+  const { revealPath, listings, onVerifiedRow, refreshListings } = useFileTreeReveal(port, projectId, chatId);
+  const displayedRoots = listings?.get('.') ?? roots;
 
   useEffect(() => {
     let cancelled = false;
@@ -87,15 +77,18 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
     };
   }, [port, projectId, chatId, refreshKey]);
 
-  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  const refresh = useCallback(() => {
+    refreshListings();
+    setRefreshKey((k) => k + 1);
+  }, [refreshListings]);
 
-  if (error) {
+  if (error && displayedRoots === null) {
     return <div className="px-3 py-4 text-meta/[1.45] text-muted-foreground">Couldn't load files.</div>;
   }
-  if (roots === null) {
+  if (displayedRoots === null) {
     return <div className="px-3 py-4 text-meta/[1.45] text-muted-foreground">Loading…</div>;
   }
-  if (roots.length === 0) {
+  if (displayedRoots.length === 0) {
     return <div className="px-3 py-4 text-meta/[1.45] text-muted-foreground">No files.</div>;
   }
 
@@ -122,7 +115,7 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
       </SidebarHeader>
       <SidebarScrollRegion>
         <div className="px-1.5 pb-2">
-          {sortEntries(roots).map((entry) => (
+          {sortEntries(displayedRoots).map((entry) => (
             <FileTreeNode
               key={entry.path}
               entry={entry}
@@ -132,6 +125,8 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
               chatId={chatId}
               base={base}
               revealPath={revealPath}
+              listings={listings}
+              onVerifiedRow={onVerifiedRow}
               activeFilePath={activeTabPath}
             />
           ))}

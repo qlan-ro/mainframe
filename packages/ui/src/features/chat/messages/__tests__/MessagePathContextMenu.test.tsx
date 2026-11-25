@@ -89,7 +89,7 @@ describe('MessagePathContextMenu — right-click on the path pill, no selection'
     fireEvent.contextMenu(screen.getByText('nested text'));
     fireEvent.click(screen.getByTestId('tool-card-path-open'));
 
-    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: '/w/src/a.ts' });
+    expect(emitSurfaceIntent).toHaveBeenCalledExactlyOnceWith({ type: 'open-file', path: '/w/src/a.ts' });
   });
 
   it('resolves the same path when right-clicking a child node inside the pill (closest, not target)', () => {

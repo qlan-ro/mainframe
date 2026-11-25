@@ -28,7 +28,9 @@
  */
 import { pickViewerKind } from '@/features/viewers/viewer-router';
 import { toFileRef } from '@/lib/files/file-ref';
-import { onSurfaceIntent } from './surface-intents';
+import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
+import { onSurfaceIntent, type FileRevealScope } from './surface-intents';
 import { useLayoutStore } from './layout';
 import { useUiPrefs } from './ui-prefs';
 import { isWorkspaceFilesPanelOpen, useWorkspaceFilesPanel } from './workspace-files-panel';
@@ -43,6 +45,43 @@ function ensureWorkspaceActive(): void {
   const state = useLayoutStore.getState();
   const { layout } = state;
   if (!layout.top.includes('workspace')) state.toggleSurface('workspace');
+}
+
+function showInFileTree(path: string): void {
+  ensureWorkspaceActive();
+  useWorkspaceFilesPanel.getState().setOpen(true);
+  useFilesStore.getState().setRevealTarget(path);
+}
+
+async function revealScopedFile(rawPath: string, scope: FileRevealScope, isLatest: () => boolean): Promise<void> {
+  const active = useActiveBasesStore.getState();
+  const { tree, bases, scopeKey } = active;
+  if (!tree || scopeKey !== scope.scopeKey || tree.daemonId !== scope.daemonId) return;
+  const isCurrent = () =>
+    isLatest() && useActiveBasesStore.getState().tree === tree && getActiveDaemon().id === tree.daemonId;
+  const ref = toFileRef(rawPath, { worktreePath: bases.worktreePath ?? bases.projectPath });
+  const segments = ref.relative.split('/');
+  if (ref.isExternal || segments.some((piece) => !piece || piece === '.' || piece === '..')) return;
+
+  try {
+    const listings = new Map<string, FileTreeEntry[]>();
+    let directory = '.';
+    for (const [index, name] of segments.entries()) {
+      if (!isCurrent()) return;
+      const path = directory === '.' ? name : `${directory}/${name}`;
+      const isFile = index === segments.length - 1;
+      const entries = await getFileTree(tree.port, tree.projectId, directory, tree.chatId);
+      if (!entries.some((entry) => entry.path === path && entry.type === (isFile ? 'file' : 'directory'))) return;
+      listings.set(directory, entries);
+      directory = path;
+    }
+    if (isCurrent()) {
+      ensureWorkspaceActive();
+      useFilesStore.setState({ revealTarget: null, verifiedReveal: { path: ref.relative, tree, listings } });
+    }
+  } catch {
+    // A failed tree lookup cannot verify the target.
+  }
 }
 
 /** The active session's launch scope, stamped onto every tab this subscriber opens. */
@@ -64,7 +103,8 @@ export function kindForPath(path: string): FileTabKind {
  * Designed to be called once from `useEffect(() => { return subscribeToFileIntents(); }, [])`.
  */
 export function subscribeToFileIntents(): () => void {
-  return onSurfaceIntent((intent) => {
+  let revealRequest = 0;
+  const unsubscribe = onSurfaceIntent((intent) => {
     if (intent.type === 'open-file') {
       const { path: rawPath, line, character } = intent;
 
@@ -114,13 +154,12 @@ export function subscribeToFileIntents(): () => void {
     }
 
     if (intent.type === 'reveal-file') {
-      // Show the workspace AND open the docked Files sidebar so the user can see the tree.
-      ensureWorkspaceActive();
-      useWorkspaceFilesPanel.getState().setOpen(true);
-      // Normalize the path (same logic as open-file) and stash it for the tree.
-      const bases = useActiveBasesStore.getState().bases;
-      const ref = toFileRef(intent.path, bases);
-      useFilesStore.getState().setRevealTarget(ref.relative);
+      const request = ++revealRequest;
+      if (intent.scope) {
+        void revealScopedFile(intent.path, intent.scope, () => request === revealRequest);
+      } else {
+        showInFileTree(toFileRef(intent.path, useActiveBasesStore.getState().bases).relative);
+      }
       return;
     }
 
@@ -173,4 +212,8 @@ export function subscribeToFileIntents(): () => void {
       return;
     }
   });
+  return () => {
+    revealRequest++;
+    unsubscribe();
+  };
 }

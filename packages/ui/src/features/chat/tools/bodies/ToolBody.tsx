@@ -26,7 +26,7 @@ export function hasToolBody(part: ToolPart, status: ToolStatus, background = fal
   if (text || resultImages(part.result).length) return true;
   switch (toolKind(part.toolName)) {
     case 'edit':
-      return resolveToolDiff('Edit', part.args, part.result).hunks !== null;
+      return true;
     case 'write':
       return Boolean(argText(part, 'content'));
     case 'shell':
@@ -61,7 +61,7 @@ function EditBody({ part, status }: ToolBodyProps) {
   const { text } = resolveResultText(part.result);
   const { hunks } = resolveToolDiff(toolKind(part.toolName) === 'edit' ? 'Edit' : 'Write', part.args, part.result);
   const change = hunks?.length || argText(part, 'content') ? <ChangeBody part={part} /> : null;
-  if (status === 'failed')
+  if (status === 'failed' && (change || text))
     return (
       <div className="flex min-w-0 flex-col gap-1.5">
         {change}
