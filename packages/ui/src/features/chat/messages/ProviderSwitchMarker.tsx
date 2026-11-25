@@ -3,13 +3,13 @@
 /**
  * ProviderSwitchMarker — the divider a provider segment opens with (a switch
  * between providers, or a fresh session on the same one). The CompactionPill
- * recipe (`Marker variant="separator"`) with the target provider's logo; the
+ * recipe (`Marker variant="separator"`); the
  * hint names the target model and the totals of the segment that ended.
  */
 import { providerSwitchLabel, type ProviderSwitchMarker as Marker_ } from '@qlan-ro/mainframe-types';
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
 import { Hint } from '@/components/ui/hint';
-import { ProviderLogo } from '@/features/shared/ProviderLogo';
+import { Repeat } from 'lucide-react';
 import { useAdapters } from '@/store/adapters';
 
 const tokenFormat = new Intl.NumberFormat('en-US');
@@ -49,14 +49,10 @@ export function ProviderSwitchMarker({ marker }: { marker: Marker_ }) {
       <Marker
         variant="separator"
         data-testid={`chat-provider-switch-marker-${marker.segmentId}`}
-        className="my-2 select-none"
+        className="mf-tr-divider select-none"
       >
-        <MarkerIcon>
-          <ProviderLogo
-            adapterId={marker.toAdapterId}
-            testId={`chat-provider-switch-logo-${marker.segmentId}`}
-            className="size-4"
-          />
+        <MarkerIcon className="size-3">
+          <Repeat data-testid={`chat-provider-switch-logo-${marker.segmentId}`} className="size-3" strokeWidth={1.5} />
         </MarkerIcon>
         <MarkerContent>{providerSwitchLabel(marker)}</MarkerContent>
       </Marker>

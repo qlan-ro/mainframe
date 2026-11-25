@@ -12,7 +12,6 @@
 import { useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { FolderGit2, Lock, Monitor, Timer } from 'lucide-react';
-import { BranchIcon } from '@/components/ui/glyphs';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { BranchPopover } from '@/features/git/BranchPopover';
@@ -76,7 +75,7 @@ function WherePart({ session, chat }: { session: StripSession; chat: Chat | null
         data-testid="composer-where"
         aria-label={runsIn}
         title={path}
-        className={cn(BOTTOM_STRIP_BUTTON, 'shrink-0 hover:bg-transparent')}
+        className={cn(BOTTOM_STRIP_BUTTON, 'pr-0 shrink-0 hover:bg-transparent')}
       >
         {content}
       </span>
@@ -90,7 +89,7 @@ function WherePart({ session, chat }: { session: StripSession; chat: Chat | null
         data-isolated={isolated || undefined}
         aria-label={`${runsIn}. ${isolated ? 'Worktree options' : 'Isolate in a worktree'}`}
         title={path ?? runsIn}
-        className={cn(BOTTOM_STRIP_BUTTON, 'shrink-0', open && 'bg-chrome-press hover:bg-chrome-press')}
+        className={cn(BOTTOM_STRIP_BUTTON, 'pr-0 shrink-0', open && 'bg-chrome-press hover:bg-chrome-press')}
       >
         {content}
       </button>
@@ -121,9 +120,11 @@ function BranchPart({ session, port }: { session: StripSession; port: number }) 
         type="button"
         data-testid="composer-branch"
         aria-label={`Branch ${branch}. Manage branches`}
-        className={cn(BOTTOM_STRIP_BUTTON, open && 'bg-chrome-press hover:bg-chrome-press')}
+        className={cn(BOTTOM_STRIP_BUTTON, 'pl-0', open && 'bg-chrome-press hover:bg-chrome-press')}
       >
-        <BranchIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span aria-hidden className="shrink-0 @max-[400px]/composer:hidden">
+          ·
+        </span>
         <span className="min-w-0 truncate font-mono text-caption/[1.45]" title={branch}>
           {branch}
         </span>

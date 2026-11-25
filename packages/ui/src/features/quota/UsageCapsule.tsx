@@ -56,12 +56,17 @@ function CapsuleRow({ item, now }: { item: CapsuleItemVm; now: number }) {
   return (
     <span
       data-testid={`usage-capsule-item-${item.key}`}
-      className="flex h-5 items-center gap-[7px] pr-3 text-meta/[1.45] whitespace-nowrap text-ink-secondary tabular-nums"
+      className="flex h-5 items-center gap-[6px] text-meta/[1.45] whitespace-nowrap text-ink-secondary tabular-nums"
     >
-      <span className="flex min-w-0 flex-1 items-center gap-[7px] truncate-fade">
+      <span
+        className={cn(
+          'flex min-w-0 flex-1 items-center gap-[6px] overflow-hidden',
+          item.name !== 'Weekly' && 'truncate-fade',
+        )}
+      >
         <span className="shrink-0">{item.providerLabel}</span>
         <span aria-hidden className="size-0.75 shrink-0 rounded-full bg-muted-foreground" />
-        <span className="shrink-0 text-muted-foreground">{item.name}</span>
+        <span className="shrink-0 text-muted-foreground">{item.name === 'Weekly' ? 'Week' : item.name}</span>
       </span>
       <Progress
         value={item.usedPercent}
@@ -137,8 +142,7 @@ export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: numbe
             hover.open && 'bg-foreground/15',
           )}
         >
-          {/* Runs into the capsule's own padding: the widest row is a pixel or two longer than the room inside it. */}
-          <span className="-mr-3 block h-5 min-w-0 flex-1 overflow-hidden">
+          <span className="block h-5 min-w-0 flex-1 overflow-hidden">
             {items.length === 0 ? (
               <span className="flex h-5 items-center text-xs text-muted-foreground italic">quota unknown</span>
             ) : (

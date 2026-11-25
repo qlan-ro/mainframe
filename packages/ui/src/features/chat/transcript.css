@@ -250,3 +250,15 @@ div.mf-tr-del {
     opacity: 1;
   }
 }
+
+.mf-tr-divider {
+  margin-block: 10px 14px;
+  min-height: 22px;
+  gap: 6px;
+  font-size: var(--text-meta);
+  line-height: 22px;
+}
+
+[data-testid^='chat-provider-switch-marker-'].mf-tr-divider {
+  margin-block: 10px;
+}

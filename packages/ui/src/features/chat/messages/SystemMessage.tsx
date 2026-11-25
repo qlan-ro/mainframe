@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangleIcon, LayersIcon, ZapIcon } from 'lucide-react';
+import { AlertTriangleIcon, Minimize2Icon, ZapIcon } from 'lucide-react';
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
@@ -13,9 +13,9 @@ import { ProviderSwitchMarker } from './ProviderSwitchMarker';
 
 export function CompactionPill() {
   return (
-    <Marker variant="separator" data-testid="chat-compaction-pill" className="my-2 select-none">
-      <MarkerIcon>
-        <LayersIcon />
+    <Marker variant="separator" data-testid="chat-compaction-pill" className="mf-tr-divider select-none">
+      <MarkerIcon className="size-3">
+        <Minimize2Icon className="size-3" strokeWidth={1.5} />
       </MarkerIcon>
       <MarkerContent>Context compacted</MarkerContent>
     </Marker>
