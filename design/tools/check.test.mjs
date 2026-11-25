@@ -358,6 +358,7 @@ test('no builder writes a board that holds a local path', () => {
     run('<p title="~/Code">x</p>');
     assert.ok(readdirSync(project).includes('Proposal-Test.dc.html'));
     rmSync(join(proposals, 'frags.json'));
+    rmSync(join(project, 'Proposal-Redesign-Spec.dc.html'));
     writeFileSync(join(proposals, 'states.py'), 'BOARDS = []\n');
     build();
     assert.ok(readdirSync(project).includes('Proposal-Redesign-Spec.dc.html'));
