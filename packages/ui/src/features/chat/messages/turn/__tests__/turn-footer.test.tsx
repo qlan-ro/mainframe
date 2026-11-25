@@ -79,8 +79,11 @@ it('says what the turn took and cost, on focus, wherever in the turn it was reco
   show(ended);
   const time = footerOf('a1').getByTestId('chat-message-timestamp');
   expect(time).toHaveProperty('tabIndex', 0);
+  expect(screen.queryByTestId('chat-message-time-detail')).toBeNull();
   act(() => time.focus());
   const details = await screen.findAllByText(/Took 2m 14s/);
   expect(details.length).toBeGreaterThan(0);
+  expect(footerOf('a1').getByTestId('chat-message-timestamp')).toBe(time);
+  expect(document.activeElement).toBe(time);
   expect(screen.getAllByText(/Cost \$0\.250/).length).toBeGreaterThan(0);
 });
