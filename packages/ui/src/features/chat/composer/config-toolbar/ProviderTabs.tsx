@@ -20,6 +20,7 @@ export interface ProviderTabsProps {
   adapters: AdapterInfo[];
   /** The tab whose catalog is shown. */
   selectedId: string;
+  pending?: boolean;
   /** The chat's current provider — never disabled. */
   activeId: string;
   /** Why the other providers can't be picked right now, or null. */
@@ -27,7 +28,7 @@ export interface ProviderTabsProps {
   onSelect: (id: string) => void;
 }
 
-export function ProviderTabs({ adapters, selectedId, activeId, blockedReason, onSelect }: ProviderTabsProps) {
+export function ProviderTabs({ adapters, selectedId, activeId, blockedReason, pending, onSelect }: ProviderTabsProps) {
   return (
     // manual activation: automatic mode also fires onValueChange on FOCUS,
     // which would double-issue the adapter PATCH on every click.
@@ -35,7 +36,7 @@ export function ProviderTabs({ adapters, selectedId, activeId, blockedReason, on
       value={selectedId}
       activationMode="manual"
       onValueChange={(v) => {
-        if (v) onSelect(v);
+        if (v && !pending) onSelect(v);
       }}
     >
       <TabsList className="h-8! w-full gap-0.5 rounded-[9px] bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] p-0.5">
@@ -47,7 +48,7 @@ export function ProviderTabs({ adapters, selectedId, activeId, blockedReason, on
               value={a.id}
               data-testid={`composer-adapter-select-option-${a.id}`}
               aria-label={`Provider: ${a.name}`}
-              disabled={!a.installed || blocked}
+              disabled={pending || !a.installed || blocked}
               className={cn(
                 'h-7 min-w-0 flex-1 gap-1.5 rounded-[7px] border-0 px-1.5 py-1 text-small/[20px] font-medium text-foreground dark:text-foreground data-active:bg-card group-data-[variant=default]/tabs-list:data-active:shadow-segment dark:data-active:bg-card',
                 blocked && 'w-full',

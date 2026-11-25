@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useProjectsStore } from '@/store/projects';
 import type { DraftCfg } from '@/features/sessions/runtime/draft-config';
 
 const { git, checkout, patch } = vi.hoisted(() => ({
@@ -123,6 +124,19 @@ describe('what belongs to the checkout', () => {
 });
 
 describe('DraftBranchPicker', () => {
+  it('names the current project above the branches', async () => {
+    const { projects } = useProjectsStore.getState();
+    useProjectsStore.setState({ projects: [{ id: 'p1', name: 'Actual project' } as (typeof projects)[number]] });
+    try {
+      await openPicker();
+      const heading = screen.getByText('Actual project');
+      const branch = screen.getByTestId('composer-branch-option-main');
+      expect(heading.compareDocumentPosition(branch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.getByText('Manage branches…')).toBeInTheDocument();
+    } finally {
+      useProjectsStore.setState({ projects });
+    }
+  });
   it('tells the empty state which branch its menu found', async () => {
     git.getGitBranch.mockReturnValue(new Promise(() => {}));
     git.getGitBranches.mockResolvedValue({ current: 'feat/x', local: [{ name: 'main' }, { name: 'feat/x' }] });

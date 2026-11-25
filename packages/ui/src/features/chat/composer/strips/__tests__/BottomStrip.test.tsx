@@ -90,10 +90,22 @@ describe('BottomStrip', () => {
     expect(screen.getByTestId('composer-branch')).toHaveTextContent('feat/quota');
   });
 
+  it('puts the decorative separator between the controls, outside both accessible names', () => {
+    renderStrip();
+    const where = screen.getByTestId('composer-worktree-trigger');
+    const branch = screen.getByTestId('composer-branch');
+    const dot = screen.getByText('·');
+    expect(where.nextElementSibling).toBe(dot);
+    expect(dot.nextElementSibling).toBe(branch);
+    expect(dot).toHaveAttribute('aria-hidden', 'true');
+    expect(branch).toHaveAccessibleName('Branch feat/quota. Manage branches');
+  });
+
   it('shows the stored base only while the worktree is on its recorded branch', () => {
     mockChat = { ...CHAT, worktreePath: '/wt/q', branchName: 'feat/quota', baseBranch: 'release/stable' };
     const view = renderStrip();
     const branch = screen.getByTestId('composer-branch');
+    expect(branch).toHaveAccessibleName('Branch feat/quota from release/stable. Manage branches');
     expect(branch).toHaveTextContent('feat/quota from release/stable');
     expect(screen.getByTitle('feat/quota from release/stable')).toBeVisible();
 
@@ -127,6 +139,7 @@ describe('BottomStrip', () => {
     mockBranch = undefined;
     renderStrip();
     expect(screen.queryByTestId('composer-branch')).toBeNull();
+    expect(screen.queryByText('·')).toBeNull();
     expect(screen.getByTestId('composer-worktree-trigger')).toBeInTheDocument();
   });
 
@@ -249,7 +262,9 @@ describe('ChangesButton', () => {
     expect(button).toHaveAttribute('aria-label', 'Changes: 2 changed files');
 
     fireEvent.click(button);
-    expect(screen.getByText('src/b.ts')).toBeInTheDocument();
+    expect(screen.getByText('src/b.ts').closest('[title]')).toHaveAttribute('title', 'src/b.ts');
+    expect(screen.getByText('Changes · 2 files')).toBeInTheDocument();
+    expect(screen.getByText('+22 −1 across 2 files')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('composer-changes-open-diff'));
     expect(emit).toHaveBeenCalledExactlyOnceWith({ type: 'open-review' });
   });

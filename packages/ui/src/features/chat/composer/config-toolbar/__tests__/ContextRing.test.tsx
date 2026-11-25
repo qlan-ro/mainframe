@@ -4,14 +4,20 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { publishCommands } from '../../../commands/command-registry';
 
 const append = vi.fn();
-vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ thread: { append } }) }));
+let chatId: string;
+let hasChat: boolean;
+let empty = true;
+vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({ thread: { append } }),
+  useAuiState: () => empty,
+}));
 
 let mockPercent: number | null = null;
 vi.mock('@/features/session-panel/use-context-percent', () => ({ useContextPercent: () => mockPercent }));
 
 let mockUsage: { totalTokens: number; maxTokens: number } | undefined;
 vi.mock('../../../runtime/chat-extras', () => ({
-  useChatExtras: () => ({ state: { contextUsage: mockUsage } }),
+  useChatExtras: () => ({ state: { contextUsage: mockUsage, chatId, chatConfig: hasChat ? { id: chatId } : null } }),
 }));
 
 import { ContextRing } from '../ContextRing';
@@ -26,19 +32,43 @@ const button = () => screen.getByTestId('composer-context-percent');
 
 beforeEach(() => {
   vi.clearAllMocks();
+  chatId = 'existing';
+  hasChat = true;
   mockPercent = 40;
   mockUsage = undefined;
   publishCommands([{ name: 'compact', description: 'Compact', source: 'claude' }]);
 });
 
 describe('ContextRing (C2)', () => {
-  it('renders nothing before there is a usage report', () => {
+  it('draws 0% for a local draft without a daemon chat', () => {
     mockPercent = null;
-
-    const { container } = renderRing();
-
-    expect(container).toBeEmptyDOMElement();
+    chatId = '__LOCALID_draft';
+    hasChat = false;
+    renderRing();
+    expect(button()).toHaveTextContent('0%');
   });
+
+  it('hides the ring while the first send is creating the daemon chat', () => {
+    mockPercent = null;
+    chatId = '__LOCALID_sending';
+    hasChat = false;
+    empty = false;
+    try {
+      expect(renderRing().container).toBeEmptyDOMElement();
+    } finally {
+      empty = true;
+    }
+  });
+
+  it.each(['existing', 'side-chat', 'fork', '__LOCALID_adopting'])(
+    'renders no ring for an existing empty chat without a usage report (%s)',
+    (id) => {
+      mockPercent = null;
+      chatId = id;
+      const { container } = renderRing();
+      expect(container).toBeEmptyDOMElement();
+    },
+  );
 
   it('shows the percentage, and the token counts in its name when known', () => {
     mockPercent = 40;
@@ -94,7 +124,9 @@ describe('ContextRing (C2)', () => {
     expect(button()).toHaveAttribute('aria-label', 'Context 95% used. Compact conversation');
 
     fireEvent.pointerDown(button(), { button: 0 });
-    fireEvent.click(await screen.findByTestId('composer-context-compact'));
+    const compact = await screen.findByTestId('composer-context-compact');
+    expect(screen.getByText('Context 95% used').nextElementSibling).toHaveAttribute('role', 'separator');
+    fireEvent.click(compact);
 
     expect(append).toHaveBeenCalledExactlyOnceWith({ role: 'user', content: [{ type: 'text', text: '/compact' }] });
   });

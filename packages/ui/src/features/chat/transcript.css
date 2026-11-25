@@ -25,7 +25,7 @@
   --mf-tr-term-err: var(--crit);
 }
 .dark {
-  --mf-tr-add-ink: oklch(from var(--success) 0.73659 c h);
+  --mf-tr-add-ink: #4cc38a;
   --mf-tr-del-ink: oklch(from var(--red) 0.78217 c h);
   --mf-tr-code-link: oklch(from var(--mf-tr-link) 0.74422 c h);
   --mf-tr-term: #0f0f10;

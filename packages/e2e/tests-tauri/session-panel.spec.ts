@@ -562,7 +562,7 @@ test.describe('§session-panel — context percentage (composer)', () => {
     await closeTauriApp(app);
   });
 
-  test('it is absent before a turn and reports a real percentage after one', async () => {
+  test('it waits for reported context usage in an existing session', async () => {
     const { page } = app;
     const percentage = page.getByTestId('composer-context-percent');
     await expect(composer(page).input()).toBeVisible();

@@ -13,7 +13,7 @@ export function TitleBarActions() {
   const searchChord = chordHint('app.search-palette');
 
   return (
-    <div data-testid="title-bar-actions" className="flex shrink-0 items-center gap-3 @max-[36rem]/trailing:gap-1">
+    <div data-testid="title-bar-actions" className="flex shrink-0 items-center gap-3 @max-[23rem]/trailing:gap-1">
       <TitleBarButton
         testId="main-toolbar-search"
         data-tut="search"

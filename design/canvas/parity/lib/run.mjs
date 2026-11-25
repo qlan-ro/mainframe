@@ -56,6 +56,7 @@ export async function runArea({
   views = Object.keys(VIEWS),
   only,
   screenshots = true,
+  sideBySide = false,
 }) {
   const problems = [];
   const counts = { states: 0, elements: 0, checks: 0 };
@@ -100,15 +101,25 @@ export async function runArea({
         }
       }
       for (const pair of state.pairs) {
-        const pull = (page, expr) =>
+        const pull = (page, expr, anchor) =>
           page.evaluate(
-            ({ expression, local }) => {
+            ({ expression, local, anchor }) => {
               const el = (0, eval)(expression);
-              return el ? window.__extract(el, local) : null;
+              if (!el) return null;
+              const result = window.__extract(el, local);
+              if (anchor) {
+                const origin = (0, eval)(anchor).getBoundingClientRect();
+                result.box.rect[0] -= origin.left;
+                result.box.rect[1] += result.box.rect[3] - origin.top;
+              }
+              return result;
             },
-            { expression: expr, local: pair.local },
+            { expression: expr, local: pair.local, anchor },
           );
-        const [p, a] = [await pull(proto, pair.p), await pull(app.page, pair.a ?? pair.p)];
+        const [p, a] = await Promise.all([
+          pull(proto, pair.p, pair.anchor?.p),
+          pull(app.page, pair.a ?? pair.p, pair.anchor?.a),
+        ]);
         if (!p || !a) {
           if (!p && !a && pair.optional) continue;
           rows.push({
@@ -194,7 +205,7 @@ export async function runArea({
           writeFileSync(`${prefix}-bounds.json`, JSON.stringify(bounds));
           writeFileSync(`${prefix}-blocks.json`, JSON.stringify({ transcript, blocks }, null, 2));
         }
-        const { png, stats } = await compose(browser, shots, theme, `${state.title ?? state.id}, ${view.join('×')}, ${theme}`, transcript, bounds);
+        const { png, stats } = await compose(browser, shots, theme, `${state.title ?? state.id}, ${view.join('×')}, ${theme}`, transcript, bounds, sideBySide);
         if (transcript) writeFileSync(join(outDir, area.id, `${state.id}-${viewName}-${theme}-pixels.json`), JSON.stringify(stats));
         writeFileSync(join(outDir, area.id, `${state.id}-${viewName}-${theme}.png`), png);
       }

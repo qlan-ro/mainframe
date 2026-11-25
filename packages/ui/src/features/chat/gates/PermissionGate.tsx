@@ -134,7 +134,7 @@ function GrantList({ grants }: { grants: readonly GrantLine[] }) {
               {verb}{' '}
               <code
                 dir="ltr"
-                className="stored-order rounded-sm bg-code-surface box-decoration-clone px-[5px] font-mono wrap-anywhere whitespace-pre-wrap text-foreground"
+                className="stored-order rounded-sm bg-code-surface box-decoration-clone px-[5px] font-mono wrap-anywhere whitespace-pre-wrap text-ink-secondary"
               >
                 {subject}
               </code>{' '}

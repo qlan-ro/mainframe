@@ -50,9 +50,9 @@ read in both directions._
 | background-client.ts | 0 | 0 |
 | chat.spec.ts | 28 | 0 |
 | composer-advanced.spec.ts | 88 | 0 |
-| composer-catalog.spec.ts | 5 | 0 |
+| composer-catalog.spec.ts | 3 | 0 |
 | composer-providers.spec.ts | 15 | 2 |
-| composer.spec.ts | 68 | 2 |
+| composer.spec.ts | 66 | 2 |
 | daemon-picker.spec.ts | 66 | 0 |
 | daemon.ts | 0 | 0 |
 | directory-picker.spec.ts | 42 | 0 |
@@ -87,7 +87,7 @@ read in both directions._
 | plan-clear-context.spec.ts | 7 | 0 |
 | port-guard.ts | 0 | 0 |
 | preview.spec.ts | 49 | 0 |
-| provider-switch.spec.ts | 7 | 0 |
+| provider-switch.spec.ts | 9 | 0 |
 | raw-ws-client.ts | 0 | 0 |
 | review-panel.spec.ts | 65 | 0 |
 | selection-hold.spec.ts | 11 | 0 |
@@ -100,7 +100,7 @@ read in both directions._
 | sessions-rows.spec.ts | 36 | 0 |
 | sessions-tags.spec.ts | 49 | 0 |
 | sessions.spec.ts | 51 | 0 |
-| settings.spec.ts | 70 | 0 |
+| settings.spec.ts | 69 | 0 |
 | setup.ts | 1 | 0 |
 | sidebar-chrome.spec.ts | 20 | 3 |
 | spotlight.spec.ts | 40 | 0 |

@@ -47,6 +47,7 @@ export function ProviderModelSelect({ disabled, className, ...menu }: ProviderMo
             data-testid="composer-model-select"
             aria-disabled={disabled || undefined}
             aria-label={`Provider and model: ${label}${disabled ? `. ${MODEL_LOCKED_HINT}` : ''}`}
+            style={open && !disabled ? { pointerEvents: 'auto' } : undefined}
             className={toolbarButton(open && !disabled, className)}
           >
             <ProviderDot adapterId={activeId} testId="composer-model-provider-dot" />
@@ -65,7 +66,7 @@ export function ProviderModelSelect({ disabled, className, ...menu }: ProviderMo
         sideOffset={6}
         className="w-62.5"
       >
-        <ModelMenu {...menu} onClose={() => setOpen(false)} />
+        {open && !disabled && <ModelMenu {...menu} />}
       </DropdownMenuContent>
     </DropdownMenu>
   );

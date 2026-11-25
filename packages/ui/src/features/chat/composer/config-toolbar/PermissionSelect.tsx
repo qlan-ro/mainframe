@@ -20,6 +20,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -72,14 +73,6 @@ export function PermissionItems({ mode, planning, autoAllowed, onSelect }: Permi
   const offered = PERMISSION_MODES.filter((m) => m.id !== 'auto' || autoAllowed);
   return (
     <DropdownMenuGroup>
-      {planning && (
-        <DropdownMenuLabel
-          data-testid="composer-permission-planning-note"
-          className="max-w-64 text-xs font-normal whitespace-normal"
-        >
-          Plan mode is active. Your choice applies once the plan is approved.
-        </DropdownMenuLabel>
-      )}
       <DropdownMenuRadioGroup value={mode} onValueChange={(next) => onSelect(next as ExecutionMode)}>
         {offered.map((m) => (
           <DropdownMenuRadioItem
@@ -95,6 +88,17 @@ export function PermissionItems({ mode, planning, autoAllowed, onSelect }: Permi
           </DropdownMenuRadioItem>
         ))}
       </DropdownMenuRadioGroup>
+      {planning && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel
+            data-testid="composer-permission-planning-note"
+            className="max-w-64 text-xs font-normal whitespace-normal"
+          >
+            Plan mode is active. Your choice applies once the plan is approved.
+          </DropdownMenuLabel>
+        </>
+      )}
     </DropdownMenuGroup>
   );
 }

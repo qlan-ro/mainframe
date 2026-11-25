@@ -16,6 +16,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -160,6 +162,14 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
               </span>
             </DropdownMenuItem>
           ))}
+          {canSteer && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="pt-1.5 pb-1 text-meta/[1.45] font-normal">
+                Choose what Enter does in Settings › Chat
+              </DropdownMenuLabel>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

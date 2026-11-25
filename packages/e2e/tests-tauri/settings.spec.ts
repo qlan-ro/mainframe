@@ -509,8 +509,6 @@ test.describe('§settings tuning inheritance', () => {
       await closeMenus(page);
       await page.getByTestId('composer-model-select').click();
       await page.getByTestId(`composer-model-select-option-${opusId}`).click();
-      await closeMenus(page);
-      await page.getByTestId('composer-model-select').click();
       await expect(page.getByTestId(`composer-model-${opusId}-tuning`)).toBeVisible({ timeout: 5_000 });
     };
     await openOpusTuning();
