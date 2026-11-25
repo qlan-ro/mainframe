@@ -92,6 +92,8 @@ export interface PreviewHandle {
    */
   readonly compositesAboveDom: boolean;
   navigate(url: string): Promise<void>;
+  /** Step through native webview history. A missing entry is a no-op. */
+  goHistory?(direction: -1 | 1): Promise<void>;
   capture(region?: Region): Promise<Uint8Array>;
   /** Clear the webview's runtime caches (Cache API + storage) and reload. Optional (Tauri/Electron implement it). */
   clearCache?(): Promise<void>;
