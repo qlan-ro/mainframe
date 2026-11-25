@@ -42,7 +42,7 @@ export function NavRailButton({
         className={cn(
           'relative flex size-9.5 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors',
           'hover:bg-sidebar-accent hover:text-foreground',
-          selected && 'bg-sidebar-accent text-foreground',
+          selected && 'bg-chrome-chip text-foreground',
           className,
         )}
         {...props}

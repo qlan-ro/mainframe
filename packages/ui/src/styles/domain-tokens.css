@@ -84,7 +84,7 @@
   --mf-viewer-check-b: color-mix(in srgb, var(--foreground) 13%, var(--background));
 
   /* Theme file shadows */
-  --mf-shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.14);
+  --mf-shadow-pop: 0 2px 4px rgba(0, 0, 0, 0.06), 0 10px 30px rgba(0, 0, 0, 0.16);
   --mf-shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.18);
   --mf-scrim: rgba(0, 0, 0, 0.4);
 
@@ -173,7 +173,7 @@
      foreground mix would invert that); the checkerboard mixes track fine. */
   --mf-viewer-matte: color-mix(in srgb, black 35%, var(--background));
 
-  --mf-shadow-pop: 0 18px 44px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
+  --mf-shadow-pop: 0 2px 4px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.5);
   --mf-shadow-modal: 0 28px 64px rgba(0, 0, 0, 0.66), 0 0 0 0.5px rgba(255, 255, 255, 0.1);
   --mf-scrim: rgba(0, 0, 0, 0.55);
 

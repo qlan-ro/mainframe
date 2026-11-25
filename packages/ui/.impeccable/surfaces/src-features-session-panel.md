@@ -32,5 +32,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## Memorable moment
 Clicking a monitor row scrolls the transcript to its pill, opens it and highlights it.
 
+The floating panel uses the two-layer menu shadow and the Sections icon uses a 1.5 px stroke. The dark panel mixes the card at 55% over the sheet.
+
 ## Unresolved
 None.

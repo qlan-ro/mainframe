@@ -51,7 +51,7 @@ describe('TitleBar — sidebar segment', () => {
     const segment = screen.getByTestId('title-bar-sidebar-segment');
     expect(segment.style.width).toBe('316px');
     expect(segment.lastElementChild).toBe(screen.getByTestId('title-bar-separator-sidebar'));
-    expect(screen.getByTestId('usage-capsule').style.width).toBe('100%');
+    expect(screen.getByTestId('usage-capsule').style.width).toBe('min(100%, 224px)');
   });
 
   it('lets the narrowest sidebar (208px, after the 56px rail) set the edge', () => {
@@ -73,7 +73,7 @@ describe('TitleBar — sidebar segment', () => {
     renderBar(false);
     const segment = screen.getByTestId('title-bar-sidebar-segment');
     expect(segment.style.width).toBe('');
-    expect(screen.getByTestId('usage-capsule').style.width).toBe('176px');
+    expect(screen.getByTestId('usage-capsule').style.width).toBe('224px');
     expect(screen.getByTestId('title-bar-separator-sidebar')).toBeInTheDocument();
   });
 

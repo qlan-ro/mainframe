@@ -446,7 +446,7 @@ Built so far in the base theme of `packages/ui`, each with a light and a dark va
 
 Text in `fail` may sit on a `fail` tint of 6 % at most (`bg-fail/6`), at full strength; a stronger tint is for icons and `foreground` text. `contrast.test.ts` measures it (4.60:1 at worst in light, 4.96:1 in dark) and refuses a stronger one.
 
-The other names keep their stock tokens (`--background`, `--primary`, `--warning`, …) until the PR that builds their area.
+The shell uses the palette above for ground, sheet, card, chip, hairlines, hover, press, selection, foreground, metadata, warning and success. The neutral row selection is separate from the legacy blue tint used for drag targets and engaged controls.
 
 ## Typography
 

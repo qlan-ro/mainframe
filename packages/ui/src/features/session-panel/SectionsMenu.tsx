@@ -26,7 +26,7 @@ export function SectionsMenu() {
             size="icon-sm"
             className="text-muted-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
           >
-            <SlidersHorizontal className="size-4" />
+            <SlidersHorizontal className="size-4" strokeWidth={1.5} />
           </Button>
         </DropdownMenuTrigger>
       </Hint>

@@ -13,18 +13,8 @@
    styles/); the v2 sheet points at its own tree, this points at the rest. */
 @source "../";
 
-/* App theme overrides on top of the stock v2 preset. The preset's light
-   sidebar is a zero-chroma gray, which reads yellowish beside blue-leaning
-   content; a violet-leaning cool gray (#F5F5F8, hover #ECECEF — the
-   Linear/macOS chrome family) keeps it cool. Dark keeps the stock values.
-   MUST stay scoped to light: a bare `:root` ties the v2 `.dark` block on
-   specificity, and stylesheet order (which HMR reshuffles) then decides the
-   winner — the dark sidebar rendered light whenever this sheet came last. */
-:root:not(.dark) {
-  --sidebar: oklch(0.97 0.004 286);
-  --sidebar-accent: oklch(0.945 0.004 286);
-  /* The preset's 0.556 is 4.36:1 on that sidebar. */
-  --muted-foreground: oklch(0.546 0 0);
+::selection {
+  background: var(--text-selection);
 }
 
 /* Native form controls must be painted for the active mode. */
@@ -117,7 +107,6 @@ code {
 }
 .mf-scrollbar:is(:hover, [data-dragging]) > span {
   width: 8px;
-  border-radius: 4px;
   background: color-mix(in srgb, var(--foreground) 42%, transparent);
 }
 .mf-scrollbar[data-axis='x']:is(:hover, [data-dragging]) > span {

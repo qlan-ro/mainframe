@@ -27,5 +27,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## Memorable moment
 Opening the workspace adds a third segment whose separator lands exactly on the panel's edge.
 
+The usage capsule is capped at 224 px and shrinks with a narrow sidebar. Separators use the stronger hairline. The collapsed segment places its separator 12 px after the capsule.
+
 ## Unresolved
 None.

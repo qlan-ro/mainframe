@@ -30,7 +30,7 @@ import { useHoverPin } from './use-hover-pin';
 
 const CYCLE_INTERVAL_MS = 4_000;
 /** The capsule's width while the sidebar is collapsed; the narrowest open sidebar gives it about this much too. */
-export const USAGE_CAPSULE_WIDTH = 176;
+export const USAGE_CAPSULE_WIDTH = 224;
 /** One capsule row; the track slides by this much per step. */
 const ROW_PX = 20;
 
@@ -127,8 +127,8 @@ export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: numbe
           onPointerLeave={hover.onPointerLeave}
           style={{ width }}
           className={cn(
-            'flex h-7 shrink-0 items-center gap-1.5 overflow-hidden rounded-lg bg-sidebar-accent pr-1.5 pl-2.5',
-            'outline-none hover:bg-foreground/15 focus-visible:focus-line',
+            'flex h-7 shrink-0 items-center gap-[7px] overflow-hidden rounded-lg bg-chrome-chip px-3',
+            'outline-none hover:bg-chrome-press focus-visible:focus-line',
             hover.open && 'bg-foreground/15',
           )}
         >

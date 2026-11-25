@@ -81,7 +81,7 @@
   --text-sm--line-height: calc(1.125 / 0.8125);
 
   --font-heading: var(--font-sans);
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
   --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, monospace;
   --color-success: var(--success);
   --color-warning: var(--warning);
@@ -96,6 +96,10 @@
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-chrome-chip: var(--chrome-chip);
+  --color-chrome-press: var(--chrome-press);
+  --color-chrome-selected: var(--chrome-selected);
   --color-sidebar: var(--sidebar);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
@@ -130,28 +134,28 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.32 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.32 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.32 0 0);
+  --background: #ffffff;
+  --foreground: #1f1f1f;
+  --card: #ffffff;
+  --card-foreground: #1f1f1f;
+  --popover: #ffffff;
+  --popover-foreground: #1f1f1f;
   --primary: oklch(0.624 0.206 255.486);
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.967 0 0);
   --secondary-foreground: oklch(0.32 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: #5c5c61;
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.32 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --success: oklch(0.62 0.16 150);
-  --warning: oklch(0.535 0.125 59.112);
+  --success: #1d7a46;
+  --warning: #8a4b00;
   --fail: #b04466;
   --focus: #0b6fdc;
   --bubble-tinted: oklch(from var(--primary) 0.96 calc(c * 0.15) h);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: #e5e5e5;
+  --input: #cfcfd4;
   --ring: var(--focus);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -159,59 +163,65 @@
   --chart-4: oklch(0.508 0.118 165.612);
   --chart-5: oklch(0.432 0.095 166.913);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.32 0 0);
+  --sidebar: #f5f5f8;
+  --sidebar-foreground: #1f1f1f;
   --sidebar-primary: oklch(0.624 0.206 255.486);
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-selection: color-mix(in oklch, var(--sidebar-primary) 10%, transparent);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.32 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-accent: #ededf0;
+  --sidebar-accent-foreground: #1f1f1f;
+  --sidebar-border: #e5e5e5;
   --sidebar-ring: var(--focus);
+  --hairline-strong: #cfcfd4;
+  --chrome-chip: #ececef;
+  --chrome-press: #e2e2e6;
+  --chrome-selected: #ececef;
+  --text-selection: rgba(10,132,255,.26);
 }
 
 .dark {
-  /* Neutral charcoal ladder (2026-08-11): the Figma-app chrome grays — canvas
-     ~#1e1e1e (0.235), panels ~#282828 (0.285), cards ~#2c2c2c (0.30),
-     hover/chips ~#383838 (0.35) — so surfaces separate like an editor's dark
-     UI instead of flattening into one black. */
-  --background: oklch(0.235 0 0);
-  --foreground: oklch(0.92 0 0);
-  --card: oklch(0.3 0 0);
-  --card-foreground: oklch(0.92 0 0);
-  --popover: oklch(0.3 0 0);
-  --popover-foreground: oklch(0.92 0 0);
+  --background: #171717;
+  --foreground: #ececec;
+  --card: #262626;
+  --card-foreground: #ececec;
+  --popover: #262626;
+  --popover-foreground: #ececec;
   --primary: oklch(0.624 0.206 255.486);
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.35 0 0);
   --secondary-foreground: oklch(0.92 0 0);
   --muted: oklch(0.35 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  --muted-foreground: #aeaeb4;
   --accent: oklch(0.35 0 0);
   --accent-foreground: oklch(0.92 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --success: oklch(0.75 0.17 150);
-  --warning: oklch(0.794 0.127 63.093);
+  --success: #4cc38a;
+  --warning: #f0b35a;
   --fail: #e48aa3;
   --focus: #3d9bff;
   --bubble-tinted: oklch(from var(--primary) 0.32 calc(c * 0.15) h);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
+  --border: #333336;
+  --input: #454549;
   --ring: var(--focus);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
   --chart-4: oklch(0.508 0.118 165.612);
   --chart-5: oklch(0.432 0.095 166.913);
-  --sidebar: oklch(0.285 0 0);
-  --sidebar-foreground: oklch(0.92 0 0);
+  --sidebar: #262626;
+  --sidebar-foreground: #ececec;
   --sidebar-primary: oklch(0.624 0.206 255.486);
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-selection: color-mix(in oklch, var(--sidebar-primary) 30%, transparent);
-  --sidebar-accent: oklch(0.35 0 0);
-  --sidebar-accent-foreground: oklch(0.92 0 0);
-  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-accent: #262628;
+  --sidebar-accent-foreground: #ececec;
+  --sidebar-border: #333336;
   --sidebar-ring: var(--focus);
+  --hairline-strong: #454549;
+  --chrome-chip: #363636;
+  --chrome-press: #303033;
+  --chrome-selected: #2f2f31;
+  --text-selection: rgba(10,132,255,.42);
 }
 
 /**
