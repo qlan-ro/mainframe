@@ -1,6 +1,6 @@
 /**
  * SessionTabContextMenu — the tab's right-click menu. Covers the Fork item's
- * placement (AC 17: after the split item and Keep Open, before the Close
+ * placement (AC 17: after Open in Workspace and Keep Open, before the Close
  * separator) and its enabled/disabled rendering off `forkAvailability`, plus
  * the surface-wide action (Hide Chat) that moved here from
  * the retired chat header — rendered after a separator, before Close.
@@ -21,8 +21,7 @@ function defaultSurface(overrides: Partial<SurfaceMenuActions> = {}): SurfaceMen
 
 function renderMenu(
   overrides: Partial<{
-    inSplit: boolean;
-    canOpenInSplit: boolean;
+    canOpenBeside: boolean;
     preview: boolean;
     canOpenSideChat: boolean;
     onOpenSideChat: () => void;
@@ -34,11 +33,9 @@ function renderMenu(
   render(
     <TooltipProvider>
       <SessionTabContextMenu
-        inSplit={overrides.inSplit ?? false}
-        canOpenInSplit={overrides.canOpenInSplit ?? true}
+        canOpenBeside={overrides.canOpenBeside ?? true}
         preview={overrides.preview ?? false}
-        onOpenInSplit={vi.fn()}
-        onCloseSplit={vi.fn()}
+        onOpenBeside={vi.fn()}
         onKeepOpen={vi.fn()}
         onClose={vi.fn()}
         forkAvailability={forkAvailability}
@@ -55,24 +52,12 @@ function renderMenu(
 }
 
 describe('SessionTabContextMenu — Fork placement', () => {
-  it('sits after Open in Split and before the Close separator, with no preview item', () => {
+  it('sits after Open in Workspace and before the Close separator, with no preview item', () => {
     renderMenu();
 
     const items = screen.getAllByRole('menuitem').map((el) => el.getAttribute('data-testid'));
     expect(items).toEqual([
-      'session-tab-ctx-open-split',
-      'session-tab-ctx-fork',
-      'session-tab-ctx-hide-chat',
-      'session-tab-ctx-close',
-    ]);
-  });
-
-  it('sits after Close Split when the tab is a split member', () => {
-    renderMenu({ inSplit: true });
-
-    const items = screen.getAllByRole('menuitem').map((el) => el.getAttribute('data-testid'));
-    expect(items).toEqual([
-      'session-tab-ctx-close-split',
+      'session-tab-ctx-open-workspace',
       'session-tab-ctx-fork',
       'session-tab-ctx-hide-chat',
       'session-tab-ctx-close',
@@ -84,7 +69,7 @@ describe('SessionTabContextMenu — Fork placement', () => {
 
     const items = screen.getAllByRole('menuitem').map((el) => el.getAttribute('data-testid'));
     expect(items).toEqual([
-      'session-tab-ctx-open-split',
+      'session-tab-ctx-open-workspace',
       'session-tab-ctx-keep-open',
       'session-tab-ctx-fork',
       'session-tab-ctx-hide-chat',

@@ -4,8 +4,8 @@
  * What we verify:
  *  1. Happy path: pointermove after pointerdown calls onFrac with the expected
  *     fraction (clientX=500 over a 1000px container → 0.5).
- *  2. Clamp low: clientX=0 → onFrac(0.18) (lower clamp).
- *  3. Clamp high: clientX=1000 → onFrac(0.82) (upper clamp).
+ *  2. Clamp low: the left panel keeps its minimum (360 of 1000 → 0.36).
+ *  3. Clamp high: the right panel keeps its minimum (320 of 1000 → 0.68).
  *  4. pointerup stops further moves: after pointerup on window, a subsequent
  *     pointermove does NOT call onFrac.
  *  5. No leak: unmounting mid-drag tears down the window listeners, so a
@@ -69,7 +69,9 @@ function dispatchWindowUp() {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('SurfDivider — axis="x"', () => {
+const ROW = { frac: 0.5, minLeft: 360, minRight: 320 };
+
+describe('SurfDivider — drag', () => {
   let onFrac: ReturnType<typeof vi.fn<(frac: number) => void>>;
 
   beforeEach(() => {
@@ -80,7 +82,7 @@ describe('SurfDivider — axis="x"', () => {
 
   it('calls onFrac(0.5) when pointermove clientX=500 fires after pointerdown', () => {
     const containerRef = makeContainerRef();
-    const { getByTestId } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={onFrac} />);
+    const { getByTestId } = render(<SurfDivider {...ROW} containerRef={containerRef} onFrac={onFrac} />);
 
     fireEvent.pointerDown(getByTestId('surf-divider-x'));
     dispatchWindowMove(500);
@@ -91,35 +93,35 @@ describe('SurfDivider — axis="x"', () => {
 
   // --- Behavior 2: lower clamp ---
 
-  it('calls onFrac(0.18) when pointermove clientX=0 (lower clamp)', () => {
+  it('keeps the left panel at its minimum', () => {
     const containerRef = makeContainerRef();
-    const { getByTestId } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={onFrac} />);
+    const { getByTestId } = render(<SurfDivider {...ROW} containerRef={containerRef} onFrac={onFrac} />);
 
     fireEvent.pointerDown(getByTestId('surf-divider-x'));
     dispatchWindowMove(0);
 
     expect(onFrac).toHaveBeenCalledTimes(1);
-    expect(onFrac).toHaveBeenCalledWith(0.18);
+    expect(onFrac).toHaveBeenCalledWith(0.36);
   });
 
   // --- Behavior 3: upper clamp ---
 
-  it('calls onFrac(0.82) when pointermove clientX=1000 (upper clamp)', () => {
+  it('keeps the right panel at its minimum', () => {
     const containerRef = makeContainerRef();
-    const { getByTestId } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={onFrac} />);
+    const { getByTestId } = render(<SurfDivider {...ROW} containerRef={containerRef} onFrac={onFrac} />);
 
     fireEvent.pointerDown(getByTestId('surf-divider-x'));
     dispatchWindowMove(1000);
 
     expect(onFrac).toHaveBeenCalledTimes(1);
-    expect(onFrac).toHaveBeenCalledWith(0.82);
+    expect(onFrac).toHaveBeenCalledWith(expect.closeTo(0.68));
   });
 
   // --- Behavior 4: pointerup stops further moves ---
 
   it('does NOT call onFrac after pointerup fires on window', () => {
     const containerRef = makeContainerRef();
-    const { getByTestId } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={onFrac} />);
+    const { getByTestId } = render(<SurfDivider {...ROW} containerRef={containerRef} onFrac={onFrac} />);
 
     fireEvent.pointerDown(getByTestId('surf-divider-x'));
     // Confirm it fires before up.
@@ -139,7 +141,7 @@ describe('SurfDivider — axis="x"', () => {
 
   it('does NOT call onFrac after unmount mid-drag', () => {
     const containerRef = makeContainerRef();
-    const { getByTestId, unmount } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={onFrac} />);
+    const { getByTestId, unmount } = render(<SurfDivider {...ROW} containerRef={containerRef} onFrac={onFrac} />);
 
     // Start a drag but do NOT fire pointerup.
     fireEvent.pointerDown(getByTestId('surf-divider-x'));
@@ -154,23 +156,27 @@ describe('SurfDivider — axis="x"', () => {
 });
 
 describe('SurfDivider — thickness', () => {
-  it('is a bare hairline by default, so the panel edge and the line are one pixel', () => {
-    const containerRef = makeContainerRef();
-    const { getByTestId } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={vi.fn()} />);
-    expect(getByTestId('surf-divider-x').style.width).toBe('1px');
-  });
-
   it('keeps its drag target off the right panel, which may be a native webview', () => {
     const containerRef = makeContainerRef();
-    const { getByTestId } = render(<SurfDivider axis="x" containerRef={containerRef} onFrac={vi.fn()} />);
+    const { getByTestId } = render(<SurfDivider {...ROW} containerRef={containerRef} onFrac={vi.fn()} />);
     const target = getByTestId('surf-divider-x').querySelector<HTMLElement>('[data-edge-handle]')!;
     expect(target.style.right).toBe('0px');
     expect(target.style.width).toBe('9px');
   });
+});
 
-  it('takes a wider gutter', () => {
+describe('SurfDivider — keyboard', () => {
+  it('moves by a step with the arrow keys, inside the same limits', () => {
+    const onFrac = vi.fn<(frac: number) => void>();
     const containerRef = makeContainerRef();
-    const { getByTestId } = render(<SurfDivider axis="y" containerRef={containerRef} onFrac={vi.fn()} gutter={9} />);
-    expect(getByTestId('surf-divider-y').style.height).toBe('9px');
+    const { getByRole, rerender } = render(<SurfDivider {...ROW} containerRef={containerRef} onFrac={onFrac} />);
+    const divider = getByRole('separator', { name: 'Resize the workspace' });
+
+    fireEvent.keyDown(divider, { key: 'ArrowLeft' });
+    expect(onFrac).toHaveBeenLastCalledWith(0.48);
+
+    rerender(<SurfDivider {...ROW} frac={0.68} containerRef={containerRef} onFrac={onFrac} />);
+    fireEvent.keyDown(divider, { key: 'ArrowRight' });
+    expect(onFrac).toHaveBeenLastCalledWith(expect.closeTo(0.68));
   });
 });

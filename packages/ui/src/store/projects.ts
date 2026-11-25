@@ -10,9 +10,9 @@
  *
  * Because every mounted consumer reloads on mount, a screen with many
  * consumers (11+, as of the sessions sidebar) fires that many concurrent
- * `getProjects` HTTP calls at once. `reloadProjects` dedupes same-port calls
+ * `getProjects` HTTP calls at once. `reloadProjects` dedupes same-daemon, same-port calls
  * that overlap an in-flight request onto that request's promise; a call for a
- * different port, or one that starts after the previous request settled
+ * different daemon or port, or one that starts after the previous request settled
  * (e.g. after a mutation like "Add project"), always gets a fresh fetch.
  *
  * `loading` means "the initial load hasn't resolved yet", not "a fetch is
@@ -30,6 +30,7 @@
  */
 import { create } from 'zustand';
 import type { Project } from '@qlan-ro/mainframe-types';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { getProjects } from '@/lib/api/projects';
 
 interface ProjectsState {
@@ -43,34 +44,32 @@ export function removeProjectFromList(projectId: string): void {
   useProjectsStore.setState((s) => ({ projects: s.projects.filter((p) => p.id !== projectId) }));
 }
 
-let reloadGeneration = 0;
-let inFlight: { port: number; token: object; promise: Promise<void> } | null = null;
+let inFlight: { daemonId: string; port: number; token: object; promise: Promise<void> } | null = null;
 
 /** Only the most recently-issued call is allowed to apply its result, so a slow
  *  response from an earlier reload can't clobber a fresher one that resolved first. */
 export async function reloadProjects(port: number): Promise<void> {
-  if (inFlight && inFlight.port === port) return inFlight.promise;
+  const daemonId = getActiveDaemon().id;
+  if (inFlight?.daemonId === daemonId && inFlight.port === port) return inFlight.promise;
 
-  const generation = ++reloadGeneration;
   const token = {};
   const promise = (async () => {
     try {
       const projects = await getProjects(port);
-      if (generation === reloadGeneration) useProjectsStore.setState({ projects, loading: false });
+      if (inFlight?.token === token && getActiveDaemon().id === daemonId)
+        useProjectsStore.setState({ projects, loading: false });
     } catch (e: unknown) {
       console.warn('[store/projects] getProjects failed', e);
-      if (generation === reloadGeneration) useProjectsStore.setState({ loading: false });
+      if (inFlight?.token === token && getActiveDaemon().id === daemonId) useProjectsStore.setState({ loading: false });
     } finally {
       if (inFlight?.token === token) inFlight = null;
     }
   })();
-  inFlight = { port, token, promise };
+  inFlight = { daemonId, port, token, promise };
   return promise;
 }
 
-/** Reserved for tests — mirrors resetAdapters/resetQuota. */
 export function resetProjectsStore(): void {
-  reloadGeneration = 0;
   inFlight = null;
   useProjectsStore.setState({ projects: [], loading: true });
 }

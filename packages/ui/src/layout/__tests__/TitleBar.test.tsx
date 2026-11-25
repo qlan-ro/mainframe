@@ -17,8 +17,7 @@ vi.mock('../TitleBarWorkspace', () => ({ TitleBarWorkspace: () => <div data-test
 
 import { TitleBar } from '../TitleBar';
 
-const place = (top: WorkspaceLayout['top'], bottom: WorkspaceLayout['bottom'] = null) =>
-  useLayoutStore.setState({ layout: { top, bottom, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } } });
+const place = (top: WorkspaceLayout['top']) => useLayoutStore.setState({ layout: { top, topFlex: {} } });
 
 function renderBar(open = true) {
   return render(
@@ -109,11 +108,8 @@ describe('TitleBar — workspace segment', () => {
     ]);
   });
 
-  it.each([
-    ['alone', ['workspace'] as const, null],
-    ['in the bottom strip', ['chat'] as const, 'workspace' as const],
-  ])('keeps the tabs but stands on no edge while the workspace is %s', (_, top, bottom) => {
-    place([...top], bottom);
+  it('keeps the tabs but stands on no edge while the workspace is alone', () => {
+    place(['workspace']);
     renderBar();
     expect(screen.getByTestId('title-bar-workspace-stub')).toBeInTheDocument();
     expect(screen.getByTestId('title-bar-trailing').style.width).toBe('');

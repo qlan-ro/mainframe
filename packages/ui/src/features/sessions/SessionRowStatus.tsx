@@ -27,7 +27,7 @@ export function SessionRowStatus({ status, updatedAt, yieldsToActions = false }:
         'flex h-4 min-w-4 shrink-0 items-center justify-end text-xs text-muted-foreground',
         // The row's fills darken the ground under the meta ink; step up with them.
         'group-hover/menu-item:text-sidebar-foreground/80 group-data-active/menu-item:text-sidebar-foreground/80',
-        'group-data-zone-visible/menu-button:text-sidebar-foreground/80',
+        'group-data-in-workspace/menu-button:text-sidebar-foreground/80',
         yieldsToActions && '@max-[216px]/row:sr-only @max-[216px]/row:min-w-0',
       )}
     >

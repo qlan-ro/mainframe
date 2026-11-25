@@ -1,3 +1,4 @@
+import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 /**
  * A new session's empty state (K11): what it says about the project and where
  * the session will run, what it offers, and that it follows the pickers, over
@@ -273,6 +274,22 @@ describe('project tasks', () => {
     fireEvent.click(screen.getByTestId('sessions-welcome-task-24'));
     expect(aui.text).toBe('Work on task #24: Task 24');
     expect(focus).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a visible task from the previous daemon', async () => {
+    api.listTodos.mockResolvedValue([todo(24)]);
+    draft();
+    await show();
+    const task = screen.getByTestId('sessions-welcome-task-24');
+    const original = getActiveDaemon();
+    try {
+      setActiveDaemon({ ...original, id: 'another-daemon' });
+      fireEvent.click(task);
+      expect(aui.text).toBe('');
+      expect(focus).not.toHaveBeenCalled();
+    } finally {
+      setActiveDaemon(original);
+    }
   });
 
   it('never replace what was typed, and go in once', async () => {

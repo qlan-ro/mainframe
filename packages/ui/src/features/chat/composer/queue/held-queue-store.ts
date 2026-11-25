@@ -203,13 +203,14 @@ export const useHeldQueue = create<HeldQueueState>()(
         clearProject: (projectId, knownChats) => {
           void useHeldQueue.persist?.rehydrate();
           const daemon = getActiveDaemon().id;
+          for (const chatId of knownChats) forgetSent(chatId);
           const entries = Object.entries(get().byChat).map(([chatId, rows]) => {
             const remaining = rows.filter(
               (row) =>
                 (row.daemon ?? 'local') !== daemon ||
                 (row.projectId ? row.projectId !== projectId : !knownChats.includes(chatId)),
             );
-            if (!remaining.length) forgetSent(chatId);
+            if (remaining.length !== rows.length) forgetSent(chatId);
             return [chatId, remaining] as const;
           });
           set({ byChat: Object.fromEntries(entries.filter(([, rows]) => rows.length)) });

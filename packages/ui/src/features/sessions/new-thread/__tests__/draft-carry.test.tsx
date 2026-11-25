@@ -48,6 +48,7 @@ vi.mock('../../../../lib/daemon/ws-client', () => ({
   DaemonWsClient: class {},
 }));
 
+import { createChat } from '@/lib/api/chats';
 import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { ActiveDaemonProvider, useActiveDaemon } from '@/features/daemon/active-daemon-context';
 import { draftItemsOf, useDraftContent } from '@/features/chat/composer/draft-content/draft-content-store';
@@ -55,6 +56,8 @@ import { useComposerSegments } from '@/features/chat/composer/segments/segment-s
 import { sessionReferencesFor, useSessionReferences } from '@/features/chat/composer/sessions/session-reference-store';
 import { failUnsent, holdUnsent, useUnsentMessages } from '@/features/chat/composer/unsent/unsent-store';
 import { useSandboxStore } from '@/store/sandbox';
+import { chatControllerRegistry } from '../../runtime/chat-controller-registry';
+import { createForLocal, isCreatePending } from '../../runtime/new-thread-coordinator';
 import { DaemonPortProvider } from '../../runtime/daemon-port-context';
 import { getDraftConfig, setDraftConfig, type DraftCfg } from '../../runtime/draft-config';
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
@@ -179,6 +182,27 @@ it('takes prose, quotes and files along, and says what it left', async () => {
   );
 });
 
+it('offers Undo when only checkout-bound content was left behind', async () => {
+  const id = await openDraft();
+  act(() =>
+    useDraftContent
+      .getState()
+      .add(id, [{ kind: 'code', filePath: 'a', startLine: 1, endLine: 1, lineContent: 'a', note: 'bound only' }]),
+  );
+  await go(REMOTE);
+  expect(prose().text).toBe('');
+  expect(draftItemsOf(main())).toEqual([]);
+  expect(toast.info).toHaveBeenCalledWith(
+    'Draft changed',
+    expect.objectContaining({
+      description: 'Removed 1 code note',
+    }),
+  );
+  await undo();
+  expect(getActiveDaemon().id).toBe(LOCAL.id);
+  expect(draftItemsOf(main()).map(({ note }) => note)).toEqual(['bound only']);
+});
+
 it('Undo goes back to the daemon, the project and everything in the draft, with what was written since', async () => {
   await openDraft();
   await fill();
@@ -191,6 +215,44 @@ it('Undo goes back to the daemon, the project and everything in the draft, with 
   expect(useSandboxStore.getState().captures).toHaveLength(1);
   expect(getDraftConfig(main())).toEqual(SETUP);
   expect(useNewThreadReady.getState().isReady(main())).toBe(true);
+});
+
+it.each(['creating', 'created'])('keeps the daemon when Undo finds the carried draft is %s', async (state) => {
+  await openDraft();
+  await fill();
+  await go(REMOTE);
+  const id = main();
+  const config: DraftCfg = {
+    ...SETUP,
+    projectId: 'remote-project',
+    permissionMode: 'default',
+    planMode: false,
+    effort: null,
+    fast: false,
+    ultracode: false,
+    adaptiveThinking: false,
+  };
+  act(() => setDraftConfig(id, config));
+  if (state === 'created') chatControllerRegistry.getOrCreate(id, 1).setRemoteId('created-chat');
+  let failCreate: (() => void) | undefined;
+  let creating: Promise<unknown> | undefined;
+  if (state === 'creating') {
+    vi.mocked(createChat).mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (failCreate = () => reject(new Error('test cleanup')))),
+    );
+    creating = createForLocal(id, 1).catch(() => undefined);
+    expect(isCreatePending(id)).toBe(true);
+  }
+  try {
+    await undo();
+    expect(getActiveDaemon().id).toBe(REMOTE.id);
+    expect(getDraftConfig(id)).toEqual(config);
+    expect(toast.info).toHaveBeenLastCalledWith('Nothing to undo', expect.anything());
+  } finally {
+    failCreate?.();
+    await creating;
+    chatControllerRegistry.dispose(id);
+  }
 });
 
 it('Undo does nothing after another session was opened', async () => {

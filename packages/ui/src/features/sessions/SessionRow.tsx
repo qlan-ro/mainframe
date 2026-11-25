@@ -10,8 +10,8 @@
  */
 import { memo, useCallback, useRef, useState } from 'react';
 import { ThreadListItemPrimitive, useAui, useAuiState } from '@assistant-ui/react';
-import { openInSplit } from '@/features/chat/zones/open-in-split';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
+import { openSessionBeside } from '@/features/workspace-chat/open-session';
+import { useMountedConversations } from '@/features/workspace-chat/mounted-conversations';
 import type { TagColor } from '@qlan-ro/mainframe-types';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
@@ -54,13 +54,9 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
   // Per-row booleans, never the raw mainThreadId or unread set: an unread mark
   // re-renders only its own row. (A switch still renders every row once — aui
   // hands each client consumer a fresh context — but adds nothing on top.)
-  // Visible-but-unfocused zone chats get the dimmed selection tint — the
-  // focused one keeps the native full data-active treatment. A parked pair is
-  // off screen, so its rows carry no tint.
-  const zones = useZonesStore((s) => (s.splitFits && s.zones?.includes(item.id) ? s.zones : null));
-  const zoneDimmed = useAuiState(
-    (s) => zones != null && s.threads.mainThreadId !== item.id && zones.includes(s.threads.mainThreadId),
-  );
+  // A session showing in the workspace gets the dimmed selection tint — the
+  // conversation itself keeps the native full data-active treatment.
+  const inWorkspace = useMountedConversations((s) => s.viewed.has(item.id));
   const unread = useUnreadStore((s) => isSessionUnread(item, s.unread));
   const [isRenaming, setIsRenaming] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -124,8 +120,8 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
       onCloseAutoFocus={handleCloseAutoFocus}
       onTags={openTagsFromMenu}
       onArchive={actions.onArchive}
-      onOpenInSplit={() => {
-        if (!openInSplit(aui.threads.getState().mainThreadId, item.id)) aui.threads.switchToThread(item.id);
+      onOpenBeside={() => {
+        if (!openSessionBeside(aui.threads, item.id)) aui.threads.switchToThread(item.id);
       }}
       forkAvailability={actions.forkAvailability}
       onFork={actions.onFork}
@@ -152,12 +148,12 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
                   ref={meta.triggerRef}
                   {...meta.triggerProps}
                   size="sm"
-                  data-zone-visible={zoneDimmed || undefined}
-                  // ⌘-click opens/retargets the split; capture so the native
+                  data-in-workspace={inWorkspace || undefined}
+                  // ⌘-click opens it in the workspace; capture so the native
                   // trigger's switchToThread never fires for the absorbed case.
                   onClickCapture={(e) => {
                     if (!e.metaKey) return;
-                    if (openInSplit(aui.threads.getState().mainThreadId, item.id)) {
+                    if (openSessionBeside(aui.threads, item.id)) {
                       e.preventDefault();
                       e.stopPropagation();
                     }
@@ -167,7 +163,7 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
                   // Selection is neutral (L1) and a step darker than hover.
                   className={cn(
                     'py-0 pr-2! pl-1.5 hover:bg-sidebar-accent/60 group-data-active/menu-item:bg-sidebar-accent',
-                    zoneDimmed && 'bg-sidebar-accent/50',
+                    inWorkspace && 'bg-sidebar-accent/50',
                   )}
                 >
                   <RowBody

@@ -1,16 +1,14 @@
-import { beforeEach, describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { layoutPersistOptions, sanitizeRun, serializeSessions, reviveSessions } from '../layout-persist';
 import { useLayoutStore } from '../layout';
 import type { RunState } from '../run-pane';
 import type { SessionWorkspace } from '../layout';
 
-const layout = {
-  top: ['chat', 'run'],
-  bottom: null,
-  topFlex: { chat: 0.6, run: 0.4 },
-  vFlex: { top: 1, bottom: 0.4 },
-} as SessionWorkspace['layout'];
+const layout: SessionWorkspace['layout'] = {
+  top: ['chat', 'workspace'],
+  topFlex: { chat: 0.6, workspace: 0.4 },
+};
 
 const run = (tabs: Array<{ id: string; kind: string; title: string; path?: string; config?: string }>): RunState =>
   ({ dir: 'v', flex: [1, 1], panes: [{ id: 'p1', active: tabs[0]?.id ?? null, tabs }] }) as RunState;
@@ -83,23 +81,26 @@ describe('layout-persist', () => {
     // terminal-only run sanitized away
     expect(out['chat-1']!.run).toBeNull();
     // layout kept fully
-    expect(out['chat-1']!.layout.topFlex).toEqual({ chat: 0.6, run: 0.4 });
+    expect(out['chat-1']!.layout.topFlex).toEqual({ chat: 0.6, workspace: 0.4 });
   });
 
   it('reviveSessions returns a real Map', () => {
     const m = reviveSessions({ 'chat-1': { layout, run: null } });
     expect(m).toBeInstanceOf(Map);
-    expect(m.get('chat-1')?.layout.top).toEqual(['chat', 'run']);
+    expect(m.get('chat-1')?.layout.top).toEqual(['chat', 'workspace']);
   });
 });
 
 // ── v1 → v2: the files/run surfaces folded into one `workspace` ───────────────
 
-describe('layout-persist migrate (v1 → v2)', () => {
-  const migrate = layoutPersistOptions.migrate!;
-  const v1 = (l: unknown) => ({ sessions: { 'chat-1': { layout: l, run: null } } });
-  const migrated = (l: unknown) =>
-    (migrate(v1(l), 1) as { sessions: Record<string, SessionWorkspace> }).sessions['chat-1']!.layout;
+describe('a v1 layout', () => {
+  const read = (persisted: unknown) =>
+    (
+      layoutPersistOptions.merge!(layoutPersistOptions.migrate!(persisted, 1), useLayoutStore.getState()) as {
+        sessions: Map<string, SessionWorkspace>;
+      }
+    ).sessions;
+  const migrated = (l: unknown) => read({ sessions: { 'chat-1': { layout: l, run: null } } }).get('chat-1')!.layout;
 
   it('renames a persisted `run` surface to `workspace`', () => {
     const out = migrated({ top: ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
@@ -116,17 +117,6 @@ describe('layout-persist migrate (v1 → v2)', () => {
     expect(out.top).toEqual(['workspace']);
   });
 
-  it('drops a bottom strip that the top row now duplicates', () => {
-    const out = migrated({ top: ['chat', 'files'], bottom: 'run', topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
-    expect(out.top).toEqual(['chat', 'workspace']);
-    expect(out.bottom).toBeNull();
-  });
-
-  it('keeps a bottom strip the top row does not hold', () => {
-    const out = migrated({ top: ['chat'], bottom: 'run', topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
-    expect(out.bottom).toBe('workspace');
-  });
-
   it('carries flex weights over, run winning a files/run tie', () => {
     const out = migrated({
       top: ['chat', 'run'],
@@ -135,7 +125,6 @@ describe('layout-persist migrate (v1 → v2)', () => {
       vFlex: { top: 0.8, bottom: 0.2 },
     });
     expect(out.topFlex).toEqual({ chat: 0.6, workspace: 0.4 });
-    expect(out.vFlex).toEqual({ top: 0.8, bottom: 0.2 });
   });
 
   it('leaves persisted tabs alone — they already carry the merged RunTab shape', () => {
@@ -147,12 +136,53 @@ describe('layout-persist migrate (v1 → v2)', () => {
         },
       },
     };
-    const out = migrate(persisted, 1) as { sessions: Record<string, SessionWorkspace> };
-    expect(out.sessions['chat-1']!.run!.panes[0]!.tabs.map((t) => t.id)).toEqual(['c1']);
+    expect(
+      read(persisted)
+        .get('chat-1')!
+        .run!.panes[0]!.tabs.map((t) => t.id),
+    ).toEqual(['c1']);
   });
 
   it('survives an empty / absent persisted payload', () => {
-    expect(migrate(undefined, 1)).toEqual({ sessions: {} });
+    expect(read(undefined).size).toBe(0);
+  });
+});
+
+describe('the bottom strip the chat split parked the workspace in', () => {
+  const migrated = (layout: unknown, tabs: Parameters<typeof run>[0] = []) =>
+    (
+      layoutPersistOptions.merge!(
+        { sessions: { 'chat-1': { layout, run: tabs.length > 0 ? run(tabs) : null } } },
+        useLayoutStore.getState(),
+      ) as { sessions: Map<string, SessionWorkspace> }
+    ).sessions.get('chat-1')!;
+
+  it('brings a parked workspace back beside the chat, still lit, with its tabs', () => {
+    const out = migrated({ top: ['chat'], bottom: 'workspace', topFlex: {}, vFlex: { top: 1, bottom: 0.4 } }, [
+      { id: 'c1', kind: 'code', title: 'a.ts', path: 'a.ts' },
+    ]);
+    expect(out.layout).toEqual({ top: ['chat', 'workspace'], topFlex: {} });
+    expect(out.run!.panes[0]!.tabs.map((t) => t.id)).toEqual(['c1']);
+  });
+
+  it('keeps the dragged widths', () => {
+    const out = migrated({
+      top: ['chat', 'workspace'],
+      bottom: null,
+      topFlex: { chat: 0.35, workspace: 0.65 },
+      vFlex: { top: 1, bottom: 0.4 },
+    });
+    expect(out.layout).toEqual({ top: ['chat', 'workspace'], topFlex: { chat: 0.35, workspace: 0.65 } });
+  });
+
+  it('keeps a hidden chat hidden', () => {
+    const out = migrated({ top: ['workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
+    expect(out.layout.top).toEqual(['workspace']);
+  });
+
+  it('puts chat on the left of a workspace that had been dragged to its other side', () => {
+    const out = migrated({ top: ['workspace', 'chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } });
+    expect(out.layout.top).toEqual(['chat', 'workspace']);
   });
 });
 
@@ -215,5 +245,278 @@ describe('layout store persistence', () => {
     // After reset, calling setActiveSession should work (Map methods usable)
     useLayoutStore.getState().setActiveSession('chat-r');
     expect(useLayoutStore.getState().activeSessionId).toBe('chat-r');
+  });
+});
+
+describe('conversation tabs', () => {
+  const TABS_KEY = 'mf:conversation-tabs::local';
+  const fork = { id: 'chat-f', kind: 'chat' as const, title: 'Fork', chatId: 'f', role: 'fork' as const };
+  const agent = { id: 'agent-c', kind: 'agent' as const, title: 'reviewer', chatId: 'chat-1', toolCallId: 'c' };
+  const file = { id: 'c1', kind: 'code' as const, title: 'a.ts', path: 'a.ts' };
+  const stored = (key = LAYOUT_SCOPED_KEY) => JSON.parse(localStorage.getItem(key)!);
+  /** As a restart: the store starts empty and reads what was written. */
+  async function restart() {
+    const layoutRaw = localStorage.getItem(LAYOUT_SCOPED_KEY);
+    const tabsRaw = localStorage.getItem(TABS_KEY);
+    useLayoutStore.setState({ sessions: new Map(), activeSessionId: null, run: null });
+    if (layoutRaw != null) localStorage.setItem(LAYOUT_SCOPED_KEY, layoutRaw);
+    if (tabsRaw != null) localStorage.setItem(TABS_KEY, tabsRaw);
+    await useLayoutStore.persist.rehydrate();
+    useLayoutStore.getState().setActiveSession('chat-1');
+  }
+  const panes = () =>
+    useLayoutStore.getState().run?.panes.map((p) => ({ tabs: p.tabs.map((t) => t.id), active: p.active })) ?? null;
+
+  beforeEach(() => {
+    setActiveDaemon({ id: 'local', kind: 'local', label: 'Local', baseUrl: 'http://127.0.0.1:0', token: null });
+    localStorage.clear();
+    useLayoutStore.setState({
+      sessions: new Map(),
+      activeSessionId: null,
+      run: null,
+      layout: { top: ['chat'], topFlex: {} },
+    });
+    useLayoutStore.getState().setActiveSession('chat-1');
+  });
+
+  it('come back across a restart, in their place and in front', async () => {
+    const { addRunTab } = useLayoutStore.getState();
+    addRunTab(fork);
+    addRunTab(file);
+    addRunTab(agent);
+    await restart();
+    expect(panes()).toEqual([{ tabs: ['chat-f', 'c1', 'agent-c'], active: 'agent-c' }]);
+    expect(useLayoutStore.getState().run!.panes[0]!.tabs[0]).toEqual(fork);
+    expect(useLayoutStore.getState().run!.panes[0]!.tabs[2]).toEqual(agent);
+  });
+
+  it('come back behind the file that was in front', async () => {
+    useLayoutStore.getState().addRunTab(fork);
+    useLayoutStore.getState().addRunTab(file);
+    await restart();
+    expect(panes()).toEqual([{ tabs: ['chat-f', 'c1'], active: 'c1' }]);
+  });
+
+  it('come back with nothing else open, and in a pane of their own', async () => {
+    useLayoutStore.getState().addRunTab(fork);
+    await restart();
+    expect(panes()).toEqual([{ tabs: ['chat-f'], active: 'chat-f' }]);
+
+    useLayoutStore.setState({
+      sessions: new Map([
+        [
+          'chat-1',
+          {
+            layout,
+            run: {
+              dir: 'h' as const,
+              flex: [2, 1],
+              panes: [
+                { id: 'p1', tabs: [fork], active: 'chat-f' },
+                { id: 'p2', tabs: [file], active: 'c1' },
+              ],
+            },
+          },
+        ],
+      ]),
+    });
+    await restart();
+    expect(panes()).toEqual([
+      { tabs: ['chat-f'], active: 'chat-f' },
+      { tabs: ['c1'], active: 'c1' },
+    ]);
+    expect(useLayoutStore.getState().run).toMatchObject({ dir: 'h', flex: [2, 1] });
+  });
+
+  it('are not in the layout an older build reads, which is one it knows', () => {
+    const { addRunTab, setTopFrac } = useLayoutStore.getState();
+    addRunTab(file);
+    addRunTab(fork);
+    setTopFrac(0.4);
+    const { version, state } = stored();
+    expect(version).toBe(2);
+    expect(state.sessions['chat-1']).toEqual({
+      layout: {
+        top: ['chat', 'workspace'],
+        bottom: null,
+        topFlex: { chat: 0.4, workspace: 0.6 },
+        vFlex: { top: 1, bottom: 0.4 },
+      },
+      run: { dir: 'v', flex: [1], panes: [{ id: expect.any(String), tabs: [file], active: 'c1' }] },
+    });
+    expect(localStorage.getItem(LAYOUT_SCOPED_KEY)).not.toContain('"chat-f"');
+  });
+
+  it('join what an older build left open since, two panes at most', async () => {
+    useLayoutStore.getState().addRunTab(fork);
+    const raw = stored();
+    raw.state.sessions['chat-1'].run = {
+      dir: 'v',
+      flex: [1, 1],
+      panes: [
+        { id: 'n1', tabs: [file], active: 'c1' },
+        { id: 'n2', tabs: [{ ...file, id: 'c2', path: 'b.ts' }], active: 'c2' },
+      ],
+    };
+    const text = JSON.stringify(raw);
+    const tabs = localStorage.getItem(TABS_KEY)!;
+    useLayoutStore.setState({ sessions: new Map() });
+    localStorage.setItem(LAYOUT_SCOPED_KEY, text);
+    localStorage.setItem(TABS_KEY, tabs);
+    await restart();
+    expect(panes()).toEqual([
+      { tabs: ['c1', 'chat-f'], active: 'c1' },
+      { tabs: ['c2'], active: 'c2' },
+    ]);
+  });
+
+  it('lost or unreadable, they cost nothing else', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    useLayoutStore.getState().addRunTab(file);
+    useLayoutStore.getState().addRunTab(fork);
+    localStorage.setItem(TABS_KEY, '{not json');
+    await restart();
+    expect(panes()).toEqual([{ tabs: ['c1'], active: 'c1' }]);
+
+    localStorage.setItem(TABS_KEY, JSON.stringify({ 'chat-1': { panes: [null, { id: 4, tabs: 'x' }] } }));
+    await restart();
+    expect(panes()).toEqual([{ tabs: ['c1'], active: 'c1' }]);
+    warn.mockRestore();
+  });
+
+  it.each([
+    ['missing', null],
+    ['not JSON', '{not json'],
+    ['not an object', '"nope"'],
+    ['without a state', '{"version":2}'],
+    ['a list', '[]'],
+    ['missing this session', JSON.stringify({ state: { sessions: {} }, version: 2 })],
+    ['garbage for this session', JSON.stringify({ state: { sessions: { 'chat-1': 'x' } }, version: 2 })],
+  ])('outlive a layout that is %s, and the next write', async (_, layoutRaw) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    useLayoutStore.getState().addRunTab(fork);
+    const tabs = localStorage.getItem(TABS_KEY)!;
+    useLayoutStore.setState({ sessions: new Map(), activeSessionId: null, run: null });
+    if (layoutRaw == null) localStorage.removeItem(LAYOUT_SCOPED_KEY);
+    else localStorage.setItem(LAYOUT_SCOPED_KEY, layoutRaw);
+    localStorage.setItem(TABS_KEY, tabs);
+    await useLayoutStore.persist.rehydrate();
+
+    useLayoutStore.getState().setActiveSession('chat-2');
+    useLayoutStore.getState().addRunTab(file);
+    expect(stored(TABS_KEY)['chat-1'].panes[0].tabs).toEqual([fork]);
+
+    useLayoutStore.getState().setActiveSession('chat-1');
+    expect(panes()).toEqual([{ tabs: ['chat-f'], active: 'chat-f' }]);
+    expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
+    warn.mockRestore();
+  });
+
+  it('make no session of their own out of nothing readable', async () => {
+    localStorage.setItem(TABS_KEY, JSON.stringify({ ghost: { panes: [{ id: 'p', tabs: [] }] } }));
+    await useLayoutStore.persist.rehydrate();
+    expect(useLayoutStore.getState().sessions.has('ghost')).toBe(false);
+  });
+
+  describe('when one key is over quota', () => {
+    /** Refuses writes to one key, as a full store does. */
+    function full(key: string) {
+      const write = localStorage.setItem.bind(localStorage);
+      vi.spyOn(localStorage, 'setItem').mockImplementation((name, value) => {
+        if (name === key) throw new Error('QuotaExceededError');
+        write(name, value);
+      });
+    }
+    beforeEach(() => void vi.spyOn(console, 'warn').mockImplementation(() => undefined));
+    afterEach(() => void vi.restoreAllMocks());
+
+    it('the chat tabs are still written, and the app goes on', () => {
+      full(LAYOUT_SCOPED_KEY);
+      expect(() => useLayoutStore.getState().addRunTab(fork)).not.toThrow();
+      expect(stored(TABS_KEY)['chat-1'].panes[0].tabs).toEqual([fork]);
+    });
+
+    it('the layout is still written, and the app goes on', () => {
+      full(TABS_KEY);
+      expect(() => useLayoutStore.getState().addRunTab(file)).not.toThrow();
+      expect(stored().state.sessions['chat-1'].run.panes[0].tabs).toEqual([file]);
+    });
+  });
+
+  it.each([
+    ['hologram', 'session'],
+    [7, 'session'],
+    ['toString', 'session'],
+    ['side', 'side'],
+    [undefined, undefined],
+  ])('with the role %s read as %s', async (role, read) => {
+    useLayoutStore.getState().addRunTab(fork);
+    const tabs = stored(TABS_KEY);
+    tabs['chat-1'].panes[0].tabs[0].role = role;
+    localStorage.setItem(TABS_KEY, JSON.stringify(tabs));
+    await restart();
+    expect(useLayoutStore.getState().run!.panes[0]!.tabs[0]!.role).toBe(read);
+  });
+});
+
+describe('what is read', () => {
+  const read = (sessions: unknown) =>
+    (
+      layoutPersistOptions.merge!({ sessions }, useLayoutStore.getState()) as {
+        sessions: Map<string, SessionWorkspace>;
+      }
+    ).sessions;
+  const good = { layout, run: run([{ id: 'c1', kind: 'code', title: 'a.ts', path: 'a.ts' }]) };
+
+  it('drops a tab of a kind this build does not know', () => {
+    const out = read({
+      'chat-1': {
+        layout,
+        run: run([
+          { id: 'x', kind: 'hologram', title: 'From the future' },
+          { id: 'c1', kind: 'code', title: 'a.ts', path: 'a.ts' },
+        ]),
+      },
+    });
+    expect(out.get('chat-1')!.run!.panes[0]).toMatchObject({ active: 'c1', tabs: [{ id: 'c1' }] });
+  });
+
+  it.each([
+    ['null', null],
+    ['a string', 'nope'],
+    ['no layout', { run: null }],
+    ['a layout with no surfaces', { layout: {}, run: null }],
+    ['surfaces that are not a list', { layout: { top: 'chat' }, run: null }],
+    ['flex that is not an object', { layout: { top: ['chat'], topFlex: 3 }, run: null }],
+    ['panes that are not a list', { layout, run: { dir: 'v', flex: [1], panes: 'none' } }],
+    ['a pane with no tabs', { layout, run: { dir: 'v', flex: [1], panes: [{ id: 'p' }] } }],
+    [
+      'a tab that is nothing',
+      { layout, run: { dir: 'v', flex: [1], panes: [{ id: 'p', tabs: [null], active: null }] } },
+    ],
+  ])('keeps the other sessions when one entry is %s', (_, bad) => {
+    const out = read({ bad, 'chat-1': good });
+    expect(out.get('chat-1')).toEqual({ layout, run: { ...good.run, flex: [1] } });
+    const salvaged = out.get('bad');
+    if (salvaged) expect(salvaged.layout.top.length).toBeGreaterThan(0);
+  });
+
+  it('reads a malformed list of sessions as none', () => {
+    expect(read('nope').size).toBe(0);
+    expect(read([good]).size).toBe(0);
+  });
+
+  it('keeps the good entries through the version migration too', () => {
+    const old = { top: ['chat', 'run'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+    const migrated = layoutPersistOptions.migrate!({ sessions: { bad: {}, 'chat-1': { layout: old, run: null } } }, 1);
+    const out = read((migrated as { sessions: unknown }).sessions);
+    expect(out.get('chat-1')!.layout.top).toEqual(['chat', 'workspace']);
+  });
+
+  it('keeps a dragged width whose value is a number only', () => {
+    const out = read({
+      'chat-1': { layout: { top: ['chat', 'workspace'], topFlex: { workspace: 'wide' } }, run: null },
+    });
+    expect(out.get('chat-1')!.layout.topFlex).toEqual({});
   });
 });

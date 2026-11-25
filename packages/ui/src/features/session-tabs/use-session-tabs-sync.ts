@@ -25,7 +25,7 @@
 import { useEffect, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
+import { migrateSplitPair } from '@/features/workspace-chat/migrate-split';
 import { useSessionListLoadState } from '../sessions/runtime/list-load-state';
 import { useSessionTabsStore } from './store';
 import {
@@ -40,35 +40,28 @@ import {
 interface PersistedTabs {
   ids: string[];
   preview: string | null;
-  /** v3: the open split's zone pair — absent/short pairs restore as no split. */
+  /** v3 only: the open split's pair, which v4 has no split to show (`migrateSplitPair`). */
   zones: string[];
-  /** The divider fraction saved with the pair; absent → even split. */
-  zonesFrac: number | null;
 }
+
+const NOTHING_PERSISTED: PersistedTabs = { ids: [], preview: null, zones: [] };
 
 function readPersisted(): PersistedTabs {
   try {
     const raw = localStorage.getItem(SESSION_TABS_STORAGE_KEY);
-    if (!raw) return { ids: [], preview: null, zones: [], zonesFrac: null };
+    if (!raw) return NOTHING_PERSISTED;
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return { ids: [], preview: null, zones: [], zonesFrac: null };
-    const { ids, preview, zones, zonesFrac } = parsed as {
-      ids?: unknown;
-      preview?: unknown;
-      zones?: unknown;
-      zonesFrac?: unknown;
-    };
+    if (typeof parsed !== 'object' || parsed === null) return NOTHING_PERSISTED;
+    const { ids, preview, zones } = parsed as { ids?: unknown; preview?: unknown; zones?: unknown };
     return {
       ids: Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [],
       // v1 payloads carry no preview — every restored tab was pinned.
       preview: typeof preview === 'string' ? preview : null,
-      // v1/v2 payloads carry no zones — they restore unsplit.
       zones: Array.isArray(zones) ? zones.filter((id): id is string => typeof id === 'string') : [],
-      zonesFrac: typeof zonesFrac === 'number' && zonesFrac > 0 && zonesFrac < 1 ? zonesFrac : null,
     };
   } catch {
     /* expected — corrupt storage reads as no persisted tabs */
-    return { ids: [], preview: null, zones: [], zonesFrac: null };
+    return NOTHING_PERSISTED;
   }
 }
 
@@ -83,6 +76,7 @@ export function useSessionTabsSync(): void {
   const hydrate = useSessionTabsStore((s) => s.hydrate);
   const ensureTab = useSessionTabsStore((s) => s.ensureTab);
   const closeTab = useSessionTabsStore((s) => s.closeTab);
+  const pinTab = useSessionTabsStore((s) => s.pinTab);
   const reconcile = useSessionTabsStore((s) => s.reconcile);
 
   useEffect(() => {
@@ -98,19 +92,17 @@ export function useSessionTabsSync(): void {
       restoreTabIds(persisted.ids, items),
       persisted.preview === null ? null : (restoreTabIds([persisted.preview], items)[0] ?? null),
     );
-    // Restore the split only when BOTH zones still resolve. Setting the pair
-    // is enough: the split renders whenever the active chat is a member (the
-    // parking model), so a boot that lands on a member shows it and any other
-    // boot leaves it parked behind a member tab click. No focus choreography —
-    // the old parked-restore dance existed only because rendering used to be
-    // forced rather than derived.
-    const zones = restoreTabIds(persisted.zones, items);
-    const [left, right] = zones;
-    if (zones.length === 2 && left != null && right != null) {
-      useZonesStore.getState().openSplit(left, right);
-      if (persisted.zonesFrac != null) useZonesStore.getState().setFrac(persisted.zonesFrac);
+    // A pair from before W9 opens as workspace tabs. Its members were pinned
+    // tabs by rule, so both are here even if one's own tab was not persisted.
+    const [left, right] = restoreTabIds(persisted.zones, items);
+    if (left != null && right != null) {
+      for (const id of [left, right]) {
+        ensureTab(id, 'pinned');
+        pinTab(id); // ensureTab won't promote a tab that is already open
+      }
+      migrateSplitPair([left, right], items);
     }
-  }, [hydrated, items, isListLoading, listLoaded, hydrate, closeTab]);
+  }, [hydrated, items, isListLoading, listLoaded, hydrate, closeTab, ensureTab, pinTab]);
 
   useEffect(() => {
     if (!mainThreadId) return;
@@ -125,21 +117,6 @@ export function useSessionTabsSync(): void {
     // would re-preview a session the user just closed.
   }, [mainThreadId, ensureTab]);
 
-  // Zones ⊆ pinned tabs, always: splitting is a "keep this open" signal, so a
-  // zone member's preview tab is promoted, and a member with no tab at all (a
-  // restore whose tab was closed pre-reboot) gets one. Otherwise the strip and
-  // the split disagree about what is open.
-  const zonesPair = useZonesStore((s) => s.zones);
-  const zoneFrac = useZonesStore((s) => s.frac);
-  useEffect(() => {
-    if (zonesPair == null) return;
-    const store = useSessionTabsStore.getState();
-    for (const id of zonesPair) {
-      store.ensureTab(id, 'pinned');
-      store.pinTab(id); // ensureTab won't promote a tab that is already open
-    }
-  }, [zonesPair, previewId]);
-
   useEffect(() => {
     reconcile((state) => reconcileTabs(state, items, mainThreadId));
   }, [items, mainThreadId, reconcile]);
@@ -152,15 +129,13 @@ export function useSessionTabsSync(): void {
     if (!hydrated) return;
     const ids = persistTabIds(tabIds, items);
     const preview = previewId === null ? null : (persistTabIds([previewId], items)[0] ?? null);
-    const zones = zonesPair === null ? [] : persistTabIds([...zonesPair], items);
-    const zonesFrac = zonesPair === null ? null : Math.round(zoneFrac * 1000) / 1000;
-    const key = `${ids.join('\0')}\0\0${preview ?? ''}\0\0${zones.join('\0')}\0\0${zonesFrac ?? ''}`;
+    const key = `${ids.join('\0')}\0\0${preview ?? ''}`;
     if (key === lastWrittenRef.current) return;
     try {
-      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 3, ids, preview, zones, zonesFrac }));
+      localStorage.setItem(SESSION_TABS_STORAGE_KEY, JSON.stringify({ v: 4, ids, preview }));
       lastWrittenRef.current = key;
     } catch {
       /* expected — storage may be unavailable; tabs simply don't survive the boot */
     }
-  }, [hydrated, tabIds, previewId, zonesPair, zoneFrac, items]);
+  }, [hydrated, tabIds, previewId, items]);
 }

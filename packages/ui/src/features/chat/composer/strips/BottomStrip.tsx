@@ -6,6 +6,8 @@
  * Nothing before the first message (K7). A chat with no composer, read-only or
  * with its directory missing, keeps the strip; where it runs is then `fixed`.
  * Until the session's own record loads, the strip shows what the list knows.
+ * A workspace tab has no changes: they open the review panel, which is the chat
+ * column's.
  */
 import { useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
@@ -144,6 +146,7 @@ export function BottomStrip({ fixed = false }: { fixed?: boolean }) {
   const [strip, setStrip] = useState<HTMLElement | null>(null);
   const chat = useChatExtrasSelector((extras) => extras?.state.chatConfig ?? null);
   const listed = useListedSession();
+  const inColumn = useAuiState((s) => s.threadListItem?.id === s.threads.mainThreadId);
   const session = chat ?? listed;
   if (session == null || session.id.startsWith('__LOCALID_')) return null;
   if (!session.temporary && session.noProject) return null;
@@ -157,7 +160,9 @@ export function BottomStrip({ fixed = false }: { fixed?: boolean }) {
       >
         {session.temporary ? <TemporaryPart /> : <WherePart session={session} chat={fixed ? null : chat} />}
         {!session.noProject && <BranchPart session={session} port={port} />}
-        {!session.noProject && <ChangesButton port={port} projectId={session.projectId} chatId={session.id} />}
+        {!session.noProject && inColumn && (
+          <ChangesButton port={port} projectId={session.projectId} chatId={session.id} />
+        )}
       </div>
     </ComposerCardProvider>
   );

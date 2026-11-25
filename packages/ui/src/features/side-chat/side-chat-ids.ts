@@ -3,7 +3,7 @@
  * chat's id to its parent chat id (todo #344).
  *
  * The server never lists a side chat (AC 5), so aui's thread list — and every
- * store that projects from it (tabs, zones) — never learns of one on its own.
+ * store that projects from it (the session tabs) — never learns of one on its own.
  * `isSideChat` is the pure identity check over a `Chat`/`SessionCustom`-shaped
  * value; the registry below is how a caller holding only an ID (a store guard,
  * a WS event, a stale toast) can still recognize one. Entries come from two

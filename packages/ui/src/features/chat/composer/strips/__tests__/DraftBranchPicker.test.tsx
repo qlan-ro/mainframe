@@ -1,6 +1,7 @@
 /** Where a new session runs (K7): the branch, a worktree, or a temporary session. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { DraftCfg } from '@/features/sessions/runtime/draft-config';
 
@@ -38,7 +39,7 @@ async function openPicker(draft: DraftCfg = DRAFT) {
 const pick = (testId: string) => fireEvent.click(screen.getByTestId(testId));
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   useProjectBranches.setState({ byProject: {} });
   checkout.mockResolvedValue(true);
   git.getGitBranch.mockResolvedValue({ branch: 'main' });
@@ -53,6 +54,40 @@ beforeEach(() => {
     { path: '/repo/.worktrees/old', branch: 'refs/heads/feat/old' },
     { path: '/repo/.worktrees/loose', branch: null },
   ]);
+});
+
+it('ignores a branch menu response from the previous daemon', async () => {
+  const original = getActiveDaemon();
+  let answer!: (result: object) => void;
+  git.getGitBranches.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+  render(
+    <TooltipProvider>
+      <DraftBranchPicker localId="local-1" projectId="p1" draft={DRAFT} />
+    </TooltipProvider>,
+  );
+  pick('composer-branch-picker');
+  try {
+    setActiveDaemon({ ...original, id: 'another-daemon' });
+    await act(async () => answer({ current: 'stale', local: [{ name: 'stale' }] }));
+    expect(screen.queryByTestId('composer-branch-option-stale')).toBeNull();
+    expect(useProjectBranches.getState().byProject.p1).toBe('main');
+  } finally {
+    setActiveDaemon(original);
+  }
+});
+
+it('hides loaded branch options immediately when the project changes', async () => {
+  const picker = (projectId: string) => (
+    <TooltipProvider>
+      <DraftBranchPicker localId="local-1" projectId={projectId} draft={{ ...DRAFT, projectId }} />
+    </TooltipProvider>
+  );
+  const app = render(picker('p1'));
+  pick('composer-branch-picker');
+  await screen.findByTestId('composer-branch-option-main');
+  git.getGitBranches.mockReturnValueOnce(new Promise(() => {}));
+  app.rerender(picker('p2'));
+  expect(screen.queryByTestId('composer-branch-option-main')).toBeNull();
 });
 
 describe('what belongs to the checkout', () => {

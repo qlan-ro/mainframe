@@ -73,7 +73,8 @@ export function ActiveDaemonProvider({ children, initialTarget }: ActiveDaemonPr
   }, []);
 
   const switchTo = useCallback(async (t: DaemonTarget): Promise<void> => {
-    if (getActiveDaemon().id !== t.id) bringDraftAlong(switchTo);
+    if (getActiveDaemon().id === t.id) return;
+    bringDraftAlong(switchTo);
     disposeDaemonSession();
     setActiveDaemon(t);
     // Remember the user's choice so the next launch reconnects to it. Persisted

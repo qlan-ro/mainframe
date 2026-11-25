@@ -73,8 +73,8 @@ function SidebarSegment({ open, separator }: { open: boolean; separator: boolean
 
 /**
  * Everything right of the session tabs. With the workspace beside the chat it
- * starts on the workspace's hairline; with the workspace alone or in the bottom
- * strip there is no edge to stand on, so it takes the room its tabs need.
+ * starts on the workspace's hairline; with the workspace alone there
+ * is no edge to stand on, so it takes the room its tabs need.
  * Children arrive as elements so an edge moving under a drag re-renders this
  * frame and nothing inside it.
  */

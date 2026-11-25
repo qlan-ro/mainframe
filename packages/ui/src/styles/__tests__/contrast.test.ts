@@ -231,7 +231,7 @@ describe('v2 contrast guardrail', () => {
 
   it('the row’s time steps up on every fill, and the hover card’s links are body ink', () => {
     const status = readSheet('features/sessions/SessionRowStatus.tsx');
-    for (const state of ['group-hover/menu-item', 'group-data-active/menu-item', 'group-data-zone-visible/menu-button'])
+    for (const state of ['group-hover/menu-item', 'group-data-active/menu-item', 'group-data-in-workspace/menu-button'])
       expect(status).toContain(`${state}:text-sidebar-foreground/80`);
     // `primary` is 3.65:1 in light, and the card's text is 11px.
     expect(readSheet('features/sessions/SessionMetaCard.tsx')).not.toMatch(/text-primary\b/);

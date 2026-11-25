@@ -23,7 +23,7 @@ import { subscribeToUrlTabIntents } from '../url-tab-intent-subscriber';
 import { clearUrlTunnelConsumers, registerUrlTunnelConsumer } from '@/features/url-tab/tunnel-consumers';
 import type { RunTab } from '../run-pane';
 
-const FRESH_LAYOUT = { top: ['chat', 'workspace'] as const, bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+const FRESH_LAYOUT = { top: ['chat', 'workspace'] as const, topFlex: {} };
 
 function resetLayout(): void {
   useLayoutStore.setState({
@@ -102,13 +102,13 @@ describe('subscribeToUrlTabIntents — creation', () => {
   });
 
   it('places Run in the layout even when it was not visible before', () => {
-    useLayoutStore.setState({ layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } } });
+    useLayoutStore.setState({ layout: { top: ['chat'], topFlex: {} } });
     const unsub = subscribeToUrlTabIntents();
 
     emitSurfaceIntent({ type: 'open-url-tab', url: 'http://localhost:5173/' });
 
     const { layout } = useLayoutStore.getState();
-    expect(layout.top.includes('workspace') || layout.bottom === 'workspace').toBe(true);
+    expect(layout.top.includes('workspace')).toBe(true);
     unsub();
   });
 

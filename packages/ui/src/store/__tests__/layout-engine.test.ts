@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useLayoutStore, type WorkspaceLayout } from '../layout';
 import { addRunTab, closePane, closeRunTab, emptyRun, moveTabToRun, type RunTab } from '../run-pane';
 
-const FRESH: WorkspaceLayout = { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+const FRESH: WorkspaceLayout = { top: ['chat'], topFlex: {} };
 
 function resetStores() {
   useLayoutStore.setState({
@@ -89,7 +89,6 @@ describe('layout store — per-session workspaces', () => {
     const { layout, activeSessionId } = useLayoutStore.getState();
     expect(activeSessionId).toBe('s1');
     expect(layout.top).toEqual(['chat']);
-    expect(layout.bottom).toBeNull();
   });
 
   it('remembers each session layout across a switch away and back', () => {
@@ -123,7 +122,7 @@ describe('layout store — workspace tabs', () => {
     const { layout, run } = useLayoutStore.getState();
     expect(run?.panes[0]!.tabs.map((t) => t.path)).toEqual(['/a.ts']);
     expect(run?.panes[0]!.active).toBe(tabId);
-    expect(layout.top.includes('workspace') || layout.bottom === 'workspace').toBe(true);
+    expect(layout.top.includes('workspace')).toBe(true);
   });
 
   it('closePane that empties the workspace removes the surface from the layout', () => {
@@ -134,7 +133,7 @@ describe('layout store — workspace tabs', () => {
     s.closePane(paneId);
     const { layout, run } = useLayoutStore.getState();
     expect(run).toBeNull();
-    expect(layout.top.includes('workspace') || layout.bottom === 'workspace').toBe(false);
+    expect(layout.top.includes('workspace')).toBe(false);
   });
 });
 

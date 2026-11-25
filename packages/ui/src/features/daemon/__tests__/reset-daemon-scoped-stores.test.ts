@@ -269,3 +269,13 @@ describe('resetDaemonScopedStores — integration with switchTo', () => {
     resetSpy.mockRestore();
   });
 });
+
+import { sessionListEpoch, useSessionListLoadState } from '@/features/sessions/runtime/list-load-state';
+
+it('invalidates an in-flight session list when the daemon stores reset', () => {
+  useSessionListLoadState.setState({ loaded: true, failed: true });
+  const epoch = sessionListEpoch();
+  resetDaemonScopedStores();
+  expect(sessionListEpoch()).toBeGreaterThan(epoch);
+  expect(useSessionListLoadState.getState()).toMatchObject({ loaded: false, failed: false });
+});

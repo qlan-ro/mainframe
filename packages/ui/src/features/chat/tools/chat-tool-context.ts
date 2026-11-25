@@ -1,19 +1,23 @@
 /**
  * Seams that tool cards depend on but that belong to other surfaces.
  *
- * - `useChatId` reads the active chat id from the runtime `extras`.
+ * - `useChatId` reads the chat id from the transcript's scope, or the runtime `extras`.
  * - `useOpenFile` emits surface intents; only `layout/` subscribes.
  */
 import { useCallback } from 'react';
 import { useTranscriptScope } from '../messages/compact/transcript-scope';
 import { useChatExtras } from '../runtime/chat-extras';
 import { emitSurfaceIntent } from '@/store/surface-intents';
+import { useIntentPath } from './chat-file-bases';
 
-/** The active chat id, or undefined before the runtime is ready. */
+/**
+ * The chat the transcript is of, or undefined before the runtime is ready. A
+ * sub-agent's tab binds no thread, so the extras there are the chat column's.
+ */
 export function useChatId(): string | undefined {
   const extras = useChatExtras();
   const scope = useTranscriptScope();
-  return extras?.state.chatId ?? scope.chatId;
+  return scope.chatId ?? extras?.state.chatId;
 }
 
 /** 0-based line/character reveal target, forwarded as-is to the open-file intent. */
@@ -30,14 +34,29 @@ export interface OpenFileIntent {
 }
 
 export function useOpenFile(): OpenFileIntent {
-  const openFile = useCallback((path: string, position?: OpenFilePosition) => {
-    emitSurfaceIntent({ type: 'open-file', path, line: position?.line, character: position?.character });
-  }, []);
-  const openDiff = useCallback((path: string, original: string, modified: string) => {
-    emitSurfaceIntent({ type: 'open-diff', path, original, modified });
-  }, []);
-  const revealFile = useCallback((path: string) => {
-    emitSurfaceIntent({ type: 'reveal-file', path });
-  }, []);
+  const intentPath = useIntentPath();
+  const openFile = useCallback(
+    (path: string, position?: OpenFilePosition) => {
+      emitSurfaceIntent({
+        type: 'open-file',
+        path: intentPath(path),
+        line: position?.line,
+        character: position?.character,
+      });
+    },
+    [intentPath],
+  );
+  const openDiff = useCallback(
+    (path: string, original: string, modified: string) => {
+      emitSurfaceIntent({ type: 'open-diff', path: intentPath(path), original, modified });
+    },
+    [intentPath],
+  );
+  const revealFile = useCallback(
+    (path: string) => {
+      emitSurfaceIntent({ type: 'reveal-file', path: intentPath(path) });
+    },
+    [intentPath],
+  );
   return { openFile, openDiff, revealFile };
 }

@@ -23,7 +23,7 @@ import type { ToolCallMessagePartComponent, ToolCallMessagePartProps } from '@as
 import { Bot, ChevronDown, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
-import { useZonesStore } from '../../zones/zones-store';
+import { openSubagentTab } from '@/features/workspace-chat/conversation-tabs';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
@@ -129,8 +129,7 @@ function taskHeaderProps({ args, result, isError, status }: ToolCallMessagePartP
 
 export const TaskCard: ToolCallMessagePartComponent = (part) => {
   const { messages, toolCallId } = part;
-  const { messageId = '', chatId, rootThreadId } = useTranscriptScope();
-  const openSubagent = useZonesStore((state) => state.openSubagent);
+  const { messageId = '', chatId } = useTranscriptScope();
 
   const header = taskHeaderProps(part);
   const [open, setOpen] = useState(false);
@@ -153,21 +152,15 @@ export const TaskCard: ToolCallMessagePartComponent = (part) => {
           <TaskHeader {...header} />
         </CollapsibleTrigger>
         {chatId && (
-          <Hint label="Open subagent transcript beside this chat">
+          <Hint label="Open in workspace">
             <Button
               data-testid={`chat-task-open-${toolCallId}`}
-              aria-label="Open subagent transcript beside this chat"
+              aria-label={`Open ${header.agentName} in the workspace`}
               variant="ghost"
               size="icon-xs"
               className="shrink-0 text-muted-foreground"
               onClick={() =>
-                openSubagent({
-                  parentChatId: chatId,
-                  parentThreadId: rootThreadId,
-                  toolCallId,
-                  messageId,
-                  title: header.agentName,
-                })
+                openSubagentTab({ chatId, toolCallId, messageId, title: header.description || header.agentName })
               }
             >
               <ExternalLink />

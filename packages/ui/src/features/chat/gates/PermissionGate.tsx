@@ -180,6 +180,31 @@ function offeredOptions(options: PermissionOption[], saves: boolean, suggested: 
   return suggested && !saves ? options.filter((option) => option.kind !== 'allow_always') : options;
 }
 
+function allowedParts(
+  name: string,
+  command: string | undefined,
+  details: string | undefined,
+  grants: readonly GrantLine[],
+) {
+  // What is allowed, as far as it is on show: Details once they are open, the rules only when they can be saved.
+  const parts: AllowedPart[] = [
+    {
+      id: 'tool',
+      name: command ? 'the command' : 'the request',
+      text: command ? `${visibleLine(name)}\n${visibleText(command)}` : visibleLine(name),
+    },
+  ];
+  if (details !== undefined) parts.push({ id: 'details', name: 'the details', text: details });
+  if (grants.length > 0) {
+    parts.push({
+      id: 'grants',
+      name: 'what “Always allow” saves',
+      text: grants.map(({ verb, subject, where }) => `${verb} ${subject} ${where}`).join('\n'),
+    });
+  }
+  return parts;
+}
+
 export function PermissionGate({ entry, reply, context }: PermissionGateProps) {
   const { request } = entry;
   const { name, details } = requestSummary(request.toolName, request.input);
@@ -192,22 +217,7 @@ export function PermissionGate({ entry, reply, context }: PermissionGateProps) {
   const detailsText = visibleText(JSON.stringify(details, null, 2));
 
   const gateRef = useRef<HTMLDivElement>(null);
-  // What is allowed, as far as it is on show: Details once they are open, the rules only when they can be saved.
-  const parts: AllowedPart[] = [
-    {
-      id: 'tool',
-      name: command ? 'the command' : 'the request',
-      text: command ? `${visibleLine(name)}\n${visibleText(command)}` : visibleLine(name),
-    },
-  ];
-  if (detailsOpen) parts.push({ id: 'details', name: 'the details', text: detailsText });
-  if (offersAlways && grants.length > 0) {
-    parts.push({
-      id: 'grants',
-      name: 'what “Always allow” saves',
-      text: grants.map(({ verb, subject, where }) => `${verb} ${subject} ${where}`).join('\n'),
-    });
-  }
+  const parts = allowedParts(name, command, detailsOpen ? detailsText : undefined, offersAlways ? grants : []);
   const shown = useShownToEnd(gateRef, request.requestId, parts);
 
   // The clicked option's own id travels with the answer (spec decision 12 —
@@ -228,7 +238,14 @@ export function PermissionGate({ entry, reply, context }: PermissionGateProps) {
         <DetailsDisclosure text={detailsText} open={detailsOpen} onToggle={() => setDetailsOpen((open) => !open)} />
         {offersAlways && <GrantList grants={grants} />}
         <OmittedList omitted={omitted} offersAlways={offersAlways} />
-        <OptionsFooter key={request.requestId} options={options} grants={grants} shown={shown} onSelect={onSelect} />
+        <OptionsFooter
+          key={request.requestId}
+          options={options}
+          grants={grants}
+          parts={parts}
+          shown={shown}
+          onSelect={onSelect}
+        />
       </GateCardShell>
     </div>
   );

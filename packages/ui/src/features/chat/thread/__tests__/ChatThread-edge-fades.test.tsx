@@ -35,6 +35,7 @@ vi.mock('@assistant-ui/react', () => {
         cloneElement(children, { onClick: testState.scrollToBottom }),
       Messages: () => <div data-testid="tp-messages" />,
     },
+    useAui: () => ({}),
     useAuiState: (
       sel: (s: {
         thread: { isRunning: boolean; messages: unknown[] };

@@ -106,7 +106,8 @@
         "packages/ui/src/features/review/",
         "packages/ui/src/features/git/",
         "packages/ui/src/features/run/",
-        "packages/ui/src/features/side-chat/"
+        "packages/ui/src/features/side-chat/",
+        "packages/ui/src/features/workspace-chat/"
       ]
     },
     {
@@ -114,6 +115,7 @@
       "name": "Settings & dialogs",
       "page": "settings",
       "boards": ["Settings-"],
+      "brief": "packages/ui/.impeccable/surfaces/src-features-daemon.md",
       "paths": [
         "packages/ui/src/features/settings/",
         "packages/ui/src/features/palette/",

@@ -17,6 +17,7 @@ vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (intent: unknown)
 const openExternal = vi.fn(() => Promise.resolve());
 vi.mock('@/lib/host', () => ({ useHost: () => ({ shell: { openExternal } }) }));
 
+import { ChatFileBasesContext } from '../../tools/chat-file-bases';
 import { SmartLink } from '../../smart-actions/SmartLink';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 
@@ -114,5 +115,25 @@ describe('SmartLink — genuine web links are unaffected', () => {
     fireEvent.contextMenu(anchor);
     expect(screen.getByTestId('chat-link-copy')).toBeInTheDocument();
     expect(screen.getByTestId('chat-link-open')).toBeInTheDocument();
+  });
+});
+
+describe('SmartLink — a file link in a chat tab of another worktree', () => {
+  it('copies and opens this chat’s own file', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(
+      <ChatFileBasesContext.Provider value={{ worktreePath: '/wt/kid', projectPath: '/repo' }}>
+        <SmartLink href="src/a.ts">a.ts</SmartLink>
+      </ChatFileBasesContext.Provider>,
+    );
+    const link = screen.getByRole('link', { name: 'a.ts' });
+    fireEvent.click(link);
+    expect(emitSurfaceIntent).toHaveBeenCalledWith(expect.objectContaining({ path: '/wt/kid/src/a.ts' }));
+
+    fireEvent.contextMenu(link);
+    fireEvent.click(screen.getByTestId('chat-fileref-copy-absolute-src/a.ts'));
+    await Promise.resolve();
+    expect(writeText).toHaveBeenLastCalledWith('/wt/kid/src/a.ts');
   });
 });

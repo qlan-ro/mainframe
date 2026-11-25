@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readBackgroundTaskOutput } from '../background-tasks';
+import { listBackgroundTasks, readBackgroundTaskOutput } from '../background-tasks';
 
 const fetchMock = vi.fn();
 beforeEach(() => vi.stubGlobal('fetch', fetchMock));
@@ -27,5 +27,24 @@ describe('readBackgroundTaskOutput', () => {
     expect(await readBackgroundTaskOutput('c', 't')).toEqual({ text: '', truncated: false });
     fetchMock.mockResolvedValueOnce(new Response('', { status: 500 }));
     await expect(readBackgroundTaskOutput('c', 't')).rejects.toThrow('Output request failed (500)');
+  });
+});
+
+describe('listBackgroundTasks', () => {
+  it('is given up with its signal', async () => {
+    fetchMock.mockImplementation(
+      (_: string, { signal }: RequestInit) =>
+        new Promise((_resolve, reject) => signal!.addEventListener('abort', () => reject(new Error('gone')))),
+    );
+    const controller = new AbortController();
+    const tasks = listBackgroundTasks('c', controller.signal);
+    controller.abort();
+    await expect(tasks).rejects.toThrow('gone');
+  });
+
+  it('asks with no signal when there is none', async () => {
+    fetchMock.mockResolvedValue(Response.json({ success: true, data: { tasks: [] } }));
+    expect(await listBackgroundTasks('c')).toEqual([]);
+    expect(fetchMock.mock.lastCall![1]).toEqual({ method: 'GET' });
   });
 });

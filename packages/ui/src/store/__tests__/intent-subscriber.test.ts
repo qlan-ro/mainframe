@@ -26,7 +26,7 @@ const PROJECT = '/Users/dev/myapp';
 
 function isWorkspaceActive() {
   const { layout } = useLayoutStore.getState();
-  return layout.top.includes('workspace') || layout.bottom === 'workspace';
+  return layout.top.includes('workspace');
 }
 
 /** Every tab across the workspace's panes, in strip order. */
@@ -41,7 +41,7 @@ function activeTabId() {
 
 beforeEach(() => {
   useLayoutStore.setState({
-    layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['chat'], topFlex: {} },
     run: null,
     sessions: new Map(),
     activeSessionId: null,

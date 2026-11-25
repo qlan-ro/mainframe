@@ -1,10 +1,10 @@
-import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 /**
  * A new session's empty state (K11), just above the composer: the project,
  * where the session will run, recent sessions to continue and open tasks to
  * start from. It follows the pickers in the strip below it (K3, K7).
  */
 import type { ReactNode } from 'react';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { CornerDownLeft, ListChecks, Loader2, MessageSquare } from 'lucide-react';
 import { useAui } from '@assistant-ui/react';
 import { useNow } from '@/lib/use-now';

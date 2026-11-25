@@ -8,23 +8,23 @@
  * list that never loaded drops every persisted tab and then overwrites the
  * payload with the survivors (#312).
  *
- * `loaded` stays latched until the daemon-scoped stores reset.
+ * `loaded` latches once and stays latched; a daemon switch or webview reload starts a fresh run.
+ * `failed` is about the latest request only: what is on screen may be out of date.
  */
 import { create } from 'zustand';
 
 interface SessionListLoadState {
   loaded: boolean;
-  /** The last list request failed. Unlike `loaded`, this follows every request. */
   failed: boolean;
+  setFailed: (failed: boolean) => void;
   markLoaded: () => void;
-  markFailed: () => void;
 }
 
 export const useSessionListLoadState = create<SessionListLoadState>((set) => ({
   loaded: false,
   failed: false,
-  markLoaded: () => set((s) => (s.loaded && !s.failed ? s : { loaded: true, failed: false })),
-  markFailed: () => set((s) => (s.failed ? s : { failed: true })),
+  setFailed: (failed) => set((s) => (s.failed === failed ? s : { failed })),
+  markLoaded: () => set((s) => (s.loaded ? s : { loaded: true })),
 }));
 
 let epoch = 0;

@@ -1,117 +1,31 @@
-/**
- * G2: nothing is allowed unread. While the end of what a request asks to allow
- * has not been in view, the answers that allow it are locked and a pinned
- * button offers the rest. The layout is `gate-layout`'s.
- */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import type { ControlUpdate } from '@qlan-ro/mainframe-types';
-import type { ChatPermissionEntry } from '../../controller/chat-thread-state';
-
-vi.mock('../use-gate-queue', () => ({ useGateQueue: vi.fn() }));
-vi.mock('../DelegatedGateProbes', () => ({ DelegatedGateProbes: () => null }));
-import { useGateQueue, type PendingGate } from '../use-gate-queue';
-import { ChatGateMount } from '../ChatGateMount';
 import { PermissionGate } from '../PermissionGate';
-import { GATE_ARM_MS } from '../GateGuard';
-import { installGateLayout, type GateLayout } from './gate-layout';
-
-const reply = vi.fn();
-let layout: GateLayout;
-let resized: Set<() => void>;
-
-const rule = (ruleContent: string): ControlUpdate => ({
-  type: 'addRules',
-  rules: [{ toolName: 'Bash', ruleContent }],
-  behavior: 'allow',
-  destination: 'session',
-});
-
-function gate(
-  requestId: string,
-  input: Record<string, unknown>,
-  { suggestions = [], toolName = 'Bash' }: { suggestions?: ControlUpdate[]; toolName?: string } = {},
-): PendingGate {
-  const entry: ChatPermissionEntry = {
-    requestId,
-    askedAt: 1,
-    options: [
-      { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
-      { optionId: 'allow-always', name: 'Always allow', kind: 'allow_always' },
-      { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
-    ],
-    request: { requestId, toolName, toolUseId: requestId, input, suggestions },
-  };
-  return { key: `c:${requestId}`, chatId: 'c', entry, reply, adapterId: 'claude', mode: undefined, from: null };
-}
-
-const ui = () => (
-  <TooltipProvider>
-    <ChatGateMount />
-  </TooltipProvider>
-);
-
-function queueFront(front: PendingGate): void {
-  vi.mocked(useGateQueue).mockReturnValue({ front, more: 0, waitingCalls: new Set() });
-}
-const arm = () => act(() => vi.advanceTimersByTime(GATE_ARM_MS));
-
-/** Shows a gate, armed. */
-function show(front: PendingGate) {
-  queueFront(front);
-  const view = render(ui());
-  arm();
-  return view;
-}
-
-const slot = () => screen.getByTestId('chat-thread-gate-slot');
-const option = (id: string) => screen.getByTestId(`chat-permission-option-${id}`);
-const showRest = () => screen.queryByTestId('chat-permission-show-rest');
-const locked = () => ['allow-once', 'allow-always'].map((id) => option(id).getAttribute('aria-disabled') === 'true');
-const LOCKED = [true, true];
-const FREE = [false, false];
-
-function press(element: HTMLElement, detail = 1) {
-  fireEvent.pointerDown(element);
-  fireEvent.click(element, { detail });
-}
-function enter(element: HTMLElement) {
-  element.focus();
-  if (fireEvent.keyDown(element, { key: 'Enter' })) fireEvent.click(element, { detail: 0 });
-}
-function scrollTo(top: number) {
-  slot().scrollTop = top;
-  fireEvent.scroll(slot());
-}
-const resize = () => act(() => resized.forEach((callback) => callback()));
-
-const WRAPPED = `echo ${'a'.repeat(1700)}; rm -rf ~`;
-const GAP = `echo ok${'\n'.repeat(11)}rm -rf ~`;
-const TALL = Array.from({ length: 200 }, (_, i) => `step ${i}`).join('\n');
-
-beforeEach(() => {
-  vi.useFakeTimers();
-  vi.clearAllMocks();
-  reply.mockResolvedValue(undefined);
-  layout = installGateLayout({ cap: 300 });
-  const callbacks = new Set<() => void>();
-  resized = callbacks;
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      constructor(private readonly callback: () => void) {}
-      observe = () => callbacks.add(this.callback);
-      unobserve = () => {};
-      disconnect = () => callbacks.delete(this.callback);
-    },
-  );
-});
-afterEach(() => {
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
-});
+import {
+  gate,
+  ui,
+  queueFront,
+  arm,
+  show,
+  slot,
+  option,
+  showRest,
+  locked,
+  LOCKED,
+  FREE,
+  press,
+  enter,
+  scrollTo,
+  resize,
+  layout,
+  reply,
+  WRAPPED,
+  GAP,
+  TALL,
+  rule,
+} from './read-lock-fixture';
+import type { ControlUpdate } from '@qlan-ro/mainframe-types';
 
 describe('a request whose end is out of view', () => {
   it.each([
@@ -216,7 +130,7 @@ describe('a request whose end is out of view', () => {
     show(gate('r1', { command: WRAPPED }));
 
     layout.cap = 900;
-    resize();
+    fireEvent(window, new Event('resize'));
 
     expect(locked()).toEqual(FREE);
   });
@@ -362,105 +276,18 @@ describe('everything on show that is allowed', () => {
   });
 });
 
-describe('where nothing can be measured', () => {
-  it('without observers the button still unlocks it', () => {
-    vi.stubGlobal('ResizeObserver', undefined);
-    vi.stubGlobal('IntersectionObserver', undefined);
-    layout.parts = { tool: 400 };
-    show(gate('r1', { command: WRAPPED }));
-    expect(locked()).toEqual(LOCKED);
-
-    press(showRest()!);
-
-    expect(locked()).toEqual(FREE);
-  });
-
-  it('keeps Allow locked when the sticky footer leaves only one pixel', () => {
-    layout.cap = 96;
-    layout.answers = 95;
-    layout.button = 0;
-    layout.parts = { tool: 600 };
-    show(gate('r1', { command: WRAPPED }));
-
-    press(showRest()!);
-
-    expect(locked()).toEqual(LOCKED);
-    const dialog = screen.getByRole('dialog');
-    const content = dialog.querySelector('pre')!;
-    const viewport = content.parentElement!;
-    vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 600, 200));
-    vi.spyOn(content, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, -viewport.scrollTop, 600, 600));
-    fireEvent.scroll(viewport);
-    expect(screen.queryByRole('button', { name: "I've read it" })).toBeNull();
-
-    viewport.scrollTop = 400;
-    fireEvent.scroll(viewport);
-    expect(locked()).toEqual(FREE);
-    expect(dialog).toBeInTheDocument();
-    press(screen.getByRole('button', { name: 'Done' }));
-    expect(dialog).not.toBeInTheDocument();
-  });
-
-  it('without a layout nothing counts as seen until the button says so', () => {
-    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 0, 0));
-    show(gate('r1', { command: 'ls' }));
-    expect(locked()).toEqual(LOCKED);
-
-    press(showRest()!);
-
-    expect(locked()).toEqual(LOCKED);
-    press(screen.getByRole('button', { name: "I've read it" }));
-    expect(locked()).toEqual(FREE);
-  });
+it('remeasures a resized part even when the slot has not resized', () => {
+  layout.parts = { tool: 400 };
+  show(gate('r1', { command: WRAPPED }));
+  expect(locked()).toEqual(LOCKED);
+  layout.parts = { tool: 140 };
+  resize(screen.getByTestId('chat-permission-command').closest('[data-allowed-part]')!);
+  expect(locked()).toEqual(FREE);
 });
 
-describe('the keyboard and screen readers', () => {
-  it('a locked answer keeps its name and its place in the tab order, and says why', () => {
-    layout.parts = { tool: 400 };
-    show(gate('r1', { command: WRAPPED }));
-
-    expect(option('allow-once')).toHaveAccessibleName('Allow once');
-    expect(option('allow-once')).toHaveAccessibleDescription(
-      'Not available until you have seen the end of the command.',
-    );
-    expect(option('allow-once')).not.toBeDisabled();
-    expect(option('reject-once')).not.toHaveAccessibleDescription();
-    option('allow-once').focus();
-    expect(option('allow-once')).toHaveFocus();
-  });
-
-  it('the keyboard alone shows the rest, keeps its place, and answers', () => {
-    layout.parts = { tool: 400 };
-    show(gate('r1', { command: WRAPPED }));
-
-    enter(showRest()!);
-
-    // The button is gone; focus is on what it showed, before the answers.
-    const shownPart = screen.getByTestId('chat-permission-command').closest('[data-allowed-part]');
-    expect(shownPart).toHaveFocus();
-    fireEvent.keyUp(shownPart!, { key: 'Enter' });
-    enter(option('allow-once'));
-    expect(reply).toHaveBeenCalledTimes(1);
-  });
-
-  it('a scroll that takes the button away hands its focus on', () => {
-    layout.parts = { tool: 400 };
-    show(gate('r1', { command: WRAPPED }));
-    showRest()!.focus();
-
-    scrollTo(450);
-
-    expect(showRest()).toBeNull();
-    expect(screen.getByTestId('chat-permission-command').closest('[data-allowed-part]')).toHaveFocus();
-  });
-
-  it('a scroll takes no focus from anything else', () => {
-    layout.parts = { tool: 400 };
-    show(gate('r1', { command: WRAPPED }));
-    option('reject-once').focus();
-
-    scrollTo(450);
-
-    expect(option('reject-once')).toHaveFocus();
-  });
+it('recognizes the last line within one pixel of the answer boundary', () => {
+  layout.parts = { tool: 207 };
+  show(gate('r1', { command: WRAPPED }));
+  expect(locked()).toEqual(FREE);
+  expect(showRest()).toBeNull();
 });

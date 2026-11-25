@@ -9,7 +9,12 @@
  * `run-pane-file-tabs.ts`.
  */
 
-export type RunTabKind = 'preview' | 'console' | 'terminal' | 'code' | 'diff' | 'skill' | 'viewer' | 'url';
+export type RunTabKind =
+  'preview' | 'console' | 'terminal' | 'code' | 'diff' | 'skill' | 'viewer' | 'url' | 'chat' | 'agent';
+
+/** Why a chat is open beside the conversation (W9): how it relates to the chat in the column. */
+export const CHAT_TAB_ROLES = ['fork', 'side', 'task', 'session'] as const;
+export type ChatTabRole = (typeof CHAT_TAB_ROLES)[number];
 
 /** Preview = the single italic replace-me slot per pane; permanent = pinned. File tabs only. */
 export type TabMode = 'preview' | 'permanent';
@@ -27,6 +32,13 @@ export interface RunTab {
   port?: number;
   /** Normalized address for a `url` tab (http/https only — see normalizePreviewUrl). */
   url?: string;
+  /** `chat`: the chat shown. `agent`: the chat whose transcript holds the sub-agent's call. */
+  chatId?: string;
+  /** `chat` tabs only. */
+  role?: ChatTabRole;
+  /** `agent` tabs only: the sub-agent's tool call, and the message it is in once that is known. */
+  toolCallId?: string;
+  messageId?: string;
   /** Preview/permanent slot for file-backed tabs; absent on every other kind. */
   mode?: TabMode;
   /** Pre-resolved diff sides for a `diff` tab; absent means HEAD-vs-working. */
@@ -40,9 +52,15 @@ export interface RunTab {
    * shows only the tabs matching the active session's scope (so they don't leak
    * across projects/worktrees). Stamped on EVERY tab — launch configs,
    * terminals, and files — from the active session; only absent on a
-   * draft/unresolved session (no scope yet).
+   * draft/unresolved session (no scope yet) and on chat and agent tabs, which
+   * belong to the session itself (`isConversationTab`).
    */
   scopeKey?: string;
+}
+
+/** A secondary chat or sub-agent: it follows its session, whatever the session's launch scope becomes. */
+export function isConversationTab(t: Pick<RunTab, 'kind'>): boolean {
+  return t.kind === 'chat' || t.kind === 'agent';
 }
 
 /** A launch-config tab — a `preview` webview or a `console` process. */
@@ -54,7 +72,8 @@ function isLaunchTab(t: RunTab): boolean {
  * A predicate matching the existing tab `addRunTab` should focus instead of
  * duplicating, or `null` when `tab` has no dedup identity. Launch tabs dedup by
  * `config` + `scopeKey`; `url` tabs dedup by exact (already-normalized) `url` +
- * `scopeKey` — same shape, different identity field.
+ * `scopeKey` — same shape, different identity field. A chat is open once, and so
+ * is a sub-agent.
  */
 function dedupMatcher(tab: RunTab): ((t: RunTab) => boolean) | null {
   if (isLaunchTab(tab) && tab.config) {
@@ -62,6 +81,10 @@ function dedupMatcher(tab: RunTab): ((t: RunTab) => boolean) | null {
   }
   if (tab.kind === 'url' && tab.url) {
     return (t) => t.kind === 'url' && t.url === tab.url && t.scopeKey === tab.scopeKey;
+  }
+  if (tab.kind === 'chat') return (t) => t.kind === 'chat' && t.chatId === tab.chatId;
+  if (tab.kind === 'agent') {
+    return (t) => t.kind === 'agent' && t.chatId === tab.chatId && t.toolCallId === tab.toolCallId;
   }
   return null;
 }
@@ -83,7 +106,7 @@ export interface RunState {
 /** Where a dragged tab lands on the workspace region. */
 export type RunDropEdge = 'center' | 'left' | 'right' | 'top' | 'bottom';
 
-const MAX_PANES = 2;
+export const MAX_PANES = 2;
 
 export function genId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;

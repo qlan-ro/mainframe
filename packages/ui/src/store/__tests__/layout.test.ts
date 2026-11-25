@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { SurfaceId, WorkspaceLayout } from '../layout';
-import { isSurfaceFloor, layoutCanSplit, litSurfaceCount, useLayoutStore } from '../layout';
+import type { RunTab } from '../run-pane';
+import { useActiveBasesStore } from '../active-bases-store';
+import { isSurfaceFloor, useLayoutStore } from '../layout';
 
 const FRESH: WorkspaceLayout = {
   top: ['chat'],
-  bottom: null,
   topFlex: {},
-  vFlex: { top: 1, bottom: 0.4 },
 };
 
 function store() {
@@ -15,7 +15,7 @@ function store() {
 
 function isActive(surface: SurfaceId) {
   const { layout } = store();
-  return layout.top.includes(surface) || layout.bottom === surface;
+  return layout.top.includes(surface);
 }
 
 describe('layout store', () => {
@@ -56,12 +56,6 @@ describe('layout store', () => {
     expect(isActive('workspace')).toBe(true);
   });
 
-  it('litSurfaceCount counts top + bottom surfaces', () => {
-    expect(litSurfaceCount(store().layout)).toBe(1);
-    store().toggleSurface('workspace');
-    expect(litSurfaceCount(store().layout)).toBe(2);
-  });
-
   it('the workspace can be toggled off when active', () => {
     store().toggleSurface('workspace');
     store().toggleSurface('workspace');
@@ -81,15 +75,6 @@ describe('layout store', () => {
     expect(store().run?.panes[0]!.tabs.map((t) => t.id)).toEqual(['t1']);
   });
 
-  it('bottom strip promoted to top row when the top row loses a surface', () => {
-    store().splitSurface('h'); // workspace → bottom strip
-    expect(store().layout.bottom).toBe('workspace');
-    store().toggleSurface('chat'); // remove chat → workspace promoted to top
-    const { layout } = store();
-    expect(layout.bottom).toBeNull();
-    expect(layout.top).toEqual(['workspace']);
-  });
-
   it('setTopFrac updates flex fractions clamped 0.18–0.82', () => {
     store().toggleSurface('workspace');
     store().setTopFrac(0.6);
@@ -104,50 +89,93 @@ describe('layout store', () => {
     expect(store().layout.topFlex['chat']).toBeCloseTo(0.18);
   });
 
-  it('setVFrac updates vertical flex fractions', () => {
-    store().splitSurface('h');
-    store().setVFrac(0.7);
-    const { layout } = store();
-    expect(layout.vFlex.top).toBeCloseTo(0.7);
-    expect(layout.vFlex.bottom).toBeCloseTo(0.3);
+  it('keeps chat left of the workspace, whichever was lit last', () => {
+    store().toggleSurface('workspace');
+    store().toggleSurface('chat');
+    store().toggleSurface('chat');
+    expect(store().layout.top).toEqual(['chat', 'workspace']);
+  });
+});
+
+describe('closing tabs (W5)', () => {
+  beforeEach(() => {
+    useLayoutStore.setState({ layout: { ...FRESH }, run: null, sessions: new Map(), activeSessionId: null });
+    useActiveBasesStore.setState({ bases: {}, scopeKey: 'proj:/a' });
   });
 
-  describe('layoutCanSplit', () => {
-    it('returns true when only chat is active', () => {
-      expect(layoutCanSplit(store().layout)).toBe(true);
-    });
+  const open = (id: string, over: Partial<RunTab> = {}) =>
+    store().addRunTab({ id, kind: 'code', title: id, scopeKey: 'proj:/a', ...over });
+  const close = (id: string) => store().closeRunTab(store().run!.panes[0]!.id, id);
 
-    it('returns false once the workspace is placed in the top row', () => {
-      store().toggleSurface('workspace');
-      expect(layoutCanSplit(store().layout)).toBe(false);
-    });
-
-    it('returns false once the workspace is placed in the bottom strip', () => {
-      store().splitSurface('h');
-      expect(layoutCanSplit(store().layout)).toBe(false);
-    });
+  it('collapses the workspace with the last tab, and not before', () => {
+    open('a');
+    open('b');
+    close('a');
+    expect(isActive('workspace')).toBe(true);
+    close('b');
+    expect(isActive('workspace')).toBe(false);
+    expect(store().run).toBeNull();
   });
 
-  describe('splitSurface', () => {
-    it('"v" adds the workspace to the top row', () => {
-      store().splitSurface('v');
-      const { layout } = store();
-      expect(layout.top).toEqual(['chat', 'workspace']);
-      expect(layout.bottom).toBeNull();
-    });
+  it('collapses with the last VISIBLE tab: one of another worktree stays, unseen', () => {
+    open('other', { scopeKey: 'proj:/b' });
+    open('a');
+    close('a');
+    expect(isActive('workspace')).toBe(false);
+    expect(store().run!.panes[0]!.tabs.map((t) => t.id)).toEqual(['other']);
+  });
 
-    it('"h" adds the workspace to the bottom strip', () => {
-      store().splitSurface('h');
-      const { layout } = store();
-      expect(layout.bottom).toBe('workspace');
-      expect(layout.top).toEqual(['chat']);
-    });
+  it('stays open while a chat tab is left, which every scope shows', () => {
+    open('chat', { kind: 'chat', chatId: 'fork-1', role: 'fork', scopeKey: undefined });
+    open('a');
+    close('a');
+    expect(isActive('workspace')).toBe(true);
+    close('chat');
+    expect(isActive('workspace')).toBe(false);
+  });
 
-    it('does nothing when the workspace is already lit', () => {
-      store().toggleSurface('workspace');
-      const before = store().layout;
-      store().splitSurface('v');
-      expect(store().layout).toEqual(before);
-    });
+  it('brings chat back when the workspace was alone', () => {
+    open('a');
+    store().toggleSurface('chat');
+    close('a');
+    expect(store().layout.top).toEqual(['chat']);
+  });
+
+  it('can be opened again with nothing in it', () => {
+    open('a');
+    close('a');
+    store().toggleSurface('workspace');
+    expect(isActive('workspace')).toBe(true);
+  });
+});
+
+describe('addSessionTab', () => {
+  const tab: RunTab = { id: 'chat-b', kind: 'chat', title: 'B', chatId: 'b', role: 'session' };
+
+  beforeEach(() => {
+    useLayoutStore.setState({ layout: { ...FRESH }, run: null, sessions: new Map(), activeSessionId: 'a' });
+  });
+
+  it('adds to the active session, on screen', () => {
+    store().addSessionTab('a', tab);
+    expect(store().layout.top).toEqual(['chat', 'workspace']);
+    expect(store().run!.panes[0]!.active).toBe('chat-b');
+  });
+
+  it('adds to a session that is not on screen, and leaves the one that is alone', () => {
+    store().addSessionTab('c', tab);
+    expect(store().layout.top).toEqual(['chat']);
+    expect(store().run).toBeNull();
+
+    store().setActiveSession('c');
+    expect(store().layout.top).toEqual(['chat', 'workspace']);
+    expect(store().run!.panes[0]!.tabs.map((t) => t.chatId)).toEqual(['b']);
+  });
+
+  it('opens a chat once', () => {
+    store().addSessionTab('c', tab);
+    store().addSessionTab('c', { ...tab, id: 'again' });
+    store().setActiveSession('c');
+    expect(store().run!.panes[0]!.tabs.map((t) => t.id)).toEqual(['chat-b']);
   });
 });

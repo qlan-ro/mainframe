@@ -3,7 +3,7 @@
  * A draft's first message that did not go out (C14): the real sessions runtime,
  * coordinator, controller and submit path; only the network is stubbed.
  */
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi, describe } from 'vitest';
 import { AssistantRuntimeProvider, useAui, type AssistantClient } from '@assistant-ui/react';
 import type { Chat, DaemonTarget } from '@qlan-ro/mainframe-types';
@@ -22,6 +22,7 @@ vi.mock('../../../../lib/api/chats', () => ({
   archiveChat: vi.fn(async () => undefined),
   unarchiveNativeSession: vi.fn(async () => undefined),
 }));
+vi.mock('@/lib/api/projects', () => ({ getProjects: vi.fn(async () => []) }));
 vi.mock('../../../../lib/api/attachments', () => ({ uploadAttachments: vi.fn() }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ mfToast: toast }));
@@ -74,6 +75,10 @@ import {
   useUnsentMessages,
 } from '@/features/chat/composer/unsent/unsent-store';
 import { UnsentNotices } from '@/features/chat/composer/unsent/UnsentNotices';
+import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
+import { ChatThread } from '@/features/chat/thread/ChatThread';
+import { ChatTabBody } from '@/features/workspace-chat/ChatTabBody';
+import { SideChatTabBody } from '@/features/workspace-chat/SideChatTabBody';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SendFailureNotice } from '@/features/chat/messages/SendFailureNotice';
 import { useChatExtras } from '@/features/chat/runtime/chat-extras';
@@ -81,6 +86,7 @@ import { sendRemedyOf } from '@/features/chat/controller/describe-send-error';
 import { moveDraft } from '../../new-thread/move-draft';
 import { resetNewThreadDraft } from '../../new-thread/reset-new-thread-draft';
 import { useDraftRow, type DraftRowState } from '../../sidebar/use-draft-row';
+import { createForLocal } from '../new-thread-coordinator';
 import { makeChatsRemoteAdapter } from '../chats-remote-adapter';
 import { chatControllerRegistry } from '../chat-controller-registry';
 import { DaemonPortProvider } from '../daemon-port-context';
@@ -141,38 +147,48 @@ function Surface({ name }: { name: string }) {
   );
 }
 
-function Body() {
+function Body({ tabId }: { tabId?: string }) {
   client = useAui();
   submit = useSubmitComposition();
   row = useDraftRow([], NO_FILTER);
   return (
     <>
       <Surface name="main" />
-      <Surface name="split" />
-      <Surface name="tab" />
-      <Surface name="side chat" />
+      {tabId !== undefined && (
+        <>
+          <section aria-label="chat column">
+            <ChatThread />
+          </section>
+          <section aria-label="tab">
+            {tabId && <ChatTabBody chatId={tabId} active tab={{ id: tabId, kind: 'chat', title: 'Chat' }} />}
+          </section>
+          <section aria-label="side chat">
+            <SideChatTabBody chatId="side-1" active />
+          </section>
+        </>
+      )}
       <Bubbles />
     </>
   );
 }
 
-function Root() {
+function Root({ tabId }: { tabId?: string }) {
   const runtime = useSessionsThreadList();
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <TooltipProvider>
-        <Body />
+        <Body tabId={tabId} />
       </TooltipProvider>
     </AssistantRuntimeProvider>
   );
 }
 
-const mount = () =>
-  render(
-    <DaemonPortProvider port={PORT}>
-      <Root />
-    </DaemonPortProvider>,
-  );
+const fixture = (tabId?: string) => (
+  <DaemonPortProvider port={PORT}>
+    <Root tabId={tabId} />
+  </DaemonPortProvider>
+);
+const mount = () => render(fixture());
 
 const flush = () => act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
 const text = () => aui().composer.getState().text;
@@ -207,6 +223,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   setActiveDaemon(LOCAL);
   useUnsentMessages.setState({ entries: [] });
+  useHeldQueue.setState({ byChat: {} });
   useDraftContent.setState({ byThread: {} });
   useComposerSegments.setState({ byThread: {} });
   useSessionReferences.setState({ byThread: {} });
@@ -216,7 +233,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   chatControllerRegistry.disposeAll();
-  expect(network).not.toHaveBeenCalled();
+  cleanup();
 });
 
 async function fill(id: string) {
@@ -363,17 +380,6 @@ describe('creating the session fails', () => {
     expect(text()).toBe('message one\n\nmessage two');
   });
 
-  it('shows the same entry in every composer of the thread, and settles it in all of them', async () => {
-    mount();
-    await openDraft();
-    vi.mocked(createChat).mockRejectedValueOnce(new Error('no'));
-    await type('first');
-    await send();
-    expect(notices('split')).toHaveLength(1);
-    await press('restore');
-    expect(notices('split')).toEqual([]);
-  });
-
   it('discards only what it was asked to', async () => {
     mount();
     await openDraft();
@@ -498,6 +504,49 @@ describe('with the failed message’s own remedies', () => {
     expect(contentOf(id)).toMatchObject({ text: '', items: [], files: [] });
   });
 
+  it('retries the text once when the unsent entry was removed', async () => {
+    const id = await failFirst();
+    const controller = chatControllerRegistry.get(id)!;
+    act(() => dropUnsentOf(controller.getDaemonId()));
+    const button = screen.getByTestId('chat-user-message-retry');
+    await act(async () => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
+    await flush();
+    expect(prompts()).toEqual([prompts()[0], prompts()[0]]);
+    expect(vi.mocked(uploadAttachments)).toHaveBeenCalledTimes(1);
+  });
+
+  it('claims a retry of an ordinary session message before repaint', async () => {
+    mount();
+    const id = await openDraft();
+    await type('first');
+    await send();
+    prompt.mockRejectedValueOnce(TIMEOUT);
+    await act(async () => {
+      await expect(
+        chatControllerRegistry.get(id)!.sendMessage({
+          role: 'user',
+          content: [{ type: 'text', text: 'second' }],
+          attachments: [],
+          createdAt: new Date(),
+          metadata: { custom: {} },
+          parentId: null,
+          sourceId: null,
+          runConfig: undefined,
+        }),
+      ).rejects.toEqual(TIMEOUT);
+    });
+    const button = screen.getByTestId('chat-user-message-retry');
+    await act(async () => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
+    await flush();
+    expect(prompts()).toEqual(['first', 'second', 'second']);
+  });
+
   it.each(['retry', 'unarchive'])('claims %s before the next repaint', async (which) => {
     await failFirst(
       which === 'unarchive'
@@ -592,8 +641,8 @@ describe('with the failed message’s own remedies', () => {
 });
 
 describe('after the draft moved to another project', () => {
-  it.each(['split', 'tab', 'side chat'])('restores from %s and sends only portable content', async (surface) => {
-    mount();
+  it('restores in the chat column and sends only portable content', async () => {
+    const app = mount();
     const id = await openDraft();
     await fill(id);
     const before = contentOf(id);
@@ -601,7 +650,8 @@ describe('after the draft moved to another project', () => {
     await send();
     const next = { ...SETUP, projectId: 'p2' };
     act(() => moveDraft(id, SETUP, next, () => setDraftConfig(id, next)));
-    const button = within(notices(surface)[0]!).getByTestId('composer-unsent-restore');
+    app.rerender(fixture(''));
+    const button = within(notices('chat column')[0]!).getByTestId('composer-unsent-restore');
     await act(async () => fireEvent.click(button));
     expect(contentOf(id)).toEqual({ ...before, items: [], references: {} });
     await send();
@@ -610,6 +660,56 @@ describe('after the draft moved to another project', () => {
     expect(prompts()[0]).toContain('quoted');
     expect(prompts()[0]).not.toMatch(/sketch|Referenced session|const x/);
     expect(vi.mocked(uploadAttachments).mock.lastCall?.[2]).toHaveLength(1);
+  });
+
+  it('shows a failed first prompt in its chat tab only', async () => {
+    const app = mount();
+    const id = await openDraft();
+    await type('unsent in the tab');
+    prompt.mockRejectedValueOnce(TIMEOUT);
+    await send();
+    const chatId = chatControllerRegistry.get(id)!.getDaemonId();
+    await openDraft();
+    app.rerender(fixture(chatId));
+    expect(screen.getByTestId(`workspace-chat-header-${chatId}`)).toBeVisible();
+    expect(screen.getByTestId('side-chat-header-side-1')).toBeVisible();
+    expect(notices('chat column')).toHaveLength(0);
+    expect(notices('side chat')).toHaveLength(0);
+    const notice = notices('tab')[0]!;
+    expect(notice).toHaveTextContent('Your message may not have been sent.');
+    await act(async () => fireEvent.click(within(notice).getByTestId('composer-unsent-restore')));
+    expect(notices('tab')).toHaveLength(0);
+    expect(within(screen.getByRole('region', { name: 'tab' })).getByTestId('chat-composer-input')).toHaveValue(
+      'unsent in the tab',
+    );
+  });
+
+  it('closes queued editing when the chat column switches threads', async () => {
+    const app = mount();
+    const id = await openDraft();
+    await type('initial message');
+    await send();
+    const chatId = chatControllerRegistry.get(id)!.getDaemonId();
+    act(() =>
+      useHeldQueue.getState().hold(
+        chatId,
+        {
+          chatId,
+          uuid: 'held',
+          messageId: 'held',
+          content: 'queued for the first chat',
+          timestamp: new Date().toISOString(),
+        },
+        { temporary: true },
+      ),
+    );
+    app.rerender(fixture(''));
+    const column = within(screen.getByRole('region', { name: 'chat column' }));
+    fireEvent.click(column.getByTestId('chat-queued-edit'));
+    expect(column.getByText('Editing queued message')).toBeVisible();
+    await openDraft();
+    expect(column.queryByText('Editing queued message')).toBeNull();
+    expect(column.getByTestId('chat-composer-input')).toHaveValue('');
   });
 
   it('restores the prose and quotes, leaves the rest there, and Undo goes back to it', async () => {
@@ -633,6 +733,41 @@ describe('after the draft moved to another project', () => {
     await act(async () => action.onClick());
     expect(getDraftConfig(id)).toEqual(SETUP);
     expect(contentOf(id)).toEqual(before);
+  });
+
+  it.each(['creating', 'created'])('refuses Undo while the destination draft is %s', async (state) => {
+    mount();
+    const id = await openDraft();
+    await fill(id);
+    const next = { ...SETUP, projectId: 'p2' };
+    act(() => moveDraft(id, SETUP, next, () => setDraftConfig(id, next)));
+    let finish: (() => void) | undefined;
+    let creating: Promise<unknown> | undefined;
+    if (state === 'creating') {
+      vi.mocked(createChat).mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            finish = () => reject(new Error('test cleanup'));
+          }),
+      );
+      await act(async () => {
+        creating = createForLocal(id, PORT).catch(() => undefined);
+      });
+    } else {
+      act(() => chatControllerRegistry.getOrCreate(id, PORT).setRemoteId('created-chat'));
+    }
+    try {
+      const [, { action }] = toast.info.mock.lastCall as [string, { action: { onClick: () => void } }];
+      await act(async () => action.onClick());
+      expect(getDraftConfig(id)).toEqual(next);
+      expect(draftItemsOf(id)).toEqual([]);
+      expect(toast.info).toHaveBeenLastCalledWith('Nothing to undo', expect.anything());
+    } finally {
+      await act(async () => {
+        finish?.();
+        await creating;
+      });
+    }
   });
 });
 

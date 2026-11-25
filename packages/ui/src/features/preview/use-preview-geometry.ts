@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
+import { useWorkspaceSlide } from '@/store/workspace-slide';
 import { useTheme } from '@/store/theme';
 
 interface PreviewGeometryProps {
@@ -34,15 +35,16 @@ export function usePreviewGeometry({ handle, anchorRef, containerRef, active, mo
   }
 
   const topFlex = useLayoutStore((s) => s.layout.topFlex);
-  const vFlex = useLayoutStore((s) => s.layout.vFlex);
   const sidebarVisible = useUiPrefs((s) => s.sidebarVisible);
+  // The panel's slide moves the anchor without resizing it.
+  const sliding = useWorkspaceSlide((s) => s.sliding);
   // UI page-zoom changes the native-webview bounds multiplier but NOT the CSS
   // layout, so the ResizeObserver never fires — refit explicitly on scale change.
   const uiScale = useTheme((s) => s.uiScale);
 
   useEffect(() => {
     scheduleRefit();
-  }, [topFlex, vFlex, sidebarVisible, uiScale, handle]);
+  }, [topFlex, sidebarVisible, sliding, uiScale, handle]);
 
   useEffect(() => {
     if (active) scheduleRefit();

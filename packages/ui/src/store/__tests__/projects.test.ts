@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/api/projects', () => ({ getProjects: vi.fn() }));
 
+import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { getProjects } from '@/lib/api/projects';
 import { useProjectsStore, reloadProjects, removeProjectFromList, resetProjectsStore } from '../projects.js';
 
@@ -12,7 +13,7 @@ const project = (id: string) => ({ id, name: id, path: `/r/${id}`, createdAt: ''
 
 describe('ui projects store', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     resetProjectsStore();
   });
 
@@ -62,6 +63,25 @@ describe('ui projects store', () => {
     await first;
     // The stale first response must not overwrite the newer second one.
     expect(useProjectsStore.getState().projects.map((p) => p.id)).toEqual(['p2']);
+  });
+
+  it('loads independently when two daemons use the same port', async () => {
+    const original = getActiveDaemon();
+    let resolveFirst!: (list: ReturnType<typeof project>[]) => void;
+    mockGetProjects.mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)));
+    const first = reloadProjects(1);
+
+    try {
+      setActiveDaemon({ ...original, id: 'another-daemon', kind: 'remote' });
+      mockGetProjects.mockResolvedValueOnce([project('current')]);
+      const second = reloadProjects(1);
+      resolveFirst([project('stale')]);
+      await Promise.all([first, second]);
+      expect(mockGetProjects).toHaveBeenCalledTimes(2);
+      expect(useProjectsStore.getState().projects).toEqual([project('current')]);
+    } finally {
+      setActiveDaemon(original);
+    }
   });
 
   it('dedupes concurrent calls on the same port into a single request', async () => {

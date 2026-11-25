@@ -6,9 +6,7 @@
  * The open set lives in `store.ts` — pinned tabs, one peek, one unsent draft,
  * rendered in that order; membership + persistence in `useSessionTabsSync`
  * (mounted here — the strip is the feature's one always-rendered component).
- * A split pair renders as ONE fused entry (`stripEntries`); the pair itself
- * stays owned by `zones-store`. Closing removes from the set only — it never
- * archives. Closing the last tab falls back to the new-session flow.
+ * Closing removes from the set only — it never archives. Closing the last tab falls back to the new-session flow.
  *
  * Keyboard: the strip is a tablist with one tab stop (`onTabListKeyDown`).
  *
@@ -25,16 +23,14 @@ import { Hint } from '@/components/ui/hint';
 import { useAdaptersStore } from '@/store/adapters';
 import { useStartNewSession } from '@/features/sessions/new-thread/use-start-new-session';
 import { useProjects } from '@/features/sessions/use-projects';
-import { canOpenInSplit } from '@/features/chat/zones/open-in-split';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
+import { canOpenBeside } from '@/features/workspace-chat/open-session';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
 import { useIndexHintsStore } from '@/features/shortcuts/index-hints';
-import { SessionTabPair } from './SessionTabPair';
 import { SessionTabPill, type SessionTabEntry } from './SessionTabPill';
 import { toTabEntry } from './tab-entry';
 import { useSessionTabsStore } from './store';
 import { onTabListKeyDown } from './tab-shape';
-import { canonicalTabId, displayedTabIds, nextTabId, stripEntries, tabAtIndex, tabHintIndex } from './tabs-model';
+import { canonicalTabId, displayedTabIds, nextTabId, tabAtIndex, tabHintIndex } from './tabs-model';
 import { useSessionTabHandlers } from './use-session-tab-handlers';
 import { useSessionTabsSync } from './use-session-tabs-sync';
 
@@ -50,7 +46,6 @@ export function SessionTabs() {
   const { projects } = useProjects();
   const projectNames = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
   const adaptersById = useAdaptersStore((s) => s.byId);
-  const zones = useZonesStore((s) => s.zones);
 
   // Between the chat.created reload and the router's handover the active
   // thread is still the draft's local id while its tab is already canonical;
@@ -58,21 +53,13 @@ export function SessionTabs() {
   // that window. aui switches on either id, so clicks pass the tab id.
   const activeTabId = canonicalTabId(mainThreadId, items);
 
-  // Pinned tabs in order, then the peek, then the unsent draft. Passing no
-  // zones keeps the PIN order, which is what a close resolves its successor
-  // against; the regrouped order below is a display concern.
-  const tabsState = { tabIds, previewId, draftId };
-  const displayIds = displayedTabIds(tabsState, null, activeTabId);
-  const ordered = displayedTabIds(tabsState, zones, activeTabId);
-  const splitFits = useZonesStore((s) => s.splitFits);
-  const entries = stripEntries(tabsState, zones, activeTabId, splitFits);
+  const ordered = displayedTabIds({ tabIds, previewId, draftId });
   const entryOf = (id: string): SessionTabEntry =>
     toTabEntry(id, items, projectNames, activeTabId, id === previewId, adaptersById);
 
-  const actions = useSessionTabHandlers(activeTabId, displayIds);
+  const actions = useSessionTabHandlers(activeTabId, ordered);
 
-  // ⌘1…⌘9 and ⌃Tab / ⌃⇧Tab walk the DISPLAYED order — what the user sees, not
-  // the stored pin order; a pair's members still count one each.
+  // ⌘1…⌘9 and ⌃Tab / ⌃⇧Tab walk the displayed order: what the user sees.
   const switchTo = (id: string | null) => {
     if (id != null && id !== activeTabId) aui.threads.switchToThread(id);
   };
@@ -95,26 +82,15 @@ export function SessionTabs() {
         onKeyDown={onTabListKeyDown}
         className="flex h-full min-w-0 flex-initial items-center gap-1 overflow-x-auto px-1 scroll-fade-x"
       >
-        {entries.map((entry) =>
-          entry.kind === 'pair' ? (
-            <SessionTabPair
-              key={`pair:${entry.ids[0]}:${entry.ids[1]}`}
-              tabs={[entryOf(entry.ids[0]), entryOf(entry.ids[1])]}
-              focused={entry.focused}
-              visible={entry.visible}
-              hintOf={hintOf}
-              {...actions}
-            />
-          ) : (
-            <SessionTabPill
-              key={entry.id}
-              tab={entryOf(entry.id)}
-              hintIndex={hintOf(entry.id)}
-              canOpenInSplit={canOpenInSplit(zones, activeTabId, entry.id)}
-              {...actions}
-            />
-          ),
-        )}
+        {ordered.map((id) => (
+          <SessionTabPill
+            key={id}
+            tab={entryOf(id)}
+            hintIndex={hintOf(id)}
+            canOpenBeside={canOpenBeside(activeTabId, id)}
+            {...actions}
+          />
+        ))}
       </div>
       <Hint label="New session">
         <Button

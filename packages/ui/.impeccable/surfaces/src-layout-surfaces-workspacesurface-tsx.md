@@ -2,7 +2,7 @@
 version: 1
 slug: "src-layout-surfaces-workspacesurface-tsx"
 primary_target: "src/layout/surfaces/WorkspaceSurface.tsx"
-related_targets: ["src/features/preview","src/features/side-chat"]
+related_targets: ["src/features/preview","src/features/workspace-chat","src/features/side-chat"]
 ---
 
 # Workspace
@@ -14,7 +14,7 @@ Operate. The workspace surface beside the chat: preview, terminal, files, diff, 
 Look at what the agent changed or runs, without losing the conversation.
 
 ## Constraints
-Tabs follow the active session's scope. The chat column always holds one conversation (W9).
+Tabs follow the active session's scope; chat and agent tabs follow the session itself. The chat column always holds one conversation (W9). Closing a chat tab never loses its unsent message, and never deletes the chat: discarding a side chat is a separate, confirmed action. Previews are native webviews above the DOM, so they hide while the panel slides.
 What the user picks here for the agent joins the message being written: a preview capture or selected code lines become a tile in the composer (C14), and nothing is sent until the user sends it.
 
 ## Direction contract
