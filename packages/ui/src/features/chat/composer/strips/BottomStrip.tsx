@@ -58,11 +58,13 @@ function WherePart({
   chat,
   branch,
   baseBranch,
+  onOpen,
 }: {
   session: StripSession;
   chat: Chat | null;
   branch?: string;
   baseBranch?: string;
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const hasMessages = useAuiState((s) => s.thread.messages.length > 0);
@@ -100,7 +102,10 @@ function WherePart({
       hasMessages={hasMessages}
       busy={busy}
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        if (next) onOpen?.();
+        setOpen(next);
+      }}
     >
       <button
         type="button"
@@ -174,6 +179,7 @@ function useListedSession(): StripSession | null {
 
 function SessionLocation({ session, chat, port }: { session: StripSession; chat: Chat | null; port: number }) {
   const visible = useContext(ConversationVisibility);
+  const hasRecordedBase = Boolean(session.worktreePath && session.baseBranch);
   const { branch, liveBranch, refetch } = useDisplayBranch({
     port,
     projectId: session.projectId,
@@ -182,6 +188,7 @@ function SessionLocation({ session, chat, port }: { session: StripSession; chat:
     isWorktree: session.worktreePath != null,
     noProject: session.noProject,
     worktreePath: session.worktreePath,
+    hasRecordedBase,
     visible,
   });
   const baseBranch =
@@ -191,7 +198,13 @@ function SessionLocation({ session, chat, port }: { session: StripSession; chat:
       {session.temporary ? (
         <TemporaryPart />
       ) : (
-        <WherePart session={session} chat={chat} branch={branch} baseBranch={baseBranch} />
+        <WherePart
+          session={session}
+          chat={chat}
+          branch={branch}
+          baseBranch={baseBranch}
+          onOpen={visible && hasRecordedBase ? refetch : undefined}
+        />
       )}
       {!session.noProject && (
         <BranchPart session={session} port={port} branch={branch} baseBranch={baseBranch} refetch={refetch} />

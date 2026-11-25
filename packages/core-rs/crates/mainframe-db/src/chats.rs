@@ -5,6 +5,7 @@ mod json_columns;
 mod query;
 mod row;
 
+pub use branch_base::ClearedWorktreeBase;
 pub use fork_input::ForkCreateInput;
 pub use query::ChatListFilters;
 

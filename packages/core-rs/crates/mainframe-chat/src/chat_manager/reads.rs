@@ -147,19 +147,23 @@ impl ChatManager {
         }
     }
 
-    pub fn refresh_worktree_base(&self, chat_id: &str) {
-        if let Some(cell) = self.get_active(chat_id)
-            && let Some(row) =
-                storage_event!(self.shared, Some(chat_id); self.shared.deps.chats_get(chat_id))
-        {
+    pub fn apply_worktree_base_change(
+        &self,
+        base: &mainframe_db::ClearedWorktreeBase,
+        restored: bool,
+    ) {
+        if let Some(cell) = self.get_active(&base.chat_id) {
             let mut guard = cell.lock_recover();
-            if guard.chat.worktree_path == row.worktree_path
-                && guard.chat.branch_name == row.branch_name
+            let chat = &mut guard.chat;
+            if chat.project_id == base.project_id
+                && chat.worktree_path == base.worktree_path
+                && chat.branch_name.as_deref() == Some(base.branch_name.as_str())
+                && (!restored || chat.base_branch.is_none())
             {
-                guard.chat.base_branch = row.base_branch;
+                chat.base_branch = restored.then(|| base.base_branch.clone());
             }
         }
-        self.emit_chat_updated(chat_id);
+        self.emit_chat_updated(&base.chat_id);
     }
 
     pub fn emit_worktree_deleted(&self, chat_id: &str) {

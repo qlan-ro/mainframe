@@ -96,7 +96,15 @@ describe('useDisplayBranch', () => {
   it('reads the worktree only when the conversation becomes visible', async () => {
     const { result, rerender } = renderHook(
       ({ visible, chatId }) =>
-        useDisplayBranch({ port: 1, projectId: 'project', chatId, branchName: 'topic', worktreePath: '/wt', visible }),
+        useDisplayBranch({
+          port: 1,
+          projectId: 'project',
+          chatId,
+          branchName: 'topic',
+          worktreePath: '/wt',
+          hasRecordedBase: true,
+          visible,
+        }),
       { initialProps: { visible: false, chatId: 'first' } },
     );
     act(() => result.current.refetch());

@@ -104,7 +104,14 @@ async fn stores_only_named_branch_start_points() {
         &["update-ref", "refs/remotes/origin/release", "HEAD"],
     );
     git(&repo, &["tag", "snapshot"]);
+    git(&repo, &["tag", "release"]);
+    git(&repo, &["branch", "local-base"]);
+    git(
+        &repo,
+        &["update-ref", "refs/remotes/origin/team/topic", "HEAD"],
+    );
     git(&repo, &["checkout", "--detach"]);
+    assert!(!mainframe_services::workspace::is_branch_start_point(&project.path, "release").await);
     let commit = std::process::Command::new("git")
         .args(["rev-parse", "HEAD"])
         .current_dir(repo.path())
@@ -113,12 +120,22 @@ async fn stores_only_named_branch_start_points() {
     let sha = String::from_utf8(commit.stdout).unwrap();
 
     for (branch, start, expected) in [
-        ("local", "release", Some("release")),
+        ("local", "local-base", Some("local-base")),
+        (
+            "qualified",
+            "refs/heads/release",
+            Some("refs/heads/release"),
+        ),
+        (
+            "qualified-remote",
+            "refs/remotes/origin/team/topic",
+            Some("refs/remotes/origin/team/topic"),
+        ),
         ("remote", "origin/release", Some("origin/release")),
         ("head", "HEAD", None),
         ("tag", "snapshot", None),
         ("commit", sha.trim(), None),
-        ("expression", "release~0", None),
+        ("expression", "local-base~0", None),
     ] {
         let cell = Arc::new(Mutex::new(ActiveChat::new(test_chat("c1"), None)));
         let manager = Harness::new(Setup::with_project(cell.clone(), project.clone()));

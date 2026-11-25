@@ -9,6 +9,7 @@ export interface UseDisplayBranchOptions {
   branchName?: string;
   isWorktree?: boolean;
   worktreePath?: string;
+  hasRecordedBase?: boolean;
   visible?: boolean;
   /** A non-project chat has no git repo to read a branch from (todo #346). */
   noProject?: boolean;
@@ -30,20 +31,23 @@ export function useDisplayBranch({
   isWorktree = false,
   noProject = false,
   worktreePath,
+  hasRecordedBase = false,
   visible = true,
 }: UseDisplayBranchOptions): DisplayBranch {
+  const canRead = !hasRecordedBase || visible;
+  const boundPath = hasRecordedBase ? worktreePath : undefined;
   const [revision, setRevision] = useState(0);
   const request = useMemo(
-    () => ({ port, projectId, chatId, branchName, noProject, worktreePath, revision, visible }),
-    [port, projectId, chatId, branchName, noProject, worktreePath, revision, visible],
+    () => ({ port, projectId, chatId, branchName, noProject, boundPath, revision, canRead }),
+    [port, projectId, chatId, branchName, noProject, boundPath, revision, canRead],
   );
   const [live, setLive] = useState<{ request: typeof request; branch: string | null }>();
   const liveBranch = live?.request === request ? live.branch : undefined;
   const refetch = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
-    const { port, projectId, chatId, noProject, visible } = request;
-    if (!visible || !projectId || noProject) return;
+    const { port, projectId, chatId, noProject, canRead } = request;
+    if (!canRead || !projectId || noProject) return;
     let cancelled = false;
     getGitBranch(port, projectId, chatId)
       .then(({ branch }) => {
@@ -56,6 +60,12 @@ export function useDisplayBranch({
       cancelled = true;
     };
   }, [request]);
+
+  useEffect(() => {
+    if (!hasRecordedBase || !visible) return;
+    window.addEventListener('focus', refetch);
+    return () => window.removeEventListener('focus', refetch);
+  }, [hasRecordedBase, visible, refetch]);
 
   // A worktree DRAFT (chat created on first send) can't resolve its branch live:
   // without a chatId the fetch reads the project root. Trust the draft's own
