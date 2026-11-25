@@ -1,5 +1,4 @@
 /** A command and what it printed. The terminal follows the theme (T1b). */
-import { cn } from '@/lib/utils';
 import { ScrollRegion } from './Surface';
 
 /**
@@ -17,7 +16,30 @@ function lineClass(line: string): string | undefined {
   return undefined;
 }
 
-export function TerminalBody({ command, output }: { command: string; output: string }) {
+function terminalLine(line: string) {
+  const progress = /^( +(?:Compiling|Finished|Running)) (.+)$/.exec(line);
+  if (progress) {
+    return (
+      <>
+        <span className="font-semibold text-mf-tr-term-ok">{progress[1]}</span>
+        {` ${progress[2]}`}
+      </>
+    );
+  }
+  const result = /^(test (?:result:|.* \.\.\.) )(ok|FAILED)(.*)$/.exec(line);
+  if (result) {
+    return (
+      <>
+        {result[1]}
+        <span className={result[2] === 'ok' ? 'text-mf-tr-term-ok' : 'text-mf-tr-term-err'}>{result[2]}</span>
+        {result[3]}
+      </>
+    );
+  }
+  return <span className={lineClass(line)}>{line}</span>;
+}
+
+export function TerminalBody({ command, output }: { command?: string; output: string }) {
   const lines = output.replace(ESCAPES, '').replace(/\n$/, '').split('\n');
   return (
     <ScrollRegion label="Command output" testId="chat-bash-region" className="bg-mf-tr-term">
@@ -30,8 +52,8 @@ export function TerminalBody({ command, output }: { command: string; output: str
         )}
         {output &&
           lines.map((line, index) => (
-            <span key={index} className={cn('block min-h-[19px] wrap-break-word whitespace-pre-wrap', lineClass(line))}>
-              {line}
+            <span key={index} className="block min-h-[19px] whitespace-pre">
+              {terminalLine(line)}
             </span>
           ))}
       </pre>

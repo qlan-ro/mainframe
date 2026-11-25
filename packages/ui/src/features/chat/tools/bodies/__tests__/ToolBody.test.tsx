@@ -74,7 +74,7 @@ describe('ToolBody', () => {
       'last',
     ].join('\n');
     show(part('Bash', { command: 'x' }, output));
-    expect(screen.getByTestId('chat-bash-output').textContent).toBe('$ xokdocsplainlast');
+    expect(screen.getByTestId('chat-bash-output').textContent).toBe('okdocsplainlast');
   });
 
   it('clamps a long file and shows the rest on request', () => {
@@ -152,9 +152,9 @@ describe('ToolBody', () => {
     expect(screen.getByTestId('chat-write-code')).toHaveTextContent('1x');
   });
 
-  it('prints a command and its output, without escape codes', () => {
+  it('prints command output without repeating the command or including escape codes', () => {
     show(part('Bash', { command: 'ls', description: 'List files' }, '\u001b[32ma.ts\u001b[0m'));
-    expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('$ lsa.ts');
+    expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('a.ts');
     expect(screen.getByTestId('chat-bash-description')).toHaveTextContent('List files');
     expect(screen.getByRole('region', { name: 'Command output' })).toHaveAttribute('tabindex', '0');
   });

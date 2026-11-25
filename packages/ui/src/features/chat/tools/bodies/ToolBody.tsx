@@ -77,13 +77,17 @@ function EditBody({ part, status }: ToolBodyProps) {
 }
 
 function ShellBody({ part, status }: ToolBodyProps) {
-  const { text, truncated } = resolveResultText(part.result);
+  const { text, truncated } = resolveResultText(part.result, true);
   const background = useBackgroundStart(part.toolCallId) !== undefined || runsInBackground(part);
   const command = argText(part, 'command') || argText(part, 'input');
   const description = argText(part, 'description');
   return (
     <>
-      {description && <BodyNote testId="chat-bash-description">{description}</BodyNote>}
+      {description && (
+        <p data-testid="chat-bash-description" className="mb-1.5 text-[12px] leading-[22px] text-muted-foreground">
+          {description}
+        </p>
+      )}
       {background ? (
         <BackgroundOutput toolCallId={part.toolCallId} command={command} launch={text} />
       ) : truncated ? (
@@ -91,7 +95,10 @@ function ShellBody({ part, status }: ToolBodyProps) {
           <ResultText part={part} />
         </Surface>
       ) : (
-        <TerminalBody command={command} output={text || (status === 'running' ? '' : '(no output)')} />
+        <TerminalBody
+          command={status === 'running' ? command : undefined}
+          output={text || (status === 'running' ? '' : '(no output)')}
+        />
       )}
     </>
   );
@@ -143,7 +150,7 @@ function ReadBody({ part, text }: { part: ToolPart; text: string }) {
 }
 
 function MainBody({ part, status }: ToolBodyProps) {
-  const { text, truncated } = resolveResultText(part.result);
+  const { text, truncated } = resolveResultText(part.result, true);
   const kind = toolKind(part.toolName);
   if (kind === 'shell') return <ShellBody part={part} status={status} />;
   if (kind === 'mcp' || kind === 'unknown') return <CallBody part={part} status={status} />;
