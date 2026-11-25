@@ -87,7 +87,12 @@ const LOCAL = JSON.parse(readFileSync(join(REPO, 'design/canvas/lib/local-paths.
 const ENCODED = new RegExp(LOCAL.encoded, 'g');
 const BASE64 = new RegExp(LOCAL.base64, 'g');
 const WRAP = new RegExp(LOCAL.wrap, 'g');
-const LOCAL_PATH = new RegExp(`(?:${LOCAL.paths.join('|')})${LOCAL.end}`, 'g');
+const ENCODED_SLASH = new RegExp(LOCAL.encodedSlash, 'g');
+const BREAKS = new RegExp(LOCAL.breaks, 'g');
+const LOCAL_PATH = new RegExp(
+  `(?:${LOCAL.exempt.join('|')})|((?:${[LOCAL.paths, ...LOCAL.more].join('|')})${LOCAL.end})`,
+  'g',
+);
 
 const decoded = (_, byHex, entityHex, entity, octal, slash) => {
   if (byHex || entityHex) return String.fromCharCode(parseInt(byHex || entityHex, 16));
@@ -101,8 +106,12 @@ const unbase64 = (run) => Buffer.from(run, 'base64').toString('latin1').replaceA
 /** Home and temp paths of a machine in `text`, escaped and base64 ones included. `lib/boards.py` holds new boards to the same rule. */
 export function localPaths(text) {
   const runs = new Set([text, text.replace(WRAP, '')].flatMap((t) => t.match(BASE64) ?? []));
-  const texts = [text, ...[...runs].map(unbase64)];
-  return [...new Set(texts.flatMap((t) => t.replace(ENCODED, decoded).match(LOCAL_PATH) ?? []))].sort();
+  const texts = [text, ...[...runs].map(unbase64)].flatMap((t) => [
+    t.replace(ENCODED_SLASH, '/'),
+    t.replace(ENCODED, decoded).replace(BREAKS, '\n'),
+  ]);
+  const found = texts.flatMap((t) => [...t.matchAll(LOCAL_PATH)].map(([, path]) => path).filter(Boolean));
+  return [...new Set(found)].sort();
 }
 
 /** What is published or describes it: boards, index, design system, spec, prototype, briefs and the two guides. */

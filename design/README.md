@@ -61,7 +61,7 @@ pnpm --filter @qlan-ro/mainframe-e2e exec playwright install chromium
 bash design/canvas/proposals/run.sh
 ```
 
-`run.sh` renders every state listed in `states.py` from the prototype, writes the boards, sets the spec board's height, lays out the Proposals page and runs the check. With an unchanged prototype and `states.py` it reproduces the boards of its last run byte for byte. The prototype numbers its tool cards (`tcN`, `mkN`) with one counter that keeps counting from state to state, so adding, removing or reordering a state renumbers every board after it. Such a diff holds nothing but ids: leave those boards as committed rather than publish the noise. `shot.cjs` previews a board locally; it needs the canvas runtime at `canvas/proposals/render/support.js` (the canvas type's `artifact-type/dc-runtime.js`, which is not committed).
+`run.sh` renders every state listed in `states.py` from the prototype, writes the boards, sets the spec board's height, lays out the Proposals page and runs the check. With an unchanged prototype and `states.py` it reproduces the boards of its last run byte for byte. The prototype numbers its tool cards (`tcN`, `mkN`) with one counter that keeps counting from state to state; `number-ids.cjs` numbers them per state and prefixes the state's name, so adding, removing or reordering a state changes only its own board. `shot.cjs` previews a board locally; it needs the canvas runtime at `canvas/proposals/render/support.js` (the canvas type's `artifact-type/dc-runtime.js`, which is not committed).
 
 ## Regenerating the other boards
 
