@@ -69,6 +69,7 @@ export default {
       id: 'earlier-open',
       title: 'Earlier unfolded',
       ...base,
+      scenario: { earlierRows: 3 },
       views: ['wide'],
       proto: async (page) => {
         await P.preset('idle')(page);
@@ -146,7 +147,7 @@ export default {
       pairs: [sections[2]],
       shot: { p: sec('Activity'), a: asec('Activity') },
     },
-  ],
+  ].map((state) => ({ ...state, scenario: { ...state.scenario, panelTaskTitles: true } })),
 };
 void PREFS;
 void TABS;

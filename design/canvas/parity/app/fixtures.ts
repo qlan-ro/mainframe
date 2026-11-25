@@ -29,6 +29,8 @@ export interface Scenario {
   perm?: 'default' | 'acceptEdits' | 'auto' | 'yolo';
   env?: 'worktree' | 'local' | 'temp';
   attachments?: number;
+  panelTaskTitles?: boolean;
+  earlierRows?: number;
   /** The workspace's own two launch configurations, running or not. */
   launch?: 'one-stopped' | 'two' | 'two-stopped';
   projects?: 'none';
@@ -203,9 +205,9 @@ const NEED = task('a0', 'agent', 'Review the quota reset diff', 36);
 const ended = (id: string, kind: string, text: string, status: string, minutes: number) =>
   task(id, kind, text, minutes + 3, { status, endedAt: atMs(minutes) });
 const EARLIER = [
-  ...['Review the scope diff', 'Check the readiness gate', 'Rerun the typecheck'].map((text, i) =>
-    ended(`f${i}`, 'agent', text, 'failed', 60 + i),
-  ),
+  ended('f0', 'agent', 'Review the scope diff', 'failed', 60),
+  ended('f1', 'workflow', 'Check the readiness gate', 'failed', 61),
+  ended('f2', 'bash', 'Rerun the typecheck', 'failed', 62),
   ...Array.from({ length: 21 }, (_, i) =>
     ended(`d${i}`, 'agent', `Explore the rate-limit sources ${i + 1}`, 'completed', 70 + i),
   ),
@@ -339,9 +341,20 @@ const todo = (number: number, title: string) => ({
   updated_at: ago(4000),
 });
 const TODOS = [
-  todo(24, 'claude: --permission-mode auto is ignored after resume'),
-  todo(23, 'Remember file tree expansion state per project'),
-  todo(22, 'Preview captures do not include native scrollbars'),
+  todo(
+    24,
+    scenario.panelTaskTitles
+      ? 'claude: --permission-mode auto i…'
+      : 'claude: --permission-mode auto is ignored after resume',
+  ),
+  todo(
+    23,
+    scenario.panelTaskTitles ? 'Remember file tree expansion sta…' : 'Remember file tree expansion state per project',
+  ),
+  todo(
+    22,
+    scenario.panelTaskTitles ? 'Preview captures do not …' : 'Preview captures do not include native scrollbars',
+  ),
 ];
 const BRANCHES = ['main', 'develop', 'release/2.15', 'refactor/daemon-baseline'];
 const WORKTREES = ['feat/quota-reset', 'feat/composer-v2', 'fix/ws-reconnect'];
@@ -479,7 +492,7 @@ export function respond(method: string, url: URL, _body: unknown): unknown {
     if ((m = is(/^\/api\/chats\/([\w-]+)\/workflow-runs$/)))
       return ok(m[1] === 's1' && scenario.transcript === 'extraTools' ? [parityReviewWorkflow] : []);
     if ((m = is(/^\/api\/chats\/([\w-]+)\/background-tasks$/)))
-      return ok({ tasks: m[1] === 's1' ? [...live(), ...EARLIER] : [] });
+      return ok({ tasks: m[1] === 's1' ? [...live(), ...EARLIER.slice(0, scenario.earlierRows)] : [] });
     if (is(/^\/api\/chats\/[\w-]+\/context$/)) return ok(CONTEXT());
     if (is(/^\/api\/chats\/[\w-]+\/segments$/)) return ok([]);
     if (is(/^\/api\/chats\/[\w-]+\/session-files$/)) return ok({ files: changes() });
@@ -644,6 +657,7 @@ function transcript(): Json[] {
     'Found it. Two things together freeze the capsule.',
     13,
     [
+      call('call-f2', 'Bash', { command: 'pnpm typecheck', run_in_background: true }, 'Typecheck failed', 65),
       call(
         'call-a1',
         'Task',
@@ -676,7 +690,7 @@ function transcript(): Json[] {
           reason: 'Check the review-readiness workflow',
           prompt: 'Check the review-readiness workflow',
         },
-        '{}',
+        JSON.stringify({ nextRunAtMs: NOW + (52 * 60 + 20) * 1000 }),
         12.6,
       ),
       call(
