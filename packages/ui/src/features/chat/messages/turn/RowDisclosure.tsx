@@ -82,7 +82,10 @@ function RowLine(props: RowDisclosureProps & { open: boolean; toggle: () => void
         {receipt && (
           <span
             data-testid={`${props.testId}-receipt`}
-            className={cn('mf-tr-meta shrink-0 whitespace-nowrap tabular-nums', props.tone && TONES[props.tone])}
+            className={cn(
+              'mf-tr-meta shrink-0 whitespace-nowrap tabular-nums',
+              props.tone ? TONES[props.tone] : 'text-muted-foreground',
+            )}
           >
             {receipt}
           </span>
@@ -92,7 +95,10 @@ function RowLine(props: RowDisclosureProps & { open: boolean; toggle: () => void
       {expandable ? (
         <ChevronRight
           aria-hidden
-          className={cn('size-3! transition-transform duration-150 motion-reduce:transition-none', open && 'rotate-90')}
+          className={cn(
+            'size-3! text-muted-foreground transition-transform duration-150 motion-reduce:transition-none',
+            open && 'rotate-90',
+          )}
         />
       ) : (
         (props.trailing ?? <span aria-hidden className="size-3 shrink-0" />)
