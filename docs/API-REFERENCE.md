@@ -419,7 +419,7 @@ panel (long-running bash/agent work started from a session).
 | Method & Path | Purpose | Request | Response |
 |---|---|---|---|
 | `GET /api/chats/{chatId}/background-tasks` | List a chat's background tasks | — | Task list |
-| `GET /api/chats/{chatId}/background-tasks/{taskId}/output` | Tail a task's output file | `?bytes=` (default reads from the end) | Output text |
+| `GET /api/chats/{chatId}/background-tasks/{taskId}/output` | Tail a task's output file | `?bytes=` (default reads from the end) | Output text; `X-Output-Truncated` when the start is left out |
 | `POST /api/chats/{chatId}/background-tasks/{taskId}/kill` | Kill a running task | — | `ok_empty` |
 
 ### External Sessions
