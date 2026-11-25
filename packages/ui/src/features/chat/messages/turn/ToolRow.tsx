@@ -53,7 +53,7 @@ function useRowTarget(part: ToolPart, facts: ToolRowFacts): { target: string; fi
 }
 
 function FileActions({ part, kind, target }: { part: ToolPart; kind: string; target: string }) {
-  const { openFile } = useOpenFile();
+  const { openFile, revealFile } = useOpenFile();
   const openEdit = useOpenEdit(part);
   const path = argText(part, 'file_path');
   if (!path) return null;
@@ -63,7 +63,10 @@ function FileActions({ part, kind, target }: { part: ToolPart; kind: string; tar
         hoverOnly
         label={`Open ${target} in the editor`}
         testId={`chat-row-open-file-${part.toolCallId}`}
-        onClick={() => openFile(path)}
+        onClick={() => {
+          openFile(path);
+          revealFile(path);
+        }}
       >
         <FileInput />
       </RowAction>

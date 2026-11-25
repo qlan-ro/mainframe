@@ -191,7 +191,7 @@ function worktreeMarker(part: ToolPart): Draft {
       label: 'Entered worktree',
       target: name,
       mono: true,
-      hint: path && path !== name ? path : undefined,
+      hint: path || undefined,
     };
   }
   if (argText(part, 'action') === 'remove')

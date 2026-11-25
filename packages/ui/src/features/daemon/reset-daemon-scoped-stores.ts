@@ -37,7 +37,7 @@ export function resetDaemonScopedStores(): void {
 
   useUnreadStore.setState({ unread: new Set<string>() });
 
-  useActiveBasesStore.setState({ bases: {}, scopeKey: null });
+  useActiveBasesStore.setState({ bases: {}, scopeKey: null, tree: null });
 
   useSandboxStore.setState({
     captures: [],

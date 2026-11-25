@@ -4,11 +4,12 @@
  * - `useChatId` reads the chat id from the transcript's scope, or the runtime `extras`.
  * - `useOpenFile` emits surface intents; only `layout/` subscribes.
  */
-import { useCallback } from 'react';
+import { useCallback, useContext } from 'react';
 import { useTranscriptScope } from '../messages/turn/transcript-scope';
 import { useChatExtras } from '../runtime/chat-extras';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-import { useIntentPath } from './chat-file-bases';
+import { useActiveBasesStore } from '@/store/active-bases-store';
+import { ChatFileRevealContext, useIntentPath } from './chat-file-bases';
 
 /**
  * The chat the transcript is of, or undefined before the runtime is ready. A
@@ -35,6 +36,7 @@ export interface OpenFileIntent {
 
 export function useOpenFile(): OpenFileIntent {
   const intentPath = useIntentPath();
+  const ownScope = useContext(ChatFileRevealContext);
   const openFile = useCallback(
     (path: string, position?: OpenFilePosition) => {
       const resolvedPath = intentPath(path);
@@ -44,7 +46,6 @@ export function useOpenFile(): OpenFileIntent {
         line: position?.line,
         character: position?.character,
       });
-      emitSurfaceIntent({ type: 'reveal-file', path: resolvedPath });
     },
     [intentPath],
   );
@@ -56,9 +57,11 @@ export function useOpenFile(): OpenFileIntent {
   );
   const revealFile = useCallback(
     (path: string) => {
-      emitSurfaceIntent({ type: 'reveal-file', path: intentPath(path) });
+      const { scopeKey, tree } = useActiveBasesStore.getState();
+      const scope = ownScope === undefined && scopeKey && tree ? { scopeKey, daemonId: tree.daemonId } : ownScope;
+      if (scope) emitSurfaceIntent({ type: 'reveal-file', path: intentPath(path), scope });
     },
-    [intentPath],
+    [intentPath, ownScope],
   );
   return { openFile, openDiff, revealFile };
 }

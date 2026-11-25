@@ -7,7 +7,9 @@
 import { useMemo, type ReactNode } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { findByChatId } from '@/features/chat/orchestration/use-session-items';
-import { ChatFileBasesContext } from '@/features/chat/tools/chat-file-bases';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
+import { activeLaunchScope } from '@/lib/launch-scope';
+import { ChatFileBasesContext, ChatFileRevealContext } from '@/features/chat/tools/chat-file-bases';
 import { useProjects } from '@/features/sessions/use-projects';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { parentOfSideChat } from '@/features/side-chat/side-chat-ids';
@@ -23,5 +25,12 @@ export function OwnFiles({ chatId, children }: { chatId: string; children: React
     () => (worktreePath == null && projectPath == null ? null : { worktreePath, projectPath }),
     [worktreePath, projectPath],
   );
-  return <ChatFileBasesContext.Provider value={bases}>{children}</ChatFileBasesContext.Provider>;
+  const scopeKey = activeLaunchScope(custom?.noProject ? undefined : custom?.projectId, worktreePath, projectPath);
+  const daemonId = getActiveDaemon().id;
+  const scope = useMemo(() => (scopeKey ? { scopeKey, daemonId } : null), [scopeKey, daemonId]);
+  return (
+    <ChatFileRevealContext.Provider value={scope}>
+      <ChatFileBasesContext.Provider value={bases}>{children}</ChatFileBasesContext.Provider>
+    </ChatFileRevealContext.Provider>
+  );
 }

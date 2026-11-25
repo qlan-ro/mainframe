@@ -103,6 +103,11 @@ describe('what each pill says', () => {
     });
   });
 
+  it('keeps the path tooltip when the worktree path is also the target', () => {
+    const path = '/repo/worktrees/x';
+    expect(facts('EnterWorktree', {}, json({ worktreePath: path }))).toMatchObject({ target: path, hint: path });
+  });
+
   it('shows a notification’s message and where it went', () => {
     expect(facts('PushNotification', { message: 'Done' }, { result: 'Sent to your phone' })).toMatchObject({
       label: 'Notified',

@@ -38,7 +38,7 @@ describe('SmartLink — file targets open via the intent bus', () => {
       line: undefined,
       character: undefined,
     });
-    expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'reveal-file', path: '/repo/src/a.ts' });
+    expect(emitSurfaceIntent).toHaveBeenCalledTimes(1);
     expect(openExternal).not.toHaveBeenCalled();
   });
 
