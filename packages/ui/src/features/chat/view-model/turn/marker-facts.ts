@@ -129,7 +129,6 @@ function jobsOf(entries: readonly unknown[]): ScheduledJob[] {
 }
 
 function scheduleMarker(part: ToolPart): Draft {
-  const result = parsed(part);
   switch (part.toolName) {
     case 'ScheduleWakeup':
       return {
@@ -142,7 +141,7 @@ function scheduleMarker(part: ToolPart): Draft {
         ),
       };
     case 'CronCreate': {
-      const job = { ...record(part.args), ...record(result) };
+      const job = { ...record(part.args), ...record(parsed(part)) };
       return {
         icon: 'cron-create',
         label: 'Scheduled',
@@ -154,6 +153,7 @@ function scheduleMarker(part: ToolPart): Draft {
     case 'CronDelete':
       return { icon: 'cron-delete', label: 'Removed schedule', target: argText(part, 'id'), mono: true };
     default: {
+      const result = parsed(part);
       const entries = Array.isArray(result) ? result : record(result)?.jobs;
       // Prose: the CLI's own list, or that there is none.
       if (!Array.isArray(entries))
@@ -182,8 +182,9 @@ function monitorMarker(part: ToolPart, running: boolean): Draft {
 }
 
 function worktreeMarker(part: ToolPart): Draft {
-  const result = record(parsed(part));
-  const name = displayText(record(part.args)?.name ?? result?.worktreeBranch ?? result?.worktreePath);
+  const requested = record(part.args)?.name;
+  const result = requested == null || part.toolName === 'EnterWorktree' ? record(parsed(part)) : undefined;
+  const name = displayText(requested ?? result?.worktreeBranch ?? result?.worktreePath);
   if (part.toolName === 'EnterWorktree') {
     const path = displayText(result?.worktreePath);
     return {

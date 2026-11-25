@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useAuiState, type ThreadMessage } from '@assistant-ui/react';
 import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
 import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { useSessionItems } from '@/features/chat/orchestration/use-session-items';
@@ -45,6 +45,20 @@ function mergedTasks(
   return [...byId.values()];
 }
 
+const transcriptActivity = new WeakMap<
+  readonly ThreadMessage[],
+  { tools: ReturnType<typeof transcriptTools>; scheduled: ReturnType<typeof scheduledEntries> }
+>();
+
+function activityFromTranscript(messages: readonly ThreadMessage[]) {
+  const cached = transcriptActivity.get(messages);
+  if (cached) return cached;
+  const tools = transcriptTools(messages);
+  const activity = { tools, scheduled: scheduledEntries(tools) };
+  transcriptActivity.set(messages, activity);
+  return activity;
+}
+
 export function useActivityEntries() {
   const messages = useAuiState((state) => state.thread.messages);
   const extras = useChatExtras();
@@ -77,7 +91,7 @@ export function useActivityEntries() {
   }, [chatId, liveTasks]);
 
   const entries = useMemo(() => {
-    const tools = transcriptTools(messages);
+    const { tools, scheduled } = activityFromTranscript(messages);
     const listed = loaded?.chatId === chatId ? (loaded?.tasks ?? []) : [];
     const delegated = chatId ? delegatedTasksOf(sessionItems, chatId) : [];
     const pending = new Set(Object.values(permissions ?? {}).map((entry) => entry.request.toolUseId));
@@ -85,7 +99,7 @@ export function useActivityEntries() {
       [
         ...markNeedsYou(taskEntries(mergedTasks(listed, liveTasks), tools), agentsAwaiting(messages, pending)),
         ...delegatedEntries(delegated, tools),
-        ...scheduledEntries(tools),
+        ...scheduled,
       ],
       messages,
       hasMore,

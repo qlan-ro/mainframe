@@ -40,6 +40,7 @@ function clampScroll(el: HTMLElement): void {
 
 const pointerOver = (el: Element): void => {
   el.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+  vi.advanceTimersByTime(20);
 };
 
 function drag(thumb: HTMLElement, type: string, clientY: number): void {
@@ -78,9 +79,21 @@ describe('overlay scrollbar manager', () => {
     expect(isShown(thumbs()[0])).toBe(false);
   });
 
-  it('shows a thumb while an unhovered area scrolls, then fades it', () => {
+  it('ignores programmatic scrolling without input', () => {
     const scroller = makeScroller();
+    const readBox = vi.spyOn(scroller, 'getBoundingClientRect');
     scroller.dispatchEvent(new Event('scroll'));
+    vi.advanceTimersByTime(40);
+    expect(readBox).not.toHaveBeenCalled();
+    expect(thumbs()).toHaveLength(0);
+  });
+
+  it('shows a user-scrolled area after the frame, then fades it', () => {
+    const scroller = makeScroller();
+    scroller.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 30 }));
+    scroller.dispatchEvent(new Event('scroll'));
+    expect(thumbs()).toHaveLength(0);
+    vi.advanceTimersByTime(20);
     expect(isShown(thumbs()[0])).toBe(true);
     vi.advanceTimersByTime(1_000);
     expect(isShown(thumbs()[0])).toBe(false);
@@ -196,6 +209,17 @@ describe('overlay scrollbar manager', () => {
       Reflect.deleteProperty(document, 'elementsFromPoint');
     });
 
+    it('does not repeat hit testing for an idle, unchanged thumb', () => {
+      const scroller = makeScroller();
+      const hit = vi.fn(() => [scroller]);
+      document.elementsFromPoint = hit;
+      pointerOver(scroller);
+      vi.advanceTimersByTime(250);
+      hit.mockClear();
+      vi.advanceTimersByTime(750);
+      expect(hit).not.toHaveBeenCalled();
+    });
+
     it('hides the thumb when a dialog covers all of it', () => {
       const scroller = makeScroller();
       const dialog = document.createElement('div');
@@ -205,6 +229,7 @@ describe('overlay scrollbar manager', () => {
       pointerOver(scroller);
       expect(thumbs()[0]?.hidden).toBe(false);
       top = dialog;
+      document.dispatchEvent(new Event('transitionend'));
       vi.advanceTimersByTime(300);
       expect(thumbs()[0]?.hidden).toBe(true);
     });
@@ -221,6 +246,7 @@ describe('overlay scrollbar manager', () => {
       expect(thumb.style.clipPath).toBe('polygon(0px 18px, 100% 18px, 100% 98px, 0px 98px)');
 
       paint(() => [scroller]);
+      document.dispatchEvent(new Event('transitionend'));
       vi.advanceTimersByTime(300);
       expect(thumb.style.clipPath).toBe('');
     });
@@ -284,7 +310,7 @@ describe('overlay scrollbar manager', () => {
       const scrollTo = (top: number): void => {
         scroller.scrollTop = top;
         scroller.dispatchEvent(new Event('scroll'));
-        vi.advanceTimersByTime(17);
+        vi.advanceTimersByTime(20);
       };
       vi.advanceTimersByTime(1);
       pointerOver(scroller);
@@ -300,6 +326,7 @@ describe('overlay scrollbar manager', () => {
       expect(calls).toBeLessThanOrEqual(5);
 
       edge = 0;
+      document.dispatchEvent(new Event('transitionend'));
       vi.advanceTimersByTime(250);
       expect(thumb.style.clipPath).toBe('');
     });
@@ -313,11 +340,11 @@ describe('overlay scrollbar manager', () => {
       pointerOver(scroller);
       edge = 20;
       scroller.dispatchEvent(new Event('scroll'));
-      vi.advanceTimersByTime(17);
+      vi.advanceTimersByTime(20);
       expect(thumbs()[0]!.style.clipPath).toBe('');
       window.dispatchEvent(new Event('resize'));
       scroller.dispatchEvent(new Event('scroll'));
-      vi.advanceTimersByTime(17);
+      vi.advanceTimersByTime(20);
       expect(thumbs()[0]!.style.clipPath).toBe('polygon(0px 18px, 100% 18px, 100% 98px, 0px 98px)');
     });
 
@@ -331,6 +358,7 @@ describe('overlay scrollbar manager', () => {
       const thumb = thumbs()[0]!;
       drag(thumb, 'pointerdown', 10);
       top = dialog;
+      document.dispatchEvent(new Event('transitionend'));
       vi.advanceTimersByTime(300);
       expect(thumb.hidden).toBe(false);
       expect(thumb.style.clipPath).toBe('');

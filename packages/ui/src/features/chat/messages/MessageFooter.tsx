@@ -17,7 +17,17 @@ function formatCostUsd(usd: number): string {
   return `$${usd.toFixed(3)}`;
 }
 
-export const formatClock = (date: Date) => date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const clockFormatter = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' });
+const dateFormatter = new Intl.DateTimeFormat([], {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+export const formatClock = (date: Date) =>
+  Number.isNaN(date.getTime()) ? 'Invalid Date' : clockFormatter.format(date);
 
 /** What the turn took, which its provider may say on another of its messages. */
 function useTook(): { totalMs?: number; cost?: number } {
@@ -31,18 +41,20 @@ function useTook(): { totalMs?: number; cost?: number } {
   return { totalMs: turn?.durationMs ?? ownMs, cost: turn?.costUsd ?? ownCost };
 }
 
+function TimestampDetails({ date }: { date: Date }) {
+  const { totalMs, cost } = useTook();
+  return (
+    <>
+      <span>{dateFormatter.format(date)}</span>
+      {totalMs !== undefined && totalMs > 0 && <span>Took {formatTurnDuration(totalMs)}</span>}
+      {cost !== undefined && <span>Cost {formatCostUsd(cost)}</span>}
+    </>
+  );
+}
+
 export function MessageTime({ user = false }: { user?: boolean }) {
   const createdAt = useAuiState((s) => s.message.createdAt as Date | undefined);
-  const { totalMs, cost } = useTook();
   if (!createdAt) return null;
-  const date = createdAt.toLocaleString([], {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -60,9 +72,7 @@ export function MessageTime({ user = false }: { user?: boolean }) {
         </time>
       </TooltipTrigger>
       <TooltipContent data-testid="chat-message-time-detail" className="flex-col items-start gap-0.5">
-        <span>{date}</span>
-        {totalMs !== undefined && totalMs > 0 && <span>Took {formatTurnDuration(totalMs)}</span>}
-        {cost !== undefined && <span>Cost {formatCostUsd(cost)}</span>}
+        <TimestampDetails date={createdAt} />
       </TooltipContent>
     </Tooltip>
   );

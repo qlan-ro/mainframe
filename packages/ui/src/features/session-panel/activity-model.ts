@@ -200,9 +200,9 @@ export function delegatedEntries(rows: readonly DelegatedTaskRow[], tools: reado
 
 function scheduledEntry(tool: ToolRef): ActivityEntry | null {
   if (tool.isError || tool.result === undefined) return null;
-  const output = resultRecord(tool.result);
   const name = tool.toolName.split('__').pop();
   if (name !== 'CronCreate' && name !== 'ScheduleWakeup') return null;
+  const output = resultRecord(tool.result);
   const prompt = string(tool.args.prompt);
   const delay = Number(tool.args.delaySeconds);
   const nextRaw = output.nextRunAt ?? output.nextRunAtMs ?? output.scheduledAt;

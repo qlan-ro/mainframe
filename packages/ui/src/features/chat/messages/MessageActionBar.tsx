@@ -94,8 +94,19 @@ function QuoteItem() {
   );
 }
 
-const MoreMenu: FC<{ user: boolean }> = ({ user }) => {
+function ExportItem() {
   const replyText = useReplyText();
+  return (
+    <ActionBarPrimitive.ExportMarkdown asChild onExport={() => download(replyText())}>
+      <ActionBarMorePrimitive.Item data-testid="chat-message-export" className={ITEM_CLASS}>
+        <DownloadIcon className="shrink-0" />
+        Export as Markdown
+      </ActionBarMorePrimitive.Item>
+    </ActionBarPrimitive.ExportMarkdown>
+  );
+}
+
+const MoreMenu: FC<{ user: boolean }> = ({ user }) => {
   return (
     <ActionBarMorePrimitive.Root>
       <ActionBarMorePrimitive.Trigger asChild>
@@ -121,14 +132,7 @@ const MoreMenu: FC<{ user: boolean }> = ({ user }) => {
         )}
       >
         <QuoteItem />
-        {!user && (
-          <ActionBarPrimitive.ExportMarkdown asChild onExport={() => download(replyText())}>
-            <ActionBarMorePrimitive.Item data-testid="chat-message-export" className={ITEM_CLASS}>
-              <DownloadIcon className="shrink-0" />
-              Export as Markdown
-            </ActionBarMorePrimitive.Item>
-          </ActionBarPrimitive.ExportMarkdown>
-        )}
+        {!user && <ExportItem />}
       </ActionBarMorePrimitive.Content>
     </ActionBarMorePrimitive.Root>
   );
