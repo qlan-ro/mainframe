@@ -92,7 +92,7 @@ describe('UsageCapsule — cycle', () => {
 });
 
 describe('UsageCapsule — row', () => {
-  it('names the provider and the window, a per-model weekly by its model', () => {
+  it('names the provider and the window in full, a per-model weekly by its model', () => {
     seed({
       claude: {
         ...claude(3),
@@ -101,8 +101,10 @@ describe('UsageCapsule — row', () => {
     });
     render(<UsageCapsule now={NOW} />);
 
-    expect(screen.getByTestId('usage-capsule-item-claude:5-hour').textContent).toBe('Claude5h3%2h 36m');
-    expect(screen.getByTestId('usage-capsule-item-claude:Weekly · Fable').textContent).toBe('ClaudeWeek Fable18%6d 0h');
+    expect(screen.getByTestId('usage-capsule-item-claude:5-hour').textContent).toBe('Claude5-hour3%2h 36m');
+    expect(screen.getByTestId('usage-capsule-item-claude:Weekly · Fable').textContent).toBe(
+      'ClaudeWeekly Fable18%6d 0h',
+    );
   });
 });
 

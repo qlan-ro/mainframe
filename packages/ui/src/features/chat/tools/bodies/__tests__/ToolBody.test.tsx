@@ -53,6 +53,11 @@ describe('ToolBody', () => {
     expect(screen.queryByTestId('chat-read-reminder')).toBeNull();
   });
 
+  it('names an MCP call by its raw tool name', () => {
+    show(part('mcp__claude_ai_github__get_issue', { id: 1 }, 'ok'));
+    expect(screen.getByTestId('chat-call-tool')).toHaveTextContent('mcp__claude_ai_github__get_issue');
+  });
+
   it('offers the whole of a structured result the daemon cut short', () => {
     const result = { content: 'Error: …', structuredPatch: [], truncated: true, fullBytes: 51_191 };
     show(part('Edit', { file_path: 'a', old_string: 'a', new_string: 'b' }, result), 'failed');
@@ -69,7 +74,7 @@ describe('ToolBody', () => {
       'last',
     ].join('\n');
     show(part('Bash', { command: 'x' }, output));
-    expect(screen.getByTestId('chat-bash-output').textContent).toBe('okdocsplainlast');
+    expect(screen.getByTestId('chat-bash-output').textContent).toBe('$ xokdocsplainlast');
   });
 
   it('clamps a long file and shows the rest on request', () => {
@@ -147,9 +152,9 @@ describe('ToolBody', () => {
     expect(screen.getByTestId('chat-write-code')).toHaveTextContent('1x');
   });
 
-  it('prints command output without repeating the command or including escape codes', () => {
+  it('prints a command and its output, without escape codes', () => {
     show(part('Bash', { command: 'ls', description: 'List files' }, '\u001b[32ma.ts\u001b[0m'));
-    expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('a.ts');
+    expect(screen.getByTestId('chat-bash-output')).toHaveTextContent('$ lsa.ts');
     expect(screen.getByTestId('chat-bash-description')).toHaveTextContent('List files');
     expect(screen.getByRole('region', { name: 'Command output' })).toHaveAttribute('tabindex', '0');
   });
@@ -170,21 +175,6 @@ describe('ToolBody', () => {
     const summary = screen.getByTestId('web-fetch-card-summary');
     expect(summary).toHaveTextContent('Read rate_limits first.');
     expect(summary.querySelector('code')).toHaveTextContent('rate_limits');
-  });
-
-  it('shows web search titles and sources with the full output available', () => {
-    const text =
-      'Web search results for query: "quota"\n\nLinks: [{"title":"Quota","url":"https://example.com/quota"}]';
-    show(part('WebSearch', { query: 'quota' }, text));
-    expect(screen.getByText('Quota')).toBeVisible();
-    expect(screen.getByText('example.com')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Full search output' }));
-    expect(screen.getByText(text.replace(/\s+/g, ' '))).toBeVisible();
-  });
-
-  it('keeps an unstructured web search result readable', () => {
-    show(part('WebSearch', { query: 'quota' }, 'No matching results'));
-    expect(screen.getByText('No matching results')).toBeVisible();
   });
 
   it('highlights literal grep matches and preserves output indentation', () => {

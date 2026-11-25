@@ -15,7 +15,7 @@
  * (nextChange / prevChange in diff-nav.ts) always hold the live MergeView.
  */
 import { useEffect, useRef } from 'react';
-import { EditorState, type Extension, type Text } from '@codemirror/state';
+import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { MergeView } from '@codemirror/merge';
 import type { LangPackId } from '@/lib/editor/file-types';
@@ -59,11 +59,6 @@ const diffTheme = EditorView.theme({
     borderRight: '1px solid var(--mf-diff-del-border)',
   },
 });
-
-/** A chunk's lines on one side; a chunk with nothing on that side has none. */
-function lineCount(doc: Text, from: number, to: number, end: number): number {
-  return from === to ? 0 : doc.lineAt(end).number - doc.lineAt(from).number + 1;
-}
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -241,8 +236,8 @@ export function CmDiffEditor({
       let additions = 0;
       let deletions = 0;
       for (const chunk of mv.chunks) {
-        additions += lineCount(mv.b.state.doc, chunk.fromB, chunk.toB, chunk.endB);
-        deletions += lineCount(mv.a.state.doc, chunk.fromA, chunk.toA, chunk.endA);
+        additions += chunk.toB - chunk.fromB;
+        deletions += chunk.toA - chunk.fromA;
       }
       onStats({ additions, deletions });
     }

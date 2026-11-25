@@ -15,11 +15,10 @@ interface ThumbProps {
   active: boolean;
   onResolve: (uri: string, value: ResolvedToolImage) => void;
   onRetry: () => void;
-  caption?: string;
-  preview?: boolean;
+  preview?: 'file' | 'browser';
 }
 
-function ToolResultImageThumb({ image, testId, onOpen, active, onResolve, onRetry, caption, preview }: ThumbProps) {
+function ToolResultImageThumb({ image, testId, onOpen, active, onResolve, onRetry, preview }: ThumbProps) {
   const [state, setState] = useState<ThumbState>('pending');
   const { ref, src, error } = useToolImage(image, active, onResolve);
   const failed = error || state === 'error';
@@ -33,18 +32,19 @@ function ToolResultImageThumb({ image, testId, onOpen, active, onResolve, onRetr
       size="xs"
       className={cn(
         'min-w-0 has-data-[slot=attachment-media]:p-0',
-        caption || preview
-          ? 'aspect-[8/5] flex-col gap-0 rounded-[8px] border-0 bg-muted shadow-[inset_0_0_0_1px_var(--border)]'
+        preview
+          ? 'aspect-[8/5] flex-col gap-0 rounded-[8px] border-0 bg-queue-well shadow-[inset_0_0_0_1px_var(--border)]'
           : 'border-0 bg-transparent',
-        preview ? 'w-[240px]' : caption && 'w-[200px]',
+        preview === 'browser' ? 'w-[240px]' : preview && 'w-[200px]',
       )}
     >
       {(state === 'done' || failed) && <ImageTrigger failed={!!failed} activate={activate} />}
       <AttachmentMedia
         variant="image"
         className={
-          (caption || preview) &&
-          'h-full w-full bg-transparent group-data-[size=xs]/attachment:w-full *:[img]:h-full *:[img]:object-contain'
+          preview
+            ? 'h-full w-full bg-transparent group-data-[size=xs]/attachment:w-full *:[img]:h-full *:[img]:object-contain'
+            : undefined
         }
       >
         {error || state === 'error' ? (
@@ -53,11 +53,6 @@ function ToolResultImageThumb({ image, testId, onOpen, active, onResolve, onRetr
           <img src={src} alt="" onLoad={() => setState('done')} onError={() => setState('error')} />
         )}
       </AttachmentMedia>
-      {caption && (
-        <span className="pointer-events-none absolute inset-x-1 bottom-1 truncate rounded bg-card/90 px-1.5 text-center text-meta/[inherit] text-muted-foreground">
-          {caption}
-        </span>
-      )}
     </Attachment>
   );
 }
@@ -87,12 +82,11 @@ function ImageTrigger({ failed, activate }: { failed: boolean; activate: () => v
 export interface ToolResultImageThumbsProps {
   toolCallId: string;
   images: ToolResultImage[];
-  caption?: string;
-  preview?: boolean;
+  preview?: 'file' | 'browser';
 }
 
 /** Renders nothing when `images` is empty, so callers can pass it unconditionally. */
-export function ToolResultImageThumbs({ toolCallId, images, caption, preview }: ToolResultImageThumbsProps) {
+export function ToolResultImageThumbs({ toolCallId, images, preview }: ToolResultImageThumbsProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const { resolved, attempts, onResolve, retry } = useImageResolution(images);
   if (images.length === 0) return null;
@@ -103,7 +97,6 @@ export function ToolResultImageThumbs({ toolCallId, images, caption, preview }: 
         <ToolResultImageThumb
           key={`${image.uri ?? index}:${attempts[index] ?? 0}`}
           image={image}
-          caption={caption}
           preview={preview}
           testId={`tool-result-image-${toolCallId}-${index}`}
           onOpen={() => setOpenIndex(index)}

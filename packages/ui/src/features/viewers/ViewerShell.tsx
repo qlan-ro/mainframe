@@ -4,14 +4,15 @@
  * Shared chrome frame for all file viewers.
  *
  * Layout:
- *   Header (32px) — basename, then its folder; optional actions slot;
- *     separator; Reveal in file tree and Reveal in Finder buttons.
+ *   Header (32px) — folder icon, breadcrumb dir segments with
+ *     chevron separators, basename; optional actions slot; separator;
+ *     Reveal in file tree and Reveal in Finder buttons.
  *   Body (flex-1 overflow-hidden) — viewer content via `children`.
  *   Footer (20px, bg-muted) — mono status string; optional right-aligned
  *     statusRight slot.
  *
  * Props:
- *   path         — absolute or relative file path used to build the header.
+ *   path         — absolute or relative file path used to build the breadcrumb.
  *   status       — mono status string rendered left-aligned in the footer.
  *   statusRight  — optional right-aligned footer content (word count, etc.).
  *   actions      — optional React node inserted before the separator + Reveal
@@ -22,7 +23,7 @@
  * remote daemon, and for a relative path when no workspace base is known.
  */
 import React from 'react';
-import { Crosshair, FolderOpen } from 'lucide-react';
+import { ChevronRight, Crosshair, Folder, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Separator } from '@/components/ui/separator';
@@ -67,11 +68,17 @@ export function ViewerShell({ path, status, statusRight, actions, children }: Vi
   return (
     <div data-testid="viewer-shell" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Header / breadcrumb */}
-      <div className="flex h-8 shrink-0 items-center gap-1.5 border-b border-border pr-1.5 pl-3.5 text-meta/[1.45]">
-        <span className="shrink-0 font-medium text-ink-secondary">{basename}</span>
-        <span className="min-w-0 truncate text-muted-foreground" title={path}>
-          {dirParts.join('/')}
-        </span>
+      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-border pr-1.5 pl-3.5 text-meta/[1.45]">
+        <Folder className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+
+        {dirParts.map((segment, i) => (
+          <React.Fragment key={i}>
+            <span className="text-muted-foreground">{segment}</span>
+            <ChevronRight className="size-2.5 shrink-0 text-muted-foreground/50" aria-hidden />
+          </React.Fragment>
+        ))}
+
+        <span className="font-medium text-ink-secondary">{basename}</span>
 
         <div className="flex-1" />
 

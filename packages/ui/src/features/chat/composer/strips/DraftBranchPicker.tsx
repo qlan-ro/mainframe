@@ -10,7 +10,7 @@
  * the checkout has uncommitted changes.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Folder, FolderGit2, FolderPlus, Loader2, Settings2, Timer } from 'lucide-react';
+import { ChevronDown, FolderGit2, FolderPlus, Loader2, Settings2, Timer } from 'lucide-react';
 import type { BranchListResult } from '@qlan-ro/mainframe-types';
 import {
   Command,
@@ -23,14 +23,13 @@ import {
 import { BranchIcon } from '@/components/ui/glyphs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MENU_DETAIL, MENU_ITEM, MENU_LABEL, MENU_SEPARATOR } from '@/components/ui/menu-item';
+import { MENU_DETAIL, MENU_ITEM, MENU_SEPARATOR } from '@/components/ui/menu-item';
 import { MenuSearch } from '@/components/ui/menu-search';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { getGitBranches, getProjectWorktrees, type WorktreeEntry } from '@/lib/api/git';
 import { BranchPopover } from '@/features/git/BranchPopover';
 import { useBranchActions } from '@/features/git/use-branch-actions';
-import { useProjects } from '@/features/sessions/use-projects';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { patchDraftConfig, type DraftCfg } from '@/features/sessions/runtime/draft-config';
 import { moveDraft } from '@/features/sessions/new-thread/move-draft';
@@ -166,7 +165,6 @@ export function DraftBranchPicker({
   const [managing, setManaging] = useState(false);
   const data = useBranchData(port, projectId, open);
   const { branch: current, reload } = useProjectBranch(port, projectId);
-  const projectName = useProjects().projects.find((project) => project.id === projectId)?.name;
   const { handleCheckout } = useBranchActions({ port, projectId });
   const env = draftEnvironment(draft);
   const Icon = ENV_ICON[env.kind];
@@ -253,12 +251,6 @@ export function DraftBranchPicker({
               {data.error && <p className="px-2 py-2 text-xs text-fail">{data.error}</p>}
               {data.branches && <CommandEmpty>No branch matches.</CommandEmpty>}
               <CommandGroup className={GROUP}>
-                {projectName && (
-                  <div className={cn(MENU_LABEL, 'flex items-center gap-[7px]')}>
-                    <Folder className="size-3.5" aria-hidden />
-                    {projectName}
-                  </div>
-                )}
                 {local.map((name) => (
                   <CommandItem
                     key={name}

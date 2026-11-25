@@ -16,8 +16,8 @@ export interface PermissionMode {
 /** Least to most permissive. */
 export const PERMISSION_MODES: readonly PermissionMode[] = [
   { id: 'default', label: 'Interactive', description: 'Approve every action' },
-  { id: 'acceptEdits', label: 'Auto-Edits', description: 'Edits applied, commands ask' },
-  { id: 'auto', label: 'Auto', description: 'The agent decides what needs approval', tone: 'caution' },
+  { id: 'acceptEdits', label: 'Auto-Edits', description: 'Edits auto-applied; commands ask' },
+  { id: 'auto', label: 'Auto', description: 'The agent decides which actions need approval', tone: 'caution' },
   { id: 'yolo', label: 'Unattended', description: 'Runs without prompts', tone: 'warning' },
 ];
 

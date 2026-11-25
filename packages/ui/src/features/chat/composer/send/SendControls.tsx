@@ -16,7 +16,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -159,10 +158,6 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
               </span>
             </DropdownMenuItem>
           ))}
-          <DropdownMenuSeparator />
-          <p className="px-2.5 pt-1.5 pb-1 text-meta/[1.45] text-muted-foreground">
-            Choose what Enter does in Settings › Chat
-          </p>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

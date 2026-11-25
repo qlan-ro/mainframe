@@ -254,12 +254,20 @@ describe('ProviderModelSelect — uninstalled adapter pill is disabled', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Provider tabs after the first message (switch behavior itself:
-//    ProviderModelSelect.switch.test.tsx)
+// 4. The footer explains what a provider tab does before and after the first
+//    message (switch behavior itself: ProviderModelSelect.switch.test.tsx)
 // ---------------------------------------------------------------------------
 
-describe('ProviderModelSelect — provider tabs after the first message', () => {
+describe('ProviderModelSelect — footer copy before and after the first message', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('locked=true says switching keeps the chat', async () => {
+    renderSelect({ adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI], locked: true });
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+    expect(screen.getByTestId('composer-provider-footer').textContent).toBe(
+      'Switching keeps this chat. The new provider gets its history with your next message.',
+    );
+  });
 
   it('locked=true leaves every installed provider tab enabled when switching is open', async () => {
     renderSelect({ adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI], locked: true });
@@ -267,6 +275,14 @@ describe('ProviderModelSelect — provider tabs after the first message', () => 
     expect(screen.getByTestId('composer-adapter-select-option-claude')).not.toBeDisabled();
     expect(screen.getByTestId('composer-adapter-select-option-gemini')).not.toBeDisabled();
     expect(screen.queryByTestId('composer-adapter-locked-gemini')).toBeNull();
+  });
+
+  it('locked=false renders the footer with the unlocked hint text', async () => {
+    renderSelect({ adapters: [ADAPTER_CLAUDE, ADAPTER_GEMINI], locked: false });
+    await userEvent.click(screen.getByTestId('composer-model-select'));
+    expect(screen.getByTestId('composer-provider-footer').textContent).toBe(
+      'Pick a provider before your first message.',
+    );
   });
 });
 

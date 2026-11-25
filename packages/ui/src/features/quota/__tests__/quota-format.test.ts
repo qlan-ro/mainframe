@@ -51,7 +51,7 @@ describe('deriveCapsuleItems — the capsule cycle', () => {
         providerId: 'claude',
         providerLabel: 'Claude',
         kind: 'session',
-        name: '5h',
+        name: '5-hour',
         label: '5-hour',
         usedPercent: 3,
         severity: 'normal',
@@ -63,7 +63,7 @@ describe('deriveCapsuleItems — the capsule cycle', () => {
         providerId: 'claude',
         providerLabel: 'Claude',
         kind: 'weekly',
-        name: 'Week',
+        name: 'Weekly',
         label: 'Weekly',
         usedPercent: 41,
         severity: 'normal',
@@ -75,7 +75,7 @@ describe('deriveCapsuleItems — the capsule cycle', () => {
         providerId: 'claude',
         providerLabel: 'Claude',
         kind: 'weekly-model',
-        name: 'Week Fable',
+        name: 'Weekly Fable',
         label: 'Weekly · Fable',
         usedPercent: 59,
         severity: 'normal',
@@ -87,7 +87,7 @@ describe('deriveCapsuleItems — the capsule cycle', () => {
         providerId: 'codex',
         providerLabel: 'Codex',
         kind: 'weekly',
-        name: 'Week',
+        name: 'Weekly',
         label: 'Weekly',
         usedPercent: 17,
         severity: 'normal',
@@ -155,12 +155,12 @@ describe('pinnedCapsuleIndex', () => {
 
 describe('capsuleWindowName', () => {
   it('names each window kind, a per-model weekly by its model without the separator dot', () => {
-    expect(capsuleWindowName({ kind: 'session', usedPercent: 0, resetsAt: null })).toBe('5h');
-    expect(capsuleWindowName({ kind: 'weekly', usedPercent: 0, resetsAt: null })).toBe('Week');
+    expect(capsuleWindowName({ kind: 'session', usedPercent: 0, resetsAt: null })).toBe('5-hour');
+    expect(capsuleWindowName({ kind: 'weekly', usedPercent: 0, resetsAt: null })).toBe('Weekly');
     expect(capsuleWindowName({ kind: 'weekly-model', usedPercent: 0, resetsAt: null, label: 'Fable' })).toBe(
-      'Week Fable',
+      'Weekly Fable',
     );
-    expect(capsuleWindowName({ kind: 'weekly-model', usedPercent: 0, resetsAt: null })).toBe('Week model');
+    expect(capsuleWindowName({ kind: 'weekly-model', usedPercent: 0, resetsAt: null })).toBe('Weekly model');
   });
 });
 

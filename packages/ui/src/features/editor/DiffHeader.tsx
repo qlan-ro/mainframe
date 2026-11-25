@@ -1,18 +1,21 @@
 /**
- * DiffHeader — the diff view's 32px header: the file's name, its folder, the
- * +N / −N counts, then the prev/next navigation buttons and Reveal on the right.
+ * DiffHeader — a 28px header bar for the diff view.
+ *
+ * Shows a git-branch icon + truncated file path on the left, separate +N / −N
+ * add/del counts in the middle/right, and prev/next navigation buttons (chevron
+ * icons) + a Reveal button on the right.
+ *
+ * The add/del counts keep the bridge-owned `mf-diff-*` palette on purpose: they
+ * are the same greens/reds CmDiffEditor paints the gutter with.
  *
  * data-testids:
  *   diff-prev-change  — navigate to the previous diff chunk
  *   diff-next-change  — navigate to the next diff chunk
  *   diff-reveal       — reveal file in tree
  */
-import { ChevronDown, ChevronUp, Crosshair } from 'lucide-react';
+import { ChevronDown, ChevronUp, Crosshair, GitBranch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { emitSurfaceIntent } from '@/store/surface-intents';
-
-const baseName = (path: string): string => path.split('/').pop() ?? path;
-const folderOf = (path: string): string => path.split('/').slice(0, -1).join('/');
 
 interface DiffHeaderProps {
   /** Basename or full path of the file being diffed. */
@@ -46,17 +49,19 @@ export function DiffHeader({ fileName, changeCount, additions, deletions, filePa
       aria-label="Diff navigation"
       className="flex h-8 shrink-0 items-center gap-1.5 border-b border-border pr-1.5 pl-3.5 text-meta/[1.45]"
     >
-      <span className="shrink-0 font-medium text-ink-secondary">{baseName(fileName)}</span>
-      <span className="min-w-0 truncate text-muted-foreground" title={filePath ?? fileName}>
-        {folderOf(filePath ?? fileName)}
-      </span>
+      <GitBranch className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
 
-      {additions !== undefined && <span className="text-success tabular-nums">+{additions}</span>}
-      {deletions !== undefined && <span className="text-red tabular-nums">−{deletions}</span>}
-      {additions === undefined && deletions === undefined && (
-        <span className="text-muted-foreground tabular-nums">{changeCount} changes</span>
+      <span className="min-w-0 flex-1 truncate font-medium text-ink-secondary">{fileName}</span>
+
+      {additions !== undefined && (
+        <span className="text-xs font-semibold text-mf-diff-add-text tabular-nums">+{additions}</span>
       )}
-      <span className="flex-1" />
+      {deletions !== undefined && (
+        <span className="text-xs font-semibold text-mf-diff-del-text tabular-nums">−{deletions}</span>
+      )}
+      {additions === undefined && deletions === undefined && (
+        <span className="text-xs text-muted-foreground tabular-nums">{changeCount} changes</span>
+      )}
 
       <Button
         data-testid="diff-prev-change"

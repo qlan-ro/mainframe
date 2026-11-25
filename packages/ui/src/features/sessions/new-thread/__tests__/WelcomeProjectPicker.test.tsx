@@ -82,6 +82,26 @@ describe('WelcomeProjectPicker — menu', () => {
 
     expect(onSelect).toHaveBeenCalledExactlyOnceWith(null);
   });
+
+  it('tags the auto-resolved project "Resolved default", and keeps the tag when the draft moves away', () => {
+    const { rerender } = renderPicker('proj-a');
+    rerender(
+      <TooltipProvider>
+        <WelcomeProjectPicker projectId="proj-b" onSelect={onSelect} />
+      </TooltipProvider>,
+    );
+    openPicker();
+
+    expect(screen.getByTestId('welcome-project-proj-a')).toHaveTextContent('Resolved default');
+    expect(screen.getByTestId('welcome-project-proj-b')).not.toHaveTextContent('Resolved default');
+  });
+
+  it('tags nothing when no project was ever auto-resolved', () => {
+    renderPicker(undefined);
+    openPicker();
+
+    expect(screen.queryByText('Resolved default')).toBeNull();
+  });
 });
 
 describe('WelcomeProjectPicker — ordering', () => {

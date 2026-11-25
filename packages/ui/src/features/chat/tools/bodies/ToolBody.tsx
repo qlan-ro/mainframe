@@ -14,7 +14,6 @@ import { ResultBlock, ResultText } from './ResultText';
 import { BodyNote, KeyValue, Surface } from './Surface';
 import { TerminalBody } from './TerminalBody';
 import { WebBody } from './WebBody';
-import { WebSearchBody } from './WebSearchBody';
 import { parseRead, plainLines } from './code-lines';
 
 export interface ToolBodyProps {
@@ -95,10 +94,7 @@ function ShellBody({ part, status }: ToolBodyProps) {
       ) : truncated ? (
         <ResultText part={part} renderOutput={(output) => <TerminalBody output={output} />} />
       ) : (
-        <TerminalBody
-          command={status === 'running' ? command : undefined}
-          output={text || (status === 'running' ? '' : '(no output)')}
-        />
+        <TerminalBody command={command} output={text || (status === 'running' ? '' : '(no output)')} />
       )}
     </>
   );
@@ -113,8 +109,14 @@ function CallBody({ part, status }: ToolBodyProps) {
     : `{ ${Object.entries(args)
         .map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`)
         .join(', ')} }`;
+  if (toolKind(part.toolName) !== 'mcp' && Object.keys(args).length === 0 && !text) return null;
   return (
     <Surface testId="chat-call-body" className="[&_pre]:whitespace-pre">
+      {toolKind(part.toolName) === 'mcp' && (
+        <KeyValue label="Tool" testId="chat-call-tool">
+          {part.toolName}
+        </KeyValue>
+      )}
       {Object.keys(args).length > 0 && (
         <KeyValue label="Arguments" testId="chat-call-args">
           {argumentsText}
@@ -157,8 +159,7 @@ function MainBody({ part, status }: ToolBodyProps) {
   if (kind === 'mcp' || kind === 'unknown') return <CallBody part={part} status={status} />;
   if (kind === 'edit' || kind === 'write') return <EditBody part={part} status={status} />;
   if (status === 'failed' && text) return <ResultBlock part={part} failed testId="chat-tool-error" />;
-  if (kind === 'web-search' && text && !truncated) return <WebSearchBody text={text} />;
-  if (kind === 'fetch' || (kind === 'web-search' && truncated))
+  if (kind === 'fetch' || kind === 'web-search')
     return (
       <WebBody url={argText(part, 'url') || undefined} text={truncated ? undefined : text}>
         {truncated && <ResultText part={part} />}
@@ -174,6 +175,11 @@ function MainBody({ part, status }: ToolBodyProps) {
   return result;
 }
 
+function imagePreview(part: ToolPart): 'file' | 'browser' | undefined {
+  if (toolKind(part.toolName) === 'read') return 'file';
+  return /(?:^|__)browser_take_screenshot$/.test(part.toolName) ? 'browser' : undefined;
+}
+
 export function ToolBody({ part, status }: ToolBodyProps) {
   const images = resultImages(part.result);
   return (
@@ -183,12 +189,7 @@ export function ToolBody({ part, status }: ToolBodyProps) {
       </div>
       {images.length > 0 && (
         <div data-testid="chat-tool-images">
-          <ToolResultImageThumbs
-            toolCallId={part.toolCallId}
-            images={images}
-            preview={/(?:^|__)browser_take_screenshot$/.test(part.toolName)}
-            caption={toolKind(part.toolName) === 'read' ? argText(part, 'file_path').split(/[\\/]/).pop() : undefined}
-          />
+          <ToolResultImageThumbs toolCallId={part.toolCallId} images={images} preview={imagePreview(part)} />
         </div>
       )}
     </div>

@@ -142,9 +142,7 @@ export function SessionSidebar() {
           </span>
         </div>
         <NewSessionRow />
-        <div className="mt-2">
-          <SidebarScopeStrip />
-        </div>
+        <SidebarScopeStrip />
       </SidebarHeader>
 
       <SidebarScrollRegion tut="sessions-list" memoryKey="chats" scrollPaddingTop={HEADER_STACK_DEPTH}>

@@ -5,7 +5,6 @@
 import type { ToolCallTiming } from '@assistant-ui/react';
 import { resolveToolDiff } from '../../tools/shared/diff-data';
 import { resolveResultText, resultImages } from '../../tools/shared/result';
-import { searchHits } from '../../tools/shared/web-search';
 import { toolKind, type ToolKind } from './tool-kind';
 import {
   agentName,
@@ -99,10 +98,6 @@ function doneReceipt(part: ToolPart, kind: ToolKind): string | undefined {
       return globReceipt(whole);
     case 'list':
       return whole ? count(nonBlankLines(whole), 'entry', 'entries') : undefined;
-    case 'web-search': {
-      const hits = !truncated && text ? searchHits(text).length : 0;
-      return hits ? count(hits, 'result') : undefined;
-    }
     case 'shell': {
       if (runsInBackground(part)) return 'in the background';
       const code = commandSummary(part) ? undefined : exitCode(part, false);

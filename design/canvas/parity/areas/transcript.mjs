@@ -294,7 +294,7 @@ export default {
       'running command',
       [open(statsToggle), show(statsToggle)],
       [open(appWork)],
-      [{ id: 'running command', p: statsRow(0), a: "tid('chat-row-parity-running')?.firstElementChild" }],
+      [{ id: 'running command', local: true, p: statsRow(0), a: "tid('chat-row-parity-running')?.firstElementChild" }],
       'live command',
     ),
   ],

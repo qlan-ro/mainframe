@@ -77,6 +77,7 @@ export function WorkspaceAddMenu({ paneId: pane, configs, onLaunch, onOpenUrl }:
         align="start"
         collisionPadding={8}
       >
+        <DropdownMenuLabel>New tab</DropdownMenuLabel>
         <DropdownMenuItem
           data-testid={`workspace-pane-open-file-${paneId}`}
           onSelect={() => emitSurfaceIntent({ type: 'open-file-picker' })}
@@ -98,7 +99,7 @@ export function WorkspaceAddMenu({ paneId: pane, configs, onLaunch, onOpenUrl }:
           {urlChord != null && <DropdownMenuShortcut>{urlChord}</DropdownMenuShortcut>}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Launch configurations</DropdownMenuLabel>
+        <DropdownMenuLabel>Launch configuration</DropdownMenuLabel>
         {configs.length === 0 ? (
           <div className="px-2.5 py-4 text-center text-meta/[1.45] text-muted-foreground">No launch configs found.</div>
         ) : (

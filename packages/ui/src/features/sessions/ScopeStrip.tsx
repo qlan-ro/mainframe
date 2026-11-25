@@ -86,7 +86,7 @@ function ScopeAvatar({
   project: Project;
   selected: boolean;
   dim: boolean;
-  /** Later avatars sit on top, as the prototype fans them; selected ones come first and stay whole. */
+  /** Earlier avatars sit on top (selected ones come first), like a fanned hand. */
   stackIndex: number;
   onSolo: () => void;
   onRemove?: () => void;
@@ -107,7 +107,7 @@ function ScopeAvatar({
       // so neither styling nor tests can key off it; the toggle state lives in
       // `aria-pressed`. The avatar is opaque, so no item background ever shows.
       className="relative h-auto min-w-0 flex-none rounded-full bg-transparent p-0 first:rounded-full last:rounded-full hover:bg-transparent aria-pressed:bg-transparent"
-      style={{ zIndex: selected ? 200 - stackIndex : stackIndex }}
+      style={{ zIndex: 100 - stackIndex }}
     >
       <ProjectAvatar
         name={project.name}
@@ -183,7 +183,7 @@ export function ScopeStrip({ projects, scope, onToggle, onSolo, onRemoveProject,
     <div
       data-testid="sessions-scope-strip"
       data-unstacked={linger.open || undefined}
-      className="flex min-w-0 items-center gap-1 pl-0.5"
+      className="flex min-h-11 min-w-0 items-center gap-2"
     >
       {/* The scroller pads by 4px all round: the selected halo (2px) and the ✓ badge
           draw outside the avatar and an overflow container would clip them. */}
@@ -205,7 +205,7 @@ export function ScopeStrip({ projects, scope, onToggle, onSolo, onRemoveProject,
             const changed = projects.find((p) => value.includes(p.id) !== next.includes(p.id));
             if (changed) onToggle(changed.id);
           }}
-          className={cn('items-center transition-[gap]', linger.open ? 'gap-[9px]' : '-space-x-3')}
+          className={cn('items-center transition-[gap]', linger.open ? 'gap-[9px]' : '-space-x-1.5')}
         >
           {shown.map((project, index) => (
             <ScopeAvatar
@@ -222,7 +222,7 @@ export function ScopeStrip({ projects, scope, onToggle, onSolo, onRemoveProject,
         {overflow > 0 && (
           <span
             data-testid="sessions-scope-more"
-            className="relative -ml-3 inline-flex shrink-0 items-center justify-center rounded-full px-1 text-xs font-semibold text-muted-foreground tabular-nums"
+            className="relative -ml-1.5 inline-flex shrink-0 items-center justify-center rounded-full px-1 text-xs font-semibold text-muted-foreground tabular-nums"
             style={{
               minWidth: SCOPE_AVATAR_SIZE,
               height: SCOPE_AVATAR_SIZE,

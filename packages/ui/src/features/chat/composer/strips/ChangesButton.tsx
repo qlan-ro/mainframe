@@ -3,7 +3,7 @@
 /** The session's uncommitted changes at the end of the bottom strip (K8). Hidden when there are none. */
 import { useState } from 'react';
 import { Diff, FileText } from 'lucide-react';
-import { MENU_DETAIL, MENU_ITEM, MENU_LABEL, MENU_SEPARATOR } from '@/components/ui/menu-item';
+import { MENU_ITEM, MENU_LABEL, MENU_SEPARATOR } from '@/components/ui/menu-item';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { toChangesSummary, useWorkingChanges } from '@/features/review/use-working-changes';
@@ -12,9 +12,6 @@ import { ComposerHint } from '../composer-card-context';
 import { BOTTOM_STRIP_BUTTON } from './BottomStrip';
 
 const SHOWN_FILES = 8;
-
-/** A file's own name and its folder's; the whole path is in the title. */
-const shortPath = (path: string): string => path.split('/').slice(-2).join('/');
 
 function Count({ additions, deletions, className }: { additions?: number; deletions?: number; className?: string }) {
   return (
@@ -55,13 +52,13 @@ export function ChangesButton({ port, projectId, chatId }: { port: number; proje
         sideOffset={6}
         className="w-85 gap-0 p-1"
       >
-        <span className={MENU_LABEL}>{`Changes · ${summary.fileCount} file${summary.fileCount === 1 ? '' : 's'}`}</span>
+        <span className={MENU_LABEL}>{files}</span>
         <div className="flex max-h-60 flex-col overflow-y-auto">
           {changes.files.slice(0, SHOWN_FILES).map((file) => (
             <div key={file.path} className="flex min-h-7 min-w-0 items-center gap-2.5 px-2.5 py-[7px]">
               <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="min-w-0 flex-1 truncate font-mono text-small/[20px]" title={file.path}>
-                {shortPath(file.path)}
+              <span className="min-w-0 flex-1 truncate font-mono text-small/[20px]" dir="rtl" title={file.path}>
+                <bdi>{file.path}</bdi>
               </span>
               <Count
                 additions={file.additions}
@@ -85,11 +82,6 @@ export function ChangesButton({ port, projectId, chatId }: { port: number; proje
           <Diff aria-hidden />
           <span className="flex min-w-0 flex-col">
             <span>Open diff</span>
-            {summary.additions != null && summary.deletions != null && (
-              <span className={MENU_DETAIL}>
-                {`+${summary.additions} −${summary.deletions} across ${summary.fileCount} file${summary.fileCount === 1 ? '' : 's'}`}
-              </span>
-            )}
           </span>
         </button>
       </PopoverContent>

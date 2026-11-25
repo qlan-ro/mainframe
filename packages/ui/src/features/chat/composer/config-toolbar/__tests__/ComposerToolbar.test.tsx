@@ -211,9 +211,16 @@ describe('ComposerToolbar — variant="side" (todo #344)', () => {
     await screen.findByTestId('composer-provider-model-popover');
   }
 
-  it('keeps the permission control in the side variant', async () => {
+  it('offers the provider footer in the main variant', async () => {
+    await renderWith('main');
+
+    expect(screen.getByTestId('composer-provider-footer')).toBeInTheDocument();
+  });
+
+  it('has no provider footer in the side variant, and keeps the permission control', async () => {
     await renderWith('side');
 
+    expect(screen.queryByTestId('composer-provider-footer')).toBeNull();
     expect(screen.getByTestId('composer-permission-mode-select')).toBeInTheDocument();
   });
 });

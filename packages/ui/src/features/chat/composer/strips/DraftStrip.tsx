@@ -59,7 +59,7 @@ export function DraftStrip({ standalone = false }: { standalone?: boolean }) {
         onSelect={(id) => void selectProject(id)}
         open={open}
         onOpenChange={setOpen}
-        className="h-7 rounded-md px-2 hover:bg-sidebar-accent"
+        className="h-7 rounded-lg px-2 hover:bg-sidebar-accent"
       />
       {threadId != null && draft?.projectId != null && (
         <DraftBranchPicker key={draft.projectId} localId={threadId} projectId={draft.projectId} draft={draft} />

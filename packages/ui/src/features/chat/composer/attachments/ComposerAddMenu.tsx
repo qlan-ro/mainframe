@@ -89,7 +89,7 @@ export function ComposerAddMenu({ textareaRef }: { textareaRef: RefObject<HTMLTe
             }}
           >
             <AtSignIcon />
-            Mention a file or agent…
+            Mention a file or agent
             <DropdownMenuShortcut>@</DropdownMenuShortcut>
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -182,7 +182,7 @@ function monitorMarker(part: ToolPart, running: boolean): Draft {
 
 function worktreeMarker(part: ToolPart): Draft {
   const result = record(parsed(part));
-  const name = displayText(result?.worktreeBranch ?? record(part.args)?.name ?? result?.worktreePath);
+  const name = displayText(record(part.args)?.name ?? result?.worktreeBranch ?? result?.worktreePath);
   if (part.toolName === 'EnterWorktree')
     return { icon: 'worktree-enter', label: 'Entered worktree', target: name, mono: true };
   if (argText(part, 'action') === 'remove')

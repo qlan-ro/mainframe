@@ -3,7 +3,6 @@
  * MCP server returns as the tool's text (spec "Tool results"). Tolerant of a
  * CLI that pretty-prints it or prefixes prose — the first JSON object wins.
  */
-import type { ToolCallTiming } from '@assistant-ui/react';
 import type { TaskStatus } from '@qlan-ro/mainframe-types';
 
 export interface DelegateResult {
@@ -11,7 +10,6 @@ export interface DelegateResult {
   childChatId: string;
   title?: string;
   status?: TaskStatus;
-  timing?: ToolCallTiming;
   /** What a call that waited brought back; nothing delivers it again. */
   summary?: string;
   error?: string;
@@ -46,26 +44,16 @@ function firstObject(text: string): Record<string, unknown> | null {
   }
 }
 
-function taskTiming(createdAt: unknown, completedAt: unknown): ToolCallTiming | undefined {
-  const startedAt = typeof createdAt === 'string' ? Date.parse(createdAt) : NaN;
-  if (!Number.isFinite(startedAt)) return undefined;
-  if (completedAt == null) return { startedAt };
-  const endedAt = typeof completedAt === 'string' ? Date.parse(completedAt) : NaN;
-  return Number.isFinite(endedAt) && endedAt >= startedAt ? { startedAt, completedAt: endedAt } : undefined;
-}
-
 export function parseDelegateResult(text: string): DelegateResult | null {
   const value = firstObject(text);
   if (value == null) return null;
   const { taskId, childChatId, title, status, summary, error } = value;
   if (typeof taskId !== 'string' || typeof childChatId !== 'string') return null;
-  const timing = taskTiming(value.createdAt, value.completedAt);
   return {
     taskId,
     childChatId,
     title: typeof title === 'string' ? title : undefined,
     status: isTaskStatus(status) ? status : undefined,
-    ...(timing && { timing }),
     summary: filled(summary),
     error: filled(error),
   };

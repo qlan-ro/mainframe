@@ -17,7 +17,6 @@ import { getWorkingDiff } from '@/lib/api/git';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { CmDiffEditorWithComments } from './inline-comments/CmDiffEditorWithComments';
-import type { DiffStats } from './CmDiffEditor';
 import { DiffHeader } from './DiffHeader';
 import { nextChange, prevChange } from './diff-nav';
 
@@ -36,7 +35,6 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
   const port = useDaemonPort();
   const { projectId, chatId } = useActiveIdentity();
   const [changeCount, setChangeCount] = useState(0);
-  const [stats, setStats] = useState<DiffStats | null>(null);
 
   // When both sides are pre-resolved, skip the fetch entirely.
   const hasPreResolved = origProp !== undefined && modProp !== undefined;
@@ -117,8 +115,6 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
       <DiffHeader
         fileName={fileName}
         changeCount={changeCount}
-        additions={stats?.additions}
-        deletions={stats?.deletions}
         filePath={path}
         onPrev={prevChange}
         onNext={nextChange}
@@ -131,7 +127,6 @@ export function DiffTab({ path, original: origProp, modified: modProp }: DiffTab
         path={path}
         filePath={path}
         onChunksChange={handleChunksChange}
-        onStats={setStats}
       />
     </div>
   );

@@ -22,6 +22,7 @@ import { displayEffort, effortOptions, EFFORT_META } from '@/lib/model-tuning';
 import { ModelMenuRow } from './ModelMenuRow';
 import { ModelTuning } from './ModelTuning';
 import { groupSlug, modelRows, partitionModels } from './model-menu-rows';
+import { PROVIDER_PICK_FOOTER, PROVIDER_SWITCH_FOOTER } from './provider-switch';
 import { ProviderTabs } from './ProviderTabs';
 import type { ProviderSwitchRequest } from './use-provider-switch';
 
@@ -167,6 +168,7 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
       {/* A capped scroll region, so a long catalog scrolls instead of growing the
           bottom-anchored menu. */}
       <div className="max-h-64 overflow-y-auto">
+        <DropdownMenuLabel>{shown?.name ?? 'Models'} models</DropdownMenuLabel>
         {catalog.current.map(renderRow)}
         {catalog.older.length > 0 && (
           <CollapsibleModelSection
@@ -197,6 +199,11 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
           setEffort={props.setEffort}
           setFeature={props.setFeature}
         />
+      )}
+      {!props.hideProviderSwitch && (
+        <p data-testid="composer-provider-footer" className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
+          {locked ? PROVIDER_SWITCH_FOOTER : PROVIDER_PICK_FOOTER}
+        </p>
       )}
     </>
   );

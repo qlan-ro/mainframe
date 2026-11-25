@@ -29,7 +29,9 @@ export function extraTools(turn: Turn, call: Call) {
     data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/Xf8AAAAASUVORK5CYII=',
   };
   const read = call('parity-image', 'Read', { file_path: 'docs/screenshot-capsule.png' }, '', 12.9);
-  const screenshot = call('parity-browser-image', 'mcp__playwright__browser_take_screenshot', {}, '', 12.85);
+  const screenshot = call('parity-browser-image', 'mcp__playwright__browser_take_screenshot', {}, '', 12.85, {
+    toolCallTiming: { startedAt: Date.now() - 2_000, completedAt: Date.now() - 1_100 },
+  });
   turn('Show the image, workflow and artifact.', 'Here are the results.', 13, [
     { ...read, content: [{ type: 'content', content: image }] },
     { ...screenshot, content: [{ type: 'content', content: image }] },

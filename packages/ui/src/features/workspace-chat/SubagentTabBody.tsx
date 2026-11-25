@@ -250,7 +250,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
         role="region"
         aria-label={shownTitle}
         tabIndex={-1}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[22px] pt-3 pb-4 outline-none focus-visible:focus-line-inset"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[22px] pt-3 pb-4 outline-none focus-visible:focus-line-inset [&_.mf-tr-mono]:translate-y-0"
       >
         {call == null || place == null ? (
           <p role="status" className="text-sm text-muted-foreground">

@@ -45,7 +45,10 @@ export function ImageRow({ unit }: { unit: TurnUnit }) {
       verb="Generated image"
       receipt="1 image"
     >
-      <Picture src={unit.part.image} />
+      <ZoomableImage
+        src={unit.part.image}
+        className="size-30 max-w-full rounded-[8px] border border-border bg-queue-well object-contain"
+      />
     </RowDisclosure>
   );
 }
