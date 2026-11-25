@@ -20,6 +20,7 @@ export interface Draft {
   /** Where its last message is, and the last one that says anything. */
   index: number;
   said: number;
+  lastVisible?: ThreadMessage;
   /** Where the last error message inside it is. */
   error: number;
 }
@@ -83,10 +84,14 @@ export function draftTurns(messages: readonly ThreadMessage[], scope: TurnScope,
     open.messages.push(message);
     open.units.push(units);
     open.index = index;
-    if (units.length) open.said = index;
+    if (units.length) {
+      open.said = index;
+      open.lastVisible = message;
+    }
   }
   return { drafts, last: open, sent: lastSent, errors, skills };
 }
 
 /** How many parts of the draft's last message show. */
-export const lastParts = (draft: Draft): number => visibleParts(draft.messages[draft.messages.length - 1]!.content);
+export const lastParts = (draft: Draft): number =>
+  visibleParts((draft.lastVisible ?? draft.messages[draft.messages.length - 1]!).content);

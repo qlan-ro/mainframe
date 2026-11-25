@@ -75,7 +75,7 @@ function standings(
 /** How the turn itself ended: what was said of the whole turn, before what its last message shows. */
 function endedAs(draft: Draft, units: readonly TurnUnit[], { reason, errorLast }: Standing): PartEvidence['ended'] {
   const states = new Set(units.map((unit) => unit.presentation?.state));
-  const status = draft.messages[draft.messages.length - 1]!.status;
+  const status = (draft.lastVisible ?? draft.messages[draft.messages.length - 1]!).status;
   const cut = status?.type === 'incomplete' ? status.reason : undefined;
   if (states.has('failed') || reason === '_mainframe.dev/error') return 'error';
   if (states.has('cancelled') || reason === 'cancelled' || cut === 'cancelled') return 'cancelled';

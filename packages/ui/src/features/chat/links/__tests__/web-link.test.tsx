@@ -2,7 +2,7 @@
  * A web link (T1d, #341): where a click opens it, and its context menu.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -172,4 +172,28 @@ describe('the link menu (#341)', () => {
     expect(screen.getByTestId('chat-link-open')).toBeInTheDocument();
     expect(screen.getByTestId('chat-link-copy')).toBeInTheDocument();
   });
+});
+
+it('logs only scheme and host when opening a link fails', async () => {
+  useUiPrefs.setState({ openLinksIn: 'browser' });
+  mountLink('https://user:secret@example.com:8443/private?token=secret#private');
+  vi.mocked(fake.shell.openExternal).mockRejectedValueOnce(new Error('private URL'));
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    fireEvent.click(screen.getByRole('link', { name: 'link text' }));
+    await waitFor(() =>
+      expect(warning).toHaveBeenCalledWith('[links] openExternal failed', 'https:', 'example.com:8443'),
+    );
+  } finally {
+    warning.mockRestore();
+  }
+});
+
+it('offers a Copy button when the link receives keyboard focus', async () => {
+  mountLink('https://example.com');
+  const link = screen.getByRole('link', { name: 'link text' });
+  act(() => link.focus());
+  const button = await screen.findByRole('button', { name: 'Copy' });
+  fireEvent.keyDown(link, { key: 'Tab' });
+  expect(button).toHaveFocus();
 });

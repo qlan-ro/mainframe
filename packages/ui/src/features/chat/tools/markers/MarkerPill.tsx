@@ -40,7 +40,7 @@ function Pill(props: MarkerPillProps & { open: boolean; toggle: () => void; body
         aria-controls={expandable && open ? props.bodyId : undefined}
         onClick={props.toggle}
         className={cn(
-          'inline-flex h-6.5 max-w-full min-w-0 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-sm text-muted-foreground focus-visible:focus-line [&>svg]:size-3.5',
+          'inline-flex h-6.5 max-w-full min-w-0 items-center gap-1.5 rounded-[13px] bg-card px-[11px] mf-tr-marker-label shadow-[inset_0_0_0_1px_var(--border)] text-(--mf-tr-muted) focus-visible:focus-line [&>svg]:size-3.5',
           expandable && 'hover:bg-muted hover:text-foreground',
           state === 'failed' && 'text-fail',
         )}
@@ -102,7 +102,7 @@ export function MarkerCard({ id, testId, children }: { id?: string; testId: stri
     <div
       id={id}
       data-testid={testId}
-      className="mb-1 w-full max-w-[600px] min-w-0 rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm"
+      className="mb-1 w-full max-w-[600px] min-w-0 rounded-xl border border-border bg-card px-3.5 py-2.5 mf-tr-marker-body"
     >
       {children}
     </div>

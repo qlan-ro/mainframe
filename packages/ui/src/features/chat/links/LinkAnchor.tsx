@@ -2,7 +2,7 @@
  * The one link of a reply (T1d): blue, underlined, its address in a tooltip and
  * the ways to open it in the context menu. A raw URL is set in mono.
  */
-import type { AnchorHTMLAttributes, MouseEvent, ReactElement, ReactNode } from 'react';
+import { useRef, useState, type AnchorHTMLAttributes, type MouseEvent, type ReactElement, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -74,16 +74,21 @@ export function LinkAnchor({
   menu,
   className,
   children,
+  onBlur,
+  onKeyDown,
   ...props
 }: LinkAnchorProps): ReactElement {
   const { onMouseDown, endedDrag } = useLinkDragSelect();
   const feedback = useMenuCopyFeedback();
+  const { copied, copy } = useCopyHref(href);
+  const [tipOpen, setTipOpen] = useState(false);
+  const copyButton = useRef<HTMLButtonElement>(null);
   const handleClick = (event: MouseEvent) => {
     event.preventDefault();
     if (!endedDrag()) onOpen();
   };
   return (
-    <Tooltip>
+    <Tooltip open={tipOpen} onOpenChange={setTipOpen}>
       <ContextMenu onOpenChange={feedback.handleOpenChange}>
         <TooltipTrigger asChild>
           {/* select-text overrides the trigger primitive's select-none: WebKit drops a
@@ -99,6 +104,17 @@ export function LinkAnchor({
                 className,
               )}
               onClick={handleClick}
+              onBlur={(event) => {
+                onBlur?.(event);
+                if (copyButton.current && event.relatedTarget === copyButton.current) event.preventDefault();
+              }}
+              onKeyDown={(event) => {
+                onKeyDown?.(event);
+                if (!event.defaultPrevented && event.key === 'Tab' && !event.shiftKey && copyButton.current) {
+                  event.preventDefault();
+                  copyButton.current.focus();
+                }
+              }}
               // stopPropagation only, never preventDefault: Radix composes a
               // nested trigger's own onContextMenu with checkForDefaultPrevented,
               // so calling preventDefault here would also block THIS link's menu.
@@ -114,7 +130,19 @@ export function LinkAnchor({
         <LinkMenu href={href} onOpenIn={onOpenIn} menu={menu} feedback={feedback} />
       </ContextMenu>
       <TooltipContent className="max-w-sm flex-col items-start gap-0.5 break-all">
-        <span>{href}</span>
+        <div className="flex w-full items-center gap-2">
+          <span className="min-w-0 truncate">{href}</span>
+          <button
+            ref={copyButton}
+            type="button"
+            data-testid="chat-link-copy-url"
+            onBlur={() => setTipOpen(false)}
+            onClick={(event) => void copy(event)}
+            className="shrink-0 rounded-sm bg-accent px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:focus-line"
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
         {note && <span data-testid="chat-link-note">{note}</span>}
       </TooltipContent>
     </Tooltip>

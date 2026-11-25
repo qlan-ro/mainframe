@@ -26,7 +26,11 @@ export interface RunRecord {
   readonly optimistic?: boolean;
   readonly startedAtMs?: number;
   /** `until`: the end of the transcript as the run ended. `reason`: how, when the daemon said. */
-  readonly end?: { readonly until: TranscriptMark | null; readonly reason?: StopReason };
+  readonly end?: {
+    readonly until: TranscriptMark | null;
+    readonly reason?: StopReason;
+    readonly messageIds?: readonly string[];
+  };
 }
 
 export interface RunStart {
@@ -88,12 +92,34 @@ export function runStarted(state: ChatThreadState, start: RunStart): readonly Ru
   ];
 }
 
-/** An end without a reason is completed by the daemon's, when that still comes. */
+function endMessageIds(messages: readonly ThreadMessageLike[], after: TranscriptMark | null, until: TranscriptMark) {
+  const start = after ? messages.findIndex(({ id }) => id === after.id) : 0;
+  if (start < 0) return [];
+  const stop = messages.findIndex(({ id }) => id === until.id);
+  return messages.slice(start, stop + 1).flatMap((message) => {
+    const mark = markOf(message);
+    const earlierParts = mark && mark.id === after?.id ? after.parts : 0;
+    return message.role === 'assistant' && mark && mark.parts > earlierParts ? [mark.id] : [];
+  });
+}
+
 export function runEnded({ runs, messages }: ChatThreadState, reason?: StopReason): readonly RunRecord[] {
   const last = lastOf(runs);
-  if (!last || (last.end && (last.end.reason !== undefined || reason === undefined))) return runs;
-  const until = last.end ? last.end.until : lastMark(messages);
-  return [...runs.slice(0, -1), { ...last, end: { until, ...(reason !== undefined && { reason }) } }];
+  const sent = lastSent(messages);
+  const lastEnd = last?.end?.until;
+  const lastEndIndex = lastEnd ? messages.findIndex(({ id }) => id === lastEnd.id) : -1;
+  const newPrompt = lastEndIndex >= 0 && sent && messages.findIndex(({ id }) => id === sent.id) > lastEndIndex;
+  const previous = newPrompt ? undefined : last;
+  const after = previous ? previous.after : sent;
+  if (previous?.end && (previous.end.reason !== undefined || reason === undefined)) return runs;
+  const until = previous?.end ? previous.end.until : lastMark(messages);
+  if (!previous && (!reason || !until || !after)) return runs;
+  const messageIds = reason && until ? endMessageIds(messages, after, until) : undefined;
+  if (!previous && !messageIds?.length) return runs;
+  return [
+    ...(previous ? runs.slice(0, -1) : runs),
+    { ...(previous ?? { after, exact: false }), end: { until, ...(reason && { reason, messageIds }) } },
+  ];
 }
 
 /** Whether a run goes that somebody else than this client's own send has told of. */

@@ -10,6 +10,8 @@ import { ScrollRegion } from './Surface';
 const ESCAPES = /\u001b\][^\u0007\u001b\n]*(?:\u0007|\u001b\\)?|\u001b\[[0-?]*[ -/]*[@-~]|\u001b[ -/]*[0-~]/g;
 
 function lineClass(line: string): string | undefined {
+  const exit = /^\s*exit (\d+)\s*$/.exec(line);
+  if (exit) return exit[1] === '0' ? 'text-mf-tr-term-ok' : 'text-mf-tr-term-err';
   if (/[✓✔]/.test(line) || /\b(?:pass(?:ed|ing)?|ok)\b/i.test(line)) return 'text-mf-tr-term-ok';
   if (/[✗✘×]/.test(line) || /\b(?:error|fail(?:ed|ure|ing)?)\b/i.test(line)) return 'text-mf-tr-term-err';
   return undefined;

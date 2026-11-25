@@ -19,7 +19,10 @@ export function useOpenExternal(): (href: string) => void {
   const host = useHost();
   return useCallback(
     (href: string) => {
-      host.shell.openExternal(href).catch(() => console.warn('[links] openExternal failed', href));
+      host.shell.openExternal(href).catch(() => {
+        const url = URL.canParse(href) ? new URL(href) : undefined;
+        console.warn('[links] openExternal failed', url?.protocol, url?.host);
+      });
     },
     [host],
   );

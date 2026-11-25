@@ -31,7 +31,7 @@ function useTook(): { totalMs?: number; cost?: number } {
   return { totalMs: turn?.durationMs ?? ownMs, cost: turn?.costUsd ?? ownCost };
 }
 
-export function MessageTime() {
+export function MessageTime({ user = false }: { user?: boolean }) {
   const createdAt = useAuiState((s) => s.message.createdAt as Date | undefined);
   const { totalMs, cost } = useTook();
   if (!createdAt) return null;
@@ -51,7 +51,10 @@ export function MessageTime() {
           data-testid="chat-message-timestamp"
           // The date, duration and cost are in its tooltip, which focus opens too.
           tabIndex={0}
-          className="mf-tr-meta rounded-md px-1 text-muted-foreground tabular-nums focus-visible:focus-line"
+          className={cn(
+            'rounded-md mf-tr-clock text-(--mf-tr-muted) tabular-nums focus-visible:focus-line',
+            user ? 'pr-0.5 pl-1.5' : 'pr-1.5 pl-0.5',
+          )}
         >
           {formatClock(createdAt)}
         </time>
@@ -73,7 +76,7 @@ export function MessageFooter({ user = false }: { user?: boolean }) {
     >
       {!user && <MessageTime />}
       <MessageActionBar user={user} />
-      {user && <MessageTime />}
+      {user && <MessageTime user />}
     </div>
   );
 }

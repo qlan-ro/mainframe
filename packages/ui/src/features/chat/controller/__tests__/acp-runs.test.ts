@@ -70,7 +70,7 @@ describe('the runs of a followed session', () => {
     idle(acpClient, reason);
     await vi.advanceTimersByTimeAsync(SETTLE_MS);
     expect(ctrl.getState().runs).toEqual([
-      { after: at('before'), exact: true, startedAtMs: 7, end: { until: at('a1'), reason } },
+      { after: at('before'), exact: true, startedAtMs: 7, end: { until: at('a1'), reason, messageIds: ['a1'] } },
     ]);
   });
 

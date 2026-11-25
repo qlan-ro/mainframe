@@ -108,7 +108,7 @@ describe('where a run ends', () => {
   const going = [START, transcript(user('u1'), reply('a1', 'One'))];
 
   it('takes the daemon’s reason at once, and the settled stop adds nothing', () => {
-    const over = [{ after: null, exact: true, end: { until: at('a1'), reason: 'cancelled' } }];
+    const over = [{ after: null, exact: true, end: { until: at('a1'), reason: 'cancelled', messageIds: ['a1'] } }];
     expect(runs([...going, ended('cancelled')])).toEqual(over);
     expect(reduce([...going, ended('cancelled')]).runState.type).toBe('running');
     expect(runs([...going, ended('cancelled'), STOPPED])).toEqual(over);
@@ -117,7 +117,7 @@ describe('where a run ends', () => {
 
   it('starts another run when one begins before the stop has settled', () => {
     expect(runs([...going, ended('end_turn'), START])).toEqual([
-      { after: null, exact: true, end: { until: at('a1'), reason: 'end_turn' } },
+      { after: null, exact: true, end: { until: at('a1'), reason: 'end_turn', messageIds: ['a1'] } },
       { after: at('a1'), exact: true },
     ]);
   });
@@ -127,7 +127,17 @@ describe('where a run ends', () => {
     const failed = [...going, { type: 'run.failed', error: 'x' } as const];
     expect(runs(failed)).toEqual([{ after: null, exact: true, end: { until: at('a1') } }]);
     const later = [...failed, transcript(user('u1'), reply('a1', 'One'), reply('a2', 'Two')), ended('end_turn')];
-    expect(runs(later)).toEqual([{ after: null, exact: true, end: { until: at('a1'), reason: 'end_turn' } }]);
+    expect(runs(later)).toEqual([
+      { after: null, exact: true, end: { until: at('a1'), reason: 'end_turn', messageIds: ['a1'] } },
+    ]);
+  });
+
+  it('records a second explicit outcome when its start was missed', () => {
+    const second = transcript(user('u1'), reply('a1', 'One'), user('u2'), reply('a2', 'Two'));
+    expect(runs([...going, ended('end_turn'), STOPPED, second, ended('cancelled')])).toMatchObject([
+      { end: { reason: 'end_turn', messageIds: ['a1'] } },
+      { end: { reason: 'cancelled', messageIds: ['a2'] } },
+    ]);
   });
 
   it('tells nothing of a thread no run was seen in', () => {

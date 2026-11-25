@@ -12,7 +12,10 @@ export function TimeMarker({ index }: { index: number }) {
   );
   if (!label) return null;
   return (
-    <div data-testid="chat-time-marker" className="mf-tr-meta pt-2 pb-1 text-center text-muted-foreground tabular-nums">
+    <div
+      data-testid="chat-time-marker"
+      className="mt-1 -mb-1 flex justify-center mf-tr-clock text-(--mf-tr-muted) tabular-nums"
+    >
       {label}
     </div>
   );

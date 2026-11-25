@@ -2,26 +2,33 @@
    meta 12). The app's text utilities are its chrome scale, which steps 11/13. */
 :root {
   --mf-tr-link: #0063cc;
-  --mf-tr-ok: #17683a;
-  --mf-tr-del: #ae3326;
+  --mf-tr-ink: #1f1f1f;
+  --mf-tr-secondary: #48484a;
+  --mf-tr-hover: #ededf0;
+  --mf-tr-bubble: #f1f1f3;
+  --mf-tr-ok: #1d7a46;
+  --mf-tr-del: #c0392b;
   --mf-tr-code: rgb(0 0 0 / 0.06);
-  /* Secondary inks on a code surface, whose tint costs the app's own their 4.5:1. */
-  --mf-tr-muted: oklch(0.46 0 0);
-  --mf-tr-code-fail: #a23a5c;
-  --mf-tr-code-link: #0059b8;
+  --mf-tr-muted: #5c5c61;
+  --mf-tr-code-fail: #b04466;
+  --mf-tr-code-link: var(--mf-tr-link);
   --mf-tr-term: var(--mf-tr-code);
-  --mf-tr-term-ink: var(--foreground);
-  --mf-tr-term-ok: #17683a;
+  --mf-tr-term-ink: var(--mf-tr-ink);
+  --mf-tr-term-ok: var(--mf-tr-ok);
   --mf-tr-term-err: #c70016;
 }
 .dark {
   --mf-tr-link: #5aaeff;
-  --mf-tr-ok: #5fd39b;
-  --mf-tr-del: #ff9a8f;
+  --mf-tr-ink: #ececec;
+  --mf-tr-secondary: #c7c7cc;
+  --mf-tr-hover: #262628;
+  --mf-tr-bubble: #262626;
+  --mf-tr-ok: #4cc38a;
+  --mf-tr-del: #ff7b6e;
   --mf-tr-code: rgb(255 255 255 / 0.09);
-  --mf-tr-muted: oklch(0.79 0 0);
-  --mf-tr-code-fail: #f0a3b8;
-  --mf-tr-code-link: #79beff;
+  --mf-tr-muted: #aeaeb4;
+  --mf-tr-code-fail: #e48aa3;
+  --mf-tr-code-link: var(--mf-tr-link);
   --mf-tr-term: #0f0f10;
   --mf-tr-term-ink: #e4e4e7;
   --mf-tr-term-ok: #7ee787;
@@ -42,7 +49,9 @@
   --muted-foreground: var(--mf-tr-muted);
   --primary: var(--mf-tr-link);
   /* What a clamped message fades into. */
-  --mf-bubble-fill: var(--muted);
+  --mf-bubble-fill: var(--mf-tr-bubble);
+  --muted: var(--mf-tr-bubble);
+  --foreground: var(--mf-tr-ink);
 }
 
 /* Utilities for the inks above; `@theme` lives in the app's own stylesheets. */
@@ -72,12 +81,24 @@
 }
 
 .mf-prose {
+  color: var(--mf-tr-ink);
   font-size: 14px;
   line-height: 22px;
 }
 .mf-tr-meta {
   font-size: 12px;
   line-height: 16px;
+}
+.mf-tr-clock {
+  font-size: 12px;
+  line-height: 22px;
+}
+.mf-tr-marker-label {
+  font-size: 12.5px;
+  line-height: 22px;
+}
+.mf-tr-marker-body {
+  font-size: 13.5px;
 }
 .mf-tr-mono {
   font-family: var(--font-mono);
@@ -114,10 +135,10 @@
 }
 /* Changed lines keep their own ink on a tint; only the +/− column is coloured. */
 div.mf-tr-add {
-  background: color-mix(in srgb, var(--mf-tr-ok) 12%, transparent);
+  background: color-mix(in srgb, var(--mf-tr-ok) 14%, transparent);
 }
 div.mf-tr-del {
-  background: color-mix(in srgb, var(--mf-tr-del) 12%, transparent);
+  background: color-mix(in srgb, var(--mf-tr-del) 14%, transparent);
 }
 
 /* A link in a reply (T1d): one blue, underlined, wherever it opens. */
@@ -137,6 +158,9 @@ div.mf-tr-del {
 
 /* The footer keeps its height and shows on hover or keyboard focus. */
 .mf-tr-footer {
+  color: var(--mf-tr-ink);
+  font-size: 14px;
+  line-height: 22px;
   opacity: 0;
   transition: opacity 120ms;
 }

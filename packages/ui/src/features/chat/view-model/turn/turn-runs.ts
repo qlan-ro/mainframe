@@ -49,7 +49,7 @@ function spans(runs: readonly RunRecord[], messages: readonly ThreadMessage[]): 
 
 /** Whether the draft reaches past a place: in a later message, or in parts its message has gained since. */
 const past = (draft: Draft, [index, parts]: readonly [number, number]): boolean =>
-  draft.index > index || (draft.index === index && lastParts(draft) > parts);
+  (draft.said < 0 ? draft.index : draft.said) > index || (draft.said === index && lastParts(draft) > parts);
 
 /** Each draft's run: the last one it reaches into, unless it also reaches past that one's end. Both are in order. */
 function spanOfDrafts(drafts: readonly Draft[], known: readonly Span[]): ReadonlyMap<Draft, number> {
@@ -97,6 +97,10 @@ export function draftRuns(
   const running = open ?? { after: [sent, Infinity] as const, record: undefined };
   const seenIdle = lastOf(known.filter(({ until }) => until))?.until;
   const spanOf = spanOfDrafts(drafts, known);
+  const endedByMessage = new Map<string, RunRecord>();
+  for (const record of runs) {
+    for (const id of record.end?.messageIds ?? []) endedByMessage.set(id, record);
+  }
   const errored = errorRuns(drafted, known, spanOf);
   const runOf = (draft: Draft): PartEvidence['run'] => {
     if (isRunning !== true || providerOver(draft)) return 'over';
@@ -106,9 +110,14 @@ export function draftRuns(
   return new Map(
     drafts.map((draft) => {
       const at = spanOf.get(draft);
-      const reason = at === undefined ? undefined : known[at]!.record.end?.reason;
+      const id = draft.lastVisible?.id;
+      const match = id === undefined ? undefined : endedByMessage.get(id);
+      const end = match?.end;
+      const recorded =
+        end && (!end.until || id !== end.until.id || lastParts(draft) <= end.until.parts) ? end : undefined;
+      const reason = recorded?.reason ?? (at === undefined ? undefined : known[at]!.record.end?.reason);
       const errorLast = at === undefined ? draft.error > draft.said : errored.has(at);
-      return [draft, { run: runOf(draft), errorLast, ...(reason && { reason }) }];
+      return [draft, { run: recorded ? 'over' : runOf(draft), errorLast, ...(reason && { reason }) }];
     }),
   );
 }

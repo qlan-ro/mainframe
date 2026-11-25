@@ -8,7 +8,7 @@
  * after a usable URL exists.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useHost } from '@/lib/host';
+import { useOpenExternal } from '../links/use-open-link';
 import { mfToast } from '@/lib/toast';
 import { startPortTunnel, stopPortTunnel } from '@/lib/api/tunnel-ports';
 import { usePortTunnel, reportPortTunnelError, type PortTunnelEntry } from '@/store/port-tunnels';
@@ -30,7 +30,6 @@ function message(err: unknown): string {
 }
 
 export function useUrlTunnel(href: string, port: number): UrlTunnelController {
-  const host = useHost();
   const daemonPort = useDaemonPort();
   const isLocal = useDaemonIsLocal();
   const chatId = useChatId();
@@ -42,12 +41,7 @@ export function useUrlTunnel(href: string, port: number): UrlTunnelController {
   const pendingOpenRef = useRef(false);
   const [starting, setStarting] = useState(false);
 
-  const openExternal = useCallback(
-    (url: string) => {
-      host.shell.openExternal(url).catch(() => console.warn('[smart-actions] openExternal failed', url));
-    },
-    [host],
-  );
+  const openExternal = useOpenExternal();
 
   useEffect(() => {
     if (!entry) return;

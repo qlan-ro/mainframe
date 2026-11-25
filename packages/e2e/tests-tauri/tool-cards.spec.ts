@@ -655,7 +655,14 @@ test.describe('§tool-cards — exit codes (bash-exit-code)', () => {
     // It is open already: an unresolved failure opens by itself.
     await expect(bad.getByTestId('chat-bash-output')).toContainText('exit 127');
     await expect(toolRow(page, 'Bash').nth(0)).toContainText('exit 0');
-    await expectRowClosed(toolRow(page, 'Bash').nth(0));
+    await expect(bad.locator('span.text-fail')).toHaveText(/exit 127/);
+    await expect(bad.getByText('Failed:', { exact: true })).toBeAttached();
+    await expect(bad.getByTestId('chat-bash-output').getByText('exit 127')).toHaveClass(/text-mf-tr-term-err/);
+
+    const good = toolRow(page, 'Bash').nth(0);
+    await expectRowClosed(good);
+    await good.getByRole('button', { name: /Ran/ }).click();
+    await expect(good.getByTestId('chat-bash-output').getByText('exit 0')).toHaveClass(/text-mf-tr-term-ok/);
   });
 });
 

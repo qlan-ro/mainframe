@@ -182,3 +182,27 @@ it('does not read a failed send as the end of anything', async () => {
   await session.apply(...send(), sendFailed());
   expect(names()).toEqual(['Finished']);
 });
+
+it.each([
+  ['end_turn', 'finished'],
+  ['cancelled', 'stopped'],
+  ['_mainframe.dev/error', 'error'],
+] as const)('preserves %s across window changes and a late subscription', async (reason, expected) => {
+  const previous = [user('Earlier', 'u0'), assistant([settled], 'a0')];
+  const prompt = user('Go', 'u1');
+  const reply = assistant([settled], 'a1');
+  const blank = assistant([text(' ')], 'blank');
+  for (const sawStart of [true, false]) {
+    const session = Session.open([...previous, prompt], ...(sawStart ? [START] : []));
+    await session.apply(transcript([...previous, prompt, reply]), ...idle(reason));
+    expect(states()).toEqual(['neutral', expected]);
+    for (const window of [[reply], [prompt, reply, blank], [...previous, prompt, reply, blank]]) {
+      await session.says(...window);
+      session.remount();
+      await waitFor(() => expect(states()).toEqual(window.includes(previous[0]!) ? ['neutral', expected] : [expected]));
+    }
+    session.close();
+  }
+  Session.open([prompt, reply, blank]);
+  expect(states()).toEqual(['neutral']);
+});

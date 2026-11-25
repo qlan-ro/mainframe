@@ -13,7 +13,7 @@ export function MarkdownTable({ children, ...props }: ComponentProps<'table'>) {
       data-testid="chat-markdown-table-scroll"
       className="my-3 overflow-x-auto rounded-lg border border-border focus-visible:focus-line-inset"
     >
-      <table className="w-full table-fixed border-collapse text-sm [overflow-wrap:anywhere]" {...props}>
+      <table className="w-full table-fixed border-collapse text-sm/5 [overflow-wrap:anywhere]" {...props}>
         {children}
       </table>
     </div>
@@ -30,7 +30,7 @@ export function MarkdownThead({ children, ...props }: ComponentProps<'thead'>) {
 
 export function MarkdownTh({ children, ...props }: ComponentProps<'th'>) {
   return (
-    <th className="px-3 py-[7px] text-left font-medium text-foreground" {...props}>
+    <th className="py-[3px] pl-0 pr-6 text-left font-medium text-foreground" {...props}>
       {children}
     </th>
   );
@@ -38,7 +38,7 @@ export function MarkdownTh({ children, ...props }: ComponentProps<'th'>) {
 
 export function MarkdownTd({ children, ...props }: ComponentProps<'td'>) {
   return (
-    <td className="border-t border-border px-3 py-[7px] text-foreground" {...props}>
+    <td className="border-t border-border py-[3px] pl-0 pr-6 text-foreground" {...props}>
       {children}
     </td>
   );

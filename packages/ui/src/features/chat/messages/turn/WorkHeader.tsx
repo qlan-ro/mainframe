@@ -19,15 +19,15 @@ export const workId = (turnKey: string) => `chat-work-${encodeURIComponent(turnK
 function EndGlyph({ state }: { state: PartState }) {
   switch (state) {
     case 'needs-you':
-      return <ShieldAlert aria-hidden className="size-3.5 text-warning" />;
+      return <ShieldAlert aria-hidden className="size-4 text-warning" />;
     case 'going':
-      return <Spinner />;
+      return <Spinner className="size-[13px]" />;
     case 'stopped':
-      return <CircleStop aria-hidden className="size-3.5 text-muted-foreground" />;
+      return <CircleStop aria-hidden className="size-4 text-muted-foreground" />;
     case 'error':
-      return <CircleX aria-hidden className="size-3.5 text-fail" />;
+      return <CircleX aria-hidden className="size-4 text-fail" />;
     case 'finished':
-      return <Check aria-hidden className="size-3.5 text-mf-tr-ok" />;
+      return <Check aria-hidden className="size-4 text-mf-tr-ok" />;
     case 'neutral':
       // Nothing says how it ended, so neither does the row.
       return <span aria-hidden className="size-1 rounded-full bg-muted-foreground" />;
@@ -79,7 +79,7 @@ function countsText(counts: ChildCounts): string {
 }
 
 const COUNT_CLASS =
-  'mf-tr-meta relative -mr-0.5 h-6 shrink-0 rounded-md px-1.5 whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:focus-line-inset';
+  'mf-tr-meta relative -mr-0.5 h-6 shrink-0 rounded-[6px] px-1.5 whitespace-nowrap text-(--mf-tr-muted) hover:bg-accent hover:text-foreground focus-visible:focus-line-inset';
 
 /** What the count lands on, after "show". */
 function shown(all: number, going: number): string {
@@ -128,7 +128,7 @@ function FailedCount({ turn, failed }: { turn: Turn; failed: readonly string[] }
       data-retried={failed.length === 0}
       aria-label={`${text}: show ${failed.length ? 'the failed step' : 'the step'}`}
       onClick={() => reveal(first, { open: true })}
-      className={cn(COUNT_CLASS, failed.length > 0 && 'text-fail hover:bg-fail/6 hover:text-fail')}
+      className={cn(COUNT_CLASS, failed.length > 0 && 'text-fail hover:bg-fail/10 hover:text-fail')}
     >
       {text}
     </button>
@@ -150,7 +150,7 @@ export function WorkHeader({ turn }: { turn: Turn }) {
       ref={rowRef}
       data-testid={`chat-work-header-${encodeURIComponent(turn.key)}`}
       data-work-state={state}
-      className="relative flex min-h-7 w-full min-w-0 items-center gap-2 rounded-md px-1 text-sm text-muted-foreground"
+      className="relative flex min-h-7 w-full min-w-0 items-center gap-2 rounded-[7px] px-1 text-sm/[22px] text-(--mf-tr-secondary) [--muted:var(--mf-tr-hover)]"
     >
       <button
         type="button"
@@ -159,13 +159,13 @@ export function WorkHeader({ turn }: { turn: Turn }) {
         aria-expanded={open}
         aria-controls={open ? workId(turn.key) : undefined}
         onClick={() => toggle(turn.key)}
-        className="absolute inset-0 rounded-md hover:bg-muted/60 focus-visible:focus-line-inset"
+        className="absolute inset-0 rounded-[7px] hover:bg-muted focus-visible:focus-line-inset"
       />
       <span className="pointer-events-none relative grid size-4 shrink-0 place-items-center">
         <EndGlyph state={state} />
       </span>
-      <span className="pointer-events-none relative shrink-0 font-medium text-foreground">{title(turn)}</span>
-      <span className="pointer-events-none relative min-w-0 flex-1 truncate">{turn.summary}</span>
+      <span className="pointer-events-none relative shrink-0 font-medium text-(--mf-tr-ink)">{title(turn)}</span>
+      <span className="pointer-events-none relative min-w-0 flex-1 truncate text-(--mf-tr-muted)">{turn.summary}</span>
       <AgentsCount turn={turn} live={live} />
       <FailedCount turn={turn} failed={failed} />
       <ChevronRight
