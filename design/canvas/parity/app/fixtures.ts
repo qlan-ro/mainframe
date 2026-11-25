@@ -3,7 +3,13 @@
  * would serve it. `window.__PARITY__` picks the state: the runner sets it before
  * the page loads, with the same vocabulary as the prototype's presets.
  */
-import { addTranscriptFixture, delegatedTasks, recordedAnswer, type TranscriptFixture } from './transcript-fixture';
+import {
+  addTranscriptFixture,
+  delegatedTasks,
+  recordedAnswer,
+  statusCommand,
+  type TranscriptFixture,
+} from './transcript-fixture';
 
 export const FAKE_PORT = 1;
 /** 24 Nov 2026 at 23:31 UTC, when the prototype's conversation ends. The runner pins the clock to it. */
@@ -214,14 +220,6 @@ const ALL = [
   ended('e10', 'agent', 'Profile the capsule render', 'stopped', 63),
 ];
 const live = (): Json[] => {
-  if (scenario.transcript === 'agent') {
-    return [
-      task('parity-agent', 'agent', 'Review the quota reset diff', 12.9, {
-        toolName: 'Task',
-        toolUseId: 'parity-agent',
-      }),
-    ];
-  }
   switch (act()) {
     case 'none':
       return [];
@@ -714,6 +712,9 @@ const gate = (
   _meta: { [MF]: { controlRequest: { requestId: 'r1', toolUseId: id, toolName, input, suggestions, options } } },
 });
 function permissions(): Json[] {
+  if (scenario.transcript === 'awaitingApproval')
+    return [gate('Bash', { command: statusCommand }, TRIAD, [], 'parity-approval')];
+
   if (scenario.gate === 'permission')
     return [
       gate(

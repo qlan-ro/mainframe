@@ -175,7 +175,7 @@ function monitorMarker(part: ToolPart, running: boolean): Draft {
     icon: 'monitor',
     label: running ? 'Monitoring' : 'Monitored',
     target: argText(part, 'description') || command,
-    mono: !argText(part, 'description'),
+    mono: true,
     body: text || command ? { type: 'output', command, text } : undefined,
   };
 }

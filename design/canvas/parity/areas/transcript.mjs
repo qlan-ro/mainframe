@@ -21,7 +21,7 @@ const state = (id, proto = [], app = [], pairs = work, transcript = 'tools') => 
   scenario: {
     transcript,
     act: 'none',
-    ...((transcript === 'agent' || transcript === 'live command') ? { running: true } : {}),
+    ...((transcript === 'live command' || transcript === 'awaitingApproval') ? { running: true } : {}),
   },
   proto: P.all(P.preset('every-tool'), ...proto),
   app: P.all(closeWorkspace, ...app),
@@ -115,7 +115,6 @@ export default {
           p: "q('.tca[data-wsagent=agent]')?.closest('.tcr')",
           a: "tid('chat-row-parity-agent')?.firstElementChild",
         },
-        { id: 'agent Stop', p: "q('.tca[aria-label^=Stop]')", a: "tid('chat-task-stop-parity-agent')" },
       ],
       'agent',
     ),
@@ -165,6 +164,11 @@ export default {
       [open(appWork)],
       [
         { id: 'work header', p: `${statsToggle}?.parentElement`, a: work[0].a },
+        {
+          id: 'no-result command',
+          p: statsRow(6),
+          a: "tid('chat-row-parity-running')?.firstElementChild",
+        },
         ...['passed', 'failed', 'stopped'].map((status, index) => ({
           id: `${status} command`,
           p: statsRow(index + 1),
@@ -172,6 +176,13 @@ export default {
         })),
       ],
       'states',
+    ),
+    state(
+      'approval command',
+      [open(statsToggle), show(statsToggle)],
+      [open(appWork)],
+      [{ id: 'approval command', p: statsRow(5), a: "tid('chat-row-parity-approval')?.firstElementChild" }],
+      'awaitingApproval',
     ),
     state(
       'running command',

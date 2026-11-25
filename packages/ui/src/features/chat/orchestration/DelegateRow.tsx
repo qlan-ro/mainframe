@@ -16,9 +16,10 @@ import { cancelDelegatedTask } from '@/lib/api/background-tasks';
 import { useAdaptersStore } from '@/store/adapters';
 import { AgentSteps } from '../messages/turn/AgentSteps';
 import { RowAction, RowDisclosure } from '../messages/turn/RowDisclosure';
+import { useStepDuration } from '../messages/turn/StepClock';
 import { RowGlyph } from '../messages/turn/RowGlyph';
 import { StopAction } from '../messages/turn/StopAction';
-import { useToolFacts, type ToolRowProps } from '../messages/turn/ToolRow';
+import { receiptText, useToolFacts, type ToolRowProps } from '../messages/turn/ToolRow';
 import { KIND_ICONS, STATUS_WORDS, type RowStatus } from '../messages/turn/tool-icons';
 import { useFailedOpen } from '../messages/turn/use-failed-open';
 import { useRowOpen } from '../messages/turn/use-row-open';
@@ -168,6 +169,9 @@ export function DelegateRow({ unit, part, turnKey }: ToolRowProps) {
   });
   const going = child?.custom.isRunning === true;
   const status = rowStatus({ call: facts.status, parsed, task, needsYou, going, live });
+  const running = status === 'running' && task === 'running';
+  const timing = running || status === 'success' || status === 'failed' ? parsed?.timing : undefined;
+  const duration = useStepDuration({ timing, running });
   const adapterId = child?.custom.adapterId ?? argText(part, 'adapterId');
   const provider = useAdaptersStore((state) => state.byId[adapterId]?.name ?? adapterId);
   const title = child?.title ?? parsed?.title ?? (facts.target || 'Task');
@@ -186,7 +190,7 @@ export function DelegateRow({ unit, part, turnKey }: ToolRowProps) {
       verb={row.verb}
       target={title}
       where={row.where}
-      receipt={<span data-status={status}>{RECEIPTS[status] ?? facts.receipt}</span>}
+      receipt={<span data-status={status}>{receiptText(RECEIPTS[status] ?? facts.receipt, duration)}</span>}
       tone={status === 'failed' ? 'fail' : status === 'needs-you' ? 'warn' : undefined}
       actions={
         parsed && openChild ? (

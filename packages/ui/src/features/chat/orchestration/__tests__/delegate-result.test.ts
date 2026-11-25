@@ -18,6 +18,20 @@ describe('parseDelegateResult', () => {
     });
   });
 
+  it('reads elapsed timing when the task result carries valid timestamps', () => {
+    const createdAt = '2026-11-24T23:28:50.000Z';
+    const completedAt = '2026-11-24T23:31:00.000Z';
+    const result = { taskId: 't', childChatId: 'c', createdAt, completedAt };
+    expect(parseDelegateResult(JSON.stringify(result))?.timing).toEqual({
+      startedAt: Date.parse(createdAt),
+      completedAt: Date.parse(completedAt),
+    });
+    expect(parseDelegateResult(JSON.stringify({ ...result, completedAt: null }))?.timing).toEqual({
+      startedAt: Date.parse(createdAt),
+    });
+    expect(parseDelegateResult(JSON.stringify({ ...result, createdAt: 'invalid' }))?.timing).toBeUndefined();
+  });
+
   it('tolerates prose around the object and drops an unknown status', () => {
     const text = 'Result:\n{"taskId":"t","childChatId":"c","status":"bogus"}\n';
     expect(parseDelegateResult(text)).toEqual({ taskId: 't', childChatId: 'c', title: undefined, status: undefined });

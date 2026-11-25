@@ -59,22 +59,34 @@ function agent(turn: Turn, call: Call) {
         'Task',
         {
           description: 'Review the quota reset diff',
-          prompt: 'Review it',
+          prompt:
+            'Review the uncommitted changes to mainframe-quota and use-quota.ts for correctness and test coverage.',
           subagent_type: 'code-reviewer',
-          run_in_background: true,
         },
-        undefined,
+        'The diff is correct. One nit: QuotaWindow::reset drops resets_at, so the tooltip loses the next reset time until the following turn.',
         12.9,
+        {
+          subagent: true,
+          toolCallTiming: { startedAt: Date.now() - 100_000, completedAt: Date.now() - 62_000 },
+        },
+      ),
+      call(
+        'parity-agent-step',
+        'Bash',
+        { command: 'git diff --stat' },
+        ' crates/mainframe-quota/src/codex.rs       | 12 ++++++++----\n crates/mainframe-quota/src/codex_tests.rs | 24 ++++++++++++++++++++++++\n 2 files changed, 32 insertions(+), 4 deletions(-)',
+        12.8,
+        { parentToolCallId: 'parity-agent' },
       ),
     ],
   );
 }
 export const delegatedTasks = [
   { title: 'Check the mobile capsule', adapterId: 'codex', status: 'waiting' },
-  { title: 'Write the weekly-window crate test', adapterId: 'claude', status: 'running' },
+  { title: 'Write the weekly-window crate test', adapterId: 'claude', status: 'running', elapsed: 64 },
   { title: 'Update the changelog for v2.15.1', adapterId: 'codex', status: 'queued' },
-  { title: 'Review the quota reset diff', adapterId: 'claude', status: 'completed' },
-  { title: 'Regenerate the API types', adapterId: 'codex', status: 'failed' },
+  { title: 'Review the quota reset diff', adapterId: 'claude', status: 'completed', elapsed: 130 },
+  { title: 'Regenerate the API types', adapterId: 'codex', status: 'failed', elapsed: 38 },
   { title: 'Draft the release notes', adapterId: 'claude', status: 'cancelled' },
   { title: 'Profile the capsule render', adapterId: 'codex', status: 'interrupted' },
 ].map((task) => ({
@@ -88,15 +100,18 @@ function delegated(turn: Turn, call: Call) {
     'Now delegate work to other agents and show every state a delegated task can be in.',
     "**Delegated tasks.** Each runs in its own chat, which you can open beside this one. The row carries the task's live status: waiting on you, running, queued, completed, failed, stopped or interrupted. One waiting on you opens itself and its request appears above the composer.",
     13,
-    delegatedTasks.map(({ taskId, childChatId, title, adapterId, status }, index) =>
-      call(
+    delegatedTasks.map(({ taskId, childChatId, title, adapterId, status, elapsed }, index) => {
+      const end = status === 'running' ? Date.now() : Date.now() - 60_000;
+      const createdAt = elapsed === undefined ? undefined : new Date(end - elapsed * 1000).toISOString();
+      const completedAt = elapsed === undefined || status === 'running' ? undefined : new Date(end).toISOString();
+      return call(
         taskId,
         'mcp__mainframe__delegate_task',
         { task: title, adapterId },
-        JSON.stringify({ taskId, childChatId, title, status }),
+        JSON.stringify({ taskId, childChatId, title, status, createdAt, completedAt }),
         12.9 - index / 100,
-      ),
-    ),
+      );
+    }),
   );
 }
 
@@ -107,6 +122,8 @@ function links(turn: Turn) {
     13,
   );
 }
+export const statusCommand = 'pnpm exec vitest run use-quota';
+
 function states(turn: Turn, call: Call) {
   const run = (id: string, status: string, result?: string, durationMs?: number) => {
     const completedAt = Date.now() - 12 * 60_000;
@@ -115,7 +132,7 @@ function states(turn: Turn, call: Call) {
         ? { startedAt: Date.now() - 12_000 }
         : { startedAt: completedAt - durationMs, completedAt };
     return {
-      ...call(id, 'Bash', { command: 'pnpm exec vitest run use-quota' }, result, 12.9, { toolCallTiming }),
+      ...call(id, 'Bash', { command: statusCommand }, result, 12.9, { toolCallTiming }),
       status,
     };
   };
@@ -159,8 +176,9 @@ function eventCalls(call: Call): Item[] {
       'parity-monitor',
       'Monitor',
       { command: 'pnpm dev', description: 'pnpm dev until "ready"' },
-      'ready in 812 ms',
+      'VITE v6.3.5  ready in 812 ms\n  ➜  Local:   http://localhost:5173/',
       12.2,
+      { toolCallTiming: { startedAt: Date.now() - 100_000, completedAt: Date.now() - 58_000 } },
     ),
     call(
       'parity-enter-worktree',
@@ -193,7 +211,23 @@ function eventCalls(call: Call): Item[] {
   ];
 }
 
-const fixtures = { markers, agent, delegated, links, states, tools, exploration, 'live command': states };
+function awaitingApproval(turn: Turn, call: Call) {
+  turn('Last, show every status a row can have.', '', 13, [
+    call('parity-approval', 'Bash', { command: statusCommand }, undefined, 12.9),
+  ]);
+}
+
+const fixtures = {
+  markers,
+  agent,
+  delegated,
+  links,
+  states,
+  tools,
+  exploration,
+  awaitingApproval,
+  'live command': states,
+};
 
 export function addTranscriptFixture(fixture: TranscriptFixture, turn: Turn, call: Call) {
   fixtures[fixture](turn, call);
