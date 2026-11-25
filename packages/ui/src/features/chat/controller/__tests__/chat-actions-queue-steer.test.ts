@@ -511,6 +511,19 @@ describe('sendHeldMessages (C10)', () => {
       expect(heldTexts()).toEqual(['B', 'C', 'D']);
     });
 
+    it('so does one whose place in the queue shows only after the answer', async () => {
+      hold('b', 2, 'B');
+      hold('c', 3, 'C');
+      const { host, sendPrompt, enqueue } = queueingDaemon();
+      sendPrompt.mockResolvedValueOnce({ queued: true }).mockRejectedValueOnce(new NotSentError('connection closed'));
+
+      await sendHeldMessages(host, 'b').catch(() => {});
+      enqueue('B');
+      await holdQueuedMessages(host);
+
+      expect(heldTexts()).toEqual(['B', 'C']);
+    });
+
     it('stays through several sends and stops', async () => {
       hold('a', 1, 'A');
       hold('b', 2, 'B');

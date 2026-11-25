@@ -266,6 +266,15 @@ describe('held queue store — a row being sent', () => {
     expect(startSending('chat-1', 'm1', 'p1')).toBe(false);
   });
 
+  it('claims nothing for a press that did not: the rows before the one pressed stay free', () => {
+    holdTwo();
+    const { claimFrom, startSending } = useHeldQueue.getState();
+    claimFrom('chat-1', 'm2', 'p1');
+    startSending('chat-1', 'm2', 'p1');
+
+    expect(stored()[0]).not.toHaveProperty('claim');
+  });
+
   it('is sent only by the press that claimed it, and given back only by it', () => {
     holdTwo();
     const { claimFrom, startSending, releaseUnsent, releasePress, refuse } = useHeldQueue.getState();

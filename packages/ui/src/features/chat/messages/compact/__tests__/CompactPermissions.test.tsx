@@ -39,7 +39,7 @@ it.each(['allow-once', 'reject-once'])(
   'retains usable %s permission controls while switching modes and expanding',
   async (optionId) => {
     installGateLayout();
-    onTestFinished(() => vi.restoreAllMocks());
+    onTestFinished(() => void vi.restoreAllMocks());
     const reply = vi.fn().mockResolvedValue(undefined);
     const state = createChatThreadState('permission-chat');
     const extras = buildChatExtras({ replyToPermission: reply } as unknown as AcpChatController, 31415, {

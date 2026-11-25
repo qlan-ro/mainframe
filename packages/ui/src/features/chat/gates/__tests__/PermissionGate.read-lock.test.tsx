@@ -13,6 +13,7 @@ vi.mock('../use-gate-queue', () => ({ useGateQueue: vi.fn() }));
 vi.mock('../DelegatedGateProbes', () => ({ DelegatedGateProbes: () => null }));
 import { useGateQueue, type PendingGate } from '../use-gate-queue';
 import { ChatGateMount } from '../ChatGateMount';
+import { PermissionGate } from '../PermissionGate';
 import { GATE_ARM_MS } from '../GateGuard';
 import { installGateLayout, type GateLayout } from './gate-layout';
 
@@ -237,6 +238,25 @@ describe('a request whose end is out of view', () => {
     press(option('allow-once'));
     expect(reply).toHaveBeenCalledTimes(1);
   });
+});
+
+it('a request shown in the place of another is locked for itself', () => {
+  layout.parts = { tool: 400 };
+  const card = (id: string) => (
+    <TooltipProvider>
+      <div data-chat-gate data-testid="chat-thread-gate-slot">
+        <PermissionGate entry={gate(id, { command: WRAPPED }).entry} reply={reply} />
+      </div>
+    </TooltipProvider>
+  );
+  const { rerender } = render(card('r1'));
+  press(showRest()!);
+  expect(locked()).toEqual(FREE);
+  scrollTo(0);
+
+  rerender(card('r2'));
+
+  expect(locked()).toEqual(LOCKED);
 });
 
 describe('a request that fits', () => {

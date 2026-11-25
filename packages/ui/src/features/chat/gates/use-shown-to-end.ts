@@ -29,7 +29,7 @@ export interface ShownToEnd {
   showRest: () => void;
 }
 
-/** A last line cut off at the top is not in view. */
+/** A last line cut off at the top is not in view; nor is anything where there is no layout. */
 const LAST_LINE_PX = 12;
 /** Kept in view above the end of a part when the scroll goes on to the next. */
 const CONTEXT_PX = 56;
@@ -41,13 +41,12 @@ interface View {
   bottom: number;
 }
 
-/** What shows of the gate: its slot, down to the answers pinned in it. Null without a layout. */
+/** What shows of the gate: its slot, down to the answers pinned in it. Null outside a slot. */
 function viewOf(gate: HTMLElement): View | null {
   const slot = gate.closest('[data-chat-gate]');
   const answers = gate.querySelector('[data-gate-answers]');
   if (!slot || !answers) return null;
   const box = slot.getBoundingClientRect();
-  if (box.height === 0) return null;
   return { slot, top: box.top, bottom: Math.min(box.bottom, answers.getBoundingClientRect().top) };
 }
 
@@ -55,7 +54,7 @@ const partElement = (gate: HTMLElement, id: string) => gate.querySelector<HTMLEl
 
 function endInView(element: HTMLElement | null, view: View): boolean {
   const box = element?.getBoundingClientRect();
-  if (!box || box.height === 0) return false;
+  if (!box) return false;
   return box.bottom <= view.bottom + ROUNDING_PX && box.bottom >= view.top + LAST_LINE_PX;
 }
 
