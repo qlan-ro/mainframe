@@ -8,28 +8,32 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::ToolDef;
-use crate::errors::{ErrorCode, ToolError};
+use crate::calls::CallCtx;
+use crate::errors::{ToolError, cap_chars};
 use crate::input::{
     Validate, check_id, check_opt_id, check_opt_len, check_range, id_schema, object_schema,
     parse_args, string_schema,
 };
-use crate::policy::{MAX_SINGLE_WAIT_MS, MAX_WAIT_MS, REASON_MAX};
-use crate::service::{CallCtx, OrchestrationService};
+use crate::policy::{MAX_SINGLE_WAIT_MS, MAX_WAIT_MS, REASON_MAX, RESULT_BUDGET_BYTES};
+use crate::service::OrchestrationService;
 use crate::tasks::task_not_found;
 
 const LIST_LIMIT: u32 = 50;
+/// A listed task's summary and error, each cut to this.
+const LIST_TEXT_CHARS: usize = 200;
+/// Room for everything around the listed tasks.
+const LIST_ENVELOPE_BYTES: usize = 512;
 
 pub(super) fn status_definition() -> ToolDef {
     ToolDef {
-        name: "task_status",
         title: "Delegated task status",
         description: "Read one of this chat's delegated tasks, optionally waiting up to waitMs for \
             it to finish (returns early when its chat needs a permission answer). Each call \
             actually blocks for well under a minute: waitReturned timeout before waitMs has \
             elapsed does not mean anything is wrong, and does not cancel the task — call \
             task_status again with the same taskId to keep waiting. Without taskId, list this \
-            chat's 50 newest tasks. Reading a finished task here means its result is not sent \
-            again as a message.",
+            chat's newest tasks (at most 50) with their summaries cut short. Reading a finished task by taskId means its result is not \
+            sent again as a message.",
         input_schema: object_schema(
             json!({
                 "taskId": id_schema("The task to read."),
@@ -46,7 +50,6 @@ pub(super) fn status_definition() -> ToolDef {
 
 pub(super) fn cancel_definition() -> ToolDef {
     ToolDef {
-        name: "task_cancel",
         title: "Cancel a delegated task",
         description: "Stop one of this chat's delegated tasks and everything it delegated, \
             deepest first. The child chat is kept for the user to open or continue.",
@@ -103,7 +106,7 @@ async fn own_task(
     ctx: &CallCtx,
     task_id: &str,
 ) -> Result<DelegatedTask, ToolError> {
-    match svc.tasks.get(task_id).await {
+    match svc.tasks.get(task_id).await? {
         Some(task) if task.parent_chat_id == ctx.caller.chat_id => Ok(task),
         _ => Err(task_not_found(task_id)),
     }
@@ -116,32 +119,44 @@ pub(super) async fn run_status(
 ) -> Result<Value, ToolError> {
     let input: StatusInput = parse_args(args)?;
     let Some(task_id) = input.task_id else {
-        let mut tasks = Vec::new();
-        for task in svc.tasks.by_parent(&ctx.caller.chat_id, LIST_LIMIT).await {
-            tasks.push(svc.task_result(&task, None).await);
-        }
-        return Ok(json!({ "tasks": tasks }));
+        return list(svc, ctx).await;
     };
     own_task(svc, ctx, &task_id).await?;
     let wait = input.wait_ms.unwrap_or(0);
     if wait == 0 {
         let task = svc.advance(&task_id, false).await?;
-        let task = svc.acknowledge(task).await?;
-        return Ok(svc.task_result(&task, None).await);
+        let task = svc.acknowledge(ctx, task).await?;
+        return svc.task_result(&task, None).await;
     }
-    let _slot = ctx.caller.try_begin_wait().ok_or_else(|| {
-        ToolError::new(
-            ErrorCode::RateLimited,
-            "Too many concurrent waits for this chat.",
-        )
-    })?;
+    let _slot = ctx.caller.begin_wait()?;
     // Capped well under a minute per call regardless of waitMs: see
     // `policy::MAX_SINGLE_WAIT_MS`. `waitReturned: "timeout"` already tells
     // the agent the task is not finished and not cancelled, so no separate
     // "still waiting" signal is needed here the way `chat_wait` needs one.
     let capped = Duration::from_millis(wait).min(Duration::from_millis(MAX_SINGLE_WAIT_MS));
     let (task, returned) = svc.wait_task(ctx, &task_id, capped).await?;
-    Ok(svc.task_result(&task, Some(returned)).await)
+    svc.task_result(&task, Some(returned)).await
+}
+
+/// The caller's newest tasks, with long texts cut and the list ended early when
+/// the result budget runs out. Reading one task by id returns its full text,
+/// so a list acknowledges nothing.
+async fn list(svc: &OrchestrationService, ctx: &CallCtx) -> Result<Value, ToolError> {
+    let tasks = svc.tasks.by_parent(&ctx.caller.chat_id, LIST_LIMIT).await?;
+    let mut used = 0;
+    let mut listed = Vec::new();
+    for mut task in tasks {
+        for text in [&mut task.summary, &mut task.error].into_iter().flatten() {
+            *text = cap_chars(text, LIST_TEXT_CHARS);
+        }
+        let result = svc.task_result(&task, None).await?;
+        used += result.to_string().len() + 1;
+        if used > RESULT_BUDGET_BYTES - LIST_ENVELOPE_BYTES {
+            break;
+        }
+        listed.push(result);
+    }
+    Ok(json!({ "tasks": listed }))
 }
 
 pub(super) async fn run_cancel(
@@ -159,7 +174,9 @@ pub(super) async fn run_cancel(
     };
     cancelled.retain(|id| *id != input.task_id);
     let task = own_task(svc, ctx, &input.task_id).await?;
-    let mut result = svc.task_result(&task, None).await;
+    // A task that finished first: its result is in this reply.
+    let task = svc.acknowledge(ctx, task).await?;
+    let mut result = svc.task_result(&task, None).await?;
     result["cancelledDescendantTaskIds"] = json!(cancelled);
     Ok(result)
 }

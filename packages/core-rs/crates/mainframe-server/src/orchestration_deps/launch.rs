@@ -20,9 +20,6 @@ struct Placement {
 impl DaemonOrchestrationPort {
     pub(super) async fn launch(&self, request: LaunchRequest) -> Result<ChatView, PortError> {
         let placement = self.place(&request).await?;
-        let mode = serde_json::to_value(request.permission_mode)
-            .ok()
-            .and_then(|v| v.as_str().map(str::to_string));
         let chat = self
             .chats
             .create_chat_with_defaults(
@@ -30,7 +27,7 @@ impl DaemonOrchestrationPort {
                     project_id: request.project_id.clone(),
                     adapter_id: request.adapter_id.clone(),
                     model: request.model.clone(),
-                    permission_mode: mode,
+                    permission_mode: Some(request.permission_mode.as_str().to_string()),
                     automation_run_id: None,
                     temporary: false,
                     scratch_root: None,

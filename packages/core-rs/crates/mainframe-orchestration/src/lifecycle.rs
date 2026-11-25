@@ -1,153 +1,16 @@
-//! The service's reactions to chat lifecycle: task progress, outbox
-//! flushes when a target goes idle, and credential revocation on exit.
+//! The service's reactions to chat lifecycle: task progress, outbox flushes,
+//! and credential revocation on exit.
 
-use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
 
 use mainframe_types::events::{ChatUpdatedReason, DaemonEvent};
 use mainframe_types::orchestration::{AgentOutboxEntry, TaskDelivery};
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::outbox::{OutboxEntry, OutboxKind, batch_body};
-use crate::policy::check_ceiling;
-use crate::ports::ChatView;
 use crate::service::OrchestrationService;
-use crate::state::{AgentMessageKind, ChatState, wrap_agent_message};
-use crate::tasks::now;
 use crate::waiter::event_chat_id;
 
 impl OrchestrationService {
-    /// Sends everything held for `chat_id` as one message once it is idle.
-    /// Deliveries a restart left owed wait until the chat spawns again.
-    ///
-    /// A dropped queued `Send` reports back to its sender as a `Notice` entry
-    /// in the same outbox (`notify_send_dropped`); an idle sender has no
-    /// other event coming to flush it on, so this recurses into the
-    /// sender's own `try_flush` once `chat_id`'s flush is done — after
-    /// `flush_locked`'s guard has dropped, so it never deadlocks on
-    /// `flush_lock` (not reentrant).
-    pub(crate) async fn try_flush(&self, chat_id: &str) {
-        if !self.outbox.has_for(chat_id) || self.is_boot_held(chat_id) {
-            return;
-        }
-        let dropped_senders = self.flush_locked(chat_id).await;
-        for sender in dropped_senders {
-            // Boxed: `try_flush` calling itself is otherwise an infinitely
-            // sized async fn.
-            Box::pin(self.try_flush(&sender)).await;
-        }
-    }
-
-    /// `try_flush`'s work under `flush_lock`, returning the senders a
-    /// ceiling-dropped `Send` was reported back to — left for the caller to
-    /// flush once the lock is released.
-    async fn flush_locked(&self, chat_id: &str) -> Vec<String> {
-        let _guard = self.flush_lock.lock().await;
-        let Some(chat) = self.port.chat(chat_id).await else {
-            self.outbox.drop_for_target(chat_id);
-            return Vec::new();
-        };
-        match crate::state::derive_state(&chat, false) {
-            ChatState::Idle => {}
-            ChatState::Ended | ChatState::Archived => {
-                self.outbox.drop_for_target(chat_id);
-                return Vec::new();
-            }
-            _ => return Vec::new(),
-        }
-        let entries = self.outbox.take_for(chat_id);
-        if entries.is_empty() {
-            return Vec::new();
-        }
-        // The ceiling was checked once, at `chat_send` time; the sender's or
-        // the target's mode may have been raised or lowered since. A task
-        // result is never subject to it (delivering a task's own outcome is
-        // not "driving" the parent), only a queued `chat_send` is. A sender
-        // that no longer passes is dropped: logged here, and reported back
-        // to the sender as a `Notice` entry (there is no queued-send record
-        // to mark failed — the outbox is in-memory only — so this is the
-        // sender's only signal; it was told `delivery: "queued"` with an
-        // `outboxEntryId` and would otherwise never learn the message died).
-        let mut deliverable = Vec::with_capacity(entries.len());
-        let mut dropped_senders = Vec::new();
-        for entry in entries {
-            if matches!(entry.kind, OutboxKind::Send)
-                && !self
-                    .sender_still_passes_ceiling(&entry.from_chat_id, &chat)
-                    .await
-            {
-                tracing::warn!(
-                    chat_id,
-                    from_chat_id = entry.from_chat_id,
-                    entry_id = entry.entry_id,
-                    "queued chat_send dropped: sender no longer passes the ceiling at delivery time"
-                );
-                dropped_senders.push(entry.from_chat_id.clone());
-                self.notify_send_dropped(chat_id, &entry);
-                continue;
-            }
-            deliverable.push(entry);
-        }
-        if deliverable.is_empty() {
-            return dropped_senders;
-        }
-        if let Err(err) = self.port.send(chat_id, &batch_body(&deliverable)).await {
-            tracing::warn!(chat_id, error = ?err, "outbox delivery failed; keeping entries");
-            self.outbox.restore(deliverable);
-            return dropped_senders;
-        }
-        self.set_delivery(&deliverable, TaskDelivery::Delivered)
-            .await;
-        dropped_senders
-    }
-
-    /// Whether `sender_id` may still reach `target` under the ceiling, read
-    /// fresh at delivery time. A sender that is gone cannot be verified, so
-    /// it reads as refused rather than assumed safe.
-    async fn sender_still_passes_ceiling(&self, sender_id: &str, target: &ChatView) -> bool {
-        let Some(sender) = self.port.chat(sender_id).await else {
-            return false;
-        };
-        check_ceiling(&sender.privileges(), &target.privileges()).is_ok()
-    }
-
-    /// Reports a dropped queued `Send` back to its sender, as a `Notice`
-    /// entry: it rides the same outbox (delivered next time the sender goes
-    /// idle), but is never itself subject to the ceiling re-check — it is
-    /// infrastructure reporting on a `Send`, not one.
-    fn notify_send_dropped(&self, target_chat_id: &str, entry: &OutboxEntry) {
-        let note = format!(
-            "Your queued message to {target_chat_id} was not delivered: \
-             {target_chat_id}'s permission mode changed and no longer allows \
-             this chat to reach it."
-        );
-        let body = wrap_agent_message(target_chat_id, AgentMessageKind::Dropped, &note);
-        self.outbox.push(
-            &entry.from_chat_id,
-            target_chat_id,
-            OutboxKind::Notice,
-            body,
-            &note,
-        );
-    }
-
-    /// Records where each task result among `entries` ended up.
-    async fn set_delivery(&self, entries: &[OutboxEntry], delivery: TaskDelivery) {
-        for entry in entries {
-            let OutboxKind::TaskResult { task_id } = &entry.kind else {
-                continue;
-            };
-            let Some(mut task) = self.tasks.get(task_id).await else {
-                continue;
-            };
-            task.delivery = delivery;
-            task.updated_at = now();
-            if let Err(err) = self.save(&task).await {
-                tracing::warn!(task_id, error = %err, "failed to record a task delivery");
-            }
-        }
-    }
-
     /// What Mainframe is holding for `chat_id`, oldest first, as the
     /// target's `Chat.agent_outbox` shows it.
     #[must_use]
@@ -166,17 +29,9 @@ impl OrchestrationService {
     /// The user's cancel on one held message; a cancelled task result is
     /// recorded as dropped. False when the entry is gone (already sent).
     pub async fn cancel_outbox_entry(&self, chat_id: &str, entry_id: &str) -> bool {
-        let entry = self
-            .outbox
-            .list_for(chat_id)
-            .into_iter()
-            .find(|e| e.entry_id == entry_id);
-        let Some(entry) = entry else {
+        let Some(entry) = self.outbox.cancel(chat_id, entry_id) else {
             return false;
         };
-        if !self.outbox.cancel(chat_id, entry_id) {
-            return false;
-        }
         self.set_delivery(&[entry], TaskDelivery::Dropped).await;
         true
     }
@@ -198,14 +53,6 @@ impl OrchestrationService {
         let Some(chat_id) = event_chat_id(event) else {
             return;
         };
-        // Only a stopped chat needs the re-read; most events skip the port.
-        // A chat that is now gone (discard deletes the row before emitting
-        // `ChatEnded`, so `port.chat` reads `None`) can never run another
-        // turn to go idle on, so its stopping flag must clear here too, or
-        // it outlives the Stop and leaks for the rest of the process.
-        if self.is_stopping(chat_id) && self.port.chat(chat_id).await.is_none_or(|c| !c.working) {
-            self.clear_stopping(chat_id);
-        }
         if let Some(task_id) = self.tracked_task(chat_id) {
             let interrupted = matches!(
                 event,
@@ -214,27 +61,28 @@ impl OrchestrationService {
                     ..
                 }
             );
-            if let Err(err) = self.advance(&task_id, interrupted).await {
-                tracing::warn!(task_id, error = %err, "failed to advance a delegated task");
-            }
+            self.advance_or_warn(&task_id, interrupted).await;
         }
+        // After advancing, which reads the stopping flag.
+        self.settle_turn(chat_id).await;
         self.try_flush(chat_id).await;
     }
 
     async fn on_lagged(&self) {
-        let tracked: Vec<String> = self
-            .active_children
-            .lock_recover()
-            .values()
-            .cloned()
-            .collect();
-        for task_id in tracked {
-            if let Err(err) = self.advance(&task_id, false).await {
-                tracing::warn!(task_id, error = %err, "failed to advance a delegated task");
-            }
+        for task_id in self.tracked_tasks() {
+            self.advance_or_warn(&task_id, false).await;
+        }
+        for chat_id in self.unsettled() {
+            self.settle_turn(&chat_id).await;
         }
         for target in self.outbox.targets() {
             self.try_flush(&target).await;
+        }
+    }
+
+    async fn advance_or_warn(&self, task_id: &str, interrupted: bool) {
+        if let Err(err) = self.advance(task_id, interrupted).await {
+            tracing::warn!(task_id, error = %err, "failed to advance a delegated task");
         }
     }
 

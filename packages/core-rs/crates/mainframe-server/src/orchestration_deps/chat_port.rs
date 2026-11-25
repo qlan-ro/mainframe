@@ -92,10 +92,16 @@ fn chat_view(chat: Chat, pending: Option<PendingPermissionView>, queued: usize) 
 }
 
 impl OrchestrationPort for DaemonOrchestrationPort {
-    fn chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ChatView>> {
+    fn chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Result<Option<ChatView>, PortError>> {
         Box::pin(async move {
-            let chat = self.chats.get_chat(chat_id)?;
-            Some(self.view(chat).await)
+            let chat = self
+                .chats
+                .try_get_chat(chat_id)
+                .map_err(|error| PortError::Internal(error.to_string()))?;
+            Ok(match chat {
+                Some(chat) => Some(self.view(chat).await),
+                None => None,
+            })
         })
     }
 
@@ -168,6 +174,10 @@ impl OrchestrationPort for DaemonOrchestrationPort {
 
     fn launch_chat(&self, request: LaunchRequest) -> BoxFuture<'_, Result<ChatView, PortError>> {
         Box::pin(async move { self.launch(request).await })
+    }
+
+    fn retire_chat<'a>(&'a self, chat_id: &'a str, delete_worktree: bool) -> BoxFuture<'a, ()> {
+        Box::pin(async move { self.chats.archive_chat(chat_id, delete_worktree).await })
     }
 
     fn send<'a>(&'a self, chat_id: &'a str, text: &'a str) -> BoxFuture<'a, Result<(), PortError>> {

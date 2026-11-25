@@ -10,6 +10,7 @@ use super::ToolDef;
 use super::launch_common::{
     admit_creation, resolve_adapter, resolve_privileges, resolve_project, resolve_workspace,
 };
+use crate::calls::CallCtx;
 use crate::errors::ToolError;
 use crate::input::{
     Validate, WorkspaceInput, WorkspaceMode, check_opt_id, check_opt_len, check_text, id_schema,
@@ -18,12 +19,11 @@ use crate::input::{
 };
 use crate::policy::TITLE_MAX;
 use crate::ports::{ChatView, LaunchRequest};
-use crate::service::{CallCtx, OrchestrationService};
+use crate::service::OrchestrationService;
 use crate::state::{AgentMessageKind, wrap_agent_message};
 
 pub(super) fn definition() -> ToolDef {
     ToolDef {
-        name: "chat_launch",
         title: "Launch a Mainframe chat",
         description: "Create a new top-level chat the user can open, optionally sending it a \
             first prompt. Defaults: the caller's project, adapter, model, permission mode, and \
@@ -88,7 +88,7 @@ pub(super) async fn run(
     admit_creation(svc, &caller).await?;
     let chat = svc.port.launch_chat(request).await?;
     let delivery = deliver_prompt(svc, &caller.id, &chat.id, input.prompt.as_deref()).await?;
-    let chat = svc.port.chat(&chat.id).await.unwrap_or(chat);
+    let chat = svc.reread(chat).await;
     Ok(json!({
         "chatId": chat.id,
         "projectId": chat.project_id,

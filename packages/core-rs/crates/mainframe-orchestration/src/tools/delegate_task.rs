@@ -4,30 +4,28 @@
 
 use std::time::Duration;
 
-use mainframe_types::orchestration::{DelegatedTask, TaskDelivery, TaskRole, TaskStatus};
+use mainframe_types::orchestration::{DelegatedTask, TaskRole};
 use mainframe_types::settings::ExecutionMode;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::ToolDef;
-use super::launch_common::{
-    admit_creation, resolve_adapter, resolve_privileges, resolve_workspace,
-};
-use crate::errors::{ErrorCode, ToolError, cap_chars};
+use crate::calls::CallCtx;
+use crate::errors::ToolError;
 use crate::input::{
     Validate, WorkspaceInput, WorkspaceMode, check_opt_id, check_opt_len, check_text,
     check_timeout, id_schema, object_schema, parse_args, permission_mode_schema, string_schema,
     text_schema, timeout_schema, workspace_schema,
 };
 use crate::policy::{DEFAULT_WAIT_MS, MAX_SINGLE_WAIT_MS, TITLE_MAX};
-use crate::ports::{ChatView, LaunchRequest};
-use crate::service::{CallCtx, OrchestrationService};
-use crate::state::{AgentMessageKind, wrap_agent_message};
-use crate::tasks::now;
+use crate::service::OrchestrationService;
+
+mod create;
+
+use create::{Created, create, find_existing};
 
 pub(super) fn definition() -> ToolDef {
     ToolDef {
-        name: "delegate_task",
         title: "Delegate a task",
         description: "Start a child chat that runs one task and reports back. Use this, not a \
             plugin or built-in subagent, when the user asks to spawn, start or delegate to a \
@@ -117,188 +115,42 @@ pub(super) async fn run(
 ) -> Result<Value, ToolError> {
     let input: Input = parse_args(args)?;
     let caller = svc.active_caller(ctx).await?;
-    // Idempotency first, before claiming a wait slot: a `mode: "wait"` retry
-    // with the same clientRequestId must not be refused by the concurrent-
-    // wait limit just because it is retrying — it may not need a new slot
-    // at all, since the task this returns is already there.
-    if let Some(key) = &input.client_request_id
-        && let Some(existing) = svc.tasks.by_request(&caller.id, key).await
-    {
-        return Ok(svc.task_result(&existing, None).await);
+    // Before claiming a wait slot: a retry may not need a new one, since the
+    // task it asks for is already there.
+    if let Some(existing) = find_existing(svc, &input, &caller).await? {
+        return retried(svc, ctx, existing).await;
     }
     // Claimed before anything is created, so a refused wait starts nothing.
     let slot = match input.mode {
-        Mode::Wait => Some(ctx.caller.try_begin_wait().ok_or_else(|| {
-            ToolError::new(
-                ErrorCode::RateLimited,
-                "Too many concurrent waits for this chat.",
-            )
-        })?),
+        Mode::Wait => Some(ctx.caller.begin_wait()?),
         Mode::Async => None,
     };
-    // The idempotency check, the per-parent/per-tree limit check, and the
-    // insert must run as one step: otherwise two concurrent calls (with or
-    // without the same clientRequestId) can both pass every check before
-    // either has inserted, both creating a task and together exceeding the
-    // limits the second call's own check just said were not exceeded. The
-    // lock is per delegation tree, not global, so unrelated trees never
-    // contend; it is released before a `wait` call blocks, so it never
-    // holds up a sibling delegation for the duration of someone else's wait.
-    let root = svc.tree_root(&caller.id).await;
-    let tree_lock = svc.tree_lock(&root);
-    let task = {
-        let _guard = tree_lock.lock().await;
-        // Re-check: the caller may have been stopped while this call waited
-        // for the lock. Without this, a delegation that started before the
-        // Stop can still land after it — the cascade's own sweep only
-        // cancels tasks that existed when it ran, so a task this call is
-        // about to insert would otherwise outlive a Stop that landed while
-        // it queued for the lock.
-        svc.active_caller(ctx).await?;
-        if let Some(key) = &input.client_request_id
-            && let Some(existing) = svc.tasks.by_request(&caller.id, key).await
-        {
-            return Ok(svc.task_result(&existing, None).await);
-        }
-        let request = build_request(svc, &input, &caller).await?;
-        svc.check_task_limits(&caller.id).await?;
-        admit_creation(svc, &caller).await?;
-        let child = svc.port.launch_chat(request).await?;
-        let task = start(svc, &input, &caller, &child).await?;
-        // Re-check again: launch_chat (worktree provisioning) and start
-        // (the DB insert and first send) can each take a while, and the
-        // same race applies — a Stop landing during either leaves the task
-        // and its child running unless caught here too.
-        if let Err(err) = svc.active_caller(ctx).await {
-            svc.cancel_task(
-                task,
-                Some("the caller was stopped while this task was starting".to_string()),
-            )
-            .await;
-            return Err(err);
-        }
-        task
+    let task = match create(svc, ctx, &input, &caller).await? {
+        Created::New(task) => task,
+        Created::Existing(task) => return retried(svc, ctx, task).await,
     };
     if slot.is_none() {
-        return Ok(svc.task_result(&task, None).await);
+        return svc.task_result(&task, None).await;
     }
     // Capped well under a minute per call regardless of timeoutMs: see
     // `policy::MAX_SINGLE_WAIT_MS`.
     let timeout = Duration::from_millis(input.timeout_ms.unwrap_or(DEFAULT_WAIT_MS))
         .min(Duration::from_millis(MAX_SINGLE_WAIT_MS));
     let (task, returned) = svc.wait_task(ctx, &task.id, timeout).await?;
-    Ok(svc.task_result(&task, Some(returned)).await)
+    svc.task_result(&task, Some(returned)).await
 }
 
-async fn build_request(
+/// A retry reads the task like `task_status` does: a finished result returned
+/// here is not sent again as a message.
+async fn retried(
     svc: &OrchestrationService,
-    input: &Input,
-    caller: &ChatView,
-) -> Result<LaunchRequest, ToolError> {
-    let (adapter_id, model, adapter_auto_mode) = resolve_adapter(
-        svc,
-        input.adapter_id.as_deref(),
-        input.model.as_deref(),
-        caller,
-    )
-    .await?;
-    let privileges = resolve_privileges(
-        &adapter_id,
-        adapter_auto_mode,
-        input.permission_mode,
-        input.plan_mode,
-        caller,
-    )?;
-    let workspace = resolve_workspace(
-        input.workspace.as_ref(),
-        WorkspaceMode::Inherit,
-        caller,
-        &caller.project_id,
-    )?;
-    let title = input
-        .title
-        .clone()
-        .unwrap_or_else(|| default_title(&input.task));
-    Ok(LaunchRequest {
-        project_id: caller.project_id.clone(),
-        adapter_id,
-        model,
-        permission_mode: privileges.mode,
-        plan_mode: privileges.plan,
-        title: Some(title),
-        workspace,
-        created_by_chat_id: caller.id.clone(),
-        parent_chat_id: Some(caller.id.clone()),
-    })
-}
-
-fn default_title(task: &str) -> String {
-    let first = task
-        .lines()
-        .find(|l| !l.trim().is_empty())
-        .unwrap_or(task)
-        .trim();
-    format!("Task: {}", cap_chars(first, 60))
-}
-
-/// Records the task, then sends the child its only message.
-async fn start(
-    svc: &OrchestrationService,
-    input: &Input,
-    caller: &ChatView,
-    child: &ChatView,
-) -> Result<DelegatedTask, ToolError> {
-    let parent_depth = svc.tasks.by_child(&caller.id).await.map_or(0, |t| t.depth);
-    let at = now();
-    let mut task = DelegatedTask {
-        id: format!("task_{}", child.id),
-        parent_chat_id: caller.id.clone(),
-        child_chat_id: child.id.clone(),
-        client_request_id: input.client_request_id.clone(),
-        title: child.title.clone(),
-        role: input.role.unwrap_or(TaskRole::General),
-        status: TaskStatus::Queued,
-        depth: parent_depth + 1,
-        summary: None,
-        error: None,
-        cancel_reason: None,
-        delivery: TaskDelivery::Pending,
-        created_at: at.clone(),
-        updated_at: at,
-        completed_at: None,
-    };
-    svc.tasks.insert(task.clone()).await?;
-    let body = task_prompt(caller, &input.task);
-    if let Err(err) = svc.port.send(&child.id, &body).await {
-        let failure = crate::tasks::Outcome::without_summary(
-            TaskStatus::Failed,
-            "The task prompt could not be delivered.",
-        );
-        tracing::warn!(task_id = task.id, error = ?err, "delegated task prompt failed");
-        return svc.finalize(task, failure).await;
-    }
-    task.status = TaskStatus::Running;
-    task.updated_at = now();
-    svc.save(&task).await?;
-    svc.track_child(&task);
-    // Catches a child that finished before it was tracked.
-    svc.advance(&task.id, false).await
-}
-
-/// The child's only message: who delegated it and the task itself.
-fn task_prompt(caller: &ChatView, task: &str) -> String {
-    let preface = format!(
-        "This is a task delegated by chat {} (\"{}\"). Your final reply is returned to it as the task result.",
-        caller.id,
-        caller.title.as_deref().unwrap_or("untitled")
-    );
-    wrap_agent_message(
-        &caller.id,
-        AgentMessageKind::Task,
-        &format!("{preface}\n\n{task}"),
-    )
+    ctx: &CallCtx,
+    task: DelegatedTask,
+) -> Result<Value, ToolError> {
+    let task = svc.acknowledge(ctx, task).await?;
+    svc.task_result(&task, None).await
 }
 
 #[cfg(test)]
 #[path = "delegate_task_tests.rs"]
-pub(crate) mod tests;
+mod tests;

@@ -1,17 +1,17 @@
 //! Limits and the privilege ceiling. The numbers are first guesses (spec "Open
 //! questions") kept in one place so tuning them is a one-line change.
 
-use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use mainframe_types::settings::ExecutionMode;
+use mainframe_types::sync::LockExt as _;
 
 use crate::errors::{ErrorCode, ToolError};
 
 /// Longest `created_by_chat_id` chain a chat may start new chats from.
-pub const MAX_DEPTH: u32 = 3;
+pub const MAX_DEPTH: usize = 3;
 pub const MAX_ACTIVE_TASKS_PER_TREE: usize = 8;
 pub const MAX_ACTIVE_TASKS_PER_PARENT: usize = 4;
 pub const CREATION_LIMIT: usize = 20;
@@ -199,7 +199,9 @@ impl CreationLimiter {
     pub fn remaining(&self, chat_id: &str) -> usize {
         let now = self.clock.now();
         let mut events = self.events.lock_recover();
-        let used = prune(events.entry(chat_id.to_string()).or_default(), now);
+        let used = events
+            .get_mut(chat_id)
+            .map_or(0, |window| prune(window, now));
         CREATION_LIMIT.saturating_sub(used)
     }
 
@@ -207,8 +209,10 @@ impl CreationLimiter {
     pub(crate) fn try_acquire(&self, chat_id: &str) -> Result<(), ToolError> {
         let now = self.clock.now();
         let mut events = self.events.lock_recover();
+        // Chats that stopped creating would otherwise keep an entry forever.
+        events.retain(|_, window| prune(window, now) > 0);
         let window = events.entry(chat_id.to_string()).or_default();
-        if prune(window, now) >= CREATION_LIMIT {
+        if window.len() >= CREATION_LIMIT {
             return Err(ToolError::new(
                 ErrorCode::RateLimited,
                 format!(

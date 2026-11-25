@@ -4,17 +4,17 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::ToolDef;
+use crate::calls::CallCtx;
 use crate::errors::{ErrorCode, ToolError};
 use crate::input::{
     Validate, check_id, check_opt_len, id_schema, object_schema, parse_args, string_schema,
 };
 use crate::policy::{REASON_MAX, check_ceiling};
-use crate::service::{CallCtx, OrchestrationService};
+use crate::service::OrchestrationService;
 use crate::state::ChatState;
 
 pub(super) fn definition() -> ToolDef {
     ToolDef {
-        name: "chat_interrupt",
         title: "Interrupt a Mainframe chat",
         description: "Stop a chat's active turn. Its delegated tasks are cancelled first, deepest \
             first, and messages Mainframe was holding for it are dropped. The chat itself is \
@@ -66,7 +66,7 @@ pub(super) async fn run(
     }
     let cancelled = svc.cascade_stop(&target.id, input.reason.as_deref()).await;
     svc.port.interrupt(&target.id).await;
-    let after = svc.port.chat(&target.id).await.unwrap_or(target);
+    let after = svc.reread(target).await;
     Ok(json!({
         "chatId": after.id,
         "interrupted": true,
