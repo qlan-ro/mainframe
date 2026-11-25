@@ -40,7 +40,7 @@ export class AcpChatController {
   private readonly loader: ChatPlaneLoader;
   private disposed = false;
   private readonly targetId = getActiveDaemon().id;
-  /** Bumped by each config broadcast and each reconciled response. */
+  /** Bumped by each config broadcast, each applied response and the start of each re-read: the latest wins. */
   private configVersion = 0;
   private modelRequests = 0;
   // The id for all network ops: the daemon chat id for pre-existing threads; for a
@@ -332,13 +332,12 @@ export class AcpChatController {
     const requestId = ++this.modelRequests;
     const response = await request();
     if (!matches()) return;
-    const beforeRead = this.configVersion;
     // A response is only current when nothing else has changed or is changing the chat; otherwise ask the daemon.
-    const current = beforeRead === atStart && requestId === this.modelRequests && usable(response);
+    const current = this.configVersion === atStart && requestId === this.modelRequests && usable(response);
+    const version = ++this.configVersion;
     const chat = current ? response : await getChat(this.port, chatId);
-    if (!matches() || this.configVersion !== beforeRead) return;
+    if (!matches() || this.configVersion !== version) return;
     if (!usable(chat)) throw new Error('Could not reload the chat configuration');
-    this.configVersion += 1;
     this.dispatch({ type: 'chat.config.updated', chat });
   }
 

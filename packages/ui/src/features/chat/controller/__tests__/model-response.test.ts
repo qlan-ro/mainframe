@@ -160,3 +160,21 @@ it('shows the older pick when the newer one is refused', async () => {
   await first.done;
   expect(ctrl.getState().chatConfig?.model).toBe('opus');
 });
+
+it.each(['older', 'newer'])('the later re-read wins when the %s one answers first', async (order) => {
+  const { ctrl, broadcast } = setup();
+  const { first, second } = twoPicks(ctrl);
+  broadcast({ model: 'sonnet' });
+  const answers: Array<() => void> = [];
+  const answer = (model: string) => () =>
+    new Promise<ReturnType<typeof makeChat>>((resolve) => answers.push(() => resolve(makeChat({ model }))));
+  vi.mocked(getChat).mockImplementationOnce(answer('opus')).mockImplementationOnce(answer('haiku'));
+  first.finish();
+  await vi.waitFor(() => expect(answers).toHaveLength(1));
+  second.finish();
+  await vi.waitFor(() => expect(answers).toHaveLength(2));
+  const [older, newest] = answers as [() => void, () => void];
+  (order === 'older' ? [older, newest] : [newest, older]).forEach((reply) => reply());
+  await Promise.all([first.done, second.done]);
+  expect(ctrl.getState().chatConfig?.model).toBe('haiku');
+});
