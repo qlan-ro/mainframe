@@ -49,6 +49,12 @@ describe('TerminalInstance', () => {
     expect(screen.getByTestId('run-terminal-abc')).toBeInTheDocument();
   });
 
+  it('pads the full pane on the workspace surface', () => {
+    render(<TerminalInstance terminalId="abc" visible />);
+    const pane = screen.getByTestId('run-terminal-abc');
+    expect(pane).toHaveClass('absolute', 'inset-0', 'bg-background', 'px-[14px]', 'py-[10px]');
+  });
+
   it('mounts the cached wrapper into its container', () => {
     render(<TerminalInstance terminalId="abc" visible />);
     expect(getOrCreateSpy).toHaveBeenCalledWith('abc');
