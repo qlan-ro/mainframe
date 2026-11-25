@@ -4,39 +4,31 @@
  * each chat it holds messages for, and forgets the ones the daemon no longer has.
  */
 import { useEffect } from 'react';
-import { getChat } from '@/lib/api/chats';
+import { chatExists } from '@/lib/api/chats';
 import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
 import { daemonWs } from '../../../lib/daemon/ws-client';
 
-/** Only the daemon's own "no such chat" counts; unreachable or failing, it has said nothing. */
-const isGone = (error: unknown): boolean => (error as { status?: unknown } | null | undefined)?.status === 404;
-
-async function forgetIfGone(port: number, chatId: string, daemon: string): Promise<void> {
+async function forgetIfGone(chatId: string, daemon: string): Promise<void> {
   try {
-    await getChat(port, chatId);
+    if ((await chatExists(chatId)) || getActiveDaemon().id !== daemon) return;
+    useHeldQueue.getState().clearChat(chatId);
   } catch (error) {
-    if (!isGone(error)) {
-      console.warn('[held-queue] could not check a session with held messages', { chatId, error });
-      return;
-    }
-    if (getActiveDaemon().id === daemon) useHeldQueue.getState().clearChat(chatId);
+    console.warn('[held-queue] could not check a session with held messages', { chatId, error });
   }
 }
 
-function forgetGoneChats(port: number): void {
+function forgetGoneChats(): void {
+  if (!daemonWs.connected) return;
   const daemon = getActiveDaemon().id;
   for (const [chatId, rows] of Object.entries(useHeldQueue.getState().byChat)) {
-    if (rows.some((row) => row.daemon === daemon)) void forgetIfGone(port, chatId, daemon);
+    if (rows.some((row) => row.daemon === daemon)) void forgetIfGone(chatId, daemon);
   }
 }
 
-export function useHeldQueuePrune(port: number): void {
+export function useHeldQueuePrune(): void {
   useEffect(() => {
-    const prune = () => {
-      if (daemonWs.connected) forgetGoneChats(port);
-    };
-    prune();
-    return daemonWs.subscribeConnection(prune);
-  }, [port]);
+    forgetGoneChats();
+    return daemonWs.subscribeConnection(forgetGoneChats);
+  }, []);
 }

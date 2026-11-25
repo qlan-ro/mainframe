@@ -104,8 +104,6 @@ vi.mock('../../lib/lsp', () => ({
   initAutoConnect: vi.fn(() => () => undefined),
 }));
 
-vi.mock('../../features/sessions/ws/use-held-queue-prune', () => ({ useHeldQueuePrune: vi.fn() }));
-
 vi.mock('../../features/sessions/ws/use-session-list-router', () => ({
   useSessionListRouter: useSessionListRouterMock,
 }));
@@ -161,7 +159,6 @@ vi.mock('@/components/ui/sonner', () => ({
 // Import the component under test — AFTER all mocks.
 // ---------------------------------------------------------------------------
 
-import { useHeldQueuePrune } from '../../features/sessions/ws/use-held-queue-prune';
 import { useConnectionState } from '../useConnectionState';
 import { App } from '../App';
 
@@ -192,16 +189,6 @@ describe('App integration — renders sidebar shell, dev harness gone', () => {
 
     expect(screen.queryByTestId('app-chatid-input')).toBeNull();
     expect(screen.getByTestId('sessions-sidebar')).toBeDefined();
-  });
-});
-
-describe('App integration — held messages of sessions that are gone', () => {
-  it('are checked against the daemon the shell runs on', async () => {
-    await act(async () => {
-      render(<App />);
-    });
-
-    expect(useHeldQueuePrune).toHaveBeenCalledWith(31415);
   });
 });
 

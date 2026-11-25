@@ -5,10 +5,10 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { ws, getChat } = vi.hoisted(() => {
+const { ws, chatExists } = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   return {
-    getChat: vi.fn(),
+    chatExists: vi.fn(),
     ws: {
       connected: false,
       listeners,
@@ -20,7 +20,7 @@ const { ws, getChat } = vi.hoisted(() => {
   };
 });
 vi.mock('../../../../lib/daemon/ws-client', () => ({ daemonWs: ws }));
-vi.mock('@/lib/api/chats', () => ({ getChat }));
+vi.mock('@/lib/api/chats', () => ({ chatExists }));
 
 import { ApiRequestError } from '@/lib/api/http';
 import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
@@ -28,7 +28,6 @@ import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
 import { useHeldQueuePrune } from '../use-held-queue-prune';
 
 const LOCAL = getActiveDaemon();
-const gone = new ApiRequestError('Chat not found', [], 404);
 const hold = (chatId: string) =>
   useHeldQueue
     .getState()
@@ -46,31 +45,28 @@ beforeEach(() => {
   setActiveDaemon(LOCAL);
   ws.connected = false;
   ws.listeners.clear();
-  getChat.mockImplementation(async (_port: number, chatId: string) => {
-    if (chatId === 'gone') throw gone;
-    return { id: chatId };
-  });
+  chatExists.mockImplementation(async (chatId: string) => chatId !== 'gone');
 });
 
 describe('held rows of a session that is gone', () => {
   it('go when the client reconnects, and other sessions keep theirs', async () => {
-    renderHook(() => useHeldQueuePrune(31415));
+    renderHook(() => useHeldQueuePrune());
     hold('gone');
     hold('here');
-    expect(getChat).not.toHaveBeenCalled();
+    expect(chatExists).not.toHaveBeenCalled();
 
     await connect(true);
 
     expect(heldChats()).toEqual(['here']);
     expect(localStorage.getItem('mf:held-queue')).not.toContain('m-gone');
-    expect(getChat.mock.calls).toEqual(expect.arrayContaining([[31415, 'gone']]));
+    expect(chatExists.mock.calls).toEqual([['gone'], ['here']]);
   });
 
   it('go when the app opens on a connected daemon', async () => {
     hold('gone');
     ws.connected = true;
 
-    renderHook(() => useHeldQueuePrune(31415));
+    renderHook(() => useHeldQueuePrune());
     await act(async () => {});
 
     expect(heldChats()).toEqual([]);
@@ -78,11 +74,11 @@ describe('held rows of a session that is gone', () => {
 
   it('a disconnect asks nothing', async () => {
     hold('gone');
-    renderHook(() => useHeldQueuePrune(31415));
+    renderHook(() => useHeldQueuePrune());
 
     await connect(false);
 
-    expect(getChat).not.toHaveBeenCalled();
+    expect(chatExists).not.toHaveBeenCalled();
     expect(heldChats()).toEqual(['gone']);
   });
 
@@ -90,10 +86,10 @@ describe('held rows of a session that is gone', () => {
     ['an unreachable daemon', new TypeError('Failed to fetch')],
     ['a daemon that failed', new ApiRequestError('boom', [], 500)],
   ])('stay after %s: nobody said the session is gone', async (_what, error) => {
-    getChat.mockRejectedValue(error);
+    chatExists.mockRejectedValue(error);
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     hold('gone');
-    renderHook(() => useHeldQueuePrune(31415));
+    renderHook(() => useHeldQueuePrune());
 
     await connect(true);
 
@@ -104,23 +100,23 @@ describe('held rows of a session that is gone', () => {
     setActiveDaemon({ ...LOCAL, id: 'remote', kind: 'remote' });
     hold('gone');
     setActiveDaemon(LOCAL);
-    renderHook(() => useHeldQueuePrune(31415));
+    renderHook(() => useHeldQueuePrune());
 
     await connect(true);
 
-    expect(getChat).not.toHaveBeenCalled();
+    expect(chatExists).not.toHaveBeenCalled();
     expect(heldChats()).toEqual(['gone']);
   });
 
   it('an answer that arrives after a switch to another daemon changes nothing', async () => {
-    let answer = (_error: unknown) => {};
-    getChat.mockImplementation(() => new Promise((_resolve, reject) => (answer = reject)));
+    let answer = (_exists: boolean) => {};
+    chatExists.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
     hold('gone');
-    renderHook(() => useHeldQueuePrune(31415));
+    renderHook(() => useHeldQueuePrune());
     await connect(true);
 
     setActiveDaemon({ ...LOCAL, id: 'remote', kind: 'remote' });
-    await act(async () => answer(gone));
+    await act(async () => answer(false));
 
     expect(heldChats()).toEqual(['gone']);
   });

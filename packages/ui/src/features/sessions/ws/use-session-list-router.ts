@@ -47,6 +47,7 @@ import { pickArchiveFallback } from '../view-model/session-fallback';
 import { reconcileDraftHandoff } from './reconcile-draft-handoff';
 import { createSessionListRouter } from './session-list-router';
 import { useGhostChatPrune } from './use-ghost-chat-prune';
+import { useHeldQueuePrune } from './use-held-queue-prune';
 
 /** The previous layout-followed session, for the split-member gate below. */
 let lastLayoutSessionId: string | null = null;
@@ -301,6 +302,9 @@ export function useSessionListRouter(): void {
 
   // Ghost-chat prune (todo #346) — see use-ghost-chat-prune.ts.
   useGhostChatPrune(items, threads);
+
+  // Held messages of sessions removed while this client was away.
+  useHeldQueuePrune();
 
   // GC: prune persisted layout entries for sessions no longer in the thread list.
   // Guard: only when the list is non-empty to avoid wiping everything before first load.

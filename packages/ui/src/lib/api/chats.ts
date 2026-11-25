@@ -14,7 +14,7 @@ import type {
   SwitchProviderBody,
 } from '@qlan-ro/mainframe-types';
 import { SwitchProviderBodySchema } from '@qlan-ro/mainframe-types';
-import { apiBase, request, requestEmpty } from './http';
+import { ApiRequestError, apiBase, request, requestEmpty } from './http';
 
 /** Body for PATCH /api/chats/:id/config — adapter / model / permission / plan. */
 export interface ChatConfigPatch {
@@ -53,6 +53,17 @@ export const continueChatInProjectRoot = (port: number, chatId: string): Promise
 /** The chat record (model, effort, planMode, permissionMode, adapterId, isRunning, …). */
 export const getChat = (port: number, chatId: string): Promise<Chat> =>
   request<Chat>('GET', `${apiBase(port)}/api/chats/${chatId}`);
+
+/** Whether the active daemon still has the chat. Only its own 404 is a no; anything else throws. */
+export async function chatExists(chatId: string): Promise<boolean> {
+  try {
+    await request<Chat>('GET', `${apiBase()}/api/chats/${chatId}`);
+    return true;
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404) return false;
+    throw error;
+  }
+}
 
 /**
  * Persist a tuning patch (effort + fast/ultracode/adaptiveThinking — the only

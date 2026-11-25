@@ -32,7 +32,6 @@ import { ReviewPanel } from '../features/review/ReviewPanel';
 import { TutorialOverlay } from '../features/tour/TutorialOverlay';
 import { useFirstRunTour } from '../features/tour/use-first-run-tour';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
-import { useHeldQueuePrune } from '../features/sessions/ws/use-held-queue-prune';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
 import { useOffloadRelease } from '../features/sessions/runtime/use-offload-release';
 import { useStartNewSession } from '../features/sessions/new-thread/use-start-new-session';
@@ -94,7 +93,6 @@ function MainSurface({ port }: { port: number }) {
  */
 function ShellRuntime({ port }: { port: number }) {
   useSessionListRouter();
-  useHeldQueuePrune(port);
   // Idle whole-chat offload (#178): releases a chat's controller/thread subtree
   // on chat.offloaded, deferring while it's on screen. Beside useSessionListRouter
   // for the same reason (needs the live thread list under the provider).

@@ -17,10 +17,11 @@ import type { AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { SidebarProvider } from '@/components/ui/sidebar';
 
-const { ws, listChatsMock } = vi.hoisted(() => {
+const { ws, listChatsMock, chatExistsMock } = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   return {
     listChatsMock: vi.fn(),
+    chatExistsMock: vi.fn(),
     ws: {
       connected: true,
       listeners,
@@ -38,12 +39,14 @@ vi.mock('../../../../lib/host', () => ({ getHost: () => ({ notify: async () => {
 vi.mock('@/lib/api/chats', () => ({
   listChats: listChatsMock,
   getChat: vi.fn(),
+  chatExists: chatExistsMock,
   renameChat: vi.fn(),
   archiveChat: vi.fn(),
   discardChat: vi.fn(),
   unarchiveChat: vi.fn(),
 }));
 
+import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
 import { DaemonPortProvider } from '../../runtime/daemon-port-context';
 import { makeChatsRemoteAdapter } from '../../runtime/chats-remote-adapter';
 import { useThreadItems } from '../../runtime/use-thread-items';
@@ -194,4 +197,21 @@ it('asks again when the socket dropped before it first opened', async () => {
   await act(async () => respond([chat({})]));
 
   await waitFor(() => expect(rowStatus()).toBe('needs-you'));
+});
+
+it('forgets what it held for a session removed while the socket was down', async () => {
+  chatExistsMock.mockImplementation(async (chatId: string) => chatId !== 'removed');
+  await mountRunning();
+  setConnected(false);
+  useHeldQueue.getState().hold('removed', {
+    messageId: 'm1',
+    chatId: 'removed',
+    uuid: 'u1',
+    content: 'held',
+    timestamp: '2026-11-24T10:00',
+  });
+
+  setConnected(true);
+
+  await waitFor(() => expect(useHeldQueue.getState().byChat).toEqual({}));
 });
