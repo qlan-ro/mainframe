@@ -93,9 +93,7 @@ function ShellBody({ part, status }: ToolBodyProps) {
       {background ? (
         <BackgroundOutput toolCallId={part.toolCallId} command={command} launch={text} />
       ) : truncated ? (
-        <Surface className="px-3 py-2">
-          <ResultText part={part} />
-        </Surface>
+        <ResultText part={part} renderOutput={(output) => <TerminalBody output={output} />} />
       ) : (
         <TerminalBody
           command={status === 'running' ? command : undefined}

@@ -16,6 +16,29 @@ function lineClass(line: string): string | undefined {
   return undefined;
 }
 
+function testRunnerLine(line: string) {
+  const failure = /^(\s*FAIL )(.+)$/.exec(line);
+  if (failure)
+    return (
+      <>
+        <span className="font-semibold text-mf-tr-term-err">{failure[1]}</span>
+        {failure[2]}
+      </>
+    );
+  const summary = /^(\s*(?:Test Files|Tests) +)(\d+ failed)(.*)$/.exec(line);
+  if (summary)
+    return (
+      <>
+        {summary[1]}
+        <span className="text-mf-tr-term-err">{summary[2]}</span>
+        {summary[3]}
+      </>
+    );
+  if (/^\s*(?:[A-Za-z]*Error):/.test(line)) return <span className="text-mf-tr-term-err">{line}</span>;
+  if (/^\s*❯ /.test(line)) return <span className="text-[color:var(--mf-tr-term-muted)]">{line}</span>;
+  return null;
+}
+
 function terminalLine(line: string) {
   const progress = /^( +(?:Compiling|Finished|Running)) (.+)$/.exec(line);
   if (progress) {
@@ -36,13 +59,17 @@ function terminalLine(line: string) {
       </>
     );
   }
-  return <span className={lineClass(line)}>{line}</span>;
+  return testRunnerLine(line) ?? <span className={lineClass(line)}>{line}</span>;
 }
 
 export function TerminalBody({ command, output }: { command?: string; output: string }) {
   const lines = output.replace(ESCAPES, '').replace(/\n$/, '').split('\n');
   return (
-    <ScrollRegion label="Command output" testId="chat-bash-region" className="bg-mf-tr-term">
+    <ScrollRegion
+      label="Command output"
+      testId="chat-bash-region"
+      className="bg-mf-tr-term dark:shadow-[inset_0_0_0_1px_var(--border)]"
+    >
       <pre data-testid="chat-bash-output" className="mf-tr-mono px-3 py-2 text-mf-tr-term-ink">
         {command && (
           <span className="block wrap-break-word whitespace-pre-wrap">

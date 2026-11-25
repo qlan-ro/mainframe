@@ -130,7 +130,7 @@ describe.each(['light', 'dark'] as const)('the transcript’s text in %s', (them
   it('reads in the terminal', () => {
     for (const [name, ground] of Object.entries(grounds))
       all(
-        ['--mf-tr-term-ink', '--mf-tr-term-ok', '--mf-tr-term-err', '--mf-tr-muted'],
+        ['--mf-tr-term-ink', '--mf-tr-term-ok', '--mf-tr-term-err', '--mf-tr-muted', '--mf-tr-term-muted'],
         `the terminal on ${name}`,
         over(color('--mf-tr-term'), ground),
       );

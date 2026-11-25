@@ -203,28 +203,39 @@ Links: ${JSON.stringify([
       ),
       status: 'failed',
     },
-    {
-      ...call(
-        'parity-truncated',
-        'Bash',
-        {
-          command: 'pnpm --filter @qlan-ro/mainframe-ui exec vitest run use-quota',
-          description: 'Run the quota hook tests',
-        },
-        [
-          ' FAIL  src/features/quota/__tests__/use-quota.test.ts > stops polling when exhausted',
-          'AssertionError: expected "spy" to be called 1 times, but got 2 times',
-          ' ❯ use-quota.test.ts:38:24',
-          '',
-          ' Test Files  1 failed (1)',
-          '      Tests  1 failed | 3 passed (4)',
-        ].join('\n'),
-        11.6,
-        timing(3100),
-      ),
-      status: 'failed',
-    },
+    truncatedCommand(call),
   ];
+}
+
+function truncatedCommand(call: Call) {
+  const preview = [
+    ' FAIL  src/features/quota/__tests__/use-quota.test.ts > stops polling when exhausted',
+    'AssertionError: expected "spy" to be called 1 times, but got 2 times',
+    ' ❯ use-quota.test.ts:38:24',
+    '',
+    ' Test Files  1 failed (1)',
+    '      Tests  1 failed | 3 passed (4)',
+  ].join('\n');
+  return {
+    ...call(
+      'parity-truncated',
+      'Bash',
+      {
+        command: 'pnpm --filter @qlan-ro/mainframe-ui exec vitest run use-quota',
+        description: 'Run the quota hook tests',
+      },
+      preview,
+      11.6,
+      timing(3100),
+    ),
+    status: 'failed',
+    content: [
+      {
+        type: 'content',
+        content: { type: 'text', text: preview, _meta: { '_mainframe.dev': { truncated: true, fullBytes: 9000 } } },
+      },
+    ],
+  };
 }
 
 export function exploration(turn: Turn, call: Call) {
