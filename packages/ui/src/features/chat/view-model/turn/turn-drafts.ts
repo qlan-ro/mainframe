@@ -40,10 +40,10 @@ function providerTurnOf(units: readonly TurnUnit[]): string | undefined {
   return undefined;
 }
 
-/** A queued prompt, one the daemon has not confirmed yet and one that failed are not in the transcript. */
+/** A queued prompt and one the daemon has not confirmed, which may have failed, are not in the transcript. */
 function sent(message: ThreadMessage): boolean {
   const meta = messageMeta(message);
-  return meta?.queued !== true && meta?.pending !== true && meta?.error === undefined;
+  return meta?.queued !== true && meta?.pending !== true;
 }
 
 export function draftTurns(messages: readonly ThreadMessage[], scope: TurnScope, cache: TurnCache): Drafts {

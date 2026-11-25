@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ThreadMessage } from '@assistant-ui/react';
 import type { RunRecord } from '../../../controller/run-records';
 import { buildTurns, partState } from '../build-turns';
+import { TurnCache } from '../turn-cache';
 import type { PartEvidence, PartState, TurnScope } from '../types';
 import { assistant, bash, presented, scope, sources, system, text, user } from './fixtures';
 
@@ -198,5 +199,29 @@ describe('which evidence a part has', () => {
       'neutral',
       'neutral',
     ]);
+  });
+});
+
+describe('a turn’s object is another one when only its evidence moved', () => {
+  const lost = { result: undefined };
+  const call = (over: object) => [user('u1'), assistant('a1', [bash('ls', { toolCallId: 'b', ...over })])];
+  type Build = readonly [ThreadMessage[], Partial<TurnScope>];
+  it.each<[string, Build, Build]>([
+    ['how it ended', [one, { runs: [ran(ended('a1'))] }], [one, { runs: [ran(ended('a1', 'end_turn'))] }]],
+    [
+      'whose run it is',
+      [steered, { isRunning: true, runs: [ran()] }],
+      [steered, { isRunning: true, runs: [ran({ after: mark('u2'), exact: false })] }],
+    ],
+    ['whether a step is open', [call(open), { isRunning: true }], [call({ result: 'ok' }), { isRunning: true }]],
+    ['whether an outcome is unknown', [call(lost), {}], [call({ result: 'ok' }), {}]],
+  ])('%s', (_what, [before, at], [after, then]) => {
+    const cache = new TurnCache();
+    const first = (messages: ThreadMessage[], options: Partial<TurnScope>) =>
+      [...buildTurns(messages, scope(options), cache).turns.values()][0]!;
+    const turn = first(before, at);
+    expect(first(before, { ...at })).toBe(turn);
+    const next = first(after, then);
+    expect([next.evidence, next.unclear]).not.toEqual([turn.evidence, turn.unclear]);
   });
 });

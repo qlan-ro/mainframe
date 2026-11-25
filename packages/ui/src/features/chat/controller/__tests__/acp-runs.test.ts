@@ -44,6 +44,7 @@ const running = (client: FakeAcpClient, startedAtMs?: number) =>
   });
 const idle = (client: FakeAcpClient, stopReason?: StopReason) =>
   client.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'idle', ...(stopReason && { stopReason }) });
+const STAGED = { itemCreationMarkers: true, replayComplete: true };
 const CREATED = { _meta: { '_mainframe.dev': { created: true } } };
 const says = (client: FakeAcpClient, id: string) =>
   client.emitUpdate(CHAT_ID, {
@@ -122,7 +123,7 @@ describe('the runs of a followed session', () => {
 
 describe('a session loaded while it runs', () => {
   it('is not known to have begun before its last message', async () => {
-    const rig = makeController(CHAT_ID, { capabilities: { itemCreationMarkers: true, replayComplete: true } });
+    const rig = makeController(CHAT_ID, { capabilities: STAGED });
     const { ctrl, acpClient } = rig;
     acpClient.nextResumeMeta = { itemCount: 3, fullReplay: true };
     const loading = ctrl.load();
@@ -132,6 +133,27 @@ describe('a session loaded while it runs', () => {
     running(acpClient, 7);
     acpClient.emitReplayComplete(CHAT_ID);
     await loading;
+    expect(ctrl.getState().runs).toEqual([{ after: at('u1'), exact: false, startedAtMs: 7 }]);
+  });
+
+  it('is not known to have begun at the end of what a reconnect brought', async () => {
+    const { ctrl, acpClient } = makeController(CHAT_ID, { capabilities: STAGED });
+    acpClient.nextResumeMeta = { itemCount: 1, fullReplay: true };
+    const loading = ctrl.load();
+    await flushMicrotasks();
+    acpClient.emitUpdate(CHAT_ID, { ...userMessageUpdate('u1', 'Go'), ...CREATED });
+    idle(acpClient);
+    acpClient.emitReplayComplete(CHAT_ID);
+    await loading;
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    // The resume that follows the gap replays from the settled item on.
+    acpClient.nextResumeMeta = { itemCount: 1 };
+    acpClient.emitGap();
+    await flushMicrotasks();
+    says(acpClient, 'a1');
+    running(acpClient, 7);
+    acpClient.emitReplayComplete(CHAT_ID);
+    await flushMicrotasks();
     expect(ctrl.getState().runs).toEqual([{ after: at('u1'), exact: false, startedAtMs: 7 }]);
   });
 });

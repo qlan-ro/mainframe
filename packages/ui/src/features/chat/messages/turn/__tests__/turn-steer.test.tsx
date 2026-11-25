@@ -3,7 +3,7 @@ import { screen } from '@testing-library/react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
-import { assistant, bash, running, text, tool, user } from './fixtures';
+import { assistant, bash, failed, running, text, tool, user } from './fixtures';
 import {
   PROVIDERS,
   START,
@@ -122,6 +122,16 @@ describe.each(PROVIDERS)('a message sent into a run of %s', (_name, presentation
     going(1);
     await session.says(...busy, reply('a2', [bash('c', 'ls')]));
     expect(states()).toEqual(['going']);
+  });
+
+  it('does not open a failed step by itself before the run has ended', async () => {
+    const wrong = [asked, assistant([bash('b', 'ls', failed)], 'a1', { presentation })];
+    const session = await begin(wrong);
+    await session.says(...wrong, user('x', 'u2'), reply('a2', [bash('c', 'ls')]));
+    expect(screen.getByTestId('chat-row-b-toggle')).toHaveAttribute('aria-expanded', 'false');
+    useUiPrefs.setState({ finishedWork: 'open' });
+    await session.apply(...idle('end_turn'));
+    expect(screen.getByTestId('chat-row-b-toggle')).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('never wakes a turn that had ended', async () => {

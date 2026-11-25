@@ -69,6 +69,20 @@ describe('where a run begins', () => {
     expect(runs([{ ...START, startedAtMs: 5, replayed: true }], known)[0]).toMatchObject({ after: null });
   });
 
+  it('stays where it was seen to be when a reconnect only says that a run goes', () => {
+    const seen = [transcript(user('u1')), START, transcript(user('u1'), reply('a1', 'One'), user('u2'))];
+    expect(runs([...seen, { ...START, replayed: true }])).toMatchObject([{ after: at('u1'), exact: true }]);
+  });
+
+  it('is not known after a failure nobody explained', () => {
+    const failed: ChatStateEvent[] = [
+      START,
+      transcript(user('u1'), reply('a1', 'One')),
+      { type: 'run.failed', error: 'x' },
+    ];
+    expect(runs([...failed, START])[1]).toMatchObject({ after: at('u1'), exact: false });
+  });
+
   it('is another run’s when the daemon names another start', () => {
     const one = [{ ...START, startedAtMs: 5 }, transcript(user('u1'), reply('a1', 'One'))];
     expect(runs([...one, { ...START, startedAtMs: 9 }])).toEqual([
