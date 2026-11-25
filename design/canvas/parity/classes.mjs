@@ -15,6 +15,17 @@ const SHIFT = /^(x|y|y \(middle\)|width|height|right edge|visible width)$/;
 const OWNER = 'Owner, 25 Nov: pickers and behaviour as the old app.';
 
 export const RULES = [
+  { area: 'shell', state: 'window', el: /^(title bar|usage capsule)$/, part: /^inner box [12]$/, prop: 'x', delta: 1, cls: 'SPEC', why: 'S1 keeps the app capsule. UsageCapsule puts 6 px before its separator dot; the prototype .capsule uses 7 px.' },
+  { area: 'shell', state: 'window', el: 'title bar', part: /^inner box [34]$/, prop: 'x', delta: -0.52, cls: 'SPEC', why: 'S1 keeps the app capsule. UsageCapsule reserves account cycle dots and flexes the leading text lane, whereas the prototype distributes space without those dots.' },
+  { area: 'shell', state: 'window', el: 'row 9: yesterday 2', part: 'text “Trace how ask_agent picks its worktree”', prop: 'visible width', delta: 1.06, cls: 'SPEC', why: 'The retained sidebar row allocates 181 px to the clipped title. The old-app row uses its own trailing status and action lane.' },
+
+  { area: 'shell', state: 'window', el: 'bottom strip', part: 'text “from main”', prop: 'missing in app', cls: 'APP', why: 'K8 records that a chat has no base branch field.' },
+  { area: 'shell', state: 'window', el: 'bottom strip', part: /^text “(?:·|feat\/quota-reset)”$/, prop: /^(x|width)$/, cls: 'SPEC', why: 'K8 keeps the branch manager as its own control. The prototype renders an inline separator and branch in the worktree button.' },
+  { area: 'shell', state: 'window', el: 'transcript viewport', part: 'box', prop: 'height', delta: -215, cls: 'SPEC', why: 'The app scroll container includes the sticky 215 px composer footer. The prototype composer is outside its scroller.' },
+  { area: 'shell', state: 'window', el: 'work after compaction', part: /^text “fetched 1 page/, prop: 'content', cls: 'SPEC', why: 'The owner retains the app’s folded summary category order and counts (T1).' },
+  { area: 'shell', state: 'window', el: 'provider divider', part: /^(text “Switched to Mock CLI B|icon 1$|inner box [12]$)/, prop: /^(content|x|width)$/, cls: 'SPEC', why: 'T1 specifies “context handed off”. Its different label recenters the glyph and resizes the adjacent rules.' },
+  { area: 'shell', state: 'window', el: /^(other session tab|title bar)$/, part: /^(text “Reuse an existing worktree branch in automation |icon [12] at (?:158,10|666,18) 12×12$)/, prop: /^(visible width|missing in app)$/, cls: 'SPEC', why: 'SessionTabPill overlays the inactive tab close affordance on hover. The prototype reserves 24 px for its close control.' },
+
   { area: 'shell', el: /^(scope row|add project)$/, cls: 'SPEC', why: OWNER },
   { area: 'new-session', state: 'project-menu', el: 'menu', cls: 'SPEC', why: OWNER },
   { area: 'composer', state: 'model-menu', el: 'menu', part: /models|Pick a provider before your first message/, cls: 'SPEC', why: OWNER },

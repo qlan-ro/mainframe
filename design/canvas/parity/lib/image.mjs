@@ -1,10 +1,10 @@
 // Prototype | app | difference, as one PNG, drawn by the browser.
-export async function compose(browser, [proto, app], theme, title) {
+export async function compose(browser, [proto, app], theme, title, transcript, regions) {
   const ctx = await browser.newContext({ viewport: { width: 800, height: 400 } });
   const page = await ctx.newPage();
   try {
-    const url = await page.evaluate(
-      async ({ proto, app, dark, title }) => {
+    const result = await page.evaluate(
+      async ({ proto, app, dark, title, transcript, regions }) => {
         const load = (b) =>
           new Promise((ok, no) => {
             const i = new Image();
@@ -34,10 +34,46 @@ export async function compose(browser, [proto, app], theme, title) {
         };
         const [P, A] = [read(p), read(a)];
         const D = new ImageData(w, h);
+        const [pThread, aThread] = transcript ?? [];
+        const shift = pThread ? Math.round(aThread.bottom - pThread.bottom) : 0;
+        const threadTop = pThread ? Math.max(pThread.top, aThread.top - shift) : 0;
+        const aligned = document.createElement('canvas');
+        aligned.width = w;
+        aligned.height = h;
+        const alignedContext = aligned.getContext('2d');
+        alignedContext.drawImage(a, 0, 0);
+        if (shift) {
+          const width = pThread.right - pThread.x;
+          const height = pThread.bottom - threadTop;
+          alignedContext.drawImage(a, pThread.x, threadTop + shift, width, height, pThread.x, threadTop, width, height);
+        }
+        const alignedPixels = shift ? alignedContext.getImageData(0, 0, w, h) : A;
+        const totals = {};
+        const inside = (rect, x, y) => rect && x >= rect[0] && y >= rect[1] && x < rect[2] && y < rect[3];
+        const regionAt = (x, y) => {
+          if (pThread && x >= pThread.x && x < pThread.right && y >= threadTop && y < pThread.bottom)
+            return 'transcript';
+          for (const key of ['picker', 'title', 'rail', 'sidebar', 'panel', 'strip', 'activity']) {
+            if (regions?.some((side) => inside(side[key], x, y))) return key;
+          }
+          return 'other';
+        };
         let off = 0;
         for (let i = 0; i < P.data.length; i += 4) {
-          const d = Math.max(Math.abs(P.data[i] - A.data[i]), Math.abs(P.data[i + 1] - A.data[i + 1]), Math.abs(P.data[i + 2] - A.data[i + 2]));
-          if (d > 8) off++;
+          const x = (i / 4) % w;
+          const y = Math.floor(i / 4 / w);
+          const region = regionAt(x, y);
+          const d = Math.max(
+            Math.abs(P.data[i] - alignedPixels.data[i]),
+            Math.abs(P.data[i + 1] - alignedPixels.data[i + 1]),
+            Math.abs(P.data[i + 2] - alignedPixels.data[i + 2]),
+          );
+          const tally = totals[region] ??= { pixels: 0, different: 0 };
+          tally.pixels++;
+          if (d > 8) {
+            off++;
+            tally.different++;
+          }
           const grey = 235 + (P.data[i] - 235) * 0.12;
           const hot = Math.min(1, d / 90);
           D.data[i] = d > 8 ? 255 - 35 * (1 - hot) : grey;
@@ -49,8 +85,8 @@ export async function compose(browser, [proto, app], theme, title) {
         dc.width = w;
         dc.height = h;
         dc.getContext('2d').putImageData(D, 0, 0);
-        const names = ['Prototype', 'App', `Difference (${((100 * off) / (w * h)).toFixed(2)} % of pixels)`];
-        [p, a, dc].forEach((img, i) => {
+        const names = ['Prototype', shift ? 'App (transcript bottom aligned)' : 'App', `Difference (${((100 * off) / (w * h)).toFixed(2)} % of pixels)`];
+        [p, shift ? aligned : a, dc].forEach((img, i) => {
           const x = stacked ? gap : gap + i * (w + gap);
           const y = stacked ? i * (h + head) + head : head;
           g.fillStyle = '#fff';
@@ -58,11 +94,11 @@ export async function compose(browser, [proto, app], theme, title) {
           g.fillText(`${names[i]}${i === 0 ? ` · ${title}` : ''}`, x, y - 12);
           g.drawImage(img, x, y);
         });
-        return canvas.toDataURL('image/png');
+        return { png: canvas.toDataURL('image/png'), stats: { pixels: w * h, different: off, regions: totals } };
       },
-      { proto: proto.toString('base64'), app: app.toString('base64'), dark: theme === 'dark', title },
+      { proto: proto.toString('base64'), app: app.toString('base64'), dark: theme === 'dark', title, transcript, regions },
     );
-    return Buffer.from(url.split(',')[1], 'base64');
+    return { png: Buffer.from(result.png.split(',')[1], 'base64'), stats: result.stats };
   } finally {
     await ctx.close();
   }

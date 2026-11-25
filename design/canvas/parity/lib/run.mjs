@@ -1,4 +1,4 @@
-import { scrollTranscriptToBottom, windowTextDiff } from './window-text.mjs';
+import { scrollTranscriptToBottom, windowTextDiff, transcriptBounds } from './window-text.mjs';
 // Walks the states of an area, measures both sides, writes rows and images.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -87,13 +87,17 @@ export async function runArea({
       await state.app?.(app.page);
       await settle(proto);
       await settle(app.page);
+      let transcript;
+      const blocks = [];
       if (state.compareWindowText) {
         await Promise.all([scrollTranscriptToBottom(proto, 0), scrollTranscriptToBottom(app.page, 1)]);
         await Promise.all([settle(proto), settle(app.page)]);
-        const differences = await windowTextDiff(proto, app.page);
-        writeFileSync(join(outDir, area.id, `window-${viewName}-${theme}.txt`), differences.join('\n'));
-        if (differences.length)
-          problems.push(`${where}: ${differences.length} text differences\n${differences.slice(0, 8).join('\n')}`);
+        transcript = await Promise.all([transcriptBounds(proto, 0), transcriptBounds(app.page, 1)]);
+        const differences = await windowTextDiff(proto, app.page, transcript);
+        writeFileSync(join(outDir, area.id, `window-${viewName}-${theme}.txt`), differences.map(({ el, proto, app }) => `${el}: ${proto} → ${app}`).join('\n'));
+        for (const difference of differences) {
+          rows.push({ area: area.id, state: state.id, view: viewName, theme, ...difference });
+        }
       }
       for (const pair of state.pairs) {
         const pull = (page, expr) =>
@@ -119,6 +123,14 @@ export async function runArea({
             app: a ? 'yes' : 'no',
           });
           continue;
+        }
+        if (pair.transcript) {
+          const boxes = [p, a].map(({ box }, side) => {
+            box.rect[1] -= transcript[side].bottom;
+            return [...box.rect];
+          });
+          const stripOffsets = boxes.map((box, side) => box[1] + transcript[side].bottom + transcript[side].taskHeight - transcript[side].stripTop);
+          blocks.push({ block: pair.id, boxes, stripOffsets, delta: boxes[1].map((v, i) => Math.round((v - boxes[0][i]) * 100) / 100) });
         }
         if (pair.local) {
           p.box.rect.splice(0, 2, 0, 0);
@@ -161,13 +173,14 @@ export async function runArea({
           await proto.screenshot({ clip: c ?? pc, animations: 'disabled' }),
           await app.page.screenshot({ clip: c ?? ac, animations: 'disabled' }),
         ];
+        let bounds;
         if (state.compareWindowText) {
           const prefix = join(outDir, area.id, `${state.id}-${viewName}-${theme}`);
           const selectors = [
             { title: '.titlebar', rail: '#rail', sidebar: '#side', picker: '.scope', panel: '#spanel', strip: '.bstrip', activity: '#actstrip', divider: '#thread .div:has(use[href="#i-repeat"])' },
-            { title: '[data-testid=title-bar]', rail: '[data-testid=shell-rail]', sidebar: '[data-slot=sidebar]', picker: '[data-testid=sessions-scope-strip]', panel: '[data-testid=session-panel-root]', strip: '[data-testid=composer-bottom-strip]', activity: '[data-testid=composer-activity-strip]', divider: '[data-testid^=chat-provider-switch-marker-]' },
+            { title: '[data-testid=title-bar]', rail: '[data-testid=shell-rail]', sidebar: '[data-slot=sidebar]', picker: '[data-testid=sessions-scope-strip]', panel: '[data-testid=session-panel]', strip: '[data-testid=composer-bottom-strip]', activity: '[data-testid=composer-activity-strip]', divider: '[data-testid^=chat-provider-switch-marker-]' },
           ];
-          const bounds = await Promise.all([proto, app.page].map((page, index) => page.evaluate(
+          bounds = await Promise.all([proto, app.page].map((page, index) => page.evaluate(
             (regions) => Object.fromEntries(Object.entries(regions).flatMap(([name, selector]) => {
               const el = document.querySelector(selector);
               if (!el?.getClientRects().length) return [];
@@ -179,8 +192,10 @@ export async function runArea({
           writeFileSync(`${prefix}-prototype.png`, shots[0]);
           writeFileSync(`${prefix}-app.png`, shots[1]);
           writeFileSync(`${prefix}-bounds.json`, JSON.stringify(bounds));
+          writeFileSync(`${prefix}-blocks.json`, JSON.stringify({ transcript, blocks }, null, 2));
         }
-        const png = await compose(browser, shots, theme, `${state.title ?? state.id}, ${view.join('×')}, ${theme}`);
+        const { png, stats } = await compose(browser, shots, theme, `${state.title ?? state.id}, ${view.join('×')}, ${theme}`, transcript, bounds);
+        if (transcript) writeFileSync(join(outDir, area.id, `${state.id}-${viewName}-${theme}-pixels.json`), JSON.stringify(stats));
         writeFileSync(join(outDir, area.id, `${state.id}-${viewName}-${theme}.png`), png);
       }
       const misses = await app.misses();

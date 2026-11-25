@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { buildApp, HERE, WORK } from './lib/build.mjs';
 import { launch } from './lib/browser.mjs';
+import { classify } from './classes.mjs';
 import { runArea } from './lib/run.mjs';
 
 const arg = (name) => {
@@ -36,7 +37,9 @@ try {
     writeFileSync(join(out, `${name}.counts.json`), JSON.stringify({ ...counts, problems }));
     console.log(`${name}: ${rows.length} differing rows, ${problems.length} problems`);
     for (const p of problems) console.log(`  ! ${p}`);
-    if (problems.length) failed = true;
+    const open = rows.filter((row) => classify(row).cls === 'OPEN');
+    console.log(`  ${open.length} unclassed rows`);
+    if (problems.length || open.length) failed = true;
   }
 } finally {
   await browser.close();
