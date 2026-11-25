@@ -61,9 +61,9 @@
      sit on the app's own neutral chrome (the old warm-paper values clashed
      with the cool stock sheet); only the ACCENT inks (kw/str/fn/type/num) are
      pinned — they are a syntax theme, not chrome. */
-  --mf-code-bg: var(--muted);
+  --mf-code-bg: var(--code-surface);
   --mf-code-fg: var(--foreground);
-  --mf-code-kw: #9b2393;
+  --mf-code-kw: var(--accent-ink);
   --mf-code-str: #c41a16;
   --mf-code-fn: #326d74;
   --mf-code-type: #5b269a;
@@ -99,7 +99,7 @@
   --mf-directive-session: #a84c08;
   /* Inline-code ink — the old warm browns are within a hair of v2's warning
      hue in BOTH modes, so it derives instead of pinning a second amber. */
-  --mf-code-inline-fg: var(--warning);
+  --mf-code-inline-fg: var(--foreground);
 
   /* Tasks/Todos semantic tints — design-constant (12-todos.jsx TD_TYPE/TD_PRI) */
   --mf-task-type-bug: #c4302b;
@@ -145,8 +145,8 @@
   /* CM6 editor UI states — selection tracks the primary; match ambers align
      with the Find tints above. */
   --mf-cm-active-line: rgba(0, 0, 0, 0.04);
-  --mf-cm-selection: color-mix(in srgb, var(--primary) 30%, transparent);
-  --mf-cm-selection-focused: color-mix(in srgb, var(--primary) 40%, transparent);
+  --mf-cm-selection: var(--text-selection);
+  --mf-cm-selection-focused: var(--text-selection);
   --mf-cm-match: rgba(251, 191, 36, 0.2);
   --mf-cm-match-border: rgba(251, 191, 36, 0.4);
   --mf-cm-match-selected: rgba(251, 191, 36, 0.4);
@@ -156,7 +156,7 @@
 .dark {
   /* Editor syntax accents — playful slate pastels (bg/fg/cmt derive above and
      track the mode on their own) */
-  --mf-code-kw: #f47fc4;
+  --mf-code-kw: var(--accent-ink);
   --mf-code-str: #eef0a0;
   --mf-code-fn: #6df295;
   --mf-code-type: #bd9bf5;
