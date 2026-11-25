@@ -89,24 +89,67 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('a list that does not name a task the chat says runs', () => {
-  const runs = { 'bg-1': {} };
+describe('a list that does not name an agent the chat says runs', () => {
+  const runs = { 'bg-1': { kind: 'agent' } };
 
-  it('is asked for again, waiting longer each time, until it does', async () => {
+  it('is asked for once more', async () => {
     const hook = mount({ events: runs });
     await answer(0);
     await pass(999);
     expect(requests).toHaveLength(1);
     await pass(1);
     expect(requests).toHaveLength(2);
-    await answer(1);
-    await pass(1_999);
-    expect(requests).toHaveLength(2);
-    await pass(1);
-    await answer(2, row('running'));
+    await answer(1, row('running'));
     expect(hook.statuses()).toEqual(['running']);
     await pass(60_000);
+    expect(requests).toHaveLength(2);
+  });
+
+  it('is let be when it comes again without it, until the next event', async () => {
+    const hook = mount({ events: runs });
+    await answer(0);
+    await pass(1_000);
+    await answer(1);
+    await pass(600_000);
+    expect(requests).toHaveLength(2);
+    // A later event asks at once, and once more.
+    hook.set({ events: { ...runs } });
     expect(requests).toHaveLength(3);
+    await answer(2);
+    await pass(1_000);
+    expect(requests).toHaveLength(4);
+    await answer(3);
+    await pass(600_000);
+    expect(requests).toHaveLength(4);
+  });
+
+  it('is not let be over a refusal', async () => {
+    mount({ events: runs });
+    await answer(0);
+    await pass(1_000);
+    await refuse(1);
+    await pass(1_000);
+    expect(requests).toHaveLength(3);
+    await answer(2);
+    await pass(600_000);
+    expect(requests).toHaveLength(3);
+  });
+
+  it.each([
+    ['in front', (hook: ReturnType<typeof mount>) => (hook.set({ visible: false }), hook.set({ visible: true }))],
+    ['on a new connection', (hook: ReturnType<typeof mount>) => (hook.connect(false), hook.connect(true))],
+  ])('has its chance again %s', async (_, again) => {
+    const hook = mount({ events: runs });
+    await answer(0);
+    await pass(1_000);
+    await answer(1);
+    again(hook);
+    await answer(2);
+    await pass(1_000);
+    expect(requests).toHaveLength(4);
+    await answer(3);
+    await pass(600_000);
+    expect(requests).toHaveLength(4);
   });
 
   it('is asked for at once when an event comes meanwhile, and not behind another tab', async () => {
@@ -120,6 +163,21 @@ describe('a list that does not name a task the chat says runs', () => {
     expect(requests).toHaveLength(2);
   });
 });
+
+it.each(['bash', 'workflow', 'other'])(
+  'asks no more for a %s an empty list leaves out, until an event',
+  async (kind) => {
+    const events = { 'bg-1': { kind } };
+    const hook = mount({ events });
+    await answer(0);
+    await pass(600_000);
+    expect(requests).toHaveLength(1);
+    hook.set({ events: { ...events } });
+    await answer(1);
+    await pass(600_000);
+    expect(requests).toHaveLength(2);
+  },
+);
 
 describe('what it lists', () => {
   it('is nothing known until the first answer, then this call’s own tasks', async () => {

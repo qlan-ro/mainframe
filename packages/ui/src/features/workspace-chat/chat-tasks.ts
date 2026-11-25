@@ -3,9 +3,9 @@
  * shows one of its agents: one request at a time, however many ask. The last list
  * stays while it is asked for again, and stops counting as live with the
  * connection, or once it is too old while the daemon refuses another. Asked for
- * again, too, while it does not name a task the chat says runs.
+ * once more, too, when it does not name an agent the chat says runs.
  */
-import type { BackgroundTask } from '@qlan-ro/mainframe-types';
+import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
 import { listBackgroundTasks } from '@/lib/api/background-tasks';
 
 const RETRY_MS = 1_000;
@@ -34,7 +34,7 @@ function keepSettled(before: readonly BackgroundTask[], now: readonly Background
 }
 
 /** The chat's running background work by id, as its events have it. */
-export type TaskEvents = Readonly<Record<string, unknown>> | undefined;
+export type TaskEvents = Readonly<Record<string, Pick<BackgroundActivityTask, 'kind'>>> | undefined;
 
 const waitAfter = (failures: number): number => Math.min(RETRY_MS * 2 ** failures, RETRY_MAX_MS);
 
@@ -49,8 +49,8 @@ class ChatTasks {
   private request: AbortController | null = null;
   private again = false;
   private refusals = 0;
-  /** Lists in a row that left out a task the chat says runs. */
-  private incomplete = 0;
+  /** Asked once more since the last event, for an agent the list left out. */
+  private askedAgain = false;
   /** The request's limit, or the wait before the next. */
   private timer: Timer;
   private lost = false;
@@ -103,7 +103,9 @@ class ChatTasks {
   setEvents(events: TaskEvents): void {
     const before = this.events;
     this.events = { seen: events };
-    if (before === null || before.seen === events || !this.asking) return;
+    if (before === null || before.seen === events) return;
+    this.askedAgain = false;
+    if (!this.asking) return;
     if (this.request !== null) this.again = true;
     // A refusal's wait is kept; one for a complete list is over with this.
     else if (this.timer === undefined || this.refusals === 0) this.run();
@@ -116,6 +118,7 @@ class ChatTasks {
   private start(): void {
     if (!this.asking) return;
     this.refusals = 0;
+    this.askedAgain = false;
     clearTimeout(this.unseen);
     this.run();
   }
@@ -161,11 +164,16 @@ class ChatTasks {
     this.confirmedAt = Date.now();
     clearTimeout(this.expiry);
     this.publish(keepSettled(this.state.tasks ?? [], tasks));
+    if (this.again) return this.run();
+    if (!this.asking || this.askedAgain || !this.leavesOutAgent(tasks)) return;
+    this.askedAgain = true;
+    this.timer = setTimeout(() => this.run(), RETRY_MS);
+  }
+
+  /** Only an agent’s call is waited for: no turn folds before the list names it. */
+  private leavesOutAgent(tasks: readonly BackgroundTask[]): boolean {
     const named = new Set(tasks.map((task) => task.id));
-    const missing = Object.keys(this.events?.seen ?? {}).some((id) => !named.has(id));
-    if (!missing) this.incomplete = 0;
-    if (this.again) this.run();
-    else if (missing && this.asking) this.timer = setTimeout(() => this.run(), waitAfter(this.incomplete++));
+    return Object.entries(this.events?.seen ?? {}).some(([id, { kind }]) => kind === 'agent' && !named.has(id));
   }
 
   private refused(error: unknown): void {

@@ -20,6 +20,7 @@ const placed = [{ id: 'bg', kind: 'agent', toolUseId: 'elsewhere', status: 'runn
 const isOpen = () => screen.getByTestId(/^chat-work-toggle-/).getAttribute('aria-expanded') === 'true';
 
 beforeEach(() => {
+  vi.mocked(listBackgroundTasks).mockReset();
   vi.useFakeTimers();
   useUiPrefs.setState({ finishedWork: 'fold' });
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -45,12 +46,19 @@ it('folds the turns it held open once the list answers', async () => {
   expect(listBackgroundTasks).toHaveBeenCalledTimes(2);
 });
 
-it('asks again while the list does not name a running task yet, and then stops', async () => {
+it('asks once more when the list does not name a running agent yet', async () => {
   vi.mocked(listBackgroundTasks).mockResolvedValueOnce([]).mockResolvedValue(placed);
   await show('retry-missing');
   expect(isOpen()).toBe(true);
   await act(() => vi.advanceTimersByTimeAsync(1000));
   expect(isOpen()).toBe(false);
   await act(() => vi.advanceTimersByTimeAsync(120_000));
+  expect(listBackgroundTasks).toHaveBeenCalledTimes(2);
+});
+
+it('lets a list be that still does not name it', async () => {
+  vi.mocked(listBackgroundTasks).mockResolvedValue([]);
+  await show('retry-never');
+  await act(() => vi.advanceTimersByTimeAsync(600_000));
   expect(listBackgroundTasks).toHaveBeenCalledTimes(2);
 });
