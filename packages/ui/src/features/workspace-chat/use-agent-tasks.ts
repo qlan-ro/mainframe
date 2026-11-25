@@ -75,7 +75,7 @@ export function useAgentTasks(
   visible: boolean,
 ): { tasks: AgentTasks; live: boolean } {
   const connected = useIsConnected();
-  const [lost, setLost] = useState(!connected);
+  const [lost, setLost] = useState(false);
   if (!connected && !lost) setLost(true);
   const [listed, setListed] = useState<{ chatId: string; tasks: AgentTasks } | null>(null);
   const refetch = useRef<(() => void) | null>(null);

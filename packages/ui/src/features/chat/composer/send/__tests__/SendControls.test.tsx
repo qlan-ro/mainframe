@@ -168,6 +168,15 @@ describe('SendControls — Stop', () => {
       expect(stopped()).toEqual([]);
     });
 
+    it('stops what runs now, not what ran when the composer opened', () => {
+      const view = render(<StopControl />, { wrapper: TooltipProvider });
+      mockStop = { ...mockStop, stop: stops.column };
+      view.rerender(<StopControl />);
+      press();
+      expect(stopped()).toEqual(['column']);
+      expect(stop).not.toHaveBeenCalled();
+    });
+
     it('stops nothing once its composer is gone', () => {
       composer('column');
       cleanup();

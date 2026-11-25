@@ -219,6 +219,23 @@ describe('unclaimed keyboard handoff', () => {
     expect(screen.getByTestId('agent')).toHaveFocus();
   });
 
+  it('keeps the request when its tab comes to the front of the other pane', () => {
+    const run = twoPanes();
+    const own = run().panes[0]!;
+    useLayoutStore.setState({ run: { ...run(), panes: [{ ...own, id: 'beside' }] } });
+    render(<Window />);
+    expect(screen.getByTestId('agent')).toHaveFocus();
+  });
+
+  it('drops the request when its tab is gone, and no other comes to the front', () => {
+    const run = twoPanes();
+    const before = run();
+    useLayoutStore.setState({ run: null });
+    useLayoutStore.setState({ run: { ...before, panes: before.panes.slice(0, 1) } });
+    render(<Window />);
+    expect(screen.getByTestId('agent')).not.toHaveFocus();
+  });
+
   it('drops the request when a tab becomes active in the other pane, its own still in front', () => {
     const run = twoPanes();
     const panes = run().panes.map((pane) => (pane.id === 'beside' ? { ...pane, active: 'chat-right' } : pane));

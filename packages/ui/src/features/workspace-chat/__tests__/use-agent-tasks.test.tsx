@@ -106,6 +106,8 @@ describe('what it lists', () => {
     hook.set({ chatId: 'other' });
     expect(hook.statuses()).toBeNull();
     expect(requests[1]!.chatId).toBe('other');
+    await answer(1);
+    expect(hook.statuses()).toEqual([]);
   });
 });
 

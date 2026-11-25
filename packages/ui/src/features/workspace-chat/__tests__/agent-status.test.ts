@@ -237,6 +237,10 @@ describe('status', () => {
     expect(label({ session: 'cancelling' })).toBe('running');
   });
 
+  it('takes no error from a call that has no result', () => {
+    expect(label({ error: true })).toBeNull();
+  });
+
   it('is none for a call whose result is empty', () => {
     expect(label({ result: '', session: 'running' })).toBeNull();
   });
