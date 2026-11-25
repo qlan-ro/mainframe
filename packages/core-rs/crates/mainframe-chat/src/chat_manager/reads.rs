@@ -147,20 +147,15 @@ impl ChatManager {
         }
     }
 
-    pub fn apply_worktree_base_change(
-        &self,
-        base: &mainframe_db::ClearedWorktreeBase,
-        restored: bool,
-    ) {
+    pub fn apply_cleared_worktree_base(&self, base: &mainframe_db::ClearedWorktreeBase) {
         if let Some(cell) = self.get_active(&base.chat_id) {
             let mut guard = cell.lock_recover();
             let chat = &mut guard.chat;
             if chat.project_id == base.project_id
                 && chat.worktree_path == base.worktree_path
                 && chat.branch_name.as_deref() == Some(base.branch_name.as_str())
-                && (!restored || chat.base_branch.is_none())
             {
-                chat.base_branch = restored.then(|| base.base_branch.clone());
+                chat.base_branch = None;
             }
         }
         self.emit_chat_updated(&base.chat_id);

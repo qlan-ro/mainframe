@@ -85,13 +85,7 @@ async fn rename_invalidates_both_names_and_keeps_stale_base_gone_on_reuse() {
     let unrelated = chat_on(&ctx, &project, "unrelated").await;
     let restored = stored_chat(&ctx, &first.id).await;
     let directory = restored.worktree_path.clone().unwrap();
-    let peer_project = ctx
-        .core
-        .db
-        .call(move |db| db.projects.create(&directory, None))
-        .await
-        .unwrap()
-        .id;
+    let peer_project = register_project(&ctx, std::path::Path::new(&directory)).await;
     let peer = chat_on(&ctx, &peer_project, "topic").await;
     assert_eq!(restored.base_branch.as_deref(), Some("release"));
 
@@ -127,7 +121,7 @@ async fn rename_invalidates_both_names_and_keeps_stale_base_gone_on_reuse() {
 }
 
 #[tokio::test]
-async fn delete_clears_matching_bases_only_when_git_deletes_the_branch() {
+async fn delete_clears_matching_bases_and_preserves_checked_out_branch_base() {
     let (ctx, project, repo) = project().await;
     git(repo.path(), &["branch", "topic"]);
     let chat = chat_on(&ctx, &project, "topic").await;
@@ -166,7 +160,7 @@ async fn install_trigger(ctx: &AppCtx, sql: &'static str) {
 }
 
 #[tokio::test]
-async fn failed_rename_restores_candidates_and_the_active_cache() {
+async fn failed_rename_leaves_persisted_and_active_bases_unset() {
     let (ctx, project, repo) = project().await;
     let chat = ctx
         .chat
@@ -189,18 +183,14 @@ async fn failed_rename_restores_candidates_and_the_active_cache() {
         rename(&ctx, &project, "topic", "occupied").await,
         StatusCode::INTERNAL_SERVER_ERROR
     );
-    assert_eq!(
-        stored_chat(&ctx, &chat.id).await.base_branch.as_deref(),
-        Some("release")
-    );
+    assert_eq!(stored_chat(&ctx, &chat.id).await.base_branch, None);
     assert_eq!(
         ctx.chat
             .chat_manager
             .get_chat(&chat.id)
             .unwrap()
-            .base_branch
-            .as_deref(),
-        Some("release")
+            .base_branch,
+        None
     );
 }
 
@@ -231,52 +221,59 @@ async fn failed_clear_leaves_git_and_the_base_untouched() {
     );
 }
 
-#[tokio::test]
-async fn failed_restore_leaves_the_base_unset() {
-    let (ctx, project, repo) = project().await;
-    git(repo.path(), &["branch", "topic"]);
-    let chat = chat_on(&ctx, &project, "topic").await;
-    install_trigger(
-        &ctx,
-        "CREATE TRIGGER fail_restore BEFORE UPDATE OF base_branch ON chats
-        WHEN NEW.base_branch IS NOT NULL BEGIN SELECT RAISE(ABORT, 'test restore failure'); END;",
-    )
-    .await;
-
-    assert_eq!(
-        rename(&ctx, &project, "topic", "release").await,
-        StatusCode::INTERNAL_SERVER_ERROR
-    );
-    assert_eq!(stored_chat(&ctx, &chat).await.base_branch, None);
+async fn register_project(ctx: &AppCtx, path: &std::path::Path) -> String {
+    let path = path.to_str().unwrap().to_owned();
+    ctx.core
+        .db
+        .call(move |db| db.projects.create(&path, None))
+        .await
+        .unwrap()
+        .id
 }
 
 #[tokio::test]
-async fn remote_deletion_keeps_the_base_for_the_same_local_name() {
+async fn unresolved_candidate_is_cleared_but_a_different_repository_is_excluded() {
     let (ctx, project, repo) = project().await;
-    let remote = tempfile::tempdir().unwrap();
-    git(remote.path(), &["init", "--bare"]);
-    git(
-        repo.path(),
-        &["remote", "add", "origin", remote.path().to_str().unwrap()],
-    );
-    git(repo.path(), &["push", "origin", "release:refs/heads/topic"]);
-    git(repo.path(), &["branch", "origin/topic"]);
-    let chat = chat_on(&ctx, &project, "origin/topic").await;
+    git(repo.path(), &["branch", "topic"]);
+    let unknown = tempfile::tempdir().unwrap();
+    let different = tempfile::tempdir().unwrap();
+    git(different.path(), &["init"]);
+    let unknown_id = register_project(&ctx, unknown.path()).await;
+    let different_id = register_project(&ctx, different.path()).await;
+    let cleared = chat_on(&ctx, &unknown_id, "topic").await;
+    let preserved = chat_on(&ctx, &different_id, "topic").await;
 
-    let response = delete_branch(
-        State(ctx.clone()),
-        Path(project),
-        Query(ChatIdQuery { chat_id: None }),
-        Bytes::from_static(br#"{"name":"origin/topic","remote":true}"#),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    git(
-        repo.path(),
-        &["show-ref", "--verify", "refs/heads/origin/topic"],
-    );
     assert_eq!(
-        stored_chat(&ctx, &chat).await.base_branch.as_deref(),
+        rename(&ctx, &project, "topic", "renamed").await,
+        StatusCode::OK
+    );
+    assert_eq!(stored_chat(&ctx, &cleared).await.base_branch, None);
+    assert_eq!(
+        stored_chat(&ctx, &preserved).await.base_branch.as_deref(),
         Some("release")
     );
 }
+
+#[tokio::test]
+async fn unresolved_caller_clears_matching_names_in_all_projects() {
+    let (ctx, project, _repo) = project().await;
+    let unknown = tempfile::tempdir().unwrap();
+    let unknown_id = register_project(&ctx, unknown.path()).await;
+    let source = chat_on(&ctx, &project, "topic").await;
+    let destination = chat_on(&ctx, &project, "renamed").await;
+    let unrelated = chat_on(&ctx, &unknown_id, "unrelated").await;
+
+    assert_eq!(
+        rename(&ctx, &unknown_id, "topic", "renamed").await,
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(stored_chat(&ctx, &source).await.base_branch, None);
+    assert_eq!(stored_chat(&ctx, &destination).await.base_branch, None);
+    assert_eq!(
+        stored_chat(&ctx, &unrelated).await.base_branch.as_deref(),
+        Some("release")
+    );
+}
+
+#[path = "remote_delete_test.rs"]
+mod remote_delete_test;

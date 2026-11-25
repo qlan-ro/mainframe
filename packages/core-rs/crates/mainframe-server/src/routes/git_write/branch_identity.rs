@@ -1,10 +1,8 @@
 use super::*;
-use mainframe_db::ClearedWorktreeBase;
 use mainframe_git::git_exec::{GitTimeout, exec_git};
-use mainframe_runtime::sync::KeyedMutex;
+use mainframe_git::parse_worktree_list;
 use mainframe_types::git::DeleteBranchResult;
 use std::path::PathBuf;
-use std::sync::OnceLock;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,24 +34,23 @@ pub(super) async fn rename_branch(
     if data.old_name.is_empty() || !is_valid_branch_name(&data.new_name) {
         return fail(StatusCode::BAD_REQUEST, "Invalid branch name");
     }
-    let scope = RefScope::new(&path).await;
-    let _guard = scope.lock().await;
-    let bases = match scope
-        .clear(&ctx, id, data.old_name.clone(), Some(data.new_name.clone()))
-        .await
+    if let Err(error) = clear_bases(
+        &ctx,
+        &path,
+        id,
+        data.old_name.clone(),
+        Some(data.new_name.clone()),
+    )
+    .await
     {
-        Ok(bases) => bases,
-        Err(error) => return error.into_response(),
-    };
+        return error.into_response();
+    }
     let result = ctx
         .core
         .git
         .for_project(path)
         .rename_branch(&data.old_name, &data.new_name)
         .await;
-    if result.is_err() {
-        restore_bases(&ctx, bases).await;
-    }
     git_empty(result, "renameBranch")
 }
 
@@ -83,81 +80,96 @@ pub(super) async fn delete_branch(
         );
     }
 
-    let scope = RefScope::new(&path).await;
-    let _guard = scope.lock().await;
-    let bases = match scope.clear(&ctx, id, data.name.clone(), None).await {
-        Ok(bases) => bases,
-        Err(error) => return error.into_response(),
+    if branch_is_checked_out(&path, &data.name).await {
+        return git_result(
+            Ok(DeleteBranchResult::IsCurrent {
+                message: "Cannot delete the currently checked-out branch".to_owned(),
+            }),
+            "deleteBranch",
+        );
+    }
+    if let Err(error) = clear_bases(&ctx, &path, id, data.name.clone(), None).await {
+        return error.into_response();
+    }
+    git_result(
+        git.delete_branch(&data.name, force, false).await,
+        "deleteBranch",
+    )
+}
+
+async fn branch_is_checked_out(path: &str, branch: &str) -> bool {
+    let Ok(listing) = exec_git(
+        &["worktree", "list", "--porcelain"],
+        path,
+        GitTimeout::Default,
+    )
+    .await
+    else {
+        return false;
     };
-    let result = git.delete_branch(&data.name, force, false).await;
-    if !matches!(result, Ok(DeleteBranchResult::Success)) {
-        restore_bases(&ctx, bases).await;
-    }
-    git_result(result, "deleteBranch")
+    let reference = format!("refs/heads/{branch}");
+    parse_worktree_list(&listing)
+        .iter()
+        .any(|entry| entry.branch.as_deref() == Some(reference.as_str()))
 }
 
-struct RefScope {
-    key: String,
-    common_dir: Option<PathBuf>,
+async fn clear_bases(
+    ctx: &AppCtx,
+    path: &str,
+    project: String,
+    branch: String,
+    other: Option<String>,
+) -> Result<(), crate::respond::ApiError> {
+    let projects = match git_common_dir(path).await {
+        Some(common_dir) => {
+            Some(matching_projects(ctx, project, &branch, other.as_deref(), &common_dir).await?)
+        }
+        None => None,
+    };
+    let bases = ctx
+        .core
+        .db
+        .call(move |db| {
+            db.chats.clear_worktree_bases_for_branches(
+                projects.as_deref(),
+                &branch,
+                other.as_deref(),
+            )
+        })
+        .await?;
+    for base in &bases {
+        ctx.chat.chat_manager.apply_cleared_worktree_base(base);
+    }
+    Ok(())
 }
 
-impl RefScope {
-    async fn new(path: &str) -> Self {
-        let common_dir = git_common_dir(path).await;
-        let key = common_dir
-            .as_ref()
-            .map_or_else(|| path.to_owned(), |dir| dir.to_string_lossy().into_owned());
-        Self { key, common_dir }
-    }
-
-    async fn lock(&self) -> tokio::sync::OwnedMutexGuard<()> {
-        static LOCKS: OnceLock<KeyedMutex> = OnceLock::new();
-        LOCKS
-            .get_or_init(KeyedMutex::default)
-            .acquire(&self.key)
-            .await
-    }
-
-    async fn clear(
-        &self,
-        ctx: &AppCtx,
-        project: String,
-        branch: String,
-        other: Option<String>,
-    ) -> Result<Vec<ClearedWorktreeBase>, crate::respond::ApiError> {
-        let (candidate_branch, candidate_other) = (branch.clone(), other.clone());
-        let candidates = ctx
-            .core
-            .db
-            .call(move |db| {
-                db.chats
-                    .projects_with_worktree_bases(&candidate_branch, candidate_other.as_deref())
-            })
-            .await?;
-        let mut projects = vec![project];
-        for (id, path) in candidates {
-            if id != projects[0]
-                && self.common_dir.is_some()
-                && git_common_dir(&path).await == self.common_dir
-            {
-                projects.push(id);
-            }
+async fn matching_projects(
+    ctx: &AppCtx,
+    project: String,
+    branch: &str,
+    other: Option<&str>,
+    common_dir: &std::path::Path,
+) -> Result<Vec<String>, crate::respond::ApiError> {
+    let (branch, other) = (branch.to_owned(), other.map(str::to_owned));
+    let candidates = ctx
+        .core
+        .db
+        .call(move |db| {
+            db.chats
+                .projects_with_worktree_bases(&branch, other.as_deref())
+        })
+        .await?;
+    let mut projects = vec![project];
+    for (id, path) in candidates {
+        if id != projects[0]
+            && git_common_dir(&path)
+                .await
+                .is_none_or(|dir| dir == common_dir)
+        {
+            projects.push(id);
         }
-        let bases = ctx
-            .core
-            .db
-            .call(move |db| {
-                db.chats
-                    .clear_worktree_bases_for_branches(&projects, &branch, other.as_deref())
-            })
-            .await?;
-        for base in &bases {
-            ctx.chat
-                .chat_manager
-                .apply_worktree_base_change(base, false);
-        }
-        Ok(bases)
     }
+    Ok(projects)
 }
 
 async fn git_common_dir(path: &str) -> Option<PathBuf> {
@@ -171,27 +183,6 @@ async fn git_common_dir(path: &str) -> Option<PathBuf> {
     tokio::fs::canonicalize(common.trim_end_matches('\n'))
         .await
         .ok()
-}
-
-async fn restore_bases(ctx: &AppCtx, bases: Vec<ClearedWorktreeBase>) {
-    if bases.is_empty() {
-        return;
-    }
-    match ctx
-        .core
-        .db
-        .call(move |db| db.chats.restore_worktree_bases(bases))
-        .await
-    {
-        Ok(restored) => {
-            for base in &restored {
-                ctx.chat.chat_manager.apply_worktree_base_change(base, true);
-            }
-        }
-        Err(error) => {
-            tracing::warn!(%error, "failed to restore worktree bases after a rejected git operation")
-        }
-    }
 }
 
 #[cfg(test)]
