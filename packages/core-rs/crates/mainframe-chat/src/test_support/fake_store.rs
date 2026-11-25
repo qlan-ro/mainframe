@@ -109,6 +109,11 @@ impl FakeChatStore {
         if let Some(worktree_path) = patch.worktree_path.clone() {
             c.worktree_path = worktree_path;
         }
+        if let Some(base_branch) = &patch.base_branch {
+            c.base_branch.clone_from(base_branch);
+        } else if patch.worktree_path.is_some() || patch.branch_name.is_some() {
+            c.base_branch = None;
+        }
         if let Some(branch_name) = patch.branch_name.clone() {
             c.branch_name = branch_name;
         }

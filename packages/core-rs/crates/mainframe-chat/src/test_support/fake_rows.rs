@@ -19,6 +19,7 @@ pub(crate) fn fork_row(id: &str, insert: &ForkCreateInput) -> Chat {
     chat.updated_at = "2026-01-01T00:00:00.000Z".to_string();
     chat.worktree_path = insert.worktree_path.clone();
     chat.branch_name = insert.branch_name.clone();
+    chat.base_branch = insert.base_branch.clone();
     chat.tuning = mainframe_types::chat::SessionTuning {
         effort: Some(insert.effort),
         fast: Some(insert.fast),
@@ -42,6 +43,7 @@ pub(crate) fn side_chat_row(id: &str, parent: &Chat) -> Chat {
     chat.updated_at = now;
     chat.worktree_path = parent.worktree_path.clone();
     chat.branch_name = parent.branch_name.clone();
+    chat.base_branch = parent.base_branch.clone();
     chat.temporary = true;
     chat.no_project = parent.no_project;
     chat.scratch_path = parent.scratch_path.clone();

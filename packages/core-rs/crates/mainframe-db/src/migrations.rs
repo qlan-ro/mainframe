@@ -216,6 +216,12 @@ const MIGRATIONS: &[Migration] = &[
         "answer_prompts",
         "ALTER TABLE external_mcp_clients ADD COLUMN answer_prompts INTEGER NOT NULL DEFAULT 0"
     ),
+    column!(
+        36,
+        "chats",
+        "base_branch",
+        "ALTER TABLE chats ADD COLUMN base_branch TEXT"
+    ),
 ];
 
 pub fn migrations() -> &'static [Migration] {

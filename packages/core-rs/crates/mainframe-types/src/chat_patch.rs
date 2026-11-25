@@ -52,6 +52,12 @@ pub struct ChatPatch {
         skip_serializing_if = "Option::is_none"
     )]
     pub branch_name: Option<Option<String>>,
+    #[serde(
+        default,
+        deserialize_with = "crate::serde_util::double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub base_branch: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mentions: Option<Vec<SessionMention>>,
     #[serde(

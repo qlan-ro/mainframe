@@ -19,7 +19,7 @@ const CHAT_SELECT_FIELDS: &str = concat!(
   total_tokens_output, last_context_tokens_input, \
   last_context_total_tokens, last_context_max_tokens, \
   mentions, modified_files, \
-  worktree_path, branch_name, \
+  worktree_path, branch_name, base_branch, \
   process_state, todos, pinned, effort, \
   plan_mode, detected_prs, \
   session_file_path, \

@@ -20,6 +20,7 @@ async fn failed_rebind_write_restarts_on_the_previous_binding() {
                 },
                 worktree_path: "/tmp/new-worktree".into(),
                 branch_name: Some("new".into()),
+                base_branch: None,
             },
         )
         .await;
@@ -114,6 +115,7 @@ async fn failed_claude_rebind_write_keeps_binding_with_moved_transcript() {
                 },
                 worktree_path: "/tmp/new-worktree".into(),
                 branch_name: Some("new".into()),
+                base_branch: None,
             },
         )
         .await;

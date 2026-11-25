@@ -159,6 +159,7 @@ fn clear_worktree_clears_binding_so_chat_rebinds_to_project_root() {
             &ChatPatch {
                 worktree_path: Some(Some("/project/.worktrees/feat-x".to_string())),
                 branch_name: Some(Some("feat-x".to_string())),
+                base_branch: Some(Some("main".to_string())),
                 ..Default::default()
             },
         )
@@ -169,4 +170,5 @@ fn clear_worktree_clears_binding_so_chat_rebinds_to_project_root() {
     let loaded = chats.get(&chat.id).unwrap().unwrap();
     assert_eq!(loaded.worktree_path, None);
     assert_eq!(loaded.branch_name, None);
+    assert_eq!(loaded.base_branch, None);
 }

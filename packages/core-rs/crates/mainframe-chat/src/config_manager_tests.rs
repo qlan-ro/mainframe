@@ -116,6 +116,7 @@ fn worktreed_chat() -> Chat {
     chat.vendor_session_id = Some("sess1".to_string());
     chat.worktree_path = Some("/old/wt".to_string());
     chat.branch_name = Some("old-branch".to_string());
+    chat.base_branch = Some("old-base".to_string());
     chat
 }
 
