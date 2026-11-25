@@ -25,6 +25,19 @@ export const RULES = [
   { area: 'transcript', state: 'agent', el: 'agent row', part: /^(icon 1|text “1 step · 38s”)$/, prop: /^(content|x|glyph|colour)$/, cls: 'DATA', why: 'The app fixture shows an active sub-agent. The prototype’s first code-reviewer sample shows completed work.' },
   { area: 'transcript', state: 'terminal states', el: /^(running|passed|failed|stopped) command$/, part: /^text “(12s|exit|stopped ·)/, prop: /^(content|x|missing in app)$/, cls: 'DATA', why: 'The fixture supplies a status and short output without historical timing or a structured exit receipt.' },
   { area: 'transcript', state: 'terminal states', el: /^(passed|failed) command$/, part: /^icon 2 /, prop: 'only in app', cls: 'DATA', why: 'The fixture has output to disclose. The prototype’s status sample has no body.' },
+  { area: 'transcript', state: 'cron-list', el: 'event marker', part: 'box', prop: /^(x|width)$/, cls: 'DATA', why: 'The pill is centred and the fixture’s shorter job count reduces its width.' },
+  { area: 'transcript', state: 'cron-list', el: 'event marker', part: /^text “3 jobs”$|^icon 2$/, prop: /^(content|x)$/, cls: 'DATA', why: 'The fixture lists one job and the prototype shows three.' },
+  { area: 'transcript', state: 'skill', el: 'event marker', part: /^text “412 lines”$/, prop: 'missing in app', cls: 'DATA', why: 'The synthetic skill result does not carry source-line metadata.' },
+  { area: 'transcript', state: 'monitor', el: 'event marker', part: /^text “matched · 42s”$/, prop: 'missing in app', cls: 'DATA', why: 'The fixture provides a short monitor result without a match receipt or elapsed timing.' },
+  { area: 'transcript', state: 'enter-worktree', el: 'event marker', part: /^text “feat\/quota-reset”$/, prop: 'content', cls: 'DATA', why: 'The fixture’s input names quota-reset and the prototype prints the full branch.' },
+
+  // ── Shell ──────────────────────────────────────────────────────────────────
+  { area: 'shell', el: 'title bar', part: /inner box [123] \(i\)/, cls: 'APP', why: 'The three window buttons are drawn by macOS, not by the page.' },
+  { el: /usage capsule|title bar/, part: /\(span\) at \d+,\d+ 3×3/, cls: 'SPEC', why: 'S1: "The shell matches today\'s app." The dots are the account cycle of the app\'s capsule; they sit in its right padding, so nothing else moves.' },
+  { area: 'shell', el: 'rail', cls: 'SPEC', why: 'S2: the content is a card on the chrome, its left edge one hairline. The app draws that hairline as the card\'s own border, so the rail is 55 px and the line 1 px, where the prototype\'s rail is 56 px with the line inside.' },
+  { area: 'shell', el: 'rail inspector', part: 'icon 1', prop: 'glyph', cls: 'SPEC', why: 'S1: "The shell matches today\'s app." The inspector keeps the app\'s own glyph (0.8 units apart, the same shape).' },
+  { area: 'shell', el: 'sidebar', cls: 'SPEC', why: 'S2: the card\'s top hairline is the card\'s border in the app and the sidebar\'s in the prototype. The line paints in the same place, and every row inside has the prototype\'s position.' },
+  { area: 'shell', el: 'scope row', part: /inner box/, prop: 'fill', cls: 'DATA', why: 'A project\'s colour is hashed from its id.' },
 
   // ── Session panel ──────────────────────────────────────────────────────────
   { el: 'Plan', prop: 'numerals', cls: 'SPEC', why: 'DESIGN.md, the Steady Number Rule: numbers that change in place use tabular figures.' },
