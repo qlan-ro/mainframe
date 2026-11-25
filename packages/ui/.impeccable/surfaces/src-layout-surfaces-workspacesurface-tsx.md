@@ -25,6 +25,9 @@ FIRST VIEWPORT: chat on the left, the workspace on the right with its tabs above
 FORM: seed: none (pinned) "this will retire split chats, everything will open as a workspace surface tab".
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
+## Terminal
+The interactive terminal fills its pane with the workspace surface in both themes. Output and the cursor use secondary ink, with 12 px monospace and 19 px rows. The terminal grid fits inside 10 px vertical and 14 px horizontal padding and keeps its overlay scrollbar lane. Theme changes recolor the existing session and its scrollback.
+
 ## Memorable moment
 An agent opened from the Activity panel arrives as a tab with its live steps. Its steps are the transcript's own rows, and its status is what its row in the transcript says (T1c, W8).
 
