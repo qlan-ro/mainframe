@@ -33,12 +33,13 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 import { daemonWs } from '../../../lib/daemon/ws-client';
 import { getHost } from '../../../lib/host';
 import { useUnreadStore } from '../../../store/unread-store';
-import { useZonesStore } from '../../chat/zones/zones-store';
+import { useMountedConversations } from '../../workspace-chat/mounted-conversations';
 import { useSessionFilters } from '../../../store/session-filters';
 import { useLayoutStore } from '../../../store/layout';
 import { isDraftSessionId } from '../../../store/layout-persist';
 import { useLastSessionStore } from '../../../store/last-session';
 import { isCreateInFlight } from '../runtime/new-thread-coordinator';
+import { isCarriedDraft, useDraftCarry } from '../new-thread/draft-carry';
 import { useIsNewThreadSwitchPending } from '../new-thread/new-thread-switch-pending';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
@@ -47,12 +48,10 @@ import { pickArchiveFallback } from '../view-model/session-fallback';
 import { reconcileDraftHandoff } from './reconcile-draft-handoff';
 import { createSessionListRouter } from './session-list-router';
 import { useGhostChatPrune } from './use-ghost-chat-prune';
-
-/** The previous layout-followed session, for the split-member gate below. */
-let lastLayoutSessionId: string | null = null;
+import { useHeldQueuePrune } from './use-held-queue-prune';
 
 /** Persist the newly-active session (boot restore + per-project + workspace layout). */
-function rememberActiveSession(active: SessionItem | undefined, items: readonly SessionItem[]): void {
+function rememberActiveSession(active: SessionItem | undefined): void {
   if (active?.remoteId == null) return;
   useLastSessionStore.getState().setLastSessionId(active.remoteId);
   if (active.custom?.projectId != null) {
@@ -61,18 +60,6 @@ function rememberActiveSession(active: SessionItem | undefined, items: readonly 
   // Follow the active session with its remembered workspace layout, keyed by the
   // stable daemon chat id. This function only runs for a real (non-draft) active
   // item — the draft's own layout key is set in the caller's draft branch instead.
-  // ALSO skipped when flipping focus BETWEEN the two chats of an open split:
-  // the surface arrangement belongs to the visible split there, and swapping
-  // per-session layouts made the workspace blink in and out per zone click.
-  const zonePair = useZonesStore.getState().zones;
-  if (zonePair != null && lastLayoutSessionId != null) {
-    const memberRemoteIds = zonePair.map((id) => items.find((t) => t.id === id)?.remoteId ?? id);
-    if (memberRemoteIds.includes(active.remoteId) && memberRemoteIds.includes(lastLayoutSessionId)) {
-      lastLayoutSessionId = active.remoteId;
-      return;
-    }
-  }
-  lastLayoutSessionId = active.remoteId;
   useLayoutStore.getState().setActiveSession(active.remoteId);
 }
 
@@ -86,6 +73,8 @@ function clearFilterOnCrossProject(active: SessionItem | undefined): void {
 }
 
 export function useSessionListRouter(): void {
+  // First: the boot selection below yields to a draft brought from another daemon.
+  useDraftCarry();
   // The `threads` SCOPE, not the client: `useAui()` returns a fresh client on
   // every main-thread switch, and the WS wiring below must outlive those.
   const threads = useAui().threads;
@@ -100,25 +89,20 @@ export function useSessionListRouter(): void {
 
   // Keep a ref so the router callback (created once in the [threads] effect) can
   // read the current active thread id without closing over a stale value.
-  // While the split is VISIBLE, both zone chats count as viewed: they join the
-  // suppression set and clear their dots on entry. A PARKED pair is off screen
-  // and badges normally.
-  const zones = useZonesStore((s) => s.zones);
+  // A chat showing in a workspace tab counts as viewed too: it joins the
+  // suppression set and clears its dot. A tab behind another badges normally.
+  const viewedInTabs = useMountedConversations((s) => s.viewed);
   const activeChatIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const active = mainThreadId == null ? undefined : items.find((t) => t.id === mainThreadId);
-    const zoneIds = zones != null && mainThreadId != null && zones.includes(mainThreadId) ? zones : [];
-    const zoneRemotes = zoneIds
-      .map((id) => items.find((t) => t.id === id)?.remoteId)
-      .filter((id): id is string => id != null);
     activeChatIdsRef.current = new Set(
-      [mainThreadId ?? undefined, active?.id, active?.remoteId, ...zoneIds, ...zoneRemotes].filter(
+      [mainThreadId ?? undefined, active?.id, active?.remoteId, ...viewedInTabs].filter(
         (id): id is string => id != null,
       ),
     );
     const unreadStore = useUnreadStore.getState();
-    for (const id of [...zoneIds, ...zoneRemotes]) unreadStore.clearUnread(id);
-  }, [items, mainThreadId, zones]);
+    for (const id of viewedInTabs) unreadStore.clearUnread(id);
+  }, [items, mainThreadId, viewedInTabs]);
 
   const reloadAfterBootLoadRef = useRef<(() => void) | null>(null);
 
@@ -247,7 +231,6 @@ export function useSessionListRouter(): void {
       // rememberActiveSession ever restores its layout.
       if (isDraftSessionId(mainThreadId) && useLayoutStore.getState().activeSessionId !== mainThreadId) {
         useLayoutStore.getState().setActiveSession(mainThreadId);
-        lastLayoutSessionId = mainThreadId;
         lastActiveRef.current = mainThreadId;
       }
 
@@ -280,7 +263,7 @@ export function useSessionListRouter(): void {
     const unreadStore = useUnreadStore.getState();
     unreadStore.clearUnread(mainThreadId);
     if (active.remoteId != null && active.remoteId !== mainThreadId) unreadStore.clearUnread(active.remoteId);
-    rememberActiveSession(active, items);
+    rememberActiveSession(active);
     clearFilterOnCrossProject(active);
   }, [mainThreadId, items, threadItems, threads, newThreadSwitchPending]);
 
@@ -303,7 +286,8 @@ export function useSessionListRouter(): void {
     const onBootDraft = mainThreadId == null || mainThreadId.startsWith('__LOCALID_');
     // The one-shot is consumed above regardless — a New switch pending (todo
     // #375) means the user already chose it, same as isCreateInFlight.
-    if (!onBootDraft || newThreadSwitchPending || (mainThreadId != null && isCreateInFlight(mainThreadId))) return;
+    if (!onBootDraft || newThreadSwitchPending || isCarriedDraft(mainThreadId)) return;
+    if (mainThreadId != null && isCreateInFlight(mainThreadId)) return;
 
     const target = pickInitialSession(items, useLastSessionStore.getState().lastSessionId);
     if (target != null && target !== mainThreadId) {
@@ -313,6 +297,9 @@ export function useSessionListRouter(): void {
 
   // Ghost-chat prune (todo #346) — see use-ghost-chat-prune.ts.
   useGhostChatPrune(items, threads);
+
+  // Held messages of sessions removed while this client was away.
+  useHeldQueuePrune();
 
   // GC: prune persisted layout entries for sessions no longer in the thread list.
   // Guard: only when the list is non-empty to avoid wiping everything before first load.

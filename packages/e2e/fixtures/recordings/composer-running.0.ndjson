@@ -1,0 +1,25 @@
+{"dir":"out","method":"onInit","args":["e2e-composer-running"],"delayMs":0}
+{"dir":"in","method":"sendMessage","args":["Where does the quota reset?"],"delayMs":0}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"The reset lives in `quota.ts`. It runs when the window rolls over, so a machine that slept through it misses one."}],null],"delayMs":20}
+{"dir":"out","method":"onContextUsage","args":[{"totalTokens":76000,"maxTokens":200000,"percentage":38}],"delayMs":30}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":40}
+{"dir":"in","method":"sendMessage","args":["Read the tests around it"],"delayMs":40}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Three tests cover the reset. None covers a clock that jumped forward."}],null],"delayMs":60}
+{"dir":"out","method":"onContextUsage","args":[{"totalTokens":168000,"maxTokens":200000,"percentage":84}],"delayMs":70}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":80}
+{"dir":"in","method":"sendMessage","args":["Write the missing test"],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Added the test. It fails on main, as expected."}],null],"delayMs":100}
+{"dir":"out","method":"onContextUsage","args":[{"totalTokens":192000,"maxTokens":200000,"percentage":96}],"delayMs":110}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":120}
+{"dir":"in","method":"sendMessage","args":["Fix the reset"],"delayMs":120}
+{"dir":"out","method":"onContextUsage","args":[{"totalTokens":76000,"maxTokens":200000,"percentage":38}],"delayMs":130}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"I'll compare against the wall clock instead of the timer."}],null],"delayMs":140}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":3600120}
+{"dir":"in","method":"interrupt","args":[],"delayMs":3600120}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"error_during_execution","is_error":false}],"delayMs":3600320}
+{"dir":"in","method":"sendMessage","args":["Also cover the DST case"],"delayMs":3600320}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Covered: the test now jumps an hour back."}],null],"delayMs":3600340}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":3600520}
+{"dir":"in","method":"sendMessage","args":["Then open a PR"],"delayMs":3600520}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Opened the pull request."}],null],"delayMs":3600540}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":3600560}

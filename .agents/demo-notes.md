@@ -53,8 +53,8 @@ pairing · Review Changes with a line-anchored comment.
 - **Terminal and sandbox preview** — `lib/host/fake-adapter.ts` rejects
   `terminal.create` and `preview.capture` without `__TAURI_INTERNALS__`.
 - **Native window chrome** — this is browser mode; no traffic lights, no title bar.
-- **Split chat** — `session-tab-ctx-open-split` is disabled unless two *committed*
-  sessions exist, and one boot can only replay one conversation. Seed a second
+- **A chat beside the conversation** — `session-tab-ctx-open-workspace` is disabled unless two
+  *committed* sessions exist, and one boot can only replay one conversation. Seed a second
   chat via `POST /api/chats` to unblock it.
 
 ## Gotchas that have cost takes

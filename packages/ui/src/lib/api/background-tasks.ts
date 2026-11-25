@@ -3,8 +3,8 @@ import { apiBase, authHeaders, request, requestEmpty } from './http';
 
 const path = (chatId: string) => `${apiBase()}/api/chats/${encodeURIComponent(chatId)}/background-tasks`;
 
-export async function listBackgroundTasks(chatId: string): Promise<BackgroundTask[]> {
-  const data = await request<{ tasks: BackgroundTask[] }>('GET', path(chatId));
+export async function listBackgroundTasks(chatId: string, signal?: AbortSignal): Promise<BackgroundTask[]> {
+  const data = await request<{ tasks: BackgroundTask[] }>('GET', path(chatId), undefined, signal);
   return data.tasks;
 }
 

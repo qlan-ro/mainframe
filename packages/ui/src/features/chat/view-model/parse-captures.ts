@@ -21,9 +21,9 @@ export interface CaptureRow {
 }
 
 /**
- * null ONLY when the sentinel is absent. After a sentinel match, malformed
- * lines stop row-parsing and everything remaining lands in `rest` (possibly
- * zero rows) — desktop semantics, the sentinel itself is always stripped.
+ * null ONLY when the sentinel is absent. A malformed row is skipped and the
+ * ones after it are still read; the first line that is no list row starts
+ * `rest`. The sentinel itself is always stripped.
  */
 export function parseSandboxCaptureBlock(text: string): { rows: CaptureRow[]; rest: string } | null {
   const block = splitSandboxCaptureBlock(text);

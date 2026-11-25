@@ -14,8 +14,12 @@ Operate. The composer card, its top strip (activity, queue), bottom strip (where
 Tell an agent what to do next, steer or queue while it runs, and answer what it asks. All of this happens without leaving the input.
 
 ## Constraints
-Keyboard first: Enter, ⌥↵, ⇧⇥, ⌘.. Gates are answered one at a time, oldest first, as the app's gate queue does. Draft content keeps today's segment model and highlight to quote.
+Keyboard first: Enter, ⌥↵, ⇧⇥, ⌘.. Gates are answered one at a time, oldest first, whoever asks: the session, a sub-agent or a delegated task. Steer needs an adapter that can take a message mid-turn; otherwise both choices queue and the menu says so. Draft content keeps today's segment model and highlight to quote. The workspace adds to the draft and never sends for the user: a preview capture or a code annotation becomes a tile, its note edited there. A draft's first message that failed is the user's to restore, from a notice above the field: nothing is merged or sent again by itself. Switching a draft's project, worktree or daemon keeps prose and quotes, removes what belongs to the old place, and says so with an Undo.
+The empty state claims only what it knows: no branch until it is read, nothing of one project under another's name, and a list that failed says so. A task's text goes under what was typed.
+Text a gate asks the user to approve shows whole, with nothing hidden, in stored order (`stored-order`, `visible-text.ts`). What overflows is not allowed unread: the allowing answers are locked until its end was in view (`use-shown-to-end.ts`). The bottom strip belongs to the thread footer, so a chat with no composer keeps it.
 The gate slot carries `data-chat-gate`: an Activity row that needs you moves focus into it (R13).
+
+The read dialog has a title, a labelled scroll region at least 64 px tall, and a reserved footer row. If the request text grows while the dialog is open, the reader must reach the new end. The manual confirmation appears only when the scroll region has no client rectangles. Closing returns focus to Show or the first available answer. If the request went away, focus moves to the next gate as a whole, or to the thread when none is left, never to an answer or the composer.
 
 ## Direction contract
 THESIS: one calm card that carries its context with it, never a toolbar of switches. Project above the input, where it runs below it, ongoing work tucked in a strip on top.

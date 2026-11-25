@@ -23,14 +23,15 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { SessionPanelState } from '@/features/session-panel/use-session-panel-state';
 
 let __mainThreadId: string | null = '__LOCALID_1';
+let __remoteId: string | undefined;
 let __itemStatus: string | undefined = 'new';
 let __messageCount = 0;
 let __projects: { id: string }[] = [{ id: 'proj-a' }];
-let __loading = false;
+let __listed = true;
 let __draftMap = new Map<string, { projectId: string | null; adapterId: string }>([
   ['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }],
 ]);
@@ -44,14 +45,15 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: unknown) => unknown) =>
     sel({
       threads: { mainThreadId: __mainThreadId, threadItems: __mainThreadId ? [{ id: __mainThreadId }] : [] },
-      threadListItem: { id: __mainThreadId, status: __itemStatus },
+      threadListItem: { id: __mainThreadId, remoteId: __remoteId, status: __itemStatus },
       thread: { messages: { length: __messageCount } },
     }),
-  // The split machinery (reconciler, hotkeys, zone focus clicks) needs the
-  // client; no case here opens a split, so the switch is inert.
+  // The workspace shortcuts need the client; no case here uses them.
   useAui: () => ({ threads: { switchToThread: () => {} } }),
 }));
-vi.mock('../../use-projects', () => ({ useProjects: () => ({ projects: __projects, loading: __loading }) }));
+vi.mock('../../use-projects', () => ({
+  useProjects: () => ({ projects: __projects, loading: !__listed, listed: __listed }),
+}));
 vi.mock('../../runtime/draft-config', () => ({
   useDraftConfigStore: (sel: (s: unknown) => unknown) => sel({ drafts: __draftMap }),
 }));
@@ -75,30 +77,22 @@ vi.mock('../../../chat/thread/ChatColumnHeader', () => ({ ChatColumnHeader: () =
 vi.mock('../../../chat/thread/ChatThread', () => ({
   ChatThread: ({ emptyState }: { emptyState?: React.ReactNode }) => <div data-testid="chat-thread">{emptyState}</div>,
 }));
-vi.mock('@/features/chat/zones/ChatZone', () => ({
-  ChatZone: ({ chatId }: { chatId: string }) => <div data-testid={`chat-zone-${chatId}`} />,
-}));
-vi.mock('@/features/chat/zones/SubagentZone', () => ({
-  SubagentZone: ({ subagent }: { subagent: { toolCallId: string } }) => (
-    <div data-testid={`chat-subagent-zone-${subagent.toolCallId}`} />
-  ),
-}));
 vi.mock('../ChatEmptyState', () => ({
-  ChatEmptyState: ({ variant, projectId }: { variant: string; projectId?: string }) => (
-    <div data-testid={`empty-${variant}`} data-project={projectId ?? ''} />
-  ),
+  ChatEmptyState: ({ variant }: { variant: string }) => <div data-testid={`empty-${variant}`} />,
 }));
 vi.mock('@/features/session-panel/SessionPanel', () => ({
   SessionPanel: ({ state }: { state: SessionPanelState }) => (
     <div data-testid="session-panel-root" data-mode={state.mode} />
   ),
 }));
-vi.mock('@/features/side-chat/SideChatHost', () => ({
-  SideChatHost: ({ parentChatId, children }: { parentChatId: string | null; children: React.ReactNode }) => (
-    <div data-testid="side-chat-host-stub" data-parent-chat-id={parentChatId ?? ''}>
-      {children}
-    </div>
-  ),
+const useSideChatTab = vi.fn();
+vi.mock('@/features/side-chat/use-side-chat-tab', () => ({
+  useSideChatTab: (input: unknown) => useSideChatTab(input),
+}));
+let __chatId: string | null = null;
+vi.mock('@/features/chat/runtime/chat-extras', () => ({
+  useChatExtrasSelector: (select: (extras: unknown) => unknown) =>
+    select(__chatId == null ? undefined : { state: { chatConfig: { id: __chatId } } }),
 }));
 
 // The shared setup's ResizeObserver stub is inert; this one records what was
@@ -113,28 +107,42 @@ class RecordingResizeObserver {
 }
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver = RecordingResizeObserver;
 
+import { heldConversation } from '@/lib/conversation-focus';
 import { ChatSurface } from '../ChatSurface';
 import { useFindInChatStore } from '@/features/chat/find/find-in-chat-store';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
 
 describe('ChatSurface', () => {
   beforeEach(() => {
-    useZonesStore.setState({ zones: null, subagent: null });
+    __chatId = null;
+    __remoteId = undefined;
+    useSideChatTab.mockClear();
     observed = [];
     __mainThreadId = '__LOCALID_1';
     __itemStatus = 'new';
     __messageCount = 0;
     __projects = [{ id: 'proj-a' }];
-    __loading = false;
+    __listed = true;
     __filterProjectIds = new Set();
     __pendingProjectId = null;
     __draftMap = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
     __initialization = { status: 'ready' };
   });
 
+  it('is its conversation to the focus, the chat’s id once a draft has one', () => {
+    const { container, rerender } = render(<ChatSurface />);
+    const shown = () => container.querySelector('[data-chat-column]')!.getAttribute('data-conversation');
+    expect(shown()).toBe('__LOCALID_1');
+
+    __remoteId = 'chat-1';
+    rerender(<ChatSurface key="sent" />);
+    expect(shown()).toBe('chat-1');
+    fireEvent.pointerDown(container.querySelector('[data-testid="session-panel-root"]')!);
+    expect(heldConversation()).toBe('chat-1');
+  });
+
   it('renders the first-run hero (no ChatThread) when there are no projects', () => {
     __projects = [];
-    __loading = false;
+    __listed = true;
     render(<ChatSurface />);
     expect(screen.getByTestId('empty-firstrun')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-thread')).toBeNull();
@@ -142,18 +150,18 @@ describe('ChatSurface', () => {
 
   it('does not show the first-run hero once the draft is set to "No project" (todo #346)', () => {
     __projects = [];
-    __loading = false;
+    __listed = true;
     __draftMap = new Map([['__LOCALID_1', { projectId: null, adapterId: 'claude' }]]);
     render(<ChatSurface />);
 
     expect(screen.queryByTestId('empty-firstrun')).toBeNull();
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', '');
+    expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
   });
 
-  it('does not show the first-run hero while projects are still loading', () => {
+  it('does not show the first-run hero until the daemon has listed its projects', () => {
     __projects = [];
-    __loading = true;
+    __listed = false;
     render(<ChatSurface />);
     expect(screen.queryByTestId('empty-firstrun')).toBeNull();
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
@@ -162,7 +170,7 @@ describe('ChatSurface', () => {
   it('renders ChatThread with the welcome empty-state for a resolved draft', () => {
     render(<ChatSurface />);
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', 'proj-a');
+    expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
   });
 
   it('renders the welcome empty-state with no project for a projectless new local thread', () => {
@@ -172,7 +180,7 @@ describe('ChatSurface', () => {
     render(<ChatSurface />);
 
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', '');
+    expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
     // No boot-settle picker and no dead end: the welcome screen owns the choice.
     expect(screen.queryByText('Initializing session…')).toBeNull();
     expect(screen.queryByTestId('empty-firstrun')).toBeNull();
@@ -187,49 +195,25 @@ describe('ChatSurface', () => {
     expect(screen.queryByTestId('empty-welcome')).toBeNull();
   });
 
-  it('opens a native subagent beside a parent still using a temporary thread ID', () => {
-    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
-    __mainThreadId = '__LOCALID_parent';
+  it('follows the conversation’s side chat, by the daemon’s id for both the chat and its workspace', () => {
+    __mainThreadId = '__LOCALID_9';
     __itemStatus = 'regular';
     __messageCount = 4;
-    useZonesStore.getState().openSubagent({
-      parentChatId: 'daemon-parent',
-      parentThreadId: '__LOCALID_parent',
-      toolCallId: 'task-1',
-      messageId: 'm-1',
-      title: 'worker',
-    });
+    __chatId = 'chat-123';
+    render(<ChatSurface />);
 
-    try {
-      const view = render(<ChatSurface />);
-      expect(screen.getByTestId('chat-split-row')).toBeInTheDocument();
-      expect(screen.getByTestId('side-chat-host-stub')).toHaveAttribute('data-parent-chat-id', '__LOCALID_parent');
-      expect(screen.getByTestId('chat-subagent-zone-task-1')).toBeInTheDocument();
-
-      __mainThreadId = 'daemon-parent';
-      view.rerender(<ChatSurface />);
-      expect(screen.getByTestId('chat-split-row')).toBeInTheDocument();
-    } finally {
-      width.mockRestore();
-    }
+    expect(useSideChatTab).toHaveBeenLastCalledWith({ parentChatId: 'chat-123', sessionId: 'chat-123' });
   });
 
-  it('mounts the side-chat host in the single view, keyed by the main thread id (todo #344)', () => {
+  it('is one conversation beside the panel, which docks as a sibling of the thread’s column', () => {
     __mainThreadId = 'chat-123';
     __itemStatus = 'regular';
     __messageCount = 4;
     const { container } = render(<ChatSurface />);
 
-    const host = screen.getByTestId('side-chat-host-stub');
-    expect(host).toHaveAttribute('data-parent-chat-id', 'chat-123');
-    expect(host.contains(screen.getByTestId('chat-thread'))).toBe(true);
-    // D20: the panel docks as a flex SIBLING of the side-chat host, outside
-    // it — not wrapped inside it — so the beside/below decision inside the
-    // host is made on the width that remains once the panel takes its own.
-    expect(host.contains(screen.getByTestId('session-panel-root'))).toBe(false);
+    expect(screen.getAllByTestId('chat-thread')).toHaveLength(1);
     const column = container.querySelector('[data-chat-column]') as HTMLElement;
-    expect(column.contains(host)).toBe(true);
-    expect(column.contains(screen.getByTestId('session-panel-root'))).toBe(true);
+    expect([...column.children].some((el) => el === screen.getByTestId('session-panel-root'))).toBe(true);
   });
 
   it('closes the find bar when the active chat changes, e.g. to a new draft', () => {
@@ -291,7 +275,7 @@ describe('ChatSurface', () => {
     // A multi-project scope is ambiguous (soleProjectId returns null), so the
     // draft is treated the same as an unresolved one: no boot-settle wait.
     expect(screen.getByTestId('chat-thread')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-welcome')).toHaveAttribute('data-project', '');
+    expect(screen.getByTestId('empty-welcome')).toBeInTheDocument();
     expect(screen.queryByText('Initializing session…')).toBeNull();
   });
 
@@ -315,24 +299,18 @@ describe('ChatSurface', () => {
     expect(panel).toHaveAttribute('data-mode', 'hidden');
   });
 
-  it("observes the parent's thread column, so a split or a side chat beside it shrinks what the panel measures", () => {
+  it('observes the whole column, so the workspace beside it shrinks what the panel measures (W6)', () => {
     const { container } = render(<ChatSurface />);
 
-    // Two observers: the surface root (split-fits width gate) and the panel
-    // state hook's own host — `[data-chat-column]`, measured BEFORE the
-    // docked panel takes its width, holding the side-chat host and the panel
-    // as flex siblings (D20).
-    expect(observed).toHaveLength(2);
     const column = container.querySelector('[data-chat-column]') as HTMLElement;
-    expect(observed).toContain(column);
-    expect(column.contains(screen.getByTestId('side-chat-host-stub'))).toBe(true);
+    expect(observed).toEqual([column]);
     expect(column.contains(screen.getByTestId('chat-thread'))).toBe(true);
     expect(column.contains(screen.getByTestId('session-panel-root'))).toBe(true);
   });
 
   it('does not mount the session panel in the first-run branch', () => {
     __projects = [];
-    __loading = false;
+    __listed = true;
     render(<ChatSurface />);
 
     expect(screen.queryByTestId('session-panel-root')).toBeNull();

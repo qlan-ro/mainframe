@@ -18,7 +18,10 @@ test('Sonnet effort choices follow the adapter catalog @real', async () => {
     const testId = await row.getAttribute('data-testid');
     if (!testId) throw new Error('Sonnet model row has no test id');
     const id = testId.replace('composer-model-select-option-', '');
-    await row.hover();
+    await row.click();
+    // A click on the trigger while the menu animates out is swallowed.
+    await expect(app.page.getByTestId('composer-provider-model-popover')).toHaveCount(0);
+    await app.page.getByTestId('composer-model-select').click();
     await expect(app.page.getByTestId(`composer-model-${id}-tuning`)).toBeVisible();
 
     const response = await daemonFetch('/api/adapters');

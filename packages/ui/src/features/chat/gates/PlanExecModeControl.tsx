@@ -13,16 +13,16 @@ interface ExecModeOption {
 
 const EXEC_MODE_OPTIONS: ExecModeOption[] = [
   { id: 'default', label: 'Interactive', Icon: ShieldIcon, desc: 'Ask before each tool' },
-  { id: 'acceptEdits', label: 'Auto-edits', Icon: PencilIcon, desc: 'Apply edits, ask to run' },
-  { id: 'auto', label: 'Auto', Icon: SparklesIcon, desc: 'Claude decides which actions need approval' },
+  { id: 'acceptEdits', label: 'Auto-Edits', Icon: PencilIcon, desc: 'Apply edits, ask to run' },
+  { id: 'auto', label: 'Auto', Icon: SparklesIcon, desc: 'The agent decides which actions need approval' },
   { id: 'yolo', label: 'Unattended', Icon: ZapIcon, desc: 'Run everything, no prompts' },
 ];
 
-/** Selected ink per mode; anything unlisted reads as the neutral `text-primary`.
- *  Auto is a caution, not a hazard — only Unattended keeps the destructive ink. */
+/** Selected ink per mode; anything unlisted reads as the accent.
+ *  Auto and Unattended are cautions, as on the composer's control. */
 const SELECTED_INK: Partial<Record<ExecutionMode, string>> = {
   auto: 'text-warning',
-  yolo: 'text-destructive',
+  yolo: 'text-warning',
 };
 
 export interface PlanExecModeControlProps {
@@ -44,7 +44,11 @@ export function PlanExecModeControl({ value, onChange, autoAllowed }: PlanExecMo
   const options = EXEC_MODE_OPTIONS.filter((o) => o.id !== 'auto' || autoAllowed === true);
 
   return (
-    <div className="inline-flex gap-0.5 rounded-md border border-border bg-muted p-0.5">
+    <div
+      role="group"
+      aria-label="Run the plan in"
+      className="inline-flex flex-wrap gap-0.5 rounded-md border border-border bg-muted p-0.5"
+    >
       {options.map(({ id, label, Icon, desc }) => {
         const selected = value === id;
 
@@ -58,6 +62,7 @@ export function PlanExecModeControl({ value, onChange, autoAllowed }: PlanExecMo
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1',
                 'text-xs font-semibold transition-colors',
+                'focus-visible:focus-line',
                 selected && ['bg-background shadow-sm', SELECTED_INK[id] ?? 'text-accent-ink'],
                 !selected && 'text-muted-foreground hover:text-foreground',
               )}

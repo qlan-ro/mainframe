@@ -23,7 +23,7 @@ const terminal: RunTab = { id: 'tab-term', kind: 'terminal', title: 'Terminal' }
 function seed(tabs: RunTab[], active = tabs[0]!.id): RunPane {
   const pane: RunPane = { id: 'pane-1', tabs, active };
   useLayoutStore.setState({
-    layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['chat', 'workspace'], topFlex: {} },
     run: { dir: 'v', flex: [1, 1], panes: [pane] },
     sessions: new Map(),
     activeSessionId: null,

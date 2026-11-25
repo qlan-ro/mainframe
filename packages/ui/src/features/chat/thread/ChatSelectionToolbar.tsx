@@ -11,22 +11,26 @@
  * (and each `Action`'s) already prevents the browser from clearing the
  * selection before the click handler runs.
  *
- * In split view each zone mounts one of these, and both portal to the same
+ * Every chat on screen (the conversation, workspace chat tabs) mounts one of
+ * these, and all portal to the same
  * fixed position for any selection anywhere (SelectionToolbarPrimitive.Root's
- * own behavior). `scopeRef` — the zone's own `ThreadPrimitive.Root` element —
- * lets only the toolbar whose zone holds the selection act on it; the other
- * stays mounted (so its own primitive still tracks selection info) but hidden
+ * own behavior). `scopeRef` — the chat's own `ThreadPrimitive.Root` element —
+ * lets only the toolbar whose chat holds the selection act on it; the others
+ * stay mounted (so their own primitive still tracks selection info) but hidden
  * via `display: none` rather than unmounted (#359).
  */
 import type { RefObject } from 'react';
 import { QuoteIcon, MessageSquarePlusIcon } from 'lucide-react';
+import { useAui } from '@assistant-ui/react';
 import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { useOpenNewThreadDraft } from '@/features/sessions/new-thread/use-open-new-thread-draft';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useAppendQuoteSegment } from '../composer/segments/use-append-quote-segment';
+import { quoteSource, selectedMessageId } from './quote-source';
 import { useSelectionInScope } from './use-selection-in-scope';
 
 export function ChatSelectionToolbar({ scopeRef }: { scopeRef?: RefObject<HTMLElement | null> } = {}) {
+  const aui = useAui();
   const appendQuoteSegment = useAppendQuoteSegment();
   const openNewThreadDraft = useOpenNewThreadDraft();
   const projectId = useChatExtras()?.state.chatConfig?.projectId;
@@ -35,7 +39,9 @@ export function ChatSelectionToolbar({ scopeRef }: { scopeRef?: RefObject<HTMLEl
   const handleQuote = () => {
     const text = window.getSelection()?.toString().trim();
     if (!text) return;
-    appendQuoteSegment(text);
+    const messageId = selectedMessageId(window.getSelection());
+    const message = messageId && aui.thread.getState().messages.find((m) => m.id === messageId);
+    appendQuoteSegment(text, message ? quoteSource(message) : undefined);
     window.getSelection()?.removeAllRanges();
   };
 

@@ -91,7 +91,11 @@ export type ControlBehavior = 'allow' | 'deny';
 
 export type ControlDestination = 'userSettings' | 'projectSettings' | 'localSettings' | 'session' | 'cliArg';
 
-/** A control rule update to save for future tool uses. */
+/**
+ * A control rule update to save for future tool uses. A request's suggestions may
+ * also hold shapes not listed here (the daemon passes on what it cannot read), and
+ * an answer never may: the daemon takes those out, and modes wider than `acceptEdits`.
+ */
 export type ControlUpdate =
   | {
       type: 'addRules';
@@ -297,6 +301,8 @@ export interface AdapterInfo {
     noPersistence?: boolean;
     /** Can branch this chat's conversation into a new chat (todo #343). Absent means unsupported. */
     fork?: boolean;
+    /** Can fold a message into a running turn (C9). Absent means unsupported. */
+    steer?: boolean;
   };
   /**
    * Why `capabilities.fork` is currently false (todo #368), e.g. a CLI below
@@ -429,6 +435,8 @@ export interface Adapter {
     noPersistence?: boolean;
     /** Can branch this chat's conversation into a new chat (todo #343). Absent means unsupported. */
     fork?: boolean;
+    /** Can fold a message into a running turn (C9). Absent means unsupported. */
+    steer?: boolean;
   };
 
   isInstalled(): Promise<boolean>;

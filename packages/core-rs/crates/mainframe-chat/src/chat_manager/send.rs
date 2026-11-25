@@ -164,8 +164,7 @@ impl ChatManager {
         Ok(())
     }
 
-    /// Plain-text send: attachments, the (possibly queued) user message, titling,
-    /// working state, dispatch, and the queued-ref bookkeeping.
+    /// Returns the daemon message ID when the prompt is queued.
     pub(super) async fn send_plain_text(
         &self,
         post: &Arc<Mutex<ActiveChat>>,
@@ -174,12 +173,12 @@ impl ChatManager {
         content: &str,
         attachment_ids: Option<&[String]>,
         delivery: Delivery<'_>,
-    ) -> Result<(), SendError> {
+    ) -> Result<Option<String>, SendError> {
         let outgoing = self
             .prepare_outgoing(chat_id, content, attachment_ids)
             .await;
         let (transient_metadata, message_uuid, is_queued) =
-            self.queued_message_metadata(post, session, &outgoing.attachment_previews);
+            self.queued_message_metadata(post, session, &outgoing.attachment_previews, &delivery);
         let message = self.store_user_message(
             chat_id,
             outgoing.message_content,
@@ -189,21 +188,17 @@ impl ChatManager {
         );
         let handoff = match delivery {
             Delivery::Steer => {
-                return self
-                    .deliver_steer(
-                        post,
-                        session,
-                        SteerMessage {
-                            chat_id,
-                            content,
-                            attachment_ids,
-                            message,
-                            message_uuid,
-                            is_queued,
-                            text: outgoing.text,
-                        },
-                    )
-                    .await;
+                let steer = SteerMessage {
+                    chat_id,
+                    content,
+                    attachment_ids,
+                    message,
+                    message_uuid,
+                    is_queued,
+                    text: outgoing.text,
+                };
+                self.deliver_steer(post, session, steer).await?;
+                return Ok(None);
             }
             Delivery::Turn { handoff } => handoff,
         };
@@ -218,11 +213,11 @@ impl ChatManager {
         }
         if is_queued {
             self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);
-        } else {
-            self.event_handler
-                .notify_chat_surface(self.shared.turn_started_event(chat_id));
+            return Ok(Some(message.id));
         }
-        Ok(())
+        self.event_handler
+            .notify_chat_surface(self.shared.turn_started_event(chat_id));
+        Ok(None)
     }
 }
 

@@ -1,0 +1,265 @@
+'use client';
+
+/**
+ * The queue, as rows at the top of the card (C10). Rows the agent still holds
+ * send when it finishes; rows a Stop took back wait for the user, the first
+ * one saying so. Only a stop turns a row failed, never a normal drain.
+ */
+import { useEffect, useState, type ReactNode } from 'react';
+import { useAuiState } from '@assistant-ui/react';
+import { CircleAlert, Loader2, PencilIcon, RotateCcwIcon, XIcon } from 'lucide-react';
+import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { mfToast } from '@/lib/toast';
+import { useChatExtras } from '../../runtime/chat-extras';
+import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-error';
+import { visibleMessageText } from '../../markers/message-markers';
+import { ComposerHint } from '../composer-card-context';
+import { useComposerEdit } from '../edit/composer-edit-context';
+import { focusVisibleComposer } from '../focus-composer';
+import { CLAIM_MS, settled, useHeldQueue, type HeldMessage } from './held-queue-store';
+
+const NO_ROWS: readonly HeldMessage[] = [];
+
+interface QueueRow {
+  messageId: string;
+  content: string;
+  attachments: number;
+  /** Why the row did not go out, or undefined while it is simply waiting. */
+  failure?: string;
+  action?: { label: string; testId: string; onClick: () => void; icon?: ReactNode };
+  note?: string;
+  /** Claimed by a "Send now": it goes out behind what the agent already has. */
+  leaving?: boolean;
+  /** On its way to the agent. */
+  sending?: boolean;
+  onEdit?: () => void;
+  onRemove?: () => void;
+}
+
+const DELIVERY_FAILURE: Record<string, string> = {
+  rejected: 'Not sent: the agent refused it. The queue is paused.',
+  unconfirmed: 'Delivery uncertain. Check the agent’s history; removing it only clears it here.',
+};
+
+const report = (what: string) => (error: unknown) => {
+  console.warn(`[queue] ${what} failed`, { error });
+  mfToast.error(`Could not ${what} the queued message`, {
+    description: sendRefusal(error) ?? sendErrorMessage(error),
+  });
+};
+
+function IconAction({
+  label,
+  testId,
+  onClick,
+  children,
+}: {
+  label: string;
+  testId: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <ComposerHint label={label}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        data-testid={testId}
+        aria-label={`${label} queued message`}
+        onClick={onClick}
+        className="size-6 text-muted-foreground"
+      >
+        {children}
+      </Button>
+    </ComposerHint>
+  );
+}
+
+function Row({ row }: { row: QueueRow }) {
+  const text = visibleMessageText(row.content);
+  const files = row.attachments > 0 ? `${row.attachments} file${row.attachments === 1 ? '' : 's'}` : '';
+  return (
+    <div
+      role="listitem"
+      data-testid="chat-queued-message"
+      data-queued-id={row.messageId}
+      data-failed={row.failure ? true : undefined}
+      data-sending={row.sending || undefined}
+      className={cn(
+        'flex min-h-8 min-w-0 items-center gap-2 rounded-lg py-0.5 pr-0.5 pl-2.5 text-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1',
+        row.failure ? 'bg-fail/6 ring-1 ring-fail/28 ring-inset' : 'bg-queue-well',
+      )}
+    >
+      {row.sending && (
+        <Loader2 className="size-3.5 shrink-0 animate-spin text-live motion-reduce:animate-none" aria-hidden />
+      )}
+      {row.failure && <CircleAlert className="size-4 shrink-0 text-fail" aria-hidden />}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 gap-2">
+          {!row.failure && (
+            <span
+              role={row.sending ? 'status' : undefined}
+              className="shrink-0 text-xs leading-[inherit] font-semibold text-muted-foreground"
+            >
+              {row.note ?? 'Queued'}
+            </span>
+          )}
+          <span className="min-w-0 truncate" title={text} data-testid="chat-queued-bubble">
+            {[text, files].filter(Boolean).join(' · ')}
+          </span>
+        </span>
+        {row.failure && <span className="text-xs text-fail">{row.failure}</span>}
+      </span>
+      {row.action && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          data-testid={row.action.testId}
+          onClick={row.action.onClick}
+          className="shrink-0 font-semibold text-accent-ink hover:text-accent-ink"
+        >
+          {row.action.icon}
+          {row.action.label}
+        </Button>
+      )}
+      {row.onEdit && (
+        <IconAction label="Edit" testId="chat-queued-edit" onClick={row.onEdit}>
+          <PencilIcon />
+        </IconAction>
+      )}
+      {row.onRemove && (
+        <IconAction label="Remove" testId="chat-queued-cancel" onClick={row.onRemove}>
+          <XIcon />
+        </IconAction>
+      )}
+    </div>
+  );
+}
+
+function useQueuedRows(): QueueRow[] {
+  const extras = useChatExtras();
+  const { startEdit } = useComposerEdit();
+  const queued = Object.values(extras?.queued ?? {})
+    .filter((ref): ref is QueuedMessageRef => ref != null && ref.steered !== true)
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  return queued.map(({ messageId, content, attachmentIds, delivery }) => ({
+    messageId,
+    content,
+    attachments: attachmentIds?.length ?? 0,
+    failure: delivery ? DELIVERY_FAILURE[delivery] : undefined,
+    action:
+      delivery === 'rejected'
+        ? {
+            label: 'Retry',
+            testId: 'chat-queued-retry',
+            icon: <RotateCcwIcon data-icon="inline-start" />,
+            onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
+          }
+        : undefined,
+    onEdit: delivery ? undefined : () => startEdit({ messageId, content }),
+    onRemove: () => void extras?.cancelQueued(messageId).catch(report('remove')),
+  }));
+}
+
+/**
+ * Rows a Stop took back. One the agent had already picked up is still in its
+ * queue or in the transcript, so it is not held after all.
+ */
+function useHeldRows(): QueueRow[] {
+  const extras = useChatExtras();
+  const chatId = extras?.state.chatId ?? '';
+  const { startEdit } = useComposerEdit();
+  const held = useHeldQueue((s) => s.byChat[chatId] ?? NO_ROWS);
+  const sentIds = useAuiState((s) =>
+    s.thread.messages
+      .filter((m) => held.some((row) => row.messageId === m.id))
+      .map((m) => m.id)
+      .join('\n'),
+  );
+  // One that reached the conversation after all is not held any more: forget it.
+  useEffect(() => {
+    for (const id of sentIds.split('\n')) if (id) useHeldQueue.getState().remove(chatId, id);
+  }, [sentIds, chatId]);
+  const now = useClaimClock(held);
+  const queuedIds = new Set(Object.values(extras?.queued ?? {}).map((ref) => ref.messageId));
+  const rows = held
+    .filter((row) => !sentIds.split('\n').includes(row.messageId) && !queuedIds.has(row.messageId))
+    .map((row) => settled(row, now));
+  const busy = rows.some((row) => row.claim);
+  return rows.map((row, index) => {
+    const base = { messageId: row.messageId, content: row.content, attachments: row.attachmentIds?.length ?? 0 };
+    // On its way, or about to be: nothing to press until it is sent or comes back.
+    if (row.claim) {
+      const { started } = row.claim;
+      return { ...base, note: started ? 'Sending…' : 'Waiting', leaving: true, sending: started };
+    }
+    return {
+      ...base,
+      failure: heldFailure(row, index),
+      note: 'Waiting',
+      action:
+        index === 0 && !busy
+          ? {
+              label: row.unconfirmed ? 'Send again' : 'Send now',
+              testId: 'chat-queued-send-now',
+              onClick: () => {
+                void extras?.sendHeld(row.messageId).catch(report('send'));
+                focusVisibleComposer();
+              },
+            }
+          : undefined,
+      onEdit: () =>
+        startEdit({ messageId: row.messageId, content: row.content, save: saveHeld(chatId, row.messageId) }),
+      onRemove: () => useHeldQueue.getState().remove(chatId, row.messageId),
+    };
+  });
+}
+
+function heldFailure(row: HeldMessage, index: number): string | undefined {
+  if (row.unconfirmed) return UNCONFIRMED;
+  if (row.refused) return `Not sent: ${row.refused}`;
+  return index === 0 ? 'Not sent: the session stopped.' : undefined;
+}
+
+const UNCONFIRMED = 'It may already have reached the agent. Check the conversation before sending it again.';
+
+/** An edit never fails in silence: a row on its way is not changed. */
+const saveHeld = (chatId: string, messageId: string) => async (content: string) => {
+  if (!useHeldQueue.getState().edit(chatId, messageId, content)) {
+    throw new Error('This message is being sent, or is gone.');
+  }
+};
+
+/** The time, read again whenever a claim runs out. */
+function useClaimClock(held: readonly HeldMessage[]): number {
+  const [now, setNow] = useState(() => Date.now());
+  const newest = Math.max(0, ...held.map((row) => row.claim?.at ?? 0));
+  useEffect(() => {
+    if (newest === 0) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(0, newest + CLAIM_MS - Date.now()));
+    return () => clearTimeout(timer);
+  }, [newest]);
+  return now;
+}
+
+export function QueuedRows() {
+  const held = useHeldRows();
+  const rows = [...held.filter((row) => !row.leaving), ...useQueuedRows(), ...held.filter((row) => row.leaving)];
+  if (rows.length === 0) return null;
+  return (
+    <div
+      role="list"
+      aria-label="Queued messages"
+      data-testid="chat-composer-queue"
+      className="mb-2 flex max-h-40 flex-col gap-1.5 overflow-y-auto"
+    >
+      {rows.map((row) => (
+        <Row key={row.messageId} row={row} />
+      ))}
+    </div>
+  );
+}

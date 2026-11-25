@@ -14,6 +14,7 @@
  *
  * Testid reference (new beyond chat.spec's list):
  *   chat-permission-details-toggle    — "Details" disclosure trigger on the permission gate
+ *   chat-permission-show-rest         — scrolls to the end of what is allowed; until it was in view the allowing answers are aria-disabled
  *   chat-permission-details-pre       — raw JSON.stringify(request.input), shown when open
  *   chat-question-option-{q}-__other__ — the "Other…" option row for question index q
  *   chat-question-other-input-{q}     — free-text input, shown once "Other…" is selected
@@ -31,7 +32,7 @@ import { writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { openWorkspaceAtRest, sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 
 // Minimal 1x1 red PNG — valid image, tiny payload (mirrors composer.spec.ts's fixture).
 const TINY_PNG_BASE64 =
@@ -46,6 +47,25 @@ async function expectGateMatchesComposerWidth(page: Page) {
   expect(composer, 'composer must be mounted').not.toBeNull();
   expect(Math.abs(gate!.x - composer!.x)).toBeLessThanOrEqual(1);
   expect(Math.abs(gate!.x + gate!.width - (composer!.x + composer!.width))).toBeLessThanOrEqual(1);
+}
+
+/** Reads an overflowing request to its end, which unlocks the answers that allow it. */
+async function showAllOfTheRequest(page: Page): Promise<void> {
+  const rest = page.getByTestId('chat-permission-show-rest');
+  await expect(rest).toBeVisible();
+  await expect(page.getByTestId('chat-permission-option-allow-once')).toBeDisabled();
+  for (let part = 0; part < 3 && (await rest.count()) > 0; part++) {
+    await rest.click();
+    const dialog = page.getByRole('dialog', { name: /^Read / });
+    if (await dialog.count()) {
+      const reading = dialog.locator('pre').locator('..');
+      await reading.focus();
+      await reading.press('End');
+      await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+  }
+  await expect(rest).toHaveCount(0);
 }
 
 /** Mirrors transcript.spec.ts's `scrollViewportToTop` recipe (not exported there). */
@@ -123,7 +143,7 @@ test.describe('§permission gate details', () => {
     await expect(page.locator('[data-testid="chat-permission-option-allow-always"]')).toBeVisible();
 
     // Narrow surface: lighting the workspace alongside chat shrinks the column in the same window.
-    await page.getByTestId('surface-rail-workspace').click();
+    await openWorkspaceAtRest(page);
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 10_000 });
     await expectGateMatchesComposerWidth(page);
     const column = await page.getByTestId('chat-thread-footer').boundingBox();
@@ -166,6 +186,202 @@ test.describe('§permission gate no suggestions', () => {
     await expect(page.locator('[data-testid="chat-permission-option-allow-always"]')).not.toBeVisible();
 
     await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
+    await waitForIdle(page, 60_000);
+  });
+});
+
+// ─── Permission gate — a long list, a mode left out, text that hides ─────────
+
+test.describe('§permission gate many suggestions', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-many' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  // The recording suggests forty rules and `bypassPermissions`, which the daemon cannot read as a mode.
+  test('counts forty rules on the button, reaches the last one with the answers in view, and says what is left out', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Build and test the workspace');
+    const gate = page.getByTestId('chat-permission-gate');
+    await gate.waitFor({ timeout: 45_000 });
+
+    await expect(page.getByTestId('chat-permission-grant-count')).toHaveText('40 changes');
+    await expect(page.getByTestId('chat-permission-omitted')).toContainText('switching permissions to Unattended');
+    await expect(page.getByTestId('chat-permission-command')).toHaveText(/⟨U\+202E⟩tset-ylper/);
+
+    const slot = page.getByTestId('chat-thread-gate-slot');
+    const always = page.getByTestId('chat-permission-option-allow-always');
+    const first = page.getByTestId('chat-permission-grants').getByRole('listitem').first();
+    const last = page.getByTestId('chat-permission-grants').getByRole('listitem').last();
+    // Before any scrolling the answers are in view, and the list is not all of it.
+    await expect(always).toBeInViewport({ ratio: 1 });
+    await expect(last).not.toBeInViewport();
+    // No line of the list shows under them.
+    const slotBox = (await slot.boundingBox())!;
+    const optionsBox = (await page.getByTestId('chat-permission-options').boundingBox())!;
+    expect(Math.abs(optionsBox.y + optionsBox.height - (slotBox.y + slotBox.height))).toBeLessThanOrEqual(1);
+
+    await slot.hover();
+    await page.mouse.wheel(0, 5_000);
+    await expect(page.getByTestId('chat-permission-omitted')).toBeInViewport({ ratio: 1 });
+    await expect(last).toBeInViewport({ ratio: 1 });
+    await expect(last).toContainText('Bash(cargo metadata -p mainframe-types *)');
+    await expect(first).not.toBeInViewport();
+    // Nothing covers the end of the list: the answers sit below it.
+    const omittedBox = (await page.getByTestId('chat-permission-omitted').boundingBox())!;
+    const alwaysBox = (await always.boundingBox())!;
+    expect(omittedBox.y + omittedBox.height).toBeLessThanOrEqual(alwaysBox.y + 1);
+
+    await page.getByTestId('chat-permission-option-allow-once').click();
+    await waitForIdle(page, 60_000);
+  });
+});
+
+// ─── Permission gate — a command taller than the gate, right-to-left text ────
+
+test.describe('§permission gate tall command', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-tall' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  /** Scrolls the gate to its end; the command's last characters must then stand clear above the answers. */
+  async function expectEndReachable(page: Page): Promise<void> {
+    const allow = page.getByTestId('chat-permission-option-allow-once');
+    await expect(allow).toBeInViewport({ ratio: 1 });
+    await page.getByTestId('chat-thread-gate-slot').hover();
+    await page.mouse.wheel(0, 20_000);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const text = document.querySelector('[data-testid="chat-permission-command"]')!.firstChild as Text;
+          const end = document.createRange();
+          end.setStart(text, text.length - 4);
+          end.setEnd(text, text.length);
+          const slot = document.querySelector('[data-testid="chat-thread-gate-slot"]')!.getBoundingClientRect();
+          const answers = document.querySelector('[data-testid="chat-permission-options"]')!.getBoundingClientRect();
+          const box = end.getBoundingClientRect();
+          return end.toString() === 'LAST' && box.top >= slot.top && box.bottom <= answers.top;
+        }),
+      )
+      .toBe(true);
+    await expect(allow).toBeInViewport({ ratio: 1 });
+  }
+
+  /** Opened at its top, locked: pressing Allow does nothing until the end was shown. */
+  async function expectLockedUntilShown(page: Page): Promise<void> {
+    const slot = page.getByTestId('chat-thread-gate-slot');
+    const allow = page.getByTestId('chat-permission-option-allow-once');
+    const rest = page.getByTestId('chat-permission-show-rest');
+    expect(await slot.evaluate((el) => el.scrollTop)).toBe(0);
+    await expect(allow).toHaveAttribute('aria-disabled', 'true');
+    await expect(rest).toHaveText('Show the rest of the command');
+    await expect(rest).toBeInViewport({ ratio: 1 });
+
+    const lines = await page.getByTestId('chat-permission-command-lines').textContent();
+    await allow.click({ force: true });
+    await allow.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Space');
+    // Long enough for an answer to have brought up the next request.
+    await page.waitForTimeout(500);
+    await expect(page.getByTestId('chat-permission-command-lines')).toHaveText(lines!);
+  }
+
+  test('a ten-line gap and 200 lines open at their top, locked until their end was shown, and reach it with the answers in view', async () => {
+    const { page } = app;
+    await page.setViewportSize({ width: 1000, height: 700 });
+    await sendMessage(page, 'Run the two long scripts');
+    const guard = page.locator('[data-testid="chat-gate-guard"][data-armed]');
+    const allow = page.getByTestId('chat-permission-option-allow-once');
+    const rest = page.getByTestId('chat-permission-show-rest');
+    await guard.waitFor({ timeout: 45_000 });
+    await expect(page.getByTestId('chat-permission-command-lines')).toHaveText('12 lines');
+    await expectLockedUntilShown(page);
+    // Scrolling to the end unlocks it.
+    await expectEndReachable(page);
+    await expect(allow).not.toHaveAttribute('aria-disabled');
+    await expect(rest).toHaveCount(0);
+    await page.getByTestId('chat-permission-option-reject-once').click();
+
+    await expect(page.getByTestId('chat-permission-command-lines')).toHaveText('200 lines');
+    await guard.waitFor({ timeout: 5_000 });
+    await expectLockedUntilShown(page);
+    // So does the button, which scrolls there.
+    await rest.click();
+    await expect(rest).toHaveCount(0);
+    await expect(allow).not.toHaveAttribute('aria-disabled');
+    await expectEndReachable(page);
+    // The path's Hebrew part stands in stored order, so nothing around it trades places.
+    const inStoredOrder = await page.evaluate(() => {
+      const text = document.querySelector('[data-testid="chat-permission-command"]')!.firstChild as Text;
+      const from = text.data.lastIndexOf('\n') + 1;
+      const lefts = Array.from({ length: text.length - from }, (_, i) => {
+        const char = document.createRange();
+        char.setStart(text, from + i);
+        char.setEnd(text, from + i + 1);
+        return char.getBoundingClientRect().left;
+      });
+      return lefts.every((left, i) => i === 0 || left > lefts[i - 1]!);
+    });
+    expect(inStoredOrder).toBe(true);
+    await page.getByTestId('chat-permission-option-reject-once').click();
+    await waitForIdle(page, 60_000);
+  });
+});
+
+// ─── Two requests, one burst of clicks ───────────────────────────────────────
+
+test.describe('§a burst of clicks', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-stacked' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('eight clicks over 700 ms answer the first request only', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Write /tmp/mf-e2e-stacked.txt then run `ls -la /tmp` to confirm it');
+    const guard = page.locator('[data-testid="chat-gate-guard"][data-armed]');
+    await guard.waitFor({ timeout: 45_000 });
+    await expect(page.getByTestId('chat-permission-gate')).toContainText('Write');
+    const box = (await page.getByTestId('chat-permission-option-allow-once').boundingBox())!;
+
+    for (let click = 1; click <= 8; click++) {
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { clickCount: click });
+      await page.waitForTimeout(100);
+    }
+
+    // The daemon raises the second request as soon as the first is answered, under the same pointer.
+    await expect(page.getByTestId('chat-permission-command')).toHaveText('ls -la /tmp');
+    await guard.waitFor({ timeout: 5_000 });
+    await page.getByTestId('chat-permission-option-reject-once').click();
     await waitForIdle(page, 60_000);
   });
 });
@@ -439,6 +655,7 @@ test.describe('§gate pinned slot', () => {
     await expectGateMatchesComposerWidth(page);
 
     // Drain the queue (this recording raises a second, Bash gate) and leave idle.
+    await showAllOfTheRequest(page);
     await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
     await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
@@ -511,6 +728,7 @@ test.describe('§gate slot cap under a tall composer draft', () => {
     // Drive the composer toward its own natural size with a multi-line queued draft
     // plus an attachment tile row.
     const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.getByTestId('composer-add-menu').click();
     await page.getByTestId('composer-add-attachment').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(testImagePath);
@@ -542,6 +760,7 @@ test.describe('§gate slot cap under a tall composer draft', () => {
     await assertGateFooterInvariants(page);
 
     // Drain the queue (this recording raises a second, Bash gate) and leave idle.
+    await showAllOfTheRequest(page);
     await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
     await page.locator('[data-testid="chat-permission-option-reject-once"]').click();
@@ -593,6 +812,7 @@ test.describe('§gate slot cap with the find bar open', () => {
     await page.locator('[data-testid="chat-permission-details-pre"]').waitFor({ timeout: 5_000 });
 
     const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.getByTestId('composer-add-menu').click();
     await page.getByTestId('composer-add-attachment').click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(testImagePath);
@@ -618,6 +838,7 @@ test.describe('§gate slot cap with the find bar open', () => {
     await scrollViewportToBottom(page);
     await assertGateFooterInvariants(page);
 
+    await showAllOfTheRequest(page);
     await page.locator('[data-testid="chat-permission-option-allow-once"]').click();
     await expect(gate).toContainText('Bash', { timeout: 10_000 });
     await page.locator('[data-testid="chat-permission-option-reject-once"]').click();

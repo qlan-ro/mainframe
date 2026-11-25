@@ -13,6 +13,8 @@
  */
 import { useCallback } from 'react';
 import type { Project } from '@qlan-ro/mainframe-types';
+import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
+import { dropUnsentOf } from '@/features/chat/composer/unsent/unsent-store';
 import { removeProject } from '@/lib/api/projects';
 import { requestConfirm } from '@/lib/confirm-bridge';
 import { mfToast } from '@/lib/toast';
@@ -21,6 +23,7 @@ import { useDaemonPort } from './runtime/daemon-port-context';
 
 export function useRemoveProject(
   removeProjectFromList: (projectId: string) => void,
+  chatIdsOf: (projectId: string) => readonly string[],
 ): (project: Project) => Promise<void> {
   const port = useDaemonPort();
   const removeFilterProject = useSessionFilters((s) => s.removeFilterProject);
@@ -36,8 +39,13 @@ export function useRemoveProject(
       });
       if (!confirmed) return;
 
+      // Before the list reloads without them.
+      const chatIds = chatIdsOf(project.id);
       try {
         await removeProject(port, project.id);
+        // The daemon's `chat.ended` reaches only the chats open here.
+        useHeldQueue.getState().clearProject(project.id, chatIds);
+        for (const chatId of chatIds) dropUnsentOf(chatId);
         removeProjectFromList(project.id);
         removeFilterProject(project.id);
         mfToast.success('Project removed', { description: project.name });
@@ -48,6 +56,6 @@ export function useRemoveProject(
         });
       }
     },
-    [port, removeProjectFromList, removeFilterProject],
+    [port, removeProjectFromList, chatIdsOf, removeFilterProject],
   );
 }

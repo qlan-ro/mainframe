@@ -31,6 +31,7 @@ function mockProjects(projects: { id: string; name: string }[]) {
   vi.mocked(useProjects).mockReturnValue({
     projects: projects as never,
     loading: false,
+    listed: true,
     reloadProjects: vi.fn(),
     removeProjectFromList: vi.fn(),
   });

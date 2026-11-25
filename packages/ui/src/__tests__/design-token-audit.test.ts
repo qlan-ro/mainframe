@@ -1,8 +1,11 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// These walk the whole source tree; a loaded machine needs more than the 5s default.
+vi.setConfig({ testTimeout: 30_000 });
 
 const SRC_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -73,6 +76,11 @@ describe('design token audit', () => {
   // tiny-avatar idiom the v2 tree uses (ProjectRow's text-[10px] badge);
   // text-xs (12px) overflows the dot.
   const TYPOGRAPHY_ARBITRARY_ALLOWLIST = new Set([
+    // The queue label shares its row's line box.
+    'features/chat/composer/queue/QueuedRows.tsx',
+    // The prototype uses an 11px mono selector and 19px / 13.5px welcome text.
+    'features/chat/composer/draft-content/DraftTile.tsx',
+    'features/sessions/new-thread/NewSessionState.tsx',
     'components/ui/assistant-ui/tool-group.tsx',
     'features/chat/parts/CodeHeader.tsx',
     'features/settings/SettingsSidebar.tsx',

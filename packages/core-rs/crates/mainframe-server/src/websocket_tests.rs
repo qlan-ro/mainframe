@@ -58,9 +58,9 @@ fn quota_event() -> DaemonEvent {
 fn replays_fork_capability_for_a_fallback_catalog_adapter() {
     let caps = AdapterCapabilities {
         plan_mode: false,
-        auto_mode: false,
         no_persistence: false,
         fork: true,
+        ..AdapterCapabilities::default()
     };
     let snapshots = vec![fallback_snapshot("codex", caps)];
     let events = build_connect_replay_events(&snapshots);
@@ -83,9 +83,9 @@ fn replays_fork_capability_for_a_fallback_catalog_adapter() {
 fn skips_replay_for_a_fallback_catalog_adapter_with_no_fork_signal() {
     let caps = AdapterCapabilities {
         plan_mode: true,
-        auto_mode: false,
         no_persistence: false,
         fork: false,
+        ..AdapterCapabilities::default()
     };
     let snapshots = vec![fallback_snapshot("claude", caps)];
     assert!(build_connect_replay_events(&snapshots).is_empty());
@@ -98,9 +98,9 @@ fn skips_replay_for_a_fallback_catalog_adapter_with_no_fork_signal() {
 fn replays_fork_unavailable_reason_for_a_fallback_catalog_adapter() {
     let caps = AdapterCapabilities {
         plan_mode: false,
-        auto_mode: false,
         no_persistence: false,
         fork: false,
+        ..AdapterCapabilities::default()
     };
     let mut snapshot = fallback_snapshot("codex", caps);
     snapshot.fork_unavailable_reason = Some("Codex CLI too old".into());

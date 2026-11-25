@@ -43,3 +43,14 @@ export async function waitForIdle(page: Page, timeout = 60_000): Promise<void> {
   await running.waitFor({ state: 'visible', timeout: Math.min(timeout, 5_000) }).catch(() => {});
   await running.waitFor({ state: 'hidden', timeout });
 }
+
+/**
+ * Lights the workspace if it is not, and waits until its panel has slid to rest
+ * (W4). Anything measured before that is mid-slide. Idempotent, so a retry that
+ * starts from a fresh app gets the same panel as a run that got here in order.
+ */
+export async function openWorkspaceAtRest(page: Page): Promise<void> {
+  const panel = page.locator('[data-surface="workspace"]');
+  if ((await panel.count()) === 0) await page.getByTestId('surface-rail-workspace').click();
+  await page.locator('[data-surface="workspace"][data-slide="open"]').waitFor({ timeout: 10_000 });
+}

@@ -18,6 +18,15 @@ interface SendFailureNoticeProps {
 export function SendFailureNotice({ error, clientId, remedy, attachmentsRestored }: SendFailureNoticeProps) {
   const chatExtras = useChatExtras();
   const canResend = clientId != null && chatExtras != null && attachmentsRestored !== true;
+  // A retry that fails says so in this notice again.
+  const resend = async (withRemedy?: PromptRemedy) => {
+    if (clientId == null) return;
+    try {
+      await (withRemedy ? chatExtras?.retryMessage(clientId, withRemedy) : chatExtras?.retryMessage(clientId));
+    } catch (error) {
+      console.warn('[chat] retry failed', error);
+    }
+  };
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
@@ -29,7 +38,7 @@ export function SendFailureNotice({ error, clientId, remedy, attachmentsRestored
             type="button"
             data-testid="chat-user-message-unarchive"
             title="Unarchive this chat's thread in the provider, then send again"
-            onClick={() => void chatExtras.retryMessage(clientId, remedy)}
+            onClick={() => void resend(remedy)}
             className="text-xs font-medium text-accent-ink hover:underline"
           >
             Unarchive
@@ -39,7 +48,7 @@ export function SendFailureNotice({ error, clientId, remedy, attachmentsRestored
           <button
             type="button"
             data-testid="chat-user-message-retry"
-            onClick={() => void chatExtras.retryMessage(clientId)}
+            onClick={() => void resend()}
             className="text-xs font-medium text-accent-ink hover:underline"
           >
             Retry

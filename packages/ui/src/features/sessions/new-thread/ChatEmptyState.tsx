@@ -1,13 +1,11 @@
 /**
  * ChatEmptyState — the draft/first-run branch selector rendered by ChatSurface.
- * `welcome` shows the project + suggestions column (composer intact via
- * ChatThread; the project may still be unpicked — the welcome screen owns the
- * picker); `firstrun` shows the zero-projects hero (no composer).
+ * `welcome` is a new session's empty state above its composer (the project may
+ * still be unpicked); `firstrun` shows the zero-projects hero (no composer).
  */
-import { WelcomeState } from './WelcomeState';
 import { FirstRunState } from './FirstRunState';
+import { NewSessionState } from './NewSessionState';
 
-export function ChatEmptyState({ variant, projectId }: { variant: 'welcome' | 'firstrun'; projectId?: string | null }) {
-  if (variant === 'firstrun') return <FirstRunState />;
-  return <WelcomeState projectId={projectId} />;
+export function ChatEmptyState({ variant }: { variant: 'welcome' | 'firstrun' }) {
+  return variant === 'firstrun' ? <FirstRunState /> : <NewSessionState />;
 }

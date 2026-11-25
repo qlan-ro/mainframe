@@ -1,39 +1,52 @@
 /**
- * SegmentQuotePill — the quote pill on a committed segment or the pending
- * live segment (spec §2.2). Plain-prop driven: the native quote compound
- * (`ComposerPrimitive.Quote/QuoteText/QuoteDismiss`) renders the single
- * `composer.quote` cell, and nothing writes that cell anymore — the
- * multi-quote segment model replaced it. Keeps the `composer-quote-preview` /
- * `composer-quote-dismiss` testids since it fills the same visual role.
+ * SegmentQuotePill — the quote block on a committed segment or the pending
+ * live segment (spec §2.2, C14): a 2 px rule, the quote on one line with the
+ * whole of it in the tooltip, and where it is from. Plain-prop driven: the
+ * native quote compound (`ComposerPrimitive.Quote/QuoteText/QuoteDismiss`)
+ * renders the single `composer.quote` cell, and nothing writes that cell
+ * anymore — the multi-quote segment model replaced it.
  */
-import { QuoteIcon, XIcon } from 'lucide-react';
+import { XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ComposerHint } from '../composer-card-context';
 
 export function SegmentQuotePill({
   segmentId,
   quote,
+  source,
   onDismiss,
 }: {
   segmentId: string;
   quote: string;
+  source?: string;
   onDismiss: () => void;
 }) {
   return (
     <div
       data-testid="composer-quote-preview"
       data-segment-id={segmentId}
-      className="mx-3 mt-2 flex items-start gap-2 rounded-lg bg-muted px-3 py-2"
+      className="relative flex items-start gap-2 py-0.5 pr-0.5 pl-3 before:absolute before:inset-y-[3px] before:left-0 before:w-0.5 before:rounded-full before:bg-foreground/20"
     >
-      <QuoteIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-      <p className="line-clamp-2 min-w-0 flex-1 text-xs text-muted-foreground">{quote}</p>
+      <span className="flex min-w-0 flex-1 flex-col text-muted-foreground">
+        <ComposerHint
+          label={<span className="block max-h-[40vh] overflow-y-auto wrap-anywhere whitespace-pre-wrap">{quote}</span>}
+        >
+          {/* One line: a quote's own line breaks collapse, and come back in the tooltip. */}
+          <span data-testid="composer-quote-text" className="block truncate text-sm">
+            {quote}
+          </span>
+        </ComposerHint>
+        {source && <span className="truncate text-xs">{source}</span>}
+      </span>
       <Button
+        type="button"
         variant="ghost"
         size="icon-xs"
         data-testid="composer-quote-dismiss"
         data-segment-id={segmentId}
-        aria-label="Dismiss quote"
+        aria-label="Remove this quote"
         onClick={onDismiss}
-        className="-my-0.5 -mr-1.5 text-muted-foreground"
+        className="size-6 shrink-0 text-muted-foreground"
       >
         <XIcon />
       </Button>

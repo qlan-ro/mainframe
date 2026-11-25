@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 import { rmSync } from 'node:fs';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { WINDOWED_RECORDING_KEY, WINDOWED_PAGE_CONTAINERS } from '../fixtures/windowed-history.js';
@@ -6,6 +6,24 @@ import { seedWindowedHistory, HistoryWire } from '../helpers/tauri/windowed-hist
 import { cleanupHeadlessProject } from '../helpers/tauri/headless-chat.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
+
+async function stableBox(row: Locator) {
+  const sampled: { row?: { id: string; y: number } } = {};
+  await expect(async () => {
+    const handle = await row.elementHandle({ timeout: 500 });
+    try {
+      await handle.waitForElementState('stable', { timeout: 500 });
+      const box = await handle.boundingBox();
+      const id = await handle.getAttribute('data-message-id');
+      if (!box || !id) throw new Error('Anchor row has no layout box or message ID');
+      sampled.row = { id, y: box.y };
+    } finally {
+      await handle.dispose();
+    }
+  }).toPass({ timeout: 5000 });
+  if (!sampled.row) throw new Error('Anchor row could not be measured');
+  return sampled.row;
+}
 
 test.describe('windowed transcript history', () => {
   let seeded: Awaited<ReturnType<typeof seedWindowedHistory>>;
@@ -107,14 +125,13 @@ test.describe('windowed transcript history', () => {
     await expect(earlier).toBeInViewport({ ratio: 1 });
     const anchor = page.getByTestId('chat-user-message').filter({ hasText: /^Needle turn 242$/ });
     await expect(anchor).toBeVisible();
-    const before = await anchor.boundingBox();
-    expect(before).not.toBeNull();
-    const id = await anchor.getAttribute('data-message-id');
+    const before = await stableBox(anchor);
     wire.holdPage = true;
     await earlier.click();
     await expect.poll(() => wire.pageRequests).toBe(1);
-    const loading = await page.locator(`[data-message-id="${id}"]`).boundingBox();
-    expect(Math.abs(loading!.y - before!.y)).toBeLessThan(2);
+    const sameRow = page.locator(`[data-message-id="${before.id}"]`);
+    const loading = await stableBox(sameRow);
+    expect(Math.abs(loading.y - before.y)).toBeLessThan(2);
     wire.release();
     await expect(page.getByTestId('chat-message-list')).toHaveAttribute(
       'data-loaded-count',
@@ -123,8 +140,8 @@ test.describe('windowed transcript history', () => {
     await expect(page.getByTestId('chat-history-boundary')).toHaveAttribute('aria-busy', 'false');
     await expect
       .poll(async () => {
-        const after = await page.locator(`[data-message-id="${id}"]`).boundingBox();
-        return after ? Math.abs(after.y - before!.y) : Infinity;
+        const after = await sameRow.boundingBox();
+        return after ? Math.abs(after.y - before.y) : Infinity;
       })
       .toBeLessThan(2);
     expect(wire.pageRequests).toBe(1);

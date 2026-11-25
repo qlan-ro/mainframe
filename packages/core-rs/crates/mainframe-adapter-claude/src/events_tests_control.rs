@@ -86,3 +86,52 @@ fn a_cancel_frame_without_a_usable_request_id_forwards_nothing() {
     );
     assert!(sink.r().cancelled.is_empty());
 }
+
+fn suggestions_of(suggestions: Value) -> Vec<mainframe_types::adapter::ControlUpdate> {
+    let s = session();
+    let sink = RecordingSink::default();
+    feed(
+        &s,
+        &sink,
+        serde_json::json!({
+            "type": "control_request",
+            "request_id": "req_8",
+            "request": {
+                "subtype": "can_use_tool",
+                "tool_name": "Bash",
+                "tool_use_id": "tu_8",
+                "input": {},
+                "permission_suggestions": suggestions
+            }
+        }),
+    );
+    sink.r().permissions[0].suggestions.clone()
+}
+
+#[test]
+fn one_suggestion_it_cannot_read_does_not_drop_the_others() {
+    let rule = serde_json::json!({
+        "type": "addRules",
+        "rules": [{ "toolName": "Bash", "ruleContent": "ls *" }],
+        "behavior": "allow",
+        "destination": "localSettings"
+    });
+    let bypass = serde_json::json!({ "type": "setMode", "mode": "bypassPermissions", "destination": "session" });
+
+    let read = suggestions_of(serde_json::json!([bypass, rule]));
+
+    assert_eq!(
+        read[0],
+        mainframe_types::adapter::ControlUpdate::Unknown(bypass)
+    );
+    assert!(read[1].grantable());
+    assert_eq!(serde_json::to_value(&read[1]).unwrap(), rule);
+}
+
+#[test]
+fn suggestions_that_are_not_a_list_grant_nothing() {
+    assert!(suggestions_of(Value::Null).is_empty());
+    let read = suggestions_of(serde_json::json!({ "type": "addRules" }));
+    assert_eq!(read.len(), 1);
+    assert!(!read[0].grantable());
+}

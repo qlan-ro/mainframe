@@ -21,6 +21,8 @@ import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type { BackgroundTask, Chat, DaemonEvent, DetectedPr } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
 import { __resetSideChatRegistryForTests, registerSideChat } from '../../../side-chat/side-chat-ids';
+import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
+import { holdUnsent, useUnsentMessages } from '@/features/chat/composer/unsent/unsent-store';
 import { SessionListRouter } from '../session-list-router';
 
 // ---------------------------------------------------------------------------
@@ -140,6 +142,27 @@ describe('session-list-router — chat.ended triggers reload', () => {
 
     expect(onReload).toHaveBeenCalledTimes(1);
     expect(onMarkUnread).not.toHaveBeenCalled();
+  });
+
+  it('forgets the messages the ended chat held, and no other chat’s', () => {
+    const held = { messageId: 'm1', chatId: '', uuid: 'u', content: 'text', timestamp: 't' };
+    useHeldQueue.getState().hold('c1', held);
+    useHeldQueue.getState().hold('c2', held);
+
+    dispatch({ type: 'chat.ended', chatId: 'c1' });
+
+    expect(Object.keys(useHeldQueue.getState().byChat)).toEqual(['c2']);
+    useHeldQueue.getState().clearChat('c2');
+  });
+
+  it('forgets the unsent first message of the ended chat, and no other chat’s', () => {
+    const draft = { text: 'x', items: [], attachments: [], references: {} };
+    for (const threadId of ['c1', 'c2']) holdUnsent({ threadId, draft, sent: [] });
+
+    dispatch({ type: 'chat.ended', chatId: 'c1' });
+
+    expect(useUnsentMessages.getState().entries.map((entry) => entry.threadId)).toEqual(['c2']);
+    useUnsentMessages.setState({ entries: [] });
   });
 });
 

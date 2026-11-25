@@ -15,11 +15,16 @@ import { reconcilePendings } from './chat-reconcile';
 import {
   acceptWorktreeOffer,
   dismissWorktreeOffer,
+  dropFailedMessage,
   markAttachmentsRestoredForFailure,
+  holdQueuedMessages,
   retryChatMessage,
   sendChatMessage,
+  sendHeldMessages,
   type ChatActionHost,
 } from './chat-actions';
+import { matchQueued } from '../composer/queue/sent-order';
+import { useHeldQueue } from '../composer/queue/held-queue-store';
 import { ChatPlaneLoader } from './chat-plane-loader';
 import { ChatActivation } from './chat-activation';
 import { ChatLiveSubscription } from './chat-live-subscription';
@@ -171,7 +176,7 @@ export class AcpChatController {
   /**
    * Gates the facade plane's subscription (D2 dormancy, T33) from the runtime
    * hook's `opts.active` effect (the one gating `subscribeLive`); idempotent.
-   * `holdActive` keeps it attached while a split zone shows the chat.
+   * `holdActive` keeps it attached while a workspace tab shows the chat.
    */
   public setActive(active: boolean): void {
     this.activation.setActive(active);
@@ -232,11 +237,19 @@ export class AcpChatController {
     return retryChatMessage(this.actionHost, clientId, remedy);
   }
 
+  /** Take the failed bubble of a draft's first message off the transcript. */
+  public dropFailedMessage(unsentId: string): void {
+    dropFailedMessage(this.actionHost, unsentId);
+  }
+
   public async cancel(): Promise<void> {
+    // Before the guard: "Send now" can be under way before its turn shows.
+    useHeldQueue.getState().releaseUnsent(this.daemonId);
     // Idle guard (#324 QA): cancelling an already-idle chat is a daemon no-op —
     // nothing would ever clear 'cancelling', stranding the "Working…" indicator.
     if (this.state.runState.type !== 'running') return;
     this.dispatch({ type: 'run.cancelling' });
+    await holdQueuedMessages(this.actionHost);
     try {
       this.plane.cancel();
     } catch (error) {
@@ -254,11 +267,18 @@ export class AcpChatController {
     this.plane.replyToPermission(response, selectedOptionId);
   }
 
+  /** Send a message a Stop held back, and line up the ones behind it. */
+  public sendHeld(messageId: string): Promise<void> {
+    return sendHeldMessages(this.actionHost, messageId);
+  }
+
   public async cancelQueued(messageId: string): Promise<void> {
     await cancelQueuedMessage(this.port, this.daemonId, messageId);
   }
 
   public async editQueued(messageId: string, content: string): Promise<void> {
+    // Its place in the held queue goes by its text until its id is known: learn that first.
+    matchQueued(this.daemonId, Object.values(this.getState().interactions.queued));
     await editQueuedMessage(this.port, this.daemonId, messageId, content);
   }
 

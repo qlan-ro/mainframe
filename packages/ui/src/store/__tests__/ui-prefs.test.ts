@@ -15,7 +15,6 @@ beforeEach(() => {
     sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
     sidebarView: 'chats',
     dontWarnOnTuningChange: false,
-    dontConfirmProviderSwitch: false,
     sessionPanelOpen: true,
     sessionPanelSections: {},
     dialogSizes: {},
@@ -180,13 +179,13 @@ describe('useUiPrefs persistence', () => {
     expect(parsed.state.sidebarWidth).toBe(300);
     expect(Object.keys(parsed.state).sort()).toEqual(
       [
+        'activityStripCollapsed',
         'dialogSizes',
-        'dontConfirmProviderSwitch',
         'dontWarnOnTuningChange',
+        'enterWhileRunning',
         'sessionPanelHiddenSections',
         'sessionPanelOpen',
         'sessionPanelSections',
-        'sideChatFrac',
         'sidebarVisible',
         'sidebarWidth',
         'sidebarView',
@@ -196,17 +195,6 @@ describe('useUiPrefs persistence', () => {
     );
     // Actions are never serialized.
     expect(parsed.state.toggleSidebar).toBeUndefined();
-  });
-});
-
-describe('useUiPrefs — side chat share', () => {
-  it('clamps the persisted side-chat share to 15–85% of the row', () => {
-    useUiPrefs.getState().setSideChatFrac(0.02);
-    expect(useUiPrefs.getState().sideChatFrac).toBe(0.15);
-    useUiPrefs.getState().setSideChatFrac(0.99);
-    expect(useUiPrefs.getState().sideChatFrac).toBe(0.85);
-    useUiPrefs.getState().setSideChatFrac(0.5);
-    expect(useUiPrefs.getState().sideChatFrac).toBe(0.5);
   });
 });
 

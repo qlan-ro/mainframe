@@ -97,7 +97,7 @@
  *   session-panel-skills-empty / session-panel-skills-manage — its empty state / Manage link
  *   session-panel-attachment-grid / session-panel-attachment-<id> — attachment tiles
  *   image-lightbox-dialog         — ImageLightbox content (opened by an image tile)
- *   session-strip-branch / -worktree / -changes — the strip under the composer that took over
+ *   composer-branch / -worktree-trigger / -changes — the strip under the composer that took over
  *                                    the panel's Session section (git-branch.spec.ts drives it)
  *   review-modal                  — the Review panel the strip's changes open
  *   WORKSPACE.strip                — a workspace pane's tab strip (opened files land here)
@@ -481,11 +481,11 @@ test.describe('§session-panel — sections', () => {
   });
 });
 
-// ─── §session-strip — where it runs, and its changes ─────────────────────────
+// ─── §bottom-strip — where it runs, and its changes ─────────────────────────
 //
 // The strip under the composer took over the panel's Session section (R2).
 
-test.describe('§session-strip — under the composer', () => {
+test.describe('§bottom-strip — under the composer', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
@@ -504,10 +504,10 @@ test.describe('§session-strip — under the composer', () => {
 
   test('the branch control names the live branch of a local checkout', async () => {
     const { page } = app;
-    const branch = page.getByTestId('session-strip-branch');
+    const branch = page.getByTestId('composer-branch');
     await expect(branch).toBeVisible({ timeout: 15_000 });
     await expect(branch).toContainText('main');
-    await expect(page.getByTestId('session-strip-worktree')).toContainText('Local');
+    await expect(page.getByTestId('composer-worktree-trigger')).toContainText('Local');
     // It IS the branch manager (git-branch.spec.ts drives it): a plain element
     // would mean the entry point regressed.
     await expect(branch).toHaveRole('button');
@@ -515,12 +515,13 @@ test.describe('§session-strip — under the composer', () => {
 
   test('the changes show the +/- totals and open the review', async () => {
     const { page } = app;
-    const changes = page.getByTestId('session-strip-changes');
+    const changes = page.getByTestId('composer-changes');
     await expect(changes).toBeVisible({ timeout: 15_000 });
     // dirtyRepo(): two pure appends → +2, −0.
     await expect(changes).toContainText('+2');
     await expect(changes).toContainText('−0'); // U+2212 minus sign
     await changes.click();
+    await page.getByTestId('composer-changes-open-diff').click();
     await expect(page.getByTestId('review-modal')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('review-close').click();
     await expect(page.getByTestId('review-modal')).toHaveCount(0, { timeout: 5_000 });
@@ -535,7 +536,7 @@ test.describe('§session-strip — under the composer', () => {
     await expect(page.getByTestId('session-panel-card-tasks')).toBeVisible();
     await expect(page.getByTestId('session-panel-card-activity')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-card-launch')).toHaveCount(0);
-    await expect(page.getByTestId('session-strip')).toHaveCount(0);
+    await expect(page.getByTestId('composer-bottom-strip')).toHaveCount(0);
   });
 });
 
@@ -787,9 +788,9 @@ test.describe('§session-panel — Activity section (task-subagent)', () => {
     await expect(row).toBeVisible();
     await expect(row).toHaveAttribute('data-activity-state', 'completed');
 
-    // The row opens the sub-agent's transcript beside the chat.
+    // The row opens the sub-agent's tab in the workspace.
     await row.click();
-    await expect(page.locator('[data-testid^="chat-subagent-zone-"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid^="workspace-conversation-agent-"]')).toBeVisible({ timeout: 10_000 });
   });
 });
 

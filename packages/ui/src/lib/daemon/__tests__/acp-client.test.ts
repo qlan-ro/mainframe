@@ -5,6 +5,7 @@
  * split to keep each file under the 300-line cap). Shared FakeSocket +
  * connectedClient() live in acp-client-test-kit.ts.
  */
+import { NotSentError } from '../not-sent-error';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AcpFacadeClient } from '../acp-client';
 import { FakeSocket, initializeResult, flushMicrotasks, connectedClient } from './acp-client-test-kit';
@@ -77,6 +78,7 @@ describe('AcpFacadeClient — handshake', () => {
     expect(socket.closed).toBe(true);
     expect(client.connected).toBe(false);
     await expect(client.prompt('chat_1', 'hi')).rejects.toThrow(/not connected/);
+    await expect(client.prompt('chat_1', 'hi')).rejects.toBeInstanceOf(NotSentError);
   });
 
   it('a leaked closing socket from a failed connect() attempt cannot tear down a later successful retry', async () => {

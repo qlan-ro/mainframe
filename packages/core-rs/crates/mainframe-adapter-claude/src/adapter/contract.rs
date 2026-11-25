@@ -71,6 +71,7 @@ impl Adapter for ClaudeAdapter {
             no_persistence: true,
             // fork.rs implements pin_fork_point below.
             fork: true,
+            steer: true,
         }
     }
 

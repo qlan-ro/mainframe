@@ -9,7 +9,7 @@
  *    with `{ message: <fixture> }` and returns whatever the selector picks.
  *  - `MessagePrimitive.Root` is stubbed to a plain `<div>` so the component
  *    tree renders without a full AssistantRuntime.
- *  - `ReadMoreBubble` and `QueuedUserTurn` render their children unchanged.
+ *  - `ReadMoreBubble` renders its children unchanged.
  *  - Child component `UserAttachments` is mocked to a simple marker div so
  *    these tests verify dispatch (conditional rendering) only — not the
  *    child's internals.
@@ -41,11 +41,8 @@ const { retryMessageSpy, extrasState } = vi.hoisted(() => ({
   retryMessageSpy: vi.fn(),
   extrasState: { chatConfig: null as import('@qlan-ro/mainframe-types').Chat | null },
 }));
-// Mutable queued-refs fixture for the FIFO position/total dispatch tests (7.2).
-let __queuedFixture: import('@qlan-ro/mainframe-types').QueuedMessageRef[] = [];
 vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({ retryMessage: retryMessageSpy, state: extrasState }),
-  useChatQueuedMessages: () => __queuedFixture,
 }));
 
 // ---------------------------------------------------------------------------
@@ -67,6 +64,7 @@ interface SyntheticMainframeMeta {
   clientId?: string;
   error?: string;
   queued?: boolean;
+  steered?: boolean;
   cleanText?: string;
   command?: {
     name: string;
@@ -124,28 +122,6 @@ vi.mock('../UserAttachments', () => ({
   UserAttachments: () => <div data-testid="chat-user-attachments" />,
 }));
 
-// QueuedUserTurn renders for real children + the extrasSlot, so a no-body
-// queued send still mounts its attachments/captures. position/total render
-// as data attributes so the FIFO dispatch tests (7.2) can assert on them.
-vi.mock('../QueuedUserTurn', () => ({
-  QueuedUserTurn: ({
-    children,
-    extrasSlot,
-    position,
-    total,
-  }: {
-    children?: React.ReactNode;
-    extrasSlot?: React.ReactNode;
-    position?: number;
-    total?: number;
-  }) => (
-    <div data-testid="chat-queued-message" data-position={position} data-total={total}>
-      {children}
-      {extrasSlot}
-    </div>
-  ),
-}));
-
 // ---------------------------------------------------------------------------
 // Mock @/features/skills/use-chat-skills
 // ---------------------------------------------------------------------------
@@ -162,7 +138,7 @@ vi.mock('@/features/skills/use-chat-skills', async (importActual) => {
   };
 });
 
-// ReadMoreBubble and QueuedUserTurn don't need mocking — they render children.
+// ReadMoreBubble doesn't need mocking — it renders its children.
 
 import { UserMessage } from '../UserMessage';
 
@@ -415,7 +391,6 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __skillsFixture = [];
-    __queuedFixture = [];
   });
 
   it('renders the bubble text of a capture message (captures themselves ride the attachment row)', () => {
@@ -453,61 +428,41 @@ describe('UserMessage — MD: metadata-driven child dispatch', () => {
     expect(screen.getByTestId('chat-user-attachments')).toBeInTheDocument();
   });
 
-  it('mounts the queued shell + extras for an image-only queued send (no text body)', () => {
+  it('renders an image-only message with its extras and no bubble', () => {
     __messageFixture = makeFixture({
       content: [{ type: 'image', image: 'data:image/png;base64,AAAA' }],
-      mainframe: { queued: true },
+      mainframe: undefined,
     });
     renderUserMessage();
-    // The queued shell renders even with no text body, and the extras
-    // (UserAttachments) mount inside its slot — the codex-flagged edge.
-    expect(screen.getByTestId('chat-queued-message')).toBeInTheDocument();
     expect(screen.getByTestId('chat-user-attachments')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-user-bubble')).not.toBeInTheDocument();
   });
 
-  it('renders nothing-bearing queued message as empty (no body, no extras → no shell)', () => {
+  // -------------------------------------------------------------------------
+  // Steered (C9): a line under the bubble, nothing else changes
+  // -------------------------------------------------------------------------
+
+  it('says "Steered into the running turn" under a steered message, beside its text', () => {
     __messageFixture = makeFixture({
-      content: [],
-      mainframe: { queued: true },
+      content: [{ type: 'text', text: 'use the other file' }],
+      mainframe: { steered: true },
     });
     renderUserMessage();
+    expect(screen.getByText('use the other file')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-user-steered')).toHaveTextContent('Steered into the running turn');
+  });
+
+  it('shows no steered line for an ordinary message', () => {
+    __messageFixture = makeFixture({ content: [{ type: 'text', text: 'hello' }], mainframe: undefined });
+    renderUserMessage();
+    expect(screen.queryByTestId('chat-user-steered')).not.toBeInTheDocument();
+  });
+
+  it('does not treat a queued message as a transcript bubble variant any more', () => {
+    __messageFixture = makeFixture({ content: [{ type: 'text', text: 'later' }], mainframe: { queued: true } });
+    renderUserMessage();
+    expect(screen.getByText('later')).toBeInTheDocument();
     expect(screen.queryByTestId('chat-queued-message')).not.toBeInTheDocument();
-  });
-
-  // -------------------------------------------------------------------------
-  // FIFO position/total dispatch (7.2) — sourced from useChatQueuedMessages()
-  // -------------------------------------------------------------------------
-
-  it('passes position=1, total=1 to QueuedUserTurn when the queue holds only this message', () => {
-    __messageFixture = makeFixture({
-      id: 'm1',
-      content: [{ type: 'text', text: 'go' }],
-      mainframe: { queued: true },
-    });
-    __queuedFixture = [
-      { messageId: 'm1', chatId: 'c1', uuid: 'u1', content: 'go', timestamp: '2026-07-02T10:00:00.000Z' },
-    ];
-    renderUserMessage();
-    const shell = screen.getByTestId('chat-queued-message');
-    expect(shell).toHaveAttribute('data-position', '1');
-    expect(shell).toHaveAttribute('data-total', '1');
-  });
-
-  it('passes position=2, total=3 to QueuedUserTurn for the second-earliest of three queued messages', () => {
-    __messageFixture = makeFixture({
-      id: 'm2',
-      content: [{ type: 'text', text: 'second' }],
-      mainframe: { queued: true },
-    });
-    __queuedFixture = [
-      { messageId: 'm1', chatId: 'c1', uuid: 'u1', content: 'first', timestamp: '2026-07-02T10:00:00.000Z' },
-      { messageId: 'm2', chatId: 'c1', uuid: 'u2', content: 'second', timestamp: '2026-07-02T10:00:01.000Z' },
-      { messageId: 'm3', chatId: 'c1', uuid: 'u3', content: 'third', timestamp: '2026-07-02T10:00:02.000Z' },
-    ];
-    renderUserMessage();
-    const shell = screen.getByTestId('chat-queued-message');
-    expect(shell).toHaveAttribute('data-position', '2');
-    expect(shell).toHaveAttribute('data-total', '3');
   });
 });
 
@@ -621,7 +576,6 @@ describe('UserMessage — SR: session reference lines and chips', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __skillsFixture = [];
-    __queuedFixture = [];
   });
 
   it('strips the reference lines from the rendered body', () => {

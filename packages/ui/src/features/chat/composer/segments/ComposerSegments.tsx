@@ -51,7 +51,7 @@ function ComposerSegmentTextarea({
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       rows={1}
-      className="w-full resize-none overflow-hidden bg-transparent px-3 py-1.5 font-sans text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
+      className="w-full resize-none overflow-hidden bg-transparent font-sans text-composer-input text-foreground outline-none placeholder:text-muted-foreground"
     />
   );
 }
@@ -74,13 +74,19 @@ export function ComposerSegments({ threadId }: { threadId: string }) {
   if (composition.committed.length === 0 && !composition.liveQuote) return null;
 
   return (
-    <div data-testid="composer-segments" ref={containerRef}>
+    <div data-testid="composer-segments" ref={containerRef} className="flex flex-col gap-2 px-1 pb-2">
       {composition.committed.map((segment) => (
-        <div key={segment.id} data-testid="composer-segment" data-segment-id={segment.id}>
+        <div
+          key={segment.id}
+          data-testid="composer-segment"
+          data-segment-id={segment.id}
+          className="flex flex-col gap-1"
+        >
           {segment.quote != null && (
             <SegmentQuotePill
               segmentId={segment.id}
               quote={segment.quote}
+              source={segment.source}
               onDismiss={() => dismiss(threadId, segment.id)}
             />
           )}
@@ -96,6 +102,7 @@ export function ComposerSegments({ threadId }: { threadId: string }) {
         <SegmentQuotePill
           segmentId={composition.liveQuote.id}
           quote={composition.liveQuote.text}
+          source={composition.liveQuote.source}
           onDismiss={() => dismiss(threadId, composition.liveQuote!.id)}
         />
       )}

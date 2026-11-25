@@ -25,12 +25,15 @@
  */
 import type { AssistantStreamChunk } from 'assistant-stream';
 import type { RemoteThreadListAdapter } from '@assistant-ui/react';
+import type { Chat } from '@qlan-ro/mainframe-types';
 import { listChats, getChat, renameChat, archiveChat, discardChat, unarchiveChat } from '../../../lib/api/chats';
 import { chatToThreadCustom } from '../view-model/chat-to-thread-custom';
 import { sameData } from '../view-model/same-data';
 import { isSideChat, recordSideChatsFromList } from '../../side-chat/side-chat-ids';
 import { takeArchiveChoice, takeDiscard, takeLocalOnlyRemoval } from './archive-confirm-bridge';
-import { useSessionListLoadState } from './list-load-state';
+import { sessionListEpoch, useSessionListLoadState } from './list-load-state';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
+import { dropUnsentOf } from '@/features/chat/composer/unsent/unsent-store';
 import { createForLocal } from './new-thread-coordinator';
 import { chatControllerRegistry } from './chat-controller-registry';
 
@@ -89,18 +92,42 @@ async function archiveWithStagedChoice(port: number, remoteId: string): Promise<
   await archiveChat(port, remoteId, choice?.deleteWorktree ?? false);
 }
 
-export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
-  const { toMetadata, retain } = makeToMetadata();
-  return {
-    async list(): Promise<RemoteThreadListResponse> {
+/** The chats, recording whether the latest request for them failed: a superseded one says nothing. */
+function makeLoadChats(port: number): (isCurrent: () => boolean) => Promise<Chat[]> {
+  let latest = 0;
+  return async (isCurrent) => {
+    const mine = ++latest;
+    const settle = (failed: boolean) => {
+      if (mine === latest && isCurrent()) useSessionListLoadState.getState().setFailed(failed);
+    };
+    try {
       // includeTemporary: the sidebar shows temporary chats (Timer glyph,
       // no pin/tag/archive) rather than hiding them (todo #346).
       const chats = await listChats(port, { includeTemporary: true });
+      settle(false);
+      return chats;
+    } catch (error) {
+      settle(true);
+      throw error;
+    }
+  };
+}
+
+export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
+  const { toMetadata, retain } = makeToMetadata();
+  const daemonId = getActiveDaemon().id;
+  const loadChats = makeLoadChats(port);
+  return {
+    async list(): Promise<RemoteThreadListResponse> {
+      const epoch = sessionListEpoch();
+      const isCurrent = () => daemonId === getActiveDaemon().id && epoch === sessionListEpoch();
+      const chats = await loadChats(isCurrent);
       // The one place that can tell a loaded list from a failed one (#312).
+      if (!isCurrent()) return { threads: [] };
       useSessionListLoadState.getState().markLoaded();
       // The server never lists a side chat, but a parent carries its
       // `sideChatId` — record the mapping on every reload so the identity
-      // guards (tab store, zones, this adapter's own fetch below) recognize
+      // guards (tab store, this adapter's own fetch below) recognize
       // it before anything tries to open it as a session (todo #344).
       recordSideChatsFromList(chats);
       const threads = chats.map(toMetadata);
@@ -119,9 +146,11 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
     },
     async archive(remoteId: string): Promise<void> {
       await archiveWithStagedChoice(port, remoteId);
+      dropUnsentOf(remoteId);
     },
     async delete(remoteId: string): Promise<void> {
       await archiveWithStagedChoice(port, remoteId);
+      dropUnsentOf(remoteId);
     },
     async unarchive(remoteId: string): Promise<void> {
       await unarchiveChat(port, remoteId);

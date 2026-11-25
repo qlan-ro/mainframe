@@ -18,6 +18,7 @@ import { useLayoutStore } from '@/store/layout';
 import { usePortTunnelsStore } from '@/store/port-tunnels';
 import { useSandboxStore } from '@/store/sandbox';
 
+vi.mock('@/features/chat/composer/draft-content/use-add-to-draft', () => ({ useAddToDraft: () => vi.fn() }));
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectId: 'proj-A', chatId: 'chat-1' }),
 }));
@@ -37,7 +38,7 @@ vi.mock('@/lib/api/tunnel-ports', () => ({
 
 import { UrlTabInstance } from '../UrlTabInstance';
 
-const FRESH_LAYOUT = { top: ['workspace' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+const FRESH_LAYOUT = { top: ['workspace' as const], topFlex: {} };
 
 /** Seed a single-pane Run holding one `url` tab, so setUrlTabTarget has something to retarget. */
 function seedUrlTab(tabId: string, url: string) {

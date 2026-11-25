@@ -26,6 +26,7 @@ vi.mock('@assistant-ui/react', () => ({
     Messages: () => <div data-testid="tp-messages" />,
   },
   // No bound threadListItem at all — the scope is the only source of an id.
+  useAui: () => ({}),
   useAuiState: (sel: (s: { thread: { isRunning: boolean; messages: unknown[] } }) => unknown) =>
     sel({ thread: { isRunning: false, messages: [] } }),
 }));
@@ -34,8 +35,10 @@ vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {}
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({
   WorktreeSwitchBanner: () => <div data-testid="worktree-banner" />,
 }));
-vi.mock('@/features/session-panel/SessionStrip', () => ({
-  SessionStrip: () => <div data-testid="session-strip" />,
+vi.mock('../../composer/strips/BottomStrip', () => ({
+  BottomStrip: ({ fixed }: { fixed?: boolean }) => (
+    <div data-testid="bottom-strip" data-fixed={String(fixed === true)} />
+  ),
 }));
 vi.mock('../../orchestration/AgentOutboxChip', () => ({
   AgentOutboxChip: () => <div data-testid="agent-outbox-chip" />,
@@ -102,7 +105,7 @@ describe('ChatThread — variant="side" (todo #344)', () => {
     render(<ChatThread variant="side" />);
 
     expect(screen.queryByTestId('worktree-banner')).toBeNull();
-    expect(screen.queryByTestId('session-strip')).toBeNull();
+    expect(screen.queryByTestId('bottom-strip')).toBeNull();
   });
 
   it('hides the agent-outbox chip in the side variant (nothing is ever held for a side chat)', () => {

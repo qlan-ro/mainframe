@@ -1,6 +1,6 @@
 /**
  * SessionContextMenu — the sidebar row's right-click menu. Covers the Fork
- * item's placement (AC 17: after Open in Split, before the Archive separator),
+ * item's placement (AC 17: after Open in Workspace, before the Archive separator),
  * its enabled/disabled rendering off `forkAvailability`, and a temporary row's
  * menu (todo #346): no Pin or Tags, and Archive relabelled "Discard".
  */
@@ -18,7 +18,7 @@ const BASE_PROPS = {
   onRename: vi.fn(),
   onTags: vi.fn(),
   onArchive: vi.fn(),
-  onOpenInSplit: vi.fn(),
+  onOpenBeside: vi.fn(),
   onFork: vi.fn(),
   canOpenSideChat: false,
   onOpenSideChat: vi.fn(),
@@ -47,15 +47,15 @@ function renderMenu(
 }
 
 describe('SessionContextMenu — Fork placement', () => {
-  it('sits between Open in Split and the separator above Archive', () => {
+  it('sits between Open in Workspace and the separator above Archive', () => {
     renderMenu({ enabled: true });
 
     const items = screen.getAllByRole('menuitem').map((el) => el.getAttribute('data-testid'));
-    const splitIndex = items.indexOf('sessions-ctx-open-split');
+    const workspaceIndex = items.indexOf('sessions-ctx-open-workspace');
     const forkIndex = items.indexOf('sessions-ctx-fork');
     const archiveIndex = items.indexOf('sessions-ctx-archive');
 
-    expect(forkIndex).toBe(splitIndex + 1);
+    expect(forkIndex).toBe(workspaceIndex + 1);
     expect(forkIndex).toBeLessThan(archiveIndex);
   });
 });
@@ -116,11 +116,11 @@ describe('SessionContextMenu — temporary row (todo #346)', () => {
     expect(screen.getByTestId('sessions-ctx-archive').textContent).toContain('Discard');
   });
 
-  it('still shows Rename and Open in Split', () => {
+  it('still shows Rename and Open in Workspace', () => {
     renderMenu({ enabled: true }, vi.fn(), true);
 
     expect(screen.getByTestId('sessions-ctx-rename')).toBeInTheDocument();
-    expect(screen.getByTestId('sessions-ctx-open-split')).toBeInTheDocument();
+    expect(screen.getByTestId('sessions-ctx-open-workspace')).toBeInTheDocument();
   });
 });
 

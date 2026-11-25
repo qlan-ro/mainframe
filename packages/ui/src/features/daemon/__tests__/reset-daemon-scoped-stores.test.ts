@@ -73,6 +73,8 @@ import { useSandboxStore } from '@/store/sandbox';
 import { useSettingsStore } from '@/store/settings';
 import { useSessionFilters } from '@/store/session-filters';
 import { useQuotaStore, applyProviderQuota } from '@/store/quota';
+import { useDraftContent } from '@/features/chat/composer/draft-content/draft-content-store';
+import { setProjectBranch, useProjectBranches } from '@/features/chat/composer/strips/project-branches';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 import { resetDaemonScopedStores } from '../reset-daemon-scoped-stores';
 
@@ -191,6 +193,16 @@ describe('resetDaemonScopedStores — composer-segments', () => {
     resetDaemonScopedStores();
     expect(useComposerSegments.getState().byThread).toEqual({});
   });
+
+  it('drops draft captures and the branches read from the other daemon', () => {
+    useDraftContent
+      .getState()
+      .add('thread-a', [{ kind: 'capture', type: 'screenshot', imageDataUrl: 'data:image/png;base64,A', note: '' }]);
+    setProjectBranch('p1', 'main');
+    resetDaemonScopedStores();
+    expect(useDraftContent.getState().byThread).toEqual({});
+    expect(useProjectBranches.getState().byProject).toEqual({});
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -256,4 +268,14 @@ describe('resetDaemonScopedStores — integration with switchTo', () => {
 
     resetSpy.mockRestore();
   });
+});
+
+import { sessionListEpoch, useSessionListLoadState } from '@/features/sessions/runtime/list-load-state';
+
+it('invalidates an in-flight session list when the daemon stores reset', () => {
+  useSessionListLoadState.setState({ loaded: true, failed: true });
+  const epoch = sessionListEpoch();
+  resetDaemonScopedStores();
+  expect(sessionListEpoch()).toBeGreaterThan(epoch);
+  expect(useSessionListLoadState.getState()).toMatchObject({ loaded: false, failed: false });
 });

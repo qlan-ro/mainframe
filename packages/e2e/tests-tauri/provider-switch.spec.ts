@@ -11,7 +11,6 @@
  *   composer-model-select                         — the provider/model menu trigger
  *   composer-adapter-select-option-<adapterId>    — a provider tab in that menu
  *   composer-model-select-option-<modelId>        — a model row
- *   composer-provider-switch-confirm(-confirm)    — the switch confirmation
  *   chat-provider-switch-marker-<segmentId>       — the divider a segment opens with
  *   chat-user-message                             — user turn root
  */
@@ -30,13 +29,12 @@ const HANDOFF_TAG = 'mainframe-context-handoff';
 
 const dividers = (page: Page) => page.locator('[data-testid^="chat-provider-switch-marker-"]');
 
-/** Opens the model menu, browses `adapterId`'s catalog and confirms the switch. */
+/** Opens the model menu, browses `adapterId`'s catalog and picks a model: that alone switches the chat. */
 async function switchTo(page: Page, adapterId: string) {
   await page.getByTestId('composer-model-select').first().click();
   await page.getByTestId(`composer-adapter-select-option-${adapterId}`).click();
   await page.getByTestId(`composer-model-select-option-${MODEL}`).click();
-  await page.getByTestId('composer-provider-switch-confirm-confirm').click();
-  await expect(page.getByTestId('composer-provider-switch-confirm')).toBeHidden();
+  await expect(page.getByTestId('composer-provider-model-popover')).toHaveCount(0);
 }
 
 test.describe('§provider-switch (two mock adapters)', () => {

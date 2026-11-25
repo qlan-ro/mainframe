@@ -57,10 +57,12 @@ vi.mock('../../controller/transcript-projector', () => ({
   },
 }));
 
-vi.mock('../../gates/select-front', () => ({
-  selectPermissionFront: () => undefined,
-}));
-
+import {
+  draftItemsOf,
+  holdSentCaptures,
+  restoreSentCapture,
+  type DraftCapture,
+} from '../../composer/draft-content/draft-content-store';
 import { useChatThreadRuntime as _useChatThreadRuntime } from '../use-chat-thread-runtime';
 import { createChatThreadState } from '../../controller/chat-thread-state';
 import type { ChatThreadState } from '../../controller/chat-thread-state';
@@ -242,6 +244,30 @@ describe('useChatThreadRuntime — attachments return to the composer on a faile
     expect(sendMessage).not.toHaveBeenCalled();
     expect(addAttachmentSpy).toHaveBeenCalledTimes(1);
     expect(addAttachmentSpy.mock.calls[0]![0]).toBe(fileA);
+    unmount();
+  });
+
+  it('gives a capture back as its tile, not as a file, when the chat could not be created', async () => {
+    const { createForLocal } = await import('../../../sessions/runtime/new-thread-coordinator');
+    vi.mocked(createForLocal).mockRejectedValueOnce(new Error('401'));
+    const capture: DraftCapture = {
+      id: 'att-0',
+      kind: 'capture',
+      type: 'screenshot',
+      imageDataUrl: 'data:image/png;base64,AA',
+      note: 'wide',
+    };
+    holdSentCaptures('t1', [capture]);
+    const controller = makeController(() => Promise.resolve(), { hasRemoteId: false });
+    const { unmount } = renderHook(() => useChatThreadRuntime(controller, PORT, { active: false }));
+
+    await expect(capturedOnNew.current?.(messageWithAttachments([makeFile('element1.png')]))).rejects.toThrow('401');
+
+    expect(draftItemsOf('t1')).toEqual([capture]);
+    expect(addAttachmentSpy).not.toHaveBeenCalled();
+    expect(controller.markAttachmentsRestoredForFailure).toHaveBeenCalled();
+    // Settled: a later failure of something else does not bring it back again.
+    expect(restoreSentCapture('att-0')).toBe(false);
     unmount();
   });
 

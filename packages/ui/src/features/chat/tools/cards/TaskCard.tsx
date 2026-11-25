@@ -23,7 +23,7 @@ import type { ToolCallMessagePartComponent, ToolCallMessagePartProps } from '@as
 import { Bot, ChevronDown, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
-import { useZonesStore } from '../../zones/zones-store';
+import { openSubagentTab } from '@/features/workspace-chat/conversation-tabs';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { TruncatedWithTooltip } from '@/components/ui/truncated-with-tooltip';
@@ -69,14 +69,14 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
   return (
     <div className="flex min-w-0 items-center gap-2 py-0.5">
       <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary/10" aria-hidden>
-        <Bot className="size-3.5 text-primary" />
+        <Bot className="size-3.5 text-accent-ink" />
       </span>
 
       {/* Agent name */}
       <TruncatedWithTooltip
         text={agentName}
         data-testid="chat-task-agent"
-        className="max-w-[180px] text-sm font-semibold text-primary"
+        className="max-w-[180px] text-sm font-semibold text-accent-ink"
       />
 
       {/* Model (mono, muted) */}
@@ -89,7 +89,7 @@ function TaskHeader({ agentName, model, description, fullPrompt, isRunning, isEr
       {/* Running dot — `primary`, not amber: under v2 `warning` means
           wrong-but-not-broken, and a running subagent is neither. */}
       {isRunning && (
-        <span aria-label="Subagent running" className="size-2 shrink-0 animate-pulse rounded-full bg-primary" />
+        <span aria-label="Subagent running" className="size-2 shrink-0 animate-pulse rounded-full bg-live" />
       )}
 
       {/* Error dot */}
@@ -129,8 +129,7 @@ function taskHeaderProps({ args, result, isError, status }: ToolCallMessagePartP
 
 export const TaskCard: ToolCallMessagePartComponent = (part) => {
   const { messages, toolCallId } = part;
-  const { messageId = '', chatId, rootThreadId } = useTranscriptScope();
-  const openSubagent = useZonesStore((state) => state.openSubagent);
+  const { messageId = '', chatId } = useTranscriptScope();
 
   const header = taskHeaderProps(part);
   const [open, setOpen] = useState(false);
@@ -153,21 +152,15 @@ export const TaskCard: ToolCallMessagePartComponent = (part) => {
           <TaskHeader {...header} />
         </CollapsibleTrigger>
         {chatId && (
-          <Hint label="Open subagent transcript beside this chat">
+          <Hint label="Open in workspace">
             <Button
               data-testid={`chat-task-open-${toolCallId}`}
-              aria-label="Open subagent transcript beside this chat"
+              aria-label={`Open ${header.agentName} in the workspace`}
               variant="ghost"
               size="icon-xs"
               className="shrink-0 text-muted-foreground"
               onClick={() =>
-                openSubagent({
-                  parentChatId: chatId,
-                  parentThreadId: rootThreadId,
-                  toolCallId,
-                  messageId,
-                  title: header.agentName,
-                })
+                openSubagentTab({ chatId, toolCallId, messageId, title: header.description || header.agentName })
               }
             >
               <ExternalLink />

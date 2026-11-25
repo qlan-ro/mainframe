@@ -57,9 +57,7 @@ const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: TooltipProvi
 
 const FRESH_LAYOUT = {
   top: ['chat' as const],
-  bottom: null as null,
   topFlex: {} as Record<string, number>,
-  vFlex: { top: 1, bottom: 0.4 },
 };
 
 describe('WorkspaceSurface — PreviewInstance prop threading', () => {

@@ -1,7 +1,7 @@
 /**
  * Zustand store for the Tasks/Todos surface.
  *
- * Server state is bucketed by project: the Kanban modal follows its own
+ * Server state is bucketed by daemon and project: the Kanban modal follows its own
  * per-open scope while the session panel's card follows the active session, so
  * the two routinely hold different projects and a single flat list would let
  * whichever loaded last blank the other. Filter/sort state stays global — it
@@ -14,7 +14,7 @@
  * The `port` and `projectId` are passed into load/mutation actions —
  * not held as store state — so the caller threads them from its own scope.
  *
- * Stale-completion guard: a sequence counter per project id. A result is
+ * Stale-completion guard: a sequence counter per daemon and project. A result is
  * discarded when a newer load for that same project has been issued since,
  * which keeps a slow response for one project from landing in another's bucket.
  */
@@ -31,6 +31,7 @@ import {
   type UpdateTodoInput,
   type TodoStatus,
 } from '@/lib/api/todos';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import type { TodoFilters, TodoSort } from './todos-filters';
 
 const DEFAULT_FILTERS: TodoFilters = { types: [], priorities: [], labels: [], search: '' };
@@ -48,8 +49,11 @@ export interface TodosEntry {
 // hand useSyncExternalStore a new snapshot on every render.
 const EMPTY_ENTRY: TodosEntry = Object.freeze({ todos: [] as Todo[], loading: false, error: null });
 
-// Monotonic per project — lives outside React/Zustand so it persists across renders.
+// Monotonic per daemon and project.
 const _loadSeq = new Map<string, number>();
+
+export const projectTodosKey = (projectId: string, daemonId = getActiveDaemon().id): string =>
+  JSON.stringify([daemonId, projectId]);
 
 interface TodosState {
   entries: Record<string, TodosEntry>;
@@ -67,7 +71,7 @@ interface TodosState {
 
 /** Read one project's bucket. `null` — no scope picked yet — reads as empty. */
 export function selectProjectTodos(projectId: string | null): (state: TodosState) => TodosEntry {
-  return (state) => (projectId === null ? EMPTY_ENTRY : (state.entries[projectId] ?? EMPTY_ENTRY));
+  return (state) => (projectId === null ? EMPTY_ENTRY : (state.entries[projectTodosKey(projectId)] ?? EMPTY_ENTRY));
 }
 
 /**
@@ -85,18 +89,19 @@ export function selectProjectTodos(projectId: string | null): (state: TodosState
  */
 export function useMergedTodos(projectIds: readonly string[]): TodosEntry {
   const entries = useTodosStore((s) => s.entries);
+  const daemonId = getActiveDaemon().id;
   return useMemo(() => {
     let loading = false;
     let error: string | null = null;
     const todos: Todo[] = [];
     for (const id of projectIds) {
-      const entry = entries[id] ?? EMPTY_ENTRY;
+      const entry = entries[projectTodosKey(id, daemonId)] ?? EMPTY_ENTRY;
       todos.push(...entry.todos);
       if (entry.loading) loading = true;
       if (entry.error != null && error === null) error = entry.error;
     }
     return { todos, loading, error };
-  }, [entries, projectIds]);
+  }, [entries, projectIds, daemonId]);
 }
 
 export const useTodosStore = create<TodosState>((set, get) => ({
@@ -105,19 +110,20 @@ export const useTodosStore = create<TodosState>((set, get) => ({
   sort: DEFAULT_SORT,
 
   load: async (port, projectId) => {
-    const seq = (_loadSeq.get(projectId) ?? 0) + 1;
-    _loadSeq.set(projectId, seq);
-    const patch = (entry: TodosEntry) => set((state) => ({ entries: { ...state.entries, [projectId]: entry } }));
-    const current = (): TodosEntry => get().entries[projectId] ?? EMPTY_ENTRY;
+    const key = projectTodosKey(projectId);
+    const seq = (_loadSeq.get(key) ?? 0) + 1;
+    _loadSeq.set(key, seq);
+    const patch = (entry: TodosEntry) => set((state) => ({ entries: { ...state.entries, [key]: entry } }));
+    const current = (): TodosEntry => get().entries[key] ?? EMPTY_ENTRY;
 
     patch({ ...current(), loading: true, error: null });
     try {
       const todos = await listTodos(port, projectId);
-      // Drop stale result if a newer load for this project has started.
-      if (seq !== _loadSeq.get(projectId)) return;
+      // Drop stale result if a newer load for this bucket has started.
+      if (seq !== _loadSeq.get(key)) return;
       patch({ todos, loading: false, error: null });
     } catch (err) {
-      if (seq !== _loadSeq.get(projectId)) return;
+      if (seq !== _loadSeq.get(key)) return;
       patch({
         ...current(),
         loading: false,
@@ -127,24 +133,28 @@ export const useTodosStore = create<TodosState>((set, get) => ({
   },
 
   create: async (port, input, projectId) => {
+    const key = projectTodosKey(projectId);
     const todo = await createTodo(port, { ...input, projectId });
-    await get().load(port, projectId);
+    if (key === projectTodosKey(projectId)) await get().load(port, projectId);
     return todo;
   },
 
   update: async (port, id, input, projectId) => {
+    const key = projectTodosKey(projectId);
     await updateTodo(port, id, input);
-    await get().load(port, projectId);
+    if (key === projectTodosKey(projectId)) await get().load(port, projectId);
   },
 
   move: async (port, id, status, projectId) => {
+    const key = projectTodosKey(projectId);
     await moveTodo(port, id, status);
-    await get().load(port, projectId);
+    if (key === projectTodosKey(projectId)) await get().load(port, projectId);
   },
 
   remove: async (port, id, projectId) => {
+    const key = projectTodosKey(projectId);
     await deleteTodo(port, id);
-    await get().load(port, projectId);
+    if (key === projectTodosKey(projectId)) await get().load(port, projectId);
   },
 
   setFilters: (filters) => set({ filters }),

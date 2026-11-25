@@ -1,6 +1,6 @@
 /**
  * Gates the facade plane's SUBSCRIPTION on whether this chat is the active
- * thread or held on screen by a split zone (D2 dormancy, todo #350 T33) — split out of `acp-chat-controller.ts`
+ * thread or held on screen by a workspace tab (D2 dormancy, todo #350 T33) — split out of `acp-chat-controller.ts`
  * to keep it under the 300-line cap. `load()`'s config-seed + client bind
  * happen unconditionally; only the subscribe half (session/resume plus
  * listeners) is gated here.
@@ -24,12 +24,12 @@ export interface ChatActivationHost {
 export class ChatActivation {
   /** The runtime hook's flag: this chat is the main thread. */
   private flag = false;
-  /** Holds from on-screen views that are not the main thread (split zones). */
+  /** Holds from on-screen views that are not the main thread (workspace tabs, task rows). */
   private holds = 0;
 
   constructor(private readonly host: ChatActivationHost) {}
 
-  /** Active while it is the main thread OR any visible zone holds it. */
+  /** Active while it is the main thread OR any other view holds it. */
   get isActive(): boolean {
     return this.flag || this.holds > 0;
   }
@@ -44,8 +44,7 @@ export class ChatActivation {
 
   /**
    * Hold the plane attached while a view shows this chat without it being the
-   * main thread — a split zone. Without it an unfocused zone never attaches
-   * (blank until clicked) and a zone that loses focus stops streaming.
+   * main thread — a workspace tab. Without it the tab never attaches (blank).
    * Returns an idempotent release.
    */
   hold(): () => void {

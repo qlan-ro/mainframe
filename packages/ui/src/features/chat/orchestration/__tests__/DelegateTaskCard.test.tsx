@@ -6,21 +6,25 @@ import type { SessionCustom } from '@/features/sessions/view-model/chat-to-threa
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { auiState, entry, setSessions, switchToThread } from './fixtures';
 
-const { openInSplit } = vi.hoisted(() => ({ openInSplit: vi.fn(() => true) }));
+const unarchive = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: typeof auiState) => unknown) => sel(auiState),
   useAui: () => ({
-    threads: { switchToThread, getState: () => ({ mainThreadId: auiState.threadListItem?.id }) },
+    threads: {
+      switchToThread,
+      item: () => ({ unarchive }),
+      getState: () => ({ mainThreadId: auiState.threadListItem?.id, threadItems: auiState.threads.threadItems }),
+    },
   }),
 }));
-vi.mock('@/features/chat/zones/open-in-split', () => ({ openInSplit }));
 vi.mock('../TaskChatTranscript', () => ({
   TaskChatTranscript: ({ chatId, taskId }: { chatId: string; taskId: string }) => (
     <div data-testid="stub-task-chat">{`${chatId}:${taskId}`}</div>
   ),
 }));
 
+import { useLayoutStore } from '@/store/layout';
 import { DelegateTaskCard } from '../DelegateTaskCard';
 
 const ARGS = { task: 'Review the diff for races', role: 'review' };
@@ -55,8 +59,16 @@ function withChild(custom: Partial<SessionCustom> = {}, status: 'regular' | 'arc
 
 beforeEach(() => {
   switchToThread.mockReset();
-  openInSplit.mockReset().mockReturnValue(true);
+  unarchive.mockClear();
+  useLayoutStore.setState({
+    layout: { top: ['chat'], topFlex: {} },
+    run: null,
+    sessions: new Map(),
+    activeSessionId: 'parent',
+  });
 });
+
+const workspaceTabs = () => useLayoutStore.getState().run?.panes.flatMap((pane) => pane.tabs) ?? [];
 
 describe('DelegateTaskCard — header', () => {
   it('follows the child row: its title, its live status, and an open link', async () => {
@@ -69,31 +81,23 @@ describe('DelegateTaskCard — header', () => {
     expect(screen.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'waiting');
 
     await userEvent.click(screen.getByTestId('chat-tool-delegate-task-open-task_kid'));
-    // Opens beside the parent (the active thread, 'parent') rather than
-    // replacing it outright: the split absorbs the gesture first, and
-    // `switchToThread` only moves focus onto the now-visible child.
-    expect(openInSplit).toHaveBeenCalledWith('parent', 'kid');
-    expect(switchToThread).toHaveBeenCalledWith('kid');
+    // Beside the parent, in the workspace; the parent stays the conversation.
+    expect(workspaceTabs()).toEqual([
+      { id: 'chat-kid', kind: 'chat', title: 'Race review', chatId: 'kid', role: 'task' },
+    ]);
+    expect(switchToThread).not.toHaveBeenCalled();
+    expect(unarchive).not.toHaveBeenCalled();
   });
 
-  it("does not replace the active thread when the split can't absorb the gesture", async () => {
-    // e.g. the child is already a member of the visible split — openInSplit
-    // falls through (returns false) and the card still just focuses it.
-    openInSplit.mockReturnValue(false);
-    withChild();
-    render(card({ result: RESULT }));
-
-    await userEvent.click(screen.getByTestId('chat-tool-delegate-task-open-task_kid'));
-    expect(openInSplit).toHaveBeenCalledWith('parent', 'kid');
-    expect(switchToThread).toHaveBeenCalledWith('kid');
-  });
-
-  it('offers to restore an archived child — opening it unarchives it', () => {
+  it('offers to restore an archived child — opening it unarchives it', async () => {
     withChild({}, 'archived');
     render(card({ result: RESULT }));
-    expect(screen.getByTestId('chat-tool-delegate-task-open-task_kid')).toHaveAccessibleName(
-      "Restore and open the task's chat beside this one",
-    );
+    const open = screen.getByTestId('chat-tool-delegate-task-open-task_kid');
+    expect(open).toHaveAccessibleName('Restore the task and open it in the workspace');
+
+    await userEvent.click(open);
+    expect(unarchive).toHaveBeenCalledOnce();
+    expect(workspaceTabs().map((tab) => tab.chatId)).toEqual(['kid']);
   });
 
   it('falls back to the result while the child row has not loaded, with the link disabled', () => {

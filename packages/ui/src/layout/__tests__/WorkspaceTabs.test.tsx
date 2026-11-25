@@ -207,6 +207,46 @@ describe('WorkspaceTabs — keyboard', () => {
     expect(fireEvent.mouseDown(getAllByRole('tab')[1]!)).toBe(false);
   });
 
+  it('takes keyboard focus off a tab when another is pressed, so Backspace cannot close the first one', () => {
+    const { getAllByRole } = render(<WorkspaceTabs pane={paneWith([terminalTab, previewTab])} />);
+    const [first, second] = getAllByRole('tab');
+    first!.focus();
+
+    fireEvent.mouseDown(second!);
+
+    expect(first).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+
+  it('takes it off a session tab too', () => {
+    const { getAllByRole, getByTestId } = render(
+      <>
+        <div role="tablist">
+          <div role="tab" tabIndex={0} data-testid="session" />
+        </div>
+        <WorkspaceTabs pane={paneWith([terminalTab])} />
+      </>,
+    );
+    getByTestId('session').focus();
+
+    fireEvent.mouseDown(getAllByRole('tab')[1]!);
+
+    expect(document.body).toHaveFocus();
+  });
+
+  it('keeps focus on the tab that was pressed', () => {
+    const { getAllByRole } = render(<WorkspaceTabs pane={paneWith([terminalTab, previewTab])} />);
+    const [first] = getAllByRole('tab');
+    first!.focus();
+    fireEvent.mouseDown(first!);
+    expect(first).toHaveFocus();
+  });
+
+  it('names the closing keys on every tab', () => {
+    const { getAllByRole } = render(<WorkspaceTabs pane={paneWith([terminalTab, previewTab])} />);
+    for (const tab of getAllByRole('tab')) expect(tab).toHaveAttribute('aria-keyshortcuts', 'Delete Backspace');
+  });
+
   it('moves focus to the Workspace toggle when the last tab closes, since the workspace goes with it', () => {
     const pane = paneWith([terminalTab]);
     const { getByRole, getByTestId } = render(

@@ -4,9 +4,8 @@
  */
 import { useCallback } from 'react';
 import { useAui } from '@assistant-ui/react';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
-import { openInSplit } from '@/features/chat/zones/open-in-split';
-import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
+import { openSubagentTab } from '@/features/workspace-chat/conversation-tabs';
+import { openTaskTab } from '@/features/workspace-chat/open-session';
 import {
   cancelDelegatedTask,
   readBackgroundTaskOutput,
@@ -29,7 +28,8 @@ export interface ActivityActions {
   stopping: boolean;
 }
 
-function stopRequest(row: ActivityEntry, chatId: string, adapterId: string | undefined) {
+/** Undefined when this work can't be stopped on its own. */
+export function stopRequest(row: ActivityEntry, chatId: string, adapterId: string | undefined) {
   if (!isOngoing(row.state)) return undefined;
   const { task, delegated } = row;
   // A resumed child is a chat of its own again; its finished task can't be cancelled.
@@ -53,16 +53,13 @@ export function useActivityActions(
   }: { chatId: string; adapterId?: string; columnId: PanelColumnId; jumps: ActivityJumps },
 ): ActivityActions {
   const aui = useAui();
-  const threadId = useSideAwareThreadId();
-  const openSubagent = useZonesStore((s) => s.openSubagent);
-  const splitFits = useZonesStore((s) => s.splitFits);
   const setOverlayOpen = usePanelControl((s) => s.setOverlayOpen);
   const { source } = row;
   const childId = row.delegated?.itemId;
   const { onStop, stopping } = useStop(row.title, stopRequest(row, chatId, adapterId));
   const readOutput = useReadOutput(row, chatId);
 
-  /** The floating panel covers what the action is about to show. */
+  /** The floating panel covers what the action is about to show, and takes the focused row with it. */
   const reveal = () => setOverlayOpen(columnId, false);
 
   const jump = () => jumps.jump(row);
@@ -70,25 +67,19 @@ export function useActivityActions(
   const activate = () => {
     // A jump still on its way would move the transcript under what this opens.
     jumps.cancel();
-    if (childId && threadId) {
+    if (childId) {
       reveal();
-      openInSplit(threadId, childId);
-      aui.threads.switchToThread(childId);
+      openTaskTab(aui.threads, childId, { focus: true });
       return;
     }
     if (row.state === 'needs-you') {
       reveal();
       if (focusPendingRequest(chatId)) return;
     }
-    if (row.kind === 'subagent' && source?.toolCallId && threadId && splitFits) {
+    if (row.kind === 'subagent' && source?.toolCallId) {
       reveal();
-      openSubagent({
-        parentChatId: chatId,
-        parentThreadId: threadId,
-        toolCallId: source.toolCallId,
-        messageId: source.messageId,
-        title: row.title,
-      });
+      const { toolCallId, messageId } = source;
+      openSubagentTab({ chatId, toolCallId, messageId, title: row.title }, { focus: true });
       return;
     }
     jump();

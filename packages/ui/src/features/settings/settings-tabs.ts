@@ -1,10 +1,11 @@
-import { SlidersHorizontal, Cpu, Keyboard, Bell, Globe, Info, Plug } from 'lucide-react';
+import { SlidersHorizontal, Cpu, Keyboard, Bell, Globe, Info, MessageSquare, Plug } from 'lucide-react';
 import type React from 'react';
 import type { ProviderConfig } from '@qlan-ro/mainframe-types';
 import type { SettingsTab } from '../../store/settings';
 
 export const SETTINGS_TABS: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
   { id: 'general', label: 'General', icon: SlidersHorizontal },
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
   { id: 'providers', label: 'Providers', icon: Cpu },
   { id: 'keybindings', label: 'Keybindings', icon: Keyboard },
   { id: 'notifications', label: 'Notifications', icon: Bell },

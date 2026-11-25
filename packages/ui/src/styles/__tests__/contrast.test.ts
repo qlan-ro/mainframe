@@ -36,9 +36,12 @@
  * `getComputedStyle` + canvas readback for every token here (33/34 exact, the
  * remainder premultiplied-alpha readback noise at α=0.1).
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { composite, contrast, parseRules, resolveOklch, toRgba, type Decls, type RGBA } from './css-color';
+
+// These walk the whole source tree; a loaded machine needs more than the 5s default.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** muted-foreground sits at *exactly* 4.5:1 worst-case, so absorb float noise. */
 const WCAG_MIN = 4.49;
@@ -228,7 +231,7 @@ describe('v2 contrast guardrail', () => {
 
   it('the row’s time steps up on every fill, and the hover card’s links are body ink', () => {
     const status = readSheet('features/sessions/SessionRowStatus.tsx');
-    for (const state of ['group-hover/menu-item', 'group-data-active/menu-item', 'group-data-zone-visible/menu-button'])
+    for (const state of ['group-hover/menu-item', 'group-data-active/menu-item', 'group-data-in-workspace/menu-button'])
       expect(status).toContain(`${state}:text-sidebar-foreground/80`);
     // `primary` is 3.65:1 in light, and the card's text is 11px.
     expect(readSheet('features/sessions/SessionMetaCard.tsx')).not.toMatch(/text-primary\b/);

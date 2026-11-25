@@ -27,7 +27,7 @@ export function SessionGroupHeader({ label }: { label: string }) {
   return (
     <SidebarGroupLabel
       data-testid={`sessions-group-header-${label}`}
-      className="h-9.5 items-end rounded-none bg-sidebar pt-3.5 pb-1 text-meta"
+      className="h-9.5 items-end rounded-none bg-sidebar pt-3.5 pb-1 text-meta/[1.45]"
     >
       <FadeLabel className="flex-1">{label}</FadeLabel>
     </SidebarGroupLabel>

@@ -1,6 +1,6 @@
 ---
 name: Mainframe
-description: A calm, native workbench for running several coding agents at once. The system of the window revamp, approved 24 Nov 2026. Failure rose, the focus line and overlay scrollbars are built in packages/ui; the rest is the target the revamp builds towards.
+description: A calm, native workbench for running several coding agents at once. The system of the window revamp, approved 24 Nov 2026. Failure rose, the focus line, overlay scrollbars, the accent's text and fill pair (accent-ink, accent-fill), the composer and the gates are built in packages/ui; the rest is the target the revamp builds towards.
 colors:
   ground: "#f5f5f8"
   side: "#ffffff"
@@ -424,7 +424,7 @@ A cool, near-neutral grey scale carries almost everything; a single system blue 
 - **Selection and interaction fills** (`sel`, `hover`, `press`): the selected sidebar row and current menu item (`sel`), hover (`hover`), and open or pressed states (`press`).
 - **Ink scale** (`ink`, `ink2`, `meta`, `faint`): primary text (`ink`), body and control text (`ink2`), and labels, times, values and icons (`meta`, the lowest colour allowed for text). `faint` is only for the disabled Send arrow and inactive tab dots, never for text.
 - **Tooltip** (`tipbg`, `tipink`): the tooltip and toast surfaces, inverted per theme.
-- **Code tint** (`code`): inline code, code blocks, keyboard hints in menus and the gate's JSON details.
+- **Code tint** (`code`): inline code, code blocks, keyboard hints in menus and the gate's JSON details. Text a gate asks the user to approve uses `stored-order`: left to right, in the order it is stored, whatever its script.
 - **Provider dots** (`claude`, `codex`): 8 px dots beside a model or provider name.
 
 ### Named Rules

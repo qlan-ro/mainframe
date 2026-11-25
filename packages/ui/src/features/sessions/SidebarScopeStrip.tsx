@@ -5,10 +5,10 @@
  * project scope and does not mount this. Projects are ordered most recently
  * used first, by their latest session activity.
  */
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useThreadItems } from './runtime/use-thread-items';
 import { useSessionFilters } from '@/store/session-filters';
-import { regularThreadItemsToSessionItems } from './view-model/chat-to-thread-custom';
+import { projectChatIds, regularThreadItemsToSessionItems } from './view-model/chat-to-thread-custom';
 import { sortProjectsByRecentActivity } from './view-model/project-activity';
 import { useProjects } from './use-projects';
 import { useAddProject } from './use-add-project';
@@ -20,9 +20,10 @@ export function SidebarScopeStrip() {
   const toggleFilterProject = useSessionFilters((s) => s.toggleFilterProject);
   const soloFilterProject = useSessionFilters((s) => s.soloFilterProject);
   const { projects, removeProjectFromList, reloadProjects } = useProjects();
-  const onRemoveProject = useRemoveProject(removeProjectFromList);
   const onAddProject = useAddProject(reloadProjects);
   const threadItems = useThreadItems();
+  const chatIdsOf = useCallback((projectId: string) => projectChatIds(threadItems, projectId), [threadItems]);
+  const onRemoveProject = useRemoveProject(removeProjectFromList, chatIdsOf);
   // Project outside the selector — a fresh array inside it would loop useAuiState's Object.is.
   const recentProjects = useMemo(
     () => sortProjectsByRecentActivity(projects, regularThreadItemsToSessionItems(threadItems)),

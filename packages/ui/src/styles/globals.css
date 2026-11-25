@@ -16,12 +16,30 @@
   --color-warning-surface: var(--warning-surface);
   --color-warning-dot: var(--warning-dot);
   --shadow-card: var(--card-shadow);
-    --text-xs: 0.6875rem;
+  --text-xs: 0.6875rem;
   --text-xs--line-height: calc(1 / 0.6875);
   --text-sm: 0.8125rem;
   --text-sm--line-height: calc(1.125 / 0.8125);
   --text-meta: 0.75rem;
-  --text-meta--line-height: 1.45;
+  --text-meta--line-height: 1.4;
+  --text-title: 0.875rem;
+  --text-title--line-height: 1.25rem;
+  --text-transcript: 0.875rem;
+  --text-transcript--line-height: 1.375rem;
+  --text-composer-input: 0.875rem;
+  --text-composer-input--line-height: 1.3125rem;
+  --text-body: 0.8125rem;
+  --text-body--line-height: 1.45;
+  --text-control: 0.8125rem;
+  --text-control--line-height: 1.25rem;
+  --text-small: 0.78125rem;
+  --text-small--line-height: 1.45;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1rem;
+  --text-caption: 0.71875rem;
+  --text-caption--line-height: 1.3;
+  --text-mono: 0.75rem;
+  --text-mono--line-height: 1.1875rem;
   --shadow-tooltip: 0 4px 14px rgba(0, 0, 0, 0.2);
   --text-headline: 0.9375rem;
   --text-headline--line-height: 1.45;
@@ -214,6 +232,11 @@
 @utility focus-line-inset {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
+}
+
+@utility stored-order {
+  direction: ltr;
+  unicode-bidi: bidi-override;
 }
 
 @layer base {

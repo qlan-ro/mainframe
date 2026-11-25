@@ -34,6 +34,7 @@ vi.mock('@assistant-ui/react', () => {
       ScrollToBottom: ({ children }: { children?: ReactNode }) => <>{children}</>,
       Messages: () => <div data-testid="tp-messages" />,
     },
+    useAui: () => ({}),
     useAuiState: (
       sel: (s: {
         thread: { isRunning: boolean; messages: unknown[] };
@@ -50,7 +51,7 @@ vi.mock('@assistant-ui/react', () => {
 vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="chat-composer" /> }));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
-vi.mock('@/features/session-panel/SessionStrip', () => ({ SessionStrip: () => null }));
+vi.mock('../../composer/strips/BottomStrip', () => ({ BottomStrip: () => null }));
 vi.mock('../../orchestration/AgentOutboxChip', () => ({ AgentOutboxChip: () => null }));
 vi.mock('../ChatSelectionToolbar', () => ({ ChatSelectionToolbar: () => null }));
 vi.mock('../../composer/edit/composer-edit-context', () => ({

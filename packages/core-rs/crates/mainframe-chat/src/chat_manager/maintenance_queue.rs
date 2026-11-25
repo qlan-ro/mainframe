@@ -21,29 +21,35 @@ impl ChatShared {
 }
 
 impl ChatManager {
+    /// Whether maintenance owns the chat's input right now, so a message has to
+    /// wait its turn behind it.
+    pub(super) fn input_reserved(&self, chat_id: &str) -> Result<bool, SendError> {
+        let provider_busy = self
+            .get_session_for_chat(chat_id)
+            .is_some_and(|s| !s.ready_for_input());
+        Ok(self.shared.maintenance.active(chat_id)
+            || provider_busy
+            || !self.shared.deps.idle_queue_list(chat_id)?.is_empty())
+    }
+
     pub(super) async fn enqueue_when_reserved(
         &self,
         chat_id: &str,
         content: &str,
         attachment_ids: Option<&[String]>,
         command: Option<&CommandMeta>,
-    ) -> Result<bool, SendError> {
-        let provider_busy = self
-            .get_session_for_chat(chat_id)
-            .is_some_and(|s| !s.ready_for_input());
-        if !self.shared.maintenance.active(chat_id)
-            && !provider_busy
-            && self.shared.deps.idle_queue_list(chat_id)?.is_empty()
-        {
-            return Ok(false);
+    ) -> Result<Option<String>, SendError> {
+        if !self.input_reserved(chat_id)? {
+            return Ok(None);
         }
-        self.enqueue_maintenance_input(chat_id, content, attachment_ids, command.cloned())
+        let message_id = self
+            .enqueue_maintenance_input(chat_id, content, attachment_ids, command.cloned())
             .await?;
         if !self.shared.maintenance.active(chat_id) && !self.session_is_spawned(chat_id) {
             self.lifecycle.start_chat(chat_id).await;
         }
         self.shared.schedule_maintenance_drain(chat_id);
-        Ok(true)
+        Ok(Some(message_id))
     }
 
     pub(super) async fn enqueue_maintenance_input(
@@ -52,7 +58,7 @@ impl ChatManager {
         content: &str,
         attachment_ids: Option<&[String]>,
         command: Option<CommandMeta>,
-    ) -> Result<(), SendError> {
+    ) -> Result<String, SendError> {
         let outgoing = self
             .prepare_outgoing(chat_id, content, attachment_ids)
             .await;
@@ -67,7 +73,7 @@ impl ChatManager {
             .append(chat_id, message.clone());
         self.record_queued_ref(chat_id, &message, uuid, content, attachment_ids);
         self.event_handler.emit_display(chat_id);
-        Ok(())
+        Ok(message.id)
     }
 
     pub(super) async fn drain_maintenance_queue(&self, chat_id: &str) -> Result<(), SendError> {

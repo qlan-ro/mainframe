@@ -8,6 +8,7 @@
  * acp-session-attachment-replay.test.ts.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { NotSentError } from '@/lib/daemon/not-sent-error';
 import { AcpSessionAttachment, type AcpSessionClientPort } from '../acp-session-attachment';
 import { CHAT_ID, makeFakeAcpClient } from './acp-test-kit';
 import { makeHost, tick, type ResumeResult } from './acp-attachment-support';
@@ -106,4 +107,10 @@ describe('AcpSessionAttachment — a first attach that fails (T40)', () => {
     expect(resume).toHaveBeenCalledTimes(3);
     expect(dispatch).toHaveBeenCalledWith({ type: 'history.refresh.refused' });
   });
+});
+
+it('a request before any client is attached certainly was not sent', () => {
+  const attachment = new AcpSessionAttachment(makeHost({}).host);
+
+  expect(() => attachment.requireClient()).toThrow(NotSentError);
 });

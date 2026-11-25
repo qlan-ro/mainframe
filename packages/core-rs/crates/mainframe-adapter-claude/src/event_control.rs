@@ -13,7 +13,7 @@ pub(super) fn handle_control_request_event(event: &Value, sink: &dyn SessionSink
             .unwrap_or_default();
         let suggestions: Vec<ControlUpdate> = request
             .get("permission_suggestions")
-            .and_then(|s| serde_json::from_value(s.clone()).ok())
+            .map(read_suggestions)
             .unwrap_or_default();
         let perm_request = ControlRequest {
             request_id: event
@@ -86,5 +86,21 @@ pub(crate) fn handle_control_response_event(
     }
     if let Some(request_id) = response.get("request_id").and_then(Value::as_str) {
         session.control.resolve(request_id, Some(response.clone()));
+    }
+}
+
+/// One suggestion this build cannot read no longer takes the others with it: it
+/// travels as `ControlUpdate::Unknown`, so the gate can say it was left out.
+fn read_suggestions(value: &Value) -> Vec<ControlUpdate> {
+    match value {
+        Value::Null => Vec::new(),
+        Value::Array(items) => items
+            .iter()
+            .map(|item| {
+                serde_json::from_value(item.clone())
+                    .unwrap_or_else(|_| ControlUpdate::Unknown(item.clone()))
+            })
+            .collect(),
+        other => vec![ControlUpdate::Unknown(other.clone())],
     }
 }

@@ -6,7 +6,7 @@
  * openNewThreadDraft sequence — no thread switch and no return-target write, so
  * "cancel" still routes back to the previous session.
  *
- * initializeDraft, resetNewThreadDraft, the toast and the filter store are
+ * initializeDraft, rescopeNewThreadDraft, the toast and the filter store are
  * mocked; each is asserted by the exact call it receives.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -24,7 +24,7 @@ const baseInitialize = async (_args: unknown) => {
 
 const switchToNewThread = vi.fn();
 const clearProjectFilter = vi.fn();
-const resetNewThreadDraft = vi.fn((_newThreadId: string | null | undefined) => undefined);
+const rescopeNewThreadDraft = vi.fn((_newThreadId: string | null | undefined) => undefined);
 const initializeDraft = vi.fn(baseInitialize);
 const toastError = vi.fn((_message: string, _options?: { description: string }) => undefined);
 
@@ -36,8 +36,12 @@ vi.mock('@assistant-ui/react', () => ({
     },
   }),
 }));
+const toastInfo = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/toast', () => ({
-  mfToast: { error: (message: string, options?: { description: string }) => toastError(message, options) },
+  mfToast: {
+    info: toastInfo,
+    error: (message: string, options?: { description: string }) => toastError(message, options),
+  },
 }));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/store/session-filters', () => ({
@@ -50,7 +54,7 @@ vi.mock('@/store/settings', () => ({
 vi.mock('@/store/adapters', () => ({ useAdapters: () => [{ id: 'gemini', installed: true }] }));
 vi.mock('../initialize-draft', () => ({ initializeDraft: (args: unknown) => initializeDraft(args) }));
 vi.mock('../reset-new-thread-draft', () => ({
-  resetNewThreadDraft: (newThreadId: string | null | undefined) => resetNewThreadDraft(newThreadId),
+  rescopeNewThreadDraft: (newThreadId: string | null | undefined) => rescopeNewThreadDraft(newThreadId),
 }));
 
 import { useSelectDraftProject } from '../use-select-draft-project';
@@ -64,10 +68,11 @@ beforeEach(() => {
   __initError = null;
   switchToNewThread.mockReset();
   clearProjectFilter.mockReset();
-  resetNewThreadDraft.mockReset();
+  rescopeNewThreadDraft.mockReset();
   initializeDraft.mockReset();
   initializeDraft.mockImplementation(baseInitialize);
   toastError.mockReset();
+  toastInfo.mockReset();
 });
 
 describe('useSelectDraftProject — preserves temporary across a project re-pick (todo #346)', () => {
@@ -100,11 +105,40 @@ describe('useSelectDraftProject — preserves temporary across a project re-pick
   });
 });
 
+describe('useSelectDraftProject — what belongs to the old project', () => {
+  const pickFrom = async (from: string | null, to: string | null) => {
+    const { setDraftConfig, clearDraftConfig } = await import('@/features/sessions/runtime/draft-config');
+    const { draftItemsOf, useDraftContent } =
+      await import('@/features/chat/composer/draft-content/draft-content-store');
+    useDraftContent.setState({ byThread: {} });
+    setDraftConfig('__LOCALID_1', { projectId: from, adapterId: 'claude' });
+    useDraftContent
+      .getState()
+      .add('__LOCALID_1', [{ kind: 'code', filePath: 'a', startLine: 1, endLine: 1, lineContent: 'a', note: 'n' }]);
+    await select()(to);
+    clearDraftConfig('__LOCALID_1');
+    return draftItemsOf('__LOCALID_1').length;
+  };
+
+  it('goes when another is picked, and the toast offers Undo', async () => {
+    expect(await pickFrom('proj-a', 'proj-b')).toBe(0);
+    expect(toastInfo).toHaveBeenCalledExactlyOnceWith(
+      'Draft changed',
+      expect.objectContaining({ description: 'Removed 1 code note' }),
+    );
+  });
+
+  it('stays when the same one is picked again', async () => {
+    expect(await pickFrom('proj-a', 'proj-a')).toBe(1);
+    expect(toastInfo).not.toHaveBeenCalled();
+  });
+});
+
 describe('useSelectDraftProject', () => {
   it('resets the reused draft slot and initializes it for the picked project', async () => {
     await select()('proj-b');
 
-    expect(resetNewThreadDraft).toHaveBeenCalledExactlyOnceWith('__LOCALID_1');
+    expect(rescopeNewThreadDraft).toHaveBeenCalledExactlyOnceWith('__LOCALID_1');
     expect(initializeDraft).toHaveBeenCalledExactlyOnceWith({
       localId: '__LOCALID_1',
       projectId: 'proj-b',
@@ -116,7 +150,7 @@ describe('useSelectDraftProject', () => {
 
   it('resets before initializing, so the fresh config is not cleared again', async () => {
     const order: string[] = [];
-    resetNewThreadDraft.mockImplementation(() => void order.push('reset'));
+    rescopeNewThreadDraft.mockImplementation(() => void order.push('reset'));
     initializeDraft.mockImplementation(async (args: unknown) => {
       order.push('initialize');
       return baseInitialize(args);
@@ -139,7 +173,7 @@ describe('useSelectDraftProject', () => {
 
     await select()('proj-b');
 
-    expect(resetNewThreadDraft).toHaveBeenCalledExactlyOnceWith(null);
+    expect(rescopeNewThreadDraft).toHaveBeenCalledExactlyOnceWith(null);
     expect(initializeDraft).toHaveBeenCalledExactlyOnceWith({
       localId: '__LOCALID_9',
       projectId: 'proj-b',
@@ -156,7 +190,7 @@ describe('useSelectDraftProject', () => {
 
     await select()('proj-b');
 
-    expect(resetNewThreadDraft).not.toHaveBeenCalled();
+    expect(rescopeNewThreadDraft).not.toHaveBeenCalled();
     expect(initializeDraft).not.toHaveBeenCalled();
     expect(clearProjectFilter).not.toHaveBeenCalled();
   });

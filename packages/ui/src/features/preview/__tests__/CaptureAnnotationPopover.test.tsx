@@ -13,7 +13,7 @@ describe('CaptureAnnotationPopover', () => {
       <CaptureAnnotationPopover
         captures={mockCaptures}
         onAnnotationChange={vi.fn()}
-        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -28,7 +28,7 @@ describe('CaptureAnnotationPopover', () => {
       <CaptureAnnotationPopover
         captures={mockCaptures}
         onAnnotationChange={onAnnotationChange}
-        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -38,7 +38,7 @@ describe('CaptureAnnotationPopover', () => {
   });
 
   it('calls onSubmit when submit button clicked', async () => {
-    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const onSubmit = vi.fn();
     const { getByTestId } = render(
       <CaptureAnnotationPopover
         captures={mockCaptures}
@@ -47,6 +47,7 @@ describe('CaptureAnnotationPopover', () => {
         onCancel={vi.fn()}
       />,
     );
+    expect(getByTestId('preview-annotation-submit')).toHaveTextContent('Add to message');
     fireEvent.click(getByTestId('preview-annotation-submit'));
     expect(onSubmit).toHaveBeenCalled();
   });
@@ -57,7 +58,7 @@ describe('CaptureAnnotationPopover', () => {
       <CaptureAnnotationPopover
         captures={mockCaptures}
         onAnnotationChange={vi.fn()}
-        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        onSubmit={vi.fn()}
         onCancel={onCancel}
       />,
     );

@@ -22,6 +22,8 @@ vi.mock('@/lib/confirm-bridge', () => ({ requestConfirm: (...args: unknown[]) =>
 
 vi.mock('../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 
+import { holdUnsent, useUnsentMessages } from '@/features/chat/composer/unsent/unsent-store';
+import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
 import { useRemoveProject } from '../use-remove-project';
 
 const PROJECT: Project = {
@@ -32,8 +34,14 @@ const PROJECT: Project = {
   lastOpenedAt: '2026-06-22T00:00:00.000Z',
 };
 
+let chatIds: string[];
+const chatIdsOf = (projectId: string) => (projectId === 'p1' ? chatIds : []);
+
 beforeEach(() => {
   vi.clearAllMocks();
+  chatIds = [];
+  localStorage.clear();
+  useHeldQueue.setState({ byChat: {} });
   setActiveDaemon({ id: 'local', kind: 'local', label: 'Local', baseUrl: 'http://127.0.0.1:0', token: null });
   useSessionFilters.setState({ filterProjectIds: new Set() });
 });
@@ -44,7 +52,7 @@ describe('useRemoveProject — confirm', () => {
     removeProject.mockResolvedValue(undefined);
     const removeProjectFromList = vi.fn();
 
-    const { result } = renderHook(() => useRemoveProject(removeProjectFromList));
+    const { result } = renderHook(() => useRemoveProject(removeProjectFromList, chatIdsOf));
     await act(async () => {
       await result.current(PROJECT);
     });
@@ -64,7 +72,7 @@ describe('useRemoveProject — confirm drops the removed project from a multi-pr
     removeProject.mockResolvedValue(undefined);
     const removeProjectFromList = vi.fn();
 
-    const { result } = renderHook(() => useRemoveProject(removeProjectFromList));
+    const { result } = renderHook(() => useRemoveProject(removeProjectFromList, chatIdsOf));
     await act(async () => {
       await result.current(PROJECT);
     });
@@ -78,7 +86,7 @@ describe('useRemoveProject — confirm drops the removed project from a multi-pr
     removeProject.mockResolvedValue(undefined);
     const removeProjectFromList = vi.fn();
 
-    const { result } = renderHook(() => useRemoveProject(removeProjectFromList));
+    const { result } = renderHook(() => useRemoveProject(removeProjectFromList, chatIdsOf));
     await act(async () => {
       await result.current(PROJECT);
     });
@@ -91,7 +99,7 @@ describe('useRemoveProject — confirm drops the removed project from a multi-pr
     removeProject.mockResolvedValue(undefined);
     const removeProjectFromList = vi.fn();
 
-    const { result } = renderHook(() => useRemoveProject(removeProjectFromList));
+    const { result } = renderHook(() => useRemoveProject(removeProjectFromList, chatIdsOf));
     await act(async () => {
       await result.current(PROJECT);
     });
@@ -106,7 +114,7 @@ describe('useRemoveProject — cancel', () => {
     requestConfirm.mockResolvedValue(false);
     const removeProjectFromList = vi.fn();
 
-    const { result } = renderHook(() => useRemoveProject(removeProjectFromList));
+    const { result } = renderHook(() => useRemoveProject(removeProjectFromList, chatIdsOf));
     await act(async () => {
       await result.current(PROJECT);
     });
@@ -126,7 +134,7 @@ describe('useRemoveProject — daemon failure', () => {
     removeProject.mockRejectedValue(new Error('database is locked'));
     const removeProjectFromList = vi.fn();
 
-    const { result } = renderHook(() => useRemoveProject(removeProjectFromList));
+    const { result } = renderHook(() => useRemoveProject(removeProjectFromList, chatIdsOf));
     await act(async () => {
       await result.current(PROJECT);
     });
@@ -143,7 +151,7 @@ describe('useRemoveProject — dialog copy', () => {
     requestConfirm.mockResolvedValue(false);
     const removeProjectFromList = vi.fn();
 
-    const { result } = renderHook(() => useRemoveProject(removeProjectFromList));
+    const { result } = renderHook(() => useRemoveProject(removeProjectFromList, chatIdsOf));
     await act(async () => {
       await result.current(PROJECT);
     });
@@ -154,5 +162,60 @@ describe('useRemoveProject — dialog copy', () => {
     expect(arg.title).toContain('alpha');
     expect(arg.destructive).toBe(true);
     expect(arg.testid).toBe('sessions-remove-project-dialog');
+  });
+});
+
+describe('useRemoveProject — held messages', () => {
+  const hold = (chatId: string, projectId = PROJECT.id) =>
+    useHeldQueue.getState().hold(
+      chatId,
+      {
+        messageId: `m-${chatId}`,
+        chatId,
+        uuid: 'u',
+        content: 'held',
+        timestamp: '2026-11-25T10:00:00Z',
+      },
+      { projectId },
+    );
+  const heldChats = () => Object.keys(useHeldQueue.getState().byChat).sort();
+  const run = async () => {
+    requestConfirm.mockResolvedValue(true);
+    const { result } = renderHook(() => useRemoveProject(vi.fn(), chatIdsOf));
+    await act(async () => {
+      await result.current(PROJECT);
+    });
+  };
+
+  beforeEach(() => {
+    hold('opened');
+    hold('never-opened');
+    hold('elsewhere', 'other-project');
+    chatIds = ['opened'];
+  });
+
+  it('go with the project, opened here or not, and no other project’s do', async () => {
+    // The list reloads without the project's chats while the daemon answers.
+    removeProject.mockImplementation(async () => void (chatIds = []));
+    await run();
+
+    expect(heldChats()).toEqual(['elsewhere']);
+  });
+
+  it('take the unsent first messages of its sessions along', async () => {
+    const draft = { text: 'x', items: [], attachments: [], references: {} };
+    for (const threadId of ['opened', 'elsewhere']) holdUnsent({ threadId, draft, sent: [] });
+    await run();
+
+    expect(useUnsentMessages.getState().entries.map((entry) => entry.threadId)).toEqual(['elsewhere']);
+    useUnsentMessages.setState({ entries: [] });
+  });
+
+  it('stay when the daemon refused', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    removeProject.mockRejectedValue(new Error('busy'));
+    await run();
+
+    expect(heldChats()).toEqual(['elsewhere', 'never-opened', 'opened']);
   });
 });

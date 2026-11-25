@@ -3,7 +3,6 @@ import { act, fireEvent, render as rtlRender, screen, waitFor, within } from '@t
 import userEvent from '@testing-library/user-event';
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useZonesStore } from '@/features/chat/zones/zones-store';
 import type { ActivityEntry } from '../activity-model';
 import { usePanelControl } from '../panel-control-store';
 
@@ -19,8 +18,9 @@ const state = vi.hoisted(() => ({
   stop: vi.fn(),
   cancel: vi.fn(),
   output: vi.fn(),
-  switchTo: vi.fn(),
-  openInSplit: vi.fn(),
+  threads: {},
+  openTask: vi.fn(),
+  openSubagent: vi.fn(),
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() },
 }));
 vi.mock('../use-activity-entries', () => ({
@@ -46,10 +46,10 @@ vi.mock('@/lib/toast', () => ({ mfToast: state.toast }));
 vi.mock('@/features/chat/runtime/chat-extras', () => ({
   useChatExtras: () => ({ state: { historyWindow: state.history }, loadEarlier: state.loadEarlier }),
 }));
-vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ threads: { switchToThread: state.switchTo } }) }));
-vi.mock('@/features/side-chat/side-chat-scope', () => ({ useSideAwareThreadId: () => 'parent' }));
+vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ threads: state.threads }) }));
 vi.mock('@/features/chat/workflow/use-workflow-run', () => ({ useWorkflowRun: () => undefined }));
-vi.mock('@/features/chat/zones/open-in-split', () => ({ openInSplit: state.openInSplit }));
+vi.mock('@/features/workspace-chat/open-session', () => ({ openTaskTab: state.openTask }));
+vi.mock('@/features/workspace-chat/conversation-tabs', () => ({ openSubagentTab: state.openSubagent }));
 // The run's detail panel reaches for the chat runtime; no workflow here has a run.
 vi.mock('../WorkflowPhases', () => ({ WorkflowPhases: () => null }));
 
@@ -82,7 +82,6 @@ beforeEach(() => {
   state.focusRequest.mockReturnValue(true);
   state.stop.mockResolvedValue(undefined);
   state.cancel.mockResolvedValue(undefined);
-  useZonesStore.setState({ subagent: null, splitFits: true });
   usePanelControl.setState({ overlayOpen: { main: true } });
 });
 
@@ -144,25 +143,26 @@ describe('ActivitySection — row clicks', () => {
     await waitFor(() => expect(state.toast.info).toHaveBeenCalledWith('“r” started before the history shown here'));
   });
 
-  it('opens a sub-agent’s transcript beside the chat', () => {
+  it('opens a sub-agent’s work in the workspace', () => {
     state.entries = [row('agent', { source, task })];
     render(<ActivitySection columnId="main" />);
     clickRow('agent');
-    expect(useZonesStore.getState().subagent).toEqual({
-      parentChatId: 'chat-1',
-      parentThreadId: 'parent',
-      toolCallId: 'call-1',
-      messageId: 'message-1',
-      title: 'agent',
-    });
+    expect(state.openSubagent).toHaveBeenCalledWith(
+      { chatId: 'chat-1', toolCallId: 'call-1', messageId: 'message-1', title: 'agent' },
+      { focus: true },
+    );
+    expect(usePanelControl.getState().overlayOpen.main).toBe(false);
     expect(state.jump).not.toHaveBeenCalled();
   });
 
-  it('opens the transcript of a sub-agent that started before the loaded history', () => {
+  it('opens the work of a sub-agent that started before the loaded history', () => {
     state.entries = [row('agent', { source: { toolCallId: 'call-0' }, task })];
     render(<ActivitySection columnId="main" />);
     clickRow('agent');
-    expect(useZonesStore.getState().subagent).toMatchObject({ toolCallId: 'call-0', messageId: undefined });
+    expect(state.openSubagent).toHaveBeenCalledWith(
+      { chatId: 'chat-1', toolCallId: 'call-0', messageId: undefined, title: 'agent' },
+      { focus: true },
+    );
     expect(state.jump).not.toHaveBeenCalled();
   });
 
@@ -175,21 +175,12 @@ describe('ActivitySection — row clicks', () => {
     expect(usePanelControl.getState().overlayOpen.main).toBe(true);
   });
 
-  it('goes to the sub-agent’s row when there is no room beside the chat', () => {
-    useZonesStore.setState({ splitFits: false });
-    state.entries = [row('agent', { source, task })];
-    render(<ActivitySection columnId="main" />);
-    clickRow('agent');
-    expect(useZonesStore.getState().subagent).toBeNull();
-    expect(state.jump).toHaveBeenCalled();
-  });
-
   it('opens a delegated task’s chat', () => {
     state.entries = [row('task', { kind: 'delegated', delegated: { taskId: 't-1', itemId: 'child' } as never })];
     render(<ActivitySection columnId="main" />);
     clickRow('task');
-    expect(state.openInSplit).toHaveBeenCalledWith('parent', 'child');
-    expect(state.switchTo).toHaveBeenCalledWith('child');
+    expect(state.openTask).toHaveBeenCalledWith(state.threads, 'child', { focus: true });
+    expect(usePanelControl.getState().overlayOpen.main).toBe(false);
   });
 
   it('a sub-agent that needs you takes focus to its request', () => {
@@ -197,7 +188,7 @@ describe('ActivitySection — row clicks', () => {
     render(<ActivitySection columnId="main" />);
     clickRow('agent');
     expect(state.focusRequest).toHaveBeenCalledWith('chat-1');
-    expect(useZonesStore.getState().subagent).toBeNull();
+    expect(state.openSubagent).not.toHaveBeenCalled();
   });
 });
 

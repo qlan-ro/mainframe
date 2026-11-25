@@ -1,10 +1,10 @@
 /**
- * Right-click menu for a session tab: the split gestures, plus the two tab
- * actions that otherwise need a hover target (keep-open, close).
+ * Right-click menu for a session tab: opening it in the workspace, plus the two
+ * tab actions that otherwise need a hover target (keep-open, close).
  *
- * Every gesture here already exists — ⌘-click opens a split, drag-to-split
- * retargets one, ⌘\ dissolves one, the ✕ closes a tab, ⌘1 hides the chat
- * surface. None of them announces itself, so this menu is where they become
+ * Every gesture here already exists — ⌘-click or a drag opens a session in the
+ * workspace, the ✕ closes a tab, ⌘⇧C hides the chat surface. None of them
+ * announces itself, so this menu is where they become
  * discoverable; it deliberately adds no capability of its own. The
  * whole-surface "Hide Chat" moved here from the retired chat header — it is
  * about the surface, not the tab, so every tab's menu offers it. (Placing the
@@ -17,7 +17,7 @@
  * data-testid: session-tab-ctx-<action>.
  */
 import type { ReactNode } from 'react';
-import { Columns2, EyeOff, MessageSquarePlus, PinIcon, Split, SquareSplitHorizontal, XIcon } from 'lucide-react';
+import { EyeOff, MessageSquarePlus, PanelRight, PinIcon, Split, XIcon } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -36,14 +36,11 @@ export interface SurfaceMenuActions {
 }
 
 interface SessionTabContextMenuProps {
-  /** A member of the open pair — the split actions invert for it. */
-  inSplit: boolean;
-  /** The open-in-split gesture has somewhere to go (`canOpenInSplit`). */
-  canOpenInSplit: boolean;
+  /** The session can open beside the conversation (`canOpenBeside`). */
+  canOpenBeside: boolean;
   /** The temporary slot — only a preview tab can be kept open. */
   preview: boolean;
-  onOpenInSplit: () => void;
-  onCloseSplit: () => void;
+  onOpenBeside: () => void;
   onKeepOpen: () => void;
   onClose: () => void;
   forkAvailability: ForkAvailability;
@@ -56,11 +53,9 @@ interface SessionTabContextMenuProps {
 }
 
 export function SessionTabContextMenu({
-  inSplit,
-  canOpenInSplit,
+  canOpenBeside,
   preview,
-  onOpenInSplit,
-  onCloseSplit,
+  onOpenBeside,
   onKeepOpen,
   onClose,
   forkAvailability,
@@ -74,17 +69,10 @@ export function SessionTabContextMenu({
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-48">
-        {inSplit ? (
-          <ContextMenuItem data-testid="session-tab-ctx-close-split" onSelect={onCloseSplit}>
-            <SquareSplitHorizontal />
-            Close Split
-          </ContextMenuItem>
-        ) : (
-          <ContextMenuItem data-testid="session-tab-ctx-open-split" disabled={!canOpenInSplit} onSelect={onOpenInSplit}>
-            <Columns2 />
-            Open in Split
-          </ContextMenuItem>
-        )}
+        <ContextMenuItem data-testid="session-tab-ctx-open-workspace" disabled={!canOpenBeside} onSelect={onOpenBeside}>
+          <PanelRight />
+          Open in Workspace
+        </ContextMenuItem>
         {preview && (
           <ContextMenuItem data-testid="session-tab-ctx-keep-open" onSelect={onKeepOpen}>
             <PinIcon />

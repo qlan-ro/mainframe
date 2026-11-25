@@ -63,7 +63,12 @@
       "paths": [
         "packages/ui/src/features/chat/composer/",
         "packages/ui/src/features/chat/gates/",
-        "packages/ui/src/features/chat/commands/"
+        "packages/ui/src/features/chat/commands/",
+        "packages/ui/src/features/sessions/new-thread/ChatEmptyState",
+        "packages/ui/src/features/sessions/new-thread/FirstRunState",
+        "packages/ui/src/features/sessions/new-thread/NewSessionState",
+        "packages/ui/src/features/sessions/new-thread/SuggestionRow",
+        "packages/ui/src/features/sessions/new-thread/Welcome"
       ]
     },
     {
@@ -101,7 +106,8 @@
         "packages/ui/src/features/review/",
         "packages/ui/src/features/git/",
         "packages/ui/src/features/run/",
-        "packages/ui/src/features/side-chat/"
+        "packages/ui/src/features/side-chat/",
+        "packages/ui/src/features/workspace-chat/"
       ]
     },
     {

@@ -11,6 +11,8 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 export interface QueuedEdit {
   readonly messageId: string;
   readonly content: string;
+  /** Where the edit goes when it is not the daemon's queue (a held row, C10). */
+  readonly save?: (content: string) => Promise<void>;
 }
 
 interface ComposerEditValue {
@@ -22,10 +24,15 @@ interface ComposerEditValue {
 const NOOP: ComposerEditValue = { editing: null, startEdit: () => {}, cancelEdit: () => {} };
 const ComposerEditContext = createContext<ComposerEditValue>(NOOP);
 
-export function ComposerEditProvider({ children }: { children: ReactNode }) {
-  const [editing, setEditing] = useState<QueuedEdit | null>(null);
-  const startEdit = useCallback((edit: QueuedEdit) => setEditing(edit), []);
-  const cancelEdit = useCallback(() => setEditing(null), []);
+export function ComposerEditProvider({ children, scope }: { children: ReactNode; scope?: string }) {
+  const [state, setState] = useState<{ scope?: string; editing: QueuedEdit | null }>({ scope, editing: null });
+  const editing = state.scope === scope ? state.editing : null;
+  if (state.scope !== scope) setState({ scope, editing: null });
+  const startEdit = useCallback((edit: QueuedEdit) => setState({ scope, editing: edit }), [scope]);
+  const cancelEdit = useCallback(
+    () => setState((current) => (current.scope === scope ? { scope, editing: null } : current)),
+    [scope],
+  );
   return (
     <ComposerEditContext.Provider value={{ editing, startEdit, cancelEdit }}>{children}</ComposerEditContext.Provider>
   );

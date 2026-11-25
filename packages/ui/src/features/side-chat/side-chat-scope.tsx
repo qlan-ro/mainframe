@@ -1,16 +1,16 @@
 'use client';
 
 /**
- * SideChatScope — the side chat's identity, provided by `SideChatPanel` and
+ * SideChatScope — the side chat's identity, provided by `SideChatTabBody` and
  * read by the parts of `ChatThread`/the composer that would otherwise key off
  * `s.threadListItem?.id` (todo #344, UI rule 5).
  *
- * The panel's nested `AuiProvider` deliberately leaves `threadListItem`
+ * The tab's nested `AuiProvider` deliberately leaves `threadListItem`
  * unbound: a side chat is never in the aui thread list, so a `threadListItem`
  * bound to its id resolves with no state (`getThreadListItemState` returns
  * `SKIP_UPDATE` — `@assistant-ui/core@0.3.12`,
- * `dist/runtime/api/thread-list-runtime.js`). Binding it anyway (mirroring
- * `ChatZone`) would also collide item-keyed state (draft config, bottom pin,
+ * `dist/runtime/api/thread-list-runtime.js`). Binding it anyway (as a
+ * `ChatTabBody` does) would also collide item-keyed state (draft config, bottom pin,
  * composer identity) with the parent, since both would resolve through the
  * SAME extended root's `threads` scope keyed by the SAME parent id otherwise
  * in view. This context is the explicit substitute: `ChatThread`'s own
@@ -31,7 +31,7 @@ export function SideChatScopeProvider({ value, children }: { value: SideChatScop
   return <SideChatScopeContext.Provider value={value}>{children}</SideChatScopeContext.Provider>;
 }
 
-/** `null` outside a `SideChatPanel` — every consumer falls back to the normal
+/** `null` outside a `SideChatTabBody` — every consumer falls back to the normal
  *  bound thread-list-item id in that case. */
 export function useSideChatScope(): SideChatScopeValue | null {
   return useContext(SideChatScopeContext);

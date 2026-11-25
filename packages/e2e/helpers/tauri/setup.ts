@@ -84,10 +84,15 @@ export async function createTauriChat(
   await composer(page).input().waitFor({ timeout: 12_000 });
 
   if (wantsPlanMode) {
-    // Verified: PlanModeToggle exposes aria-pressed={active}.
-    const toggle = page.getByTestId('composer-plan-toggle');
-    await toggle.waitFor({ timeout: 10_000 });
-    if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
+    // Plan mode has no toggle in the composer: a chat enters it from the provider
+    // setting or the agent, so the suite sets it on the chat and waits for the status.
+    const patched = await daemonFetch(`/api/chats/${chatId}/config`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ planMode: true }),
+    });
+    if (!patched.ok) throw new Error(`createTauriChat: plan mode failed (${patched.status})`);
+    await page.locator('[data-testid="composer-permission-mode-select"][data-planning]').waitFor({ timeout: 10_000 });
   }
   return chatId;
 }

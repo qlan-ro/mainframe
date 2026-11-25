@@ -92,12 +92,12 @@ describe('pending turn previews', () => {
   });
 });
 
-describe('queued turn previews', () => {
-  it('a queued ref renders the previews stored under its attachment ids', () => {
+describe('steered turn previews', () => {
+  it('a steered ref renders the previews stored under its attachment ids', () => {
     const state = reduce(
       createChatThreadState('chat-1'),
       { type: 'local.attachments.queued', previews: { 'att-1': IMAGE } },
-      { type: 'queued.snapshot', refs: [queuedRef({ attachmentIds: ['att-1'] })] },
+      { type: 'queued.snapshot', refs: [queuedRef({ attachmentIds: ['att-1'], steered: true })] },
     );
 
     const [message] = projectChatThreadMessages(state);
@@ -109,10 +109,10 @@ describe('queued turn previews', () => {
     expect(message!.metadata.custom.mainframe).toMatchObject({ queued: true });
   });
 
-  it('a queued ref with unknown attachment ids renders text only', () => {
+  it('a steered ref with unknown attachment ids renders text only', () => {
     const state = reduce(createChatThreadState('chat-1'), {
       type: 'queued.snapshot',
-      refs: [queuedRef({ attachmentIds: ['att-unknown'] })],
+      refs: [queuedRef({ attachmentIds: ['att-unknown'], steered: true })],
     });
 
     const [message] = projectChatThreadMessages(state);

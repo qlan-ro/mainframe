@@ -4,7 +4,8 @@
  * Composer edit mode — editing a QUEUED message reuses the one composer.
  *
  * Amber header marks the mode ("Editing queued message · stays queued until the
- * run finishes" + esc-to-cancel). The text is loaded + editable; the config
+ * run finishes" + esc-to-cancel). The blocks a message carries for the agent
+ * (captures, session references) are kept out of the field and put back. The text is loaded + editable; the config
  * toolbar is shown MUTED (the queue-edit contract is content-only — `PATCH
  * /queue/:id { content }`). Save updates the queued item; Cancel-edit discards
  * and leaves it queued.
@@ -15,26 +16,29 @@
 import { useState, useCallback } from 'react';
 import { PencilIcon, CheckIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { splitHiddenPrefix } from '../../markers/message-markers';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { ComposerToolbar } from '../config-toolbar/ComposerToolbar';
+import { StopControl } from '../send/SendControls';
 import type { QueuedEdit } from './composer-edit-context';
 
 export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: () => void }) {
   const extras = useChatExtras();
-  const [text, setText] = useState(edit.content);
+  const { hidden, visible } = splitHiddenPrefix(edit.content);
+  const [text, setText] = useState(visible);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSave = useCallback(() => {
     const trimmed = text.trim();
-    if (!extras || !trimmed || trimmed === edit.content) {
+    const save = edit.save ?? ((content: string) => extras?.editQueued(edit.messageId, content) ?? Promise.resolve());
+    if (!trimmed || trimmed === visible) {
       onDone();
       return;
     }
     setSaving(true);
     setSaveError(null);
-    extras
-      .editQueued(edit.messageId, trimmed)
+    save(hidden + trimmed)
       .then(() => {
         onDone();
       })
@@ -43,22 +47,24 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
         setSaving(false);
         setSaveError('Save failed — please try again.');
       });
-  }, [text, extras, edit, onDone]);
+  }, [text, extras, edit, onDone, hidden, visible]);
 
   return (
     <div
       data-testid="chat-composer-edit"
       // Caution amber and the edit-ring glow stay bridge-owned: v2's `warning`
       // means wrong-but-not-broken, and an edit in flight is neither.
-      className="overflow-hidden rounded-xl border border-warning bg-card shadow-[var(--mf-shadow-edit-ring)] has-[textarea:focus-visible]:focus-line-inset"
+      className="relative z-1 overflow-hidden rounded-2xl border border-warning bg-card shadow-[var(--mf-shadow-edit-ring)] has-[textarea:focus-visible]:focus-line-inset"
     >
-      <div className="flex items-center gap-2 bg-warning/10 py-1.5 pr-3 pl-2.5">
+      <div className="flex items-center gap-2 bg-warning-surface py-1.5 pr-3 pl-2.5">
         <PencilIcon size={12} className="shrink-0 text-warning" />
         <span className="text-xs font-semibold text-foreground">Editing queued message</span>
         {saveError ? (
           <span className="text-xs text-fail">{saveError}</span>
         ) : (
-          <span className="text-xs text-muted-foreground">· stays queued until the run finishes</span>
+          <span className="text-xs text-muted-foreground">
+            {edit.save ? '· not sent until you send it' : '· stays queued until the run finishes'}
+          </span>
         )}
         <span className="ml-auto font-mono text-xs text-muted-foreground">esc to cancel</span>
       </div>
@@ -90,6 +96,8 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
           <ComposerToolbar />
         </div>
         <div className="flex items-center gap-2">
+          {/* The turn keeps running while a queued message is edited. */}
+          <StopControl />
           <Button variant="outline" size="sm" data-testid="chat-composer-edit-cancel" onClick={onDone}>
             Cancel edit
           </Button>

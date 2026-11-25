@@ -2,6 +2,7 @@
  * RpcConnection — deadline + close-rejects-pending behavior tests
  * (todo #350 plan review fixes, T29, R3.8).
  */
+import { NotSentError } from '../not-sent-error';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { RpcConnection, type AcpSocketLike } from '../acp-rpc-connection';
 
@@ -40,14 +41,19 @@ describe('RpcConnection — close rejects pending requests', () => {
 
     conn.close();
 
-    await expect(req).rejects.toMatchObject({ code: -32000 });
+    const error = await req.catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: -32000 });
+    // It was written: the daemon may have it.
+    expect(error).not.toBeInstanceOf(NotSentError);
   });
 
   it('a request made after close() rejects immediately instead of writing to a dead connection', async () => {
     const { conn } = await openConnection();
     conn.close();
 
-    await expect(conn.sendRequest('session/prompt', {})).rejects.toMatchObject({ code: -32000 });
+    const error = await conn.sendRequest('session/prompt', {}).catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ code: -32000 });
+    expect(error).toBeInstanceOf(NotSentError);
   });
 });
 

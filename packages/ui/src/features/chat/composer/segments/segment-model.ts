@@ -7,6 +7,8 @@
 export interface Segment {
   id: string;
   quote: string | null;
+  /** Where the quote is from, as the block says it: "From the reply at 11:27 PM". */
+  source?: string;
   text: string;
 }
 
@@ -14,7 +16,7 @@ export interface Composition {
   /** s0..s(N-1): each with its own quote and its own prose (a plain <textarea>). */
   committed: Segment[];
   /** sN's quote, if any. Its prose is the native composer's text — never stored here. */
-  liveQuote: { id: string; text: string } | null;
+  liveQuote: { id: string; text: string; source?: string } | null;
 }
 
 export function mintSegmentId(): string {
@@ -28,16 +30,24 @@ export function mintSegmentId(): string {
  */
 export function appendQuote(
   composition: Composition,
-  { quote, liveText }: { quote: string; liveText: string },
+  { quote, liveText, source }: { quote: string; liveText: string; source?: string },
 ): Composition {
   const { committed, liveQuote } = composition;
   const shouldCommit = liveQuote != null || liveText.trim() !== '';
 
   const nextCommitted = shouldCommit
-    ? [...committed, { id: liveQuote?.id ?? mintSegmentId(), quote: liveQuote?.text ?? null, text: liveText }]
+    ? [
+        ...committed,
+        {
+          id: liveQuote?.id ?? mintSegmentId(),
+          quote: liveQuote?.text ?? null,
+          ...(liveQuote?.source ? { source: liveQuote.source } : {}),
+          text: liveText,
+        },
+      ]
     : committed;
 
-  return { committed: nextCommitted, liveQuote: { id: mintSegmentId(), text: quote } };
+  return { committed: nextCommitted, liveQuote: { id: mintSegmentId(), text: quote, ...(source ? { source } : {}) } };
 }
 
 /**

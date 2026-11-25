@@ -17,7 +17,6 @@ import { useMemo, useRef } from 'react';
 import type { ControlResponse, PromptRemedy, QueuedMessageRef, WorktreeSwitchOffer } from '@qlan-ro/mainframe-types';
 import type { AcpChatController } from '../controller/acp-chat-controller';
 import type { ChatThreadState, ChatPermissionEntry } from '../controller/chat-thread-state';
-import { selectPermissionFront } from '../gates/select-front';
 
 const symbolMfExtras = Symbol('mainframe-chat-extras');
 
@@ -39,10 +38,14 @@ export interface ChatRuntimeExtras {
   readonly cancel: () => Promise<void>;
   readonly replyToPermission: (response: ControlResponse, selectedOptionId?: string) => Promise<void>;
   readonly cancelQueued: (messageId: string) => Promise<void>;
+  /** Send a message a Stop held back (C10). */
+  readonly sendHeld: (messageId: string) => Promise<void>;
   readonly editQueued: (messageId: string, content: string) => Promise<void>;
   /** Re-send a failed optimistic user message (the "Failed to send" indicator),
    *  applying the failure's `remedy` (Unarchive) first when given. */
   readonly retryMessage: (clientId: string, remedy?: PromptRemedy) => Promise<void>;
+  /** Take the failed bubble of a draft's first message off the transcript. */
+  readonly dropFailedMessage: (unsentId: string) => void;
   /** Re-run the history load — used to retry after `state.loadState.type === 'error'`. */
   readonly retry: () => Promise<void>;
   readonly acceptWorktreeOffer: (worktreePath: string) => Promise<void>;
@@ -56,8 +59,8 @@ function isChatRuntimeExtras(extras: unknown): extras is ChatRuntimeExtras {
 
 /**
  * The one place extras are assembled — shared by the native runtime hook and
- * the split-view zone mount so `useChatExtras()` consumers behave identically
- * in a zone. Lives here because the brand symbol is module-private on purpose.
+ * the workspace tabs' mount so `useChatExtras()` consumers behave identically
+ * in a tab. Lives here because the brand symbol is module-private on purpose.
  */
 export function buildChatExtras(
   controller: AcpChatController,
@@ -75,9 +78,11 @@ export function buildChatExtras(
     canSearchHistory: controller.canSearchHistory,
     cancel: () => controller.cancel(),
     replyToPermission: (response, selectedOptionId) => controller.replyToPermission(response, selectedOptionId),
+    sendHeld: (messageId) => controller.sendHeld(messageId),
     cancelQueued: (messageId) => controller.cancelQueued(messageId),
     editQueued: (messageId, content) => controller.editQueued(messageId, content),
     retryMessage: (clientId, remedy) => controller.retryMessage(clientId, remedy),
+    dropFailedMessage: (unsentId) => controller.dropFailedMessage(unsentId),
     retry: () => controller.refresh(),
     acceptWorktreeOffer: (worktreePath) => controller.acceptWorktreeOffer(worktreePath),
     dismissWorktreeOffer: (worktreePath) => controller.dismissWorktreeOffer(worktreePath),
@@ -119,9 +124,8 @@ export function useChatExtrasState(state: ChatThreadState): ChatThreadState {
  * idle while it waits, and `run.started` follows the answer. This keeps that
  * cue even though `isRunning:false` is now ignored while the facade is
  * attached (`handle-daemon-event.ts`) — the gate-time dip doesn't depend on
- * the side-band backstop, it is derived here, in the ONE place this used to
- * be duplicated three ways (`ChatZone.tsx`, `SideChatPanel.tsx`, and this
- * file).
+ * the side-band backstop, it is derived here, for every place
+ * a chat shows.
  */
 export function isRunningFromState(state: ChatThreadState): boolean {
   if (Object.keys(state.interactions.permissions).length > 0) return false;
@@ -148,15 +152,6 @@ export function useChatExtras(): ChatRuntimeExtras | undefined {
 export function useChatExtrasSelector<T>(select: (extras: ChatRuntimeExtras | undefined) => T): T {
   return useAuiState((s: { thread: { extras: unknown } }) =>
     select(isChatRuntimeExtras(s.thread.extras) ? s.thread.extras : undefined),
-  );
-}
-
-/** Queued messages (waiting to be sent to the CLI). */
-export function useChatQueuedMessages(): QueuedMessageRef[] {
-  const extras = useChatExtras();
-  return useMemo(
-    () => (extras ? Object.values(extras.queued).filter((q): q is QueuedMessageRef => q != null) : []),
-    [extras],
   );
 }
 
@@ -197,21 +192,4 @@ export function useWorktreeOffer(): {
 
 async function notReady(): Promise<never> {
   throw new Error('Chat runtime not ready');
-}
-
-/** Queue-front gate: pending sorted by askedAt asc, take [0]. Stable ref via useMemo([extras]). */
-export function useChatPermissionFront(): {
-  front: ChatPermissionEntry | undefined;
-  reply: (response: ControlResponse, selectedOptionId?: string) => Promise<void>;
-} {
-  const extras = useChatExtras();
-  return useMemo(() => {
-    const front = selectPermissionFront(extras?.permissions);
-    const reply: (response: ControlResponse, selectedOptionId?: string) => Promise<void> =
-      extras?.replyToPermission ??
-      (async () => {
-        throw new Error('Chat runtime not ready');
-      });
-    return { front, reply };
-  }, [extras]);
 }

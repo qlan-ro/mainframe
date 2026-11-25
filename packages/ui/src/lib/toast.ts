@@ -37,6 +37,8 @@ export interface MfToastOptions {
   action?: MfToastAction;
   /** Raw payload behind a Details button (stack, stderr, response body …). */
   details?: string;
+  /** Milliseconds, for a toast whose action needs longer than the default. */
+  duration?: number;
 }
 
 export interface MfToastInput extends MfToastOptions {
@@ -47,7 +49,7 @@ export interface MfToastInput extends MfToastOptions {
 let nextId = 0;
 
 function fire(input: MfToastInput, id: string = `mf-toast-${++nextId}`) {
-  const { type, title, description, chatId, action, details } = input;
+  const { type, title, description, chatId, action, details, duration = AUTO_DISMISS_MS } = input;
   const persistent = type === 'error' || type === 'permission';
   const primary =
     action ?? (chatId != null ? { label: 'Open session', onClick: () => openSessionById(chatId) } : undefined);
@@ -69,7 +71,7 @@ function fire(input: MfToastInput, id: string = `mf-toast-${++nextId}`) {
     id,
     description:
       description != null ? React.createElement(ClampedDescription, { text: description, onOverflow }) : undefined,
-    duration: persistent ? Infinity : AUTO_DISMISS_MS,
+    duration: persistent ? Infinity : duration,
     // The close button is ours (inside the card); sonner's stays off.
     closeButton: false,
     action:

@@ -11,7 +11,7 @@
  * subscribe to one test store, which the test bumps to stand in for a reload,
  * a switch or a background `chat.updated`.
  */
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -98,6 +98,7 @@ vi.mock('../../features/shortcuts/ShortcutsCheatSheet', () => ({
   ShortcutsCheatSheet: counted('ShortcutsCheatSheet'),
 }));
 
+import { conversationProps, heldConversation } from '@/lib/conversation-focus';
 import { AppShell } from '../AppShell';
 
 const CHROME = [
@@ -132,4 +133,18 @@ describe('AppShell render isolation', () => {
     expect(renders.get('useSessionListRouter')).toBe(before.get('useSessionListRouter')! + 5);
     expect(renders.get('useActiveIdentity')).toBe(before.get('useActiveIdentity')! + 5);
   });
+});
+
+it('follows the focus out of a conversation, for ⌘.', () => {
+  render(
+    <>
+      <AppShell port={31415} />
+      <button {...conversationProps('chat-1')}>chat</button>
+      <button>settings</button>
+    </>,
+  );
+  act(() => screen.getByText('chat').focus());
+  expect(heldConversation()).toBe('chat-1');
+  act(() => screen.getByText('settings').focus());
+  expect(heldConversation()).toBeNull();
 });

@@ -78,12 +78,15 @@ export function dialogSizeFor(sizes: DialogSizes, key: string, fallback: DialogS
   return sizes[key] ?? fallback;
 }
 
-const SIDE_CHAT_DEFAULT_FRAC = 0.4;
-
 export type TranscriptMode = 'verbose' | 'compact';
 
-/** The transcript column's un-dragged cap, its 2 × 20px padding included. */
-export const TRANSCRIPT_DEFAULT_WIDTH = 680;
+/** What Enter does while a turn runs; ⌥↵ does the other (C9). */
+export type EnterWhileRunning = 'queue' | 'steer';
+
+/** The un-dragged cap of the transcript column and the composer: 740px of content plus 2 × 20px padding. */
+export const TRANSCRIPT_DEFAULT_WIDTH = 780;
+/** The default before v9; a persisted copy of it migrates to the new default. */
+const TRANSCRIPT_LEGACY_DEFAULT_WIDTH = 680;
 const TRANSCRIPT_MIN_WIDTH = 480;
 const TRANSCRIPT_MAX_WIDTH = 1600;
 
@@ -95,6 +98,11 @@ export function clampTranscriptWidth(width: number): number {
 interface UiPrefsState {
   transcriptMode: TranscriptMode;
   setTranscriptMode: (mode: TranscriptMode) => void;
+  enterWhileRunning: EnterWhileRunning;
+  setEnterWhileRunning: (mode: EnterWhileRunning) => void;
+  /** The composer's activity strip shows only its first row (K5). */
+  activityStripCollapsed: boolean;
+  setActivityStripCollapsed: (collapsed: boolean) => void;
   /** The transcript column's cap, dragged from its edge grips. A narrower
    *  chat column still squeezes it — this is a max, not a fixed width. */
   transcriptWidth: number;
@@ -104,8 +112,6 @@ interface UiPrefsState {
   sidebarView: SidebarView;
   /** Once true, the mid-session model/effort/feature change warning is suppressed for good. */
   dontWarnOnTuningChange: boolean;
-  /** Once true, switching a chat's provider no longer asks for confirmation. */
-  dontConfirmProviderSwitch: boolean;
   /** Whether the session panel is open. ONE bit for the whole panel — it is a
    *  single docked column of sections, not a stack of cards. This store is the
    *  sole owner so the choice survives a remount and a session switch. */
@@ -118,14 +124,11 @@ interface UiPrefsState {
   /** Committed sizes for opt-in resizable dialogs. Absent keys read as that
    *  dialog's declared default; see dialogSizeFor. */
   dialogSizes: DialogSizes;
-  /** The side chat's share of its parent's row while docked beside it. */
-  sideChatFrac: number;
   toggleSidebar: () => void;
   setSidebarVisible: (visible: boolean) => void;
   setSidebarWidth: (width: number) => void;
   setSidebarView: (view: SidebarView) => void;
   dismissTuningChangeWarning: () => void;
-  dismissProviderSwitchConfirm: () => void;
   toggleSessionPanel: () => void;
   setSessionPanelOpen: (open: boolean) => void;
   toggleSessionPanelSection: (id: SessionPanelOpenSectionId) => void;
@@ -133,24 +136,23 @@ interface UiPrefsState {
   /** Overwrites the committed size for one dialog key. Callers clamp before
    *  committing — the store doesn't know a dialog's measured minimum. */
   setDialogSize: (key: string, size: DialogSize) => void;
-  setSideChatFrac: (frac: number) => void;
 }
 
 /** The persisted subset. */
 function partializeUiPrefs(s: UiPrefsState) {
   return {
     transcriptMode: s.transcriptMode,
+    enterWhileRunning: s.enterWhileRunning,
+    activityStripCollapsed: s.activityStripCollapsed,
     transcriptWidth: s.transcriptWidth,
     sidebarVisible: s.sidebarVisible,
     sidebarWidth: s.sidebarWidth,
     sidebarView: s.sidebarView,
     dontWarnOnTuningChange: s.dontWarnOnTuningChange,
-    dontConfirmProviderSwitch: s.dontConfirmProviderSwitch,
     sessionPanelOpen: s.sessionPanelOpen,
     sessionPanelSections: s.sessionPanelSections,
     sessionPanelHiddenSections: s.sessionPanelHiddenSections,
     dialogSizes: s.dialogSizes,
-    sideChatFrac: s.sideChatFrac,
   };
 }
 
@@ -181,6 +183,8 @@ function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPr
   return {
     ...state,
     transcriptMode: state.transcriptMode === 'compact' ? 'compact' : 'verbose',
+    enterWhileRunning: state.enterWhileRunning === 'steer' ? 'steer' : 'queue',
+    activityStripCollapsed: state.activityStripCollapsed === true,
     transcriptWidth:
       typeof state.transcriptWidth === 'number'
         ? clampTranscriptWidth(state.transcriptWidth)
@@ -216,29 +220,39 @@ function migrateToV8(next: Record<string, unknown>): void {
   next.sidebarView = sanitizeSidebarView(next.sidebarView);
 }
 
+/**
+ * v9: the column default grew to the composer's 740px of content, and the
+ * provider-switch confirmation (with its "Don't ask again") is gone.
+ */
+function migrateToV9(next: Record<string, unknown>): void {
+  if (next.transcriptWidth === TRANSCRIPT_LEGACY_DEFAULT_WIDTH) next.transcriptWidth = TRANSCRIPT_DEFAULT_WIDTH;
+  delete next.dontConfirmProviderSwitch;
+}
+
 export const useUiPrefs = create<UiPrefsState>()(
   persist(
     (set) => ({
       transcriptMode: 'verbose',
       setTranscriptMode: (transcriptMode) => set({ transcriptMode }),
+      enterWhileRunning: 'queue',
+      setEnterWhileRunning: (enterWhileRunning) => set({ enterWhileRunning }),
+      activityStripCollapsed: false,
+      setActivityStripCollapsed: (activityStripCollapsed) => set({ activityStripCollapsed }),
       transcriptWidth: TRANSCRIPT_DEFAULT_WIDTH,
       setTranscriptWidth: (width) => set({ transcriptWidth: clampTranscriptWidth(width) }),
       sidebarVisible: true,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
       sidebarView: 'chats',
       dontWarnOnTuningChange: false,
-      dontConfirmProviderSwitch: false,
       sessionPanelOpen: true,
       sessionPanelSections: {},
       sessionPanelHiddenSections: [],
       dialogSizes: {},
-      sideChatFrac: SIDE_CHAT_DEFAULT_FRAC,
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
       setSidebarView: (sidebarView) => set({ sidebarView }),
       dismissTuningChangeWarning: () => set({ dontWarnOnTuningChange: true }),
-      dismissProviderSwitchConfirm: () => set({ dontConfirmProviderSwitch: true }),
       toggleSessionPanel: () => set((s) => ({ sessionPanelOpen: !s.sessionPanelOpen })),
       setSessionPanelOpen: (sessionPanelOpen) => set({ sessionPanelOpen }),
       toggleSessionPanelSection: (id) =>
@@ -254,18 +268,19 @@ export const useUiPrefs = create<UiPrefsState>()(
           return { sessionPanelHiddenSections: shown ? others : [...others, key] };
         }),
       setDialogSize: (key, size) => set((s) => ({ dialogSizes: { ...s.dialogSizes, [key]: size } })),
-      setSideChatFrac: (frac) => set({ sideChatFrac: Math.min(0.85, Math.max(0.15, frac)) }),
     }),
     {
       name: 'mf:ui-prefs',
-      version: 8,
+      version: 9,
       partialize: partializeUiPrefs,
       merge: (persisted, current) => ({ ...current, ...sanitizeTranscriptPreference(persisted) }),
       migrate: (persisted, version): PersistedUiPrefs => {
-        if (version >= 8 || persisted === null || typeof persisted !== 'object') {
+        if (version >= 9 || persisted === null || typeof persisted !== 'object') {
           return sanitizeTranscriptPreference(persisted) as PersistedUiPrefs;
         }
         const next = { ...(persisted as Record<string, unknown>) };
+        migrateToV9(next);
+        if (version === 8) return sanitizeTranscriptPreference(next) as PersistedUiPrefs;
         if (version >= 6) {
           migrateToV8(next);
           return sanitizeTranscriptPreference(next) as PersistedUiPrefs;
