@@ -40,7 +40,7 @@ function testRunnerLine(line: string) {
 }
 
 function terminalLine(line: string) {
-  const progress = /^( +(?:Compiling|Finished|Running)) (.+)$/.exec(line);
+  const progress = /^( *(?:Compiling|Finished|Running)) (.+)$/.exec(line);
   if (progress) {
     return (
       <>
@@ -79,7 +79,7 @@ export function TerminalBody({ command, output }: { command?: string; output: st
         )}
         {output &&
           lines.map((line, index) => (
-            <span key={index} className="block min-h-[19px] whitespace-pre">
+            <span key={index} className="block min-h-[19px] wrap-break-word whitespace-pre-wrap">
               {terminalLine(line)}
             </span>
           ))}

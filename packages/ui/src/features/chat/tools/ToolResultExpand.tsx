@@ -13,7 +13,7 @@
  * Props accept chatId/toolUseId explicitly so the component can be used
  * anywhere in the tool-card tree without requiring a full ChatRuntime.
  */
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect } from 'react';
 import { useHost } from '@/lib/host';
 import { getToolResultContent } from '@/lib/api/chats';
 import { cn } from '@/lib/utils';
@@ -37,18 +37,11 @@ export interface ToolResultExpandProps {
   toolUseId: string;
   truncatedContent: string;
   fullBytes: number;
-  renderOutput?: (content: string) => ReactNode;
 }
 
 type FetchState = 'idle' | 'loading' | 'error';
 
-export function ToolResultExpand({
-  chatId,
-  toolUseId,
-  truncatedContent,
-  fullBytes,
-  renderOutput,
-}: ToolResultExpandProps) {
+export function ToolResultExpand({ chatId, toolUseId, truncatedContent, fullBytes }: ToolResultExpandProps) {
   const host = useHost();
   const [full, setFull] = useRetainedValue<string | null>(`full-output:${chatId}:${toolUseId}`, null);
   const [fetchState, setFetchState] = useState<FetchState>('idle');
@@ -78,26 +71,14 @@ export function ToolResultExpand({
 
   return full === null ? (
     <ToolResultPreview
-      output={
-        renderOutput?.(truncatedContent) ?? (
-          <pre className="text-xs wrap-break-word whitespace-pre-wrap text-muted-foreground">{truncatedContent}</pre>
-        )
-      }
+      content={truncatedContent}
       state={fetchState}
       disabled={port === null}
       fullBytes={fullBytes}
       onExpand={expand}
-      terminal={Boolean(renderOutput)}
     />
   ) : (
-    <ExpandedToolResult
-      output={
-        renderOutput?.(full) ?? (
-          <pre className="text-xs wrap-break-word whitespace-pre-wrap text-foreground">{full}</pre>
-        )
-      }
-      onCollapse={() => setFull(null)}
-    />
+    <ExpandedToolResult content={full} onCollapse={() => setFull(null)} />
   );
 }
 
@@ -105,10 +86,10 @@ const buttonClass = cn(
   'text-xs text-muted-foreground hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50',
 );
 
-function ExpandedToolResult({ output, onCollapse }: { output: ReactNode; onCollapse: () => void }) {
+function ExpandedToolResult({ content, onCollapse }: { content: string; onCollapse: () => void }) {
   return (
     <div className="flex flex-col gap-1">
-      {output}
+      <pre className="text-xs wrap-break-word whitespace-pre-wrap text-foreground">{content}</pre>
       <button data-testid="tool-result-expand-collapse" type="button" className={buttonClass} onClick={onCollapse}>
         Collapse
       </button>
@@ -117,23 +98,21 @@ function ExpandedToolResult({ output, onCollapse }: { output: ReactNode; onColla
 }
 
 function ToolResultPreview({
-  output,
+  content,
   state,
   disabled,
   fullBytes,
   onExpand,
-  terminal,
 }: {
-  output: ReactNode;
+  content: string;
   state: FetchState;
   disabled: boolean;
   fullBytes: number;
   onExpand: () => void;
-  terminal: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      {output}
+      <pre className="text-xs wrap-break-word whitespace-pre-wrap text-muted-foreground">{content}</pre>
       {state === 'error' ? (
         <span className="text-xs text-muted-foreground">full output no longer available</span>
       ) : (
@@ -141,11 +120,7 @@ function ToolResultPreview({
           data-testid="tool-result-expand-toggle"
           type="button"
           disabled={state === 'loading' || disabled}
-          className={cn(
-            buttonClass,
-            terminal &&
-              '-ml-1.5 h-6 self-start rounded-md px-1.5 text-meta/[inherit] hover:bg-muted focus-visible:focus-line-inset',
-          )}
+          className={buttonClass}
           onClick={onExpand}
         >
           {state === 'loading' ? 'Loading…' : `Show full output · ${fmtBytes(fullBytes)}`}

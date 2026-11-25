@@ -130,22 +130,20 @@ export interface ResolvedResult {
  *
  * stripErrorXml is always applied to the raw text before returning.
  */
-export function resolveResultText(result: unknown, preserveWhitespace = false): ResolvedResult {
-  const clean = (text: string) =>
-    preserveWhitespace ? text.replace(/<\/?(?:tool_use_error|error)>/g, '') : stripErrorXml(text);
+export function resolveResultText(result: unknown): ResolvedResult {
   if (isStructuredResult(result)) {
     const cut = isTruncatedResult(result) ? result.fullBytes : 0;
-    return { text: clean(result.content), truncated: cut > 0, fullBytes: cut };
+    return { text: stripErrorXml(result.content), truncated: cut > 0, fullBytes: cut };
   }
   if (isTruncatedResult(result)) {
-    return { text: clean(result.content), truncated: true, fullBytes: result.fullBytes };
+    return { text: stripErrorXml(result.content), truncated: true, fullBytes: result.fullBytes };
   }
   if (typeof result === 'string') {
-    return { text: clean(result), truncated: false, fullBytes: 0 };
+    return { text: stripErrorXml(result), truncated: false, fullBytes: 0 };
   }
   if (resultImages(result).length > 0) {
     const content = (result as Record<string, unknown>)['content'];
-    return { text: clean(typeof content === 'string' ? content : ''), truncated: false, fullBytes: 0 };
+    return { text: stripErrorXml(typeof content === 'string' ? content : ''), truncated: false, fullBytes: 0 };
   }
   if (result !== undefined && result !== null) {
     return { text: JSON.stringify(result, null, 2), truncated: false, fullBytes: 0 };

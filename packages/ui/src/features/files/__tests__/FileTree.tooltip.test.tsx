@@ -113,6 +113,7 @@ it.each([folder, file])('keeps the $type hint and its positioning wrapper pointe
   expect(wrapper).not.toBeNull();
   expect(getComputedStyle(wrapper!).pointerEvents).toBe('none');
   expect(getComputedStyle(content).pointerEvents).toBe('none');
+  expect(getComputedStyle(content.querySelector('svg')!).pointerEvents).toBe('none');
   leave(entry.name);
   expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 });

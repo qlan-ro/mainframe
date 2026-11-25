@@ -7,7 +7,7 @@ export function WebBody({ url, text, children }: { url?: string; text?: string; 
   return (
     <Surface mono={false} className="flex max-h-96 flex-col gap-1 overflow-y-auto px-3 py-2 font-sans text-control">
       {url && (
-        <div className="truncate text-xs leading-5" data-testid="web-fetch-card-url">
+        <div className="w-fit max-w-full truncate text-xs leading-5" data-testid="web-fetch-card-url">
           <SmartLink href={url} className="mf-tr-fetch-link font-sans">
             {url}
           </SmartLink>
@@ -15,16 +15,8 @@ export function WebBody({ url, text, children }: { url?: string; text?: string; 
       )}
       {children}
       {text && (
-        <p data-testid="web-fetch-card-summary" className="wrap-break-word">
-          {text.split(/(`[^`\n]+`)/).map((segment, index) =>
-            index % 2 ? (
-              <code key={index} className="mf-tr-code font-mono">
-                {segment.slice(1, -1)}
-              </code>
-            ) : (
-              segment
-            ),
-          )}
+        <p data-testid="web-fetch-card-summary" className="font-sans text-control wrap-break-word whitespace-pre-wrap">
+          {text}
         </p>
       )}
     </Surface>

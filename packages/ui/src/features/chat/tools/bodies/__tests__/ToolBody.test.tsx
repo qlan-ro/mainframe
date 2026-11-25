@@ -90,7 +90,7 @@ describe('ToolBody', () => {
     const lines = [...screen.getByTestId('chat-edit-diff').querySelectorAll<HTMLElement>('[data-diff]')];
     expect(lines.map((line) => [line.dataset.diff, line.textContent])).toEqual([
       ['ctx', '1one'],
-      ['del', '2Removed: -two'],
+      ['del', '2Removed: −two'],
       ['add', '2Added: +three'],
     ]);
   });
@@ -98,7 +98,7 @@ describe('ToolBody', () => {
   it('shows why an edit failed, and what it tried to change', () => {
     show(part('Edit', { file_path: 'a', old_string: 'a', new_string: 'b' }, 'String not found'), 'failed');
     expect(screen.getByTestId('chat-tool-error')).toHaveTextContent('String not found');
-    expect(screen.getByTestId('chat-edit-diff')).toHaveTextContent('-a');
+    expect(screen.getByTestId('chat-edit-diff')).toHaveTextContent('−a');
   });
 
   it.each([
@@ -170,19 +170,15 @@ describe('ToolBody', () => {
     expect(opened).toHaveBeenCalledWith('https://example.com');
   });
 
-  it('renders backtick-delimited code in a fetched summary', () => {
+  it('preserves the original fetched summary text', () => {
     show(part('WebFetch', { url: 'https://example.com' }, 'Read `rate_limits` first.'));
     const summary = screen.getByTestId('web-fetch-card-summary');
-    expect(summary).toHaveTextContent('Read rate_limits first.');
-    expect(summary.querySelector('code')).toHaveTextContent('rate_limits');
+    expect(summary).toHaveTextContent('Read `rate_limits` first.');
   });
 
-  it('highlights literal grep matches and preserves output indentation', () => {
-    show(part('Grep', { pattern: 'a+b' }, 'src/quota.ts:21:    a+b = 1;'));
-    const body = screen.getByTestId('search-card-plain-body');
-    expect(within(body).getByText('src/quota.ts:21')).toBeVisible();
-    expect(body.querySelector('mark')?.textContent).toBe('a+b');
-    expect(body.lastElementChild?.textContent).toBe('    a+b = 1;');
+  it('renders a call body when arguments and output are empty', () => {
+    show(part('mcp__a__b', {}, ''));
+    expect(screen.getByTestId('chat-call-args')).toHaveTextContent('{}');
   });
 
   it('shows a call’s arguments and its result, or its error', () => {

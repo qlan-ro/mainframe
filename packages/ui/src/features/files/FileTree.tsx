@@ -28,11 +28,10 @@ import { activeFileTab } from '@/store/run-pane-file-tabs';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { SidebarHeader } from '@/components/ui/sidebar';
 import { Hint } from '@/components/ui/hint';
-import { cn } from '@/lib/utils';
 import { FileTreeRowMenu } from './FileTreeRowMenu';
 import { FileTreeNode } from './FileTreeNode';
 import { SidebarScrollRegion } from '@/features/shared/SidebarScrollRegion';
-import { sortEntries } from './file-tree-utils';
+import { lastSegment, sortEntries } from './file-tree-utils';
 
 const HEADER_ACTION =
   'inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:focus-line';
@@ -102,20 +101,14 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
 
   return (
     <div data-testid="file-tree" className="flex min-h-0 flex-1 flex-col">
-      <SidebarHeader className="group/files h-9 shrink-0 flex-row items-center gap-0 py-0 pr-1.5 pl-3">
+      <SidebarHeader className="h-9 shrink-0 flex-row items-center gap-0 py-0 pr-1.5 pl-3">
         <FileTreeRowMenu entry={{ name: '.', path: '.', type: 'directory' }} fullPath={base ?? projectId}>
-          <span className="flex-1 truncate text-label/[1.45] font-medium text-muted-foreground">Files</span>
+          <span className="flex-1 truncate text-label/[1.45] font-medium text-muted-foreground">
+            {lastSegment(base ?? projectId)}
+          </span>
         </FileTreeRowMenu>
         <Hint label="Refresh">
-          <button
-            data-testid="file-tree-refresh"
-            type="button"
-            onClick={refresh}
-            className={cn(
-              HEADER_ACTION,
-              'opacity-0 group-focus-within/files:opacity-100 group-hover/files:opacity-100',
-            )}
-          >
+          <button data-testid="file-tree-refresh" type="button" onClick={refresh} className={HEADER_ACTION}>
             <RotateCw size={16} />
           </button>
         </Hint>

@@ -2,7 +2,7 @@
 import { memo, useMemo } from 'react';
 import { FileInput, GitCompare } from 'lucide-react';
 import { toFileRef } from '@/lib/files/file-ref';
-import { ToolBody, hasToolBody } from '../../tools/bodies/ToolBody';
+import { ToolBody } from '../../tools/bodies/ToolBody';
 import { useFileBases } from '../../tools/chat-file-bases';
 import { useOpenFile } from '../../tools/chat-tool-context';
 import { useOpenEdit } from '../../tools/use-open-edit';
@@ -122,7 +122,7 @@ function StandardRow({ unit, part, turnKey }: ToolRowProps) {
       tool={part.toolName}
       anchor={{ 'data-activity-id': part.toolCallId }}
     >
-      {hasToolBody(part, status, startedAt !== undefined) ? <ToolBody part={part} status={status} /> : undefined}
+      <ToolBody part={part} status={status} />
     </RowDisclosure>
   );
 }

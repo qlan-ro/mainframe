@@ -286,10 +286,10 @@ describe('AddCommentMarker (lines without a comment)', () => {
     expect(el.style.opacity).toBe('1');
   });
 
-  it('toDOM button has bg-primary style (var(--primary) background)', () => {
+  it('toDOM button has the accent-fill background', () => {
     const marker = new AddCommentMarker(2, vi.fn(), true);
     const el = marker.toDOM() as HTMLElement;
-    expect(el.style.background).toContain('var(--primary)');
+    expect(el.style.background).toContain('var(--accent-fill)');
   });
 
   it('clicking the marker calls onAddComment with the line number', () => {

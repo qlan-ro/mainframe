@@ -9,7 +9,6 @@ import { record } from '../../view-model/turn/values';
 import { BackgroundOutput } from './BackgroundOutput';
 import { CodeBody } from './CodeBody';
 import { DiffBody } from './DiffBody';
-import { GrepBody } from './GrepBody';
 import { ResultBlock, ResultText } from './ResultText';
 import { BodyNote, KeyValue, Surface } from './Surface';
 import { TerminalBody } from './TerminalBody';
@@ -21,7 +20,7 @@ export interface ToolBodyProps {
   status: ToolStatus;
 }
 
-/** Whether the row has anything to open on. `background`: the daemon holds a task the call started. */
+/** Whether there is content for the tool-specific renderer. */
 export function hasToolBody(part: ToolPart, status: ToolStatus, background = false): boolean {
   const { text } = resolveResultText(part.result);
   if (text || resultImages(part.result).length) return true;
@@ -78,7 +77,7 @@ function EditBody({ part, status }: ToolBodyProps) {
 }
 
 function ShellBody({ part, status }: ToolBodyProps) {
-  const { text, truncated } = resolveResultText(part.result, true);
+  const { text, truncated } = resolveResultText(part.result);
   const background = useBackgroundStart(part.toolCallId) !== undefined || runsInBackground(part);
   const command = argText(part, 'command') || argText(part, 'input');
   const description = argText(part, 'description');
@@ -92,7 +91,9 @@ function ShellBody({ part, status }: ToolBodyProps) {
       {background ? (
         <BackgroundOutput toolCallId={part.toolCallId} command={command} launch={text} />
       ) : truncated ? (
-        <ResultText part={part} renderOutput={(output) => <TerminalBody output={output} />} />
+        <Surface className="px-3 py-2">
+          <ResultText part={part} />
+        </Surface>
       ) : (
         <TerminalBody command={command} output={text || (status === 'running' ? '' : '(no output)')} />
       )}
@@ -103,25 +104,16 @@ function ShellBody({ part, status }: ToolBodyProps) {
 function CallBody({ part, status }: ToolBodyProps) {
   const { text } = resolveResultText(part.result);
   const args = record(part.args) ?? {};
-  const multiline = toolKind(part.toolName) === 'mcp' && status !== 'failed';
-  const argumentsText = multiline
-    ? JSON.stringify(args, null, 2)
-    : `{ ${Object.entries(args)
-        .map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`)
-        .join(', ')} }`;
-  if (toolKind(part.toolName) !== 'mcp' && Object.keys(args).length === 0 && !text) return null;
   return (
-    <Surface testId="chat-call-body" className="[&_pre]:whitespace-pre">
+    <Surface testId="chat-call-body">
       {toolKind(part.toolName) === 'mcp' && (
         <KeyValue label="Tool" testId="chat-call-tool">
           {part.toolName}
         </KeyValue>
       )}
-      {Object.keys(args).length > 0 && (
-        <KeyValue label="Arguments" testId="chat-call-args">
-          {argumentsText}
-        </KeyValue>
-      )}
+      <KeyValue label="Arguments" testId="chat-call-args">
+        {JSON.stringify(args, null, 2)}
+      </KeyValue>
       {text && (
         <KeyValue
           label={status === 'failed' ? 'Error' : 'Result'}
@@ -165,14 +157,9 @@ function MainBody({ part, status }: ToolBodyProps) {
         {truncated && <ResultText part={part} />}
       </WebBody>
     );
-  if (!text) return null;
+  if (!text) return <CallBody part={part} status={status} />;
   if (kind === 'read' && !truncated) return <ReadBody part={part} text={text} />;
-  const result = (
-    <ResultBlock part={part} failed={false} testId="search-card-plain-body" preformatted={kind === 'list'} />
-  );
-  if (kind === 'grep' && !truncated)
-    return <GrepBody text={text} pattern={argText(part, 'pattern')} fallback={result} />;
-  return result;
+  return <ResultBlock part={part} failed={false} testId="search-card-plain-body" />;
 }
 
 function imagePreview(part: ToolPart): 'file' | 'browser' | undefined {
@@ -181,11 +168,16 @@ function imagePreview(part: ToolPart): 'file' | 'browser' | undefined {
 }
 
 export function ToolBody({ part, status }: ToolBodyProps) {
+  const background = useBackgroundStart(part.toolCallId) !== undefined;
   const images = resultImages(part.result);
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="min-w-0 empty:hidden">
-        <MainBody part={part} status={status} />
+        {hasToolBody(part, status, background) ? (
+          <MainBody part={part} status={status} />
+        ) : (
+          <CallBody part={part} status={status} />
+        )}
       </div>
       {images.length > 0 && (
         <div data-testid="chat-tool-images">

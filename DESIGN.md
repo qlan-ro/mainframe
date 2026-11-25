@@ -651,3 +651,9 @@ Motion is functional and short:
 - **Don't** hide a control at narrow widths; merge, shorten or iconify it.
 - **Don't** confirm Stop; the one confirmation in the composer is turning on Unattended, once per session.
 - **Don't** use `faint` for text, draw a scrollbar track, or let a native scrollbar take width; scrollbars are overlay thumbs.
+
+### Shared CSS defaults
+
+WebKit uses antialiased font smoothing on the app body in both themes. Lucide icons with the default 2-unit stroke render at 1.5 units. Icons that specify a different stroke width keep it.
+
+The shared `cn()` function registers the named text sizes, shadows and tile radius with Tailwind Merge. A size such as `text-meta` can sit beside `text-muted-foreground`, and a later size in the same variant replaces the earlier size.

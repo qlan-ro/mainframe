@@ -71,7 +71,9 @@ function SendButton({ ready }: { ready: boolean }) {
         disabled={!ready}
         className={cn(
           ROUND,
-          ready ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90' : 'border-input text-faint',
+          ready
+            ? 'border-primary bg-accent-fill text-primary-foreground hover:brightness-95'
+            : 'border-input text-faint',
         )}
       >
         <ArrowUpIcon className="size-4" />

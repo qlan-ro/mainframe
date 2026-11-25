@@ -32,7 +32,7 @@ function diffLines(hunks: readonly DiffHunk[]): DiffLine[] {
   });
 }
 
-const SIGNS = { add: '+', del: '-', ctx: '' } as const;
+const SIGNS = { add: '+', del: '−', ctx: '' } as const;
 
 function Row({ line, tokens }: { line: DiffLine; tokens?: NonNullable<ReturnType<typeof useShikiTokens>>[number] }) {
   return (

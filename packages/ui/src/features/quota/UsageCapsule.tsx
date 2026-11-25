@@ -58,29 +58,33 @@ function CapsuleRow({ item, now }: { item: CapsuleItemVm; now: number }) {
       data-testid={`usage-capsule-item-${item.key}`}
       className="flex h-5 items-center gap-[7px] pr-3 text-meta/[1.45] whitespace-nowrap text-ink-secondary tabular-nums"
     >
-      {/* Gives way only where a narrow sidebar leaves the capsule less than its own width. */}
-      <span className="flex min-w-0 items-center gap-[7px] overflow-hidden @min-[200px]/capsule:shrink-0">
+      <span className="flex min-w-0 flex-1 items-center gap-[7px] truncate-fade">
         <span className="shrink-0">{item.providerLabel}</span>
         <span aria-hidden className="size-0.75 shrink-0 rounded-full bg-muted-foreground" />
-        <span className="text-muted-foreground">{item.name}</span>
+        <span className="shrink-0 text-muted-foreground">{item.name}</span>
       </span>
       <Progress
         value={item.usedPercent}
-        className={cn('h-1 w-8 shrink-0 bg-[color-mix(in_srgb,var(--foreground)_16%,transparent)]', QUOTA_BAR_FILL[item.severity])}
+        className={cn(
+          'h-1 w-8 shrink-0 bg-[color-mix(in_srgb,var(--foreground)_16%,transparent)]',
+          QUOTA_BAR_FILL[item.severity],
+        )}
       />
       <span className={cn('shrink-0 font-semibold', QUOTA_PERCENT_TEXT[item.severity])}>
         {formatUsedPercent(item.usedPercent)}%
       </span>
-      <span className="ml-auto shrink-0 text-muted-foreground">
-        {formatRelativeReset(item.resetsAt, now) ?? '—'}
-      </span>
+      <span className="ml-auto shrink-0 text-muted-foreground">{formatRelativeReset(item.resetsAt, now) ?? '—'}</span>
     </span>
   );
 }
 
 function CycleDots({ count, active }: { count: number; active: number }) {
   return (
-    <span data-testid="usage-capsule-dots" aria-hidden className="absolute top-1/2 right-1 flex -translate-y-1/2 flex-col gap-0.5">
+    <span
+      data-testid="usage-capsule-dots"
+      aria-hidden
+      className="absolute top-1/2 right-1 flex -translate-y-1/2 flex-col gap-0.5"
+    >
       {Array.from({ length: count }, (_, i) => (
         <span
           key={i}
@@ -128,7 +132,7 @@ export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: numbe
           onPointerLeave={hover.onPointerLeave}
           style={{ width }}
           className={cn(
-            '@container/capsule relative flex h-7 shrink-0 items-center gap-[7px] overflow-hidden rounded-lg bg-chrome-chip px-3',
+            'relative flex h-7 shrink-0 items-center gap-[7px] overflow-hidden rounded-lg bg-chrome-chip px-3',
             'outline-none hover:bg-chrome-press focus-visible:focus-line',
             hover.open && 'bg-foreground/15',
           )}

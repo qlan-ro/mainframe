@@ -68,10 +68,10 @@ export function ComposerToolbar({
   const choosePermission = (next: ExecutionMode) => unattended.run(next, mode, () => setPermissionMode(next));
   const controls = useRef<HTMLDivElement>(null);
   /** The permissions control on screen: the chip stands in for it in a narrow composer. */
-  const permissionsControl = () =>
-    [...(controls.current?.querySelectorAll<HTMLElement>('[data-permissions-control]') ?? [])].find(
-      (el) => el.offsetParent !== null,
-    );
+  const focusPermissions = () =>
+    [...(controls.current?.querySelectorAll<HTMLElement>('[data-permissions-control]') ?? [])]
+      .find((el) => el.offsetParent !== null)
+      ?.focus();
   const [announced, announce] = useFlash<ExecutionMode>(ANNOUNCE_MS);
 
   useImperativeHandle(
@@ -152,11 +152,7 @@ export function ComposerToolbar({
         onConfirm={tuning.tuningWarning.confirm}
         onCancel={tuning.tuningWarning.cancel}
       />
-      <UnattendedConfirmDialog
-        confirm={unattended}
-        anchor={permissionsControl}
-        returnFocus={() => permissionsControl()?.focus()}
-      />
+      <UnattendedConfirmDialog confirm={unattended} returnFocus={focusPermissions} />
     </div>
   );
 }

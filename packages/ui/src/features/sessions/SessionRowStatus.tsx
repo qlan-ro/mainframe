@@ -24,8 +24,11 @@ export function SessionRowStatus({ status, updatedAt, yieldsToActions = false }:
       data-testid="sessions-row-status"
       data-status={status}
       className={cn(
-        'flex h-4 shrink-0 items-center justify-end text-meta/[1.45] text-muted-foreground',
-        yieldsToActions && '@max-[216px]/row:sr-only',
+        'flex h-4 min-w-4 shrink-0 items-center justify-end text-meta/[1.45] text-muted-foreground',
+        // The row's fills darken the ground under the meta ink; step up with them.
+        'group-hover/menu-item:text-sidebar-foreground/80 group-data-active/menu-item:text-sidebar-foreground/80',
+        'group-data-in-workspace/menu-button:text-sidebar-foreground/80',
+        yieldsToActions && '@max-[216px]/row:sr-only @max-[216px]/row:min-w-0',
       )}
     >
       <StatusValue status={status} updatedAt={updatedAt} />
