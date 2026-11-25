@@ -1,4 +1,4 @@
-// GitHub tour, segment E — session tabs and two threads side by side.
+// GitHub tour, segment E — session tabs, and a session in the workspace beside the conversation.
 // Boot: MF_DEMO_RECORDING_KEY=tool-group .agents/demo-env.sh up
 async page => {
   const APP_URL = 'http://localhost:5183';
@@ -57,7 +57,7 @@ async page => {
   await page.screencast.start({ path: OUT, size: SIZE });
 
   await chapter('Several sessions at once', {
-    description: 'Tabs across the top — or two threads side by side.',
+    description: 'Tabs across the top — or one of them beside the conversation.',
     duration: 1900,
   });
 
@@ -67,12 +67,13 @@ async page => {
   await tabsMark.dispose();
   await page.waitForTimeout(500);
 
-  // Split from the TAB context menu: under a project filter the sidebar list can
-  // be empty even when sessions exist, but the tab strip always has them.
+  // Open it beside the conversation from the TAB context menu: under a project
+  // filter the sidebar list can be empty even when sessions exist, but the tab
+  // strip always has them.
   const firstTab = page.locator('[data-testid^=session-tab-]:not([data-testid*=close]):not([data-testid*=pin]):not([data-testid=session-tabs-new])').first();
   await firstTab.click({ button: 'right' });
   await page.waitForTimeout(1000);
-  await page.getByTestId('session-tab-ctx-open-split').click();
+  await page.getByTestId('session-tab-ctx-open-workspace').click();
   await page.waitForTimeout(3200);
   await page.mouse.move(640, 250);
   await page.waitForTimeout(1500);

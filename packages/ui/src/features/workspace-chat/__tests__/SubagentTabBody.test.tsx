@@ -5,14 +5,17 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useActiveBasesStore } from '@/store/active-bases-store';
+import { onSurfaceIntent } from '@/store/surface-intents';
 
 interface Call {
   args: Record<string, unknown>;
   result?: unknown;
   isError?: boolean;
   messages?: Partial<ThreadMessage>[];
+  providerMetadata?: { mainframe: { acpStatus: string } };
 }
 
 const { controller, world } = vi.hoisted(() => ({
@@ -30,16 +33,41 @@ const { controller, world } = vi.hoisted(() => ({
     tasks: [] as Partial<BackgroundTask>[],
     hasMore: false,
     adapterId: 'claude',
+    /** What follows the call in the parent's transcript. */
+    after: [] as Partial<ThreadMessage>[],
+    /** A new object per background event, as the reducer's. */
+    backgroundTasks: undefined as object | undefined,
+    list: vi.fn(),
     stop: vi.fn(async () => undefined),
   },
 }));
 
+vi.mock('@assistant-ui/react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@assistant-ui/react')>()),
+  // The chat column's thread, which is another chat's.
+  useAuiState: (select: (s: unknown) => unknown) =>
+    select({
+      thread: {},
+      threads: {
+        threadItems: [
+          { id: 'column', custom: { projectId: 'p1', worktreePath: '/wt/column' } },
+          { id: 'parent', custom: { projectId: 'p1', worktreePath: '/wt/parent' } },
+        ],
+      },
+    }),
+}));
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [{ id: 'p1', path: '/proj' }] }),
+}));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
   chatControllerRegistry: { getOrCreate: () => controller },
 }));
 vi.mock('@/lib/api/background-tasks', () => ({
-  listBackgroundTasks: async () => world.tasks,
+  listBackgroundTasks: async (chatId: string) => {
+    world.list(chatId);
+    return world.tasks;
+  },
   stopBackgroundTask: (chatId: string, taskId: string) => {
     (world.stop as (...args: string[]) => Promise<void>)(chatId, taskId);
     return Promise.resolve();
@@ -51,7 +79,7 @@ vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
     runState: { type: world.running ? 'running' : 'idle' },
     historyWindow: { hasMore: world.hasMore },
     interactions: { permissions: world.permissions },
-    backgroundTasks: undefined,
+    backgroundTasks: world.backgroundTasks,
     chatConfig: { adapterId: world.adapterId },
   }),
   CHAT_ATTACHMENT_ADAPTER: {},
@@ -60,34 +88,45 @@ vi.mock('@/features/chat/runtime/use-native-thread-messages', () => ({
   useNativeThreadMessages: () => messages(),
 }));
 vi.mock('@/features/chat/tools/cards/SubagentTranscript', () => ({
-  SubagentTranscript: ({ messages: steps }: { messages: readonly ThreadMessage[] }) => (
-    <div data-testid="steps">{steps.map((step) => step.id).join(',')}</div>
-  ),
+  SubagentTranscript: ({ messages: steps }: { messages: readonly ThreadMessage[] }) => {
+    const { openFile } = useOpenFile();
+    return (
+      <button type="button" data-testid="steps" data-chat={useChatId()} onClick={() => openFile('src/step.ts')}>
+        {steps.map((step) => step.id).join(',')}
+      </button>
+    );
+  },
 }));
 
-let cached: { call: Call | null; list: ThreadMessage[] } = { call: null, list: [] };
+let cached: { call: Call | null; after: unknown; list: ThreadMessage[] } = { call: null, after: null, list: [] };
 /** Identity-stable per call, like the projector. */
 function messages(): ThreadMessage[] {
-  if (cached.call !== world.call) {
+  if (cached.call !== world.call || cached.after !== world.after) {
     const part = world.call && { type: 'tool-call', toolCallId: 'call-1', toolName: 'Task', ...world.call };
     cached = {
       call: world.call,
-      list: part ? ([{ id: 'm-1', role: 'assistant', content: [part] }] as unknown as ThreadMessage[]) : [],
+      after: world.after,
+      list: part
+        ? ([{ id: 'm-1', role: 'assistant', content: [part] }, ...world.after] as unknown as ThreadMessage[])
+        : [],
     };
   }
   return cached.list;
 }
 
+import { registerSideChat, __resetSideChatRegistryForTests } from '@/features/side-chat/side-chat-ids';
+import { useChatId, useOpenFile } from '@/features/chat/tools/chat-tool-context';
 import { useMountedConversations } from '../mounted-conversations';
 import { SubagentTabBody } from '../SubagentTabBody';
 
-async function show(call: Call | null) {
+const body = (active = true, chatId = 'parent') => (
+  <TooltipProvider>
+    <SubagentTabBody chatId={chatId} toolCallId="call-1" messageId="m-1" title="reviewer" active={active} />
+  </TooltipProvider>
+);
+async function show(call: Call | null, active = true, chatId = 'parent') {
   world.call = call;
-  const view = render(
-    <TooltipProvider>
-      <SubagentTabBody chatId="parent" toolCallId="call-1" messageId="m-1" title="reviewer" />
-    </TooltipProvider>,
-  );
+  const view = render(body(active, chatId));
   await act(async () => undefined);
   return view;
 }
@@ -107,8 +146,19 @@ const step = (id: string, toolCallId: string) =>
   }) as unknown as ThreadMessage;
 
 beforeEach(() => {
-  Object.assign(world, { call: null, running: false, permissions: {}, tasks: [], hasMore: false, adapterId: 'claude' });
+  Object.assign(world, {
+    call: null,
+    running: false,
+    permissions: {},
+    tasks: [],
+    hasMore: false,
+    adapterId: 'claude',
+    after: [],
+    backgroundTasks: undefined,
+  });
   world.stop.mockClear();
+  world.list.mockClear();
+  __resetSideChatRegistryForTests();
   controller.loadEarlier.mockClear().mockResolvedValue(true);
 });
 
@@ -148,6 +198,43 @@ describe('status', () => {
     world.running = running;
     await show(call);
     expect(status()).toBe(expected);
+  });
+
+  const said = (custom: object = {}) =>
+    ({
+      id: 'm-2',
+      role: 'user',
+      content: [{ type: 'text', text: 'next' }],
+      metadata: { custom },
+    }) as unknown as ThreadMessage;
+
+  it.each([
+    ['the next turn runs', [said()]],
+    [
+      'a later turn than the next runs',
+      [{ id: 'a', role: 'assistant', content: [] } as unknown as ThreadMessage, said()],
+    ],
+  ])('is stopped, not running, when it was interrupted and %s', async (_, after) => {
+    world.running = true;
+    world.after = after;
+    await show({ args: ARGS });
+    expect(status()).toBe('stopped');
+  });
+
+  it.each([
+    ['queued', { mainframe: { queued: true } }],
+    ['on its way', { mainframe: { pending: true } }],
+  ])('stays running while a message is %s behind it', async (_, custom) => {
+    world.running = true;
+    world.after = [said(custom)];
+    await show({ args: ARGS });
+    expect(status()).toBe('running');
+  });
+
+  it('takes the daemon’s word that the call was cancelled', async () => {
+    world.running = true;
+    await show({ args: ARGS, providerMetadata: { mainframe: { acpStatus: 'cancelled' } } });
+    expect(status()).toBe('stopped');
   });
 
   it('needs you while one of its own calls waits for an answer', async () => {
@@ -207,5 +294,56 @@ describe('a call outside the loaded history', () => {
     controller.loadEarlier.mockRejectedValue(new Error('daemon is away'));
     await show(null);
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('daemon is away'));
+  });
+});
+
+describe('opened from a chat in another worktree than the conversation', () => {
+  const paths: string[] = [];
+  let stop: () => void;
+  beforeEach(() => {
+    paths.length = 0;
+    useActiveBasesStore.setState({ bases: { worktreePath: '/wt/column', projectPath: '/proj' }, scopeKey: null });
+    stop = onSurfaceIntent((intent) => intent.type === 'open-file' && paths.push(intent.path));
+  });
+  afterEach(() => stop());
+
+  it('opens its parent’s files, from its steps and from its brief', async () => {
+    await show({ args: { ...ARGS, prompt: 'Read [a.ts](src/a.ts).' }, messages: [step('s-1', 't-1')] });
+    fireEvent.click(screen.getByTestId('steps'));
+    fireEvent.click(screen.getByRole('link', { name: 'a.ts' }));
+    expect(paths).toEqual(['/wt/parent/src/step.ts', '/wt/parent/src/a.ts']);
+    expect(screen.getByTestId('steps').dataset.chat).toBe('parent');
+  });
+
+  it('opens the files a side chat shares with its parent', async () => {
+    registerSideChat('side-1', 'parent');
+    await show({ args: ARGS, messages: [step('s-1', 't-1')] }, true, 'side-1');
+    fireEvent.click(screen.getByTestId('steps'));
+    expect(paths).toEqual(['/wt/parent/src/step.ts']);
+  });
+});
+
+describe('its background task', () => {
+  it('is read again on every event, while the tab is in front', async () => {
+    const view = await show({ args: ARGS });
+    expect(world.list).toHaveBeenCalledTimes(1);
+    world.backgroundTasks = {};
+    view.rerender(body());
+    await act(async () => undefined);
+    expect(world.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('is not read behind another tab, and is brought up to date in front', async () => {
+    const view = await show({ args: ARGS }, false);
+    world.backgroundTasks = {};
+    view.rerender(body(false));
+    await act(async () => undefined);
+    expect(world.list).not.toHaveBeenCalled();
+
+    world.tasks = [{ id: 'bg-1', toolUseId: 'call-1', status: 'running' }];
+    view.rerender(body(true));
+    await act(async () => undefined);
+    expect(world.list).toHaveBeenCalledTimes(1);
+    expect(status()).toBe('running');
   });
 });

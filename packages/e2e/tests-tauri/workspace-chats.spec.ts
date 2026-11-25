@@ -189,7 +189,7 @@ test.describe('§workspace-chats', () => {
     // As the panel's release would have left it: no tab in any layout, B's panel folded.
     await page.evaluate((folded) => {
       for (const key of Object.keys(localStorage)) {
-        if (key === 'mf:side-chat-tabs' || key.startsWith('mf:session-layout')) localStorage.removeItem(key);
+        if (/^mf:(side-chat-tabs$|session-layout|conversation-tabs)/.test(key)) localStorage.removeItem(key);
       }
       localStorage.setItem(`mf:side-chat-collapsed:${folded}`, 'true');
     }, chatB);

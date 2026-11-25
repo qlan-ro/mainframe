@@ -16,7 +16,13 @@ function Body({ tab, active }: { tab: RunTab; active: boolean }) {
   if (tab.kind === 'agent') {
     if (!tab.toolCallId) return <p className="p-4 text-sm text-muted-foreground">{tab.title}: no agent to show</p>;
     return (
-      <SubagentTabBody chatId={tab.chatId} toolCallId={tab.toolCallId} messageId={tab.messageId} title={tab.title} />
+      <SubagentTabBody
+        chatId={tab.chatId}
+        toolCallId={tab.toolCallId}
+        messageId={tab.messageId}
+        title={tab.title}
+        active={active}
+      />
     );
   }
   if (tab.role === 'side') return <SideChatTabBody chatId={tab.chatId} active={active} />;

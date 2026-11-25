@@ -2,7 +2,7 @@
  * SurfaceHost — the workspace reports its resting left edge for the title bar,
  * takes its share of the row, and slides in and out beside the chat (W4).
  */
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLayoutStore } from '@/store/layout';
 import { useWorkspaceSlide } from '@/store/workspace-slide';
@@ -144,5 +144,46 @@ describe('SurfaceHost — slide (W4)', () => {
     expect(slide()).toBe('open');
     act(() => place(['chat']));
     expect(workspace()).toBeNull();
+  });
+
+  describe('with the divider', () => {
+    const divider = () => screen.getByTestId('surf-divider-x');
+    const frac = () => useLayoutStore.getState().layout.topFlex.workspace;
+    beforeEach(() => {
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ width: 1000 }));
+    });
+    afterEach(() => vi.restoreAllMocks());
+    const moveTo = (clientX: number) =>
+      act(() => void window.dispatchEvent(Object.assign(new Event('pointermove'), { clientX })));
+
+    it('stops for a drag, which the panel then follows', () => {
+      render(<SurfaceHost />);
+      act(() => place(['chat', 'workspace']));
+      expect(slide()).toBe('opening');
+
+      fireEvent.pointerDown(divider());
+      expect(slide()).toBe('open');
+      expect(workspace()).toHaveClass('transition-none');
+      expect(useWorkspaceSlide.getState().sliding).toBe(false);
+
+      moveTo(400);
+      expect(frac()).toBeCloseTo(0.6);
+      expect(slide()).toBe('open');
+    });
+
+    it('stops for an arrow key', () => {
+      render(<SurfaceHost />);
+      act(() => place(['chat', 'workspace']));
+      fireEvent.keyDown(screen.getByRole('separator', { name: 'Resize the workspace' }), { key: 'ArrowLeft' });
+      expect(slide()).toBe('open');
+    });
+
+    it('lets a closing panel go on closing', () => {
+      place(['chat', 'workspace']);
+      render(<SurfaceHost />);
+      act(() => place(['chat']));
+      fireEvent.pointerDown(divider());
+      expect(slide()).toBe('closing');
+    });
   });
 });

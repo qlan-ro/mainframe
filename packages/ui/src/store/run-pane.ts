@@ -105,7 +105,7 @@ export interface RunState {
 /** Where a dragged tab lands on the workspace region. */
 export type RunDropEdge = 'center' | 'left' | 'right' | 'top' | 'bottom';
 
-const MAX_PANES = 2;
+export const MAX_PANES = 2;
 
 export function genId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;

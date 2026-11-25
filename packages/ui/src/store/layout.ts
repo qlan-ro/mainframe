@@ -221,7 +221,9 @@ export const useLayoutStore = create<LayoutStore>()(
         releaseUrlTunnels(tabIdsForScope(run, scopeKey, 'url'));
         // Preview/console bodies tear down via their own unmount cleanup once removed.
         const nextRun = releaseRunScopeReducer(run, scopeKey);
-        writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'workspace'), run: nextRun });
+        // As closing its tabs one by one would (W5).
+        const collapse = nextRun == null || (!nothingVisible(run, undefined) && nothingVisible(nextRun, undefined));
+        writeWorkspace({ layout: !collapse ? layout : removeSurface(layout, 'workspace'), run: nextRun });
       },
 
       pruneSessions(validIds) {

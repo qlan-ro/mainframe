@@ -71,6 +71,8 @@ export function usePreviewVisibility(
     });
     if (visible === prevVisibleRef.current) return;
     prevVisibleRef.current = visible;
+    // Hidden, it may have moved: it must be in its place before it can be seen.
+    if (visible) handle?.refit();
     handle?.setVisible(visible);
   }, [handle, isActiveTab, surfaceVisible, overlayMounted, sliding, occluded, compositesAboveDom]);
 

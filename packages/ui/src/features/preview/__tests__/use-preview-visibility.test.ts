@@ -3,6 +3,7 @@ import { it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
+import { useWorkspaceSlide } from '@/store/workspace-slide';
 
 import { computePreviewVisible, usePreviewVisibility } from '../use-preview-visibility';
 
@@ -148,4 +149,18 @@ it('re-asserts setVisible(false) on a new handle even when the computed value is
     rerender({ handle: handleB, occluded: true });
   });
   expect(handleB.setVisible).toHaveBeenCalledWith(false);
+});
+
+it('is in its new place before it shows again after the panel slid', () => {
+  useLayoutStore.setState({ layout: { top: ['chat', 'workspace'], topFlex: {} } });
+  useWorkspaceSlide.setState({ sliding: true });
+  const handle = makeFakeHandle();
+  renderHook(() => usePreviewVisibility(handle, true, false));
+  expect(handle.setVisible).toHaveBeenLastCalledWith(false);
+  const calls: string[] = [];
+  vi.mocked(handle.refit).mockImplementation(() => void calls.push('refit'));
+  vi.mocked(handle.setVisible).mockImplementation((visible) => void calls.push(`visible:${visible}`));
+
+  act(() => useWorkspaceSlide.setState({ sliding: false }));
+  expect(calls).toEqual(['refit', 'visible:true']);
 });

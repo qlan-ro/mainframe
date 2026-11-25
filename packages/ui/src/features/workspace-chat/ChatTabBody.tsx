@@ -8,18 +8,19 @@
  * the user, and one that became the conversation itself steps aside: the chat
  * column owns its composer now.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AuiProvider, useAui, useAuiState } from '@assistant-ui/react';
 import { ArrowLeftToLine, Bot, MessageSquare, Split } from 'lucide-react';
+import { useIsConnected } from '@/app/ConnectionStatusContext';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { findByChatId } from '@/features/chat/orchestration/use-session-items';
 import { ChatThread } from '@/features/chat/thread/ChatThread';
-import { ChatFileBasesContext } from '@/features/chat/tools/chat-file-bases';
+import { useSessionListLoadState } from '@/features/sessions/runtime/list-load-state';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
-import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
+import { useStop } from '@/features/session-panel/use-stop';
 import { SideChatToggle } from '@/features/side-chat/SideChatToggle';
 import { useSideChatTab } from '@/features/side-chat/use-side-chat-tab';
 import { cancelDelegatedTask } from '@/lib/api/background-tasks';
@@ -31,7 +32,7 @@ import { ChatHeaderParentLink } from '@/features/chat/thread/ChatHeaderParentLin
 import { DraftKeeper } from './DraftKeeper';
 import { useDeclareConversation } from './mounted-conversations';
 import { useConversationThread } from './use-conversation-thread';
-import { useStop } from './use-stop';
+import { OwnFiles } from './OwnFiles';
 
 /** How long a chat may take to reach the session list (a new fork's reload) before its tab calls it gone. */
 const LISTING_GRACE_MS = 5_000;
@@ -48,19 +49,32 @@ export interface ChatTabBodyProps {
   active: boolean;
 }
 
+/** Whether the list on screen is the daemon's answer, rather than one still loading or out of reach. */
+function useListSettled(): boolean {
+  const isLoading = useAuiState((s) => s.threads.isLoading);
+  return useSessionListLoadState((s) => s.loaded) && !isLoading;
+}
+
 function Unlisted({ chatId }: { chatId: string }) {
+  const connected = useIsConnected();
+  const settled = useListSettled() && connected;
   const [late, setLate] = useState(false);
   useEffect(() => {
+    if (!settled) return undefined;
     const timer = setTimeout(() => setLate(true), LISTING_GRACE_MS);
-    return () => clearTimeout(timer);
-  }, []);
+    return () => {
+      clearTimeout(timer);
+      setLate(false);
+    };
+  }, [settled]);
+  const waiting = connected ? 'Opening the chat…' : 'Waiting for the connection…';
   return (
     <div
       data-testid={`workspace-chat-unlisted-${chatId}`}
       role="status"
       className="grid h-full place-items-center p-4 text-center text-sm text-muted-foreground"
     >
-      {late ? 'This chat is no longer here.' : 'Opening the chat…'}
+      {late && settled ? 'This chat is no longer here.' : waiting}
     </div>
   );
 }
@@ -78,7 +92,7 @@ const LIVE: ReadonlySet<AgentStatus> = new Set(['running', 'needs-you', 'queued'
 function TaskControls({ chatId, title, custom }: { chatId: string; title: string; custom: SessionCustom }) {
   const status = taskStatus(custom);
   const { delegation, parentChatId } = custom;
-  const stop = useStop(
+  const { onStop, stopping } = useStop(
     title,
     delegation != null && parentChatId != null && LIVE.has(status)
       ? () => cancelDelegatedTask(parentChatId, delegation.taskId)
@@ -87,9 +101,7 @@ function TaskControls({ chatId, title, custom }: { chatId: string; title: string
   return (
     <>
       <AgentStatusLabel status={status} testId={`workspace-chat-status-${chatId}`} />
-      {stop && (
-        <StopButton title={title} busy={stop.busy} onStop={stop.stop} testId={`workspace-chat-stop-${chatId}`} />
-      )}
+      {onStop && <StopButton title={title} busy={stopping} onStop={onStop} testId={`workspace-chat-stop-${chatId}`} />}
     </>
   );
 }
@@ -139,13 +151,6 @@ function SideChatFollower({ chatId }: { chatId: string }): null {
   return null;
 }
 
-/** The chat's own worktree and project, so its file links open its files whatever the conversation's are. */
-function OwnFiles({ children }: { children: React.ReactNode }) {
-  const { worktreePath, projectPath } = useActiveIdentity();
-  const bases = useMemo(() => ({ worktreePath, projectPath }), [worktreePath, projectPath]);
-  return <ChatFileBasesContext.Provider value={bases}>{children}</ChatFileBasesContext.Provider>;
-}
-
 function Conversation({ tab, chatId, itemId, active }: ChatTabBodyProps & { itemId: string }) {
   const aui = useAui();
   const controller = useChatController(itemId, useDaemonPort());
@@ -156,7 +161,7 @@ function Conversation({ tab, chatId, itemId, active }: ChatTabBodyProps & { item
       <DraftKeeper chatId={itemId} />
       <SideChatFollower chatId={chatId} />
       <ThreadHeader tab={tab} chatId={chatId} itemId={itemId} />
-      <OwnFiles>
+      <OwnFiles chatId={chatId}>
         <div className="min-h-0 flex-1">
           <ChatThread />
         </div>

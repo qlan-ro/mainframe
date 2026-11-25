@@ -8,7 +8,7 @@
  * nested messages live. A call outside the loaded window loads the history that
  * holds it.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
 import { Bot } from 'lucide-react';
@@ -25,14 +25,15 @@ import { useControllerState } from '@/features/chat/runtime/use-chat-thread-runt
 import { useNativeThreadMessages } from '@/features/chat/runtime/use-native-thread-messages';
 import { SubagentTranscript } from '@/features/chat/tools/cards/SubagentTranscript';
 import { isErrorResult, resolveResultText } from '@/features/chat/tools/shared';
+import { useStop } from '@/features/session-panel/use-stop';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { listBackgroundTasks, stopBackgroundTask } from '@/lib/api/background-tasks';
 import { AgentStatusLabel, ConversationHeader, StopButton, type AgentStatus } from './ConversationHeader';
 import { findSubagentCall, toolCallIdsOf, type SubagentCall } from './find-subagent-call';
 import { useHoldConversation } from './mounted-conversations';
+import { OwnFiles } from './OwnFiles';
 import { useKeepAttached } from './use-conversation-thread';
-import { useStop } from './use-stop';
 
 const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 
@@ -41,14 +42,20 @@ const STOP_ADAPTER = 'claude';
 
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
-/** The background task behind the call, when the sub-agent runs in the background. Null until listed, or never. */
+/**
+ * The background task behind the call, when the sub-agent runs in the background.
+ * Null until listed, or never. Read again on every background event, but only
+ * for a tab the user can see.
+ */
 function useBackgroundTask(
   chatId: string,
   toolCallId: string,
   live: Readonly<Record<string, BackgroundActivityTask>> | undefined,
+  visible: boolean,
 ): BackgroundTask | null {
   const [task, setTask] = useState<BackgroundTask | null>(null);
   useEffect(() => {
+    if (!visible) return undefined;
     let current = true;
     listBackgroundTasks(chatId).then(
       (tasks) => {
@@ -59,7 +66,7 @@ function useBackgroundTask(
     return () => {
       current = false;
     };
-  }, [chatId, toolCallId, live]);
+  }, [chatId, toolCallId, live, visible]);
   return task;
 }
 
@@ -68,10 +75,34 @@ function waitsOnUser(state: ChatThreadState, steps: readonly ThreadMessage[]): b
   return toolCallIdsOf(steps).some((id) => pending.has(id));
 }
 
-function callStatus(call: SubagentCall, state: ChatThreadState, task: BackgroundTask | null): AgentStatus {
+/** True for a user message the model has, as opposed to one queued or still on its way. */
+function isDelivered(message: ThreadMessage): boolean {
+  const meta = message.metadata?.custom?.mainframe as { queued?: boolean; pending?: boolean } | undefined;
+  return meta?.queued !== true && meta?.pending !== true;
+}
+
+/**
+ * A call with no result is still going only while its own turn is. An interrupted
+ * one never gets a result, and the chat runs on with the next message.
+ */
+function isInterrupted(call: SubagentCall, messages: readonly ThreadMessage[]): boolean {
+  const lifecycle = call.part.providerMetadata?.mainframe as { acpStatus?: string } | undefined;
+  if (lifecycle?.acpStatus === 'cancelled') return true;
+  const at = messages.findIndex((message) => message.id === call.messageId);
+  return messages.slice(at + 1).some((message) => message.role === 'user' && isDelivered(message));
+}
+
+function callStatus(
+  call: SubagentCall,
+  state: ChatThreadState,
+  messages: readonly ThreadMessage[],
+  task: BackgroundTask | null,
+): AgentStatus {
   if (waitsOnUser(state, call.part.messages ?? [])) return 'needs-you';
   if (task != null) return task.status;
-  if (call.part.result === undefined) return isRunningFromState(state) ? 'running' : 'stopped';
+  if (call.part.result === undefined) {
+    return isRunningFromState(state) && !isInterrupted(call, messages) ? 'running' : 'stopped';
+  }
   return isErrorResult(call.part.result, call.part.isError) ? 'failed' : 'completed';
 }
 
@@ -130,7 +161,14 @@ function ProseBlock({ label, testId, source }: { label: string; testId: string; 
   );
 }
 
-function Steps({ chatId, call, state }: { chatId: string; call: SubagentCall; state: ChatThreadState }) {
+function Steps({ call }: { call: SubagentCall }) {
+  const steps = call.part.messages ?? [];
+  if (steps.length === 0) return null;
+  return <SubagentTranscript messages={steps} messageId={call.messageId} toolCallId={call.part.toolCallId} inZone />;
+}
+
+/** Everything in the tab is the parent's: no thread is bound here, so without this it would read the chat column's. */
+function ParentScope({ chatId, state, children }: { chatId: string; state: ChatThreadState; children: ReactNode }) {
   const permissions = state.interactions.permissions;
   const scope = useMemo(
     () => ({
@@ -143,11 +181,9 @@ function Steps({ chatId, call, state }: { chatId: string; call: SubagentCall; st
     }),
     [chatId, permissions],
   );
-  const steps = call.part.messages ?? [];
-  if (steps.length === 0) return null;
   return (
     <TranscriptScopeProvider value={scope}>
-      <SubagentTranscript messages={steps} messageId={call.messageId} toolCallId={call.part.toolCallId} inZone />
+      <OwnFiles chatId={chatId}>{children}</OwnFiles>
     </TranscriptScopeProvider>
   );
 }
@@ -170,9 +206,11 @@ export interface SubagentTabBodyProps {
   toolCallId: string;
   messageId?: string;
   title: string;
+  /** In front in its pane. */
+  active: boolean;
 }
 
-export function SubagentTabBody({ chatId, toolCallId, messageId, title }: SubagentTabBodyProps) {
+export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }: SubagentTabBodyProps) {
   const controller = useChatController(chatId, useDaemonPort());
   useKeepAttached(controller);
   useHoldConversation(chatId);
@@ -180,12 +218,12 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title }: Subage
   const messages = useNativeThreadMessages(state);
   const call = useMemo(() => findSubagentCall(messages, toolCallId), [messages, toolCallId]);
   const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId });
-  const task = useBackgroundTask(chatId, toolCallId, state.backgroundTasks);
-  const status = call == null ? null : callStatus(call, state, task);
+  const task = useBackgroundTask(chatId, toolCallId, state.backgroundTasks, active);
+  const status = call == null ? null : callStatus(call, state, messages, task);
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
   const shownTitle = text(args['description']) || title;
   const canStop = task?.status === 'running' && state.chatConfig?.adapterId === STOP_ADAPTER;
-  const stop = useStop(shownTitle, canStop ? () => stopBackgroundTask(chatId, task.id) : undefined);
+  const { onStop, stopping } = useStop(shownTitle, canStop ? () => stopBackgroundTask(chatId, task.id) : undefined);
 
   return (
     <div data-testid={`workspace-agent-${toolCallId}`} className="flex h-full min-h-0 flex-col text-foreground">
@@ -196,11 +234,11 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title }: Subage
         kind={kindLine(call)}
       >
         {status != null && <AgentStatusLabel status={status} testId={`workspace-agent-status-${toolCallId}`} />}
-        {stop && (
+        {onStop && (
           <StopButton
             title={shownTitle}
-            busy={stop.busy}
-            onStop={stop.stop}
+            busy={stopping}
+            onStop={onStop}
             testId={`workspace-agent-stop-${toolCallId}`}
           />
         )}
@@ -211,15 +249,15 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title }: Subage
             {error ?? 'Loading the sub-agent…'}
           </p>
         ) : (
-          <>
+          <ParentScope chatId={chatId} state={state}>
             <ProseBlock label="Brief" testId={`workspace-agent-brief-${toolCallId}`} source={text(args['prompt'])} />
-            <Steps chatId={chatId} call={call} state={state} />
+            <Steps call={call} />
             <ProseBlock
               label="Result"
               testId={`workspace-agent-result-${toolCallId}`}
               source={resultText(call, task)}
             />
-          </>
+          </ParentScope>
         )}
       </div>
     </div>

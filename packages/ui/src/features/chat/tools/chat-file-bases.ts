@@ -5,9 +5,16 @@
  * relative path is a different file, so its paths leave the tab absolute.
  */
 import { createContext, useCallback, useContext } from 'react';
+import { useActiveBasesStore } from '@/store/active-bases-store';
 import { toFileRef, type FileBases } from '@/lib/files/file-ref';
 
 export const ChatFileBasesContext = createContext<FileBases | null>(null);
+
+/** What a transcript's paths are relative to: its own chat's files, or the active session's. */
+export function useFileBases(): FileBases {
+  const active = useActiveBasesStore((s) => s.bases);
+  return useContext(ChatFileBasesContext) ?? active;
+}
 
 /** The path to put in an intent: absolute inside a tab with bases of its own, as given otherwise. */
 export function useIntentPath(): (path: string) => string {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { errorMessage } from '@/lib/error-message';
 import { mfToast } from '@/lib/toast';
 
@@ -10,21 +10,30 @@ export function useStop(title: string, request: (() => Promise<void>) | undefine
   const [stopping, setStopping] = useState(false);
   const pending = useRef(false);
   const retry = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(retry.current), []);
-  const release = () => {
+  /** Which Stop this is: one whose work ended must not release the next. */
+  const turn = useRef(0);
+  const release = useCallback(() => {
+    clearTimeout(retry.current);
+    turn.current++;
     pending.current = false;
     setStopping(false);
-  };
+  }, []);
+  const ended = request === undefined;
+  useEffect(() => {
+    if (ended) release();
+  }, [ended, release]);
+  useEffect(() => () => clearTimeout(retry.current), []);
   const stop = async () => {
     if (!request || pending.current) return;
     pending.current = true;
     setStopping(true);
+    const mine = turn.current;
     try {
       await request();
       mfToast.success(`Stopped “${title}”`);
-      retry.current = setTimeout(release, STOP_RETRY_MS);
+      if (turn.current === mine) retry.current = setTimeout(release, STOP_RETRY_MS);
     } catch (error) {
-      release();
+      if (turn.current === mine) release();
       mfToast.error(`Could not stop “${title}”`, { description: errorMessage(error) });
     }
   };

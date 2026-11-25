@@ -8,6 +8,8 @@ interface Props {
   /** The smallest the panels can be, in px; the right one wins when the row cannot hold both. */
   minLeft: number;
   minRight: number;
+  /** A drag or a key press is about to move it. */
+  onGrab?: () => void;
   onFrac: (frac: number) => void;
 }
 
@@ -29,7 +31,7 @@ function clampFrac(frac: number, width: number, { minLeft, minRight }: Pick<Prop
  * thumb share those pixels; it is also the keyboard's handle. On hover a 2px accent line appears. Dragging, or
  * an arrow key, calls onFrac with a share both panels' minimums allow.
  */
-export function SurfDivider({ containerRef, frac, minLeft, minRight, onFrac }: Props) {
+export function SurfDivider({ containerRef, frac, minLeft, minRight, onGrab, onFrac }: Props) {
   const [hot, setHot] = useState(false);
 
   // Holds the teardown for an in-flight drag so it can run on unmount too —
@@ -46,6 +48,7 @@ export function SurfDivider({ containerRef, frac, minLeft, minRight, onFrac }: P
   const onDown = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    onGrab?.();
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
 
@@ -70,6 +73,7 @@ export function SurfDivider({ containerRef, frac, minLeft, minRight, onFrac }: P
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
+    onGrab?.();
     commit(frac + (e.key === 'ArrowLeft' ? -KEY_STEP : KEY_STEP));
   };
 

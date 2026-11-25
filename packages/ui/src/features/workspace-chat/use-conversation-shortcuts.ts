@@ -7,6 +7,8 @@
  * front off the workspace; the chat stays. Inert while another kind of tab is.
  */
 import type { AssistantClient } from '@assistant-ui/react';
+import { flushSync } from 'react-dom';
+import { focusAfterClosedTab } from '@/features/chat/composer/focus-composer';
 import { useSessionTabsStore } from '@/features/session-tabs/store';
 import { canonicalTabId, displayedTabIds, nextBesideId } from '@/features/session-tabs/tabs-model';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
@@ -23,7 +25,10 @@ function closeFrontConversation(): void {
   for (const pane of run?.panes ?? []) {
     const front = pane.tabs.find((t) => t.id === pane.active);
     if (front == null || !isConversationTab(front)) continue;
-    closeRunTab(pane.id, front.id);
+    // Closing unmounts what has the focus, which would fall to the body and take the keyboard with it.
+    const held = document.activeElement?.closest('[data-conversation-tab="active"]') != null;
+    flushSync(() => closeRunTab(pane.id, front.id));
+    if (held && (document.activeElement == null || document.activeElement === document.body)) focusAfterClosedTab();
     return;
   }
 }

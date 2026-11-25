@@ -77,7 +77,7 @@ function SurfaceHostImpl() {
   const rowRef = useRef<HTMLDivElement>(null);
   const chatLit = layout.top.includes('chat');
   const workspaceLit = layout.top.includes('workspace');
-  const phase = useWorkspaceSlide({ lit: workspaceLit, beside: chatLit, sessionId });
+  const { phase, settle } = useWorkspaceSlide({ lit: workspaceLit, beside: chatLit, sessionId });
   const beside = chatLit && phase !== 'closed';
   const workspaceFrac = layout.topFlex.workspace ?? 0.5;
 
@@ -100,6 +100,7 @@ function SurfaceHostImpl() {
             frac={1 - workspaceFrac}
             minLeft={MIN_CHAT}
             minRight={MIN_WORKSPACE}
+            onGrab={settle}
             onFrac={setTopFrac}
           />
         )}
@@ -113,8 +114,10 @@ function SurfaceHostImpl() {
               !chatLit && 'flex-1',
               chatLit && 'shrink-0',
               chatLit && (phase === 'closing' ? 'w-0' : PANEL_WIDTH),
-              (phase === 'opening' || phase === 'closing') &&
-                'transition-[width] duration-[320ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none',
+              // `transition-none`, not no class: a slide still under way would otherwise run on.
+              phase === 'opening' || phase === 'closing'
+                ? 'transition-[width] duration-[320ms] ease-[cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none'
+                : 'transition-none',
               phase === 'opening' && 'starting:w-0',
             )}
           >

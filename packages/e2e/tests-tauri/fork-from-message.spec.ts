@@ -15,7 +15,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { openWorkspaceAtRest, sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
 
 const PROMPT_1 = 'What is 2 + 2? Reply with just the number.';
 const PROMPT_2 = 'List the files in this project using bash ls.';
@@ -138,5 +138,70 @@ test.describe('§fork-from-message (mock without fork)', () => {
     await expect(button).toBeDisabled();
     await button.locator('..').hover();
     await expect(page.getByRole('tooltip')).toContainText("Forking isn't available for Mock CLI chats yet");
+  });
+});
+
+/** The fork's tab opens at any width: nothing parks it, and nothing it holds depends on one. */
+test.describe('§fork-from-message (narrow viewport)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'messaging', mockFork: true });
+    await app.page.setViewportSize({ width: 820, height: 800 });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    await sendBothPrompts(app.page);
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('keeps an unsent message when the window is widened', async () => {
+    const { page } = app;
+    await (await forkButton(page, 0)).click();
+    const composer = forkTab(page).getByTestId('chat-composer-input');
+    await expect(composer).toBeEmpty({ timeout: 15_000 });
+
+    const edited = 'edited before widening — must survive';
+    await composer.fill(edited);
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await openWorkspaceAtRest(page);
+    await expect(composer).toHaveValue(edited);
+  });
+});
+
+/** The workspace is already beside the chat, so the fork has no room to wait for. */
+test.describe('§fork-from-message (mid-width viewport, workspace open)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'messaging', mockFork: true });
+    await app.page.setViewportSize({ width: 1500, height: 900 });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    await sendBothPrompts(app.page);
+    await openWorkspaceAtRest(app.page);
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('opens an empty fork, and keeps its unsent message while the workspace is hidden', async () => {
+    const { page } = app;
+    await (await forkButton(page, 0)).click();
+    const composer = forkTab(page).getByTestId('chat-composer-input');
+    await expect(composer).toBeEmpty({ timeout: 15_000 });
+
+    await composer.fill('not sent yet');
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(page.getByTestId('workspace-surface')).toHaveCount(0);
+    await page.getByTestId('surface-rail-workspace').click();
+    await expect(composer).toHaveValue('not sent yet');
   });
 });

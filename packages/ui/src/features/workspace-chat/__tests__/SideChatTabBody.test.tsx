@@ -6,13 +6,25 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useConfirmBridge } from '@/lib/confirm-bridge';
+import { useActiveBasesStore } from '@/store/active-bases-store';
 import { useLayoutStore } from '@/store/layout';
+import { onSurfaceIntent } from '@/store/surface-intents';
 
 vi.mock('@assistant-ui/react', () => ({
   AuiProvider: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   useAui: () => ({}),
   useAuiState: (select: (s: unknown) => unknown) =>
-    select({ threads: { threadItems: [{ id: 'parent-1', title: 'Fix the parser' }] } }),
+    select({
+      thread: {},
+      threads: {
+        threadItems: [
+          { id: 'parent-1', title: 'Fix the parser', custom: { projectId: 'p1', worktreePath: '/wt/parent' } },
+        ],
+      },
+    }),
+}));
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [{ id: 'p1', path: '/proj' }] }),
 }));
 const discardChat = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('@/lib/api/chats', () => ({ discardChat: (...args: unknown[]) => discardChat(...args) }));
@@ -31,10 +43,16 @@ vi.mock('@/features/side-chat/SideChatNotice', () => ({
 }));
 vi.mock('@/features/chat/thread/ChatThread', async () => {
   const { useSideChatScope } = await import('@/features/side-chat/side-chat-scope');
+  const { useOpenFile } = await import('@/features/chat/tools/chat-tool-context');
   return {
     ChatThread: ({ variant }: { variant?: string }) => {
       const scope = useSideChatScope();
-      return <div data-testid="thread">{`${variant}:${scope?.parentChatId}:${scope?.sideChatId}`}</div>;
+      const { openFile } = useOpenFile();
+      return (
+        <button type="button" data-testid="thread" onClick={() => openFile('src/a.ts')}>
+          {`${variant}:${scope?.parentChatId}:${scope?.sideChatId}`}
+        </button>
+      );
     },
   };
 });
@@ -84,6 +102,16 @@ it('takes the session on screen for its parent until the list names it', () => {
   __resetSideChatRegistryForTests();
   show();
   expect(screen.getByTestId('thread')).toHaveTextContent('side:parent-1:side-1');
+});
+
+it('opens its parent’s files, whichever worktree the conversation is in', () => {
+  useActiveBasesStore.setState({ bases: { worktreePath: '/wt/column', projectPath: '/proj' }, scopeKey: null });
+  const paths: string[] = [];
+  const stop = onSurfaceIntent((intent) => intent.type === 'open-file' && paths.push(intent.path));
+  show();
+  fireEvent.click(screen.getByTestId('thread'));
+  stop();
+  expect(paths).toEqual(['/wt/parent/src/a.ts']);
 });
 
 describe('Discard', () => {

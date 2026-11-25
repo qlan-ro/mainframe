@@ -4,7 +4,7 @@
  * not when another session's layout takes over, when the chat is hidden, or
  * under `prefers-reduced-motion`.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useWorkspaceSlide as useSlideStore } from '@/store/workspace-slide';
 
 /** Matches the width transition in `SurfaceHost`. */
@@ -31,7 +31,13 @@ function nextPhase(prev: SlideInput & { phase: SlidePhase }, next: SlideInput): 
   return next.lit ? 'opening' : 'closing';
 }
 
-export function useWorkspaceSlide(input: SlideInput): SlidePhase {
+interface WorkspaceSlide {
+  phase: SlidePhase;
+  /** Ends an opening slide where it would come to rest: the panel is being resized, and must follow the pointer. */
+  settle: () => void;
+}
+
+export function useWorkspaceSlide(input: SlideInput): WorkspaceSlide {
   const [state, setState] = useState(() => ({ ...input, phase: (input.lit ? 'open' : 'closed') as SlidePhase }));
   let { phase } = state;
   if (state.lit !== input.lit || state.beside !== input.beside || state.sessionId !== input.sessionId) {
@@ -50,5 +56,7 @@ export function useWorkspaceSlide(input: SlideInput): SlidePhase {
   }, [sliding, phase]);
 
   useEffect(() => () => useSlideStore.setState({ sliding: false }), []);
-  return phase;
+
+  const settle = useCallback(() => setState((s) => (s.phase === 'opening' ? { ...s, phase: 'open' } : s)), []);
+  return { phase, settle };
 }

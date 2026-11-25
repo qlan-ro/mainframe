@@ -30,6 +30,7 @@ import { ConversationHeader } from './ConversationHeader';
 import { closeChatTab } from './conversation-tabs';
 import { DraftKeeper } from './DraftKeeper';
 import { useDeclareConversation } from './mounted-conversations';
+import { OwnFiles } from './OwnFiles';
 import { useConversationThread } from './use-conversation-thread';
 
 function DiscardButton({ chatId }: { chatId: string }) {
@@ -95,7 +96,9 @@ export function SideChatTabBody({ chatId, active }: { chatId: string; active: bo
         </ConversationHeader>
         <SideChatNotice parentChatId={parentChatId} />
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-          <ChatThread variant="side" />
+          <OwnFiles chatId={parentChatId}>
+            <ChatThread variant="side" />
+          </OwnFiles>
         </div>
       </SideChatScopeProvider>
     </AuiProvider>

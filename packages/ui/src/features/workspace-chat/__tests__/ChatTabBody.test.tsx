@@ -19,12 +19,13 @@ interface Item {
 }
 let items: Item[] = [];
 let mainThreadId = 'main';
+let isLoading = false;
 const switchToThread = vi.fn();
 vi.mock('@assistant-ui/react', () => ({
   AuiProvider: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   useAui: () => ({ threads: { switchToThread } }),
   useAuiState: (select: (s: unknown) => unknown) =>
-    select({ threads: { threadItems: items, mainThreadId }, threadListItem: items[0] }),
+    select({ threads: { threadItems: items, mainThreadId, isLoading }, threadListItem: items[0] }),
 }));
 const cancelDelegatedTask = vi.fn(async (..._args: string[]) => undefined);
 vi.mock('@/lib/api/background-tasks', () => ({
@@ -35,8 +36,9 @@ const getOrCreate = vi.fn((_id: string) => ({}));
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
   chatControllerRegistry: { getOrCreate: (id: string) => getOrCreate(id) },
 }));
-let identity: { worktreePath?: string; projectPath?: string } = {};
-vi.mock('@/features/sessions/use-active-identity', () => ({ useActiveIdentity: () => identity }));
+vi.mock('@/features/sessions/use-projects', () => ({
+  useProjects: () => ({ projects: [{ id: 'p1', path: '/proj' }] }),
+}));
 vi.mock('../use-conversation-thread', () => ({ useConversationThread: () => ({}) }));
 vi.mock('../DraftKeeper', () => ({
   DraftKeeper: ({ chatId }: { chatId: string }) => <div data-testid={`keeper-${chatId}`} />,
@@ -56,6 +58,8 @@ vi.mock('@/features/chat/thread/ChatHeaderParentLink', () => ({
 vi.mock('@/features/side-chat/SideChatToggle', () => ({ SideChatToggle: () => <div data-testid="side-toggle" /> }));
 vi.mock('@/features/side-chat/use-side-chat-tab', () => ({ useSideChatTab: () => undefined }));
 
+import { ConnectionStatusProvider } from '@/app/ConnectionStatusContext';
+import { useSessionListLoadState } from '@/features/sessions/runtime/list-load-state';
 import { ChatTabBody } from '../ChatTabBody';
 import { useMountedConversations } from '../mounted-conversations';
 
@@ -90,7 +94,8 @@ const header = () => screen.getByTestId('workspace-chat-header-kid');
 beforeEach(() => {
   items = [];
   mainThreadId = 'main';
-  identity = {};
+  isLoading = false;
+  useSessionListLoadState.setState({ loaded: true });
   switchToThread.mockClear();
   cancelDelegatedTask.mockClear();
   getOrCreate.mockClear();
@@ -160,6 +165,53 @@ describe('with no chat to show', () => {
     expect(screen.getByRole('status')).toHaveTextContent('This chat is no longer here.');
   });
 
+  describe('does not call it gone', () => {
+    const body = (state: 'connected' | 'disconnected' | 'connecting') => (
+      <ConnectionStatusProvider value={{ state, daemonStatus: 'running' }}>
+        <TooltipProvider>
+          <ChatTabBody tab={tab('fork')} chatId="kid" active />
+        </TooltipProvider>
+      </ConnectionStatusProvider>
+    );
+    const wait = () => act(() => vi.advanceTimersByTime(60_000));
+    beforeEach(() => vi.useFakeTimers());
+
+    it('while the list is loading', () => {
+      isLoading = true;
+      const view = render(body('connected'));
+      wait();
+      expect(screen.getByRole('status')).toHaveTextContent('Opening the chat…');
+
+      isLoading = false;
+      view.rerender(body('connected'));
+      act(() => vi.advanceTimersByTime(4_999));
+      expect(screen.getByRole('status')).toHaveTextContent('Opening the chat…');
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.getByRole('status')).toHaveTextContent('This chat is no longer here.');
+    });
+
+    it('when the list never loaded', () => {
+      useSessionListLoadState.setState({ loaded: false });
+      render(body('connected'));
+      wait();
+      expect(screen.getByRole('status')).toHaveTextContent('Opening the chat…');
+    });
+
+    it.each(['disconnected', 'connecting'] as const)('while the app is %s', (state) => {
+      const view = render(body(state));
+      wait();
+      expect(screen.getByRole('status')).toHaveTextContent('Waiting for the connection…');
+
+      view.rerender(body('connected'));
+      expect(screen.getByRole('status')).toHaveTextContent('Opening the chat…');
+      wait();
+      expect(screen.getByRole('status')).toHaveTextContent('This chat is no longer here.');
+
+      view.rerender(body(state));
+      expect(screen.getByRole('status')).toHaveTextContent('Waiting for the connection…');
+    });
+  });
+
   it('shows the chat as soon as it is listed', () => {
     const view = show();
     list();
@@ -182,10 +234,9 @@ describe('with no chat to show', () => {
 
 describe('a file link in its transcript', () => {
   it('opens this chat’s own file, not the conversation’s file at the same path', () => {
-    identity = { worktreePath: '/wt/kid', projectPath: '/proj' };
     const paths: string[] = [];
     const stop = onSurfaceIntent((intent) => intent.type === 'open-file' && paths.push(intent.path));
-    list();
+    list({ projectId: 'p1', worktreePath: '/wt/kid' });
     show();
     fireEvent.click(screen.getByTestId('thread'));
     stop();
