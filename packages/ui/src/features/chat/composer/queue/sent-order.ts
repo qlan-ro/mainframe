@@ -1,3 +1,4 @@
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 
 interface SentRow {
@@ -6,6 +7,7 @@ interface SentRow {
 }
 
 const byChat = new Map<string, Map<string, SentRow>>();
+const chatKey = (chatId: string) => JSON.stringify([getActiveDaemon().id, chatId]);
 
 export function noteQueued(
   chatId: string,
@@ -17,26 +19,26 @@ export function noteQueued(
     timestamp: string;
   },
 ): void {
-  const rows = byChat.get(chatId) ?? new Map<string, SentRow>();
+  const rows = byChat.get(chatKey(chatId)) ?? new Map<string, SentRow>();
   rows.set(queuedMessageId, { timestamp, seen: false });
-  byChat.set(chatId, rows);
+  byChat.set(chatKey(chatId), rows);
 }
 
 export function matchQueued(chatId: string, queue: readonly QueuedMessageRef[]): void {
-  const rows = byChat.get(chatId);
+  const rows = byChat.get(chatKey(chatId));
   if (!rows) return;
   const inQueue = new Set(queue.map((ref) => ref.messageId));
   for (const [id, row] of rows) {
     if (inQueue.has(id)) row.seen = true;
     else if (row.seen) rows.delete(id);
   }
-  if (!rows.size) byChat.delete(chatId);
+  if (!rows.size) byChat.delete(chatKey(chatId));
 }
 
 export function heldTimestamp(chatId: string, messageId: string): string | undefined {
-  return byChat.get(chatId)?.get(messageId)?.timestamp;
+  return byChat.get(chatKey(chatId))?.get(messageId)?.timestamp;
 }
 
 export function forgetSent(chatId: string): void {
-  byChat.delete(chatId);
+  byChat.delete(chatKey(chatId));
 }

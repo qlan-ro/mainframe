@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ArrowDown } from 'lucide-react';
 import type { VariantProps } from 'class-variance-authority';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -49,50 +49,98 @@ function SavedBadge({ grants }: { grants: readonly GrantLine[] }) {
 /** Only these answers allow nothing; a kind this build does not know counts as allowing. */
 const REFUSING: readonly string[] = ['reject_once', 'reject_always'];
 
-export function OptionsFooter({
-  options,
-  grants,
-  shown,
-  onSelect,
-}: {
+interface FooterProps {
   options: PermissionOption[];
-  /** What "always" saves. */
   grants: readonly GrantLine[];
+  parts: readonly AllowedPart[];
   shown: ShownToEnd;
   onSelect: (option: PermissionOption) => void;
+}
+
+function focusAnswer(root: HTMLDivElement | null) {
+  const target =
+    root?.querySelector<HTMLElement>('[data-gate-show-rest]') ??
+    root?.querySelector<HTMLElement>('button:not([aria-disabled="true"]):not(:disabled)');
+  target?.focus();
+}
+
+function ShowRest({ part, onShow }: { part: AllowedPart; onShow: () => void }) {
+  return (
+    <div className="basis-full">
+      <Button
+        variant="outline"
+        size="sm"
+        data-testid="chat-permission-show-rest"
+        data-gate-show-rest
+        onClick={(event) => {
+          if (event.detail <= 1) onShow();
+        }}
+      >
+        <ArrowDown data-icon="inline-start" />
+        Show the rest of {part.name}
+      </Button>
+    </div>
+  );
+}
+
+function PermissionAnswer({
+  option,
+  grants,
+  lockedId,
+  onSelect,
+}: Pick<FooterProps, 'grants' | 'onSelect'> & {
+  option: PermissionOption;
+  lockedId: string | undefined;
 }) {
+  const blocked = lockedId !== undefined && !REFUSING.includes(option.kind);
+  return (
+    <Button
+      variant={KIND_VARIANT[option.kind as PermissionOptionKind] ?? 'secondary'}
+      size="sm"
+      className={cn('aria-disabled:cursor-not-allowed aria-disabled:opacity-50', {
+        [GATE_PRIMARY]: option.kind === 'allow_once',
+      })}
+      data-testid={`chat-permission-option-${option.optionId}`}
+      aria-disabled={blocked || undefined}
+      aria-describedby={blocked ? lockedId : undefined}
+      onClick={() => {
+        if (!blocked) onSelect(option);
+      }}
+    >
+      {option.name}
+      {option.kind === 'allow_always' && <SavedBadge grants={grants} />}
+    </Button>
+  );
+}
+
+export function OptionsFooter({ options, grants, parts, shown, onSelect }: FooterProps) {
   const lockedId = useId();
   const { rest, locked } = shown;
-  const [reading, setReading] = useState<AllowedPart>();
+  const footer = useRef<HTMLDivElement>(null);
+  const [readingId, setReadingId] = useState<string>();
+  const reading = parts.find((part) => part.id === readingId);
   return (
     // Stays in view while a long list scrolls behind it, unless the window is too short to spare
     // the room. `-bottom-1` reaches past the slot's own padding, so nothing shows under it.
     <div
+      ref={footer}
       data-testid="chat-permission-options"
       data-gate-answers
       className="flex flex-wrap items-center gap-2 bg-card px-4 pb-3 [@container_(min-height:26rem)]:sticky [@container_(min-height:26rem)]:-bottom-1 [@container_(min-height:26rem)]:pt-1"
     >
       {rest && (
-        <div className="basis-full">
-          <Button
-            variant="outline"
-            size="sm"
-            data-testid="chat-permission-show-rest"
-            data-gate-show-rest
-            // The second click of a double-click would pass the next part by unread.
-            onClick={(event) => {
-              if (event.detail <= 1 && !shown.showRest()) setReading(rest);
-            }}
-          >
-            <ArrowDown data-icon="inline-start" />
-            Show the rest of {rest.name}
-          </Button>
-        </div>
+        <ShowRest
+          part={rest}
+          onShow={() => {
+            if (!shown.showRest()) setReadingId(rest.id);
+          }}
+        />
       )}
       {reading && (
         <PermissionReadDialog
           part={reading}
-          onClose={() => setReading(undefined)}
+          onClose={() => setReadingId(undefined)}
+          onRestoreFocus={() => focusAnswer(footer.current)}
           onRead={() => shown.confirmRest(reading)}
         />
       )}
@@ -101,29 +149,15 @@ export function OptionsFooter({
           Not available until you have seen the end of {rest?.name ?? 'the request'}.
         </span>
       )}
-      {options.map((option) => {
-        const lockedOption = locked && !REFUSING.includes(option.kind);
-        return (
-          <Button
-            key={option.optionId}
-            variant={KIND_VARIANT[option.kind as PermissionOptionKind] ?? 'secondary'}
-            size="sm"
-            className={cn('aria-disabled:cursor-not-allowed aria-disabled:opacity-50', {
-              [GATE_PRIMARY]: option.kind === 'allow_once',
-            })}
-            data-testid={`chat-permission-option-${option.optionId}`}
-            // Not `disabled`: it stays in the tab order, and says why.
-            aria-disabled={lockedOption || undefined}
-            aria-describedby={lockedOption ? lockedId : undefined}
-            onClick={() => {
-              if (!lockedOption) onSelect(option);
-            }}
-          >
-            {option.name}
-            {option.kind === 'allow_always' && <SavedBadge grants={grants} />}
-          </Button>
-        );
-      })}
+      {options.map((option) => (
+        <PermissionAnswer
+          key={option.optionId}
+          option={option}
+          grants={grants}
+          lockedId={locked ? lockedId : undefined}
+          onSelect={onSelect}
+        />
+      ))}
     </div>
   );
 }
