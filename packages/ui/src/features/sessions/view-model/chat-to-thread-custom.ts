@@ -294,3 +294,11 @@ export function archivedThreadItemsToSessionItems(entries: readonly ThreadListEn
     .filter((entry) => entry.status === 'archived')
     .map(threadEntryToSessionItem);
 }
+
+/** Every chat of a project the list knows: archived sessions, delegated tasks and side chats included. */
+export function projectChatIds(entries: readonly ThreadListEntry[], projectId: string): string[] {
+  return threadItemsToSessionItems(entries)
+    .filter((item) => item.custom.projectId === projectId)
+    .flatMap((item) => [item.remoteId, item.custom.sideChatId])
+    .filter((id): id is string => id != null);
+}

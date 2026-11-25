@@ -208,7 +208,7 @@ describe('AskUserQuestionGate', () => {
     const option = screen.getByTestId('chat-question-option-0-MP4');
     const indicator = option.querySelector('[data-radio-indicator]');
     expect(indicator).not.toBeNull();
-    expect(indicator).toHaveClass('size-4', 'border-input');
+    expect(indicator).toHaveClass('size-4', 'border-muted-foreground');
 
     fireEvent.click(option);
     expect(indicator).toHaveClass('border-primary', 'bg-primary');
@@ -316,7 +316,7 @@ describe('AskUserQuestionGate', () => {
   // 7. Header present: GateHead title = header; question text in body element
   // -------------------------------------------------------------------------
 
-  it('with header "Auth method" the head title is the header and question text is in chat-question-text', () => {
+  it('the question is the title, and its header is the context line under it', () => {
     const entry: ChatPermissionEntry = {
       requestId: 'r3',
       askedAt: 1,
@@ -333,29 +333,137 @@ describe('AskUserQuestionGate', () => {
     };
     wrap(<AskUserQuestionGate entry={entry} reply={reply} />);
 
-    // The header is the title shown in GateHead.
-    expect(screen.getByText('Auth method')).toBeInTheDocument();
-
-    // The question text is demoted to the body paragraph.
-    const body = screen.getByTestId('chat-question-text');
-    expect(body).toBeInTheDocument();
-    expect(body).toHaveTextContent('Which auth approach?');
-
-    // Body row left-aligns under the head title column (GATE_BODY_INSET).
-    expect(body).toHaveClass('pl-[calc(1rem+1.5rem+0.625rem)]');
+    const title = screen.getByTestId('chat-question-text');
+    expect(title.tagName).toBe('H3');
+    expect(title).toHaveTextContent('Which auth approach?');
+    expect(screen.getByTestId('chat-question-context')).toHaveTextContent('Auth method');
   });
 
   // -------------------------------------------------------------------------
-  // 8. No header: question text IS the title; no chat-question-text element
+  // 8. No header, no context: the title stands alone, with no label above it
   // -------------------------------------------------------------------------
 
-  it('without a header the question text is the title and chat-question-text is absent', () => {
+  it('without a header or context there is no context line', () => {
     wrap(<AskUserQuestionGate entry={singleNoHeader()} reply={reply} />);
 
-    // The question text should appear as the head title (no header to displace it).
-    expect(screen.getByText('Which auth approach?')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-question-text')).toHaveTextContent('Which auth approach?');
+    expect(screen.queryByTestId('chat-question-context')).toBeNull();
+    expect(screen.queryByText('Question')).toBeNull();
+  });
 
-    // No separate body paragraph element should be present.
-    expect(screen.queryByTestId('chat-question-text')).toBeNull();
+  it('adds "select all that apply" to the context line of a multi-select question', () => {
+    wrap(<AskUserQuestionGate entry={multi()} reply={reply} />);
+
+    expect(screen.getByTestId('chat-question-context')).toHaveTextContent('select all that apply');
+  });
+
+  it('names the asker and how many more wait, after the header', () => {
+    wrap(
+      <AskUserQuestionGate
+        entry={single()}
+        reply={reply}
+        context={{ asker: 'code-reviewer', title: 'Review the diff', more: 2 }}
+      />,
+    );
+
+    expect(screen.getByTestId('chat-question-context').textContent).toBe(
+      'Format · code-reviewer · Review the diff · 2 more waiting',
+    );
+  });
+
+  it('shows no "more waiting" when nothing waits behind it', () => {
+    wrap(<AskUserQuestionGate entry={single()} reply={reply} context={{ asker: 'code-reviewer', more: 0 }} />);
+
+    expect(screen.getByTestId('chat-question-context').textContent).toBe('Format · code-reviewer');
+  });
+
+  it('spells out what hides in the asker, and keeps its order', () => {
+    wrap(
+      <AskUserQuestionGate
+        entry={single()}
+        reply={reply}
+        context={{ asker: 'a\u202Eb', title: 'c\u200Bd', more: 0 }}
+      />,
+    );
+
+    expect(screen.getByTestId('chat-question-context').textContent).toBe('Format · a⟨U+202E⟩b · c⟨U+200B⟩d');
+    expect(screen.getByText(/a⟨U\+202E⟩b/)).toHaveClass('stored-order');
+  });
+
+  it('spells out what hides in the agent’s question, header and options, and answers with them as written', () => {
+    const entry = single();
+    entry.request.input = {
+      questions: [
+        {
+          question: 'Delete \u202Egnihton\u202C?',
+          header: 'Cle\u200Ban',
+          options: [{ label: 'Ye\u200Bs', description: 'all\u2066' }, { label: 'No' }],
+        },
+      ],
+    };
+    const reply = vi.fn().mockResolvedValue(undefined);
+    wrap(<AskUserQuestionGate entry={entry} reply={reply} />);
+
+    expect(screen.getByTestId('chat-question-text')).toHaveTextContent('Delete ⟨U+202E⟩gnihton⟨U+202C⟩?');
+    expect(screen.getByTestId('chat-question-context')).toHaveTextContent('Cle⟨U+200B⟩an');
+    expect(screen.getByRole('radiogroup')).toHaveAccessibleName('Delete ⟨U+202E⟩gnihton⟨U+202C⟩?');
+    const [yes] = screen.getAllByRole('radio');
+    expect(yes).toHaveTextContent('Ye⟨U+200B⟩sall⟨U+2066⟩');
+
+    fireEvent.click(yes!);
+    fireEvent.click(screen.getByTestId('chat-question-submit'));
+    expect(reply).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        updatedInput: expect.objectContaining({ answers: { 'Delete \u202Egnihton\u202C?': 'Ye\u200Bs' } }),
+      }),
+    );
+  });
+
+  it('tags an option ending in "(Recommended)" and drops the suffix from its label', () => {
+    const entry = single();
+    (entry.request.input.questions as { options: { label: string }[] }[])[0]!.options = [
+      { label: 'MP4 (Recommended)' },
+      { label: 'GIF' },
+    ];
+    wrap(<AskUserQuestionGate entry={entry} reply={reply} />);
+
+    const option = screen.getByTestId('chat-question-option-0-MP4 (Recommended)');
+    expect(screen.getByTestId('chat-question-option-0-MP4 (Recommended)-recommended')).toHaveTextContent('Recommended');
+    expect(option.textContent).toContain('MP4');
+    expect(option.textContent).not.toContain('(Recommended)');
+    expect(screen.queryByTestId('chat-question-option-0-GIF-recommended')).toBeNull();
+  });
+
+  it('answers with the label as the model wrote it, suffix included, when a recommended option is chosen', () => {
+    const entry = single();
+    (entry.request.input.questions as { options: { label: string }[] }[])[0]!.options = [
+      { label: 'MP4 (Recommended)' },
+      { label: 'GIF' },
+    ];
+    wrap(<AskUserQuestionGate entry={entry} reply={reply} />);
+
+    fireEvent.click(screen.getByTestId('chat-question-option-0-MP4 (Recommended)'));
+    fireEvent.click(screen.getByTestId('chat-question-submit'));
+
+    expect(reply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        behavior: 'allow',
+        updatedInput: expect.objectContaining({ answers: { 'Pick a format': 'MP4 (Recommended)' } }),
+      }),
+    );
+  });
+
+  it('exposes single-select rows as a radiogroup and multi-select rows as checkboxes', () => {
+    const { unmount } = wrap(<AskUserQuestionGate entry={single()} reply={reply} />);
+    expect(screen.getByRole('radiogroup', { name: 'Pick a format' })).toBeInTheDocument();
+    expect(screen.getByTestId('chat-question-option-0-MP4')).toHaveAttribute('role', 'radio');
+    expect(screen.getByTestId('chat-question-option-0-MP4')).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(screen.getByTestId('chat-question-option-0-MP4'));
+    expect(screen.getByTestId('chat-question-option-0-MP4')).toHaveAttribute('aria-checked', 'true');
+    unmount();
+
+    wrap(<AskUserQuestionGate entry={multi()} reply={reply} />);
+    expect(screen.getByRole('group', { name: 'Pick tags' })).toBeInTheDocument();
+    expect(screen.getAllByRole('checkbox').length).toBeGreaterThan(0);
   });
 });

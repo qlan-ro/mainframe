@@ -4,7 +4,7 @@
  * stand-in for the coming reply there, which a list of messages never shows.
  */
 import { act, render, screen } from '@testing-library/react';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
   AssistantRuntimeProvider,
   ThreadPrimitive,
@@ -29,7 +29,15 @@ import { TurnTranscript } from '../TurnTranscript';
 
 const controller = {} as AcpChatController;
 
-export function RunThread({ state, rootId }: { state: ChatThreadState; rootId: string }) {
+export function RunThread({
+  state,
+  rootId,
+  children,
+}: {
+  state: ChatThreadState;
+  rootId: string;
+  children?: ReactNode;
+}) {
   const projector = useMemo(() => new TranscriptProjector(), []);
   const messageRepository = useMemo(() => projector.projectRepository(state), [projector, state]);
   const runtime = useExternalStoreRuntime<ThreadMessage>({
@@ -38,9 +46,15 @@ export function RunThread({ state, rootId }: { state: ChatThreadState; rootId: s
     extras: buildChatExtras(controller, 31415, state),
     onNew: async () => {},
   });
+  const permissions = state.interactions.permissions;
   const scope = useMemo(
-    () => ({ rootThreadId: rootId, chatId: 'chat', ancestors: [], pendingToolIds: new Set<string>() }),
-    [rootId],
+    () => ({
+      rootThreadId: rootId,
+      chatId: 'chat',
+      ancestors: [],
+      pendingToolIds: new Set(Object.values(permissions).map(({ request }) => request.toolUseId)),
+    }),
+    [rootId, permissions],
   );
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -49,6 +63,7 @@ export function RunThread({ state, rootId }: { state: ChatThreadState; rootId: s
           <TranscriptScrollProvider value={null}>
             <ThreadPrimitive.Root>
               <TurnTranscript />
+              {children}
             </ThreadPrimitive.Root>
           </TranscriptScrollProvider>
         </TranscriptScopeProvider>

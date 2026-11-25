@@ -2,12 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { ControlResponse } from '@qlan-ro/mainframe-types';
-import {
-  createChatThreadState,
-  type ChatPermissionEntry,
-  type ChatThreadState,
-} from '../../controller/chat-thread-state';
+import { createChatThreadState, reduceChatThreadState, type ChatThreadState } from '../../controller/chat-thread-state';
 import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
 
 /** The slice of `AcpChatController` the hook drives. */
@@ -16,7 +11,6 @@ class FakeController {
   readonly listeners = new Set<() => void>();
   readonly release = vi.fn();
   readonly holdActive = vi.fn(() => this.release);
-  readonly replyToPermission = vi.fn(async () => {});
   getState = () => this.state;
   subscribeState = (listener: () => void) => {
     this.listeners.add(listener);
@@ -52,15 +46,6 @@ function message(i: number): ThreadMessageLike {
   return { id: `m${i}`, role: 'assistant', createdAt: new Date(i), content: [{ type: 'text', text: `m${i}` }] };
 }
 
-function gate(requestId: string, askedAt: number): ChatPermissionEntry {
-  return {
-    requestId,
-    askedAt,
-    request: { requestId, toolName: 'Bash', toolUseId: `tu-${requestId}`, input: {}, suggestions: [] },
-    options: [],
-  };
-}
-
 beforeEach(() => controllers.clear());
 
 describe('useTaskChat', () => {
@@ -83,15 +68,21 @@ describe('useTaskChat', () => {
     expect(result.current.messages[0]!.id).toBe('m5');
   });
 
-  it("surfaces the child's oldest open gate and answers it into the child's session", async () => {
+  it('exposes the pending tool ID without a second gate or reply handler', () => {
     const { result } = renderHook(() => useTaskChat('kid'), { wrapper });
     const controller = controllers.get('kid')!;
-    const interactions = { ...controller.state.interactions, permissions: { b: gate('b', 2), a: gate('a', 1) } };
-    act(() => controller.set({ ...controller.state, interactions }));
-    expect(result.current.gate?.requestId).toBe('a');
+    act(() =>
+      controller.set(
+        reduceChatThreadState(controller.state, {
+          type: 'permission.requested',
+          requestId: 'req',
+          request: { requestId: 'req', toolUseId: 'cmd', toolName: 'Bash', input: {}, suggestions: [] },
+          options: [],
+        }),
+      ),
+    );
 
-    const response = { requestId: 'a', behavior: 'deny' } as unknown as ControlResponse;
-    await result.current.reply(response, 'reject-once');
-    expect(controller.replyToPermission).toHaveBeenCalledWith(response, 'reject-once');
+    expect(Object.keys(result.current).sort()).toEqual(['hiddenCount', 'loadState', 'messages', 'pendingToolIds']);
+    expect(result.current.pendingToolIds).toEqual(new Set(['cmd']));
   });
 });

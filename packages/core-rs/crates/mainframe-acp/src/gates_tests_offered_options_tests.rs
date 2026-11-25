@@ -107,3 +107,45 @@ fn claude_hides_allow_always_without_suggestions() {
         .collect();
     assert_eq!(ids, vec!["allow-once", "allow-always", "reject-once"]);
 }
+
+#[test]
+fn claude_hides_allow_always_when_nothing_suggested_may_be_saved() {
+    let suggestions: Vec<mainframe_types::adapter::ControlUpdate> = serde_json::from_value(json!([
+        { "type": "setMode", "mode": "yolo", "destination": "session" },
+        { "type": "setMode", "mode": "bypassPermissions", "destination": "session" },
+        { "type": "someday" }
+    ]))
+    .unwrap();
+    let request = control_request_with_suggestions(suggestions);
+
+    let ids: Vec<String> = offered_options(&request)
+        .into_iter()
+        .map(|option| option.option_id)
+        .collect();
+
+    assert_eq!(ids, vec!["allow-once", "reject-once"]);
+}
+
+/// An older client sends every suggestion back. The answer still resolves its
+/// gate; the chat layer is what takes the unsavable part out.
+#[test]
+fn a_rich_answer_with_an_update_it_cannot_read_still_parses() {
+    let response: RequestPermissionResponse = serde_json::from_value(json!({
+        "outcome": { "outcome": "selected", "optionId": "allow-always" },
+        "_meta": { "_mainframe.dev": { "controlResponse": {
+            "requestId": "req_001",
+            "toolUseId": "toolu_01A",
+            "behavior": "allow",
+            "updatedPermissions": [
+                { "type": "setMode", "mode": "bypassPermissions", "destination": "session" }
+            ]
+        } } }
+    }))
+    .unwrap();
+
+    let mut control = parse_answer(&control_request(), response).unwrap();
+
+    assert_eq!(control.behavior, ControlBehavior::Allow);
+    assert_eq!(control.withhold_ungrantable().len(), 1);
+    assert_eq!(control.updated_permissions, Some(vec![]));
+}

@@ -32,6 +32,8 @@ mod history_snapshot;
 mod offload;
 #[path = "chat_manager_tests_orchestration.rs"]
 mod orchestration;
+#[path = "chat_manager_tests_permission_answers.rs"]
+mod permission_answers;
 #[path = "chat_manager_tests_plan_mode.rs"]
 mod plan_mode;
 #[path = "chat_manager_tests_provider_switch.rs"]
@@ -44,6 +46,8 @@ mod resume_snapshot;
 mod segment_fake;
 #[path = "chat_manager_tests_side_chat.rs"]
 mod side_chat;
+#[path = "chat_manager_tests_steer_waits.rs"]
+mod steer_waits;
 #[path = "chat_manager_tests_teardown.rs"]
 mod teardown;
 #[path = "chat_manager_tests_unarchive.rs"]
@@ -79,6 +83,8 @@ struct RecSession {
     /// When set, `send_message` fails with this message instead of recording
     /// the call (Codex refusing `thread/resume` for an archived thread).
     send_err: Mutex<Option<String>>,
+    /// Set once the CLI has exited (an interrupt lands).
+    exited: std::sync::atomic::AtomicBool,
 }
 
 impl RecSession {
@@ -98,6 +104,7 @@ impl RecSession {
             steer_calls: Mutex::new(Vec::new()),
             steer_err: Mutex::new(None),
             send_err: Mutex::new(None),
+            exited: std::sync::atomic::AtomicBool::new(false),
         })
     }
     fn with_order(label: &str, order: Arc<Mutex<Vec<String>>>) -> Arc<Self> {
@@ -116,6 +123,7 @@ impl RecSession {
             steer_calls: Mutex::new(Vec::new()),
             steer_err: Mutex::new(None),
             send_err: Mutex::new(None),
+            exited: std::sync::atomic::AtomicBool::new(false),
         })
     }
 }
@@ -135,7 +143,7 @@ impl AdapterSession for RecSession {
         "/tmp/test"
     }
     fn is_spawned(&self) -> bool {
-        true
+        !self.exited.load(Ordering::SeqCst)
     }
     fn supports_replay_ack(&self) -> bool {
         self.supports_replay_ack

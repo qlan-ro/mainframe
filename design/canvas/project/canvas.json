@@ -68,30 +68,28 @@
       "y": 1060
     },
     "Chat-Composer.dc.html": {
-      "h": 5330,
+      "h": 2082,
       "page": "composer",
-      "title": "Chat — composer controls",
-      "w": 2645,
-      "x": 1205,
-      "y": 4415
-    },
-    "Chat-ComposerFlow.dc.html": {
-      "h": 900,
-      "is_interactive": true,
-      "page": "composer",
-      "title": "Chat — send and stop flow",
-      "w": 1440,
+      "title": "Chat — composer",
+      "w": 2772,
       "x": 0,
       "y": 0
     },
-    "Chat-ComposerMenus.dc.html": {
-      "h": 900,
-      "is_interactive": true,
+    "Chat-ComposerFlow.dc.html": {
+      "h": 754,
       "page": "composer",
-      "title": "Chat — configuration menus",
-      "w": 1440,
-      "x": 1520,
-      "y": 0
+      "title": "Chat — composer, from draft to stop",
+      "w": 2772,
+      "x": 0,
+      "y": 2242
+    },
+    "Chat-ComposerMenus.dc.html": {
+      "h": 3272,
+      "page": "composer",
+      "title": "Chat — composer menus",
+      "w": 2772,
+      "x": 0,
+      "y": 3156
     },
     "Chat-SessionPanel-ActivitySection.dc.html": {
       "h": 2036,
@@ -166,38 +164,6 @@
       "x": 0,
       "y": 0
     },
-    "Proposal-Redesign-Activity.dc.html": {
-      "h": 3992,
-      "page": "proposals",
-      "title": "Window redesign: queue and activity strip",
-      "w": 2932,
-      "x": 1460,
-      "y": 14038
-    },
-    "Proposal-Redesign-BottomStrip.dc.html": {
-      "h": 1120,
-      "page": "proposals",
-      "title": "Window redesign: where it runs, branch and changes",
-      "w": 2616,
-      "x": 1460,
-      "y": 18190
-    },
-    "Proposal-Redesign-Composer.dc.html": {
-      "h": 4586,
-      "page": "proposals",
-      "title": "Window redesign: composer toolbar, send and stop",
-      "w": 2616,
-      "x": 1460,
-      "y": 6872
-    },
-    "Proposal-Redesign-Gates.dc.html": {
-      "h": 2428,
-      "page": "proposals",
-      "title": "Window redesign: permission, plan and question gates",
-      "w": 2616,
-      "x": 1460,
-      "y": 19470
-    },
     "Proposal-Redesign-NewSession.dc.html": {
       "h": 3426,
       "page": "proposals",
@@ -212,10 +178,10 @@
       "title": "Window redesign: keyboard shortcuts sheet",
       "w": 1536,
       "x": 1460,
-      "y": 31096
+      "y": 18330
     },
     "Proposal-Redesign-Spec.dc.html": {
-      "h": 10085,
+      "h": 10921,
       "page": "proposals",
       "title": "Window redesign: the decisions (spec)",
       "w": 1360,
@@ -236,7 +202,7 @@
       "title": "Window redesign: workspace surface",
       "w": 3024,
       "x": 1460,
-      "y": 25904
+      "y": 13138
     },
     "Proposal-Window-Baseline.dc.html": {
       "h": 900,
@@ -493,7 +459,7 @@
     "Proposal-Redesign-Transcript.dc.html": {
       "page": "proposals",
       "x": 1460,
-      "y": 22058,
+      "y": 9292,
       "w": 3504,
       "h": 3686,
       "title": "Window redesign: transcript, every row and state"
@@ -501,7 +467,7 @@
     "Proposal-Redesign-ComposerContent.dc.html": {
       "page": "proposals",
       "x": 1460,
-      "y": 11618,
+      "y": 6872,
       "w": 2616,
       "h": 2260,
       "title": "Window redesign: files, captures and quotes in the composer"
@@ -523,12 +489,12 @@
       "y": 3120
     },
     "Chat-ComposerFocus.dc.html": {
-      "h": 708,
+      "h": 1776,
       "page": "composer",
       "title": "Chat — composer focus and gates",
-      "w": 1792,
+      "w": 2772,
       "x": 0,
-      "y": 9905
+      "y": 6588
     },
     "Chat-States-Failures.dc.html": {
       "h": 1040,
@@ -593,6 +559,14 @@
       "w": 2172,
       "x": 0,
       "y": 10751
+    },
+    "Settings-Chat.dc.html": {
+      "h": 1100,
+      "page": "settings",
+      "title": "Settings — Chat",
+      "w": 1536,
+      "x": 0,
+      "y": 17444
     }
   },
   "createdOnFiles": {
@@ -707,6 +681,7 @@
     "Settings-DialogsMore.dc.html",
     "Settings-SetupAdvisor.dc.html",
     "Settings-Errors.dc.html",
+    "Settings-Chat.dc.html",
     "Automations-List.dc.html",
     "Automations-Flow.dc.html",
     "Automations-Empty.dc.html",
@@ -726,11 +701,7 @@
     "Proposal-Window-BaselineDark.dc.html",
     "Proposal-Redesign-Window.dc.html",
     "Proposal-Redesign-NewSession.dc.html",
-    "Proposal-Redesign-Composer.dc.html",
     "Proposal-Redesign-ComposerContent.dc.html",
-    "Proposal-Redesign-Activity.dc.html",
-    "Proposal-Redesign-BottomStrip.dc.html",
-    "Proposal-Redesign-Gates.dc.html",
     "Proposal-Redesign-Transcript.dc.html",
     "Proposal-Redesign-Workspace.dc.html",
     "Proposal-Redesign-Shortcuts.dc.html"

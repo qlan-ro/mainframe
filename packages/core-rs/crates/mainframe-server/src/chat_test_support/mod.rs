@@ -123,9 +123,9 @@ impl Adapter for StubAdapter {
     fn capabilities(&self) -> AdapterCapabilities {
         AdapterCapabilities {
             plan_mode: false,
-            auto_mode: false,
             no_persistence: self.no_persistence,
             fork: false,
+            ..AdapterCapabilities::default()
         }
     }
     fn is_installed(&self) -> BoxFuture<'_, Result<bool, AdapterError>> {

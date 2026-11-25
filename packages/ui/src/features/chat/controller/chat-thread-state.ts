@@ -50,6 +50,8 @@ export interface PendingUserMessage {
   attachmentsRestored?: boolean;
   /** The send meta (e.g. a `/command` invocation) a retry must re-carry — text-only, attachmentIds are never re-added here. */
   sendMeta?: PromptSendMeta;
+  /** Sent behind a running turn: it becomes a queue row, so it never shows as a sent bubble first. */
+  queueing?: boolean;
   /** The composer's attachment bytes, previewed while the send is in flight. */
   attachments?: LocalAttachmentPreview[];
 }

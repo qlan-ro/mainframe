@@ -92,7 +92,7 @@ it('reuses immutable historical native objects across active updates and reorder
   expect(result.current[0]).not.toBe(original);
   expect(result.current[0]!.content).toEqual(replacement.content);
 });
-it('keeps pending and queued user messages in canonical order without assistant status', () => {
+it('keeps pending and steered user messages in canonical order without assistant status', () => {
   const base = stateFor([assistant()]);
   const state: ChatThreadState = {
     ...base,
@@ -107,6 +107,7 @@ it('keeps pending and queued user messages in canonical order without assistant 
           chatId: 'chat',
           uuid: 'queued',
           content: 'queued',
+          steered: true,
           timestamp: new Date(2).toISOString(),
         },
       },

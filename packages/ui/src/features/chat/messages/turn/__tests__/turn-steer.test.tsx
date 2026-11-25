@@ -215,9 +215,9 @@ describe('the stand-in for the coming reply', () => {
     expect(screen.getByTestId('chat-turn-status')).toBe(status);
   });
 
-  it('leaves the status row above a queued prompt', () => {
+  it('keeps the status row visible while the composer owns queued prompts', () => {
     Session.open([user('Go', 'u1')], START, queued());
-    const order = screen.getByTestId('chat-turn-status').compareDocumentPosition(screen.getByText('also the tests'));
-    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('chat-turn-status')).toBeInTheDocument();
+    expect(screen.queryByText('also the tests')).toBeNull();
   });
 });

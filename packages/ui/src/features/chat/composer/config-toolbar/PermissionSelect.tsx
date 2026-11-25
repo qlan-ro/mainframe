@@ -1,34 +1,33 @@
 'use client';
 
 /**
- * PermissionSelect — Shield-icon trigger + dropdown of execution modes.
+ * The composer's permissions control: the mode by name (C6), or "Planning ·
+ * then Auto-Edits" while plan mode is on (C1). NOT disabled while the chat is
+ * running: a change applies to the next action.
  *
- * Interactive / Auto-Edits / Auto / Unattended, least to most permissive. Auto is
- * the Claude CLI's own mode and shows only for an adapter advertising
- * capabilities.autoMode; the label is still resolved off the unfiltered list so a
- * chat carrying a mode this adapter can't offer never renders the raw wire string.
- * Tone tints the trigger and the option label: Unattended `warning` (ink AND a
- * warning-tinted chip — reverses #325: running unattended needs you, it is not
- * a destructive act), Auto `caution` (warning ink alone), so the two stay distinct.
- * NOT disabled while the chat is running — can be changed for the next turn.
- *
- * A floating list of choices is a native DropdownMenu (ledger rule, 2026-08-05).
- * Open chrome is driven by React state, not `data-[state=open]:` — the Hint's
- * `TooltipTrigger asChild` overwrites the child's `data-state` with the tooltip's.
+ * Tone is the only place Unattended shows (C13): `warning` ink on a tinted
+ * chip. Auto is warning ink alone. Auto shows only for an adapter advertising
+ * capabilities.autoMode; the label is still resolved off the full list so a
+ * chat carrying a mode this adapter can't offer never renders the raw wire
+ * string.
  */
 
 import { useState } from 'react';
-import { ChevronDown, Shield } from 'lucide-react';
+import { ChevronDown, ClipboardList, Shield } from 'lucide-react';
 import type { AdapterInfo, Chat, ExecutionMode, ProviderConfig } from '@qlan-ro/mainframe-types';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
+import { ComposerHint } from '../composer-card-context';
+import { PERMISSION_MODES, permissionLabel, type ModeTone } from './permission-modes';
+import { toolbarButton } from './toolbar-button';
 
 export interface PermissionSelectProps {
   chat: Chat;
@@ -36,84 +35,111 @@ export interface PermissionSelectProps {
   providerDefaults?: ProviderConfig;
   /** Resolved adapter for this chat; gates the Auto option. Null/absent while the catalog loads. */
   adapter?: AdapterInfo | null;
+  className?: string;
 }
 
-type ModeTone = 'caution' | 'warning' | undefined;
-
-const PERMISSION_MODES: { id: ExecutionMode; label: string; description: string; tone?: ModeTone }[] = [
-  { id: 'default', label: 'Interactive', description: 'Approve every action' },
-  { id: 'acceptEdits', label: 'Auto-Edits', description: 'Edits auto-applied; commands ask' },
-  { id: 'auto', label: 'Auto', description: 'Claude decides which actions need approval', tone: 'caution' },
-  { id: 'yolo', label: 'Unattended', description: 'Runs without prompts', tone: 'warning' },
-];
-
-const TONE_INK: Record<'caution' | 'warning', string> = {
-  caution: 'text-warning',
-  warning: 'text-warning',
-};
-
-function toneInk(tone: ModeTone): string {
-  return tone == null ? 'text-muted-foreground' : TONE_INK[tone];
+export function currentPermission(chat: Chat, providerDefaults?: ProviderConfig): ExecutionMode {
+  return chat.permissionMode ?? providerDefaults?.defaultMode ?? 'default';
 }
 
-/** The chip tint that separates Unattended from Auto's bare warning ink. */
-function toneChip(tone: ModeTone): string | undefined {
-  return tone === 'warning' ? 'border-warning/40 bg-warning/10' : undefined;
+const toneOf = (mode: ExecutionMode): ModeTone => PERMISSION_MODES.find((m) => m.id === mode)?.tone;
+
+/** Trigger classes for a mode: warning ink for Auto, a tinted chip for Unattended, the accent while planning. */
+export function permissionTone(mode: ExecutionMode, planning: boolean): string | undefined {
+  if (planning) return 'text-accent-ink';
+  const tone = toneOf(mode);
+  if (tone == null) return undefined;
+  return cn(
+    'text-warning',
+    tone === 'warning' && 'bg-warning/10 ring-1 ring-warning/40 ring-inset hover:bg-warning/20',
+  );
 }
 
-export function PermissionSelect({ chat, setPermissionMode, providerDefaults, adapter }: PermissionSelectProps) {
+/** "Interactive", or "Planning · then Auto-Edits". */
+export function permissionStatus(mode: ExecutionMode, planning: boolean): string {
+  return planning ? `Planning · then ${permissionLabel(mode)}` : permissionLabel(mode);
+}
+
+interface PermissionItemsProps {
+  mode: ExecutionMode;
+  planning: boolean;
+  autoAllowed: boolean;
+  onSelect: (mode: ExecutionMode) => void;
+}
+
+/** The mode list, shared by this menu and the combined chip's. */
+export function PermissionItems({ mode, planning, autoAllowed, onSelect }: PermissionItemsProps) {
+  const offered = PERMISSION_MODES.filter((m) => m.id !== 'auto' || autoAllowed);
+  return (
+    <DropdownMenuGroup>
+      {planning && (
+        <DropdownMenuLabel
+          data-testid="composer-permission-planning-note"
+          className="max-w-64 text-xs font-normal whitespace-normal"
+        >
+          Plan mode is active. Your choice applies once the plan is approved.
+        </DropdownMenuLabel>
+      )}
+      <DropdownMenuRadioGroup value={mode} onValueChange={(next) => onSelect(next as ExecutionMode)}>
+        {offered.map((m) => (
+          <DropdownMenuRadioItem
+            key={m.id}
+            value={m.id}
+            data-testid={`composer-permission-mode-select-option-${m.id}`}
+            className="items-start"
+          >
+            <span className="flex min-w-0 flex-col">
+              <span className={cn('font-medium', m.tone != null && 'text-warning')}>{m.label}</span>
+              <span className="text-xs leading-snug text-muted-foreground">{m.description}</span>
+            </span>
+          </DropdownMenuRadioItem>
+        ))}
+      </DropdownMenuRadioGroup>
+    </DropdownMenuGroup>
+  );
+}
+
+export function PermissionSelect({
+  chat,
+  setPermissionMode,
+  providerDefaults,
+  adapter,
+  className,
+}: PermissionSelectProps) {
   const [open, setOpen] = useState(false);
-  const currentMode: ExecutionMode = chat.permissionMode ?? providerDefaults?.defaultMode ?? 'default';
-  const current = PERMISSION_MODES.find((m) => m.id === currentMode);
-  const currentLabel = current?.label ?? currentMode;
-  const offered = PERMISSION_MODES.filter((m) => m.id !== 'auto' || adapter?.capabilities.autoMode === true);
+  const mode = currentPermission(chat, providerDefaults);
+  const planning = chat.planMode === true;
+  const status = permissionStatus(mode, planning);
+  const Icon = planning ? ClipboardList : Shield;
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <Hint label={`Permission: ${currentLabel}`} side="top">
+      <ComposerHint label={`Permissions: ${status} · ⇧⇥ to switch`}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             data-testid="composer-permission-mode-select"
-            aria-label={`Permission mode: ${currentLabel}`}
-            className={cn(
-              'flex h-[20px] shrink-0 items-center justify-center gap-[5px] px-[6px]',
-              '@[560px]:justify-start @[560px]:pl-[8px] @[560px]:pr-[7px]',
-              'rounded-[11px] border-[0.5px] border-border text-xs',
-              'hover:bg-accent hover:text-accent-foreground',
-              open && 'border-primary bg-sidebar-selection',
-              'transition-colors',
-              'focus-visible:focus-line',
-              toneInk(current?.tone),
-              toneChip(current?.tone),
-            )}
+            data-permissions-control
+            data-planning={planning || undefined}
+            aria-label={`Permission mode: ${status}`}
+            className={toolbarButton(open, cn('font-medium', permissionTone(mode, planning), className))}
           >
-            <Shield size={12} className="shrink-0" />
-            <span className="hidden @[560px]:inline truncate font-medium">{currentLabel}</span>
-            <ChevronDown size={12} className="hidden @[560px]:inline shrink-0 text-muted-foreground" />
+            <Icon className="size-3.5 shrink-0" />
+            <span className="truncate">
+              {planning ? 'Planning' : permissionLabel(mode)}
+              {planning && <span className="font-normal text-muted-foreground"> · then {permissionLabel(mode)}</span>}
+            </span>
+            <ChevronDown className="size-3 shrink-0 opacity-70" />
           </button>
         </DropdownMenuTrigger>
-      </Hint>
-
-      <DropdownMenuContent align="start" side="top" sideOffset={6} className="min-w-40">
-        <DropdownMenuGroup>
-          {offered.map((mode) => (
-            <DropdownMenuItem
-              key={mode.id}
-              data-testid={`composer-permission-mode-select-option-${mode.id}`}
-              onSelect={() => setPermissionMode(mode.id)}
-              className={cn(
-                'items-start',
-                mode.id === currentMode && 'bg-sidebar-selection font-medium text-foreground',
-              )}
-            >
-              <span className="flex min-w-0 flex-col">
-                <span className={cn('font-medium', mode.tone != null && TONE_INK[mode.tone])}>{mode.label}</span>
-                <span className="text-xs leading-snug text-muted-foreground">{mode.description}</span>
-              </span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
+      </ComposerHint>
+      <DropdownMenuContent align="start" side="top" sideOffset={6} className="w-64">
+        <PermissionItems
+          mode={mode}
+          planning={planning}
+          autoAllowed={adapter?.capabilities.autoMode === true}
+          onSelect={setPermissionMode}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );

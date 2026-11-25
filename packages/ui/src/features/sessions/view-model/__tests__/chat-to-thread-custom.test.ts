@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { activeSessionCustom, chatToThreadCustom } from '../chat-to-thread-custom';
+import { activeSessionCustom, chatToThreadCustom, projectChatIds } from '../chat-to-thread-custom';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -284,5 +284,23 @@ describe('activeSessionCustom', () => {
   it('returns undefined for a custom-less draft item', () => {
     const draft = { id: '__LOCALID_new', status: 'new' };
     expect(activeSessionCustom(draft, [draft])).toBeUndefined();
+  });
+});
+
+describe('projectChatIds', () => {
+  const listed = (overrides: Partial<Chat>) => {
+    const { status, remoteId, custom } = chatToThreadCustom(makeChat(overrides));
+    return { id: remoteId, remoteId, status, custom: custom as unknown as Record<string, unknown> };
+  };
+
+  it('names every chat of the project: archived ones and side chats too, drafts and other projects not', () => {
+    const entries = [
+      listed({ id: 'a', sideChatId: 'a-side' }),
+      listed({ id: 'b', status: 'archived' }),
+      listed({ id: 'c', projectId: 'proj-2' }),
+      { id: '__LOCALID_x', status: 'new' },
+    ];
+
+    expect(projectChatIds(entries, 'proj-1')).toEqual(['a', 'a-side', 'b']);
   });
 });

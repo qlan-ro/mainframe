@@ -65,3 +65,35 @@ async fn set_mode_pointed_at_local_settings_is_forwarded_session_scoped() {
     assert_eq!(emitted["destination"], "session");
     assert_eq!(emitted["mode"], "acceptEdits");
 }
+
+#[tokio::test]
+async fn a_mode_wider_than_auto_edits_never_reaches_the_cli() {
+    let s = session();
+    let mut rx = spawned_with_stdin(&s);
+    let rule = ControlUpdate::AddRules {
+        rules: vec![ControlRule {
+            tool_name: "Edit".to_string(),
+            rule_content: None,
+        }],
+        behavior: RuleBehavior::Allow,
+        destination: ControlDestination::Session,
+    };
+    let set = |mode| ControlUpdate::SetMode {
+        mode,
+        destination: ControlDestination::Session,
+    };
+    s.respond_to_permission(response(vec![
+        set(PermissionMode::Yolo),
+        rule,
+        set(PermissionMode::Auto),
+    ]))
+    .await
+    .unwrap();
+
+    let payload = read_json(&mut rx);
+    let sent = payload["response"]["response"]["updatedPermissions"]
+        .as_array()
+        .unwrap();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0]["type"], "addRules");
+}

@@ -1,5 +1,6 @@
 /**
- * WelcomeProjectPicker — the welcome screen's single project-or-none trigger
+ * WelcomeProjectPicker — a new session's project-or-none trigger, in the strip
+ * above the composer (K3)
  * (spec "variant D", todo #346): a dropdown showing the draft's current
  * choice — a colored dot + name, the dashed "No project" glyph, or "Choose a
  * project" before anything has resolved — and a "Start in…" list of every
@@ -25,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
 import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { listedThreadItemsToSessionItems } from '@/features/sessions/view-model/task-chats';
@@ -36,6 +38,10 @@ export interface WelcomeProjectPickerProps {
   /** undefined = not yet resolved, null = "No project", a string = a project id. */
   projectId: string | null | undefined;
   onSelect: (projectId: string | null) => void;
+  /** Controlled, so ⌘; can open it. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  className?: string;
 }
 
 /**
@@ -73,7 +79,13 @@ function WelcomeProjectTrigger({
   return <ProjectChip projectId={projectId} name={projectName ?? projectId} size={18} />;
 }
 
-export function WelcomeProjectPicker({ projectId, onSelect }: WelcomeProjectPickerProps) {
+export function WelcomeProjectPicker({
+  projectId,
+  onSelect,
+  open,
+  onOpenChange,
+  className,
+}: WelcomeProjectPickerProps) {
   const { projects } = useProjects();
   const threadItems = useThreadItems();
   const sortedProjects = sortProjectsByRecentActivity(projects, listedThreadItemsToSessionItems(threadItems));
@@ -81,15 +93,19 @@ export function WelcomeProjectPicker({ projectId, onSelect }: WelcomeProjectPick
   const resolvedDefaultId = useResolvedDefaultProjectId(projectId);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
           data-testid="welcome-project"
-          className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted"
+          aria-label={`Project: ${projectId === null ? 'No project' : (projectName ?? 'not chosen')}`}
+          className={cn(
+            'inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted focus-visible:focus-line',
+            className,
+          )}
         >
           <WelcomeProjectTrigger projectId={projectId} projectName={projectName} />
-          <ChevronDown size={12} className="text-muted-foreground" aria-hidden />
+          <ChevronDown size={12} className="shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent data-testid="welcome-project-picker" align="start" sideOffset={6} className="w-60">

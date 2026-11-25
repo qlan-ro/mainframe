@@ -1,6 +1,5 @@
 /**
- * A delegated task's chat inside its row: its live steps, read-only, and its
- * pending request, answered into the child's own session.
+ * A delegated task's read-only steps inside its row.
  *
  * Bounded to the latest `TASK_CHAT_WINDOW` messages; when more exist, a line
  * counts them and opens the full chat. Lazy-loaded and mounted only while the
@@ -8,7 +7,6 @@
  */
 import { PanelRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { GateCard } from '../gates/GateCard';
 import { AgentSteps, type AgentStepsProps } from '../messages/turn/AgentSteps';
 import { BodyNote } from '../tools/bodies/Surface';
 import { useTaskChat, type TaskChatView } from './use-task-chat';
@@ -61,13 +59,6 @@ export function TaskChatSteps({ chatId, taskId, onOpen, ...steps }: TaskChatStep
             {view.hiddenCount > 0 && <EarlierMessages count={view.hiddenCount} taskId={taskId} onOpen={onOpen} />}
             {note && <BodyNote testId={`chat-tool-delegate-task-empty-${taskId}`}>{note}</BodyNote>}
           </>
-        }
-        after={
-          view.gate != null && (
-            <div data-testid={`chat-tool-delegate-task-gate-${taskId}`} className="py-1">
-              <GateCard entry={view.gate} reply={view.reply} adapterId={view.adapterId} />
-            </div>
-          )
         }
       />
     </div>

@@ -26,8 +26,10 @@ export interface MainframeMessageMeta {
    *  block instead of the plain text part (which is kept for a11y/fallback). */
   readonly errorText?: string;
   // user turn
+  /** A steered message the agent has not picked up yet. */
   readonly queued?: boolean;
-  readonly queueDelivery?: string;
+  /** Folded into the running turn (C9). */
+  readonly steered?: boolean;
   readonly cleanText?: string;
   readonly command?: {
     readonly name: string;

@@ -1,0 +1,7 @@
+{"dir":"in","method":"sendMessage","args":["(the daemon sends the delegated task prompt here)"],"delayMs":0}
+{"dir":"out","method":"onInit","args":["e2e-delegate-gate-child"],"delayMs":20}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"Running the migration tests."}],null],"delayMs":40}
+{"dir":"out","method":"onPermission","args":[{"requestId":"e2e-delegate-gate-req","toolName":"Bash","toolUseId":"toolu_gate_bash","input":{"command":"cargo test -p migrations -- --nocapture","description":"Run the migration tests"},"suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"cargo test *"}],"behavior":"allow","destination":"localSettings"}]}],"delayMs":60}
+{"dir":"in","method":"respondToPermission","args":[{"requestId":"e2e-delegate-gate-req","behavior":"allow"}],"delayMs":80}
+{"dir":"out","method":"onMessage","args":[[{"type":"text","text":"The migration applies cleanly."}],null],"delayMs":100}
+{"dir":"out","method":"onResult","args":[{"total_cost_usd":0.004,"usage":{"input_tokens":10,"output_tokens":9},"subtype":"success","is_error":false}],"delayMs":140}

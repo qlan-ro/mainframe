@@ -36,9 +36,12 @@
  * `getComputedStyle` + canvas readback for every token here (33/34 exact, the
  * remainder premultiplied-alpha readback noise at α=0.1).
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { composite, contrast, parseRules, resolveOklch, toRgba, type Decls, type RGBA } from './css-color';
+
+// These walk the whole source tree; a loaded machine needs more than the 5s default.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** muted-foreground sits at *exactly* 4.5:1 worst-case, so absorb float noise. */
 const WCAG_MIN = 4.49;

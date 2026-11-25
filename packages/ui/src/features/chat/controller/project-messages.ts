@@ -48,6 +48,7 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
         mainframe: {
           ...(local.attachmentPreviews && { attachmentPreviews: local.attachmentPreviews }),
           pending: true,
+          ...(pending.sendMeta?.steer === true && { steered: true }),
           clientId: pending.clientId,
           ...(pending.status === 'failed'
             ? {
@@ -63,11 +64,13 @@ function projectPendingMessage(pending: PendingUserMessage): ThreadUserMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Queued-turn projection (D1): the encoder drops messages carrying `queued`
-// metadata, so queued turns render from `state.interactions.queued` alone.
+// Steered-turn projection (D1): the encoder drops messages carrying `queued`
+// metadata until the CLI picks them up. A steered one is already part of the
+// conversation, so it renders here from `state.interactions.queued`; the rest
+// of the queue is rows in the composer card (`composer/queue/`, C10).
 // ---------------------------------------------------------------------------
 
-function projectQueuedMessage(
+function projectSteeredMessage(
   ref: QueuedMessageRef,
   previews: Readonly<Record<string, LocalAttachmentPreview>>,
 ): ThreadUserMessage {
@@ -81,7 +84,7 @@ function projectQueuedMessage(
       custom: {
         mainframe: {
           queued: true,
-          queueDelivery: ref.delivery,
+          steered: true,
           ...(local.attachmentPreviews && { attachmentPreviews: local.attachmentPreviews }),
         },
       },
@@ -90,20 +93,20 @@ function projectQueuedMessage(
 }
 
 /**
- * Queued refs in FIFO order, skipping any whose `messageId` already appears
+ * Steered refs in FIFO order, skipping any whose `messageId` already appears
  * in the confirmed transcript — the window between the dequeue's create
  * frame and the next `queue_state` snapshot, which would otherwise render
  * the same turn twice.
  */
-function projectQueuedMessages(state: ChatThreadState, serverMessageIds: ReadonlySet<string>): ThreadUserMessage[] {
+function projectSteeredMessages(state: ChatThreadState, serverMessageIds: ReadonlySet<string>): ThreadUserMessage[] {
   return Object.values(state.interactions.queued)
-    .filter((ref) => !serverMessageIds.has(ref.messageId))
+    .filter((ref) => ref.steered === true && !serverMessageIds.has(ref.messageId))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-    .map((ref) => projectQueuedMessage(ref, state.queuedAttachmentPreviews));
+    .map((ref) => projectSteeredMessage(ref, state.queuedAttachmentPreviews));
 }
 
 /**
- * Everything that follows the confirmed transcript: queued turns (D1), then
+ * Everything that follows the confirmed transcript: steered turns (D1), then
  * the pending (optimistic) sends sorted by createdAt — always "newest", sent
  * just now; a reconciled pending no longer appears here.
  */
@@ -111,12 +114,12 @@ export function projectTrailingMessages(
   state: ChatThreadState,
   serverMessageIds: ReadonlySet<string>,
 ): ThreadUserMessage[] {
-  const queued = projectQueuedMessages(state, serverMessageIds);
+  const steered = projectSteeredMessages(state, serverMessageIds);
   const pending = Object.values(state.pendingUserMessages)
-    .filter((p): p is PendingUserMessage => p != null)
+    .filter((p): p is PendingUserMessage => p != null && !(p.queueing === true && p.status === 'pending'))
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(projectPendingMessage);
-  return [...queued, ...pending];
+  return [...steered, ...pending];
 }
 
 // ---------------------------------------------------------------------------

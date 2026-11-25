@@ -8,7 +8,7 @@
  * Variants rendered by this file:
  *   - Plain text    → CoolCard + ReadMoreBubble + markdown + @mention chips
  *   - /command|skill → CoolCard + leading pill badge (metadata-driven) + user text
- *   - Queued badge  → quiet animated footer badge above the card
+ *   - Steered       → a line under the bubble (C9)
  *   - Inline images → thumbnail row (regular image parts)
  *   - Attachments   → UserAttachments: file pills + clickable capture-image
  *     tiles with their selector context (native message.attachments)
@@ -36,12 +36,9 @@ import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import { Badge } from '@/components/ui/badge';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { useMainframeMeta } from '../view-model/message-meta';
-import { useChatQueuedMessages } from '../runtime/chat-extras';
 import { MessageFooter } from './MessageFooter';
 import { useIsNestedTranscript } from './nested-transcript-context';
 import { ReadMoreBubble } from './ReadMoreBubble';
-import { QueuedUserTurn } from './QueuedUserTurn';
-import { queuePosition } from './queue-position';
 import { InlineImageThumbs } from './InlineImageThumbs';
 import { userMarkdownComponents } from './user-directive-renderers';
 import { visibleMessageText } from '../markers/message-markers';
@@ -100,20 +97,11 @@ function SlashPill({ kind, name }: SlashPillProps) {
 
 function UserMessageImpl() {
   const meta = useMainframeMeta();
-  const isQueued = meta.queued === true;
   const nested = useIsNestedTranscript();
-  // FIFO position/total for the queued footer (design 7.2: UMQueuedStack).
-  // Only needed while queued — the hook is cheap (memoized off extras.queued).
-  const queuedRefs = useChatQueuedMessages();
 
   // H6: s.message is typed as MessageState (= ThreadMessage & extras) via the
   // ScopeRegistry augmentation in @assistant-ui/core — no cast needed.
   const messageId = useAuiState((s) => s.message.id);
-
-  const { position: queuePos, total: queueTotal } = useMemo(
-    () => queuePosition(queuedRefs, messageId),
-    [queuedRefs, messageId],
-  );
 
   // Resolve text: prefer cleanText (pipeline-stripped) over raw part text.
   // Read the stable content ref; derive text outside useAuiState to avoid a
@@ -132,9 +120,6 @@ function UserMessageImpl() {
       content.filter((p): p is { type: 'image'; image: string } => p.type === 'image' && typeof p.image === 'string'),
     [content],
   );
-  // Native attachments (file pills + capture image tiles) live on
-  // message.attachments (built in convert-message).
-  const attachmentCount = useAuiState((s) => s.message.attachments?.length ?? 0);
 
   // Reference lines are addressed to the agent, not the reader — the chips in
   // the body already say which sessions were referenced.
@@ -185,20 +170,13 @@ function UserMessageImpl() {
   // status === 'failed'; SendFailureNotice offers Retry (and the remedy).
   const sendError = meta.error;
 
-  // Capture context + attachments + image thumbs. For a queued turn these ride
-  // INSIDE QueuedUserTurn (above its meta footer, with the ghost treatment —
-  // artboard "Queued + attachment"); for a sent turn they stack as siblings
-  // below the cool-card. Built once so both paths share the exact same content.
+  // Capture context + attachments + image thumbs, stacked below the bubble.
   const extras = (
     <>
       <UserAttachments />
       <InlineImageThumbs parts={imageParts} />
     </>
   );
-  // Render the queued shell when there is a text body OR meaningful extras, so an
-  // attachment/image/capture-only queued send is never dropped (codex review).
-  const hasExtras = imageParts.length > 0 || attachmentCount > 0;
-
   return (
     <MessagePrimitive.Root
       data-testid="chat-user-message"
@@ -211,20 +189,7 @@ function UserMessageImpl() {
         <MessageContent>
           {reviewCard && <div data-text-part>{reviewCard}</div>}
 
-          {isQueued ? (
-            (body || hasExtras) && (
-              <QueuedUserTurn
-                delivery={meta.queueDelivery}
-                messageId={messageId}
-                content={cleanText}
-                extrasSlot={extras}
-                position={queuePos}
-                total={queueTotal}
-              >
-                {body}
-              </QueuedUserTurn>
-            )
-          ) : planBody ? (
+          {planBody ? (
             // Full width, so the marker centres on the spine rather than on the
             // end-aligned column.
             <div className="w-full">
@@ -238,6 +203,11 @@ function UserMessageImpl() {
             <>
               {body && <UserBubble>{body}</UserBubble>}
               {extras}
+              {meta.steered && (
+                <span data-testid="chat-user-steered" className="text-xs text-muted-foreground">
+                  Steered into the running turn
+                </span>
+              )}
             </>
           )}
 
@@ -251,7 +221,7 @@ function UserMessageImpl() {
           )}
         </MessageContent>
       </Message>
-      {!isQueued && !planBody && !nested && <MessageFooter user />}
+      {!meta.queued && !planBody && !nested && <MessageFooter user />}
     </MessagePrimitive.Root>
   );
 }

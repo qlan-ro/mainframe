@@ -1,11 +1,12 @@
 /** A request is answered above the composer, whether its turn is open or folded (G5, T1b). */
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { buildChatExtras } from '../../../runtime/chat-extras';
 import { createChatThreadState } from '../../../controller/chat-thread-state';
 import type { AcpChatController } from '../../../controller/acp-chat-controller';
+import { installGateLayout } from '../../../gates/__tests__/gate-layout';
 import { ChatGateMount } from '../../../gates/ChatGateMount';
 import { TurnFixture, assistant, bash, running, text, user } from './fixtures';
 
@@ -73,7 +74,9 @@ it.each([
   ['reject-once', 'open'],
   ['allow-once', 'folded'],
   ['reject-once', 'folded'],
-] as const)('answers %s while the turn is %s', (optionId, fold) => {
+] as const)('answers %s while the turn is %s', async (optionId, fold) => {
+  installGateLayout();
+  onTestFinished(() => void vi.restoreAllMocks());
   const reply = vi.fn().mockResolvedValue(undefined);
   show(reply);
   if (fold === 'folded') {
@@ -82,6 +85,7 @@ it.each([
     expect(screen.queryByTestId('chat-row-guarded')).toBeNull();
   }
   expect(screen.getByTestId('chat-thread-gate-slot')).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByTestId('chat-gate-guard')).toHaveAttribute('data-armed'));
   fireEvent.click(screen.getByRole('button', { name: optionId === 'allow-once' ? 'Allow once' : 'Reject' }));
   expect(reply).toHaveBeenCalledWith(expect.objectContaining({ requestId: 'request' }), optionId);
 });

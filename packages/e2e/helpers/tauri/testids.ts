@@ -7,7 +7,6 @@ export const T = {
   sessionRow: 'sessions-row',
   composerInput: 'chat-composer-input',
   composerSend: 'chat-composer-send',
-  planToggle: 'composer-plan-toggle',
   thread: 'chat-thread',
   userMessage: 'chat-user-message',
   assistantMessage: 'chat-assistant-message',

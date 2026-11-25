@@ -333,17 +333,7 @@ describe('useComposerTuning — setAdapter', () => {
 // 6. setPlanMode / setPermissionMode fire setChatConfig
 // ---------------------------------------------------------------------------
 
-describe('useComposerTuning — setPlanMode and setPermissionMode', () => {
-  it('calls setChatConfig(port, chatId, { planMode: true })', () => {
-    const { result } = renderHook(() => useComposerTuning([]));
-
-    act(() => {
-      result.current.setPlanMode(true);
-    });
-
-    expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID, { planMode: true });
-  });
-
+describe('useComposerTuning — setPermissionMode', () => {
   it("calls setChatConfig(port, chatId, { permissionMode: 'yolo' })", () => {
     const { result } = renderHook(() => useComposerTuning([]));
 
@@ -576,12 +566,6 @@ describe('useComposerTuning — draft mode: setters patch draftConfig, never the
       expectedPatch: { permissionMode: 'yolo' },
       liveSetter: setChatConfig,
     },
-    {
-      label: 'setPlanMode',
-      run: (result) => result.setPlanMode(true),
-      expectedPatch: { planMode: true },
-      liveSetter: setChatConfig,
-    },
   ])(
     '$label patches draftConfig with the expected fields and does not call the live setter',
     ({ run, expectedPatch, liveSetter }) => {
@@ -662,16 +646,13 @@ describe('useComposerTuning — post-first-send gap: chatId stale, chatConfig re
     expect(vi.mocked(setChatConfig)).toHaveBeenCalledExactlyOnceWith(PORT, REAL_CHAT_ID, { model: 'claude-3-opus' });
   });
 
-  it('setAdapter / setPlanMode / setPermissionMode all PATCH the real daemon id', () => {
+  it('setAdapter / setPermissionMode all PATCH the real daemon id', () => {
     vi.mocked(useChatExtras).mockReturnValue(makePostAdoptExtras() as unknown as ReturnType<typeof useChatExtras>);
 
     const { result } = renderHook(() => useComposerTuning([]));
 
     act(() => {
       result.current.setAdapter('gemini');
-    });
-    act(() => {
-      result.current.setPlanMode(true);
     });
     act(() => {
       result.current.setPermissionMode('yolo' as Parameters<typeof result.current.setPermissionMode>[0]);
@@ -681,16 +662,15 @@ describe('useComposerTuning — post-first-send gap: chatId stale, chatConfig re
       adapterId: 'gemini',
       model: 'default',
     });
-    expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(2, PORT, REAL_CHAT_ID, { planMode: true });
-    expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(3, PORT, REAL_CHAT_ID, { permissionMode: 'yolo' });
+    expect(vi.mocked(setChatConfig)).toHaveBeenNthCalledWith(2, PORT, REAL_CHAT_ID, { permissionMode: 'yolo' });
   });
 });
 
 // ---------------------------------------------------------------------------
-// setTemporary + draftMode (todo #346) — create-time only, no live PATCH path.
+// draftMode — a __LOCALID_* thread patches the in-memory draft, not the daemon.
 // ---------------------------------------------------------------------------
 
-describe('useComposerTuning — setTemporary and draftMode', () => {
+describe('useComposerTuning — draftMode', () => {
   it('draftMode is true for a __LOCALID_* thread with a resolved draft', () => {
     vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
     draftConfigStub = makeDraft();
@@ -707,34 +687,6 @@ describe('useComposerTuning — setTemporary and draftMode', () => {
     const { result } = renderHook(() => useComposerTuning([]));
 
     expect(result.current.draftMode).toBe(false);
-  });
-
-  it('draft mode: setTemporary(true) patches draftConfig with { temporary: true }', () => {
-    vi.mocked(useChatExtras).mockReturnValue(makeDraftExtras() as unknown as ReturnType<typeof useChatExtras>);
-    draftConfigStub = makeDraft();
-
-    const { result } = renderHook(() => useComposerTuning([]));
-
-    act(() => {
-      result.current.setTemporary(true);
-    });
-
-    expect(patchDraftConfigSpy).toHaveBeenCalledExactlyOnceWith(LOCAL_DRAFT_ID, { temporary: true });
-  });
-
-  it('real chat: setTemporary is a no-op — no PATCH, no patchDraftConfig', () => {
-    vi.mocked(useChatExtras).mockReturnValue(makeFakeExtras() as unknown as ReturnType<typeof useChatExtras>);
-    draftConfigStub = undefined;
-
-    const { result } = renderHook(() => useComposerTuning([]));
-
-    act(() => {
-      result.current.setTemporary(true);
-    });
-
-    expect(patchDraftConfigSpy).not.toHaveBeenCalled();
-    expect(vi.mocked(setChatConfig)).not.toHaveBeenCalled();
-    expect(vi.mocked(setChatTuning)).not.toHaveBeenCalled();
   });
 });
 

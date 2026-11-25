@@ -44,6 +44,7 @@ impl QueuedInput {
             content: self.content.clone(),
             attachment_ids: self.attachment_ids.clone(),
             timestamp: self.message.timestamp.clone(),
+            steered: None,
         }
     }
 

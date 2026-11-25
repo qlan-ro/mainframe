@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The composer's pending-attachment strip and the two left-slot add buttons.
+ * The composer's pending-attachment strip.
  *
  * aui owns the state (`ComposerPrimitive.Attachments` feeds one
  * `AttachmentPrimitive` context per pending file); the v2 chat kit owns the
@@ -14,9 +14,8 @@
  * the aui-state adapters it needs (`useAttachmentSrc`, `AttachmentPreviewDialog`)
  * stay in the vendored `components/ui/assistant-ui/attachment.tsx`.
  */
-import type { RefObject } from 'react';
-import { AtSignIcon, Paperclip, XIcon } from 'lucide-react';
-import { AttachmentPrimitive, ComposerPrimitive, useAui, useAuiState } from '@assistant-ui/react';
+import { XIcon } from 'lucide-react';
+import { AttachmentPrimitive, ComposerPrimitive, useAuiState } from '@assistant-ui/react';
 import {
   Attachment,
   AttachmentAction,
@@ -28,12 +27,8 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from '@/components/ui/attachment';
-import { Button } from '@/components/ui/button';
-import { Hint } from '@/components/ui/hint';
 import { AttachmentPreviewDialog, useAttachmentSrc } from '@/components/ui/assistant-ui/attachment';
 import { extTint, fileExtMeta } from '../../messages/file-ext-colors';
-import { readLiveComposerState } from '../read-live-composer-state';
-import { mentionDraft, writeComposerDraft } from '../triggers/open-mention-trigger';
 
 /**
  * One pending attachment. The tile is labelled (name + kind), so it carries no
@@ -80,70 +75,12 @@ function ComposerAttachmentTile() {
 /**
  * The strip itself. `empty:hidden` and the padding sit on the SAME element so an
  * empty strip costs no space — split across two, the outer one is never `:empty`
- * and its top padding always shows above the input.
+ * and its margin always shows above the input.
  */
 export function ComposerAttachments() {
   return (
-    <AttachmentGroup data-testid="composer-attachments" className="gap-2 px-3 pt-2.5 empty:hidden">
+    <AttachmentGroup data-testid="composer-attachments" className="mb-2 gap-2 empty:hidden">
       <ComposerPrimitive.Attachments>{() => <ComposerAttachmentTile />}</ComposerPrimitive.Attachments>
     </AttachmentGroup>
-  );
-}
-
-/** `onMouseDown` preventDefault on both buttons: the composer textarea must not lose focus. */
-export function ComposerAddAttachment() {
-  return (
-    <Hint label="Add attachment">
-      <ComposerPrimitive.AddAttachment asChild>
-        <Button
-          data-testid="composer-add-attachment"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Add attachment"
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          <Paperclip />
-        </Button>
-      </ComposerPrimitive.AddAttachment>
-    </Hint>
-  );
-}
-
-/**
- * Opens the same mention trigger popover typing "@" does (ComposerTriggers) —
- * the design's second left-slot affordance.
- *
- * The "@" is written into the textarea through its real change path, not
- * through `composer.setText`: a programmatic write fires no DOM event, so the
- * trigger engine's tracked cursor never moves and detection finds nothing.
- */
-export function ComposerAddMention({ textareaRef }: { textareaRef?: RefObject<HTMLTextAreaElement | null> }) {
-  const aui = useAui();
-  const handleClick = () => {
-    const composer = aui.composer;
-    const next = mentionDraft(readLiveComposerState(composer).text);
-    const el = textareaRef?.current;
-    if (!el) {
-      console.warn('[composer] add-mention: no textarea ref — picker cannot open');
-      composer.setText(next);
-      return;
-    }
-    writeComposerDraft(el, next);
-  };
-
-  return (
-    <Hint label="Mention a file or agent">
-      <Button
-        data-testid="composer-add-mention"
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        aria-label="Mention a file or agent"
-        onClick={handleClick}
-        onMouseDown={(e) => e.preventDefault()}
-      >
-        <AtSignIcon />
-      </Button>
-    </Hint>
   );
 }

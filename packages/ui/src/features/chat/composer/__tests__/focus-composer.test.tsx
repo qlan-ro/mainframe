@@ -132,11 +132,12 @@ vi.mock('@assistant-ui/react', () => ({
 vi.mock('../segments/ComposerSegments', () => ({ ComposerSegments: () => null }));
 vi.mock('../edit/composer-edit-context', () => ({ useComposerEdit: () => ({ editing: null, cancelEdit: vi.fn() }) }));
 vi.mock('../config-toolbar/ComposerToolbar', () => ({ ComposerToolbar: () => null }));
-vi.mock('../attachments/ComposerAttachmentStrip', () => ({
-  ComposerAttachments: () => null,
-  ComposerAddAttachment: () => null,
-  ComposerAddMention: () => null,
-}));
+vi.mock('../attachments/ComposerAttachmentStrip', () => ({ ComposerAttachments: () => null }));
+vi.mock('../strips/TopStrip', () => ({ TopStrip: () => null }));
+vi.mock('../queue/QueuedRows', () => ({ QueuedRows: () => null }));
+vi.mock('../config-toolbar/ContextRing', () => ({ ContextRing: () => null }));
+vi.mock('../send/SendControls', () => ({ SendControls: () => null }));
+vi.mock('../attachments/ComposerAddMenu', () => ({ ComposerAddMenu: () => null }));
 vi.mock('../triggers/ComposerTriggers', () => ({
   ComposerTriggers: ({ children }: { children: React.ReactNode }) => children,
 }));

@@ -5,6 +5,12 @@ import type { CaptureArea } from '../types.mts';
 const area: CaptureArea = {
   boards: [
     {
+      file: 'Settings-Chat',
+      title: 'Settings — Chat',
+      subtitle: 'What Enter does while a turn runs.',
+      width: 2400,
+    },
+    {
       file: 'Settings-Errors',
       title: 'Settings — field focus and errors',
       subtitle: 'A focused field, and a setting that could not be saved.',
@@ -18,6 +24,33 @@ const area: CaptureArea = {
     },
   ],
   groups: [
+    {
+      board: 'Settings-Chat',
+      before: stubUsage,
+      seed: async ({ page }) => {
+        await seedWorkbench(page);
+        await page.getByTestId('shell-rail-settings').click();
+        await page.getByTestId('settings-nav-chat').click();
+        await page.getByTestId('settings-pane-chat').waitFor();
+        await parkPointer(page);
+      },
+      states: [
+        {
+          id: 'queue',
+          caption: '**Queue** (the default): Enter sends when the agent finishes; ⌥↵ steers (C9).',
+          crop: [0, 48, 1440, 420],
+        },
+        {
+          id: 'steer',
+          caption: '**Steer**: Enter adds the message to the running turn; ⌥↵ queues.',
+          crop: [0, 48, 1440, 420],
+          setup: async ({ page }) => {
+            await page.getByTestId('settings-chat-enter-running-steer').click();
+            await parkPointer(page);
+          },
+        },
+      ],
+    },
     {
       board: 'Settings-Errors',
       before: async (page) => {

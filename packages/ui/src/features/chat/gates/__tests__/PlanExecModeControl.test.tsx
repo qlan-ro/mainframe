@@ -12,8 +12,8 @@
  *  2. Auto renders only when `autoAllowed` is true — absent when false and when
  *     the prop is omitted (an adapter that does not advertise the capability).
  *  3. Auto sits between Auto-edits and Unattended.
- *  4. A selected Auto reads as a caution (`text-warning`) and never carries the
- *     destructive tint a selected Unattended keeps.
+ *  4. A selected Auto and a selected Unattended both read as cautions
+ *     (`text-warning`), as on the composer's permissions control.
  *  5. Clicking Auto reports `auto` to the caller.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -37,11 +37,11 @@ function wrap(props: { value: ExecutionMode; onChange?: (m: ExecutionMode) => vo
 describe('PlanExecModeControl', () => {
   // --- Behavior 1: the always-on segments ---
 
-  it('renders Interactive, Auto-edits and Unattended regardless of the auto capability', () => {
+  it('renders Interactive, Auto-Edits and Unattended regardless of the auto capability', () => {
     wrap({ value: 'default' });
 
     expect(screen.getByTestId('chat-plan-execmode-default')).toHaveTextContent('Interactive');
-    expect(screen.getByTestId('chat-plan-execmode-acceptEdits')).toHaveTextContent('Auto-edits');
+    expect(screen.getByTestId('chat-plan-execmode-acceptEdits')).toHaveTextContent('Auto-Edits');
     expect(screen.getByTestId('chat-plan-execmode-yolo')).toHaveTextContent('Unattended');
   });
 
@@ -93,12 +93,18 @@ describe('PlanExecModeControl', () => {
     expect(auto).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('keeps the destructive tint on a selected Unattended', () => {
+  it('tints a selected Unattended with the warning ink too', () => {
     wrap({ value: 'yolo', autoAllowed: true });
 
     const yolo = screen.getByTestId('chat-plan-execmode-yolo');
-    expect(yolo).toHaveClass('text-destructive');
-    expect(yolo).not.toHaveClass('text-warning');
+    expect(yolo).toHaveClass('text-warning');
+    expect(yolo).not.toHaveClass('text-destructive');
+  });
+
+  it('labels the group "Run the plan in"', () => {
+    wrap({ value: 'default' });
+
+    expect(screen.getByRole('group', { name: 'Run the plan in' })).toBeInTheDocument();
   });
 
   it('leaves an unselected Auto on the muted ink', () => {
