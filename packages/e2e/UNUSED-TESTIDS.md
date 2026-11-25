@@ -1,7 +1,7 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-08-11. Source: packages/ui/src data-testids (1169) minus e2e references
-(617). Unused: 552._
+_Generated 2026-08-11. Source: packages/ui/src data-testids (1189) minus e2e references
+(626). Unused: 563._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
@@ -239,7 +239,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1169) minus e2e ref
 - `tasks-sidebar-row-project-${…}`
 - `tasks-sidebar-start-${…}`
 
-## composer (32)
+## composer (41)
 
 - `composer-activity-gate-toggle`
 - `composer-activity-open`
@@ -248,10 +248,12 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1169) minus e2e ref
 - `composer-activity-toggle`
 - `composer-adapter-logo-${…}`
 - `composer-adapter-switch-blocked-${…}`
+- `composer-attachment-preview`
 - `composer-attachments`
 - `composer-branch-manage`
 - `composer-branch-menu`
 - `composer-branch-worktree-${…}`
+- `composer-capture-tile`
 - `composer-changes-popover`
 - `composer-command-item-${…}`
 - `composer-context-compact`
@@ -263,18 +265,25 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1169) minus e2e ref
 - `composer-model-older-header`
 - `composer-model-permission-select`
 - `composer-model-provider-dot`
+- `composer-note-edit`
 - `composer-permission-announcement`
 - `composer-permission-planning-note`
 - `composer-provider-blocked`
+- `composer-quote-text`
 - `composer-segment`
 - `composer-segment-input`
 - `composer-temporary`
 - `composer-tuning-warning`
+- `composer-unsent`
+- `composer-unsent-copy`
+- `composer-unsent-discard`
+- `composer-unsent-reason`
+- `composer-unsent-restore`
 - `composer-where`
 - `composer-worktree-busy`
 - `composer-worktree-open-folder`
 
-## sessions (28)
+## sessions (31)
 
 - `sessions-archive-cancel`
 - `sessions-ctx-fork`
@@ -303,6 +312,10 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1169) minus e2e ref
 - `sessions-section`
 - `sessions-tag-filter-synthetic-${…}`
 - `sessions-tag-popover-error`
+- `sessions-welcome-recent-retry`
+- `sessions-welcome-tasks`
+- `sessions-welcome-tasks-retry`
+- `sessions-welcome-tile`
 
 ## settings (25)
 
@@ -719,7 +732,3 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1169) minus e2e ref
 ## trigger (1)
 
 - `trigger-field-popover`
-
-## welcome (1)
-
-- `welcome-project-picker-no-project`

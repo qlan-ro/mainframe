@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type FC } from 'react';
 import { ActionBarPrimitive, ActionBarMorePrimitive, useAuiState } from '@assistant-ui/react';
 import { CheckIcon, CopyIcon, DownloadIcon, MoreHorizontalIcon, QuoteIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { quoteSource } from '../thread/quote-source';
 import { useQuoteMessage } from './use-quote-message';
 import { useTurnSelector } from './turn/turn-context';
 import { useReplyText } from './use-reply-text';
@@ -76,13 +77,15 @@ const ITEM_CLASS = cn(
 function QuoteItem() {
   const quote = useQuoteMessage();
   const content = useAuiState((s) => s.message.content);
+  const role = useAuiState((s) => s.message.role);
+  const createdAt = useAuiState((s) => s.message.createdAt as Date | undefined);
   const replyText = useReplyText();
   const hasText = content.some((part) => part.type === 'text' && part.text.trim());
   return (
     <ActionBarMorePrimitive.Item
       data-testid="chat-message-quote"
       disabled={!hasText}
-      onSelect={() => quote(replyText())}
+      onSelect={() => quote(replyText(), quoteSource({ role, createdAt }))}
       className={ITEM_CLASS}
     >
       <QuoteIcon className="shrink-0" />

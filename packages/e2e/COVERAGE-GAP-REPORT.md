@@ -13,9 +13,9 @@ read in both directions._
 
 | Metric | Count |
 |---|---|
-| Defined | 1169 |
-| Referenced | 617 |
-| Unused | 552 |
+| Defined | 1189 |
+| Referenced | 626 |
+| Unused | 563 |
 | Dead selectors | 20 |
 
 ## Dead selectors
@@ -56,7 +56,7 @@ read in both directions._
 | daemon-picker.spec.ts | 66 | 0 |
 | daemon.ts | 0 | 0 |
 | directory-picker.spec.ts | 42 | 0 |
-| editor-comments-review.spec.ts | 45 | 0 |
+| editor-comments-review.spec.ts | 53 | 0 |
 | editor-diff.spec.ts | 31 | 0 |
 | editor.spec.ts | 45 | 0 |
 | facade-protocol-partial.spec.ts | 0 | 0 |
@@ -94,7 +94,7 @@ read in both directions._
 | session-panel-jumps.spec.ts | 10 | 0 |
 | session-panel.spec.ts | 126 | 1 |
 | session-tabs.spec.ts | 22 | 0 |
-| sessions-draft.spec.ts | 70 | 0 |
+| sessions-draft.spec.ts | 80 | 0 |
 | sessions-filters.spec.ts | 37 | 0 |
 | sessions-list.spec.ts | 26 | 0 |
 | sessions-rows.spec.ts | 36 | 0 |
@@ -137,8 +137,8 @@ read in both directions._
 | chat | 213 | 99 |
 | automations | 92 | 80 |
 | tasks | 91 | 43 |
-| composer | 78 | 32 |
-| sessions | 97 | 28 |
+| composer | 91 | 41 |
+| sessions | 103 | 31 |
 | settings | 42 | 25 |
 | skills | 24 | 24 |
 | session | 72 | 22 |
@@ -150,7 +150,7 @@ read in both directions._
 | shell | 13 | 9 |
 | usage | 10 | 9 |
 | viewer | 27 | 9 |
-| editor | 28 | 7 |
+| editor | 29 | 7 |
 | run | 8 | 7 |
 | image | 8 | 6 |
 | title | 9 | 6 |
@@ -188,7 +188,6 @@ read in both directions._
 | thread | 3 | 1 |
 | transcript | 1 | 1 |
 | trigger | 1 | 1 |
-| welcome | 4 | 1 |
 | advisor | 2 | 0 |
 | archived | 1 | 0 |
 | connection | 1 | 0 |
@@ -205,3 +204,4 @@ read in both directions._
 | surface | 2 | 0 |
 | tour | 8 | 0 |
 | web | 2 | 0 |
+| welcome | 4 | 0 |
