@@ -32,4 +32,4 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 "1 failed, retried" in grey, so a recovered failure doesn't shout.
 
 ## Unresolved
-Agents open in today's split until the Agent tab (W8). A delegated task's request stays in its row until it shows above the composer (G5).
+Agents and delegated tasks open in the workspace's Agent tab (W8), and their rows say what the tab says (T1c). A delegated task's request shows above the composer (G5).

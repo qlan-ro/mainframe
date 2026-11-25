@@ -25,7 +25,7 @@ FORM: seed: none (pinned) "this will retire split chats, everything will open as
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
 ## Memorable moment
-An agent opened from the Activity panel arrives as a tab with its live steps.
+An agent opened from the Activity panel arrives as a tab with its live steps. Its steps are the transcript's own rows, and its status is what its row in the transcript says (T1c, W8).
 
 ## Unresolved
 None.
