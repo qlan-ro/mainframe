@@ -35,7 +35,7 @@ const state = (id, proto = [], app = [], pairs = work, transcript = 'tools') => 
   app: P.all(closeWorkspace, ...app),
   pairs,
 });
-const tool = (id, label, protoHeader = protoWork, occurrence = 0) => {
+const tool = (id, label, protoHeader = protoWork, occurrence = 0, transcript = 'tools') => {
   const protoToggle = `[...document.querySelectorAll('#thread .tct')].filter((button) => button.getAttribute('aria-label').startsWith(${JSON.stringify(label)}))[${occurrence}]`;
   const appRoot = `tid('chat-row-parity-${id}')`;
   const appToggle = `tid('chat-row-parity-${id}-toggle')`;
@@ -51,6 +51,7 @@ const tool = (id, label, protoHeader = protoWork, occurrence = 0) => {
         a: `tid('chat-row-parity-${id}-body')`,
       },
     ],
+    transcript,
   );
   return {
     ...isolated,
@@ -100,17 +101,58 @@ export default {
       [
         {
           id: 'exploration row',
+          local: true,
           p: "q('.tct[aria-label^=Explored]')?.parentElement",
           a: "tid('chat-explore-parity-explore-0')?.firstElementChild",
         },
         {
           id: 'exploration steps',
+          local: true,
           p: "q('.tct[aria-label^=Explored]')?.closest('.tc')?.querySelector('.tck')",
           a: "tid('chat-explore-parity-explore-0-body')",
         },
       ],
       'exploration',
     ),
+    tool('image', 'Read docs/screenshot-capsule.png', secondaryTools, 0, 'extraTools'),
+    state(
+      'workflow row',
+      [open("qa('#thread .wkt')[3]"), show("txt('#thread .tcr', 'Started workflow')")],
+      [open(appWork), show("tid('chat-workflow-launcher-parity-review')")],
+      [
+        {
+          id: 'workflow row',
+          p: "qa('#thread .tcr').find((row) => row.textContent.includes('review-changes'))",
+          a: "tid('chat-workflow-launcher-parity-review')?.firstElementChild",
+          local: true,
+        },
+      ],
+      'extraTools',
+    ),
+    state(
+      'artifact row',
+      [],
+      [open(appWork), show("tid('chat-row-parity-artifact')")],
+      [
+        {
+          id: 'artifact row',
+          p: "qa('#thread .tcr').find((row) => row.textContent.includes('Publish artifact'))",
+          a: "tid('chat-row-parity-artifact')?.firstElementChild",
+          local: true,
+        },
+      ],
+      'extraTools',
+    ),
+    {
+      ...state(
+        'workspace agent body',
+        [open(secondaryTools), P.js("q('.tca[data-wsagent=agent]')?.click()")],
+        [open(appWork), P.js("tid('chat-task-open-parity-agent')?.click()")],
+        [{ id: 'workspace agent body', p: "q('.agw')", a: "tid('workspace-agent-parity-agent')", local: true }],
+        'agent',
+      ),
+      shot: { p: "q('#wsp')", a: "tid('workspace-surface')", own: true },
+    },
     tool('read', 'Read quota/use-quota.ts'),
     tool('write', 'Wrote src/codex_tests.rs'),
     tool('edit', 'Edited src/codex.rs'),
@@ -201,14 +243,22 @@ export default {
       [open(statsToggle), show(statsToggle)],
       [open(appWork)],
       [
-        { id: 'work header', p: `${statsToggle}?.parentElement`, a: work[0].a },
+        { id: 'work header', local: true, p: `${statsToggle}?.parentElement`, a: work[0].a },
         {
           id: 'no-result command',
+          local: true,
           p: statsRow(6),
           a: "tid('chat-row-parity-running')?.firstElementChild",
         },
+        {
+          id: 'declined command',
+          p: statsRow(4),
+          local: true,
+          a: "tid('chat-row-parity-declined')?.firstElementChild",
+        },
         ...['passed', 'failed', 'stopped'].map((status, index) => ({
           id: `${status} command`,
+          local: true,
           p: statsRow(index + 1),
           a: `tid('chat-row-parity-${status}')?.firstElementChild`,
         })),
@@ -219,7 +269,14 @@ export default {
       'approval command',
       [open(statsToggle), show(statsToggle)],
       [open(appWork)],
-      [{ id: 'approval command', p: statsRow(5), a: "tid('chat-row-parity-approval')?.firstElementChild" }],
+      [
+        {
+          id: 'approval command',
+          local: true,
+          p: statsRow(5),
+          a: "tid('chat-row-parity-approval')?.firstElementChild",
+        },
+      ],
       'awaitingApproval',
     ),
     state(

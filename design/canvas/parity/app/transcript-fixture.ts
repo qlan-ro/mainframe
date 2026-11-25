@@ -1,3 +1,4 @@
+import { extraTools } from './transcript-extra-fixture';
 import { exploration, tools } from './transcript-tools-fixture';
 
 type Item = Record<string, unknown>;
@@ -231,6 +232,7 @@ const fixtures = {
   states,
   tools,
   exploration,
+  extraTools,
   awaitingApproval,
   'live command': states,
 };

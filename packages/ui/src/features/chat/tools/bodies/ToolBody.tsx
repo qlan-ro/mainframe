@@ -183,7 +183,11 @@ export function ToolBody({ part, status }: ToolBodyProps) {
       </div>
       {images.length > 0 && (
         <div data-testid="chat-tool-images">
-          <ToolResultImageThumbs toolCallId={part.toolCallId} images={images} />
+          <ToolResultImageThumbs
+            toolCallId={part.toolCallId}
+            images={images}
+            caption={toolKind(part.toolName) === 'read' ? argText(part, 'file_path').split(/[\\/]/).pop() : undefined}
+          />
         </div>
       )}
     </div>

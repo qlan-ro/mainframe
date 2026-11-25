@@ -1,3 +1,4 @@
+import { parityReviewWorkflow } from './transcript-extra-fixture';
 /**
  * The prototype's own data (design/redesign/prototype/index.html), as the daemon
  * would serve it. `window.__PARITY__` picks the state: the runner sets it before
@@ -472,7 +473,8 @@ export function respond(method: string, url: URL, _body: unknown): unknown {
     if (is(/^\/api\/adapters\/\w+\/config-conflicts$/)) return ok({ conflicts: [] });
     if (is(/^\/api\/adapters\/\w+\/effective-model$/)) return ok(null);
     if ((m = is(/^\/api\/chats\/([\w-]+)$/))) return ok(chats().find((c) => c.id === m![1]));
-    if (is(/^\/api\/chats\/[\w-]+\/workflow-runs$/)) return ok([]);
+    if ((m = is(/^\/api\/chats\/([\w-]+)\/workflow-runs$/)))
+      return ok(m[1] === 's1' && scenario.transcript === 'extraTools' ? [parityReviewWorkflow] : []);
     if ((m = is(/^\/api\/chats\/([\w-]+)\/background-tasks$/)))
       return ok({ tasks: m[1] === 's1' ? [...live(), ...EARLIER] : [] });
     if (is(/^\/api\/chats\/[\w-]+\/context$/)) return ok(CONTEXT());
