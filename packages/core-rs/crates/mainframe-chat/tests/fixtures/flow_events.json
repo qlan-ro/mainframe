@@ -45,6 +45,7 @@
   {
     "chat": {
       "adapterId": "claude",
+      "baseBranch": "main",
       "branchName": "golden",
       "createdAt": "TIME",
       "directoryMissing": false,

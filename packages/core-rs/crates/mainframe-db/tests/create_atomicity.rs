@@ -87,6 +87,7 @@ fn failed_fork_readback_rolls_back_fork_and_preserves_parent() {
         adaptive_thinking: None,
         worktree_path: None,
         branch_name: None,
+        base_branch: None,
         title: None,
         pending_fork: &pending,
         segments: None,

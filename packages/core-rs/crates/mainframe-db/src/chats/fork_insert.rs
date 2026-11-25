@@ -19,10 +19,10 @@ pub(super) fn insert_fork_row(
         "INSERT INTO chats (
                 id, adapter_id, project_id, model, permission_mode, plan_mode,
                 effort, fast, ultracode, adaptive_thinking,
-                worktree_path, branch_name, title,
+                worktree_path, branch_name, base_branch, title,
                 parent_chat_id, pending_fork,
                 status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)",
         rusqlite::params![
             id,
             insert.adapter_id,
@@ -36,6 +36,7 @@ pub(super) fn insert_fork_row(
             insert.adaptive_thinking.map(i64::from),
             insert.worktree_path,
             insert.branch_name,
+            insert.base_branch,
             insert.title,
             insert.parent_chat_id,
             pending_fork_json,

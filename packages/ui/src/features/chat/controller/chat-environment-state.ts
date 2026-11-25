@@ -102,6 +102,7 @@ function sameComposerConfig(a: Chat | null, b: Chat): boolean {
     a.transcriptMissing === b.transcriptMissing &&
     a.worktreePath === b.worktreePath &&
     a.branchName === b.branchName &&
+    a.baseBranch === b.baseBranch &&
     a.noProject === b.noProject &&
     a.contextLostAt === b.contextLostAt &&
     a.sideChatId === b.sideChatId

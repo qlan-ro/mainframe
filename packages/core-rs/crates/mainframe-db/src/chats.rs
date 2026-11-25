@@ -56,6 +56,7 @@ pub struct ForkInsert<'a> {
     pub adaptive_thinking: Option<bool>,
     pub worktree_path: Option<&'a str>,
     pub branch_name: Option<&'a str>,
+    pub base_branch: Option<&'a str>,
     pub title: Option<&'a str>,
     pub pending_fork: &'a PendingFork,
     /// A multi-segment parent's segments, copied as planned. `None` seeds the
@@ -230,7 +231,7 @@ impl ChatsRepository {
     /// Detach the chat from its (deleted) worktree so it rebinds to the project root.
     pub fn clear_worktree(&self, id: &str) -> Result<(), DbError> {
         self.db.execute(
-            "UPDATE chats SET worktree_path = NULL, branch_name = NULL WHERE id = ?",
+            "UPDATE chats SET worktree_path = NULL, branch_name = NULL, base_branch = NULL WHERE id = ?",
             rusqlite::params![id],
         )?;
         Ok(())

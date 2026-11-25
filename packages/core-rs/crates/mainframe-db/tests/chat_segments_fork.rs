@@ -161,6 +161,7 @@ fn fork_of(db: &DatabaseManager, parent: &Chat, plan: Option<&ForkPlan>) -> Chat
         adaptive_thinking: None,
         worktree_path: None,
         branch_name: None,
+        base_branch: None,
         title: Some("Untitled (fork)"),
         pending_fork: &pending,
         segments: plan,

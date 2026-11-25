@@ -216,6 +216,7 @@ async fn rebinds_a_worktreed_chat_to_a_different_worktree() {
         &[ChatPatch {
             worktree_path: Some(Some("/new/wt".to_string())),
             branch_name: Some(Some("feat".to_string())),
+            base_branch: Some(None),
             ..Default::default()
         }]
     );

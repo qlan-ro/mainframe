@@ -48,6 +48,8 @@ pub struct Chat {
     pub worktree_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branch_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_branch: Option<String>,
     #[serde(
         default,
         deserialize_with = "crate::serde_util::double_option",

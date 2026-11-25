@@ -358,8 +358,7 @@ impl ChatLifecycleManager {
             && let (Some(wt), Some(branch)) = (&chat.worktree_path, &chat.branch_name)
         {
             self.shared
-                .deps
-                .remove_worktree(project_path, wt, branch)
+                .remove_archived_worktree(chat_id, project_path, wt, branch)
                 .await;
         }
 

@@ -93,7 +93,7 @@ impl ChatConfigManager {
                         adapter_id: &adapter,
                         session_id: Some(&session_id),
                     },
-                    info,
+                    (info, source.base_branch()),
                 )
                 .await;
         }
@@ -111,6 +111,7 @@ impl ChatConfigManager {
             chat_id,
             Some(info.worktree_path),
             Some(info.branch_name),
+            source.base_branch(),
             None,
         )?;
         Ok(())
@@ -122,8 +123,12 @@ impl ChatConfigManager {
         project_id: &str,
         project: &str,
         active: ActiveSession<'_>,
-        info: mainframe_services::workspace::worktree::WorktreeInfo,
+        info: (
+            mainframe_services::workspace::worktree::WorktreeInfo,
+            Option<String>,
+        ),
     ) -> Result<(), ConfigError> {
+        let (info, base_branch) = info;
         self.rebind_live_session(
             cell,
             chat_id,
@@ -134,6 +139,7 @@ impl ChatConfigManager {
                 active,
                 worktree_path: info.worktree_path.clone(),
                 branch_name: Some(info.branch_name),
+                base_branch,
             },
         )
         .await
@@ -210,4 +216,13 @@ enum WorktreeSource<'a> {
     NewBranch { base_branch: &'a str },
     /// Check out a branch that already exists.
     ExistingBranch,
+}
+
+impl WorktreeSource<'_> {
+    fn base_branch(self) -> Option<String> {
+        match self {
+            Self::NewBranch { base_branch } => Some(base_branch.to_string()),
+            Self::ExistingBranch => None,
+        }
+    }
 }

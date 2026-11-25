@@ -235,7 +235,7 @@ async fn validate_and_delete_worktree(
         .await?;
     remove_worktree(project_path, &real_worktree_path, &resolved_branch).await;
     for chat_id in affected {
-        cm.emit_chat_updated(&chat_id);
+        cm.emit_worktree_deleted(&chat_id);
     }
     Ok(())
 }
