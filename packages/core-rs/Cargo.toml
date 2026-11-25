@@ -12,29 +12,29 @@ publish = false
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 axum = { version = "0.8", features = ["ws"] }
-tower-http = { version = "0.6", features = ["cors", "limit", "compression-gzip", "compression-br"] }
+tower-http = { version = "0.7", features = ["cors", "limit", "compression-gzip", "compression-br"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
-rusqlite = { version = "0.32", features = ["bundled"] }
+toml = "1.2"
+rusqlite = { version = "0.41", features = ["bundled"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 thiserror = "2"
-hmac = "0.12"
-sha2 = "0.10"
+hmac = "0.13"
+sha2 = "0.11"
 hex = "0.4"
-rand = "0.8"
-nanoid = "0.4"
+rand = "0.10"
+nanoid = "0.5"
 dashmap = "6"
-notify = "6"
+notify = "9"
 chrono = { version = "0.4", features = ["serde"] }
-dirs = "6"
+dirs = "7"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 # Pairing QR in the daemon's `pair` subcommand.
-qrcode = "0.14"
+qrcode = "0.15"
 # Cron parsing for the automations scheduler.
-croner = "3"
+croner = "5"
 # Test-only: temp dirs/files for db/git/fs tests (use as a dev-dependency).
 tempfile = "3"
 # Safe `getuid(2)` for the Claude CLI's per-user spool root (`/tmp/claude-<uid>`);
@@ -54,17 +54,17 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # integration tests (use as dev-dependencies). Versions must match what
 # async-compression already pulls in, so no second copy compiles.
 flate2 = "1"
-brotli = "8"
+brotli = "9"
 # The ACP facade's compressed replay batches: zlib-deflated
 # JSON carried as base64 text frames, so no WebSocket extension is needed.
-base64 = "0.22"
+base64 = "0.23"
 # Pure-Rust search (PR 1): pinned to the exact versions ripgrep 14.1.1 itself
 # vendors, so regex syntax and gitignore semantics match the search parity
 # oracle (search_with_ripgrep tests) that used to run against the real `rg`.
-ignore = "=0.4.23"
+ignore = "=0.4.32"
 grep-searcher = "=0.1.14"
 grep-regex = "=0.1.13"
-grep-matcher = "=0.1.7"
+grep-matcher = "=0.1.9"
 
 mainframe-types = { path = "crates/mainframe-types" }
 mainframe-runtime = { path = "crates/mainframe-runtime" }
