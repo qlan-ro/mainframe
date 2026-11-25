@@ -37,8 +37,8 @@ function AnswerChip({ label, listed }: { label: string; listed: boolean }) {
       data-listed={listed}
       title={listed ? undefined : 'Written by you'}
       className={cn(
-        'inline-flex min-h-6 items-center gap-1.5 rounded-md border px-2',
-        listed ? 'border-border bg-muted' : 'border-dashed border-input',
+        'inline-flex min-h-6 items-center gap-1.5 rounded-[6px] px-2 text-sm/5.5',
+        listed ? 'bg-queue-well shadow-[inset_0_0_0_1px_var(--border)]' : 'border border-dashed border-input',
       )}
     >
       {listed ? (
@@ -57,11 +57,11 @@ function Answer({ entry, question }: { entry: AskUserQuestionAnswer; question: Q
   const listed = (label: string) => question?.options?.some((option) => option.label === label) ?? true;
   return (
     <div role="group" aria-label={`Question, answered: ${entry.question}`} className="flex flex-col gap-1.5">
-      <div data-testid="chat-ask-header" className="mf-tr-meta flex items-center gap-1.5 text-muted-foreground">
+      <div data-testid="chat-ask-header" className="flex items-center gap-1.5 text-meta/5.5 text-muted-foreground">
         <MessageCircleQuestion aria-hidden className="size-3.5" />
         {header} · answered
       </div>
-      <p data-testid="chat-ask-question-text" className="font-medium text-foreground">
+      <p data-testid="chat-ask-question-text" className="font-medium leading-5.5 text-foreground">
         {entry.question}
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -70,7 +70,7 @@ function Answer({ entry, question }: { entry: AskUserQuestionAnswer; question: Q
         ))}
       </div>
       {entry.notes && (
-        <p data-testid="chat-ask-answer-notes" className="mf-tr-meta text-muted-foreground">
+        <p data-testid="chat-ask-answer-notes" className="mf-tr-marker-label text-muted-foreground">
           Note: “{entry.notes}”
         </p>
       )}
@@ -86,7 +86,7 @@ function Answer({ entry, question }: { entry: AskUserQuestionAnswer; question: Q
 function Unanswered({ question, state }: { question: QuestionArg; state: string }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <div data-testid="chat-ask-header" className="mf-tr-meta flex items-center gap-1.5 text-muted-foreground">
+      <div data-testid="chat-ask-header" className="flex items-center gap-1.5 text-meta/5.5 text-muted-foreground">
         <MessageCircleQuestion aria-hidden className="size-3.5" />
         {question.header ?? 'Question'} · {state}
       </div>

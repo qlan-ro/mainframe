@@ -66,7 +66,7 @@ function Pill(props: MarkerPillProps & { open: boolean; toggle: () => void; body
           <ChevronRight
             aria-hidden
             className={cn(
-              'size-3! shrink-0 transition-transform duration-150 motion-reduce:transition-none',
+              'shrink-0 transition-transform duration-150 motion-reduce:transition-none',
               open && 'rotate-90',
             )}
           />
@@ -102,7 +102,7 @@ export function MarkerCard({ id, testId, children }: { id?: string; testId: stri
     <div
       id={id}
       data-testid={testId}
-      className="mb-1 w-full max-w-[600px] min-w-0 rounded-xl border border-border bg-card px-3.5 py-2.5 mf-tr-marker-body"
+      className="mb-1 w-full max-w-[600px] min-w-0 rounded-[12px] bg-card px-3.5 py-2.5 mf-tr-marker-body shadow-[inset_0_0_0_1px_var(--border)]"
     >
       {children}
     </div>

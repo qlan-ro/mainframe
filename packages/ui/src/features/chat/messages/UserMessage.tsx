@@ -64,7 +64,10 @@ const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 function UserBubble({ children }: { children: ReactNode }) {
   return (
     <Bubble variant="muted" align="end" className="mf-tr-bubble max-w-[85%]">
-      <BubbleContent data-testid="chat-user-bubble" className="mf-prose rounded-[14px] px-3.5 py-2 wrap-anywhere">
+      <BubbleContent
+        data-testid="chat-user-bubble"
+        className="mf-prose rounded-[14px] border-0 px-3.5 py-2 wrap-anywhere"
+      >
         {children}
       </BubbleContent>
     </Bubble>
