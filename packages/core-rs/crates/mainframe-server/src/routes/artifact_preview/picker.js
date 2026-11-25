@@ -43,7 +43,7 @@
     const path = [];
     for (let node = element; node && node.nodeType === 1 && node !== document.documentElement;) {
       if (node.id) {
-        path.unshift(`${node.tagName.toLowerCase()}#${node.id}`);
+        path.unshift(`${node.tagName.toLowerCase()}#${CSS.escape(node.id)}`);
         break;
       }
       let position = 1;
@@ -60,13 +60,21 @@
     return { slug: parts[3] || '', page: decodeURIComponent(parts.slice(5).join('/')) };
   }
 
-  // A chat row wraps this in backticks and keeps it on one line.
+  function singleLine(text) {
+    return text.replace(/\s+/g, ' ').replace(/\p{Cc}|\p{Bidi_Control}/gu, '').trim();
+  }
+
+  function descriptionField(text) {
+    return singleLine(text).replace(/[\x60"|]/g, (character) => '\\u' + character.charCodeAt(0).toString(16).padStart(4, '0'));
+  }
+
+  // Escape fields before joining them so page text cannot imitate a field boundary.
   function describe(element) {
     const { slug, page } = pageParts();
-    const text = (element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT);
-    const parts = [`artifact https://claude.ai/artifact/${slug}`, `board ${page}`, cssPath(element)];
+    const text = descriptionField(singleLine(element.innerText || element.textContent || '').slice(0, MAX_TEXT));
+    const parts = [`artifact https://claude.ai/artifact/${slug}`, `board ${page}`, descriptionField(cssPath(element))];
     if (text) parts.push(`text "${text}"`);
-    return parts.join(' | ').replace(/`/g, "'");
+    return singleLine(parts.join(' | '));
   }
 
   function targetAt(event) {
@@ -182,7 +190,7 @@
       endFramePick();
       stop();
       const selector =
-        typeof pick.selector === 'string' ? pick.selector.replace(/[`\r\n]/g, ' ').slice(0, MAX_SELECTOR) : null;
+        typeof pick.selector === 'string' ? singleLine(pick.selector).slice(0, MAX_SELECTOR) : null;
       reportToHost({ selector, rect: selector === null ? null : toTopViewport(frame, pick.rect) });
     });
     finish = (result) => {

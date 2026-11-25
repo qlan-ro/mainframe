@@ -52,12 +52,16 @@ export function DraftTile({
         {lead}
         <span className="flex min-w-0 flex-1 flex-col leading-tight">
           {typeof title === 'string' ? (
-            <FadeLabel className={cn(FADE, 'text-sm leading-4 font-medium')}>{title}</FadeLabel>
+            <FadeLabel className={cn(FADE, 'text-[12.5px]/tight', !monoDetail && 'font-medium')}>{title}</FadeLabel>
           ) : (
             title
           )}
           <FadeLabel
-            className={cn(FADE, 'text-xs text-muted-foreground dark:text-foreground/65', monoDetail && 'font-mono')}
+            className={cn(
+              FADE,
+              'text-muted-foreground dark:text-foreground/65',
+              monoDetail ? 'font-mono text-[11px]/[1.3]' : 'text-[11.5px]/tight',
+            )}
           >
             {detail}
           </FadeLabel>

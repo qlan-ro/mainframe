@@ -45,8 +45,7 @@ export const CAPTURE_ROW_RE = /^> - `([^`]+)`(?: — selector `([^`]+)`)?(?: —
 /**
  * The capture block split into its row lines and the trailing user text, or null
  * when the sentinel is absent. Shared by the row parser and the stripper so the
- * two can never disagree about where the block ends: a malformed line stops the
- * row run and everything from there on is `rest`.
+ * two agree about where the block ends. Malformed list rows are skipped.
  */
 export function splitSandboxCaptureBlock(text: string): { rowLines: string[]; rest: string } | null {
   if (!text.startsWith(SANDBOX_CAPTURE_SENTINEL)) return null;
@@ -54,8 +53,8 @@ export function splitSandboxCaptureBlock(text: string): { rowLines: string[]; re
   let i = 0;
   if (lines[i]?.trim() === CAPTURE_HEADER_LINE) i += 1;
   const rowLines: string[] = [];
-  for (; i < lines.length && CAPTURE_ROW_RE.test(lines[i] ?? ''); i += 1) {
-    rowLines.push(lines[i]!);
+  for (; i < lines.length && lines[i]?.startsWith('> - '); i += 1) {
+    if (CAPTURE_ROW_RE.test(lines[i]!)) rowLines.push(lines[i]!);
   }
   return { rowLines, rest: lines.slice(i).join('\n').trim() };
 }

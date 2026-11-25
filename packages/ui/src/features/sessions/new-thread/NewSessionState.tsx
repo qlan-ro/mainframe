@@ -23,7 +23,7 @@ import { useProjectTasks } from './use-project-tasks';
 import { useRecentSessions } from './use-recent-sessions';
 
 const Code = ({ children }: { children: string }) => (
-  <code className="font-mono text-xs text-foreground/80 wrap-anywhere">{children}</code>
+  <code className="font-mono text-xs/4.5 text-foreground/80 wrap-anywhere">{children}</code>
 );
 
 function detachedFolder(path: string): string {
@@ -65,15 +65,15 @@ function Head({ project, children }: { project?: string; children: ReactNode }) 
       <span
         aria-hidden
         data-testid="sessions-welcome-tile"
-        className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-foreground/7 text-base font-semibold text-foreground/80 ring-1 ring-border ring-inset"
+        className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-foreground/7 text-[15px] leading-[22px] font-semibold text-foreground/80 ring-1 ring-border ring-inset"
       >
         {project?.trim().charAt(0).toUpperCase() || '–'}
       </span>
       <div className="min-w-0">
-        <h1 className="text-lg leading-6.5 font-semibold tracking-tight wrap-anywhere text-foreground">
+        <h1 className="text-[19px]/6.5 font-semibold tracking-[-0.01em] wrap-anywhere text-foreground">
           {project ? `What’s next for ${project}?` : 'What’s next?'}
         </h1>
-        <p data-testid="sessions-welcome-where" className="text-sm text-muted-foreground">
+        <p data-testid="sessions-welcome-where" className="text-[13px]/4.5 text-muted-foreground">
           {children}
         </p>
       </div>
@@ -93,7 +93,7 @@ function Group({ label, testId, children }: { label: string; testId: string; chi
 }
 
 const ROW =
-  'group/row flex h-8 min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-sm text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:focus-line-inset';
+  'group/row flex h-8 min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-[13.5px] leading-[22px] text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:focus-line-inset';
 const ROW_ICON = 'size-4 shrink-0 text-muted-foreground';
 
 /** A list that has nothing to show yet, or could not be read. Empty, it isn't there at all. */
@@ -173,7 +173,7 @@ function Continue({ projectId, project }: { projectId: string; project?: string 
         >
           <MessageSquare aria-hidden className={ROW_ICON} />
           <span className="min-w-0 flex-1 truncate">{item.title ?? 'Untitled session'}</span>
-          <span className="flex shrink-0 items-center text-xs tabular-nums">
+          <span className="flex shrink-0 items-center text-xs/[22px] tabular-nums">
             <SessionValue item={item} />
           </span>
         </button>
@@ -215,7 +215,7 @@ function StartFromTask({ projectId }: { projectId: string }) {
         >
           <ListChecks aria-hidden className={ROW_ICON} />
           <span className="min-w-0 flex-1 truncate">{todo.title}</span>
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">#{todo.number}</span>
+          <span className="shrink-0 text-xs/[22px] text-muted-foreground tabular-nums">#{todo.number}</span>
           <CornerDownLeft
             aria-hidden
             className="size-3.5 shrink-0 text-muted-foreground opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100"

@@ -1,6 +1,7 @@
 /** A draft's captures and code annotations as tiles (C14): what they say, and what their controls do. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 vi.mock('@assistant-ui/react', () => ({
@@ -88,6 +89,27 @@ describe('tiles', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove element1' }));
     expect(notes()).toEqual(['second']);
     expect(screen.getByTestId('composer-capture-tile')).toHaveTextContent('element1');
+  });
+
+  it('keeps the last of 50 captures reachable by its accessible controls', async () => {
+    const user = userEvent.setup();
+    add(...Array.from({ length: 50 }, () => REGION));
+    strip();
+
+    expect(screen.getAllByTestId('composer-capture-tile')).toHaveLength(50);
+    const addNote = screen.getByRole('button', { name: 'Add a note on screenshot50' });
+    addNote.focus();
+    await user.keyboard('{Enter}');
+    const note = await screen.findByTestId('composer-note-input');
+    expect(note).toHaveFocus();
+    await user.keyboard('Last capture{Escape}');
+    await waitFor(() => expect(screen.queryByTestId('composer-note-input')).toBeNull());
+    expect(notes().at(-1)).toBe('Last capture');
+
+    const remove = screen.getByRole('button', { name: 'Remove screenshot50' });
+    remove.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getAllByTestId('composer-capture-tile')).toHaveLength(49);
   });
 
   it('take no room when the draft has none', () => {

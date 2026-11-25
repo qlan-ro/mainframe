@@ -25,8 +25,13 @@ export function captureLabels(captures: ReadonlyArray<Pick<CaptureLike, 'type'>>
   return captures.map((c) => (c.type === 'element' ? `element${(el += 1)}` : `screenshot${(sc += 1)}`));
 }
 
-/** A row is one line; a line break in it would end the block and spill the rest into the message. */
-const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim();
+function escapeRowField(text: string): string {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/\p{Cc}|\p{Bidi_Control}/gu, '')
+    .trim()
+    .replace(/[\x60"|]/g, (character) => '\\u' + character.charCodeAt(0).toString(16).padStart(4, '0'));
+}
 
 export function formatCaptures(captures: ReadonlyArray<CaptureLike>): {
   markdown: string;
@@ -47,8 +52,9 @@ export function formatCaptures(captures: ReadonlyArray<CaptureLike>): {
       kind: 'image',
       data: base64,
     });
-    const sel = c.selector ? ` — selector \`${c.selector}\`` : '';
-    const note = oneLine(c.annotation ?? '');
+    const selector = escapeRowField(c.selector ?? '');
+    const sel = selector ? ` — selector \`${selector}\`` : '';
+    const note = escapeRowField(c.annotation ?? '');
     const ann = note ? ` — "${note}"` : '';
     lines.push(`> - \`${label}\`${sel}${ann}`);
   });
