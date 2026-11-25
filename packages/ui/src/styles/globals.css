@@ -87,6 +87,10 @@
   --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, monospace;
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-live: var(--live);
+  --color-accent-ink: var(--accent-ink);
+  --color-tooltip: var(--tooltip);
+  --color-tooltip-foreground: var(--tooltip-foreground);
   --color-fail: var(--fail);
   --color-focus: var(--focus);
   --color-bubble-tinted: var(--bubble-tinted);
@@ -179,6 +183,10 @@
   --chrome-press: #e2e2e6;
   --chrome-selected: #ececef;
   --text-selection: rgba(10,132,255,.26);
+  --live: #0b6fdc;
+  --accent-ink: #0063cc;
+  --tooltip: #1f1f1f;
+  --tooltip-foreground: #ffffff;
 }
 
 .dark {
@@ -224,6 +232,10 @@
   --chrome-press: #303033;
   --chrome-selected: #2f2f31;
   --text-selection: rgba(10,132,255,.42);
+  --live: #0a84ff;
+  --accent-ink: #5aaeff;
+  --tooltip: #ececec;
+  --tooltip-foreground: #1f1f1f;
 }
 
 /**

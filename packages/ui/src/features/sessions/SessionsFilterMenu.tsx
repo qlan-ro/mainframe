@@ -78,7 +78,7 @@ export function SessionsFilterMenu({ inUse, synthetic, registry }: SessionsFilte
             aria-label={label}
             className={cn(
               JUMP_ACTION,
-              active && 'text-primary opacity-100 hover:text-primary aria-expanded:text-primary',
+              active && 'text-accent-ink opacity-100 hover:text-accent-ink aria-expanded:text-accent-ink',
             )}
           >
             <ListFilterIcon />

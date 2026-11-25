@@ -41,7 +41,7 @@ function StatusValue({ status, updatedAt }: Pick<SessionRowStatusProps, 'status'
   if (status === 'running') {
     return (
       <>
-        <Loader2Icon aria-hidden className="size-3.5! animate-spin text-primary motion-reduce:animate-none" />
+        <Loader2Icon aria-hidden className="size-3.5! animate-spin text-live motion-reduce:animate-none" />
         <span className="sr-only">Running</span>
       </>
     );
