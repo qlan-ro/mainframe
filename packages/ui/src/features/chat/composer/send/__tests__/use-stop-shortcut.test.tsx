@@ -203,10 +203,11 @@ describe('what a conversation opens', () => {
     const cancel = await screen.findByTestId('confirm-dialog-cancel');
     act(() => cancel.focus());
     expectStopped('a');
-    // A press that leaves the focus there changes nothing.
+    fireEvent.pointerDown(cancel);
+    expectStopped('a');
     fireEvent.pointerDown(screen.getByText('files'));
     expect(cancel).toHaveFocus();
-    expectStopped('a');
+    expectStopped();
     fireEvent.click(cancel);
 
     focusButton('sidebar');
@@ -279,10 +280,22 @@ describe('another surface with the focus since', () => {
     expectStopped('a');
   });
 
-  it('is not one whose press left the focus where it was', () => {
+  it('is where the last press was, even when the focus stayed behind', () => {
     show(BESIDE);
     focus('message a');
     fireEvent.pointerDown(screen.getByText('files'));
+    expectStopped();
+    fireEvent.pointerDown(screen.getByText('transcript b'));
+    expectStopped('b');
+  });
+
+  it('is where the focus is again once the user types there', () => {
+    show(BESIDE);
+    focus('message a');
+    fireEvent.pointerDown(screen.getByText('files'));
+    fireEvent.keyDown(screen.getByLabelText('message a'), { key: 'Shift' });
+    expectStopped();
+    fireEvent.keyDown(screen.getByLabelText('message a'), { key: 'x' });
     expectStopped('a');
   });
 });

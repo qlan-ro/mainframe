@@ -218,6 +218,22 @@ describe('two visible tabs', () => {
     expect(requests).toHaveLength(2);
   });
 
+  it('do not say what ran is running after 30 s out of sight, until the daemon says so', async () => {
+    const hook = mount({ events });
+    await answer(0, row('running'));
+    hook.set({ visible: false });
+    await pass(29_000);
+    hook.set({ visible: true });
+    expect(hook.get().live).toBe(true);
+    await answer(1, row('running'));
+    hook.set({ visible: false });
+    await pass(30_000);
+    hook.set({ visible: true });
+    expect(hook.get().live).toBe(false);
+    await answer(2, row('running'));
+    expect(hook.get().live).toBe(true);
+  });
+
   it('of different agents each have their own rows', async () => {
     const one = mount({ events });
     const two = mount({ events, callId: 'call-2' });

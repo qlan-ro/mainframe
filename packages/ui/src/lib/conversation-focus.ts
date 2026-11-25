@@ -1,6 +1,7 @@
 /**
- * Which conversation the user works in: the one that last had the focus, or a
- * press where nothing takes the focus (WebKit focuses no button on a click).
+ * Which conversation the user works in: where they last focused, typed or pressed,
+ * whichever came last. A press counts by itself because it may leave the focus where
+ * it was (WebKit focuses no button on a click).
  * What a conversation opens in a portal counts as it, because React's events
  * reach the conversation from there. Everything else is another surface.
  *
@@ -11,6 +12,7 @@
 type Holder = string | null | undefined;
 
 let focused: Holder;
+/** A press since the last focus or typing. */
 let pressed: Holder;
 let anyYet = false;
 
@@ -22,14 +24,21 @@ function onFocusIn(): void {
 function onPress(): void {
   pressed = null;
 }
+/** Typing is working where the focus is. A shortcut isn't: it may be the one asking. */
+function onKeyDown(event: KeyboardEvent): void {
+  if (!event.metaKey && !event.ctrlKey && !event.altKey && !MODIFIERS.has(event.key)) pressed = undefined;
+}
+const MODIFIERS = new Set(['Meta', 'Control', 'Alt', 'Shift']);
 
 /** For as long as the app's shell is mounted. */
 export function trackConversationFocus(): () => void {
   window.addEventListener('focusin', onFocusIn, true);
   window.addEventListener('pointerdown', onPress, true);
+  window.addEventListener('keydown', onKeyDown, true);
   return () => {
     window.removeEventListener('focusin', onFocusIn, true);
     window.removeEventListener('pointerdown', onPress, true);
+    window.removeEventListener('keydown', onKeyDown, true);
     focused = pressed = undefined;
     anyYet = false;
   };
@@ -63,9 +72,8 @@ export function conversationOf(element: Element | null): string | undefined {
 export function heldConversation(): string | null | undefined {
   const at = document.activeElement;
   const inside = at === null || at === document.body ? undefined : conversationOf(at);
+  if (anyYet && pressed !== undefined) return pressed;
   // The chat shown there now: the chat column's changes under the focus.
   if (inside !== undefined) return inside;
-  if (!anyYet) return undefined;
-  const nowhere = at === null || at === document.body;
-  return (nowhere && pressed !== undefined ? pressed : focused) ?? null;
+  return anyYet ? (focused ?? null) : undefined;
 }

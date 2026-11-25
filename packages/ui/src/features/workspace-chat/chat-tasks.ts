@@ -100,6 +100,8 @@ class ChatTasks {
   private start(): void {
     if (!this.asking) return;
     this.refusals = 0;
+    // Nobody asked for a while: what ran then may be over.
+    if (this.state.tasks !== null && Date.now() - this.confirmedAt >= CONFIRMED_MS) this.expire();
     this.run();
   }
 
