@@ -204,3 +204,16 @@ fn reload(manager: &ChatManager, deps: Arc<crate::test_support::FakeDeps>) -> Ar
     reloaded.shared.messages.lock_recover().set("c", history);
     reloaded
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reserved_send_returns_the_queued_ref_message_id() {
+    let (manager, _, _) = fixture(IdleTestSession::new()).await;
+    let _reservation = manager.lifecycle.try_claim_maintenance("c").unwrap();
+    let queued_id = manager
+        .send_message_with_queue_id("c", "reserved input", None, None)
+        .await
+        .unwrap();
+    let refs = manager.get_queued_for_chat("c");
+    assert_eq!(refs.len(), 1);
+    assert_eq!(queued_id.as_deref(), Some(refs[0].message_id.as_str()));
+}

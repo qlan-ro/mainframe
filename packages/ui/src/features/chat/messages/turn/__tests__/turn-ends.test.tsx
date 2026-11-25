@@ -95,9 +95,12 @@ describe.each(PROVIDERS)('a reload while %s runs', (_name, presentation) => {
   const steered = (...content: ThreadMessage['content']) => [...turn(presentation, ...content), user('More', 'u2')];
   const reply = assistant([bash('c', 'ls')], 'a2', { presentation });
 
-  it('keeps an open step going, whatever was written after it', () => {
+  const stepIsLive = presentation?.state === 'running';
+  const openStepLabel = stepIsLive ? 'Still going' : 'Worked';
+
+  it('uses the open step’s provider state when the run start is unknown', () => {
     Session.reload(steered(cut));
-    expect([names(), opened()]).toEqual([['Still going'], [true]]);
+    expect([names(), opened()]).toEqual([[openStepLabel], [stepIsLive]]);
   });
 
   it('claims nothing for a settled part somebody wrote after', async () => {
@@ -120,13 +123,13 @@ describe.each(PROVIDERS)('a reload while %s runs', (_name, presentation) => {
     expect(names()).toEqual(['Worked', 'Running']);
   });
 
-  it('claims nothing for an open step once the session went idle, and lets it go on with the next run', async () => {
+  it('shows an open step as neutral at idle and reads provider evidence while running', async () => {
     const session = Session.reload(steered(cut));
     await session.apply(IDLE);
     expect([names(), opened()]).toEqual([['Worked'], [false]]);
     expect(screen.queryByTestId('chat-row-cut')).toBeNull();
     await session.apply(...send());
-    expect(names()).toEqual(['Still going']);
+    expect(names()).toEqual([openStepLabel]);
   });
 });
 

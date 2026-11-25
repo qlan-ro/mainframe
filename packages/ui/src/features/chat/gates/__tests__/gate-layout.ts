@@ -42,7 +42,8 @@ export function installGateLayout(overrides: Partial<GateLayout> = {}): GateLayo
     Object.assign(this, {
       getClientRects: () => {
         const rect = (node as HTMLElement).getBoundingClientRect();
-        return [box(rect.bottom - 12, 12)];
+        const last = box(rect.bottom - 12, 12);
+        return rect.height > LINE ? [box(rect.top, 12), last] : [last];
       },
     });
   });

@@ -26,8 +26,6 @@ export function partState({ needsYou, live, ended }: PartEvidence, liveChild: bo
   return live || liveChild ? 'going' : (ended ?? 'neutral');
 }
 
-const TERMINAL: ReadonlySet<string | undefined> = new Set(['completed', 'cancelled', 'failed']);
-
 const isOnItsWay = (meta: MainframeMessageMeta | undefined) => meta?.pending === true && meta.error === undefined;
 
 interface Standing {
@@ -36,7 +34,6 @@ interface Standing {
   readonly running: boolean;
   /** It belongs to the run in progress. */
   readonly inRun: boolean;
-  /** Some run is in progress, so a step with no outcome may be its. */
   readonly session: boolean;
 }
 
@@ -99,10 +96,9 @@ function turnOf(draft: Draft, standing: Standing, scope: TurnScope, now: number)
   const answer = answerUnits(units, running);
   const work = units.filter((unit) => !isMarkerUnit(unit) && !answer.has(unit));
   const tools = workTools(work);
-  const open = work.filter((unit) => isOpenStep(unit, scope.pendingToolIds));
-  // Nothing can settle a step of a turn its provider ended.
-  const unsettled = open.some((unit) => !TERMINAL.has(unit.presentation?.state));
-  const live = needsYou || inRun || (session && unsettled);
+  const liveStep =
+    session && work.some((unit) => unit.presentation?.state === 'running' && isOpenStep(unit, scope.pendingToolIds));
+  const live = needsYou || inRun || liveStep;
   const ended = endOf(draft, scope);
   return {
     key: draft.key,

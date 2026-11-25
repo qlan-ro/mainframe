@@ -22,11 +22,13 @@ function providerTurns(units: readonly TurnUnit[], pending: ReadonlySet<string>)
 }
 
 export function endOf(draft: Draft, { pendingToolIds }: TurnScope): PartEnd | undefined {
+  const units = draft.units.flat();
+  if (units.some((unit) => !unit.presentation && isOpenStep(unit, pendingToolIds))) return undefined;
   const last = draft.lastVisible ?? draft.messages[draft.messages.length - 1]!;
   const cut = last.status?.type === 'incomplete' ? last.status.reason : undefined;
   // Words the provider has not placed are no part of the turn it ended.
   const placed = draft.units[draft.messages.indexOf(last)]!.some(({ presentation }) => presentation);
-  const turns = placed ? providerTurns(draft.units.flat(), pendingToolIds) : [];
+  const turns = placed ? providerTurns(units, pendingToolIds) : [];
   const state = turns[turns.length - 1]?.state;
   if (state === 'failed') return 'error';
   if (state === 'cancelled' || cut === 'cancelled') return 'stopped';

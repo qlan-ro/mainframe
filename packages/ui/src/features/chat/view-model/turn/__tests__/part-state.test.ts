@@ -56,7 +56,7 @@ describe('a part is going while the session runs', () => {
     [
       'one that waits for an approval nobody asks for now',
       bash('ls', { ...open, approval: { id: 'x' } } as never),
-      'going',
+      'neutral',
     ],
     ['a monitor, which is no step', { ...bash('x', open), toolName: 'Monitor' } as never, 'neutral'],
     ['one that came back', bash('ls'), 'neutral'],
@@ -65,16 +65,17 @@ describe('a part is going while the session runs', () => {
     expect(states(thread, runs)).toEqual([expected, 'going']);
   });
 
-  it('when a step of it has no outcome, unless its provider ended that turn', () => {
+  it('does not attribute an earlier open step to a later run', () => {
     const cut = (over?: object) => [
       user('u1'),
       assistant('a1', [bash('ls', open)], over),
       user('u2'),
       assistant('a2', [text('Hi')]),
     ];
-    expect(states(cut(), runs)).toEqual(['going', 'going']);
-    expect(states(cut(), { ...runs, runAfter: 'u2' })).toEqual(['going', 'going']);
-    expect(states(cut(said('invalid')), runs)).toEqual(['going', 'going']);
+    expect(states(cut(), runs)).toEqual(['neutral', 'going']);
+    expect(states(cut(), { ...runs, runAfter: 'u2' })).toEqual(['neutral', 'going']);
+    expect(states(cut(said('running')), { ...runs, runAfter: 'u2' })).toEqual(['going', 'going']);
+    expect(states(cut(said('invalid')), runs)).toEqual(['neutral', 'going']);
     expect(states(cut(said('completed')), runs)).toEqual(['finished', 'going']);
     expect(states(cut(said('cancelled')), runs)).toEqual(['stopped', 'going']);
     expect(states(cut(said('failed')), runs)).toEqual(['error', 'going']);
@@ -107,6 +108,15 @@ describe('a part is going while the session runs', () => {
 });
 
 describe('how a part ended is what its own messages say', () => {
+  it.each(['completed', 'cancelled', 'failed'] as const)(
+    'keeps a part neutral with an unplaced open step before a %s provider turn',
+    (state) => {
+      expect(
+        states([user('u1'), assistant('a1', [bash('ls', open)]), assistant('a2', [text('Done')], said(state))]),
+      ).toEqual(['neutral']);
+    },
+  );
+
   it.each([
     ['completed', 'finished'],
     ['cancelled', 'stopped'],

@@ -64,8 +64,7 @@ describe('whether its turn part can still be going', () => {
     expect(callLive(first, 'a', at({}))).toBe(true);
     expect(callLive(first, 'a', at({ runState: { type: 'cancelling' } }))).toBe(true);
     expect(callLive(first, 'a', at({ runState: { type: 'idle' } }))).toBe(false);
-    // Its call has no outcome, so it may go on; one that came back goes on with its part alone.
-    expect(callLive([...first, ...then], 'a', at(since('a1')))).toBe(true);
+    expect(callLive([...first, ...then], 'a', at(since('a1')))).toBe(false);
     expect(callLive([...back, ...then], 'a', at(since('a1')))).toBe(false);
     expect(callLive([...back, ...then], 'a', at(since(null)))).toBe(true);
     expect(callLive([...back, ...then], 'a', at({}))).toBe(false);
@@ -75,7 +74,7 @@ describe('whether its turn part can still be going', () => {
     const nested = assistant('n', [call({ toolCallId: 'inner' })]);
     const around = [user('u1', 'Go'), assistant('a1', [ended('in_progress', { messages: [nested] })])];
     expect(callLive(around, 'inner', at({}))).toBe(true);
-    expect(callLive([...around, ...then], 'inner', at(since('a1')))).toBe(true);
+    expect(callLive([...around, ...then], 'inner', at(since('a1')))).toBe(false);
     const done = [user('u1', 'Go'), assistant('a1', [ended('completed', { result: 'ok', messages: [nested] })])];
     expect(callLive([...done, ...then], 'inner', at(since('a1')))).toBe(false);
   });

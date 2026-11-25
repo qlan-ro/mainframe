@@ -310,7 +310,7 @@ describe('a call with no outcome', () => {
     expect(turn.children[0]!.status).toBe('stopped');
   });
 
-  it('is stopped in an earlier turn its provider ended, while a new one runs', () => {
+  it('is stopped in an earlier turn without live step evidence', () => {
     const thread = (custom?: object) => [
       user('u1'),
       assistant('a1', [agent], custom),
@@ -320,8 +320,7 @@ describe('a call with no outcome', () => {
     const live = (custom?: object) =>
       [...build(thread(custom), { isRunning: true }).turns.values()].map((turn) => turn.live);
     expect(live({ partSources: sources(1, presented({ state: 'cancelled' })) })).toEqual([false, true]);
-    // Nothing says that one ended, so it may go on.
-    expect(live()).toEqual([true, true]);
+    expect(live()).toEqual([false, true]);
   });
 
   it('still runs when the viewer wrote into the turn that goes on', () => {

@@ -126,6 +126,7 @@ export function LinkAnchor({
       <span ref={setPlace} />
       <TooltipContent
         container={place}
+        data-chat-link-tooltip
         className="max-w-sm flex-col items-start gap-0.5 font-sans font-normal break-all not-italic select-none"
         onEscapeKeyDown={() => {
           if (place?.contains(document.activeElement)) link.current?.focus();

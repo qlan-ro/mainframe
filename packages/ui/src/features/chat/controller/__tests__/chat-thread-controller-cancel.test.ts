@@ -22,10 +22,10 @@ vi.mock('@/lib/toast', () => ({
   mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn(), permission: vi.fn() },
 }));
 
-import { cancelQueuedMessage } from '../../../../lib/api/chats';
+import { cancelQueuedMessage, getChat } from '../../../../lib/api/chats';
 import { useHeldQueue } from '../../composer/queue/held-queue-store';
 import { forgetSent, noteQueued } from '../../composer/queue/sent-order';
-import { CHAT_ID, makeController } from './acp-test-kit';
+import { CHAT_ID, makeChat, makeController } from './acp-test-kit';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -66,6 +66,7 @@ describe('AcpChatController.cancel — holds the queue first (C10)', () => {
   });
 
   it('takes the queued messages back before interrupting, and keeps them held', async () => {
+    vi.mocked(getChat).mockResolvedValueOnce(makeChat());
     const order: string[] = [];
     vi.mocked(cancelQueuedMessage).mockImplementation(async (_port, _chat, id) => {
       order.push(`cancel-queued:${id}`);
@@ -89,7 +90,9 @@ describe('AcpChatController.cancel — holds the queue first (C10)', () => {
       'cancel-queued:m1',
       'cancel-queued:m2',
     ]);
-    expect(useHeldQueue.getState().byChat[CHAT_ID]!.map((row) => row.messageId)).toEqual(['m1', 'm2']);
+    const held = useHeldQueue.getState().byChat[CHAT_ID]!;
+    expect(held.map((row) => row.messageId)).toEqual(['m1', 'm2']);
+    expect(held.map((row) => row.projectId)).toEqual(['p1', 'p1']);
   });
 
   it('does not touch the queue when the chat is idle', async () => {

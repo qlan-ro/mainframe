@@ -13,6 +13,7 @@ import {
   acceptWorktreeOffer as postAcceptWorktreeOffer,
   dismissWorktreeOffer as postDismissWorktreeOffer,
 } from '../../../lib/api/git';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { mfToast } from '@/lib/toast';
 import { matchCommandInvocation } from '../commands/command-registry';
 import { buildPendingMessage, parseSendInput } from './chat-reconcile';
@@ -164,6 +165,7 @@ export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
 export async function sendHeldMessages(host: ChatActionHost, firstId: string): Promise<void> {
   const chatId = host.getDaemonId();
   const held = useHeldQueue.getState();
+  const daemonId = getActiveDaemon().id;
   const press = crypto.randomUUID();
   const rows = held.claimFrom(chatId, firstId, press);
   // Another press holds the claims, and gives them back itself.
@@ -172,6 +174,7 @@ export async function sendHeldMessages(host: ChatActionHost, firstId: string): P
     // The prompt needs the facade client; failing here, nothing has gone out.
     await host.load();
     for (const row of rows) {
+      if (getActiveDaemon().id !== daemonId) break;
       const { messageId, content, attachmentIds } = row;
       // Removed meanwhile, with its chat say, stopped, or no longer this press's: not sent.
       if (!held.startSending(chatId, messageId, press)) continue;
@@ -187,8 +190,8 @@ export async function sendHeldMessages(host: ChatActionHost, firstId: string): P
         throw error;
       }
       if (queuedMessageId) {
-        noteQueued(chatId, { queuedMessageId, timestamp: row.timestamp });
-        matchQueued(chatId, Object.values(host.getState().interactions.queued));
+        noteQueued(chatId, { queuedMessageId, timestamp: row.timestamp }, daemonId);
+        matchQueued(chatId, Object.values(host.getState().interactions.queued), daemonId);
       }
       held.remove(chatId, messageId);
     }

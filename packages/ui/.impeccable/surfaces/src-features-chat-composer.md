@@ -18,6 +18,8 @@ Keyboard first: Enter, ⌥↵, ⇧⇥, ⌘.. Gates are answered one at a time, o
 Text a gate asks the user to approve shows whole, with nothing hidden, in stored order (`stored-order`, `visible-text.ts`). What overflows is not allowed unread: the allowing answers are locked until its end was in view (`use-shown-to-end.ts`). The bottom strip belongs to the thread footer, so a chat with no composer keeps it.
 The gate slot carries `data-chat-gate`: an Activity row that needs you moves focus into it (R13).
 
+The read dialog has a title, a labelled scroll region at least 64 px tall, and a reserved footer row. If the request text grows while the dialog is open, the reader must reach the new end. The manual confirmation appears only when the scroll region has no client rectangles. Closing returns focus to Show or the first available answer. If the request went away, focus moves to the next gate as a whole, or to the thread when none is left, never to an answer or the composer.
+
 ## Direction contract
 THESIS: one calm card that carries its context with it, never a toolbar of switches. Project above the input, where it runs below it, ongoing work tucked in a strip on top.
 OWN-WORLD: white card on grey, 16 px radius, hairline and soft shadow, solid focus line. Tiles in one 172 × 40 shape. Requests pinned above in warning tone.
