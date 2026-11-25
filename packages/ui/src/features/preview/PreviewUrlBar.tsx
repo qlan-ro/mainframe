@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RotateCw, ExternalLink, Eraser } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCw, ExternalLink, Eraser } from 'lucide-react';
 import { Hint } from '@/components/ui/hint';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { usePreviewAddress } from './use-preview-address';
@@ -58,6 +58,10 @@ export function PreviewUrlBar({ handle, seedUrl, enabled, onCommitUrl }: Preview
     }
   }
 
+  function goHistory(direction: -1 | 1) {
+    handle?.goHistory?.(direction).catch((error: unknown) => console.warn('[preview] history navigation', error));
+  }
+
   function handleReload() {
     if (!currentUrl) return;
     handle?.navigate(currentUrl).catch((e: unknown) => console.warn('[preview] url-bar reload', e));
@@ -75,6 +79,28 @@ export function PreviewUrlBar({ handle, seedUrl, enabled, onCommitUrl }: Preview
   return (
     <InputGroup className="ml-1 h-7 min-w-0 flex-1 rounded-md border-transparent bg-chrome-chip shadow-none dark:bg-chrome-chip">
       <InputGroupAddon className="gap-1">
+        <Hint label="Back">
+          <InputGroupButton
+            data-testid="preview-url-back"
+            size="icon-xs"
+            aria-label="Back"
+            disabled={!canAct || !handle?.goHistory}
+            onClick={() => goHistory(-1)}
+          >
+            <ChevronLeft />
+          </InputGroupButton>
+        </Hint>
+        <Hint label="Forward">
+          <InputGroupButton
+            data-testid="preview-url-forward"
+            size="icon-xs"
+            aria-label="Forward"
+            disabled={!canAct || !handle?.goHistory}
+            onClick={() => goHistory(1)}
+          >
+            <ChevronRight />
+          </InputGroupButton>
+        </Hint>
         <Hint label="Reload preview">
           <InputGroupButton
             data-testid="preview-url-reload"

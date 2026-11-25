@@ -75,6 +75,10 @@ export function mountTauriPreview(container: HTMLElement, url: string, _opts?: P
     },
     compositesAboveDom: true,
     navigate: (next: string): Promise<void> => enqueue(() => preview.previewNavigate(tabId, next)),
+    goHistory: (direction) =>
+      enqueue(() =>
+        preview.previewEval(tabId, direction === -1 ? 'window.history.back()' : 'window.history.forward()'),
+      ),
     capture: (region?: Region): Promise<Uint8Array> => enqueue(() => preview.previewCapture(tabId, region)),
     // Clears service-worker/Cache-API entries + web storage, then reloads. Does
     // NOT purge the native HTTP disk cache (no WKWebView API from JS) — enough for

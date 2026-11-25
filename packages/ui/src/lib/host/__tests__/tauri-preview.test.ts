@@ -100,6 +100,16 @@ describe('mountTauriPreview', () => {
     expect(previewNavigate).toHaveBeenCalledWith(expect.any(String), 'http://localhost:4000');
   });
 
+  it('steps native history using only the two fixed eval scripts', async () => {
+    const { mountTauriPreview } = await import('../tauri-preview');
+    const handle = mountTauriPreview(fakeContainer(), 'https://example.com/');
+    await handle.goHistory!(-1);
+    await handle.goHistory!(1);
+    expect(previewEval).toHaveBeenNthCalledWith(1, expect.any(String), 'window.history.back()');
+    expect(previewEval).toHaveBeenNthCalledWith(2, expect.any(String), 'window.history.forward()');
+    expect(previewNavigate).not.toHaveBeenCalled();
+  });
+
   it('capture() returns a Uint8Array', async () => {
     const { mountTauriPreview } = await import('../tauri-preview');
     const handle = mountTauriPreview(fakeContainer(), 'http://x');
