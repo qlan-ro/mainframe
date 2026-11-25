@@ -4,6 +4,7 @@
  */
 import { Fragment } from 'react';
 import type { DiffHunk } from '@qlan-ro/mainframe-types';
+import { TokenLine, useShikiTokens } from '@/lib/shiki-tokens';
 import { cn } from '@/lib/utils';
 import { ShowMore, Surface, useClampedLines } from './Surface';
 
@@ -33,7 +34,7 @@ function diffLines(hunks: readonly DiffHunk[]): DiffLine[] {
 
 const SIGNS = { add: '+', del: '-', ctx: '' } as const;
 
-function Row({ line }: { line: DiffLine }) {
+function Row({ line, tokens }: { line: DiffLine; tokens?: NonNullable<ReturnType<typeof useShikiTokens>>[number] }) {
   return (
     <div
       data-diff={line.kind}
@@ -61,14 +62,27 @@ function Row({ line }: { line: DiffLine }) {
         {line.kind === 'ctx' ? '' : <span className="sr-only">{line.kind === 'add' ? 'Added: ' : 'Removed: '}</span>}
         <span aria-hidden>{SIGNS[line.kind]}</span>
       </span>
-      <span className="min-h-[19px] whitespace-pre">{line.text}</span>
+      <span className="min-h-[19px] whitespace-pre">
+        {line.kind === 'ctx' && tokens ? <TokenLine tokens={tokens} addNewline={false} /> : line.text}
+      </span>
     </div>
   );
 }
 
-export function DiffBody({ id, hunks, testId }: { id: string; hunks: readonly DiffHunk[]; testId: string }) {
+export function DiffBody({
+  id,
+  hunks,
+  path,
+  testId,
+}: {
+  id: string;
+  hunks: readonly DiffHunk[];
+  path?: string;
+  testId: string;
+}) {
   const lines = diffLines(hunks);
   const { shown, hidden, showAll } = useClampedLines(id, lines, 16);
+  const tokens = useShikiTokens(shown.map((line) => line.text).join('\n'), path?.split('.').pop(), 'transcript');
   return (
     <>
       <Surface className="py-2" testId={testId}>
@@ -79,7 +93,7 @@ export function DiffBody({ id, hunks, testId }: { id: string; hunks: readonly Di
                 ⋯
               </div>
             )}
-            <Row line={line} />
+            <Row line={line} tokens={tokens?.[index]} />
           </Fragment>
         ))}
       </Surface>

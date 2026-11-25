@@ -9,6 +9,7 @@ import { record } from '../../view-model/turn/values';
 import { BackgroundOutput } from './BackgroundOutput';
 import { CodeBody } from './CodeBody';
 import { DiffBody } from './DiffBody';
+import { GrepBody } from './GrepBody';
 import { ResultBlock, ResultText } from './ResultText';
 import { BodyNote, KeyValue, Surface } from './Surface';
 import { TerminalBody } from './TerminalBody';
@@ -44,7 +45,7 @@ function ChangeBody({ part }: { part: ToolPart }) {
   const kind = toolKind(part.toolName) === 'edit' ? 'Edit' : 'Write';
   const { hunks } = resolveToolDiff(kind, part.args, part.result);
   if (hunks?.length && !(kind === 'Write' && createsFile(part)))
-    return <DiffBody id={part.toolCallId} hunks={hunks} testId="chat-edit-diff" />;
+    return <DiffBody id={part.toolCallId} hunks={hunks} path={argText(part, 'file_path')} testId="chat-edit-diff" />;
   const content = argText(part, 'content');
   if (!content) return null;
   return (
@@ -107,16 +108,17 @@ function ShellBody({ part, status }: ToolBodyProps) {
 function CallBody({ part, status }: ToolBodyProps) {
   const { text } = resolveResultText(part.result);
   const args = record(part.args) ?? {};
+  const multiline = toolKind(part.toolName) === 'mcp' && status !== 'failed';
+  const argumentsText = multiline
+    ? JSON.stringify(args, null, 2)
+    : `{ ${Object.entries(args)
+        .map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`)
+        .join(', ')} }`;
   return (
     <Surface testId="chat-call-body">
-      {toolKind(part.toolName) === 'mcp' && (
-        <KeyValue label="Tool" testId="chat-call-tool">
-          {part.toolName}
-        </KeyValue>
-      )}
       {Object.keys(args).length > 0 && (
         <KeyValue label="Arguments" testId="chat-call-args">
-          {JSON.stringify(args, null, 2)}
+          {argumentsText}
         </KeyValue>
       )}
       {text && (
@@ -164,7 +166,10 @@ function MainBody({ part, status }: ToolBodyProps) {
     );
   if (!text) return null;
   if (kind === 'read' && !truncated) return <ReadBody part={part} text={text} />;
-  return <ResultBlock part={part} failed={false} testId="search-card-plain-body" />;
+  const result = <ResultBlock part={part} failed={false} testId="search-card-plain-body" />;
+  if (kind === 'grep' && !truncated)
+    return <GrepBody text={text} pattern={argText(part, 'pattern')} fallback={result} />;
+  return result;
 }
 
 export function ToolBody({ part, status }: ToolBodyProps) {

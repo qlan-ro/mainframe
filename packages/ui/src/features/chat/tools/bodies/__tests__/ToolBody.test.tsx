@@ -53,11 +53,6 @@ describe('ToolBody', () => {
     expect(screen.queryByTestId('chat-read-reminder')).toBeNull();
   });
 
-  it('names an MCP call by its raw tool name', () => {
-    show(part('mcp__claude_ai_github__get_issue', { id: 1 }, 'ok'));
-    expect(screen.getByTestId('chat-call-tool')).toHaveTextContent('mcp__claude_ai_github__get_issue');
-  });
-
   it('offers the whole of a structured result the daemon cut short', () => {
     const result = { content: 'Error: …', structuredPatch: [], truncated: true, fullBytes: 51_191 };
     show(part('Edit', { file_path: 'a', old_string: 'a', new_string: 'b' }, result), 'failed');
@@ -168,6 +163,14 @@ describe('ToolBody', () => {
     show(part('WebFetch', { url: 'https://example.com' }, 'A page'));
     fireEvent.click(within(screen.getByTestId('web-fetch-card-url')).getByRole('link'));
     expect(opened).toHaveBeenCalledWith('https://example.com');
+  });
+
+  it('highlights literal grep matches and preserves output indentation', () => {
+    show(part('Grep', { pattern: 'a+b' }, 'src/quota.ts:21:    a+b = 1;'));
+    const body = screen.getByTestId('search-card-plain-body');
+    expect(within(body).getByText('src/quota.ts:21')).toBeVisible();
+    expect(body.querySelector('mark')?.textContent).toBe('a+b');
+    expect(body.lastElementChild?.textContent).toBe('    a+b = 1;');
   });
 
   it('shows a call’s arguments and its result, or its error', () => {
