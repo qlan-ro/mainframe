@@ -408,10 +408,11 @@ describe('sendHeldMessages (C10)', () => {
         version: 1,
       }),
     );
+    window.dispatchEvent(new StorageEvent('storage', { key: 'mf:held-queue' }));
+    await vi.waitFor(() => expect(row('m1').claim).toBeDefined());
     const { host } = makeHost();
 
     await holdQueuedMessages(host);
-    hold('m2', 2);
 
     expect(row('m1').claim).toBeDefined();
   });

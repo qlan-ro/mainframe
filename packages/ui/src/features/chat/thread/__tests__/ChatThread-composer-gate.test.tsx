@@ -108,6 +108,16 @@ describe('ChatThread — composer gate on a projectless draft', () => {
     expect(screen.queryByTestId('composer-stub')).toBeNull();
   });
 
+  it('marks the footer the floating session panel ends above', () => {
+    __mainThreadId = 'chat-42';
+    __itemStatus = 'regular';
+
+    render(<ChatThread />);
+
+    expect(screen.getByTestId('chat-thread-footer')).toHaveAttribute('data-chat-footer');
+    expect(screen.getByTestId('chat-thread-footer')).toContainElement(screen.getByTestId('bottom-strip'));
+  });
+
   it('keeps the branch and changes strip on a read-only delegated chat', () => {
     __mainThreadId = 'chat-42';
     __itemStatus = 'regular';
