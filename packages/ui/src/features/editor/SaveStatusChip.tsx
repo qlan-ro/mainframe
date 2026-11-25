@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 export function SaveStatusChip({ dirty }: { dirty: boolean }) {
   return (
     <Badge data-testid="editor-save-status" variant="secondary">
-      <span className={dirty ? 'size-1.5 rounded-full bg-warning' : 'size-1.5 rounded-full bg-success'} aria-hidden />
+      <span className={dirty ? 'size-1.5 rounded-full bg-warning-dot' : 'size-1.5 rounded-full bg-success'} aria-hidden />
       {dirty ? 'unsaved' : 'saved'}
     </Badge>
   );

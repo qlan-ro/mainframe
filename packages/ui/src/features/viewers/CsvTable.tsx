@@ -59,7 +59,7 @@ function RowNoteAction({
         type="button"
         data-testid={`csv-note-marker-${row.startLine}`}
         aria-label="Open agent note"
-        className="flex size-4 items-center justify-center text-primary"
+        className="flex size-4 items-center justify-center text-accent-ink"
         onClick={() => onOpen(existing.id)}
       >
         <Sparkles className="size-3" aria-hidden />
@@ -72,7 +72,7 @@ function RowNoteAction({
       type="button"
       data-testid={`csv-note-add-${row.startLine}`}
       aria-label="Add agent note"
-      className="flex size-4 items-center justify-center text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary"
+      className="flex size-4 items-center justify-center text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-accent-ink"
       onClick={() => {
         const id = model.addNote({
           startLine: row.startLine,
@@ -128,8 +128,8 @@ export function CsvTable({
                 >
                   <span className={['inline-flex items-center gap-1', isNum ? 'flex-row-reverse' : ''].join(' ')}>
                     {header}
-                    {isActive && sort.dir === 'asc' && <span className="text-xs text-primary">▲</span>}
-                    {isActive && sort.dir === 'desc' && <span className="text-xs text-primary">▼</span>}
+                    {isActive && sort.dir === 'asc' && <span className="text-xs text-accent-ink">▲</span>}
+                    {isActive && sort.dir === 'desc' && <span className="text-xs text-accent-ink">▼</span>}
                     {isActive && <ChevronsUpDown className="size-2.5 shrink-0 text-muted-foreground" aria-hidden />}
                   </span>
                 </th>

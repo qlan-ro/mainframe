@@ -162,7 +162,7 @@ export function PlanGate({ entry, reply, autoAllowed }: PlanGateProps) {
       <GateCardShell>
         <GateHead
           icon={<SquareCheckIcon className="size-3.5" />}
-          tileClassName="bg-primary/10 text-primary"
+          tileClassName="bg-primary/10 text-accent-ink"
           eyebrow="Plan"
           title="Ready to implement"
         />

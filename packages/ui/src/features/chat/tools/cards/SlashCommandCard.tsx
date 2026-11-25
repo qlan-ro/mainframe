@@ -19,8 +19,8 @@ export const SlashCommandCard: ToolCallMessagePartComponent = ({ args }) => {
 
   return (
     <div data-testid="chat-slash-command-row" className="my-1 flex items-center gap-1.5 py-0.5">
-      <ZapIcon className="size-3.5 shrink-0 text-primary" />
-      <span className="font-mono text-sm text-primary">/{skill}</span>
+      <ZapIcon className="size-3.5 shrink-0 text-accent-ink" />
+      <span className="font-mono text-sm text-accent-ink">/{skill}</span>
       {skillArgs && (
         <Tooltip>
           <TooltipTrigger asChild>

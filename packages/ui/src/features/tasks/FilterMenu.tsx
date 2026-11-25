@@ -50,7 +50,7 @@ export function FilterMenu({ label, options, selected, onChange }: Props): React
           variant="outline"
           size="sm"
           data-testid={`tasks-filter-${toKebab(label)}`}
-          className={cn(hasSelection && 'border-transparent bg-primary/10 text-primary hover:bg-primary/15')}
+          className={cn(hasSelection && 'border-transparent bg-primary/10 text-accent-ink hover:bg-primary/15')}
         >
           {label}
           {hasSelection && (

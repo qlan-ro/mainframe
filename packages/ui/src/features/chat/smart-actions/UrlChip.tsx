@@ -81,7 +81,7 @@ export function UrlChip({ href, port }: UrlChipProps) {
 
   return (
     <span className={CHIP_CLASS} data-smart-action-port={port}>
-      <span className="font-mono text-xs text-primary">{href}</span>
+      <span className="font-mono text-xs text-accent-ink">{href}</span>
       {badge && <span className={`${BADGE_CLASS} ${badge.className}`}>{badge.label}</span>}
       <DropdownMenu onOpenChange={handleOpenChange}>
         {/* Hint WRAPS the trigger — inside it, TooltipTrigger's asChild would

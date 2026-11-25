@@ -126,7 +126,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           className={cn(
             'mt-0.5 inline-flex h-[26px] shrink-0 items-center gap-[5px] rounded-md border-[0.5px] px-2.5 text-xs font-semibold',
             open
-              ? 'border-primary/40 bg-primary/10 text-primary'
+              ? 'border-primary/40 bg-primary/10 text-accent-ink'
               : 'border-border text-muted-foreground hover:bg-accent',
           )}
         >
@@ -149,7 +149,7 @@ export function StepCard({ step, onChange, tokens, catalog, issues, onDragStart,
           data-level={bad ? 'error' : 'warning'}
           className={cn(
             'flex flex-col gap-[4px] border-t-[0.5px] px-[12px] pt-[7px] pb-[8px]',
-            bad ? 'border-fail/20 bg-fail/6' : 'border-warning/30 bg-warning/10',
+            bad ? 'border-fail/20 bg-fail/6' : 'border-warning-border bg-warning-surface',
           )}
         >
           {myIssues.map((issue, i) => (

@@ -113,7 +113,7 @@ export function RunStepRow({
             <Hint label="This step failed but the automation kept going">
               <span
                 data-testid={`${testId}-kept-going`}
-                className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-warning/15 px-[8px] text-xs font-semibold text-muted-foreground"
+                className="inline-flex h-[18px] shrink-0 items-center rounded-full bg-warning-surface px-[8px] text-xs font-semibold text-muted-foreground"
               >
                 Kept going
               </span>
@@ -161,7 +161,7 @@ export function RunStepRow({
             type="button"
             data-testid={`${testId}-chat`}
             onClick={() => onOpenChat(entry.chatId!)}
-            className="mt-[7px] inline-flex h-[26px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-[11px] text-xs font-semibold text-primary hover:bg-accent"
+            className="mt-[7px] inline-flex h-[26px] items-center gap-1.5 rounded-md border-[0.5px] border-border px-[11px] text-xs font-semibold text-accent-ink hover:bg-accent"
           >
             <MessageSquare size={14} aria-hidden />
             Open agent chat

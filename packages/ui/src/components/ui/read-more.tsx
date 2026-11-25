@@ -84,15 +84,15 @@ function ReadMoreToggle({ expanded, testId, onToggle }: { expanded: boolean; tes
       data-testid={testId}
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-2 text-xs font-semibold text-primary hover:underline"
+      className="inline-flex items-center gap-2 text-xs font-semibold text-accent-ink hover:underline"
       aria-label={expanded ? 'Show less' : 'Read more'}
       aria-expanded={expanded}
     >
       {expanded ? 'Show less' : 'Read more'}
       {expanded ? (
-        <ChevronsUpDown size={12} className="text-primary" />
+        <ChevronsUpDown size={12} className="text-accent-ink" />
       ) : (
-        <ChevronDown size={12} className="text-primary" />
+        <ChevronDown size={12} className="text-accent-ink" />
       )}
     </button>
   );

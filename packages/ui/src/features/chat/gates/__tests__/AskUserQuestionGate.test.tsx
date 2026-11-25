@@ -211,7 +211,7 @@ describe('AskUserQuestionGate', () => {
     expect(indicator).toHaveClass('size-4', 'border-input');
 
     fireEvent.click(option);
-    expect(indicator).toHaveClass('border-primary', 'bg-primary');
+    expect(indicator).toHaveClass('border-accent-fill', 'bg-accent-fill');
   });
 
   // -------------------------------------------------------------------------

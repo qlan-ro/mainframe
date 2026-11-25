@@ -50,7 +50,7 @@ function PillOption({
       onClick={onClick}
       className={cn(
         'h-[28px] rounded-full border-[0.5px] px-[12px] text-xs font-medium',
-        active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent',
+        active ? 'border-primary/40 bg-primary/10 text-accent-ink' : 'border-border text-muted-foreground hover:bg-accent',
       )}
     >
       {label}
@@ -165,7 +165,7 @@ export function RunInlineForm({ interaction, onSubmitted, testId }: RunInlineFor
   return (
     <div
       data-testid={testId}
-      className="flex flex-col gap-[11px] rounded-lg border-[0.5px] border-warning/35 bg-warning/[0.06] p-[13px]"
+      className="flex flex-col gap-[11px] rounded-lg border-[0.5px] border-warning-border bg-warning-surface p-[13px]"
     >
       <div className="text-xs font-bold text-foreground">{interaction.title}</div>
       {visibleFields.map((field) => (

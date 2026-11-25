@@ -80,7 +80,7 @@ describe('TurnStatusRow — Reconnecting', () => {
     expect(text).toHaveClass('text-muted-foreground');
     expect(text).not.toHaveClass('text-warning');
     expect(container.querySelector('[data-testid="chat-thread-running"] > span[aria-hidden]')).toHaveClass(
-      'bg-warning',
+      'bg-warning-dot',
     );
   });
 
@@ -165,7 +165,7 @@ describe('TurnStatusTrailing — Reconnecting in a hosting header', () => {
   it('uses a warning dot with normal-colour text', () => {
     render(<TurnStatusTrailing />);
     const label = screen.getByTestId(TEST_ID);
-    expect(label.querySelector('[aria-hidden]')).toHaveClass('bg-warning');
+    expect(label.querySelector('[aria-hidden]')).toHaveClass('bg-warning-dot');
     expect(label).toHaveClass('text-muted-foreground');
     expect(label).not.toHaveClass('text-warning');
   });

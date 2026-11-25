@@ -14,6 +14,6 @@ export const QUOTA_PERCENT_TEXT: Record<QuotaSeverity, string> = {
 /** Re-tints `Progress`'s indicator rather than forking the primitive. */
 export const QUOTA_BAR_FILL: Record<QuotaSeverity, string> = {
   normal: '*:data-[slot=progress-indicator]:bg-foreground',
-  amber: '*:data-[slot=progress-indicator]:bg-warning',
+  amber: '*:data-[slot=progress-indicator]:bg-warning-dot',
   red: '*:data-[slot=progress-indicator]:bg-destructive',
 };

@@ -63,7 +63,7 @@ function ModelRowBody({ option, active }: { option: AdapterModel; active: boolea
   const desc = rowDescription(option);
   return (
     <>
-      <Check className={cn('mt-0.5 size-3.5 shrink-0 text-primary', !active && 'invisible')} />
+      <Check className={cn('mt-0.5 size-3.5 shrink-0 text-accent-ink', !active && 'invisible')} />
       <span className="min-w-0 flex-1">
         <span className="block font-medium">{option.label}</span>
         {desc && <span className="block text-xs leading-snug text-muted-foreground">{desc}</span>}

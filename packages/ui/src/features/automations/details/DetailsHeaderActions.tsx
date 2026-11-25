@@ -106,7 +106,7 @@ export function DetailsHeaderActions({ automation }: DetailsHeaderActionsProps) 
         onClick={() => void handleRun()}
         className="inline-flex h-[28px] shrink-0 items-center gap-[5px] rounded-md border-[0.5px] border-border px-[12px] text-xs font-semibold text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
       >
-        <Play size={14} className="text-primary" fill="currentColor" aria-hidden />
+        <Play size={14} className="text-accent-ink" fill="currentColor" aria-hidden />
         Run now
       </button>
       <Hint label="Edit">

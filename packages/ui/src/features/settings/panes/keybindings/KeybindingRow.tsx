@@ -104,7 +104,7 @@ export function KeybindingRow({ binding, isMac, holderOf, onBind, onReset }: Key
         }}
         className={cn(
           'shrink-0 rounded border bg-muted px-1 py-0.5 font-mono text-xs',
-          recording ? 'text-primary' : 'text-muted-foreground',
+          recording ? 'text-accent-ink' : 'text-muted-foreground',
           !rebindable && 'opacity-60',
         )}
       >

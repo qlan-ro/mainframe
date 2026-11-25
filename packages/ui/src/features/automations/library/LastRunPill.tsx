@@ -17,8 +17,8 @@ export const RUN_STATUS_LABEL: Record<AutomationRunStatus, string> = {
 };
 
 export const RUN_STATUS_DOT_CLASS: Record<AutomationRunStatus, string> = {
-  running: 'bg-primary',
-  waiting: 'bg-warning',
+  running: 'bg-live',
+  waiting: 'bg-warning-dot',
   succeeded: 'bg-success',
   failed: 'bg-fail',
   cancelled: 'bg-muted-foreground',

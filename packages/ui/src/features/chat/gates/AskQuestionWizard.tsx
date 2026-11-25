@@ -56,7 +56,7 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
       }}
       className={cn(
         'flex min-h-11 w-full cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 text-left text-sm shadow-xs transition-colors select-none',
-        isSelected ? 'border-primary/40 bg-muted' : 'border-input bg-transparent hover:bg-muted/50 dark:bg-input/20',
+        isSelected ? 'border-input bg-queue-well' : 'border-input bg-transparent hover:bg-muted/50 dark:bg-input/20',
       )}
     >
       {isMulti ? (
@@ -67,7 +67,7 @@ function OptionRow({ label, description, isSelected, isMulti, testId, onToggle }
           data-radio-indicator
           className={cn(
             'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
-            isSelected ? 'border-primary bg-primary' : 'border-input',
+            isSelected ? 'border-accent-fill bg-accent-fill' : 'border-input',
           )}
         >
           {isSelected && <span className="size-1.5 rounded-full bg-primary-foreground" />}

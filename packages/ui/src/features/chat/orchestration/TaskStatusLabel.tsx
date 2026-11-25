@@ -10,8 +10,8 @@ import { cn } from '@/lib/utils';
 
 const DOT: Record<TaskStatus, string> = {
   queued: 'bg-muted-foreground',
-  running: 'bg-primary',
-  waiting: 'bg-warning',
+  running: 'bg-live',
+  waiting: 'bg-warning-dot',
   completed: 'bg-success',
   failed: 'bg-fail',
   cancelled: 'bg-muted-foreground',

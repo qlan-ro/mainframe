@@ -72,9 +72,9 @@ function QueuedMeta({ position = 1, total = 1 }: { position?: number; total?: nu
       {/* `warning` in v2 means wrong-but-not-broken; a queued turn is neither,
           so the waiting signal is the accent, matching the running indicator. */}
       {showSpinner ? (
-        <span className="inline-block size-2 shrink-0 animate-spin rounded-full border-[1.5px] border-primary border-t-transparent" />
+        <span className="inline-block size-2 shrink-0 animate-spin rounded-full border-[1.5px] border-live border-t-transparent" />
       ) : (
-        <span className="inline-block size-2 shrink-0 rounded-full bg-primary" />
+        <span className="inline-block size-2 shrink-0 rounded-full bg-muted-foreground" />
       )}
       {label}
     </span>
@@ -151,10 +151,10 @@ export function QueuedUserTurn({
         {/* Skip the dashed bubble entirely for an attachment/image/capture-only
             queued message — otherwise it renders as an empty box. */}
         {children && (
-          <Bubble variant="tinted" align="end" className="max-w-[470px]">
+          <Bubble variant="queued" align="end" className="max-w-[470px]">
             <BubbleContent
               data-testid="chat-queued-bubble"
-              className="border-dashed border-border opacity-80 transition-[opacity,border-color] duration-200 ease-in-out"
+              className="border-dashed border-border transition-colors duration-200 ease-in-out"
             >
               {children}
             </BubbleContent>

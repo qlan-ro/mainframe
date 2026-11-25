@@ -49,7 +49,7 @@ export function PlanModeToggle({ chat, adapter, setPlanMode }: PlanModeTogglePro
           'transition-colors',
           'focus-visible:focus-line',
           active
-            ? 'border-primary bg-sidebar-selection text-primary'
+            ? 'border-primary bg-sidebar-selection text-accent-ink'
             : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',
         )}
       >

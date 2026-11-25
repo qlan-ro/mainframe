@@ -66,7 +66,7 @@ function MultiValueEditor({
               className={cn(
                 'h-6 rounded-full border-[0.5px] px-2.5 text-xs font-medium',
                 active
-                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  ? 'border-primary/40 bg-primary/10 text-accent-ink'
                   : 'border-border text-muted-foreground hover:bg-accent',
               )}
             >

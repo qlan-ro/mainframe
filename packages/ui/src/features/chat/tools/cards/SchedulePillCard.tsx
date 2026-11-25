@@ -55,7 +55,7 @@ function buildPendingLabel(kind: ScheduleKind, args: Record<string, unknown>): R
     const desc = String(args['description'] ?? args['command'] ?? '');
     return (
       <>
-        Monitoring: <span className="text-primary">{desc}</span>
+        Monitoring: <span className="text-accent-ink">{desc}</span>
       </>
     );
   }
@@ -75,7 +75,7 @@ function buildDoneLabel(kind: ScheduleKind, args: Record<string, unknown>, parse
     const reason = String(args['reason'] ?? '');
     return (
       <>
-        Will resume in <span className="text-primary">{delay}</span>
+        Will resume in <span className="text-accent-ink">{delay}</span>
         {reason ? ` · ${reason}` : ''}
       </>
     );
@@ -87,7 +87,7 @@ function buildDoneLabel(kind: ScheduleKind, args: Record<string, unknown>, parse
     const durable = obj?.['durable'];
     return (
       <>
-        Scheduled: <span className="text-primary">{human}</span>
+        Scheduled: <span className="text-accent-ink">{human}</span>
         {' · '}
         {recurring ? 'recurring' : 'one-shot'}
         {durable === false && ' · session-only'}
@@ -97,7 +97,7 @@ function buildDoneLabel(kind: ScheduleKind, args: Record<string, unknown>, parse
   if (kind === 'CronDelete') {
     return (
       <>
-        Removed schedule · <span className="font-mono text-primary">{String(args['id'] ?? '')}</span>
+        Removed schedule · <span className="font-mono text-accent-ink">{String(args['id'] ?? '')}</span>
       </>
     );
   }
@@ -105,7 +105,7 @@ function buildDoneLabel(kind: ScheduleKind, args: Record<string, unknown>, parse
     const jobs = Array.isArray(parsed) ? parsed : [];
     return (
       <>
-        Listed <span className="text-primary">{jobs.length}</span> scheduled job
+        Listed <span className="text-accent-ink">{jobs.length}</span> scheduled job
         {jobs.length === 1 ? '' : 's'}
       </>
     );
@@ -114,7 +114,7 @@ function buildDoneLabel(kind: ScheduleKind, args: Record<string, unknown>, parse
   const desc = String(args['description'] ?? args['command'] ?? '');
   return (
     <>
-      Stopped monitoring: <span className="text-primary">{desc}</span>
+      Stopped monitoring: <span className="text-accent-ink">{desc}</span>
     </>
   );
 }
@@ -131,7 +131,7 @@ function buildBody(kind: ScheduleKind, parsed: unknown, text: string): React.Rea
           <div key={String(j['id'] ?? '')}>
             <div>
               {'• '}
-              <span className="text-primary">{String(j['id'] ?? '')}</span>{' '}
+              <span className="text-accent-ink">{String(j['id'] ?? '')}</span>{' '}
               {String(j['humanSchedule'] ?? j['cron'] ?? '')} ({j['recurring'] ? 'recurring' : 'one-shot'}
               {j['durable'] === false ? ', session-only' : ''})
             </div>

@@ -10,7 +10,7 @@ type GateAccent = 'primary' | 'warning';
  */
 const ACCENT_RING: Record<GateAccent, string> = {
   primary: 'border-primary/40 ring-3 ring-primary/15',
-  warning: 'border-warning/40 ring-3 ring-warning/15',
+  warning: 'border-warning-dot ring-3 ring-warning/15',
 };
 
 /**

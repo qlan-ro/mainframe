@@ -36,7 +36,7 @@ function Anchor({ href, children, ...props }: ElProps<'a'>) {
     <a
       {...props}
       href={href}
-      className="text-primary underline underline-offset-2"
+      className="text-accent-ink underline underline-offset-2"
       onClick={(e) => {
         if (!href) return;
         e.preventDefault();

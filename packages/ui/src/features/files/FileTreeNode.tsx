@@ -147,7 +147,7 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
             size={12}
             className={`flex-shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`}
           />
-          <Folder size={12} className="flex-shrink-0 fill-current text-primary" />
+          <Folder size={12} className="flex-shrink-0 fill-current text-accent-ink" />
           <TruncatedWithTooltip
             text={entry.name}
             tooltip={fullPath}

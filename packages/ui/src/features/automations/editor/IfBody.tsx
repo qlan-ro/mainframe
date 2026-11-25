@@ -85,7 +85,7 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
             type="button"
             data-testid={`automations-if-add-condition-${step.id}`}
             onClick={addCondition}
-            className="text-xs font-semibold text-primary"
+            className="text-xs font-semibold text-accent-ink"
           >
             + Add condition
           </button>
@@ -155,7 +155,7 @@ export function IfBody({ step, onChange, tokens, catalog, issues, depth }: IfBod
           type="button"
           data-testid={`automations-if-add-otherwise-${step.id}`}
           onClick={() => setShowOtherwise(true)}
-          className="self-start text-xs font-semibold text-primary"
+          className="self-start text-xs font-semibold text-accent-ink"
         >
           + Add “otherwise”
         </button>

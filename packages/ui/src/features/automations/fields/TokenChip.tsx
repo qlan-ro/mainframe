@@ -44,7 +44,7 @@ const SOURCE_STYLE: Record<TokenSourceKind, SourceStyle> = {
     tintClass: 'bg-mf-auto-kind-call/12',
     borderClass: 'border-mf-auto-kind-call/30',
   },
-  agent: { icon: Sparkles, iconClass: 'text-primary', tintClass: 'bg-primary/12', borderClass: 'border-primary/30' },
+  agent: { icon: Sparkles, iconClass: 'text-accent-ink', tintClass: 'bg-primary/12', borderClass: 'border-primary/30' },
   askme: {
     icon: MessageCircle,
     iconClass: 'text-mf-auto-kind-question',

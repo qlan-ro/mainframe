@@ -54,7 +54,7 @@ export function CountBadge({
     <span
       className={cn(
         'text-xs font-semibold tabular-nums',
-        variant === 'unread' ? 'text-primary' : 'text-muted-foreground',
+        variant === 'unread' ? 'text-accent-ink' : 'text-muted-foreground',
         onAccent && 'text-primary-foreground',
         className,
       )}

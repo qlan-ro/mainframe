@@ -25,7 +25,7 @@ export function SyncRunBanner(): React.ReactElement | null {
       data-testid="tasks-github-banner"
       className={cn(
         'flex shrink-0 items-start gap-2 border-b px-4 py-2',
-        failed ? 'border-warning/40 bg-warning-tint' : 'border-border bg-card',
+        failed ? 'border-warning-border bg-warning-tint' : 'border-border bg-card',
       )}
     >
       {failed ? (
@@ -42,7 +42,7 @@ export function SyncRunBanner(): React.ReactElement | null {
               data-testid="tasks-github-banner-report"
               type="button"
               onClick={() => openDialog({ kind: 'report' })}
-              className="text-xs font-medium text-primary underline-offset-2 transition-colors hover:underline"
+              className="text-xs font-medium text-accent-ink underline-offset-2 transition-colors hover:underline"
             >
               View report
             </button>

@@ -156,7 +156,7 @@ export function AskUserQuestionGate({ entry, reply }: AskUserQuestionGateProps) 
       <GateCardShell>
         <GateHead
           icon={<MessageCircleQuestionIcon className="size-3.5" />}
-          tileClassName="bg-primary/10 text-primary"
+          tileClassName="bg-primary/10 text-accent-ink"
           eyebrow={eyebrow}
           title={title}
           right={

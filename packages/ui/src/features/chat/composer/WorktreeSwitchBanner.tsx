@@ -34,7 +34,7 @@ function branchLabel(worktreePath: string, branchName: string | null): string {
 
 function SwitchingLine({ label }: { label: string }) {
   return (
-    <div data-testid="worktree-switch-status" className="flex items-center gap-1.5 text-xs text-primary">
+    <div data-testid="worktree-switch-status" className="flex items-center gap-1.5 text-xs text-accent-ink">
       <Loader2 className="size-3.5 animate-spin" aria-hidden />
       {`Switching — restarting the agent in ${label}…`}
     </div>
@@ -60,7 +60,7 @@ function OfferActions({
         data-path={worktreePath}
         disabled={disabled}
         onClick={onAccept}
-        className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md bg-accent-fill px-2.5 py-1 text-xs font-medium text-primary-foreground hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Switch session
       </button>
@@ -168,7 +168,7 @@ export function WorktreeSwitchBanner() {
       {offers.length > 1 ? (
         <div className={`${PANEL_CLASS} flex flex-col gap-2`}>
           <p className="flex items-center gap-1.5 text-sm font-medium">
-            <GitBranch className="size-3.5 text-primary" aria-hidden />
+            <GitBranch className="size-3.5 text-accent-ink" aria-hidden />
             {`${offers.length} new worktrees — switch this session?`}
           </p>
           <p className="text-xs text-muted-foreground">{busy ? BUSY_NOTE : LIST_WARNING}</p>
@@ -214,7 +214,7 @@ function SingleOfferPanel({
   return (
     <div className={`${PANEL_CLASS} flex flex-col gap-2`}>
       <p className="flex items-center gap-1.5 text-sm font-medium">
-        <GitBranch className="size-3.5 text-primary" aria-hidden />
+        <GitBranch className="size-3.5 text-accent-ink" aria-hidden />
         {`New worktree: ${label}`}
       </p>
       <p className="text-xs text-muted-foreground">

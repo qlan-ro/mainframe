@@ -54,7 +54,7 @@ function UrlRow({ url }: { url: string }) {
         type="button"
         data-testid="web-fetch-card-url"
         onClick={open}
-        className="min-w-0 cursor-pointer truncate text-left font-mono text-xs text-primary underline-offset-4 hover:underline"
+        className="min-w-0 cursor-pointer truncate text-left font-mono text-xs text-accent-ink underline-offset-4 hover:underline"
       >
         {url}
       </button>

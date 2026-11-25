@@ -38,7 +38,7 @@ export const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
       className={cn(
         // select-none: a selection spanning the block must not copy the language label or "Copy".
         'flex select-none items-center justify-between',
-        'mt-3 bg-muted border border-border rounded-t-md',
+        'mt-3 bg-code-surface border border-border rounded-t-md',
         'px-3 py-1.5',
       )}
     >

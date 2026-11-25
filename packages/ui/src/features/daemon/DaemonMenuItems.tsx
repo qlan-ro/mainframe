@@ -145,7 +145,7 @@ export function DaemonMenuItems({
           <span className="min-w-0 flex-1 truncate">
             <strong className="font-semibold">{active.label}</strong> is unreachable.
           </span>
-          <span className="flex shrink-0 items-center font-semibold text-primary">
+          <span className="flex shrink-0 items-center font-semibold text-accent-ink">
             Use {local.label}
             <ChevronRightIcon />
           </span>

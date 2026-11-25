@@ -71,7 +71,14 @@ function SendOrStopButton() {
     );
   }
   return (
-    <Button type="submit" data-testid="chat-composer-send" aria-label="Send" size="icon-sm" disabled={!canSubmit}>
+    <Button
+      type="submit"
+      data-testid="chat-composer-send"
+      aria-label="Send"
+      size="icon-sm"
+      disabled={!canSubmit}
+      className="bg-primary disabled:border-input disabled:bg-transparent disabled:text-faint disabled:opacity-100"
+    >
       <ArrowUpIcon />
     </Button>
   );
@@ -200,7 +207,7 @@ export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {
         // automatic minimum is its content size, so it would overflow the
         // footer's cap instead of shrinking to fit; `overflow-y-auto` clips
         // that content rather than letting it paint past the card's border.
-        className="min-h-0 min-w-60 overflow-y-auto rounded-xl border border-input bg-card shadow-xs transition-colors focus-within:focus-line-inset"
+        className="min-h-0 min-w-60 overflow-y-auto rounded-xl bg-card shadow-card transition-colors focus-within:focus-line-inset"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"

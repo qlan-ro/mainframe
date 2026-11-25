@@ -92,7 +92,7 @@ function ReconnectingSegment({ label, testId }: { label: string; testId: string 
       data-testid={testId}
       className={cn('flex shrink-0 items-center gap-2 font-medium text-muted-foreground', ENTER)}
     >
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-warning" />
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-warning-dot" />
       {label}
     </span>
   );
@@ -131,7 +131,7 @@ function RunningStatus() {
         aria-hidden
         className={cn(
           'size-1.5 shrink-0 animate-pulse rounded-full motion-reduce:animate-none',
-          attention || reconnecting ? 'bg-warning' : 'bg-primary',
+          attention || reconnecting ? 'bg-warning-dot' : 'bg-live',
         )}
       />
       {/* Two spans: the enter morph and the idle pulse both own `animation`. */}

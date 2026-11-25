@@ -59,7 +59,7 @@ function buildWorktreeCard(kind: 'EnterWorktree' | 'ExitWorktree'): ToolCallMess
       const name = String(args['name'] ?? worktreeBranch ?? worktreePath ?? '');
       label = (
         <>
-          Entered worktree: <span className="text-primary">{name}</span>
+          Entered worktree: <span className="text-accent-ink">{name}</span>
         </>
       );
       tooltip = worktreePath ?? null;

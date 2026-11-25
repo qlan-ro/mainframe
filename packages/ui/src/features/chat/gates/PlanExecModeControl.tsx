@@ -58,7 +58,7 @@ export function PlanExecModeControl({ value, onChange, autoAllowed }: PlanExecMo
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1',
                 'text-xs font-semibold transition-colors',
-                selected && ['bg-background shadow-sm', SELECTED_INK[id] ?? 'text-primary'],
+                selected && ['bg-background shadow-sm', SELECTED_INK[id] ?? 'text-accent-ink'],
                 !selected && 'text-muted-foreground hover:text-foreground',
               )}
             >

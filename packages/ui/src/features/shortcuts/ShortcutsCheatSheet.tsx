@@ -80,7 +80,7 @@ export function ShortcutsCheatSheet({ entries = SHORTCUTS, dev = import.meta.env
         {/* pr-12 clears the stock close button. */}
         <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
           <DialogTitle className="flex items-center gap-1.5">
-            <Keyboard size={13} className="shrink-0 text-primary" aria-hidden />
+            <Keyboard size={13} className="shrink-0 text-accent-ink" aria-hidden />
             Keyboard Shortcuts
           </DialogTitle>
         </DialogHeader>

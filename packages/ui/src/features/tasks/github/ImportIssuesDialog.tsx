@@ -43,7 +43,7 @@ function IssueRow({ issue, selected, onToggle }: RowProps): React.ReactElement {
         onCheckedChange={() => onToggle(issue.number)}
         className="shrink-0"
       />
-      <span className="shrink-0 font-mono text-xs font-medium text-primary">#{issue.number}</span>
+      <span className="shrink-0 font-mono text-xs font-medium text-accent-ink">#{issue.number}</span>
       <span className={cn('min-w-0 flex-1 truncate text-sm', paired ? 'text-muted-foreground' : 'text-foreground')}>
         {issue.title}
       </span>

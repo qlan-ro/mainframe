@@ -58,7 +58,7 @@ export function ReviewCommentCard({ review }: { review: ReviewComment }) {
       className="max-w-[75%] self-end overflow-hidden rounded-xl border border-border bg-card shadow-sm"
     >
       <div className="flex items-center gap-2 border-b border-border bg-muted px-3 py-1.5">
-        <CodeIcon size={12} className="shrink-0 text-primary" />
+        <CodeIcon size={12} className="shrink-0 text-accent-ink" />
         <Hint label={review.file}>
           <span className="min-w-0 truncate font-mono text-xs font-semibold text-muted-foreground">{fileName}</span>
         </Hint>

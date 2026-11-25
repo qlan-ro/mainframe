@@ -65,7 +65,7 @@ export function Step0Body({ url, phase, version, onUrlChange, onVerify }: Step0B
               type="button"
               data-testid="daemon-add-retry"
               onClick={onVerify}
-              className="text-xs font-semibold text-primary hover:underline"
+              className="text-xs font-semibold text-accent-ink hover:underline"
             >
               Retry
             </button>

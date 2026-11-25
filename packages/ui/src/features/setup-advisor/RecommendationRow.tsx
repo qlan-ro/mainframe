@@ -33,7 +33,7 @@ function SourceAttribution({ rec }: { rec: AutomationRecommendation }) {
   if (rec.provenance === 'third-party') {
     return (
       <p className="mt-1">
-        <Badge variant="outline" className="border-warning/40 bg-warning/10 text-xs text-warning">
+        <Badge variant="outline" className="border-warning-border bg-warning-surface text-xs text-warning">
           Third-party · {label}
         </Badge>
       </p>

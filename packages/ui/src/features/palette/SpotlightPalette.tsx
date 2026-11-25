@@ -99,7 +99,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
             <Badge
               data-testid="search-palette-mode-chip"
               variant="secondary"
-              className="px-1.5 py-0 text-xs text-primary"
+              className="px-1.5 py-0 text-xs text-accent-ink"
             >
               {parsed.chip}
             </Badge>

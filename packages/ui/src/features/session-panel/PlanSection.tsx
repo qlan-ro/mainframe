@@ -13,7 +13,7 @@ import { todosToPlan, type PlanStep, type PlanStepState } from './plan-view';
 
 const STEP_GLYPH: Record<PlanStepState, ReactNode> = {
   done: <Check className="size-3.5! text-success" />,
-  running: <LoaderCircle className="size-3.5! animate-spin text-primary motion-reduce:animate-none" />,
+  running: <LoaderCircle className="size-3.5! animate-spin text-live motion-reduce:animate-none" />,
   next: <Circle className="size-2! text-foreground" />,
   todo: <Circle className="size-2! text-muted-foreground" />,
 };

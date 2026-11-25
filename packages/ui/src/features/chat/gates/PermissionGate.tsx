@@ -127,7 +127,7 @@ export function PermissionGate({ entry, reply }: PermissionGateProps) {
       <GateCardShell accent="warning">
         <GateHead
           icon={<ShieldIcon className="size-3.5" />}
-          tileClassName="bg-warning/10 text-warning"
+          tileClassName="bg-warning-surface text-warning"
           eyebrow="Permission required"
           title="Permission Required"
         />

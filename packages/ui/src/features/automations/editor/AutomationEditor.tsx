@@ -195,7 +195,7 @@ export function AutomationEditor() {
             <ChevronLeft size={15} aria-hidden />
           </button>
         </Hint>
-        <Zap size={15} className="text-primary" aria-hidden />
+        <Zap size={15} className="text-accent-ink" aria-hidden />
         <span className="text-base font-semibold tracking-tight text-foreground">
           {isNew ? 'New automation' : draft.name || 'Automation'}
         </span>
@@ -285,7 +285,7 @@ export function AutomationEditor() {
           ) : (
             issues.map((issue, i) => (
               <span key={i} className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                <span className={cn('size-1.5 rounded-full', issue.level === 'error' ? 'bg-fail' : 'bg-warning')} />
+                <span className={cn('size-1.5 rounded-full', issue.level === 'error' ? 'bg-fail' : 'bg-warning-dot')} />
                 {issue.msg}
               </span>
             ))

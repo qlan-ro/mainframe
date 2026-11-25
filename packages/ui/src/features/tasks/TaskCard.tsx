@@ -121,7 +121,7 @@ export const TaskCard = React.memo(function TaskCard({
     >
       {/* Row 1: #number + project avatar (multi-project only) + title + type badge */}
       <div className="flex items-start gap-1.5 min-w-0">
-        <span className="shrink-0 font-mono text-xs font-medium text-primary leading-5">#{todo.number}</span>
+        <span className="shrink-0 font-mono text-xs font-medium text-accent-ink leading-5">#{todo.number}</span>
         {project != null && <TaskProjectBadge project={project} testId={`tasks-card-project-${todo.number}`} />}
         <span className="flex-1 min-w-0">
           <span
@@ -201,7 +201,7 @@ export const TaskCard = React.memo(function TaskCard({
                       e.stopPropagation();
                       onStartSession(todo);
                     }}
-                    className="p-1.5 rounded text-primary hover:bg-accent transition-colors"
+                    className="p-1.5 rounded text-accent-ink hover:bg-accent transition-colors"
                     aria-label="Start in new session"
                   >
                     <Play size={14} />

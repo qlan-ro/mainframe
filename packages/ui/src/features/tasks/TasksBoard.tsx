@@ -120,7 +120,7 @@ export function TasksBoard({ port, projectIds, onStartSession, onClose }: Props)
       {/* Header band. Close sits at the far RIGHT — every dialog closes on the
           right (stock shadcn position); the old left-side X predates the port. */}
       <div className="flex h-[52px] shrink-0 items-center gap-4 border-b px-4">
-        <ListChecks size={15} className="shrink-0 text-primary" aria-hidden />
+        <ListChecks size={15} className="shrink-0 text-accent-ink" aria-hidden />
         <span className="text-base font-semibold text-foreground">Tasks</span>
         <Badge variant="secondary" className="font-mono text-xs font-normal text-muted-foreground">
           {activeCount} active · {doneCount} done

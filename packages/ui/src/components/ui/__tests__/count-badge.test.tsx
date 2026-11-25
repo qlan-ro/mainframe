@@ -23,7 +23,7 @@ describe('CountBadge', () => {
       ['text-muted-foreground', 'text-xs', 'tabular-nums'],
       ['rounded-full', 'bg-primary'],
     ],
-    ['unread uses the accent ink', { variant: 'unread' }, ['text-primary'], ['text-muted-foreground']],
+    ['unread uses the accent ink', { variant: 'unread' }, ['text-accent-ink'], ['text-muted-foreground']],
     [
       'unread + onAccent forces primary-foreground',
       { variant: 'unread', onAccent: true },

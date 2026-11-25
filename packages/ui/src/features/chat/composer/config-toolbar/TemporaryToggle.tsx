@@ -71,7 +71,7 @@ export function TemporaryToggle({ chat, draftMode, setTemporary }: TemporaryTogg
           'transition-colors',
           'focus-visible:focus-line',
           active
-            ? 'border-primary bg-sidebar-selection text-primary'
+            ? 'border-primary bg-sidebar-selection text-accent-ink'
             : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',
           locked && 'cursor-default',
           // Only suppress the hover fill when there's no engaged chrome to

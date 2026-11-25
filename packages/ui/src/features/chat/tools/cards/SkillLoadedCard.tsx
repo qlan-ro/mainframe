@@ -25,13 +25,13 @@ export function SkillLoadedCard({ skillName, path = '', content = '' }: SkillLoa
 
   const pillLabel = (
     <>
-      Using skill: <span className="text-primary">{skillName}</span>
+      Using skill: <span className="text-accent-ink">{skillName}</span>
     </>
   );
 
   const pill = (
     <MarkerPill
-      icon={<ZapIcon className="text-primary" />}
+      icon={<ZapIcon className="text-accent-ink" />}
       state="done"
       expandable={expandable}
       open={open}

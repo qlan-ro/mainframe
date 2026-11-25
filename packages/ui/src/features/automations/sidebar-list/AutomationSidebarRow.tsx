@@ -36,8 +36,8 @@ function StatusDot({ status }: { status: AutomationRowStatus }) {
         aria-label={STATUS_LABEL[status]}
         className={cn(
           'size-2 shrink-0 rounded-full',
-          status === 'running' && 'animate-pulse bg-primary motion-reduce:animate-none',
-          status === 'needs-you' && 'bg-warning',
+          status === 'running' && 'animate-pulse bg-live motion-reduce:animate-none',
+          status === 'needs-you' && 'bg-warning-dot',
           status === 'disabled' && 'border-[1.5px] border-muted-foreground',
           status === 'idle' && 'bg-muted-foreground/50',
         )}

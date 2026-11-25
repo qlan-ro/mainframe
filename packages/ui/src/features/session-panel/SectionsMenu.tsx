@@ -24,7 +24,7 @@ export function SectionsMenu() {
             aria-label="Sections"
             variant="ghost"
             size="icon-sm"
-            className="text-muted-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
+            className="text-muted-foreground data-[state=open]:bg-chrome-press data-[state=open]:text-foreground"
           >
             <SlidersHorizontal className="size-4" strokeWidth={1.5} />
           </Button>

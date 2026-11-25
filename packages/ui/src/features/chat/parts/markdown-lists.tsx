@@ -32,7 +32,7 @@ const UL_MARKER_CLASS =
 const OL_MARKER_CLASS =
   '[counter-reset:aui-md-ol] [&>li]:[counter-increment:aui-md-ol]' +
   ' [&>li]:before:content-[counter(aui-md-ol,decimal-leading-zero)]' +
-  ' [&>li]:before:font-mono [&>li]:before:font-bold [&>li]:before:text-primary' +
+  ' [&>li]:before:font-mono [&>li]:before:font-bold [&>li]:before:text-accent-ink' +
   ' [&>li]:before:text-xs [&>li]:before:absolute [&>li]:before:left-0' +
   ' [&>li]:before:w-[22px]';
 

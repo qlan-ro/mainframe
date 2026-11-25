@@ -106,7 +106,7 @@ const CM6_THEME_SPEC = {
     backgroundColor: 'var(--mf-cm-active-line)',
   },
   '.cm-cursor': {
-    borderLeftColor: 'var(--mf-code-fg)',
+    borderLeftColor: 'var(--primary)',
   },
   '.cm-selectionBackground, ::selection': {
     backgroundColor: 'var(--mf-cm-selection)',

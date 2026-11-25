@@ -140,7 +140,7 @@ export function TasksFilterBar({ filters, onChange, allLabels, sort, onSortChang
             variant="ghost"
             size="sm"
             data-testid="tasks-filter-clear"
-            className="text-primary"
+            className="text-accent-ink"
             onClick={clearAll}
           >
             <X />

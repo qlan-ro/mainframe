@@ -25,7 +25,7 @@ function LaunchValue({ row }: { row: LaunchRow }) {
       {status === 'starting' && (
         <LoaderCircle
           data-testid={`session-panel-launch-spinner-${name}`}
-          className="size-3 animate-spin text-primary motion-reduce:animate-none"
+          className="size-3 animate-spin text-live motion-reduce:animate-none"
           aria-hidden
         />
       )}
@@ -35,7 +35,7 @@ function LaunchValue({ row }: { row: LaunchRow }) {
           <Square className="size-3 text-destructive" fill="currentColor" aria-hidden />
         ) : (
           <Play
-            className="size-3 transition-colors group-hover/launch:text-primary group-focus-visible/launch:text-primary"
+            className="size-3 transition-colors group-hover/launch:text-accent-ink group-focus-visible/launch:text-accent-ink"
             fill="currentColor"
             aria-hidden
           />

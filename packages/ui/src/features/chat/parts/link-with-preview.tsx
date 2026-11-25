@@ -71,7 +71,7 @@ export function LinkWithPreview({
   };
 
   // Design: a faint border-bottom rule (not a solid text-decoration underline).
-  const LINK_RULE_CLASS = 'aui-md-a text-primary no-underline border-b border-primary/40';
+  const LINK_RULE_CLASS = 'aui-md-a text-accent-ink no-underline border-b border-primary/40';
 
   if (!href) {
     return <a className={cn(LINK_RULE_CLASS, className)} {...props} />;

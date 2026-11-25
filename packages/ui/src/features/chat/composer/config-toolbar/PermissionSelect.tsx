@@ -58,7 +58,7 @@ function toneInk(tone: ModeTone): string {
 
 /** The chip tint that separates Unattended from Auto's bare warning ink. */
 function toneChip(tone: ModeTone): string | undefined {
-  return tone === 'warning' ? 'border-warning/40 bg-warning/10' : undefined;
+  return tone === 'warning' ? 'border-warning-border bg-warning-surface' : undefined;
 }
 
 export function PermissionSelect({ chat, setPermissionMode, providerDefaults, adapter }: PermissionSelectProps) {

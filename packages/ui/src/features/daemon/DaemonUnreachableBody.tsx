@@ -41,8 +41,8 @@ export function DaemonUnreachableBody({ target, onSwitchLocal }: DaemonUnreachab
         {target.host != null && <p className="mt-0.5 font-mono text-xs text-muted-foreground">{target.host}</p>}
       </div>
 
-      <div className="h-1 w-48 overflow-hidden rounded-full bg-warning/20">
-        <div className="h-full w-2/5 rounded-full bg-warning animate-[ws-indeterminate_1.5s_ease-in-out_infinite]" />
+      <div className="h-1 w-48 overflow-hidden rounded-full bg-warning-surface">
+        <div className="h-full w-2/5 rounded-full bg-warning-dot animate-[ws-indeterminate_1.5s_ease-in-out_infinite]" />
       </div>
 
       <Button data-testid="daemon-unreachable-switchlocal" className="w-full" onClick={onSwitchLocal}>

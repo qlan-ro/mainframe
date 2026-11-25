@@ -32,7 +32,7 @@ function LinkButton({ onClick }: { onClick: () => void }): React.ReactElement {
       variant="outline"
       size="sm"
       onClick={onClick}
-      className="gap-1.5 border-[0.5px] bg-card font-semibold text-primary"
+      className="gap-1.5 border-[0.5px] bg-card font-semibold text-accent-ink"
     >
       <CircleDot size={12} aria-hidden />
       Link GitHub repo

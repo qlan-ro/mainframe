@@ -100,7 +100,7 @@ export function ClickableFilePath({ filePath }: { filePath: string }) {
           tabIndex={0}
           onClick={handleClick}
           onKeyDown={handleKeyDown}
-          className="cursor-pointer truncate font-mono text-sm text-primary underline-offset-4 hover:underline"
+          className="cursor-pointer truncate font-mono text-sm text-accent-ink underline-offset-4 hover:underline"
         >
           {shortFilename(filePath)}
         </span>

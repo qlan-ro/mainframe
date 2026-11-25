@@ -52,7 +52,7 @@ export function VariablePickerButton({ scope, testId, value, onChange, textareaR
           type="button"
           data-testid={pickerTestId}
           aria-label="Insert variable"
-          className="flex size-[20px] items-center justify-center rounded-md text-xs font-semibold text-primary hover:bg-accent"
+          className="flex size-[20px] items-center justify-center rounded-md text-xs font-semibold text-accent-ink hover:bg-accent"
         >
           <span aria-hidden className="font-mono">
             ⟨⟩

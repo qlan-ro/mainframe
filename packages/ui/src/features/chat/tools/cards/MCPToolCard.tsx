@@ -96,7 +96,7 @@ function McpBody({
 function McpLabel({ server, verb, state, tool }: { server: string; verb: string; state: MarkerState; tool: string }) {
   return (
     <>
-      {server} {verb} {state !== 'error' && <span className="text-primary">{tool}</span>}
+      {server} {verb} {state !== 'error' && <span className="text-accent-ink">{tool}</span>}
       {state === 'error' && <span className="text-fail">{tool}</span>}
     </>
   );

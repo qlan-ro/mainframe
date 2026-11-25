@@ -49,7 +49,7 @@ type ModeOption = (typeof MODE_OPTIONS)[number];
  *  ring needs the matching fill override or the two inks disagree. */
 function itemToneClass(mode: ModeOption): string {
   if (mode.danger) return 'border-destructive/50 text-destructive [&_svg]:fill-destructive';
-  if (mode.caution) return 'border-warning/50 text-warning [&_svg]:fill-warning';
+  if (mode.caution) return 'border-warning-border text-warning [&_svg]:fill-warning';
   return '';
 }
 

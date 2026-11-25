@@ -127,7 +127,7 @@ export function RunTrace({ runId, forceOpenDefault = false }: RunTraceProps) {
           onClick={() => void handleRunAgain()}
           className="inline-flex h-[26px] items-center gap-[5px] rounded-md border-[0.5px] border-border px-[10px] text-xs font-semibold text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-45"
         >
-          <Play size={12} className="text-primary" fill="currentColor" aria-hidden />
+          <Play size={12} className="text-accent-ink" fill="currentColor" aria-hidden />
           Run again
         </button>
       </div>

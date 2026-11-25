@@ -44,7 +44,7 @@ function LauncherTile() {
   return (
     <span
       aria-hidden
-      className="flex size-[22px] shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary"
+      className="flex size-[22px] shrink-0 items-center justify-center rounded-sm bg-primary/10 text-accent-ink"
     >
       <Workflow size={12} />
     </span>
