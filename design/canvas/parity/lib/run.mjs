@@ -54,6 +54,7 @@ export async function runArea({
   themes = ['light', 'dark'],
   views = Object.keys(VIEWS),
   only,
+  screenshots = true,
 }) {
   const problems = [];
   const counts = { states: 0, elements: 0, checks: 0 };
@@ -87,10 +88,13 @@ export async function runArea({
       await settle(app.page);
       for (const pair of state.pairs) {
         const pull = (page, expr) =>
-          page.evaluate((e) => {
-            const el = (0, eval)(e);
-            return el ? window.__extract(el) : null;
-          }, expr);
+          page.evaluate(
+            ({ expression, local }) => {
+              const el = (0, eval)(expression);
+              return el ? window.__extract(el, local) : null;
+            },
+            { expression: expr, local: pair.local },
+          );
         const [p, a] = [await pull(proto, pair.p), await pull(app.page, pair.a ?? pair.p)];
         if (!p || !a) {
           if (!p && !a && pair.optional) continue;
@@ -107,14 +111,17 @@ export async function runArea({
           });
           continue;
         }
+        if (pair.local) {
+          p.box.rect.splice(0, 2, 0, 0);
+          a.box.rect.splice(0, 2, 0, 0);
+        }
         if (pair.abs) (shiftToWindow(p), shiftToWindow(a));
         const { rows: found, checks } = compare(p, a, pair);
         counts.elements++;
         counts.checks += checks;
-        for (const r of found)
-          rows.push({ area: area.id, state: state.id, view: viewName, theme, el: pair.id, ...r });
+        for (const r of found) rows.push({ area: area.id, state: state.id, view: viewName, theme, el: pair.id, ...r });
       }
-      if (state.shot && (!state.shotViews || state.shotViews.includes(viewName))) {
+      if (screenshots && state.shot && (!state.shotViews || state.shotViews.includes(viewName))) {
         const clip = async (page, expr) => {
           if (expr === true) return undefined;
           return page.evaluate((e) => {
@@ -154,9 +161,10 @@ export async function runArea({
       if (app.errors.length) problems.push(`${where}: page error: ${app.errors[0].slice(0, 300)}`);
     } catch (e) {
       problems.push(`${where}: ${String(e.message ?? e).slice(0, 400)}`);
-      await app.page
-        .screenshot({ path: join(outDir, area.id, `failed-${state.id}-${viewName}-${theme}.png`) })
-        .catch(() => {});
+      if (screenshots)
+        await app.page
+          .screenshot({ path: join(outDir, area.id, `failed-${state.id}-${viewName}-${theme}.png`) })
+          .catch(() => {});
     } finally {
       await proto.context().close();
       await app.page.context().close();

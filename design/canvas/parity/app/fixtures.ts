@@ -34,6 +34,7 @@ export interface Scenario {
   /** A session with no transcript rows (the transcript area is #948's). */
   blank?: boolean;
   transcript?: TranscriptFixture;
+  transcriptCall?: string;
 }
 export const scenario: Scenario = (window as unknown as { __PARITY__?: Scenario }).__PARITY__ ?? {};
 
@@ -619,10 +620,12 @@ function transcript(): Json[] {
     out.push(user(q, minutes));
     seq++;
     out.push(
-      ...calls.map((c) => ({
-        ...c,
-        _meta: stamp(minutes - 0.5, { ...c._meta?.[MF], containerId: `c${seq}` }),
-      })),
+      ...calls
+        .filter((c) => !scenario.transcriptCall || c.toolCallId === scenario.transcriptCall)
+        .map((c) => ({
+          ...c,
+          _meta: stamp(minutes - 0.5, { ...c._meta?.[MF], containerId: `c${seq}` }),
+        })),
       ...(minutes === 13 ? asking : []),
       agent(a, minutes - 1, durationMs),
     );

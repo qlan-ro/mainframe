@@ -2,6 +2,14 @@ import { P, base, closeWorkspace } from './common.mjs';
 
 const work = [{ id: 'work header', p: "q('#thread .wk')", a: "q('[data-testid^=chat-work-header-]')" }];
 const show = (selector) => P.js(`(${selector})?.scrollIntoView({ block: 'center' })`);
+const isolate = (selector, candidates) =>
+  P.js(`(() => {
+    const target = (${selector})?.closest(${JSON.stringify(candidates)});
+    if (!target) return;
+    for (const row of document.querySelectorAll('#thread ' + ${JSON.stringify(candidates)})) {
+      if (row !== target && !row.contains(target)) row.style.setProperty('display', 'none', 'important');
+    }
+  })()`);
 const open = (selector) =>
   P.js(`(() => {
   const button = ${selector};
@@ -21,19 +29,19 @@ const state = (id, proto = [], app = [], pairs = work, transcript = 'tools') => 
   scenario: {
     transcript,
     act: 'none',
-    ...((transcript === 'live command' || transcript === 'awaitingApproval') ? { running: true } : {}),
+    ...(transcript === 'live command' || transcript === 'awaitingApproval' ? { running: true } : {}),
   },
   proto: P.all(P.preset('every-tool'), ...proto),
   app: P.all(closeWorkspace, ...app),
   pairs,
 });
-const tool = (id, label, protoHeader = protoWork) => {
-  const protoToggle = `q('.tct[aria-label^="${label}"]')`;
+const tool = (id, label, protoHeader = protoWork, occurrence = 0) => {
+  const protoToggle = `[...document.querySelectorAll('#thread .tct')].filter((button) => button.getAttribute('aria-label').startsWith(${JSON.stringify(label)}))[${occurrence}]`;
   const appRoot = `tid('chat-row-parity-${id}')`;
   const appToggle = `tid('chat-row-parity-${id}-toggle')`;
-  return state(
+  const isolated = state(
     id,
-    [open(protoHeader), open(protoToggle), show(protoToggle)],
+    [open(protoHeader), open(protoToggle), isolate(protoToggle, '.tc'), show(protoToggle)],
     [open(appWork), open(appToggle), show(appRoot)],
     [
       { id: 'tool row', p: `${protoToggle}?.parentElement`, a: `${appRoot}?.firstElementChild` },
@@ -44,13 +52,28 @@ const tool = (id, label, protoHeader = protoWork) => {
       },
     ],
   );
+  return {
+    ...isolated,
+    scenario: { ...isolated.scenario, transcriptCall: `parity-${id}` },
+    pairs: isolated.pairs.map((pair) => ({ ...pair, local: true })),
+  };
 };
 
 const secondaryTools = "qa('#thread .wkt')[1]";
 const marker = (id, label, name) => {
   const p = `txt('.mkp', ${JSON.stringify(label)})`;
   const a = `tid('chat-marker-${name}')`;
-  return state(id, [show(p)], [show(a)], [{ id: 'event marker', p, a }], 'markers');
+  const isolated = state(
+    id,
+    [isolate(p, '.mk'), show(p)],
+    [show(a)],
+    [{ id: 'event marker', p, a, local: true }],
+    'markers',
+  );
+  return {
+    ...isolated,
+    scenario: { ...isolated.scenario, transcriptCall: id === 'notification' ? 'parity-notify' : `parity-${id}` },
+  };
 };
 
 export default {
@@ -69,7 +92,11 @@ export default {
     state(
       'grouped exploration',
       [open(protoWork), open("q('.tct[aria-label^=Explored]')"), show("q('.tct[aria-label^=Explored]')")],
-      [open(appWork), open("tid('chat-explore-parity-explore-0-toggle')"), show("tid('chat-explore-parity-explore-0')")],
+      [
+        open(appWork),
+        open("tid('chat-explore-parity-explore-0-toggle')"),
+        show("tid('chat-explore-parity-explore-0')"),
+      ],
       [
         {
           id: 'exploration row',
@@ -87,7 +114,7 @@ export default {
     tool('read', 'Read quota/use-quota.ts'),
     tool('write', 'Wrote src/codex_tests.rs'),
     tool('edit', 'Edited src/codex.rs'),
-    tool('grep', 'Searched'),
+    tool('grep', 'Searched "resets_at"'),
     tool('glob', 'Found'),
     tool('bash', 'Ran cargo test -p mainframe-quota codex'),
     tool('fetch', 'Fetched'),
@@ -96,6 +123,17 @@ export default {
     tool('mcp', 'Called get_issue', secondaryTools),
     tool('lsp', 'Called LSP', secondaryTools),
     tool('dynamic', 'Called docs__search', secondaryTools),
+    tool('error', 'Called get_issue', secondaryTools, 1),
+    tool('truncated', 'Ran pnpm --filter @qlan-ro/mainframe-ui exec vitest run use-quota'),
+    {
+      ...state(
+        'todo',
+        [],
+        [],
+        [{ id: 'todo row', p: "txt('#thread .tv', 'TodoWrite')", a: "tid('chat-row-parity-todo')", optional: true }],
+        'todo',
+      ),
+    },
     marker('skill', 'Used skill', 'skill'),
     marker('wakeup', 'Scheduled a wakeup', 'schedulewakeup'),
     marker('cron-create', 'Scheduled weekdays', 'croncreate'),
@@ -141,14 +179,14 @@ export default {
       'plan',
       [show("txt('.mkp', 'Updated plan')")],
       [show("tid('chat-marker-exitplanmode')")],
-      [{ id: 'plan marker', p: "txt('.mkp', 'Updated plan')", a: "tid('chat-marker-exitplanmode')" }],
+      [{ id: 'plan marker', p: "txt('.mkp', 'Updated plan')", a: "tid('chat-marker-exitplanmode')", local: true }],
       'markers',
     ),
     state(
       'question',
       [show("q('#thread .qa')")],
       [show("tid('chat-ask-card')")],
-      [{ id: 'question card', p: "q('#thread .qa')", a: "tid('chat-ask-card')" }],
+      [{ id: 'question card', p: "q('#thread .qa')", a: "tid('chat-ask-card')", local: true }],
       'markers',
     ),
     state(

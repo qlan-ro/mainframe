@@ -217,7 +217,13 @@ function awaitingApproval(turn: Turn, call: Call) {
   ]);
 }
 
+function todo(turn: Turn) {
+  // The adapter display pipeline filters TodoWrite before the client receives history.
+  turn('Track the quota reset', 'Updated the checklist.', 13);
+}
+
 const fixtures = {
+  todo,
   markers,
   agent,
   delegated,

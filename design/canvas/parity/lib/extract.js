@@ -1,7 +1,7 @@
 // Runs in either page. Reads what an element paints, independent of how its markup is nested:
 // its box (rect, fill, edges, radii, shadow) and, in reading order, the texts, icons and painted
 // boxes inside it, placed relative to it. Two markups that paint the same compare equal.
-window.__extract = (root) => {
+window.__extract = (root, local = false) => {
   const probe = document.createElement('i');
   document.documentElement.append(probe);
   const rgba = (value) => {
@@ -228,16 +228,25 @@ window.__extract = (root) => {
     }
     for (const node of el.childNodes) {
       if (node.nodeType === 3) {
-        const text = node.data.replace(/\u200b/g, '').replace(/\s+/g, ' ').trim();
-        if (!text || text === '​') continue;
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        const rects = [...range.getClientRects()];
-        if (!rects.length) continue;
-        const full = range.getBoundingClientRect();
-        const cut = clip(el, full, root);
-        if (!cut) continue;
-        texts.push({ text, lead: /^\s/.test(node.data), trail: /\s$/.test(node.data), rect: rel(cut), cut: full.right - cut.right > 0.6, lines: new Set(rects.map((r) => Math.round(r.top))).size, ...textInk(el) });
+        const parts = local && /^(pre|pre-wrap|pre-line|break-spaces)$/.test(getComputedStyle(el).whiteSpace)
+          ? node.data.split('\n')
+          : [node.data];
+        let offset = 0;
+        for (const part of parts) {
+          const start = offset;
+          offset += part.length + 1;
+          const text = part.replace(/\u200b/g, '').replace(/\s+/g, ' ').trim();
+          if (!text) continue;
+          const range = document.createRange();
+          range.setStart(node, start);
+          range.setEnd(node, start + part.length);
+          const rects = [...range.getClientRects()];
+          if (!rects.length) continue;
+          const full = range.getBoundingClientRect();
+          const cut = clip(el, full, root);
+          if (!cut) continue;
+          texts.push({ text, lead: /^\s/.test(part), trail: /\s$/.test(part), rect: rel(cut), pre: /^(pre|pre-wrap|break-spaces)$/.test(getComputedStyle(el).whiteSpace), cut: full.right - cut.right > 0.6, lines: new Set(rects.map((r) => Math.round(r.top))).size, ...textInk(el) });
+        }
       } else if (node.nodeType === 1) walk(node, depth + 1);
     }
   };
@@ -246,7 +255,7 @@ window.__extract = (root) => {
   const merged = [];
   for (const t of texts) {
     const prev = merged[merged.length - 1];
-    const same = prev && !prev.field && !t.field && prev.parentKey === t.parentKey && Math.abs(prev.rect[1] - t.rect[1]) < 1 && Math.abs(prev.rect[0] + prev.rect[2] - t.rect[0]) < 6 && prev.color === t.color && prev.size === t.size && prev.weight === t.weight && prev.family === t.family;
+    const same = prev && !prev.field && !t.field && prev.parentKey === t.parentKey && Math.abs(prev.rect[1] - t.rect[1]) < 1 && Math.abs(prev.rect[0] + prev.rect[2] - t.rect[0]) < (local && t.pre && prev.pre ? 8 : 6) && prev.color === t.color && prev.size === t.size && prev.weight === t.weight && prev.family === t.family && prev.style === t.style;
     if (same) {
       const gap = t.rect[0] - (prev.rect[0] + prev.rect[2]);
       prev.text += (gap > 1.5 || t.lead || prev.trail ? ' ' : '') + t.text;

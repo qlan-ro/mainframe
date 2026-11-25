@@ -2,6 +2,10 @@ import type { Call, Turn } from './transcript-fixture';
 
 type Item = Record<string, unknown>;
 
+const timing = (duration: number) => ({
+  toolCallTiming: { startedAt: Date.now() - 100_000, completedAt: Date.now() - 100_000 + duration },
+});
+
 export function tools(turn: Turn, call: Call) {
   turn(
     'Walk me through every kind of tool card the transcript can show. Start with files, searches, edits, commands and the web.',
@@ -42,7 +46,7 @@ export function tools(turn: Turn, call: Call) {
             '}',
           ].join('\n'),
         },
-        'File created',
+        'File created successfully at: src/codex_tests.rs',
         12.8,
       ),
       {
@@ -82,14 +86,23 @@ export function tools(turn: Turn, call: Call) {
         'parity-grep',
         'Grep',
         { pattern: 'resets_at', path: 'packages/core-rs' },
-        'src/codex.rs:21: pub resets_at: i64',
+        [
+          'mainframe-quota/src/codex.rs:21:    pub resets_at: Option<DateTime<Utc>>,',
+          'mainframe-quota/src/codex.rs:38:            resets_at: w.resets_at,',
+          'mainframe-server/src/routes/quota.rs:61:        "resets_at": w.resets_at,',
+        ].join('\n'),
         12.6,
       ),
       call(
         'parity-glob',
         'Glob',
         { pattern: '**/quota*.rs', path: 'packages/core-rs' },
-        ['quota.rs', 'quota_window.rs', 'routes/quota.rs', 'quota_tests.rs'].join('\n'),
+        [
+          'crates/mainframe-quota/src/quota.rs',
+          'crates/mainframe-quota/src/quota_window.rs',
+          'crates/mainframe-server/src/routes/quota.rs',
+          'crates/mainframe-quota/tests/quota_tests.rs',
+        ].join('\n'),
         12.5,
       ),
       ...shellAndExternalCalls(call),
@@ -120,10 +133,25 @@ function shellAndExternalCalls(call: Call): Item[] {
       'parity-fetch',
       'WebFetch',
       { url: 'https://developers.openai.com/codex/rate-limits', prompt: 'Find the rate limits' },
-      'Limits reset at the end of each window.',
+      'Codex enforces a rolling 5-hour window and a weekly window per account. Usage is reported in rate_limits events attached to each turn, with used_percent and resets_in_seconds. Windows reset automatically; no event is sent at reset time.',
       12.3,
+      timing(1200),
     ),
-    call('parity-search', 'WebSearch', { query: 'codex rate limit reset' }, 'Rate limits · OpenAI Codex docs', 12.2),
+    call(
+      'parity-search',
+      'WebSearch',
+      { query: 'codex rate limit reset' },
+      [
+        'Rate limits · OpenAI Codex docs',
+        'developers.openai.com',
+        'Usage stuck at 100% after reset',
+        'github.com · issue',
+        'Codex CLI changelog 0.62',
+        'github.com',
+        '5 more results',
+      ].join('\n'),
+      12.2,
+    ),
     call(
       'parity-list',
       'LS',
@@ -135,17 +163,65 @@ function shellAndExternalCalls(call: Call): Item[] {
       'parity-mcp',
       'mcp__github__get_issue',
       { owner: 'qlan-ro', repo: 'mainframe', issue_number: 847 },
-      '{"title":"Reset stale quota windows"}',
+      [
+        '{',
+        '  "number": 847,',
+        '  "title": "Usage capsule stuck at 100% after the weekly reset",',
+        '  "state": "open",',
+        '  "labels": ["bug", "area:quota"]',
+        '}',
+      ].join('\n'),
       12,
+      timing(800),
     ),
     call(
       'parity-lsp',
       'LSP',
       { operation: 'findReferences', filePath: 'src/codex.rs', line: 32 },
-      '3 references to snapshot',
+      '3 references to snapshot: routes/quota.rs:58, codex.rs:32, codex_tests.rs:8',
       11.9,
+      timing(300),
     ),
-    call('parity-dynamic', 'docs__search', { query: 'rate limits' }, 'Rate limits · OpenAI Codex docs', 11.8),
+    call(
+      'parity-dynamic',
+      'docs__search',
+      { query: 'rate limit windows' },
+      '2 pages: rate-limits.md, usage.md',
+      11.8,
+      timing(600),
+    ),
+    {
+      ...call(
+        'parity-error',
+        'mcp__github__get_issue',
+        { owner: 'qlan-ro', repo: 'mainframe', issue_number: 8470 },
+        '404 Not Found: no issue 8470 in qlan-ro/mainframe',
+        11.7,
+        timing(400),
+      ),
+      status: 'failed',
+    },
+    {
+      ...call(
+        'parity-truncated',
+        'Bash',
+        {
+          command: 'pnpm --filter @qlan-ro/mainframe-ui exec vitest run use-quota',
+          description: 'Run the quota hook tests',
+        },
+        [
+          ' FAIL  src/features/quota/__tests__/use-quota.test.ts > stops polling when exhausted',
+          'AssertionError: expected "spy" to be called 1 times, but got 2 times',
+          ' ❯ use-quota.test.ts:38:24',
+          '',
+          ' Test Files  1 failed (1)',
+          '      Tests  1 failed | 3 passed (4)',
+        ].join('\n'),
+        11.6,
+        timing(3100),
+      ),
+      status: 'failed',
+    },
   ];
 }
 
