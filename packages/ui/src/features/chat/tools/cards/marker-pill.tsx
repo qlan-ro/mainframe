@@ -63,6 +63,7 @@ export function MarkerPill({
           data-testid={testId}
           type="button"
           disabled={!clickable}
+          aria-expanded={clickable ? open : undefined}
           onClick={clickable ? onClick : undefined}
           className={cn(
             'flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors',

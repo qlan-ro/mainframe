@@ -183,6 +183,7 @@ describe('useUiPrefs persistence', () => {
         'dialogSizes',
         'dontConfirmProviderSwitch',
         'dontWarnOnTuningChange',
+        'sessionPanelHiddenSections',
         'sessionPanelOpen',
         'sessionPanelSections',
         'sideChatFrac',
@@ -206,5 +207,26 @@ describe('useUiPrefs — side chat share', () => {
     expect(useUiPrefs.getState().sideChatFrac).toBe(0.85);
     useUiPrefs.getState().setSideChatFrac(0.5);
     expect(useUiPrefs.getState().sideChatFrac).toBe(0.5);
+  });
+});
+
+describe('ui-prefs — session panel sections', () => {
+  it('turns a section off and on again', () => {
+    const { setSessionPanelSectionShown } = useUiPrefs.getState();
+    setSessionPanelSectionShown('launch', false);
+    setSessionPanelSectionShown('launch', false);
+    expect(useUiPrefs.getState().sessionPanelHiddenSections).toEqual(['launch']);
+    setSessionPanelSectionShown('launch', true);
+    expect(useUiPrefs.getState().sessionPanelHiddenSections).toEqual([]);
+  });
+
+  it('drops keys it does not know from a stored list', async () => {
+    localStorage.setItem(
+      'mf:ui-prefs',
+      JSON.stringify({ state: { sessionPanelHiddenSections: ['tasks', 'gone'] }, version: 8 }),
+    );
+    await useUiPrefs.persist.rehydrate();
+    expect(useUiPrefs.getState().sessionPanelHiddenSections).toEqual(['tasks']);
+    useUiPrefs.setState({ sessionPanelHiddenSections: [] });
   });
 });

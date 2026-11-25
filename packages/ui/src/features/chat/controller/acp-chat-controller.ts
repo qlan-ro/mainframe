@@ -103,6 +103,11 @@ export class AcpChatController {
 
   isHistoryContext = (itemId: string) => this.plane.history.isContextItem(itemId);
 
+  /** Changes when a history load on its way is dropped. */
+  get historyGeneration(): number {
+    return this.plane.history.loadGeneration;
+  }
+
   loadEarlier(untilItemId?: string): Promise<boolean> {
     return this.plane.history.load(untilItemId);
   }

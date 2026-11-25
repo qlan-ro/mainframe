@@ -47,6 +47,11 @@ export class AcpHistory {
       : { containers: 40, items: 80 };
   }
 
+  /** Changes when the history is reloaded or detached, which ends a load on its way. */
+  get loadGeneration(): number {
+    return this.generation;
+  }
+
   isContextItem(id: string): boolean {
     return this.host.hasItem(id) && !this.host.hasItem(id, this.state.floorItemId);
   }

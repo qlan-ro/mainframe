@@ -10,6 +10,7 @@ import { SubagentTranscript } from '../tools/cards/SubagentTranscript';
 import { RootTranscriptScope } from '../messages/compact/transcript-scope';
 import type { SubagentZoneRef } from './zones-store';
 import { findSubagentTranscript } from './find-subagent-transcript';
+import { findToolCall } from '@/features/session-panel/activity-model';
 
 function SubagentZoneHeader({
   title,
@@ -53,6 +54,7 @@ export function SubagentZone({
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
   const transcript = findSubagentTranscript(messages, subagent.toolCallId);
+  const messageId = subagent.messageId ?? findToolCall(messages, subagent.toolCallId)?.messageId;
   const partial = controller.isHistoryContext(subagent.toolCallId);
   const root = useRef<HTMLDivElement>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -69,7 +71,7 @@ export function SubagentZone({
   useEffect(() => root.current?.focus(), [subagent]);
   useEffect(() => {
     if (state.loadState?.type !== 'ready' || (transcript && !partial)) return;
-    if (!state.historyWindow?.hasMore || (!partial && messages.some((message) => message.id === subagent.messageId))) {
+    if (!state.historyWindow?.hasMore || (!partial && messages.some((message) => message.id === messageId))) {
       setHistoryError('Not in this transcript');
       return;
     }
@@ -88,7 +90,7 @@ export function SubagentZone({
   }, [
     controller,
     partial,
-    subagent.messageId,
+    messageId,
     state.loadState?.type,
     state.historyWindow?.hasMore,
     transcript,
@@ -110,7 +112,7 @@ export function SubagentZone({
           <RootTranscriptScope>
             <SubagentTranscript
               messages={transcript}
-              messageId={subagent.messageId}
+              messageId={messageId ?? ''}
               toolCallId={subagent.toolCallId}
               inZone
             />

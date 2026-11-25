@@ -33,11 +33,11 @@ beforeEach(() => {
 });
 
 describe('ContextFileItem', () => {
-  it('renders the basename and badge and emits open-file on click', () => {
-    renderItem(<ContextFileItem path="src/deep/file.ts" badge="@" />);
+  it('renders the basename and its reason, and emits open-file on click', () => {
+    renderItem(<ContextFileItem path="src/deep/file.ts" reason="mentioned" />);
     const btn = screen.getByTestId('session-panel-session-item-src/deep/file.ts');
     expect(btn).toHaveTextContent('file.ts');
-    expect(btn).toHaveTextContent('@');
+    expect(btn).toHaveTextContent('mentioned');
     fireEvent.click(btn);
     expect(emitSurfaceIntent).toHaveBeenCalledWith({ type: 'open-file', path: 'src/deep/file.ts' });
   });
@@ -59,11 +59,5 @@ describe('ContextFileItem', () => {
       'aria-label',
       'src/deep/file.ts',
     );
-  });
-
-  it('renders no badge element when no badge is given', () => {
-    renderItem(<ContextFileItem path="src/plain.ts" />);
-    const btn = screen.getByTestId('session-panel-session-item-src/plain.ts');
-    expect(btn.querySelector('[data-slot="badge"]')).toBeNull();
   });
 });

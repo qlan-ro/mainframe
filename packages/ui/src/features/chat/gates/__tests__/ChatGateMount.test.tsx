@@ -276,6 +276,8 @@ describe('ChatGateMount', () => {
 
     const slot = screen.getByTestId('chat-thread-gate-slot');
     expect(slot).toContainElement(screen.getByTestId('chat-permission-gate'));
+    // An Activity row that needs you finds the request by this.
+    expect(slot).toHaveAttribute('data-chat-gate');
   });
 
   it('wraps an AskUserQuestion gate in the chat-thread-gate-slot', () => {

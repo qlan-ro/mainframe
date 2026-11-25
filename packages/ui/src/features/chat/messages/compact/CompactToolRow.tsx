@@ -85,6 +85,7 @@ export function CompactToolRow({ row, memberKeys }: { row: ToolRow; memberKeys: 
       memberKeys={memberKeys}
       label={row.label}
       live={hostsTurnStatus}
+      anchor={{ 'data-activity-id': row.toolCallIds.join(' ') }}
       icon={<StatusIcon status={row.status} kind={row.kind} />}
       trailing={trailing}
     >

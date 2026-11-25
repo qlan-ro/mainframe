@@ -41,9 +41,11 @@ export function SessionPanelToggle({ columnId, testId, tourAnchor = false, class
     <Hint label={label}>
       <Button
         data-testid={testId}
+        data-session-panel-toggle
         data-tut={tourAnchor ? 'session-rail' : undefined}
         aria-label={label}
         aria-pressed={showing}
+        aria-haspopup={fits ? undefined : 'dialog'}
         variant="ghost"
         size="icon-sm"
         onClick={(event) => {

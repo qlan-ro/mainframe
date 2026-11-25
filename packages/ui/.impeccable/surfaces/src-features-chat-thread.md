@@ -16,6 +16,8 @@ Follow what an agent did and why, find the step that failed, and copy or quote w
 ## Constraints
 Long threads, streamed. Every tool the app renders has a row or a marker (T1a). Times live in hover footers.
 
+Every row, marker and card for a tool call carries `data-activity-id` with the call's id (space-separated when a row stands for several), and its own disclosure is the first `aria-expanded` control inside it. A group that renders its rows only once opened lists their ids in `data-activity-group`. The session panel's jump (R13) relies on both.
+
 ## Direction contract
 THESIS: one work row per turn, folded once the answer starts. Events are pills on the spine. This replaces a stack of tool cards.
 OWN-WORLD: rows of glyph, verb, target and receipt. Pills for skills, plans, schedules, monitors, worktrees and notifications. Failures in muted rose. Answered questions are small cards outside the fold.
