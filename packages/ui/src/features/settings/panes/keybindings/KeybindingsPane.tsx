@@ -40,12 +40,12 @@ export function KeybindingsPane() {
 
   const bind = useCallback(
     (id: string, chord: Chord, steal: boolean) => {
-      // Both paths go through bindWithSteal: without a holder it is a plain
-      // write, so there is one code path rather than two that can diverge.
-      if (!steal && chordHolder(bindings, chord, isMac, id) != null) return;
-      setOverrides(bindWithSteal(overrides, visible, id, chord, isMac));
+      setOverrides((current) => {
+        if (!steal && chordHolder(effectiveBindings(visible, current), chord, isMac, id)) return current;
+        return bindWithSteal(current, visible, id, chord, isMac);
+      });
     },
-    [bindings, overrides, visible, isMac, setOverrides],
+    [visible, isMac, setOverrides],
   );
 
   const sections = GROUP_ORDER.map((group) => ({
