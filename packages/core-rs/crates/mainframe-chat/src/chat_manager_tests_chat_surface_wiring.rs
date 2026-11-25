@@ -59,9 +59,13 @@ async fn a_queued_prompt_is_accepted_immediately_but_not_started_until_dequeued(
         RecSession::new("c1", true, true),
     );
 
-    mgr.send_message("c1", "hello while busy", None, None)
+    let queued_id = mgr
+        .send_message_with_queue_id("c1", "hello while busy", None, None)
         .await
         .unwrap();
+    let refs = mgr.get_queued_for_chat("c1");
+    assert_eq!(refs.len(), 1);
+    assert_eq!(queued_id.as_deref(), Some(refs[0].message_id.as_str()));
 
     assert!(
         surface
