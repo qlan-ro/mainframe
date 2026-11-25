@@ -162,7 +162,7 @@ function SessionRowInner({ item, colorOf, projectName, depth }: SessionRowInnerP
                   // SidebarMenuAction, but the actions render inline now.
                   // Selection is neutral (L1) and a step darker than hover.
                   className={cn(
-                    'py-0 pr-2! pl-1.5 hover:bg-sidebar-accent group-data-active/menu-item:bg-chrome-selected! group-data-active/menu-item:hover:bg-chrome-selected!',
+                    'relative py-0 pr-2! pl-1.5 hover:bg-sidebar-accent focus-visible:z-10 focus-visible:[outline-offset:2px] group-data-active/menu-item:bg-chrome-selected! group-data-active/menu-item:hover:bg-chrome-selected!',
                     inWorkspace && 'bg-sidebar-accent/50',
                   )}
                 >

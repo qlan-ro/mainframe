@@ -562,11 +562,11 @@ test.describe('§session-panel — context percentage (composer)', () => {
     await closeTauriApp(app);
   });
 
-  test('it starts at zero and reports a real percentage after a turn', async () => {
+  test('it waits for reported context usage in an existing session', async () => {
     const { page } = app;
     const percentage = page.getByTestId('composer-context-percent');
     await expect(composer(page).input()).toBeVisible();
-    await expect(percentage).toHaveText('0%');
+    await expect(percentage).toHaveCount(0);
 
     await sendMessage(page, 'Explain what TypeScript generics are in two sentences.');
     await waitForIdle(page, 60_000);

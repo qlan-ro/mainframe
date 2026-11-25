@@ -12,6 +12,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 export interface ModelMenuRowProps {
   option: AdapterModel;
   active: boolean;
+  inactive: boolean;
   onSelect: (id: string) => boolean;
 }
 
@@ -20,15 +21,35 @@ function rowDescription(option: AdapterModel): string | undefined {
   return option.description ? `${option.description} · default` : 'default';
 }
 
-export function ModelMenuRow({ option, active, onSelect }: ModelMenuRowProps) {
+export function ModelMenuRow({ option, active, inactive, onSelect }: ModelMenuRowProps) {
   const desc = rowDescription(option);
   return (
     <DropdownMenuItem
       data-testid={`composer-model-select-option-${option.id}`}
       aria-label={active ? `${option.label}, selected` : option.label}
-      className="items-start"
+      aria-disabled={inactive || undefined}
+      className="items-start aria-disabled:opacity-50"
+      onPointerMove={(event) => {
+        if (inactive) event.preventDefault();
+      }}
+      onPointerDown={(event) => {
+        if (inactive) event.preventDefault();
+      }}
+      onPointerLeave={(event) => {
+        if (inactive) event.preventDefault();
+      }}
+      onKeyDown={(event) => {
+        if (inactive && event.key !== 'Escape' && event.key !== 'Tab') {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
       onSelect={(event) => {
-        if (onSelect(option.id)) event.preventDefault();
+        if (inactive) event.preventDefault();
+        else if (onSelect(option.id)) {
+          event.preventDefault();
+          (event.target as HTMLElement).focus();
+        }
       }}
     >
       <span className="min-w-0 flex-1">

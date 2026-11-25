@@ -2,6 +2,16 @@ const missing = /^(?:missing in app|only in app)$/;
 const svg = /^(?:x|y|width|height|stroke|glyph|colour|filled)$/;
 
 export const MEASURED_EXCEPTIONS = [
+  ...[
+    { prop: 'content', proto: '+6', app: '2 changes' },
+    { prop: 'y (middle)', proto: '15.3', app: '14.59' },
+    { theme: 'light', prop: 'color', proto: '#1d7a46', app: '#5c5c61' },
+    { theme: 'dark', prop: 'color', proto: '#4cc38a', app: '#aeaeb4' },
+  ].map((values) => ({
+    area: 'workspace', state: 'diff', el: 'diff header', part: 'text “+6”', cls: 'APP',
+    why: 'DiffTab.tsx:115 supplies the actual chunk count (2 changes), not additions or deletions. The prototype paints +6 as a colored addition count at prototype/index.html:1581. The neutral chunk label is measured against that different text.',
+    ...values,
+  })),
   { area: 'composer', state: 'bottom-hover', el: 'worktree, hovered', part: 'text “Worktree”', prop: 'x', proto: '28', app: '25', cls: 'SPEC', why: 'K8 retains an independent branch action. A 3 px content inset, compensated by 3 px of outer margin, clears the independent separator while preserving the strip-relative label x at 34 px.' },
   { area: 'composer', state: 'bottom-hover', el: 'worktree, hovered', part: 'icon 1', prop: 'x', proto: '6', app: '3', cls: 'SPEC', why: 'K8 retains an independent branch action. The independent button has 3 px symmetric internal padding and a 3 px outer offset, keeping the icon at the prototype’s strip-relative x.' },
   { area: 'transcript', state: 'edit', theme: 'light', el: 'tool body', part: 'text “-”', prop: 'color', proto: '#c0392b', app: '#b42d20', cls: 'SPEC', why: 'The prototype red reached 3.90:1 over the changed-line tint in transcript-contrast.test.ts. DESIGN.md requires 4.5:1. Keep the contrast-safe diff ink.' },
@@ -28,8 +38,8 @@ export const MEASURED_EXCEPTIONS = [
   { area: 'transcript', state: 'workspace agent body', el: 'workspace agent body', part: 'text “Stop”', prop: 'width', cls: 'SPEC', why: 'W8 keeps Stop for live work. The app uses StopButton and the prototype draws an unstyled Stop label; its rendered width differs by 0.68 px.' },
   { area: 'transcript', state: 'workspace agent body', el: 'workspace agent body', part: /^icon 7 at .*12×12$/, prop: 'only in app', cls: 'SPEC', why: 'T1b says “every row opens”. The workspace fixture has underlying result text and the app retains its disclosure glyph.' },
   { area: 'transcript', state: 'grep', el: 'tool body', part: /^text “(?:mainframe-(?:quota|server)\/src\/|pub resets_at|resets_at|["]resets_at)/, prop: /^(?:content|x|y \(middle\)|weight|family|color|missing in app|only in app)$/, cls: 'DATA', why: 'The Grep fixture returns raw path:line:source strings. The prototype types the paths and excerpts as separate nodes with highlighted marks. The app preserves the full raw lines and applies existing path-link parsing.' },
-  { area: 'transcript', state: 'grep', el: 'tool body', part: /^(?:box|inner box 1)$/, prop: 'height', cls: 'DATA', why: 'The app’s full raw path:line:source output wraps at narrow widths; the prototype has three sample excerpt rows with independently painted token spans.' },
-  { area: 'transcript', state: 'grep', el: 'tool body', part: /^inner box [2-6] \(mark\) at /, prop: 'missing in app', cls: 'PROTO', why: 'The prototype hand-marks each occurrence of resets_at in sample excerpts. The Grep result is raw text, and the app does not invent highlight markup from its command arguments.' },
+  { area: 'transcript', state: 'grep', el: 'tool body', part: /^(?:box|inner box 1)$/, prop: 'height', cls: 'DATA', why: 'The app retains the colon after each location and the literal source spacing; the prototype has three sample excerpt rows with independently painted token spans.' },
+  { area: 'transcript', state: 'grep', el: 'tool body', part: /^inner box [2-6] \(mark\) at /, prop: 'missing in app', cls: 'PROTO', why: 'prototype/index.html:1771 hand-marks each occurrence of resets_at in sample excerpts. The Grep result is raw text, and the app does not invent highlight markup from its command arguments.' },
   { area: 'transcript', state: 'bash', el: 'tool body', part: /^text “(?:Compiling|mainframe-quota v0\.1\.0)”$/, prop: 'x', delta: 21.67, cls: 'DATA', why: 'The sample begins Compiling with three more monospace cells than the fixture’s terminal rendering. TerminalBody preserves the command’s leading whitespace and its progress highlighting.' },
   { area: 'transcript', state: 'fetch', el: 'tool body', part: /^(?:box|inner box 1)$/, prop: 'height', delta: 2, cls: 'DATA', why: 'The fixture returns one plain paragraph from WebFetch; the prototype inserts inline-code boxes in its sample, making a 2 px line-box difference.' },
   { area: 'transcript', state: 'fetch', el: 'tool body', part: /^text “(?:Codex enforces|rate_limits|events attached|used_percent|and”|resets_in_seconds|\. Windows reset)/, prop: /^(?:content|missing in app)$/, cls: 'DATA', why: 'WebBody renders the fetched string verbatim. The prototype hand-splits the same subject into prose and inline code elements.' },

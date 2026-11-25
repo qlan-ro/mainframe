@@ -66,7 +66,7 @@ export function ProviderModelSelect({ disabled, className, ...menu }: ProviderMo
         sideOffset={6}
         className="w-62.5"
       >
-        <ModelMenu {...menu} />
+        {open && !disabled && <ModelMenu {...menu} />}
       </DropdownMenuContent>
     </DropdownMenu>
   );

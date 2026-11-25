@@ -70,7 +70,7 @@ it('keeps distinct reported context windows selectable by their exact IDs', asyn
   expect(screen.getByTestId('composer-model-select-option-opus')).toHaveTextContent('Opus 5.5 · 250K');
   expect(screen.getByTestId('composer-model-select-option-opus[1m]')).toHaveTextContent('Opus 5.5 · 1M');
   await userEvent.click(screen.getByTestId('composer-model-select-option-opus[1m]'));
-  expect(actions.setModel).toHaveBeenCalledExactlyOnceWith('opus[1m]');
+  expect(actions.setModel).toHaveBeenCalledExactlyOnceWith('opus[1m]', expect.any(Function));
 });
 
 it('keeps a pinned resolved model selected without a duplicate alias row', async () => {

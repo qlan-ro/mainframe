@@ -150,6 +150,52 @@ function ReadBody({ part, text }: { part: ToolPart; text: string }) {
   );
 }
 
+function highlightedSearchText(text: string, query: string) {
+  if (!query || !text.includes(query)) return text;
+  let offset = 0;
+  return text.split(query).map((part, index) => {
+    const key = offset;
+    offset += part.length + query.length;
+    return (
+      <span key={key}>
+        {index > 0 && (
+          <mark className="rounded-[2px] bg-[color-mix(in_srgb,var(--warning-dot)_26%,transparent)] text-inherit">
+            {query}
+          </mark>
+        )}
+        {part}
+      </span>
+    );
+  });
+}
+
+function grepExcerpt(text: string, query: string) {
+  let offset = 0;
+  const lines = text.split(/(?<=\n)/).map((line) => {
+    const location = /^[^:\r\n]+:\d+:/.exec(line)?.[0];
+    return { line, location };
+  });
+  const column = lines.reduce((max, { location }) => Math.max(max, (location?.length ?? 0) - 1), 0);
+  return (
+    <pre className="whitespace-pre">
+      {lines.map(({ line, location }) => {
+        const key = offset;
+        offset += line.length;
+        return location ? (
+          <span key={key}>
+            <span className="mr-4 inline-block text-muted-foreground" style={{ width: `${column}ch` }}>
+              {location}
+            </span>
+            {highlightedSearchText(line.slice(location.length), query)}
+          </span>
+        ) : (
+          <span key={key}>{highlightedSearchText(line, query)}</span>
+        );
+      })}
+    </pre>
+  );
+}
+
 function MainBody({ part, status }: ToolBodyProps) {
   const { text, truncated } = resolveResultText(part.result);
   const kind = toolKind(part.toolName);
@@ -165,7 +211,14 @@ function MainBody({ part, status }: ToolBodyProps) {
     );
   if (!text) return null;
   if (kind === 'read' && !truncated) return <ReadBody part={part} text={text} />;
-  return <ResultBlock part={part} failed={false} testId="search-card-plain-body" />;
+  return (
+    <ResultBlock
+      part={part}
+      failed={false}
+      testId="search-card-plain-body"
+      renderPreview={kind === 'grep' ? (result) => grepExcerpt(result, argText(part, 'pattern')) : undefined}
+    />
+  );
 }
 
 function imagePreview(part: ToolPart): 'file' | 'browser' | undefined {

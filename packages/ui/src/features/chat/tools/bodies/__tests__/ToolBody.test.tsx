@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,8 +13,21 @@ vi.mock('../BackgroundOutput', () => ({
 }));
 vi.mock('@/lib/shiki-tokens', () => ({ useShikiTokens: () => null, TokenLine: () => null }));
 vi.mock('../../ToolResultExpand', () => ({
-  ToolResultExpand: ({ toolUseId, fullBytes }: { toolUseId: string; fullBytes: number }) => (
-    <div data-testid="expand">{`${toolUseId}:${fullBytes}`}</div>
+  ToolResultExpand: ({
+    toolUseId,
+    fullBytes,
+    truncatedContent,
+    renderPreview,
+  }: {
+    toolUseId: string;
+    fullBytes: number;
+    truncatedContent: string;
+    renderPreview?: (content: string) => ReactNode;
+  }) => (
+    <>
+      <div data-testid="expand">{`${toolUseId}:${fullBytes}`}</div>
+      {renderPreview?.(truncatedContent)}
+    </>
   ),
 }));
 const opened = vi.fn();
@@ -172,9 +186,21 @@ describe('ToolBody', () => {
     expect(screen.getByRole('region', { name: 'Command output' })).toHaveAttribute('tabindex', '0');
   });
 
-  it('offers the whole of a result the daemon cut short', () => {
-    show(part('Bash', { command: 'ls' }, { content: 'a', truncated: true, fullBytes: 9000 }));
+  it('preserves preview text with the same terminal cleanup as ordinary Bash output', () => {
+    const content = '\u001b[32mfirst\u001b[0m second';
+    show(part('Bash', { command: 'ls' }, { content, truncated: true, fullBytes: 9000 }));
     expect(screen.getByTestId('expand')).toHaveTextContent('call:9000');
+    expect(screen.getByTestId('chat-bash-output').textContent).toBe('first second');
+  });
+
+  it('colors Grep locations without changing whitespace, punctuation, or line endings', () => {
+    const result = 'src/a.ts:12:  const foo = 1;\r\nplain:metadata\n./b.ts:9:  x:y';
+    show(part('Grep', { pattern: 'x' }, result));
+    const preview = screen.getByTestId('search-card-plain-body').querySelector('pre');
+    expect(preview?.textContent).toBe(result);
+    expect(screen.getByText('src/a.ts:12:')).toHaveClass('text-muted-foreground');
+    expect(screen.getByText('./b.ts:9:')).toHaveClass('text-muted-foreground');
+    expect(preview?.querySelector('mark')).toHaveTextContent('x');
   });
 
   it('opens a fetched page where links open', () => {

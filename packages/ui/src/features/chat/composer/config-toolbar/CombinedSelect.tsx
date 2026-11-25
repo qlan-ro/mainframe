@@ -68,7 +68,7 @@ export function CombinedSelect({ disabled, setPermissionMode, className, ...menu
         {disabled ? (
           <DropdownMenuLabel className="text-meta font-normal">{MODEL_LOCKED_HINT}</DropdownMenuLabel>
         ) : (
-          <ModelMenu {...menu} />
+          open && <ModelMenu {...menu} />
         )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Permissions</DropdownMenuLabel>

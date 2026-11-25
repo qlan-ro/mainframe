@@ -101,6 +101,7 @@ export function ComposerToolbar({
     providerDefaults,
     setAdapter: tuning.setAdapter,
     setModel: tuning.setModel,
+    draftMode: tuning.draftMode,
     setEffort: tuning.setEffort,
     setFeature: tuning.setFeature,
     hideProviderSwitch: variant === 'side',

@@ -1,3 +1,4 @@
+import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 /**
  * ComposerToolbar — integration tests for the mid-session tuning warning (todo #288).
  *
@@ -135,6 +136,15 @@ const A_MESSAGE = { id: 'm1' };
 
 function renderToolbar() {
   return render(
+    <TooltipProvider>
+      <ComposerToolbar />
+    </TooltipProvider>,
+  );
+}
+
+function confirmServerModel(view: ReturnType<typeof renderToolbar>, chat: Chat) {
+  fakeExtras.state.chatConfig = chat;
+  view.rerender(
     <TooltipProvider>
       <ComposerToolbar />
     </TooltipProvider>,
@@ -432,7 +442,7 @@ describe('ComposerToolbar — model menu stays open', () => {
   it.each(['mouse', 'Enter'] as const)('keeps the menu open with the picked model after %s', async (method) => {
     const user = userEvent.setup();
     vi.mocked(setChatConfig).mockResolvedValueOnce(makeChat({ model: 'opus' }));
-    renderToolbar();
+    const view = renderToolbar();
     await openModelPicker();
     const row = screen.getByTestId('composer-model-select-option-opus');
     if (method === 'mouse') await user.click(row);
@@ -440,6 +450,9 @@ describe('ComposerToolbar — model menu stays open', () => {
       row.focus();
       await user.keyboard('{Enter}');
     }
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    expect(row).not.toHaveAccessibleName(/selected/);
+    confirmServerModel(view, makeChat({ model: 'opus' }));
     expect(row).toHaveAttribute('aria-label', 'Opus 5, selected');
     expect(screen.getByTestId('composer-model-opus-tuning')).toBeVisible();
   });
@@ -462,36 +475,70 @@ describe('ComposerToolbar — model menu stays open', () => {
     },
   );
 
-  it.each([true, false])('only sends queued effort after the picked model succeeds (%s)', async (succeeds) => {
-    let finish!: () => void;
-    vi.mocked(setChatConfig).mockImplementationOnce(
-      () =>
-        new Promise((resolve, reject) => {
-          finish = () => (succeeds ? resolve(makeChat({ model: 'opus' })) : reject(new Error('Model unavailable')));
-        }),
+  it('ignores a second pick and tuning while pending, then sends tuning for the confirmed model', async () => {
+    const view = renderToolbar();
+    await openModelPicker();
+    const opus = screen.getByTestId('composer-model-select-option-opus');
+    const sonnet = screen.getByTestId('composer-model-select-option-sonnet');
+    act(() => {
+      fireEvent.click(opus);
+      fireEvent.click(sonnet);
+    });
+    expect(opus).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(opus).toHaveFocus();
+    expect(setChatConfig).toHaveBeenCalledExactlyOnceWith(31415, 'chat-a', { model: 'opus' });
+    expect(sonnet).toHaveAccessibleName(/selected/);
+    expect(screen.getByTestId('composer-model-select')).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('Sonnet'),
     );
+    expect(opus).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByTestId('composer-adapter-select-option-claude')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('composer-model-sonnet-effort-max'));
+    fireEvent.click(screen.getByTestId('composer-model-sonnet-feature-ultracode'));
+    expect(setChatTuning).not.toHaveBeenCalled();
+
+    confirmServerModel(view, makeChat({ model: 'opus' }));
+    await userEvent.click(screen.getByTestId('composer-model-opus-effort-max'));
+    expect(setChatTuning).toHaveBeenCalledExactlyOnceWith(31415, 'chat-a', { effort: 'max' });
+  });
+
+  it('re-enables the old model after a refused request', async () => {
+    vi.mocked(setChatConfig).mockRejectedValueOnce(new Error('Model unavailable'));
     renderToolbar();
     await openModelPicker();
     await userEvent.click(screen.getByTestId('composer-model-select-option-opus'));
-    expect(screen.queryByTestId('composer-model-sonnet-tuning')).toBeNull();
-    await userEvent.click(screen.getByTestId('composer-model-opus-effort-max'));
-    expect(setChatTuning).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByTestId('composer-model-select-option-opus')).not.toHaveAttribute('aria-disabled'),
+    );
+    expect(screen.getByTestId('composer-model-select-option-sonnet')).toHaveAccessibleName(/selected/);
+  });
 
-    await act(async () => finish());
-    if (succeeds) {
-      expect(setChatTuning).toHaveBeenCalledExactlyOnceWith(31415, 'chat-a', { effort: 'max' });
-      expect(screen.getByTestId('composer-model-opus-tuning')).toBeVisible();
-    } else {
-      expect(setChatTuning).not.toHaveBeenCalled();
-      expect(screen.getByTestId('composer-model-sonnet-tuning')).toBeVisible();
-      expect(screen.getByTestId('composer-model-select-option-sonnet')).toHaveAttribute(
-        'aria-label',
-        'Sonnet 4.5, selected',
-      );
+  it.each(['chat', 'daemon', 'reopen'])('drops pending state on %s', async (change) => {
+    const view = renderToolbar();
+    await openModelPicker();
+    const id = 'composer-model-select-option-opus';
+    await userEvent.click(screen.getByTestId(id));
+    expect(screen.getByTestId(id)).toHaveAttribute('aria-disabled', 'true');
+    const daemon = getActiveDaemon();
+    try {
+      if (change === 'reopen') {
+        await userEvent.keyboard('{Escape}');
+        await openModelPicker();
+      } else if (change === 'daemon') {
+        act(() => setActiveDaemon({ ...daemon, id: 'another-daemon' }));
+      } else {
+        fakeExtras.state.chatId = 'chat-b';
+        confirmServerModel(view, makeChat({ id: 'chat-b' }));
+      }
+      expect(screen.getByTestId(id)).not.toHaveAttribute('aria-disabled');
+    } finally {
+      if (change === 'daemon') act(() => setActiveDaemon(daemon));
     }
   });
 
-  it('switches in place, immediately showing the new provider and its options', async () => {
+  it.each([true, false])('switches in place and waits for confirmation or failure (%s)', async (succeeds) => {
     const codex: AdapterInfo = {
       ...ADAPTER_CLAUDE,
       id: 'codex',
@@ -500,23 +547,39 @@ describe('ComposerToolbar — model menu stays open', () => {
     };
     useAdaptersStore.setState({ byId: { claude: ADAPTER_CLAUDE, codex } });
     fakeAuiState.thread.messages = [A_MESSAGE];
-    vi.mocked(switchChatProvider).mockResolvedValueOnce(makeChat({ adapterId: 'codex', model: 'gpt' }));
-    renderToolbar();
+    let finish!: () => void;
+    vi.mocked(switchChatProvider).mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          finish = () =>
+            succeeds ? resolve(makeChat({ adapterId: 'codex', model: 'gpt' })) : reject(new Error('Switch refused'));
+        }),
+    );
+    const view = renderToolbar();
     await openModelPicker();
     await userEvent.click(screen.getByTestId('composer-adapter-select-option-codex'));
     await userEvent.click(screen.getByTestId('composer-model-select-option-gpt'));
     expect(switchChatProvider).toHaveBeenCalledExactlyOnceWith(31415, 'chat-a', { adapterId: 'codex', model: 'gpt' });
     expect(screen.queryByTestId('composer-tuning-warning')).toBeNull();
     expect(screen.getByTestId('composer-adapter-select-option-codex')).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('composer-model-gpt-tuning')).toBeVisible();
+    expect(screen.queryByTestId('composer-model-gpt-tuning')).toBeNull();
+    await act(async () => finish());
+    if (succeeds) {
+      confirmServerModel(view, makeChat({ adapterId: 'codex', model: 'gpt' }));
+      expect(screen.getByTestId('composer-model-gpt-tuning')).toBeVisible();
+    } else {
+      expect(screen.getByTestId('composer-model-select-option-sonnet')).toHaveAccessibleName(/selected/);
+      expect(screen.getByTestId('composer-adapter-select-option-codex')).toBeEnabled();
+    }
   });
 
   it('also keeps model picks open in the combined menu and still closes on a permission pick', async () => {
     vi.mocked(setChatConfig).mockResolvedValueOnce(makeChat({ model: 'opus' }));
-    renderToolbar();
+    const view = renderToolbar();
     const trigger = screen.getByTestId('composer-model-permission-select');
     await userEvent.click(trigger);
     await userEvent.click(screen.getByTestId('composer-model-select-option-opus'));
+    confirmServerModel(view, makeChat({ model: 'opus' }));
     expect(screen.getByTestId('composer-model-opus-tuning')).toBeVisible();
     await userEvent.click(screen.getByTestId('composer-permission-mode-select-option-acceptEdits'));
     expect(screen.queryByTestId('composer-model-opus-tuning')).toBeNull();

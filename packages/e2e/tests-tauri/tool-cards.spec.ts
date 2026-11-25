@@ -589,7 +589,9 @@ test.describe('§tool-cards — ToolResultExpand (tool-result-truncated)', () =>
     const toggle = row.getByTestId('tool-result-expand-toggle');
     await expect(toggle).toContainText('Show full output');
     await expect(toggle).toContainText('50 KB');
-    await expect(row.getByTestId('chat-bash-output')).toBeVisible();
+    await expect(row.getByTestId('chat-bash-output')).toContainText(
+      '[INFO] build step 1 completed successfully at 00:00:01',
+    );
   });
 });
 

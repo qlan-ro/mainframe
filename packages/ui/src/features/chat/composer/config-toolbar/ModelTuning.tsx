@@ -18,6 +18,7 @@ import { displayEffort, effectiveFeature, effortOptions, visibleFeatures } from 
 
 export interface ModelTuningProps {
   model: AdapterModel;
+  disabled?: boolean;
   chat: Chat;
   providerDefaults?: ProviderConfig;
   setEffort: (effort: EffortLevel) => void;
@@ -26,7 +27,7 @@ export interface ModelTuningProps {
 
 const keepOpen = (event: Event) => event.preventDefault();
 
-export function ModelTuning({ model, chat, providerDefaults, setEffort, setFeature }: ModelTuningProps) {
+export function ModelTuning({ model, chat, disabled, providerDefaults, setEffort, setFeature }: ModelTuningProps) {
   const efforts = effortOptions(model);
   const features = visibleFeatures(model);
   if (efforts.length === 0 && features.length === 0) return null;
@@ -40,7 +41,7 @@ export function ModelTuning({ model, chat, providerDefaults, setEffort, setFeatu
           <DropdownMenuLabel>Effort</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={effort}
-            onValueChange={(level) => setEffort(level as EffortLevel)}
+            onValueChange={(level) => !disabled && setEffort(level as EffortLevel)}
             className="flex gap-0.5 px-1 pt-0.5 pb-1"
           >
             {efforts.map((level) => (
@@ -48,7 +49,7 @@ export function ModelTuning({ model, chat, providerDefaults, setEffort, setFeatu
                 key={level.id}
                 value={level.id}
                 data-testid={`composer-model-${model.id}-effort-${level.id}`}
-                disabled={locked}
+                disabled={disabled || locked}
                 aria-label={level.label}
                 title={level.id === 'max' ? level.label : undefined}
                 onSelect={keepOpen}
@@ -70,10 +71,11 @@ export function ModelTuning({ model, chat, providerDefaults, setEffort, setFeatu
           <DropdownMenuCheckboxItem
             key={f.key}
             data-testid={`composer-model-${model.id}-feature-${f.key}`}
+            disabled={disabled}
             checked={on}
             onSelect={(e) => {
               e.preventDefault();
-              setFeature(f.key, !on);
+              if (!disabled) setFeature(f.key, !on);
             }}
           >
             {f.label}

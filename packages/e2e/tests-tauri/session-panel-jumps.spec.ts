@@ -105,6 +105,25 @@ test.describe('§session-panel — jumps in a windowed session', () => {
     await expect(landed.locator(':focus')).toHaveCount(1);
   });
 
+  test('a long single-line result can be scrolled to its far edge', async () => {
+    const { page } = app;
+    await row(page, 'earlier-monitor').click();
+    const preview = target(page, 'window-tool-239-1').locator('pre');
+    await expect(preview).toContainText('x'.repeat(128));
+    const scroll = await preview.evaluate((pre) => {
+      let surface = pre.parentElement;
+      while (surface && !['auto', 'scroll'].includes(getComputedStyle(surface).overflowX)) {
+        surface = surface.parentElement;
+      }
+      if (!surface) throw Error('No horizontal scroll surface for tool output');
+      const end = surface.scrollWidth - surface.clientWidth;
+      surface.scrollLeft = end;
+      return { end, left: surface.scrollLeft };
+    });
+    expect(scroll.end).toBeGreaterThan(0);
+    expect(scroll.left).toBeCloseTo(scroll.end, 0);
+  });
+
   test('a sub-agent started before the loaded history opens its own tab', async () => {
     const { page } = app;
     await row(page, 'earlier-agent').click();

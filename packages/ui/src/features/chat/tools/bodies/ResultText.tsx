@@ -29,11 +29,26 @@ export function ResultText({
   return renderPreview ? renderPreview(text) : <pre className="whitespace-pre">{text}</pre>;
 }
 
-export function ResultBlock({ part, failed, testId }: { part: ToolPart; failed: boolean; testId: string }) {
+export function ResultBlock({
+  part,
+  failed,
+  testId,
+  renderPreview,
+}: {
+  part: ToolPart;
+  failed: boolean;
+  testId: string;
+  renderPreview?: (content: string) => ReactNode;
+}) {
   return (
     <Surface className="max-h-96 overflow-y-auto">
-      <KeyValue label={failed ? 'Error' : 'Result'} tone={failed ? 'fail' : undefined} testId={testId}>
-        <ResultText part={part} />
+      <KeyValue
+        label={failed ? 'Error' : 'Result'}
+        hideLabel={renderPreview != null}
+        tone={failed ? 'fail' : undefined}
+        testId={testId}
+      >
+        <ResultText part={part} renderPreview={renderPreview} />
       </KeyValue>
     </Surface>
   );

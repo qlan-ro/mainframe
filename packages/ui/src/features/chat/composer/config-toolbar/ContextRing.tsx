@@ -49,9 +49,11 @@ function Ring({ percent }: { percent: number }) {
 
 export function ContextRing() {
   const reportedPercent = useContextPercent();
-  const fresh = useAuiState(({ thread }) => thread.messages.length === 0);
-  const percent = reportedPercent ?? (fresh ? 0 : null);
-  const usage = useChatExtras()?.state.contextUsage;
+  const state = useChatExtras()?.state;
+  const empty = useAuiState(({ thread }) => thread.messages.length === 0);
+  const draft = empty && state?.chatId?.startsWith('__LOCALID_') && state.chatConfig == null;
+  const percent = reportedPercent ?? (draft ? 0 : null);
+  const usage = state?.contextUsage;
   const aui = useAui();
   if (percent == null) return null;
 

@@ -87,7 +87,7 @@ describe('ProviderModelSelect — switching providers after the first message', 
     await userEvent.click(screen.getByTestId('composer-model-select'));
     await userEvent.click(screen.getByTestId('composer-adapter-select-option-codex'));
     await userEvent.click(await screen.findByText('Codex Pro'));
-    expect(onSwitchProvider).toHaveBeenCalledWith({ adapterId: 'codex', model: 'codex-pro' });
+    expect(onSwitchProvider).toHaveBeenCalledWith({ adapterId: 'codex', model: 'codex-pro' }, expect.any(Function));
     expect(setModel).not.toHaveBeenCalled();
   });
 

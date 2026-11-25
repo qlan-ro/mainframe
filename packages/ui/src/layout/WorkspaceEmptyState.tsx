@@ -15,6 +15,7 @@
  *   workspace-picker-new-terminal      — New terminal
  *   workspace-picker-launch-<config>   — a launch configuration
  */
+import { chordHint } from '@/features/shortcuts/chord-hint';
 import { useState } from 'react';
 import { ChevronRight, Eye, FileText, GitCompare, Globe, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,22 +33,28 @@ interface RowProps {
   icon: React.ReactNode;
   label: string;
   hint?: string;
+  shortcut?: string | null;
   chevron?: boolean;
   onClick?: () => void;
 }
 
-function PickerRow({ testid, icon, label, hint, chevron, onClick }: RowProps) {
+function PickerRow({ testid, icon, label, hint, shortcut, chevron, onClick }: RowProps) {
   return (
     <Button
       data-testid={testid}
       variant="ghost"
       size="sm"
       onClick={onClick}
-      className="h-8 w-full justify-start gap-2.5 rounded-md border-0 px-2 text-body font-normal text-ink-secondary hover:bg-sidebar-accent [&>svg]:size-4"
+      className="h-8 w-full justify-start gap-2.5 rounded-lg border-0 px-2 text-body font-normal text-ink-secondary hover:bg-sidebar-accent [&>svg]:size-4"
     >
       {icon}
       <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {hint && <span className="shrink-0 font-mono text-caption/[1.45] text-muted-foreground">{hint}</span>}
+      {shortcut && (
+        <kbd aria-hidden className="font-mono text-caption/[1.45] text-muted-foreground">
+          {shortcut}
+        </kbd>
+      )}
       {chevron && <ChevronRight className="size-3 shrink-0 text-muted-foreground" />}
     </Button>
   );
@@ -65,13 +72,6 @@ function FileRows() {
   const recent = useRecentFiles(port, projectId ?? undefined, chatId ?? undefined, 3);
   return (
     <>
-      <PickerRow
-        testid="workspace-picker-open-file"
-        icon={<FileText className="text-muted-foreground" />}
-        label="Open file…"
-        chevron
-        onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
-      />
       <PickerRow
         testid="workspace-picker-view-changes"
         icon={<GitCompare className="text-muted-foreground" />}
@@ -105,6 +105,21 @@ function RunRows() {
   const { configs, handleLaunch } = useLaunchActions(port, projectId ?? undefined, chatId ?? undefined);
   return (
     <>
+      <PickerRow
+        testid="workspace-picker-open-file"
+        icon={<FileText className="text-muted-foreground" />}
+        label="Open file…"
+        chevron
+        onClick={() => emitSurfaceIntent({ type: 'open-file-picker' })}
+      />
+      <PickerRow
+        testid="workspace-picker-new-terminal"
+        icon={<Terminal className="text-muted-foreground" />}
+        label="New terminal"
+        shortcut={chordHint('workspace.new-terminal')}
+        hint="zsh"
+        onClick={() => emitSurfaceIntent({ type: 'new-terminal' })}
+      />
       {urlEntryOpen ? (
         <div className="flex px-2 py-1">
           <WorkspaceUrlEntry onDone={() => setUrlEntryOpen(false)} />
@@ -114,16 +129,10 @@ function RunRows() {
           testid="workspace-picker-open-url"
           icon={<Globe className="text-muted-foreground" />}
           label="Open URL…"
+          shortcut={chordHint('workspace.new-url-tab')}
           onClick={() => setUrlEntryOpen(true)}
         />
       )}
-      <PickerRow
-        testid="workspace-picker-new-terminal"
-        icon={<Terminal className="text-muted-foreground" />}
-        label="New terminal"
-        hint="zsh"
-        onClick={() => emitSurfaceIntent({ type: 'new-terminal' })}
-      />
       <RowLabel>Launch configuration</RowLabel>
       {configs.length === 0 ? (
         <div className="px-2 py-2 text-xs text-muted-foreground">No launch configs found.</div>
@@ -155,9 +164,10 @@ export function WorkspaceEmptyState() {
         className="max-h-full w-[min(300px,100%)] gap-0 overflow-hidden border-0 bg-transparent py-0 shadow-none ring-0"
       >
         <div className="flex min-h-0 flex-col overflow-y-auto">
-          <FileRows />
-          <Separator className="my-1" />
+          <h3 className="mb-2 ml-2 text-control/[1.45] font-semibold">Open in the workspace</h3>
           <RunRows />
+          <Separator className="my-1" />
+          <FileRows />
         </div>
         <div className="shrink-0 border-t border-border px-3 py-1.5 font-mono text-xs text-muted-foreground">
           files, terminals, and previews share this surface

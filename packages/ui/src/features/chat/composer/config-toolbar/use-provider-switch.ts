@@ -19,15 +19,18 @@ export interface ProviderSwitchRequest {
 export function useProviderSwitch(
   chat: Chat | null,
   port: number | null,
-): (req: ProviderSwitchRequest) => Promise<Chat | null> {
+): (req: ProviderSwitchRequest, onFailure?: () => void) => void {
   const chatId = chat?.id ?? null;
   return useCallback(
-    (req) => {
-      if (chatId == null || port == null) return Promise.resolve(null);
-      return switchChatProvider(port, chatId, req).catch((err: unknown) => {
+    (req, onFailure) => {
+      if (chatId == null || port == null) {
+        onFailure?.();
+        return;
+      }
+      void switchChatProvider(port, chatId, req).catch((err: unknown) => {
         console.warn('[composer/useProviderSwitch] switch failed', { err });
         mfToast.error('Could not switch provider', { description: err instanceof Error ? err.message : String(err) });
-        return null;
+        onFailure?.();
       });
     },
     [chatId, port],

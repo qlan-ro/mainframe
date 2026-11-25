@@ -36,6 +36,7 @@ interface DiffHeaderProps {
 
 export function DiffHeader({ fileName, changeCount, additions, deletions, filePath, onPrev, onNext }: DiffHeaderProps) {
   const disabled = changeCount === 0;
+  const directory = filePath?.slice(0, Math.max(0, filePath.lastIndexOf('/')));
 
   function handleReveal() {
     if (filePath) {
@@ -49,9 +50,14 @@ export function DiffHeader({ fileName, changeCount, additions, deletions, filePa
       aria-label="Diff navigation"
       className="flex h-8 shrink-0 items-center gap-1.5 border-b border-border pr-1.5 pl-3.5 text-meta/[1.45]"
     >
-      <GitBranch className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-
-      <span className="min-w-0 flex-1 truncate font-medium text-ink-secondary">{fileName}</span>
+      <span className="min-w-0 max-w-1/2 truncate font-medium text-ink-secondary" title={fileName}>
+        {fileName}
+      </span>
+      {directory && (
+        <span className="min-w-0 truncate text-muted-foreground" title={directory}>
+          {directory}
+        </span>
+      )}
 
       {additions !== undefined && (
         <span className="text-xs font-semibold text-mf-diff-add-text tabular-nums">+{additions}</span>
@@ -60,9 +66,10 @@ export function DiffHeader({ fileName, changeCount, additions, deletions, filePa
         <span className="text-xs font-semibold text-mf-diff-del-text tabular-nums">−{deletions}</span>
       )}
       {additions === undefined && deletions === undefined && (
-        <span className="text-xs text-muted-foreground tabular-nums">{changeCount} changes</span>
+        <span className="text-meta text-muted-foreground tabular-nums">{changeCount} changes</span>
       )}
 
+      <GitBranch className="ml-auto size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       <Button
         data-testid="diff-prev-change"
         variant="ghost"

@@ -50,7 +50,13 @@ export function SessionsMoreMenu() {
             </Button>
           </DropdownMenuTrigger>
         </Hint>
-        <DropdownMenuContent data-testid="sessions-more-menu" align="start" className="w-55">
+        <DropdownMenuContent
+          data-testid="sessions-more-menu"
+          align="start"
+          alignOffset={1}
+          sideOffset={8}
+          className="w-55"
+        >
           <DropdownMenuItem data-testid="sessions-more-archived" onSelect={() => setArchivedOpen(true)}>
             <ArchiveIcon />
             Archived sessions
