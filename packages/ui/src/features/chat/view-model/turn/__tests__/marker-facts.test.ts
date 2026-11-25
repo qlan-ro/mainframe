@@ -88,10 +88,13 @@ describe('what each pill says', () => {
   });
 
   it('tells the three worktree operations apart', () => {
-    expect(facts('EnterWorktree', {}, json({ worktreeBranch: 'feat/x' }))).toMatchObject({
+    expect(
+      facts('EnterWorktree', {}, json({ worktreeBranch: 'feat/x', worktreePath: '/repo/worktrees/x' })),
+    ).toMatchObject({
       icon: 'worktree-enter',
       label: 'Entered worktree',
       target: 'feat/x',
+      hint: '/repo/worktrees/x',
     });
     expect(facts('ExitWorktree', { action: 'keep' })).toMatchObject({ icon: 'worktree-leave', receipt: 'kept' });
     expect(facts('ExitWorktree', { action: 'remove' })).toMatchObject({

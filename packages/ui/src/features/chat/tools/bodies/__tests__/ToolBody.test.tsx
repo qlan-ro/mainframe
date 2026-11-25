@@ -40,6 +40,13 @@ const show = (value: ToolPart, status: ToolStatus = 'success') =>
   );
 
 describe('ToolBody', () => {
+  it('offers a disclosure for an edit with no diff or output', () => {
+    const edit = part('Edit', { file_path: 'a.ts' });
+    expect(hasToolBody(edit, 'success')).toBe(true);
+    show(edit);
+    expect(screen.getByText('Diff unavailable')).toBeVisible();
+  });
+
   it('numbers a read file as the CLI numbered it, its reminders apart', () => {
     const reminder = '<system-reminder>\nMind the license.\n</system-reminder>';
     show(part('Read', { file_path: 'a.ts' }, `     8→const a = 1;\n     9→\n\n${reminder}`));

@@ -83,6 +83,7 @@ function ToolMarker({ unit, part }: MarkerProps) {
       icon={MARKER_ICONS[facts.icon]}
       label={facts.label}
       target={facts.target}
+      hint={facts.hint}
       mono={facts.mono}
       receipt={[facts.receipt, duration].filter(Boolean).join(' · ') || undefined}
       state={facts.state}

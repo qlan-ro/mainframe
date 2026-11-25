@@ -112,7 +112,10 @@ it('opens its own agents and files as its parent’s, not as the conversation’
   expect(tab.getByTestId('chat-row-read')).toHaveTextContent(/src\/a\.ts/);
   expect(tab.getByTestId('chat-row-read')).not.toHaveTextContent('/wt/parent');
   fireEvent.click(tab.getByTestId('chat-row-open-file-read'));
-  expect(intents).toEqual([expect.objectContaining({ type: 'open-file', path: '/wt/parent/src/a.ts' })]);
+  expect(intents).toEqual([
+    expect.objectContaining({ type: 'open-file', path: '/wt/parent/src/a.ts' }),
+    { type: 'reveal-file', path: '/wt/parent/src/a.ts' },
+  ]);
   off();
 });
 

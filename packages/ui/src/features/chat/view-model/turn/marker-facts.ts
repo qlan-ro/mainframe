@@ -40,6 +40,7 @@ export interface MarkerFacts {
   readonly icon: MarkerIcon;
   readonly label: string;
   readonly target?: string;
+  readonly hint?: string;
   readonly mono?: boolean;
   readonly receipt?: string;
   readonly state: 'done' | 'running' | 'failed';
@@ -183,8 +184,16 @@ function monitorMarker(part: ToolPart, running: boolean): Draft {
 function worktreeMarker(part: ToolPart): Draft {
   const result = record(parsed(part));
   const name = displayText(record(part.args)?.name ?? result?.worktreeBranch ?? result?.worktreePath);
-  if (part.toolName === 'EnterWorktree')
-    return { icon: 'worktree-enter', label: 'Entered worktree', target: name, mono: true };
+  if (part.toolName === 'EnterWorktree') {
+    const path = displayText(result?.worktreePath);
+    return {
+      icon: 'worktree-enter',
+      label: 'Entered worktree',
+      target: name,
+      mono: true,
+      hint: path && path !== name ? path : undefined,
+    };
+  }
   if (argText(part, 'action') === 'remove')
     return { icon: 'worktree-remove', label: 'Removed worktree', target: name, mono: true };
   return { icon: 'worktree-leave', label: 'Left worktree', target: name, mono: true, receipt: 'kept' };

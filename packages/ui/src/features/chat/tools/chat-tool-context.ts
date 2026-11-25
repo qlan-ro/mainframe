@@ -37,12 +37,14 @@ export function useOpenFile(): OpenFileIntent {
   const intentPath = useIntentPath();
   const openFile = useCallback(
     (path: string, position?: OpenFilePosition) => {
+      const resolvedPath = intentPath(path);
       emitSurfaceIntent({
         type: 'open-file',
-        path: intentPath(path),
+        path: resolvedPath,
         line: position?.line,
         character: position?.character,
       });
+      emitSurfaceIntent({ type: 'reveal-file', path: resolvedPath });
     },
     [intentPath],
   );
