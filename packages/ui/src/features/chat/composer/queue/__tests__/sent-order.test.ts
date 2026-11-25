@@ -19,8 +19,14 @@ const at = (id: string) => heldTimestamp(CHAT, id);
 beforeEach(() => forgetSent(CHAT));
 
 describe('a held message in the agent’s queue', () => {
-  it('is found by its text, and then by its id however it is edited', () => {
-    noteQueued(CHAT, { content: 'B', timestamp: 't1' });
+  it('cannot take an older ref with the same text and attachments', () => {
+    noteQueued(CHAT, { queuedMessageId: 'q2', timestamp: 't1' });
+    matchQueued(CHAT, [ref('q1', 1, 'again'), ref('q2', 2, 'again')]);
+    expect([at('q1'), at('q2')]).toEqual([undefined, 't1']);
+  });
+
+  it('keeps the timestamp when a queued row is edited', () => {
+    noteQueued(CHAT, { queuedMessageId: 'q1', timestamp: 't1' });
     matchQueued(CHAT, [ref('q1', 1, 'B')]);
     matchQueued(CHAT, [ref('q1', 1, 'B, reworded')]);
 
@@ -29,31 +35,31 @@ describe('a held message in the agent’s queue', () => {
   });
 
   it('keeps two with the same text in their order, whatever order the queue is listed in', () => {
-    noteQueued(CHAT, { content: 'again', timestamp: 't1' });
-    noteQueued(CHAT, { content: 'again', timestamp: 't2' });
+    noteQueued(CHAT, { queuedMessageId: 'q1', timestamp: 't1' });
+    noteQueued(CHAT, { queuedMessageId: 'q2', timestamp: 't2' });
     matchQueued(CHAT, [ref('q2', 2, 'again'), ref('q1', 1, 'again')]);
 
     expect([at('q1'), at('q2')]).toEqual(['t1', 't2']);
   });
 
   it('is taken once: a second look does not give its place to the next one', () => {
-    noteQueued(CHAT, { content: 'again', timestamp: 't1' });
+    noteQueued(CHAT, { queuedMessageId: 'q1', timestamp: 't1' });
     matchQueued(CHAT, [ref('q1', 1, 'again')]);
-    noteQueued(CHAT, { content: 'again', timestamp: 't2' });
+    noteQueued(CHAT, { queuedMessageId: 'q2', timestamp: 't2' });
     matchQueued(CHAT, [ref('q1', 1, 'again'), ref('q2', 2, 'again')]);
 
     expect([at('q1'), at('q2')]).toEqual(['t1', 't2']);
   });
 
-  it('is not one with the same text and other attachments', () => {
-    noteQueued(CHAT, { content: 'see', attachmentIds: ['a1'], timestamp: 't1' });
+  it('only binds the acknowledged id even when another row has the same text', () => {
+    noteQueued(CHAT, { queuedMessageId: 'q3', timestamp: 't1' });
     matchQueued(CHAT, [ref('q1', 1, 'see'), ref('q2', 2, 'see', ['a2'])]);
 
     expect([at('q1'), at('q2')]).toEqual([undefined, undefined]);
   });
 
   it('waits to be seen there, and is forgotten once it has left', () => {
-    noteQueued(CHAT, { content: 'B', timestamp: 't1' });
+    noteQueued(CHAT, { queuedMessageId: 'q1', timestamp: 't1' });
     matchQueued(CHAT, []);
     matchQueued(CHAT, [ref('q1', 1, 'B')]);
     expect(at('q1')).toBe('t1');
@@ -63,7 +69,7 @@ describe('a held message in the agent’s queue', () => {
   });
 
   it('goes with its chat', () => {
-    noteQueued(CHAT, { content: 'B', timestamp: 't1' });
+    noteQueued(CHAT, { queuedMessageId: 'q1', timestamp: 't1' });
     matchQueued(CHAT, [ref('q1', 1, 'B')]);
     useHeldQueue.getState().clearChat(CHAT);
 

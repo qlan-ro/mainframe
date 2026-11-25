@@ -48,7 +48,7 @@ export function sendErrorMessage(error: unknown): string {
 const REFUSALS: readonly (readonly [RegExp, string])[] = [
   [/^Chat \S+ not running$|^Session \S+ not spawned$/, 'the session is not running.'],
   [/^Session \S+ stdin queue is full$/, 'the agent has too many messages waiting.'],
-  [/^Project directory does not exist or is not accessible/, 'the session’s folder is missing.'],
+  [/^Project directory does not exist or is not accessible/, 'the session’s folder is unavailable.'],
 ];
 const WRITTEN_FOR_THE_USER = /^This message is too large to send with /;
 
@@ -56,7 +56,7 @@ function refusalInWords(error: unknown, failure: PromptFailure | undefined): str
   if (error instanceof NotSentError) return 'the connection to the daemon was lost.';
   if (!failure) return 'the daemon could not read it.';
   if (failure.remedy || WRITTEN_FOR_THE_USER.test(failure.reason)) return failure.reason;
-  return REFUSALS.find(([raw]) => raw.test(failure.reason))?.[1] ?? 'the agent refused it.';
+  return REFUSALS.find(([raw]) => raw.test(failure.reason))?.[1] ?? 'the message could not be sent.';
 }
 
 /** Why a prompt was refused, in plain words, when it certainly did not reach the agent; undefined when it may have. */

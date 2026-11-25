@@ -465,10 +465,10 @@ describe('sendHeldMessages (C10)', () => {
           }),
         );
         made.host.dispatch({ type: 'queued.snapshot', refs: queue });
+        return queue[queue.length - 1]!.messageId;
       };
       made.sendPrompt.mockImplementation(async (content: string, meta: { attachmentIds?: string[] }) => {
-        enqueue(content, meta.attachmentIds);
-        return { queued: true };
+        return { queued: true, queuedMessageId: enqueue(content, meta.attachmentIds) };
       });
       return { ...made, enqueue };
     }
@@ -483,7 +483,7 @@ describe('sendHeldMessages (C10)', () => {
         .mockResolvedValueOnce({ queued: false })
         .mockImplementationOnce(async () => {
           enqueue('B');
-          return { queued: true };
+          return { queued: true, queuedMessageId: 'q1' };
         })
         .mockRejectedValueOnce(new NotSentError('connection closed'));
 
@@ -501,7 +501,7 @@ describe('sendHeldMessages (C10)', () => {
         .mockImplementationOnce(async () => {
           enqueue('B');
           enqueue('D');
-          return { queued: true };
+          return { queued: true, queuedMessageId: 'q1' };
         })
         .mockRejectedValueOnce(new NotSentError('connection closed'));
 
@@ -515,7 +515,9 @@ describe('sendHeldMessages (C10)', () => {
       hold('b', 2, 'B');
       hold('c', 3, 'C');
       const { host, sendPrompt, enqueue } = queueingDaemon();
-      sendPrompt.mockResolvedValueOnce({ queued: true }).mockRejectedValueOnce(new NotSentError('connection closed'));
+      sendPrompt
+        .mockResolvedValueOnce({ queued: true, queuedMessageId: 'q1' })
+        .mockRejectedValueOnce(new NotSentError('connection closed'));
 
       await sendHeldMessages(host, 'b').catch(() => {});
       enqueue('B');
@@ -536,14 +538,14 @@ describe('sendHeldMessages (C10)', () => {
       }
     });
 
-    it('goes by attachments where the agent’s text is not the one sent', async () => {
+    it('keeps its place when the echoed text contains attachment markup', async () => {
       useHeldQueue.getState().hold(CHAT, ref('b', 2, { content: 'see', attachmentIds: ['a1'] }));
       hold('c', 3, 'C');
       const { host, sendPrompt, enqueue } = queueingDaemon();
       sendPrompt
         .mockImplementationOnce(async () => {
           enqueue('see\n[a1]', ['a1']);
-          return { queued: true };
+          return { queued: true, queuedMessageId: 'q1' };
         })
         .mockRejectedValueOnce(new NotSentError('connection closed'));
 
@@ -560,7 +562,7 @@ describe('sendHeldMessages (C10)', () => {
       sendPrompt
         .mockImplementationOnce(async () => {
           host.dispatch({ type: 'queued.snapshot', refs: [ref('q1', 1, { content: 'again' })] });
-          return { queued: true };
+          return { queued: true, queuedMessageId: 'q1' };
         })
         .mockRejectedValueOnce(new NotSentError('connection closed'));
       await sendHeldMessages(host, 'b').catch(() => {});
@@ -632,9 +634,9 @@ describe('sendHeldMessages (C10)', () => {
     [
       'a missing folder',
       refusedWith('Project directory does not exist or is not accessible: /tmp/x'),
-      'the session’s folder is missing.',
+      'the session’s folder is unavailable.',
     ],
-    ['the agent', refusedWith('-32600: thread_4f2 not found'), 'the agent refused it.'],
+    ['an unexplained send failure', refusedWith('-32600: thread_4f2 not found'), 'the message could not be sent.'],
     [
       'a message too large for the handoff',
       refusedWith('This message is too large to send with Codex’s context handoff. Shorten it.'),

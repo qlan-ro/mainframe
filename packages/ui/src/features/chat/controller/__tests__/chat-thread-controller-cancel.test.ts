@@ -119,7 +119,7 @@ describe('AcpChatController.cancel — holds the queue first (C10)', () => {
   it('a held row sent, queued and edited there comes back in its place', async () => {
     useHeldQueue.getState().hold(CHAT_ID, { ...queuedRef('b', 1), content: 'B' });
     useHeldQueue.getState().hold(CHAT_ID, { ...queuedRef('c', 2), content: 'C' });
-    noteQueued(CHAT_ID, useHeldQueue.getState().byChat[CHAT_ID]![0]!);
+    noteQueued(CHAT_ID, { queuedMessageId: 'q', timestamp: useHeldQueue.getState().byChat[CHAT_ID]![0]!.timestamp });
     useHeldQueue.getState().remove(CHAT_ID, 'b');
     const { ctrl, acpClient } = makeController();
     await ctrl.load();

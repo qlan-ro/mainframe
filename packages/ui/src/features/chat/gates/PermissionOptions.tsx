@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { ArrowDown } from 'lucide-react';
 import type { VariantProps } from 'class-variance-authority';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils';
 import type { PermissionOption, PermissionOptionKind } from '@qlan-ro/mainframe-types';
 import { GATE_PRIMARY } from './shared/GateShell';
 import type { GrantLine } from './permission-grants';
-import type { ShownToEnd } from './use-shown-to-end';
+import { PermissionReadDialog } from './PermissionReadDialog';
+import type { AllowedPart, ShownToEnd } from './use-shown-to-end';
 
 type ButtonVariant = VariantProps<typeof buttonVariants>['variant'];
 
@@ -62,6 +63,7 @@ export function OptionsFooter({
 }) {
   const lockedId = useId();
   const { rest, locked } = shown;
+  const [reading, setReading] = useState<AllowedPart>();
   return (
     // Stays in view while a long list scrolls behind it, unless the window is too short to spare
     // the room. `-bottom-1` reaches past the slot's own padding, so nothing shows under it.
@@ -78,12 +80,21 @@ export function OptionsFooter({
             data-testid="chat-permission-show-rest"
             data-gate-show-rest
             // The second click of a double-click would pass the next part by unread.
-            onClick={(event) => event.detail <= 1 && shown.showRest()}
+            onClick={(event) => {
+              if (event.detail <= 1 && !shown.showRest()) setReading(rest);
+            }}
           >
             <ArrowDown data-icon="inline-start" />
             Show the rest of {rest.name}
           </Button>
         </div>
+      )}
+      {reading && (
+        <PermissionReadDialog
+          part={reading}
+          onClose={() => setReading(undefined)}
+          onRead={() => shown.confirmRest(reading)}
+        />
       )}
       {locked && (
         <span id={lockedId} className="sr-only">

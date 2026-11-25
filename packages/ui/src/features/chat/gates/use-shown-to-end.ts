@@ -1,15 +1,5 @@
 'use client';
 
-/**
- * Nothing is allowed unread (G2): while the end of what a request asks to allow
- * has not been in view, its allowing answers are locked. Overflow decides, not
- * the number of lines. An end counts once it has been in view, by any scrolling
- * or by `showRest`, for this request only; hiding it again later takes nothing back.
- *
- * Measured on mount, on scroll and on resize. Where nothing can be measured (no
- * layout, no observer) an end has simply not been in view, and `showRest` is the
- * way through.
- */
 import { useLayoutEffect, useState, type RefObject } from 'react';
 
 /** A block of what is allowed. Its element carries `data-allowed-part` with the id. */
@@ -25,15 +15,13 @@ export interface ShownToEnd {
   locked: boolean;
   /** The first part whose end has been looked for and is out of view. */
   rest: AllowedPart | undefined;
-  /** Scrolls to that end, and counts it as shown. */
-  showRest: () => void;
+  /** Scrolls to the end and reports whether it became visible. */
+  showRest: () => boolean;
+  confirmRest: (part: AllowedPart) => void;
 }
 
-/** A last line cut off at the top is not in view; nor is anything where there is no layout. */
-const LAST_LINE_PX = 12;
 /** Kept in view above the end of a part when the scroll goes on to the next. */
 const CONTEXT_PX = 56;
-const ROUNDING_PX = 1;
 
 interface View {
   slot: Element;
@@ -52,15 +40,25 @@ function viewOf(gate: HTMLElement): View | null {
 
 const partElement = (gate: HTMLElement, id: string) => gate.querySelector<HTMLElement>(`[data-allowed-part="${id}"]`);
 
+export function lastLine(element: HTMLElement): { top: number; bottom: number } | undefined {
+  const box = element.getBoundingClientRect();
+  if (!box.height || !box.width) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  const rects = range.getClientRects?.();
+  if (!rects) return;
+  const lines = Array.from(rects).filter((rect) => rect.height > 0);
+  return lines[lines.length - 1];
+}
+
 function endInView(element: HTMLElement | null, view: View): boolean {
-  const box = element?.getBoundingClientRect();
-  if (!box) return false;
-  return box.bottom <= view.bottom + ROUNDING_PX && box.bottom >= view.top + LAST_LINE_PX;
+  const line = element && lastLine(element);
+  return !!line && line.top >= view.top && line.bottom <= view.bottom;
 }
 
 /** The end of `part` into view, and as much of what follows as leaves it there. */
 function scrollToEnd(view: View, part: HTMLElement, last: HTMLElement): void {
-  const end = part.getBoundingClientRect().bottom;
+  const end = lastLine(part)?.bottom ?? part.getBoundingClientRect().bottom;
   const lastEnd = last.getBoundingClientRect().bottom;
   view.slot.scrollTop += Math.max(end - view.bottom, Math.min(lastEnd - view.bottom, end - view.top - CONTEXT_PX));
 }
@@ -105,9 +103,15 @@ export function useShownToEnd(
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     if (slot) observer?.observe(slot);
     observer?.observe(gate);
+    for (const part of unshown) {
+      const element = partElement(gate, part.id);
+      if (element) observer?.observe(element);
+    }
+    window.addEventListener('resize', measure);
     return () => {
       slot?.removeEventListener('scroll', measure);
       observer?.disconnect();
+      window.removeEventListener('resize', measure);
     };
     // The keys stand for the parts: their text, their request, and what is left of them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,12 +120,22 @@ export function useShownToEnd(
   const rest = unshown.find((part) => lookedFor.has(keyOf(part)));
   const showRest = () => {
     const gate = gateRef.current;
-    if (!gate || !rest) return;
+    if (!gate || !rest) return false;
     const view = viewOf(gate);
     const element = partElement(gate, rest.id);
     const last = partElement(gate, parts[parts.length - 1]!.id);
     if (view && element && last) scrollToEnd(view, element, last);
-    countShown(rest);
+    countShown();
+    const after = viewOf(gate);
+    return !!after && endInView(element, after);
   };
-  return { locked: unshown.length > 0, rest, showRest };
+  return {
+    locked: unshown.length > 0,
+    rest,
+    showRest,
+    confirmRest: (part) => {
+      const current = unshown.find((candidate) => keyOf(candidate) === keyOf(part));
+      if (current) countShown(current);
+    },
+  };
 }

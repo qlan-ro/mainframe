@@ -38,17 +38,18 @@ impl ChatManager {
         content: &str,
         attachment_ids: Option<&[String]>,
         command: Option<&CommandMeta>,
-    ) -> Result<bool, SendError> {
+    ) -> Result<Option<String>, SendError> {
         if !self.input_reserved(chat_id)? {
-            return Ok(false);
+            return Ok(None);
         }
-        self.enqueue_maintenance_input(chat_id, content, attachment_ids, command.cloned())
+        let message_id = self
+            .enqueue_maintenance_input(chat_id, content, attachment_ids, command.cloned())
             .await?;
         if !self.shared.maintenance.active(chat_id) && !self.session_is_spawned(chat_id) {
             self.lifecycle.start_chat(chat_id).await;
         }
         self.shared.schedule_maintenance_drain(chat_id);
-        Ok(true)
+        Ok(Some(message_id))
     }
 
     pub(super) async fn enqueue_maintenance_input(
@@ -57,7 +58,7 @@ impl ChatManager {
         content: &str,
         attachment_ids: Option<&[String]>,
         command: Option<CommandMeta>,
-    ) -> Result<(), SendError> {
+    ) -> Result<String, SendError> {
         let outgoing = self
             .prepare_outgoing(chat_id, content, attachment_ids)
             .await;
@@ -72,7 +73,7 @@ impl ChatManager {
             .append(chat_id, message.clone());
         self.record_queued_ref(chat_id, &message, uuid, content, attachment_ids);
         self.event_handler.emit_display(chat_id);
-        Ok(())
+        Ok(message.id)
     }
 
     pub(super) async fn drain_maintenance_queue(&self, chat_id: &str) -> Result<(), SendError> {

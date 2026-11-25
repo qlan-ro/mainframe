@@ -31,6 +31,7 @@ export interface HeldMessage {
   timestamp: string;
   /** The daemon its chat lives on; the rows of every daemon are kept together. */
   daemon?: string;
+  projectId?: string;
   /** From a temporary session: kept in memory only. */
   unsaved?: true;
   /** Being sent: by which window, and which press of "Send now" there. `started` once its own prompt has gone out. */
@@ -50,7 +51,11 @@ type Rows = readonly HeldMessage[];
 interface HeldQueueState {
   byChat: Readonly<Record<string, Rows>>;
   /** `timestamp`: where it stood before, when it was held and sent already. */
-  hold: (chatId: string, ref: QueuedMessageRef, options?: { temporary?: boolean; timestamp?: string }) => void;
+  hold: (
+    chatId: string,
+    ref: QueuedMessageRef,
+    options?: { temporary?: boolean; timestamp?: string; projectId?: string },
+  ) => void;
   /** False when there is no such row, or it is being sent. */
   edit: (chatId: string, messageId: string, content: string) => boolean;
   remove: (chatId: string, messageId: string) => void;
@@ -70,6 +75,7 @@ interface HeldQueueState {
   /** Gives this window's claims back, in every chat. */
   releaseClaims: () => void;
   clearChat: (chatId: string) => void;
+  clearProject: (projectId: string, knownChats: readonly string[]) => void;
 }
 
 const byTime = (a: HeldMessage, b: HeldMessage): number => a.timestamp.localeCompare(b.timestamp);
@@ -117,7 +123,7 @@ export const useHeldQueue = create<HeldQueueState>()(
       };
       return {
         byChat: {},
-        hold: (chatId, ref, { temporary = false, timestamp = ref.timestamp } = {}) =>
+        hold: (chatId, ref, { temporary = false, timestamp = ref.timestamp, projectId } = {}) =>
           update(chatId, (rows) =>
             merged(rows, [
               {
@@ -126,6 +132,7 @@ export const useHeldQueue = create<HeldQueueState>()(
                 ...(ref.attachmentIds && { attachmentIds: ref.attachmentIds }),
                 timestamp,
                 daemon: getActiveDaemon().id,
+                ...(projectId && { projectId }),
                 ...(temporary && { unsaved: true as const }),
               },
             ]),
@@ -192,6 +199,20 @@ export const useHeldQueue = create<HeldQueueState>()(
             if (!get().byChat[chatId]?.some(mine)) continue;
             update(chatId, (rows) => rows.map((row) => (mine(row) ? released(row) : row)));
           }
+        },
+        clearProject: (projectId, knownChats) => {
+          void useHeldQueue.persist?.rehydrate();
+          const daemon = getActiveDaemon().id;
+          const entries = Object.entries(get().byChat).map(([chatId, rows]) => {
+            const remaining = rows.filter(
+              (row) =>
+                (row.daemon ?? 'local') !== daemon ||
+                (row.projectId ? row.projectId !== projectId : !knownChats.includes(chatId)),
+            );
+            if (!remaining.length) forgetSent(chatId);
+            return [chatId, remaining] as const;
+          });
+          set({ byChat: Object.fromEntries(entries.filter(([, rows]) => rows.length)) });
         },
         clearChat: (chatId) => {
           forgetSent(chatId);

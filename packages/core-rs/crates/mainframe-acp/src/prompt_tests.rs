@@ -40,6 +40,7 @@ impl PromptPort for FakePort {
                 .push((session_id.to_string(), text.to_string(), send_meta));
             Ok(PromptAcceptance {
                 queued_position: self.queue_next_at,
+                queued_message_id: self.queue_next_at.map(|_| "queued-1".to_owned()),
             })
         })
     }
@@ -100,6 +101,10 @@ async fn a_queued_prompt_accepts_with_the_mainframe_extension_meta() {
         panic!("expected a result, got {:?}", response.outcome);
     };
     assert_eq!(result["_meta"]["_mainframe.dev"]["position"], json!(2));
+    assert_eq!(
+        result["_meta"]["_mainframe.dev"]["messageId"],
+        json!("queued-1")
+    );
 }
 
 #[tokio::test]

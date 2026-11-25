@@ -194,7 +194,11 @@ export function PermissionGate({ entry, reply, context }: PermissionGateProps) {
   const gateRef = useRef<HTMLDivElement>(null);
   // What is allowed, as far as it is on show: Details once they are open, the rules only when they can be saved.
   const parts: AllowedPart[] = [
-    { id: 'tool', name: command ? 'the command' : 'the request', text: `${name}\n${command ?? ''}` },
+    {
+      id: 'tool',
+      name: command ? 'the command' : 'the request',
+      text: command ? `${visibleLine(name)}\n${visibleText(command)}` : visibleLine(name),
+    },
   ];
   if (detailsOpen) parts.push({ id: 'details', name: 'the details', text: detailsText });
   if (offersAlways && grants.length > 0) {
@@ -224,7 +228,7 @@ export function PermissionGate({ entry, reply, context }: PermissionGateProps) {
         <DetailsDisclosure text={detailsText} open={detailsOpen} onToggle={() => setDetailsOpen((open) => !open)} />
         {offersAlways && <GrantList grants={grants} />}
         <OmittedList omitted={omitted} offersAlways={offersAlways} />
-        <OptionsFooter options={options} grants={grants} shown={shown} onSelect={onSelect} />
+        <OptionsFooter key={request.requestId} options={options} grants={grants} shown={shown} onSelect={onSelect} />
       </GateCardShell>
     </div>
   );

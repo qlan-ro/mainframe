@@ -134,10 +134,12 @@ pub struct RetryMarker {
 /// Queued-prompt state: an ordinary accepted prompt's
 /// `PromptResponse._meta["_mainframe.dev"]` carries this while the prompt
 /// waits for its turn. No `queue.*` frame family exists on the facade.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueuedPromptState {
     pub position: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
 }
 
 /// The rich permission answer: today's `ControlResponse`

@@ -165,14 +165,18 @@ describe('useRemoveProject — dialog copy', () => {
 });
 
 describe('useRemoveProject — held messages', () => {
-  const hold = (chatId: string) =>
-    useHeldQueue.getState().hold(chatId, {
-      messageId: `m-${chatId}`,
+  const hold = (chatId: string, projectId = PROJECT.id) =>
+    useHeldQueue.getState().hold(
       chatId,
-      uuid: 'u',
-      content: 'held',
-      timestamp: '2026-11-25T10:00:00Z',
-    });
+      {
+        messageId: `m-${chatId}`,
+        chatId,
+        uuid: 'u',
+        content: 'held',
+        timestamp: '2026-11-25T10:00:00Z',
+      },
+      { projectId },
+    );
   const heldChats = () => Object.keys(useHeldQueue.getState().byChat).sort();
   const run = async () => {
     requestConfirm.mockResolvedValue(true);
@@ -185,8 +189,8 @@ describe('useRemoveProject — held messages', () => {
   beforeEach(() => {
     hold('opened');
     hold('never-opened');
-    hold('elsewhere');
-    chatIds = ['opened', 'never-opened'];
+    hold('elsewhere', 'other-project');
+    chatIds = ['opened'];
   });
 
   it('go with the project, opened here or not, and no other project’s do', async () => {

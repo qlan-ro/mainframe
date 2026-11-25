@@ -259,6 +259,19 @@ it('a request shown in the place of another is locked for itself', () => {
   expect(locked()).toEqual(LOCKED);
 });
 
+it('measures a longer command again when its text changes in the same request', () => {
+  const { rerender } = show(gate('r1', { command: 'ls' }));
+  expect(locked()).toEqual(FREE);
+
+  layout.parts = { tool: 600 };
+  queueFront(gate('r1', { command: WRAPPED }));
+  rerender(ui());
+
+  expect(locked()).toEqual(LOCKED);
+  press(showRest()!);
+  expect(locked()).toEqual(FREE);
+});
+
 describe('a request that fits', () => {
   it('has no button and no lock', () => {
     layout.parts = { tool: 100 };
@@ -362,6 +375,32 @@ describe('where nothing can be measured', () => {
     expect(locked()).toEqual(FREE);
   });
 
+  it('keeps Allow locked when the sticky footer leaves only one pixel', () => {
+    layout.cap = 96;
+    layout.answers = 95;
+    layout.button = 0;
+    layout.parts = { tool: 600 };
+    show(gate('r1', { command: WRAPPED }));
+
+    press(showRest()!);
+
+    expect(locked()).toEqual(LOCKED);
+    const dialog = screen.getByRole('dialog');
+    const content = dialog.querySelector('pre')!;
+    const viewport = content.parentElement!;
+    vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 600, 200));
+    vi.spyOn(content, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, -viewport.scrollTop, 600, 600));
+    fireEvent.scroll(viewport);
+    expect(screen.queryByRole('button', { name: "I've read it" })).toBeNull();
+
+    viewport.scrollTop = 400;
+    fireEvent.scroll(viewport);
+    expect(locked()).toEqual(FREE);
+    expect(dialog).toBeInTheDocument();
+    press(screen.getByRole('button', { name: 'Done' }));
+    expect(dialog).not.toBeInTheDocument();
+  });
+
   it('without a layout nothing counts as seen until the button says so', () => {
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 0, 0));
     show(gate('r1', { command: 'ls' }));
@@ -369,6 +408,8 @@ describe('where nothing can be measured', () => {
 
     press(showRest()!);
 
+    expect(locked()).toEqual(LOCKED);
+    press(screen.getByRole('button', { name: "I've read it" }));
     expect(locked()).toEqual(FREE);
   });
 });

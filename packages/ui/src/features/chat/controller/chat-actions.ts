@@ -31,7 +31,7 @@ export interface ChatActionHost {
   dispatch(event: ChatStateEvent): void;
   /** The controller's deduped load — resolves instantly once seeded. */
   load(): Promise<void>;
-  sendPrompt(text: string, meta: PromptSendMeta): Promise<{ queued: boolean }>;
+  sendPrompt(text: string, meta: PromptSendMeta): Promise<{ queued: boolean; queuedMessageId?: string }>;
 }
 
 function refuseIfDirectoryMissing(host: ChatActionHost): boolean {
@@ -134,7 +134,8 @@ export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
   const refs = Object.values(host.getState().interactions.queued).filter((ref) => ref.delivery == null);
   if (refs.length === 0) return;
   const chatId = host.getDaemonId();
-  const temporary = host.getState().chatConfig?.temporary === true;
+  const chat = host.getState().chatConfig;
+  const temporary = chat?.temporary === true;
   matchQueued(chatId, refs);
   const cancels = refs.map((ref) =>
     cancelQueuedMessage(host.getPort(), chatId, ref.messageId).then(
@@ -142,7 +143,9 @@ export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
         // The agent already had it: it is in the conversation, not held.
         if (!takenBack) return;
         const timestamp = heldTimestamp(chatId, ref.messageId);
-        useHeldQueue.getState().hold(chatId, ref, { temporary, ...(timestamp && { timestamp }) });
+        useHeldQueue
+          .getState()
+          .hold(chatId, ref, { temporary, projectId: chat?.projectId, ...(timestamp && { timestamp }) });
       },
       (error: unknown) => console.warn('[chat] queued message could not be held', { error }),
     ),
@@ -172,9 +175,9 @@ export async function sendHeldMessages(host: ChatActionHost, firstId: string): P
       const { messageId, content, attachmentIds } = row;
       // Removed meanwhile, with its chat say, stopped, or no longer this press's: not sent.
       if (!held.startSending(chatId, messageId, press)) continue;
-      let queued: boolean;
+      let queuedMessageId: string | undefined;
       try {
-        ({ queued } = await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {}));
+        ({ queuedMessageId } = await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {}));
       } catch (error) {
         const reason = sendRefusal(error);
         if (reason !== undefined) {
@@ -183,8 +186,8 @@ export async function sendHeldMessages(host: ChatActionHost, firstId: string): P
         }
         throw error;
       }
-      if (queued) {
-        noteQueued(chatId, row);
+      if (queuedMessageId) {
+        noteQueued(chatId, { queuedMessageId, timestamp: row.timestamp });
         matchQueued(chatId, Object.values(host.getState().interactions.queued));
       }
       held.remove(chatId, messageId);

@@ -34,6 +34,7 @@ pub use mainframe_types::BoxFuture;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptAcceptance {
     pub queued_position: Option<i64>,
+    pub queued_message_id: Option<String>,
 }
 
 /// A session the port could not act on (edge case: prompt/cancel to a dead or
@@ -94,9 +95,13 @@ pub async fn dispatch_prompt(request: JsonRpcRequest, port: &dyn PromptPort) -> 
     }
     match port.send_prompt(&prompt.session_id, &text, send_meta).await {
         Ok(acceptance) => {
-            let meta = acceptance.queued_position.map(
-                |position| json!({ MAINFRAME_META_NAMESPACE: QueuedPromptState { position } }),
-            );
+            let meta = acceptance.queued_position.map(|position| {
+                let state = QueuedPromptState {
+                    position,
+                    message_id: acceptance.queued_message_id,
+                };
+                json!({ MAINFRAME_META_NAMESPACE: state })
+            });
             let response = PromptResponse { meta };
             rpc::success_response(id, serde_json::to_value(response).unwrap_or(Value::Null))
         }

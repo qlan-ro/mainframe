@@ -43,7 +43,7 @@ export function useRemoveProject(
       try {
         await removeProject(port, project.id);
         // The daemon's `chat.ended` reaches only the chats open here.
-        for (const chatId of chatIds) useHeldQueue.getState().clearChat(chatId);
+        useHeldQueue.getState().clearProject(project.id, chatIds);
         removeProjectFromList(project.id);
         removeFilterProject(project.id);
         mfToast.success('Project removed', { description: project.name });

@@ -15,6 +15,7 @@ export interface GateLayout {
 }
 
 const LINE = 20;
+const selectNodeContents = Range.prototype.selectNodeContents;
 
 /** A layout every gate fits in, unless told otherwise. Restored by `vi.restoreAllMocks`. */
 export function installGateLayout(overrides: Partial<GateLayout> = {}): GateLayout {
@@ -35,6 +36,15 @@ export function installGateLayout(overrides: Partial<GateLayout> = {}): GateLayo
     if (index < 0) return box(0, 0);
     const above = heights.slice(0, index).reduce((sum, height) => sum + height, layout.head);
     return box(above - scrolled, heights[index]!);
+  });
+  vi.spyOn(Range.prototype, 'selectNodeContents').mockImplementation(function (this: Range, node: Node) {
+    selectNodeContents.call(this, node);
+    Object.assign(this, {
+      getClientRects: () => {
+        const rect = (node as HTMLElement).getBoundingClientRect();
+        return [box(rect.bottom - 12, 12)];
+      },
+    });
   });
   return layout;
 }

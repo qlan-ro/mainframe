@@ -164,8 +164,7 @@ impl ChatManager {
         Ok(())
     }
 
-    /// Plain-text send: attachments, the (possibly queued) user message, titling,
-    /// working state, dispatch, and the queued-ref bookkeeping.
+    /// Returns the daemon message ID when the prompt is queued.
     pub(super) async fn send_plain_text(
         &self,
         post: &Arc<Mutex<ActiveChat>>,
@@ -174,7 +173,7 @@ impl ChatManager {
         content: &str,
         attachment_ids: Option<&[String]>,
         delivery: Delivery<'_>,
-    ) -> Result<(), SendError> {
+    ) -> Result<Option<String>, SendError> {
         let outgoing = self
             .prepare_outgoing(chat_id, content, attachment_ids)
             .await;
@@ -203,7 +202,8 @@ impl ChatManager {
                             text: outgoing.text,
                         },
                     )
-                    .await;
+                    .await
+                    .map(|_| None);
             }
             Delivery::Turn { handoff } => handoff,
         };
@@ -218,11 +218,11 @@ impl ChatManager {
         }
         if is_queued {
             self.record_queued_ref(chat_id, &message, message_uuid, content, attachment_ids);
-        } else {
-            self.event_handler
-                .notify_chat_surface(self.shared.turn_started_event(chat_id));
+            return Ok(Some(message.id));
         }
-        Ok(())
+        self.event_handler
+            .notify_chat_surface(self.shared.turn_started_event(chat_id));
+        Ok(None)
     }
 }
 

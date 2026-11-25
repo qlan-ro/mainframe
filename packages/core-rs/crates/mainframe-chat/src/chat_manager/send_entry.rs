@@ -12,20 +12,32 @@ impl ChatManager {
         attachment_ids: Option<&[String]>,
         command: Option<CommandMeta>,
     ) -> Result<(), SendError> {
+        self.send_message_with_queue_id(chat_id, content, attachment_ids, command)
+            .await
+            .map(|_| ())
+    }
+
+    pub async fn send_message_with_queue_id(
+        &self,
+        chat_id: &str,
+        content: &str,
+        attachment_ids: Option<&[String]>,
+        command: Option<CommandMeta>,
+    ) -> Result<Option<String>, SendError> {
         // Register before reading any registry/cache state; the guard drops on
         // every return path below, `?` included.
         let _send_guard = self.lifecycle.begin_send(chat_id).await;
-        if self
+        if let Some(message_id) = self
             .enqueue_when_reserved(chat_id, content, attachment_ids, command.as_ref())
             .await?
         {
-            return Ok(());
+            return Ok(Some(message_id));
         }
         let Some(((post, session), handoff)) = self
             .prepare_send(chat_id, content, attachment_ids, command.as_ref())
             .await?
         else {
-            return Ok(());
+            return Ok(None);
         };
         info!(chat_id, "user message sent");
         self.mark_turn_accepted(&post, chat_id)?;
@@ -33,7 +45,8 @@ impl ChatManager {
         if let Some(cmd) = command {
             return self
                 .dispatch_command(cmd, &post, &session, chat_id, content, handoff.as_deref())
-                .await;
+                .await
+                .map(|_| None);
         }
         self.send_plain_text(
             &post,

@@ -52,9 +52,18 @@ async function expectGateMatchesComposerWidth(page: Page) {
 /** Reads an overflowing request to its end, which unlocks the answers that allow it. */
 async function showAllOfTheRequest(page: Page): Promise<void> {
   const rest = page.getByTestId('chat-permission-show-rest');
-  // One press per part: the command, the details, what "Always allow" saves.
+  await expect(rest).toBeVisible();
+  await expect(page.getByTestId('chat-permission-option-allow-once')).toBeDisabled();
   for (let part = 0; part < 3 && (await rest.count()) > 0; part++) {
-    await rest.evaluate((button: HTMLElement) => button.click());
+    await rest.click();
+    const dialog = page.getByRole('dialog', { name: /^Read / });
+    if (await dialog.count()) {
+      const reading = dialog.locator('pre').locator('..');
+      await reading.focus();
+      await reading.press('End');
+      await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+    }
   }
   await expect(rest).toHaveCount(0);
 }
