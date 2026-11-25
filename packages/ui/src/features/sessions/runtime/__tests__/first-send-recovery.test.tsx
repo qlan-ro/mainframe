@@ -550,8 +550,11 @@ describe('after the draft moved to another project', () => {
     await press('restore');
     expect(contentOf(id)).toEqual({ ...before, items: [], references: {} });
     expect(toast.info).toHaveBeenCalledExactlyOnceWith(
-      'Removed 1 capture, 1 code note and 1 session mention',
-      expect.objectContaining({ action: expect.objectContaining({ label: 'Undo' }) }),
+      'Draft changed',
+      expect.objectContaining({
+        description: 'Removed 1 capture, 1 code note and 1 session mention',
+        action: expect.objectContaining({ label: 'Undo' }),
+      }),
     );
     const [, { action }] = toast.info.mock.lastCall as [string, { action: { onClick: () => void } }];
     await act(async () => action.onClick());

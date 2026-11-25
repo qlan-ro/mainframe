@@ -31,7 +31,10 @@ const CODE = { kind: 'code', filePath: 'a.ts', startLine: 1, endLine: 1, lineCon
 const items = () => draftItemsOf(ID).map(({ note }) => note);
 const move = (to: DraftCfg, from = getDraftConfig(ID)) => moveDraft(ID, from, to, () => setDraftConfig(ID, to));
 const lastToast = () =>
-  toast.info.mock.lastCall as [string, { duration: number; action: { label: string; onClick: () => void } }];
+  toast.info.mock.lastCall as [
+    string,
+    { description: string; duration: number; action: { label: string; onClick: () => void } },
+  ];
 const undo = () => lastToast()[1].action.onClick();
 
 beforeEach(() => {
@@ -66,7 +69,7 @@ it('removes what belongs to the old project, keeps the quotes and their prose, a
   expect(useSandboxStore.getState().captures).toEqual([]);
   expect(sessionReferencesFor(ID).size).toBe(0);
   expect(useComposerSegments.getState().byThread[ID]).toBe(quotes);
-  expect(lastToast()[0]).toBe('Removed 2 captures, 1 code note and 1 session mention from atlas-web');
+  expect(lastToast()[1].description).toBe('Removed 2 captures, 1 code note and 1 session mention from atlas-web');
   expect(lastToast()[1].duration).toBeGreaterThan(10_000);
 });
 
@@ -105,7 +108,7 @@ describe('Undo', () => {
     useDraftContent.getState().add(ID, [{ ...CAPTURE, note: 'beacon’s' }]);
     undo();
     expect(items()).toEqual(['n']);
-    expect(lastToast()[0]).toBe('Removed 1 capture from beacon');
+    expect(lastToast()[1].description).toBe('Removed 1 capture from beacon');
     undo();
     expect(items()).toEqual(['beacon’s']);
     expect(getDraftConfig(ID)).toEqual(BEACON);
@@ -174,6 +177,6 @@ describe('what counts as a move', () => {
   ])('names the place left', (from, title) => {
     useDraftContent.getState().add(ID, [CODE]);
     move(BEACON, from);
-    expect(lastToast()[0]).toBe(title);
+    expect(lastToast()[1].description).toBe(title);
   });
 });

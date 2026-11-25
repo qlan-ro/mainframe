@@ -334,6 +334,24 @@ test.describe('§editor-comments-review — inline comment gutter', () => {
     await expect(tile).toHaveCount(0);
   });
 
+  test('right-click → Quote Reference quotes "path:line (word)" in the message', async () => {
+    const { page } = app;
+    const line2 = page.getByTestId('editor-code').locator('.cm-line').nth(1);
+    await line2.click();
+    await page.keyboard.press('Home');
+    await line2.click({ button: 'right' });
+
+    await expect(page.getByTestId('editor-context-menu-content')).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId('editor-context-menu-quote-ref').click();
+
+    const quote = page.getByTestId('composer-quote-preview');
+    await expect(quote).toContainText('review.ts:2 (return)', { timeout: 5_000 });
+
+    // Clean up so the quote doesn't linger into the next describe's assertions.
+    await quote.getByTestId('composer-quote-dismiss').click();
+    await expect(quote).toHaveCount(0);
+  });
+
   test('Go to Definition / Find All References are disabled for a file type with no LSP language mapping', async () => {
     const { page } = app;
     // readme.txt has no getLspLanguage() entry — EditorTab never builds an

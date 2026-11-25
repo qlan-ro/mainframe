@@ -170,8 +170,11 @@ it('takes prose, quotes and files along, and says what it left', async () => {
   expect(sessionReferencesFor(main()).size).toBe(0);
   expect(getDraftConfig(main())).toBeUndefined();
   expect(toast.info).toHaveBeenCalledExactlyOnceWith(
-    'Removed 1 capture, 1 code note and 1 session mention',
-    expect.objectContaining({ action: expect.objectContaining({ label: 'Undo' }) }),
+    'Draft changed',
+    expect.objectContaining({
+      description: 'Removed 1 capture, 1 code note and 1 session mention',
+      action: expect.objectContaining({ label: 'Undo' }),
+    }),
   );
 });
 

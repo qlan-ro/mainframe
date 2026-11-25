@@ -114,7 +114,6 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   } catch (error) {
     const stage = uploadItems.length > 0 && attachmentIds === undefined ? 'upload' : 'send';
     host.dispatch({ type: 'local.message.failed', clientId: pending.clientId, error, stage, pending });
-    failUnsent(unsentId, error);
     // Preview captures go back to the draft with their notes; with nothing else attached that is all of it.
     const restored = sentIds.filter(restoreSentCapture);
     if (restored.length > 0 && restored.length === sentIds.length) {

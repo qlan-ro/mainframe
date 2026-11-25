@@ -47,7 +47,8 @@ export function sayRemoved(threadId: string, bound: BoundContent, from: DraftCfg
 export function announceRemoved(bound: BoundContent, place: string | undefined, undo: () => void): void {
   const summary = boundSummary(bound);
   if (summary === '') return;
-  mfToast.info(`Removed ${summary}${place ? ` from ${place}` : ''}`, {
+  mfToast.info('Draft changed', {
+    description: `Removed ${summary}${place ? ` from ${place}` : ''}`,
     duration: UNDO_MS,
     action: { label: 'Undo', onClick: undo },
   });

@@ -122,7 +122,10 @@ describe('useSelectDraftProject — what belongs to the old project', () => {
 
   it('goes when another is picked, and the toast offers Undo', async () => {
     expect(await pickFrom('proj-a', 'proj-b')).toBe(0);
-    expect(toastInfo).toHaveBeenCalledExactlyOnceWith('Removed 1 code note', expect.anything());
+    expect(toastInfo).toHaveBeenCalledExactlyOnceWith(
+      'Draft changed',
+      expect.objectContaining({ description: 'Removed 1 code note' }),
+    );
   });
 
   it('stays when the same one is picked again', async () => {

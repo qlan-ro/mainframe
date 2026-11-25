@@ -69,7 +69,10 @@ describe('what belongs to the checkout', () => {
       await openPicker();
       pick(option);
       expect(left()).toBe(0);
-      expect(toastInfo).toHaveBeenCalledExactlyOnceWith('Removed 1 code note', expect.anything());
+      expect(toastInfo).toHaveBeenCalledExactlyOnceWith(
+        'Draft changed',
+        expect.objectContaining({ description: 'Removed 1 code note' }),
+      );
     },
   );
 
