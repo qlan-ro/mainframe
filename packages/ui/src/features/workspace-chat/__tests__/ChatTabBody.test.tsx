@@ -144,6 +144,12 @@ describe('a delegated task (T1c)', () => {
     ['completed', {}, 'completed', false],
     ['failed', {}, 'failed', false],
     ['interrupted', {}, 'stopped', false],
+    // Its chat goes on by itself; the task that ended can't be stopped.
+    ['completed', { isRunning: true }, 'running', false],
+    ['interrupted', { isRunning: true }, 'running', false],
+    ['failed', { isRunning: true }, 'failed', false],
+    ['completed', { hasPending: true }, 'needs-you', false],
+    ['running', { delegatedWaiting: true }, 'needs-you', true],
   ])('%s %j reads as %s', (status, extra, shown, stoppable) => {
     list({ ...task(status), ...extra });
     show('task');

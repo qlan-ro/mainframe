@@ -118,7 +118,11 @@ export function TurnFixture({ messages, rootId, isRunning, extras, pending, scro
         <TranscriptScopeProvider value={scope}>
           <TranscriptScrollProvider value={scroll ?? null}>
             <ThreadPrimitive.Root>
-              <ThreadPrimitive.Viewport data-testid="turn-viewport">
+              <ThreadPrimitive.Viewport
+                data-testid="turn-viewport"
+                data-mf-chat-thread=""
+                data-mf-chat-id="chat-fixture"
+              >
                 <TurnTranscript />
                 {children}
               </ThreadPrimitive.Viewport>

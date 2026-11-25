@@ -1,14 +1,15 @@
 /**
  * §transcript-work — a turn's work row end to end: the "Finished work" setting,
- * and a permission request answered while the row is open and while it is folded.
+ * a permission request answered while the row is open and while it is folded,
+ * and how a turn ended.
  *
- * Recordings: `messaging` (a Bash turn) and `permissions-interactive` (a Write
- * that is asked for twice).
+ * Recordings: `messaging` (a Bash turn), `permissions-interactive` (a Write that
+ * is asked for twice) and `turn-finished` (a Bash turn its provider completed).
  */
 import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
+import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
 import { waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
 import { openRow, toolRow, workRows } from '../helpers/tauri/transcript.js';
 
@@ -98,6 +99,21 @@ test.describe('§transcript-work — permission requests', () => {
     await page.getByTestId('chat-permission-option-allow-once').click();
     await waitForIdle(page, 60_000);
     await expect(page.getByTestId('chat-permission-gate')).toHaveCount(0);
-    await expect(work).toHaveAccessibleName(/^Finished/);
+    // This recording says nothing of how its turns end, so neither does the row.
+    await expect(work).toHaveAccessibleName(/^Worked/);
+  });
+});
+
+test.describe('§transcript-work — how a turn ended', () => {
+  const pageFor = recordedChat('turn-finished');
+
+  test('a turn whose provider says it completed reads Finished, also after a reload', async () => {
+    const page = pageFor();
+    await sendMessage(page, 'List the files');
+    await waitForIdle(page, 60_000);
+    await expect(workRows(page).last()).toHaveAccessibleName(/^Finished: Worked/);
+    await page.reload();
+    await waitConnected(page);
+    await expect(workRows(page).last()).toHaveAccessibleName(/^Finished: Worked/, { timeout: 15_000 });
   });
 });

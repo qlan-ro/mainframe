@@ -52,17 +52,23 @@ describe('a part is going while the session runs', () => {
     expect(states(steered, { ...runs, runAfter: 'not-loaded' })).toEqual(['neutral', 'going']);
   });
 
+  const asked = { ...open, approval: { id: 'x' } } as never;
+  const monitor = (over: object) => ({ ...bash('x', over), toolName: 'Monitor' }) as never;
   it.each([
-    [
-      'one that waits for an approval nobody asks for now',
-      bash('ls', { ...open, approval: { id: 'x' } } as never),
-      'neutral',
-    ],
-    ['a monitor, which is no step', { ...bash('x', open), toolName: 'Monitor' } as never, 'neutral'],
-    ['one that came back', bash('ls'), 'neutral'],
-  ] as const)('when a step of it is open: %s', (_name, step, expected) => {
-    const thread = [user('u1'), assistant('a1', [step, text('Hm')]), user('u2'), assistant('a2', [text('Hi')])];
-    expect(states(thread, runs)).toEqual([expected, 'going']);
+    // An approval nobody asks for now, before and after the provider placed it.
+    ['awaits an approval', bash('ls', asked), undefined, 'neutral'],
+    ['awaits an approval', bash('ls', asked), 'running', 'going'],
+    ['awaits an approval', bash('ls', asked), 'completed', 'finished'],
+    // A monitor is no step: it holds nothing open, whatever its turn says.
+    ['is a monitor', monitor(open), undefined, 'neutral'],
+    ['is a monitor', monitor(open), 'running', 'neutral'],
+    ['is a monitor', monitor(open), 'completed', 'finished'],
+    ['came back', bash('ls'), undefined, 'neutral'],
+    ['came back', bash('ls'), 'running', 'neutral'],
+    ['came back', bash('ls'), 'completed', 'finished'],
+  ] as const)('and an earlier one by a step that %s: %j placed as %s', (_name, step, state, expected) => {
+    const first = assistant('a1', [step, text('Hm')], state && { partSources: sources(2, presented({ state })) });
+    expect(states([user('u1'), first, user('u2'), assistant('a2', [text('Hi')])], runs)).toEqual([expected, 'going']);
   });
 
   it('does not attribute an earlier open step to a later run', () => {
@@ -207,6 +213,38 @@ it('is the only part that waits when an earlier one’s background agent asks no
     'neutral',
     'neutral',
   ]);
+});
+
+describe('a step that awaits approval and the end of its part', () => {
+  const asked = (over: object = {}) => bash('ls', { ...open, approval: { id: 'x' }, ...over } as never);
+  const part = (step: ReturnType<typeof bash>, over?: object) => [user('u1'), assistant('a1', [step], over)];
+  const pending = { pendingToolIds: new Set(['ask']) };
+
+  it('lets no part end that the provider has not placed it in', () => {
+    const boomed = [...part(asked()), boom];
+    expect(states(boomed)).toEqual(['neutral']);
+    const settled = asked({ result: 'ok', providerMetadata: { mainframe: { acpStatus: 'completed' } } });
+    expect(states([...part(settled), boom])).toEqual(['neutral']);
+    const answered = asked({ result: 'no', approval: { id: 'x', approved: false } });
+    expect(states([...part(answered), boom])).toEqual(['error']);
+  });
+
+  it('cuts an earlier provider turn short in a part a later one completed', () => {
+    const two = [asked(), text('Done')];
+    const of = [presented({ state: 'running', turnId: 't1' }), presented({ state: 'completed', turnId: 't2' })];
+    const partSources = { 0: sources(1, of[0]!)[0], 1: sources(1, of[1]!)[0] };
+    expect(states([user('u1'), assistant('a1', two, { partSources })])).toEqual(['neutral']);
+  });
+
+  it('waits on the viewer when the request is there, also once its turn completed', () => {
+    const step = asked({ toolCallId: 'ask', result: 'ok' });
+    for (const state of ['running', 'completed'] as const)
+      expect(states(part(step, said(state)), pending)).toEqual(['needs-you']);
+    // Answered, the same part says what its provider says.
+    expect(states(part(asked({ toolCallId: 'ask', result: 'ok', approval: undefined }), said('completed')))).toEqual([
+      'finished',
+    ]);
+  });
 });
 
 describe('whether a neutral part may fold by itself', () => {

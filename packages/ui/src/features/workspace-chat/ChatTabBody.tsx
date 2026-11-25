@@ -9,11 +9,13 @@
  * column owns its composer now.
  */
 import { useEffect, useState } from 'react';
+import { isTerminalTaskStatus } from '@qlan-ro/mainframe-types';
 import { AuiProvider, useAui, useAuiState } from '@assistant-ui/react';
 import { ArrowLeftToLine, Bot, MessageSquare, Split } from 'lucide-react';
 import { useIsConnected } from '@/app/ConnectionStatusContext';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
+import { resumed } from '@/features/chat/orchestration/task-standing';
 import { findByChatId } from '@/features/chat/orchestration/use-session-items';
 import { ChatThread } from '@/features/chat/thread/ChatThread';
 import { useSessionListLoadState } from '@/features/sessions/runtime/list-load-state';
@@ -98,22 +100,20 @@ function Unlisted({ chatId }: { chatId: string }) {
   return <Missing chatId={chatId} />;
 }
 
-function taskStatus(custom: SessionCustom): AgentStatus {
-  const status = custom.delegation?.status ?? 'completed';
-  if (status === 'interrupted') return 'stopped';
-  if (status === 'waiting') return 'needs-you';
-  if (status === 'running' && (custom.hasPending || custom.delegatedWaiting)) return 'needs-you';
-  return status;
+/** As the task's row in its parent's transcript says it (T1c). */
+function taskStatus({ delegation, hasPending, delegatedWaiting, isRunning }: SessionCustom): AgentStatus {
+  const status = delegation?.status ?? 'completed';
+  if (hasPending || delegatedWaiting || status === 'waiting') return 'needs-you';
+  if (resumed(status, isRunning === true)) return 'running';
+  return status === 'interrupted' ? 'stopped' : status;
 }
-
-const LIVE: ReadonlySet<AgentStatus> = new Set(['running', 'needs-you', 'queued']);
 
 function TaskControls({ chatId, title, custom }: { chatId: string; title: string; custom: SessionCustom }) {
   const status = taskStatus(custom);
   const { delegation, parentChatId } = custom;
   const { onStop, stopping } = useStop(
     title,
-    delegation != null && parentChatId != null && LIVE.has(status)
+    delegation != null && parentChatId != null && !isTerminalTaskStatus(delegation.status)
       ? () => cancelDelegatedTask(parentChatId, delegation.taskId)
       : undefined,
   );

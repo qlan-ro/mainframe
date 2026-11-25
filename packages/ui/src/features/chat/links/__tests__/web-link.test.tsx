@@ -2,7 +2,8 @@
  * A web link (T1d, #341): where a click opens it, and its context menu.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { HostProvider } from '@/lib/host';
@@ -106,6 +107,50 @@ describe('Open links in', () => {
     mountLink('mailto:a@b.com');
     fireEvent.click(screen.getByRole('link', { name: 'link text' }));
     expect(fake.shell.openExternal).toHaveBeenCalledWith('mailto:a@b.com');
+  });
+});
+
+describe('the tooltip', () => {
+  const CSS = readFileSync('src/styles/globals.css', 'utf8');
+  /** The rule that takes the transcript's fade mask away, which would cut the tooltip off. */
+  const unmask = /\n(\[data-mf-chat-thread\]:has\([^{]*) \{\s*mask-image: none;\s*\}/.exec(CSS)!;
+
+  function mount() {
+    fake = new FakeHostBridge();
+    render(
+      <HostProvider host={fake}>
+        <TooltipProvider delayDuration={0}>
+          <div data-mf-chat-thread="" data-testid="thread">
+            <A href="https://example.com/a">link text</A>
+          </div>
+        </TooltipProvider>
+      </HostProvider>,
+    );
+    return screen.getByTestId('thread');
+  }
+
+  it('lifts the transcript’s mask while it is open, and only then', async () => {
+    const thread = mount();
+    expect(thread.matches(unmask[1]!)).toBe(false);
+    act(() => screen.getByRole('link').focus());
+    const tip = await waitFor(() => document.querySelector('[data-chat-link-tooltip]')!);
+    expect(thread).toContainElement(tip as HTMLElement);
+    expect(thread.matches(unmask[1]!)).toBe(true);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(thread.matches(unmask[1]!)).toBe(false));
+  });
+
+  it('wins over the mask’s utility, which lies in a layer', () => {
+    const before = CSS.slice(0, unmask.index);
+    expect(before.split('{').length).toBe(before.split('}').length);
+    expect(CSS).toMatch(/@utility scroll-fade-sticky/);
+  });
+
+  it('is marked by every link of a reply, and by no other tooltip', async () => {
+    const thread = mount();
+    await userEvent.hover(screen.getByRole('link'));
+    await waitFor(() => expect(thread.querySelectorAll('[data-chat-link-tooltip]')).toHaveLength(1));
+    expect(document.querySelectorAll('[data-slot="tooltip-content"]:not([data-chat-link-tooltip])')).toHaveLength(0);
   });
 });
 

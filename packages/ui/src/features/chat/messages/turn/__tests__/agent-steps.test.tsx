@@ -271,3 +271,23 @@ it('opens no path menu of its own: its row’s message has one', () => {
   expect(agent().queryByTestId('chat-message-menu-trigger')).toBeNull();
   expect(screen.getAllByTestId('chat-message-menu-trigger')).toHaveLength(1);
 });
+
+it('shows its steps alone where what was asked and what came back are shown around them', () => {
+  const messages = [user(PROMPT, 'p'), assistant([bash('b', 'git diff'), text('Looks right.')], 'a')];
+  const bare = { bare: true, prompt: PROMPT } as const;
+  const view = show(messages, { ...bare, result: 'Looks right.' });
+  expect(agent().queryByText(PROMPT)).toBeNull();
+  expect(agent().getByTestId('chat-row-b')).toBeVisible();
+  expect(agent().queryByTestId('chat-agent-result')).toBeNull();
+  // Said once: the result around the steps is these very words.
+  expect(agent().queryByText('Looks right.')).toBeNull();
+  view.unmount();
+  show(messages, { ...bare, result: 'Two races found.' });
+  expect(agent().getByText('Looks right.')).toBeVisible();
+  expect(agent().queryByText('Two races found.')).toBeNull();
+});
+
+it.each(['Looks right. And more', ''])('keeps its last words among its steps when “%s” came back', (result) => {
+  show([user(PROMPT, 'p'), assistant([text('Looks right.')], 'a')], { bare: true, prompt: PROMPT, result });
+  expect(agent().getByText('Looks right.')).toBeVisible();
+});

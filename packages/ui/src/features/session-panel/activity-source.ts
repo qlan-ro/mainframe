@@ -171,6 +171,32 @@ export async function jumpToActivitySource(
   }
 }
 
+/**
+ * Brings a call's row into view where its message is loaded, highlighted, and
+ * opened or focused when asked. Undefined when it has no row, or another jump
+ * was asked for meanwhile. The scroll goes on after it resolves.
+ */
+export async function showActivityRow(
+  chatId: string,
+  source: LocatedSource & { toolCallId: string },
+  { open, focus }: { open: boolean; focus: boolean },
+): Promise<HTMLElement | undefined> {
+  const jump = ++latestJump;
+  const isCurrent = () => jump === latestJump && transcript(chatId) !== undefined;
+  const { toolCallId } = source;
+  window.dispatchEvent(new CustomEvent<ActivityJump>(ACTIVITY_JUMP_EVENT, { detail: { chatId, source } }));
+  const row = await revealRow(chatId, toolCallId, isCurrent);
+  if (!row) return undefined;
+  const trigger = open ? openDisclosure(row) : row.querySelector<HTMLElement>('[aria-expanded]');
+  await nextFrame();
+  const viewport = transcript(chatId);
+  if (!isCurrent() || !viewport) return undefined;
+  highlight(row);
+  if (focus) focusElement(trigger ?? row);
+  void scrollToRow(viewport, () => (isCurrent() ? findAnchor(chatId, 'activityId', toolCallId) : undefined));
+  return row;
+}
+
 /** Moves focus to the request above this chat's composer. False when none is showing. */
 export function focusPendingRequest(chatId: string): boolean {
   const gate = transcript(chatId)?.querySelector<HTMLElement>('[data-chat-gate]');

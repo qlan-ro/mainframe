@@ -89,6 +89,38 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('a list that does not name a task the chat says runs', () => {
+  const runs = { 'bg-1': {} };
+
+  it('is asked for again, waiting longer each time, until it does', async () => {
+    const hook = mount({ events: runs });
+    await answer(0);
+    await pass(999);
+    expect(requests).toHaveLength(1);
+    await pass(1);
+    expect(requests).toHaveLength(2);
+    await answer(1);
+    await pass(1_999);
+    expect(requests).toHaveLength(2);
+    await pass(1);
+    await answer(2, row('running'));
+    expect(hook.statuses()).toEqual(['running']);
+    await pass(60_000);
+    expect(requests).toHaveLength(3);
+  });
+
+  it('is asked for at once when an event comes meanwhile, and not behind another tab', async () => {
+    const hook = mount({ events: runs });
+    await answer(0);
+    hook.set({ events: { ...runs } });
+    expect(requests).toHaveLength(2);
+    await answer(1);
+    hook.set({ visible: false });
+    await pass(60_000);
+    expect(requests).toHaveLength(2);
+  });
+});
+
 describe('what it lists', () => {
   it('is nothing known until the first answer, then this call’s own tasks', async () => {
     const hook = mount();
