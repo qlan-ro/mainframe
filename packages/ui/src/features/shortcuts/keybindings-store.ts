@@ -50,6 +50,10 @@ export const useKeybindingsStore = create<KeybindingsStore>()(
     }),
     {
       name: storageKey,
+      migrate: (persisted, version) => {
+        if (version === 1) return persisted as Pick<KeybindingsStore, 'overrides'>;
+        throw new Error('Unsupported keybindings version');
+      },
       merge: (persisted, current) => ({
         ...current,
         overrides: migrateSplitBindings((persisted as { overrides?: unknown } | undefined)?.overrides),

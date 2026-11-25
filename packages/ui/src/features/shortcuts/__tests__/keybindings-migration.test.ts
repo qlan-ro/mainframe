@@ -113,6 +113,14 @@ describe('legacy split shortcuts', () => {
     expect(useKeybindingsStore.getState().overrides).toEqual({ ...saved, 'sessions.close-beside': null });
   });
 
+  it('recovers version 1 preferences and writes them back as version 0', async () => {
+    const overrides = { 'sessions.open-beside': customChord, 'sessions.close-beside': null };
+    localStorage.setItem(storageKey, JSON.stringify({ version: 1, state: { overrides } }));
+    await useKeybindingsStore.persist.rehydrate();
+    expect(useKeybindingsStore.getState().overrides).toEqual(overrides);
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual({ version: 0, state: { overrides } });
+  });
+
   it('merges a second window write even before the storage event arrives', async () => {
     await loadLegacyOverrides({});
     const remote = { 'sessions.open-in-split': customChord, 'chat.stop': null };
