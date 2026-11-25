@@ -22,8 +22,11 @@ it('clears project and legacy rows from fresh storage and forgets sent-only chat
   );
   noteQueued('sent-only', { queuedMessageId: 'q', timestamp: 't' });
 
+  noteQueued('tagged', { queuedMessageId: 'q', timestamp: 't' });
+
   useHeldQueue.getState().clearProject('p', ['legacy', 'sent-only', 'unrelated']);
 
   expect(Object.keys(useHeldQueue.getState().byChat)).toEqual(['unknown', 'elsewhere', 'unrelated']);
+  expect(heldTimestamp('tagged', 'q')).toBeUndefined();
   expect(heldTimestamp('sent-only', 'q')).toBeUndefined();
 });

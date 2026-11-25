@@ -2,4 +2,4 @@
 "@qlan-ro/mainframe-ui": patch
 ---
 
-Keep the permission read dialog usable in short windows, restore keyboard focus when it closes, and clear queued-message ordering when removing a project.
+Keep the permission reader footer in view as the request grows, restore keyboard focus when the reader closes or the request is replaced, and preserve queued-message ordering across daemon switches and project removal.

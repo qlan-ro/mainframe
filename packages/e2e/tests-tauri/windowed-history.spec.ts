@@ -124,6 +124,7 @@ test.describe('windowed transcript history', () => {
     await earlier.scrollIntoViewIfNeeded();
     await expect(earlier).toBeInViewport({ ratio: 1 });
     const anchor = page.getByTestId('chat-user-message').filter({ hasText: /^Needle turn 242$/ });
+    await expect(anchor).toBeVisible();
     const before = await stableBox(anchor);
     wire.holdPage = true;
     await earlier.click();

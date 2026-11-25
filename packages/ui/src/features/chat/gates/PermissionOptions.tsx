@@ -64,6 +64,32 @@ function focusAnswer(root: HTMLDivElement | null) {
   target?.focus();
 }
 
+function restoreReadFocus(footer: HTMLDivElement | null, thread: Element | null) {
+  if (footer) return focusAnswer(footer);
+  if (!thread?.isConnected || document.activeElement !== document.body) return;
+  const next = thread.querySelector('[data-chat-gate]');
+  if (!next) {
+    thread.querySelector<HTMLElement>('[data-mf-composer-input]')?.focus();
+    return;
+  }
+  const focusNext = () => {
+    const answer = next.querySelector<HTMLElement>(
+      '[data-gate-answers] button:not([data-gate-show-rest]):not([aria-disabled="true"]):not(:disabled), ' +
+        '[data-testid="chat-plan-approve"], [role="radiogroup"] [role="radio"], ' +
+        '[data-testid="chat-question-gate"] [role="checkbox"], [data-testid="chat-question-skip"]',
+    );
+    (answer ?? next.querySelector<HTMLElement>('[data-gate-show-rest]'))?.focus();
+  };
+  const guard = next.querySelector('[inert]');
+  if (!guard) return focusNext();
+  const observer = new MutationObserver(() => {
+    if (next.isConnected && guard.hasAttribute('inert')) return;
+    observer.disconnect();
+    if (document.activeElement === document.body) restoreReadFocus(null, thread);
+  });
+  observer.observe(thread, { subtree: true, childList: true, attributes: true, attributeFilter: ['inert'] });
+}
+
 function ShowRest({ part, onShow }: { part: AllowedPart; onShow: () => void }) {
   return (
     <div className="basis-full">
@@ -117,6 +143,7 @@ export function OptionsFooter({ options, grants, parts, shown, onSelect }: Foote
   const lockedId = useId();
   const { rest, locked } = shown;
   const footer = useRef<HTMLDivElement>(null);
+  const thread = useRef<Element | null>(null);
   const [readingId, setReadingId] = useState<string>();
   const reading = parts.find((part) => part.id === readingId);
   return (
@@ -132,7 +159,10 @@ export function OptionsFooter({ options, grants, parts, shown, onSelect }: Foote
         <ShowRest
           part={rest}
           onShow={() => {
-            if (!shown.showRest()) setReadingId(rest.id);
+            if (!shown.showRest()) {
+              thread.current = footer.current?.closest('[data-testid="chat-thread"]') ?? null;
+              setReadingId(rest.id);
+            }
           }}
         />
       )}
@@ -140,7 +170,7 @@ export function OptionsFooter({ options, grants, parts, shown, onSelect }: Foote
         <PermissionReadDialog
           part={reading}
           onClose={() => setReadingId(undefined)}
-          onRestoreFocus={() => focusAnswer(footer.current)}
+          onRestoreFocus={() => restoreReadFocus(footer.current, thread.current)}
           onRead={() => shown.confirmRest(reading)}
         />
       )}

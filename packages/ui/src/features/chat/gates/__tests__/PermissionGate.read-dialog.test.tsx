@@ -24,6 +24,7 @@ import {
 
 function installDialogRects(viewport: HTMLElement, content: HTMLElement) {
   Object.defineProperty(viewport, 'getBoundingClientRect', { value: () => new DOMRect(0, 0, 600, 200) });
+  Object.defineProperty(viewport, 'getClientRects', { value: () => [viewport.getBoundingClientRect()] });
   Object.defineProperty(content, 'getBoundingClientRect', {
     value: () => new DOMRect(0, -viewport.scrollTop, 600, 600),
   });
@@ -138,7 +139,7 @@ it.each(['viewport', 'content'] as const)('remeasures the observed %s with the c
   resize(viewport);
   expect(previous).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: "I've read it" })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
 
   rerender(dialog(current));
   viewport.scrollTop = 400;
@@ -146,4 +147,95 @@ it.each(['viewport', 'content'] as const)('remeasures the observed %s with the c
   expect(current).toHaveBeenCalledOnce();
   expect(previous).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+});
+
+it.each(['none', 'permission', 'locked permission', 'plan'] as const)(
+  'restores focus when an open request disappears with next gate %s',
+  async (replacement) => {
+    layout.cap = 96;
+    layout.answers = 95;
+    layout.button = 0;
+    layout.parts = { tool: 600 };
+    const { rerender } = show(gate('r1', { command: WRAPPED }));
+    enter(showRest()!);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    layout.cap = 300;
+    layout.answers = 44;
+    layout.parts = replacement === 'locked permission' ? { tool: 600 } : {};
+    const next =
+      replacement === 'plan'
+        ? gate('r2', { plan: 'Plan text' }, { toolName: 'ExitPlanMode' })
+        : gate('r2', { command: replacement === 'locked permission' ? TALL : 'ls' });
+    queueFront(replacement === 'none' ? undefined : next);
+    rerender(ui());
+    await act(async () => vi.runAllTimersAsync());
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const targets = {
+      none: ['textbox', 'Composer'],
+      permission: ['button', 'Allow once'],
+      'locked permission': ['button', 'Reject'],
+      plan: ['button', 'Approve & run'],
+    };
+    const [role, name] = targets[replacement]!;
+    expect(screen.getByRole(role!, { name })).toHaveFocus();
+  },
+);
+
+it.each([360, 800])('requires the new end after rule text grows at %i×600', (width) => {
+  vi.stubGlobal('innerWidth', width);
+  vi.stubGlobal('innerHeight', 600);
+  const name = 'the saved rules '.repeat(40);
+  const onRead = vi.fn();
+  const onClose = vi.fn();
+  const dialog = (text: string) => (
+    <PermissionReadDialog
+      part={{ id: 'rules', name, text }}
+      onRead={onRead}
+      onClose={onClose}
+      onRestoreFocus={onClose}
+    />
+  );
+  const { rerender } = render(dialog(TALL));
+  const viewport = screen.getByRole('region', { name: name.trim() });
+  const content = viewport.querySelector('pre')!;
+  let height = 600;
+  const box = () => new DOMRect(0, 0, width - 48, 64);
+  vi.spyOn(viewport, 'getClientRects').mockReturnValue([box()] as unknown as DOMRectList);
+  Object.defineProperty(viewport, 'getBoundingClientRect', { value: box });
+  Object.defineProperty(content, 'getBoundingClientRect', {
+    value: () => new DOMRect(0, -viewport.scrollTop, width - 48, height),
+  });
+  viewport.scrollTop = 536;
+  fireEvent.scroll(viewport);
+  const done = screen.getByRole('button', { name: 'Done' });
+  expect(done).toBeEnabled();
+  expect(onRead).toHaveBeenCalledOnce();
+
+  height = 900;
+  rerender(dialog(TALL + WRAPPED));
+  expect(content.textContent).toBe(TALL + WRAPPED);
+  expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: "I've read it" })).toBeNull();
+  fireEvent.scroll(viewport);
+  expect(onRead).toHaveBeenCalledOnce();
+  viewport.scrollTop = 836;
+  fireEvent.scroll(viewport);
+  expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+  expect(onRead).toHaveBeenCalledTimes(2);
+});
+
+it('does not offer manual confirmation when the scroller has a zero-height client rect', () => {
+  const onRead = vi.fn();
+  vi.spyOn(Element.prototype, 'getClientRects').mockReturnValue([new DOMRect()] as unknown as DOMRectList);
+  render(
+    <PermissionReadDialog
+      part={{ id: 'tool', name: 'the command', text: WRAPPED }}
+      onRead={onRead}
+      onClose={vi.fn()}
+      onRestoreFocus={vi.fn()}
+    />,
+  );
+  expect(screen.queryByRole('button', { name: "I've read it" })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  expect(onRead).not.toHaveBeenCalled();
 });

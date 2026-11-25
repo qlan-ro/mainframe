@@ -47,11 +47,14 @@ function gate(
 
 const ui = () => (
   <TooltipProvider>
-    <ChatGateMount />
+    <div data-testid="chat-thread">
+      <ChatGateMount />
+      <textarea data-mf-composer-input aria-label="Composer" />
+    </div>
   </TooltipProvider>
 );
 
-function queueFront(front: PendingGate): void {
+function queueFront(front: PendingGate | undefined): void {
   vi.mocked(useGateQueue).mockReturnValue({ front, more: 0, waitingCalls: new Set() });
 }
 const arm = () => act(() => vi.advanceTimersByTime(GATE_ARM_MS));
