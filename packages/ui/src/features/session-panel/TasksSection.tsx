@@ -70,7 +70,7 @@ function QuickAddRow({ port, projectId }: { port: number; projectId: string }) {
           onKeyDown={quick.onKeyDown}
           aria-label="New task"
           placeholder="New task"
-          className="min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-50"
+          className="min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 text-body text-foreground outline-none placeholder:text-ink-secondary disabled:opacity-50"
         />
       </div>
       {quick.pending.length > 0 && <AttachmentCountChip count={quick.pending.length} onClear={quick.clearPending} />}

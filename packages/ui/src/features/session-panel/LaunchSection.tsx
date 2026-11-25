@@ -85,7 +85,7 @@ export function LaunchSection({ port }: { port: number }) {
                 className="group/launch"
                 icon={row.config.preview ? <Eye /> : <Terminal />}
                 label={row.name}
-                labelClassName={row.selected ? 'font-semibold' : undefined}
+                labelClassName={row.selected ? 'font-semibold text-foreground' : undefined}
                 value={<LaunchValue row={row} />}
               />
             </Hint>

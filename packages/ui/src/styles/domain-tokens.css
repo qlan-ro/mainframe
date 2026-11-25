@@ -37,7 +37,6 @@
    - the compressed spacing scale (p-2 = 4px) — legacy areas render roomier
    - the ocean/velvet schemes and the window styles — retired with the merge
    - --radius / the v1 radius derivations — v2's scale is byte-close anyway
-   - `antialiased` font smoothing — the app is native-smoothed now
    - the tracking/leading overrides — they redefined Tailwind's own names
      globally, so the v2 tree inherited v1 metrics; defaults win now
    - the v1 type scale — retired 2026-08-07 (see below)
@@ -46,9 +45,8 @@
    The v1 type scale is gone too: caption/body mapped losslessly onto v2's
    text-xs/text-sm (11px and 13px), label 12→11, micro 10→11, heading 15→16
    (text-base, DialogTitle's own rung) and title 17→18 (text-lg, kept a step
-   above heading so the two rungs stay distinct). `cn`'s extendTailwindMerge
-   font-size registration went with them — every size the app uses is a stock
-   name tailwind-merge already knows.
+   above heading so the two rungs stay distinct). The redesign's named sizes are
+   in globals.css; `cn` (lib/utils.ts) registers each with tailwind-merge.
    ════════════════════════════════════════════════════════════════════════ */
 
 :root {
@@ -205,6 +203,11 @@
 }
 
 @theme inline {
+  /* The panel's attachment tiles, cards in gates and dialogs (DESIGN.md, Shapes). */
+  --radius-tile: 12px;
+  /* The session row's project letter, in its 16px tile. */
+  --text-tile: 0.59375rem;
+  --text-tile--line-height: 1;
   /* --mf-* extensions → utilities */
   --color-mf-directive-skill: var(--mf-directive-skill);
   --color-mf-directive-session: var(--mf-directive-session);

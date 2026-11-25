@@ -72,7 +72,7 @@ function PanelBody({ state }: { state: SessionPanelState }) {
   return (
     <>
       <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center justify-between bg-inherit pr-1.5 pl-3.5">
-        <h2 className="text-sm font-semibold">Session</h2>
+        <h2 className="text-body font-semibold">Session</h2>
         <SectionsMenu />
       </div>
       <SessionContextProvider>

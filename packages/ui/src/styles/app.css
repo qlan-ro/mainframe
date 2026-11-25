@@ -17,6 +17,20 @@
   background: var(--text-selection);
 }
 
+/* Glyphs are drawn as the prototype draws them, without macOS's heavier subpixel weight. */
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Icons carry a 1.5 stroke on Lucide's 24-unit grid (DESIGN.md, Shapes), not its own
+   2: 1px in a 16px icon, 1.25px in the rail. An icon that names another width, as
+   attribute or utility, keeps it. */
+@layer base {
+  .lucide[stroke-width='2'] {
+    stroke-width: 1.5;
+  }
+}
+
 /* Native form controls must be painted for the active mode. */
 :root {
   color-scheme: light;

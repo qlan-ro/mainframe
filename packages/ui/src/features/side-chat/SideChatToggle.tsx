@@ -52,7 +52,8 @@ export function SideChatToggle() {
         aria-label={label}
         aria-pressed={inFront}
         variant="ghost"
-        size="icon-xs"
+        size="icon-sm"
+        className="hover:bg-sidebar-accent dark:hover:bg-sidebar-accent"
         onClick={() => {
           if (sideChatId == null) void openSideChat(parentChatId, false);
           else if (inFront) closeChatTab(sideChatId);

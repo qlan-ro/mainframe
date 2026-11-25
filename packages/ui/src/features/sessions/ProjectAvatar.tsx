@@ -20,8 +20,8 @@ import { CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { projectFill } from './sidebar/project-color';
 
-/** The scope strip's avatar size; pickers and hover cards pass their own. */
-export const SCOPE_AVATAR_SIZE = 26;
+/** The scope strip's avatar: a 24px disc and its 2px cut-out. Pickers and hover cards pass their own size. */
+export const SCOPE_AVATAR_SIZE = 28;
 
 interface ProjectAvatarProps {
   name: string;
@@ -79,7 +79,7 @@ export function ProjectAvatar({
       style={{
         width: size,
         height: size,
-        fontSize: Math.round(size * 0.4),
+        fontSize: stacked ? 10.5 : Math.round(size * 0.4),
         ...(stacked ? stackedStyle(color, ground, ring, dim) : { backgroundColor: fillOf(color), color: 'white' }),
       }}
     >

@@ -54,7 +54,11 @@ export function SessionPanelToggle({ columnId, testId, tourAnchor = false, class
           event.stopPropagation();
           togglePanel(columnId, fits);
         }}
-        className={cn('text-muted-foreground', showing && 'bg-accent text-foreground', className)}
+        className={cn(
+          'text-muted-foreground hover:bg-sidebar-accent dark:hover:bg-sidebar-accent',
+          showing && 'bg-chrome-chip text-foreground hover:bg-chrome-chip dark:hover:bg-chrome-chip',
+          className,
+        )}
       >
         <PanelRight className="size-4" />
       </Button>

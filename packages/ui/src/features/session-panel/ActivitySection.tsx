@@ -101,17 +101,16 @@ function EarlierHeader({
       aria-label={earlierLabel(earlier.length, failed, hasMore)}
       aria-expanded={open}
       onClick={onToggle}
+      smallIcon
       icon={
-        <ChevronRight
-          className={cn('size-3.5! transition-transform motion-reduce:transition-none', open && 'rotate-90')}
-        />
+        <ChevronRight className={cn('transition-transform motion-reduce:transition-none', open && 'rotate-90')} />
       }
       label="Earlier"
       value={
         <>
           {failed > 0 && <span className="text-fail">{failed} failed</span>}
-          {failed > 0 && <span>·</span>}
-          <span>
+          <span className={failed > 0 ? 'ml-1' : undefined}>
+            {failed > 0 && '· '}
             {earlier.length}
             {hasMore && '+'}
           </span>

@@ -20,8 +20,8 @@ export function SessionProjectTile({ projectName, className }: SessionProjectTil
       aria-hidden
       data-testid="sessions-row-project-tile"
       className={cn(
-        'flex size-4 shrink-0 items-center justify-center rounded-sm bg-sidebar-foreground/8 text-xs leading-none font-semibold text-sidebar-foreground/75',
-        'group-data-active/menu-item:bg-sidebar-foreground/12 group-data-active/menu-item:text-sidebar-foreground',
+        'flex size-4 shrink-0 items-center justify-center rounded-[5px] bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] text-tile font-semibold text-muted-foreground',
+        'group-data-active/menu-item:bg-[color-mix(in_srgb,var(--foreground)_12%,transparent)] group-data-active/menu-item:text-sidebar-foreground',
         className,
       )}
     >

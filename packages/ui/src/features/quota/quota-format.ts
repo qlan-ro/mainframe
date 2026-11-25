@@ -29,9 +29,16 @@ export const QUOTA_PROVIDERS: readonly { id: string; label: string }[] = [
   { id: 'codex', label: 'Codex' },
 ];
 
-/** The window name the capsule shows after the provider name: the popover label without its `·`, since the capsule's own dot already sits before it. */
+/** The window name the capsule shows after the provider name: shorter than the popover's label, to fit its 224px. */
 export function capsuleWindowName(window: QuotaWindow): string {
-  return window.kind === 'weekly-model' ? `Weekly ${window.label ?? 'model'}` : windowLabel(window);
+  switch (window.kind) {
+    case 'session':
+      return '5h';
+    case 'weekly':
+      return 'Week';
+    case 'weekly-model':
+      return `Week ${window.label ?? 'model'}`;
+  }
 }
 
 /**
@@ -45,7 +52,7 @@ export interface CapsuleItemVm {
   providerId: string;
   providerLabel: string;
   kind: QuotaWindow['kind'];
-  /** "Weekly Fable" — the label the capsule row shows. */
+  /** "Week Fable" — the label the capsule row shows. */
   name: string;
   label: string;
   usedPercent: number;

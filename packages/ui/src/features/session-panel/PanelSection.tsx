@@ -12,9 +12,9 @@ import { SECTION_LABEL } from './panel-sections';
 
 /** A section's label line: 22px, its text sitting on the bottom edge. */
 export const SECTION_HEADER =
-  'mt-3 flex h-[22px] w-full shrink-0 items-end gap-1.5 px-4 pb-1 text-left text-xs font-medium text-muted-foreground';
+  'mt-3 flex h-[22px] w-full shrink-0 items-end gap-1.5 pr-3.5 pb-1 pl-4 text-left text-label/[1.45] font-medium text-muted-foreground';
 
-const ROW = 'mx-1.5 flex h-7 w-[calc(100%-0.75rem)] min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-sm';
+const ROW = 'mx-1.5 flex h-7 w-[calc(100%-0.75rem)] min-w-0 items-center gap-2 rounded-[7px] px-2.5 text-left text-body text-ink-secondary';
 
 interface PanelSectionProps extends Omit<ComponentPropsWithRef<'section'>, 'title'> {
   section: SessionPanelSectionKey;
@@ -46,10 +46,16 @@ export function PanelSection({ section, action, header, className, children, ...
   );
 }
 
-/** The 16px lane every row leads with; empty keeps the title on the text column. */
-export function RowIcon({ children }: { children?: ReactNode }) {
+/** The 16px lane a row leads with (12px for a disclosure chevron); empty keeps the title on the text column. */
+export function RowIcon({ children, small = false }: { children?: ReactNode; small?: boolean }) {
   return (
-    <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground [&>svg]:size-4" aria-hidden>
+    <span
+      className={cn(
+        'flex shrink-0 items-center justify-center text-muted-foreground',
+        small ? 'size-3 [&>svg]:size-3' : 'size-4 [&>svg]:size-4',
+      )}
+      aria-hidden
+    >
       {children}
     </span>
   );
@@ -57,24 +63,26 @@ export function RowIcon({ children }: { children?: ReactNode }) {
 
 interface PanelRowProps extends Omit<ComponentPropsWithRef<'button'>, 'title' | 'value'> {
   icon?: ReactNode;
+  /** A disclosure chevron: its lane is as wide as the glyph. */
+  smallIcon?: boolean;
   label: ReactNode;
   labelClassName?: string;
   /** The value lane at the row's end. */
   value?: ReactNode;
 }
 
-export function PanelRow({ icon, label, labelClassName, value, className, ...props }: PanelRowProps) {
+export function PanelRow({ icon, smallIcon, label, labelClassName, value, className, ...props }: PanelRowProps) {
   return (
     <button
       type="button"
       className={cn(
         ROW,
-        'transition-colors hover:bg-foreground/8 disabled:pointer-events-none disabled:opacity-50',
+        'transition-colors hover:bg-sidebar-accent disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
       {...props}
     >
-      <RowIcon>{icon}</RowIcon>
+      <RowIcon small={smallIcon}>{icon}</RowIcon>
       <span className={cn('min-w-0 flex-1 truncate', labelClassName)}>{label}</span>
       {value != null && <RowValue>{value}</RowValue>}
     </button>
@@ -84,7 +92,7 @@ export function PanelRow({ icon, label, labelClassName, value, className, ...pro
 export function RowValue({ className, ...props }: ComponentPropsWithRef<'span'>) {
   return (
     <span
-      className={cn('flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums', className)}
+      className={cn('flex shrink-0 items-center gap-1 text-meta/[1.45] text-muted-foreground tabular-nums', className)}
       {...props}
     />
   );
@@ -99,7 +107,7 @@ export function PanelEmpty({
 }: ComponentPropsWithRef<'div'> & { icon?: ReactNode }) {
   return (
     <div
-      className={cn('mx-1.5 flex min-h-7 items-center gap-2 px-2.5 text-sm text-muted-foreground', className)}
+      className={cn('mx-1.5 flex min-h-7 items-center gap-2 px-2.5 text-body text-ink-secondary', className)}
       {...props}
     >
       {icon != null && <RowIcon>{icon}</RowIcon>}
@@ -125,9 +133,9 @@ export function ShowAllRow({
       data-testid={testId}
       aria-expanded={all}
       onClick={onToggle}
-      icon={all ? <ChevronUp className="size-3.5!" /> : <ChevronDown className="size-3.5!" />}
+      smallIcon
+      icon={all ? <ChevronUp /> : <ChevronDown />}
       label={all ? 'Show fewer' : `Show all ${count}`}
-      labelClassName="text-muted-foreground"
     />
   );
 }

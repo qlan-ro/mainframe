@@ -30,7 +30,6 @@ import {
   keepFocusOnTabPress,
   TAB_CLOSE_ATTR,
   TAB_CLOSE_BUTTON,
-  TAB_CLOSE_OVERLAY,
   TAB_KEYS_ATTR,
   TAB_HOVER_STYLE,
   tabShape,
@@ -147,17 +146,16 @@ export function SessionTabPill({ tab, hintIndex = null, canOpenBeside, ...action
         className={tabShape(
           tab.active,
           cn(
-            'w-45 min-w-24 shrink gap-2',
-            tab.active ? 'pr-1 pl-3' : 'px-3 text-ink-secondary',
+            'w-45 min-w-24 shrink gap-2 pr-1 pl-3',
             // The dragged pill ghosts so the cursor + drop target read as the live thing.
             dragging && 'opacity-40',
           ),
         )}
         style={TAB_HOVER_STYLE}
       >
-        {/* The badge takes the dot's 14px slot rather than adding one, so
+        {/* The badge overflows the dot's own 8px rather than taking a slot, so
             holding the modifier never reflows the strip under the pointer. */}
-        <span className="relative inline-flex size-3.5 shrink-0 items-center justify-center">
+        <span className="relative inline-flex size-2 shrink-0 items-center justify-center">
           {hintIndex != null ? (
             <ShortcutIndexBadge index={hintIndex} data-testid={`session-tab-hint-${tab.id}`} />
           ) : (
@@ -167,14 +165,7 @@ export function SessionTabPill({ tab, hintIndex = null, canOpenBeside, ...action
         <FadeLabel className={cn('flex-1', tab.preview && 'italic')} tooltipDelay={600}>
           {tab.title}
         </FadeLabel>
-        <span
-          data-testid={`session-tab-controls-${tab.id}`}
-          className={cn(
-            !tab.active && TAB_CLOSE_OVERLAY,
-            !tab.active && 'bg-(--tab-hover) opacity-0 before:to-(--tab-hover)',
-            !tab.active && 'group-focus-within/tab:opacity-100 group-hover/tab:opacity-100',
-          )}
-        >
+        <span data-testid={`session-tab-controls-${tab.id}`}>
           <Hint label={`Close ${tab.title}`}>
             <Button
               data-testid={`session-tab-close-${tab.id}`}

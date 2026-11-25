@@ -23,14 +23,14 @@ export function SectionsMenu() {
             data-testid="session-panel-sections-menu"
             aria-label="Sections"
             variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground data-[state=open]:bg-chrome-press data-[state=open]:text-foreground"
+            size="icon-xs"
+            className="rounded-sm text-muted-foreground hover:bg-sidebar-accent dark:hover:bg-sidebar-accent aria-expanded:bg-transparent aria-expanded:text-muted-foreground"
           >
-            <SlidersHorizontal className="size-4" strokeWidth={1.5} />
+            <SlidersHorizontal className="size-4" />
           </Button>
         </DropdownMenuTrigger>
       </Hint>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align="end" className="w-55">
         <DropdownMenuLabel>Sections</DropdownMenuLabel>
         {SESSION_PANEL_SECTION_KEYS.map((key) => (
           <DropdownMenuCheckboxItem

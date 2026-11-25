@@ -108,6 +108,8 @@ export function SessionListVirtuoso({ groups, renderItem }: SessionListVirtuosoP
   return (
     <GroupedVirtuoso
       customScrollParent={scrollParent}
+      // Takes back the hairline below, so the first row starts on the header's edge.
+      style={{ marginTop: -1 }}
       groupCounts={groupCounts}
       components={VIRTUOSO_COMPONENTS}
       computeItemKey={(index) => keys[index] ?? index}

@@ -52,14 +52,14 @@ export function NewSessionRow() {
     <SidebarMenu className="mt-0.5">
       <SidebarMenuItem>
         <SidebarMenuButton
-          className="gap-2.5 pr-1.5"
+          className="gap-2.5 pr-1.5 text-body"
           data-testid="sidebar-action-new-thread"
           data-tut="new-session"
           onClick={newThread}
         >
-          <SquarePen strokeWidth={1.5} />
+          <SquarePen className="text-ink-secondary" />
           <FadeLabel className="flex-1">New session</FadeLabel>
-          <Plus aria-hidden className="shrink-0 text-muted-foreground" />
+          <Plus aria-hidden className="shrink-0 text-ink-secondary" />
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
@@ -120,8 +120,8 @@ export function SessionSidebar() {
       {/* The scope strip lives here, not in the scrolling body: shadcn
           documents the header as the home for a workspace switcher, and it is
           the one thing a long session list must not scroll away. */}
-      <SidebarHeader className="gap-0 pt-0 pr-[6px] pb-1">
-        <div className="flex h-11 items-center justify-between pl-1">
+      <SidebarHeader className="gap-0 pt-0 pb-1">
+        <div className="-mr-0.5 flex h-11 items-center justify-between pl-1">
           <span className="text-headline font-semibold">Chats</span>
           <span className="flex items-center text-muted-foreground">
             <Hint label={searchChord == null ? 'Search' : `Search (${searchChord})`}>

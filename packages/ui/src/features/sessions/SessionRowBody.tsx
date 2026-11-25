@@ -44,8 +44,8 @@ export function RowBody({ item, unread, projectName, renameSlot, actionsSlot }: 
           data-testid="sessions-row-title"
           data-unread={unread || undefined}
           className={cn(
-            'flex-1 group-data-active/menu-item:text-sidebar-foreground',
-            unread ? 'font-semibold text-sidebar-foreground' : 'text-sidebar-foreground/85',
+            'flex-1 text-body group-data-active/menu-item:text-sidebar-foreground',
+            unread ? 'font-semibold text-sidebar-foreground' : 'text-ink-secondary',
           )}
         >
           {item.title ?? 'Untitled session'}
