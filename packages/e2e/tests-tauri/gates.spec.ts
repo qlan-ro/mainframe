@@ -84,7 +84,7 @@ async function scrollViewportToBottom(page: Page): Promise<void> {
 /**
  * The three invariants a pending gate and the composer must hold together,
  * at every scroll position: (a) the gate slot keeps a readable floor rather
- * than collapsing under the composer's competing demand — `min-h-24` (96px)
+ * than collapsing under the composer's competing demand — 96 px in supported window sizes
  * in ChatGateMount.tsx, a few px of tolerance for border/rounding; (b) the
  * composer's bottom edge stays inside the scrollport, not just the window;
  * (c) some transcript stays visible above the footer — the cap reserves a
@@ -102,6 +102,7 @@ async function assertGateFooterInvariants(page: Page): Promise<void> {
 
   expect(composer!.y + composer!.height).toBeLessThanOrEqual(pane!.y + pane!.height + 1);
   expect(slot!.height).toBeGreaterThanOrEqual(90);
+  expect(slot!.height).toBeLessThanOrEqual((await page.evaluate(() => innerHeight)) * 0.45 + 1);
   expect(footer!.y).toBeGreaterThan(pane!.y);
 }
 
@@ -674,7 +675,7 @@ test.describe('§gate slot cap under a tall composer draft', () => {
     // `permissions-stacked`, not `permissions-no-suggestions`: its non-empty
     // `suggestions` render the "Always Allow" row, which is what actually
     // pushes the collapsed card — and, once Details is open, the slot itself
-    // — past the 45cqh cap at this window size. `§gate pinned slot` above
+    // — past the 45vh cap at this window size. `§gate pinned slot` above
     // already proves that overflow on this exact recording; reusing it here
     // means the "gate at its cap" precondition below is backed by a passing
     // sibling assertion, not a guess.

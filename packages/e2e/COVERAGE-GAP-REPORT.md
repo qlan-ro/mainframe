@@ -13,9 +13,9 @@ read in both directions._
 
 | Metric | Count |
 |---|---|
-| Defined | 1189 |
+| Defined | 1188 |
 | Referenced | 626 |
-| Unused | 563 |
+| Unused | 562 |
 | Dead selectors | 20 |
 
 ## Dead selectors
@@ -134,7 +134,7 @@ read in both directions._
 
 | Surface | Defined | Unused |
 |---|---|---|
-| chat | 213 | 99 |
+| chat | 212 | 98 |
 | automations | 92 | 80 |
 | tasks | 91 | 43 |
 | composer | 91 | 41 |

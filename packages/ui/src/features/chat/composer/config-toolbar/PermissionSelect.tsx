@@ -75,17 +75,26 @@ export function PermissionItems({ mode, planning, autoAllowed, onSelect }: Permi
     <DropdownMenuGroup>
       <DropdownMenuRadioGroup value={mode} onValueChange={(next) => onSelect(next as ExecutionMode)}>
         {offered.map((m) => (
-          <DropdownMenuRadioItem
-            key={m.id}
-            value={m.id}
-            data-testid={`composer-permission-mode-select-option-${m.id}`}
-            className="items-start"
-          >
-            <span className="flex min-w-0 flex-col">
-              <span className={cn('font-medium', m.tone != null && 'text-warning')}>{m.label}</span>
-              <span className="text-meta/[1.35] font-normal text-muted-foreground">{m.description}</span>
-            </span>
-          </DropdownMenuRadioItem>
+          <ComposerHint key={m.id} label={m.description}>
+            <DropdownMenuRadioItem
+              value={m.id}
+              data-testid={`composer-permission-mode-select-option-${m.id}`}
+              className="items-start"
+              title={m.description}
+              aria-description={m.description}
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className={cn('font-medium', m.tone != null && 'text-warning')}>{m.label}</span>
+                <span className="text-meta/[1.35] font-normal text-muted-foreground">
+                  {m.id === 'acceptEdits'
+                    ? 'Edits applied, commands ask'
+                    : m.id === 'auto'
+                      ? 'The agent decides what needs approval'
+                      : m.description}
+                </span>
+              </span>
+            </DropdownMenuRadioItem>
+          </ComposerHint>
         ))}
       </DropdownMenuRadioGroup>
       {planning && (

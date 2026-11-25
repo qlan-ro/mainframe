@@ -128,7 +128,7 @@ describe('PermissionSelect — dropdown items render description notes', () => {
     expect(interactive.textContent).toContain('Approve every action');
   });
 
-  it('Auto-Edits option renders its description note "Edits auto-applied; commands ask"', async () => {
+  it('Auto-Edits option renders its description note "Edits applied, commands ask"', async () => {
     render(
       <TooltipProvider>
         <PermissionSelect chat={makeChat()} setPermissionMode={vi.fn()} />
@@ -138,7 +138,7 @@ describe('PermissionSelect — dropdown items render description notes', () => {
     await userEvent.click(screen.getByTestId('composer-permission-mode-select'));
 
     const autoEdits = screen.getByTestId('composer-permission-mode-select-option-acceptEdits');
-    expect(autoEdits.textContent).toContain('Edits auto-applied; commands ask');
+    expect(autoEdits.textContent).toContain('Edits applied, commands ask');
   });
 
   it('Unattended option renders its description note "Runs without prompts"', async () => {

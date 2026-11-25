@@ -92,7 +92,7 @@
       "y": 3880
     },
     "Chat-SessionPanel-ActivitySection.dc.html": {
-      "h": 2054,
+      "h": 2818,
       "page": "session-panel",
       "title": "Session panel — Activity",
       "w": 1240,
@@ -162,14 +162,6 @@
       "w": 1440,
       "x": 0,
       "y": 0
-    },
-    "Proposal-Redesign-Spec.dc.html": {
-      "h": 12498,
-      "page": "proposals",
-      "title": "Window redesign: the decisions (spec)",
-      "w": 1360,
-      "x": 0,
-      "y": 960
     },
     "Settings-Controls.dc.html": {
       "h": 3464,
@@ -424,7 +416,7 @@
       "y": 3120
     },
     "Chat-ComposerFocus.dc.html": {
-      "h": 1776,
+      "h": 1831,
       "page": "composer",
       "title": "Chat — composer focus and gates",
       "w": 2772,
@@ -545,7 +537,7 @@
     "view": "canvas",
     "page": "overview"
   },
-  "noteOrder": ["proposalsHowTo", "sessionPanelTitle", "sessionPanelGuide", "revampTitle", "revampGuide"],
+  "noteOrder": ["proposalsHowTo", "sessionPanelTitle", "sessionPanelGuide"],
   "notes": {
     "proposalsHowTo": {
       "fill": "blue",
@@ -555,24 +547,6 @@
       "w": 560,
       "x": 0,
       "y": 0
-    },
-    "revampGuide": {
-      "fill": "gray",
-      "page": "proposals",
-      "size": 24,
-      "text": "Proposal-Redesign-Spec records the approved window redesign. The product pages show the implemented design. Decision IDs refer to sections in design/redesign/DECISIONS.md.\n\nClickable prototype for historical reference: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn.",
-      "w": 560,
-      "x": -640,
-      "y": 960
-    },
-    "revampTitle": {
-      "kind": "title1",
-      "maxW": 7000,
-      "page": "proposals",
-      "text": "UI revamp: the window redesign",
-      "w": 240,
-      "x": 0,
-      "y": 700
     },
     "sessionPanelGuide": {
       "fill": "gray",
@@ -657,8 +631,7 @@
     "Tasks-Cards.dc.html",
     "Tasks-Types.dc.html",
     "Tasks-Details.dc.html",
-    "Tasks-Errors.dc.html",
-    "Proposal-Redesign-Spec.dc.html"
+    "Tasks-Errors.dc.html"
   ],
   "pages": [
     {

@@ -346,8 +346,8 @@ describe('ChatGateMount', () => {
   });
 
   // Class-string regression check only: this pins the tokens the height cap
-  // and the composer width parity depend on. `max-h-[45cqh]` is the slot's
-  // preferred cap; `min-h-24` is the floor it shrinks to (no lower) once the
+  // and the composer width parity depend on. `max-h-[45vh]` is the slot's
+  // preferred cap; `min-h-0` is the floor it shrinks to (no lower) once the
   // footer's own `max-h-[calc(100cqh-2rem)]` (ChatThread.tsx) squeezes it
   // below that — `overflow-y-auto` zeroes flexbox's automatic minimum, so
   // without an explicit floor the slot would compress to 0px under a tall
@@ -368,8 +368,8 @@ describe('ChatGateMount', () => {
 
     const slot = screen.getByTestId('chat-thread-gate-slot');
     expect(slot).toHaveClass('overflow-y-auto');
-    expect(slot).toHaveClass('max-h-[45cqh]');
-    expect(slot).toHaveClass('min-h-24');
+    expect(slot).toHaveClass('max-h-[45vh]');
+    expect(slot).toHaveClass('min-h-[min(6rem,45vh)]');
     expect(slot).toHaveClass('shrink-[100]');
   });
 });

@@ -124,14 +124,13 @@ describe('what belongs to the checkout', () => {
 });
 
 describe('DraftBranchPicker', () => {
-  it('names the current project above the branches', async () => {
+  it('lists branches without a project heading', async () => {
     const { projects } = useProjectsStore.getState();
     useProjectsStore.setState({ projects: [{ id: 'p1', name: 'Actual project' } as (typeof projects)[number]] });
     try {
       await openPicker();
-      const heading = screen.getByText('Actual project');
-      const branch = screen.getByTestId('composer-branch-option-main');
-      expect(heading.compareDocumentPosition(branch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(screen.queryByText('Actual project')).not.toBeInTheDocument();
+      expect(screen.getByTestId('composer-branch-option-main')).toBeVisible();
       expect(screen.getByText('Manage branches…')).toBeInTheDocument();
     } finally {
       useProjectsStore.setState({ projects });
