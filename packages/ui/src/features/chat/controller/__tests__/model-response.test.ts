@@ -103,3 +103,60 @@ it('ignores a response after the active daemon changes', async () => {
     setActiveDaemon(daemon);
   }
 });
+
+/** Two picks with no broadcasts: opens the request of each and returns how to finish it. */
+function twoPicks(ctrl: ReturnType<typeof setup>['ctrl']) {
+  const start = (model: string) => {
+    let finish!: () => void;
+    let refuse!: () => void;
+    const done = ctrl.reconcileModelResponse(
+      CHAT_ID,
+      () =>
+        new Promise((resolve, reject) => {
+          finish = () => resolve(makeChat({ model }));
+          refuse = () => reject(new Error('refused'));
+        }),
+    );
+    return { done, finish, refuse };
+  };
+  return { first: start('opus'), second: start('haiku') };
+}
+
+it('a late response to an older pick never replaces the newer pick', async () => {
+  const { ctrl } = setup();
+  const { first, second } = twoPicks(ctrl);
+  second.finish();
+  await second.done;
+  expect(ctrl.getState().chatConfig?.model).toBe('haiku');
+  vi.mocked(getChat).mockResolvedValueOnce(makeChat({ model: 'haiku' }));
+  first.finish();
+  await first.done;
+  expect(ctrl.getState().chatConfig?.model).toBe('haiku');
+});
+
+it('an older pick’s re-read that outlasts the newer response is dropped', async () => {
+  const { ctrl } = setup();
+  const { first, second } = twoPicks(ctrl);
+  let answer!: () => void;
+  vi.mocked(getChat).mockImplementationOnce(
+    () => new Promise((resolve) => (answer = () => resolve(makeChat({ model: 'opus' })))),
+  );
+  first.finish();
+  await vi.waitFor(() => expect(getChat).toHaveBeenCalledOnce());
+  second.finish();
+  await second.done;
+  answer();
+  await first.done;
+  expect(ctrl.getState().chatConfig?.model).toBe('haiku');
+});
+
+it('shows the older pick when the newer one is refused', async () => {
+  const { ctrl } = setup();
+  const { first, second } = twoPicks(ctrl);
+  second.refuse();
+  await expect(second.done).rejects.toThrow('refused');
+  vi.mocked(getChat).mockResolvedValueOnce(makeChat({ model: 'opus' }));
+  first.finish();
+  await first.done;
+  expect(ctrl.getState().chatConfig?.model).toBe('opus');
+});

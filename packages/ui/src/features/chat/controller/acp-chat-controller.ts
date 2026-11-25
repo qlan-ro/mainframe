@@ -40,7 +40,9 @@ export class AcpChatController {
   private readonly loader: ChatPlaneLoader;
   private disposed = false;
   private readonly targetId = getActiveDaemon().id;
-  private configBroadcasts = 0;
+  /** Bumped by each config broadcast and each reconciled response. */
+  private configVersion = 0;
+  private modelRequests = 0;
   // The id for all network ops: the daemon chat id for pre-existing threads; for a
   // new (__LOCALID_*) thread it starts local and setRemoteId() swaps in the real id
   // once createChat resolves. Neither plane opens while this is still local.
@@ -105,7 +107,7 @@ export class AcpChatController {
       getPort: () => this.port,
       getWs: () => this.ws,
       dispatch: (event) => {
-        if (event.type === 'chat.config.updated') this.configBroadcasts += 1;
+        if (event.type === 'chat.config.updated') this.configVersion += 1;
         this.dispatch(event);
       },
       isFacadeAttached: () => this.plane.isAttached,
@@ -326,13 +328,17 @@ export class AcpChatController {
       typeof chat.adapterId === 'string' &&
       (chat.model === undefined || typeof chat.model === 'string');
     if (!matches()) return;
-    const atStart = this.configBroadcasts;
+    const atStart = this.configVersion;
+    const requestId = ++this.modelRequests;
     const response = await request();
     if (!matches()) return;
-    const beforeRead = this.configBroadcasts;
-    const chat = beforeRead === atStart && usable(response) ? response : await getChat(this.port, chatId);
-    if (!matches() || this.configBroadcasts !== beforeRead) return;
+    const beforeRead = this.configVersion;
+    // A response is only current when nothing else has changed or is changing the chat; otherwise ask the daemon.
+    const current = beforeRead === atStart && requestId === this.modelRequests && usable(response);
+    const chat = current ? response : await getChat(this.port, chatId);
+    if (!matches() || this.configVersion !== beforeRead) return;
     if (!usable(chat)) throw new Error('Could not reload the chat configuration');
+    this.configVersion += 1;
     this.dispatch({ type: 'chat.config.updated', chat });
   }
 
