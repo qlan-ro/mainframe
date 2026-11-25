@@ -13,9 +13,9 @@ read in both directions._
 
 | Metric | Count |
 |---|---|
-| Defined | 1167 |
-| Referenced | 616 |
-| Unused | 551 |
+| Defined | 1169 |
+| Referenced | 617 |
+| Unused | 552 |
 | Dead selectors | 20 |
 
 ## Dead selectors
@@ -92,7 +92,7 @@ read in both directions._
 | review-panel.spec.ts | 65 | 0 |
 | selection-hold.spec.ts | 11 | 0 |
 | session-panel-jumps.spec.ts | 10 | 0 |
-| session-panel.spec.ts | 124 | 1 |
+| session-panel.spec.ts | 126 | 1 |
 | session-tabs.spec.ts | 22 | 0 |
 | sessions-draft.spec.ts | 70 | 0 |
 | sessions-filters.spec.ts | 37 | 0 |
@@ -134,7 +134,7 @@ read in both directions._
 
 | Surface | Defined | Unused |
 |---|---|---|
-| chat | 211 | 98 |
+| chat | 213 | 99 |
 | automations | 92 | 80 |
 | tasks | 91 | 43 |
 | composer | 78 | 32 |
