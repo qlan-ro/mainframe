@@ -134,7 +134,7 @@ export function TitleBar() {
             <>
               <TitleBarSeparator testId="title-bar-separator-workspace" />
               <TitleBarWorkspace />
-              <TitleBarSeparator testId="title-bar-separator-actions" className="mx-2 @max-[32rem]/trailing:mx-1" />
+              <TitleBarSeparator testId="title-bar-separator-actions" className="mx-2 @max-[24rem]/trailing:mx-1" />
             </>
           )}
           <TitleBarActions />
