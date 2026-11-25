@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { controller, childMessages, call } = vi.hoisted(() => ({
+const { controller, childMessages, call, listed } = vi.hoisted(() => ({
   controller: {
     load: vi.fn(async () => undefined),
     loadEarlier: vi.fn(async () => true),
@@ -12,18 +12,21 @@ const { controller, childMessages, call } = vi.hoisted(() => ({
   },
   childMessages: { current: [] as ThreadMessage[] },
   call: { current: {} as object },
+  listed: { current: [] as object[] },
 }));
 
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
   chatControllerRegistry: { getOrCreate: () => controller },
 }));
+vi.mock('@/lib/api/background-tasks', () => ({ listBackgroundTasks: vi.fn(async () => listed.current) }));
 vi.mock('../../runtime/use-chat-thread-runtime', () => ({
   useControllerState: () => ({
     loadState: { type: 'ready' },
     historyWindow: { hasMore: true, floorItemId: 'child' },
     interactions: { permissions: {} },
     runState: { type: 'idle' },
+    runs: [],
     backgroundTasks: {},
   }),
 }));
@@ -32,7 +35,18 @@ vi.mock('../../runtime/use-native-thread-messages', () => ({
     {
       id: 'parent-message',
       role: 'assistant',
-      content: [{ type: 'tool-call', toolCallId: 'task-1', messages: childMessages.current, ...call.current }],
+      status: { type: 'complete', reason: 'stop' },
+      metadata: { custom: {} },
+      content: [
+        {
+          type: 'tool-call',
+          toolCallId: 'task-1',
+          toolName: 'Task',
+          args: {},
+          messages: childMessages.current,
+          ...call.current,
+        },
+      ],
     },
   ],
 }));

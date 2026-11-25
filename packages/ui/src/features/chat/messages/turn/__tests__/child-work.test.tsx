@@ -49,8 +49,8 @@ beforeEach(() => {
 it('folds a turn whose agents have finished, and still names them', () => {
   render(<TurnFixture rootId={`cw-${roots}`} messages={[user('Hi'), assistant([agent(), text('Done')])]} />);
   expect(isOpen()).toBe(false);
-  expect(header()).toHaveAccessibleName('Finished: Worked, 1 agent');
-  expect(screen.getByRole('button', { name: '1 agent: show them' })).toHaveTextContent('1 agent');
+  expect(header()).toHaveAccessibleName('Worked, 1 agent');
+  expect(screen.getByRole('button', { name: '1 agent: show it' })).toHaveTextContent('1 agent');
 });
 
 it('stays open, with a live count, while an agent runs in the background', async () => {
@@ -82,13 +82,22 @@ it('counts an agent that waits on you first', async () => {
       pending={['inner']}
     />,
   );
-  expect(await screen.findByRole('button', { name: '1 agent · 1 needs you: show the ones still going' })).toBeVisible();
+  expect(await screen.findByRole('button', { name: '1 agent · 1 needs you: show the one still going' })).toBeVisible();
+});
+
+it('names several agents, and several still going, in the plural', async () => {
+  const other = { toolCallId: 'other' } as const;
+  const messages = (over: object) => [user('Hi'), assistant([agent(over), agent({ ...over, ...other })], 'a')];
+  const view = render(<TurnFixture rootId={`cw-${roots}`} messages={messages({})} isRunning={false} />);
+  expect(screen.getByRole('button', { name: '2 agents: show them' })).toBeVisible();
+  view.rerender(<TurnFixture rootId={`cw-${roots}`} messages={messages(running)} isRunning />);
+  expect(await screen.findByRole('button', { name: '2 agents · 2 running: show the ones still going' })).toBeVisible();
 });
 
 it('opens the turn on its agent', async () => {
   Element.prototype.scrollIntoView = vi.fn();
   render(<TurnFixture rootId={`cw-${roots}`} messages={[user('Hi'), assistant([agent(), text('Done')])]} />);
-  fireEvent.click(screen.getByRole('button', { name: '1 agent: show them' }));
+  fireEvent.click(screen.getByRole('button', { name: '1 agent: show it' }));
   await waitFor(() => expect(screen.getByTestId('chat-row-agent-toggle')).toHaveFocus());
   expect(screen.getByTestId('chat-row-agent')).toHaveAttribute('data-activity-flash');
 });

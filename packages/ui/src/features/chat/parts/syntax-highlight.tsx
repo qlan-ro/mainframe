@@ -21,7 +21,7 @@ export const SyntaxHighlighter: FC<SyntaxHighlighterProps> = ({ code, language }
   const chip = useInstructionChipForLine(code);
   if (chip) return null;
 
-  return <ShikiCode code={code} lang={language} preClass={PRE_CLASS} />;
+  return <ShikiCode code={code} lang={language} preClass={PRE_CLASS} showLineNumbers />;
 };
 
 SyntaxHighlighter.displayName = 'SyntaxHighlighter';

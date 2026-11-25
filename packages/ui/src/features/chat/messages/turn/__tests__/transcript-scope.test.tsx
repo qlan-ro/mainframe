@@ -112,7 +112,7 @@ it('does not rebuild historical rows when only the active message streams with n
   const prompt = user('Next', 'between');
   const view = render(<ScopeFixture messages={[history, prompt, active('first chunk')]} state={state} />);
   await screen.findByText('first chunk');
-  fireEvent.click(screen.getByRole('button', { name: /^Finished: Worked/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
   const historical = () => build.mock.calls.filter(([part]) => part.toolCallId === 'historical-read').length;
   const count = historical();
   expect(count).toBeGreaterThan(0);

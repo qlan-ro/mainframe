@@ -143,6 +143,7 @@ export function RowAction({
   testId,
   onClick,
   hoverOnly = false,
+  busy = false,
   children,
 }: {
   label: string;
@@ -150,6 +151,8 @@ export function RowAction({
   onClick: () => void;
   /** Shown while the row is hovered or holds focus. */
   hoverOnly?: boolean;
+  /** Under way: it keeps its place and focus, and takes no second click. */
+  busy?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -158,7 +161,8 @@ export function RowAction({
       data-testid={testId}
       aria-label={label}
       title={label}
-      onClick={onClick}
+      aria-disabled={busy || undefined}
+      onClick={busy ? undefined : onClick}
       className={cn(
         'size-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:focus-line-inset [&_svg]:size-3.5',
         hoverOnly ? 'hidden group-focus-within/row:grid group-hover/row:grid [@media(hover:none)]:grid' : 'grid',

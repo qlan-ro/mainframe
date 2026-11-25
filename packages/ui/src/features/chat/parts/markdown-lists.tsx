@@ -25,7 +25,18 @@ export function MarkdownOl({ className, ...props }: ComponentProps<'ol'>) {
 }
 
 export function MarkdownLi({ className, ...props }: ComponentProps<'li'>) {
-  return <li className={cn('aui-md-li mt-1', className)} {...props} />;
+  return (
+    <li
+      className={cn(
+        'aui-md-li mt-1',
+        // A done task is struck through. The box is in the item, or in its first paragraph in a loose list.
+        className?.includes('task-list-item') &&
+          'aui-md-li-task has-[>[data-checked=true],>p>[data-checked=true]]:text-muted-foreground has-[>[data-checked=true],>p>[data-checked=true]]:line-through',
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export function MarkdownTaskCheckbox({ checked, ...props }: ComponentProps<'input'>) {

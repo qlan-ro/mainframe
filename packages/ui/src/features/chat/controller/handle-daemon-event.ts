@@ -33,7 +33,8 @@ export function handleDaemonEvent(event: DaemonEvent, chatId: string, facadeAtta
         return { kind: 'event', event: { type: 'run.stopped' } };
       }
       if (event.chat.isRunning === true) {
-        return { kind: 'event', event: { type: 'run.started' } };
+        // Without a facade the transcript isn't followed: the run may be older than what is loaded.
+        return { kind: 'event', event: { type: 'run.started', ...(!facadeAttached && { replayed: true }) } };
       }
       return { kind: 'noop' };
     }

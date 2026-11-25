@@ -23,9 +23,11 @@ function sameTurn(a: Turn, b: Turn): boolean {
   return (
     a.running === b.running &&
     a.live === b.live &&
-    a.unfinished === b.unfinished &&
-    a.needsYou === b.needsYou &&
-    a.end === b.end &&
+    a.unclear === b.unclear &&
+    a.evidence.needsYou === b.evidence.needsYou &&
+    a.evidence.run === b.evidence.run &&
+    a.evidence.unsettled === b.evidence.unsettled &&
+    a.evidence.ended === b.evidence.ended &&
     a.durationMs === b.durationMs &&
     a.costUsd === b.costUsd &&
     a.lastMessageId === b.lastMessageId &&
@@ -71,7 +73,6 @@ export class TurnCache {
   private turns = new Map<string, CachedTurn>();
   private seenMessages = new Set<string>();
   private seenTurns = new Set<string>();
-  private standing: ReadonlyMap<string, boolean | undefined> = new Map();
 
   begin(scope: TurnScope): void {
     const key = JSON.stringify([scope.rootThreadId, scope.ancestors, [...scope.pendingToolIds].sort()]);
@@ -132,13 +133,7 @@ export class TurnCache {
     return kept;
   }
 
-  /** Whether a turn went on in the last build; undefined when that build couldn't say. */
-  wentOn(key: string): boolean | undefined {
-    return this.standing.get(key);
-  }
-
-  finish(standing: Iterable<readonly [string, boolean | undefined]>): void {
-    this.standing = new Map(standing);
+  finish(): void {
     for (const key of this.messages.keys()) if (!this.seenMessages.has(key)) this.messages.delete(key);
     for (const key of this.turns.keys()) if (!this.seenTurns.has(key)) this.turns.delete(key);
   }

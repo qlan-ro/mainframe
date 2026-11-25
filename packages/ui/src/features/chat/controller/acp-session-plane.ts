@@ -215,7 +215,7 @@ export class AcpSessionPlane {
       return;
     }
     if (update.sessionUpdate === 'state_update') {
-      this.applyStateUpdate(update, this.store.accumulator.itemsInOrder);
+      this.applyStateUpdate(update, this.store.accumulator.itemsInOrder, stage !== null);
       return;
     }
     if (update.sessionUpdate === 'usage_update') {
@@ -241,7 +241,7 @@ export class AcpSessionPlane {
     this.refreshFrom(items);
     const state = stage.pendingState;
     stage.pendingState = null;
-    if (state) this.applyStateUpdate(state, items);
+    if (state) this.applyStateUpdate(state, items, true);
   }
 
   /** `AcpSessionAttachmentHost.discardReplay` — THIS window's stage was discarded: a daemon `aborted:true`, or a previously client-aborted window's marker finally arriving. The visible transcript is untouched. */
@@ -270,17 +270,19 @@ export class AcpSessionPlane {
   private applyStateUpdate(
     update: Extract<SessionUpdate, { sessionUpdate: 'state_update' }>,
     items: AccumulatedItem[],
+    replayed: boolean,
   ): void {
     if (update.state === 'running') {
       this.runStop.cancel();
       const startedAtMs = update._meta?.['_mainframe.dev']?.startedAtMs;
-      this.host.dispatch(startedAtMs === undefined ? { type: 'run.started' } : { type: 'run.started', startedAtMs });
+      const start = { ...(startedAtMs !== undefined && { startedAtMs }), ...(replayed && { replayed }) };
+      this.host.dispatch({ type: 'run.started', ...start });
       return;
     }
     if (update.state === 'idle') {
-      // The settled cursor is computed immediately — the `run.stopped`
-      // dispatch itself waits out the settle delay (D7, finding 10).
+      // At once: the settled cursor, and the run's end. `run.stopped` waits out the settle delay (D7, finding 10).
       if (items.length > 0) this.cursorTracker.recordSettledItem(items[items.length - 1]!.id);
+      this.host.dispatch({ type: 'run.ended', stopReason: update.stopReason });
       this.runStop.scheduleStop();
     }
   }

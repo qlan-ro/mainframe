@@ -57,7 +57,7 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   const sendMeta = command ? { command: { ...command } } : {};
   const pending = buildPendingMessage(host.getDaemonId(), text, sendMeta, uploadItems);
   host.dispatch({ type: 'local.message.queued', pending });
-  host.dispatch({ type: 'run.started' });
+  host.dispatch({ type: 'run.started', optimistic: true });
 
   let attachmentIds: string[] | undefined;
   try {
@@ -100,7 +100,7 @@ export async function retryChatMessage(host: ChatActionHost, clientId: string, r
   if (refuseIfDirectoryMissing(host)) return;
 
   host.dispatch({ type: 'local.message.retrying', clientId });
-  host.dispatch({ type: 'run.started' });
+  host.dispatch({ type: 'run.started', optimistic: true });
 
   try {
     if (remedy === 'unarchive_native_session') await unarchiveNativeSession(host.getPort(), host.getDaemonId());

@@ -11,7 +11,8 @@ vi.mock('@/lib/api/background-tasks', () => ({
   readBackgroundTaskOutput: vi.fn().mockResolvedValue(''),
 }));
 
-const header = () => screen.getByRole('button', { name: /^(Finished|Running|Stopped|Ended on an error|Still going):/ });
+const header = () =>
+  screen.getByRole('button', { name: /^((Finished|Running|Stopped|Ended on an error|Still going): )?Work(ed|ing)/ });
 const isOpen = () => header().getAttribute('aria-expanded') === 'true';
 const row = (id: string) => screen.queryByTestId(`chat-row-${id}`);
 
@@ -39,7 +40,7 @@ describe('the work row', () => {
       user('Hi'),
       assistant([bash('b', 'ls'), text('Looking'), tool(), text('All done')], 'a', { timing: 134_000 }),
     ]);
-    expect(header()).toHaveAccessibleName('Finished: Worked for 2m 14s, read 1 file, ran 1 command');
+    expect(header()).toHaveAccessibleName('Worked for 2m 14s, read 1 file, ran 1 command');
     expect(isOpen()).toBe(false);
     expect(row('b')).toBeNull();
     expect(screen.getByText('All done')).toBeVisible();
@@ -89,11 +90,26 @@ describe('the work row', () => {
   it.each([
     ['cancelled', 'Stopped', 'stopped'],
     ['failed', 'Ended on an error', 'error'],
-    ['completed', 'Finished', 'done'],
-  ] as const)('says how a %s turn ended', (state, word, end) => {
+    ['completed', 'Finished', 'finished'],
+  ] as const)('says how a %s turn ended', (state, word, at) => {
     show([user('Hi'), assistant([bash('b', 'ls'), text('Done')], 'a', { presentation: { state } })]);
     expect(header()).toHaveAccessibleName(new RegExp(`^${word}:`));
-    expect(header().parentElement).toHaveAttribute('data-work-end', end);
+    expect(header().parentElement).toHaveAttribute('data-work-state', at);
+  });
+
+  it('claims no end nobody told of, and shows no check', () => {
+    show([user('Hi'), assistant([bash('b', 'ls'), text('Done')], 'a', { presentation: { state: 'invalid' } })]);
+    expect(header()).toHaveAccessibleName('Worked, ran 1 command');
+    expect(header().parentElement).toHaveAttribute('data-work-state', 'neutral');
+    expect(header().parentElement!.querySelector('.lucide-check')).toBeNull();
+    expect(isOpen()).toBe(false);
+  });
+
+  it('does not fold a turn that claims no end while a step’s outcome is unknown', () => {
+    const lost = bash('b', 'ls', { result: undefined, providerMetadata: {} });
+    const said = { presentation: { state: 'invalid' } } as const;
+    show([user('Hi'), assistant([lost, text('Done')], 'a', said)]);
+    expect([header().getAttribute('aria-label'), isOpen()]).toEqual(['Worked, ran 1 command', true]);
   });
 });
 

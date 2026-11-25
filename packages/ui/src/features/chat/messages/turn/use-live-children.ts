@@ -18,7 +18,7 @@ const RETRY_MAX_MS = 30_000;
  * nobody placed holds every turn open; and once more when the last one ends, for
  * how it ended. `launched`: an agent was started, whose call says only that.
  */
-function useListedTasks(
+export function useListedTasks(
   chatId: string | undefined,
   live: Readonly<Record<string, BackgroundActivityTask>>,
   launched: boolean,

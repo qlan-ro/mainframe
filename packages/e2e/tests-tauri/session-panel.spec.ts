@@ -111,6 +111,7 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
 import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
+import { openWork, workRows } from '../helpers/tauri/transcript.js';
 import { DAEMON_PORT } from '../fixtures/daemon.js';
 
 const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
@@ -1056,13 +1057,18 @@ test.describe('§session-panel — Activity section (Stop)', () => {
     await page.keyboard.press('Enter');
     await page.keyboard.press('Enter');
     await expect(page.getByText(/Stopped “.+”/)).toBeVisible({ timeout: 15_000 });
-    // The mock child never ends its turn, so its row reads as a resumed chat
-    // rather than stopped; the task itself is what Stop cancels.
-    await expect(page.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'cancelled', {
-      timeout: 15_000,
-    });
-    await expect(stop).toHaveCount(0);
+    await expect(stop).toHaveCount(0, { timeout: 15_000 });
     expect(requests).toHaveLength(1);
     await expect(row).toBeFocused();
+    // The mock child never ends its turn, so its row in the panel reads as a
+    // resumed chat rather than stopped; the task itself is what Stop cancels.
+    // Nothing holds the turn that delegated it open any more, so it folds.
+    await expect(workRows(page).last()).toHaveAttribute('aria-expanded', 'false', { timeout: 15_000 });
+    await openWork(page);
+    await expect(page.getByTestId('chat-tool-delegate-task-card-receipt').locator('[data-status]')).toHaveAttribute(
+      'data-status',
+      'stopped',
+      { timeout: 15_000 },
+    );
   });
 });

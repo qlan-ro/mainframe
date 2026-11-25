@@ -113,6 +113,15 @@ describe('fenced code block container', () => {
     expect(container.querySelector('span')).toHaveTextContent('ts');
   });
 
+  it('SyntaxHighlighter renders a line-number gutter cell per line', () => {
+    const components = {} as unknown as SyntaxHighlighterProps['components'];
+    const { container } = render(
+      <SyntaxHighlighter code={'line one\nline two'} language="ts" components={components} />,
+    );
+    const numbers = container.querySelectorAll('[data-slot="code-line-number"]');
+    expect([...numbers].map((cell) => cell.textContent)).toEqual(['1', '2']);
+  });
+
   it('CodeHeader copy button shows a visible "Copy" text label', () => {
     const { getByTestId } = render(<CodeHeader language="ts" code="const x = 1;" />);
     const button = getByTestId('chat-code-copy');
@@ -143,6 +152,19 @@ describe('markdownComponents task-list checkbox', () => {
     const { container } = render(<Comp type="checkbox" checked={false} readOnly disabled />);
     const box = container.querySelector('[data-slot="md-task-checkbox"]');
     expect(box!.getAttribute('data-checked')).toBe('false');
+  });
+
+  it('a done task-list <li> strikes its label through, an ordinary one does not', () => {
+    const item = (className?: string) => {
+      const { container } = render(
+        <ul>
+          <Li className={className}>thing</Li>
+        </ul>,
+      );
+      return container.querySelector('li')!.className;
+    };
+    expect(item('task-list-item')).toMatch(/has-\[.*data-checked=true.*\]:line-through/);
+    expect(item()).not.toContain('line-through');
   });
 
   it('says each state to assistive tech, and is not a control', () => {

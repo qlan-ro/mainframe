@@ -8,19 +8,24 @@ import { BodyNote } from '../../tools/bodies/Surface';
 import { resolveResultText } from '../../tools/shared';
 import { record } from '../../view-model/turn/values';
 import { RowAction, RowDisclosure } from './RowDisclosure';
-import { RowGlyph } from './RowGlyph';
+import { RowGlyph, Spinner } from './RowGlyph';
 import { receiptText, useToolFacts, type ToolRowProps } from './ToolRow';
 import { useStepDuration } from './StepClock';
 import { KIND_ICONS, STATUS_WORDS } from './tool-icons';
 import { useFailedOpen } from './use-failed-open';
 
 function OpenActions({ url }: { url: string }) {
-  const { open } = useOpenArtifact();
+  const { open, opening } = useOpenArtifact();
   const openExternal = useOpenExternal();
   return (
     <>
-      <RowAction label="Open the artifact" testId="artifact-card-open" onClick={() => void open(url)}>
-        <AppWindow />
+      <RowAction
+        label={opening ? 'Opening the artifact…' : 'Open the artifact'}
+        testId="artifact-card-open"
+        busy={opening}
+        onClick={() => void open(url)}
+      >
+        {opening ? <Spinner /> : <AppWindow />}
       </RowAction>
       <RowAction label="Open on claude.ai" testId="artifact-card-open-browser" onClick={() => openExternal(url)}>
         <ExternalLink />

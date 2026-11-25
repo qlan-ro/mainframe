@@ -7,8 +7,8 @@ import { useLayoutEffect } from 'react';
 import { Check, ChevronRight, CircleStop, CircleX, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatTurnDuration } from '../../format-step';
-import type { Turn } from '../../view-model/turn/types';
-import { NO_CHILDREN, childCounts, childGoing, type ChildCounts, type LiveChildren } from './live-children';
+import type { PartState, Turn } from '../../view-model/turn/types';
+import { NO_CHILDREN, childCounts, childGoing, turnState, type ChildCounts, type LiveChildren } from './live-children';
 import { Spinner } from './RowGlyph';
 import { useRevealStep } from './reveal-step';
 import { useTurnActions, useTurnSelector } from './turn-context';
@@ -16,27 +16,44 @@ import { useRowAnchor } from './use-row-anchor';
 
 export const workId = (turnKey: string) => `chat-work-${encodeURIComponent(turnKey)}`;
 
-function EndGlyph({ turn, going }: { turn: Turn; going: boolean }) {
-  if (turn.needsYou) return <ShieldAlert aria-hidden className="size-3.5 text-warning" />;
-  if (turn.running || going) return <Spinner />;
-  if (turn.end === 'stopped') return <CircleStop aria-hidden className="size-3.5 text-muted-foreground" />;
-  if (turn.end === 'error') return <CircleX aria-hidden className="size-3.5 text-fail" />;
-  return <Check aria-hidden className="size-3.5 text-mf-tr-ok" />;
+function EndGlyph({ state }: { state: PartState }) {
+  switch (state) {
+    case 'needs-you':
+      return <ShieldAlert aria-hidden className="size-3.5 text-warning" />;
+    case 'going':
+      return <Spinner />;
+    case 'stopped':
+      return <CircleStop aria-hidden className="size-3.5 text-muted-foreground" />;
+    case 'error':
+      return <CircleX aria-hidden className="size-3.5 text-fail" />;
+    case 'finished':
+      return <Check aria-hidden className="size-3.5 text-mf-tr-ok" />;
+    case 'neutral':
+      // Nothing says how it ended, so neither does the row.
+      return <span aria-hidden className="size-1 rounded-full bg-muted-foreground" />;
+  }
 }
 
-function stateWord(turn: Turn, going: boolean): string {
-  if (turn.needsYou) return 'Waiting on you';
-  if (turn.running) return 'Running';
-  if (going) return 'Still going';
-  if (turn.end === 'stopped') return 'Stopped';
-  return turn.end === 'error' ? 'Ended on an error' : 'Finished';
-}
+const STATE_WORDS: Record<PartState, string> = {
+  'needs-you': 'Waiting on you',
+  going: 'Still going',
+  error: 'Ended on an error',
+  stopped: 'Stopped',
+  finished: 'Finished',
+  neutral: '',
+};
 
 function title(turn: Turn): string {
   // The turn status row is the one live clock, so a running turn states no time.
-  if (turn.needsYou) return 'Waiting on you';
+  if (turn.evidence.needsYou) return STATE_WORDS['needs-you'];
   if (turn.running) return 'Working';
   return turn.durationMs === undefined ? 'Worked' : `Worked for ${formatTurnDuration(turn.durationMs)}`;
+}
+
+/** The row's name: its state, unless the visible title says it or nothing does. */
+function named(turn: Turn, state: PartState): string {
+  const word = state === 'going' && turn.running ? 'Running' : STATE_WORDS[state];
+  return !word || word === title(turn) ? title(turn) : `${word}: ${title(turn)}`;
 }
 
 /** Steps that failed, and delegated tasks whose work did. */
@@ -64,17 +81,23 @@ function countsText(counts: ChildCounts): string {
 const COUNT_CLASS =
   'mf-tr-meta relative -mr-0.5 h-6 shrink-0 rounded-md px-1.5 whitespace-nowrap text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:focus-line-inset';
 
+/** What the count lands on, after "show". */
+function shown(all: number, going: number): string {
+  if (going) return going === 1 ? 'the one still going' : 'the ones still going';
+  return all === 1 ? 'it' : 'them';
+}
+
 function AgentsCount({ turn, live }: { turn: Turn; live: LiveChildren }) {
   const reveal = useRevealStep(turn.key);
   const counts = childCounts(turn.children, live);
   if (!counts) return null;
-  const going = turn.children.find((child) => childGoing(child, live));
-  const first = going ?? turn.children[0]!;
+  const going = turn.children.filter((child) => childGoing(child, live));
+  const first = going[0] ?? turn.children[0]!;
   return (
     <button
       type="button"
       data-testid={`chat-work-agents-${encodeURIComponent(turn.key)}`}
-      aria-label={`${countsText(counts)}: show ${going ? 'the ones still going' : 'them'}`}
+      aria-label={`${countsText(counts)}: show ${shown(turn.children.length, going.length)}`}
       onClick={() => reveal(first.toolCallId, { open: false })}
       className={COUNT_CLASS}
     >
@@ -118,21 +141,15 @@ export function WorkHeader({ turn }: { turn: Turn }) {
   const live = useTurnSelector((state) => state.children, NO_CHILDREN);
   const { rowRef, beforeToggle } = useRowAnchor(open);
   useLayoutEffect(() => register(turn.key, beforeToggle), [register, turn.key, beforeToggle]);
-  const going = turn.unfinished || turn.children.some((child) => childGoing(child, live));
+  const state = turnState(turn, live);
   const counts = childCounts(turn.children, live);
   const failed = failedSteps(turn, live);
-  const word = stateWord(turn, going);
-  const name = [
-    word === title(turn) ? word : `${word}: ${title(turn)}`,
-    turn.summary,
-    counts && countsText(counts),
-    failedText(turn, failed),
-  ];
+  const name = [named(turn, state), turn.summary, counts && countsText(counts), failedText(turn, failed)];
   return (
     <div
       ref={rowRef}
       data-testid={`chat-work-header-${encodeURIComponent(turn.key)}`}
-      data-work-end={turn.needsYou ? 'needs-you' : turn.running ? 'running' : turn.end}
+      data-work-state={state}
       className="relative flex min-h-7 w-full min-w-0 items-center gap-2 rounded-md px-1 text-sm text-muted-foreground"
     >
       <button
@@ -145,7 +162,7 @@ export function WorkHeader({ turn }: { turn: Turn }) {
         className="absolute inset-0 rounded-md hover:bg-muted/60 focus-visible:focus-line-inset"
       />
       <span className="pointer-events-none relative grid size-4 shrink-0 place-items-center">
-        <EndGlyph turn={turn} going={going} />
+        <EndGlyph state={state} />
       </span>
       <span className="pointer-events-none relative shrink-0 font-medium text-foreground">{title(turn)}</span>
       <span className="pointer-events-none relative min-w-0 flex-1 truncate">{turn.summary}</span>

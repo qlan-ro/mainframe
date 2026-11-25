@@ -722,7 +722,7 @@ test.describe('§tool-cards — a realistic thread (transcript-rows)', () => {
 
   test('the work row names its agents and opens on them', async () => {
     const { page } = app;
-    await page.getByRole('button', { name: '1 agent: show them' }).click();
+    await page.getByRole('button', { name: '1 agent: show it' }).click();
     const agent = toolRow(page, 'Task');
     await expect(agent).toBeVisible();
     await openRow(agent);

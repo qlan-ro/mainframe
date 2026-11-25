@@ -7,11 +7,11 @@
  *    `search-palette-change-row-*` in the spotlight palette's `#` changes mode,
  *    which emits an `open-diff` surface intent with a bare path (no pre-resolved
  *    sides) so `DiffTab` fetches HEAD-vs-working itself.
- *  - "§editor-diff — Open in diff editor from EditFileCard" replays the
+ *  - "§editor-diff — Open in diff editor from the transcript" replays the
  *    `changes-tab` recording (E2E_MODE=mock), which contains a real `Edit` tool
  *    call with `structuredPatch`/`originalFile`/`modifiedFile` on its result —
- *    verified by reading the NDJSON directly. Clicking the card's
- *    `chat-edit-open-diff` button opens a diff tab with those PRE-resolved
+ *    verified by reading the NDJSON directly. Clicking the row's
+ *    `chat-row-open-diff-<toolCallId>` action opens a diff tab with those PRE-resolved
  *    sides (no daemon fetch — see `DiffTab.tsx`'s `hasPreResolved` branch).
  *
  * CORRECTION (the dispatch's "known gap" does not hold — verified by direct
@@ -37,8 +37,8 @@
  *     `{ type: 'open-file' }` (verified in source), so it opens an EDITOR tab.
  *     There is no diff-tab route out of the review modal at all — its diff is
  *     rendered inside the modal by `ReviewDiffPane`, not as a workspace tab.
- *   - Deleting the describe and relying on the EditFileCard one would drop every
- *     assertion about `DiffTab`'s daemon-FETCHED branch: the EditFileCard path
+ *   - Deleting the describe and relying on the transcript one would drop every
+ *     assertion about `DiffTab`'s daemon-FETCHED branch: the transcript path
  *     exercises only the PRE-resolved-sides branch (`hasPreResolved`). The chunk
  *     count over a real HEAD-vs-working diff, prev/next chunk navigation, the
  *     no-save-path guarantee and the "No diff available" state would all go
@@ -62,8 +62,8 @@
  *   diff-reveal               — DiffHeader reveal button; mounts once the diff tab is 'ready'
  *     (absent only in the 'loading'/'unavailable' states, where DiffHeader itself
  *     doesn't mount) — see the correction note above
- *   chat-edit-card            — EditFileCard root (CollapsibleCardShell, defaultOpen)
- *   chat-edit-open-diff       — EditFileCard "Open in diff editor" trigger
+ *   chat-row-<toolCallId>     — the edit's row in the transcript (`toolRow(page, 'Edit')`)
+ *   chat-row-open-diff-<toolCallId> — that row's "Open … in the diff editor" action
  *   editor-save-status        — EditorTab's dirty/saved chip — never rendered for a diff tab
  *   editor-tab-save-error     — EditorTab's save-failed banner — never rendered for a diff tab
  *
@@ -342,16 +342,16 @@ test.describe('§editor-diff — bare-path diff (spotlight)', () => {
   });
 });
 
-// ─── §editor-diff — Open in diff editor from EditFileCard ─────────────────────
+// ─── §editor-diff — Open in diff editor from the transcript ─────────────────────
 
-test.describe('§editor-diff — Open in diff editor from EditFileCard', () => {
+test.describe('§editor-diff — Open in diff editor from the transcript', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
   test.beforeAll(async () => {
     // `changes-tab` recording (verified via the NDJSON directly) replays a
     // real Edit tool call whose result carries structuredPatch +
-    // originalFile/modifiedFile — exactly what EditFileCard's
+    // originalFile/modifiedFile — exactly what the transcript's
     // "Open in diff editor" button needs to pre-resolve both diff sides.
     app = await launchTauriApp({ recordingKey: 'changes-tab' });
     project = await createTauriProject(app.page);

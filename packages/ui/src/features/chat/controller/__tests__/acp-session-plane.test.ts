@@ -90,10 +90,16 @@ describe('AcpSessionPlane — state_update → run frames', () => {
 
       // Not yet — the stop is deferred so a content frame in the same throttle flush can mount
       // its part first; the idle frame still ends a reconnect status at once (todo #406).
-      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'retry.cleared' }]);
+      const ended = { type: 'run.ended', stopReason: 'end_turn' };
+      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'retry.cleared' }, ended]);
 
       await vi.advanceTimersByTimeAsync(50);
-      expect(eventsOf(host)).toEqual([{ type: 'run.started' }, { type: 'retry.cleared' }, { type: 'run.stopped' }]);
+      expect(eventsOf(host)).toEqual([
+        { type: 'run.started' },
+        { type: 'retry.cleared' },
+        ended,
+        { type: 'run.stopped' },
+      ]);
     } finally {
       vi.useRealTimers();
     }

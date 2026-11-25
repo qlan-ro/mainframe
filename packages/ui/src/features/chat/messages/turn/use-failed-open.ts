@@ -4,6 +4,6 @@ import { useTurnSelector } from './turn-context';
 export function useFailedOpen(turnKey: string | undefined, toolCallId: string): boolean {
   return useTurnSelector(({ model, children }) => {
     const turn = turnKey ? model.turns.get(turnKey) : undefined;
-    return turn !== undefined && !turn.running && (turn.failed.includes(toolCallId) || children.failed.has(toolCallId));
+    return turn !== undefined && !turn.live && (turn.failed.includes(toolCallId) || children.failed.has(toolCallId));
   }, false);
 }

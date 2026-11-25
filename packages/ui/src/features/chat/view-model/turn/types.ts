@@ -6,6 +6,7 @@
  */
 import type { MessagePartState, ThreadMessage } from '@assistant-ui/react';
 import type { TaskStatus, TranscriptPresentation } from '@qlan-ro/mainframe-types';
+import type { RunRecord } from '../../controller/run-records';
 
 export type ToolPart = Extract<MessagePartState, { type: 'tool-call' }>;
 export type ToolStatus = 'running' | 'success' | 'failed' | 'stopped' | 'declined' | 'awaiting-approval' | 'unknown';
@@ -16,6 +17,8 @@ export interface TurnScope {
   readonly ancestors: readonly string[];
   readonly pendingToolIds: ReadonlySet<string>;
   readonly isRunning?: boolean;
+  /** The runs the controller saw; without any, only the last message sent bounds the run in progress. */
+  readonly runs?: readonly RunRecord[];
   /** Whether these messages' work can still be going. Left out: yes. */
   readonly live?: boolean;
 }
@@ -31,7 +34,24 @@ export interface TurnUnit {
   readonly itemId?: string;
 }
 
-export type TurnEnd = 'done' | 'stopped' | 'error';
+/** How a part of a turn stands. `neutral`: nothing says how it ended. */
+export type PartState = 'needs-you' | 'going' | 'error' | 'stopped' | 'finished' | 'neutral';
+
+/** What a part's state is read from (`partState`). */
+export interface PartEvidence {
+  /** A pending request belongs to it. */
+  readonly needsYou: boolean;
+  /**
+   * The run it belongs to: the one in progress; maybe that one, since where the
+   * run began isn't known; or none that goes, also because the session is idle.
+   */
+  readonly run: 'current' | 'unknown' | 'over';
+  /** A step of it has no outcome. */
+  readonly unsettled: boolean;
+  /** How the turn itself ended, when the provider, the daemon or an error said. */
+  readonly ended?: 'error' | 'cancelled' | 'completed';
+}
+
 export type ChildKind = 'agent' | 'workflow';
 
 export interface TurnChild {
@@ -51,14 +71,13 @@ export interface TurnChild {
 
 export interface Turn {
   readonly key: string;
+  /** The agent writes in it, or waits on the viewer in it. */
   readonly running: boolean;
-  /** It runs, or a step of it can still be going: the viewer wrote into a turn that goes on. */
+  /** A step of it can still be going: it belongs, or may belong, to the run in progress. */
   readonly live: boolean;
-  /** The agent went on after the viewer wrote, and a step of this part still runs. */
-  readonly unfinished: boolean;
-  /** It stands still until the viewer answers a request. */
-  readonly needsYou: boolean;
-  readonly end: TurnEnd;
+  readonly evidence: PartEvidence;
+  /** A step's outcome is unknown. While its turn claims no end, it doesn't fold by itself. */
+  readonly unclear: boolean;
   readonly durationMs?: number;
   readonly costUsd?: number;
   /** Where the turn ends, whichever message carries its footer. */

@@ -66,7 +66,7 @@ test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
     await expect(page.locator('[data-testid^="chat-task-result-"]')).toHaveCount(0);
 
     // Finished child work folds its turn, which still names it.
-    await expect(page.getByRole('button', { name: '1 agent: show them' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '1 agent: show it' })).toBeVisible();
     await openWork(page, 0);
     const card = page.getByTestId('chat-tool-delegate-task-card');
     await expect(card).toContainText('Race review');

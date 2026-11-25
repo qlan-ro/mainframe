@@ -62,7 +62,7 @@ it('never reads as finished, and stays open on the step that waits', () => {
   show(vi.fn());
   expect(header()).toHaveAccessibleName(/^Waiting on you/);
   expect(header()).toHaveAttribute('aria-expanded', 'true');
-  expect(header().parentElement).toHaveAttribute('data-work-end', 'needs-you');
+  expect(header().parentElement).toHaveAttribute('data-work-state', 'needs-you');
   expect(screen.getByTestId('chat-row-guarded-receipt')).toHaveTextContent('needs approval');
   // The reply isn't done, so it offers no copy of itself; the viewer's own message does.
   expect(screen.getAllByTestId('chat-message-copy')).toHaveLength(1);
@@ -89,8 +89,8 @@ it.each([
 it.each([
   ['running', /^Waiting on you/],
   ['cancelling', /^Waiting on you/],
-  // A background agent's request, whose call isn't loaded: the newest turn has finished.
-  ['idle', /^Finished/],
+  // A background agent's request, whose call isn't loaded: the newest turn doesn't wait on it.
+  ['idle', /^Worked/],
 ] as const)('reads a request whose call is not here by the run, %s, not by the thread', (type, name) => {
   const state = createChatThreadState('chat-fixture');
   const extras = buildChatExtras({} as AcpChatController, 31415, {

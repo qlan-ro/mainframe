@@ -16,7 +16,7 @@ import {
 import { useUiPrefs } from '@/store/ui-prefs';
 import type { Turn, TurnModel } from '../../view-model/turn/types';
 import { disclosureStore } from './disclosure-store';
-import { childGoing, type LiveChildren } from './live-children';
+import { turnState, type LiveChildren } from './live-children';
 import { turnDisclosureStore } from './turn-disclosure-store';
 
 /** Turns the viewer is inside of: a row they opened, a selection, or focus. */
@@ -71,9 +71,10 @@ export function useTurnState(model: TurnModel, live: LiveChildren, root: RefObje
     const held = heldTurns(root.current, model.turns);
     const next = new Set(folded);
     for (const [key, turn] of model.turns) {
-      const going = turn.unfinished || turn.children.some((child) => childGoing(child, live));
+      const state = turnState(turn, live);
+      const unsettled = ['needs-you', 'going'].includes(state) || (state === 'neutral' && turn.unclear);
       const unknownAgent = live.unplacedAgents && !folded.has(key);
-      const fold = !keepOpen && !turn.running && !going && !unknownAgent && (folded.has(key) || !held.has(key));
+      const fold = !keepOpen && !unsettled && !unknownAgent && (folded.has(key) || !held.has(key));
       if (turnDisclosureStore.get(key) !== undefined || fold === next.has(key)) continue;
       anchors.current.get(key)?.(true);
       if (fold) next.add(key);

@@ -5,15 +5,18 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
+import type { ChatThreadState } from '../controller/chat-thread-state';
 import { useControllerState } from '../runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '../runtime/use-native-thread-messages';
 import { AgentSteps } from '../messages/turn/AgentSteps';
+import { useListedTasks } from '../messages/turn/use-live-children';
 import { RootTranscriptScope } from '../messages/turn/transcript-scope';
 import { agentLaunched } from '../view-model/turn/tool-values';
+import { TurnCache } from '../view-model/turn/turn-cache';
 import { resolveResultText } from '../tools/shared';
 import type { SubagentZoneRef } from './zones-store';
 import { findSubagentCall } from './find-subagent-transcript';
-import { pendingToolIds, subagentOutcome } from './subagent-outcome';
+import { callLive, subagentOutcome, zoneScope, type OutcomeSources } from './subagent-outcome';
 import { findToolCall } from '@/features/session-panel/activity-model';
 
 function SubagentZoneHeader({
@@ -44,6 +47,21 @@ function SubagentZoneHeader({
   );
 }
 
+/** Where the call stands, read as the chat's own transcript reads it. */
+function useOutcomeSources(
+  { parentChatId, toolCallId }: SubagentZoneRef,
+  messages: readonly ThreadMessage[],
+  state: ChatThreadState,
+  launched: boolean,
+): OutcomeSources {
+  const { interactions, runState, runs, backgroundTasks } = state;
+  const cache = useMemo(() => new TurnCache(), []);
+  const scope = useMemo(() => zoneScope({ interactions, runState, runs }), [interactions, runState, runs]);
+  const live = useMemo(() => callLive(messages, toolCallId, scope, cache), [messages, toolCallId, scope, cache]);
+  const listed = useListedTasks(parentChatId, backgroundTasks, launched);
+  return { pending: scope.pendingToolIds, live, running: backgroundTasks, listed };
+}
+
 const NO_MESSAGES: readonly ThreadMessage[] = [];
 
 export function SubagentZone({
@@ -63,9 +81,10 @@ export function SubagentZone({
   const transcript = call && (call.messages ?? NO_MESSAGES);
   const messageId = subagent.messageId ?? findToolCall(messages, subagent.toolCallId)?.messageId;
   const partial = controller.isHistoryContext(subagent.toolCallId);
-  const pending = useMemo(() => pendingToolIds(state), [state]);
-  const outcome = call ? subagentOutcome(call, state) : 'done';
   const result = resolveResultText(call?.result).text;
+  const launched = agentLaunched(result);
+  const sources = useOutcomeSources(subagent, messages, state, launched);
+  const outcome = call ? subagentOutcome(call, sources) : 'done';
   const root = useRef<HTMLDivElement>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
@@ -125,9 +144,9 @@ export function SubagentZone({
               messageId={messageId ?? ''}
               toolCallId={subagent.toolCallId}
               chatId={subagent.parentChatId}
-              pendingToolIds={pending}
+              pendingToolIds={sources.pending}
               outcome={outcome}
-              result={outcome === 'done' && agentLaunched(result) ? '' : result}
+              result={launched ? '' : result}
             />
           </RootTranscriptScope>
         ) : (

@@ -4,7 +4,8 @@ import { isTerminalTaskStatus } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { resumed, taskStatusOf } from '../../orchestration/task-standing';
 import { findSession } from '../../orchestration/use-session-items';
-import type { TurnChild, TurnModel } from '../../view-model/turn/types';
+import { partState } from '../../view-model/turn/build-turns';
+import type { PartState, Turn, TurnChild, TurnModel } from '../../view-model/turn/types';
 
 export type ChildState = 'needs-you' | 'running' | 'queued';
 
@@ -110,6 +111,14 @@ export function sameLive(a: LiveChildren, b: LiveChildren): boolean {
 
 export function childGoing(child: TurnChild, live: LiveChildren): boolean {
   return live.byCall.has(child.toolCallId);
+}
+
+/** How a turn stands, its child work included (T1b, T1e). */
+export function turnState(turn: Turn, live: LiveChildren): PartState {
+  return partState(
+    turn.evidence,
+    turn.children.some((child) => childGoing(child, live)),
+  );
 }
 
 /** "7 agents · 1 needs you · 1 running · 1 queued", as its parts. */
