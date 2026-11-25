@@ -10,8 +10,8 @@
  *   chat.notification / permission(notify) → unread.markUnread()
  *   chat.notification (attention_request)  → host.notify() (OS banner)
  *   socket (re)connected                → threads.reload() (what moved while
- *                                          it was down was never sent), except
- *                                          a boot connect whose list is loading
+ *                                          it was down was never sent); a boot
+ *                                          connect waits for the list to load
  *
  * On every active-thread change it also: clears the active chat's unread,
  * clears the project filter when the activated chat crosses projects, adopts
@@ -120,6 +120,8 @@ export function useSessionListRouter(): void {
     for (const id of [...zoneIds, ...zoneRemotes]) unreadStore.clearUnread(id);
   }, [items, mainThreadId, zones]);
 
+  const reloadAfterBootLoadRef = useRef<(() => void) | null>(null);
+
   // Static WS → list wiring; created once, disposed on unmount.
   useEffect(() => {
     // Coalesce reload bursts. `chat.updated` fires on cost/token churn during a
@@ -165,18 +167,20 @@ export function useSessionListRouter(): void {
     });
     // Events are not replayed: a gate opened, a run ended or a chat created while
     // the socket was down reaches the list only by asking again.
-    // At boot the socket opens while the runtime's own first load is running, and
-    // asking again would request the list twice. Only that one connect is skipped:
-    // a load that already finished (or failed) or a drop before it can have missed
-    // something.
+    // At boot the socket can open while the runtime's own first load is running, whose
+    // answer may be older than the socket. Reloading at once would discard that answer,
+    // leaving no list if the second request fails, so it waits for the load to settle.
     let booting = !daemonWs.connected;
     const unsubscribeConnection = daemonWs.subscribeConnection(() => {
       const bootLoadRunning = booting && threads.getState().isLoading;
       booting = false;
-      if (daemonWs.connected && !bootLoadRunning) scheduleReload();
+      if (!daemonWs.connected) return;
+      if (bootLoadRunning) reloadAfterBootLoadRef.current = scheduleReload;
+      else scheduleReload();
     });
     return () => {
       if (cooling != null) clearTimeout(cooling);
+      reloadAfterBootLoadRef.current = null;
       unsubscribeConnection();
       router.dispose();
     };
@@ -186,6 +190,14 @@ export function useSessionListRouter(): void {
     // would drop a queued trailing reload, stranding the list on stale metadata
     // until the next event.
   }, [threads]);
+
+  const isLoading = useAuiState((s) => s.threads.isLoading);
+  useEffect(() => {
+    if (isLoading) return;
+    const reload = reloadAfterBootLoadRef.current;
+    reloadAfterBootLoadRef.current = null;
+    reload?.();
+  }, [isLoading]);
 
   // Active-thread side-effects: unread clear, cross-project filter clear, and the
   // archived-active fallback. `lastActiveRef` dedupes the once-per-activation work;
