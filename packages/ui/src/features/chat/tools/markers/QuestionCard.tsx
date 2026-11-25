@@ -3,7 +3,8 @@
  * composer; what stays in the transcript is the record: the question, the
  * chosen answers, the note.
  */
-import { Check, MessageCircleQuestion, Pencil } from 'lucide-react';
+import { Check, Pencil } from 'lucide-react';
+import { QuestionIcon } from '@/components/ui/glyphs';
 import type { AskUserQuestionAnswer } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { useTranscriptScope, type TranscriptScope } from '../../messages/turn/transcript-scope';
@@ -58,7 +59,7 @@ function Answer({ entry, question }: { entry: AskUserQuestionAnswer; question: Q
   return (
     <div role="group" aria-label={`Question, answered: ${entry.question}`} className="flex flex-col gap-1.5">
       <div data-testid="chat-ask-header" className="flex items-center gap-1.5 text-meta/5.5 text-muted-foreground">
-        <MessageCircleQuestion aria-hidden className="size-3.5" />
+        <QuestionIcon aria-hidden className="size-3.5" />
         {header} · answered
       </div>
       <p data-testid="chat-ask-question-text" className="font-medium leading-5.5 text-foreground">
@@ -87,7 +88,7 @@ function Unanswered({ question, state }: { question: QuestionArg; state: string 
   return (
     <div className="flex flex-col gap-1.5">
       <div data-testid="chat-ask-header" className="flex items-center gap-1.5 text-meta/5.5 text-muted-foreground">
-        <MessageCircleQuestion aria-hidden className="size-3.5" />
+        <QuestionIcon aria-hidden className="size-3.5" />
         {question.header ?? 'Question'} · {state}
       </div>
       <p className="text-foreground">{question.question}</p>
