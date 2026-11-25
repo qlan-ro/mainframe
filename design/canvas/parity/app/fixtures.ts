@@ -128,7 +128,15 @@ const PLAN = [
 export const chats = (): Json[] => [
   main(),
   ...(scenario.transcript === 'delegated'
-    ? delegatedTasks.map(({ childChatId, title, adapterId }) => chat(childChatId, title, 12, { adapterId }))
+    ? delegatedTasks.map(({ childChatId, title, adapterId, taskId, status }) =>
+        chat(childChatId, title, 12, {
+          adapterId,
+          parentChatId: 's1',
+          isRunning: status === 'running',
+          delegatedWaiting: status === 'waiting',
+          delegation: { taskId, status, role: 'general' },
+        }),
+      )
     : []),
   chat('s2', 'Reuse an existing worktree branch in automation steps', 12, {
     ...worktree('fix/automation-reuse-branch'),
