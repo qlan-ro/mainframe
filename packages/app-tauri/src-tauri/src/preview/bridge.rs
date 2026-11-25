@@ -198,5 +198,10 @@ pub const BRIDGE_JS: &str = r#"
   history.replaceState = function () { _mfReplace.apply(this, arguments); _mfReportNav(); };
   window.addEventListener('popstate', _mfReportNav);
   window.addEventListener('hashchange', _mfReportNav);
+  window.addEventListener('pageshow', function (event) {
+    if (!event.persisted) return;
+    _mfLastUrl = null;
+    _mfReportNav();
+  });
 })();
 "#;

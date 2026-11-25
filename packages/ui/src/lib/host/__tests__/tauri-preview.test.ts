@@ -271,6 +271,7 @@ describe('mountTauriPreview', () => {
     await Promise.resolve();
     capturedNavigateCallback!({ tabId: `${tabId}-WRONG`, url: 'http://other/' });
     capturedNavigateCallback!({ tabId, url: 'http://localhost:3000/x' });
-    expect(received).toEqual(['http://localhost:3000/x']);
+    capturedNavigateCallback!({ tabId, url: 'http://localhost:3000/x' });
+    expect(received).toEqual(['http://localhost:3000/x', 'http://localhost:3000/x']);
   });
 });
