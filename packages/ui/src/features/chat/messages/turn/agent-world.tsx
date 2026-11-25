@@ -4,8 +4,17 @@
  * does (T1c). Without a provider nothing is known, and no agent reads as running.
  */
 import { createContext, useContext, useMemo } from 'react';
-import { agentStanding, callFacts, type AgentStanding, type AgentTasks } from '@/features/workspace-chat/agent-status';
+import { useStop } from '@/features/session-panel/use-stop';
+import {
+  agentStanding,
+  callFacts,
+  stoppableTask,
+  type AgentStanding,
+  type AgentTasks,
+} from '@/features/workspace-chat/agent-status';
 import { ownTasks } from '@/features/workspace-chat/use-chat-tasks';
+import { stopBackgroundTask } from '@/lib/api/background-tasks';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { settledStatus } from '../../view-model/turn/tool-status';
 import type { ToolPart, ToolStatus } from '../../view-model/turn/types';
 import { agentOutcome, type AgentOutcome } from './agent-outcome';
@@ -19,6 +28,8 @@ export interface AgentWorld {
   readonly tasks: AgentTasks;
   /** The list is the latest over a connection that still stands. */
   readonly live: boolean;
+  /** The CLI its session runs on. */
+  readonly adapterId?: string;
   /** Calls of parts that can't be going, where no turn around them says so (a delegated task's own chat). */
   readonly over?: ReadonlySet<string>;
 }
@@ -67,4 +78,13 @@ export function useAgentWork(part: ToolPart): AgentWork {
   const world = useContext(Context);
   const partLive = live && !world.over?.has(part.toolCallId);
   return useMemo(() => readAgentWork(part, pendingToolIds, partLive, world), [part, pendingToolIds, partLive, world]);
+}
+
+/** Stop for a sub-agent's row: the same task, by the same route, as its tab's (W8). */
+export function useAgentStop(toolCallId: string, title: string) {
+  const { chatId } = useTranscriptScope();
+  const { tasks, live, adapterId } = useContext(Context);
+  const task = chatId === undefined ? undefined : stoppableTask(ownTasks(tasks, toolCallId), live, adapterId);
+  const work = JSON.stringify([getActiveDaemon().id, chatId, task?.id ?? toolCallId]);
+  return useStop(title, task && (() => stopBackgroundTask(chatId!, task.id)), work);
 }

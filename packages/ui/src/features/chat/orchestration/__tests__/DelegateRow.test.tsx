@@ -158,6 +158,16 @@ describe('the row', () => {
     expect(body).toHaveTextContent('Half done');
   });
 
+  it('offers Stop while the list says it runs, and not over a delivered result', () => {
+    withChild({ parentChatId: 'parent' });
+    const view = render(row({ result: RESULT }));
+    expect(screen.getByTestId('chat-tool-delegate-task-stop-task_kid')).toHaveAccessibleName('Stop Race review');
+    view.unmount();
+    result.current = { taskId: 'task_kid', status: 'completed', body: 'Done' } as TaskResultMarker;
+    render(row({ result: RESULT }));
+    expect(screen.queryByTestId('chat-tool-delegate-task-stop-task_kid')).toBeNull();
+  });
+
   it('claims nothing of a launch nothing reports on any more', () => {
     setSessions(entry('parent'));
     render(row({ result: RESULT }, false));

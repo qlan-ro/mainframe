@@ -58,7 +58,15 @@ interface AgentPresentation {
   /** The call's own text. */
   result: string;
   reports: AgentReport[];
-  runningTask?: BackgroundTask;
+}
+
+/** The only CLI that can stop one background agent on its own. */
+const STOP_ADAPTER = 'claude';
+
+/** The task a Stop for one call ends, while a list that counts says it runs. */
+export function stoppableTask(tasks: AgentTasks, live: boolean, adapterId: string | undefined) {
+  if (!live || adapterId !== STOP_ADAPTER) return undefined;
+  return tasks?.find((task) => task.status === 'running');
 }
 
 export const isCodexAgent = (call: SubagentCall): boolean => call.part.toolName === 'CollabAgent';
@@ -185,6 +193,5 @@ export function describeAgent(facts: Facts, live: boolean): AgentPresentation {
     }),
     result,
     reports: reports.filter(({ text }) => text !== ''),
-    runningTask: live ? tasks?.find((task) => task.status === 'running') : undefined,
   };
 }

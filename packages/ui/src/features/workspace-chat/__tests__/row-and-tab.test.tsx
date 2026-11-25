@@ -3,7 +3,7 @@
  * call (T1c, W8): in every state the tab's rule knows, what one says never
  * contradicts the other, and one says "running" exactly when the other does.
  */
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AssistantRuntimeProvider,
@@ -83,7 +83,17 @@ interface Scene {
   list?: ChatTasksState;
   connected?: boolean;
   run?: ChatThreadState['run'];
+  adapterId?: string;
 }
+
+interface Drawn {
+  row: string;
+  tab: string | null;
+  spins: boolean;
+}
+
+/** The Stop controls in each, by their own ids. */
+let stops: { row: number; tab: number };
 
 let roots = 0;
 
@@ -117,7 +127,7 @@ function Both({ scene, toolCallId }: { scene: Scene; toolCallId: string }) {
 }
 
 /** What the row and the tab say, by their own elements. */
-async function draw(scene: Scene, toolCallId = 'call-1'): Promise<{ row: string; tab: string | null; spins: boolean }> {
+async function draw(scene: Scene, toolCallId = 'call-1'): Promise<Drawn> {
   world.messages = [...scene.messages];
   world.list = scene.list ?? NOTHING_LISTED;
   world.state = {
@@ -125,6 +135,7 @@ async function draw(scene: Scene, toolCallId = 'call-1'): Promise<{ row: string;
     loadState: { type: 'ready' },
     runState: { type: scene.session ?? 'idle' },
     run: scene.run ?? null,
+    chatConfig: { adapterId: scene.adapterId ?? 'claude' },
     interactions: {
       permissions: scene.pending ? { r: { request: { toolUseId: scene.pending } } } : {},
       queued: {},
@@ -139,6 +150,10 @@ async function draw(scene: Scene, toolCallId = 'call-1'): Promise<{ row: string;
   const tab = screen.queryByTestId(`workspace-agent-status-${toolCallId}`);
   const word = line.querySelector('.sr-only')!.textContent!.replace(': ', '');
   const [row] = Object.entries(STATUS_WORDS).find(([, said]) => said === word)!;
+  stops = {
+    row: within(line as HTMLElement).queryAllByRole('button', { name: /^Stop / }).length,
+    tab: screen.queryAllByTestId(`workspace-agent-stop-${toolCallId}`).length,
+  };
   return { row, tab: tab?.dataset.status ?? null, spins: line.querySelector('.animate-spin') !== null };
 }
 
@@ -230,6 +245,8 @@ describe.each(Object.keys(RESULTS))('a call whose result is %s', (result) => {
       else expect(AGREES[tab ?? 'none']).toContain(row);
       expect(row === 'running').toBe(tab === 'running');
       expect(spins).toBe(tab === 'running');
+      const stoppable = list === 'running' || list === 'mixed';
+      expect(stops).toEqual(stoppable && live && connected ? { row: 1, tab: 1 } : { row: 0, tab: 0 });
     });
   });
 });
@@ -265,6 +282,12 @@ describe('a call that is not the last thing the session does', () => {
 it('waits for both while the call itself asks to be allowed', async () => {
   const both = await draw({ messages: inTurn(agent(running), true), session: 'running', pending: 'call-1' });
   expect(both).toEqual({ row: 'awaiting-approval', tab: 'needs-you', spins: false });
+});
+
+it('offers Stop in neither for a CLI that can’t stop one agent', async () => {
+  const list = { tasks: tasks('running'), live: true };
+  await draw({ messages: inTurn(agent(running), true), session: 'running', list, adapterId: 'codex' });
+  expect(stops).toEqual({ row: 0, tab: 0 });
 });
 
 describe('an agent another agent started', () => {

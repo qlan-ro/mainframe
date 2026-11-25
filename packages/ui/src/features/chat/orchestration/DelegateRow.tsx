@@ -8,12 +8,17 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { PanelRight } from 'lucide-react';
 import { useAui } from '@assistant-ui/react';
-import type { TaskStatus } from '@qlan-ro/mainframe-types';
+import { isTerminalTaskStatus, type TaskStatus } from '@qlan-ro/mainframe-types';
+import { useStop } from '@/features/session-panel/use-stop';
+import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { openTaskTab } from '@/features/workspace-chat/open-session';
+import { cancelDelegatedTask } from '@/lib/api/background-tasks';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { useAdaptersStore } from '@/store/adapters';
 import { AgentSteps } from '../messages/turn/AgentSteps';
 import { RowAction, RowDisclosure } from '../messages/turn/RowDisclosure';
 import { RowGlyph } from '../messages/turn/RowGlyph';
+import { StopAction } from '../messages/turn/StopAction';
 import { useToolFacts, type ToolRowProps } from '../messages/turn/ToolRow';
 import { KIND_ICONS, STATUS_WORDS, type RowStatus } from '../messages/turn/tool-icons';
 import { useFailedOpen } from '../messages/turn/use-failed-open';
@@ -71,6 +76,14 @@ function useTaskChild(childChatId: string | undefined) {
   const needsYou = child != null && (child.custom.hasPending || child.custom.delegatedWaiting === true);
   const openChild = child == null ? undefined : () => openTaskTab(aui.threads, child.id);
   return { child, needsYou, openChild };
+}
+
+/** The task itself is live: its own stop route, as the panel's and its tab's. Not a finished one whose chat goes on. */
+function useTaskStop(title: string, task: TaskStatus | undefined, taskId = '', custom?: SessionCustom) {
+  const parent = custom?.delegation?.taskId === taskId ? custom.parentChatId : undefined;
+  const live = parent != null && task !== undefined && !isTerminalTaskStatus(task);
+  const work = JSON.stringify([getActiveDaemon().id, parent, taskId]);
+  return useStop(title, live ? () => cancelDelegatedTask(parent, taskId) : undefined, work);
 }
 
 interface Standing {
@@ -162,6 +175,7 @@ export function DelegateRow({ unit, part, turnKey }: ToolRowProps) {
   const title = child?.title ?? parsed?.title ?? (facts.target || 'Task');
   useOpenOnNeed(unit.key, needsYou);
   const failedOpen = useFailedOpen(turnKey, part.toolCallId);
+  const { onStop, stopping } = useTaskStop(title, task, parsed?.taskId, child?.custom);
   const archived = child?.status === 'archived';
   const row = { ...facts, verb: 'Delegated', target: title, where: provider ? `to ${provider}` : undefined };
   return (
@@ -178,13 +192,23 @@ export function DelegateRow({ unit, part, turnKey }: ToolRowProps) {
       tone={status === 'failed' ? 'fail' : status === 'needs-you' ? 'warn' : undefined}
       actions={
         parsed && openChild ? (
-          <RowAction
-            label={archived ? `Restore ${title} and open it in the workspace` : `Open ${title} in the workspace`}
-            testId={`chat-tool-delegate-task-open-${parsed.taskId}`}
-            onClick={openChild}
-          >
-            <PanelRight />
-          </RowAction>
+          <>
+            {onStop && (
+              <StopAction
+                title={title}
+                testId={`chat-tool-delegate-task-stop-${parsed.taskId}`}
+                stopping={stopping}
+                onStop={onStop}
+              />
+            )}
+            <RowAction
+              label={archived ? `Restore ${title} and open it in the workspace` : `Open ${title} in the workspace`}
+              testId={`chat-tool-delegate-task-open-${parsed.taskId}`}
+              onClick={openChild}
+            >
+              <PanelRight />
+            </RowAction>
+          </>
         ) : undefined
       }
       defaultOpen={failedOpen}

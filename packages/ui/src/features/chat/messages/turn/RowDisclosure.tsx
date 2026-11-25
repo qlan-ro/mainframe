@@ -4,7 +4,7 @@
  * it lets the press through, except its actions. The button is the first
  * `aria-expanded` control inside, which is how an Activity jump opens the row.
  */
-import { useId, type ReactElement, type ReactNode } from 'react';
+import { useId, type ReactElement, type ReactNode, type Ref } from 'react';
 import { Slot } from 'radix-ui';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -144,6 +144,7 @@ export function RowAction({
   onClick,
   hoverOnly = false,
   busy = false,
+  ref,
   children,
 }: {
   label: string;
@@ -153,10 +154,12 @@ export function RowAction({
   hoverOnly?: boolean;
   /** Under way: it keeps its place and focus, and takes no second click. */
   busy?: boolean;
+  ref?: Ref<HTMLButtonElement>;
   children: ReactNode;
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       data-testid={testId}
       aria-label={label}

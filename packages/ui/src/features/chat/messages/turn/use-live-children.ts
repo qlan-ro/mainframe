@@ -19,10 +19,11 @@ export function useAgentWorld(
   events: Readonly<Record<string, BackgroundActivityTask>>,
   agents: boolean,
   runs: boolean,
+  adapterId: string | undefined,
 ): AgentWorld {
   const listed = chatId !== undefined && !chatId.startsWith('__LOCALID_');
   const { tasks, live } = useChatTasks(chatId ?? '', events, listed && (agents || Object.keys(events).length > 0));
-  return useMemo(() => ({ runs, tasks, live }), [runs, tasks, live]);
+  return useMemo(() => ({ runs, tasks, live, adapterId }), [runs, tasks, live, adapterId]);
 }
 
 /** Where each turn's child work stands; the same object until one of them moves. */
@@ -37,7 +38,8 @@ export function useLiveChildren(
     () => [...model.turns.values()].some((turn) => turn.children.some((child) => child.call)),
     [model],
   );
-  const world = useAgentWorld(chatId, live, agents, runs);
+  const adapterId = useChatExtrasSelector((extras) => extras?.state.chatConfig?.adapterId);
+  const world = useAgentWorld(chatId, live, agents, runs, adapterId);
   const { tasks: listed, live: listLive } = world;
   const next = useMemo(
     () => liveChildren(model, { sessions, live, listed, listLive, runs }),

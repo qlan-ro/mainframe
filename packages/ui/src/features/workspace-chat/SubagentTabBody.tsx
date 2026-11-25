@@ -35,7 +35,15 @@ import { useStop } from '@/features/session-panel/use-stop';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { stopBackgroundTask } from '@/lib/api/background-tasks';
-import { describeAgent, isBackgroundLaunch, isCodexAgent, isFailed, pendingCalls, sessionRuns } from './agent-status';
+import {
+  describeAgent,
+  isBackgroundLaunch,
+  isCodexAgent,
+  isFailed,
+  pendingCalls,
+  sessionRuns,
+  stoppableTask,
+} from './agent-status';
 import { AgentStatusLabel, ConversationHeader, StopButton } from './ConversationHeader';
 import { findSubagentCall, type SubagentCall } from './find-subagent-call';
 import { useHoldConversation } from './mounted-conversations';
@@ -44,9 +52,6 @@ import { ownTasks, useChatTasks } from './use-chat-tasks';
 import { useKeepAttached } from './use-conversation-thread';
 
 const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
-
-/** The only CLI that can stop one background agent on its own. */
-const STOP_ADAPTER = 'claude';
 
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
@@ -205,7 +210,8 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId });
   const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
   const runs = sessionRuns(state);
-  const world = useMemo(() => ({ runs, tasks: listed, live }), [runs, listed, live]);
+  const adapterId = state.chatConfig?.adapterId;
+  const world = useMemo(() => ({ runs, tasks: listed, live, adapterId }), [runs, listed, live, adapterId]);
   const place = usePlace(call, messages, state, world);
   const tasks = ownTasks(listed, toolCallId);
   const agent = call && place && describeAgent({ call, state, tasks, partLive: place.partLive }, live);
@@ -214,9 +220,8 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const ResultBlock = call != null && (isFailed(call) || isBackgroundLaunch(call)) ? TextBlock : ProseBlock;
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
   const shownTitle = text(args['description']) || title;
-  const running = agent?.runningTask;
-  const canStop = running != null && state.chatConfig?.adapterId === STOP_ADAPTER;
-  const { onStop, stopping } = useStop(shownTitle, canStop ? () => stopBackgroundTask(chatId, running.id) : undefined);
+  const task = agent && stoppableTask(tasks, live, adapterId);
+  const { onStop, stopping } = useStop(shownTitle, task ? () => stopBackgroundTask(chatId, task.id) : undefined);
 
   return (
     <div data-testid={`workspace-agent-${toolCallId}`} className="flex h-full min-h-0 flex-col text-foreground">

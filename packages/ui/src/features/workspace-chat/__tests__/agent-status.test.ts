@@ -3,7 +3,7 @@ import type { ThreadMessage } from '@assistant-ui/react';
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import { describe, expect, it } from 'vitest';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
-import { describeAgent, type AgentTasks } from '../agent-status';
+import { describeAgent, stoppableTask, type AgentTasks } from '../agent-status';
 
 type Status = BackgroundTask['status'];
 
@@ -205,17 +205,12 @@ describe('every combination of the evidence', () => {
     expect(wrong.map(nameOf)).toEqual([]);
   });
 
-  it('can stop only a task a live list says runs', () => {
-    const wrong = ROWS.filter((row) => {
-      const id = describeWorld(worldOf(row)).runningTask?.id;
-      const expected = !row.live
-        ? undefined
-        : row.list === 'running'
-          ? 'bg-0'
-          : row.list === 'mixed'
-            ? 'bg-1'
-            : undefined;
-      return id !== expected;
+  it('can stop only a task a live list says runs, of the CLI that can', () => {
+    const first: Record<string, string> = { running: 'bg-0', mixed: 'bg-1' };
+    const wrong = ROWS.filter(({ list, live }) => {
+      const stopped = (adapterId?: string) => stoppableTask(LISTS[list]!, live, adapterId)?.id;
+      const expected = live ? first[list] : undefined;
+      return stopped('claude') !== expected || stopped('codex') !== undefined || stopped() !== undefined;
     });
     expect(wrong.map(nameOf)).toEqual([]);
   });

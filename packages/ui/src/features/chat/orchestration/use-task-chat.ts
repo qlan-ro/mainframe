@@ -59,7 +59,8 @@ export function useTaskChat(chatId: string): TaskChatView {
     () => [...turns.turns.values()].some((turn) => turn.children.some((child) => child.call)),
     [turns],
   );
-  const known = useAgentWorld(chatId, state.backgroundTasks, agents, sessionRuns(state));
+  const adapterId = state.chatConfig?.adapterId;
+  const known = useAgentWorld(chatId, state.backgroundTasks, agents, sessionRuns(state), adapterId);
   const world = useMemo(() => ({ ...known, over: overCalls(turns) }), [known, turns]);
 
   return {

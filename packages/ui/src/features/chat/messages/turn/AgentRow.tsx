@@ -8,9 +8,10 @@ import type { ToolPart } from '../../view-model/turn/types';
 import { ResultText } from '../../tools/bodies/ResultText';
 import { BodyNote } from '../../tools/bodies/Surface';
 import { AgentSteps } from './AgentSteps';
-import { useAgentWork } from './agent-world';
+import { useAgentStop, useAgentWork } from './agent-world';
 import { RowAction, RowDisclosure } from './RowDisclosure';
 import { RowGlyph } from './RowGlyph';
+import { StopAction } from './StopAction';
 import { useStepDuration } from './StepClock';
 import { receiptText, useToolFacts, type ToolRowProps } from './ToolRow';
 import { KIND_ICONS, STATUS_WORDS, type RowStatus } from './tool-icons';
@@ -52,6 +53,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
   const title = facts.target || facts.verb;
   const model = argText(part, 'model');
   const word = standing?.label ?? (own && status !== 'running' ? facts.receipt : WORDS[status]);
+  const { onStop, stopping } = useAgentStop(part.toolCallId, title);
   const open = () =>
     openSubagentTab({
       chatId: chatId!,
@@ -75,13 +77,23 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
       }
       actions={
         chatId && (
-          <RowAction
-            label={`Open ${title} in the workspace`}
-            testId={`chat-task-open-${part.toolCallId}`}
-            onClick={open}
-          >
-            <PanelRight />
-          </RowAction>
+          <>
+            {onStop && (
+              <StopAction
+                title={title}
+                testId={`chat-task-stop-${part.toolCallId}`}
+                stopping={stopping}
+                onStop={onStop}
+              />
+            )}
+            <RowAction
+              label={`Open ${title} in the workspace`}
+              testId={`chat-task-open-${part.toolCallId}`}
+              onClick={open}
+            >
+              <PanelRight />
+            </RowAction>
+          </>
         )
       }
       defaultOpen={failed}
