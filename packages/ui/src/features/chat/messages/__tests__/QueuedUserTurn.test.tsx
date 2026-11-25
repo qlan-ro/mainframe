@@ -117,7 +117,7 @@ describe('QueuedUserTurn — hover-reveal ghost treatment', () => {
     expect(bubble).toBeInTheDocument();
     expect(bubble.className).toContain('border-dashed');
     expect(bubble.className).toContain('border-border');
-    expect(bubble.className).toContain('opacity-80');
+    expect(bubble.closest('[data-slot="bubble"]')).toHaveAttribute('data-variant', 'queued');
     expect(bubble.className).toContain('wrap-break-word');
 
     // A1 — QueuedAction is now the kit's ghost/xs Button (own gap/radius geometry
