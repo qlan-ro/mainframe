@@ -444,6 +444,8 @@ Built so far in the base theme of `packages/ui`, each with a light and a dark va
 | `live` | `--live` | `text-live` on the session row spinner |
 | `accent-ink` | `--accent-ink` | `text-accent-ink` on the active sidebar filter |
 | `tipbg`, `tipink` | `--tooltip`, `--tooltip-foreground` | `bg-tooltip`, `text-tooltip-foreground` on shared tooltips |
+| Meta (12 px) | `--text-meta` | `text-meta` on group labels and shared tooltips |
+| Tooltip shadow | `--shadow-tooltip` | `shadow-tooltip` |
 
 `crit` and `red` are not built. The app has one red, `--destructive` (`#e7000b` light, `#ff6467` dark, against `#c70016` and `#ff8080` for `crit`, `#c0392b` and `#ff7b6e` for `red`), and it does the work of both: irreversible actions, Reject, Stop, context and plan usage at 90 % and above, the Unattended permission, error output in tool bodies and the run console, and diff deletions (`--mf-diff-del-text` aliases it). The xterm terminal's red is its own ANSI palette. The split into two reds and the 95 % threshold come with the PRs that build those areas.
 
