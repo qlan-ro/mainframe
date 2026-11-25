@@ -31,7 +31,7 @@ import {
 import { asToolPart, chatTurns, holderLive } from '@/features/chat/messages/turn/chat-turns';
 import { OwnChatStateProvider } from '@/features/chat/runtime/own-chat-state';
 import { TurnCache } from '@/features/chat/view-model/turn/turn-cache';
-import { useStop } from '@/features/session-panel/use-stop';
+import { stopKey, useStop } from '@/features/session-panel/use-stop';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { stopBackgroundTask } from '@/lib/api/background-tasks';
@@ -221,7 +221,11 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
   const shownTitle = text(args['description']) || title;
   const task = agent && stoppableTask(tasks, live, adapterId);
-  const { onStop, stopping } = useStop(shownTitle, task ? () => stopBackgroundTask(chatId, task.id) : undefined);
+  const { onStop, stopping } = useStop(
+    shownTitle,
+    task ? () => stopBackgroundTask(chatId, task.id) : undefined,
+    stopKey(chatId, task?.id ?? toolCallId),
+  );
 
   return (
     <div data-testid={`workspace-agent-${toolCallId}`} className="flex h-full min-h-0 flex-col text-foreground">

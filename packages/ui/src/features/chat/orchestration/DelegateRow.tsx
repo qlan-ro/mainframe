@@ -9,11 +9,10 @@ import { lazy, Suspense, useEffect } from 'react';
 import { PanelRight } from 'lucide-react';
 import { useAui } from '@assistant-ui/react';
 import { isTerminalTaskStatus, type TaskStatus } from '@qlan-ro/mainframe-types';
-import { useStop } from '@/features/session-panel/use-stop';
+import { stopKey, useStop } from '@/features/session-panel/use-stop';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import { openTaskTab } from '@/features/workspace-chat/open-session';
 import { cancelDelegatedTask } from '@/lib/api/background-tasks';
-import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { useAdaptersStore } from '@/store/adapters';
 import { AgentSteps } from '../messages/turn/AgentSteps';
 import { RowAction, RowDisclosure } from '../messages/turn/RowDisclosure';
@@ -82,8 +81,7 @@ function useTaskChild(childChatId: string | undefined) {
 function useTaskStop(title: string, task: TaskStatus | undefined, taskId = '', custom?: SessionCustom) {
   const parent = custom?.delegation?.taskId === taskId ? custom.parentChatId : undefined;
   const live = parent != null && task !== undefined && !isTerminalTaskStatus(task);
-  const work = JSON.stringify([getActiveDaemon().id, parent, taskId]);
-  return useStop(title, live ? () => cancelDelegatedTask(parent, taskId) : undefined, work);
+  return useStop(title, live ? () => cancelDelegatedTask(parent, taskId) : undefined, stopKey(parent, taskId));
 }
 
 interface Standing {

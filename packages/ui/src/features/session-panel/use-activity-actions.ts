@@ -16,7 +16,7 @@ import { isOngoing, type ActivityEntry } from './activity-model';
 import { focusPendingRequest } from './activity-source';
 import { usePanelControl, type PanelColumnId } from './panel-control-store';
 import type { ActivityJumps } from './use-activity-jump';
-import { useStop } from './use-stop';
+import { stopKey, useStop } from './use-stop';
 
 export interface ActivityActions {
   onActivate: () => void;
@@ -29,6 +29,9 @@ export interface ActivityActions {
 }
 
 /** Undefined when this work can't be stopped on its own. */
+export const stopKeyOf = (row: ActivityEntry, chatId: string): string =>
+  stopKey(chatId, row.delegated?.taskId ?? row.task?.id ?? row.id);
+
 export function stopRequest(row: ActivityEntry, chatId: string, adapterId: string | undefined) {
   if (!isOngoing(row.state)) return undefined;
   const { task, delegated } = row;
@@ -56,7 +59,7 @@ export function useActivityActions(
   const setOverlayOpen = usePanelControl((s) => s.setOverlayOpen);
   const { source } = row;
   const childId = row.delegated?.itemId;
-  const { onStop, stopping } = useStop(row.title, stopRequest(row, chatId, adapterId));
+  const { onStop, stopping } = useStop(row.title, stopRequest(row, chatId, adapterId), stopKeyOf(row, chatId));
   const readOutput = useReadOutput(row, chatId);
 
   /** The floating panel covers what the action is about to show, and takes the focused row with it. */

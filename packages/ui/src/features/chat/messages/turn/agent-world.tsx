@@ -4,7 +4,7 @@
  * does (T1c). Without a provider nothing is known, and no agent reads as running.
  */
 import { createContext, useContext, useMemo } from 'react';
-import { useStop } from '@/features/session-panel/use-stop';
+import { stopKey, useStop } from '@/features/session-panel/use-stop';
 import {
   agentStanding,
   callFacts,
@@ -14,7 +14,6 @@ import {
 } from '@/features/workspace-chat/agent-status';
 import { ownTasks } from '@/features/workspace-chat/use-chat-tasks';
 import { stopBackgroundTask } from '@/lib/api/background-tasks';
-import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { settledStatus } from '../../view-model/turn/tool-status';
 import type { ToolPart, ToolStatus } from '../../view-model/turn/types';
 import { agentOutcome, type AgentOutcome } from './agent-outcome';
@@ -85,6 +84,5 @@ export function useAgentStop(toolCallId: string, title: string) {
   const { chatId } = useTranscriptScope();
   const { tasks, live, adapterId } = useContext(Context);
   const task = chatId === undefined ? undefined : stoppableTask(ownTasks(tasks, toolCallId), live, adapterId);
-  const work = JSON.stringify([getActiveDaemon().id, chatId, task?.id ?? toolCallId]);
-  return useStop(title, task && (() => stopBackgroundTask(chatId!, task.id)), work);
+  return useStop(title, task && (() => stopBackgroundTask(chatId!, task.id)), stopKey(chatId, task?.id ?? toolCallId));
 }

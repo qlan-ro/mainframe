@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { errorMessage } from '@/lib/error-message';
 import { mfToast } from '@/lib/toast';
 
@@ -26,10 +27,20 @@ function release(key: Key): void {
   changed();
 }
 
+/** Reserved for tests: a Stop outlives the control that asked for it. */
+export function resetStops(): void {
+  for (const key of [...pending.keys()]) release(key);
+}
+
+/** Names a background or delegated task for `useStop`: the same one from every place that can stop it. */
+export function stopKey(chatId: string | null | undefined, taskId: string): string {
+  return JSON.stringify([getActiveDaemon().id, chatId, taskId]);
+}
+
 /**
  * One Stop at a time: until the work ends, the request fails, or it had time to
- * take effect. `work` names what is stopped where its control can leave the
- * document and come back meanwhile, as a row of the virtualized transcript does.
+ * take effect. `work` names what is stopped (`stopKey`) where several controls stop
+ * it, or one can leave the document and come back meanwhile.
  */
 export function useStop(title: string, request: (() => Promise<void>) | undefined, work?: string) {
   const [own] = useState(() => Symbol('stop'));

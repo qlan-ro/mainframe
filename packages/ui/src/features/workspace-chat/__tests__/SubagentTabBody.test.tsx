@@ -133,6 +133,7 @@ import { registerSideChat, __resetSideChatRegistryForTests } from '@/features/si
 import { useChatId, useOpenFile } from '@/features/chat/tools/chat-tool-context';
 import { useMountedConversations } from '../mounted-conversations';
 import { SubagentTabBody } from '../SubagentTabBody';
+import { resetStops } from '@/features/session-panel/use-stop';
 
 const body = (active = true, chatId = 'parent') => (
   <TooltipProvider>
@@ -181,6 +182,7 @@ const step = (id: string, toolCallId: string) =>
   }) as unknown as ThreadMessage;
 
 beforeEach(() => {
+  resetStops();
   Object.assign(world, {
     call: null,
     running: false,

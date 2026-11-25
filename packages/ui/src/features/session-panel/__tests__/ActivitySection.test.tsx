@@ -5,6 +5,7 @@ import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ActivityEntry } from '../activity-model';
 import { usePanelControl } from '../panel-control-store';
+import { resetStops } from '../use-stop';
 
 const state = vi.hoisted(() => ({
   entries: [] as ActivityEntry[],
@@ -70,6 +71,7 @@ const task = { id: 'bg-1', toolUseId: 'call-1' } as BackgroundTask;
 const clickRow = (id: string) => fireEvent.click(screen.getByTestId(`session-panel-activity-${id}`));
 
 beforeEach(() => {
+  resetStops();
   vi.clearAllMocks();
   state.entries = [];
   state.adapterId = 'claude';
@@ -485,9 +487,13 @@ describe('ActivitySection — Stop', () => {
       await act(() => vi.advanceTimersByTimeAsync(200));
       await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Stop agent' })));
       expect(state.stop).toHaveBeenCalledTimes(2);
-      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      // On its way wherever the task shows, so closing the panel and opening it again doesn't ask twice.
       view.unmount();
-      expect(vi.getTimerCount()).toBe(0);
+      render(<ActivitySection columnId="main" />);
+      fireEvent.click(screen.getByRole('button', { name: 'Stopping agent' }));
+      expect(state.stop).toHaveBeenCalledTimes(2);
+      await act(() => vi.advanceTimersByTimeAsync(10_000));
+      expect(screen.getByRole('button', { name: 'Stop agent' })).toBeVisible();
     } finally {
       vi.useRealTimers();
     }

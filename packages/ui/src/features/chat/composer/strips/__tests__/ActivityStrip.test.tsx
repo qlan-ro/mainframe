@@ -40,6 +40,7 @@ vi.mock('../../../gates/use-gate-queue', () => ({ useGateQueue: () => mockGates 
 import { cancelDelegatedTask, stopBackgroundTask } from '@/lib/api/background-tasks';
 import { mfToast } from '@/lib/toast';
 import { ActivityStrip } from '../ActivityStrip';
+import { resetStops } from '@/features/session-panel/use-stop';
 
 const NOW = 100_000;
 
@@ -64,6 +65,7 @@ const renderStrip = () =>
 const rowIds = () => screen.getAllByRole('listitem').map((el) => el.dataset.testid);
 
 beforeEach(() => {
+  resetStops();
   vi.clearAllMocks();
   localStorage.clear();
   useUiPrefs.setState({ activityStripCollapsed: false });

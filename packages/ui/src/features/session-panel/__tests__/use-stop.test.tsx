@@ -5,7 +5,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ mfToast: toast }));
 
-import { useStop } from '../use-stop';
+import type { ActivityEntry } from '../activity-model';
+import { stopKeyOf } from '../use-activity-actions';
+import { stopKey, useStop } from '../use-stop';
 
 type Request = (() => Promise<void>) | undefined;
 const request = vi.fn(async () => undefined);
@@ -106,4 +108,28 @@ it('says why it failed and is ready at once', async () => {
   await press(hook);
   expect(toast.error).toHaveBeenCalledWith('Could not stop “reviewer”', { description: 'task is gone' });
   expect(hook.result.current.stopping).toBe(false);
+});
+
+it('asks once for a task that several controls can stop, and shows it on all of them', async () => {
+  const at = (ask: Request) => renderHook(() => useStop('reviewer', ask, stopKey('chat-1', 'task-1')));
+  let answer = () => {};
+  request.mockImplementation(() => new Promise<undefined>((resolve) => (answer = () => resolve(undefined))));
+  const row = at(request);
+  const panel = at(request);
+  const other = renderHook(() => useStop('builder', request, stopKey('chat-1', 'task-2')));
+
+  await act(async () => row.result.current.onStop?.());
+  await act(async () => panel.result.current.onStop?.());
+  expect(request).toHaveBeenCalledTimes(1);
+  expect([row, panel, other].map((hook) => hook.result.current.stopping)).toEqual([true, true, false]);
+  await act(async () => answer());
+
+  await act(async () => other.result.current.onStop?.());
+  expect(request).toHaveBeenCalledTimes(2);
+});
+
+it('names an Activity row as the transcript row and the tab of the same task do', () => {
+  const row = { id: 'r1', title: 'reviewer' } as ActivityEntry;
+  expect(stopKeyOf({ ...row, task: { id: 'bg-1' } } as ActivityEntry, 'chat-1')).toBe(stopKey('chat-1', 'bg-1'));
+  expect(stopKeyOf({ ...row, delegated: { taskId: 't-1' } } as ActivityEntry, 'chat-1')).toBe(stopKey('chat-1', 't-1'));
 });
