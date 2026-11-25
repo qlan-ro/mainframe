@@ -9,7 +9,7 @@ import { useLayoutStore } from '../layout';
 
 function isWorkspaceActive() {
   const { layout } = useLayoutStore.getState();
-  return layout.top.includes('workspace') || layout.bottom === 'workspace';
+  return layout.top.includes('workspace');
 }
 
 /** The docked panel's open flag for whatever scope is currently active. */
@@ -22,7 +22,7 @@ describe('intent-subscriber — command intents', () => {
   let unsub: () => void;
   beforeEach(() => {
     useLayoutStore.setState({
-      layout: { top: ['chat'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+      layout: { top: ['chat'], topFlex: {} },
       run: null,
       sessions: new Map(),
       activeSessionId: null,
@@ -47,7 +47,7 @@ describe('intent-subscriber — command intents', () => {
 
   it('toggle-workspace-files closes a panel that is ON SCREEN, touching nothing else', () => {
     useLayoutStore.setState({
-      layout: { top: ['chat', 'workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+      layout: { top: ['chat', 'workspace'], topFlex: {} },
     });
     useWorkspaceFilesPanel.getState().setOpen(true);
     const layoutBefore = useLayoutStore.getState().layout;

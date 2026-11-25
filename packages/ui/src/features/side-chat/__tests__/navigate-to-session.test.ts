@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 /**
  * navigateToSession — routes a session-navigation request to its real target:
- * a side chat id resolves to its parent and expands the panel; anything else
- * switches directly (todo #344, UI rule 2).
+ * a side chat id resolves to its parent, with the side chat's tab in front of the
+ * parent's workspace; anything else switches directly (todo #344, UI rule 2).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import { __resetSideChatRegistryForTests, registerSideChat } from '../side-chat-ids';
-import { useSideChatCollapseStore } from '../side-chat-collapse-store';
+import { useLayoutStore } from '@/store/layout';
 import { navigateToSession } from '../navigate-to-session';
 
 function makeChat(overrides: Partial<Chat> = {}): Chat {
@@ -31,11 +31,23 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
 afterEach(() => {
   __resetSideChatRegistryForTests();
   window.localStorage.clear();
-  useSideChatCollapseStore.setState({ collapsedByParent: {} });
+  useLayoutStore.setState({
+    layout: { top: ['chat'], topFlex: {} },
+    run: null,
+    sessions: new Map(),
+    activeSessionId: null,
+  });
 });
 
+/** The front tab of a session's workspace once it is on screen. */
+function frontOf(sessionId: string): string | null {
+  useLayoutStore.getState().setActiveSession(sessionId);
+  const { layout, run } = useLayoutStore.getState();
+  return layout.top.includes('workspace') ? (run?.panes[0]?.active ?? null) : null;
+}
+
 describe('navigateToSession — a registered side chat id', () => {
-  it('activates the parent, expands the panel, and never calls getChat', async () => {
+  it('activates the parent, shows the side chat, and never calls getChat', async () => {
     registerSideChat('chat-side-1', 'chat-parent');
     const switchToThread = vi.fn();
     const getChat = vi.fn();
@@ -43,7 +55,7 @@ describe('navigateToSession — a registered side chat id', () => {
     await navigateToSession('chat-side-1', { switchToThread, getChat });
 
     expect(switchToThread).toHaveBeenCalledWith('chat-parent');
-    expect(useSideChatCollapseStore.getState().isCollapsed('chat-parent')).toBe(false);
+    expect(frontOf('chat-parent')).toBe('chat-chat-side-1');
     expect(getChat).not.toHaveBeenCalled();
   });
 });
@@ -59,7 +71,7 @@ describe('navigateToSession — an unregistered id resolved via getChat', () => 
 
     expect(getChat).toHaveBeenCalledWith('chat-side-2');
     expect(switchToThread).toHaveBeenCalledWith('chat-parent-2');
-    expect(useSideChatCollapseStore.getState().isCollapsed('chat-parent-2')).toBe(false);
+    expect(frontOf('chat-parent-2')).toBe('chat-chat-side-2');
   });
 
   it('switches to the id directly when getChat reveals a regular chat', async () => {

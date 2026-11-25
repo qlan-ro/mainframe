@@ -78,8 +78,6 @@ export function dialogSizeFor(sizes: DialogSizes, key: string, fallback: DialogS
   return sizes[key] ?? fallback;
 }
 
-const SIDE_CHAT_DEFAULT_FRAC = 0.4;
-
 export type TranscriptMode = 'verbose' | 'compact';
 
 /** What Enter does while a turn runs; ⌥↵ does the other (C9). */
@@ -126,8 +124,6 @@ interface UiPrefsState {
   /** Committed sizes for opt-in resizable dialogs. Absent keys read as that
    *  dialog's declared default; see dialogSizeFor. */
   dialogSizes: DialogSizes;
-  /** The side chat's share of its parent's row while docked beside it. */
-  sideChatFrac: number;
   toggleSidebar: () => void;
   setSidebarVisible: (visible: boolean) => void;
   setSidebarWidth: (width: number) => void;
@@ -140,7 +136,6 @@ interface UiPrefsState {
   /** Overwrites the committed size for one dialog key. Callers clamp before
    *  committing — the store doesn't know a dialog's measured minimum. */
   setDialogSize: (key: string, size: DialogSize) => void;
-  setSideChatFrac: (frac: number) => void;
 }
 
 /** The persisted subset. */
@@ -158,7 +153,6 @@ function partializeUiPrefs(s: UiPrefsState) {
     sessionPanelSections: s.sessionPanelSections,
     sessionPanelHiddenSections: s.sessionPanelHiddenSections,
     dialogSizes: s.dialogSizes,
-    sideChatFrac: s.sideChatFrac,
   };
 }
 
@@ -254,7 +248,6 @@ export const useUiPrefs = create<UiPrefsState>()(
       sessionPanelSections: {},
       sessionPanelHiddenSections: [],
       dialogSizes: {},
-      sideChatFrac: SIDE_CHAT_DEFAULT_FRAC,
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
       setSidebarVisible: (visible) => set({ sidebarVisible: visible }),
       setSidebarWidth: (width) => set({ sidebarWidth: clampSidebarWidth(width) }),
@@ -275,7 +268,6 @@ export const useUiPrefs = create<UiPrefsState>()(
           return { sessionPanelHiddenSections: shown ? others : [...others, key] };
         }),
       setDialogSize: (key, size) => set((s) => ({ dialogSizes: { ...s.dialogSizes, [key]: size } })),
-      setSideChatFrac: (frac) => set({ sideChatFrac: Math.min(0.85, Math.max(0.15, frac)) }),
     }),
     {
       name: 'mf:ui-prefs',

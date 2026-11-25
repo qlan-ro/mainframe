@@ -90,9 +90,7 @@ const CLEAN_SANDBOX = {
 const CLEAN_LAYOUT = {
   layout: {
     top: ['chat' as const],
-    bottom: null,
     topFlex: {},
-    vFlex: { top: 1, bottom: 0.4 },
   },
   run: null,
   sessions: new Map(),
@@ -150,9 +148,7 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
       ...CLEAN_LAYOUT,
       layout: {
         top: ['chat', 'workspace'] as ['chat', 'workspace'],
-        bottom: null,
         topFlex: {},
-        vFlex: { top: 1, bottom: 0.4 },
       },
       run: {
         dir: 'v',
@@ -203,9 +199,7 @@ describe('useLaunchConfigs — scope-aware reconcile regression', () => {
       ...CLEAN_LAYOUT,
       layout: {
         top: ['chat', 'workspace'] as ['chat', 'workspace'],
-        bottom: null,
         topFlex: {},
-        vFlex: { top: 1, bottom: 0.4 },
       },
       run: {
         dir: 'v',

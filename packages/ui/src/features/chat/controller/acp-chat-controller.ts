@@ -175,7 +175,7 @@ export class AcpChatController {
   /**
    * Gates the facade plane's subscription (D2 dormancy, T33) from the runtime
    * hook's `opts.active` effect (the one gating `subscribeLive`); idempotent.
-   * `holdActive` keeps it attached while a split zone shows the chat.
+   * `holdActive` keeps it attached while a workspace tab shows the chat.
    */
   public setActive(active: boolean): void {
     this.activation.setActive(active);

@@ -2,10 +2,9 @@
 
 /**
  * The side chat's shared controller (todo #344, UI rule 8). Read by
- * `SideChatHost` (which owns the `load`/`subscribeLive` effect, so the
- * controller stays warm whether the panel is collapsed or expanded), by the
- * parent header's `SideChatToggle`, and by `SideChatPanelHeader` — all three
- * agree on running/waiting state without each owning its own subscription.
+ * `useSideChatTab` (which keeps it loaded and live, tab open or not), by the
+ * parent header's `SideChatToggle`, and by the tab's dot — all three agree on
+ * running/waiting state without each owning its own subscription.
  * `chatControllerRegistry.getOrCreate` is idempotent, so every caller gets the
  * SAME instance for a given side-chat id.
  */

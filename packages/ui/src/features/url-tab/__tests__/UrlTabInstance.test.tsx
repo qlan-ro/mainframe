@@ -37,7 +37,7 @@ vi.mock('@/lib/api/tunnel-ports', () => ({
 
 import { UrlTabInstance } from '../UrlTabInstance';
 
-const FRESH_LAYOUT = { top: ['workspace' as const], bottom: null as null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } };
+const FRESH_LAYOUT = { top: ['workspace' as const], topFlex: {} };
 
 /** Seed a single-pane Run holding one `url` tab, so setUrlTabTarget has something to retarget. */
 function seedUrlTab(tabId: string, url: string) {

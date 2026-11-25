@@ -197,6 +197,42 @@ describe('chats-remote-adapter — list latches the load flag', () => {
   });
 });
 
+describe('chats-remote-adapter — list records whether the latest request failed', () => {
+  const failed = () => useSessionListLoadState.getState().failed;
+
+  it('says so until a later one succeeds', async () => {
+    useSessionListLoadState.setState({ failed: false });
+    const adapter = makeChatsRemoteAdapter(31415);
+    mockListChats.mockRejectedValueOnce(new Error('daemon down'));
+    await expect(adapter.list()).rejects.toThrow('daemon down');
+    expect(failed()).toBe(true);
+
+    mockListChats.mockResolvedValueOnce([FIXTURE]);
+    await adapter.list();
+    expect(failed()).toBe(false);
+  });
+
+  it.each([
+    ['fails', true],
+    ['succeeds', false],
+  ])('keeps the latest answer when an earlier request %s after it', async (_, earlierFails) => {
+    useSessionListLoadState.setState({ failed: false });
+    const adapter = makeChatsRemoteAdapter(31415);
+    let answer = { settle: (_chats: Chat[]) => undefined as void, fail: (_error: Error) => undefined as void };
+    mockListChats.mockImplementationOnce(() => new Promise((settle, fail) => (answer = { settle, fail })));
+    const earlier = adapter.list().catch(() => undefined);
+    if (earlierFails) mockListChats.mockResolvedValueOnce([FIXTURE]);
+    else mockListChats.mockRejectedValueOnce(new Error('daemon down'));
+    await adapter.list().catch(() => undefined);
+    const latest = failed();
+    if (earlierFails) answer.fail(new Error('daemon down'));
+    else answer.settle([FIXTURE]);
+    await earlier;
+    expect(failed()).toBe(latest);
+    expect(latest).toBe(!earlierFails);
+  });
+});
+
 describe('chats-remote-adapter — list maps archived chat status', () => {
   it('threads[0].status is archived for an archived chat', async () => {
     mockListChats.mockResolvedValueOnce([FIXTURE_ARCHIVED]);

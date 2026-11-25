@@ -1,42 +1,24 @@
 /**
  * The pure helpers the session-tab keyboard shortcuts sit on: the strip's
- * DISPLAYED order (fact 17 — the same order `SessionTabs.tsx` renders, split
- * members regrouped adjacently), index/next/prev navigation over it (AC 10,
- * AC 11), and the split-partner search that shares `canOpenInSplit` with the
- * tab strip's ⌘-click and the context menu (fact 18, AC 12).
+ * DISPLAYED order (the same order `SessionTabs.tsx` renders), index/next/prev
+ * navigation over it (AC 10, AC 11), and the search for the next tab to open in
+ * the workspace, which shares `canOpenBeside` with the tab strip's ⌘-click and
+ * the context menu (AC 12).
  */
 import { describe, expect, it } from 'vitest';
-import { displayedTabIds, nextSplitPartner, nextTabId, tabAtIndex, tabHintIndex, type TabsState } from '../tabs-model';
+import { displayedTabIds, nextBesideId, nextTabId, tabAtIndex, tabHintIndex, type TabsState } from '../tabs-model';
 
-describe('displayedTabIds — fact 17', () => {
-  it('concatenates pinned tabs, the preview, then the draft when there is no split', () => {
+describe('displayedTabIds', () => {
+  it('concatenates pinned tabs, the preview, then the draft', () => {
     const state: TabsState = { tabIds: ['a', 'b', 'c'], previewId: 'p', draftId: 'd' };
 
-    expect(displayedTabIds(state, null, 'a')).toEqual(['a', 'b', 'c', 'p', 'd']);
+    expect(displayedTabIds(state)).toEqual(['a', 'b', 'c', 'p', 'd']);
   });
 
   it('drops null preview/draft slots', () => {
     const state: TabsState = { tabIds: ['a', 'b'], previewId: null, draftId: null };
 
-    expect(displayedTabIds(state, null, 'a')).toEqual(['a', 'b']);
-  });
-
-  it('regroups a visible split pair adjacently at the first member’s position', () => {
-    const state: TabsState = { tabIds: ['a', 'b', 'c'], previewId: 'p', draftId: 'd' };
-
-    expect(displayedTabIds(state, ['b', 'd'], 'b')).toEqual(['a', 'b', 'd', 'c', 'p']);
-  });
-
-  it('does not regroup when only one zone member is in the displayed set', () => {
-    const state: TabsState = { tabIds: ['a', 'b', 'c'], previewId: null, draftId: null };
-
-    expect(displayedTabIds(state, ['b', 'not-displayed'], 'b')).toEqual(['a', 'b', 'c']);
-  });
-
-  it('does not regroup when there is no split', () => {
-    const state: TabsState = { tabIds: ['a', 'b', 'c'], previewId: null, draftId: null };
-
-    expect(displayedTabIds(state, null, 'a')).toEqual(['a', 'b', 'c']);
+    expect(displayedTabIds(state)).toEqual(['a', 'b']);
   });
 });
 
@@ -78,29 +60,29 @@ describe('nextTabId — AC 11', () => {
   });
 });
 
-describe('nextSplitPartner — AC 12, shares canOpenInSplit (fact 18)', () => {
+describe('nextBesideId — AC 12, shares canOpenBeside', () => {
   it('returns null with only one session open', () => {
-    expect(nextSplitPartner(['a'], 'a', null)).toBeNull();
+    expect(nextBesideId(['a'], 'a')).toBeNull();
   });
 
-  it('returns null when the active session is an unsent draft', () => {
-    expect(nextSplitPartner(['__LOCALID_x', 'b'], '__LOCALID_x', null)).toBeNull();
+  it('returns null when the conversation is an unsent draft', () => {
+    expect(nextBesideId(['__LOCALID_x', 'b'], '__LOCALID_x')).toBeNull();
   });
 
-  it('returns null when the only two sessions already fill both split slots', () => {
-    expect(nextSplitPartner(['a', 'b'], 'a', ['a', 'b'])).toBeNull();
+  it('returns the nearest following session', () => {
+    expect(nextBesideId(['a', 'b', 'c'], 'a')).toBe('b');
   });
 
-  it('returns the nearest following splittable id with no split open', () => {
-    expect(nextSplitPartner(['a', 'b', 'c'], 'a', null)).toBe('b');
+  it('skips one that is in the workspace already, and wraps past the end', () => {
+    expect(nextBesideId(['a', 'b', 'c'], 'b', (id) => id === 'c')).toBe('a');
   });
 
-  it('skips a following id already in the visible split before finding one that qualifies', () => {
-    expect(nextSplitPartner(['a', 'b', 'c'], 'a', ['a', 'b'])).toBe('c');
+  it('skips a draft', () => {
+    expect(nextBesideId(['a', '__LOCALID_x', 'c'], 'a')).toBe('c');
   });
 
-  it('wraps past the end to find a qualifying partner', () => {
-    expect(nextSplitPartner(['a', 'b', 'c'], 'b', ['b', 'c'])).toBe('a');
+  it('returns null when every other session is there', () => {
+    expect(nextBesideId(['a', 'b'], 'a', () => true)).toBeNull();
   });
 });
 
@@ -129,15 +111,5 @@ describe('tabHintIndex', () => {
       expect(shown).not.toBeNull();
       expect(tabAtIndex(displayed, (shown as number) - 1)).toBe(id);
     }
-  });
-
-  it('follows the regrouped split order rather than the pin order', () => {
-    const state: TabsState = { tabIds: ['a', 'b', 'c'], previewId: null, draftId: null };
-    // 'c' joins 'a' at the front when the two are split, so it becomes ⌃2.
-    const displayed = displayedTabIds(state, ['a', 'c'], 'a');
-
-    expect(displayed).toEqual(['a', 'c', 'b']);
-    expect(tabHintIndex(displayed, 'c')).toBe(2);
-    expect(tabHintIndex(displayed, 'b')).toBe(3);
   });
 });

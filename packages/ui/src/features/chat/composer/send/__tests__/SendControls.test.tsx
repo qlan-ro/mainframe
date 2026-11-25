@@ -3,19 +3,16 @@
  * the Queue / Steer split once there is something to send into a running turn.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { resetAdapters, seedAdapters } from '@/store/adapters';
 
 let mockRunning = false;
-let mockFocused = true;
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (select: (s: unknown) => unknown) =>
     select({
       thread: { isRunning: mockRunning },
-      threads: { mainThreadId: 't1' },
-      threadListItem: { id: mockFocused ? 't1' : 't2' },
     }),
 }));
 
@@ -23,7 +20,7 @@ let mockCanSubmit = false;
 vi.mock('../../segments/use-submit-composition', () => ({ useCanSubmit: () => mockCanSubmit }));
 
 const stop = vi.fn();
-let mockStop = { available: false, stopping: false, target: 'the turn', stop };
+let mockStop = { available: false, running: false, stopping: false, target: 'the turn', stop };
 vi.mock('../use-stop', () => ({ useComposerStop: () => mockStop }));
 
 const shortcut = vi.fn();
@@ -37,7 +34,7 @@ vi.mock('../../../runtime/chat-extras', () => ({
     select({ state: { chatConfig: { adapterId: mockAdapterId } } }),
 }));
 
-import { SendControls } from '../SendControls';
+import { SendControls, StopControl } from '../SendControls';
 
 const submit = vi.fn();
 const renderControls = () =>
@@ -52,9 +49,8 @@ beforeEach(() => {
   localStorage.clear();
   useUiPrefs.setState({ enterWhileRunning: 'queue' });
   mockRunning = false;
-  mockFocused = true;
   mockCanSubmit = false;
-  mockStop = { available: false, stopping: false, target: 'the turn', stop };
+  mockStop = { available: false, running: false, stopping: false, target: 'the turn', stop };
   mockAdapterId = 'claude';
   resetAdapters();
   seedAdapters([
@@ -99,7 +95,7 @@ describe('SendControls — idle', () => {
 describe('SendControls — Stop', () => {
   beforeEach(() => {
     mockRunning = true;
-    mockStop = { available: true, stopping: false, target: 'the turn and 2 sub-agents', stop };
+    mockStop = { available: true, running: true, stopping: false, target: 'the turn and 2 sub-agents', stop };
   });
 
   it('names what it will stop, and stops on click', () => {
@@ -108,7 +104,7 @@ describe('SendControls — Stop', () => {
     const button = screen.getByTestId('chat-composer-cancel');
     expect(button).toHaveAttribute('aria-label', 'Stop the turn and 2 sub-agents');
     fireEvent.click(button);
-    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledExactlyOnceWith(button);
   });
 
   it('shows no Send while the turn runs and nothing is typed', () => {
@@ -128,20 +124,39 @@ describe('SendControls — Stop', () => {
     expect(button).toBeDisabled();
   });
 
-  it('binds ⌘. (chat.stop) in the focused composer only', () => {
-    renderControls();
-    expect(shortcut).toHaveBeenCalledWith('chat.stop', stop);
+  describe('⌘. (chat.stop)', () => {
+    const press = () => (shortcut.mock.lastCall![1] as () => void)();
 
-    shortcut.mockClear();
-    mockFocused = false;
-    renderControls();
-    expect(shortcut).not.toHaveBeenCalled();
+    it('stops what runs now, not what ran when the composer opened, and leaves the keyboard here', () => {
+      const view = render(<StopControl />, { wrapper: TooltipProvider });
+      const now = vi.fn();
+      mockStop = { ...mockStop, stop: now };
+      view.rerender(<StopControl />);
+      press();
+      expect(stop).not.toHaveBeenCalled();
+      expect(now).toHaveBeenCalledExactlyOnceWith(expect.any(HTMLSpanElement));
+      expect(view.container).toContainElement(now.mock.lastCall![0] as HTMLElement);
+    });
+
+    it('is not for sub-agents alone, unless the conversation has had the focus', () => {
+      mockStop = { ...mockStop, running: false };
+      renderControls();
+      press();
+      expect(stop).not.toHaveBeenCalled();
+    });
+
+    it('stops nothing once its composer is gone', () => {
+      renderControls();
+      cleanup();
+      press();
+      expect(stop).not.toHaveBeenCalled();
+    });
   });
 
   it('with sub-agents running but no turn, Stop sits beside plain Send', () => {
     mockRunning = false;
     mockCanSubmit = true;
-    mockStop = { available: true, stopping: false, target: '2 sub-agents', stop };
+    mockStop = { available: true, running: false, stopping: false, target: '2 sub-agents', stop };
     renderControls();
 
     expect(screen.getByTestId('chat-composer-cancel')).toHaveAttribute('aria-label', 'Stop 2 sub-agents');
@@ -151,7 +166,7 @@ describe('SendControls — Stop', () => {
 
   it('with sub-agents running, no turn and an empty draft, only Stop shows', () => {
     mockRunning = false;
-    mockStop = { available: true, stopping: false, target: '2 sub-agents', stop };
+    mockStop = { available: true, running: false, stopping: false, target: '2 sub-agents', stop };
     renderControls();
 
     expect(screen.getByTestId('chat-composer-cancel')).toBeInTheDocument();
@@ -163,7 +178,7 @@ describe('SendControls — the Queue / Steer split while a turn runs', () => {
   beforeEach(() => {
     mockRunning = true;
     mockCanSubmit = true;
-    mockStop = { available: true, stopping: false, target: 'the turn', stop };
+    mockStop = { available: true, running: true, stopping: false, target: 'the turn', stop };
   });
 
   it('appears beside Stop once there is text', () => {

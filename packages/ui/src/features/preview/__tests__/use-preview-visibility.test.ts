@@ -3,6 +3,7 @@ import { it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { PreviewHandle } from '@qlan-ro/mainframe-types';
 import { useLayoutStore } from '@/store/layout';
+import { useWorkspaceSlide } from '@/store/workspace-slide';
 
 import { computePreviewVisible, usePreviewVisibility } from '../use-preview-visibility';
 
@@ -11,6 +12,7 @@ const base = {
   isActiveTab: true,
   surfaceVisible: true,
   overlayMounted: false,
+  sliding: false,
   occluded: false,
   compositesAboveDom: true,
 };
@@ -20,6 +22,7 @@ it.each([
   ['overlayMounted is true', { overlayMounted: true }],
   ['surfaceVisible is false', { surfaceVisible: false }],
   ['occluded is true', { occluded: true }],
+  ['the panel is sliding', { sliding: true }],
 ] as const)('hidden when %s', (_label, override) => {
   expect(computePreviewVisible({ ...base, ...override })).toBe(false);
 });
@@ -32,32 +35,74 @@ it('visible only when active + surface-visible + no overlay + not occluded', () 
 it.each([
   [
     'overlayMounted, compositesAboveDom=false (Electron) → not hidden',
-    { isActiveTab: true, surfaceVisible: true, overlayMounted: true, occluded: false, compositesAboveDom: false },
+    {
+      isActiveTab: true,
+      surfaceVisible: true,
+      overlayMounted: true,
+      sliding: false,
+      occluded: false,
+      compositesAboveDom: false,
+    },
     true,
   ],
   [
     'occluded, compositesAboveDom=false (Electron) → not hidden',
-    { isActiveTab: true, surfaceVisible: true, overlayMounted: false, occluded: true, compositesAboveDom: false },
+    {
+      isActiveTab: true,
+      surfaceVisible: true,
+      overlayMounted: false,
+      sliding: false,
+      occluded: true,
+      compositesAboveDom: false,
+    },
     true,
   ],
   [
     'overlayMounted, compositesAboveDom=true (Tauri) → hidden',
-    { isActiveTab: true, surfaceVisible: true, overlayMounted: true, occluded: false, compositesAboveDom: true },
+    {
+      isActiveTab: true,
+      surfaceVisible: true,
+      overlayMounted: true,
+      sliding: false,
+      occluded: false,
+      compositesAboveDom: true,
+    },
     false,
   ],
   [
     'occluded, compositesAboveDom=true (Tauri) → hidden',
-    { isActiveTab: true, surfaceVisible: true, overlayMounted: false, occluded: true, compositesAboveDom: true },
+    {
+      isActiveTab: true,
+      surfaceVisible: true,
+      overlayMounted: false,
+      sliding: false,
+      occluded: true,
+      compositesAboveDom: true,
+    },
     false,
   ],
   [
     'inactive tab still hides regardless of compositesAboveDom',
-    { isActiveTab: false, surfaceVisible: true, overlayMounted: false, occluded: false, compositesAboveDom: false },
+    {
+      isActiveTab: false,
+      surfaceVisible: true,
+      overlayMounted: false,
+      sliding: false,
+      occluded: false,
+      compositesAboveDom: false,
+    },
     false,
   ],
   [
     'hidden surface still hides regardless of compositesAboveDom',
-    { isActiveTab: true, surfaceVisible: false, overlayMounted: false, occluded: false, compositesAboveDom: false },
+    {
+      isActiveTab: true,
+      surfaceVisible: false,
+      overlayMounted: false,
+      sliding: false,
+      occluded: false,
+      compositesAboveDom: false,
+    },
     false,
   ],
 ] as const)('%s', (_label, input, expected) => {
@@ -85,7 +130,7 @@ function makeFakeHandle(): PreviewHandle {
 
 it('re-asserts setVisible(false) on a new handle even when the computed value is unchanged (recreated webview desync)', () => {
   useLayoutStore.setState({
-    layout: { top: ['workspace'], bottom: null, topFlex: {}, vFlex: { top: 1, bottom: 0.4 } },
+    layout: { top: ['workspace'], topFlex: {} },
     run: null,
     sessions: new Map(),
     activeSessionId: null,
@@ -104,4 +149,18 @@ it('re-asserts setVisible(false) on a new handle even when the computed value is
     rerender({ handle: handleB, occluded: true });
   });
   expect(handleB.setVisible).toHaveBeenCalledWith(false);
+});
+
+it('is in its new place before it shows again after the panel slid', () => {
+  useLayoutStore.setState({ layout: { top: ['chat', 'workspace'], topFlex: {} } });
+  useWorkspaceSlide.setState({ sliding: true });
+  const handle = makeFakeHandle();
+  renderHook(() => usePreviewVisibility(handle, true, false));
+  expect(handle.setVisible).toHaveBeenLastCalledWith(false);
+  const calls: string[] = [];
+  vi.mocked(handle.refit).mockImplementation(() => void calls.push('refit'));
+  vi.mocked(handle.setVisible).mockImplementation((visible) => void calls.push(`visible:${visible}`));
+
+  act(() => useWorkspaceSlide.setState({ sliding: false }));
+  expect(calls).toEqual(['refit', 'visible:true']);
 });

@@ -10,11 +10,14 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ActivityEntry } from '@/features/session-panel/activity-model';
 import { useUiPrefs } from '@/store/ui-prefs';
 
-const switchToThread = vi.fn();
-vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ threads: { switchToThread } }) }));
-vi.mock('@/features/side-chat/side-chat-scope', () => ({ useSideAwareThreadId: () => 'parent-thread' }));
-const openInSplit = vi.fn();
-vi.mock('../../../zones/open-in-split', () => ({ openInSplit: (...a: unknown[]) => openInSplit(...a) }));
+const threads = { getState: vi.fn() };
+vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ threads }) }));
+const openTaskTab = vi.fn();
+vi.mock('@/features/workspace-chat/open-session', () => ({ openTaskTab: (...a: unknown[]) => openTaskTab(...a) }));
+const openSubagentTab = vi.fn();
+vi.mock('@/features/workspace-chat/conversation-tabs', () => ({
+  openSubagentTab: (...a: unknown[]) => openSubagentTab(...a),
+}));
 const jumpToActivitySource = vi.fn().mockResolvedValue('shown');
 const cancelActivityJump = vi.fn();
 vi.mock('@/features/session-panel/activity-source', () => ({
@@ -128,7 +131,7 @@ describe('ActivityStrip — rows', () => {
     expect(screen.getByTestId('composer-activity-line')).toHaveTextContent('queued');
   });
 
-  it('Open on a delegated task opens its chat in a split and switches to it', () => {
+  it('Open on a delegated task opens its chat in the workspace, and hands it the keyboard', () => {
     mockActivity.entries = [
       entry('asking', {
         state: 'needs-you',
@@ -139,24 +142,38 @@ describe('ActivityStrip — rows', () => {
 
     fireEvent.click(screen.getByTestId('composer-activity-open'));
 
-    expect(openInSplit).toHaveBeenCalledExactlyOnceWith('parent-thread', 'child-1');
-    expect(switchToThread).toHaveBeenCalledExactlyOnceWith('child-1');
+    expect(openTaskTab).toHaveBeenCalledExactlyOnceWith(threads, 'child-1', { focus: true });
     // A jump still on its way would move the transcript behind it.
-    expect(cancelActivityJump).toHaveBeenCalledBefore(openInSplit);
+    expect(cancelActivityJump).toHaveBeenCalledBefore(openTaskTab);
   });
 
-  it('Open on a sub-agent row jumps to its place in the transcript', () => {
+  it('Open on a sub-agent opens its tab, and hands it the keyboard', () => {
     mockActivity.entries = [entry('sub', { source: { messageId: 'm1', toolCallId: 'call-1' }, title: 'Sub' })];
     mockGates = { front: undefined, more: 0, waitingCalls: new Set(['call-1']) };
     renderStrip();
 
     fireEvent.click(screen.getByTestId('composer-activity-open'));
 
-    expect(jumpToActivitySource).toHaveBeenCalledExactlyOnceWith('chat-1', { messageId: 'm1', toolCallId: 'call-1' });
+    expect(openSubagentTab).toHaveBeenCalledExactlyOnceWith(
+      { chatId: 'chat-1', toolCallId: 'call-1', messageId: 'm1', title: 'Sub' },
+      { focus: true },
+    );
+    expect(jumpToActivitySource).not.toHaveBeenCalled();
   });
 
-  const openSubagentRow = async () => {
-    mockActivity.entries = [entry('sub', { state: 'needs-you', source: { toolCallId: 'call-1' }, title: 'Sub' })];
+  it('Open on anything else jumps to its place in the transcript', () => {
+    mockActivity.entries = [entry('run', { kind: 'command', state: 'needs-you', source: { toolCallId: 'call-1' } })];
+    renderStrip();
+
+    fireEvent.click(screen.getByTestId('composer-activity-open'));
+
+    expect(jumpToActivitySource).toHaveBeenCalledExactlyOnceWith('chat-1', { toolCallId: 'call-1' });
+  });
+
+  const openCommandRow = async () => {
+    mockActivity.entries = [
+      entry('run', { kind: 'command', state: 'needs-you', source: { toolCallId: 'call-1' }, title: 'Sub' }),
+    ];
     renderStrip();
     fireEvent.click(screen.getByTestId('composer-activity-open'));
     await act(async () => {});
@@ -164,14 +181,14 @@ describe('ActivityStrip — rows', () => {
 
   it('Open says so when the history does not hold it', async () => {
     jumpToActivitySource.mockResolvedValueOnce('missing');
-    await openSubagentRow();
+    await openCommandRow();
 
     expect(mfToast.info).toHaveBeenCalledExactlyOnceWith('“Sub” started before the history shown here');
   });
 
   it('Open says nothing for a jump something else replaced', async () => {
     jumpToActivitySource.mockResolvedValueOnce('superseded');
-    await openSubagentRow();
+    await openCommandRow();
 
     expect(mfToast.info).not.toHaveBeenCalled();
     expect(mfToast.error).not.toHaveBeenCalled();
@@ -179,7 +196,7 @@ describe('ActivityStrip — rows', () => {
 
   it('Open says when the history could not be loaded', async () => {
     jumpToActivitySource.mockRejectedValueOnce(new Error('offline'));
-    await openSubagentRow();
+    await openCommandRow();
 
     expect(mfToast.error).toHaveBeenCalledExactlyOnceWith('Could not load the message', { description: 'offline' });
   });

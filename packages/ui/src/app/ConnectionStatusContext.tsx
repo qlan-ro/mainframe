@@ -15,3 +15,9 @@ export function useConnectionStatus(): ConnectionStatus {
   if (!ctx) throw new Error('useConnectionStatus must be used within ConnectionStatusProvider');
   return ctx;
 }
+
+/** False while the daemon is out of reach. True where nothing watches the connection. */
+export function useIsConnected(): boolean {
+  const ctx = useContext(ConnectionStatusContext);
+  return ctx == null || ctx.state === 'connected';
+}

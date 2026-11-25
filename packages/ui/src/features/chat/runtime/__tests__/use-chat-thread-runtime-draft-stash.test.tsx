@@ -18,13 +18,21 @@ vi.mock('../../../sessions/runtime/chat-controller-registry', () => ({
 }));
 
 const setTextSpy = vi.fn();
+const clearAttachmentsSpy = vi.fn().mockResolvedValue(undefined);
 const addAttachmentSpy = vi.fn().mockResolvedValue(undefined);
 let composerState: { text: string; attachments: { file?: File }[] } = { text: '', attachments: [] };
 const getStateSpy = vi.fn(() => composerState);
 
 vi.mock('@assistant-ui/react', () => ({
   useExternalStoreRuntime: () => ({
-    thread: { composer: { setText: setTextSpy, addAttachment: addAttachmentSpy, getState: getStateSpy } },
+    thread: {
+      composer: {
+        setText: setTextSpy,
+        addAttachment: addAttachmentSpy,
+        clearAttachments: clearAttachmentsSpy,
+        getState: getStateSpy,
+      },
+    },
   }),
   useAuiState: vi.fn(() => undefined),
 }));
@@ -168,17 +176,11 @@ describe('useChatThreadRuntime — draft-stash capture on unmount', () => {
   });
 });
 
-// `splitFits` lags `zones` (its ResizeObserver settles async, after the
-// workspace panel parks to free the width — review follow-up on 214de9d4):
-// this instance can correctly be "the one displayed" for a beat, take the
-// stash, and then lose that status once `ChatZone` mounts. The handoff below
-// hands whatever the composer holds back to the stash at that exact moment,
-// so `ChatZone`'s own restore still finds it instead of a now-empty composer.
-//
-// Gated on `isVisibleSplitZone` (`isVisibleZone(zones, chatId) && splitFits`),
-// NOT `skipDraftRestore` — see the regression group below for why.
-describe('useChatThreadRuntime — handoff when becoming a visible split zone', () => {
-  it('re-stashes the composer’s CURRENT content (the user’s edit, not the stale original) when isVisibleSplitZone flips true', () => {
+// Opening a chat in a workspace tab gives it a second composer, the tab's own.
+// Whatever this one holds goes with it, or the tab would open empty and the
+// draft would sit where nobody sees it.
+describe('useChatThreadRuntime — handoff when the chat opens in a workspace tab', () => {
+  it('re-stashes the composer’s CURRENT content (the user’s edit, not the stale original)', () => {
     handoffDraft('chat-handoff-1', { text: 'original draft', attachments: [] });
     composerState = { text: 'original draft', attachments: [] };
     const controller = makeController('chat-handoff-1');
@@ -187,43 +189,44 @@ describe('useChatThreadRuntime — handoff when becoming a visible split zone', 
         useChatThreadRuntime(controller, PORT, {
           active: false,
           chatId: 'chat-handoff-1',
-          isVisibleSplitZone: visible,
+          shownInTab: visible,
         }),
       { initialProps: { visible: false } },
     );
     expect(setTextSpy).toHaveBeenCalledWith('original draft');
     expect(takeStash('chat-handoff-1')).toBeUndefined(); // one-shot: already taken
 
-    // The user edits it before the layout (e.g. a split catching up with a
-    // just-parked workspace panel) makes this instance a visible zone member.
+    // The user edits it, then opens the chat beside another one.
     composerState = { text: 'user edited text', attachments: [] };
     rerender({ visible: true });
 
-    // Handed off for the next consumer (ChatZone's own restore) to take.
+    // Handed off for the next consumer (the tab's `DraftKeeper`) to take.
     expect(takeStash('chat-handoff-1')).toEqual({ text: 'user edited text', attachments: [] });
-    // Cleared locally too, so an unsplit back to this instance later doesn't
+    // Cleared locally too, so opening it in the chat column later doesn't
     // resurrect the handed-off text stale.
     expect(setTextSpy).toHaveBeenLastCalledWith('');
     unmount();
   });
 
-  it('hands off text typed into a narrow fork without an earlier stash', () => {
+  it('hands off text typed in the chat column, and its files', () => {
     const controller = makeController('chat-handoff-typed');
     const { rerender, unmount } = renderHook(
       ({ visible }: { visible: boolean }) =>
         useChatThreadRuntime(controller, PORT, {
           active: false,
           chatId: 'chat-handoff-typed',
-          isVisibleSplitZone: visible,
+          shownInTab: visible,
         }),
       { initialProps: { visible: false } },
     );
 
-    composerState = { text: 'typed in the single view', attachments: [] };
+    const file = new File(['x'], 'notes.txt');
+    composerState = { text: 'typed in the chat column', attachments: [{ file }] };
     rerender({ visible: true });
 
-    expect(takeStash('chat-handoff-typed')).toEqual({ text: 'typed in the single view', attachments: [] });
+    expect(takeStash('chat-handoff-typed')).toEqual({ text: 'typed in the chat column', attachments: [file] });
     expect(setTextSpy).toHaveBeenLastCalledWith('');
+    expect(clearAttachmentsSpy).toHaveBeenCalled();
     unmount();
   });
 
@@ -234,12 +237,12 @@ describe('useChatThreadRuntime — handoff when becoming a visible split zone', 
         useChatThreadRuntime(controller, PORT, {
           active: false,
           chatId: 'chat-handoff-2',
-          isVisibleSplitZone: visible,
+          shownInTab: visible,
         }),
       { initialProps: { visible: true } },
     );
     rerender({ visible: false }); // takes — nothing stashed, so a no-op
-    rerender({ visible: true }); // becomes a visible zone member with nothing to hand off
+    rerender({ visible: true }); // opens in a tab with nothing to hand off
 
     expect(takeStash('chat-handoff-2')).toBeUndefined();
     expect(setTextSpy).not.toHaveBeenCalledWith('');
@@ -247,33 +250,28 @@ describe('useChatThreadRuntime — handoff when becoming a visible split zone', 
   });
 });
 
-// Regression (5c43c27e → the bug this PR fixes): a draft was erased by simply
-// switching to another chat. `skipDraftRestore` flips true on any ORDINARY
-// focus change too (`pendingPair || !isDisplayedHere` — every other warm
-// instance's `isDisplayedHere` goes false the moment it isn't
-// `mainThreadId`), which used to drive the handoff directly. That stashed
-// (and cleared) this chat's draft on a plain focus change; `OffloadRelease`'s
-// later real eviction then captured the already-cleared composer and
-// overwrote the real draft with `{ text: '' }`.
+// Regression: switching to another session also takes the composer off screen,
+// and it used to stash-and-clear the draft there. `OffloadRelease`'s later real
+// eviction then captured the cleared composer over the real draft.
 describe('useChatThreadRuntime — a plain focus change never hands off (chat-switch regression)', () => {
-  it('leaves the draft alone when skipDraftRestore flips true but this chat never becomes a visible split zone', () => {
+  it('leaves the draft alone when the chat leaves the screen without opening in a tab', () => {
     handoffDraft('chat-focus-switch-1', { text: 'drafted before switching chats', attachments: [] });
     composerState = { text: 'drafted before switching chats', attachments: [] };
     const controller = makeController('chat-focus-switch-1');
     const { rerender, unmount } = renderHook(
-      ({ skip }: { skip: boolean }) =>
+      ({ owns }: { owns: boolean }) =>
         useChatThreadRuntime(controller, PORT, {
           active: false,
           chatId: 'chat-focus-switch-1',
-          skipDraftRestore: skip,
-          isVisibleSplitZone: false, // never a split member — just an ordinary focus change
+          ownsComposer: owns,
+          shownInTab: false,
         }),
-      { initialProps: { skip: false } },
+      { initialProps: { owns: true } },
     );
     expect(setTextSpy).toHaveBeenCalledWith('drafted before switching chats');
 
     // The user switches focus to an unrelated chat.
-    rerender({ skip: true });
+    rerender({ owns: false });
 
     expect(setTextSpy).not.toHaveBeenLastCalledWith('');
     expect(takeStash('chat-focus-switch-1')).toBeUndefined(); // nothing handed off

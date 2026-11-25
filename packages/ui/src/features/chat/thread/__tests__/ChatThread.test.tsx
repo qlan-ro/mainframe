@@ -23,6 +23,7 @@ vi.mock('@assistant-ui/react', () => {
       Messages: () => <div data-testid="tp-messages" />,
     },
     // isRunning selector → true; messages.length selector → 1.
+    useAui: () => ({}),
     useAuiState: (
       sel: (s: {
         thread: { isRunning: boolean; messages: unknown[] };

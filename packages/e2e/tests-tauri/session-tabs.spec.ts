@@ -15,10 +15,7 @@
  * Every testid below is unchanged by the redesign (`SessionTabPill.tsx` kept
  * them through the restyle — content-sized `rounded-md` pill, no more
  * underline, the 14px lead slot now a `ProviderDot` instead of a
- * `ProjectAvatar`). The pill's new split-pair form (`SessionTabPair.tsx`,
- * `session-tabs-zone-group`) and the menu's "Open in Split"
- * (`session-tab-ctx-open-split`) have no single-tab scenario here — they
- * belong to the split/zone specs that actually open a second surface.
+ * `ProjectAvatar`). The menu's Open in Workspace belongs to workspace-chats.spec.
  *
  * Testid reference (verified against packages/ui/src/features/session-tabs/):
  *   session-tabs             — the strip root (inside the title bar's chat column)

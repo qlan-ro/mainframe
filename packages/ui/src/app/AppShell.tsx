@@ -49,6 +49,7 @@ import { useReturnToChatsOnActivate } from '../layout/use-return-to-chats-on-act
 import { setSessionNavigator } from '../lib/session-nav';
 import { getChat } from '../lib/api/chats';
 import { navigateToSession } from '../features/side-chat/navigate-to-session';
+import { useTrackConversationFocus } from './use-track-conversation-focus';
 import { useShortcutDispatcher } from '../features/shortcuts/use-shortcut-dispatcher';
 import { useIndexHintReveal } from '../features/shortcuts/index-hints';
 import { ShortcutsCheatSheet } from '../features/shortcuts/ShortcutsCheatSheet';
@@ -100,6 +101,7 @@ function ShellRuntime({ port }: { port: number }) {
   useSandboxWsRouter();
   // The app's ONE keydown listener — every app chord dispatches through it.
   useShortcutDispatcher();
+  useTrackConversationFocus();
   // Hold ⌘ (Ctrl off-mac) to reveal which number each session tab answers to.
   useIndexHintReveal();
   // D3: a session activation (tab click, ⌘N, a task/automation's "open

@@ -1,10 +1,7 @@
 /**
- * useForkChat — forks via the daemon, opens the result in a split beside its
- * parent, and reports failure.
- * `useAui` and the daemon port are module-mocked; `switchToThread` is asserted
- * to fire without waiting on `reload()` first (the self-heal via
- * `adapter.fetch` documented on the hook). The split beside the parent is
- * only queued here — `useZonesReconciler` opens it once the fork is listed.
+ * useForkChat — forks via the daemon, opens the result in the workspace beside
+ * the conversation (W9), and reports failure. `useAui` and the daemon port are
+ * module-mocked.
  */
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,7 +19,7 @@ vi.mock('@/lib/api/chats', () => ({ forkChat: (...args: unknown[]) => forkChatMo
 vi.mock('@/lib/toast', () => ({ mfToast: { error: (...args: unknown[]) => toastError(...args) } }));
 vi.mock('../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 
-import { useZonesStore } from '@/features/chat/zones/zones-store';
+import { useLayoutStore } from '@/store/layout';
 import { useForkChat } from '../use-fork-chat';
 
 beforeEach(() => {
@@ -30,51 +27,54 @@ beforeEach(() => {
   reload.mockReset().mockResolvedValue(undefined);
   forkChatMock.mockReset();
   toastError.mockReset();
-  useZonesStore.setState({ zones: null, focusedIndex: 0, pendingPair: null });
+  useLayoutStore.setState({
+    layout: { top: ['chat'], topFlex: {} },
+    run: null,
+    sessions: new Map(),
+    activeSessionId: 'chat-parent',
+  });
   mainThreadId = 'chat-parent';
 });
 
+const tabs = () => useLayoutStore.getState().run?.panes.flatMap((pane) => pane.tabs) ?? [];
+
 describe('useForkChat', () => {
-  it('forks the given chat, switches to the new one, and reloads the thread list', async () => {
-    forkChatMock.mockResolvedValue({ id: 'chat-fork-1' });
+  it('opens the fork as a tab beside its parent, which stays the conversation', async () => {
+    forkChatMock.mockResolvedValue({ id: 'chat-fork-1', title: 'Try it another way' });
     const { result } = renderHook(() => useForkChat());
 
     await act(() => result.current('chat-parent'));
 
     expect(forkChatMock).toHaveBeenCalledWith(31415, 'chat-parent');
-    expect(switchToThread).toHaveBeenCalledWith('chat-fork-1');
+    expect(tabs()).toEqual([
+      { id: 'chat-chat-fork-1', kind: 'chat', title: 'Try it another way', chatId: 'chat-fork-1', role: 'fork' },
+    ]);
+    expect(useLayoutStore.getState().layout.top).toEqual(['chat', 'workspace']);
+    expect(switchToThread).not.toHaveBeenCalled();
     expect(reload).toHaveBeenCalledTimes(1);
     expect(toastError).not.toHaveBeenCalled();
   });
 
-  it('queues a split pairing the fork beside its on-screen parent, parent on the left', async () => {
-    forkChatMock.mockResolvedValue({ id: 'chat-fork-1' });
-    const { result } = renderHook(() => useForkChat());
-
-    await act(() => result.current('chat-parent'));
-
-    expect(useZonesStore.getState().pendingPair).toEqual(['chat-parent', 'chat-fork-1']);
-  });
-
-  it('pairs the fork with the chat in view when the parent is off screen', async () => {
+  it('opens it beside the conversation on screen when the parent is another session', async () => {
     mainThreadId = 'chat-current';
+    useLayoutStore.setState({ activeSessionId: 'chat-current' });
     forkChatMock.mockResolvedValue({ id: 'chat-fork-1' });
     const { result } = renderHook(() => useForkChat());
 
     await act(() => result.current('chat-parent'));
 
-    expect(useZonesStore.getState().pendingPair).toEqual(['chat-current', 'chat-fork-1']);
-    expect(switchToThread).toHaveBeenCalledWith('chat-fork-1');
+    expect(tabs().map((tab) => tab.chatId)).toEqual(['chat-fork-1']);
+    expect(switchToThread).not.toHaveBeenCalled();
   });
 
-  it('opens the fork alone when only an unsent draft is in view', async () => {
+  it('opens it in the chat column when only an unsent draft is in view', async () => {
     mainThreadId = '__LOCALID_1';
     forkChatMock.mockResolvedValue({ id: 'chat-fork-1' });
     const { result } = renderHook(() => useForkChat());
 
     await act(() => result.current('chat-parent'));
 
-    expect(useZonesStore.getState().pendingPair).toBeNull();
+    expect(tabs()).toEqual([]);
     expect(switchToThread).toHaveBeenCalledWith('chat-fork-1');
   });
 
@@ -87,7 +87,7 @@ describe('useForkChat', () => {
     expect(toastError).toHaveBeenCalledWith('Nothing to fork yet');
     expect(switchToThread).not.toHaveBeenCalled();
     expect(reload).not.toHaveBeenCalled();
-    expect(useZonesStore.getState().pendingPair).toBeNull();
+    expect(tabs()).toEqual([]);
   });
 
   it('sends fromMessageId and opens the fork', async () => {
@@ -97,7 +97,7 @@ describe('useForkChat', () => {
     await act(() => result.current('chat-parent', { fromMessageId: 'msg-2' }));
 
     expect(forkChatMock).toHaveBeenCalledWith(31415, 'chat-parent', { fromMessageId: 'msg-2' });
-    expect(switchToThread).toHaveBeenCalledWith('chat-fork-2');
+    expect(tabs().map((tab) => tab.chatId)).toEqual(['chat-fork-2']);
   });
 
   it('does not switch when a from-message fork fails', async () => {

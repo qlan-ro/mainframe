@@ -5,6 +5,7 @@ import {
   activateRunTab as activateRunTabReducer,
   closePane as closePaneReducer,
   closeRunTab as closeRunTabReducer,
+  isConversationTab,
   releaseRunScope as releaseRunScopeReducer,
   retargetUrlTab as retargetUrlTabReducer,
   tabIdsForScope,
@@ -24,16 +25,17 @@ import { layoutPersistOptions, prunePersistedSessions } from './layout-persist';
 import { adoptSessionEntry, dropSessionEntry } from './layout-sessions';
 import {
   isSurfaceFloor,
-  layoutCanSplit,
+  isSurfaceLit,
   placeInLayout,
   removeSurface,
-  repositionInLayout,
   type SurfaceId,
   type WorkspaceLayout,
 } from './layout-placement';
+import { useActiveBasesStore } from './active-bases-store';
+import { filterRunByScope } from './run-scope-filter';
 
-export type { RepositionTarget, SurfaceId, WorkspaceLayout } from './layout-placement';
-export { isSurfaceFloor, isSurfaceLit, layoutCanSplit, litSurfaceCount } from './layout-placement';
+export type { SurfaceId, WorkspaceLayout } from './layout-placement';
+export { isSurfaceFloor, isSurfaceLit } from './layout-placement';
 
 /** A single session's remembered workspace (surface placement + workspace panes). */
 export interface SessionWorkspace {
@@ -43,19 +45,18 @@ export interface SessionWorkspace {
 
 // ── store ─────────────────────────────────────────────────────────────────
 
-/** Injected by features/chat/zones (store/ cannot import features/): true while the
- *  chat split is on screen, so a surface lit mid-split lands in the bottom strip. */
-let chatSplitVisibleProbe: () => boolean = () => false;
-export function registerChatSplitVisibleProbe(probe: () => boolean): void {
-  chatSplitVisibleProbe = probe;
-}
+const INITIAL_LAYOUT: WorkspaceLayout = { top: ['chat'], topFlex: {} };
 
-const INITIAL_LAYOUT: WorkspaceLayout = {
-  top: ['chat'],
-  bottom: null,
-  topFlex: {},
-  vFlex: { top: 1, bottom: 0.4 },
-};
+/**
+ * True once nothing the user can see is left in the workspace. Tabs of another
+ * launch scope stay in the panes unseen, so an empty `run` alone is too late:
+ * the last VISIBLE tab is the one whose close collapses the panel (W5).
+ */
+function nothingVisible(run: RunState | null, closed: RunTab | undefined): boolean {
+  const scope =
+    closed == null || isConversationTab(closed) ? useActiveBasesStore.getState().scopeKey : (closed.scopeKey ?? null);
+  return filterRunByScope(run, scope) == null;
+}
 
 export interface LayoutStore {
   layout: WorkspaceLayout;
@@ -68,27 +69,16 @@ export interface LayoutStore {
   setActiveSession: (sessionId: string) => void;
 
   toggleSurface: (surface: SurfaceId) => void;
-  /** Called by the horizontal SurfDivider; frac = fraction of the top-row width. */
+  /** Called by the SurfDivider; frac = the chat's fraction of the row's width. */
   setTopFrac: (frac: number) => void;
-  /** Called by the vertical SurfDivider; frac = fraction of the total height. */
-  setVFrac: (frac: number) => void;
-  /** Place the workspace surface side-by-side ('v') or in the bottom strip ('h'). */
-  splitSurface: (orientation: 'v' | 'h') => void;
-
-  /** Set while the chat split parked the workspace in the strip — holds the top-row
-   *  side it came from so the restore returns it there. Transient by design. */
-  workspaceSystemMoved: 'top-left' | 'top-right' | null;
-  /** Chat-split follower (split plan, decision 8): a top-row workspace moves to
-   *  the bottom strip when the chat splits… */
-  moveWorkspaceForChatSplit: () => void;
-  /** …and returns beside the chat on unsplit. */
-  restoreWorkspaceAfterChatSplit: () => void;
   /** Open (or focus) a file-backed tab in the workspace and light the surface; returns its id. */
   openFileTab: (target: OpenFileTarget, mode: TabMode, paneId?: string) => string;
   /** Promote a preview tab to permanent (double-click / first edit). */
   promoteFileTab: (tabId: string) => void;
   /** Append a tab (terminal/preview). False when an explicit `paneId` no longer exists (M6). */
   addRunTab: (tab: RunTab, paneId?: string) => boolean;
+  /** Append a tab to a session's remembered workspace and light it, whether or not it is the active one. */
+  addSessionTab: (sessionId: string, tab: RunTab) => void;
   activateRunTab: (paneId: string, tabId: string) => void;
   /** Point a URL tab at a newly committed URL. The tab's id — and its webview — survive. */
   setUrlTabTarget: (tabId: string, url: string, title: string) => void;
@@ -118,16 +108,6 @@ export const useLayoutStore = create<LayoutStore>()(
       set({ layout: next.layout, run: next.run, sessions: nextSessions });
     }
 
-    /** placeInLayout, but split-aware: while the chat split is visible a newly lit
-     *  workspace goes to the bottom strip, claimed as system-moved to return later. */
-    function placeWorkspace(layout: WorkspaceLayout): WorkspaceLayout {
-      if (chatSplitVisibleProbe() && layout.bottom == null && !layout.top.includes('workspace')) {
-        set({ workspaceSystemMoved: 'top-right' });
-        return { ...layout, bottom: 'workspace' };
-      }
-      return placeInLayout(layout, 'workspace');
-    }
-
     return {
       layout: INITIAL_LAYOUT,
       run: null,
@@ -137,7 +117,7 @@ export const useLayoutStore = create<LayoutStore>()(
       setActiveSession(sessionId) {
         const { sessions } = get();
         const existing = sessions.get(sessionId);
-        // structuredClone so per-session seeds don't share nested topFlex/vFlex refs.
+        // structuredClone so per-session seeds don't share nested topFlex refs.
         const ws: SessionWorkspace = existing ?? { layout: structuredClone(INITIAL_LAYOUT), run: null };
         const nextSessions = existing ? sessions : new Map(sessions).set(sessionId, ws);
         set({ activeSessionId: sessionId, layout: ws.layout, run: ws.run, sessions: nextSessions });
@@ -149,15 +129,8 @@ export const useLayoutStore = create<LayoutStore>()(
         const { layout, run } = get();
         // Dynamic floor: the last lit surface (chat or workspace) can't be hidden.
         if (isSurfaceFloor(layout, surface)) return;
-        const isActive = layout.top.includes(surface) || layout.bottom === surface;
-        writeWorkspace({
-          layout: isActive
-            ? removeSurface(layout, surface)
-            : surface === 'workspace'
-              ? placeWorkspace(layout)
-              : placeInLayout(layout, surface),
-          run,
-        });
+        const lit = isSurfaceLit(layout, surface);
+        writeWorkspace({ layout: lit ? removeSurface(layout, surface) : placeInLayout(layout, surface), run });
       },
 
       setTopFrac(frac) {
@@ -168,43 +141,10 @@ export const useLayoutStore = create<LayoutStore>()(
         writeWorkspace({ layout: { ...layout, topFlex: { ...layout.topFlex, [a]: c, [b]: 1 - c } }, run });
       },
 
-      setVFrac(frac) {
-        const { layout, run } = get();
-        const c = Math.max(0.18, Math.min(0.82, frac));
-        writeWorkspace({ layout: { ...layout, vFlex: { top: c, bottom: 1 - c } }, run });
-      },
-
-      splitSurface(orientation) {
-        const { layout, run } = get();
-        if (!layoutCanSplit(layout)) return;
-        if (orientation === 'v') {
-          writeWorkspace({ layout: placeWorkspace(layout), run });
-        } else {
-          if (layout.bottom) return;
-          writeWorkspace({ layout: { ...layout, bottom: 'workspace' }, run });
-        }
-      },
-
-      workspaceSystemMoved: null,
-
-      moveWorkspaceForChatSplit() {
-        const { layout, run } = get();
-        if (!layout.top.includes('workspace')) return;
-        set({ workspaceSystemMoved: layout.top[0] === 'workspace' ? 'top-left' : 'top-right' });
-        writeWorkspace({ layout: repositionInLayout(layout, 'workspace', 'bottom'), run });
-      },
-
-      restoreWorkspaceAfterChatSplit() {
-        const { layout, run, workspaceSystemMoved } = get();
-        set({ workspaceSystemMoved: null });
-        if (workspaceSystemMoved == null || layout.bottom !== 'workspace') return;
-        writeWorkspace({ layout: repositionInLayout(layout, 'workspace', workspaceSystemMoved), run });
-      },
-
       openFileTab(target, mode, paneId) {
         const { layout, run } = get();
         const next = openFileTabReducer(run, target, mode, paneId);
-        writeWorkspace({ layout: placeWorkspace(layout), run: next.run });
+        writeWorkspace({ layout: placeInLayout(layout, 'workspace'), run: next.run });
         return next.tabId;
       },
 
@@ -220,8 +160,21 @@ export const useLayoutStore = create<LayoutStore>()(
         const nextRun = addRunTabReducer(run, tab, paneId);
         // null = explicit paneId gone; false tells the subscriber to dispose the orphan.
         if (nextRun === null) return false;
-        writeWorkspace({ layout: placeWorkspace(layout), run: nextRun });
+        writeWorkspace({ layout: placeInLayout(layout, 'workspace'), run: nextRun });
         return true;
+      },
+
+      addSessionTab(sessionId, tab) {
+        const { sessions, activeSessionId } = get();
+        if (sessionId === activeSessionId) {
+          get().addRunTab(tab);
+          return;
+        }
+        const entry = sessions.get(sessionId) ?? { layout: structuredClone(INITIAL_LAYOUT), run: null };
+        const run = addRunTabReducer(entry.run, tab);
+        set({
+          sessions: new Map(sessions).set(sessionId, { layout: placeInLayout(entry.layout, 'workspace'), run }),
+        });
       },
 
       activateRunTab(paneId, tabId) {
@@ -245,7 +198,8 @@ export const useLayoutStore = create<LayoutStore>()(
         if (tab?.kind === 'url') releaseUrlTunnels([tabId]);
         // Preview destruction: PreviewInstance's own unmount cleanup, once removed.
         const nextRun = closeRunTabReducer(run, paneId, tabId);
-        writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'workspace'), run: nextRun });
+        const collapse = nothingVisible(nextRun, tab);
+        writeWorkspace({ layout: collapse ? removeSurface(layout, 'workspace') : layout, run: nextRun });
       },
 
       closePane(paneId) {
@@ -254,8 +208,10 @@ export const useLayoutStore = create<LayoutStore>()(
         killAndDisposeCachedTerminals(tabIdsInPane(run, paneId, 'terminal'));
         releaseUrlTunnels(tabIdsInPane(run, paneId, 'url'));
         // Preview destruction: PreviewInstance's own unmount cleanup, once removed.
+        const closed = run.panes.find((p) => p.id === paneId)?.tabs[0];
         const nextRun = closePaneReducer(run, paneId);
-        writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'workspace'), run: nextRun });
+        const collapse = nothingVisible(nextRun, closed);
+        writeWorkspace({ layout: collapse ? removeSurface(layout, 'workspace') : layout, run: nextRun });
       },
 
       releaseRunScope(scopeKey) {
@@ -265,7 +221,9 @@ export const useLayoutStore = create<LayoutStore>()(
         releaseUrlTunnels(tabIdsForScope(run, scopeKey, 'url'));
         // Preview/console bodies tear down via their own unmount cleanup once removed.
         const nextRun = releaseRunScopeReducer(run, scopeKey);
-        writeWorkspace({ layout: nextRun ? layout : removeSurface(layout, 'workspace'), run: nextRun });
+        // As closing its tabs one by one would (W5).
+        const collapse = nextRun == null || (!nothingVisible(run, undefined) && nothingVisible(nextRun, undefined));
+        writeWorkspace({ layout: !collapse ? layout : removeSurface(layout, 'workspace'), run: nextRun });
       },
 
       pruneSessions(validIds) {

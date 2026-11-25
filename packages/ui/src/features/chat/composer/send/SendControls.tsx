@@ -9,7 +9,7 @@
  * draft text, so hoisting it would re-render the whole composer on every
  * keystroke.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { ArrowUpIcon, ChevronDown, CornerDownLeft, Loader2Icon } from 'lucide-react';
 import {
@@ -20,12 +20,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { useShortcutAction } from '@/features/shortcuts/action-store';
 import type { EnterWhileRunning } from '@/store/ui-prefs';
 import { ComposerHint } from '../composer-card-context';
 import { useCanSubmit, type SubmitComposition } from '../segments/use-submit-composition';
 import { useCanSteer, useEnterMode } from './use-enter-mode';
 import { useComposerStop, type ComposerStop } from './use-stop';
+import { useStopShortcut } from './use-stop-shortcut';
 
 const ROUND = 'grid size-7 shrink-0 place-items-center rounded-full border transition-colors focus-visible:focus-line';
 
@@ -39,7 +39,7 @@ function StopButton({ stop }: { stop: ComposerStop }) {
         data-stopping={stop.stopping || undefined}
         aria-label={label}
         disabled={stop.stopping}
-        onClick={stop.stop}
+        onClick={(event) => stop.stop(event.currentTarget)}
         className={cn(
           ROUND,
           stop.stopping
@@ -55,11 +55,6 @@ function StopButton({ stop }: { stop: ComposerStop }) {
       </button>
     </ComposerHint>
   );
-}
-
-function StopShortcut({ stop }: { stop: () => void }) {
-  useShortcutAction('chat.stop', stop);
-  return null;
 }
 
 function SendButton({ ready }: { ready: boolean }) {
@@ -159,11 +154,11 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
 /** Stop and its shortcut, wherever the composer shows them. */
 export function StopControl() {
   const stop = useComposerStop();
-  // Split view mounts two composers: ⌘. belongs to the focused one.
-  const focused = useAuiState((s) => s.threads?.mainThreadId === s.threadListItem?.id);
+  const anchor = useRef<HTMLSpanElement>(null);
+  useStopShortcut(anchor, () => stop.stop(anchor.current), stop.running);
   return (
     <>
-      {focused && <StopShortcut stop={stop.stop} />}
+      <span ref={anchor} hidden />
       {stop.available && <StopButton stop={stop} />}
     </>
   );

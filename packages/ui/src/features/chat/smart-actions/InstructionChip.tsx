@@ -35,7 +35,7 @@ export function InstructionChip({ target, variant = 'inline' }: InstructionChipP
           data-testid="smart-action-instruction-append"
           aria-label="Add to composer"
           className={ICON_BUTTON_CLASS}
-          onClick={() => append(target.insertText)}
+          onClick={(event) => append(target.insertText, event.currentTarget)}
         >
           <CornerDownLeft className="size-3.5" />
         </button>

@@ -45,6 +45,7 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar, composer, workspace } from '../helpers/tauri/page-objects.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
+import { openWorkspaceAtRest } from '../helpers/tauri/wait.js';
 
 // ─── drag-gesture helpers (divider resizes) ───────────────────────────────────
 
@@ -190,6 +191,7 @@ test.describe('§20 layout — splits + divider resize', () => {
     const { page } = app;
     await page.getByTestId('surface-rail-workspace').click();
     await expect(page.getByTestId('workspace-surface')).toBeVisible({ timeout: 5_000 });
+    await openWorkspaceAtRest(page);
 
     const chatBox = await page.locator('[data-surface="chat"]').boundingBox();
     const wsBox = await page.locator('[data-surface="workspace"]').boundingBox();
@@ -216,6 +218,7 @@ test.describe('§20 layout — splits + divider resize', () => {
 
   test('dragging the horizontal divider resizes the top-row split, and the fraction sticks across a re-render', async () => {
     const { page } = app;
+    await openWorkspaceAtRest(page);
     const box = await page.getByTestId('surf-divider-x').boundingBox();
     if (!box) throw new Error('surf-divider-x has no bounding box');
     const wsBefore = await page.locator('[data-surface="workspace"]').boundingBox();
@@ -245,6 +248,7 @@ test.describe('§20 layout — splits + divider resize', () => {
   test('closing the non-floor workspace leaves Chat alone, and re-showing it brings its tabs back', async () => {
     const { page } = app;
     // Re-light the workspace so it starts from a fresh top-row placement.
+    await openWorkspaceAtRest(page);
     await page.getByTestId('surface-rail-workspace').click();
     await expect(page.getByTestId('workspace-surface')).toHaveCount(0);
     await page.getByTestId('surface-rail-workspace').click();

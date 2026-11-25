@@ -2,13 +2,13 @@ import { useEffect, useState, type RefObject } from 'react';
 
 /**
  * Reports whether the current DOM selection's anchor lies inside `scopeRef`'s
- * element. Split view mounts one `ChatThread` (and one `ChatSelectionToolbar`)
- * per zone, both portalled to the same fixed position by
- * `SelectionToolbarPrimitive.Root` — without this, a selection in either zone
- * shows both toolbars stacked, and the top one (belonging to whichever zone,
+ * element. Every chat on screen mounts one `ChatThread` (and one
+ * `ChatSelectionToolbar`): the conversation, and each workspace chat tab, all portalled to the same fixed position by
+ * `SelectionToolbarPrimitive.Root` — without this, a selection in either
+ * shows both toolbars stacked, and the top one (belonging to whichever chat,
  * not necessarily the one holding the selection) eats the click (#359).
  *
- * `scopeRef` omitted means there is exactly one toolbar in view (no split, no
+ * `scopeRef` omitted means there is exactly one toolbar in view (no
  * contention) — always in scope.
  *
  * Listens the same events `SelectionToolbarPrimitive.Root` does — mouseup/keyup

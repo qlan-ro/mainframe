@@ -4,7 +4,7 @@
  * warm. Its requests show above the parent's composer (`gates/use-gate-queue`).
  *
  * Mounted only while the card is expanded: the hook holds the controller's
- * facade activation (`holdActive`, the split-zone hold), which attaches the
+ * facade activation (`holdActive`), which attaches the
  * child's session on the shared per-adapter `/acp/{profile}` connection — a
  * `session/resume` on a socket the app already has, not a new one — and
  * releases it on collapse or unmount, which detaches the stream again. The

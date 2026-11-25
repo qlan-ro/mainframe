@@ -5,7 +5,7 @@
  */
 import { it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useZonesStore } from '../../../chat/zones/zones-store';
+import { useMountedConversations } from '../../../workspace-chat/mounted-conversations';
 
 let mainThreadIdValue: string | null;
 let fakeThreadItems: Array<{ id: string; remoteId?: string }>;
@@ -18,7 +18,7 @@ let disposeControllerSpy: ReturnType<typeof vi.fn<(id: string) => void>>;
 interface CapturedDeps {
   getThreadItems: () => readonly { id: string; remoteId: string | undefined }[];
   getMainThreadId: () => string | null;
-  getZones: () => readonly [string, string] | null;
+  getTabChats: () => ReadonlySet<string>;
   detachItem: (id: string) => void;
   disposeController: (chatId: string) => void;
   markForStash: (id: string) => void;
@@ -71,7 +71,7 @@ beforeEach(() => {
   detachSpy = vi.fn();
   disposeControllerSpy = vi.fn();
   factoryCallCount = 0;
-  useZonesStore.setState({ zones: null, focusedIndex: 0 });
+  useMountedConversations.setState({ held: new Set() });
 });
 
 it('constructs the release exactly once per threads-scope identity', () => {
@@ -82,16 +82,16 @@ it('constructs the release exactly once per threads-scope identity', () => {
   expect(factoryCallCount).toBe(1);
 });
 
-it('wires getThreadItems/getMainThreadId/getZones to the live aui + zones state', () => {
+it('wires getThreadItems/getMainThreadId/getTabChats to the live state', () => {
   mainThreadIdValue = 'chat-9';
   fakeThreadItems = [{ id: 'chat-9', remoteId: undefined }];
-  useZonesStore.setState({ zones: ['a', 'b'], focusedIndex: 0 });
+  useMountedConversations.setState({ held: new Set(['a', 'b']) });
 
   renderHook(() => useOffloadRelease());
 
   expect(capturedDeps.getThreadItems()).toEqual(fakeThreadItems);
   expect(capturedDeps.getMainThreadId()).toBe('chat-9');
-  expect(capturedDeps.getZones()).toEqual(['a', 'b']);
+  expect(capturedDeps.getTabChats()).toEqual(new Set(['a', 'b']));
 });
 
 it('wires detachItem to the aui thread-list-item detach() method', () => {
@@ -128,11 +128,11 @@ it('calls recheck() again when mainThreadId changes (beyond the mount-time call)
   expect(recheckSpy.mock.calls.length).toBeGreaterThan(afterMount);
 });
 
-it('calls recheck() again when the zones pair changes (beyond the mount-time call)', () => {
+it('calls recheck() again when the workspace chat tabs change (beyond the mount-time call)', () => {
   const { rerender } = renderHook(() => useOffloadRelease());
   const afterMount = recheckSpy.mock.calls.length;
 
-  act(() => useZonesStore.setState({ zones: ['a', 'b'], focusedIndex: 0 }));
+  act(() => useMountedConversations.setState({ held: new Set(['a', 'b']) }));
   rerender();
 
   expect(recheckSpy.mock.calls.length).toBeGreaterThan(afterMount);
