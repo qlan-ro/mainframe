@@ -271,7 +271,7 @@ const area: CaptureArea = {
         {
           id: 'sections-menu',
           caption: '**Sections menu.** Each section on or off, remembered for this viewer.',
-          crop: [1124, 48, 316, 720],
+          crop: [1124, 48, 316, 852],
           setup: async ({ page }) => {
             await page.getByTestId('session-panel-sections-menu').click();
             await page.getByTestId('session-panel-sections-menu-tasks').waitFor();
@@ -412,7 +412,7 @@ const area: CaptureArea = {
         {
           id: 'command-menu',
           caption: '**A background command’s menu** has its full output, until its transcript row shows it.',
-          crop: [1040, 48, 400, 520],
+          crop: [1040, 48, 400, 852],
           setup: async ({ page }) => {
             await page.getByTestId('session-panel-activity-task:c1').click({ button: 'right' });
             await page.getByTestId('session-panel-activity-output-task:c1').waitFor();
@@ -432,7 +432,7 @@ const area: CaptureArea = {
         {
           id: 'row-menu',
           caption: '**Right-click.** Stop while the work can be stopped, and Show in transcript where the history holds its call (not for this task).',
-          crop: [1040, 48, 400, 420],
+          crop: [1040, 48, 400, 852],
           setup: async ({ page }) => {
             await page.keyboard.press('Escape');
             await page.getByTestId('session-panel-output-dialog').waitFor({ state: 'detached' });
