@@ -631,7 +631,7 @@ test.describe('§sessions-draft — empty state', () => {
     project = await createTauriProject(app.page);
     chatId = await createTauriChat(app.page, project.projectId, 'default');
     for (const title of ['Keep the retry timer', 'Round the export totals']) {
-      const res = await fetch(`${DAEMON_BASE}/api/plugins/todos/todos`, {
+      const res = await daemonFetch('/api/plugins/todos/todos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: project.projectId, title }),

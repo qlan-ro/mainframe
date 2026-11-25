@@ -78,7 +78,7 @@ async function seedTasks(projectId: string): Promise<void> {
     'Remember file tree expansion per project',
     'Auto mode is ignored after a resume',
   ]) {
-    await fetch(`${DAEMON_BASE}/api/plugins/todos/todos`, {
+    await daemonFetch('/api/plugins/todos/todos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, title }),
