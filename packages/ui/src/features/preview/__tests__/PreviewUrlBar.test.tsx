@@ -33,6 +33,18 @@ describe('PreviewUrlBar', () => {
     handle = makeHandle();
   });
 
+  it.each([true, false])('keeps the address start addon to navigation buttons when enabled=%s', (enabled) => {
+    render(<PreviewUrlBar handle={handle} seedUrl="https://example.com/" enabled={enabled} />);
+    const group = screen.getByTestId('preview-url-input').closest('[data-slot="input-group"]');
+    const start = group?.querySelector('[data-align="inline-start"]');
+    expect(start?.children).toHaveLength(3);
+    expect([...start!.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Back',
+      'Forward',
+      'Reload preview',
+    ]);
+  });
+
   it('shows the seed URL as the input value when enabled', () => {
     render(<PreviewUrlBar handle={handle} seedUrl="http://localhost:3000" enabled />);
     expect(screen.getByTestId('preview-url-input')).toHaveValue('http://localhost:3000');
@@ -78,9 +90,32 @@ describe('PreviewUrlBar', () => {
   it('keeps the input live but dims the actions when enabled with no handle', () => {
     render(<PreviewUrlBar handle={null} seedUrl="http://localhost:3000" enabled />);
     expect(screen.getByTestId('preview-url-input')).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Forward' })).toBeDisabled();
     expect(screen.getByTestId('preview-url-reload')).toBeDisabled();
     expect(screen.getByTestId('preview-url-open-browser')).toBeDisabled();
     expect(screen.getByTestId('preview-url-clear-cache')).toBeDisabled();
+  });
+
+  it('steps through webview history and follows reported URLs', () => {
+    let emit: (url: string) => void = () => {};
+    handle = makeHandle({
+      goHistory: vi.fn().mockResolvedValue(undefined),
+      onNavigate: (cb) => {
+        emit = cb;
+        return () => {};
+      },
+    });
+    render(<PreviewUrlBar handle={handle} seedUrl="https://example.com/docs" enabled />);
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    act(() => emit('https://example.com/'));
+    expect(screen.getByTestId('preview-url-input')).toHaveValue('https://example.com/');
+    fireEvent.click(screen.getByRole('button', { name: 'Forward' }));
+    act(() => emit('https://example.com/docs'));
+    expect(screen.getByTestId('preview-url-input')).toHaveValue('https://example.com/docs');
+    expect(handle.goHistory).toHaveBeenNthCalledWith(1, -1);
+    expect(handle.goHistory).toHaveBeenNthCalledWith(2, 1);
+    expect(handle.navigate).not.toHaveBeenCalled();
   });
 
   it('Open in browser opens the current URL externally (not an in-webview navigate)', () => {
