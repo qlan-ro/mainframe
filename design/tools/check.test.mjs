@@ -346,18 +346,21 @@ test('no builder writes a board that holds a local path', () => {
     const project = join(dir, 'design/canvas/project');
     const proposals = join(dir, 'design/canvas/proposals');
     mkdirSync(project);
+    const build = () => execFileSync('python3', [join(proposals, 'build.py')], { stdio: 'pipe', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
     const run = (html) => {
-      const ids = JSON.parse(
-        python('import json,sys; sys.path.insert(0, sys.argv[1]); from states import BOARDS; print(json.dumps([s["id"] for b in BOARDS for s in b["states"]]))', '', [proposals]),
-      );
+      writeFileSync(join(proposals, 'states.py'), "BOARDS = [{'file': 'Proposal-Test', 'title': 'Test', 'cols': 1, 'states': [{'id': 'test', 'crop': None, 'cap': 'Test', 'theme': 'light'}]}]\n");
       const frame = { html, w: 100, h: 100 };
-      const frags = Object.fromEntries([...ids, '__sprite'].map((id) => [id, frame]));
-      writeFileSync(join(proposals, 'frags.json'), JSON.stringify(frags));
-      execFileSync('python3', [join(proposals, 'build.py')], { stdio: 'pipe', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
+      writeFileSync(join(proposals, 'frags.json'), JSON.stringify({ test: frame, __sprite: frame }));
+      build();
     };
     assert.throws(() => run('<p title="/Users/jane/Code">x</p>'), /the board names this machine, not written: \/Users\/jane\/Code/);
     assert.deepEqual(readdirSync(project), []);
     run('<p title="~/Code">x</p>');
+    assert.ok(readdirSync(project).includes('Proposal-Test.dc.html'));
+    rmSync(join(proposals, 'frags.json'));
+    rmSync(join(project, 'Proposal-Redesign-Spec.dc.html'));
+    writeFileSync(join(proposals, 'states.py'), 'BOARDS = []\n');
+    build();
     assert.ok(readdirSync(project).includes('Proposal-Redesign-Spec.dc.html'));
   } finally {
     rmSync(dir, { recursive: true, force: true });

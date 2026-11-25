@@ -6,7 +6,7 @@ from boards import write_board
 HERE=os.path.dirname(os.path.abspath(__file__))
 ROOT=os.path.dirname(HERE)  # design/canvas
 PROTO=os.path.join(ROOT,'..','redesign','prototype','index.html')
-FR=json.load(open(os.path.join(HERE,'frags.json')))
+FR=json.load(open(os.path.join(HERE,'frags.json'))) if BOARDS else {}
 src=open(PROTO).read()
 css=src[src.index('<style>')+7:src.index('</style>')]
 # scope the prototype's page-level rules to each frame (.pf) so light and dark frames can sit side by side
@@ -24,7 +24,7 @@ FRAME_CSS='''
 .bnote{position:absolute;left:48px;top:92px;max-width:1400px;font:13px/18px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#1f1f1f;background:#fff4d6;border-radius:8px;padding:6px 10px}
 .bs{position:absolute;left:48px;top:68px;font:13px/18px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:#5c5c61}
 '''
-SPRITE=FR['__sprite']['html']
+SPRITE=FR['__sprite']['html'] if BOARDS else ''
 def md_inline(t):
     t=html.escape(t,quote=False)
     t=re.sub(r'\*\*(.+?)\*\*',r'<b>\1</b>',t)

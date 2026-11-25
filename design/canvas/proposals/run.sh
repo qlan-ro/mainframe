@@ -8,7 +8,9 @@ import json,sys
 from states import BOARDS
 L=[{k:s[k] for k in ['id','preset','theme','ww','actions','wait','h']} for b in BOARDS for s in b['states']]
 json.dump(L,open('states.json','w'))"
-node capture.cjs states.json frags.json
+if [[ "$(cat states.json)" != "[]" ]]; then
+  node capture.cjs states.json frags.json
+fi
 python3 build.py
 SPEC=../project/Proposal-Redesign-Spec.dc.html
 H=$(node measure.cjs "$SPEC")

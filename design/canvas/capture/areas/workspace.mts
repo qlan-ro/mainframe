@@ -142,6 +142,7 @@ const area: CaptureArea = {
             await page.getByTestId('chat-assistant-message-fork').first().click();
             await page
               .locator('[data-testid^="workspace-conversation-chat-"] [data-testid="chat-user-message"]')
+              .first()
               .waitFor({ timeout: 15_000 });
             await parkPointer(page);
           },
@@ -208,6 +209,7 @@ const area: CaptureArea = {
             await page.getByTestId('chat-assistant-message-fork').first().click();
             await page
               .locator('[data-testid^="workspace-conversation-chat-"] [data-testid="chat-user-message"]')
+              .first()
               .waitFor({ timeout: 15_000 });
             await parkPointer(page);
           },
@@ -396,7 +398,14 @@ const area: CaptureArea = {
           id: 'viewer-svg',
           caption: '**SVG.**',
           crop: [860, 0, 580, 640],
-          setup: ({ page }) => fileBesideTree(page, 'logo.svg'),
+          // The file picker leaves images out, so the tree opens it.
+          setup: async ({ page }) => {
+            await page.getByTestId('workspace-files-open').click();
+            await page.getByTestId('file-tree-row-logo.svg').dblclick();
+            await page.getByTestId('viewer-svg').waitFor();
+            await page.getByTestId('workspace-files-collapse').click();
+            await parkPointer(page);
+          },
           wait: 1_200,
         },
       ],

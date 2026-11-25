@@ -134,10 +134,10 @@ const area: CaptureArea = {
           setup: async ({ page }) => {
             await openTurn(page, header(page, 1));
             await page
-              .locator('[data-testid^="chat-row-"][data-file-path$="codex.ts"] [aria-expanded]')
+              .locator('[data-testid^="chat-row-"] > [data-file-path$="codex.ts"] [aria-expanded]')
               .first()
               .click();
-            await page.locator('[data-testid^="chat-row-"][data-file-path$="codex.test.ts"] [aria-expanded]').click();
+            await page.locator('[data-testid^="chat-row-"] > [data-file-path$="codex.test.ts"] [aria-expanded]').click();
             await parkPointer(page);
           },
         },
