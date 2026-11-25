@@ -33,6 +33,18 @@ describe('PreviewUrlBar', () => {
     handle = makeHandle();
   });
 
+  it.each([true, false])('keeps the address start addon to navigation buttons when enabled=%s', (enabled) => {
+    render(<PreviewUrlBar handle={handle} seedUrl="https://example.com/" enabled={enabled} />);
+    const group = screen.getByTestId('preview-url-input').closest('[data-slot="input-group"]');
+    const start = group?.querySelector('[data-align="inline-start"]');
+    expect(start?.children).toHaveLength(3);
+    expect([...start!.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Back',
+      'Forward',
+      'Reload preview',
+    ]);
+  });
+
   it('shows the seed URL as the input value when enabled', () => {
     render(<PreviewUrlBar handle={handle} seedUrl="http://localhost:3000" enabled />);
     expect(screen.getByTestId('preview-url-input')).toHaveValue('http://localhost:3000');

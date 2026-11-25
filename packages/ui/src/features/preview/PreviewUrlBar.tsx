@@ -112,11 +112,6 @@ export function PreviewUrlBar({ handle, seedUrl, enabled, onCommitUrl }: Preview
             <RotateCw className="size-4" />
           </InputGroupButton>
         </Hint>
-        {/* Live-address indicator: a pulse while the bar is wired to a webview. */}
-        <span
-          className={enabled ? 'size-1.5 animate-pulse rounded-full bg-success' : 'size-1.5 rounded-full bg-border'}
-          aria-hidden
-        />
       </InputGroupAddon>
 
       <InputGroupInput
