@@ -1,3 +1,4 @@
+import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { describe, it, expect, afterEach, vi, type MockedFunction } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import type { SessionCustom } from '../../view-model/chat-to-thread-custom';
@@ -180,6 +181,23 @@ describe('chats-remote-adapter — list requests temporary chats too (todo #346)
     await adapter.list();
     expect(mockListChats).toHaveBeenCalledExactlyOnceWith(31415, { includeTemporary: true });
   });
+});
+
+it('drops an old daemon list before it can mark the current list loaded', async () => {
+  const original = getActiveDaemon();
+  let resolve!: (value: Chat[]) => void;
+  const pending = new Promise<Chat[]>((done) => (resolve = done));
+  mockListChats.mockReturnValueOnce(pending);
+  useSessionListLoadState.setState({ loaded: false, failed: false });
+  const list = makeChatsRemoteAdapter(1).list();
+  try {
+    setActiveDaemon({ ...original, id: 'remote-test' });
+    resolve([FIXTURE]);
+    expect(await list).toEqual({ threads: [] });
+    expect(useSessionListLoadState.getState().loaded).toBe(false);
+  } finally {
+    setActiveDaemon(original);
+  }
 });
 
 describe('chats-remote-adapter — list latches the load flag', () => {

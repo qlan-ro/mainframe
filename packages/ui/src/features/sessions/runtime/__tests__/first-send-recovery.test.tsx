@@ -78,6 +78,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { SendFailureNotice } from '@/features/chat/messages/SendFailureNotice';
 import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { sendRemedyOf } from '@/features/chat/controller/describe-send-error';
+import { moveDraft } from '../../new-thread/move-draft';
 import { resetNewThreadDraft } from '../../new-thread/reset-new-thread-draft';
 import { useDraftRow, type DraftRowState } from '../../sidebar/use-draft-row';
 import { makeChatsRemoteAdapter } from '../chats-remote-adapter';
@@ -148,6 +149,8 @@ function Body() {
     <>
       <Surface name="main" />
       <Surface name="split" />
+      <Surface name="tab" />
+      <Surface name="side chat" />
       <Bubbles />
     </>
   );
@@ -495,6 +498,54 @@ describe('with the failed message’s own remedies', () => {
     expect(contentOf(id)).toMatchObject({ text: '', items: [], files: [] });
   });
 
+  it.each(['retry', 'unarchive'])('claims %s before the next repaint', async (which) => {
+    await failFirst(
+      which === 'unarchive'
+        ? refusal('Archived', { remedy: 'unarchive_native_session', neverDelivered: true })
+        : undefined,
+    );
+    const button = screen.getByTestId(`chat-user-message-${which}`);
+    await act(async () => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
+    await flush();
+    expect(prompts()).toHaveLength(2);
+    expect(unarchiveNativeSession).toHaveBeenCalledTimes(which === 'unarchive' ? 1 : 0);
+  });
+
+  it.each(['restore', 'discard'])('ignores %s from a stale notice after Retry claims it', async (action) => {
+    const id = await failFirst();
+    const button = within(notices()[0]!).getByTestId(`composer-unsent-${action}`);
+    const retryButton = screen.getByTestId('chat-user-message-retry');
+    let resolve!: (value: object) => void;
+    const pending = new Promise<object>((done) => (resolve = done));
+    prompt.mockReturnValueOnce(pending);
+    await act(async () => {
+      fireEvent.click(retryButton);
+      fireEvent.click(button);
+    });
+    expect(useUnsentMessages.getState().entries).toHaveLength(1);
+    expect(contentOf(id)).toMatchObject({ text: '', items: [], files: [] });
+    await act(async () => resolve({}));
+    await flush();
+    expect(prompts()).toHaveLength(2);
+    expect(useUnsentMessages.getState().entries).toEqual([]);
+  });
+
+  it('ignores Retry from a stale bubble after Restore claims the draft', async () => {
+    const id = await failFirst();
+    const restore = within(notices()[0]!).getByTestId('composer-unsent-restore');
+    const retryButton = screen.getByTestId('chat-user-message-retry');
+    await act(async () => {
+      fireEvent.click(restore);
+      fireEvent.click(retryButton);
+    });
+    await flush();
+    expect(prompts()).toHaveLength(1);
+    expect(contentOf(id).text).toBe('compare @Prior');
+  });
+
   it('offers nothing to restore while a Retry is on its way', async () => {
     await failFirst();
     let answer: (value: object) => void = () => {};
@@ -525,11 +576,11 @@ describe('with the failed message’s own remedies', () => {
     expect(notices()).toEqual([]);
   });
 
-  it('a Retry that failed before its prompt went out is certain again', async () => {
+  it('keeps delivery uncertain when Retry fails before writing', async () => {
     await failFirst(TIMEOUT);
     vi.mocked(uploadAttachments).mockRejectedValueOnce({ code: -32000, message: 'connection closed' });
     await retry();
-    expect(notices()[0]).toHaveTextContent('Your message wasn’t sent.');
+    expect(notices()[0]).toHaveTextContent('Your message may not have been sent.');
   });
 
   it('Discard takes the failed message off the transcript', async () => {
@@ -541,6 +592,26 @@ describe('with the failed message’s own remedies', () => {
 });
 
 describe('after the draft moved to another project', () => {
+  it.each(['split', 'tab', 'side chat'])('restores from %s and sends only portable content', async (surface) => {
+    mount();
+    const id = await openDraft();
+    await fill(id);
+    const before = contentOf(id);
+    vi.mocked(createChat).mockRejectedValueOnce(new Error('no'));
+    await send();
+    const next = { ...SETUP, projectId: 'p2' };
+    act(() => moveDraft(id, SETUP, next, () => setDraftConfig(id, next)));
+    const button = within(notices(surface)[0]!).getByTestId('composer-unsent-restore');
+    await act(async () => fireEvent.click(button));
+    expect(contentOf(id)).toEqual({ ...before, items: [], references: {} });
+    await send();
+    expect(prompts()).toHaveLength(1);
+    expect(prompts()[0]).toContain('compare @Prior');
+    expect(prompts()[0]).toContain('quoted');
+    expect(prompts()[0]).not.toMatch(/sketch|Referenced session|const x/);
+    expect(vi.mocked(uploadAttachments).mock.lastCall?.[2]).toHaveLength(1);
+  });
+
   it('restores the prose and quotes, leaves the rest there, and Undo goes back to it', async () => {
     mount();
     const id = await openDraft();

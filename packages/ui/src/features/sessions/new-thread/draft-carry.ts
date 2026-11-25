@@ -5,7 +5,12 @@
  */
 import { useEffect } from 'react';
 import { useAui, useAuiState, type Attachment } from '@assistant-ui/react';
-import { putBound, takeBound, type BoundContent } from '@/features/chat/composer/draft-content/bound-content';
+import {
+  boundSummary,
+  putBound,
+  takeBound,
+  type BoundContent,
+} from '@/features/chat/composer/draft-content/bound-content';
 import { readLiveComposerState } from '@/features/chat/composer/read-live-composer-state';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
 import { restoreDraft } from '@/features/chat/composer/unsent/restore-draft';
@@ -18,8 +23,9 @@ import { getDraftConfig, setDraftConfig, type DraftCfg } from '../runtime/draft-
 import { useNewThreadReady } from '../runtime/new-thread-ready-store';
 import { isDraftSessionId } from '@/store/layout-persist';
 import { mfToast } from '@/lib/toast';
-import { endDraftGenerations } from './draft-generation';
-import { samePlace } from './draft-place';
+import { draftGeneration, endDraftGenerations } from './draft-generation';
+import { isCreatePending } from '../runtime/new-thread-coordinator';
+import { chatControllerRegistry } from '../runtime/chat-controller-registry';
 
 interface OpenDraft {
   threadId: string;
@@ -31,9 +37,10 @@ export interface LeftDraft {
   prose: SubmittedDraft;
   bound: BoundContent;
   setup?: DraftCfg;
+  destination?: { threadId: string; generation: string };
 }
 
-type CarriedDraft = { prose: SubmittedDraft } & Partial<LeftDraft>;
+type CarriedDraft = { prose: SubmittedDraft; restore?: LeftDraft; move?: LeftDraft };
 
 let readOpenDraft: (() => OpenDraft | undefined) | null = null;
 let carried: CarriedDraft | null = null;
@@ -45,7 +52,7 @@ const isEmpty = ({ text, attachments, composition }: SubmittedDraft) =>
 /** Before a daemon switch: takes the open draft along. Undefined when no draft is open. */
 export function leaveDaemonDraft(): LeftDraft | undefined {
   const open = readOpenDraft?.();
-  const left = open && {
+  const left: LeftDraft | undefined = open && {
     prose: {
       text: open.text,
       composition: useComposerSegments.getState().byThread[open.threadId],
@@ -56,7 +63,8 @@ export function leaveDaemonDraft(): LeftDraft | undefined {
     bound: takeBound(open.threadId),
     setup: getDraftConfig(open.threadId),
   };
-  carried = left && !isEmpty(left.prose) ? { prose: left.prose } : null;
+  carried =
+    left && (!isEmpty(left.prose) || boundSummary(left.bound) !== '') ? { prose: left.prose, move: left } : null;
   closeUnsentDrafts();
   endDraftGenerations();
   return left;
@@ -64,19 +72,23 @@ export function leaveDaemonDraft(): LeftDraft | undefined {
 
 /** An Undo of the switch: the draft goes back as it was, with what was written in it since. */
 export function returnToDaemonDraft(left: LeftDraft): void {
-  carried = { ...left, ...carried };
+  carried = { prose: carried?.prose ?? left.prose, move: carried?.move, restore: left };
 }
 
-/** An Undo once the user is back by themselves: into the draft that is open, unless it is for somewhere else. */
-export function putBackDaemonDraft({ bound, setup }: LeftDraft): void {
-  const threadId = readOpenDraft?.()?.threadId;
-  const here = threadId === undefined ? undefined : getDraftConfig(threadId);
-  if (threadId === undefined || (here && setup && !samePlace(here, setup))) {
-    mfToast.info('Nothing to undo', { description: 'That draft was sent or closed.' });
-    return;
+export function canUndoDaemonDraft({ destination }: LeftDraft): boolean {
+  if (destination) {
+    const { threadId, generation } = destination;
+    if (
+      readOpenDraft?.()?.threadId === threadId &&
+      draftGeneration(threadId) === generation &&
+      !isCreatePending(threadId) &&
+      !chatControllerRegistry.get(threadId)?.hasRemoteId()
+    ) {
+      return true;
+    }
   }
-  if (!here && setup) openIn(threadId, setup);
-  putBound(threadId, bound);
+  mfToast.info('Nothing to undo', { description: 'That draft was sent or closed.' });
+  return false;
 }
 
 function openIn(threadId: string, setup: DraftCfg): void {
@@ -107,11 +119,12 @@ export function useDraftCarry(): void {
     if (!mainThreadId || !isDraftSessionId(mainThreadId)) return;
     reopenUnsentDrafts(mainThreadId);
     if (!carried) return;
-    const { prose, bound, setup } = carried;
+    const { prose, restore, move } = carried;
     carried = null;
     carriedInto = mainThreadId;
-    if (setup) openIn(mainThreadId, setup);
+    if (move) move.destination = { threadId: mainThreadId, generation: draftGeneration(mainThreadId) };
+    if (restore?.setup) openIn(mainThreadId, restore.setup);
     restoreDraft(mainThreadId, aui.composer, prose);
-    if (bound) putBound(mainThreadId, bound);
+    if (restore) putBound(mainThreadId, restore.bound);
   }, [aui, mainThreadId]);
 }

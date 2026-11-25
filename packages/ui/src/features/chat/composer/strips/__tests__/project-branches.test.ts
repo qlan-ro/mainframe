@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetDaemonScopedStores } from '@/features/daemon/reset-daemon-scoped-stores';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
 const getGitBranch = vi.hoisted(() => vi.fn());
@@ -39,6 +40,16 @@ describe('useProjectBranch', () => {
     getGitBranch.mockResolvedValue({ branch: 'feat/x' });
     act(() => picker.result.current.reload());
     await waitFor(() => expect(emptyState.result.current.branch).toBe('feat/x'));
+  });
+
+  it('drops a branch answer after daemon-scoped stores are reset', async () => {
+    const old = deferred();
+    getGitBranch.mockReturnValueOnce(old.promise);
+    const { result } = renderHook(() => useProjectBranch(1, 'p1'));
+    act(resetDaemonScopedStores);
+    old.resolve('old-daemon');
+    await flush();
+    expect(result.current.branch).toBeUndefined();
   });
 
   it('drops an older answer that comes last', async () => {

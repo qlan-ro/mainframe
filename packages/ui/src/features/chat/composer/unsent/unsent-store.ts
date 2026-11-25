@@ -35,6 +35,7 @@ export interface UnsentMessage {
   readonly sent: readonly CompleteAttachment[];
   /** The prompt was handed to the connection: without a refusal, the agent may have it. */
   readonly prompted: boolean;
+  readonly previousDeliveryUnknown?: boolean;
   /** Undefined while it is on its way. */
   readonly failure?: { readonly reason: string; readonly delivery: 'none' | 'unknown' };
 }
@@ -87,7 +88,11 @@ export function markPrompted(id: string | undefined): void {
 
 /** A Retry is on its way: nothing to restore until it settles. */
 export function markRetrying(id: string | undefined): void {
-  update(id, ({ failure: _failure, ...entry }) => ({ ...entry, prompted: false }));
+  update(id, ({ failure, ...entry }) => ({
+    ...entry,
+    prompted: false,
+    previousDeliveryUnknown: entry.previousDeliveryUnknown || failure?.delivery === 'unknown',
+  }));
 }
 
 /** Accepted, restored or discarded. */
@@ -100,7 +105,8 @@ export function failUnsent(id: string | undefined, error: unknown): void {
     ...entry,
     failure: {
       reason: sendFailureReason(error),
-      delivery: entry.prompted && sendRefusal(error) === undefined ? 'unknown' : 'none',
+      delivery:
+        entry.previousDeliveryUnknown || (entry.prompted && sendRefusal(error) === undefined) ? 'unknown' : 'none',
     },
   }));
 }

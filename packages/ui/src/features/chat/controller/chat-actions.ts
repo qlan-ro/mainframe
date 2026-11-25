@@ -133,11 +133,13 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
  */
 export async function retryChatMessage(host: ChatActionHost, clientId: string, remedy?: PromptRemedy): Promise<void> {
   const pending = host.getState().pendingUserMessages[clientId];
-  if (!pending) return;
+  if (pending?.status !== 'failed') return;
   if (refuseIfDirectoryMissing(host)) return;
 
   const { unsentId } = pending;
-  const uploadItems = toUploadItems(getUnsent(unsentId)?.sent ?? []);
+  const entry = getUnsent(unsentId);
+  if (unsentId !== undefined && !entry?.failure) return;
+  const uploadItems = toUploadItems(entry?.sent ?? []);
   markRetrying(unsentId);
   host.dispatch({ type: 'local.message.retrying', clientId });
   host.dispatch({ type: 'run.started' });

@@ -34,6 +34,7 @@ import { moveDraft } from '@/features/sessions/new-thread/move-draft';
 import { validateBranchName } from '../config-toolbar/WorktreeNewForm';
 import { ComposerHint } from '../composer-card-context';
 import { draftEnvironment, environmentPatch, suggestBranchName, type DraftEnvironment } from './draft-environment';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { setProjectBranch, useProjectBranch } from './project-branches';
 
 interface BranchData {
@@ -42,28 +43,34 @@ interface BranchData {
   error: string | null;
 }
 
+const NO_BRANCH_DATA: BranchData = { branches: null, worktrees: [], error: null };
+
 /** Branches and worktrees, fetched each time the picker opens. */
 function useBranchData(port: number, projectId: string, open: boolean): BranchData {
-  const [data, setData] = useState<BranchData>({ branches: null, worktrees: [], error: null });
+  const daemonId = getActiveDaemon().id;
+  const key = JSON.stringify([daemonId, port, projectId]);
+  const [value, setValue] = useState<{ key: string; data: BranchData }>();
   useEffect(() => {
     if (!open) return;
     let stale = false;
     Promise.all([getGitBranches(port, projectId), getProjectWorktrees(port, projectId)]).then(
       ([branches, worktrees]) => {
-        if (stale) return;
-        setData({ branches, worktrees, error: null });
+        if (stale || getActiveDaemon().id !== daemonId) return;
+        setValue({ key, data: { branches, worktrees, error: null } });
         // The menu's answer is the newer one: the strip and the empty state say the same.
         setProjectBranch(projectId, branches.current || null);
       },
-      (error: unknown) =>
-        !stale &&
-        setData((prev) => ({ ...prev, error: error instanceof Error ? error.message : 'Could not load branches' })),
+      (error: unknown) => {
+        if (stale || getActiveDaemon().id !== daemonId) return;
+        const message = error instanceof Error ? error.message : 'Could not load branches';
+        setValue({ key, data: { ...NO_BRANCH_DATA, error: message } });
+      },
     );
     return () => {
       stale = true;
     };
-  }, [open, port, projectId]);
-  return data;
+  }, [open, port, projectId, daemonId, key]);
+  return value?.key === key ? value.data : NO_BRANCH_DATA;
 }
 
 function TriggerLabel({ env, branch }: { env: DraftEnvironment; branch: string | null | undefined }) {

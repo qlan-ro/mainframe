@@ -17,6 +17,11 @@ export const useProjectBranches = create<ProjectBranchesState>(() => ({ byProjec
 /** The newest read of a project; an older answer is dropped. */
 const newest = new Map<string, object>();
 
+export function resetProjectBranches(): void {
+  newest.clear();
+  useProjectBranches.setState({ byProject: {} });
+}
+
 export function setProjectBranch(projectId: string, branch: string | null): void {
   newest.delete(projectId);
   useProjectBranches.setState((s) => ({ byProject: { ...s.byProject, [projectId]: branch } }));

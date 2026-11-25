@@ -19,7 +19,7 @@ import { setLastDaemonId } from '@/lib/daemon/last-daemon';
 import { disposeDaemonSession } from '@/lib/daemon/dispose-daemon-session';
 import { daemonWs } from '@/lib/daemon/ws-client';
 import { rebindLspToActiveDaemon } from '@/lib/lsp';
-import { leaveDaemonDraft, putBackDaemonDraft, returnToDaemonDraft } from '@/features/sessions/new-thread/draft-carry';
+import { canUndoDaemonDraft, leaveDaemonDraft, returnToDaemonDraft } from '@/features/sessions/new-thread/draft-carry';
 import { placeName } from '@/features/sessions/new-thread/draft-place';
 import { announceRemoved } from '@/features/sessions/new-thread/move-draft';
 import { resetDaemonScopedStores } from './reset-daemon-scoped-stores';
@@ -48,10 +48,7 @@ function bringDraftAlong(switchTo: (t: DaemonTarget) => Promise<void>): void {
   const left = leaveDaemonDraft();
   if (!left) return;
   announceRemoved(left.bound, left.setup && placeName(left.setup), () => {
-    if (getActiveDaemon().id === from.id) {
-      putBackDaemonDraft(left);
-      return;
-    }
+    if (!canUndoDaemonDraft(left)) return;
     void switchTo(from);
     // The switch has read the draft it leaves, and nothing has mounted yet.
     returnToDaemonDraft(left);

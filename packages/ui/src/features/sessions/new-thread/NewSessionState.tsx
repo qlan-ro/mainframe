@@ -1,3 +1,4 @@
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 /**
  * A new session's empty state (K11), just above the composer: the project,
  * where the session will run, recent sessions to continue and open tasks to
@@ -194,7 +195,9 @@ function StartFromTask({ projectId }: { projectId: string }) {
   const { tasks, state, reload } = useProjectTasks(useDaemonPort(), projectId);
   if (tasks.length === 0 && state === 'ready') return null;
 
+  const daemonId = getActiveDaemon().id;
   const start = (todo: Todo) => {
+    if (getActiveDaemon().id !== daemonId) return;
     const text = readLiveComposerState(aui.composer).text;
     const next = withTask(text, todo);
     if (next !== text) aui.composer.setText(next);

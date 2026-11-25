@@ -48,7 +48,7 @@ vi.mock('../../../../lib/daemon/ws-client', () => ({
   DaemonWsClient: class {},
 }));
 
-import { setActiveDaemon } from '@/lib/daemon/active-daemon';
+import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { ActiveDaemonProvider, useActiveDaemon } from '@/features/daemon/active-daemon-context';
 import { draftItemsOf, useDraftContent } from '@/features/chat/composer/draft-content/draft-content-store';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
@@ -60,6 +60,7 @@ import { getDraftConfig, setDraftConfig, type DraftCfg } from '../../runtime/dra
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 import { useSessionsThreadList } from '../../runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../../ws/use-session-list-router';
+import { startDraftGeneration } from '../draft-generation';
 
 const LOCAL: DaemonTarget = {
   id: 'local',
@@ -192,7 +193,7 @@ it('Undo goes back to the daemon, the project and everything in the draft, with 
   expect(useNewThreadReady.getState().isReady(main())).toBe(true);
 });
 
-it('Undo gives the draft back whole when another session was opened meanwhile', async () => {
+it('Undo does nothing after another session was opened', async () => {
   listChats.mockResolvedValue([{ id: 'chat-9', title: 'Other', projectId: 'p9' } as Chat]);
   await openDraft();
   await fill();
@@ -201,18 +202,30 @@ it('Undo gives the draft back whole when another session was opened meanwhile', 
   await flush();
   expect(main()).toBe('chat-9');
   await undo();
-  expect(prose()).toEqual({ text: 'compare @Prior', files: ['notes.txt'], quote: 'quoted' });
+  expect(getActiveDaemon().id).toBe(REMOTE.id);
+  expect(main()).toBe('chat-9');
 });
 
-it('Undo once already back puts what was removed into the draft there', async () => {
+it('ignores an Undo for the previous draft in the same slot', async () => {
+  await openDraft();
+  await fill();
+  await go(REMOTE);
+  const id = main();
+  act(() => startDraftGeneration(id));
+  await undo();
+  expect(main()).toBe(id);
+  expect(getActiveDaemon().id).toBe(REMOTE.id);
+});
+
+it('Undo from the first switch expires after switching back', async () => {
   await openDraft();
   await fill();
   await go(REMOTE);
   await go(LOCAL);
   expect(draftItemsOf(main())).toEqual([]);
   await undo();
-  expect(draftItemsOf(main()).map(({ note }) => note)).toEqual(['n']);
-  expect(getDraftConfig(main())).toEqual(SETUP);
+  expect(draftItemsOf(main())).toEqual([]);
+  expect(toast.info).toHaveBeenLastCalledWith('Nothing to undo', expect.anything());
 });
 
 it('Undo once already back leaves a draft for another project alone', async () => {

@@ -22,7 +22,7 @@ vi.mock('../../send/SendControls', () => ({
 }));
 
 import { ComposerEditMode } from '../ComposerEditMode';
-import type { QueuedEdit } from '../composer-edit-context';
+import { ComposerEditProvider, useComposerEdit, type QueuedEdit } from '../composer-edit-context';
 
 const EDIT: QueuedEdit = { messageId: 'm1', content: 'hello' };
 
@@ -102,4 +102,30 @@ describe('ComposerEditMode — blocks the message carries for the agent', () => 
     expect(save).not.toHaveBeenCalled();
     expect(onDone).toHaveBeenCalled();
   });
+});
+
+it('drops the queued edit on a thread switch without saving or altering either draft', () => {
+  const save = vi.fn();
+  function Panel({ draft }: { draft: string }) {
+    const { editing, startEdit, cancelEdit } = useComposerEdit();
+    return editing ? (
+      <ComposerEditMode edit={editing} onDone={cancelEdit} />
+    ) : (
+      <button onClick={() => startEdit({ ...EDIT, save })}>{draft}</button>
+    );
+  }
+  const view = (scope: string, draft: string) => (
+    <ComposerEditProvider scope={scope}>
+      <Panel draft={draft} />
+    </ComposerEditProvider>
+  );
+  const { rerender } = render(view('original', 'original draft'));
+  fireEvent.click(screen.getByText('original draft'));
+  fireEvent.change(screen.getByTestId('chat-composer-edit-input'), { target: { value: 'unsaved queue edit' } });
+  rerender(view('next', 'next draft'));
+  expect(screen.getByText('next draft')).toBeInTheDocument();
+  expect(screen.queryByTestId('chat-composer-edit-save')).toBeNull();
+  rerender(view('original', 'original draft'));
+  expect(screen.getByText('original draft')).toBeInTheDocument();
+  expect(save).not.toHaveBeenCalled();
 });

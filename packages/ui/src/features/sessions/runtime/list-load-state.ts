@@ -1,5 +1,5 @@
 /**
- * Did `adapter.list()` ever come back this app-run?
+ * Did `adapter.list()` ever come back for this daemon connection?
  *
  * Nothing in the aui thread-list state answers that: `isLoading` goes false on
  * the failure path too, and a `custom`-carrying entry can also be injected by
@@ -8,7 +8,7 @@
  * list that never loaded drops every persisted tab and then overwrites the
  * payload with the survivors (#312).
  *
- * `loaded` latches once and stays latched; a webview reload starts a fresh run.
+ * `loaded` stays latched until the daemon-scoped stores reset.
  */
 import { create } from 'zustand';
 
@@ -26,3 +26,11 @@ export const useSessionListLoadState = create<SessionListLoadState>((set) => ({
   markLoaded: () => set((s) => (s.loaded && !s.failed ? s : { loaded: true, failed: false })),
   markFailed: () => set((s) => (s.failed ? s : { failed: true })),
 }));
+
+let epoch = 0;
+export const sessionListEpoch = (): number => epoch;
+
+export function resetSessionListLoadState(): void {
+  epoch += 1;
+  useSessionListLoadState.setState({ loaded: false, failed: false });
+}
