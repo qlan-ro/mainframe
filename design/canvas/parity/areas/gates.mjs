@@ -52,8 +52,8 @@ export default {
     S('question-hover', 'Question gate, an option hovered', {
       scenario: { gate: 'question', act: 'run', running: true },
       views: ['wide'],
-      proto: P.all(P.preset('gate-question'), P.hover("qa('.gopt')[1]")),
-      app: app(P.hover("qa('[data-testid=chat-question-gate] [data-testid^=chat-question-option]')[1] ?? qa('[data-testid=chat-question-gate] [role=radio]')[1]")),
+      proto: P.all(P.preset('gate-question'), P.hover("txt('.gopt', 'Add the switcher first')")),
+      app: app(P.hover("tid('chat-question-option-0-Add the switcher first')")),
       pairs: [gate],
     }),
   ],

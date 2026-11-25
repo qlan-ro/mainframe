@@ -41,7 +41,7 @@ export interface PlanGateProps {
 
 function PlanBody({ plan }: { plan: string }) {
   return (
-    <div className="aui-md max-h-[300px] overflow-auto border-t border-border px-4 py-3 text-transcript text-foreground [&_:is(h1,h2,h3,h4)]:mt-0! [&_:is(h1,h2,h3,h4)]:mb-1.5! [&_:is(h1,h2,h3,h4)]:text-transcript! [&_:is(h1,h2,h3,h4)]:font-semibold! [&_li]:my-0! [&_li+li]:mt-0.5! [&_ol]:my-0!">
+    <div className="aui-md max-h-[300px] overflow-auto border-t border-border px-4 py-3 text-transcript text-foreground [&_:is(h1,h2,h3,h4)]:mt-0! [&_:is(h1,h2,h3,h4)]:mb-1.5! [&_:is(h1,h2,h3,h4)]:text-transcript! [&_:is(h1,h2,h3,h4)]:font-semibold! [&_:is(h1,h2,h3,h4)]:text-foreground! [&_li]:my-0! [&_li+li]:mt-0.5! [&_ol]:my-0! [&_ol]:pl-5!">
       <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
         {plan}
       </Markdown>
