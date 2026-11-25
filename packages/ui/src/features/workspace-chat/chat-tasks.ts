@@ -165,7 +165,7 @@ class ChatTasks {
     clearTimeout(this.expiry);
     this.publish(keepSettled(this.state.tasks ?? [], tasks));
     if (this.again) return this.run();
-    if (!this.asking || this.askedAgain || !this.leavesOutAgent(tasks)) return;
+    if (this.askedAgain || !this.leavesOutAgent(tasks)) return;
     this.askedAgain = true;
     this.timer = setTimeout(() => this.run(), RETRY_MS);
   }

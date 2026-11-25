@@ -149,6 +149,18 @@ it.each([
   expect(screen.getByTestId('chat-row-cut-receipt')).toHaveTextContent(receipt);
 });
 
+it.each([
+  ['cancelled', codex('cancelled'), 'stopped', 'stopped, not answered'],
+  ['cut without a word', claude('invalid'), 'no result', 'not answered'],
+] as const)('reads an open pill and question as its turn says: %s', (_what, said, pill, question) => {
+  const worktree = tool({ ...running, toolCallId: 'wt', toolName: 'EnterWorktree', args: { name: 'x' } });
+  const ask = { question: 'Which?', header: 'Order', options: [] };
+  const asked = tool({ ...running, toolCallId: 'q', toolName: 'AskUserQuestion', args: { questions: [ask] } });
+  Session.open(turn(said, settled, worktree, asked));
+  expect(screen.getByTestId('chat-marker-enterworktree')).toHaveTextContent(pill);
+  expect(screen.getByTestId('chat-ask-header').textContent).toBe(`Order · ${question}`);
+});
+
 describe('an error', () => {
   const boom = assistant([text('Overloaded')], 'e', { custom: { errorText: 'API Error: overloaded' } });
   const on = assistant([bash('c', 'ls'), text('Done.')], 'a2', { presentation: claude('completed') });

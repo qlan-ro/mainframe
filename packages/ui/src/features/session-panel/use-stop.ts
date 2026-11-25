@@ -34,14 +34,13 @@ function release(key: Key): void {
 export function useStop(title: string, request: (() => Promise<void>) | undefined, work?: string) {
   const [own] = useState(() => Symbol('stop'));
   const key = work ?? own;
-  const asked = useSyncExternalStore(subscribe, () => pending.has(key));
+  const stopping = useSyncExternalStore(subscribe, () => pending.has(key));
   const stoppable = request !== undefined;
   const offered = useRef<Key>(undefined);
   useEffect(() => {
     if (!stoppable && offered.current !== undefined) release(offered.current);
     offered.current = stoppable ? key : undefined;
   }, [stoppable, key]);
-  useEffect(() => () => release(own), [own]);
   const stop = async () => {
     if (!request || pending.has(key)) return;
     const mine = setTimeout(() => release(key), STOP_RETRY_MS);
@@ -55,5 +54,5 @@ export function useStop(title: string, request: (() => Promise<void>) | undefine
       mfToast.error(`Could not stop “${title}”`, { description: errorMessage(error) });
     }
   };
-  return { onStop: request && (() => void stop()), stopping: stoppable && asked };
+  return { onStop: request && (() => void stop()), stopping };
 }
