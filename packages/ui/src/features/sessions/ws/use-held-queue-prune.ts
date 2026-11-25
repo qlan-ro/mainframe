@@ -2,6 +2,12 @@
  * useHeldQueuePrune: a client that was offline (or not running) when a project
  * was removed got no `chat.ended` for its chats. On every connect it asks about
  * each chat it holds messages for, and forgets the ones the daemon no longer has.
+ *
+ * A paired daemon only: its token belongs to one data directory, so its "no such
+ * session" is about the sessions the rows came from. Any daemon on this machine
+ * answers as `local`, a development or test one too, and knows nothing of
+ * another's sessions; there, rows go with `chat.ended`, or with the project this
+ * client removes (`useRemoveProject`).
  */
 import { useEffect } from 'react';
 import { chatExists } from '@/lib/api/chats';
@@ -20,7 +26,8 @@ async function forgetIfGone(chatId: string, daemon: string): Promise<void> {
 
 function forgetGoneChats(): void {
   if (!daemonWs.connected) return;
-  const daemon = getActiveDaemon().id;
+  const { id: daemon, kind } = getActiveDaemon();
+  if (kind === 'local') return;
   for (const [chatId, rows] of Object.entries(useHeldQueue.getState().byChat)) {
     if (rows.some((row) => row.daemon === daemon)) void forgetIfGone(chatId, daemon);
   }

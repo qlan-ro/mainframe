@@ -12,7 +12,7 @@
  */
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { useMemo, type FC } from 'react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi, onTestFinished } from 'vitest';
 import { AssistantRuntimeProvider, useExternalStoreRuntime, useRemoteThreadListRuntime } from '@assistant-ui/react';
 import type { AssistantRuntime, ThreadMessage } from '@assistant-ui/react';
 import type { Chat } from '@qlan-ro/mainframe-types';
@@ -47,6 +47,7 @@ vi.mock('@/lib/api/chats', () => ({
   unarchiveChat: vi.fn(),
 }));
 
+import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
 import { DaemonPortProvider } from '../../runtime/daemon-port-context';
 import { makeChatsRemoteAdapter } from '../../runtime/chats-remote-adapter';
@@ -264,6 +265,10 @@ it('asks again when the socket dropped before it first opened', async () => {
 
 it('forgets what it held for a session removed while the socket was down', async () => {
   chatExistsMock.mockImplementation(async (chatId: string) => chatId !== 'removed');
+  // A paired daemon: one on this machine is not asked (`useHeldQueuePrune`).
+  const local = getActiveDaemon();
+  setActiveDaemon({ ...local, id: 'paired', kind: 'remote' });
+  onTestFinished(() => setActiveDaemon(local));
   await mountRunning();
   setConnected(false);
   useHeldQueue.getState().hold('removed', {

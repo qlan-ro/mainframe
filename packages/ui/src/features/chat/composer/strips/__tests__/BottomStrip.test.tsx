@@ -5,8 +5,14 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { Chat } from '@qlan-ro/mainframe-types';
 
 let mockChat: Partial<Chat> | null;
+let mockListed: object | undefined;
 vi.mock('@assistant-ui/react', () => ({
-  useAuiState: (select: (s: unknown) => unknown) => select({ thread: { messages: [{}], isRunning: false } }),
+  useAuiState: (select: (s: unknown) => unknown) =>
+    select({
+      thread: { messages: [{}], isRunning: false },
+      threadListItem: mockListed && { id: 'chat-1', remoteId: 'chat-1', status: 'regular', custom: mockListed },
+      threads: { threadItems: [] },
+    }),
 }));
 vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtrasSelector: (select: (extras: unknown) => unknown) => select({ state: { chatConfig: mockChat } }),
@@ -55,6 +61,7 @@ const renderStrip = ({ fixed }: { fixed?: boolean } = {}) =>
 beforeEach(() => {
   vi.clearAllMocks();
   mockChat = CHAT;
+  mockListed = undefined;
   mockBranch = 'feat/quota';
   mockChanges = { files: [], loading: false, error: false };
 });
@@ -108,13 +115,71 @@ describe('BottomStrip', () => {
     expect(screen.getByTestId('composer-changes')).toBeInTheDocument();
   });
 
-  it('a temporary session says so, offers no worktree and shows no changes', () => {
+  const CHANGED = {
+    files: [{ path: 'a.ts' }],
+    totalAdditions: 1,
+    totalDeletions: 0,
+    loading: false,
+    error: false,
+  };
+
+  it('a temporary session says so, offers no worktree, and keeps its changes', () => {
     mockChat = { ...CHAT, temporary: true };
-    mockChanges = { files: [{ path: 'a.ts' }], totalAdditions: 1, totalDeletions: 0, loading: false, error: false };
+    mockChanges = CHANGED;
     renderStrip();
     expect(screen.getByTestId('composer-temporary')).toHaveAttribute('aria-disabled', 'true');
     expect(screen.queryByTestId('composer-worktree-trigger')).toBeNull();
+    expect(screen.getByTestId('composer-changes')).toBeInTheDocument();
+  });
+
+  it('a temporary session with no changes shows none', () => {
+    mockChat = { ...CHAT, temporary: true };
+    renderStrip();
     expect(screen.queryByTestId('composer-changes')).toBeNull();
+  });
+
+  it('a temporary session with no project has neither branch nor changes', () => {
+    mockChat = { ...CHAT, temporary: true, noProject: true };
+    mockChanges = CHANGED;
+    renderStrip();
+    expect(screen.getByTestId('composer-temporary')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-branch')).toBeNull();
+    expect(screen.queryByTestId('composer-changes')).toBeNull();
+  });
+
+  describe('before the session’s own record has loaded', () => {
+    const LISTED = { projectId: 'p1', temporary: false, noProject: false, worktreePath: '/repo/.worktrees/q' };
+    beforeEach(() => {
+      mockChat = null;
+      mockListed = LISTED;
+      mockChanges = CHANGED;
+    });
+
+    it('shows what the list knows, and offers no move yet', () => {
+      renderStrip();
+      expect(screen.getByTestId('composer-where')).toHaveAccessibleName('Runs in a worktree, q');
+      expect(screen.queryByTestId('composer-worktree-trigger')).toBeNull();
+      expect(screen.getByTestId('composer-branch')).toHaveTextContent('feat/quota');
+      expect(screen.getByTestId('composer-changes')).toBeInTheDocument();
+      expect(changesOptions).toHaveBeenLastCalledWith(expect.objectContaining({ projectId: 'p1', chatId: 'chat-1' }));
+    });
+
+    it('a temporary session reads as one at once', () => {
+      mockListed = { ...LISTED, temporary: true };
+      renderStrip();
+      expect(screen.getByTestId('composer-temporary')).toBeInTheDocument();
+      expect(screen.queryByTestId('composer-where')).toBeNull();
+    });
+
+    it('is absent for one with no project, and while the list has not it either', () => {
+      mockListed = { ...LISTED, noProject: true };
+      const { unmount } = renderStrip();
+      expect(screen.queryByTestId('composer-bottom-strip')).toBeNull();
+      unmount();
+      mockListed = undefined;
+      renderStrip();
+      expect(screen.queryByTestId('composer-bottom-strip')).toBeNull();
+    });
   });
 });
 
