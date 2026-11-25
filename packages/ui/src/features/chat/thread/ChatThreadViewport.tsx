@@ -55,7 +55,7 @@ function ThreadFooter({
       <div
         data-testid="chat-thread-footer"
         data-chat-footer
-        className="mx-auto flex w-full min-h-0 max-w-(--mf-transcript-width) flex-col px-5 pb-4"
+        className="mx-auto flex w-[calc(100%-0.5rem)] min-h-0 max-w-(--mf-transcript-width) flex-col px-5 pb-4"
       >
         <ChatGateMount />
         <div className="flex min-h-0 flex-col">
@@ -132,7 +132,10 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
           className="scroll-fade-y scroll-fade-sticky relative flex flex-1 flex-col overflow-y-auto [overflow-anchor:none]"
         >
           <ChatThreadLoadingSpinner />
-          <div ref={contentRef} className="relative mx-auto w-full max-w-(--mf-transcript-width) flex-1 px-5 py-4">
+          <div
+            ref={contentRef}
+            className="relative mx-auto w-[calc(100%-0.5rem)] max-w-(--mf-transcript-width) flex-1 px-5 py-4"
+          >
             <TranscriptWidthHandle side="left" rootRef={rootRef} />
             <TranscriptWidthHandle side="right" rootRef={rootRef} />
             <LoadErrorBanner />
