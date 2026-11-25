@@ -1,14 +1,14 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-08-11. Source: packages/ui/src data-testids (1189) minus e2e references
-(626). Unused: 563._
+_Generated 2026-08-11. Source: packages/ui/src data-testids (1188) minus e2e references
+(626). Unused: 562._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
 > buttons via getByRole), so this lists selector gaps, not necessarily untested behavior. `${…}`
 > marks templated id families.
 
-## chat (99)
+## chat (98)
 
 - `chat-agent-message-card-${…}`
 - `chat-agent-model`
@@ -20,7 +20,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1189) minus e2e ref
 - `chat-background-output-error`
 - `chat-background-output-truncated`
 - `chat-bash-region`
-- `chat-call-tool`
 - `chat-capture-selector`
 - `chat-composer-agent-outbox-cancel-${…}`
 - `chat-composer-agent-outbox-chip`
