@@ -31,7 +31,7 @@ function diffLines(hunks: readonly DiffHunk[]): DiffLine[] {
   });
 }
 
-const SIGNS = { add: '+', del: '−', ctx: '' } as const;
+const SIGNS = { add: '+', del: '-', ctx: '' } as const;
 
 function Row({ line }: { line: DiffLine }) {
   return (
@@ -43,7 +43,12 @@ function Row({ line }: { line: DiffLine }) {
         line.kind === 'del' && 'mf-tr-del',
       )}
     >
-      <span className="w-10 shrink-0 pr-3 text-right text-muted-foreground tabular-nums select-none">
+      <span
+        className={cn(
+          'w-10 shrink-0 pr-3 text-right tabular-nums select-none',
+          line.kind === 'ctx' && 'text-muted-foreground',
+        )}
+      >
         {line.number}
       </span>
       <span

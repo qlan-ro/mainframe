@@ -150,7 +150,7 @@ function ReadBody({ part, text }: { part: ToolPart; text: string }) {
 }
 
 function MainBody({ part, status }: ToolBodyProps) {
-  const { text, truncated } = resolveResultText(part.result, true);
+  const { text, truncated } = resolveResultText(part.result);
   const kind = toolKind(part.toolName);
   if (kind === 'shell') return <ShellBody part={part} status={status} />;
   if (kind === 'mcp' || kind === 'unknown') return <CallBody part={part} status={status} />;

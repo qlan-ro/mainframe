@@ -29,17 +29,55 @@ export function tools(turn: Turn, call: Call) {
       call(
         'parity-write',
         'Write',
-        { file_path: 'src/codex_tests.rs', content: 'use super::*;' },
+        {
+          file_path: 'src/codex_tests.rs',
+          content: [
+            'use super::*;',
+            'use chrono::{Duration, Utc};',
+            '',
+            '#[test]',
+            'fn a_window_past_its_reset_reads_zero() {',
+            '    let now = Utc::now();',
+            '    // …',
+            '}',
+          ].join('\n'),
+        },
         'File created',
         12.8,
       ),
-      call(
-        'parity-edit',
-        'Edit',
-        { file_path: 'src/codex.rs', old_string: 'return None;', new_string: 'return Some(window);' },
-        'File updated',
-        12.7,
-      ),
+      {
+        ...call('parity-edit', 'Edit', { file_path: 'src/codex.rs' }, 'File updated', 12.7),
+        content: [
+          { type: 'content', content: { type: 'text', text: 'File updated' } },
+          {
+            type: 'diff',
+            changes: [{ operation: 'modify', path: 'src/codex.rs', fileType: 'text' }],
+            _meta: {
+              '_mainframe.dev': {
+                structuredPatch: [
+                  {
+                    oldStart: 32,
+                    oldLines: 6,
+                    newStart: 32,
+                    newLines: 7,
+                    lines: [
+                      ' pub fn snapshot(&self, now: DateTime<Utc>) -> Vec<QuotaWindow> {',
+                      '     self.windows',
+                      '         .iter()',
+                      '-        .map(|w| QuotaWindow {',
+                      '-            used_percent: w.used_percent,',
+                      '+        .map(|w| match w.resets_at {',
+                      '+            Some(at) if at <= now => QuotaWindow::reset(w.window),',
+                      '+            _ => w.clone().into(),',
+                      '         })',
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
       call(
         'parity-grep',
         'Grep',
