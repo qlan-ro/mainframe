@@ -96,8 +96,11 @@ export function FileTree({ port, projectId, chatId, onCollapse }: FileTreeProps)
     <div data-testid="file-tree" className="flex min-h-0 flex-1 flex-col">
       <SidebarHeader className="h-9 shrink-0 flex-row items-center gap-0 py-0 pr-1.5 pl-3">
         <FileTreeRowMenu entry={{ name: '.', path: '.', type: 'directory' }} fullPath={base ?? projectId}>
-          <span className="flex-1 truncate text-label/[1.45] font-medium text-muted-foreground">
-            {lastSegment(base ?? projectId)}
+          <span
+            className="flex-1 truncate text-label/[1.45] font-medium text-muted-foreground"
+            title={lastSegment(base ?? projectId)}
+          >
+            {onCollapse ? 'Files' : lastSegment(base ?? projectId)}
           </span>
         </FileTreeRowMenu>
         <Hint label="Refresh">

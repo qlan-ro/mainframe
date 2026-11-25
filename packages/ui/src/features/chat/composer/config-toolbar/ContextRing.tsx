@@ -5,12 +5,14 @@
  * above it opens "Compact conversation"; below that it only explains itself.
  */
 
-import { useAui } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { Minimize2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -46,8 +48,12 @@ function Ring({ percent }: { percent: number }) {
 }
 
 export function ContextRing() {
-  const percent = useContextPercent();
-  const usage = useChatExtras()?.state.contextUsage;
+  const reportedPercent = useContextPercent();
+  const state = useChatExtras()?.state;
+  const empty = useAuiState(({ thread }) => thread.messages.length === 0);
+  const draft = empty && state?.chatId?.startsWith('__LOCALID_') && state.chatConfig == null;
+  const percent = reportedPercent ?? (draft ? 0 : null);
+  const usage = state?.contextUsage;
   const aui = useAui();
   if (percent == null) return null;
 
@@ -80,7 +86,16 @@ export function ContextRing() {
       <ComposerHint label={`${label} · Click to compact`}>
         <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
       </ComposerHint>
-      <DropdownMenuContent align="end" side="top" sideOffset={6} className="w-auto min-w-67.5">
+      <DropdownMenuContent
+        align="end"
+        side="top"
+        sideOffset={6}
+        className="w-auto min-w-67.5 [&_[role=menuitem]]:text-control/[1.45]"
+      >
+        <DropdownMenuLabel className="pb-[5px] text-control/[1.45] font-medium text-foreground">
+          {label}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="-translate-y-px" />
         <DropdownMenuItem
           data-testid="composer-context-compact"
           disabled={!canCompact}

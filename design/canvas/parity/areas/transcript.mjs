@@ -35,7 +35,7 @@ const state = (id, proto = [], app = [], pairs = work, transcript = 'tools') => 
   },
   proto: P.all(P.preset('every-tool'), ...proto),
   app: P.all(closeWorkspace, ...app),
-  pairs,
+  pairs: pairs.map((pair) => ({ local: true, ...pair })),
 });
 const tool = (
   id,

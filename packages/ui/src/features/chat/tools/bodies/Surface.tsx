@@ -55,11 +55,13 @@ export function ScrollRegion({
 
 export function KeyValue({
   label,
+  hideLabel,
   tone,
   testId,
   children,
 }: {
   label: string;
+  hideLabel?: boolean;
   tone?: 'fail';
   testId?: string;
   children: ReactNode;
@@ -67,12 +69,15 @@ export function KeyValue({
   return (
     <div className="px-3 py-2 not-first:border-t not-first:border-border">
       <div
-        className={cn('mf-tr-meta mb-0.5 font-sans font-medium text-muted-foreground', tone === 'fail' && 'text-fail')}
+        className={cn(
+          hideLabel ? 'sr-only' : 'mf-tr-meta mb-0.5 font-sans font-medium text-muted-foreground',
+          tone === 'fail' && 'text-fail',
+        )}
       >
         {label}
       </div>
       {typeof children === 'string' ? (
-        <pre data-testid={testId} className="wrap-break-word whitespace-pre-wrap">
+        <pre data-testid={testId} className="whitespace-pre">
           {children}
         </pre>
       ) : (

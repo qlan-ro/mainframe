@@ -102,8 +102,8 @@ describe('UsageCapsule — row', () => {
     render(<UsageCapsule now={NOW} />);
 
     expect(screen.getByTestId('usage-capsule-item-claude:5-hour').textContent).toBe('Claude5-hour3%2h 36m');
-    expect(screen.getByTestId('usage-capsule-item-claude:Weekly')).toHaveTextContent('Weekly');
-    expect(screen.getByTitle('Claude Weekly')).toHaveTextContent('Weekly');
+    expect(screen.getByTestId('usage-capsule-item-claude:Weekly')).toHaveTextContent('Week');
+    expect(screen.getByTitle('Claude Weekly')).toHaveTextContent('Week');
     expect(screen.getByTitle('Claude Weekly Fable')).toHaveTextContent('Weekly Fable');
     expect(screen.getByTestId('usage-capsule-item-claude:Weekly · Fable').textContent).toBe(
       'ClaudeWeekly Fable18%6d 0h',

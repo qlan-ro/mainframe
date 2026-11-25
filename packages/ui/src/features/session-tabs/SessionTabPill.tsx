@@ -5,9 +5,7 @@
  * lives in the right-click menu.
  *
  * The shared title-bar tab shape (`tab-shape`), 180px wide, shrinking to 96.
- * The title fades only when it overflows. On a background tab it owns the whole
- * pill: the ✕ sits out of flow and overlays its tail on hover or keyboard focus
- * (on the pill's ground, behind a short ramp). The selected tab's ✕ is in flow.
+ * The title fades when it overflows. The close control has its own slot on every tab.
  *
  * A PREVIEW tab (editor-style temporary slot) renders its title italic;
  * double-click or the menu's "Keep open" pins it. Dragged onto the chat, a
@@ -30,7 +28,6 @@ import {
   keepFocusOnTabPress,
   TAB_CLOSE_ATTR,
   TAB_CLOSE_BUTTON,
-  TAB_CLOSE_OVERLAY,
   TAB_KEYS_ATTR,
   TAB_HOVER_STYLE,
   tabShape,
@@ -148,7 +145,7 @@ export function SessionTabPill({ tab, hintIndex = null, canOpenBeside, ...action
           tab.active,
           cn(
             'w-45 min-w-24 shrink gap-2',
-            tab.active ? 'pr-1 pl-3' : 'px-3',
+            'pr-1 pl-3',
             // The dragged pill ghosts so the cursor + drop target read as the live thing.
             dragging && 'opacity-40',
           ),
@@ -170,8 +167,8 @@ export function SessionTabPill({ tab, hintIndex = null, canOpenBeside, ...action
         <span
           data-testid={`session-tab-controls-${tab.id}`}
           className={cn(
-            !tab.active && TAB_CLOSE_OVERLAY,
-            !tab.active && 'bg-(--tab-hover) opacity-0 before:to-(--tab-hover)',
+            'shrink-0',
+            !tab.active && 'opacity-0',
             !tab.active && 'group-focus-within/tab:opacity-100 group-hover/tab:opacity-100',
           )}
         >

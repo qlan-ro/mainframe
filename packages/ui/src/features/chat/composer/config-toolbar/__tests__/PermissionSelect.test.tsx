@@ -71,6 +71,18 @@ async function openMenu(): Promise<void> {
 // Tests
 // ---------------------------------------------------------------------------
 
+it.each([true, false])('shows the permission footer only while planning (%s)', async (planMode) => {
+  renderSelect(makeChat({ planMode }));
+  await openMenu();
+  const note = screen.queryByText('Plan mode is active. Your choice applies once the plan is approved.');
+  if (planMode) {
+    expect(note).toBeInTheDocument();
+    expect(note?.previousElementSibling).toHaveAttribute('role', 'separator');
+  } else {
+    expect(note).toBeNull();
+  }
+});
+
 describe('PermissionSelect — default label with no providerDefaults', () => {
   it('shows "Interactive" when chat.permissionMode is unset', () => {
     renderSelect(makeChat({ permissionMode: undefined }));

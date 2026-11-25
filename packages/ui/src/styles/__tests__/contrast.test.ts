@@ -216,6 +216,10 @@ describe('v2 contrast guardrail', () => {
     const rest = [ground];
     // Half strength is the row of the chat visible in the split's other zone.
     const filled = [0.5, 0.6, 1].map((strength) => composite(at(accent, strength), ground));
+    expect(
+      inkOn(color(t, '--muted-foreground'), composite(accent, ground)),
+      `time on an unselected hovered row (${theme})`,
+    ).toBeGreaterThanOrEqual(WCAG_MIN);
     for (const bg of rest) {
       expect(inkOn(color(t, '--muted-foreground'), bg), `time at rest (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
     }
@@ -229,9 +233,10 @@ describe('v2 contrast guardrail', () => {
     }
   });
 
-  it('the row’s time steps up on every fill, and the hover card’s links are body ink', () => {
+  it('the row’s time uses meta ink and steps up on selected fills; hover card links use body ink', () => {
     const status = readSheet('features/sessions/SessionRowStatus.tsx');
-    for (const state of ['group-hover/menu-item', 'group-data-active/menu-item', 'group-data-in-workspace/menu-button'])
+    expect(status).toContain('text-muted-foreground');
+    for (const state of ['group-data-active/menu-item', 'group-data-in-workspace/menu-button'])
       expect(status).toContain(`${state}:text-sidebar-foreground/80`);
     // `primary` is 3.65:1 in light, and the card's text is 11px.
     expect(readSheet('features/sessions/SessionMetaCard.tsx')).not.toMatch(/text-primary\b/);

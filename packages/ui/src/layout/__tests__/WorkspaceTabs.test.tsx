@@ -177,6 +177,7 @@ describe('WorkspaceTabs — add menu (native DropdownMenu)', () => {
 
     openAddMenu(getByTestId);
 
+    expect(getByTestId('workspace-add-menu-pane-1')).toHaveAccessibleName('New tab');
     expect(getByTestId('workspace-add-menu-pane-1')).toHaveTextContent('No launch configs found.');
     expect(queryByTestId('workspace-pane-launch-Sleeper-pane-1')).toBeNull();
   });

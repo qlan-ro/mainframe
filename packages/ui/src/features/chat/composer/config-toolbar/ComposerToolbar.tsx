@@ -25,7 +25,6 @@ import { ProviderModelSelect } from './ProviderModelSelect';
 import { providerSwitchBlockedReason } from './provider-switch';
 import { TuningWarningDialog } from './TuningWarningDialog';
 import { UnattendedConfirmDialog } from './UnattendedConfirmDialog';
-import { useProviderSwitch } from './use-provider-switch';
 import { useUnattendedGuard } from './use-unattended-confirm';
 
 const ANNOUNCE_MS = 1400;
@@ -62,16 +61,16 @@ export function ComposerToolbar({
   const { chat, adapter, model, runningModel, providerDefaults, setPermissionMode, disabled } = tuning;
   const extras = useChatExtras();
   const queuedCount = Object.values(extras?.queued ?? {}).filter((q) => q != null).length;
-  const switchProvider = useProviderSwitch(chat, extras?.port ?? null);
   const mode: ExecutionMode = chat ? currentPermission(chat, providerDefaults) : 'default';
   const unattended = useUnattendedGuard(chat?.id ?? null);
   const choosePermission = (next: ExecutionMode) => unattended.run(next, mode, () => setPermissionMode(next));
   const controls = useRef<HTMLDivElement>(null);
   /** The permissions control on screen: the chip stands in for it in a narrow composer. */
-  const focusPermissions = () =>
-    [...(controls.current?.querySelectorAll<HTMLElement>('[data-permissions-control]') ?? [])]
-      .find((el) => el.offsetParent !== null)
-      ?.focus();
+  const permissionsAnchor = () =>
+    [...(controls.current?.querySelectorAll<HTMLElement>('[data-permissions-control]') ?? [])].find(
+      (el) => el.offsetParent !== null,
+    );
+  const focusPermissions = () => permissionsAnchor()?.focus();
   const [announced, announce] = useFlash<ExecutionMode>(ANNOUNCE_MS);
 
   useImperativeHandle(
@@ -102,11 +101,12 @@ export function ComposerToolbar({
     providerDefaults,
     setAdapter: tuning.setAdapter,
     setModel: tuning.setModel,
+    draftMode: tuning.draftMode,
     setEffort: tuning.setEffort,
     setFeature: tuning.setFeature,
     hideProviderSwitch: variant === 'side',
     switchBlockedReason: providerSwitchBlockedReason(chat, queuedCount, fromName),
-    onSwitchProvider: switchProvider,
+    onSwitchProvider: tuning.switchProvider,
   };
 
   return (
@@ -152,7 +152,7 @@ export function ComposerToolbar({
         onConfirm={tuning.tuningWarning.confirm}
         onCancel={tuning.tuningWarning.cancel}
       />
-      <UnattendedConfirmDialog confirm={unattended} returnFocus={focusPermissions} />
+      <UnattendedConfirmDialog confirm={unattended} returnFocus={focusPermissions} anchor={permissionsAnchor} />
     </div>
   );
 }

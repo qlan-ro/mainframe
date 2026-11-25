@@ -79,7 +79,7 @@ export function TerminalBody({ command, output }: { command?: string; output: st
         )}
         {output &&
           lines.map((line, index) => (
-            <span key={index} className="block min-h-[19px] wrap-break-word whitespace-pre-wrap">
+            <span key={index} className="block min-h-[19px] whitespace-pre">
               {terminalLine(line)}
             </span>
           ))}

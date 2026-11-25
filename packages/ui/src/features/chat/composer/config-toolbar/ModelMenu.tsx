@@ -6,7 +6,7 @@
  * combined chip that replaces it in a narrow composer (C6).
  */
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type {
   AdapterInfo,
@@ -18,6 +18,7 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenuLabel } from '@/components/ui/dropdown-menu';
+import { getActiveDaemon, subscribeActiveDaemon } from '@/lib/daemon/active-daemon';
 import { displayEffort, effortOptions, EFFORT_META } from '@/lib/model-tuning';
 import { ModelMenuRow } from './ModelMenuRow';
 import { ModelTuning } from './ModelTuning';
@@ -39,10 +40,11 @@ export interface ModelMenuProps {
   locked: boolean;
   /** Why switching providers is unavailable right now (shown on the tabs), or null. */
   switchBlockedReason?: string | null;
-  onSwitchProvider?: (request: ProviderSwitchRequest) => void;
+  onSwitchProvider?: (request: ProviderSwitchRequest, onSettled?: () => void) => void;
   providerDefaults?: ProviderConfig;
   setAdapter: (adapterId: string) => void;
-  setModel: (model: string) => void;
+  setModel: (model: string, onSettled?: () => void) => boolean | void;
+  draftMode?: boolean;
   setEffort: (effort: EffortLevel) => void;
   setFeature: (key: FeatureKey, on: boolean) => void;
   /** Hides the provider tabs (side chats: the adapter is a copy of the parent's). */
@@ -106,24 +108,59 @@ function CollapsibleModelSection({ label, testId, containsCurrent, children }: M
   );
 }
 
-export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () => void }) {
+const daemonId = () => getActiveDaemon().id;
+
+export function ModelMenu(props: ModelMenuProps) {
+  const daemon = useSyncExternalStore(subscribeActiveDaemon, daemonId, daemonId);
+  return <ModelMenuBody key={JSON.stringify([daemon, props.chat.id])} {...props} />;
+}
+
+function ModelMenuBody(props: ModelMenuProps) {
   const { chat, adapters, model, runningModel = null, showCurrentModel = false, locked, providerDefaults } = props;
   // Mid-session, a tab only browses: which provider's catalog the menu shows.
   const [browseId, setBrowseId] = useState<string | null>(null);
   const { activeId, active, currentModelId } = activeModel(props);
+  const [pending, setPending] = useState(false);
+  const pendingPick = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      pendingPick.current = null;
+    },
+    [],
+  );
   const shownId = locked ? (browseId ?? activeId) : activeId;
   const browsingOther = shownId !== activeId;
   const shown = browsingOther ? (adapters.find((a) => a.id === shownId) ?? active) : active;
   const catalog = partitionModels(modelRows(shown, browsingOther ? '' : currentModelId));
   const tuned = browsingOther ? null : model;
 
-  const onPickModel = (id: string): void => {
-    if (browsingOther) props.onSwitchProvider?.({ adapterId: shownId, model: id });
-    else if (id !== currentModelId) props.setModel(id);
-    onClose();
+  const onPickModel = (id: string): boolean => {
+    if (pendingPick.current || (!browsingOther && id === currentModelId)) return true;
+    const target = { adapterId: shownId, model: id };
+    const settled = () => {
+      if (pendingPick.current !== settled) return;
+      pendingPick.current = null;
+      setPending(false);
+      if (browsingOther) setBrowseId(null);
+    };
+    if (!props.draftMode) {
+      pendingPick.current = settled;
+      setPending(true);
+    }
+    if (browsingOther) {
+      if (props.onSwitchProvider) props.onSwitchProvider(target, settled);
+      else settled();
+    } else if (props.setModel(id, settled)) return false;
+    return true;
   };
   const renderRow = (m: AdapterModel) => (
-    <ModelMenuRow key={m.id} option={m} active={!browsingOther && m.id === currentModelId} onSelect={onPickModel} />
+    <ModelMenuRow
+      key={m.id}
+      option={m}
+      inactive={pending}
+      active={!browsingOther && m.id === currentModelId}
+      onSelect={onPickModel}
+    />
   );
   const holdsCurrent = (models: AdapterModel[]) => !browsingOther && models.some((m) => m.id === currentModelId);
 
@@ -143,8 +180,10 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
               adapters={adapters}
               selectedId={shownId}
               activeId={activeId}
+              pending={pending}
               blockedReason={locked ? (props.switchBlockedReason ?? null) : null}
               onSelect={(id) => {
+                if (pending) return;
                 if (locked) setBrowseId(id);
                 else if (id !== activeId) props.setAdapter(id);
               }}
@@ -194,6 +233,7 @@ export function ModelMenu({ onClose, ...props }: ModelMenuProps & { onClose: () 
       {tuned && (
         <ModelTuning
           model={tuned}
+          disabled={pending}
           chat={chat}
           providerDefaults={providerDefaults}
           setEffort={props.setEffort}

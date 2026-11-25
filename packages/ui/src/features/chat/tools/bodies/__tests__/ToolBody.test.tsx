@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,8 +13,21 @@ vi.mock('../BackgroundOutput', () => ({
 }));
 vi.mock('@/lib/shiki-tokens', () => ({ useShikiTokens: () => null, TokenLine: () => null }));
 vi.mock('../../ToolResultExpand', () => ({
-  ToolResultExpand: ({ toolUseId, fullBytes }: { toolUseId: string; fullBytes: number }) => (
-    <div data-testid="expand">{`${toolUseId}:${fullBytes}`}</div>
+  ToolResultExpand: ({
+    toolUseId,
+    fullBytes,
+    truncatedContent,
+    renderPreview,
+  }: {
+    toolUseId: string;
+    fullBytes: number;
+    truncatedContent: string;
+    renderPreview?: (content: string) => ReactNode;
+  }) => (
+    <>
+      <div data-testid="expand">{`${toolUseId}:${fullBytes}`}</div>
+      {renderPreview?.(truncatedContent)}
+    </>
   ),
 }));
 const opened = vi.fn();
@@ -172,9 +186,39 @@ describe('ToolBody', () => {
     expect(screen.getByRole('region', { name: 'Command output' })).toHaveAttribute('tabindex', '0');
   });
 
-  it('offers the whole of a result the daemon cut short', () => {
-    show(part('Bash', { command: 'ls' }, { content: 'a', truncated: true, fullBytes: 9000 }));
+  it('preserves preview text with the same terminal cleanup as ordinary Bash output', () => {
+    const content = '\u001b[32mfirst\u001b[0m second';
+    show(part('Bash', { command: 'ls' }, { content, truncated: true, fullBytes: 9000 }));
     expect(screen.getByTestId('expand')).toHaveTextContent('call:9000');
+    expect(screen.getByTestId('chat-bash-output').textContent).toBe('first second');
+  });
+
+  it('colors Grep locations without changing whitespace, punctuation, or line endings', () => {
+    const result = 'src/a.ts:12:  const foo = 1;\r\nplain:metadata\n./b.ts:9:  x:y';
+    show(part('Grep', { pattern: 'x' }, result));
+    const preview = screen.getByTestId('search-card-plain-body').querySelector('pre');
+    expect(preview?.textContent).toBe(result);
+    expect(screen.getByText('src/a.ts:12:')).toHaveClass('text-muted-foreground');
+    expect(screen.getByText('./b.ts:9:')).toHaveClass('text-muted-foreground');
+    expect(preview?.querySelector('mark')).toHaveTextContent('x');
+  });
+
+  it('removes Grep error wrappers while preserving the result whitespace', () => {
+    const text = '  src/a.ts:12: x\r\n  ';
+    show(part('Grep', { pattern: 'x' }, `<tool_use_error><error>${text}</error></tool_use_error>`));
+    expect(screen.getByTestId('search-card-plain-body').querySelector('pre')?.textContent).toBe(text);
+  });
+
+  it.each([
+    ['over 200 lines', 'a.ts:1: x\r\n'.repeat(201)],
+    ['a line over 2,000 characters', 'a.ts:1: x' + 'a'.repeat(2_000) + '\n'],
+    ['over 500 matches', 'a.ts:1: ' + 'x'.repeat(501) + '\n  '],
+    ['an overwide location', 'a.ts:1: x\n' + 'a'.repeat(80) + '.ts:2: x\n'],
+  ])('preserves the raw text without decorating %s', (_case, result) => {
+    show(part('Grep', { pattern: 'x' }, result));
+    const preview = screen.getByTestId('search-card-plain-body').querySelector('pre');
+    expect(preview?.textContent).toBe(result);
+    expect(preview?.children).toHaveLength(0);
   });
 
   it('opens a fetched page where links open', () => {
