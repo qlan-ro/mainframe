@@ -101,11 +101,7 @@ export function createThumb(scroller: Element, axis: Axis, { onEnter, onLeave }:
     event.stopPropagation();
   });
   element.addEventListener('pointerdown', (event) => {
-    if (event.button === 0)
-      startDrag(element, scroller, axis, event, () => {
-        place(true);
-        onLeave();
-      });
+    if (event.button === 0) startDrag(element, scroller, axis, event, onLeave);
   });
   element.addEventListener('wheel', (event) => forwardWheel(scroller, event), { passive: false });
   document.body.append(element);
