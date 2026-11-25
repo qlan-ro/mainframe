@@ -7,7 +7,9 @@
 import { createContext, useCallback, useContext } from 'react';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { toFileRef, type FileBases } from '@/lib/files/file-ref';
+import type { FileRevealScope } from '@/store/surface-intents';
 
+export const ChatFileRevealContext = createContext<FileRevealScope | null | undefined>(undefined);
 export const ChatFileBasesContext = createContext<FileBases | null>(null);
 
 /** What a transcript's paths are relative to: its own chat's files, or the active session's. */

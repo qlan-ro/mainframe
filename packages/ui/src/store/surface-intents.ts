@@ -1,10 +1,15 @@
 import type { TabMode } from './run-pane';
 
+export interface FileRevealScope {
+  scopeKey: string;
+  daemonId: string;
+}
+
 export type SurfaceIntent =
   /** `mode` requests a permanent tab; omitted (or 'preview') keeps today's preview behavior. */
   | { type: 'open-file'; path: string; line?: number; character?: number; mode?: TabMode }
   | { type: 'open-diff'; path: string; original?: string; modified?: string; mode?: TabMode }
-  | { type: 'reveal-file'; path: string }
+  | { type: 'reveal-file'; path: string; scope?: FileRevealScope }
   | { type: 'activate-surface'; surface: 'chat' | 'workspace' }
   /** Trigger the file-open picker / command palette. */
   | { type: 'open-file-picker' }

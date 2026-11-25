@@ -1,4 +1,14 @@
 import { create } from 'zustand';
+import type { FileTreeEntry } from '@/lib/api/files';
+import type { ActiveFileTree } from './active-bases-store';
+
+export type FileTreeListings = ReadonlyMap<string, FileTreeEntry[]>;
+
+export interface VerifiedFileReveal {
+  path: string;
+  tree: ActiveFileTree;
+  listings: FileTreeListings;
+}
 
 /**
  * workspace surface store.
@@ -15,6 +25,7 @@ import { create } from 'zustand';
 interface FilesStore {
   /** Relative path to reveal in the file tree, or null when idle. */
   revealTarget: string | null;
+  verifiedReveal: VerifiedFileReveal | null;
 
   /** Whether the file-open picker dialog is currently open. */
   pickerOpen: boolean;
@@ -34,10 +45,11 @@ interface FilesStore {
 
 export const useFilesStore = create<FilesStore>()((set, get) => ({
   revealTarget: null,
+  verifiedReveal: null,
   pickerOpen: false,
 
   setRevealTarget(path) {
-    set({ revealTarget: path });
+    set({ revealTarget: path, verifiedReveal: null });
   },
 
   getRevealTarget() {

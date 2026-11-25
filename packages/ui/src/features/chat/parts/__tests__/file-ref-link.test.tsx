@@ -38,6 +38,7 @@ describe('SmartLink — file targets open via the intent bus', () => {
       line: undefined,
       character: undefined,
     });
+    expect(emitSurfaceIntent).toHaveBeenCalledTimes(1);
     expect(openExternal).not.toHaveBeenCalled();
   });
 

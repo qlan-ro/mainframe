@@ -17,16 +17,25 @@
 import { create } from 'zustand';
 import type { FileBases } from '@/lib/files/file-ref';
 
+export interface ActiveFileTree {
+  daemonId: string;
+  projectId: string;
+  chatId?: string;
+  port: number;
+}
+
 interface ActiveBasesStore {
+  tree: ActiveFileTree | null;
   bases: FileBases;
   scopeKey: string | null;
-  setActiveBases: (bases: FileBases, scopeKey: string | null) => void;
+  setActiveBases: (bases: FileBases, scopeKey: string | null, tree?: ActiveFileTree | null) => void;
 }
 
 export const useActiveBasesStore = create<ActiveBasesStore>()((set) => ({
   bases: {},
+  tree: null,
   scopeKey: null,
-  setActiveBases(bases, scopeKey) {
-    set({ bases, scopeKey });
+  setActiveBases(bases, scopeKey, tree = null) {
+    set({ bases, scopeKey, tree });
   },
 }));

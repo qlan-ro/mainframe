@@ -37,6 +37,7 @@ import { useOffloadRelease } from '../features/sessions/runtime/use-offload-rele
 import { useStartNewSession } from '../features/sessions/new-thread/use-start-new-session';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { activeLaunchScope } from '../lib/launch-scope';
 import { useUiPrefs } from '../store/ui-prefs';
 import { AppSidebar } from '../layout/AppSidebar';
@@ -129,14 +130,19 @@ function ShellRuntime({ port }: { port: number }) {
   // active session's project → none) and opens the draft there.
   useAppShortcutActions({ onNewSession: useStartNewSession() });
 
-  const { worktreePath, projectPath, projectId } = useActiveIdentity();
+  const { worktreePath, projectPath, projectId, chatId } = useActiveIdentity();
+  const daemonId = getActiveDaemon().id;
 
   // Sync the active bases into the store so the intent subscriber (outside React)
   // can normalize open-file path flavors to a canonical relative key (F1 fix).
   const setActiveBases = useActiveBasesStore((s) => s.setActiveBases);
   useEffect(() => {
-    setActiveBases({ worktreePath, projectPath }, activeLaunchScope(projectId, worktreePath, projectPath));
-  }, [projectId, worktreePath, projectPath, setActiveBases]);
+    setActiveBases(
+      { worktreePath, projectPath },
+      activeLaunchScope(projectId, worktreePath, projectPath),
+      projectId ? { projectId, chatId, daemonId, port } : null,
+    );
+  }, [projectId, chatId, daemonId, port, worktreePath, projectPath, setActiveBases]);
 
   return null;
 }
