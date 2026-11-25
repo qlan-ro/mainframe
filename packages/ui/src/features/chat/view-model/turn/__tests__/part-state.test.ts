@@ -52,6 +52,19 @@ describe('a part is going while the session runs', () => {
     expect(states(steered, { ...runs, runAfter: 'not-loaded' })).toEqual(['neutral', 'going']);
   });
 
+  it.each([
+    [
+      'one that waits for an approval nobody asks for now',
+      bash('ls', { ...open, approval: { id: 'x' } } as never),
+      'going',
+    ],
+    ['a monitor, which is no step', { ...bash('x', open), toolName: 'Monitor' } as never, 'neutral'],
+    ['one that came back', bash('ls'), 'neutral'],
+  ] as const)('when a step of it is open: %s', (_name, step, expected) => {
+    const thread = [user('u1'), assistant('a1', [step, text('Hm')]), user('u2'), assistant('a2', [text('Hi')])];
+    expect(states(thread, runs)).toEqual([expected, 'going']);
+  });
+
   it('when a step of it has no outcome, unless its provider ended that turn', () => {
     const cut = (over?: object) => [
       user('u1'),
@@ -82,7 +95,9 @@ describe('a part is going while the session runs', () => {
     expect(states(done, { ...runs, runAfter: 'u1' })).toEqual(['going']);
     expect(states(done, runs)).toEqual(['going']);
     // With nothing on its way the agent went on by itself.
-    expect(states(done.slice(0, 2), { ...runs, runAfter: 'a1' })).toEqual(['going']);
+    const failed = user('f', 'x', { pending: true, error: 'offline' });
+    for (const after of [[], [failed]])
+      expect(states([...done.slice(0, 2), ...after], { ...runs, runAfter: 'a1' })).toEqual(['going']);
   });
 
   it('and only then: nothing in an idle session is going by itself', () => {
@@ -163,6 +178,11 @@ describe('how a part ended is what its own messages say', () => {
     expect(states(two(turn('completed', 't1'), turn('invalid', 't2')))).toEqual(['neutral']);
     // A turn cut in a step, with another after it.
     expect(states(two(turn('running', 't1'), turn('completed', 't2'), open))).toEqual(['neutral']);
+    expect(states(two(turn('completed', 't1'), turn('completed', 't2'), open))).toEqual(['finished']);
+    const three = [bash('ls', open), bash('pwd'), text('Done')];
+    const of = [turn('running', 't1'), turn('running', 't1'), turn('completed', 't2')];
+    const partSources = Object.fromEntries(of.map((each, index) => [index, sources(1, each)[0]]));
+    expect(states([user('u1'), assistant('a1', three, { partSources })])).toEqual(['neutral']);
     // One turn whose last part has the newest word is one turn.
     expect(states(two(turn('invalid', 't1'), turn('completed', 't1')))).toEqual(['finished']);
   });

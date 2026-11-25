@@ -26,9 +26,9 @@ export function runStarted(state: ChatThreadState, start: RunStart): RunInProgre
   // A queued prompt's run can start before the stop of the one before has settled.
   const another = startedAtMs !== undefined && known !== undefined && startedAtMs !== known;
   if (run && !another) return run.confirmed || optimistic ? run : { ...run, confirmed: true };
-  const edge = another || loadState.type === 'ready';
+  const seen = !replayed && loadState.type === 'ready';
   return {
-    ...(edge && !replayed && { after: messages[messages.length - 1]?.id ?? null }),
+    ...(seen && { after: messages[messages.length - 1]?.id ?? null }),
     confirmed: !optimistic,
   };
 }

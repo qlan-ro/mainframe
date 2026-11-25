@@ -15,9 +15,8 @@ function providerTurns(units: readonly TurnUnit[], pending: ReadonlySet<string>)
   const turns = new Map<string, { state: State; open: boolean }>();
   for (const unit of units) {
     if (!unit.presentation) continue;
-    const { provider, turnId, state } = unit.presentation;
-    const key = `${provider}:${turnId}`;
-    turns.set(key, { state, open: Boolean(turns.get(key)?.open) || isOpenStep(unit, pending) });
+    const { turnId, state } = unit.presentation;
+    turns.set(turnId, { state, open: Boolean(turns.get(turnId)?.open) || isOpenStep(unit, pending) });
   }
   return [...turns.values()];
 }
@@ -32,6 +31,6 @@ export function endOf(draft: Draft, { pendingToolIds }: TurnScope): PartEnd | un
   if (state === 'failed') return 'error';
   if (state === 'cancelled' || cut === 'cancelled') return 'stopped';
   if (cut === 'error' || draft.error > draft.said) return 'error';
-  const whole = turns.slice(0, -1).every((turn) => turn.state === 'completed' || (!CUT.has(turn.state) && !turn.open));
+  const whole = turns.every((turn) => turn.state === 'completed' || (!CUT.has(turn.state) && !turn.open));
   return state === 'completed' && whole ? 'finished' : undefined;
 }
