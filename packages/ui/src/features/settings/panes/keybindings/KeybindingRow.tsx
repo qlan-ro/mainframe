@@ -19,19 +19,15 @@ import { renderEntryChord } from '@/features/shortcuts/render-chord';
 interface KeybindingRowProps {
   binding: EffectiveBinding;
   isMac: boolean;
-  /** Who currently answers to a candidate chord — drives the steal prompt. */
-  holderOf: (chord: Chord) => ShortcutDescriptor | null;
-  onBind: (chord: Chord, steal: boolean) => void;
+  onBind: (chord: Chord, confirmedHolderId: string | null) => ShortcutDescriptor | null;
   onReset: () => void;
 }
 
-export function KeybindingRow({ binding, isMac, holderOf, onBind, onReset }: KeybindingRowProps) {
+export function KeybindingRow({ binding, isMac, onBind, onReset }: KeybindingRowProps) {
   const { entry, chord, isDefault, rebindable } = binding;
   const [recording, setRecording] = useState(false);
-  const [candidate, setCandidate] = useState<Chord | null>(null);
+  const [conflict, setConflict] = useState<{ chord: Chord; holder: ShortcutDescriptor } | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
-
-  const holder = candidate ? holderOf(candidate) : null;
 
   useEffect(() => {
     if (!recording) return;
@@ -42,22 +38,18 @@ export function KeybindingRow({ binding, isMac, holderOf, onBind, onReset }: Key
       event.stopPropagation();
       if (event.code === 'Escape') {
         setRecording(false);
-        setCandidate(null);
+        setConflict(null);
         return;
       }
       const next = chordFromEvent(event, isMac);
       if (next == null) return;
-      setCandidate(next);
       setRecording(false);
-      // A free chord commits immediately; a taken one waits for the steal.
-      if (holderOf(next) == null) {
-        onBind(next, false);
-        setCandidate(null);
-      }
+      const holder = onBind(next, null);
+      setConflict(holder ? { chord: next, holder } : null);
     }
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [recording, isMac, holderOf, onBind]);
+  }, [recording, isMac, onBind]);
 
   const label = chord === null ? 'Unassigned' : renderEntryChord({ ...entry, chord }, isMac);
 
@@ -68,24 +60,24 @@ export function KeybindingRow({ binding, isMac, holderOf, onBind, onReset }: Key
     >
       <span className="min-w-0 flex-1 truncate text-sm">{entry.label}</span>
 
-      {holder && candidate && (
+      {conflict && (
         <span
           data-testid={`settings-keybinding-conflict-${entry.id}`}
           className="shrink-0 text-xs text-muted-foreground"
         >
-          Already {holder.label}
+          Already {conflict.holder.label}
         </span>
       )}
 
-      {holder && candidate ? (
+      {conflict ? (
         <Button
           data-testid={`settings-keybinding-steal-${entry.id}`}
           variant="ghost"
           size="sm"
           className="shrink-0 text-xs"
           onClick={() => {
-            onBind(candidate, true);
-            setCandidate(null);
+            const holder = onBind(conflict.chord, conflict.holder.id);
+            setConflict(holder ? { chord: conflict.chord, holder } : null);
           }}
         >
           Use it anyway
@@ -99,7 +91,7 @@ export function KeybindingRow({ binding, isMac, holderOf, onBind, onReset }: Key
         size="sm"
         disabled={!rebindable}
         onClick={() => {
-          setCandidate(null);
+          setConflict(null);
           setRecording(true);
         }}
         className={cn(
