@@ -170,14 +170,20 @@ it.each(['none', 'permission', 'locked permission', 'plan'] as const)(
     rerender(ui());
     await act(async () => vi.runAllTimersAsync());
     expect(screen.queryByRole('dialog')).toBeNull();
-    const targets = {
-      none: ['textbox', 'Composer'],
-      permission: ['button', 'Allow once'],
-      'locked permission': ['button', 'Reject'],
-      plan: ['button', 'Approve & run'],
-    };
-    const [role, name] = targets[replacement]!;
-    expect(screen.getByRole(role!, { name })).toHaveFocus();
+    if (replacement === 'none') {
+      expect(screen.getByRole('textbox', { name: 'Composer' })).toHaveFocus();
+      return;
+    }
+    // The request as a whole: a key meant for the text just read answers nothing.
+    const slot = screen.getByTestId('chat-thread-gate-slot');
+    expect(slot).toHaveFocus();
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    for (const key of [' ', 'Enter']) {
+      fireEvent.keyDown(document.activeElement!, { key });
+      fireEvent.keyUp(document.activeElement!, { key });
+    }
+    expect(slot).toHaveFocus();
+    expect(reply).not.toHaveBeenCalled();
   },
 );
 
