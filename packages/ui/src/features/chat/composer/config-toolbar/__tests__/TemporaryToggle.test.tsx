@@ -135,7 +135,7 @@ describe('TemporaryToggle — hover chrome', () => {
   it('keeps the engaged background on hover for a locked, active (real temporary) chat', () => {
     renderToggle(makeChat({ temporary: true }), false);
     const button = screen.getByTestId('composer-temporary-toggle');
-    expect(button.className).toContain('bg-sidebar-selection');
+    expect(button.className).toContain('bg-chrome-press');
     expect(button.className).not.toContain('hover:bg-transparent');
   });
 
