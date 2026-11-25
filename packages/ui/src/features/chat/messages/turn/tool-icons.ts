@@ -7,7 +7,6 @@ import {
   Clock,
   Diff,
   FileText,
-  FilePlus2,
   Globe,
   Layers,
   Plug,
@@ -22,6 +21,11 @@ import {
 import { BotFilled } from '@/lib/icons/bot-filled';
 import type { ToolKind } from '../../view-model/turn/tool-kind';
 import type { ToolStatus } from '../../view-model/turn/types';
+
+const WriteIcon = createLucideIcon('write', [
+  ['path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', key: 'page' }],
+  ['path', { d: 'M14 2v6h6M12 18v-6M9 15h6', key: 'fold-plus' }],
+]);
 
 const ListTreeIcon = createLucideIcon('tree', [
   [
@@ -47,7 +51,7 @@ export type RowIcon = LucideIcon | typeof BotFilled;
 export const KIND_ICONS: Record<ToolKind, RowIcon> = {
   read: FileText,
   edit: Diff,
-  write: FilePlus2,
+  write: WriteIcon,
   glob: Search,
   grep: Search,
   list: ListTreeIcon,

@@ -22,7 +22,7 @@ export function mcpName(toolName: string): { server: string; tool: string } {
   const match = /^mcp__(.+?)__(.+)$/.exec(toolName);
   if (!match) return { server: 'mcp', tool: toolName };
   const server = match[1]!.replace(/^claude_ai_/, '').replace(/_/g, ' ');
-  return { server: server.charAt(0).toUpperCase() + server.slice(1), tool: match[2]! };
+  return { server: server === 'github' ? 'GitHub' : server.charAt(0).toUpperCase() + server.slice(1), tool: match[2]! };
 }
 
 /** What Codex reported a command did, when every action is of one kind. */

@@ -158,7 +158,11 @@ Links: ${JSON.stringify([
       'parity-list',
       'LS',
       { path: 'packages/core-rs/crates' },
-      'mainframe-adapter-claude/ mainframe-adapter-codex/ mainframe-chat/',
+      [
+        'mainframe-adapter-claude/  mainframe-adapter-codex/  mainframe-chat/',
+        'mainframe-display/  mainframe-quota/  mainframe-server/  mainframe-types/',
+        '… 7 more',
+      ].join('\n'),
       12.1,
     ),
     call(

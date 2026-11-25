@@ -23,9 +23,19 @@ export function ResultText({ part, renderOutput }: { part: ToolPart; renderOutpu
   return renderOutput?.(text) ?? <pre className="wrap-break-word whitespace-pre-wrap">{text}</pre>;
 }
 
-export function ResultBlock({ part, failed, testId }: { part: ToolPart; failed: boolean; testId: string }) {
+export function ResultBlock({
+  part,
+  failed,
+  testId,
+  preformatted,
+}: {
+  part: ToolPart;
+  failed: boolean;
+  testId: string;
+  preformatted?: boolean;
+}) {
   return (
-    <Surface className="max-h-96 overflow-y-auto">
+    <Surface className={preformatted ? 'max-h-96 overflow-y-auto [&_pre]:whitespace-pre' : 'max-h-96 overflow-y-auto'}>
       <KeyValue label={failed ? 'Error' : 'Result'} tone={failed ? 'fail' : undefined} testId={testId}>
         <ResultText part={part} />
       </KeyValue>

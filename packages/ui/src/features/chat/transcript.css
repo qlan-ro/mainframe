@@ -27,7 +27,6 @@
 .dark {
   --mf-tr-add-ink: oklch(from var(--success) 0.73659 c h);
   --mf-tr-del-ink: oklch(from var(--red) 0.78217 c h);
-  --mf-tr-code-fail: oklch(from var(--mf-tr-failure) 0.75875 c h);
   --mf-tr-code-link: oklch(from var(--mf-tr-link) 0.74422 c h);
   --mf-tr-term: #0f0f10;
   --mf-tr-term-ink: #e4e4e7;

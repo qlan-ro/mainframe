@@ -58,7 +58,7 @@ describe('verb, target and receipt by tool', () => {
     ],
     ['web search', call('WebSearch', { query: 'codex' }), { verb: 'Searched the web', target: '"codex"' }],
     ['fetch', call('WebFetch', { url: 'https://example.com/a' }), { verb: 'Fetched', target: 'example.com/a' }],
-    ['mcp', call('mcp__github__get_issue', {}), { verb: 'Called', target: 'get_issue', where: 'on Github' }],
+    ['mcp', call('mcp__github__get_issue', {}), { verb: 'Called', target: 'get_issue', where: 'on GitHub' }],
     [
       'mcp images',
       call('mcp__playwright__shot', {}, { result: { content: '', images: [{}, {}] } }),

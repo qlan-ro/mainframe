@@ -114,7 +114,7 @@ function CallBody({ part, status }: ToolBodyProps) {
         .map(([key, value]) => `${JSON.stringify(key)}: ${JSON.stringify(value)}`)
         .join(', ')} }`;
   return (
-    <Surface testId="chat-call-body">
+    <Surface testId="chat-call-body" className="[&_pre]:whitespace-pre">
       {Object.keys(args).length > 0 && (
         <KeyValue label="Arguments" testId="chat-call-args">
           {argumentsText}
@@ -166,7 +166,9 @@ function MainBody({ part, status }: ToolBodyProps) {
     );
   if (!text) return null;
   if (kind === 'read' && !truncated) return <ReadBody part={part} text={text} />;
-  const result = <ResultBlock part={part} failed={false} testId="search-card-plain-body" />;
+  const result = (
+    <ResultBlock part={part} failed={false} testId="search-card-plain-body" preformatted={kind === 'list'} />
+  );
   if (kind === 'grep' && !truncated)
     return <GrepBody text={text} pattern={argText(part, 'pattern')} fallback={result} />;
   return result;
