@@ -6,7 +6,7 @@
  * project" before anything has resolved — and a "Start in…" list of every
  * real project plus a trailing "No project" entry at the same row weight.
  *
- * Entries are ordered most-recently-active first (see WelcomeState). The
+ * Entries are ordered most-recently-active first (see sortProjectsByRecentActivity). The
  * project matching the auto-resolved default (an active filter pill, else the
  * previously-active session — see resolveNewSessionProject) is tagged
  * "Resolved default". That default is frozen the first time this component

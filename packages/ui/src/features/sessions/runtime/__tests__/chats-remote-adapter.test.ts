@@ -1,3 +1,4 @@
+import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 import { describe, it, expect, afterEach, vi, type MockedFunction } from 'vitest';
 import type { Chat } from '@qlan-ro/mainframe-types';
 import type { SessionCustom } from '../../view-model/chat-to-thread-custom';
@@ -74,7 +75,7 @@ vi.mock('../chat-controller-registry', () => ({
 
 // Import AFTER mocks so the module under test picks them up.
 import { makeChatsRemoteAdapter } from '../chats-remote-adapter';
-import { useSessionListLoadState } from '../list-load-state';
+import { resetSessionListLoadState, useSessionListLoadState } from '../list-load-state';
 import { listChats, getChat, renameChat, archiveChat, discardChat, unarchiveChat } from '../../../../lib/api/chats';
 import { takeArchiveChoice, takeDiscard, takeLocalOnlyRemoval } from '../archive-confirm-bridge';
 import { createForLocal } from '../new-thread-coordinator';
@@ -182,6 +183,33 @@ describe('chats-remote-adapter — list requests temporary chats too (todo #346)
   });
 });
 
+it('drops an old daemon list before it can mark the current list loaded', async () => {
+  const original = getActiveDaemon();
+  let resolve!: (value: Chat[]) => void;
+  const pending = new Promise<Chat[]>((done) => (resolve = done));
+  mockListChats.mockReturnValueOnce(pending);
+  useSessionListLoadState.setState({ loaded: false, failed: false });
+  const list = makeChatsRemoteAdapter(1).list();
+  try {
+    setActiveDaemon({ ...original, id: 'remote-test' });
+    resolve([FIXTURE]);
+    expect(await list).toEqual({ threads: [] });
+    expect(useSessionListLoadState.getState().loaded).toBe(false);
+  } finally {
+    setActiveDaemon(original);
+  }
+});
+
+it('ignores a list started before a reset even when the daemon identity matches again', async () => {
+  let resolve!: (value: Chat[]) => void;
+  mockListChats.mockReturnValueOnce(new Promise<Chat[]>((done) => (resolve = done)));
+  const list = makeChatsRemoteAdapter(1).list();
+  resetSessionListLoadState();
+  resolve([FIXTURE]);
+  expect(await list).toEqual({ threads: [] });
+  expect(useSessionListLoadState.getState()).toMatchObject({ loaded: false, failed: false });
+});
+
 describe('chats-remote-adapter — list latches the load flag', () => {
   it('marks loaded only when listChats resolves, never when it rejects (#312)', async () => {
     useSessionListLoadState.setState({ loaded: false });
@@ -194,6 +222,21 @@ describe('chats-remote-adapter — list latches the load flag', () => {
     mockListChats.mockResolvedValueOnce([]);
     await adapter.list();
     expect(useSessionListLoadState.getState().loaded).toBe(true);
+  });
+
+  it('says whether the last request failed, while loaded stays latched', async () => {
+    useSessionListLoadState.setState({ loaded: false, failed: false });
+    const adapter = makeChatsRemoteAdapter(31415);
+    mockListChats.mockResolvedValueOnce([]);
+    await adapter.list();
+
+    mockListChats.mockRejectedValueOnce(new Error('daemon down'));
+    await expect(adapter.list()).rejects.toThrow('daemon down');
+    expect(useSessionListLoadState.getState()).toMatchObject({ loaded: true, failed: true });
+
+    mockListChats.mockResolvedValueOnce([]);
+    await adapter.list();
+    expect(useSessionListLoadState.getState()).toMatchObject({ loaded: true, failed: false });
   });
 });
 

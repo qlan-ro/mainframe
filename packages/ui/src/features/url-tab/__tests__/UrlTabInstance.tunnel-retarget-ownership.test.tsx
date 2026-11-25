@@ -18,6 +18,7 @@ import { startPortTunnel, stopPortTunnel } from '@/lib/api/tunnel-ports';
 import { releaseUrlTunnelConsumers, clearUrlTunnelConsumers } from '@/features/url-tab/tunnel-consumers';
 import { installFakeHost, seedStores, setPortEntry, renderTab } from './url-tab-tunnel-harness';
 
+vi.mock('@/features/chat/composer/draft-content/use-add-to-draft', () => ({ useAddToDraft: () => vi.fn() }));
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectId: 'proj-A', chatId: 'chat-1' }),
 }));

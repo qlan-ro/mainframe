@@ -21,13 +21,16 @@
  */
 import type { RefObject } from 'react';
 import { QuoteIcon, MessageSquarePlusIcon } from 'lucide-react';
+import { useAui } from '@assistant-ui/react';
 import { SelectionToolbar } from '@/components/ui/assistant-ui/quote';
 import { useOpenNewThreadDraft } from '@/features/sessions/new-thread/use-open-new-thread-draft';
 import { useChatExtras } from '../runtime/chat-extras';
 import { useAppendQuoteSegment } from '../composer/segments/use-append-quote-segment';
+import { quoteSource, selectedMessageId } from './quote-source';
 import { useSelectionInScope } from './use-selection-in-scope';
 
 export function ChatSelectionToolbar({ scopeRef }: { scopeRef?: RefObject<HTMLElement | null> } = {}) {
+  const aui = useAui();
   const appendQuoteSegment = useAppendQuoteSegment();
   const openNewThreadDraft = useOpenNewThreadDraft();
   const projectId = useChatExtras()?.state.chatConfig?.projectId;
@@ -36,7 +39,9 @@ export function ChatSelectionToolbar({ scopeRef }: { scopeRef?: RefObject<HTMLEl
   const handleQuote = () => {
     const text = window.getSelection()?.toString().trim();
     if (!text) return;
-    appendQuoteSegment(text);
+    const messageId = selectedMessageId(window.getSelection());
+    const message = messageId && aui.thread.getState().messages.find((m) => m.id === messageId);
+    appendQuoteSegment(text, message ? quoteSource(message) : undefined);
     window.getSelection()?.removeAllRanges();
   };
 

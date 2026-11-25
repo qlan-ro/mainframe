@@ -91,6 +91,7 @@ vi.mock('@assistant-ui/react', () => ({
 
 import { useSubmitComposition, useCanSubmit } from '../use-submit-composition';
 import { useSessionReferences } from '../../sessions/session-reference-store';
+import { draftItemsOf, restoreSentCapture, useDraftContent } from '../../draft-content/draft-content-store';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -101,6 +102,7 @@ beforeEach(() => {
   liveCanSend = false;
   useComposerSegments.setState({ byThread: {} });
   useSessionReferences.setState({ byThread: {} });
+  useDraftContent.setState({ byThread: {} });
 });
 
 describe('useSubmitComposition — append shape', () => {
@@ -340,5 +342,69 @@ describe('useSubmitComposition — session reference lines', () => {
     act(() => result.current());
 
     expect(appendSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('captures and code annotations (C14)', () => {
+  const sent = () => appendSpy.mock.calls[0]![0] as { content: { text: string }[]; attachments: { id: string }[] };
+  const submit = () => {
+    const { result } = renderHook(() => useSubmitComposition());
+    act(() => result.current());
+  };
+  const addCapture = () =>
+    useDraftContent
+      .getState()
+      .add(THREAD_ID, [
+        { kind: 'capture', type: 'element', imageDataUrl: 'data:image/png;base64,AA', selector: '.btn', note: 'wide' },
+      ]);
+  const addCode = () =>
+    useDraftContent
+      .getState()
+      .add(THREAD_ID, [
+        { kind: 'code', filePath: 'a.ts', startLine: 1, endLine: 1, lineContent: 'see @Quota', note: 'why' },
+      ]);
+
+  it('go with the text, the captures’ images ahead of the files, and the draft is empty after', () => {
+    addCapture();
+    const { id } = draftItemsOf(THREAD_ID)[0]!;
+    liveText = 'Fix it';
+    liveAttachments = [
+      { id: 'file', type: 'document', name: 'a.txt', content: [], status: { type: 'requires-action' } },
+    ];
+    submit();
+    expect(sent().attachments.map((a) => a.id)).toEqual([id, 'file']);
+    expect(sent().content[0]!.text).toContain('> - `element1` — selector `.btn` — "wide"\n\nFix it');
+    expect(draftItemsOf(THREAD_ID)).toEqual([]);
+  });
+
+  it('are enough on their own', () => {
+    addCode();
+    submit();
+    expect(sent().content[0]!.text).toContain('File: `a.ts`');
+  });
+
+  it('make Send ready', () => {
+    expect(renderHook(() => useCanSubmit()).result.current).toBe(false);
+    addCode();
+    expect(renderHook(() => useCanSubmit()).result.current).toBe(true);
+  });
+
+  it('are not read as session mentions, and the text’s mentions still are', () => {
+    useSessionReferences.getState().record(THREAD_ID, 'Quota', '/x/quota.jsonl');
+    addCode();
+    liveText = 'Like @Quota';
+    submit();
+    const { text } = sent().content[0]!;
+    expect(text).toContain('Like @session[Quota]');
+    expect(text).toContain('see @Quota');
+    expect(text.startsWith('Referenced session @session[Quota]: /x/quota.jsonl')).toBe(true);
+  });
+
+  it('are kept until the send settles, so a failed one gives the captures back', () => {
+    addCapture();
+    const [item] = draftItemsOf(THREAD_ID);
+    submit();
+    expect(restoreSentCapture(item!.id)).toBe(true);
+    expect(draftItemsOf(THREAD_ID)).toEqual([item]);
   });
 });

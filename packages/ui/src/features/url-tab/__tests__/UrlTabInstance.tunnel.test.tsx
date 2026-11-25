@@ -18,6 +18,7 @@ import { registerUrlTunnelConsumer } from '@/features/url-tab/tunnel-consumers';
 import { clearStoredClaims } from '@/features/url-tab/tunnel-claim-registry';
 import { installFakeHost, seedStores, setPortEntry, renderTab as renderUrlTab } from './url-tab-tunnel-harness';
 
+vi.mock('@/features/chat/composer/draft-content/use-add-to-draft', () => ({ useAddToDraft: () => vi.fn() }));
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectId: 'proj-A', chatId: 'chat-1' }),
 }));

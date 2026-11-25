@@ -22,6 +22,7 @@ vi.mock('@/lib/confirm-bridge', () => ({ requestConfirm: (...args: unknown[]) =>
 
 vi.mock('../runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
 
+import { holdUnsent, useUnsentMessages } from '@/features/chat/composer/unsent/unsent-store';
 import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
 import { useRemoveProject } from '../use-remove-project';
 
@@ -199,6 +200,15 @@ describe('useRemoveProject — held messages', () => {
     await run();
 
     expect(heldChats()).toEqual(['elsewhere']);
+  });
+
+  it('take the unsent first messages of its sessions along', async () => {
+    const draft = { text: 'x', items: [], attachments: [], references: {} };
+    for (const threadId of ['opened', 'elsewhere']) holdUnsent({ threadId, draft, sent: [] });
+    await run();
+
+    expect(useUnsentMessages.getState().entries.map((entry) => entry.threadId)).toEqual(['elsewhere']);
+    useUnsentMessages.setState({ entries: [] });
   });
 
   it('stay when the daemon refused', async () => {

@@ -14,13 +14,14 @@ import { getDraftConfig, setDraftConfig, useDraftConfigStore } from '../../runti
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 import { markDraftDiscarded, isDraftDiscarded, useDiscardedDraftStore } from '../discarded-drafts';
 import { useComposerSegments } from '@/features/chat/composer/segments/segment-store';
+import { draftItemsOf, useDraftContent } from '@/features/chat/composer/draft-content/draft-content-store';
 import { useSessionReferences } from '@/features/chat/composer/sessions/session-reference-store';
 import { useLayoutStore } from '@/store/layout';
 const abandonCreateForLocal = vi.fn();
 vi.mock('../../runtime/new-thread-coordinator', () => ({
   abandonCreateForLocal: (...args: unknown[]) => abandonCreateForLocal(...args),
 }));
-import { resetNewThreadDraft } from '../reset-new-thread-draft';
+import { rescopeNewThreadDraft, resetNewThreadDraft } from '../reset-new-thread-draft';
 
 beforeEach(() => {
   useDraftConfigStore.setState({ drafts: new Map() });
@@ -28,6 +29,7 @@ beforeEach(() => {
   useDiscardedDraftStore.setState({ ids: new Set() });
   useComposerSegments.setState({ byThread: {} });
   useSessionReferences.setState({ byThread: {} });
+  useDraftContent.setState({ byThread: {} });
   useLayoutStore.setState({
     layout: { top: ['chat'], topFlex: {} },
     run: null,
@@ -142,5 +144,48 @@ describe('resetNewThreadDraft', () => {
     resetNewThreadDraft('__LOCALID_1');
 
     expect(useLayoutStore.getState().layout.top).toEqual(['chat']);
+  });
+});
+
+// What was written in a draft is the user's: it goes when the slot is reused
+// for another new session, not when the same draft moves to another project.
+describe('what was written in the draft', () => {
+  const ID = '__LOCALID_1';
+  const write = () => {
+    setDraftConfig(ID, { projectId: 'proj-A', adapterId: 'claude' });
+    useNewThreadReady.getState().markReady(ID);
+    useComposerSegments.getState().append(ID, { quote: 'first', liveText: '' });
+    useComposerSegments.getState().append(ID, { quote: 'second', liveText: 'about the first' });
+    useSessionReferences.getState().record(ID, 'Quota', '/x/quota.jsonl');
+    useDraftContent
+      .getState()
+      .add(ID, [{ kind: 'capture', type: 'screenshot', imageDataUrl: 'data:image/png;base64,AA', note: 'too wide' }]);
+  };
+
+  it('stays when the draft moves to another project', () => {
+    write();
+    rescopeNewThreadDraft(ID);
+
+    const { committed, liveQuote } = useComposerSegments.getState().byThread[ID]!;
+    expect(committed).toEqual([expect.objectContaining({ quote: 'first', text: 'about the first' })]);
+    expect(liveQuote?.text).toBe('second');
+    expect(useSessionReferences.getState().byThread[ID]).toEqual({ Quota: '/x/quota.jsonl' });
+    expect(draftItemsOf(ID)).toEqual([expect.objectContaining({ note: 'too wide' })]);
+    // The project it was for does go.
+    expect(getDraftConfig(ID)).toBeUndefined();
+    expect(useNewThreadReady.getState().isReady(ID)).toBe(false);
+    expect(abandonCreateForLocal).toHaveBeenCalledExactlyOnceWith(ID);
+  });
+
+  it('goes with the slot when another new session starts', () => {
+    write();
+    resetNewThreadDraft(ID);
+    expect(useComposerSegments.getState().byThread[ID]).toEqual({ committed: [], liveQuote: null });
+    expect(useSessionReferences.getState().byThread[ID]).toEqual({});
+    expect(draftItemsOf(ID)).toEqual([]);
+  });
+
+  it('is a no-op for an empty slot', () => {
+    expect(() => rescopeNewThreadDraft(null)).not.toThrow();
   });
 });

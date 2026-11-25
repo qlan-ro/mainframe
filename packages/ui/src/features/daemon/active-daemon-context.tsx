@@ -3,6 +3,7 @@
  *
  * Provides `target` (the current DaemonTarget in React state) and `switchTo`,
  * which runs the full teardown+reconnect sequence:
+ *   0. The open draft's prose is taken along (`draft-carry.ts`).
  *   1. disposeDaemonSession() — disconnect WS, dispose controllers and PTYs.
  *   2. setActiveDaemon(t)     — update the singleton (notifies all listeners).
  *   3. daemonWs.setPort(port) + daemonWs.connect() — reconnect to the new target.
@@ -18,6 +19,9 @@ import { setLastDaemonId } from '@/lib/daemon/last-daemon';
 import { disposeDaemonSession } from '@/lib/daemon/dispose-daemon-session';
 import { daemonWs } from '@/lib/daemon/ws-client';
 import { rebindLspToActiveDaemon } from '@/lib/lsp';
+import { canUndoDaemonDraft, leaveDaemonDraft, returnToDaemonDraft } from '@/features/sessions/new-thread/draft-carry';
+import { placeName } from '@/features/sessions/new-thread/draft-place';
+import { announceRemoved } from '@/features/sessions/new-thread/move-draft';
 import { resetDaemonScopedStores } from './reset-daemon-scoped-stores';
 
 interface ActiveDaemonContextValue {
@@ -38,6 +42,19 @@ function derivePort(target: DaemonTarget): number {
   return u.port ? Number(u.port) : u.protocol === 'https:' ? 443 : 80;
 }
 
+/** The open draft goes to the new daemon, without what belongs to the old one; Undo goes back to it. */
+function bringDraftAlong(switchTo: (t: DaemonTarget) => Promise<void>): void {
+  const from = getActiveDaemon();
+  const left = leaveDaemonDraft();
+  if (!left) return;
+  announceRemoved(left.bound, left.setup && placeName(left.setup), () => {
+    if (!canUndoDaemonDraft(left)) return;
+    void switchTo(from);
+    // The switch has read the draft it leaves, and nothing has mounted yet.
+    returnToDaemonDraft(left);
+  });
+}
+
 interface ActiveDaemonProviderProps {
   children: ReactNode;
   /**
@@ -56,6 +73,8 @@ export function ActiveDaemonProvider({ children, initialTarget }: ActiveDaemonPr
   }, []);
 
   const switchTo = useCallback(async (t: DaemonTarget): Promise<void> => {
+    if (getActiveDaemon().id === t.id) return;
+    bringDraftAlong(switchTo);
     disposeDaemonSession();
     setActiveDaemon(t);
     // Remember the user's choice so the next launch reconnects to it. Persisted

@@ -1,3 +1,4 @@
+import { getActiveDaemon, setActiveDaemon } from '@/lib/daemon/active-daemon';
 /**
  * useDaemonRegistry — TDD test.
  *
@@ -98,9 +99,11 @@ function makeWrapper(_fakeHost: FakeHostBridge) {
 // Setup / teardown
 // ---------------------------------------------------------------------------
 
+const originalTarget = getActiveDaemon();
 let fakeHost: FakeHostBridge;
 
 beforeEach(async () => {
+  setActiveDaemon(LOCAL_TARGET);
   fakeHost = new FakeHostBridge();
   // Seed one remote daemon + token before any hook renders.
   await fakeHost.daemons.upsert(REMOTE_STUDIO);
@@ -109,6 +112,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  setActiveDaemon(originalTarget);
   resetHostForTesting();
   vi.clearAllMocks();
   clearAuthFailure('studio');

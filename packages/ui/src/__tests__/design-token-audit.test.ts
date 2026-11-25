@@ -86,6 +86,11 @@ describe('design token audit', () => {
     // The activity strip's 12.5px rows and the question gate's 14px title come from the redesign spec.
     'features/chat/composer/strips/ActivityStrip.tsx',
     'features/chat/gates/AskUserQuestionGate.tsx',
+    // The draft tiles' and the empty state's sizes come from the prototype; they move to
+    // named sizes when DESIGN.md's type scale lands as tokens (#955).
+    'features/chat/composer/draft-content/DraftTile.tsx',
+    'features/chat/composer/draft-content/NoteTile.tsx',
+    'features/sessions/new-thread/NewSessionState.tsx',
     'components/ui/assistant-ui/tool-group.tsx',
     'features/chat/parts/CodeHeader.tsx',
     'features/settings/SettingsSidebar.tsx',

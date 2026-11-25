@@ -2,7 +2,7 @@
 import type { Page } from '../../../../packages/e2e/node_modules/@playwright/test/index.mjs';
 import { daemonFetch, fetchRoute } from '../../../../packages/e2e/fixtures/daemon.js';
 import { sendMessage, waitForIdle } from '../../../../packages/e2e/helpers/tauri/wait.js';
-import { escape, parkPointer, seedWorkbench, stub, stubUsage } from '../seed.mts';
+import { escape, openWorkspaceFiles, parkPointer, seedWorkbench, stub, stubUsage } from '../seed.mts';
 import type { CaptureArea, CaptureContext, CaptureState, Crop } from '../types.mts';
 
 const field = (page: Page) => page.getByTestId('chat-composer-input');
@@ -70,6 +70,27 @@ async function seed(ctx: CaptureContext): Promise<void> {
   ctx.vars['chat'] = chats.at(-1)!;
   ctx.vars['project'] = atlas;
 }
+
+/** Open tasks for the empty state to start from (K11). */
+async function seedTasks(projectId: string): Promise<void> {
+  for (const title of [
+    'Preview captures leave out native scrollbars',
+    'Remember file tree expansion per project',
+    'Auto mode is ignored after a resume',
+  ]) {
+    await daemonFetch('/api/plugins/todos/todos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, title }),
+    });
+  }
+}
+
+/** A small picture of a bar, for the image tile. */
+const CAPSULE_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAEAAAAAoCAIAAADBrGu+AAAASklEQVR42u3VQQkAIBAAwctnKVteCvFhAkt4oDiwBea1MeZ6ugAAAAAAAAAAAAAAOAhoPUsDAAAAALgb4MQAAAAAAAAAAAAAnwA2nTjMhz2GqAEAAAAASUVORK5CYII=',
+  'base64',
+);
 
 /** Runs the recording's first turn, so the session has a transcript and a context reading. */
 async function turn(page: Page, text: string): Promise<void> {
@@ -139,19 +160,48 @@ const area: CaptureArea = {
     },
   ],
   groups: [
-    // ── New session: the strip carries the project and where it runs ─────────
+    // ── New session: the empty state, and the strip with the project and where it runs ──
     {
       board: 'Chat-Composer',
       launch: { recordingKey: 'composer-running' },
       before,
-      seed,
+      seed: async (ctx) => {
+        await seed(ctx);
+        await seedTasks(ctx.vars['project']!);
+      },
       states: [
+        {
+          id: 'empty-no-project',
+          caption: '**No project chosen.** The empty state asks for one (K11).',
+          crop: around(200),
+          setup: async ({ page }) => {
+            await page.getByTestId('sidebar-action-new-thread').click();
+            await page.getByTestId('sessions-welcome').waitFor();
+            await page.getByTestId('welcome-project').click();
+            await page.getByTestId('welcome-project-picker-no-project').click();
+            await page.getByText('No project: the agent works without a repository').waitFor();
+            await parkPointer(page);
+          },
+          wait: 800,
+        },
+        {
+          id: 'empty',
+          caption:
+            '**A new session is about its project** (K11): where it will run, recent sessions to continue, open tasks to start from.',
+          crop: around(420),
+          setup: async ({ page, vars }) => {
+            await page.getByTestId('welcome-project').click();
+            await page.getByTestId(`welcome-project-${vars['project']}`).click();
+            await page.getByTestId('sessions-welcome-tasks').waitFor();
+            await parkPointer(page);
+          },
+          wait: 800,
+        },
         {
           id: 'new-session',
           caption: '**New session.** Project and branch sit above the card (K3); nothing below it yet (K7).',
           crop: around(120),
           setup: async ({ page }) => {
-            await page.getByTestId('sidebar-action-new-thread').click();
             await page.getByTestId('composer-branch-picker').waitFor();
             await parkPointer(page);
           },
@@ -165,8 +215,9 @@ const area: CaptureArea = {
         },
         {
           id: 'new-worktree',
-          caption: '**In a new worktree.** The branch part names what it starts from.',
-          crop: around(40),
+          caption:
+            '**In a new worktree.** The branch part names what it starts from, and the empty state follows (K11).',
+          crop: around(420),
           setup: async ({ page }) => {
             await page.getByTestId('composer-branch-picker').click();
             await page.getByTestId('composer-branch-new-worktree').click();
@@ -182,6 +233,69 @@ const area: CaptureArea = {
             await page.getByTestId('composer-temporary-toggle').click();
             await escape(page);
           },
+        },
+      ],
+    },
+    // ── What a draft carries (C14). A preview capture needs the native webview, which the mock has not. ──
+    {
+      board: 'Chat-Composer',
+      launch: { recordingKey: 'composer-running', mockMaxDelayMs: 3_600_000 },
+      before,
+      seed: async (ctx) => {
+        await seed(ctx);
+        await turn(ctx.page, 'Where does the quota reset?');
+      },
+      states: [
+        {
+          id: 'draft-files',
+          caption: '**Files and images**, one tile each: extension or thumbnail, name, dimensions and size (C14).',
+          crop: around(24),
+          setup: async ({ page }) => {
+            const chooser = page.waitForEvent('filechooser');
+            await page.getByTestId('composer-add-menu').click();
+            await page.getByTestId('composer-add-attachment').click();
+            await (
+              await chooser
+            ).setFiles([
+              { name: 'quota-trace.log', mimeType: 'text/plain', buffer: Buffer.alloc(14 * 1024, 'x') },
+              { name: 'capsule-after-the-weekly-reset.png', mimeType: 'image/png', buffer: CAPSULE_PNG },
+            ]);
+            await page.getByTestId('composer-attachment-tile').nth(1).waitFor();
+            await parkPointer(page);
+          },
+          wait: 600,
+        },
+        {
+          id: 'draft-code',
+          caption: '**A code annotation** from the editor: its lines, and a note edited from the tile (C14).',
+          crop: around(24),
+          setup: async ({ page }) => {
+            await openWorkspaceFiles(page, ['index.ts']);
+            await page.getByTestId('editor-code').locator('.cm-line').first().click();
+            await page.getByTestId('editor-code').locator('.cm-line').first().click({ button: 'right' });
+            await page.getByTestId('editor-context-menu-add-context').click();
+            await page.getByTestId('composer-note-add').click();
+            await page.getByTestId('composer-note-input').fill('Keep the greeting');
+            await page.getByTestId('composer-note-input').press('Enter');
+            await page.getByTestId('surface-rail-workspace').click();
+            await page.getByTestId('composer-code-tile').hover();
+          },
+          wait: 600,
+        },
+        {
+          id: 'draft-quote',
+          caption:
+            '**A quote** sits right above the field: one line, where it is from, the whole of it in its tooltip.',
+          crop: around(24),
+          setup: async ({ page }) => {
+            await page.getByTestId('chat-assistant-message').last().locator('p').first().selectText();
+            await page.mouse.up();
+            await page.getByTestId('chat-selection-quote').click();
+            await page.getByTestId('composer-quote-preview').waitFor();
+            await field(page).fill('And keep the reset time.');
+            await parkPointer(page);
+          },
+          wait: 600,
         },
       ],
     },

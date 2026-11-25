@@ -28,6 +28,9 @@ import { TranscriptProjector } from '../controller/transcript-projector';
 import { buildChatExtras, isRunningFromState, useChatExtrasState } from './chat-extras';
 import { createForLocal } from '../../sessions/runtime/new-thread-coordinator';
 import { chatControllerRegistry } from '../../sessions/runtime/chat-controller-registry';
+import { forgetSentCaptures, restoreSentCapture } from '../composer/draft-content/draft-content-store';
+import { failUnsent, moveUnsent, unsentIdOf } from '../composer/unsent/unsent-store';
+import { reportUnsent } from '../composer/unsent/report-unsent';
 import { captureIfMarked, handoffDraft, takeStash } from './draft-stash';
 
 // ---------------------------------------------------------------------------
@@ -59,6 +62,11 @@ async function restoreAttachments(
 
   let restored = 0;
   for (const attachment of pending) {
+    // A preview capture returns as its tile, note included. The controller may already have put it back.
+    if (restoreSentCapture(attachment.id)) {
+      restored += 1;
+      continue;
+    }
     const file = attachment.file;
     if (!file) continue;
     try {
@@ -68,6 +76,7 @@ async function restoreAttachments(
       console.warn('[chat-runtime] could not restore an attachment to the composer', error);
     }
   }
+  forgetSentCaptures(pending.map((attachment) => attachment.id));
   return restored === pending.length;
 }
 
@@ -137,14 +146,23 @@ export function useChatThreadRuntime(
   // (pre-existing chat, or one created earlier this session) just sends.
   const onNew = useCallback(
     async (message: AppendMessage): Promise<void> => {
+      const unsentId = unsentIdOf(message);
       // createChat can 401 before a pending bubble exists, after the composer reset.
       try {
         if (!controller.hasRemoteId()) {
           const { remoteId } = await createForLocal(controller.getThreadId(), port);
           chatControllerRegistry.adopt(controller, remoteId);
         }
+        if (unsentId) moveUnsent(unsentId, controller.getDaemonId());
         await controller.sendMessage(message);
+        reportUnsent(unsentId);
       } catch (error) {
+        // A draft's first message is kept whole for the user to restore.
+        if (unsentId) {
+          failUnsent(unsentId, error);
+          reportUnsent(unsentId);
+          return;
+        }
         // Safe against the composer reset: sendMessage cannot reject before its
         // first await (the upload fetch), so this lands after append() has
         // dropped this promise and use-submit-composition has reset the composer.

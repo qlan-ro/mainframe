@@ -289,7 +289,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `sessions-section`
 - `sessions-tag-filter-synthetic-${…}`
 - `sessions-tag-popover-error`
-- `sessions-welcome-suggestion-insert-${…}`
 
 ## settings (25)
 

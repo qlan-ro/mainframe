@@ -18,6 +18,7 @@ import { useLayoutStore } from '@/store/layout';
 import { usePortTunnelsStore } from '@/store/port-tunnels';
 import { useSandboxStore } from '@/store/sandbox';
 
+vi.mock('@/features/chat/composer/draft-content/use-add-to-draft', () => ({ useAddToDraft: () => vi.fn() }));
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectId: 'proj-A', chatId: 'chat-1' }),
 }));

@@ -18,7 +18,7 @@ const EMPTY_COMPOSITION: Composition = { committed: [], liveQuote: null };
 
 interface ComposerSegmentsState {
   byThread: Record<string, Composition>;
-  append: (threadId: string, args: { quote: string; liveText: string }) => void;
+  append: (threadId: string, args: { quote: string; liveText: string; source?: string }) => void;
   dismiss: (threadId: string, segmentId: string) => void;
   updateText: (threadId: string, segmentId: string, text: string) => void;
   clear: (threadId: string) => void;

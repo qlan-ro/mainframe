@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { InspectResult, Region, PreviewHandle, RegionSelectResult } from '@qlan-ro/mainframe-types';
 import { useSandboxStore } from '@/store/sandbox';
-import { useSendCaptures } from './use-send-captures';
-import type { CaptureLike } from '@/features/run/format-captures';
+import { useAddToDraft } from '@/features/chat/composer/draft-content/use-add-to-draft';
 
 function bytesToDataUrl(bytes: Uint8Array): string {
   let binary = '';
@@ -17,9 +16,10 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
   const [annotationPopoverOpen, setAnnotationPopoverOpen] = useState(false);
   const [annotationBackdrop, setAnnotationBackdrop] = useState<string | null>(null);
   const [inspectActive, setInspectActive] = useState(false);
-  const [annotations, setAnnotations] = useState<Map<string, string>>(new Map());
   const pendingCaptures = useSandboxStore((s) => s.captures);
-  const sendCapturesFn = useSendCaptures();
+  const addToDraft = useAddToDraft();
+  // Nothing left to annotate: a project switch took the captures (`bound-content.ts`).
+  const annotating = annotationPopoverOpen && pendingCaptures.length > 0;
 
   const openAnnotation = useCallback(async () => {
     if (handle?.compositesAboveDom) {
@@ -63,10 +63,13 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
     const handleRegionResult = (result: RegionSelectResult) => {
       setRegionSelectActive(false);
       if (!result.region) return;
+      const { w, h } = result.region;
       handle
         .capture(result.region)
         .then((bytes) => {
-          useSandboxStore.getState().addCapture({ type: 'screenshot', imageDataUrl: bytesToDataUrl(bytes) });
+          useSandboxStore
+            .getState()
+            .addCapture({ type: 'screenshot', imageDataUrl: bytesToDataUrl(bytes), region: { w, h } });
           void openAnnotation();
         })
         .catch((e: unknown) => console.warn('[preview] capture failed', e));
@@ -80,8 +83,8 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
   }, [handle, openAnnotation]);
 
   useEffect(() => {
-    setOverlayMounted(annotationPopoverOpen);
-  }, [annotationPopoverOpen, setOverlayMounted]);
+    setOverlayMounted(annotating);
+  }, [annotating, setOverlayMounted]);
 
   const onCaptureClick = useCallback(() => {
     handle
@@ -131,35 +134,35 @@ export function usePreviewCapture(handle: PreviewHandle | null, setOverlayMounte
   }, [handle, inspectActive, regionSelectActive]);
 
   const onAnnotationChange = useCallback((id: string, annotation: string) => {
-    setAnnotations((prev) => new Map(prev).set(id, annotation));
+    useSandboxStore.getState().annotateCapture(id, annotation);
   }, []);
 
-  const onAnnotationSubmit = useCallback(async () => {
-    const capturesWithAnnotations: CaptureLike[] = pendingCaptures.map((c) => ({
-      ...c,
-      annotation: annotations.get(c.id) ?? c.annotation,
-    }));
-    await sendCapturesFn(capturesWithAnnotations).catch((e: unknown) =>
-      console.warn('[preview] send captures failed', e),
+  const onAnnotationSubmit = useCallback(() => {
+    const added = addToDraft(
+      pendingCaptures.map(({ id: _id, annotation, ...capture }) => ({
+        kind: 'capture' as const,
+        ...capture,
+        note: annotation ?? '',
+      })),
     );
+    // With no message to add to, the captures and their notes stay here.
+    if (!added) return;
     useSandboxStore.getState().clearCaptures();
     setAnnotationPopoverOpen(false);
     setAnnotationBackdrop(null);
-    setAnnotations(new Map());
-  }, [pendingCaptures, annotations, sendCapturesFn]);
+  }, [pendingCaptures, addToDraft]);
 
   const onAnnotationCancel = useCallback(() => {
     useSandboxStore.getState().clearCaptures();
     setAnnotationPopoverOpen(false);
     setAnnotationBackdrop(null);
-    setAnnotations(new Map());
   }, []);
 
   return {
     pendingCaptures,
     regionSelectActive,
-    annotationPopoverOpen,
-    annotationBackdrop,
+    annotationPopoverOpen: annotating,
+    annotationBackdrop: annotating ? annotationBackdrop : null,
     inspectActive,
     onCaptureClick,
     onRegionClick,

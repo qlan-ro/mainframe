@@ -21,6 +21,8 @@ export interface Capture {
   type: 'element' | 'screenshot';
   imageDataUrl: string;
   selector?: string;
+  /** The size of the region the user dragged, in page pixels. */
+  region?: { w: number; h: number };
   annotation?: string;
 }
 
@@ -52,6 +54,7 @@ interface SandboxState {
   tunnelErrors: Record<string, Record<string, string>>;
 
   addCapture: (capture: Omit<Capture, 'id'>) => void;
+  annotateCapture: (id: string, annotation: string) => void;
   removeCapture: (id: string) => void;
   clearCaptures: () => void;
   setProcessStatus: (scopeKey: string, name: string, status: LaunchProcessStatus) => void;
@@ -79,6 +82,9 @@ export const useSandboxStore = create<SandboxState>()((set) => ({
     set((state) => ({
       captures: [...state.captures, { id: crypto.randomUUID(), ...capture }].slice(-CAPTURE_CAP),
     })),
+
+  annotateCapture: (id, annotation) =>
+    set((state) => ({ captures: state.captures.map((c) => (c.id === id ? { ...c, annotation } : c)) })),
 
   removeCapture: (id) => set((state) => ({ captures: state.captures.filter((c) => c.id !== id) })),
 

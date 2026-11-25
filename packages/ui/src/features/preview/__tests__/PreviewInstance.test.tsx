@@ -35,6 +35,8 @@ vi.mock('@/lib/toast', () => ({
   mfToast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
+vi.mock('@/features/chat/composer/draft-content/use-add-to-draft', () => ({ useAddToDraft: () => vi.fn() }));
+
 import { PreviewInstance } from '../PreviewInstance';
 
 const SCOPE = 'proj:/wt';

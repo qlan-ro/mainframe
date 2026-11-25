@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { hasUnsent } from '@/features/chat/composer/unsent/unsent-store';
 import { getDraftConfig, useDraftConfigStore } from '../runtime/draft-config';
 import { isCreatePending, subscribeCreateLifecycle } from '../runtime/new-thread-coordinator';
 import { resetNewThreadDraft } from '../new-thread/reset-new-thread-draft';
@@ -29,7 +30,8 @@ export function useDraftNavigationCleanup(newThreadId: string | null, mainThread
       }
       if (!mainThreadId || mainThreadId === selectedId || pending) return;
       // Configuration and native thread identity publish independently.
-      if (getDraftConfig(selectedId) === selectedCfg && !isCreatePending(selectedId)) {
+      // A draft with a message that did not go out stays, to come back to.
+      if (getDraftConfig(selectedId) === selectedCfg && !isCreatePending(selectedId) && !hasUnsent(selectedId)) {
         resetNewThreadDraft(selectedId);
         useDraftReturnTarget.getState().clear();
       }

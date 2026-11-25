@@ -22,6 +22,7 @@ import type { BackgroundTask, Chat, DaemonEvent, DetectedPr } from '@qlan-ro/mai
 import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
 import { __resetSideChatRegistryForTests, registerSideChat } from '../../../side-chat/side-chat-ids';
 import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
+import { holdUnsent, useUnsentMessages } from '@/features/chat/composer/unsent/unsent-store';
 import { SessionListRouter } from '../session-list-router';
 
 // ---------------------------------------------------------------------------
@@ -152,6 +153,16 @@ describe('session-list-router — chat.ended triggers reload', () => {
 
     expect(Object.keys(useHeldQueue.getState().byChat)).toEqual(['c2']);
     useHeldQueue.getState().clearChat('c2');
+  });
+
+  it('forgets the unsent first message of the ended chat, and no other chat’s', () => {
+    const draft = { text: 'x', items: [], attachments: [], references: {} };
+    for (const threadId of ['c1', 'c2']) holdUnsent({ threadId, draft, sent: [] });
+
+    dispatch({ type: 'chat.ended', chatId: 'c1' });
+
+    expect(useUnsentMessages.getState().entries.map((entry) => entry.threadId)).toEqual(['c2']);
+    useUnsentMessages.setState({ entries: [] });
   });
 });
 

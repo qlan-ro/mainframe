@@ -3,39 +3,8 @@
 const SANDBOX_CAPTURE_SENTINEL: &str = "\0__MF_SANDBOX_CAPTURE__";
 const CAPTURE_HEADER_LINE: &str = "> **Preview captures**";
 
-/// `CAPTURE_ROW_RE`: ``> - `label` — selector `sel` — "annotation"``, the last two
-/// optional. Anchored at both ends, like the UI's regex.
-fn is_capture_row(line: &str) -> bool {
-    let Some(rest) = line.strip_prefix("> - `") else {
-        return false;
-    };
-    let Some(label_end) = rest.find('`') else {
-        return false;
-    };
-    if label_end == 0 {
-        return false; // `[^`]+` needs at least one character
-    }
-    let mut tail = &rest[label_end + 1..];
-
-    if let Some(after) = tail.strip_prefix(" — selector `") {
-        let Some(selector_end) = after.find('`') else {
-            return false;
-        };
-        if selector_end == 0 {
-            return false;
-        }
-        tail = &after[selector_end + 1..];
-    }
-
-    match tail.strip_prefix(" — \"") {
-        Some(annotation) => annotation.ends_with('"'),
-        None => tail.is_empty(),
-    }
-}
-
 /// Drops the sentinel, the header, and the row run, keeping the user's own text.
-/// A malformed line ends the row run and everything from there survives —
-/// `parseSandboxCaptureBlock`'s semantics.
+/// A malformed list row is skipped, matching the UI parser.
 pub fn strip_sandbox_capture_block(text: &str) -> String {
     let Some(body) = text.strip_prefix(SANDBOX_CAPTURE_SENTINEL) else {
         return text.to_string();
@@ -52,7 +21,7 @@ pub fn strip_sandbox_capture_block(text: &str) -> String {
     {
         i = 1;
     }
-    while i < lines.len() && is_capture_row(lines[i]) {
+    while i < lines.len() && lines[i].starts_with("> - ") {
         i += 1;
     }
     lines[i..].join("\n").trim().to_string()
