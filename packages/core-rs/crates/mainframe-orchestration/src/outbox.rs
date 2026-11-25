@@ -5,9 +5,10 @@
 //! turn dies with the daemon too. Every change is reported per target, so the
 //! target's `Chat.agent_outbox` stays current.
 
-use mainframe_types::sync::LockExt as _;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+use mainframe_types::sync::LockExt as _;
 
 use crate::errors::cap_chars;
 
@@ -49,12 +50,7 @@ pub struct Outbox {
 
 impl Outbox {
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    #[must_use]
-    pub fn observed(listener: impl Fn(&str) + Send + Sync + 'static) -> Self {
+    pub(crate) fn observed(listener: impl Fn(&str) + Send + Sync + 'static) -> Self {
         Self {
             listener: Some(Box::new(listener)),
             ..Self::default()
@@ -76,7 +72,7 @@ impl Outbox {
 
     /// Holds `body` for `target`; returns the entry id. `preview` is the
     /// unwrapped text, cut for display.
-    pub fn push(
+    pub(crate) fn push(
         &self,
         target: &str,
         from: &str,
@@ -103,7 +99,7 @@ impl Outbox {
     }
 
     #[must_use]
-    pub fn targets(&self) -> Vec<String> {
+    pub(crate) fn targets(&self) -> Vec<String> {
         let mut targets: Vec<String> = self
             .lock()
             .iter()
@@ -125,13 +121,10 @@ impl Outbox {
 
     /// Removes and returns every entry owed to `target`, oldest first.
     pub(crate) fn take_for(&self, target: &str) -> Vec<OutboxEntry> {
-        let taken = {
-            let mut entries = self.lock();
-            let (taken, kept): (Vec<_>, Vec<_>) =
-                entries.drain(..).partition(|e| e.target_chat_id == target);
-            *entries = kept;
-            taken
-        };
+        let taken: Vec<OutboxEntry> = self
+            .lock()
+            .extract_if(.., |e| e.target_chat_id == target)
+            .collect();
         if !taken.is_empty() {
             self.changed([target]);
         }
@@ -139,7 +132,7 @@ impl Outbox {
     }
 
     /// Puts entries back at the front, after a failed delivery.
-    pub fn restore(&self, mut taken: Vec<OutboxEntry>) {
+    pub(crate) fn restore(&self, mut taken: Vec<OutboxEntry>) {
         let targets: Vec<String> = taken.iter().map(|e| e.target_chat_id.clone()).collect();
         {
             let mut entries = self.lock();
@@ -149,39 +142,27 @@ impl Outbox {
         self.changed(targets.iter().map(String::as_str));
     }
 
-    /// Drops every entry owed to `target` (Stop cascade step 3).
-    pub(crate) fn drop_for_target(&self, target: &str) -> usize {
-        self.take_for(target).len()
-    }
-
     /// Drops one task's delivery wherever it is queued.
     pub(crate) fn drop_task(&self, task_id: &str) {
-        let is_task = |e: &OutboxEntry| matches!(&e.kind, OutboxKind::TaskResult { task_id: t } if t == task_id);
-        let targets: Vec<String> = {
-            let mut entries = self.lock();
-            let targets = entries
-                .iter()
-                .filter(|e| is_task(e))
-                .map(|e| e.target_chat_id.clone())
-                .collect();
-            entries.retain(|e| !is_task(e));
-            targets
+        let is_task = |e: &OutboxEntry| match &e.kind {
+            OutboxKind::TaskResult { task_id: id } => id == task_id,
+            OutboxKind::Send | OutboxKind::Notice => false,
         };
-        self.changed(targets.iter().map(String::as_str));
+        let dropped: Vec<OutboxEntry> = self.lock().extract_if(.., |e| is_task(e)).collect();
+        self.changed(dropped.iter().map(|e| e.target_chat_id.as_str()));
     }
 
-    /// The user's cancel on a pending agent message.
-    pub fn cancel(&self, target: &str, entry_id: &str) -> bool {
+    /// The user's cancel on a pending agent message. `None` when it is gone.
+    pub(crate) fn cancel(&self, target: &str, entry_id: &str) -> Option<OutboxEntry> {
         let removed = {
             let mut entries = self.lock();
-            let before = entries.len();
-            entries.retain(|e| !(e.target_chat_id == target && e.entry_id == entry_id));
-            entries.len() != before
+            let index = entries
+                .iter()
+                .position(|e| e.target_chat_id == target && e.entry_id == entry_id)?;
+            entries.remove(index)
         };
-        if removed {
-            self.changed([target]);
-        }
-        removed
+        self.changed([target]);
+        Some(removed)
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Vec<OutboxEntry>> {

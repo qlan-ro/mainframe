@@ -1,25 +1,21 @@
 //! `OrchestrationService`: the credential registry, the outbox, the limits,
 //! and the shared checks every tool runs before touching a chat.
 
-use mainframe_types::sync::LockExt as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
+use mainframe_runtime::sync::KeyedMutex;
 use mainframe_types::orchestration::OrchestrationMcpLaunch;
-use tokio_util::sync::CancellationToken;
+use mainframe_types::sync::LockExt as _;
 
-use crate::credentials::{Caller, CredentialRegistry};
-use crate::errors::{ErrorCode, ToolError};
+use crate::calls::CallCtx;
+use crate::credentials::CredentialRegistry;
+use crate::errors::{ErrorCode, PortError, ToolError};
 use crate::outbox::Outbox;
 use crate::policy::{CreationLimiter, MAX_DEPTH, SystemClock};
 use crate::ports::{ChatView, OrchestrationPort, TaskStore};
 use crate::state::{ChatState, derive_state};
-
-/// One in-flight `tools/call`: who made it and how to abandon it.
-pub struct CallCtx {
-    pub caller: Caller,
-    pub cancel: CancellationToken,
-}
+use crate::turn_flags::Hold;
 
 pub struct OrchestrationService {
     pub(crate) port: Arc<dyn OrchestrationPort>,
@@ -28,8 +24,7 @@ pub struct OrchestrationService {
     pub(crate) limiter: CreationLimiter,
     pub(crate) outbox: Outbox,
     /// Chats whose turn was stopped; cleared when the chat next goes idle.
-    stopping: Mutex<HashSet<String>>,
-    inflight: Mutex<HashMap<(String, String), CancellationToken>>,
+    pub(crate) stopping: Mutex<HashSet<String>>,
     /// Serializes outbox flushes so two triggers cannot send one batch twice.
     pub(crate) flush_lock: tokio::sync::Mutex<()>,
     /// Serializes task state transitions, so the event loop and a waiting
@@ -38,14 +33,19 @@ pub struct OrchestrationService {
     /// `child chat id → task id` for every started, nonterminal task: the
     /// event loop's in-memory index of which chat events advance a task.
     pub(crate) active_children: Mutex<HashMap<String, String>>,
-    /// One lock per delegation-tree root, so two concurrent `delegate_task`
-    /// calls in the same tree cannot both pass the idempotency and limit
-    /// checks before either inserts (`tools/delegate_task.rs::run`). Trees
-    /// rooted at different chats never contend.
-    pub(crate) tree_locks: mainframe_runtime::sync::KeyedMutex,
-    /// Parents whose owed deliveries survived a restart; held until the
-    /// parent's CLI spawns again, so a restart never wakes every parent.
-    pub(crate) boot_held: Mutex<HashSet<String>>,
+    /// One lock per chat that tops a chain of agent-created chats, so two
+    /// concurrent `delegate_task` calls in the same tree cannot both pass the
+    /// idempotency and limit checks before either inserts its task. Trees
+    /// topped by different chats never contend.
+    pub(crate) tree_locks: KeyedMutex,
+    /// Chats whose held messages wait for their next turn: parents whose owed
+    /// deliveries survived a restart (so a restart never wakes every parent),
+    /// and chats the last delivery could not reach.
+    pub(crate) held: Mutex<HashMap<String, Hold>>,
+    /// The chat whose held messages are being sent (`flush_lock` allows one).
+    /// They have left the outbox while its turn has not started yet: without
+    /// this it reads as idle, and a task run in it as finished.
+    delivering: Mutex<Option<String>>,
     version: String,
     endpoint_url: String,
 }
@@ -65,16 +65,16 @@ impl OrchestrationService {
         Self {
             port,
             tasks,
-            credentials: CredentialRegistry::new(),
+            credentials: CredentialRegistry::default(),
             limiter: CreationLimiter::new(Box::new(SystemClock)),
             outbox,
             stopping: Mutex::new(HashSet::new()),
-            inflight: Mutex::new(HashMap::new()),
             flush_lock: tokio::sync::Mutex::new(()),
             task_lock: tokio::sync::Mutex::new(()),
             active_children: Mutex::new(HashMap::new()),
-            tree_locks: mainframe_runtime::sync::KeyedMutex::default(),
-            boot_held: Mutex::new(HashSet::new()),
+            tree_locks: KeyedMutex::default(),
+            held: Mutex::new(HashMap::new()),
+            delivering: Mutex::new(None),
             version: version.to_string(),
             // The daemon binds 127.0.0.1 only, so loopback is always right.
             endpoint_url: format!("http://127.0.0.1:{daemon_port}/mcp"),
@@ -94,7 +94,7 @@ impl OrchestrationService {
     /// The credential for one spawn of `chat_id` (revoking any earlier one).
     #[must_use]
     pub fn issue_launch(&self, chat_id: &str, session_id: &str) -> OrchestrationMcpLaunch {
-        self.boot_held.lock_recover().remove(chat_id);
+        self.release(chat_id);
         OrchestrationMcpLaunch {
             url: self.endpoint_url.clone(),
             token: self.credentials.issue(chat_id, session_id),
@@ -105,60 +105,10 @@ impl OrchestrationService {
         self.credentials.revoke_chat(chat_id);
     }
 
-    /// Stop step 1: end the chat's in-flight calls and refuse late mutating
-    /// calls from the stopped turn until the chat goes idle.
-    pub(crate) fn mark_stopping(&self, chat_id: &str) {
-        self.credentials.cancel_inflight(chat_id);
-        self.lock_stopping().insert(chat_id.to_string());
-    }
-
-    pub(crate) fn clear_stopping(&self, chat_id: &str) {
-        self.lock_stopping().remove(chat_id);
-    }
-
-    pub(crate) fn is_stopping(&self, chat_id: &str) -> bool {
-        self.lock_stopping().contains(chat_id)
-    }
-
-    fn lock_stopping(&self) -> std::sync::MutexGuard<'_, HashSet<String>> {
-        self.stopping.lock_recover()
-    }
-
-    /// Registers a call so `notifications/cancelled` can abandon it.
-    pub(crate) fn begin_call(&self, caller: &Caller, request_id: &str) -> CallCtx {
-        let cancel = caller.cancel.child_token();
-        self.lock_inflight().insert(
-            (caller.chat_id.clone(), request_id.to_string()),
-            cancel.clone(),
-        );
-        CallCtx {
-            caller: caller.clone(),
-            cancel,
-        }
-    }
-
-    pub(crate) fn end_call(&self, caller: &Caller, request_id: &str) {
-        self.lock_inflight()
-            .remove(&(caller.chat_id.clone(), request_id.to_string()));
-    }
-
-    pub(crate) fn cancel_call(&self, caller: &Caller, request_id: &str) {
-        let key = (caller.chat_id.clone(), request_id.to_string());
-        if let Some(token) = self.lock_inflight().remove(&key) {
-            token.cancel();
-        }
-    }
-
-    fn lock_inflight(
-        &self,
-    ) -> std::sync::MutexGuard<'_, HashMap<(String, String), CancellationToken>> {
-        self.inflight.lock_recover()
-    }
-
     // ── checks shared by the tools ────────────────────────────────────────
 
     pub(crate) async fn caller_chat(&self, ctx: &CallCtx) -> Result<ChatView, ToolError> {
-        self.port.chat(&ctx.caller.chat_id).await.ok_or_else(|| {
+        self.port.chat(&ctx.caller.chat_id).await?.ok_or_else(|| {
             ToolError::new(
                 ErrorCode::CallerNotActive,
                 "The calling chat no longer exists.",
@@ -189,8 +139,8 @@ impl OrchestrationService {
         chat_id: &str,
         caller: &ChatView,
     ) -> Result<ChatView, ToolError> {
-        match self.port.chat(chat_id).await {
-            Some(chat) if chat.is_agent_addressable() && self.in_scope(caller, &chat).await => {
+        match self.port.chat(chat_id).await? {
+            Some(chat) if chat.is_agent_addressable() && self.in_scope(caller, &chat).await? => {
                 Ok(chat)
             }
             _ => Err(ToolError::new(
@@ -211,55 +161,70 @@ impl OrchestrationService {
     /// this walk is what `chat_launch` into another project (or
     /// "no-project") needs, and it also covers a chain of plain launches
     /// (the caller launched X, X later launched Y: the caller may still
-    /// reach Y). Bounded the same way `depth_of` is, so a corrupt cycle
-    /// cannot spin.
-    pub(crate) async fn in_scope(&self, caller: &ChatView, target: &ChatView) -> bool {
+    /// reach Y).
+    pub(crate) async fn in_scope(
+        &self,
+        caller: &ChatView,
+        target: &ChatView,
+    ) -> Result<bool, PortError> {
         if target.project_id == caller.project_id {
-            return true;
+            return Ok(true);
         }
-        let mut next = target.created_by_chat_id.clone();
-        for _ in 0..=MAX_DEPTH {
-            match next {
-                Some(id) if id == caller.id => return true,
-                Some(id) => next = self.port.chat(&id).await.and_then(|c| c.created_by_chat_id),
-                None => return false,
+        Ok(self.creators(target).await?.contains(&caller.id))
+    }
+
+    /// `chat` as it now stands, for a reply. The work is done by then, so a
+    /// failed read reports the older view instead of failing the call.
+    pub(crate) async fn reread(&self, chat: ChatView) -> ChatView {
+        match self.port.chat(&chat.id).await {
+            Ok(fresh) => fresh.unwrap_or(chat),
+            Err(err) => {
+                tracing::warn!(chat_id = chat.id, error = %err, "failed to re-read a chat");
+                chat
             }
         }
-        false
     }
 
     #[must_use]
     pub(crate) fn state_of(&self, chat: &ChatView) -> ChatState {
-        derive_state(chat, self.outbox.has_for(&chat.id))
+        let delivering = self.delivering.lock_recover().as_ref() == Some(&chat.id);
+        derive_state(chat, delivering || self.outbox.has_for(&chat.id))
     }
 
-    /// The lock for the whole tree `root_id` roots: `delegate_task` awaits
-    /// it (`.lock().await`) across its idempotency check, limit check, and
-    /// insert, so that sequence runs atomically with respect to every other
-    /// concurrent delegation in the same tree. Find the root first with
-    /// `tasks_ops::tree_root`. Trees rooted at different chats never
-    /// contend; this map only grows, but by at most one entry per root chat
-    /// that has ever delegated, which is bounded by how many chats exist.
-    pub(crate) fn tree_lock(&self, root_id: &str) -> Arc<tokio::sync::Mutex<()>> {
-        self.tree_locks.get(root_id)
+    pub(crate) fn set_delivering(&self, chat_id: Option<&str>) {
+        *self.delivering.lock_recover() = chat_id.map(str::to_string);
     }
 
-    /// Length of the `created_by` chain above `chat`, capped one past
+    /// The chats whose agents created `chat`, nearest first. Cut off one past
     /// [`MAX_DEPTH`] so a corrupt cycle cannot spin.
-    pub(crate) async fn depth_of(&self, chat: &ChatView) -> u32 {
-        let mut depth = 0;
+    async fn creators(&self, chat: &ChatView) -> Result<Vec<String>, PortError> {
+        let mut creators = Vec::new();
         let mut next = chat.created_by_chat_id.clone();
-        while let Some(parent) = next {
-            depth += 1;
-            if depth > MAX_DEPTH {
+        while let Some(id) = next {
+            let creator = self.port.chat(&id).await?;
+            creators.push(id);
+            if creators.len() > MAX_DEPTH {
                 break;
             }
-            next = self
-                .port
-                .chat(&parent)
-                .await
-                .and_then(|c| c.created_by_chat_id);
+            next = creator.and_then(|c| c.created_by_chat_id);
         }
-        depth
+        Ok(creators)
+    }
+
+    /// Length of the creator chain above `chat`, at most one past [`MAX_DEPTH`].
+    pub(crate) async fn depth_of(&self, chat: &ChatView) -> Result<usize, PortError> {
+        Ok(self.creators(chat).await?.len())
+    }
+
+    /// The key of `chat`'s entry in [`Self::tree_locks`]. Unlike the tree the
+    /// task limits count, which shrinks as tasks finish, the creator chain
+    /// never changes, so two calls from one tree always share a lock.
+    pub(crate) async fn tree_key(&self, chat: &ChatView) -> Result<String, PortError> {
+        let top = self.creators(chat).await?.pop();
+        Ok(top.unwrap_or_else(|| chat.id.clone()))
     }
 }
+
+#[cfg(test)]
+#[path = "service_tests.rs"]
+mod tests;

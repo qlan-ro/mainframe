@@ -1,11 +1,12 @@
-use mainframe_types::events::DaemonEvent;
 use mainframe_types::orchestration::{TaskDelivery, TaskStatus};
 use serde_json::json;
 
 use super::*;
+use crate::errors::ErrorCode;
 use crate::input::golden::{fixture_keys, schema_properties};
-use crate::test_support::{call_ctx, wire_chat};
-use crate::tools::delegate_task::tests::{delegate, finish, fixture};
+use crate::policy::SUMMARY_CAP;
+use crate::test_fixture::{delegate, finish, fixture};
+use crate::test_support::{announce, call_ctx};
 
 #[test]
 fn schemas_match_the_input_structs() {
@@ -47,12 +48,7 @@ async fn reading_a_finished_task_acknowledges_its_delivery() {
 
     let prompts = f.port.lock().sent.len();
     f.port.update("parent", |c| c.working = false);
-    f.svc
-        .on_event(&DaemonEvent::ChatUpdated {
-            chat: wire_chat("parent"),
-            reason: None,
-        })
-        .await;
+    announce(&f.svc, "parent").await;
     assert_eq!(
         f.port.lock().sent.len(),
         prompts,
@@ -85,9 +81,19 @@ async fn user_cancellation_is_scoped_to_the_parent_chat() {
         .as_str()
         .unwrap()
         .to_string();
-    assert!(!f.svc.cancel_task_for_parent("stranger", &task_id).await);
+    assert!(
+        !f.svc
+            .cancel_task_for_parent("stranger", &task_id)
+            .await
+            .unwrap()
+    );
     assert_eq!(f.tasks.find(&task_id).unwrap().status, TaskStatus::Running);
-    assert!(f.svc.cancel_task_for_parent("parent", &task_id).await);
+    assert!(
+        f.svc
+            .cancel_task_for_parent("parent", &task_id)
+            .await
+            .unwrap()
+    );
     assert_eq!(
         f.tasks.find(&task_id).unwrap().status,
         TaskStatus::Cancelled
@@ -145,4 +151,55 @@ async fn a_stop_cascades_and_rejects_a_late_call_from_the_stopped_turn() {
         .await
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::CallerNotActive);
+}
+
+/// Fifty results at the summary cap are far over what one result may carry.
+#[tokio::test]
+async fn the_task_list_stays_within_the_result_budget() {
+    let f = fixture();
+    let out = delegate(&f, &f.ctx, "t").await;
+    let child = out["childChatId"].as_str().unwrap().to_string();
+    finish(&f, &child, &"x".repeat(SUMMARY_CAP)).await;
+    let finished = f.tasks.all().remove(0);
+    f.tasks
+        .rows
+        .lock()
+        .unwrap()
+        .extend((1..50).map(|n| DelegatedTask {
+            id: format!("task_{n}"),
+            ..finished.clone()
+        }));
+    let out = run_status(&f.svc, &f.ctx, json!({})).await.unwrap();
+    assert!(out.to_string().len() <= RESULT_BUDGET_BYTES);
+    let listed = out["tasks"].as_array().unwrap();
+    assert_eq!(listed[0]["taskId"], "task_49", "newest first");
+    assert!(listed.len() > 20, "only {} listed", listed.len());
+    assert_eq!(
+        listed[0]["summary"].as_str().unwrap().len(),
+        LIST_TEXT_CHARS
+    );
+    assert_eq!(
+        f.tasks.find(&finished.id).unwrap().delivery,
+        TaskDelivery::Owed,
+        "a cut summary is not the result"
+    );
+}
+
+/// The task's result was already on its way when the cancel arrived.
+#[tokio::test]
+async fn cancelling_a_task_that_just_finished_keeps_its_delivery() {
+    let f = fixture();
+    let out = delegate(&f, &f.ctx, "t").await;
+    let child = out["childChatId"].as_str().unwrap().to_string();
+    let stale = f.tasks.all().remove(0);
+    finish(&f, &child, "answer").await;
+    assert!(f.svc.cancel_task(stale.clone(), None).await.is_empty());
+    let task = f.tasks.find(&stale.id).unwrap();
+    assert_eq!(task.status, TaskStatus::Completed);
+    assert_eq!(task.delivery, TaskDelivery::Owed);
+    assert!(f.svc.outbox.has_for("parent"));
+    assert!(
+        f.port.lock().interrupted.is_empty(),
+        "a child that is done may be in a turn its user started"
+    );
 }

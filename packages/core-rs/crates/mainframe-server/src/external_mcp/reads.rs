@@ -2,7 +2,7 @@ use mainframe_orchestration::{
     errors::{ErrorCode, ToolError},
     ports::{ChatView, OrchestrationPort},
     state::derive_state,
-    tools::chat_read_items::{render, to_item},
+    tools::chat_read_items::{RenderedItem, render, to_item},
 };
 use mainframe_types::external_mcp::ExternalMcpClient;
 use serde_json::{Value, json};
@@ -38,7 +38,7 @@ pub async fn target(
     input::id(id)?;
     port(ctx)
         .chat(id)
-        .await
+        .await?
         .filter(|c| c.is_agent_addressable() && client.project_ids.contains(&c.project_id))
         .ok_or_else(|| ToolError::new(ErrorCode::ChatNotFound, "Chat not found"))
 }
@@ -143,7 +143,7 @@ pub async fn read(
     let mut more = false;
     for (position, message) in messages.iter().enumerate().skip(start) {
         let item = to_item(position, message, true).map(|i| render(&i, 0, 1000));
-        let size = item.as_ref().map_or(0, |v| v.to_string().len());
+        let size = item.as_ref().map_or(0, RenderedItem::size);
         if items.len() == input.limit || used + size > 16_000 {
             more = true;
             break;

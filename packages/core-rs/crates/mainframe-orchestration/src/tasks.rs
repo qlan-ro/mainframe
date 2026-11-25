@@ -5,72 +5,22 @@
 //! nothing it delegated is still open. Once terminal, its summary is fixed:
 //! later messages to the child never reopen it.
 
-use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::orchestration::{DelegatedTask, TaskDelivery, TaskStatus, TaskWorkState};
 use mainframe_types::sync::LockExt as _;
 
-use crate::errors::{ErrorCode, ToolError, cap_chars};
-use crate::outbox::OutboxKind;
-use crate::policy::SUMMARY_CAP;
+use crate::errors::{ErrorCode, PortError, ToolError};
+use crate::outcome::{Outcome, idle_outcome};
 use crate::service::OrchestrationService;
-use crate::state::{ChatState, last_assistant_text};
-
-/// How a terminal task ended, and what the parent is told.
-pub(crate) struct Outcome {
-    pub status: TaskStatus,
-    pub summary: Option<String>,
-    pub error: Option<String>,
-}
-
-impl Outcome {
-    /// An ending with nothing to summarize, only a reason.
-    pub(crate) fn without_summary(status: TaskStatus, error: &str) -> Self {
-        Self {
-            status,
-            summary: None,
-            error: Some(error.to_string()),
-        }
-    }
-}
+use crate::state::ChatState;
 
 /// The daemon's timestamp shape (`2026-10-06T12:00:00.000Z`).
 pub(crate) fn now() -> String {
     mainframe_types::time::now_iso8601()
 }
 
-/// What a finished child reports: a failed last turn leads with its error.
-fn idle_outcome(messages: &[ChatMessage]) -> Outcome {
-    let summary =
-        Some(cap_chars(&last_assistant_text(messages), SUMMARY_CAP)).filter(|s| !s.is_empty());
-    let error = messages
-        .last()
-        .filter(|m| m.r#type == ChatMessageType::Error)
-        .map(|m| {
-            m.content
-                .iter()
-                .filter_map(|c| match c {
-                    MessageContent::Node(MessageContentNode::Error { message, .. }) => {
-                        Some(message.as_str())
-                    }
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        });
-    match error {
-        Some(error) => Outcome {
-            status: TaskStatus::Failed,
-            summary,
-            error: Some(error),
-        },
-        None => Outcome {
-            status: TaskStatus::Completed,
-            summary,
-            error: None,
-        },
-    }
-}
+/// Proof that the caller holds [`OrchestrationService::task_lock`].
+pub(crate) type TaskGuard<'a> = tokio::sync::MutexGuard<'a, ()>;
 
 impl OrchestrationService {
     /// Persists and announces a task change, on its own event and on both
@@ -85,31 +35,111 @@ impl OrchestrationService {
         Ok(())
     }
 
-    pub(crate) fn track_child(&self, task: &DelegatedTask) {
-        self.lock_children()
+    fn track_child(&self, task: &DelegatedTask) {
+        self.active_children
+            .lock_recover()
             .insert(task.child_chat_id.clone(), task.id.clone());
     }
 
-    pub(crate) fn untrack_child(&self, child_chat_id: &str) {
-        self.lock_children().remove(child_chat_id);
+    fn untrack_child(&self, child_chat_id: &str) {
+        self.active_children.lock_recover().remove(child_chat_id);
     }
 
     pub(crate) fn tracked_task(&self, child_chat_id: &str) -> Option<String> {
-        self.lock_children().get(child_chat_id).cloned()
+        self.active_children
+            .lock_recover()
+            .get(child_chat_id)
+            .cloned()
     }
 
-    fn lock_children(
+    pub(crate) fn tracked_tasks(&self) -> Vec<String> {
+        self.active_children
+            .lock_recover()
+            .values()
+            .cloned()
+            .collect()
+    }
+
+    pub(crate) async fn find_task(&self, task_id: &str) -> Result<DelegatedTask, ToolError> {
+        let task = self.tasks.get(task_id).await?;
+        task.ok_or_else(|| task_not_found(task_id))
+    }
+
+    async fn has_open_subtasks(&self, chat_id: &str) -> Result<bool, ToolError> {
+        let tasks = self.tasks.by_parent(chat_id, u32::MAX).await?;
+        Ok(tasks.iter().any(|t| !t.status.is_terminal()))
+    }
+
+    /// Moves a recorded task to running (or failed) once its prompt was sent,
+    /// unless it was cancelled meanwhile: a cancelled task stays cancelled, and
+    /// the turn the prompt just started is stopped.
+    pub(crate) async fn settle_start(
         &self,
-    ) -> std::sync::MutexGuard<'_, std::collections::HashMap<String, String>> {
-        self.active_children.lock_recover()
+        task: DelegatedTask,
+        sent: Result<(), PortError>,
+    ) -> Result<DelegatedTask, ToolError> {
+        let (task, cancelled) = {
+            let guard = self.task_lock.lock().await;
+            // Tracked whatever fails below: the row is open and the child runs,
+            // so the child's next event gets to try again.
+            self.track_child(&task);
+            let mut task = self.find_task(&task.id).await?;
+            let cancelled = task.status.is_terminal();
+            match &sent {
+                _ if cancelled => self.untrack_child(&task.child_chat_id),
+                Err(err) => {
+                    tracing::warn!(
+                        chat_id = task.child_chat_id,
+                        task_id = task.id,
+                        error = %err,
+                        "delegated task prompt failed"
+                    );
+                    let failed = Outcome::without_summary(
+                        TaskStatus::Failed,
+                        "The task prompt could not be delivered.",
+                    );
+                    task = self.finalize(&guard, task, failed).await?;
+                }
+                Ok(()) => {
+                    task.status = TaskStatus::Running;
+                    task.updated_at = now();
+                    self.save(&task).await?;
+                }
+            }
+            (task, cancelled)
+        };
+        if !cancelled {
+            // Catches a child that finished before it was tracked.
+            return self.advance(&task.id, false).await;
+        }
+        if sent.is_ok() {
+            self.begin_stop(&task.child_chat_id).await;
+            self.port.interrupt(&task.child_chat_id).await;
+        }
+        Ok(task)
     }
 
-    async fn has_open_subtasks(&self, chat_id: &str) -> bool {
-        self.tasks
-            .by_parent(chat_id, u32::MAX)
-            .await
-            .iter()
-            .any(|t| !t.status.is_terminal())
+    /// Ends the task running in `child_chat_id`, if any, because the results it
+    /// waits for could not be delivered: it would otherwise stay open, held,
+    /// with nothing left to wake it. Returns the parent it now owes.
+    pub(crate) async fn fail_undeliverable(
+        &self,
+        child_chat_id: &str,
+    ) -> Result<Option<String>, ToolError> {
+        let Some(task_id) = self.tracked_task(child_chat_id) else {
+            return Ok(None);
+        };
+        let guard = self.task_lock.lock().await;
+        let task = self.find_task(&task_id).await?;
+        if task.status.is_terminal() {
+            return Ok(None);
+        }
+        let failed = Outcome::without_summary(
+            TaskStatus::Failed,
+            "A message the task was waiting for could not be delivered to its chat.",
+        );
+        let task = self.finalize(&guard, task, failed).await?;
+        Ok(Some(task.parent_chat_id))
     }
 
     /// Re-reads the child and moves the task forward. `interrupted` is set when
@@ -119,39 +149,57 @@ impl OrchestrationService {
         task_id: &str,
         interrupted: bool,
     ) -> Result<DelegatedTask, ToolError> {
-        let _guard = self.task_lock.lock().await;
-        let mut task = self
-            .tasks
-            .get(task_id)
-            .await
-            .ok_or_else(|| task_not_found(task_id))?;
+        let task = {
+            let guard = self.task_lock.lock().await;
+            self.advance_locked(&guard, task_id, interrupted).await?
+        };
+        // Outside the lock: a delivery may have to start the parent's CLI.
+        if task.delivery == TaskDelivery::Owed {
+            self.try_flush(&task.parent_chat_id).await;
+        }
+        Ok(task)
+    }
+
+    async fn advance_locked(
+        &self,
+        guard: &TaskGuard<'_>,
+        task_id: &str,
+        interrupted: bool,
+    ) -> Result<DelegatedTask, ToolError> {
+        let mut task = self.find_task(task_id).await?;
         if task.status.is_terminal() || self.tracked_task(&task.child_chat_id).is_none() {
             return Ok(task);
         }
-        let Some(child) = self.port.chat(&task.child_chat_id).await else {
+        let Some(child) = self.port.chat(&task.child_chat_id).await? else {
             let gone = Outcome::without_summary(TaskStatus::Failed, "The task's chat was deleted.");
-            return self.finalize(task, gone).await;
+            return self.finalize(guard, task, gone).await;
         };
-        let next = match self.state_of(&child) {
+        let state = self.state_of(&child);
+        let next = match state {
             ChatState::Ended | ChatState::Archived => {
                 let closed = Outcome::without_summary(
                     TaskStatus::Interrupted,
                     "The task's chat was closed.",
                 );
-                return self.finalize(task, closed).await;
+                return self.finalize(guard, task, closed).await;
             }
-            _ if interrupted => {
+            // A waiting tool call sees the same idle chat the event loop does,
+            // but not the event's reason: the stopping flag, which the loop
+            // clears only after advancing, tells a Stop from a finished turn.
+            _ if interrupted || (state == ChatState::Idle && self.is_stopping(&child.id)) => {
                 let messages = self.port.messages(&child.id).await;
-                let mut stopped = idle_outcome(&messages);
-                stopped.status = TaskStatus::Interrupted;
-                return self.finalize(task, stopped).await;
+                let stopped = Outcome {
+                    status: TaskStatus::Interrupted,
+                    ..idle_outcome(&messages)
+                };
+                return self.finalize(guard, task, stopped).await;
             }
             ChatState::WaitingForPermission => TaskStatus::Waiting,
             ChatState::Working => TaskStatus::Running,
-            ChatState::Idle if self.has_open_subtasks(&child.id).await => TaskStatus::Running,
+            ChatState::Idle if self.has_open_subtasks(&child.id).await? => TaskStatus::Running,
             ChatState::Idle => {
                 let messages = self.port.messages(&child.id).await;
-                return self.finalize(task, idle_outcome(&messages)).await;
+                return self.finalize(guard, task, idle_outcome(&messages)).await;
             }
         };
         if next != task.status {
@@ -162,10 +210,12 @@ impl OrchestrationService {
         Ok(task)
     }
 
-    /// Makes `task` terminal and owes the parent its delivery (dropped for a
-    /// cancellation, which the parent asked for itself).
+    /// Makes `task` terminal and queues the delivery it owes the parent (none
+    /// for a cancellation, which the parent asked for itself). The caller
+    /// flushes the parent once it has released the lock.
     pub(crate) async fn finalize(
         &self,
+        _guard: &TaskGuard<'_>,
         mut task: DelegatedTask,
         outcome: Outcome,
     ) -> Result<DelegatedTask, ToolError> {
@@ -180,13 +230,15 @@ impl OrchestrationService {
         } else {
             TaskDelivery::Owed
         };
-        self.untrack_child(&task.child_chat_id);
+        // Saved before it is untracked: an unsaved ending leaves the row open,
+        // so the child's next event has to try again.
         self.save(&task).await?;
+        self.untrack_child(&task.child_chat_id);
         if task.delivery == TaskDelivery::Owed {
             self.queue_delivery(&task);
-            self.try_flush(&task.parent_chat_id).await;
         }
         tracing::info!(
+            chat_id = task.child_chat_id,
             task_id = task.id,
             status = task.status.as_str(),
             "delegated task finished"
@@ -194,82 +246,24 @@ impl OrchestrationService {
         Ok(task)
     }
 
-    pub(crate) fn queue_delivery(&self, task: &DelegatedTask) {
-        let text = task
-            .error
-            .as_deref()
-            .into_iter()
-            .chain(task.summary.as_deref())
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let body = format!(
-            "<mainframe-task-result task=\"{}\" chat=\"{}\" status=\"{}\">\n{text}\n</mainframe-task-result>",
-            task.id,
-            task.child_chat_id,
-            task.status.as_str()
-        );
-        let kind = OutboxKind::TaskResult {
-            task_id: task.id.clone(),
-        };
-        self.outbox
-            .push(&task.parent_chat_id, &task.child_chat_id, kind, body, &text);
-    }
-
-    /// The parent read the terminal result through a tool, so the message
-    /// delivery is no longer owed.
-    pub(crate) async fn acknowledge(
+    pub(crate) async fn work_state(
         &self,
-        mut task: DelegatedTask,
-    ) -> Result<DelegatedTask, ToolError> {
-        if !task.status.is_terminal() || task.delivery != TaskDelivery::Owed {
-            return Ok(task);
-        }
-        self.outbox.drop_task(&task.id);
-        task.delivery = TaskDelivery::Acknowledged;
-        task.updated_at = now();
-        self.save(&task).await?;
-        Ok(task)
-    }
-
-    pub(crate) async fn work_state(&self, task: &DelegatedTask) -> TaskWorkState {
-        if task.status.is_terminal() {
-            return TaskWorkState::ResultAvailable;
-        }
-        if self.has_open_subtasks(&task.child_chat_id).await {
+        task: &DelegatedTask,
+    ) -> Result<TaskWorkState, ToolError> {
+        Ok(if task.status.is_terminal() {
+            TaskWorkState::ResultAvailable
+        } else if self.has_open_subtasks(&task.child_chat_id).await? {
             TaskWorkState::WaitingForChildren
         } else {
             TaskWorkState::Working
-        }
-    }
-
-    /// Boot: interrupt what died with the previous daemon, and hold owed
-    /// deliveries until each parent spawns again.
-    pub async fn reconcile_boot(&self) {
-        let unfinished = self.tasks.nonterminal().await;
-        let interrupted = self.tasks.interrupt_unfinished().await;
-        for task in &unfinished {
-            self.port.chat_changed(&task.parent_chat_id);
-            self.port.chat_changed(&task.child_chat_id);
-        }
-        let owed = self.tasks.owed().await;
-        for task in &owed {
-            self.boot_held
-                .lock_recover()
-                .insert(task.parent_chat_id.clone());
-            self.queue_delivery(task);
-        }
-        tracing::info!(
-            interrupted,
-            owed = owed.len(),
-            "delegated tasks reconciled at boot"
-        );
-    }
-
-    pub(crate) fn is_boot_held(&self, chat_id: &str) -> bool {
-        self.boot_held.lock_recover().contains(chat_id)
+        })
     }
 }
 
 pub(crate) fn task_not_found(task_id: &str) -> ToolError {
     ToolError::new(ErrorCode::TaskNotFound, format!("No task {task_id}."))
 }
+
+#[cfg(test)]
+#[path = "tasks_tests.rs"]
+mod tests;

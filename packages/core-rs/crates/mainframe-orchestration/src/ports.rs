@@ -123,32 +123,42 @@ pub struct LaunchRequest {
 }
 
 /// Persistence for `delegated_tasks`. Every failure is internal: the tools
-/// never expose storage errors to the model.
+/// never expose storage errors to the model. A failed read is an error, never
+/// "nothing there": read as empty it would finish a task that still has open
+/// subtasks, lift the task limits, or start a retried task twice.
 pub trait TaskStore: Send + Sync {
     fn insert(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>>;
     fn update(&self, task: DelegatedTask) -> BoxFuture<'_, Result<(), PortError>>;
-    fn get<'a>(&'a self, task_id: &'a str) -> BoxFuture<'a, Option<DelegatedTask>>;
-    fn by_child<'a>(&'a self, child_chat_id: &'a str) -> BoxFuture<'a, Option<DelegatedTask>>;
+    fn get<'a>(
+        &'a self,
+        task_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<DelegatedTask>, PortError>>;
+    fn by_child<'a>(
+        &'a self,
+        child_chat_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<DelegatedTask>, PortError>>;
     fn by_request<'a>(
         &'a self,
         parent_chat_id: &'a str,
         client_request_id: &'a str,
-    ) -> BoxFuture<'a, Option<DelegatedTask>>;
+    ) -> BoxFuture<'a, Result<Option<DelegatedTask>, PortError>>;
     /// The parent's tasks, newest first.
     fn by_parent<'a>(
         &'a self,
         parent_chat_id: &'a str,
         limit: u32,
-    ) -> BoxFuture<'a, Vec<DelegatedTask>>;
-    fn nonterminal(&self) -> BoxFuture<'_, Vec<DelegatedTask>>;
-    fn owed(&self) -> BoxFuture<'_, Vec<DelegatedTask>>;
+    ) -> BoxFuture<'a, Result<Vec<DelegatedTask>, PortError>>;
+    fn nonterminal(&self) -> BoxFuture<'_, Result<Vec<DelegatedTask>, PortError>>;
+    fn owed(&self) -> BoxFuture<'_, Result<Vec<DelegatedTask>, PortError>>;
     /// Boot: marks every unfinished task interrupted (its CLI died with the
     /// previous daemon). Returns how many.
-    fn interrupt_unfinished(&self) -> BoxFuture<'_, usize>;
+    fn interrupt_unfinished(&self) -> BoxFuture<'_, Result<usize, PortError>>;
 }
 
 pub trait OrchestrationPort: Send + Sync {
-    fn chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ChatView>>;
+    /// `None` only when the chat does not exist: a read that failed is an
+    /// error, so a storage hiccup never reads as a deleted chat.
+    fn chat<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Result<Option<ChatView>, PortError>>;
     fn list_chats<'a>(
         &'a self,
         project_id: &'a str,
@@ -162,6 +172,10 @@ pub trait OrchestrationPort: Send + Sync {
     /// Creates (and, for `NewWorktree`, provisions) a chat. Workspace problems
     /// come back as `PortError::Public(workspace_invalid)`.
     fn launch_chat(&self, request: LaunchRequest) -> BoxFuture<'_, Result<ChatView, PortError>>;
+    /// Archives a chat `launch_chat` created but the launch could not finish
+    /// with: the caller never learns its id, so it must not stay behind, nor
+    /// may a worktree made for it (`delete_worktree`).
+    fn retire_chat<'a>(&'a self, chat_id: &'a str, delete_worktree: bool) -> BoxFuture<'a, ()>;
     /// An ordinary send: resumes an offloaded chat, starts a turn when idle.
     fn send<'a>(&'a self, chat_id: &'a str, text: &'a str) -> BoxFuture<'a, Result<(), PortError>>;
     /// Folds `text` into the running turn at the next tool boundary.

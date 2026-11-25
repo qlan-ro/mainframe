@@ -2,7 +2,8 @@ use mainframe_types::settings::ExecutionMode;
 
 use super::*;
 use crate::outbox::OutboxKind;
-use crate::test_support::{FakePort, service_with};
+use crate::test_support::{FakePort, announce, service_with};
+use crate::turn_flags::Hold;
 
 #[tokio::test]
 async fn held_messages_flush_as_one_batch_only_when_idle() {
@@ -21,11 +22,7 @@ async fn held_messages_flush_as_one_batch_only_when_idle() {
     svc.try_flush("target").await;
     assert!(port.lock().sent.is_empty());
     port.update("target", |c| c.working = false);
-    svc.on_event(&DaemonEvent::ChatUpdated {
-        chat: crate::test_support::wire_chat("target"),
-        reason: None,
-    })
-    .await;
+    announce(&svc, "target").await;
     assert_eq!(
         port.lock().sent,
         vec![("target".to_string(), "one\n\ntwo".to_string())]
@@ -181,4 +178,82 @@ async fn process_exit_revokes_the_matching_credential() {
     .await;
     assert!(!svc.credentials().has_credential("caller"));
     assert!(ctx.cancel.is_cancelled());
+}
+
+/// Putting the entries back announces the chat, and the service reacts to its
+/// own announcement: without a hold, a CLI that cannot start is retried forever.
+#[tokio::test]
+async fn a_failed_delivery_waits_for_the_targets_next_turn() {
+    let port = FakePort::new();
+    port.add_chat("caller");
+    port.add_chat("target");
+    let (svc, _ctx) = service_with(port.clone(), "caller");
+    let mut events = svc.port.subscribe();
+    {
+        let mut state = port.lock();
+        state.announce_changes = true;
+        state.send_fails.insert("target".into());
+    }
+    svc.outbox
+        .push("target", "caller", OutboxKind::Send, "hi".into(), "hi");
+    for _ in 0..20 {
+        if let Ok(event) = events.try_recv() {
+            svc.on_event(&event).await;
+        }
+    }
+    assert_eq!(port.lock().failed_sends, 1);
+    assert!(svc.outbox.has_for("target"), "the message is kept");
+
+    port.lock().send_fails.clear();
+    for working in [true, false] {
+        port.update("target", |c| c.working = working);
+        announce(&svc, "target").await;
+    }
+    assert_eq!(
+        port.lock().sent,
+        vec![("target".to_string(), "hi".to_string())]
+    );
+}
+
+#[tokio::test]
+async fn a_spawn_releases_messages_a_failed_delivery_held() {
+    let port = FakePort::new();
+    port.add_chat("caller");
+    port.add_chat("target");
+    let (svc, _ctx) = service_with(port.clone(), "caller");
+    port.lock().send_fails.insert("target".into());
+    svc.outbox
+        .push("target", "caller", OutboxKind::Send, "hi".into(), "hi");
+    svc.try_flush("target").await;
+    port.lock().send_fails.clear();
+    svc.try_flush("target").await;
+    assert!(port.lock().sent.is_empty());
+    let _launch = svc.issue_launch("target", "session");
+    svc.try_flush("target").await;
+    assert_eq!(port.lock().sent.len(), 1);
+}
+
+#[tokio::test]
+async fn a_new_message_retries_a_failed_delivery_but_not_a_boot_hold() {
+    let port = FakePort::new();
+    port.add_chat("caller");
+    let (svc, _ctx) = service_with(port, "caller");
+    svc.hold("failed", Hold::DeliveryFailed);
+    svc.hold("booted", Hold::Boot);
+    for chat in ["failed", "booted"] {
+        svc.retry_failed_delivery(chat);
+    }
+    assert!(!svc.is_held("failed"));
+    assert!(svc.is_held("booted"));
+}
+
+/// A lagged event loop may have missed the event that ended a Stop.
+#[tokio::test]
+async fn a_lagged_event_loop_still_ends_a_finished_stop() {
+    let port = FakePort::new();
+    port.add_chat("caller");
+    let (svc, _ctx) = service_with(port, "caller");
+    svc.mark_stopping("caller");
+    svc.on_lagged().await;
+    assert!(!svc.is_stopping("caller"));
 }

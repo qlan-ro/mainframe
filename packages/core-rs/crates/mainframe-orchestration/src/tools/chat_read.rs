@@ -5,21 +5,29 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::ToolDef;
-use super::chat_read_items::{Item, decode_cursor, encode_cursor, locate, render, to_item};
+use super::chat_read_items::{
+    Item, RenderedItem, decode_cursor, encode_cursor, locate, render, to_item,
+};
+use crate::calls::CallCtx;
 use crate::errors::{ErrorCode, ToolError};
 use crate::input::{
-    Validate, check_id, check_opt_id, check_opt_len, check_range, id_schema, object_schema,
-    parse_args, string_schema,
+    Validate, check_id, check_opt_len, check_range, id_schema, object_schema, parse_args,
+    string_schema,
 };
 use crate::policy::{
     READ_DEFAULT_CHARS, READ_DEFAULT_ITEMS, READ_MAX_CHARS, READ_MAX_ITEMS, READ_MIN_CHARS,
     RESULT_BUDGET_BYTES,
 };
-use crate::service::{CallCtx, OrchestrationService};
+use crate::service::OrchestrationService;
+
+/// Message ids are opaque provider strings, not always `Id`-shaped.
+const MESSAGE_ID_MAX: usize = 200;
+const CURSOR_MAX: usize = 400;
+/// Room for everything around the items.
+const ENVELOPE_BYTES: usize = 1024;
 
 pub(super) fn definition() -> ToolDef {
     ToolDef {
-        name: "chat_read",
         title: "Read a Mainframe chat",
         description: "Read another chat's timeline. Without a cursor it returns the latest items; \
             pass nextCursor to continue forward, or messageId with textOffset to continue one \
@@ -30,11 +38,11 @@ pub(super) fn definition() -> ToolDef {
             json!({
                 "chatId": id_schema("The chat to read."),
                 "view": { "enum": ["messages", "activity"], "description": "Default messages." },
-                "cursor": string_schema(128, "nextCursor from a previous read."),
+                "cursor": string_schema(CURSOR_MAX, "nextCursor from a previous read."),
                 "limit": { "type": "integer", "minimum": 1, "maximum": READ_MAX_ITEMS },
                 "maxChars": { "type": "integer", "minimum": READ_MIN_CHARS, "maximum": READ_MAX_CHARS },
                 "fromEnd": { "type": "boolean", "description": "Default true when no cursor." },
-                "messageId": id_schema("Continue this truncated item."),
+                "messageId": string_schema(MESSAGE_ID_MAX, "Continue this truncated item, with the same view."),
                 "textOffset": { "type": "integer", "minimum": 0 }
             }),
             &["chatId"],
@@ -70,8 +78,8 @@ struct Input {
 impl Validate for Input {
     fn validate(&self) -> Result<(), ToolError> {
         check_id("chatId", &self.chat_id)?;
-        check_opt_len("cursor", self.cursor.as_deref(), 128)?;
-        check_opt_id("messageId", self.message_id.as_deref())?;
+        check_opt_len("cursor", self.cursor.as_deref(), CURSOR_MAX)?;
+        check_opt_len("messageId", self.message_id.as_deref(), MESSAGE_ID_MAX)?;
         if let Some(limit) = self.limit {
             check_range("limit", limit, 1, READ_MAX_ITEMS as u64)?;
         }
@@ -98,108 +106,129 @@ pub(super) async fn run(
     let input: Input = parse_args(args)?;
     let caller = svc.caller_chat(ctx).await?;
     let chat = svc.target_chat(&input.chat_id, &caller).await?;
-    let state = svc.state_of(&chat).as_str();
     let messages = svc.port.messages(&chat.id).await;
-    let max_chars = input.max_chars.map_or(READ_DEFAULT_CHARS, |v| v as usize);
-    let last_position = messages.len().checked_sub(1);
-    if let Some(message_id) = &input.message_id {
-        let items = continue_item(&messages, message_id, &input, max_chars)?;
-        return Ok(page(&chat.id, state, items, None, last_position));
-    }
-    let activity = input.view == View::Activity;
-    let candidates: Vec<Item> = messages
-        .iter()
-        .enumerate()
-        .filter_map(|(i, m)| to_item(i, m, activity))
-        .collect();
-    let (selected, more_after) = select(&messages, &candidates, &input)?;
-    let from_end = input.cursor.is_none() && input.from_end.unwrap_or(true);
-    let (items, cut) = fit_budget(&selected, max_chars, from_end);
-    let next_cursor = (more_after || (cut && !from_end))
-        .then(|| items.last().map(item_cursor))
-        .flatten();
-    Ok(page(&chat.id, state, items, next_cursor, last_position))
+    let page = match &input.message_id {
+        Some(id) => Page::ending(continue_item(&messages, id, &input)?),
+        None => read_page(&messages, &input)?,
+    };
+    Ok(json!({
+        "chatId": chat.id,
+        "state": svc.state_of(&chat),
+        "items": page.items,
+        "nextCursor": page.next_cursor,
+        "lastPosition": messages.len().checked_sub(1),
+    }))
 }
 
-/// The rest of one truncated item, from `textOffset`.
+struct Page {
+    items: Vec<RenderedItem>,
+    next_cursor: Option<String>,
+}
+
+impl Page {
+    /// A page nothing follows.
+    fn ending(items: Vec<RenderedItem>) -> Self {
+        Self {
+            items,
+            next_cursor: None,
+        }
+    }
+}
+
+impl Input {
+    fn limit(&self) -> usize {
+        self.limit.map_or(READ_DEFAULT_ITEMS, saturating_usize)
+    }
+
+    fn max_chars(&self) -> usize {
+        self.max_chars.map_or(READ_DEFAULT_CHARS, saturating_usize)
+    }
+
+    fn shows_activity(&self) -> bool {
+        self.view == View::Activity
+    }
+}
+
+fn saturating_usize(value: u64) -> usize {
+    usize::try_from(value).unwrap_or(usize::MAX)
+}
+
+/// The rest of one truncated item, from `textOffset`. The offset counts
+/// characters of the view it was read in, so that view renders it; an item
+/// only the activity view shows can have come from nowhere else.
 fn continue_item(
     messages: &[ChatMessage],
     message_id: &str,
     input: &Input,
-    max_chars: usize,
-) -> Result<Vec<Value>, ToolError> {
-    let position = messages
+) -> Result<Vec<RenderedItem>, ToolError> {
+    let (position, message) = messages
         .iter()
-        .position(|m| m.id == message_id)
+        .enumerate()
+        .find(|(_, m)| m.id == message_id)
         .ok_or_else(|| {
             ToolError::new(
                 ErrorCode::InvalidCursor,
                 format!("No message {message_id}."),
             )
         })?;
-    let offset = input.text_offset.map_or(0, |v| v as usize);
-    Ok(to_item(position, &messages[position], true)
-        .map(|item| render(&item, offset, max_chars))
+    let offset = input.text_offset.map_or(0, saturating_usize);
+    Ok(to_item(position, message, input.shows_activity())
+        .or_else(|| to_item(position, message, true))
+        .map(|item| render(&item, offset, input.max_chars()))
         .into_iter()
         .collect())
 }
 
-/// The items this read covers, and whether more follow them.
-fn select<'a>(
-    messages: &[ChatMessage],
-    candidates: &'a [Item],
-    input: &Input,
-) -> Result<(Vec<&'a Item>, bool), ToolError> {
-    let limit = input.limit.map_or(READ_DEFAULT_ITEMS, |v| v as usize);
-    Ok(match &input.cursor {
+/// The latest items, or the items after a cursor or from the start.
+fn read_page(messages: &[ChatMessage], input: &Input) -> Result<Page, ToolError> {
+    let mut candidates = messages
+        .iter()
+        .enumerate()
+        .filter_map(|(i, m)| to_item(i, m, input.shows_activity()));
+    let (limit, max_chars) = (input.limit(), input.max_chars());
+    let after = match &input.cursor {
         Some(cursor) => {
             let (position, id) = decode_cursor(cursor).ok_or_else(invalid_cursor)?;
-            let anchor = locate(messages, position, &id).ok_or_else(invalid_cursor)?;
-            let after: Vec<&Item> = candidates.iter().filter(|i| i.position > anchor).collect();
-            let more = after.len() > limit;
-            (after.into_iter().take(limit).collect(), more)
+            Some(locate(messages, position, &id).ok_or_else(invalid_cursor)?)
         }
         None if input.from_end.unwrap_or(true) => {
-            let skip = candidates.len().saturating_sub(limit);
-            (candidates.iter().skip(skip).collect(), false)
+            let mut items = fit_budget(candidates.rev().take(limit), max_chars);
+            items.reverse();
+            return Ok(Page::ending(items));
         }
-        None => (
-            candidates.iter().take(limit).collect(),
-            candidates.len() > limit,
-        ),
-    })
+        None => None,
+    };
+    let selected: Vec<Item> = candidates
+        .by_ref()
+        .filter(|item| after.is_none_or(|anchor| item.position > anchor))
+        .take(limit)
+        .collect();
+    let items = fit_budget(selected.iter(), max_chars);
+    let more = items.len() < selected.len() || candidates.next().is_some();
+    let next_cursor = items
+        .last()
+        .filter(|_| more)
+        .map(|item| encode_cursor(item.position, &item.message_id));
+    Ok(Page { items, next_cursor })
 }
 
-/// Renders items until the 20 KB result budget runs out. Reading from the end
-/// keeps the newest items and drops the oldest.
-fn fit_budget(selected: &[&Item], max_chars: usize, from_end: bool) -> (Vec<Value>, bool) {
-    let budget = RESULT_BUDGET_BYTES - 1024;
+/// Renders items, in order, until the result budget runs out. The first one
+/// always fits: an empty page would never advance.
+fn fit_budget<I>(items: impl Iterator<Item = I>, max_chars: usize) -> Vec<RenderedItem>
+where
+    I: std::borrow::Borrow<Item>,
+{
     let mut used = 0;
-    let mut out = Vec::new();
-    let ordered: Vec<&&Item> = if from_end {
-        selected.iter().rev().collect()
-    } else {
-        selected.iter().collect()
-    };
-    let mut cut = false;
-    for item in ordered {
-        let value = render(item, 0, max_chars);
-        used += value.to_string().len() + 1;
-        if used > budget && !out.is_empty() {
-            cut = true;
+    let mut fitting = Vec::new();
+    for item in items {
+        let rendered = render(item.borrow(), 0, max_chars);
+        used += rendered.size() + 1;
+        if used > RESULT_BUDGET_BYTES - ENVELOPE_BYTES && !fitting.is_empty() {
             break;
         }
-        out.push(value);
+        fitting.push(rendered);
     }
-    if from_end {
-        out.reverse();
-    }
-    (out, cut)
-}
-
-fn item_cursor(item: &Value) -> String {
-    let position = item["position"].as_u64().unwrap_or(0) as usize;
-    encode_cursor(position, item["messageId"].as_str().unwrap_or_default())
+    fitting
 }
 
 fn invalid_cursor() -> ToolError {
@@ -207,22 +236,6 @@ fn invalid_cursor() -> ToolError {
         ErrorCode::InvalidCursor,
         "The cursor no longer matches this chat; read again without a cursor.",
     )
-}
-
-fn page(
-    chat_id: &str,
-    state: &str,
-    items: Vec<Value>,
-    next_cursor: Option<String>,
-    last_position: Option<usize>,
-) -> Value {
-    json!({
-        "chatId": chat_id,
-        "state": state,
-        "items": items,
-        "nextCursor": next_cursor,
-        "lastPosition": last_position,
-    })
 }
 
 #[cfg(test)]

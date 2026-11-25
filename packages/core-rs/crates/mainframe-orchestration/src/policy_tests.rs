@@ -183,7 +183,17 @@ fn sliding_window_refuses_the_21st_creation_then_recovers() {
     let err = limiter.try_acquire("p").err().map(|e| e.code);
     assert_eq!(err, Some(ErrorCode::RateLimited));
     assert_eq!(limiter.remaining("other"), CREATION_LIMIT);
+    assert_eq!(
+        limiter.events.lock().unwrap().len(),
+        1,
+        "asking keeps nothing"
+    );
     offset.store(CREATION_WINDOW.as_secs(), Ordering::SeqCst);
     assert_eq!(limiter.remaining("p"), CREATION_LIMIT);
+    assert!(limiter.try_acquire("q").is_ok());
+    assert!(
+        !limiter.events.lock().unwrap().contains_key("p"),
+        "a chat that stopped creating is forgotten"
+    );
     assert!(limiter.try_acquire("p").is_ok());
 }

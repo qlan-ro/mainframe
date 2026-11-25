@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn take_for_batches_only_the_target_in_order() {
-    let outbox = Outbox::new();
+    let outbox = Outbox::default();
     outbox.push("t", "a", OutboxKind::Send, "one".into(), "one");
     outbox.push("other", "a", OutboxKind::Send, "x".into(), "x");
     outbox.push("t", "b", OutboxKind::Send, "two".into(), "two");
@@ -14,7 +14,7 @@ fn take_for_batches_only_the_target_in_order() {
 
 #[test]
 fn cancel_and_drop_remove_entries() {
-    let outbox = Outbox::new();
+    let outbox = Outbox::default();
     let id = outbox.push("t", "a", OutboxKind::Send, "one".into(), "one");
     outbox.push(
         "p",
@@ -25,8 +25,8 @@ fn cancel_and_drop_remove_entries() {
         "r".into(),
         "r",
     );
-    assert!(!outbox.cancel("t", "nope"));
-    assert!(outbox.cancel("t", &id));
+    assert_eq!(outbox.cancel("t", "nope"), None);
+    assert!(outbox.cancel("t", &id).is_some());
     outbox.drop_task("k");
     assert!(outbox.targets().is_empty());
 }
@@ -48,8 +48,8 @@ fn every_change_reports_its_target_once() {
         "r".into(),
         "r",
     );
-    assert!(outbox.cancel("t", &id));
-    assert!(!outbox.cancel("t", &id));
+    assert!(outbox.cancel("t", &id).is_some());
+    assert_eq!(outbox.cancel("t", &id), None);
     outbox.drop_task("k");
     assert!(outbox.take_for("p").is_empty());
     outbox.push("t", "a", OutboxKind::Send, "two".into(), "two");
@@ -63,7 +63,7 @@ fn every_change_reports_its_target_once() {
 
 #[test]
 fn restore_puts_entries_back_first() {
-    let outbox = Outbox::new();
+    let outbox = Outbox::default();
     outbox.push("t", "a", OutboxKind::Send, "one".into(), "one");
     let taken = outbox.take_for("t");
     outbox.push("t", "a", OutboxKind::Send, "two".into(), "two");

@@ -5,7 +5,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
-use serde_json::{Value, json};
+use serde::Serialize;
 
 use crate::errors::cap_chars;
 use crate::state::is_agent_message;
@@ -110,31 +110,53 @@ fn render_node(node: &MessageContentNode) -> Option<(String, Option<String>)> {
     }
 }
 
-/// Renders `item` from char `offset`, cut to `max_chars`.
-pub fn render(item: &Item, offset: usize, max_chars: usize) -> Value {
-    let total = item.text.chars().count();
-    let start = offset.min(total);
-    let slice: String = item.text.chars().skip(start).take(max_chars).collect();
-    let end = start + slice.chars().count();
-    let truncated = end < total;
-    json!({
-        "position": item.position,
-        "messageId": item.message_id,
-        "role": item.role,
-        "origin": item.origin,
-        "toolName": item.tool_name,
-        "text": slice,
-        "textTruncated": truncated,
-        "nextTextOffset": if truncated { json!(end) } else { Value::Null },
-        "timestamp": item.timestamp,
-    })
+/// An [`Item`] as a tool result carries it: its text bounded.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderedItem {
+    pub position: usize,
+    pub message_id: String,
+    pub role: &'static str,
+    pub origin: &'static str,
+    pub tool_name: Option<String>,
+    pub text: String,
+    pub text_truncated: bool,
+    pub next_text_offset: Option<usize>,
+    pub timestamp: String,
 }
 
-pub fn encode_cursor(position: usize, message_id: &str) -> String {
+impl RenderedItem {
+    /// Bytes this item adds to a result.
+    #[must_use]
+    pub fn size(&self) -> usize {
+        serde_json::to_string(self).map_or(0, |json| json.len())
+    }
+}
+
+/// Renders `item` from char `offset`, cut to `max_chars`.
+#[must_use]
+pub fn render(item: &Item, offset: usize, max_chars: usize) -> RenderedItem {
+    let mut rest = item.text.chars().skip(offset);
+    let text: String = rest.by_ref().take(max_chars).collect();
+    let next_text_offset = rest.next().is_some().then(|| offset + text.chars().count());
+    RenderedItem {
+        position: item.position,
+        message_id: item.message_id.clone(),
+        role: item.role,
+        origin: item.origin,
+        tool_name: item.tool_name.clone(),
+        text,
+        text_truncated: next_text_offset.is_some(),
+        next_text_offset,
+        timestamp: item.timestamp.clone(),
+    }
+}
+
+pub(super) fn encode_cursor(position: usize, message_id: &str) -> String {
     URL_SAFE_NO_PAD.encode(format!("{position}:{message_id}"))
 }
 
-pub fn decode_cursor(cursor: &str) -> Option<(usize, String)> {
+pub(super) fn decode_cursor(cursor: &str) -> Option<(usize, String)> {
     let raw = URL_SAFE_NO_PAD.decode(cursor).ok()?;
     let raw = String::from_utf8(raw).ok()?;
     let (position, id) = raw.split_once(':')?;
@@ -144,7 +166,7 @@ pub fn decode_cursor(cursor: &str) -> Option<(usize, String)> {
 /// The position a cursor points at now: its recorded position when the id
 /// still sits there, else wherever the id moved (a cancelled queued message
 /// or a rewind shifts positions), else `None`.
-pub fn locate(messages: &[ChatMessage], position: usize, id: &str) -> Option<usize> {
+pub(super) fn locate(messages: &[ChatMessage], position: usize, id: &str) -> Option<usize> {
     if messages.get(position).is_some_and(|m| m.id == id) {
         return Some(position);
     }

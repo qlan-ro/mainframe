@@ -3,9 +3,10 @@
 
 use serde_json::{Value, json};
 
+use crate::calls::CallCtx;
 use crate::errors::ToolError;
 use crate::ports::ChatView;
-use crate::service::{CallCtx, OrchestrationService};
+use crate::service::OrchestrationService;
 use crate::state::ChatState;
 
 mod capabilities;
@@ -20,21 +21,20 @@ mod delegate_task;
 mod launch_common;
 mod task_status;
 
-/// One `tools/list` entry.
-pub struct ToolDef {
-    pub name: &'static str,
-    pub title: &'static str,
-    pub description: &'static str,
-    pub input_schema: Value,
-    pub read_only: bool,
-    pub destructive: bool,
-    pub idempotent: bool,
+/// What `tools/list` says about one tool.
+struct ToolDef {
+    title: &'static str,
+    description: &'static str,
+    input_schema: Value,
+    read_only: bool,
+    destructive: bool,
+    idempotent: bool,
 }
 
 impl ToolDef {
-    fn to_json(&self) -> Value {
+    fn to_json(&self, name: &str) -> Value {
         json!({
-            "name": self.name,
+            "name": name,
             "title": self.title,
             "description": self.description,
             "inputSchema": self.input_schema,
@@ -49,51 +49,96 @@ impl ToolDef {
     }
 }
 
-#[must_use]
-pub fn definitions() -> Vec<ToolDef> {
-    vec![
-        capabilities::definition(),
-        chat_list::definition(),
-        chat_read::definition(),
-        chat_wait::definition(),
-        chat_launch::definition(),
-        chat_send::definition(),
-        chat_interrupt::definition(),
-        delegate_task::definition(),
-        task_status::status_definition(),
-        task_status::cancel_definition(),
-    ]
+/// The catalogue, in `tools/list` order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Tool {
+    Capabilities,
+    ChatList,
+    ChatRead,
+    ChatWait,
+    ChatLaunch,
+    ChatSend,
+    ChatInterrupt,
+    DelegateTask,
+    TaskStatus,
+    TaskCancel,
 }
 
-#[must_use]
-pub fn list() -> Vec<Value> {
-    definitions().iter().map(ToolDef::to_json).collect()
-}
+impl Tool {
+    const ALL: [Self; 10] = [
+        Self::Capabilities,
+        Self::ChatList,
+        Self::ChatRead,
+        Self::ChatWait,
+        Self::ChatLaunch,
+        Self::ChatSend,
+        Self::ChatInterrupt,
+        Self::DelegateTask,
+        Self::TaskStatus,
+        Self::TaskCancel,
+    ];
 
-#[must_use]
-pub fn exists(name: &str) -> bool {
-    definitions().iter().any(|d| d.name == name)
-}
-
-pub(crate) async fn call(
-    svc: &OrchestrationService,
-    ctx: &CallCtx,
-    name: &str,
-    args: Value,
-) -> Result<Value, ToolError> {
-    match name {
-        "capabilities" => capabilities::run(svc, ctx, args).await,
-        "chat_list" => chat_list::run(svc, ctx, args).await,
-        "chat_read" => chat_read::run(svc, ctx, args).await,
-        "chat_wait" => chat_wait::run(svc, ctx, args).await,
-        "chat_launch" => chat_launch::run(svc, ctx, args).await,
-        "chat_send" => chat_send::run(svc, ctx, args).await,
-        "chat_interrupt" => chat_interrupt::run(svc, ctx, args).await,
-        "delegate_task" => delegate_task::run(svc, ctx, args).await,
-        "task_status" => task_status::run_status(svc, ctx, args).await,
-        "task_cancel" => task_status::run_cancel(svc, ctx, args).await,
-        _ => Err(ToolError::invalid(format!("Unknown tool: {name}"))),
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Self::Capabilities => "capabilities",
+            Self::ChatList => "chat_list",
+            Self::ChatRead => "chat_read",
+            Self::ChatWait => "chat_wait",
+            Self::ChatLaunch => "chat_launch",
+            Self::ChatSend => "chat_send",
+            Self::ChatInterrupt => "chat_interrupt",
+            Self::DelegateTask => "delegate_task",
+            Self::TaskStatus => "task_status",
+            Self::TaskCancel => "task_cancel",
+        }
     }
+
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|tool| tool.name() == name)
+    }
+
+    fn definition(self) -> ToolDef {
+        match self {
+            Self::Capabilities => capabilities::definition(),
+            Self::ChatList => chat_list::definition(),
+            Self::ChatRead => chat_read::definition(),
+            Self::ChatWait => chat_wait::definition(),
+            Self::ChatLaunch => chat_launch::definition(),
+            Self::ChatSend => chat_send::definition(),
+            Self::ChatInterrupt => chat_interrupt::definition(),
+            Self::DelegateTask => delegate_task::definition(),
+            Self::TaskStatus => task_status::status_definition(),
+            Self::TaskCancel => task_status::cancel_definition(),
+        }
+    }
+
+    pub(crate) async fn run(
+        self,
+        svc: &OrchestrationService,
+        ctx: &CallCtx,
+        args: Value,
+    ) -> Result<Value, ToolError> {
+        match self {
+            Self::Capabilities => capabilities::run(svc, ctx, args).await,
+            Self::ChatList => chat_list::run(svc, ctx, args).await,
+            Self::ChatRead => chat_read::run(svc, ctx, args).await,
+            Self::ChatWait => chat_wait::run(svc, ctx, args).await,
+            Self::ChatLaunch => chat_launch::run(svc, ctx, args).await,
+            Self::ChatSend => chat_send::run(svc, ctx, args).await,
+            Self::ChatInterrupt => chat_interrupt::run(svc, ctx, args).await,
+            Self::DelegateTask => delegate_task::run(svc, ctx, args).await,
+            Self::TaskStatus => task_status::run_status(svc, ctx, args).await,
+            Self::TaskCancel => task_status::run_cancel(svc, ctx, args).await,
+        }
+    }
+}
+
+#[must_use]
+pub(crate) fn list() -> Vec<Value> {
+    Tool::ALL
+        .into_iter()
+        .map(|tool| tool.definition().to_json(tool.name()))
+        .collect()
 }
 
 /// One derivation for every reader: a task row makes a child `delegated`, a
@@ -135,6 +180,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn every_name_resolves_to_its_own_tool() {
+        for tool in Tool::ALL {
+            assert_eq!(Tool::from_name(tool.name()), Some(tool));
+        }
+        assert_eq!(Tool::from_name("chat_delete"), None);
+    }
+
+    #[test]
     fn every_tool_is_listed_once_with_closed_schemas_and_annotations() {
         let tools = list();
         let names: HashSet<_> = tools.iter().map(|t| t["name"].as_str()).collect();
@@ -150,12 +203,16 @@ mod tests {
 
     #[test]
     fn read_tools_are_marked_read_only() {
-        for def in definitions() {
+        for tool in Tool::ALL {
             let read = matches!(
-                def.name,
-                "capabilities" | "chat_list" | "chat_read" | "chat_wait" | "task_status"
+                tool,
+                Tool::Capabilities
+                    | Tool::ChatList
+                    | Tool::ChatRead
+                    | Tool::ChatWait
+                    | Tool::TaskStatus
             );
-            assert_eq!(def.read_only, read, "{}", def.name);
+            assert_eq!(tool.definition().read_only, read, "{}", tool.name());
         }
     }
 }

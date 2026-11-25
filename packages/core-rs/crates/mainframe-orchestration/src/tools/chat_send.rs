@@ -1,9 +1,11 @@
 //! `chat_send`: message an existing chat now, after its turn, or into it.
 
+use mainframe_types::chat::ChatStatus;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::ToolDef;
+use crate::calls::CallCtx;
 use crate::errors::{ErrorCode, ToolError};
 use crate::input::{
     Validate, check_id, check_text, id_schema, object_schema, parse_args, text_schema,
@@ -11,12 +13,11 @@ use crate::input::{
 use crate::outbox::OutboxKind;
 use crate::policy::check_ceiling;
 use crate::ports::ChatView;
-use crate::service::{CallCtx, OrchestrationService};
-use crate::state::{AgentMessageKind, ChatState, wrap_agent_message};
+use crate::service::OrchestrationService;
+use crate::state::{AgentMessageKind, ChatState, derive_state, wrap_agent_message};
 
 pub(super) fn definition() -> ToolDef {
     ToolDef {
-        name: "chat_send",
         title: "Send to a Mainframe chat",
         description: "Send a message to another chat. auto (default) starts a turn when the chat \
             is idle and otherwise holds the message until its current turn ends. queue always \
@@ -75,7 +76,8 @@ pub(super) async fn run(
     check_ceiling(&caller.privileges(), &target.privileges())?;
     let state = svc.state_of(&target);
     let (delivery, entry_id) = match (state, input.mode) {
-        (ChatState::Idle, Mode::Steer) => {
+        // Held messages alone make a chat read as working; there is no turn.
+        (_, Mode::Steer) if derive_state(&target, false) == ChatState::Idle => {
             return Err(ToolError::new(
                 ErrorCode::NoActiveTurn,
                 "The chat has no active turn to steer.",
@@ -90,6 +92,7 @@ pub(super) async fn run(
             ("steered", None)
         }
         _ => {
+            svc.retry_failed_delivery(&target.id);
             let id = svc.outbox.push(
                 &target.id,
                 &caller.id,
@@ -100,7 +103,7 @@ pub(super) async fn run(
             ("queued", Some(id))
         }
     };
-    let after = svc.port.chat(&target.id).await.unwrap_or(target);
+    let after = svc.reread(target).await;
     Ok(json!({
         "chatId": after.id,
         "delivery": delivery,
@@ -120,8 +123,8 @@ async fn sendable_target(
     chat_id: &str,
     caller: &ChatView,
 ) -> Result<ChatView, ToolError> {
-    let target = match svc.port.chat(chat_id).await {
-        Some(chat) if svc.in_scope(caller, &chat).await => chat,
+    let target = match svc.port.chat(chat_id).await? {
+        Some(chat) if svc.in_scope(caller, &chat).await? => chat,
         _ => {
             return Err(ToolError::new(
                 ErrorCode::ChatNotFound,
@@ -129,17 +132,14 @@ async fn sendable_target(
             ));
         }
     };
-    let ended = matches!(
-        svc.state_of(&target),
-        ChatState::Ended | ChatState::Archived
-    );
-    if ended || !target.is_agent_addressable() {
-        return Err(ToolError::new(
-            ErrorCode::ChatNotSendable,
-            "The chat has ended or is archived.",
-        ));
-    }
-    Ok(target)
+    let refusal = if !target.is_agent_addressable() {
+        "Side chats, temporary chats, and automation chats take no agent messages."
+    } else if matches!(target.status, ChatStatus::Ended | ChatStatus::Archived) {
+        "The chat has ended or is archived."
+    } else {
+        return Ok(target);
+    };
+    Err(ToolError::new(ErrorCode::ChatNotSendable, refusal))
 }
 
 async fn steer(svc: &OrchestrationService, target: &ChatView, body: &str) -> Result<(), ToolError> {
@@ -158,10 +158,7 @@ async fn steer(svc: &OrchestrationService, target: &ChatView, body: &str) -> Res
             ),
         ));
     }
-    svc.port
-        .steer(&target.id, body)
-        .await
-        .map_err(ToolError::from)
+    Ok(svc.port.steer(&target.id, body).await?)
 }
 
 #[cfg(test)]
