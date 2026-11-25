@@ -389,14 +389,12 @@ test('a capture’s daemon gets an empty HOME and none of the machine’s tokens
   Object.assign(process.env, secrets, { MF_E2E_RUST_DAEMON_PATH: fake, MF_E2E_DAEMON_PORT: await freePort() });
   delete process.env.E2E_MODE;
   try {
-    const { startDaemon } = await import('../../packages/e2e/fixtures/daemon.ts');
+    const { startDaemon, stopDaemon } = await import('../../packages/e2e/fixtures/daemon.ts');
     const { isolated } = await import('../canvas/capture/isolation.mts');
     const envOf = async (options) => {
-      const { daemon, testDataDir } = await startDaemon(options);
-      const gone = new Promise((done) => daemon.once('exit', done));
-      daemon.kill();
-      await gone;
-      return JSON.parse(readFileSync(join(testDataDir, 'env.json'), 'utf8'));
+      const handle = await startDaemon(options);
+      await stopDaemon(handle, true);
+      return JSON.parse(readFileSync(join(handle.testDataDir, 'env.json'), 'utf8'));
     };
 
     const launch = isolated({ mockFork: true }, 3, dir);

@@ -1,4 +1,5 @@
 // Sidebar: the session list's rows, states and menus, the other sidebar views, and editing errors.
+import { assertOwnDaemon, fetchRoute } from '../../../../packages/e2e/fixtures/daemon.js';
 import { waitConnected } from '../../../../packages/e2e/helpers/tauri/wait.js';
 import type { Page, WebSocketRoute } from '../../../../packages/e2e/node_modules/@playwright/test/index.mjs';
 import { escape, parkPointer, reload, seedChat, seedProject, seedWorkbench, stubUsage } from '../seed.mts';
@@ -56,7 +57,7 @@ async function dressList(page: Page): Promise<void> {
   const byTitle = new Map(LIST.map(([title, , ago, over]) => [title, { ago, over }]));
   await page.route(/\/api\/chats(\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
-    const response = await route.fetch();
+    const response = await fetchRoute(route);
     const body = (await response.json()) as { data: (Over & { id: string; title?: string })[] };
     const parent = body.data.find((chat) => chat.title === FORK[1]);
     const now = Date.now();
@@ -80,6 +81,7 @@ async function tapSocket(page: Page): Promise<void> {
   await page.routeWebSocket(
     (url) => !url.pathname.includes('acp'),
     (ws) => {
+      assertOwnDaemon();
       ws.connectToServer();
       open.push(ws);
     },

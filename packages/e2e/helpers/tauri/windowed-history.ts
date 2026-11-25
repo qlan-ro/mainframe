@@ -1,7 +1,7 @@
 import { inflateSync } from 'node:zlib';
 import { rmSync } from 'node:fs';
 import { expect, type Page, type WebSocketRoute } from '@playwright/test';
-import { DAEMON_BASE, startDaemon, stopDaemon } from '../../fixtures/daemon.js';
+import { assertOwnDaemon, daemonFetch, startDaemon, stopDaemon } from '../../fixtures/daemon.js';
 import { writeWindowedHistoryRecording, WINDOWED_RECORDING_KEY } from '../../fixtures/windowed-history.js';
 import { createHeadlessProject, createHeadlessChat, cleanupHeadlessProject } from './headless-chat.js';
 import { openSocket, sendJson, collectFrames, closeSocket } from './raw-ws-client.js';
@@ -24,7 +24,7 @@ export async function seedWindowedHistory() {
       await frames.next((frame) => JSON.stringify(frame).includes('"state":"idle"'));
       await expect
         .poll(async () => {
-          const response = await fetch(`${DAEMON_BASE}/api/chats/${chatId}`);
+          const response = await daemonFetch(`/api/chats/${chatId}`);
           expect(response.ok).toBe(true);
           const payload = (await response.json()) as { data: { claudeSessionId?: string; isRunning?: boolean } };
           return payload.data.claudeSessionId === 'windowed-reference-session' && payload.data.isRunning === false;
@@ -94,6 +94,7 @@ export class HistoryWire {
 
   private connect(client: WebSocketRoute): void {
     this.clients.add(client);
+    assertOwnDaemon();
     const server = client.connectToServer();
     client.onClose((_code, reason) => {
       this.clients.delete(client);
