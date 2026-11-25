@@ -53,12 +53,32 @@ function useHoldRevision(root: RefObject<HTMLDivElement | null>, turns: Readonly
   return `${revision}:${expanded}`;
 }
 
+function canFold(turn: Turn, live: LiveChildren): boolean {
+  const state = turnState(turn, live);
+  return state !== 'needs-you' && state !== 'going' && (state !== 'neutral' || !turnUnclear(turn, live));
+}
+
+function initialFolds(turns: ReadonlyMap<string, Turn>, live: LiveChildren, keepOpen: boolean): ReadonlySet<string> {
+  const folded = new Set<string>();
+  if (keepOpen || live.unplacedAgents) return folded;
+  for (const [key, turn] of turns) {
+    if (turnDisclosureStore.get(key) === undefined && canFold(turn, live) && !disclosureStore.isOpen(turn.workKeys))
+      folded.add(key);
+  }
+  return folded;
+}
+
 export function useTurnState(model: TurnModel, live: LiveChildren, root: RefObject<HTMLDivElement | null>) {
   'use no memo'; // `open` reads the mutable disclosure store; `revision` only marks that it changed
   const revision = useSyncExternalStore(turnDisclosureStore.subscribe, turnDisclosureStore.snapshot, () => 0);
   const keepOpen = useUiPrefs((state) => state.finishedWork === 'open');
   const holds = useHoldRevision(root, model.turns);
-  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
+  const [populated, setPopulated] = useState(model.turns.size > 0);
+  const [folded, setFolded] = useState(() => initialFolds(model.turns, live, keepOpen));
+  if (!populated && model.turns.size > 0) {
+    setPopulated(true);
+    setFolded(initialFolds(model.turns, live, keepOpen));
+  }
   const anchors = useRef(new Map<string, (automatic?: boolean) => void>());
   const register = useCallback((key: string, before: (automatic?: boolean) => void) => {
     anchors.current.set(key, before);
@@ -71,10 +91,8 @@ export function useTurnState(model: TurnModel, live: LiveChildren, root: RefObje
     const held = heldTurns(root.current, model.turns);
     const next = new Set(folded);
     for (const [key, turn] of model.turns) {
-      const state = turnState(turn, live);
-      const unsettled = ['needs-you', 'going'].includes(state) || (state === 'neutral' && turnUnclear(turn, live));
       const unknownAgent = live.unplacedAgents && !folded.has(key);
-      const fold = !keepOpen && !unsettled && !unknownAgent && (folded.has(key) || !held.has(key));
+      const fold = !keepOpen && canFold(turn, live) && !unknownAgent && (folded.has(key) || !held.has(key));
       if (turnDisclosureStore.get(key) !== undefined || fold === next.has(key)) continue;
       anchors.current.get(key)?.(true);
       if (fold) next.add(key);

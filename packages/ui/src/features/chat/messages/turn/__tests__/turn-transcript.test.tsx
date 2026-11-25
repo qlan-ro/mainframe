@@ -5,6 +5,18 @@ import { useUiPrefs } from '@/store/ui-prefs';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 import { TurnFixture, assistant, bash, failed, running, system, text, tool, user } from './fixtures';
 
+const { renderToolRow } = vi.hoisted(() => ({ renderToolRow: vi.fn() }));
+vi.mock('../ToolRow', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../ToolRow')>();
+  return {
+    ...actual,
+    ToolRow: (props: React.ComponentProps<typeof actual.ToolRow>) => {
+      renderToolRow(props.part.toolCallId);
+      return <actual.ToolRow {...props} />;
+    },
+  };
+});
+
 vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
 vi.mock('@/lib/api/background-tasks', () => ({
   listBackgroundTasks: vi.fn().mockResolvedValue([]),
@@ -45,6 +57,15 @@ describe('the work row', () => {
     expect(row('b')).toBeNull();
     expect(screen.getByText('All done')).toBeVisible();
     expect(screen.queryByText('Looking')).toBeNull();
+  });
+
+  it('does not mount completed tool rows when replay first populates a folded transcript', () => {
+    show([user('Hi'), assistant([bash('replayed', 'ls'), text('Done')])]);
+    expect(renderToolRow).not.toHaveBeenCalledWith('replayed');
+    expect(isOpen()).toBe(false);
+    fireEvent.click(header());
+    expect(row('replayed')).toBeVisible();
+    expect(renderToolRow).toHaveBeenCalledWith('replayed');
   });
 
   it('opens on its rows, with the agent’s words between them', () => {
