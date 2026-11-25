@@ -10,7 +10,7 @@ import { findByChatId } from '@/features/chat/orchestration/use-session-items';
 import { isRegisteredSideChatId } from '@/features/side-chat/side-chat-ids';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 import type { ChatTabRole } from '@/store/run-pane';
-import { openChatTab } from './conversation-tabs';
+import { openChatTab, type OpenOptions } from './conversation-tabs';
 
 type Threads = Pick<AssistantClient['threads'], 'getState' | 'item'>;
 
@@ -35,23 +35,24 @@ export function roleOf(custom: SessionCustom | undefined): ChatTabRole {
 }
 
 /** False when there is nothing to open beside: the caller then just switches to the session. */
-export function openSessionBeside(threads: Threads, id: string): boolean {
+export function openSessionBeside(threads: Threads, id: string, options?: OpenOptions): boolean {
   const { mainThreadId, threadItems } = threads.getState();
   if (!canOpenBeside(mainThreadId, id)) return false;
   const item = findByChatId(threadItems, id);
-  return openChatTab({
+  const target = {
     chatId: item?.remoteId ?? id,
     role: roleOf(item?.custom as SessionCustom | undefined),
     title: item?.title ?? 'Untitled',
-  });
+  };
+  return openChatTab(target, undefined, options);
 }
 
 /**
  * A delegated task's own chat, in the workspace beside its parent. An archived
  * one is restored first. With nothing to stand beside, it opens in the column.
  */
-export function openTaskTab(threads: AssistantClient['threads'], itemId: string): void {
+export function openTaskTab(threads: AssistantClient['threads'], itemId: string, options?: OpenOptions): void {
   const item = findByChatId(threads.getState().threadItems, itemId);
   if (item?.status === 'archived') void threads.item({ id: item.id }).unarchive();
-  if (!openSessionBeside(threads, itemId)) threads.switchToThread(itemId);
+  if (!openSessionBeside(threads, itemId, options)) threads.switchToThread(itemId);
 }

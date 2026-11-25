@@ -10,7 +10,6 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ThreadMessage } from '@assistant-ui/react';
-import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
 import { Bot } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -23,15 +22,16 @@ import type { ChatThreadState } from '@/features/chat/controller/chat-thread-sta
 import { useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '@/features/chat/runtime/use-native-thread-messages';
 import { SubagentTranscript } from '@/features/chat/tools/cards/SubagentTranscript';
-import { isErrorResult, resolveResultText } from '@/features/chat/tools/shared';
 import { useStop } from '@/features/session-panel/use-stop';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
-import { listBackgroundTasks, stopBackgroundTask } from '@/lib/api/background-tasks';
-import { AgentStatusLabel, ConversationHeader, StopButton, type AgentStatus } from './ConversationHeader';
-import { findSubagentCall, toolCallIdsOf, type SubagentCall } from './find-subagent-call';
+import { stopBackgroundTask } from '@/lib/api/background-tasks';
+import { agentResult, agentState, isCodexAgent } from './agent-status';
+import { AgentStatusLabel, ConversationHeader, StopButton } from './ConversationHeader';
+import { findSubagentCall, type SubagentCall } from './find-subagent-call';
 import { useHoldConversation } from './mounted-conversations';
 import { OwnFiles } from './OwnFiles';
+import { useAgentTasks } from './use-agent-tasks';
 import { useKeepAttached } from './use-conversation-thread';
 
 const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
@@ -39,84 +39,7 @@ const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
 /** The only CLI that can stop one background agent on its own. */
 const STOP_ADAPTER = 'claude';
 
-const CODEX_AGENT = 'CollabAgent';
-
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-
-/** The call's latest task: a Codex agent that is talked to again gets another for the same call. */
-function taskOf(tasks: readonly BackgroundTask[], toolCallId: string): BackgroundTask | null {
-  const own = tasks.filter((task) => task.toolUseId === toolCallId);
-  return own.reduce<BackgroundTask | null>((a, b) => (a != null && a.startedAt >= b.startedAt ? a : b), null);
-}
-
-/**
- * The background task behind the call, when the sub-agent runs in the background.
- * Null until listed, or never. Read again on every background event, but only
- * for a tab the user can see.
- */
-function useBackgroundTask(
-  chatId: string,
-  toolCallId: string,
-  live: Readonly<Record<string, BackgroundActivityTask>> | undefined,
-  visible: boolean,
-): BackgroundTask | null {
-  const [task, setTask] = useState<BackgroundTask | null>(null);
-  useEffect(() => {
-    if (!visible) return undefined;
-    let current = true;
-    listBackgroundTasks(chatId).then(
-      (tasks) => {
-        if (current) setTask(taskOf(tasks, toolCallId));
-      },
-      (error: unknown) => console.warn('[workspace-chat] could not list background tasks', error),
-    );
-    return () => {
-      current = false;
-    };
-  }, [chatId, toolCallId, live, visible]);
-  return task;
-}
-
-function waitsOnUser(state: ChatThreadState, steps: readonly ThreadMessage[]): boolean {
-  const pending = new Set(Object.values(state.interactions.permissions).map((entry) => entry.request.toolUseId));
-  return toolCallIdsOf(steps).some((id) => pending.has(id));
-}
-
-/** True for a user message the model has, as opposed to one queued or still on its way. */
-function isDelivered(message: ThreadMessage): boolean {
-  const meta = message.metadata?.custom?.mainframe as { queued?: boolean; pending?: boolean } | undefined;
-  return meta?.queued !== true && meta?.pending !== true;
-}
-
-/** The run that could still answer the call: a request waiting on the user pauses it, but doesn't end it. */
-const isRunGoing = ({ runState }: ChatThreadState) => runState.type === 'running' || runState.type === 'cancelling';
-
-/**
- * A call with no answer, whose agent no task reports on. It goes on in the turn
- * that made it. A user message after it may have ended that turn or steered it,
- * so past one there is only the missing result to tell.
- */
-function unansweredStatus(call: SubagentCall, state: ChatThreadState, messages: readonly ThreadMessage[]): AgentStatus {
-  const lifecycle = call.part.providerMetadata?.mainframe as { acpStatus?: string } | undefined;
-  if (lifecycle?.acpStatus === 'cancelled' || !isRunGoing(state)) return 'stopped';
-  const at = messages.findIndex((message) => message.id === call.messageId);
-  const spokenTo = messages.slice(at + 1).some((message) => message.role === 'user' && isDelivered(message));
-  return spokenTo ? 'no-result' : 'running';
-}
-
-function callStatus(
-  call: SubagentCall,
-  state: ChatThreadState,
-  messages: readonly ThreadMessage[],
-  task: BackgroundTask | null,
-): AgentStatus {
-  if (waitsOnUser(state, call.part.messages ?? [])) return 'needs-you';
-  // A Codex task ends as completed however its agent ended; only the result knows better.
-  if (task != null && task.status !== 'completed') return task.status;
-  if (call.part.result !== undefined)
-    return isErrorResult(call.part.result, call.part.isError) ? 'failed' : 'completed';
-  return task != null ? 'no-result' : unansweredStatus(call, state, messages);
-}
 
 /** Pages history back until the call is loaded. The text to show when it is not there, or null. */
 function useLoadCall(
@@ -203,14 +126,8 @@ function ParentScope({ chatId, state, children }: { chatId: string; state: ChatT
 function kindLine(call: SubagentCall | null): string {
   if (call == null) return 'Sub-agent';
   const args = call.part.args as Record<string, unknown>;
-  const name = call.part.toolName === CODEX_AGENT ? 'Codex agent' : text(args['subagent_type']);
+  const name = isCodexAgent(call) ? 'Codex agent' : text(args['subagent_type']);
   return ['Sub-agent', name, text(args['model'])].filter(Boolean).join(' · ');
-}
-
-/** The result a finished call carries. A Claude background call's own result is only the launch receipt. */
-function resultText(call: SubagentCall, task: BackgroundTask | null): string {
-  if (task != null && call.part.toolName !== CODEX_AGENT) return task.status === 'running' ? '' : text(task.summary);
-  return call.part.result === undefined ? '' : resolveResultText(call.part.result).text.trim();
 }
 
 export interface SubagentTabBodyProps {
@@ -230,12 +147,13 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const messages = useNativeThreadMessages(state);
   const call = useMemo(() => findSubagentCall(messages, toolCallId), [messages, toolCallId]);
   const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId });
-  const task = useBackgroundTask(chatId, toolCallId, state.backgroundTasks, active);
-  const status = call == null ? null : callStatus(call, state, messages, task);
+  const tasks = useAgentTasks(chatId, toolCallId, state.backgroundTasks, active);
+  const shown = call == null ? null : agentState({ call, state, messages, tasks });
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
   const shownTitle = text(args['description']) || title;
-  const canStop = task?.status === 'running' && state.chatConfig?.adapterId === STOP_ADAPTER;
-  const { onStop, stopping } = useStop(shownTitle, canStop ? () => stopBackgroundTask(chatId, task.id) : undefined);
+  const running = tasks?.find((task) => task.status === 'running');
+  const canStop = running != null && state.chatConfig?.adapterId === STOP_ADAPTER;
+  const { onStop, stopping } = useStop(shownTitle, canStop ? () => stopBackgroundTask(chatId, running.id) : undefined);
 
   return (
     <div data-testid={`workspace-agent-${toolCallId}`} className="flex h-full min-h-0 flex-col text-foreground">
@@ -245,7 +163,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
         title={shownTitle}
         kind={kindLine(call)}
       >
-        {status != null && <AgentStatusLabel status={status} testId={`workspace-agent-status-${toolCallId}`} />}
+        {shown != null && <AgentStatusLabel {...shown} testId={`workspace-agent-status-${toolCallId}`} />}
         {onStop && (
           <StopButton
             title={shownTitle}
@@ -255,7 +173,13 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
           />
         )}
       </ConversationHeader>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pt-3 pb-4">
+      <div
+        data-conversation-scroller
+        role="region"
+        aria-label={shownTitle}
+        tabIndex={-1}
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pt-3 pb-4 outline-none focus-visible:focus-line-inset"
+      >
         {call == null ? (
           <p role="status" className="text-sm text-muted-foreground">
             {error ?? 'Loading the sub-agent…'}
@@ -267,7 +191,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
             <ProseBlock
               label="Result"
               testId={`workspace-agent-result-${toolCallId}`}
-              source={resultText(call, task)}
+              source={agentResult(call, tasks, shown)}
             />
           </ParentScope>
         )}

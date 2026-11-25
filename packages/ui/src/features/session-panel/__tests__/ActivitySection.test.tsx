@@ -147,12 +147,10 @@ describe('ActivitySection — row clicks', () => {
     state.entries = [row('agent', { source, task })];
     render(<ActivitySection columnId="main" />);
     clickRow('agent');
-    expect(state.openSubagent).toHaveBeenCalledWith({
-      chatId: 'chat-1',
-      toolCallId: 'call-1',
-      messageId: 'message-1',
-      title: 'agent',
-    });
+    expect(state.openSubagent).toHaveBeenCalledWith(
+      { chatId: 'chat-1', toolCallId: 'call-1', messageId: 'message-1', title: 'agent' },
+      { focus: true },
+    );
     expect(usePanelControl.getState().overlayOpen.main).toBe(false);
     expect(state.jump).not.toHaveBeenCalled();
   });
@@ -161,12 +159,10 @@ describe('ActivitySection — row clicks', () => {
     state.entries = [row('agent', { source: { toolCallId: 'call-0' }, task })];
     render(<ActivitySection columnId="main" />);
     clickRow('agent');
-    expect(state.openSubagent).toHaveBeenCalledWith({
-      chatId: 'chat-1',
-      toolCallId: 'call-0',
-      messageId: undefined,
-      title: 'agent',
-    });
+    expect(state.openSubagent).toHaveBeenCalledWith(
+      { chatId: 'chat-1', toolCallId: 'call-0', messageId: undefined, title: 'agent' },
+      { focus: true },
+    );
     expect(state.jump).not.toHaveBeenCalled();
   });
 
@@ -183,7 +179,7 @@ describe('ActivitySection — row clicks', () => {
     state.entries = [row('task', { kind: 'delegated', delegated: { taskId: 't-1', itemId: 'child' } as never })];
     render(<ActivitySection columnId="main" />);
     clickRow('task');
-    expect(state.openTask).toHaveBeenCalledWith(state.threads, 'child');
+    expect(state.openTask).toHaveBeenCalledWith(state.threads, 'child', { focus: true });
     expect(usePanelControl.getState().overlayOpen.main).toBe(false);
   });
 

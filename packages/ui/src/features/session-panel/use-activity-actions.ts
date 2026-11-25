@@ -58,7 +58,7 @@ export function useActivityActions(
   const { onStop, stopping } = useStop(row.title, stopRequest(row, chatId, adapterId));
   const readOutput = useReadOutput(row, chatId);
 
-  /** The floating panel covers what the action is about to show. */
+  /** The floating panel covers what the action is about to show, and takes the focused row with it. */
   const reveal = () => setOverlayOpen(columnId, false);
 
   const jump = () => jumps.jump(row);
@@ -68,7 +68,7 @@ export function useActivityActions(
     jumps.cancel();
     if (childId) {
       reveal();
-      openTaskTab(aui.threads, childId);
+      openTaskTab(aui.threads, childId, { focus: true });
       return;
     }
     if (row.state === 'needs-you') {
@@ -77,7 +77,8 @@ export function useActivityActions(
     }
     if (row.kind === 'subagent' && source?.toolCallId) {
       reveal();
-      openSubagentTab({ chatId, toolCallId: source.toolCallId, messageId: source.messageId, title: row.title });
+      const { toolCallId, messageId } = source;
+      openSubagentTab({ chatId, toolCallId, messageId, title: row.title }, { focus: true });
       return;
     }
     jump();

@@ -9,6 +9,7 @@
 import type { ChatTabRole, RunState, RunTab } from '@/store/run-pane';
 import { useLayoutStore } from '@/store/layout';
 import { isSurfaceLit } from '@/store/layout-placement';
+import { focusTabBody } from './tab-focus';
 
 export interface ChatTarget {
   /** The daemon's chat id, which is also the key of its own workspace layout. */
@@ -34,6 +35,11 @@ function subagentTab({ chatId, toolCallId, messageId, title }: SubagentTarget): 
   return { id: `agent-${toolCallId}`, kind: 'agent', title, chatId, toolCallId, messageId };
 }
 
+export interface OpenOptions {
+  /** Moves the keyboard to the tab, for an opener that is about to go away. */
+  focus?: boolean;
+}
+
 function addTab(tab: RunTab, sessionId: string | null): void {
   const store = useLayoutStore.getState();
   if (sessionId == null) store.addRunTab(tab);
@@ -45,15 +51,23 @@ function addTab(tab: RunTab, sessionId: string | null): void {
  * when it has one. False, and nothing happens, when the chat IS that session: it
  * is already in the chat column.
  */
-export function openChatTab(target: ChatTarget, sessionId = useLayoutStore.getState().activeSessionId): boolean {
+export function openChatTab(
+  target: ChatTarget,
+  sessionId = useLayoutStore.getState().activeSessionId,
+  { focus }: OpenOptions = {},
+): boolean {
   if (target.chatId === sessionId) return false;
-  addTab(chatTab(target), sessionId);
+  const tab = chatTab(target);
+  addTab(tab, sessionId);
+  if (focus) focusTabBody(tab.id);
   return true;
 }
 
 /** Show a sub-agent's work beside the session. */
-export function openSubagentTab(target: SubagentTarget): void {
-  addTab(subagentTab(target), useLayoutStore.getState().activeSessionId);
+export function openSubagentTab(target: SubagentTarget, { focus }: OpenOptions = {}): void {
+  const tab = subagentTab(target);
+  addTab(tab, useLayoutStore.getState().activeSessionId);
+  if (focus) focusTabBody(tab.id);
 }
 
 /** A session's panes: the live ones for the active session, the remembered ones for the rest. */

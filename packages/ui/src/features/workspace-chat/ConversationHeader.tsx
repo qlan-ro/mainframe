@@ -21,11 +21,18 @@ const STATUS: Record<AgentStatus, { label: string; className: string }> = {
   'no-result': { label: 'no result', className: 'text-muted-foreground' },
 };
 
-export function AgentStatusLabel({ status, testId }: { status: AgentStatus; testId: string }) {
-  const { label, className } = STATUS[status];
+interface AgentStatusLabelProps {
+  status: AgentStatus;
+  /** Instead of the status's own word. */
+  label?: string;
+  testId: string;
+}
+
+export function AgentStatusLabel({ status, label, testId }: AgentStatusLabelProps) {
+  const { label: word, className } = STATUS[status];
   return (
     <span data-testid={testId} data-status={status} className={`shrink-0 text-xs ${className}`}>
-      {label}
+      {label ?? word}
     </span>
   );
 }

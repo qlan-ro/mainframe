@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ThreadMessage } from '@assistant-ui/react';
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConnectionStatusProvider } from '@/app/ConnectionStatusContext';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useActiveBasesStore } from '@/store/active-bases-store';
 import { onSurfaceIntent } from '@/store/surface-intents';
@@ -33,6 +34,10 @@ const { controller, world } = vi.hoisted(() => ({
     runState: undefined as string | undefined,
     permissions: {} as Record<string, { request: { toolUseId: string } }>,
     tasks: [] as Partial<BackgroundTask>[],
+    /** Whether the daemon answers the task list, refuses it, or hasn't answered yet. */
+    listing: 'answered' as 'answered' | 'refused' | 'pending',
+    /** The turn the call was made in, as its part's own source says. */
+    turn: undefined as string | undefined,
     hasMore: false,
     adapterId: 'claude',
     /** What follows the call in the parent's transcript. */
@@ -68,6 +73,8 @@ vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
 vi.mock('@/lib/api/background-tasks', () => ({
   listBackgroundTasks: async (chatId: string) => {
     world.list(chatId);
+    if (world.listing === 'refused') throw new Error('daemon is away');
+    if (world.listing === 'pending') await new Promise(() => undefined);
     return world.tasks;
   },
   stopBackgroundTask: (chatId: string, taskId: string) => {
@@ -100,6 +107,23 @@ vi.mock('@/features/chat/tools/cards/SubagentTranscript', () => ({
   },
 }));
 
+/** Where a part came from: a Codex turn of the parent, or of a sub-agent's own thread. */
+const source = (thread: string, turn: string, state: string, parentToolUseId?: string) => ({
+  sourceMessageId: `${thread}-${turn}`,
+  sourceBlockIndex: 0,
+  presentation: {
+    version: 1,
+    provider: 'codex',
+    turnId: JSON.stringify([thread, turn]),
+    state,
+    finalEligible: false,
+    parentToolUseId,
+  },
+});
+const sourced = (...sources: object[]) => ({
+  custom: { mainframe: { partSources: Object.fromEntries(sources.map((entry, i) => [i, [entry]])) } },
+});
+
 let cached: { call: Call | null; after: unknown; list: ThreadMessage[] } = { call: null, after: null, list: [] };
 /** Identity-stable per call, like the projector. */
 function messages(): ThreadMessage[] {
@@ -109,7 +133,15 @@ function messages(): ThreadMessage[] {
       call: world.call,
       after: world.after,
       list: part
-        ? ([{ id: 'm-1', role: 'assistant', content: [part] }, ...world.after] as unknown as ThreadMessage[])
+        ? ([
+            {
+              id: 'm-1',
+              role: 'assistant',
+              content: [part],
+              metadata: world.turn ? sourced(source('parent', 'p-1', world.turn)) : undefined,
+            },
+            ...world.after,
+          ] as unknown as ThreadMessage[])
         : [],
     };
   }
@@ -139,6 +171,9 @@ const ARGS = {
   description: 'Review the diff',
   prompt: 'Look for **races**.',
 };
+const RECEIPT = 'Async agent launched successfully.\nagentId: a1';
+const STATUS = 'workspace-agent-status-call-1';
+const RESULT = 'workspace-agent-result-call-1';
 const status = () => screen.getByTestId('workspace-agent-status-call-1').dataset.status;
 const step = (id: string, toolCallId: string) =>
   ({
@@ -154,6 +189,8 @@ beforeEach(() => {
     runState: undefined,
     permissions: {},
     tasks: [],
+    listing: 'answered',
+    turn: undefined,
     hasMore: false,
     adapterId: 'claude',
     after: [],
@@ -175,6 +212,14 @@ describe('what it shows', () => {
     expect(screen.getByTestId('workspace-agent-brief-call-1')).toHaveTextContent('Look for races.');
     expect(screen.getByTestId('steps')).toHaveTextContent('s-1,s-2');
     expect(screen.getByTestId('workspace-agent-result-call-1')).toHaveTextContent('No races found.');
+  });
+
+  it('scrolls by keyboard: its content is a named region that can take the focus', async () => {
+    await show({ args: ARGS, result: 'ok' });
+    const region = screen.getByRole('region', { name: 'Review the diff' });
+    expect(region).toHaveAttribute('data-conversation-scroller');
+    act(() => region.focus());
+    expect(region).toHaveFocus();
   });
 
   it('has no composer', async () => {
@@ -293,16 +338,17 @@ describe('status', () => {
   });
 
   it.each([
-    ['', [0, 1]],
-    [', listed first', [1, 0]],
-  ])('follows the last of its tasks once all have ended%s', async (_, order) => {
-    const tasks = [
-      { ...ended, status: 'stopped' as const },
-      { ...ended, id: 'bg-2', startedAt: 2 },
+    ['stopped', 'completed', 'stopped'],
+    ['completed', 'stopped', 'stopped'],
+    ['stopped', 'failed', 'failed'],
+    ['completed', 'completed', 'completed'],
+  ] as const)('is as bad as the worst of its tasks once all have ended: %s and %s', async (first, second, worst) => {
+    world.tasks = [
+      { ...ended, status: first },
+      { ...ended, id: 'bg-2', startedAt: 2, status: second },
     ];
-    world.tasks = order.map((i) => tasks[i]!);
-    await show({ args: ARGS, result: 'Async agent launched' });
-    expect(status()).toBe('completed');
+    await show({ args: ARGS, result: RECEIPT });
+    expect(status()).toBe(worst);
   });
 
   it('reads a Codex agent’s end from its result, which its task has no word of', async () => {
@@ -329,6 +375,209 @@ describe('status', () => {
     world.tasks = [{ id: 'bg-1', toolUseId: 'call-1', status: 'completed', summary: 'Two races.' }];
     await show({ args: ARGS, result: 'Async agent launched' });
     expect(screen.getByTestId('workspace-agent-result-call-1')).toHaveTextContent('Two races.');
+  });
+});
+
+describe('an agent in the background, whose result is only the launch receipt', () => {
+  const flagged = { args: { ...ARGS, run_in_background: true }, result: 'Launched.' };
+
+  it.each([
+    ['flagged', flagged],
+    ['known by its receipt', { args: ARGS, result: RECEIPT }],
+    ['a teammate', { args: ARGS, result: 'Spawned successfully. agent_id: a1' }],
+  ])('has no result and no receipt when no task is listed for it: %s', async (_, call) => {
+    await show(call);
+    expect(status()).toBe('no-result');
+    expect(screen.queryByTestId(RESULT)).toBeNull();
+  });
+
+  it.each(['pending', 'refused'] as const)('claims nothing while the list is %s', async (listing) => {
+    world.listing = listing;
+    await show(flagged);
+    expect(screen.queryByTestId(STATUS)).toBeNull();
+    expect(screen.queryByTestId(RESULT)).toBeNull();
+  });
+
+  it.each(['pending', 'refused'] as const)('is not called stopped while the list is %s', async (listing) => {
+    world.listing = listing;
+    await show({ args: flagged.args });
+    expect(screen.queryByTestId(STATUS)).toBeNull();
+  });
+
+  it('is not called stopped by a turn that ended without it', async () => {
+    await show({ args: flagged.args });
+    expect(status()).toBe('no-result');
+  });
+
+  it('says why it could not be launched', async () => {
+    world.listing = 'refused';
+    await show({ ...flagged, result: 'No such agent type', isError: true });
+    expect(status()).toBe('failed');
+    expect(screen.getByTestId(RESULT)).toHaveTextContent('No such agent type');
+  });
+
+  it('keeps what it knew when the next request fails', async () => {
+    world.tasks = [{ id: 'bg-1', toolUseId: 'call-1', status: 'running', startedAt: 1 }];
+    const view = await show(flagged);
+    world.listing = 'refused';
+    world.backgroundTasks = {};
+    view.rerender(body());
+    await act(async () => undefined);
+    expect(status()).toBe('running');
+  });
+
+  it('is asked about again on reconnecting', async () => {
+    const at = (state: 'connected' | 'reconnecting') => (
+      <ConnectionStatusProvider value={{ state, daemonStatus: '' } as never}>{body()}</ConnectionStatusProvider>
+    );
+    world.call = flagged;
+    world.listing = 'refused';
+    const view = render(at('connected'));
+    await act(async () => undefined);
+    view.rerender(at('reconnecting'));
+    await act(async () => undefined);
+    world.listing = 'answered';
+    world.tasks = [{ id: 'bg-1', toolUseId: 'call-1', status: 'completed', startedAt: 1, summary: 'Two races.' }];
+    view.rerender(at('connected'));
+    await act(async () => undefined);
+    expect(status()).toBe('completed');
+    expect(screen.getByTestId(RESULT)).toHaveTextContent('Two races.');
+  });
+
+  it('leaves a foreground agent’s own result alone when the list is refused', async () => {
+    world.listing = 'refused';
+    await show({ args: ARGS, result: 'No races found.' });
+    expect(status()).toBe('completed');
+    expect(screen.getByTestId(RESULT)).toHaveTextContent('No races found.');
+  });
+});
+
+describe('Codex agents sharing one call', () => {
+  const task = (id: string, status: 'running' | 'completed', startedAt: number) => ({
+    id,
+    toolUseId: 'call-1',
+    status,
+    startedAt,
+  });
+  /** The agents' steps, one per thread, each from a turn of its own in the given state. */
+  const agents = (...turns: string[]) => [
+    {
+      id: 'steps',
+      role: 'assistant',
+      content: turns.map((_, i) => ({ type: 'text', text: `step ${i}` })),
+      metadata: sourced(...turns.map((state, i) => source(`agent-${i}`, 't', state, 'call-1'))),
+    } as unknown as ThreadMessage,
+  ];
+  const codex = { args: ARGS, toolName: 'CollabAgent', result: 'Answer.' };
+
+  it('is running while any is, though the one started last has ended', async () => {
+    world.running = true;
+    world.tasks = [task('a', 'running', 1), task('b', 'completed', 2)];
+    await show(codex);
+    expect(status()).toBe('running');
+    expect(screen.getByTestId(STATUS)).toHaveTextContent(/^running$/);
+  });
+
+  it('counts those running', async () => {
+    world.running = true;
+    world.tasks = [task('a', 'running', 1), task('b', 'running', 2), task('c', 'completed', 3)];
+    await show(codex);
+    expect(status()).toBe('running');
+    expect(screen.getByTestId(STATUS)).toHaveTextContent('2 running');
+  });
+
+  it.each([['failed'], ['cancelled']])('counts those that ended badly: %s', async (bad) => {
+    world.tasks = [task('a', 'completed', 1), task('b', 'completed', 2)];
+    await show({ ...codex, messages: agents(bad, 'completed') });
+    expect(status()).toBe('failed');
+    expect(screen.getByTestId(STATUS)).toHaveTextContent('1 of 2 failed');
+  });
+
+  it('is done when all are', async () => {
+    await show({ ...codex, messages: agents('completed', 'completed') });
+    expect(status()).toBe('completed');
+  });
+
+  it('goes by an agent’s last turn, not the one it was interrupted in', async () => {
+    const [steps] = agents('cancelled', 'completed', 'completed');
+    const sources = [
+      source('agent-0', 't1', 'cancelled', 'call-1'),
+      source('agent-0', 't2', 'completed', 'call-1'),
+      source('agent-1', 't1', 'completed', 'call-1'),
+    ];
+    await show({ ...codex, messages: [{ ...steps, metadata: sourced(...sources) } as unknown as ThreadMessage] });
+    expect(status()).toBe('completed');
+  });
+
+  it('does not call one agent’s answer the end while the list is unknown and the turn goes on', async () => {
+    world.running = true;
+    world.listing = 'refused';
+    await show(codex);
+    expect(screen.queryByTestId(STATUS)).toBeNull();
+  });
+
+  describe('when the turn that started them was cut short', () => {
+    beforeEach(() => void (world.turn = 'cancelled'));
+
+    it.each([
+      ['cancelled', []],
+      ['cancelled', agents('running')],
+      ['cancelled', agents('unknown')],
+      ['cancelled', agents('completed', 'unknown')],
+      ['failed', agents('unknown')],
+    ])('is not done just because the daemon closed it: %s', async (turn, messages) => {
+      world.turn = turn;
+      await show({ ...codex, result: 'Sub-agent completed', messages });
+      expect(status()).toBe('no-result');
+      expect(screen.queryByTestId(RESULT)).toBeNull();
+    });
+
+    it('is not done when another agent left no step', async () => {
+      world.tasks = [task('a', 'completed', 1), task('b', 'completed', 2)];
+      await show({ ...codex, messages: agents('completed') });
+      expect(status()).toBe('no-result');
+    });
+
+    it('is done when its own turn completed', async () => {
+      world.tasks = [task('a', 'completed', 1)];
+      await show({ ...codex, messages: agents('completed') });
+      expect(status()).toBe('completed');
+      expect(screen.getByTestId(RESULT)).toHaveTextContent('Answer.');
+    });
+
+    it('stays failed when it failed', async () => {
+      await show({ ...codex, isError: true });
+      expect(status()).toBe('failed');
+    });
+
+    it('is known from the turn’s other messages, when the call’s own part says nothing', async () => {
+      world.turn = undefined;
+      world.after = [
+        {
+          id: 'm-2',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Waiting.' }],
+          metadata: sourced(source('parent', 'p-1', 'cancelled')),
+        } as unknown as ThreadMessage,
+      ];
+      await show(codex);
+      expect(status()).toBe('no-result');
+    });
+
+    it('says nothing of the turn after it', async () => {
+      world.turn = undefined;
+      world.after = [
+        { id: 'u', role: 'user', content: [{ type: 'text', text: 'next' }] } as unknown as ThreadMessage,
+        {
+          id: 'm-2',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Sure.' }],
+          metadata: sourced(source('parent', 'p-2', 'cancelled')),
+        } as unknown as ThreadMessage,
+      ];
+      await show(codex);
+      expect(status()).toBe('completed');
+    });
   });
 });
 
