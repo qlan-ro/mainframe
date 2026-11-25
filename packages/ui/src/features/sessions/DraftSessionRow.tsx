@@ -41,7 +41,7 @@ export function DraftSessionRow({ projectId, projectName, selected, onSelect, on
           size="sm"
           isActive={selected}
           onClick={onSelect}
-          className="pr-2! pl-1.5 hover:bg-sidebar-accent data-active:bg-chrome-selected data-active:font-normal"
+          className="pr-2! pl-1.5 hover:bg-sidebar-accent data-active:bg-chrome-selected data-active:hover:bg-chrome-selected data-active:font-normal"
         >
           <SessionProjectTile projectName={projectId != null ? projectName : undefined} />
           <FadeLabel
