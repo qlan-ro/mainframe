@@ -172,6 +172,26 @@ it('keeps the boot answer when asking again fails', async () => {
   expect(rowStatus()).toBe('running');
 });
 
+it('asks again once after boot, not after every answer', async () => {
+  ws.connected = false;
+  let respond = (_chats: Chat[]) => {};
+  listChatsMock.mockImplementationOnce(() => new Promise<Chat[]>((resolve) => (respond = resolve)));
+  render(<Harness />);
+  await waitFor(() => expect(listChatsMock).toHaveBeenCalledTimes(1));
+
+  listChatsMock.mockImplementation(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return [chat({ displayStatus: 'waiting' })];
+  });
+  setConnected(true);
+  await act(async () => respond([chat({})]));
+  await waitFor(() => expect(rowStatus()).toBe('needs-you'));
+
+  // Past the 200 ms window that would collapse a repeat.
+  await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+  expect(listChatsMock).toHaveBeenCalledTimes(2);
+});
+
 it('shows the boot answer while asking again has no answer', async () => {
   ws.connected = false;
   let respond = (_chats: Chat[]) => {};
