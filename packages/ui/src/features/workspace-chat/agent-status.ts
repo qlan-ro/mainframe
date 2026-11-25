@@ -1,163 +1,128 @@
-import type { ThreadMessage } from '@assistant-ui/react';
+/**
+ * What an agent tab says of its call (W8). It repeats what the transcript and
+ * the daemon's task list state, and is silent otherwise: there is no label for
+ * an agent that finished.
+ */
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
-import { isErrorResult, resolveResultText } from '@/features/chat/tools/shared';
-import { agentTurns, completedChildAnswer, startedInCutTurn } from './agent-turns';
+import { extractResultContent, isErrorResult, resolveResultText } from '@/features/chat/tools/shared';
+import type { MainframeMessageMeta } from '@/features/chat/view-model/message-meta';
 import type { AgentStatus } from './ConversationHeader';
 import { toolCallIdsOf, type SubagentCall } from './find-subagent-call';
 
-export interface AgentState {
-  status: AgentStatus;
-  /** Instead of the status's own word: how many of several agents it is true of. */
-  label?: string;
-}
-
-/** A call's tasks: several for Codex agents that share one, or one that is talked to again. Null until listed. */
+/** The tasks the daemon lists for a call, which can be several. Null until it has listed them. */
 export type AgentTasks = readonly BackgroundTask[] | null;
 
-const CODEX_AGENT = 'CollabAgent';
-
-export const isCodexAgent = (call: SubagentCall): boolean => call.part.toolName === CODEX_AGENT;
-
-const isFailed = ({ part }: SubagentCall) => part.result !== undefined && isErrorResult(part.result, part.isError);
-
-const answerOf = ({ part }: SubagentCall) =>
-  part.result === undefined ? '' : resolveResultText(part.result).text.trim();
-
-/** The run that could still answer the call: a request waiting on the user pauses it, but doesn't end it. */
-const isRunGoing = ({ runState }: ChatThreadState) => runState.type === 'running' || runState.type === 'cancelling';
-
-/** True for a user message the model has, as opposed to one queued or still on its way. */
-function isDelivered(message: ThreadMessage): boolean {
-  const meta = message.metadata?.custom?.mainframe as { queued?: boolean; pending?: boolean } | undefined;
-  return meta?.queued !== true && meta?.pending !== true;
-}
-
-function isCancelled(call: SubagentCall): boolean {
-  const lifecycle = call.part.providerMetadata?.mainframe as { acpStatus?: string } | undefined;
-  return lifecycle?.acpStatus === 'cancelled';
+/** Text that is not the call's own result, and where it is from. */
+export interface AgentReport {
+  source: 'Task summary' | 'Final answer';
+  text: string;
 }
 
 interface Facts {
   call: SubagentCall;
-  /** The parent chat, and its transcript. */
+  /** The parent chat. */
   state: ChatThreadState;
-  messages: readonly ThreadMessage[];
   tasks: AgentTasks;
 }
 
-function needsYou({ call, state }: Facts): boolean {
+interface AgentPresentation {
+  status: { status: AgentStatus; label?: string } | null;
+  /** The call's own text. */
+  result: string;
+  reports: AgentReport[];
+  runningTask?: BackgroundTask;
+}
+
+export const isCodexAgent = (call: SubagentCall): boolean => call.part.toolName === 'CollabAgent';
+
+const isFailed = ({ part }: SubagentCall) => part.result !== undefined && isErrorResult(part.result, part.isError);
+
+/** Untouched, but for the CLI's tags around an error. */
+function resultText(call: SubagentCall): string {
+  const text = isFailed(call) ? '' : extractResultContent(call.part.result);
+  return text || resolveResultText(call.part.result).text;
+}
+
+const lifecycleOf = ({ part }: SubagentCall) =>
+  (part.providerMetadata?.mainframe as { acpStatus?: string } | undefined)?.acpStatus;
+
+/** The call has no result and nothing says it ended, in a session that runs. */
+function isOpen(call: SubagentCall, { runState }: ChatThreadState): boolean {
+  const settled = ['completed', 'failed', 'cancelled'].includes(lifecycleOf(call) ?? '');
+  const sessionRuns = runState.type === 'running' || runState.type === 'cancelling';
+  return call.part.result === undefined && !settled && sessionRuns;
+}
+
+function needsYou(call: SubagentCall, state: ChatThreadState): boolean {
   const pending = new Set(Object.values(state.interactions.permissions).map((entry) => entry.request.toolUseId));
   return toolCallIdsOf(call.part.messages ?? []).some((id) => pending.has(id));
 }
 
-/**
- * A call with no answer, whose agent no task reports on. It goes on in the turn
- * that made it. A user message after it may have ended that turn or steered it,
- * so past one there is only the missing result to tell.
- */
-function foregroundRunning({ call, state, messages }: Facts): boolean {
-  const at = messages.findIndex((message) => message.id === call.messageId);
-  return (
-    isRunGoing(state) && !messages.slice(at + 1).some((message) => message.role === 'user' && isDelivered(message))
-  );
+function statusOf({ call, state, tasks }: Facts, live: boolean): AgentPresentation['status'] {
+  const listed = tasks ?? [];
+  const count = (status: BackgroundTask['status']) => listed.filter((task) => task.status === status).length;
+  const show = (status: AgentStatus, n = 1, several = n > 1) => ({
+    status,
+    label: several ? `${n} ${status}` : undefined,
+  });
+
+  if (needsYou(call, state)) return show('needs-you');
+  const running = count('running');
+  if (running > 0) return live ? show('running', running) : null;
+  // A settled task speaks for its call, whatever the transcript still lacks.
+  if (listed.length === 0 && isOpen(call, state)) return live ? show('running') : null;
+  for (const status of ['failed', 'stopped'] as const) {
+    const n = count(status);
+    if (n > 0) return show(status, n, listed.length > 1);
+  }
+  if (isFailed(call)) return show('failed');
+  return lifecycleOf(call) === 'cancelled' ? show('stopped') : null;
 }
 
-interface Evidence {
-  codex: boolean;
-  background: boolean;
-  explicitForeground: boolean;
-  needsPermission: boolean;
-  cancelled: boolean;
-  foregroundRunning: boolean;
-  parentRunning: boolean;
-  failed: boolean;
-  answer: string;
-  childAnswer: string;
-  childTurns: ReturnType<typeof agentTurns>;
-  parentCut: boolean;
-  tasks: AgentTasks;
-  tasksFresh: boolean;
+function taskSummaries(tasks: AgentTasks): AgentReport[] {
+  return [...(tasks ?? [])]
+    .sort((a, b) => a.startedAt - b.startedAt)
+    .map((task) => ({ source: 'Task summary', text: task.summary?.trim() ?? '' }));
 }
 
-interface AgentPresentation {
-  state: AgentState | null;
-  result: string;
-  runningTask?: BackgroundTask;
+/** A Codex turn id is its thread's id and its own, in JSON. */
+function threadOf(turnId: string): string {
+  try {
+    const parsed: unknown = JSON.parse(turnId);
+    return Array.isArray(parsed) ? String(parsed[0]) : turnId;
+  } catch {
+    return turnId;
+  }
 }
 
-export function presentAgent(e: Evidence): AgentPresentation {
-  const running = e.tasks?.filter((task) => task.status === 'running') ?? [];
-  const settled = e.tasks?.filter((task) => task.status !== 'running') ?? [];
-  const allDone =
-    e.childTurns.length >= Math.max(1, e.tasks?.length ?? 0) && e.childTurns.every((turn) => turn === 'completed');
-  const cutWithoutCompletion = e.codex && e.parentCut && !allDone;
-  const result = e.codex
-    ? cutWithoutCompletion && !e.failed
-      ? e.childAnswer
-      : e.answer
-    : e.failed || !e.background
-      ? e.answer
-      : running.length
-        ? ''
-        : latestSummary(settled);
-  const show = (status: AgentStatus | null, label?: string): AgentPresentation => ({
-    state: status === null ? null : { status, label },
+/** The last final answer of each Codex agent under the call. */
+function finalAnswers({ part }: SubagentCall): AgentReport[] {
+  const byThread = new Map<string, string>();
+  for (const message of part.messages ?? []) {
+    const meta = message.metadata?.custom?.mainframe as MainframeMessageMeta | undefined;
+    message.content.forEach((content, index) => {
+      if (content.type !== 'text') return;
+      for (const { presentation, startUtf16, endUtf16 } of meta?.partSources?.[index] ?? []) {
+        const { parentToolUseId, phase, state, turnId } = presentation;
+        if (parentToolUseId === part.toolCallId && phase === 'final_answer' && state === 'completed')
+          byThread.set(threadOf(turnId), content.text.slice(startUtf16, endUtf16).trim());
+      }
+    });
+  }
+  return [...byThread.values()].map((text) => ({ source: 'Final answer', text }));
+}
+
+/** `live`: the list is the daemon's latest over a connection that still stands. */
+export function describeAgent(facts: Facts, live: boolean): AgentPresentation {
+  const { call, tasks } = facts;
+  const result = resultText(call);
+  const background = (call.part.args as Record<string, unknown>)['run_in_background'] === true;
+  const reports = result.trim() === '' || background ? [...taskSummaries(tasks), ...finalAnswers(call)] : [];
+  return {
+    status: statusOf(facts, live),
     result,
-    runningTask: e.tasksFresh ? running[0] : undefined,
-  });
-  const missing = result ? null : 'no-result';
-  if (e.needsPermission) return show('needs-you');
-  if (running.length)
-    return e.tasksFresh ? show('running', running.length > 1 ? `${running.length} running` : undefined) : show(null);
-
-  const failed = e.childTurns.filter((turn) => turn === 'failed').length;
-  const cancelled = e.childTurns.filter((turn) => turn === 'cancelled').length;
-  if (e.failed || failed || settled.some((task) => task.status === 'failed')) {
-    return show('failed', failed && e.childTurns.length > 1 ? `${failed} of ${e.childTurns.length} failed` : undefined);
-  }
-  if (e.cancelled || cancelled || settled.some((task) => task.status === 'stopped')) return show('stopped');
-  if (e.codex) {
-    if (cutWithoutCompletion) return show(missing);
-    if (e.tasks === null && e.parentRunning && e.answer) return show(null);
-    if (e.answer || allDone) return show('completed');
-  } else if (settled.length || (e.explicitForeground && e.answer && !e.background)) {
-    return show('completed');
-  }
-  if (e.background && !e.tasksFresh) return show(null);
-  if (e.answer || settled.length) return show(missing);
-  return show(e.foregroundRunning && !e.parentCut ? 'running' : missing);
-}
-
-function latestSummary(tasks: readonly BackgroundTask[]): string {
-  return (
-    tasks
-      .reduce<BackgroundTask | undefined>(
-        (latest, task) => (!latest || task.startedAt >= latest.startedAt ? task : latest),
-        undefined,
-      )
-      ?.summary?.trim() ?? ''
-  );
-}
-
-export function describeAgent(facts: Facts, tasksFresh: boolean): AgentPresentation {
-  const { call, state, tasks } = facts;
-  const codex = isCodexAgent(call);
-  const args = call.part.args as Record<string, unknown>;
-  return presentAgent({
-    codex,
-    background: !codex && (args['run_in_background'] === true || Boolean(tasks?.length)),
-    explicitForeground: args['run_in_background'] === false,
-    needsPermission: needsYou(facts),
-    cancelled: isCancelled(call),
-    foregroundRunning: foregroundRunning(facts),
-    parentRunning: isRunGoing(state),
-    failed: isFailed(call),
-    answer: answerOf(call),
-    childAnswer: codex ? completedChildAnswer(call) : '',
-    childTurns: codex ? agentTurns(call) : [],
-    parentCut: codex && startedInCutTurn(call, facts.messages),
-    tasks,
-    tasksFresh,
-  });
+    reports: reports.filter(({ text }) => text !== ''),
+    runningTask: live ? tasks?.find((task) => task.status === 'running') : undefined,
+  };
 }

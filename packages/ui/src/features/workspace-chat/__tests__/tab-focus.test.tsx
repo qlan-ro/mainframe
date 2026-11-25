@@ -38,6 +38,7 @@ vi.mock('../SubagentTabBody', () => ({
 
 import { ConversationTabBody } from '../ConversationTabBody';
 import { openChatTab, openSubagentTab } from '../conversation-tabs';
+import { focusTabBody } from '../tab-focus';
 
 const entry = (overrides: Partial<ActivityEntry> = {}): ActivityEntry => ({
   id: 'r',
@@ -190,6 +191,45 @@ describe('unclaimed keyboard handoff', () => {
     const switched = { ...initial, panes: initial.panes.map((pane) => ({ ...pane, active: 'chat-other' })) };
     useLayoutStore.setState({ run: switched });
     useLayoutStore.setState({ run: initial });
+    render(<Window />);
+    expect(screen.getByTestId('agent')).not.toHaveFocus();
+  });
+
+  /** The target in front in one pane, two other tabs in the pane beside it. */
+  function twoPanes() {
+    openChatTab({ chatId: 'left', role: 'session', title: 'Left' });
+    openChatTab({ chatId: 'right', role: 'session', title: 'Right' });
+    openSubagentTab(target);
+    const { run } = useLayoutStore.getState();
+    const pane = run!.panes[0]!;
+    const isAgent = ({ kind }: { kind: string }) => kind === 'agent';
+    const panes = [
+      { ...pane, tabs: pane.tabs.filter(isAgent), active: 'agent-call-1' },
+      { ...pane, id: 'beside', tabs: pane.tabs.filter((tab) => !isAgent(tab)), active: 'chat-left' },
+    ];
+    useLayoutStore.setState({ run: { ...run!, panes } });
+    focusTabBody('agent-call-1', null);
+    return () => useLayoutStore.getState().run!;
+  }
+
+  it('keeps the request while nothing else becomes active', () => {
+    const run = twoPanes();
+    useLayoutStore.setState({ run: { ...run(), panes: run().panes.map((pane) => ({ ...pane })) } });
+    render(<Window />);
+    expect(screen.getByTestId('agent')).toHaveFocus();
+  });
+
+  it('drops the request when a tab becomes active in the other pane, its own still in front', () => {
+    const run = twoPanes();
+    const panes = run().panes.map((pane) => (pane.id === 'beside' ? { ...pane, active: 'chat-right' } : pane));
+    useLayoutStore.setState({ run: { ...run(), panes } });
+    render(<Window />);
+    expect(screen.getByTestId('agent')).not.toHaveFocus();
+  });
+
+  it('drops the request when another session becomes active, its tab still in front', () => {
+    twoPanes();
+    useLayoutStore.setState({ activeSessionId: 'another' });
     render(<Window />);
     expect(screen.getByTestId('agent')).not.toHaveFocus();
   });

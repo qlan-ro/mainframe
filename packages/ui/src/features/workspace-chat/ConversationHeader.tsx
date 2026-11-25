@@ -6,9 +6,8 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 
-/** `no-result`: whether it still runs is not known, only that it has answered nothing. */
-export type AgentStatus =
-  'running' | 'needs-you' | 'queued' | 'completed' | 'failed' | 'stopped' | 'cancelled' | 'no-result';
+/** A sub-agent's tab uses four of these (`agent-status`); a delegated task's record has them all. */
+export type AgentStatus = 'running' | 'needs-you' | 'queued' | 'completed' | 'failed' | 'stopped' | 'cancelled';
 
 const STATUS: Record<AgentStatus, { label: string; className: string }> = {
   running: { label: 'running', className: 'text-muted-foreground' },
@@ -18,7 +17,6 @@ const STATUS: Record<AgentStatus, { label: string; className: string }> = {
   failed: { label: 'failed', className: 'text-fail' },
   stopped: { label: 'stopped', className: 'text-muted-foreground' },
   cancelled: { label: 'stopped', className: 'text-muted-foreground' },
-  'no-result': { label: 'no result', className: 'text-muted-foreground' },
 };
 
 interface AgentStatusLabelProps {

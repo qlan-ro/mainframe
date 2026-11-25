@@ -86,7 +86,7 @@ function Block({ label, testId, children }: { label: string; testId: string; chi
 }
 
 function ProseBlock({ label, testId, source }: { label: string; testId: string; source: string }) {
-  if (source === '') return null;
+  if (source.trim() === '') return null;
   return (
     <Block label={label} testId={testId}>
       <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
@@ -147,9 +147,9 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const messages = useNativeThreadMessages(state);
   const call = useMemo(() => findSubagentCall(messages, toolCallId), [messages, toolCallId]);
   const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId });
-  const { tasks, fresh } = useAgentTasks(chatId, toolCallId, state.backgroundTasks, active);
-  const agent = call == null ? null : describeAgent({ call, state, messages, tasks }, fresh);
-  const shown = agent?.state;
+  const { tasks, live } = useAgentTasks(chatId, toolCallId, state.backgroundTasks, active);
+  const agent = call == null ? null : describeAgent({ call, state, tasks }, live);
+  const shown = agent?.status;
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
   const shownTitle = text(args['description']) || title;
   const running = agent?.runningTask;
@@ -190,6 +190,14 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
             <ProseBlock label="Brief" testId={`workspace-agent-brief-${toolCallId}`} source={text(args['prompt'])} />
             <Steps call={call} />
             <ProseBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
+            {agent?.reports.map(({ source, text: report }, i) => (
+              <ProseBlock
+                key={`${source}-${i}`}
+                label={source}
+                testId={`workspace-agent-report-${toolCallId}`}
+                source={report}
+              />
+            ))}
           </ParentScope>
         )}
       </div>
