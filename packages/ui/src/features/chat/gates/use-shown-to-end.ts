@@ -53,7 +53,7 @@ export function lastLine(element: HTMLElement): { top: number; bottom: number } 
 
 function endInView(element: HTMLElement | null, view: View): boolean {
   const line = element && lastLine(element);
-  return !!line && line.top >= view.top && line.bottom <= view.bottom;
+  return !!line && line.top >= view.top - 1 && line.bottom <= view.bottom + 1;
 }
 
 /** The end of `part` into view, and as much of what follows as leaves it there. */
