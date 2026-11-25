@@ -52,7 +52,7 @@ function ToolResultImageThumb({ image, testId, onOpen, active, onResolve, onRetr
         )}
       </AttachmentMedia>
       {caption && (
-        <span className="pointer-events-none absolute inset-x-1 bottom-1 truncate rounded bg-card/90 px-1.5 text-center text-[12px] text-muted-foreground">
+        <span className="pointer-events-none absolute inset-x-1 bottom-1 truncate rounded bg-card/90 px-1.5 text-center text-meta/[inherit] text-muted-foreground">
           {caption}
         </span>
       )}

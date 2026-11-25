@@ -93,8 +93,8 @@ function useLoadCall(
 function Block({ label, testId, children }: { label: string; testId: string; children: React.ReactNode }) {
   return (
     <section data-testid={testId} className="mt-0.5 mb-1.5 min-w-0">
-      <h3 className="text-[13px] leading-5 font-medium text-(--mf-tr-secondary)">{label}</h3>
-      <div className="aui-md text-[13px] leading-5 text-(--mf-tr-secondary) break-words">{children}</div>
+      <h3 className="text-control font-medium text-(--mf-tr-secondary)">{label}</h3>
+      <div className="aui-md text-control text-(--mf-tr-secondary) break-words">{children}</div>
     </section>
   );
 }

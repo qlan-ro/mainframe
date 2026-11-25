@@ -35,7 +35,7 @@ function testRunnerLine(line: string) {
       </>
     );
   if (/^\s*(?:[A-Za-z]*Error):/.test(line)) return <span className="text-mf-tr-term-err">{line}</span>;
-  if (/^\s*❯ /.test(line)) return <span className="text-[color:var(--mf-tr-term-muted)]">{line}</span>;
+  if (/^\s*❯ /.test(line)) return <span className="text-mf-tr-term-muted">{line}</span>;
   return null;
 }
 

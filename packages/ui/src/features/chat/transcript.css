@@ -76,6 +76,9 @@
 .text-mf-tr-del {
   color: var(--mf-tr-del);
 }
+.text-mf-tr-term-muted {
+  color: var(--mf-tr-term-muted);
+}
 .text-mf-tr-term-ink {
   color: var(--mf-tr-term-ink);
 }

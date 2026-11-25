@@ -144,7 +144,7 @@ function ToolResultPreview({
           className={cn(
             buttonClass,
             terminal &&
-              '-ml-1.5 h-6 self-start rounded-md px-1.5 text-[12px] hover:bg-muted focus-visible:focus-line-inset',
+              '-ml-1.5 h-6 self-start rounded-md px-1.5 text-meta/[inherit] hover:bg-muted focus-visible:focus-line-inset',
           )}
           onClick={onExpand}
         >

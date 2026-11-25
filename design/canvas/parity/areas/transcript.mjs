@@ -35,31 +35,38 @@ const state = (id, proto = [], app = [], pairs = work, transcript = 'tools') => 
   app: P.all(closeWorkspace, ...app),
   pairs,
 });
-const tool = (id, label, protoHeader = protoWork, occurrence = 0, transcript = 'tools') => {
+const tool = (
+  id,
+  label,
+  protoHeader = protoWork,
+  occurrence = 0,
+  transcript = 'tools',
+  appRoot = `tid('chat-row-parity-${id}')`,
+) => {
   const protoToggle = `[...document.querySelectorAll('#thread .tct')].filter((button) => button.getAttribute('aria-label').startsWith(${JSON.stringify(label)}))[${occurrence}]`;
-  const appRoot = `tid('chat-row-parity-${id}')`;
-  const appToggle = `tid('chat-row-parity-${id}-toggle')`;
+  const appToggle = `(${appRoot})?.querySelector('[data-testid$=-toggle]')`;
   const isolated = state(
     id,
     [open(protoHeader), open(protoToggle), isolate(protoToggle, '.tc'), show(protoToggle)],
     [open(appWork), open(appToggle), show(appRoot)],
     [
-      { id: 'tool row', p: `${protoToggle}?.parentElement`, a: `${appRoot}?.firstElementChild` },
+      { id: 'tool row', p: `${protoToggle}?.parentElement`, a: `(${appRoot})?.firstElementChild` },
       {
         id: 'tool body',
         p: `${protoToggle}?.closest('.tc')?.querySelector('.tcb')`,
-        a: `tid('chat-row-parity-${id}-body')`,
+        a: `(${appRoot})?.querySelector('[data-testid$=-body]')`,
       },
     ],
     transcript,
   );
   return {
     ...isolated,
-    scenario: { ...isolated.scenario, transcriptCall: `parity-${id}` },
+    scenario: { ...isolated.scenario, transcriptCall: id === 'generated-image' ? undefined : `parity-${id}` },
     pairs: isolated.pairs.map((pair) => ({ ...pair, local: true })),
   };
 };
 
+const generatedImageRoot = "q('[data-testid^=chat-image-][data-testid$=-toggle]')?.parentElement?.parentElement";
 const secondaryTools = "qa('#thread .wkt')[1]";
 const marker = (id, label, name) => {
   const p = `txt('.mkp', ${JSON.stringify(label)})`;
@@ -115,6 +122,8 @@ export default {
       'exploration',
     ),
     tool('image', 'Read docs/screenshot-capsule.png', secondaryTools, 0, 'extraTools'),
+    tool('browser-image', 'Called browser_take_screenshot', secondaryTools, 0, 'extraTools'),
+    tool('generated-image', 'Generated image', secondaryTools, 0, 'extraTools', generatedImageRoot),
     state(
       'workflow row',
       [open("qa('#thread .wkt')[3]"), show("txt('#thread .tcr', 'Started workflow')")],

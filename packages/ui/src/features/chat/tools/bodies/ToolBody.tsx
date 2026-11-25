@@ -86,7 +86,7 @@ function ShellBody({ part, status }: ToolBodyProps) {
   return (
     <>
       {description && (
-        <p data-testid="chat-bash-description" className="mb-1.5 text-[12px] leading-[22px] text-muted-foreground">
+        <p data-testid="chat-bash-description" className="mb-1.5 text-meta/5.5 text-muted-foreground">
           {description}
         </p>
       )}
