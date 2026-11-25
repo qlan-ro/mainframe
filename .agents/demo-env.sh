@@ -2,7 +2,7 @@
 # Demo environment for mainframe — feature-recorder skill contract.
 #   demo-env.sh up [<target>]  ports -> daemon (mock adapter) -> renderer -> seed -> block until ready
 #                              -> print KEY=VALUE facts -> exit 0
-#   demo-env.sh down           port-scoped teardown of what `up` started
+#   demo-env.sh down           port-scoped teardown of what `up` started in this checkout
 #
 # Sibling of test-env.sh, deliberately separate: a demo films the renderer against a
 # DETERMINISTIC agent (the e2e mock adapter replaying recorded NDJSON) on a seeded,
@@ -13,6 +13,7 @@ set -uo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$PROJECT_ROOT"
+. .agents/own-ports.sh
 
 DAEMON_PORT="${MF_DEMO_DAEMON_PORT:-31417}"
 VITE_PORT="${MF_DEMO_VITE_PORT:-5183}"
@@ -29,7 +30,7 @@ UI_LOG="/tmp/mf-demo-ui-${VITE_PORT}.log"
 
 kill_port() {
   for p in "${PROTECTED[@]}"; do [ "$1" = "$p" ] && { echo "refusing protected port $1" >&2; return 1; }; done
-  lsof -ti ":$1" | xargs kill 2>/dev/null || true
+  stop_port "$1" "$PROJECT_ROOT"
 }
 
 seed() {
@@ -115,7 +116,7 @@ TS
 }
 
 up() {
-  for p in "${PORTS[@]}"; do kill_port "$p"; done
+  for p in "${PORTS[@]}"; do kill_port "$p" || exit 1; done
   rm -rf "$DATA_DIR"; mkdir -p "$DATA_DIR"
 
   # From inside core-rs so rustup picks up its rust-toolchain.toml.
@@ -170,7 +171,7 @@ up() {
 }
 
 down() {
-  for p in "${PORTS[@]}"; do kill_port "$p"; done
+  for p in "${PORTS[@]}"; do kill_port "$p" || exit 1; done
   rm -rf "$DATA_DIR" "$WORKSPACE"
 }
 

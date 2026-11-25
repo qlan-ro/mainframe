@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Port-scoped teardown of ONE test run (parallel-safe; never touches siblings).
+# Port-scoped teardown of ONE test run (parallel-safe). A listener this checkout did not
+# start is named and left running (own-ports.sh).
 # Usage: stop-test.sh [port ...]   — defaults to this checkout's .env ports + CDP 9222.
-# Tauri note: killing $DAEMON_PORT also takes the parent app (shared socket) — at
+# Tauri note: killing $DAEMON_PORT also takes the app connected to it — at
 # teardown that is exactly what we want; never use this mid-run for a "daemon-only" restart.
 #
 # POSIX-clean: no bash arrays / BASH_SOURCE, so it runs identically under bash,
@@ -9,7 +10,7 @@
 set -uo pipefail
 
 PROJECT_ROOT="${MF_TARGET:-$(cd "$(dirname "$0")/.." && pwd -P)}"
-PROTECTED_PORT=31415
+. "$(cd "$(dirname "$0")" && pwd -P)/own-ports.sh"
 
 if [ "$#" -gt 0 ]; then
   PORTS="$*"
@@ -23,30 +24,15 @@ else
 fi
 
 for port in $PORTS; do
-  if [ "$port" = "$PROTECTED_PORT" ]; then
-    echo "REFUSED: $PROTECTED_PORT is protected" >&2
-    exit 2
-  fi
+  check_port "$port" || exit 2
 done
 
+failed=""
 for port in $PORTS; do
-  lsof -ti ":$port" 2>/dev/null | xargs kill -9 2>/dev/null
+  stop_port "$port" "$PROJECT_ROOT" || failed="$failed $port"
 done
-sleep 2
-
-leftover=0
-for port in $PORTS; do
-  if lsof -ti ":$port" >/dev/null 2>&1; then
-    lsof -ti ":$port" | xargs kill -9 2>/dev/null
-    leftover=1
-  fi
-done
-[ "$leftover" = 1 ] && sleep 1
-
-for port in $PORTS; do
-  if lsof -ti ":$port" >/dev/null 2>&1; then
-    echo "STOP_FAILED: port $port still held" >&2
-    exit 1
-  fi
-done
+if [ -n "$failed" ]; then
+  echo "STOP_FAILED: still held:$failed" >&2
+  exit 1
+fi
 echo "STOP_OK: ports $PORTS clear"

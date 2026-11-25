@@ -103,11 +103,9 @@ import { mkdirSync, writeFileSync } from 'fs';
 import path from 'path';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
 import { workspace } from '../helpers/tauri/page-objects.js';
-
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 /** Write a `.mainframe/launch.json` with the three configs this spec exercises. */
 function seedLaunchConfigs(projectPath: string): void {
@@ -183,8 +181,8 @@ async function closeSessionPanel(page: Page): Promise<void> {
 }
 
 /** Poll the daemon's launch-status REST endpoint for a config's status. */
-async function launchStatus(page: Page, projectId: string, name: string): Promise<string | undefined> {
-  const res = await page.request.get(`${DAEMON_BASE}/api/projects/${projectId}/launch/status`);
+async function launchStatus(projectId: string, name: string): Promise<string | undefined> {
+  const res = await daemonFetch(`/api/projects/${projectId}/launch/status`);
   const body = (await res.json()) as { data?: { statuses?: Record<string, string> } };
   return body.data?.statuses?.[name];
 }
@@ -439,12 +437,12 @@ test.describe('§21 workspace-surface — tab strip, add-menu, launch lifecycle,
 
     await panel.getByTestId('session-panel-launch-start-sleep-long').click();
     await expect(panel.getByTestId('session-panel-launch-stop-sleep-long')).toBeVisible({ timeout: 15_000 });
-    await expect.poll(() => launchStatus(page, project.projectId, 'sleep-long'), { timeout: 15_000 }).toBe('running');
+    await expect.poll(() => launchStatus(project.projectId, 'sleep-long'), { timeout: 15_000 }).toBe('running');
     await expect(row).toHaveAttribute('data-live', 'true', { timeout: 10_000 });
 
     await panel.getByTestId('session-panel-launch-stop-sleep-long').click();
     await expect(panel.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible({ timeout: 15_000 });
-    await expect.poll(() => launchStatus(page, project.projectId, 'sleep-long'), { timeout: 15_000 }).toBe('stopped');
+    await expect.poll(() => launchStatus(project.projectId, 'sleep-long'), { timeout: 15_000 }).toBe('stopped');
     await expect(row).toHaveAttribute('data-live', 'false', { timeout: 10_000 });
 
     await closeSessionPanel(page);
@@ -488,9 +486,7 @@ test.describe('§21 workspace-surface — failed launch config', () => {
     // No dedicated "Failed" UI text exists on the console tab (verified: neither
     // the tab pill's glyph nor ConsolePane render a status word) — the daemon's
     // own launch-status endpoint is the observable source of truth here.
-    await expect
-      .poll(() => launchStatus(page, project.projectId, 'exit-immediately'), { timeout: 15_000 })
-      .toBe('failed');
+    await expect.poll(() => launchStatus(project.projectId, 'exit-immediately'), { timeout: 15_000 }).toBe('failed');
 
     // The tab survives the process exiting — closing it is a distinct user action.
     await expect(tab).toBeVisible();

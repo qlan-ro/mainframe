@@ -157,7 +157,7 @@ suite, not a recording.
 ### 5.4 Switching daemons routes the next prompt to the new daemon
 
 **Why unreachable.** `fixtures/daemon.ts` runs exactly one daemon on one port
-(`assertPortFree` exists to guarantee that), and the renderer bakes that port at build time
+(`ensurePortFree` exists to guarantee that), and the renderer bakes that port at build time
 (`VITE_DAEMON_PORT`, checked by `global-setup.ts::assertBundleTargetsTestPort`). With no second
 daemon there is no switch to observe.
 

@@ -60,9 +60,7 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { closeMenus, waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
-
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
+import { daemonFetch } from '../fixtures/daemon.js';
 
 // ── external-session seed helpers (ported from 35-external-sessions.spec.ts) ──
 
@@ -269,14 +267,14 @@ test.describe('§45 Sessions panel — archive dialog worktree branch', () => {
   /** REST-enable a worktree on `chatId` and return its resolved worktreePath (read back
    *  via GET /api/chats/:id so the on-disk path is known independent of the dialog). */
   async function enableWorktree(chatId: string, branchName: string): Promise<string> {
-    const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/enable-worktree`, {
+    const res = await daemonFetch(`/api/chats/${chatId}/enable-worktree`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ baseBranch: 'main', branchName }),
     });
     expect(res.ok).toBe(true);
 
-    const chatRes = await fetch(`${DAEMON_BASE}/api/chats/${chatId}`);
+    const chatRes = await daemonFetch(`/api/chats/${chatId}`);
     const body = (await chatRes.json()) as { data?: { worktreePath?: string } };
     const worktreePath = body.data?.worktreePath;
     if (!worktreePath) throw new Error(`enableWorktree: chat ${chatId} has no worktreePath after enabling`);
@@ -373,11 +371,11 @@ test.describe('§35 External session import', () => {
     // same endpoint until it reports both seeded sessions — the scan enriches
     // each candidate file (stat + JSONL parse) and can take a moment past the
     // first response, so a fixed sleep here is a flake vector.
-    await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
+    await daemonFetch(`/api/projects/${project.projectId}/external-sessions`);
     await expect
       .poll(
         async () => {
-          const res = await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
+          const res = await daemonFetch(`/api/projects/${project.projectId}/external-sessions`);
           const body = await res.json();
           return body.data?.total ?? 0;
         },
@@ -517,7 +515,7 @@ test.describe('§35 External session import — pagination', () => {
 
     // Trigger the daemon's external-session scan for the project (same pre-warm
     // pattern as the §35 import block above).
-    await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
+    await daemonFetch(`/api/projects/${project.projectId}/external-sessions`);
   });
 
   test.afterAll(async () => {
@@ -597,7 +595,7 @@ test.describe('§35 External session import — retry on error', () => {
       firstPrompt: 'Session recovered after retry',
       gitBranch: 'main',
     });
-    await app.page.request.get(`${DAEMON_BASE}/api/projects/${project.projectId}/external-sessions`);
+    await daemonFetch(`/api/projects/${project.projectId}/external-sessions`);
   });
 
   test.afterAll(async () => {

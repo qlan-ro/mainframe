@@ -73,10 +73,8 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 import { TOAST } from '../helpers/tauri/testids.js';
-
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 /** A project's avatar in the (always-mounted) scope strip. */
 function scopeAvatar(page: Page, projectId: string): Locator {
@@ -171,7 +169,7 @@ interface SuggestionDto {
 }
 
 async function fetchSuggestions(projectId: string): Promise<SuggestionDto[]> {
-  const res = await fetch(`${DAEMON_BASE}/api/projects/${projectId}/suggestions`);
+  const res = await daemonFetch(`/api/projects/${projectId}/suggestions`);
   expect(res.ok).toBe(true);
   const body = (await res.json()) as { data?: SuggestionDto[] };
   return body.data ?? [];
@@ -180,7 +178,7 @@ async function fetchSuggestions(projectId: string): Promise<SuggestionDto[]> {
 /** `GET /api/chats?project=<id>` — the same route `lib/api/chats.ts` `listChats`
  *  uses, rather than the uncovered `/api/projects/:id/chats` parity alias. */
 async function fetchProjectChatIds(projectId: string): Promise<string[]> {
-  const res = await fetch(`${DAEMON_BASE}/api/chats?project=${encodeURIComponent(projectId)}`);
+  const res = await daemonFetch(`/api/chats?project=${encodeURIComponent(projectId)}`);
   expect(res.ok).toBe(true);
   const body = (await res.json()) as { data?: { id: string }[] };
   return (body.data ?? []).map((chat) => chat.id);

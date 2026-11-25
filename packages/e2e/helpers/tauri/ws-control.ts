@@ -1,5 +1,5 @@
 import type { Page, WebSocketRoute } from '@playwright/test';
-import { DAEMON_PORT } from '../../fixtures/daemon.js';
+import { DAEMON_PORT, assertOwnDaemon } from '../../fixtures/daemon.js';
 
 export interface WsControl {
   /** Sever every CURRENT daemon WebSocket (side-band `/` AND facade `/acp/*`). Each client
@@ -45,6 +45,7 @@ export async function installWsControl(page: Page): Promise<WsControl> {
     // native close-forwarding. Manual `ws.onMessage(m => server.send(m))` relays replace
     // that with an unbuffered path that can drop frames sent while the server connection
     // is still being established (flaky lost subscribe/prompt frames).
+    assertOwnDaemon();
     ws.connectToServer();
   });
   return {

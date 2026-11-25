@@ -35,7 +35,7 @@ import { test, expect } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitForIdle } from '../helpers/tauri/wait.js';
-import { DAEMON_BASE } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 
 test.describe('§mcp-delegate (mock CLI calls the real /mcp endpoint)', () => {
   let app: TauriAppFixture;
@@ -175,7 +175,7 @@ test.describe('§mcp-delegate Stop cascade', () => {
     // (`routes/chat_commands.rs::interrupt` → `ChatManager::interrupt_chat`),
     // not `FakePort`: this exercises the real `OrchestrationHooks::
     // on_chat_stopping` → `cascade_stop` path end to end.
-    const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/interrupt`, { method: 'POST' });
+    const res = await daemonFetch(`/api/chats/${chatId}/interrupt`, { method: 'POST' });
     expect(res.ok).toBe(true);
 
     await expect(status).toHaveAttribute('data-status', 'cancelled', { timeout: 15_000 });
