@@ -3,7 +3,7 @@
  * would serve it. `window.__PARITY__` picks the state: the runner sets it before
  * the page loads, with the same vocabulary as the prototype's presets.
  */
-import { addTranscriptFixture, delegatedTasks, type TranscriptFixture } from './transcript-fixture';
+import { addTranscriptFixture, delegatedTasks, recordedAnswer, type TranscriptFixture } from './transcript-fixture';
 
 export const FAKE_PORT = 1;
 /** 24 Nov 2026 at 23:31 UTC, when the prototype's conversation ends. The runner pins the clock to it. */
@@ -559,12 +559,15 @@ const user = (text: string, minutes: number): Json => {
     _meta: stamp(minutes),
   };
 };
-const agent = (text: string, minutes: number): Json => ({
-  sessionUpdate: 'agent_message',
-  messageId: `a${seq}-${minutes}`,
-  content: [{ type: 'text', text }],
-  _meta: stamp(minutes),
-});
+const agent = (text: string, minutes: number, durationMs?: number): Json => {
+  const messageId = `a${seq}-${minutes}`;
+  return {
+    sessionUpdate: 'agent_message',
+    messageId,
+    content: [{ type: 'text', text }],
+    _meta: stamp(minutes, durationMs === undefined ? {} : recordedAnswer(messageId, text.length, durationMs)),
+  };
+};
 const call = (
   id: string,
   title: string,
@@ -614,7 +617,7 @@ function transcript(): Json[] {
           },
         ]
       : [];
-  const turn = (q: string, a: string, minutes: number, calls: Json[] = []) => {
+  const turn = (q: string, a: string, minutes: number, calls: Json[] = [], durationMs?: number) => {
     out.push(user(q, minutes));
     seq++;
     out.push(
@@ -623,7 +626,7 @@ function transcript(): Json[] {
         _meta: stamp(minutes - 0.5, { ...c._meta?.[MF], containerId: `c${seq}` }),
       })),
       ...(minutes === 13 ? asking : []),
-      agent(a, minutes - 1),
+      agent(a, minutes - 1, durationMs),
     );
   };
   if (scenario.transcript) {

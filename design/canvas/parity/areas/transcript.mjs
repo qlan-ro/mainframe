@@ -21,7 +21,7 @@ const state = (id, proto = [], app = [], pairs = work, transcript = 'tools') => 
   scenario: {
     transcript,
     act: 'none',
-    ...(transcript === 'agent' || transcript === 'states' ? { running: true } : {}),
+    ...((transcript === 'agent' || transcript === 'live command') ? { running: true } : {}),
   },
   proto: P.all(P.preset('every-tool'), ...proto),
   app: P.all(closeWorkspace, ...app),
@@ -65,6 +65,24 @@ export default {
         { id: 'user bubble', p: "q('#thread .bubble')", a: "tid('chat-user-bubble')" },
         { id: 'reply', p: "q('#thread .ans')", a: "tid('chat-answer')" },
       ],
+    ),
+    state(
+      'grouped exploration',
+      [open(protoWork), open("q('.tct[aria-label^=Explored]')"), show("q('.tct[aria-label^=Explored]')")],
+      [open(appWork), open("tid('chat-explore-parity-explore-0-toggle')"), show("tid('chat-explore-parity-explore-0')")],
+      [
+        {
+          id: 'exploration row',
+          p: "q('.tct[aria-label^=Explored]')?.parentElement",
+          a: "tid('chat-explore-parity-explore-0')?.firstElementChild",
+        },
+        {
+          id: 'exploration steps',
+          p: "q('.tct[aria-label^=Explored]')?.closest('.tc')?.querySelector('.tck')",
+          a: "tid('chat-explore-parity-explore-0-body')",
+        },
+      ],
+      'exploration',
     ),
     tool('read', 'Read quota/use-quota.ts'),
     tool('write', 'Wrote src/codex_tests.rs'),
@@ -147,13 +165,20 @@ export default {
       [open(appWork)],
       [
         { id: 'work header', p: `${statsToggle}?.parentElement`, a: work[0].a },
-        ...['running', 'passed', 'failed', 'stopped'].map((status, index) => ({
+        ...['passed', 'failed', 'stopped'].map((status, index) => ({
           id: `${status} command`,
-          p: statsRow(index),
+          p: statsRow(index + 1),
           a: `tid('chat-row-parity-${status}')?.firstElementChild`,
         })),
       ],
       'states',
+    ),
+    state(
+      'running command',
+      [open(statsToggle), show(statsToggle)],
+      [open(appWork)],
+      [{ id: 'running command', p: statsRow(0), a: "tid('chat-row-parity-running')?.firstElementChild" }],
+      'live command',
     ),
   ],
 };

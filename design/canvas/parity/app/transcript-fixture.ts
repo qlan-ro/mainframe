@@ -1,6 +1,8 @@
+import { exploration, tools } from './transcript-tools-fixture';
+
 type Item = Record<string, unknown>;
-type Turn = (question: string, answer: string, minutes: number, calls?: Item[]) => void;
-type Call = (id: string, title: string, input: Item, output: unknown, minutes: number, extra?: Item) => Item;
+export type Turn = (question: string, answer: string, minutes: number, calls?: Item[], durationMs?: number) => void;
+export type Call = (id: string, title: string, input: Item, output: unknown, minutes: number, extra?: Item) => Item;
 export type TranscriptFixture = keyof typeof fixtures;
 
 function markers(turn: Turn, call: Call) {
@@ -101,7 +103,7 @@ function delegated(turn: Turn, call: Call) {
 function links(turn: Turn) {
   turn(
     'Now show every markdown element a reply can use.',
-    '# Weekly reset: what changed\n\nThe daemon now treats a window as reset once `resets_at` has passed. This paragraph shows **bold**, *italic*, ~~struck-through text~~, `inline code`, a [link to the Codex docs](https://developers.openai.com/codex/rate-limits) and a file link [crates/mainframe-quota/src/codex.rs](crates/mainframe-quota/src/codex.rs).',
+    '# Weekly reset: what changed\n\nThe daemon now treats a window as reset once `resets_at` has passed. This paragraph shows **bold**, *italic*, ~~struck-through text~~, `inline code`, a [link to the Codex docs](https://developers.openai.com/codex/rate-limits) and a file link [crates/mainframe-quota/src/codex.rs](crates/mainframe-quota/src/codex.rs).[^1]\n\n[^1]: The 5-hour window behaves the same way; it was already covered by the existing test.',
     13,
   );
 }
@@ -127,60 +129,7 @@ function states(turn: Turn, call: Call) {
       run('parity-failed', 'failed', 'Exit code 1\nLint failed', 3100),
       run('parity-stopped', 'cancelled', undefined, 48000),
     ],
-  );
-}
-function tools(turn: Turn, call: Call) {
-  turn(
-    'Walk me through every kind of tool card the transcript can show. Start with files, searches, edits, commands and the web.',
-    '**Files, searches, edits, commands and the web.** Every row has the same shape: glyph, verb, target, receipt. Click any row with a chevron to open it.',
-    13,
-    [
-      call(
-        'parity-read',
-        'Read',
-        { file_path: 'quota/use-quota.ts' },
-        [
-          'export function useQuota(adapterId: string) {',
-          '  return useQuery({',
-          "    queryKey: ['quota', adapterId],",
-          '    queryFn: () => api.quota.snapshot(adapterId),',
-          '    refetchInterval: pollInterval,',
-          '    staleTime: minute,',
-          '  });',
-          '}',
-        ].join('\n'),
-        12.9,
-      ),
-      call(
-        'parity-write',
-        'Write',
-        { file_path: 'src/codex_tests.rs', content: 'use super::*;' },
-        'File created',
-        12.8,
-      ),
-      call(
-        'parity-edit',
-        'Edit',
-        { file_path: 'src/codex.rs', old_string: 'return None;', new_string: 'return Some(window);' },
-        'File updated',
-        12.7,
-      ),
-      call(
-        'parity-grep',
-        'Grep',
-        { pattern: 'resets_at', path: 'packages/core-rs' },
-        'src/codex.rs:21: pub resets_at: i64',
-        12.6,
-      ),
-      call(
-        'parity-glob',
-        'Glob',
-        { pattern: '**/quota*.rs', path: 'packages/core-rs' },
-        ['quota.rs', 'quota_window.rs', 'routes/quota.rs', 'quota_tests.rs'].join('\n'),
-        12.5,
-      ),
-      ...shellAndExternalCalls(call),
-    ],
+    3000,
   );
 }
 function eventCalls(call: Call): Item[] {
@@ -244,44 +193,32 @@ function eventCalls(call: Call): Item[] {
   ];
 }
 
-function shellAndExternalCalls(call: Call): Item[] {
-  return [
-    call('parity-bash', 'Bash', { command: 'cargo test -p mainframe-quota codex' }, 'test result: ok. 4 passed', 12.4),
-    call(
-      'parity-fetch',
-      'WebFetch',
-      { url: 'https://developers.openai.com/codex/rate-limits', prompt: 'Find the rate limits' },
-      'Limits reset at the end of each window.',
-      12.3,
-    ),
-    call('parity-search', 'WebSearch', { query: 'codex rate limit reset' }, 'Rate limits · OpenAI Codex docs', 12.2),
-    call(
-      'parity-list',
-      'LS',
-      { path: 'packages/core-rs/crates' },
-      'mainframe-adapter-claude/ mainframe-adapter-codex/ mainframe-chat/',
-      12.1,
-    ),
-    call(
-      'parity-mcp',
-      'mcp__github__get_issue',
-      { owner: 'qlan-ro', repo: 'mainframe', issue_number: 847 },
-      '{"title":"Reset stale quota windows"}',
-      12,
-    ),
-    call(
-      'parity-lsp',
-      'LSP',
-      { operation: 'findReferences', filePath: 'src/codex.rs', line: 32 },
-      '3 references to snapshot',
-      11.9,
-    ),
-    call('parity-dynamic', 'docs__search', { query: 'rate limits' }, 'Rate limits · OpenAI Codex docs', 11.8),
-  ];
-}
-
-const fixtures = { markers, agent, delegated, links, states, tools };
+const fixtures = { markers, agent, delegated, links, states, tools, exploration, 'live command': states };
 
 export function addTranscriptFixture(fixture: TranscriptFixture, turn: Turn, call: Call) {
   fixtures[fixture](turn, call);
+}
+
+export function recordedAnswer(messageId: string, endUtf16: number, durationMs: number) {
+  return {
+    presentationSources: {
+      version: 1,
+      sources: [
+        {
+          sourceMessageId: messageId,
+          sourceBlockIndex: 0,
+          target: { type: 'text', contentBlockIndex: 0, startUtf16: 0, endUtf16 },
+          presentation: {
+            version: 1,
+            provider: 'claude',
+            turnId: messageId,
+            phase: 'final_answer',
+            state: 'completed',
+            finalEligible: true,
+            timing: { durationMs },
+          },
+        },
+      ],
+    },
+  };
 }

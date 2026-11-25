@@ -8,7 +8,7 @@ export function Surface({ className, children, testId }: { className?: string; c
     <div
       data-testid={testId}
       className={cn(
-        'mf-tr-mono mf-editor-selectable min-w-0 overflow-x-auto rounded-lg bg-mf-tr-code text-foreground',
+        'mf-tr-mono mf-editor-selectable min-w-0 overflow-x-auto rounded-[8px] bg-mf-tr-code text-foreground',
         className,
       )}
     >
@@ -35,7 +35,7 @@ export function ScrollRegion({
       aria-label={label}
       tabIndex={0}
       data-testid={testId}
-      className={cn('max-h-96 overflow-auto rounded-lg focus-visible:focus-line-inset', className)}
+      className={cn('max-h-96 overflow-auto rounded-[8px] focus-visible:focus-line-inset', className)}
     >
       {children}
     </div>

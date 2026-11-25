@@ -90,6 +90,25 @@
   font-size: 14px;
   line-height: 22px;
 }
+.mf-tr-answer .aui-md {
+  display: flow-root;
+}
+.mf-tr-answer .aui-md > .aui-md-p:last-child {
+  margin-bottom: 8px;
+}
+.mf-tr-answer .aui-md-strong {
+  font-weight: 700;
+}
+.mf-tr-answer sup:has(> [data-footnote-ref]) {
+  font-size: smaller;
+  line-height: inherit;
+  position: static;
+  vertical-align: super;
+}
+.mf-tr-answer sup > [data-footnote-ref] {
+  font-size: 11px;
+  margin-inline-start: 1px;
+}
 .mf-tr-meta {
   font-size: 12px;
   line-height: 16px;
