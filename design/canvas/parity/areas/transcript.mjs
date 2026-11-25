@@ -102,6 +102,25 @@ export default {
       'agent',
     ),
     state(
+      'delegated',
+      [open("qa('#thread .wkt')[2]")],
+      [open(appWork)],
+      [
+        'Check the mobile capsule',
+        'Write the weekly-window crate test',
+        'Update the changelog for v2.15.1',
+        'Review the quota reset diff',
+        'Regenerate the API types',
+        'Draft the release notes',
+        'Profile the capsule render',
+      ].map((title, index) => ({
+        id: `delegated row ${index + 1}`,
+        p: `qa('#thread .tcr').find((e) => e.textContent.includes(${JSON.stringify(title)}) && e.textContent.includes('Delegated'))`,
+        a: `qa('[data-testid=chat-tool-delegate-task-card]')[${index}]?.firstElementChild`,
+      })),
+      'delegated',
+    ),
+    state(
       'plan',
       [show("txt('.mkp', 'Updated plan')")],
       [show("tid('chat-marker-exitplanmode')")],

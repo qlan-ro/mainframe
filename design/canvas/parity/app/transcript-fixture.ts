@@ -41,6 +41,7 @@ function markers(turn: Turn, call: Call) {
           },
         ],
       },
+      call('parity-approved-plan', 'ExitPlanMode', {}, '## Approved Plan\n\n### Weekly reset', 12.75),
       ...eventCalls(call).slice(1),
     ],
   );
@@ -66,6 +67,37 @@ function agent(turn: Turn, call: Call) {
     ],
   );
 }
+export const delegatedTasks = [
+  { title: 'Check the mobile capsule', adapterId: 'codex', status: 'waiting' },
+  { title: 'Write the weekly-window crate test', adapterId: 'claude', status: 'running' },
+  { title: 'Update the changelog for v2.15.1', adapterId: 'codex', status: 'queued' },
+  { title: 'Review the quota reset diff', adapterId: 'claude', status: 'completed' },
+  { title: 'Regenerate the API types', adapterId: 'codex', status: 'failed' },
+  { title: 'Draft the release notes', adapterId: 'claude', status: 'cancelled' },
+  { title: 'Profile the capsule render', adapterId: 'codex', status: 'interrupted' },
+].map((task) => ({
+  ...task,
+  taskId: `parity-task-${task.status}`,
+  childChatId: `parity-child-${task.status}`,
+}));
+
+function delegated(turn: Turn, call: Call) {
+  turn(
+    'Now delegate work to other agents and show every state a delegated task can be in.',
+    "**Delegated tasks.** Each runs in its own chat, which you can open beside this one. The row carries the task's live status: waiting on you, running, queued, completed, failed, stopped or interrupted. One waiting on you opens itself and its request appears above the composer.",
+    13,
+    delegatedTasks.map(({ taskId, childChatId, title, adapterId, status }, index) =>
+      call(
+        taskId,
+        'mcp__mainframe__delegate_task',
+        { task: title, adapterId },
+        JSON.stringify({ taskId, childChatId, title, status }),
+        12.9 - index / 100,
+      ),
+    ),
+  );
+}
+
 function links(turn: Turn) {
   turn(
     'Now show every markdown element a reply can use.',
@@ -74,20 +106,26 @@ function links(turn: Turn) {
   );
 }
 function states(turn: Turn, call: Call) {
-  const run = (id: string, status: string, result?: string, toolCallTiming?: Item) => ({
-    ...call(id, 'Bash', { command: 'pnpm exec vitest run use-quota' }, result, 12.9, { toolCallTiming }),
-    status,
-  });
+  const run = (id: string, status: string, result?: string, durationMs?: number) => {
+    const completedAt = Date.now() - 12 * 60_000;
+    const toolCallTiming =
+      durationMs === undefined
+        ? { startedAt: Date.now() - 12_000 }
+        : { startedAt: completedAt - durationMs, completedAt };
+    return {
+      ...call(id, 'Bash', { command: 'pnpm exec vitest run use-quota' }, result, 12.9, { toolCallTiming }),
+      status,
+    };
+  };
   turn(
     'Last, show every status a row can have.',
     'Running, passed, failed, stopped, declined, waiting for approval, and no result recorded.',
     13,
     [
       run('parity-running', 'in_progress'),
-      run('parity-passed', 'completed', '4 passed', { durationMs: 3100 }),
-      run('parity-failed', 'failed', 'Exit code 1\nLint failed', { durationMs: 3100 }),
-      run('parity-stopped', 'cancelled', undefined, { durationMs: 48000 }),
-      run('parity-no-result', 'completed'),
+      run('parity-passed', 'completed', '4 passed', 3100),
+      run('parity-failed', 'failed', 'Exit code 1\nLint failed', 3100),
+      run('parity-stopped', 'cancelled', undefined, 48000),
     ],
   );
 }
@@ -182,7 +220,20 @@ function eventCalls(call: Call): Item[] {
       '{"worktreeBranch":"feat/quota-reset"}',
       12.1,
     ),
-    call('parity-exit-worktree', 'ExitWorktree', { action: 'keep' }, '{"action":"keep"}', 12),
+    call(
+      'parity-exit-worktree',
+      'ExitWorktree',
+      { action: 'keep' },
+      '{"action":"keep","worktreeBranch":"feat/quota-reset"}',
+      12,
+    ),
+    call(
+      'parity-remove-worktree',
+      'ExitWorktree',
+      { action: 'remove' },
+      '{"action":"remove","worktreeBranch":"feat/quota-reset"}',
+      11.95,
+    ),
     call(
       'parity-notify',
       'PushNotification',
@@ -229,7 +280,7 @@ function shellAndExternalCalls(call: Call): Item[] {
   ];
 }
 
-const fixtures = { markers, agent, links, states, tools };
+const fixtures = { markers, agent, delegated, links, states, tools };
 
 export function addTranscriptFixture(fixture: TranscriptFixture, turn: Turn, call: Call) {
   fixtures[fixture](turn, call);

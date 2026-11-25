@@ -3,7 +3,7 @@
  * would serve it. `window.__PARITY__` picks the state: the runner sets it before
  * the page loads, with the same vocabulary as the prototype's presets.
  */
-import { addTranscriptFixture, type TranscriptFixture } from './transcript-fixture';
+import { addTranscriptFixture, delegatedTasks, type TranscriptFixture } from './transcript-fixture';
 
 export const FAKE_PORT = 1;
 /** 24 Nov 2026 at 23:31 UTC, when the prototype's conversation ends. The runner pins the clock to it. */
@@ -127,6 +127,9 @@ const PLAN = [
 
 export const chats = (): Json[] => [
   main(),
+  ...(scenario.transcript === 'delegated'
+    ? delegatedTasks.map(({ childChatId, title, adapterId }) => chat(childChatId, title, 12, { adapterId }))
+    : []),
   chat('s2', 'Reuse an existing worktree branch in automation steps', 12, {
     ...worktree('fix/automation-reuse-branch'),
     isRunning: true,
