@@ -1,9 +1,9 @@
 import type { AppendMessage } from '@assistant-ui/react';
-import type { ControlResponse, PromptRemedy } from '@qlan-ro/mainframe-types';
+import type { Chat, ControlResponse, PromptRemedy } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import { getAcpFacadeClient } from '../../../lib/daemon/acp-clients';
 import type { AcpSessionClientPort } from './acp-session-plane';
-import { cancelQueuedMessage, editQueuedMessage } from '../../../lib/api/chats';
+import { cancelQueuedMessage, editQueuedMessage, getChat } from '../../../lib/api/chats';
 import {
   createChatThreadState,
   reduceChatThreadState,
@@ -26,6 +26,7 @@ import {
 import { matchQueued } from '../composer/queue/sent-order';
 import { useHeldQueue } from '../composer/queue/held-queue-store';
 import { ChatPlaneLoader } from './chat-plane-loader';
+import { getActiveDaemon } from '../../../lib/daemon/active-daemon';
 import { ChatActivation } from './chat-activation';
 import { ChatLiveSubscription } from './chat-live-subscription';
 
@@ -38,6 +39,8 @@ export class AcpChatController {
   private readonly plane: AcpSessionPlane;
   private readonly loader: ChatPlaneLoader;
   private disposed = false;
+  private readonly targetId = getActiveDaemon().id;
+  private latestConfigTime = -Infinity;
   // The id for all network ops: the daemon chat id for pre-existing threads; for a
   // new (__LOCALID_*) thread it starts local and setRemoteId() swaps in the real id
   // once createChat resolves. Neither plane opens while this is still local.
@@ -313,8 +316,26 @@ export class AcpChatController {
     this.dispatch(event);
   }
 
+  public async reconcileModelResponse(chatId: string, response: Chat | undefined): Promise<void> {
+    const matches = () => !this.disposed && this.daemonId === chatId && getActiveDaemon().id === this.targetId;
+    const usable = (chat: Chat | undefined): chat is Chat =>
+      chat?.id === chatId &&
+      typeof chat.adapterId === 'string' &&
+      (chat.model === undefined || typeof chat.model === 'string');
+    if (!matches()) return;
+    const chat = usable(response) ? response : await getChat(this.port, chatId);
+    if (!matches()) return;
+    if (!usable(chat)) throw new Error('Could not reload the chat configuration');
+    this.dispatch({ type: 'chat.config.updated', chat });
+  }
+
   /** Single dispatch choke point. `run.started` (any source) and `run.failed` both cancel the plane's deferred `run.stopped` (D7 finding 10) — a failure inside the settle delay must not be clobbered by the stale deferred idle. */
   private dispatch(event: ChatStateEvent): void {
+    if (event.type === 'chat.config.updated') {
+      const time = Date.parse(event.chat.updatedAt);
+      if (time < this.latestConfigTime) return;
+      if (Number.isFinite(time)) this.latestConfigTime = time;
+    }
     if (event.type === 'run.started' || event.type === 'run.failed') this.plane.cancelPendingStop();
     const nextState = reduceChatThreadState(this.state, event);
     if (nextState === this.state) return;

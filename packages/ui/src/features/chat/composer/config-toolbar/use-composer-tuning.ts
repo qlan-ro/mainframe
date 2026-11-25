@@ -88,7 +88,8 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
   const draft = useDraftConfig(isLocalDraft ? chatId : null);
   const draftMode = isLocalDraft && draft != null;
   const adapterInitializations = useRef(new Set<string>());
-  const switchProvider = useProviderSwitch(realChat, port);
+  const reconcileModelResponse = extras?.reconcileModelResponse;
+  const switchProvider = useProviderSwitch(realChat, port, reconcileModelResponse);
   const chat: Chat | null = realChat ?? (chatId != null && draft != null ? synthesizeDraftChat(chatId, draft) : null);
 
   // Live run-state from the assistant-ui thread — stays accurate mid-run
@@ -155,6 +156,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         return;
       }
       void setChatConfig(port, patchChatId, patch)
+        .then((chat) => (label === 'setModel' ? reconcileModelResponse?.(patchChatId, chat) : undefined))
         .catch((err: unknown) => {
           console.warn(`[composer/useComposerTuning] ${label} failed`, { err });
           if (patch.model !== undefined) {
@@ -163,7 +165,7 @@ export function useComposerTuning(adapters: AdapterInfo[]): ComposerTuningHook {
         })
         .finally(onSettled);
     },
-    [patchChatId, port],
+    [patchChatId, port, reconcileModelResponse],
   );
 
   const setModel = useCallback(

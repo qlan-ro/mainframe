@@ -121,11 +121,13 @@ function ModelMenuBody(props: ModelMenuProps) {
   const [browseId, setBrowseId] = useState<string | null>(null);
   const { activeId, active, currentModelId } = activeModel(props);
   const [pending, setPending] = useState(false);
-  const pendingPick = useRef<{ adapterId: Chat['adapterId']; model: Chat['model']; settle: () => void } | null>(null);
-  useEffect(() => {
-    const pick = pendingPick.current;
-    if (pick && (pick.adapterId !== chat.adapterId || pick.model !== chat.model)) pick.settle();
-  }, [chat.adapterId, chat.model]);
+  const pendingPick = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      pendingPick.current = null;
+    },
+    [],
+  );
   const shownId = locked ? (browseId ?? activeId) : activeId;
   const browsingOther = shownId !== activeId;
   const shown = browsingOther ? (adapters.find((a) => a.id === shownId) ?? active) : active;
@@ -136,13 +138,13 @@ function ModelMenuBody(props: ModelMenuProps) {
     if (pendingPick.current || (!browsingOther && id === currentModelId)) return true;
     const target = { adapterId: shownId, model: id };
     const settled = () => {
-      if (pendingPick.current?.settle !== settled) return;
+      if (pendingPick.current !== settled) return;
       pendingPick.current = null;
       setPending(false);
       if (browsingOther) setBrowseId(null);
     };
     if (!props.draftMode) {
-      pendingPick.current = { adapterId: chat.adapterId, model: chat.model, settle: settled };
+      pendingPick.current = settled;
       setPending(true);
     }
     if (browsingOther) {

@@ -81,10 +81,11 @@ export function isTruncatedResult(result: unknown): result is TruncatedResult {
 
 /**
  * Strips `<tool_use_error>` and bare `<error>` XML sentinel tags injected by
- * the Claude CLI around error text. Returns the trimmed inner content.
+ * the Claude CLI around error text. Trims the inner content by default.
  */
-export function stripErrorXml(text: string): string {
-  return text.replace(/<\/?(?:tool_use_error|error)>/g, '').trim();
+export function stripErrorXml(text: string, trim = true): string {
+  const inner = text.replace(/<\/?(?:tool_use_error|error)>/g, '');
+  return trim ? inner.trim() : inner;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +131,10 @@ export interface ResolvedResult {
  *
  * The default display strips error wrappers and trims the text.
  */
-export function resolveResultText(result: unknown, cleanText = stripErrorXml): ResolvedResult {
+export function resolveResultText(
+  result: unknown,
+  cleanText: (text: string) => string = stripErrorXml,
+): ResolvedResult {
   if (isStructuredResult(result)) {
     const cut = isTruncatedResult(result) ? result.fullBytes : 0;
     return { text: cleanText(result.content), truncated: cut > 0, fullBytes: cut };

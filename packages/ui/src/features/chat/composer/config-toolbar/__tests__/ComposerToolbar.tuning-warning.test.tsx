@@ -45,6 +45,7 @@ const { fakeAuiState, fakeExtras } = vi.hoisted(() => ({
       contextUsage: null as { percentage: number; totalTokens: number; maxTokens: number } | null,
     },
     port: 31415 as number | null,
+    reconcileModelResponse: vi.fn<(chatId: string, chat: Chat | undefined) => Promise<void>>(),
   },
 }));
 
@@ -135,11 +136,25 @@ function makeChat(overrides: Partial<Chat> = {}): Chat {
 const A_MESSAGE = { id: 'm1' };
 
 function renderToolbar() {
-  return render(
+  const view = render(
     <TooltipProvider>
       <ComposerToolbar />
     </TooltipProvider>,
   );
+  const activeChat = fakeExtras.state.chatId;
+  fakeExtras.reconcileModelResponse.mockImplementation(async (chatId, chat) => {
+    if (chat && chatId === activeChat && fakeExtras.state.chatId === activeChat) confirmServerModel(view, chat);
+  });
+  return view;
+}
+
+function deferredModel() {
+  let resolve!: (chat: Chat) => void;
+  const promise = new Promise<Chat>((done) => {
+    resolve = done;
+  });
+  vi.mocked(setChatConfig).mockReturnValueOnce(promise);
+  return resolve;
 }
 
 function confirmServerModel(view: ReturnType<typeof renderToolbar>, chat: Chat) {
@@ -476,8 +491,8 @@ describe('ComposerToolbar — model menu stays open', () => {
   );
 
   it('ignores a second pick and tuning while pending, then sends tuning for the confirmed model', async () => {
-    vi.mocked(setChatConfig).mockImplementationOnce(() => new Promise(() => undefined));
-    const view = renderToolbar();
+    const finish = deferredModel();
+    renderToolbar();
     await openModelPicker();
     const opus = screen.getByTestId('composer-model-select-option-opus');
     const sonnet = screen.getByTestId('composer-model-select-option-sonnet');
@@ -500,30 +515,32 @@ describe('ComposerToolbar — model menu stays open', () => {
     fireEvent.click(screen.getByTestId('composer-model-sonnet-feature-ultracode'));
     expect(setChatTuning).not.toHaveBeenCalled();
 
-    confirmServerModel(view, makeChat({ model: 'opus' }));
+    await act(async () => finish(makeChat({ model: 'opus' })));
     await userEvent.click(screen.getByTestId('composer-model-opus-effort-max'));
     expect(setChatTuning).toHaveBeenCalledExactlyOnceWith(31415, 'chat-a', { effort: 'max' });
   });
 
-  it('unlocks when default is reported as a concrete model before the request settles', async () => {
-    vi.mocked(setChatConfig).mockImplementationOnce(() => new Promise(() => undefined));
+  it('stays locked after an unrelated model update until its own request settles', async () => {
+    const finish = deferredModel();
     const view = renderToolbar();
     await openModelPicker();
     await userEvent.click(screen.getByTestId('composer-model-select-option-default'));
     expect(screen.getByTestId('composer-model-select-option-default')).toHaveAttribute('aria-disabled', 'true');
     confirmServerModel(view, makeChat({ model: 'opus' }));
     expect(screen.getByTestId('composer-model-select-option-opus')).toHaveAccessibleName(/selected/);
+    expect(screen.getByTestId('composer-model-select-option-opus')).toHaveAttribute('aria-disabled', 'true');
+    await act(async () => finish(makeChat({ model: 'opus' })));
     expect(screen.getByTestId('composer-model-select-option-opus')).not.toHaveAttribute('aria-disabled');
   });
 
-  it('unlocks on success without a chat update and leaves the reported model checked', async () => {
+  it('applies the response before unlocking even if the broadcast is missed', async () => {
     vi.mocked(setChatConfig).mockResolvedValueOnce(makeChat({ model: 'opus' }));
     renderToolbar();
     await openModelPicker();
     await userEvent.click(screen.getByTestId('composer-model-select-option-opus'));
     expect(screen.getByTestId('composer-model-select-option-opus')).not.toHaveAttribute('aria-disabled');
-    expect(screen.getByTestId('composer-model-select-option-sonnet')).toHaveAccessibleName(/selected/);
-    expect(screen.getByTestId('composer-model-sonnet-tuning')).toBeVisible();
+    expect(screen.getByTestId('composer-model-select-option-opus')).toHaveAccessibleName(/selected/);
+    expect(screen.getByTestId('composer-model-opus-tuning')).toBeVisible();
   });
 
   it('re-enables the old model after a refused request', async () => {
@@ -538,7 +555,7 @@ describe('ComposerToolbar — model menu stays open', () => {
   });
 
   it.each(['chat', 'daemon', 'reopen'])('drops pending state on %s', async (change) => {
-    vi.mocked(setChatConfig).mockImplementationOnce(() => new Promise(() => undefined));
+    const finishOld = deferredModel();
     const view = renderToolbar();
     await openModelPicker();
     const id = 'composer-model-select-option-opus';
@@ -555,6 +572,12 @@ describe('ComposerToolbar — model menu stays open', () => {
         fakeExtras.state.chatId = 'chat-b';
         confirmServerModel(view, makeChat({ id: 'chat-b' }));
       }
+      expect(screen.getByTestId(id)).not.toHaveAttribute('aria-disabled');
+      const finishNew = deferredModel();
+      await userEvent.click(screen.getByTestId(id));
+      await act(async () => finishOld(makeChat({ model: 'opus' })));
+      expect(screen.getByTestId(id)).toHaveAttribute('aria-disabled', 'true');
+      await act(async () => finishNew(makeChat({ id: change === 'chat' ? 'chat-b' : 'chat-a', model: 'opus' })));
       expect(screen.getByTestId(id)).not.toHaveAttribute('aria-disabled');
     } finally {
       if (change === 'daemon') act(() => setActiveDaemon(daemon));
@@ -578,7 +601,7 @@ describe('ComposerToolbar — model menu stays open', () => {
             succeeds ? resolve(makeChat({ adapterId: 'codex', model: 'gpt' })) : reject(new Error('Switch refused'));
         }),
     );
-    const view = renderToolbar();
+    renderToolbar();
     await openModelPicker();
     await userEvent.click(screen.getByTestId('composer-adapter-select-option-codex'));
     await userEvent.click(screen.getByTestId('composer-model-select-option-gpt'));
@@ -588,7 +611,6 @@ describe('ComposerToolbar — model menu stays open', () => {
     expect(screen.queryByTestId('composer-model-gpt-tuning')).toBeNull();
     await act(async () => finish());
     if (succeeds) {
-      confirmServerModel(view, makeChat({ adapterId: 'codex', model: 'gpt' }));
       expect(screen.getByTestId('composer-model-gpt-tuning')).toBeVisible();
     } else {
       expect(screen.getByTestId('composer-model-select-option-sonnet')).toHaveAccessibleName(/selected/);

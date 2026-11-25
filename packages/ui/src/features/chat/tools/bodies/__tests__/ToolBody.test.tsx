@@ -203,6 +203,12 @@ describe('ToolBody', () => {
     expect(preview?.querySelector('mark')).toHaveTextContent('x');
   });
 
+  it('removes Grep error wrappers while preserving the result whitespace', () => {
+    const text = '  src/a.ts:12: x\r\n  ';
+    show(part('Grep', { pattern: 'x' }, `<tool_use_error><error>${text}</error></tool_use_error>`));
+    expect(screen.getByTestId('search-card-plain-body').querySelector('pre')?.textContent).toBe(text);
+  });
+
   it.each([
     ['over 200 lines', 'a.ts:1: x\r\n'.repeat(201)],
     ['a line over 2,000 characters', 'a.ts:1: x' + 'a'.repeat(2_000) + '\n'],

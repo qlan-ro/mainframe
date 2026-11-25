@@ -1,12 +1,12 @@
 /** A call's result as text: one the daemon cut short offers the whole of it. */
 import type { ReactNode } from 'react';
-import { resolveResultText } from '../shared';
+import { resolveResultText, stripErrorXml } from '../shared';
 import { useChatId } from '../chat-tool-context';
 import { ToolResultExpand } from '../ToolResultExpand';
 import type { ToolPart } from '../../view-model/turn/types';
 import { KeyValue, Surface } from './Surface';
 
-const rawText = (text: string) => text;
+const cleanPreservingWhitespace = (text: string) => stripErrorXml(text, false);
 
 /** The text alone, where a surface already holds it. */
 export function ResultText({
@@ -19,7 +19,10 @@ export function ResultText({
   preserveText?: boolean;
 }) {
   const chatId = useChatId();
-  const { text, truncated, fullBytes } = resolveResultText(part.result, preserveText ? rawText : undefined);
+  const { text, truncated, fullBytes } = resolveResultText(
+    part.result,
+    preserveText ? cleanPreservingWhitespace : undefined,
+  );
   if (truncated && chatId)
     return (
       <ToolResultExpand
