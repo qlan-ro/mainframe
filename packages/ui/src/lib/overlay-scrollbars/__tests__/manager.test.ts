@@ -271,6 +271,56 @@ describe('overlay scrollbar manager', () => {
       expect(thumbs()[0]?.style.width).toBe('8px');
     });
 
+    it('hit-tests a spot once between rechecks, however many frames scroll past it', () => {
+      const scroller = makeScroller();
+      const popover = document.createElement('div');
+      document.body.append(popover);
+      let calls = 0;
+      let edge = 60;
+      paint((y) => {
+        calls += 1;
+        return y < edge ? [popover, scroller] : [scroller];
+      });
+      const scrollTo = (top: number): void => {
+        scroller.scrollTop = top;
+        scroller.dispatchEvent(new Event('scroll'));
+        vi.advanceTimersByTime(17);
+      };
+      vi.advanceTimersByTime(1);
+      pointerOver(scroller);
+      const thumb = thumbs()[0]!;
+      expect(thumb.style.clipPath).toBe('polygon(0px 58px, 100% 58px, 100% 98px, 0px 98px)');
+
+      calls = 0;
+      for (let i = 0; i < 5; i++) scrollTo(0);
+      expect(calls).toBe(0);
+      // 24.5px down the track: its two ends and the three grid points that are new, of the twenty or so in a scan.
+      scrollTo(50);
+      expect(thumb.style.clipPath).toBe('polygon(0px 33.5px, 100% 33.5px, 100% 98px, 0px 98px)');
+      expect(calls).toBeLessThanOrEqual(5);
+
+      edge = 0;
+      vi.advanceTimersByTime(250);
+      expect(thumb.style.clipPath).toBe('');
+    });
+
+    it('looks again at what covers the thumb in the frame after a resize, a scroll in that frame included', () => {
+      const scroller = makeScroller();
+      const popover = document.createElement('div');
+      document.body.append(popover);
+      let edge = 0;
+      paint((y) => (y < edge ? [popover, scroller] : [scroller]));
+      pointerOver(scroller);
+      edge = 20;
+      scroller.dispatchEvent(new Event('scroll'));
+      vi.advanceTimersByTime(17);
+      expect(thumbs()[0]!.style.clipPath).toBe('');
+      window.dispatchEvent(new Event('resize'));
+      scroller.dispatchEvent(new Event('scroll'));
+      vi.advanceTimersByTime(17);
+      expect(thumbs()[0]!.style.clipPath).toBe('polygon(0px 18px, 100% 18px, 100% 98px, 0px 98px)');
+    });
+
     it('never hides the thumb that is being dragged', () => {
       const scroller = makeScroller();
       const dialog = document.createElement('div');

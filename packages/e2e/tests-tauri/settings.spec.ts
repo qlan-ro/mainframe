@@ -73,13 +73,12 @@ import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { closeMenus, waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 
 type SettingsTab = 'general' | 'providers' | 'keybindings' | 'notifications' | 'remote-access' | 'about';
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 
 async function providerSetting(adapterId: string, key: string): Promise<unknown> {
-  const response = await fetch(`${DAEMON_BASE}/api/settings/providers`);
+  const response = await daemonFetch('/api/settings/providers');
   const body = (await response.json()) as { data?: Record<string, Record<string, unknown>> };
   return body.data?.[adapterId]?.[key];
 }

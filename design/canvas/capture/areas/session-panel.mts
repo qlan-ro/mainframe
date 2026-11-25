@@ -1,6 +1,6 @@
 // Session panel: the card, its sections, Activity, and the panel beside, over and behind other surfaces.
 import { fail, openTab, parkPointer, renameChat, reload, seedWorkbench, stub, stubUsage } from '../seed.mts';
-import { DAEMON_BASE } from '../../../../packages/e2e/fixtures/daemon.js';
+import { daemonFetch, fetchRoute } from '../../../../packages/e2e/fixtures/daemon.js';
 import { sendMessage, waitForIdle } from '../../../../packages/e2e/helpers/tauri/wait.js';
 import type { CaptureArea, CaptureContext } from '../types.mts';
 import type { Page } from '../../../../packages/e2e/node_modules/@playwright/test/index.mjs';
@@ -16,7 +16,7 @@ type Json = Record<string, unknown>;
 async function patch(page: Page, url: RegExp, change: (data: never) => unknown): Promise<void> {
   await page.route(url, async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
-    const response = await route.fetch();
+    const response = await fetchRoute(route);
     const body = (await response.json()) as { data: never };
     await route.fulfill({ response, json: { ...body, data: change(body.data) } });
   });
@@ -160,7 +160,7 @@ async function stubSession(page: Page, options: { tasks?: () => unknown[]; child
 
 async function addProjectTasks(projectId: string, titles: string[]) {
   for (const title of titles)
-    await fetch(`${DAEMON_BASE}/api/plugins/todos/todos`, {
+    await daemonFetch('/api/plugins/todos/todos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, title }),

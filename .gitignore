@@ -69,6 +69,7 @@ packages/e2e/logs/
 .playwright-cli/
 dist-local/
 /packages/e2e/daemon-logs/
+/packages/e2e/.harness/
 
 # Recorded demo output — takes are large and regenerated; scripts are versioned, videos are not.
 demos/**/*.mp4

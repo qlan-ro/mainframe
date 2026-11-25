@@ -136,7 +136,9 @@ code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.92em}
 .segsw button:hover{background:var(--hover);color:var(--ink)}
 .segsw button[aria-pressed=true]{background:var(--chip);color:var(--ink)}
 /* rail */
-.rail{width:56px;flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 10px;background:var(--ground);border-right:1px solid var(--hair)}
+.rail{width:56px;flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 10px;background:var(--ground);border-right:1px solid var(--hair);position:relative}
+/* Round only the junction to preserve the prototype’s existing paint outside it. */
+.rail::after{content:"";position:absolute;left:100%;top:0;width:10px;height:10px;z-index:1;pointer-events:none;background:radial-gradient(circle at bottom right,transparent 8.5px,var(--hair) 9px 9.5px,var(--ground) 10px)}
 .rb{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--meta);position:relative}
 .rb .ic{width:20px;height:20px}
 .rb:hover{background:var(--hover);color:var(--ink)}

@@ -1,6 +1,6 @@
 /** One overlay thumb: its element, its placement and dragging it. */
 import { scrollPerDragPixel, THUMB_INSET, thumbBox, thumbClip, type Axis, type Box } from './geometry';
-import { hasEdgeHandle, metricsOf, paddingBox, scrolls, uncoveredSpans, visibleBox } from './scroller';
+import { hasEdgeHandle, metricsOf, paddingBox, scrolls, uncoveredSpans, visibleBox, type HitCache } from './scroller';
 
 /**
  * Fired on a scroller (not bubbling) when its thumb is grabbed. Code that tells
@@ -11,8 +11,8 @@ export const SCROLLBAR_DRAG_EVENT = 'mf-scrollbar-drag';
 
 export interface Thumb {
   element: HTMLDivElement;
-  /** Moves the thumb to its scroller's current offset, or hides it. */
-  place: () => void;
+  /** Moves the thumb to its scroller's current offset, or hides it. `refresh` looks again at what covers it. */
+  place: (refresh: boolean) => void;
   setVisible: (visible: boolean) => void;
   /** Hovered or being dragged, so it must not fade. */
   isHeld: () => boolean;
@@ -70,7 +70,6 @@ function lengthOf(axis: Axis, box: Box): number {
 
 /** Leaves the outermost pixels of the scroller's edge to a resize strip that shares it. */
 function yieldEdge(axis: Axis, box: Box): Box {
-  if (!hasEdgeHandle(axis, box)) return box;
   return axis === 'y' ? { ...box, right: box.right - THUMB_INSET } : { ...box, bottom: box.bottom - THUMB_INSET };
 }
 
@@ -107,17 +106,26 @@ export function createThumb(scroller: Element, axis: Axis, { onEnter, onLeave }:
   element.addEventListener('wheel', (event) => forwardWheel(scroller, event), { passive: false });
   document.body.append(element);
 
-  const place = (): void => {
+  const hits: HitCache = new Map();
+  let sharesEdge: boolean | undefined;
+
+  const place = (refresh: boolean): void => {
+    if (refresh) {
+      hits.clear();
+      sharesEdge = undefined;
+    }
     const full = scrolls(scroller, axis)
       ? thumbBox(axis, metricsOf(scroller, axis), paddingBox(scroller), visibleBox(scroller))
       : null;
     // Hiding the thumb mid-drag would drop its pointer capture, so a drag shows all of it.
     const dragging = element.dataset.dragging !== undefined;
-    const clip = dragging || !full ? '' : thumbClip(axis, lengthOf(axis, full), uncoveredSpans(scroller, axis, full));
+    const clip =
+      dragging || !full ? '' : thumbClip(axis, lengthOf(axis, full), uncoveredSpans(scroller, axis, full, hits));
     element.hidden = !dragging && (full === null || clip === null);
     element.style.clipPath = clip ?? '';
     if (!full) return;
-    const box = yieldEdge(axis, full);
+    sharesEdge ??= hasEdgeHandle(axis, full);
+    const box = sharesEdge ? yieldEdge(axis, full) : full;
     element.style.top = `${box.top}px`;
     element.style.left = `${box.left}px`;
     element.style.width = `${box.right - box.left}px`;
