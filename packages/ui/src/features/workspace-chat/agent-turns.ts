@@ -53,3 +53,23 @@ export function startedInCutTurn(call: SubagentCall, messages: readonly ThreadMe
   const around = messages.slice(start + 1, next < 0 ? undefined : next);
   return around.flatMap(turnsOf).some((turn) => turn.parentToolUseId === undefined && isCut(turn.state));
 }
+
+export function completedChildAnswer({ part }: SubagentCall): string {
+  for (const message of [...(part.messages ?? [])].reverse()) {
+    const meta = message.metadata?.custom?.mainframe as MainframeMessageMeta | undefined;
+    for (let index = message.content.length - 1; index >= 0; index--) {
+      const content = message.content[index];
+      if (content?.type !== 'text') continue;
+      if (
+        meta?.partSources?.[index]?.some(
+          ({ presentation }) =>
+            presentation.parentToolUseId === part.toolCallId &&
+            presentation.state === 'completed' &&
+            presentation.phase === 'final_answer',
+        )
+      )
+        return content.text.trim();
+    }
+  }
+  return '';
+}

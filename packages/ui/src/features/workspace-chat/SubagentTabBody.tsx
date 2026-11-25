@@ -26,7 +26,7 @@ import { useStop } from '@/features/session-panel/use-stop';
 import { useChatController } from '@/features/sessions/runtime/use-chat-controller';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { stopBackgroundTask } from '@/lib/api/background-tasks';
-import { agentResult, agentState, isCodexAgent } from './agent-status';
+import { describeAgent, isCodexAgent } from './agent-status';
 import { AgentStatusLabel, ConversationHeader, StopButton } from './ConversationHeader';
 import { findSubagentCall, type SubagentCall } from './find-subagent-call';
 import { useHoldConversation } from './mounted-conversations';
@@ -147,11 +147,12 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const messages = useNativeThreadMessages(state);
   const call = useMemo(() => findSubagentCall(messages, toolCallId), [messages, toolCallId]);
   const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId });
-  const tasks = useAgentTasks(chatId, toolCallId, state.backgroundTasks, active);
-  const shown = call == null ? null : agentState({ call, state, messages, tasks });
+  const { tasks, fresh } = useAgentTasks(chatId, toolCallId, state.backgroundTasks, active);
+  const agent = call == null ? null : describeAgent({ call, state, messages, tasks }, fresh);
+  const shown = agent?.state;
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
   const shownTitle = text(args['description']) || title;
-  const running = tasks?.find((task) => task.status === 'running');
+  const running = agent?.runningTask;
   const canStop = running != null && state.chatConfig?.adapterId === STOP_ADAPTER;
   const { onStop, stopping } = useStop(shownTitle, canStop ? () => stopBackgroundTask(chatId, running.id) : undefined);
 
@@ -188,11 +189,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
           <ParentScope chatId={chatId} state={state}>
             <ProseBlock label="Brief" testId={`workspace-agent-brief-${toolCallId}`} source={text(args['prompt'])} />
             <Steps call={call} />
-            <ProseBlock
-              label="Result"
-              testId={`workspace-agent-result-${toolCallId}`}
-              source={agentResult(call, tasks, shown)}
-            />
+            <ProseBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
           </ParentScope>
         )}
       </div>

@@ -9,7 +9,7 @@
 import type { ChatTabRole, RunState, RunTab } from '@/store/run-pane';
 import { useLayoutStore } from '@/store/layout';
 import { isSurfaceLit } from '@/store/layout-placement';
-import { focusTabBody } from './tab-focus';
+import { clearTabFocus, focusTabBody } from './tab-focus';
 
 export interface ChatTarget {
   /** The daemon's chat id, which is also the key of its own workspace layout. */
@@ -41,6 +41,7 @@ export interface OpenOptions {
 }
 
 function addTab(tab: RunTab, sessionId: string | null): void {
+  clearTabFocus();
   const store = useLayoutStore.getState();
   if (sessionId == null) store.addRunTab(tab);
   else store.addSessionTab(sessionId, tab);
@@ -58,16 +59,18 @@ export function openChatTab(
 ): boolean {
   if (target.chatId === sessionId) return false;
   const tab = chatTab(target);
+  const opener = focus ? document.activeElement : null;
   addTab(tab, sessionId);
-  if (focus) focusTabBody(tab.id);
+  if (focus) focusTabBody(tab.id, opener);
   return true;
 }
 
 /** Show a sub-agent's work beside the session. */
 export function openSubagentTab(target: SubagentTarget, { focus }: OpenOptions = {}): void {
   const tab = subagentTab(target);
+  const opener = focus ? document.activeElement : null;
   addTab(tab, useLayoutStore.getState().activeSessionId);
-  if (focus) focusTabBody(tab.id);
+  if (focus) focusTabBody(tab.id, opener);
 }
 
 /** A session's panes: the live ones for the active session, the remembered ones for the rest. */

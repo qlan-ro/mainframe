@@ -237,7 +237,7 @@ test.describe('§workspace-chats — agent tab (W8)', () => {
     await expect(agent.locator('[data-testid^="workspace-agent-brief-"]')).toContainText('Search the project');
     await expect(agent.getByTestId('chat-bash-card')).toHaveCount(1);
     await expect(agent.locator('[data-testid^="workspace-agent-result-"]')).toContainText('index.ts');
-    await expect(agent.locator('[data-testid^="workspace-agent-status-"]')).toHaveAttribute('data-status', 'completed');
+    await expect(agent.locator('[data-testid^="workspace-agent-status-"]')).toHaveCount(0);
     // Read-only: the one composer on screen is the conversation's.
     await expect(page.getByTestId('chat-composer-input')).toHaveCount(1);
 

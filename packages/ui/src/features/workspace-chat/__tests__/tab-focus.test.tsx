@@ -150,3 +150,54 @@ describe('from what stays on screen', () => {
     expect(press(name)).toHaveFocus();
   });
 });
+
+describe('unclaimed keyboard handoff', () => {
+  const target = { chatId: 'main', toolCallId: 'call-1', title: 'Review' };
+
+  it('does not move focus on a later open of the same tab', () => {
+    openSubagentTab(target, { focus: true });
+    render(<button onClick={() => openSubagentTab(target)}>Open elsewhere</button>);
+    const opener = press('Open elsewhere');
+    render(<Window />);
+    expect(opener).toHaveFocus();
+  });
+
+  it('does not move focus after the handoff expires', () => {
+    vi.useFakeTimers();
+    try {
+      openSubagentTab(target, { focus: true });
+      act(() => vi.advanceTimersByTime(1000));
+      render(<Window />);
+      expect(screen.getByTestId('agent')).not.toHaveFocus();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drops the request when its opener disappears before the tab mounts', async () => {
+    const view = render(<button onClick={() => openSubagentTab(target, { focus: true })}>Temporary</button>);
+    press('Temporary');
+    view.unmount();
+    await act(async () => undefined);
+    render(<Window />);
+    expect(screen.getByTestId('agent')).not.toHaveFocus();
+  });
+
+  it('drops the request when another tab becomes active', () => {
+    openChatTab({ chatId: 'other', role: 'session', title: 'Other' });
+    openSubagentTab(target, { focus: true });
+    const initial = useLayoutStore.getState().run!;
+    const switched = { ...initial, panes: initial.panes.map((pane) => ({ ...pane, active: 'chat-other' })) };
+    useLayoutStore.setState({ run: switched });
+    useLayoutStore.setState({ run: initial });
+    render(<Window />);
+    expect(screen.getByTestId('agent')).not.toHaveFocus();
+  });
+
+  it('gives focus to the latest of two opens', () => {
+    openSubagentTab(target, { focus: true });
+    openChatTab({ chatId: 'other', role: 'session', title: 'Other' }, 'main', { focus: true });
+    render(<Window />);
+    expect(screen.getByTestId('chat-viewport')).toHaveFocus();
+  });
+});

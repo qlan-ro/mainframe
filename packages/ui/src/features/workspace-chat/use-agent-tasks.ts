@@ -1,35 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { BackgroundActivityTask } from '@qlan-ro/mainframe-types';
 import { useIsConnected } from '@/app/ConnectionStatusContext';
 import { listBackgroundTasks } from '@/lib/api/background-tasks';
 import type { AgentTasks } from './agent-status';
 
-/**
- * The background tasks behind a sub-agent's call. Null until listed: a request
- * that fails leaves what was known, and is made again on reconnecting. Read
- * again on every background event, but only for a tab the user can see.
- */
 export function useAgentTasks(
   chatId: string,
   toolCallId: string,
   live: Readonly<Record<string, BackgroundActivityTask>> | undefined,
   visible: boolean,
-): AgentTasks {
+): { tasks: AgentTasks; fresh: boolean } {
   const connected = useIsConnected();
-  const [listed, setListed] = useState<{ key: string; tasks: AgentTasks } | null>(null);
-  const key = `${chatId} ${toolCallId}`;
+  const request = useMemo(
+    () => ({ chatId, toolCallId, live, visible, connected }),
+    [chatId, toolCallId, live, visible, connected],
+  );
+  const [listed, setListed] = useState<{
+    chatId: string;
+    toolCallId: string;
+    request: object;
+    tasks: AgentTasks;
+  } | null>(null);
   useEffect(() => {
     if (!visible || !connected) return undefined;
     let current = true;
     listBackgroundTasks(chatId).then(
       (tasks) => {
-        if (current) setListed({ key, tasks: tasks.filter((task) => task.toolUseId === toolCallId) });
+        if (current)
+          setListed({ chatId, toolCallId, request, tasks: tasks.filter((task) => task.toolUseId === toolCallId) });
       },
       (error: unknown) => console.warn('[workspace-chat] could not list background tasks', error),
     );
     return () => {
       current = false;
     };
-  }, [chatId, toolCallId, key, live, visible, connected]);
-  return listed?.key === key ? listed.tasks : null;
+  }, [chatId, toolCallId, request, visible, connected]);
+  const sameCall = listed?.chatId === chatId && listed.toolCallId === toolCallId;
+  return { tasks: sameCall ? listed.tasks : null, fresh: sameCall && listed.request === request };
 }

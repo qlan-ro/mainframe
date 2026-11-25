@@ -116,7 +116,8 @@ const source = (thread: string, turn: string, state: string, parentToolUseId?: s
     provider: 'codex',
     turnId: JSON.stringify([thread, turn]),
     state,
-    finalEligible: false,
+    phase: parentToolUseId ? 'final_answer' : undefined,
+    finalEligible: Boolean(parentToolUseId),
     parentToolUseId,
   },
 });
@@ -168,6 +169,7 @@ async function show(call: Call | null, active = true, chatId = 'parent') {
 const ARGS = {
   subagent_type: 'code-reviewer',
   model: 'sonnet',
+  run_in_background: false,
   description: 'Review the diff',
   prompt: 'Look for **races**.',
 };
@@ -239,7 +241,7 @@ describe('what it shows', () => {
 describe('status', () => {
   it.each([
     ['running', { args: ARGS }, true],
-    ['stopped', { args: ARGS }, false],
+    ['no-result', { args: ARGS }, false],
     ['completed', { args: ARGS, result: 'ok' }, false],
     ['failed', { args: ARGS, result: 'boom', isError: true }, false],
   ] as const)('is %s', async (expected, call, running) => {
@@ -277,10 +279,10 @@ describe('status', () => {
     expect(status()).toBe('running');
   });
 
-  it('is stopped, whatever was said since, once nothing runs', async () => {
+  it('shows no result when an idle call has no cancellation evidence', async () => {
     world.after = [said()];
     await show({ args: ARGS });
-    expect(status()).toBe('stopped');
+    expect(status()).toBe('no-result');
   });
 
   it.each([
@@ -381,15 +383,20 @@ describe('status', () => {
 describe('an agent in the background, whose result is only the launch receipt', () => {
   const flagged = { args: { ...ARGS, run_in_background: true }, result: 'Launched.' };
 
-  it.each([
-    ['flagged', flagged],
-    ['known by its receipt', { args: ARGS, result: RECEIPT }],
-    ['a teammate', { args: ARGS, result: 'Spawned successfully. agent_id: a1' }],
-  ])('has no result and no receipt when no task is listed for it: %s', async (_, call) => {
+  it.each([['flagged', flagged]])('has no result and no receipt when no task is listed for it: %s', async (_, call) => {
     await show(call);
     expect(status()).toBe('no-result');
     expect(screen.queryByTestId(RESULT)).toBeNull();
   });
+
+  it.each([RECEIPT, 'Spawned successfully. The deployment is healthy.', 'Launch wording changed.'])(
+    'shows unclassified text without claiming an outcome: %s',
+    async (result) => {
+      await show({ args: { ...ARGS, run_in_background: undefined }, result });
+      expect(screen.queryByTestId(STATUS)).toBeNull();
+      expect(screen.getByTestId(RESULT)).toHaveTextContent(result.replace('\n', ' '));
+    },
+  );
 
   it.each(['pending', 'refused'] as const)('claims nothing while the list is %s', async (listing) => {
     world.listing = listing;
@@ -416,14 +423,39 @@ describe('an agent in the background, whose result is only the launch receipt', 
     expect(screen.getByTestId(RESULT)).toHaveTextContent('No such agent type');
   });
 
-  it('keeps what it knew when the next request fails', async () => {
+  it('withdraws running and Stop when the next request fails', async () => {
     world.tasks = [{ id: 'bg-1', toolUseId: 'call-1', status: 'running', startedAt: 1 }];
     const view = await show(flagged);
     world.listing = 'refused';
     world.backgroundTasks = {};
     view.rerender(body());
     await act(async () => undefined);
+    expect(screen.queryByTestId(STATUS)).toBeNull();
+    expect(screen.queryByTestId('workspace-agent-stop-call-1')).toBeNull();
+  });
+
+  it('withdraws running and Stop until a reconnect refresh succeeds', async () => {
+    const at = (state: 'connected' | 'reconnecting') => (
+      <ConnectionStatusProvider value={{ state, daemonStatus: '' } as never}>{body()}</ConnectionStatusProvider>
+    );
+    world.call = flagged;
+    world.tasks = [{ id: 'bg-1', toolUseId: 'call-1', status: 'running' }];
+    const view = render(at('connected'));
+    await act(async () => undefined);
     expect(status()).toBe('running');
+    view.rerender(at('reconnecting'));
+    expect(screen.queryByTestId(STATUS)).toBeNull();
+    expect(screen.queryByTestId('workspace-agent-stop-call-1')).toBeNull();
+    world.listing = 'pending';
+    view.rerender(at('connected'));
+    expect(screen.queryByTestId(STATUS)).toBeNull();
+    expect(screen.queryByTestId('workspace-agent-stop-call-1')).toBeNull();
+    world.listing = 'answered';
+    world.backgroundTasks = {};
+    view.rerender(at('connected'));
+    await act(async () => undefined);
+    expect(status()).toBe('running');
+    expect(screen.getByTestId('workspace-agent-stop-call-1')).toBeVisible();
   });
 
   it('is asked about again on reconnecting', async () => {
@@ -486,7 +518,7 @@ describe('Codex agents sharing one call', () => {
     expect(screen.getByTestId(STATUS)).toHaveTextContent('2 running');
   });
 
-  it.each([['failed'], ['cancelled']])('counts those that ended badly: %s', async (bad) => {
+  it.each([['failed']])('counts those that ended badly: %s', async (bad) => {
     world.tasks = [task('a', 'completed', 1), task('b', 'completed', 2)];
     await show({ ...codex, messages: agents(bad, 'completed') });
     expect(status()).toBe('failed');
@@ -523,7 +555,6 @@ describe('Codex agents sharing one call', () => {
       ['cancelled', []],
       ['cancelled', agents('running')],
       ['cancelled', agents('unknown')],
-      ['cancelled', agents('completed', 'unknown')],
       ['failed', agents('unknown')],
     ])('is not done just because the daemon closed it: %s', async (turn, messages) => {
       world.turn = turn;
@@ -532,10 +563,18 @@ describe('Codex agents sharing one call', () => {
       expect(screen.queryByTestId(RESULT)).toBeNull();
     });
 
-    it('is not done when another agent left no step', async () => {
+    it('keeps a completed child’s answer when another child was left open', async () => {
+      world.tasks = [task('a', 'completed', 1), task('b', 'completed', 2)];
+      await show({ ...codex, result: 'Sub-agent completed', messages: agents('completed', 'unknown') });
+      expect(screen.queryByTestId(STATUS)).toBeNull();
+      expect(screen.getByTestId(RESULT)).toHaveTextContent('step 0');
+    });
+
+    it('shows the known child result when another agent left no step', async () => {
       world.tasks = [task('a', 'completed', 1), task('b', 'completed', 2)];
       await show({ ...codex, messages: agents('completed') });
-      expect(status()).toBe('no-result');
+      expect(screen.queryByTestId(STATUS)).toBeNull();
+      expect(screen.getByTestId(RESULT)).toHaveTextContent('step 0');
     });
 
     it('is done when its own turn completed', async () => {
