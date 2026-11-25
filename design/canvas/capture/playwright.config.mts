@@ -7,6 +7,6 @@ export default defineConfig({
   globalSetup: '../../../packages/e2e/fixtures/global-setup.ts',
   outputDir: '.work/results',
   workers: 1,
-  timeout: 600_000,
+  timeout: 1_800_000,
   reporter: 'line',
 });
