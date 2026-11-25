@@ -63,7 +63,12 @@
       "paths": [
         "packages/ui/src/features/chat/composer/",
         "packages/ui/src/features/chat/gates/",
-        "packages/ui/src/features/chat/commands/"
+        "packages/ui/src/features/chat/commands/",
+        "packages/ui/src/features/sessions/new-thread/ChatEmptyState",
+        "packages/ui/src/features/sessions/new-thread/FirstRunState",
+        "packages/ui/src/features/sessions/new-thread/NewSessionState",
+        "packages/ui/src/features/sessions/new-thread/SuggestionRow",
+        "packages/ui/src/features/sessions/new-thread/Welcome"
       ]
     },
     {

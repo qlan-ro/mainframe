@@ -52,16 +52,12 @@ export function DraftTile({
         {lead}
         <span className="flex min-w-0 flex-1 flex-col leading-tight">
           {typeof title === 'string' ? (
-            <FadeLabel className={cn(FADE, 'text-[0.78rem] font-medium')}>{title}</FadeLabel>
+            <FadeLabel className={cn(FADE, 'text-sm leading-4 font-medium')}>{title}</FadeLabel>
           ) : (
             title
           )}
           <FadeLabel
-            className={cn(
-              FADE,
-              'text-xs text-muted-foreground dark:text-foreground/65',
-              monoDetail && 'font-mono text-[0.69rem]',
-            )}
+            className={cn(FADE, 'text-xs text-muted-foreground dark:text-foreground/65', monoDetail && 'font-mono')}
           >
             {detail}
           </FadeLabel>
@@ -80,9 +76,13 @@ export function ExtensionLead({ name }: { name: string }) {
   return (
     <span
       aria-hidden
-      className="grid size-7 shrink-0 place-items-center rounded-md text-[0.56rem] font-semibold tracking-wide uppercase"
+      className="grid size-7 shrink-0 place-items-center rounded-md font-semibold uppercase"
       // Toward the ink of the theme: the bare hue is too faint for text this small.
-      style={{ color: `color-mix(in oklab, ${meta.color} 45%, var(--foreground))`, background: extTint(meta.color) }}
+      style={{
+        fontSize: '0.5625rem',
+        color: `color-mix(in oklab, ${meta.color} 45%, var(--foreground))`,
+        background: extTint(meta.color),
+      }}
     >
       {ext || <FileIcon className="size-3.5" />}
     </span>

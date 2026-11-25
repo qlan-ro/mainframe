@@ -65,12 +65,12 @@ function Head({ project, children }: { project?: string; children: ReactNode }) 
       <span
         aria-hidden
         data-testid="sessions-welcome-tile"
-        className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-foreground/7 text-[0.94rem] font-semibold text-foreground/80 ring-1 ring-border ring-inset"
+        className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-foreground/7 text-base font-semibold text-foreground/80 ring-1 ring-border ring-inset"
       >
         {project?.trim().charAt(0).toUpperCase() || '–'}
       </span>
       <div className="min-w-0">
-        <h1 className="text-[1.19rem] leading-[1.625rem] font-semibold tracking-[-0.01em] wrap-anywhere text-foreground">
+        <h1 className="text-lg leading-6.5 font-semibold tracking-tight wrap-anywhere text-foreground">
           {project ? `What’s next for ${project}?` : 'What’s next?'}
         </h1>
         <p data-testid="sessions-welcome-where" className="text-sm text-muted-foreground">
@@ -93,7 +93,7 @@ function Group({ label, testId, children }: { label: string; testId: string; chi
 }
 
 const ROW =
-  'group/row flex h-8 min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-[0.84rem] text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:focus-line-inset';
+  'group/row flex h-8 min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-sm text-foreground/80 hover:bg-accent hover:text-foreground focus-visible:focus-line-inset';
 const ROW_ICON = 'size-4 shrink-0 text-muted-foreground';
 
 /** A list that has nothing to show yet, or could not be read. Empty, it isn't there at all. */

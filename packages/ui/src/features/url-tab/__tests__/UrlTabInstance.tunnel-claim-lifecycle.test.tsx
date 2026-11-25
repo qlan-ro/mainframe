@@ -18,6 +18,7 @@ import { releaseUrlTunnelConsumers, clearUrlTunnelConsumers } from '@/features/u
 import { URL_TAB_TUNNEL_TIMEOUT_MS } from '../resolve-url-target';
 import { installFakeHost, seedStores, setPortEntry, renderTab } from './url-tab-tunnel-harness';
 
+vi.mock('@/features/chat/composer/draft-content/use-add-to-draft', () => ({ useAddToDraft: () => vi.fn() }));
 vi.mock('@/features/sessions/use-active-identity', () => ({
   useActiveIdentity: () => ({ projectId: 'proj-A', chatId: 'chat-1' }),
 }));

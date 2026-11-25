@@ -15,6 +15,7 @@ Look at what the agent changed or runs, without losing the conversation.
 
 ## Constraints
 Tabs follow the active session's scope. The chat column always holds one conversation (W9).
+What the user picks here for the agent joins the message being written: a preview capture or selected code lines become a tile in the composer (C14), and nothing is sent until the user sends it.
 
 ## Direction contract
 THESIS: one surface for everything that isn't the conversation. Forked chats, side chats, delegated tasks and sub-agents open as tabs here. This retires split chats.

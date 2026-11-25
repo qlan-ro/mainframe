@@ -51,7 +51,7 @@ export function NoteTile({ testId, lead, subject, detail, where, note, setNote, 
               aria-label={`Add a note on ${subject}`}
               onClick={open}
               // A 24 px target in a 16 px line: the rest reaches over the lines beside it.
-              className="relative w-fit rounded-sm text-left text-[0.78rem] text-accent-ink before:absolute before:-inset-x-1 before:-inset-y-1 hover:underline focus-visible:focus-line"
+              className="relative w-fit rounded-sm text-left text-sm leading-4 text-accent-ink before:absolute before:-inset-x-1 before:-inset-y-1 hover:underline focus-visible:focus-line"
             >
               Add a note
             </button>
