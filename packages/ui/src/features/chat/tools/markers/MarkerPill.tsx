@@ -51,15 +51,19 @@ function Pill(props: MarkerPillProps & { open: boolean; toggle: () => void; body
           {target && (
             <>
               {' '}
-              <span className={cn('text-foreground', props.mono ? 'mf-tr-mono' : 'font-medium')}>{target}</span>
+              <span className={cn('text-(--mf-tr-secondary)', props.mono ? 'mf-tr-mono font-normal' : 'font-medium')}>
+                {target}
+              </span>
             </>
           )}
         </span>
         {(receipt || state === 'running') && (
           <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
-            <span aria-hidden>·</span>
+            <span aria-hidden className="mr-0.5">
+              ·
+            </span>
             {state === 'running' && <Spinner className="size-3" />}
-            {receipt}
+            {receipt && <span>{receipt}</span>}
           </span>
         )}
         {expandable && (
