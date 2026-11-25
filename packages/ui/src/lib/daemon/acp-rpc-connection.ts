@@ -7,6 +7,7 @@
  * notification never has an `id` key at all.
  */
 import type { JsonRpcNotification, JsonRpcRequest, JsonRpcRequestId, JsonRpcResponse } from '@qlan-ro/mainframe-types';
+import { NotSentError } from './not-sent-error';
 import { JsonRpcNotificationSchema, JsonRpcRequestSchema, JsonRpcResponseSchema } from '@qlan-ro/mainframe-types';
 
 export interface AcpSocketLike {
@@ -150,7 +151,7 @@ export class RpcConnection {
     if (!entry) return;
     this.pending.delete(key);
     clearTimeout(entry.deadline);
-    entry.reject(CLOSED_ERROR);
+    entry.reject(new NotSentError(CLOSED_ERROR.message));
   }
 
   private handleMessage(raw: string): void {

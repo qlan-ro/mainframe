@@ -15,6 +15,8 @@ struct FakePort {
     fails_with: Option<String>,
     /// The remedy a `fails_with` prompt refusal carries.
     remedy: Option<PromptRemedy>,
+    /// Whether a `fails_with` prompt refusal is known not to have reached the agent.
+    never_delivered: bool,
 }
 
 impl PromptPort for FakePort {
@@ -29,6 +31,7 @@ impl PromptPort for FakePort {
                 return Err(PromptError {
                     message: message.clone(),
                     remedy: self.remedy,
+                    never_delivered: self.never_delivered,
                 });
             }
             self.sent
@@ -37,6 +40,7 @@ impl PromptPort for FakePort {
                 .push((session_id.to_string(), text.to_string(), send_meta));
             Ok(PromptAcceptance {
                 queued_position: self.queue_next_at,
+                queued_message_id: self.queue_next_at.map(|_| "queued-1".to_owned()),
             })
         })
     }
@@ -97,6 +101,10 @@ async fn a_queued_prompt_accepts_with_the_mainframe_extension_meta() {
         panic!("expected a result, got {:?}", response.outcome);
     };
     assert_eq!(result["_meta"]["_mainframe.dev"]["position"], json!(2));
+    assert_eq!(
+        result["_meta"]["_mainframe.dev"]["messageId"],
+        json!("queued-1")
+    );
 }
 
 #[tokio::test]
@@ -119,10 +127,11 @@ async fn a_dead_session_prompt_gets_a_structured_error() {
 }
 
 #[tokio::test]
-async fn a_refusal_with_a_remedy_carries_it_in_the_error_data() {
+async fn a_refusal_carries_its_remedy_and_that_it_never_reached_the_agent_in_the_error_data() {
     let port = FakePort {
         fails_with: Some("This chat's Codex thread is archived in Codex".to_string()),
         remedy: Some(PromptRemedy::UnarchiveNativeSession),
+        never_delivered: true,
         ..Default::default()
     };
     let response = dispatch_prompt(prompt_request("chat_1", "hi"), &port).await;
@@ -135,6 +144,7 @@ async fn a_refusal_with_a_remedy_carries_it_in_the_error_data() {
         Some(json!({ "_mainframe.dev": {
             "reason": "This chat's Codex thread is archived in Codex",
             "remedy": "unarchive_native_session",
+            "neverDelivered": true,
         } }))
     );
 }

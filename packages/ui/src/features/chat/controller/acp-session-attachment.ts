@@ -1,3 +1,4 @@
+import { NotSentError } from '@/lib/daemon/not-sent-error';
 import {
   HistoryStateSchema,
   MAINFRAME_META_NAMESPACE,
@@ -180,7 +181,7 @@ export class AcpSessionAttachment {
 
   /** Prompt/cancel/reply only need a bound client, not a live subscription — a dormant chat can still be prompted (the daemon attaches this connection on send). */
   requireClient(): AcpSessionClientPort {
-    if (!this.client) throw new Error('[acp-session] not attached — no facade client yet');
+    if (!this.client) throw new NotSentError('[acp-session] not attached — no facade client yet');
     return this.client;
   }
 

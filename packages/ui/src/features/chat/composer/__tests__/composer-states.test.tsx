@@ -2,76 +2,21 @@
  * Composer visual-state behavior tests — Phase 3 parity fixes.
  *
  * Covers:
- *  1. Toolbar left slot — dedicated "@" mention button beside the paperclip
- *  2. ProviderModelSelect footer in BOTH locked and unlocked states
- *  3. PermissionSelect per-option description notes
- *  4. Toolbar hairline separator between paperclip and config chips
+ *  1. ProviderModelSelect footer in BOTH locked and unlocked states
+ *  2. PermissionSelect per-option description notes
  *
  * Each test asserts hardcoded expected values against the rendered DOM —
  * never derives expectations from the component's own logic.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
-// Mocks for Composer (AUI plumbing)
-// ---------------------------------------------------------------------------
-
-vi.mock('@assistant-ui/react', () => ({
-  ComposerPrimitive: {
-    Root: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
-    AttachmentDropzone: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => (
-      <div {...rest}>{children}</div>
-    ),
-    Input: ({ children, ...rest }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-      <textarea {...rest}>{children}</textarea>
-    ),
-    Send: ({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-      <button {...rest}>{children}</button>
-    ),
-    Cancel: ({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-      <button {...rest}>{children}</button>
-    ),
-  },
-  useAuiState: (
-    selector: (s: { thread: { isRunning: boolean; messages: unknown[] }; composer: { quote: undefined } }) => unknown,
-  ) => selector({ thread: { isRunning: false, messages: [] }, composer: { quote: undefined } }),
-  useAui: () => ({ composer: { send: vi.fn() } }),
-}));
-
-vi.mock('../edit/composer-edit-context', () => ({
-  useComposerEdit: () => ({ editing: null, cancelEdit: vi.fn() }),
-}));
-
-vi.mock('../config-toolbar/ComposerToolbar', () => ({
-  ComposerToolbar: () => null,
-}));
-
-vi.mock('../attachments/ComposerAttachmentStrip', () => ({
-  ComposerAttachments: () => null,
-  ComposerAddAttachment: () => <button data-testid="composer-add-attachment" />,
-  ComposerAddMention: () => <button data-testid="composer-add-mention" />,
-}));
-
-vi.mock('../triggers/ComposerTriggers', () => ({
-  ComposerTriggers: ({ children }: { children: React.ReactNode }) => children,
-}));
-
-// ComposerHighlight reads useAuiState(s => s.composer.text) — a selector shape
-// this file's useAuiState fake (thread-only) doesn't provide. Stub it out, same
-// as Composer.test.tsx, since these tests assert on send/toolbar/plan/etc., not
-// the highlight overlay's own rendering (covered by ComposerHighlight.test.tsx).
-vi.mock('../highlight/ComposerHighlight', () => ({
-  ComposerHighlight: () => null,
-}));
-
-// ---------------------------------------------------------------------------
 // Subject imports
 // ---------------------------------------------------------------------------
 
-import { Composer } from '../Composer';
 import { ProviderModelSelect } from '../config-toolbar/ProviderModelSelect';
 import { PermissionSelect } from '../config-toolbar/PermissionSelect';
 import type { AdapterInfo, AdapterModel, Chat } from '@qlan-ro/mainframe-types';
@@ -126,27 +71,6 @@ const ADAPTER_GEMINI: AdapterInfo = {
 };
 
 // ---------------------------------------------------------------------------
-// 1b. Toolbar left slot — dedicated "@" mention button beside the paperclip
-// ---------------------------------------------------------------------------
-
-describe('Composer — toolbar renders a dedicated "@" mention button beside the paperclip', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('renders composer-add-mention inside the toolbar left slot', () => {
-    render(
-      <TooltipProvider>
-        <Composer />
-      </TooltipProvider>,
-    );
-
-    const toolbar = screen.getByTestId('chat-composer-toolbar');
-    expect(toolbar.querySelector('[data-testid="composer-add-mention"]')).not.toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 5. ProviderModelSelect — footer in BOTH locked and unlocked states
 // ---------------------------------------------------------------------------
 
@@ -163,7 +87,6 @@ describe('ProviderModelSelect — footer shows in both locked and unlocked state
           disabled={false}
           setAdapter={vi.fn()}
           setModel={vi.fn()}
-          setModelTuning={vi.fn()}
           setEffort={vi.fn()}
           setFeature={vi.fn()}
         />
@@ -229,34 +152,5 @@ describe('PermissionSelect — dropdown items render description notes', () => {
 
     const unattended = screen.getByTestId('composer-permission-mode-select-option-yolo');
     expect(unattended.textContent).toContain('Runs without prompts');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 7. Composer bottom bar — hairline separator between paperclip and config chips
-// ---------------------------------------------------------------------------
-
-describe('Composer — hairline separator between attachment and toolbar controls', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('renders a vertical Separator primitive between them', () => {
-    // We need a Composer that renders the real attachment slot + toolbar.
-    // ComposerAddAttachment is stubbed to a button; ComposerToolbar to null.
-    // The separator is a sibling between them.
-    render(
-      <TooltipProvider>
-        <Composer />
-      </TooltipProvider>,
-    );
-
-    // A hand-rolled `div.w-px.bg-border` became the v2 `Separator`; the
-    // hairline fill now comes from the primitive's own data-vertical rules.
-    const toolbar = screen.getByTestId('chat-composer-toolbar');
-    const sep = toolbar.querySelector('[data-slot="separator"]');
-    expect(sep).not.toBeNull();
-    expect(sep).toHaveAttribute('data-orientation', 'vertical');
-    expect((sep as HTMLElement).className).toContain('bg-border');
   });
 });

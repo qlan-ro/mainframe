@@ -40,14 +40,18 @@ impl PromptPort for ManagerPorts {
     ) -> BoxFuture<'a, Result<PromptAcceptance, PromptError>> {
         Box::pin(async move {
             let manager = self.require()?;
-            let is_command = send_meta.command.is_some();
+            if send_meta.wants_steer()
+                && let Some(acceptance) = steer_prompt(manager, session_id, text).await?
+            {
+                return Ok(acceptance);
+            }
             let command = send_meta.command.map(|c| CommandMeta {
                 name: c.name,
                 source: c.source,
                 args: c.args,
             });
-            manager
-                .send_message(
+            let queued_message_id = manager
+                .send_message_with_queue_id(
                     session_id,
                     text,
                     send_meta.attachment_ids.as_deref(),
@@ -55,18 +59,11 @@ impl PromptPort for ManagerPorts {
                 )
                 .await
                 .map_err(prompt_error)?;
-            // A command bypasses the queue and always dispatches immediately —
-            // it never adds itself to `queued_message_count`, so that count
-            // (when non-zero) belongs entirely to OTHER, unrelated queued
-            // prompts and must not be reported as this command's own queue
-            // position.
-            let queued = if is_command {
-                0
-            } else {
-                manager.queued_message_count(session_id)
-            };
             Ok(PromptAcceptance {
-                queued_position: (queued > 0).then_some(queued as i64),
+                queued_position: queued_message_id
+                    .as_ref()
+                    .map(|_| manager.queued_message_count(session_id).max(1) as i64),
+                queued_message_id,
             })
         })
     }
@@ -77,6 +74,38 @@ impl PromptPort for ManagerPorts {
             Ok(())
         })
     }
+}
+
+/// Folds a prompt into the running turn. `None` when it cannot be steered (the
+/// turn just ended, or the adapter has no steer): the caller then sends it the
+/// ordinary way, which queues it behind a running turn.
+async fn steer_prompt(
+    manager: &ChatManager,
+    chat_id: &str,
+    text: &str,
+) -> Result<Option<PromptAcceptance>, PromptError> {
+    if let Err(error) = manager.steer_message(chat_id, text).await {
+        steer_fallback(&error)?;
+        tracing::debug!(chat_id, error = %error, "steer unavailable, queueing instead");
+        return Ok(None);
+    }
+    let queued = manager.queued_message_count(chat_id);
+    Ok(Some(PromptAcceptance {
+        queued_position: (queued > 0).then_some(queued as i64),
+        queued_message_id: None,
+    }))
+}
+
+/// Whether a failed steer may be sent the ordinary way. Only when it certainly
+/// never reached the agent: otherwise resending could deliver it twice, so the
+/// user is told instead.
+fn steer_fallback(error: &SendError) -> Result<(), PromptError> {
+    if error.never_delivered() {
+        return Ok(());
+    }
+    Err(PromptError::new(format!(
+        "Could not confirm that the agent received this message ({error}). Check the conversation before sending it again."
+    )))
 }
 
 impl ResumePort for ManagerPorts {
@@ -171,5 +200,49 @@ fn prompt_error(err: SendError) -> PromptError {
     PromptError {
         message: err.to_string(),
         remedy,
+        never_delivered: err.never_delivered(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_refusal_says_whether_the_agent_certainly_did_not_get_the_prompt() {
+        let refused = [
+            SendError::NotRunning("c1".into()),
+            SendError::HandoffTooLarge("Codex".into()),
+            SendError::Adapter(AdapterError::DeliveryRejected("no such thread".into())),
+            SendError::Adapter(AdapterError::ProjectDirMissing("gone".into())),
+            SendError::Adapter(AdapterError::NativeSessionArchived("archived".into())),
+        ];
+        for error in refused {
+            assert!(prompt_error(error).never_delivered);
+        }
+        let unanswered = SendError::Adapter(AdapterError::Message("timed out".into()));
+        assert!(!prompt_error(unanswered).never_delivered);
+    }
+
+    #[test]
+    fn a_steer_is_resent_only_when_it_never_reached_the_agent() {
+        let refused = [
+            SendError::NoActiveTurn("c1".into()),
+            SendError::SteerUnsupported("c1".into()),
+            SendError::NotRunning("c1".into()),
+            SendError::Adapter(AdapterError::DeliveryRejected("turn ended".into())),
+            SendError::Adapter(AdapterError::StdinFull("s1".into())),
+        ];
+        for error in refused {
+            assert!(steer_fallback(&error).is_ok(), "{error}");
+        }
+        let unknown = SendError::Adapter(AdapterError::Message("timed out".into()));
+        let told = steer_fallback(&unknown).unwrap_err();
+        assert!(
+            told.message.contains("Check the conversation"),
+            "{}",
+            told.message
+        );
+        assert!(told.message.contains("timed out"));
     }
 }

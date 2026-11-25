@@ -1,81 +1,39 @@
 'use client';
 
 /**
- * Composer shell — the v2 skin over the native `ComposerPrimitive`.
+ * Composer shell — one card over the native `ComposerPrimitive`, with a strip
+ * tucked behind its top edge (K1, K2). The bare row under it is the footer's
+ * (`BottomStrip`): a chat with no composer has it too.
  *
- * Native ~90%: Root/Input own the draft + submit; Send↔Stop swaps on
- * `thread.isRunning`, and a mid-run Enter still queues. The bottom bar's left slot carries the
- * attachment affordances and the config toolbar (model · permission · plan ·
- * temporary · worktree · context).
+ * Native ~90%: Root/Input own the draft + submit. The card holds, top to
+ * bottom, the queue (C10), the draft's attachments and quotes, the field, and
+ * the toolbar: `+`, model, permissions, context ring, Stop / Send (C4).
  *
- * (Decomposed out of ChatThread; mounted inside `ThreadPrimitive.ViewportFooter`
- * so its height registers as scroll inset — the last message never hides behind it.)
+ * Mounted inside `ThreadPrimitive.ViewportFooter` so its height registers as
+ * scroll inset — the last message never hides behind it.
  */
-import { useCallback, useRef, type RefObject, type KeyboardEvent } from 'react';
+import { useCallback, useRef, useState, type RefObject, type KeyboardEvent } from 'react';
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
-import { ArrowUpIcon, Loader2Icon, SquareIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { ComposerToolbar } from './config-toolbar/ComposerToolbar';
+import { ComposerToolbar, type ComposerToolbarHandle } from './config-toolbar/ComposerToolbar';
+import { ContextRing } from './config-toolbar/ContextRing';
+import { ComposerCardProvider } from './composer-card-context';
 import { ComposerEditMode } from './edit/ComposerEditMode';
 import { useComposerEdit } from './edit/composer-edit-context';
-import { ComposerAttachments, ComposerAddAttachment, ComposerAddMention } from './attachments/ComposerAttachmentStrip';
+import { ComposerAddMenu } from './attachments/ComposerAddMenu';
+import { ComposerAttachments } from './attachments/ComposerAttachmentStrip';
 import { useActiveThreadId } from '../runtime/use-active-thread-id';
-import { useChatExtras } from '../runtime/chat-extras';
 import { ComposerTriggers } from './triggers/ComposerTriggers';
 import { useTriggerFieldAria } from './triggers/trigger-field-aria-context';
 import { focusOwningTranscript } from './focus-composer';
 import { ComposerHighlight } from './highlight/ComposerHighlight';
+import { QueuedRows } from './queue/QueuedRows';
 import { ComposerSegments } from './segments/ComposerSegments';
 import { useComposerSegments } from './segments/segment-store';
-import { useSubmitComposition, useCanSubmit } from './segments/use-submit-composition';
-
-/**
- * Send (idle, disabled while empty) ↔ Stop (running) — swapped on
- * `thread.isRunning`. Once Stop is clicked the run is `cancelling` until the
- * daemon reports the turn over, which can take seconds while the CLI finishes
- * a tool call; the button shows a disabled spinner meanwhile so the click
- * visibly registered (a repeat click during `cancelling` is a no-op anyway).
- *
- * `useCanSubmit` is subscribed HERE, not in `Composer`: it reads the live
- * draft text, so hoisting it would re-render the whole composer (segments,
- * triggers, toolbar, highlight overlay) on every keystroke.
- */
-function SendOrStopButton() {
-  const isRunning = useAuiState((s) => s.thread.isRunning);
-  const stopping = useChatExtras()?.state.runState.type === 'cancelling';
-  const canSubmit = useCanSubmit();
-
-  if (isRunning) {
-    // A soft destructive fill — it swaps in for the primary Send, so it must
-    // read as THE action, unlike the incidental ghost stops elsewhere.
-    return (
-      <ComposerPrimitive.Cancel asChild>
-        <Button
-          data-testid="chat-composer-cancel"
-          data-stopping={stopping || undefined}
-          aria-label={stopping ? 'Stopping' : 'Stop'}
-          variant="ghost"
-          size="icon-sm"
-          disabled={stopping}
-          className="bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
-        >
-          {stopping ? (
-            <Loader2Icon className="animate-spin motion-reduce:animate-none" />
-          ) : (
-            <SquareIcon fill="currentColor" />
-          )}
-        </Button>
-      </ComposerPrimitive.Cancel>
-    );
-  }
-  return (
-    <Button type="submit" data-testid="chat-composer-send" aria-label="Send" size="icon-sm" disabled={!canSubmit}>
-      <ArrowUpIcon />
-    </Button>
-  );
-}
+import { useSubmitComposition } from './segments/use-submit-composition';
+import { SendControls } from './send/SendControls';
+import { useEnterMode } from './send/use-enter-mode';
+import { TopStrip } from './strips/TopStrip';
 
 /**
  * The textarea, split out so `useTriggerFieldAria()` resolves correctly:
@@ -145,47 +103,90 @@ function ComposerInputField({
       placeholder={placeholder}
       rows={1}
       autoFocus
-      className="relative w-full resize-none overflow-hidden bg-transparent px-3.5 pt-2.5 pb-1 font-sans text-sm leading-relaxed text-transparent caret-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      className="relative block w-full resize-none overflow-hidden bg-transparent px-1 pt-0.5 pb-2 font-sans text-[0.875rem] leading-[1.3125rem] text-transparent caret-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
       {...triggerAria}
     />
   );
 }
 
+/** What an empty field says (C7). */
+function usePlaceholder(hasLiveQuote: boolean): string {
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+  const started = useAuiState((s) => s.thread.messages.length > 0);
+  const enter = useEnterMode();
+  if (hasLiveQuote) return 'Add a message…';
+  if (isRunning) {
+    return enter === 'steer' ? 'Steer the agent, ⌥↵ to queue…' : 'Queue a message for when the agent finishes…';
+  }
+  return started ? 'Reply to the agent…' : 'Ask anything, @ to mention, / for actions';
+}
+
 export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {}) {
   const { editing, cancelEdit } = useComposerEdit();
+  const [card, setCard] = useState<HTMLElement | null>(null);
+
+  return (
+    <ComposerCardProvider value={card}>
+      <div data-testid="chat-composer-frame" className="@container/composer flex min-h-0 min-w-0 flex-col">
+        {variant !== 'side' && <TopStrip />}
+        {editing ? (
+          <ComposerEditMode key={editing.messageId} edit={editing} onDone={cancelEdit} />
+        ) : (
+          <ComposerCard variant={variant} cardRef={setCard} />
+        )}
+      </div>
+    </ComposerCardProvider>
+  );
+}
+
+function ComposerCard({
+  variant,
+  cardRef,
+}: {
+  variant: 'main' | 'side';
+  cardRef: (element: HTMLFormElement | null) => void;
+}) {
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const threadId = useActiveThreadId();
   const hasLiveQuote = useComposerSegments((s) =>
     threadId ? (s.byThread[threadId]?.liveQuote ?? null) !== null : false,
   );
   const submit = useSubmitComposition();
+  const enterWhileRunning = useEnterMode();
+  const placeholder = usePlaceholder(hasLiveQuote);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const toolbarRef = useRef<ComposerToolbarHandle>(null);
 
-  // Mid-run Enter-to-queue. The native ComposerPrimitive.Input gates Enter off
-  // while running unless `thread.capabilities.queue` is set — and that is false
-  // for us because we use the daemon-backed queue, not assistant-ui's native
-  // Queue adapter. So intercept Enter ourselves and submit directly: submit()
-  // ignores isRunning, routes through append() → onNew → controller.sendMessage,
-  // and the daemon enqueues the message behind the in-flight run (mirrors desktop).
+  // Mid-run Enter. The native ComposerPrimitive.Input gates Enter off while
+  // running unless `thread.capabilities.queue` is set — and that is false for
+  // us because we use the daemon-backed queue, not assistant-ui's own. So the
+  // key is handled here: submit() ignores isRunning and routes through
+  // append() → onNew → controller.sendMessage, which queues the message or
+  // folds it into the turn. ⌥↵ does the other of the two (C9).
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (!isRunning) return;
-      if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+      if (e.nativeEvent.isComposing || e.defaultPrevented) return;
+      if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        toolbarRef.current?.cyclePermission();
+        return;
+      }
+      if (!isRunning || e.key !== 'Enter' || e.shiftKey) return;
       e.preventDefault();
+      const steer = (enterWhileRunning === 'steer') !== e.altKey;
       try {
-        submit();
+        submit(steer ? 'steer' : 'queue');
       } catch (err) {
-        console.warn('[composer] mid-run queued send failed', err);
+        console.warn('[composer] mid-run send failed', err);
       }
     },
-    [isRunning, submit],
+    [isRunning, submit, enterWhileRunning],
   );
-
-  if (editing) return <ComposerEditMode key={editing.messageId} edit={editing} onDone={cancelEdit} />;
 
   return (
     <ComposerTriggers textareaRef={textareaRef}>
       <ComposerPrimitive.Root
+        ref={cardRef}
         data-testid="chat-composer"
         onSubmit={(e) => {
           // Load-bearing, not boilerplate: aui composes its own onSubmit
@@ -200,16 +201,19 @@ export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {
         // automatic minimum is its content size, so it would overflow the
         // footer's cap instead of shrinking to fit; `overflow-y-auto` clips
         // that content rather than letting it paint past the card's border.
-        className="min-h-0 min-w-60 overflow-y-auto rounded-xl border border-input bg-card shadow-xs transition-colors focus-within:focus-line-inset"
+        // `z-1` keeps it over the strip tucked behind its top edge. The focus
+        // line is the FIELD's: a focused toolbar control draws its own.
+        className="relative z-1 min-h-0 min-w-60 overflow-y-auto rounded-2xl border border-input bg-card shadow-sm transition-colors has-[textarea:focus-visible]:focus-line-inset"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"
           className={cn(
-            'rounded-xl transition-colors',
+            'rounded-2xl px-2.5 pt-2.5 pb-2 transition-colors @max-[400px]/composer:px-2 @max-[400px]/composer:pt-2 @max-[400px]/composer:pb-1.5',
             '[&[data-dragging]]:ring-2 [&[data-dragging]]:ring-primary [&[data-dragging]]:ring-offset-1',
             '[&[data-dragging]]:bg-sidebar-selection',
           )}
         >
+          <QueuedRows />
           {/* Pending attachment tiles — the strip owns its own empty:hidden. */}
           <ComposerAttachments />
 
@@ -221,26 +225,21 @@ export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {
           {/* Scroll-wrapper owns max-h + overflow so overlay and textarea wrap/scroll together. */}
           <div className="relative max-h-48 overflow-y-auto">
             <ComposerHighlight />
-            <ComposerInputField
-              textareaRef={textareaRef}
-              onKeyDown={handleInputKeyDown}
-              placeholder={hasLiveQuote ? 'Add a message…' : 'Reply to the agent…'}
-            />
+            <ComposerInputField textareaRef={textareaRef} onKeyDown={handleInputKeyDown} placeholder={placeholder} />
           </div>
 
-          <div className="@container flex items-center justify-between gap-2 px-2.5 pt-1 pb-1.5">
-            {/* Left slot: paperclip + mention + separator + config toolbar */}
-            <div
-              data-testid="chat-composer-toolbar"
-              className="flex min-h-8 min-w-0 items-center gap-1 text-muted-foreground"
-            >
-              <ComposerAddAttachment />
-              <ComposerAddMention textareaRef={textareaRef} />
-              {/* Hairline separating the attachment actions from the config chips. */}
-              <Separator orientation="vertical" className="mx-1 h-3 data-vertical:self-center" />
-              <ComposerToolbar variant={variant} />
+          <div
+            data-testid="chat-composer-toolbar"
+            className="flex min-w-0 items-center gap-0.5 @max-[320px]/composer:flex-wrap @max-[320px]/composer:gap-y-1"
+          >
+            <ComposerAddMenu textareaRef={textareaRef} />
+            <ComposerToolbar ref={toolbarRef} variant={variant} />
+            <span className="min-w-0 flex-1" aria-hidden />
+            {/* Below 320px this group wraps onto its own row, so nothing truncates. */}
+            <div className="flex shrink-0 items-center gap-1.5 @max-[320px]/composer:ml-auto">
+              <ContextRing />
+              <SendControls submit={submit} />
             </div>
-            <SendOrStopButton />
           </div>
         </ComposerPrimitive.AttachmentDropzone>
       </ComposerPrimitive.Root>

@@ -39,7 +39,7 @@ fn non_set_mode_updates_pass_through_unchanged() {
         },
     ];
 
-    assert_eq!(keep_mode_changes_session_scoped(input.clone()), input);
+    assert_eq!(forwardable_updates(input.clone()), input);
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn set_mode_keeps_a_session_destination() {
         destination: ControlDestination::Session,
     }];
 
-    assert_eq!(keep_mode_changes_session_scoped(input.clone()), input);
+    assert_eq!(forwardable_updates(input.clone()), input);
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn set_mode_is_downgraded_from_every_persisting_destination() {
             destination,
         }];
 
-        let output = keep_mode_changes_session_scoped(input);
+        let output = forwardable_updates(input);
         assert_eq!(
             output,
             vec![ControlUpdate::SetMode {
@@ -82,10 +82,35 @@ fn set_mode_keeps_a_cli_arg_destination() {
         destination: ControlDestination::CliArg,
     }];
 
-    assert_eq!(keep_mode_changes_session_scoped(input.clone()), input);
+    assert_eq!(forwardable_updates(input.clone()), input);
 }
 
 #[test]
 fn empty_input_returns_empty_output() {
-    assert_eq!(keep_mode_changes_session_scoped(vec![]), vec![]);
+    assert_eq!(forwardable_updates(vec![]), vec![]);
+}
+
+#[test]
+fn no_mode_wider_than_auto_edits_is_forwarded() {
+    let set = |mode| ControlUpdate::SetMode {
+        mode,
+        destination: ControlDestination::Session,
+    };
+
+    let output = forwardable_updates(vec![
+        set(PermissionMode::Yolo),
+        set(PermissionMode::Auto),
+        set(PermissionMode::AcceptEdits),
+    ]);
+
+    assert_eq!(output, vec![set(PermissionMode::AcceptEdits)]);
+}
+
+#[test]
+fn an_update_it_cannot_read_is_not_forwarded() {
+    let unread = serde_json::json!({ "type": "grantEverything" });
+    assert_eq!(
+        forwardable_updates(vec![ControlUpdate::Unknown(unread)]),
+        vec![]
+    );
 }

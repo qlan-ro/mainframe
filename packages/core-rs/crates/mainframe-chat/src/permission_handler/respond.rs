@@ -3,7 +3,8 @@
 //! `permission_handler.rs` — a pure move; the branches themselves live in
 //! `branches.rs`.
 
-use mainframe_types::adapter::{ControlBehavior, ControlResponse};
+use mainframe_types::adapter::{ControlBehavior, ControlResponse, ControlUpdate};
+use mainframe_types::chat::ChatMessageType;
 use mainframe_types::sync::LockExt as _;
 use tracing::{info, warn};
 
@@ -13,7 +14,7 @@ impl ChatPermissionHandler {
     pub async fn respond_to_permission(
         &self,
         chat_id: &str,
-        response: ControlResponse,
+        mut response: ControlResponse,
     ) -> Result<(), PermissionError> {
         if self.response_was_cancelled(chat_id, &response) {
             return Ok(());
@@ -25,6 +26,21 @@ impl ChatPermissionHandler {
             return Ok(());
         }
 
+        // Every client's answer passes here, so no client can save more than this.
+        let withheld = response.withhold_ungrantable();
+        self.forward_response(chat_id, response, active).await?;
+        if !withheld.is_empty() {
+            self.report_withheld(chat_id, &withheld);
+        }
+        Ok(())
+    }
+
+    async fn forward_response(
+        &self,
+        chat_id: &str,
+        response: ControlResponse,
+        active: Option<std::sync::Arc<std::sync::Mutex<crate::types::ActiveChat>>>,
+    ) -> Result<(), PermissionError> {
         let spawned = active.as_ref().is_some_and(Self::session_spawned);
         if !spawned {
             warn!(
@@ -51,7 +67,7 @@ impl ChatPermissionHandler {
         );
 
         if let Some(text) = &response.message {
-            let message = self.transient_user_text(chat_id, text);
+            let message = self.transient_text(chat_id, ChatMessageType::User, text);
             self.shared.messages.lock_recover().append(chat_id, message);
             self.event_handler.emit_display(chat_id);
         }
@@ -68,6 +84,18 @@ impl ChatPermissionHandler {
         self.handle_normal_permission(chat_id, active, response)
             .await
     }
+
+    /// A line in the session for what the answer asked to save and did not.
+    fn report_withheld(&self, chat_id: &str, withheld: &[ControlUpdate]) {
+        let what: Vec<String> = withheld.iter().map(ControlUpdate::withheld_label).collect();
+        let what = what.join("; ");
+        warn!(chat_id, withheld = what, "permission answer narrowed");
+        let text = format!("Not saved with the permission answer: {what}.");
+        let message = self.transient_text(chat_id, ChatMessageType::System, &text);
+        self.shared.messages.lock_recover().append(chat_id, message);
+        self.event_handler.emit_display(chat_id);
+    }
+
     fn response_was_cancelled(&self, chat_id: &str, response: &ControlResponse) -> bool {
         if self
             .shared

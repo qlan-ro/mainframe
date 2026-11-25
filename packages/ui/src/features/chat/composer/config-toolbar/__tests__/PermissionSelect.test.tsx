@@ -142,7 +142,7 @@ describe('PermissionSelect — D19: reverses #325 — Auto and Unattended both r
     renderSelect(makeChat({ permissionMode: 'yolo' }));
     const trigger = screen.getByTestId('composer-permission-mode-select');
     expect(trigger.className).toContain('text-warning');
-    expect(trigger.className).toContain('border-warning/40');
+    expect(trigger.className).toContain('ring-warning/40');
     expect(trigger.className).toContain('bg-warning/10');
     expect(trigger.className).not.toContain('text-destructive');
   });

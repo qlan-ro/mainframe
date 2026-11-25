@@ -38,9 +38,16 @@ vi.mock('@assistant-ui/react', () => ({
 
 vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="composer-stub" /> }));
+vi.mock('../../composer/strips/DraftStrip', () => ({
+  DraftStrip: ({ standalone }: { standalone?: boolean }) => (
+    <div data-testid="draft-strip-stub" data-standalone={String(standalone === true)} />
+  ),
+}));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
-vi.mock('@/features/session-panel/SessionStrip', () => ({
-  SessionStrip: () => <div data-testid="session-strip" />,
+vi.mock('../../composer/strips/BottomStrip', () => ({
+  BottomStrip: ({ fixed }: { fixed?: boolean }) => (
+    <div data-testid="bottom-strip" data-fixed={String(fixed === true)} />
+  ),
 }));
 vi.mock('../../orchestration/AgentOutboxChip', () => ({ AgentOutboxChip: () => null }));
 vi.mock('../ChatSelectionToolbar', () => ({ ChatSelectionToolbar: () => null }));
@@ -68,10 +75,11 @@ describe('ChatThread — composer gate on a projectless draft', () => {
     useDraftConfigStore.setState({ drafts: new Map() });
   });
 
-  it('hides the composer on a new local thread with no draft config', () => {
+  it('hides the composer on a new local thread with no draft config, and offers the project picker alone', () => {
     render(<ChatThread />);
 
     expect(screen.queryByTestId('composer-stub')).toBeNull();
+    expect(screen.getByTestId('draft-strip-stub')).toHaveAttribute('data-standalone', 'true');
   });
 
   it('shows the composer once the picked project seeds the draft', () => {
@@ -80,6 +88,7 @@ describe('ChatThread — composer gate on a projectless draft', () => {
     render(<ChatThread />);
 
     expect(screen.getByTestId('composer-stub')).toBeInTheDocument();
+    expect(screen.queryByTestId('draft-strip-stub')).toBeNull();
   });
 
   it('shows the composer on a regular chat, which never carries a draft config', () => {
@@ -89,6 +98,7 @@ describe('ChatThread — composer gate on a projectless draft', () => {
     render(<ChatThread />);
 
     expect(screen.getByTestId('composer-stub')).toBeInTheDocument();
+    expect(screen.getByTestId('bottom-strip')).toHaveAttribute('data-fixed', 'false');
   });
 
   it('ignores a draft seeded for a different local thread', () => {
@@ -97,6 +107,16 @@ describe('ChatThread — composer gate on a projectless draft', () => {
     render(<ChatThread />);
 
     expect(screen.queryByTestId('composer-stub')).toBeNull();
+  });
+
+  it('marks the footer the floating session panel ends above', () => {
+    __mainThreadId = 'chat-42';
+    __itemStatus = 'regular';
+
+    render(<ChatThread />);
+
+    expect(screen.getByTestId('chat-thread-footer')).toHaveAttribute('data-chat-footer');
+    expect(screen.getByTestId('chat-thread-footer')).toContainElement(screen.getByTestId('bottom-strip'));
   });
 
   it('keeps the branch and changes strip on a read-only delegated chat', () => {
@@ -108,6 +128,6 @@ describe('ChatThread — composer gate on a projectless draft', () => {
 
     expect(screen.getByTestId('chat-read-only-note')).toBeInTheDocument();
     expect(screen.queryByTestId('composer-stub')).toBeNull();
-    expect(screen.getByTestId('session-strip')).toBeInTheDocument();
+    expect(screen.getByTestId('bottom-strip')).toHaveAttribute('data-fixed', 'true');
   });
 });

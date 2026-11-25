@@ -151,6 +151,30 @@ async fn calls_kill_tasks_before_session_kill_for_each_chat() {
     );
 }
 
+/// Clients drop what they kept for a chat (held queue rows) on this event.
+#[tokio::test]
+async fn remove_project_tells_clients_that_each_of_its_chats_ended() {
+    let mut c1 = test_chat("c1");
+    c1.project_id = "p1".to_string();
+    let mut c2 = test_chat("c2");
+    c2.project_id = "p1".to_string();
+    let deps = FakeDeps::with_chats(vec![c1, c2]);
+    let mgr = ChatManager::new(deps.clone());
+
+    mgr.remove_project("p1").await.unwrap();
+
+    let mut ended: Vec<String> = deps
+        .events()
+        .iter()
+        .filter_map(|event| match event {
+            DaemonEvent::ChatEnded { chat_id } => Some(chat_id.clone()),
+            _ => None,
+        })
+        .collect();
+    ended.sort();
+    assert_eq!(ended, vec!["c1".to_string(), "c2".to_string()]);
+}
+
 #[tokio::test]
 async fn remove_project_propagates_a_row_delete_failure() {
     let mut c1 = test_chat("c1");
@@ -166,6 +190,13 @@ async fn remove_project_propagates_a_row_delete_failure() {
     seed_active(&mgr, "c1", c1, s1);
 
     let err = mgr.remove_project("p1").await.unwrap_err();
+    assert!(
+        !deps
+            .events()
+            .iter()
+            .any(|event| matches!(event, DaemonEvent::ChatEnded { .. })),
+        "the chats are still there"
+    );
     assert!(matches!(err, RemoveProjectError::Store(_)));
     assert_eq!(
         (err.status_kind(), err.to_string()),

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as http from '../http';
-import { discardChat, listChats, resumeChat, trustWorkspace } from '../chats';
+import { cancelQueuedMessage, chatExists, discardChat, listChats, resumeChat, trustWorkspace } from '../chats';
 
 describe('resumeChat readiness contract', () => {
   beforeEach(() => vi.restoreAllMocks());
@@ -21,6 +21,35 @@ describe('resumeChat readiness contract', () => {
     vi.spyOn(http, 'apiBase').mockReturnValue('http://d');
     await resumeChat(0, 'chat-1', { waitFor: 'transcript' });
     expect(spy).toHaveBeenCalledWith('POST', 'http://d/api/chats/chat-1/resume?waitFor=transcript');
+  });
+});
+
+describe('chatExists', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(http, 'apiBase').mockReturnValue('http://d');
+  });
+
+  it('is true for a chat the daemon answers with', async () => {
+    const spy = vi.spyOn(http, 'request').mockResolvedValue({ id: 'chat-1' });
+
+    expect(await chatExists('chat-1')).toBe(true);
+    expect(spy).toHaveBeenCalledExactlyOnceWith('GET', 'http://d/api/chats/chat-1');
+  });
+
+  it('is false for the daemon’s own 404', async () => {
+    vi.spyOn(http, 'request').mockRejectedValue(new http.ApiRequestError('Chat not found', [], 404));
+
+    expect(await chatExists('chat-1')).toBe(false);
+  });
+
+  it.each([
+    ['an unreachable daemon', new TypeError('Failed to fetch')],
+    ['a failing one', new http.ApiRequestError('boom', [], 500)],
+  ])('answers nothing for %s', async (_what, error) => {
+    vi.spyOn(http, 'request').mockRejectedValue(error);
+
+    await expect(chatExists('chat-1')).rejects.toBe(error);
   });
 });
 
@@ -61,5 +90,29 @@ describe('listChats — includeTemporary (todo #346)', () => {
     await listChats(0, { includeTemporary: true });
     const url = new URL(spy.mock.calls[0]![1] as string);
     expect(url.searchParams.get('includeTemporary')).toBe('true');
+  });
+});
+
+describe('cancelQueuedMessage', () => {
+  beforeEach(() => vi.restoreAllMocks());
+  const answered = (data: unknown) => {
+    vi.spyOn(http, 'apiBase').mockReturnValue('http://d');
+    return vi.spyOn(http, 'request').mockResolvedValue(data);
+  };
+
+  it('is true when the daemon took the message back', async () => {
+    const spy = answered({ cancelled: true });
+    expect(await cancelQueuedMessage(0, 'chat-1', 'm1')).toBe(true);
+    expect(spy).toHaveBeenCalledWith('DELETE', 'http://d/api/chats/chat-1/queue/m1');
+  });
+
+  it('is false when the agent already had it', async () => {
+    answered({ cancelled: false });
+    expect(await cancelQueuedMessage(0, 'chat-1', 'm1')).toBe(false);
+  });
+
+  it.each([undefined, {}])('reads an older daemon’s answer (%o) as taken back', async (data) => {
+    answered(data);
+    expect(await cancelQueuedMessage(0, 'chat-1', 'm1')).toBe(true);
   });
 });

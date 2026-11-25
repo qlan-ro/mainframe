@@ -46,7 +46,7 @@ export function composer(page: Page) {
       await this.send().click();
     },
     modelOption: (id: string) => page.getByTestId(`composer-model-select-option-${id}`),
-    /** Effort now lives in a model row's flyout, keyed by the model it belongs to. */
+    /** The selected model's effort segment, below the model list. */
     modelEffortOption: (modelId: string, level: string) =>
       page.getByTestId(`composer-model-${modelId}-effort-${level}`),
     permissionModeOption: (id: string) => page.getByTestId(`composer-permission-mode-select-option-${id}`),

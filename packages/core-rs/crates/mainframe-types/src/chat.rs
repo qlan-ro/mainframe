@@ -265,6 +265,9 @@ pub struct QueuedMessageRef {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachment_ids: Option<Vec<String>>,
     pub timestamp: String,
+    /// Folded into the running turn instead of waiting for it to end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steered: Option<bool>,
 }
 
 #[cfg(test)]

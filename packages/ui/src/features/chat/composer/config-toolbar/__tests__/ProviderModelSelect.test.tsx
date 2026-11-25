@@ -30,7 +30,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { ProviderModelSelect, type ProviderModelSelectProps } from '../ProviderModelSelect';
+import { ProviderModelSelect } from '../ProviderModelSelect';
 import type { AdapterInfo, AdapterModel, Chat, EffortLevel, FeatureKey } from '@qlan-ro/mainframe-types';
 
 // ---------------------------------------------------------------------------
@@ -112,7 +112,6 @@ interface RenderProps {
   disabled?: boolean;
   setAdapter?: (id: string) => void;
   setModel?: (id: string) => void;
-  setModelTuning?: ProviderModelSelectProps['setModelTuning'];
   setEffort?: (effort: EffortLevel) => void;
   setFeature?: (key: FeatureKey, on: boolean) => void;
   hideProviderSwitch?: boolean;
@@ -121,7 +120,6 @@ interface RenderProps {
 function renderSelect(props: RenderProps = {}) {
   const setAdapter = props.setAdapter ?? vi.fn();
   const setModel = props.setModel ?? vi.fn();
-  const setModelTuning = props.setModelTuning ?? vi.fn();
   const setEffort = props.setEffort ?? vi.fn();
   const setFeature = props.setFeature ?? vi.fn();
   const chat = props.chat ?? makeChat({ adapterId: 'claude', model: 'sonnet' });
@@ -144,7 +142,6 @@ function renderSelect(props: RenderProps = {}) {
         disabled={disabled}
         setAdapter={setAdapter}
         setModel={setModel}
-        setModelTuning={setModelTuning}
         setEffort={setEffort}
         setFeature={setFeature}
         hideProviderSwitch={props.hideProviderSwitch}
@@ -152,7 +149,7 @@ function renderSelect(props: RenderProps = {}) {
     </TooltipProvider>,
   );
 
-  return { setAdapter, setModel, setModelTuning, setEffort, setFeature };
+  return { setAdapter, setModel, setEffort, setFeature };
 }
 
 // ---------------------------------------------------------------------------
@@ -415,10 +412,16 @@ describe('ProviderModelSelect — default model shows "default" marker', () => {
 describe('ProviderModelSelect — disabled prop makes the picker inert mid-turn', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('disabled=true renders the trigger with the disabled attribute', () => {
+  it('disabled=true keeps the label readable: aria-disabled, not disabled, and the reason in its name', () => {
     renderSelect({ disabled: true });
 
-    expect(screen.getByTestId('composer-model-select')).toBeDisabled();
+    const trigger = screen.getByTestId('composer-model-select');
+    expect(trigger).not.toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    expect(trigger).toHaveAttribute(
+      'aria-label',
+      'Provider and model: Claude Sonnet 4. Model changes apply after this turn',
+    );
   });
 
   it('disabled=true blocks the popover from opening and never calls setModel', async () => {
@@ -435,7 +438,7 @@ describe('ProviderModelSelect — disabled prop makes the picker inert mid-turn'
     renderSelect({});
 
     const trigger = screen.getByTestId('composer-model-select');
-    expect(trigger).not.toBeDisabled();
+    expect(trigger).not.toHaveAttribute('aria-disabled');
 
     await userEvent.click(trigger);
 
@@ -664,21 +667,16 @@ const ADAPTER_TUNABLE: AdapterInfo = {
   models: [TUNABLE, HAIKU],
 };
 
-/**
- * Opens the model menu, then a model row's flyout. HOVER, not click — clicking
- * a row chooses that model and closes the whole menu, which is the point of the
- * pattern.
- */
+/** Opens the model menu; the selected model's tuning sits inside it, below the list. */
 async function openFlyout(user: ReturnType<typeof userEvent.setup>, modelId: string) {
   await user.click(screen.getByTestId('composer-model-select'));
-  await user.hover(screen.getByTestId(`composer-model-select-option-${modelId}`));
   return screen.findByTestId(`composer-model-${modelId}-tuning`);
 }
 
-describe('ProviderModelSelect — per-model tuning flyout', () => {
+describe("ProviderModelSelect — the selected model's tuning", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('gives a model with no effort levels and no options no flyout at all', async () => {
+  it('shows no tuning for a selected model with no effort levels and no options', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderSelect({
       adapters: [ADAPTER_TUNABLE],
@@ -688,7 +686,6 @@ describe('ProviderModelSelect — per-model tuning flyout', () => {
     });
 
     await user.click(screen.getByTestId('composer-model-select'));
-    await user.click(screen.getByTestId('composer-model-select-option-haiku'));
 
     expect(screen.queryByTestId('composer-model-haiku-tuning')).toBeNull();
   });
@@ -782,36 +779,23 @@ describe('ProviderModelSelect — per-model tuning flyout', () => {
     expect(setFeature).toHaveBeenCalledExactlyOnceWith('fast', false);
   });
 
-  it('a non-active model previews its defaults; touching a control switches to it with that tuning', async () => {
+  it('shows tuning for the selected model only, not for the other rows', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
-    const setEffort = vi.fn();
-    const setModelTuning = vi.fn();
     renderSelect({
       adapters: [ADAPTER_TUNABLE],
       adapter: ADAPTER_TUNABLE,
-      // haiku is selected, so the tunable row is NOT the active model
       model: HAIKU,
-      chat: { ...makeChat({ adapterId: 'claude', model: 'haiku' }), effort: 'low' },
-      setEffort,
-      setModelTuning,
+      chat: makeChat({ adapterId: 'claude', model: 'haiku' }),
     });
 
-    await openFlyout(user, 'tunable');
+    await user.click(screen.getByTestId('composer-model-select'));
 
-    // Its own default, not the chat's 'low'.
-    expect(screen.getByTestId('composer-model-tunable-effort-medium')).toHaveAttribute('data-state', 'checked');
-
-    // One compound write: switch model AND apply the effort — never the plain
-    // active-model setter, which would tune the wrong model.
-    fireEvent.click(screen.getByTestId('composer-model-tunable-effort-high'));
-    expect(setModelTuning).toHaveBeenCalledExactlyOnceWith('tunable', { effort: 'high' });
-    expect(setEffort).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByTestId('composer-model-tunable-feature-fast'));
-    expect(setModelTuning).toHaveBeenCalledWith('tunable', { fast: true });
+    expect(screen.getByTestId('composer-model-select-option-tunable')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-model-tunable-tuning')).toBeNull();
+    expect(screen.queryByTestId('composer-model-tunable-effort-high')).toBeNull();
   });
 
-  it('clicking a flyout row still selects that model', async () => {
+  it('clicking another model row selects that model', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const setModel = vi.fn();
     renderSelect({
@@ -844,7 +828,7 @@ const ADAPTER_ULTRA: AdapterInfo = {
   models: [ULTRA_MODEL, HAIKU],
 };
 
-describe('ProviderModelSelect — per-model tuning flyout offers ultra when advertised', () => {
+describe('ProviderModelSelect — tuning offers ultra when advertised', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("shows a labelled 'Ultra' option for a model advertising it (red today: empty label)", async () => {
@@ -887,26 +871,26 @@ describe('ProviderModelSelect — trigger effort suffix', () => {
       name: "the chat's own effort",
       model: TUNABLE,
       chat: { ...makeChat({ adapterId: 'claude', model: 'tunable' }), effort: 'high' },
-      expected: 'Tunable · High',
+      expected: 'Provider and model: Tunable High',
     },
     {
       name: "the model's default effort when the chat sets none",
       model: TUNABLE,
       chat: makeChat({ adapterId: 'claude', model: 'tunable' }),
-      expected: 'Tunable · Medium',
+      expected: 'Provider and model: Tunable Medium',
     },
     {
       name: 'no suffix at all for a model with no effort axis',
       model: HAIKU,
       chat: makeChat({ adapterId: 'claude', model: 'haiku' }),
-      expected: 'Claude Haiku 4',
+      expected: 'Provider and model: Claude Haiku 4',
     },
   ];
 
   it.each(CASES)('shows $name', ({ model, chat, expected }) => {
     renderSelect({ adapters: [ADAPTER_TUNABLE], adapter: ADAPTER_TUNABLE, model, chat });
 
-    expect(screen.getByTestId('composer-model-select').textContent).toBe(expected);
+    expect(screen.getByTestId('composer-model-select')).toHaveAttribute('aria-label', expected);
   });
 });
 

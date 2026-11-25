@@ -7,7 +7,7 @@
  */
 import type { AppendMessage } from '@assistant-ui/react';
 import type { PromptRemedy, PromptSendMeta } from '@qlan-ro/mainframe-types';
-import { unarchiveNativeSession } from '../../../lib/api/chats';
+import { cancelQueuedMessage, unarchiveNativeSession } from '../../../lib/api/chats';
 import { uploadAttachments } from '../../../lib/api/attachments';
 import {
   acceptWorktreeOffer as postAcceptWorktreeOffer,
@@ -16,8 +16,12 @@ import {
 import { mfToast } from '@/lib/toast';
 import { matchCommandInvocation } from '../commands/command-registry';
 import { buildPendingMessage, parseSendInput } from './chat-reconcile';
+import { sendErrorMessage, sendRefusal } from './describe-send-error';
 import { previewsById } from './local-attachments';
-import type { ChatStateEvent, ChatThreadState } from './chat-thread-state';
+import { wantsSteer } from './steer';
+import { useHeldQueue } from '../composer/queue/held-queue-store';
+import { heldTimestamp, matchQueued, noteQueued } from '../composer/queue/sent-order';
+import type { ChatStateEvent, ChatThreadState, PendingUserMessage } from './chat-thread-state';
 
 export interface ChatActionHost {
   getPort(): number;
@@ -27,7 +31,7 @@ export interface ChatActionHost {
   dispatch(event: ChatStateEvent): void;
   /** The controller's deduped load — resolves instantly once seeded. */
   load(): Promise<void>;
-  sendPrompt(text: string, meta: PromptSendMeta): Promise<{ queued: boolean }>;
+  sendPrompt(text: string, meta: PromptSendMeta): Promise<{ queued: boolean; queuedMessageId?: string }>;
 }
 
 function refuseIfDirectoryMissing(host: ChatActionHost): boolean {
@@ -54,8 +58,13 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   // so a later retry can re-carry it (T34) — attachmentIds are NOT part of
   // it: a retry is text-only.
   const command = matchCommandInvocation(text);
-  const sendMeta = command ? { command: { ...command } } : {};
-  const pending = buildPendingMessage(host.getDaemonId(), text, sendMeta, uploadItems);
+  const sendMeta: PromptSendMeta = command ? { command: { ...command } } : {};
+  const running = host.getState().runState.type === 'running';
+  if (running && wantsSteer(message) && !command && uploadItems.length === 0) sendMeta.steer = true;
+  const pending: PendingUserMessage = {
+    ...buildPendingMessage(host.getDaemonId(), text, sendMeta, uploadItems),
+    ...(running && !command && !sendMeta.steer ? { queueing: true } : {}),
+  };
   host.dispatch({ type: 'local.message.queued', pending });
   host.dispatch({ type: 'run.started' });
 
@@ -109,6 +118,82 @@ export async function retryChatMessage(host: ChatActionHost, clientId: string, r
   } catch (error) {
     host.dispatch({ type: 'local.message.failed', clientId, error, stage: 'send', pending });
     throw error;
+  }
+}
+
+/** How long Stop waits for the queue to be taken back before interrupting anyway. */
+const HOLD_QUEUE_BUDGET_MS = 1000;
+
+/**
+ * Take the queue back from the agent before a Stop, so nothing queued starts a
+ * new turn behind it (C10), and cancel what "Send now" has not sent yet. Each row is kept the moment its cancel wins; one the
+ * agent had already picked up is part of the conversation and is not held.
+ */
+export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
+  useHeldQueue.getState().releaseUnsent(host.getDaemonId());
+  const refs = Object.values(host.getState().interactions.queued).filter((ref) => ref.delivery == null);
+  if (refs.length === 0) return;
+  const chatId = host.getDaemonId();
+  const chat = host.getState().chatConfig;
+  const temporary = chat?.temporary === true;
+  matchQueued(chatId, refs);
+  const cancels = refs.map((ref) =>
+    cancelQueuedMessage(host.getPort(), chatId, ref.messageId).then(
+      (takenBack) => {
+        // The agent already had it: it is in the conversation, not held.
+        if (!takenBack) return;
+        const timestamp = heldTimestamp(chatId, ref.messageId);
+        useHeldQueue
+          .getState()
+          .hold(chatId, ref, { temporary, projectId: chat?.projectId, ...(timestamp && { timestamp }) });
+      },
+      (error: unknown) => console.warn('[chat] queued message could not be held', { error }),
+    ),
+  );
+  await Promise.race([Promise.all(cancels), new Promise((resolve) => setTimeout(resolve, HOLD_QUEUE_BUDGET_MS))]);
+}
+
+/**
+ * Send a held row, then line the rows behind it up again in their order. They
+ * are claimed first, so a second press (or another window) finds nothing to
+ * send, and each leaves the queue only once the daemon has it: a quit in between
+ * loses none. What does not go out is given back: with the reason when it was
+ * refused, or marked when it may have reached the agent. A Stop meanwhile takes
+ * back the rows that have not gone out.
+ */
+export async function sendHeldMessages(host: ChatActionHost, firstId: string): Promise<void> {
+  const chatId = host.getDaemonId();
+  const held = useHeldQueue.getState();
+  const press = crypto.randomUUID();
+  const rows = held.claimFrom(chatId, firstId, press);
+  // Another press holds the claims, and gives them back itself.
+  if (rows.length === 0) return;
+  try {
+    // The prompt needs the facade client; failing here, nothing has gone out.
+    await host.load();
+    for (const row of rows) {
+      const { messageId, content, attachmentIds } = row;
+      // Removed meanwhile, with its chat say, stopped, or no longer this press's: not sent.
+      if (!held.startSending(chatId, messageId, press)) continue;
+      let queuedMessageId: string | undefined;
+      try {
+        ({ queuedMessageId } = await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {}));
+      } catch (error) {
+        const reason = sendRefusal(error);
+        if (reason !== undefined) {
+          console.warn('[chat] held message refused', { chatId, messageId, raw: sendErrorMessage(error) });
+          held.refuse(chatId, messageId, press, reason);
+        }
+        throw error;
+      }
+      if (queuedMessageId) {
+        noteQueued(chatId, { queuedMessageId, timestamp: row.timestamp });
+        matchQueued(chatId, Object.values(host.getState().interactions.queued));
+      }
+      held.remove(chatId, messageId);
+    }
+  } finally {
+    held.releasePress(chatId, press);
   }
 }
 

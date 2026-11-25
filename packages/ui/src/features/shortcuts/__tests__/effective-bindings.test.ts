@@ -28,12 +28,38 @@ const ENTRIES: ShortcutDescriptor[] = [
   },
 ];
 
+const FIXED: ShortcutDescriptor = {
+  id: 'a.fixed',
+  chord: { code: 'Enter', alt: true },
+  label: 'Fixed',
+  group: 'Chat',
+  fixed: true,
+};
+
 const byId = (id: string) => ENTRIES.find((e) => e.id === id) as ShortcutDescriptor;
 
 describe('isRebindable', () => {
   it('is false for a multi-chord family — one recorder cannot express nine chords', () => {
     expect(isRebindable(byId('a.one'))).toBe(true);
     expect(isRebindable(byId('a.family'))).toBe(false);
+  });
+});
+
+describe('a fixed entry (handled by the field it acts in)', () => {
+  it('is not rebindable', () => {
+    expect(isRebindable(FIXED)).toBe(false);
+  });
+
+  it('is never handed to the global dispatcher, so the field keeps the key', () => {
+    const ids = dispatchableShortcuts([...ENTRIES, FIXED], {}).map((e) => e.id);
+
+    expect(ids).toEqual(['a.one', 'a.two', 'a.family']);
+  });
+
+  it('still shows its chord in the effective bindings, for the cheat sheet', () => {
+    const fixed = effectiveBindings([FIXED], {})[0];
+
+    expect(fixed?.chord).toEqual({ code: 'Enter', alt: true });
   });
 });
 

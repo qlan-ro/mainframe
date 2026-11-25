@@ -1,109 +1,158 @@
 'use client';
 
 /**
- * ComposerToolbar — the left-slot of the composer bottom bar.
+ * ComposerToolbar — the model and the permissions (C4), as two controls or,
+ * below 400px, one chip (C6).
  *
- * Calls useAdapters + useComposerTuning ONCE and fans out resolved props to
- * all config controls so no child runs its own hooks.
+ * Calls useAdapters + useComposerTuning ONCE and fans out resolved props, so
+ * no child runs its own hooks. Renders nothing before the chat loads.
  *
- * Left→right order: Agent+Model · Permission · Plan · Temporary · Worktree ·
- * context percent. Effort and features are no longer their own chips — they
- * live in each model row's flyout inside the model menu (the Cursor pattern).
- * Renders nothing when every control is hidden (e.g. before chat/model loads).
+ * `variant="side"` (todo #344): the side chat's adapter is a copy of the
+ * parent's and locked, so its menu has no provider tabs.
  *
- * `variant="side"` (todo #344): the side-chat panel's composer offers no
- * adapter switch, no worktree controls, and no Temporary toggle — its adapter
- * is a one-time copy of the parent's and locked, and the chat can never be
- * temporary-toggled or given its own worktree. Model and permission stay.
- *
- * Wired into Composer.tsx via the `data-testid="chat-composer-toolbar"` slot.
+ * ⇧⇥ in the field reaches the permissions through `ref.cyclePermission`
+ * (C12): it changes the mode, then shows and announces it for a moment.
  */
 
-import { useAdapters, useComposerTuning } from './use-composer-tuning';
-import { ProviderModelSelect } from './ProviderModelSelect';
-import { PermissionSelect } from './PermissionSelect';
-import { PlanModeToggle } from './PlanModeToggle';
-import { TemporaryToggle } from './TemporaryToggle';
-import { WorktreePopover } from './WorktreePopover';
-import { TuningWarningDialog } from './TuningWarningDialog';
-import { ContextPercent } from './ContextPercent';
-import { ProviderSwitchConfirm } from './ProviderSwitchConfirm';
-import { providerSwitchBlockedReason } from './provider-switch';
-import { useProviderSwitch } from './use-provider-switch';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 import { useChatExtras } from '../../runtime/chat-extras';
+import { useAdapters, useComposerTuning } from './use-composer-tuning';
+import { CombinedSelect } from './CombinedSelect';
+import { cyclePermission, permissionLabel } from './permission-modes';
+import { PermissionSelect, currentPermission } from './PermissionSelect';
+import { ProviderModelSelect } from './ProviderModelSelect';
+import { providerSwitchBlockedReason } from './provider-switch';
+import { TuningWarningDialog } from './TuningWarningDialog';
+import { UnattendedConfirmDialog } from './UnattendedConfirmDialog';
+import { useProviderSwitch } from './use-provider-switch';
+import { useUnattendedGuard } from './use-unattended-confirm';
 
-export function ComposerToolbar({ variant = 'main' }: { variant?: 'main' | 'side' } = {}) {
+const ANNOUNCE_MS = 1400;
+
+export interface ComposerToolbarHandle {
+  cyclePermission: () => void;
+}
+
+/** Holds a value for a moment. */
+function useFlash<T>(ms: number): [T | null, (value: T) => void] {
+  const [held, setHeld] = useState<T | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const flash = useCallback(
+    (value: T) => {
+      clearTimeout(timer.current);
+      setHeld(value);
+      timer.current = setTimeout(() => setHeld(null), ms);
+    },
+    [ms],
+  );
+  return [held, flash];
+}
+
+export function ComposerToolbar({
+  variant = 'main',
+  ref,
+}: {
+  variant?: 'main' | 'side';
+  ref?: Ref<ComposerToolbarHandle>;
+}) {
   const adapters = useAdapters();
-  const {
-    chat,
-    adapter,
-    model,
-    runningModel,
-    providerDefaults,
-    setModel,
-    setModelTuning,
-    setAdapter,
-    setPermissionMode,
-    setPlanMode,
-    setTemporary,
-    draftMode,
-    setEffort,
-    setFeature,
-    disabled,
-    // The agent is locked once the thread has any messages — switching mid-thread
-    // would orphan the CLI session (mirrors desktop's hasMessages guard).
-    hasMessages,
-    contextTokens,
-    tuningWarning,
-  } = useComposerTuning(adapters);
+  const tuning = useComposerTuning(adapters);
+  const { chat, adapter, model, runningModel, providerDefaults, setPermissionMode, disabled } = tuning;
   const extras = useChatExtras();
   const queuedCount = Object.values(extras?.queued ?? {}).filter((q) => q != null).length;
-  const providerSwitch = useProviderSwitch(chat, extras?.port ?? null, adapters);
+  const switchProvider = useProviderSwitch(chat, extras?.port ?? null);
+  const mode: ExecutionMode = chat ? currentPermission(chat, providerDefaults) : 'default';
+  const unattended = useUnattendedGuard(chat?.id ?? null);
+  const choosePermission = (next: ExecutionMode) => unattended.run(next, mode, () => setPermissionMode(next));
+  const controls = useRef<HTMLDivElement>(null);
+  /** The permissions control on screen: the chip stands in for it in a narrow composer. */
+  const focusPermissions = () =>
+    [...(controls.current?.querySelectorAll<HTMLElement>('[data-permissions-control]') ?? [])]
+      .find((el) => el.offsetParent !== null)
+      ?.focus();
+  const [announced, announce] = useFlash<ExecutionMode>(ANNOUNCE_MS);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      cyclePermission: () => {
+        if (chat == null) return;
+        const next = cyclePermission(mode);
+        setPermissionMode(next);
+        // The mode asked for: the chat still carries the old one until the daemon answers.
+        announce(next);
+      },
+    }),
+    [chat, mode, setPermissionMode, announce],
+  );
 
   // All controls need a resolved chat; nothing to render while loading.
   if (!chat) return null;
   const fromName = adapters.find((a) => a.id === chat.adapterId)?.name ?? chat.adapterId;
+  const menu = {
+    chat,
+    adapters,
+    adapter,
+    model,
+    runningModel,
+    showCurrentModel: chat.processState != null || disabled,
+    locked: tuning.hasMessages,
+    providerDefaults,
+    setAdapter: tuning.setAdapter,
+    setModel: tuning.setModel,
+    setEffort: tuning.setEffort,
+    setFeature: tuning.setFeature,
+    hideProviderSwitch: variant === 'side',
+    switchBlockedReason: providerSwitchBlockedReason(chat, queuedCount, fromName),
+    onSwitchProvider: switchProvider,
+  };
 
   return (
-    <>
+    <div ref={controls} className="relative flex min-w-0 items-center gap-0.5">
+      {/* Not a Radix tooltip: those take part in the menus' dismiss layers, and
+          this one shows and hides on its own. */}
+      <span
+        role="status"
+        aria-live="polite"
+        data-testid="composer-permission-announcement"
+        className={
+          announced
+            ? 'absolute bottom-full left-0 z-10 mb-1 rounded-md bg-foreground px-3 py-1.5 text-xs whitespace-nowrap text-background'
+            : 'sr-only'
+        }
+      >
+        {announced &&
+          `Permissions: ${permissionLabel(announced)}${chat.planMode ? ', after the plan' : ''} · ⇧⇥ to switch`}
+      </span>
       <ProviderModelSelect
-        chat={chat}
-        adapters={adapters}
-        adapter={adapter}
-        model={model}
-        runningModel={runningModel}
-        showCurrentModel={chat.processState != null || disabled}
-        locked={hasMessages}
+        {...menu}
         disabled={disabled}
-        providerDefaults={providerDefaults}
-        setAdapter={setAdapter}
-        setModel={setModel}
-        setModelTuning={setModelTuning}
-        setEffort={setEffort}
-        setFeature={setFeature}
-        hideProviderSwitch={variant === 'side'}
-        switchBlockedReason={providerSwitchBlockedReason(chat, queuedCount, fromName)}
-        onSwitchProvider={providerSwitch.request}
+        className="@max-[560px]/composer:max-w-[150px] @max-[400px]/composer:hidden"
       />
       <PermissionSelect
         chat={chat}
         adapter={adapter}
-        setPermissionMode={setPermissionMode}
+        setPermissionMode={choosePermission}
         providerDefaults={providerDefaults}
+        className="@max-[400px]/composer:hidden"
       />
-      {adapter != null && <PlanModeToggle chat={chat} adapter={adapter} setPlanMode={setPlanMode} />}
-      {variant !== 'side' && <TemporaryToggle chat={chat} draftMode={draftMode} setTemporary={setTemporary} />}
-      {variant !== 'side' && <WorktreePopover chat={chat} hasMessages={hasMessages} busy={disabled} />}
-      <ContextPercent />
+      <CombinedSelect
+        {...menu}
+        disabled={disabled}
+        setPermissionMode={choosePermission}
+        className="@min-[400px]/composer:hidden"
+      />
       <TuningWarningDialog
-        pending={tuningWarning.pending}
-        contextTokens={contextTokens}
-        suppressChecked={tuningWarning.suppressChecked}
-        onSuppressChange={tuningWarning.setSuppressChecked}
-        onConfirm={tuningWarning.confirm}
-        onCancel={tuningWarning.cancel}
+        pending={tuning.tuningWarning.pending}
+        contextTokens={tuning.contextTokens}
+        suppressChecked={tuning.tuningWarning.suppressChecked}
+        onSuppressChange={tuning.tuningWarning.setSuppressChecked}
+        onConfirm={tuning.tuningWarning.confirm}
+        onCancel={tuning.tuningWarning.cancel}
       />
-      <ProviderSwitchConfirm hook={providerSwitch} />
-    </>
+      <UnattendedConfirmDialog confirm={unattended} returnFocus={focusPermissions} />
+    </div>
   );
 }

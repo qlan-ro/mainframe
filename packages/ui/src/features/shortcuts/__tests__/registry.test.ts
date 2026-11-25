@@ -34,6 +34,46 @@ describe('SHORTCUTS — well-formedness', () => {
   });
 });
 
+describe('SHORTCUTS — the composer redesign entries', () => {
+  it('binds ⌘. to stopping the turn and every sub-agent, ignoring key repeat', () => {
+    expect(shortcutById('chat.stop')).toMatchObject({
+      chord: { code: 'Period', mod: true },
+      label: 'Stop the turn and all sub-agents',
+      group: 'Chat',
+      ignoreRepeat: true,
+    });
+  });
+
+  it('binds ⌘; to choosing the project of a new session', () => {
+    expect(shortcutById('chat.project-picker')).toMatchObject({
+      chord: { code: 'Semicolon', mod: true },
+      group: 'Chat',
+    });
+  });
+
+  it('lists ⌥↵ as fixed: the composer handles it', () => {
+    expect(shortcutById('composer.send-other-way')).toMatchObject({
+      chord: { code: 'Enter', alt: true },
+      label: 'Steer instead of queue, or the reverse',
+      fixed: true,
+    });
+  });
+
+  it('lists ⇧⇥ as fixed: the composer handles it', () => {
+    expect(shortcutById('composer.cycle-permission')).toMatchObject({
+      chord: { code: 'Tab', shift: true },
+      fixed: true,
+    });
+  });
+
+  it('marks nothing else fixed', () => {
+    expect(SHORTCUTS.filter((entry: ShortcutDescriptor) => entry.fixed).map((entry) => entry.id)).toEqual([
+      'composer.send-other-way',
+      'composer.cycle-permission',
+    ]);
+  });
+});
+
 describe('findChordConflicts — the guard itself', () => {
   it('reports a deliberately duplicated chord as a conflict pair', () => {
     const fixture: ShortcutDescriptor[] = [

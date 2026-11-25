@@ -25,7 +25,7 @@
   "mainframe-automations/src/tokens/compare_tests.rs": 307,
   "mainframe-automations/src/tokens/variables_tests.rs": 331,
   "mainframe-automations/src/triggers/router_tests.rs": 476,
-  "mainframe-chat/src/chat_manager/send.rs": 237,
+  "mainframe-chat/src/chat_manager/send.rs": 232,
   "mainframe-chat/src/event_handler/partial_overlay_tests.rs": 376,
   "mainframe-chat/src/lifecycle_manager.rs": 732,
   "mainframe-claude-workflows/tests/store_lifecycle.rs": 482,
@@ -53,6 +53,6 @@
   "mainframe-server/tests/support/mod.rs": 423,
   "mainframe-server/tests/workflow_runs_history.rs": 392,
   "mainframe-services/src/quota/manager.rs": 363,
-  "mainframe-types/src/adapter.rs": 579,
+  "mainframe-types/src/adapter.rs": 519,
   "mainframe-types/src/events.rs": 331
 }

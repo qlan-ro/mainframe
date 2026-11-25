@@ -53,6 +53,7 @@ impl Adapter for CodexAdapter {
             // True only on a CLI with the `thread/fork` `lastTurnId` surface —
             // `None` (never refreshed, or version undetermined) is `false`.
             fork: version.as_deref().is_some_and(fork_supported),
+            steer: true,
         }
     }
 

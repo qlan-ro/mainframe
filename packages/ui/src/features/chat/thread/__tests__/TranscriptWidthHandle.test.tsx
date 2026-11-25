@@ -5,7 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { TranscriptWidthHandle } from '../TranscriptWidthHandle';
 
-/** A 680px column centred at x=500 in a 1200px viewport. */
+/** A 780px column centred at x=500 in a 1200px viewport. */
 function Harness() {
   const rootRef = useRef<HTMLDivElement>(null);
   return (
@@ -73,9 +73,9 @@ it('a click without a drag leaves a wider stored width alone', () => {
   expect(useUiPrefs.getState().transcriptWidth).toBe(1400);
 });
 
-it('double-click restores the 680px default', () => {
+it('double-click restores the 780px default', () => {
   useUiPrefs.setState({ transcriptWidth: 1100 });
   renderHarness();
   fireEvent.doubleClick(screen.getByTestId('transcript-width-handle-left'));
-  expect(useUiPrefs.getState().transcriptWidth).toBe(680);
+  expect(useUiPrefs.getState().transcriptWidth).toBe(780);
 });

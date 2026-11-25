@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { SquareCheckIcon } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -7,8 +7,11 @@ import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
-import type { ReplyFn } from './gate-types';
-import { GateCardShell, GateHead } from './shared/GateShell';
+import { gateEyebrow, type GateContext, type ReplyFn } from './gate-types';
+import { cn } from '@/lib/utils';
+import { UnattendedConfirmDialog } from '../composer/config-toolbar/UnattendedConfirmDialog';
+import { useUnattendedGuard } from '../composer/config-toolbar/use-unattended-confirm';
+import { GateCardShell, GateHead, GATE_PRIMARY } from './shared/GateShell';
 import { markdownComponents } from '../parts/markdown-text';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
 import { buildPlanResponse } from './build-control-response';
@@ -25,6 +28,11 @@ export interface PlanGateProps {
   reply: ReplyFn;
   /** Resolved by the mount from the chat's adapter; omitted means no Auto segment. */
   autoAllowed?: boolean;
+  /** The asking chat: approving into Unattended asks once per session (C13). */
+  chatId?: string;
+  /** The mode the composer's permissions control names ("then Auto-Edits"), preselected (G3). */
+  composerMode?: ExecutionMode;
+  context?: GateContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,17 +80,25 @@ function ControlsPanel({
 // ---------------------------------------------------------------------------
 
 function ActionRow({
+  approveRef,
   onApprove,
   onKeepPlanning,
   onReject,
 }: {
+  approveRef: RefObject<HTMLButtonElement | null>;
   onApprove: () => void;
   onKeepPlanning: () => void;
   onReject: () => void;
 }) {
   return (
     <div className="flex items-center gap-2 px-4 pb-3">
-      <Button size="sm" data-testid="chat-plan-approve" onClick={onApprove} className="flex-1">
+      <Button
+        size="sm"
+        ref={approveRef}
+        data-testid="chat-plan-approve"
+        onClick={onApprove}
+        className={cn('flex-1', GATE_PRIMARY)}
+      >
         Approve &amp; run
       </Button>
       <Button variant="outline" size="sm" data-testid="chat-plan-keep-planning" onClick={onKeepPlanning}>
@@ -124,7 +140,13 @@ function ReviseRow({
         <Button variant="outline" size="sm" data-testid="chat-plan-revise-cancel" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" data-testid="chat-plan-send-feedback" disabled={feedback.trim() === ''} onClick={onSend}>
+        <Button
+          size="sm"
+          className={GATE_PRIMARY}
+          data-testid="chat-plan-send-feedback"
+          disabled={feedback.trim() === ''}
+          onClick={onSend}
+        >
           Send feedback
         </Button>
       </div>
@@ -136,16 +158,22 @@ function ReviseRow({
 // PlanGate
 // ---------------------------------------------------------------------------
 
-export function PlanGate({ entry, reply, autoAllowed }: PlanGateProps) {
-  const [execMode, setExecMode] = useState<ExecutionMode>('default');
+export function PlanGate({ entry, reply, autoAllowed, chatId, composerMode, context }: PlanGateProps) {
+  const offered = composerMode !== 'auto' || autoAllowed === true;
+  const [execMode, setExecMode] = useState<ExecutionMode>((offered && composerMode) || 'default');
   const [clearContext, setClearContext] = useState(false);
   const [revising, setRevising] = useState(false);
   const [feedback, setFeedback] = useState('');
 
   const plan = (entry.request.input.plan as string | undefined) ?? '';
 
+  const unattended = useUnattendedGuard(chatId ?? null);
+  const approveButton = useRef<HTMLButtonElement>(null);
+
   const handleApprove = () => {
-    void reply(buildPlanResponse(entry, { kind: 'approve', executionMode: execMode, clearContext }));
+    const approve = () =>
+      void reply(buildPlanResponse(entry, { kind: 'approve', executionMode: execMode, clearContext }));
+    unattended.run(execMode, composerMode ?? 'default', approve);
   };
 
   const handleSendFeedback = () => {
@@ -163,7 +191,7 @@ export function PlanGate({ entry, reply, autoAllowed }: PlanGateProps) {
         <GateHead
           icon={<SquareCheckIcon className="size-3.5" />}
           tileClassName="bg-primary/10 text-primary"
-          eyebrow="Plan"
+          eyebrow={gateEyebrow('Plan', context, { withTitle: true })}
           title="Ready to implement"
         />
         {plan && <PlanBody plan={plan} />}
@@ -182,9 +210,15 @@ export function PlanGate({ entry, reply, autoAllowed }: PlanGateProps) {
             onCancel={() => setRevising(false)}
           />
         ) : (
-          <ActionRow onApprove={handleApprove} onKeepPlanning={() => setRevising(true)} onReject={handleReject} />
+          <ActionRow
+            approveRef={approveButton}
+            onApprove={handleApprove}
+            onKeepPlanning={() => setRevising(true)}
+            onReject={handleReject}
+          />
         )}
       </GateCardShell>
+      <UnattendedConfirmDialog confirm={unattended} returnFocus={() => approveButton.current?.focus()} />
     </div>
   );
 }

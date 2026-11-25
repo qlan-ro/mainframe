@@ -19,10 +19,12 @@
  *  6. attachWorktree is called when an existing worktree row is clicked
  *  7. Mid-session warning appears when hasMessages=true
  *  8. Cancel button closes the popover (Enable button disappears)
+ *  9. The caller owns open/onOpenChange and the trigger (live chats only; a
+ *     draft picks its worktree in DraftBranchPicker)
  */
+import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 // ---------------------------------------------------------------------------
@@ -53,10 +55,14 @@ vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
   useDaemonPort: () => 31415,
 }));
 
+let daemonIsLocal = false;
+vi.mock('@/lib/daemon/use-daemon-is-local', () => ({ useDaemonIsLocal: () => daemonIsLocal }));
+const openPathMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/host', () => ({ useHost: () => ({ fs: { openPath: openPathMock } }) }));
+
 // Import component AFTER mocks are in place
 import { WorktreePopover } from '../WorktreePopover';
 import type { Chat } from '@qlan-ro/mainframe-types';
-import { useDraftConfigStore, setDraftConfig, getDraftConfig } from '@/features/sessions/runtime/draft-config';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -84,10 +90,19 @@ function makeChat(overrides?: Partial<Chat>): Chat {
 // Render helper
 // ---------------------------------------------------------------------------
 
+function Harness({ chat, hasMessages, busy }: { chat: Chat; hasMessages: boolean; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <WorktreePopover chat={chat} hasMessages={hasMessages} busy={busy} open={open} onOpenChange={setOpen}>
+      <button type="button" data-testid="composer-worktree-trigger" />
+    </WorktreePopover>
+  );
+}
+
 function renderPopover(chat: Chat, hasMessages = false, busy = false) {
   return render(
     <TooltipProvider>
-      <WorktreePopover chat={chat} hasMessages={hasMessages} busy={busy} />
+      <Harness chat={chat} hasMessages={hasMessages} busy={busy} />
     </TooltipProvider>,
   );
 }
@@ -105,7 +120,8 @@ beforeEach(() => {
   attachWorktreeMock.mockClear();
   getGitBranchesMock.mockClear();
   getProjectWorktreesMock.mockClear();
-  useDraftConfigStore.setState({ drafts: new Map() });
+  openPathMock.mockClear();
+  daemonIsLocal = false;
 });
 
 // ---------------------------------------------------------------------------
@@ -366,7 +382,7 @@ describe('WorktreePopover — a turn in flight', () => {
 
     rerender(
       <TooltipProvider>
-        <WorktreePopover chat={makeChat()} hasMessages={false} busy={false} />
+        <Harness chat={makeChat()} hasMessages={false} busy={false} />
       </TooltipProvider>,
     );
 
@@ -394,280 +410,77 @@ describe('WorktreePopover — cancel closes the popover', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. Trigger shape — fixed 26x20 rounded-sm icon button (RADIUS.sm), matching
-//    the design's distinct icon-button family (03-content.jsx:599-608), not the
-//    auto-sized rounded-[11px] pill shared with the text-bearing chips.
+// 9. Open state belongs to the caller (the bottom strip, K8)
 // ---------------------------------------------------------------------------
 
-describe('WorktreePopover — trigger shape', () => {
-  it('trigger has w-[26px] and rounded-sm, not rounded-[11px]', () => {
-    renderPopover(makeChat());
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    expect(trigger.className).toContain('w-[26px]');
-    expect(trigger.className).toContain('rounded-sm');
-    expect(trigger.className).not.toContain('rounded-[11px]');
-  });
-
-  it('FolderGit2 glyph renders at 13px (design size), not 11px', () => {
-    renderPopover(makeChat());
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    const svg = trigger.querySelector('svg');
-    expect(svg).not.toBeNull();
-    expect(svg!.getAttribute('width')).toBe('13');
-    expect(svg!.getAttribute('height')).toBe('13');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 10. Isolated-state indicator — absolute 5px corner dot (design 03-content.jsx:602),
-//     not an inline Check glyph.
-// ---------------------------------------------------------------------------
-
-describe('WorktreePopover — isolated-state indicator', () => {
-  it('renders an absolute 5px corner dot when isolated, not a Check icon', () => {
-    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
-    renderPopover(chat);
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    const dot = trigger.querySelector('span[aria-hidden]');
-    expect(dot).not.toBeNull();
-    expect(dot!.className).toContain('absolute');
-    expect(dot!.className).toContain('size-[5px]');
-    expect(dot!.className).toContain('rounded-full');
-
-    // No Check glyph (lucide Check renders a <svg> with a polyline path) inside the trigger
-    const svgs = trigger.querySelectorAll('svg');
-    expect(svgs.length).toBe(1); // only FolderGit2
-  });
-
-  it('corner dot uses the primary accent color, not success', () => {
-    const chat = makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
-    renderPopover(chat);
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    const dot = trigger.querySelector('span[aria-hidden]');
-    expect(dot).not.toBeNull();
-    expect(dot!.className).toContain('bg-primary');
-    expect(dot!.className).not.toContain('bg-success');
-  });
-
-  it('does NOT render the corner dot when not isolated', () => {
-    renderPopover(makeChat());
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    const dot = trigger.querySelector('span[aria-hidden]');
-    expect(dot).toBeNull();
-  });
-
-  // An accepted worktree-switch offer rebinds the chat server-side; the daemon's
-  // chat.updated is the only thing that flips this control.
-  it('flips to the isolated state when the chat is rebound to a worktree', () => {
-    const { rerender } = renderPopover(makeChat());
-
-    expect(screen.getByTestId('composer-worktree-trigger')).toHaveAttribute('aria-label', 'Isolate in worktree');
-
-    rerender(
+describe('WorktreePopover — controlled open state', () => {
+  it('stays closed, and fetches nothing, until the caller opens it', () => {
+    render(
       <TooltipProvider>
-        <WorktreePopover
-          chat={makeChat({ worktreePath: '/wt/alpha', branchName: 'alpha' })}
-          hasMessages={false}
-          busy={false}
-        />
+        <WorktreePopover chat={makeChat()} hasMessages={false} busy={false} open={false} onOpenChange={vi.fn()}>
+          <button data-testid="composer-worktree-trigger" />
+        </WorktreePopover>
       </TooltipProvider>,
     );
 
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    expect(trigger).toHaveAttribute('aria-label', 'Worktree: alpha');
-    expect(trigger.className).toContain('border-success');
-    expect(trigger.querySelector('span[aria-hidden]')).not.toBeNull();
+    expect(screen.queryByTestId('composer-worktree-popover')).not.toBeInTheDocument();
+    expect(getGitBranchesMock).not.toHaveBeenCalled();
   });
 
-  // Moving between worktrees relabels the trigger, not just the isolated flag.
-  it('relabels the trigger when the chat moves to a different worktree', () => {
-    const { rerender } = renderPopover(makeChat({ worktreePath: '/wt/alpha', branchName: 'alpha' }));
-
-    rerender(
+  it('asks the caller to open when its trigger is clicked', () => {
+    const onOpenChange = vi.fn();
+    render(
       <TooltipProvider>
-        <WorktreePopover
-          chat={makeChat({ worktreePath: '/wt/beta', branchName: 'beta' })}
-          hasMessages={false}
-          busy={false}
-        />
+        <WorktreePopover chat={makeChat()} hasMessages={false} busy={false} open={false} onOpenChange={onOpenChange}>
+          <button data-testid="composer-worktree-trigger" />
+        </WorktreePopover>
       </TooltipProvider>,
     );
 
-    expect(screen.getByTestId('composer-worktree-trigger')).toHaveAttribute('aria-label', 'Worktree: beta');
-  });
-});
+    fireEvent.click(screen.getByTestId('composer-worktree-trigger'));
 
-// ---------------------------------------------------------------------------
-// 9. Draft mode (todo #223) — a __LOCALID_* chat has no daemon chat yet, so the
-// choice is stashed in the draft config and carried into first-send creation.
-// ---------------------------------------------------------------------------
-
-const DRAFT_ID = '__LOCALID_d1';
-
-function makeDraftChat(overrides?: Partial<Chat>): Chat {
-  return makeChat({ id: DRAFT_ID, ...overrides });
-}
-
-describe('WorktreePopover — draft mode stashes instead of calling the daemon', () => {
-  it('Existing-tab attach patches the draft config and never calls attachWorktree', async () => {
-    setDraftConfig(DRAFT_ID, { projectId: 'p1', adapterId: 'claude' });
-    renderPopover(makeDraftChat());
-
-    openPopover();
-    fireEvent.mouseDown(await screen.findByTestId('composer-worktree-tab-existing'));
-    fireEvent.click(await screen.findByTestId('composer-worktree-attach-/wt/feat-a'));
-
-    await waitFor(() => expect(getDraftConfig(DRAFT_ID)?.worktreePath).toBe('/wt/feat-a'));
-    expect(getDraftConfig(DRAFT_ID)?.branchName).toBe('feat-a');
-    expect(attachWorktreeMock).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(true);
   });
 
-  it('New-tab enable stashes a pendingWorktree and never calls enableWorktree', async () => {
-    setDraftConfig(DRAFT_ID, { projectId: 'p1', adapterId: 'claude' });
-    renderPopover(makeDraftChat());
+  it('asks the caller to close after enabling a worktree', async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <TooltipProvider>
+        <WorktreePopover chat={makeChat()} hasMessages={false} busy={false} open onOpenChange={onOpenChange}>
+          <button data-testid="composer-worktree-trigger" />
+        </WorktreePopover>
+      </TooltipProvider>,
+    );
+    fireEvent.change(await screen.findByTestId('composer-worktree-branch-name'), { target: { value: 'feat/x' } });
 
-    openPopover();
-    const input = await screen.findByTestId('composer-worktree-branch-name');
-    fireEvent.change(input, { target: { value: 'feat/new' } });
     fireEvent.click(screen.getByTestId('composer-worktree-enable'));
 
-    await waitFor(() =>
-      expect(getDraftConfig(DRAFT_ID)?.pendingWorktree).toEqual({ baseBranch: 'main', branchName: 'feat/new' }),
-    );
-    expect(enableWorktreeMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 });
 
-describe('WorktreePopover — draft panel reflects the stashed choice', () => {
-  it('shows the draft panel for an attached draft worktree and cancel clears it', async () => {
-    setDraftConfig(DRAFT_ID, {
-      projectId: 'p1',
-      adapterId: 'claude',
-      worktreePath: '/wt/feat-a',
-      branchName: 'feat-a',
-    });
-    // ComposerToolbar synthesizes the draft chat from the same draft config.
-    renderPopover(makeDraftChat({ worktreePath: '/wt/feat-a', branchName: 'feat-a' }));
+// ---------------------------------------------------------------------------
+// 10. Open folder — only when the daemon shares this machine's filesystem
+// ---------------------------------------------------------------------------
 
+describe('WorktreePopover — Open folder', () => {
+  const isolated = () => makeChat({ worktreePath: '/wt/c1', branchName: 'feat/c1' });
+
+  it('opens the worktree folder through the host when the daemon is local', async () => {
+    daemonIsLocal = true;
+    renderPopover(isolated());
     openPopover();
 
-    expect(await screen.findByTestId('composer-worktree-draft-panel')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('composer-worktree-draft-cancel'));
+    fireEvent.click(await screen.findByTestId('composer-worktree-open-folder'));
 
-    expect(getDraftConfig(DRAFT_ID)?.worktreePath).toBeUndefined();
-    expect(getDraftConfig(DRAFT_ID)?.branchName).toBeUndefined();
+    expect(openPathMock).toHaveBeenCalledExactlyOnceWith('/wt/c1');
   });
 
-  it('shows the draft panel for a pending new worktree and cancel clears the intent', async () => {
-    setDraftConfig(DRAFT_ID, {
-      projectId: 'p1',
-      adapterId: 'claude',
-      pendingWorktree: { baseBranch: 'main', branchName: 'feat/new' },
-    });
-    renderPopover(makeDraftChat());
-
+  it('offers no Open folder for a remote daemon', async () => {
+    renderPopover(isolated());
     openPopover();
+    await screen.findByTestId('composer-worktree-active-info');
 
-    const panel = await screen.findByTestId('composer-worktree-draft-panel');
-    expect(panel.textContent).toContain('feat/new');
-    fireEvent.click(screen.getByTestId('composer-worktree-draft-cancel'));
-
-    expect(getDraftConfig(DRAFT_ID)?.pendingWorktree).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 11. No-project chat/draft (todo #346) — worktrees disabled, no daemon call
-// ---------------------------------------------------------------------------
-
-describe('WorktreePopover — no-project chat', () => {
-  it('disables the trigger and explains why, without fetching branch data', () => {
-    renderPopover(makeChat({ noProject: true }));
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    expect(trigger).toBeDisabled();
-    expect(trigger).toHaveAttribute('aria-label', 'Worktrees unavailable — no project');
-
-    // Radix disables opening for a disabled trigger — no fetch fires.
-    fireEvent.click(trigger);
-    expect(getGitBranchesMock).not.toHaveBeenCalled();
-    expect(getProjectWorktreesMock).not.toHaveBeenCalled();
-  });
-
-  it('disables the trigger for a no-project draft the same way', () => {
-    setDraftConfig(DRAFT_ID, { projectId: null, adapterId: 'claude' });
-    renderPopover(makeDraftChat({ noProject: true }));
-
-    expect(screen.getByTestId('composer-worktree-trigger')).toBeDisabled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 12. Temporary chat/draft (todo #346) — worktrees disabled, no
-// daemon call, and a temporary REAL chat never offers to enable one either.
-// ---------------------------------------------------------------------------
-
-describe('WorktreePopover — temporary chat/draft', () => {
-  // aria-disabled + a click guard, NOT the native `disabled` attribute: native `disabled` would also kill the Hint tooltip explaining
-  // why, via the shared `disabled:pointer-events-none` rule.
-  it('marks the trigger aria-disabled and explains why, without fetching branch data', () => {
-    renderPopover(makeChat({ temporary: true }));
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    expect(trigger).not.toBeDisabled();
-    expect(trigger).toHaveAttribute('aria-disabled', 'true');
-    expect(trigger).toHaveAttribute('aria-label', 'Worktrees unavailable — temporary chat');
-
-    fireEvent.click(trigger);
-    expect(getGitBranchesMock).not.toHaveBeenCalled();
-    expect(getProjectWorktreesMock).not.toHaveBeenCalled();
-    // Not just "no fetch" — the popover itself must never open.
-    expect(screen.queryByTestId('composer-worktree-popover')).not.toBeInTheDocument();
-  });
-
-  it('never opens the popover via a click, even after the click guard runs', async () => {
-    renderPopover(makeChat({ temporary: true }));
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    fireEvent.click(trigger);
-    await Promise.resolve();
-
-    expect(screen.queryByTestId('composer-worktree-popover')).not.toBeInTheDocument();
-  });
-
-  it('never opens the popover via keyboard Enter on the focused trigger', async () => {
-    renderPopover(makeChat({ temporary: true }));
-    const user = userEvent.setup();
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    trigger.focus();
-    await user.keyboard('{Enter}');
-
-    expect(screen.queryByTestId('composer-worktree-popover')).not.toBeInTheDocument();
-  });
-
-  it('never opens the popover via keyboard Space on the focused trigger', async () => {
-    renderPopover(makeChat({ temporary: true }));
-    const user = userEvent.setup();
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    trigger.focus();
-    await user.keyboard(' ');
-
-    expect(screen.queryByTestId('composer-worktree-popover')).not.toBeInTheDocument();
-  });
-
-  it('marks the trigger aria-disabled for a temporary draft the same way', () => {
-    setDraftConfig(DRAFT_ID, { projectId: 'p1', adapterId: 'claude', temporary: true });
-    renderPopover(makeDraftChat({ temporary: true }));
-
-    const trigger = screen.getByTestId('composer-worktree-trigger');
-    expect(trigger).not.toBeDisabled();
-    expect(trigger).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByTestId('composer-worktree-open-folder')).not.toBeInTheDocument();
   });
 });

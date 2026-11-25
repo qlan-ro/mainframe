@@ -12,7 +12,6 @@
  */
 import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { GateCard } from '../gates/GateCard';
 import { SubagentTranscript } from '../tools/cards/SubagentTranscript';
 import { useTaskChat, type TaskChatView } from './use-task-chat';
 
@@ -67,11 +66,6 @@ export function TaskChatTranscript({ chatId, taskId, messageId, toolCallId, onOp
         <p data-testid={`chat-tool-delegate-task-empty-${taskId}`} className="text-xs text-muted-foreground">
           {emptyText(view.loadState)}
         </p>
-      )}
-      {view.gate != null && (
-        <div data-testid={`chat-tool-delegate-task-gate-${taskId}`}>
-          <GateCard entry={view.gate} reply={view.reply} adapterId={view.adapterId} />
-        </div>
       )}
     </div>
   );

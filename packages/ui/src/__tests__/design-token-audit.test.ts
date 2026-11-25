@@ -1,8 +1,11 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// These walk the whole source tree; a loaded machine needs more than the 5s default.
+vi.setConfig({ testTimeout: 30_000 });
 
 const SRC_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -73,6 +76,16 @@ describe('design token audit', () => {
   // tiny-avatar idiom the v2 tree uses (ProjectRow's text-[10px] badge);
   // text-xs (12px) overflows the dot.
   const TYPOGRAPHY_ARBITRARY_ALLOWLIST = new Set([
+    // The composer's textarea, its highlight mirror and its segment overlay
+    // must share one 14px / 21px line box so the caret and the chips line up.
+    'features/chat/composer/Composer.tsx',
+    'features/chat/composer/highlight/ComposerHighlight.tsx',
+    'features/chat/composer/segments/ComposerSegments.tsx',
+    // `leading-[inherit]` aligns the "Not sent" label to the row's line box.
+    'features/chat/composer/queue/QueuedRows.tsx',
+    // The activity strip's 12.5px rows and the question gate's 14px title come from the redesign spec.
+    'features/chat/composer/strips/ActivityStrip.tsx',
+    'features/chat/gates/AskUserQuestionGate.tsx',
     'components/ui/assistant-ui/tool-group.tsx',
     'features/chat/parts/CodeHeader.tsx',
     'features/settings/SettingsSidebar.tsx',

@@ -31,17 +31,6 @@ pub struct UsageMeta {
     pub percentage: f64,
 }
 
-/// A slash-command invocation riding [`PromptSendMeta`] (formerly the legacy
-/// `message.send` frame's `metadata.command`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MessageSendCommand {
-    pub name: String,
-    pub source: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub args: Option<String>,
-}
-
 /// Display-fidelity payload riding every encoded item's
 /// `_meta["_mainframe.dev"]` (desktop-cutover pass): the legacy
 /// `DisplayMessage` context the core ACP item grammar has no field for.
@@ -131,19 +120,6 @@ pub struct SkillLoadedMeta {
     pub content: String,
 }
 
-/// The send context a `session/prompt`'s `_meta["_mainframe.dev"]` carries
-/// (desktop-cutover pass): uploaded attachment ids and the slash-command
-/// invocation — the two fields the legacy `message.send` frame carried that
-/// the core ACP prompt has no construct for.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PromptSendMeta {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub attachment_ids: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub command: Option<MessageSendCommand>,
-}
-
 /// `api_retry` modeled as a content-replacing patch plus this marker,
 /// riding a message/tool-call upsert's `_meta["_mainframe.dev"]`
 /// alongside the replaced `content` — never a distinct lifecycle frame.
@@ -158,10 +134,12 @@ pub struct RetryMarker {
 /// Queued-prompt state: an ordinary accepted prompt's
 /// `PromptResponse._meta["_mainframe.dev"]` carries this while the prompt
 /// waits for its turn. No `queue.*` frame family exists on the facade.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueuedPromptState {
     pub position: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
 }
 
 /// The rich permission answer: today's `ControlResponse`

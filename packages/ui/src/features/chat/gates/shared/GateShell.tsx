@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { visibleLine } from '../visible-text';
 
 type GateAccent = 'primary' | 'warning';
 
@@ -20,6 +21,9 @@ const ACCENT_RING: Record<GateAccent, string> = {
  */
 export const GATE_BODY_INSET = 'pl-[calc(1rem+1.5rem+0.625rem)]';
 
+/** A gate's primary answer: white text needs the deeper blue (DESIGN.md, Deep Blue Fill). */
+export const GATE_PRIMARY = 'bg-accent-fill text-white hover:bg-accent-fill/90';
+
 export function GateCardShell({
   resolved,
   accent = 'primary',
@@ -32,7 +36,8 @@ export function GateCardShell({
     <div
       data-testid="chat-gate-card"
       className={cn(
-        'overflow-hidden rounded-xl border bg-card',
+        // `clip`, not `hidden`: it is no scroll container, so a sticky footer answers to the gate's slot.
+        'overflow-clip rounded-xl border bg-card',
         resolved ? 'border-border' : ACCENT_RING[accent],
         className,
       )}
@@ -43,6 +48,7 @@ export function GateCardShell({
   );
 }
 
+/** The eyebrow and the title may be the asking agent's words: nothing in them hides, or moves the rest. */
 export function GateHead({
   icon,
   eyebrow,
@@ -69,8 +75,20 @@ export function GateHead({
         {icon}
       </span>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className={cn('text-xs font-medium', eyebrowClassName)}>{eyebrow}</span>
-        <span className="text-sm leading-tight font-semibold text-foreground">{title}</span>
+        <span
+          data-testid="gate-head-eyebrow"
+          dir="ltr"
+          className={cn('stored-order text-xs font-medium', eyebrowClassName)}
+        >
+          {visibleLine(eyebrow)}
+        </span>
+        <span
+          data-testid="gate-head-title"
+          dir="ltr"
+          className="stored-order text-sm leading-tight font-semibold text-foreground"
+        >
+          {visibleLine(title)}
+        </span>
         {subtitle != null && <span className="text-xs text-muted-foreground">{subtitle}</span>}
       </div>
       {right}

@@ -10,7 +10,7 @@
  * (createForLocal → setRemoteId) before the first send.
  *
  * The `extras` contract and its consumer hooks (`useChatExtras`,
- * `useChatPermissionFront`, …) live in `chat-extras.ts`.
+ * `useWorktreeOffer`, …) live in `chat-extras.ts`.
  */
 import { useExternalStoreRuntime } from '@assistant-ui/react';
 import { createAttachmentAdapter } from '../composer/attachment-adapter';

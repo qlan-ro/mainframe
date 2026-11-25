@@ -1,6 +1,6 @@
 ---
 name: Mainframe
-description: A calm, native workbench for running several coding agents at once. The system of the window revamp, approved 24 Nov 2026. Failure rose, the focus line and overlay scrollbars are built in packages/ui; the rest is the target the revamp builds towards.
+description: A calm, native workbench for running several coding agents at once. The system of the window revamp, approved 24 Nov 2026. Failure rose, the focus line, overlay scrollbars, the accent's text and fill pair (accent-ink, accent-fill), the composer and the gates are built in packages/ui; the rest is the target the revamp builds towards.
 colors:
   ground: "#f5f5f8"
   side: "#ffffff"
@@ -424,7 +424,7 @@ A cool, near-neutral grey scale carries almost everything; a single system blue 
 - **Selection and interaction fills** (`sel`, `hover`, `press`): the selected sidebar row and current menu item (`sel`), hover (`hover`), and open or pressed states (`press`).
 - **Ink scale** (`ink`, `ink2`, `meta`, `faint`): primary text (`ink`), body and control text (`ink2`), and labels, times, values and icons (`meta`, the lowest colour allowed for text). `faint` is only for the disabled Send arrow and inactive tab dots, never for text.
 - **Tooltip** (`tipbg`, `tipink`): the tooltip and toast surfaces, inverted per theme.
-- **Code tint** (`code`): inline code, code blocks, keyboard hints in menus and the gate's JSON details.
+- **Code tint** (`code`): inline code, code blocks, keyboard hints in menus and the gate's JSON details. Text a gate asks the user to approve uses `stored-order`: left to right, in the order it is stored, whatever its script.
 - **Provider dots** (`claude`, `codex`): 8 px dots beside a model or provider name.
 
 ### Named Rules
@@ -481,7 +481,7 @@ The other names keep their stock tokens (`--background`, `--primary`, `--warning
 The window is a set of fixed columns that line up from the title bar to the composer.
 
 - **Title bar** (48 px): traffic lights and the usage capsule (224 × 28) on the left, then session tabs, then (when open) workspace tabs, and search plus the Chat / Workspace switch on the far right. Small separators (1 × 16 px, `hair2`) split it into segments that sit exactly above the column edges below: one above the sidebar's right edge and one above the workspace panel's left edge. That gives two segments, or three with the workspace open.
-- **Rail and sidebar**: an icon rail (56 px, its own column with a hairline) and a session list (260 px), 316 px in total. The sidebar collapses with ⌘B.
+- **Rail and sidebar**: an icon rail (56 px, its own column with a hairline) and a session list (260 px), 316 px in total. The sidebar collapses with ⌘B. The pane beside the rail clips its contents at a 10 px top-left corner. Its 1 px top and left border follows the curve, with the ground visible outside it.
 - **Main pane**: a 44 px session header (title left, side-chat and panel toggles right). The transcript scrolls across the whole pane, so its scrollbar sits at the pane edge. The reading column and the composer share one centred width (`--cw`, default 740 px) with at least 24 px gutters. The composer sits 16 px above the window bottom.
 - **Session panel**: 300 px, inset 8 px from the sheet edges, as tall as its content up to the window height. It docks only when the chat column is at least 1044 px wide (720 transcript + 24 gap + 300 panel). Otherwise its toggle floats it over the chat, starting under the header and ending 8 px above the composer.
 - **Workspace panel**: slides in from the right and pushes the chat narrower. Its default width is 50 % of the area right of the sidebar, never under 320 px, and the chat column keeps at least 360 px. The left edge is a resize grip, and the docked file tree is 224 px.
