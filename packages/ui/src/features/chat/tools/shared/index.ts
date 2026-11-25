@@ -16,16 +16,8 @@ export {
   resultImages,
 } from './result';
 
-// ── Diff math + rendering ────────────────────────────────────────────────────
-export { countDiffStats, reconstructFromHunks, computeFallbackHunks } from './diff';
-export { DiffFromPatch, DiffFallback } from './diff';
-
-// ── Status chrome ────────────────────────────────────────────────────────────
-export { StatusDot, ErrorDot, cardStyle, shortFilename, ClickableFilePath } from './chrome';
-
-// ── Card shell ───────────────────────────────────────────────────────────────
-export type { CollapsibleCardShellProps, ErrorBodyProps } from './card-shell';
-export { CollapsibleCardShell, ErrorBody } from './card-shell';
+// ── Diff math ────────────────────────────────────────────────────────────────
+export { countDiffStats, reconstructFromHunks, computeFallbackHunks } from './diff-data';
 
 // ── Tool-result image thumbnails ────────────────────────────────────────────
 export type { ToolResultImageThumbsProps } from './ToolResultImageThumbs';

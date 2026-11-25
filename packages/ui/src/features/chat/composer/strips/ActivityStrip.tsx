@@ -18,7 +18,7 @@ import { ActivitySpinner } from '@/features/session-panel/ActivitySpinner';
 import { cancelActivityJump, jumpToActivitySource } from '@/features/session-panel/activity-source';
 import { formatElapsed } from '@/features/session-panel/background-activity-view';
 import type { ActivityEntry } from '@/features/session-panel/activity-model';
-import { stopRequest } from '@/features/session-panel/use-activity-actions';
+import { stopKeyOf, stopRequest } from '@/features/session-panel/use-activity-actions';
 import { useActivityEntries } from '@/features/session-panel/use-activity-entries';
 import { useStop } from '@/features/session-panel/use-stop';
 import { openSubagentTab } from '@/features/workspace-chat/conversation-tabs';
@@ -61,8 +61,8 @@ function useOpen(chatId: string) {
 }
 
 /** Stop is immediate (K4), as the composer's own is. Absent when this item can't be stopped on its own. */
-function StopAction({ title, request }: { title: string; request: () => Promise<void> }) {
-  const { onStop, stopping } = useStop(title, request);
+function StopAction({ title, request, work }: { title: string; request: () => Promise<void>; work: string }) {
+  const { onStop, stopping } = useStop(title, request, work);
   return (
     <Button
       type="button"
@@ -126,7 +126,7 @@ function ItemRow({ item, chatId, adapterId, now, trailing }: ItemRowProps) {
           Open
         </Button>
       ) : (
-        stop && <StopAction title={entry.title} request={stop} />
+        stop && <StopAction title={entry.title} request={stop} work={stopKeyOf(entry, chatId)} />
       )}
       {trailing}
     </div>

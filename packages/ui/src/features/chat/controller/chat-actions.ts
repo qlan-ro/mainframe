@@ -86,7 +86,7 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
     ...(unsentId ? { unsentId } : {}),
   };
   host.dispatch({ type: 'local.message.queued', pending });
-  host.dispatch({ type: 'run.started' });
+  host.dispatch({ type: 'run.started', optimistic: true });
 
   let attachmentIds: string[] | undefined;
   try {
@@ -143,7 +143,7 @@ export async function retryChatMessage(host: ChatActionHost, clientId: string, r
   const uploadItems = toUploadItems(entry?.sent ?? []);
   markRetrying(unsentId);
   host.dispatch({ type: 'local.message.retrying', clientId });
-  host.dispatch({ type: 'run.started' });
+  host.dispatch({ type: 'run.started', optimistic: true });
 
   try {
     if (remedy === 'unarchive_native_session') await unarchiveNativeSession(host.getPort(), host.getDaemonId());

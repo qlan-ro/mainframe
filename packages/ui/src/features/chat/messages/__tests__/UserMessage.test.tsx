@@ -25,7 +25,7 @@
  *  MD — plain message (no captures) → no capture row; UserAttachments always
  *       present.
  *  PB — a clear-context "Implement the following plan:" message renders the
- *       shared PlanBubble instead of the plain cool-card body.
+ *       approved plan's marker instead of the plain bubble.
  *  WB — the bubble shell (`chat-user-bubble`) and the send-failure detail
  *       (`chat-user-message-send-error`) both carry `wrap-break-word`, so a
  *       token longer than the card wraps instead of painting past the
@@ -34,15 +34,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
-// Controllable retry spy + chat-config fixture for the chat-extras seam
-// (hoisted for vi.mock). `state.chatConfig` feeds the PlanBubble's
-// execution-mode caption, so it must be swappable per test.
-const { retryMessageSpy, extrasState } = vi.hoisted(() => ({
-  retryMessageSpy: vi.fn(),
-  extrasState: { chatConfig: null as import('@qlan-ro/mainframe-types').Chat | null },
+const retryMessageSpy = vi.hoisted(() => vi.fn());
+vi.mock('../MessageFooter', () => ({ MessageFooter: () => <div data-testid="footer-stub" /> }));
+vi.mock('../PlanApprovedMarker', () => ({
+  PlanApprovedMarker: ({ plan }: { plan: string }) => <div data-testid="plan-stub">{plan}</div>,
 }));
 vi.mock('../../runtime/chat-extras', () => ({
-  useChatExtras: () => ({ retryMessage: retryMessageSpy, state: extrasState }),
+  useChatExtras: () => ({ retryMessage: retryMessageSpy }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -231,12 +229,6 @@ describe('UserMessage — H6: message id and content rendering', () => {
     __messageFixture = makeFixture();
     renderUserMessage();
     expect(screen.getByTestId('chat-user-message')).toBeInTheDocument();
-  });
-
-  it('carries a 16px bottom margin to the next message (pb-4, standard v2 scale)', () => {
-    __messageFixture = makeFixture();
-    renderUserMessage();
-    expect(screen.getByTestId('chat-user-message').className).toContain('pb-4');
   });
 
   it('renders cleanText from metadata when present, ignoring raw text', () => {
@@ -475,16 +467,14 @@ describe('UserMessage — WB: word-breaking containment', () => {
     vi.clearAllMocks();
   });
 
-  // The 470px cap is kept over the kit's relative `max-w-[80%]` (which measures
-  // ~582px at this column width) — an e2e case pins the absolute value.
-  it('the user bubble opts into word breaking, capped at 470px by its Bubble parent', () => {
+  it('the user bubble opts into word breaking, capped at 85% of the column (T1)', () => {
     __messageFixture = makeFixture();
     renderUserMessage();
     const bubbleContent = screen.getByTestId('chat-user-bubble');
-    expect(bubbleContent.className).toContain('wrap-break-word');
+    expect(bubbleContent).toHaveClass('wrap-anywhere');
     const bubble = bubbleContent.closest('[data-slot="bubble"]');
     expect(bubble).not.toBeNull();
-    expect(bubble!.className).toContain('max-w-[470px]');
+    expect(bubble).toHaveClass('max-w-[85%]');
   });
 
   it('the send-failure detail wraps long tokens', () => {
@@ -505,66 +495,43 @@ describe('UserMessage — find DOM hook', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests — PB: clear-context plan message renders the shared PlanBubble
+// Tests — PB: clear-context plan message renders the approved plan's marker
 // ---------------------------------------------------------------------------
 
 describe('UserMessage — PB: clear-context plan message', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    __skillsFixture = [];
-    extrasState.chatConfig = null;
-  });
-
-  it('renders the PlanBubble for a plan-prefixed message', () => {
-    __messageFixture = makeFixture({
+  const plan = () =>
+    makeFixture({
       content: [{ type: 'text', text: 'Implement the following plan:\n\n# Dummy Plan\nSome body' }],
       mainframe: undefined,
     });
+
+  it('renders the marker over the plan alone, across the full column', () => {
+    __messageFixture = plan();
     renderUserMessage();
-    expect(screen.getByTestId('chat-plan-bubble')).toBeInTheDocument();
-    expect(screen.getByText('Implementing plan')).toBeInTheDocument();
-    expect(screen.getByText('Dummy Plan')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-stub').textContent).toBe('# Dummy Plan\nSome body');
+    expect(screen.queryByTestId('chat-user-bubble')).not.toBeInTheDocument();
+    // MessageContent end-aligns its children, so the marker needs the full width to centre in.
+    expect(screen.getByTestId('plan-stub').parentElement).toHaveClass('w-full');
   });
 
-  it("captions the plan record with the chat's permission mode and the cleared-context suffix", () => {
-    extrasState.chatConfig = { permissionMode: 'yolo' } as import('@qlan-ro/mainframe-types').Chat;
-    __messageFixture = makeFixture({
-      content: [{ type: 'text', text: 'Implement the following plan:\n\n# Dummy Plan\nSome body' }],
-      mainframe: undefined,
-    });
+  it('has no footer, unlike a message the user wrote', () => {
+    __messageFixture = plan();
     renderUserMessage();
-    expect(screen.getByTestId('chat-plan-exec-mode')).toHaveTextContent('Unattended · context cleared');
+    expect(screen.queryByTestId('footer-stub')).not.toBeInTheDocument();
   });
 
-  it('does not render the plain cool-card body for a plan-prefixed message', () => {
-    __messageFixture = makeFixture({
-      content: [{ type: 'text', text: 'Implement the following plan:\n\n# Dummy Plan\nSome body' }],
-      mainframe: undefined,
-    });
+  it('renders the bubble and its footer for a normal message', () => {
+    __messageFixture = makeFixture({ content: [{ type: 'text', text: 'Just a message' }], mainframe: undefined });
     renderUserMessage();
-    expect(screen.queryByText('Implement the following plan:')).not.toBeInTheDocument();
+    expect(screen.getByText('Just a message')).toBeInTheDocument();
+    expect(screen.queryByTestId('plan-stub')).not.toBeInTheDocument();
+    expect(screen.getByTestId('footer-stub')).toBeInTheDocument();
   });
 
-  it('renders the plain cool-card body (not the PlanBubble) for a normal message', () => {
-    __messageFixture = makeFixture({
-      content: [{ type: 'text', text: 'Just a regular message' }],
-      mainframe: undefined,
-    });
+  it('has no footer while queued: the queue owns its actions', () => {
+    __messageFixture = makeFixture({ mainframe: { queued: true } });
     renderUserMessage();
-    expect(screen.getByText('Just a regular message')).toBeInTheDocument();
-    expect(screen.queryByTestId('chat-plan-bubble')).not.toBeInTheDocument();
-  });
-
-  it('renders the plan record on a full-width wrapper, escaping the right-aligned message column', () => {
-    __messageFixture = makeFixture({
-      content: [{ type: 'text', text: 'Implement the following plan:\n\n# Dummy Plan\nSome body' }],
-      mainframe: undefined,
-    });
-    renderUserMessage();
-    // MessagePrimitive.Root is `items-end`, which shrink-wraps and right-aligns
-    // flex children by default — the plan record needs an explicit full-width
-    // wrapper so it fills the message column instead.
-    expect(screen.getByTestId('chat-plan-bubble').parentElement).toHaveClass('w-full');
+    expect(screen.queryByTestId('footer-stub')).not.toBeInTheDocument();
   });
 });
 

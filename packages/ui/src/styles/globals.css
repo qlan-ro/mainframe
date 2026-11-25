@@ -259,6 +259,12 @@
   );
 }
 
+/* A link tooltip stays in DOM order and needs to paint beyond the transcript mask. */
+[data-mf-chat-thread]:has([data-chat-link-tooltip]:is([data-state='instant-open'], [data-state='delayed-open'])) {
+  mask-image: none;
+}
+
+/** Below the primary path's engine floor (unconfirmed — see the webview probe doc), shadcn's fallback pins both ramps open permanently; drop the mask so those engines clip like before this change. */
 @supports not (animation-timeline: scroll()) {
   .scroll-fade-y,
   .scroll-fade-x {

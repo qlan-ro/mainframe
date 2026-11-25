@@ -2,6 +2,7 @@ import type { ChatStateEvent, ChatThreadState } from './chat-thread-state';
 import { reduceEnvironmentEvent, type EnvironmentEvent } from './chat-environment-state';
 import { reduceLocalMessageEvent, type LocalMessageEvent } from './chat-reconcile';
 import { pruneQueuedPreviews } from './local-attachments';
+import { runStarted } from './run-start';
 
 type LifecycleEvent = Extract<
   ChatStateEvent,
@@ -37,7 +38,9 @@ function reduceLifecycle(state: ChatThreadState, event: LifecycleEvent): ChatThr
     case 'transcript.updated':
       return { ...state, messages: event.messages };
     case 'transcript.cleared':
-      return state.messages.length === 0 && state.retry === null ? state : { ...state, messages: [], retry: null };
+      return state.messages.length === 0 && state.retry === null
+        ? state
+        : { ...state, messages: [], run: null, retry: null };
     case 'run.started': {
       // A later start frame without a time (a local send, a reconnect) keeps the known start of the same run.
       const known = state.runState.type === 'running' ? state.runState.startedAtMs : undefined;
@@ -47,6 +50,7 @@ function reduceLifecycle(state: ChatThreadState, event: LifecycleEvent): ChatThr
       return {
         ...state,
         retry,
+        run: runStarted(state, event),
         runState: startedAtMs === undefined ? { type: 'running' } : { type: 'running', startedAtMs },
       };
     }
@@ -59,9 +63,15 @@ function reduceLifecycle(state: ChatThreadState, event: LifecycleEvent): ChatThr
       };
     }
     case 'run.stopped':
-      return { ...state, runState: { type: 'idle' }, compacting: false, retry: null };
+      return { ...state, runState: { type: 'idle' }, run: null, compacting: false, retry: null };
     case 'run.failed':
-      return { ...state, runState: { type: 'error', error: event.error }, compacting: false, retry: null };
+      return {
+        ...state,
+        runState: { type: 'error', error: event.error },
+        run: null,
+        compacting: false,
+        retry: null,
+      };
   }
 }
 function reduceInteraction(state: ChatThreadState, event: InteractionEvent): ChatThreadState {

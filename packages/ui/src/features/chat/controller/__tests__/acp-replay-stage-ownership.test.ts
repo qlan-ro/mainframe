@@ -293,7 +293,7 @@ describe('AcpSessionPlane — run state and the settled cursor derive from the w
     host.dispatch.mockClear();
     client.emitReplayComplete(CHAT_ID); // B publishes — starts the run from B's own captured state
 
-    expect(eventsOf(host)).toContainEqual({ type: 'run.started' });
+    expect(eventsOf(host)).toContainEqual({ type: 'run.started', replayed: true });
     expect(idsOf(lastOf(transcripts(host))!.messages)).toEqual(['b-1']); // B's own content, not mixed with A's
 
     // B's `running` never moved the settled cursor off A's own last item.

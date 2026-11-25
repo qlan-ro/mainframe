@@ -51,7 +51,7 @@ vi.mock('../use-instruction-actions', () => ({
 
 import { MarkdownText, markdownComponents } from '../../parts/markdown-text';
 import { remarkSmartActions } from '../remark-smart-actions';
-import { PlanBubble } from '../../messages/PlanBubble';
+import { Prose } from '../../messages/turn/Prose';
 import { ReviewCommentCard } from '../../messages/ReviewCommentCard';
 
 const Markdown = MarkdownText as unknown as React.FC;
@@ -238,8 +238,8 @@ describe('instruction chip — streaming settle', () => {
 });
 
 describe('instruction chip — surfaces outside MarkdownText', () => {
-  it('renders no chip inside a PlanBubble', () => {
-    const { container } = render(<PlanBubble plan={'Start with /domain-modeling.\n\n`/todo-pipeline run`'} />);
+  it('renders no chip inside a plan’s markdown', () => {
+    const { container } = render(<Prose text={'Start with /domain-modeling.\n\n`/todo-pipeline run`'} />);
 
     expect(screen.queryByTestId('smart-action-instruction-append')).toBeNull();
     expect(container.querySelector('[data-smart-action-token]')).toBeNull();

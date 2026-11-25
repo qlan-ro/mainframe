@@ -3,6 +3,8 @@
  * A draft's first message that did not go out (C14): the real sessions runtime,
  * coordinator, controller and submit path; only the network is stubbed.
  */
+import type { ReactNode } from 'react';
+import { VirtuosoMockContext } from 'react-virtuoso';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi, describe } from 'vitest';
 import { AssistantRuntimeProvider, useAui, type AssistantClient } from '@assistant-ui/react';
@@ -189,6 +191,10 @@ const fixture = (tabId?: string) => (
   </DaemonPortProvider>
 );
 const mount = () => render(fixture());
+/** With a height, for the transcript's virtualized list to draw its rows in. */
+const inView = (tree: ReactNode) => (
+  <VirtuosoMockContext.Provider value={{ viewportHeight: 600, itemHeight: 60 }}>{tree}</VirtuosoMockContext.Provider>
+);
 
 const flush = () => act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
 const text = () => aui().composer.getState().text;
@@ -516,6 +522,54 @@ describe('with the failed message’s own remedies', () => {
     await flush();
     expect(prompts()).toEqual([prompts()[0], prompts()[0]]);
     expect(vi.mocked(uploadAttachments)).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so once above the field and once on the message in the transcript, and Retry there sends once', async () => {
+    const app = render(inView(fixture()));
+    await openDraft();
+    await type('first');
+    prompt.mockRejectedValueOnce(refusal('No', { neverDelivered: true }));
+    await send();
+    app.rerender(inView(fixture('')));
+    await flush();
+    const column = within(screen.getByRole('region', { name: 'chat column' }));
+    expect(notices('chat column')).toHaveLength(1);
+    expect(column.getAllByTestId('chat-user-message-send-failed')).toHaveLength(1);
+    expect(column.getAllByTestId('chat-user-message-send-error')).toHaveLength(1);
+    expect(column.getAllByText('first')).toHaveLength(1);
+    // Nothing was sent, so there is no turn and nothing that says it works.
+    expect(column.queryByTestId(/^chat-work-header-/)).toBeNull();
+    expect(column.queryByTestId('chat-turn-status')).toBeNull();
+
+    const retryThere = column.getByTestId('chat-user-message-retry');
+    await act(async () => {
+      fireEvent.click(retryThere);
+      fireEvent.click(retryThere);
+    });
+    await flush();
+    expect(prompts()).toHaveLength(2);
+    expect(prompts()[1]).toBe(prompts()[0]);
+    expect(notices('chat column')).toEqual([]);
+    expect(column.queryByTestId('chat-user-message-send-failed')).toBeNull();
+    expect(column.getAllByText('first')).toHaveLength(1);
+  });
+
+  it('Retry that fails again leaves one notice of each', async () => {
+    const app = render(inView(fixture()));
+    await openDraft();
+    await type('first');
+    prompt.mockRejectedValueOnce(refusal('No', { neverDelivered: true }));
+    await send();
+    app.rerender(inView(fixture('')));
+    await flush();
+    const column = within(screen.getByRole('region', { name: 'chat column' }));
+    prompt.mockRejectedValueOnce(refusal('Still no', { neverDelivered: true }));
+    await act(async () => fireEvent.click(column.getByTestId('chat-user-message-retry')));
+    await flush();
+    expect(prompts()).toHaveLength(2);
+    expect(notices('chat column')).toHaveLength(1);
+    expect(notices('chat column')[0]).toHaveTextContent('Still no');
+    expect(column.getAllByTestId('chat-user-message-send-failed')).toHaveLength(1);
   });
 
   it('claims a retry of an ordinary session message before repaint', async () => {

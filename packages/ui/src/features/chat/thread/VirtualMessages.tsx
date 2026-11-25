@@ -8,6 +8,7 @@ import { DisclosureStateProvider } from '@/components/ui/disclosure-state';
 import { seekingComponents, useScrollSeek } from './use-scroll-seek';
 import { useFindInChatStore } from '../find/find-in-chat-store';
 import { waitForMessage } from '../find/daemon-highlights';
+import { TimeMarker } from './TimeMarker';
 import { TurnStatusRow } from './TurnStatusRow';
 import { statusAnchorId } from './turn-phase';
 
@@ -109,6 +110,7 @@ function VirtualMessage({ id, components }: { id: string; components: MessageCom
   if (index < 0) return null;
   return (
     <>
+      <TimeMarker index={index} />
       <ThreadPrimitive.MessageByIndex index={index} components={components} />
       {anchor && <TurnStatusRow />}
     </>

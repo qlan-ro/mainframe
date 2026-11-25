@@ -7,6 +7,7 @@ use mainframe_types::adapter::{
 };
 use mainframe_types::chat::{MessageContent, TodoItem};
 use mainframe_types::context::SkillFileEntry;
+use mainframe_types::transcript_presentation::TranscriptPresentation;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -34,10 +35,19 @@ pub(crate) fn emit_event(sink: Arc<dyn SessionSink>, event: RecordedEvent) {
 fn dispatch(sink: &Arc<dyn SessionSink>, event: &RecordedEvent) -> Result<(), RecordedEventError> {
     match &event.method {
         RecordedMethod::OnInit => sink.on_init(&arg::<String>(event, 0)?),
-        RecordedMethod::OnMessage => sink.on_message(
-            arg::<Vec<MessageContent>>(event, 0)?,
-            arg::<Option<MessageMetadata>>(event, 1)?,
-        ),
+        // `args[2]` (what the provider says of the message's turn) is optional:
+        // most recordings carry none.
+        RecordedMethod::OnMessage => {
+            let content = arg::<Vec<MessageContent>>(event, 0)?;
+            let metadata = arg::<Option<MessageMetadata>>(event, 1)?;
+            match event.args.get(2) {
+                Some(_) => {
+                    let presentation = arg::<TranscriptPresentation>(event, 2)?;
+                    sink.on_message_with_presentation(content, metadata, presentation);
+                }
+                None => sink.on_message(content, metadata),
+            }
+        }
         // `args[1]` (the vendor id) is optional so pre-existing recorded
         // fixtures that predate it keep replaying unchanged.
         RecordedMethod::OnToolResult => sink.on_tool_result(

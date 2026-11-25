@@ -163,7 +163,8 @@ export function reduceLocalMessageEvent(state: ChatThreadState, event: LocalMess
           ...state.pendingUserMessages,
           [event.clientId]: { ...rest, status: 'failed', error: event.error, stage: event.stage },
         },
-        runState: { type: 'error', error: event.error },
+        // A send that failed ends no run: it reached nobody.
+        ...(!state.run?.confirmed && { runState: { type: 'error', error: event.error }, run: null }),
       };
     }
 

@@ -3,7 +3,8 @@
  * the in-chat tunnel chips (#279). Pure and React-free.
  */
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+/** `0.0.0.0` is what dev servers print for "every interface"; from a browser it means this machine. */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]']);
 const DEFAULT_PORTS: Record<string, number> = { 'http:': 80, 'https:': 443 };
 
 /**

@@ -12,16 +12,12 @@ import {
 } from '@assistant-ui/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ReasoningText } from '../ReasoningText';
-import { VerboseParts } from '../../messages/VerboseParts';
-import { CompactParts } from '../../messages/compact/CompactParts';
-import { TranscriptScopeProvider } from '../../messages/compact/transcript-scope';
+import { TranscriptScopeProvider } from '../../messages/turn/transcript-scope';
 import { convertAcpItems } from '../../view-model/convert-acp-item';
 import type { AccumulatedItem } from '../../view-model/acp-item-accumulator';
 import { createChatThreadState, reduceChatThreadState } from '../../controller/chat-thread-state';
 import { projectChatThreadMessages } from '../../controller/project-messages';
 
-export type Mode = 'leaf' | 'verbose' | 'compact';
-const ModeContext = createContext<Mode>('leaf');
 const PartIndexContext = createContext<number | undefined>(undefined);
 export const LONG = 'A'.repeat(80);
 export const MORE = 'B'.repeat(80);
@@ -64,23 +60,20 @@ function LeafParts() {
   );
 }
 function Assistant() {
-  const mode = useContext(ModeContext);
   return (
     <MessagePrimitive.Root data-testid="reasoning-message">
-      {mode === 'leaf' ? <LeafParts /> : mode === 'verbose' ? <VerboseParts /> : <CompactParts />}
+      <LeafParts />
     </MessagePrimitive.Root>
   );
 }
 export function Harness({
   items,
   running = true,
-  mode = 'leaf',
   rootId = 'reasoning',
   index,
 }: {
   items: AccumulatedItem[];
   running?: boolean;
-  mode?: Mode;
   rootId?: string;
   index?: number;
 }) {
@@ -98,15 +91,13 @@ export function Harness({
     <AssistantRuntimeProvider runtime={runtime}>
       <TooltipProvider>
         <TranscriptScopeProvider value={scope}>
-          <ModeContext.Provider value={mode}>
-            <PartIndexContext.Provider value={index}>
-              <ThreadPrimitive.Root>
-                <ThreadPrimitive.Viewport data-testid="reasoning-viewport">
-                  <ThreadPrimitive.Messages components={{ AssistantMessage: Assistant, UserMessage: () => null }} />
-                </ThreadPrimitive.Viewport>
-              </ThreadPrimitive.Root>
-            </PartIndexContext.Provider>
-          </ModeContext.Provider>
+          <PartIndexContext.Provider value={index}>
+            <ThreadPrimitive.Root>
+              <ThreadPrimitive.Viewport data-testid="reasoning-viewport">
+                <ThreadPrimitive.Messages components={{ AssistantMessage: Assistant, UserMessage: () => null }} />
+              </ThreadPrimitive.Viewport>
+            </ThreadPrimitive.Root>
+          </PartIndexContext.Provider>
         </TranscriptScopeProvider>
       </TooltipProvider>
     </AssistantRuntimeProvider>

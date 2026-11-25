@@ -62,7 +62,10 @@ vi.mock('@assistant-ui/react', async (importOriginal) => ({
 vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({ projects: [{ id: 'p1', path: '/proj' }] }),
 }));
-vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
+vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({
+  useDaemonPort: () => 31415,
+  useKnownDaemonPort: () => 31415,
+}));
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
   chatControllerRegistry: { getOrCreate: () => controller },
 }));
@@ -83,6 +86,7 @@ vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
     loadState: { type: 'ready' },
     runState: { type: world.runState ?? (world.running ? 'running' : 'idle') },
     historyWindow: { hasMore: world.hasMore },
+    run: null,
     interactions: { permissions: world.permissions },
     backgroundTasks: world.backgroundTasks,
     chatConfig: { adapterId: world.adapterId },
@@ -92,8 +96,8 @@ vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
 vi.mock('@/features/chat/runtime/use-native-thread-messages', () => ({
   useNativeThreadMessages: () => messages(),
 }));
-vi.mock('@/features/chat/tools/cards/SubagentTranscript', () => ({
-  SubagentTranscript: ({ messages: steps }: { messages: readonly ThreadMessage[] }) => {
+vi.mock('@/features/chat/messages/turn/AgentSteps', () => ({
+  AgentSteps: ({ messages: steps }: { messages: readonly ThreadMessage[] }) => {
     const { openFile } = useOpenFile();
     return (
       <button type="button" data-testid="steps" data-chat={useChatId()} onClick={() => openFile('src/step.ts')}>
@@ -103,6 +107,15 @@ vi.mock('@/features/chat/tools/cards/SubagentTranscript', () => ({
   },
 }));
 
+const assistant = (id: string, content: ThreadMessage['content']) =>
+  ({
+    id,
+    role: 'assistant',
+    content,
+    status: { type: 'complete', reason: 'stop' },
+    metadata: { custom: {} },
+  }) as unknown as ThreadMessage;
+
 let cached: { call: Call | null; list: ThreadMessage[] } = { call: null, list: [] };
 /** Identity-stable per call, like the projector. */
 function messages(): ThreadMessage[] {
@@ -110,7 +123,7 @@ function messages(): ThreadMessage[] {
     const part = world.call && { type: 'tool-call', toolCallId: 'call-1', toolName: 'Task', ...world.call };
     cached = {
       call: world.call,
-      list: part ? ([{ id: 'm-1', role: 'assistant', content: [part] }] as unknown as ThreadMessage[]) : [],
+      list: part ? [assistant('m-1', [part as never])] : [],
     };
   }
   return cached.list;
@@ -120,6 +133,7 @@ import { registerSideChat, __resetSideChatRegistryForTests } from '@/features/si
 import { useChatId, useOpenFile } from '@/features/chat/tools/chat-tool-context';
 import { useMountedConversations } from '../mounted-conversations';
 import { SubagentTabBody } from '../SubagentTabBody';
+import { resetStops } from '@/features/session-panel/use-stop';
 
 const body = (active = true, chatId = 'parent') => (
   <TooltipProvider>
@@ -168,6 +182,7 @@ const step = (id: string, toolCallId: string) =>
   }) as unknown as ThreadMessage;
 
 beforeEach(() => {
+  resetStops();
   Object.assign(world, {
     call: null,
     running: false,

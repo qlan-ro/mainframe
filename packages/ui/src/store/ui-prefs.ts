@@ -78,7 +78,10 @@ export function dialogSizeFor(sizes: DialogSizes, key: string, fallback: DialogS
   return sizes[key] ?? fallback;
 }
 
-export type TranscriptMode = 'verbose' | 'compact';
+/** Whether a turn's work row folds once the turn has ended, or stays open. */
+export type FinishedWork = 'fold' | 'open';
+/** Where a URL in a reply opens: the workspace browser, or the system's own. */
+export type LinkTarget = 'workspace' | 'browser';
 
 /** What Enter does while a turn runs; ⌥↵ does the other (C9). */
 export type EnterWhileRunning = 'queue' | 'steer';
@@ -96,8 +99,10 @@ export function clampTranscriptWidth(width: number): number {
 }
 
 interface UiPrefsState {
-  transcriptMode: TranscriptMode;
-  setTranscriptMode: (mode: TranscriptMode) => void;
+  finishedWork: FinishedWork;
+  setFinishedWork: (finishedWork: FinishedWork) => void;
+  openLinksIn: LinkTarget;
+  setOpenLinksIn: (openLinksIn: LinkTarget) => void;
   enterWhileRunning: EnterWhileRunning;
   setEnterWhileRunning: (mode: EnterWhileRunning) => void;
   /** The composer's activity strip shows only its first row (K5). */
@@ -141,7 +146,8 @@ interface UiPrefsState {
 /** The persisted subset. */
 function partializeUiPrefs(s: UiPrefsState) {
   return {
-    transcriptMode: s.transcriptMode,
+    finishedWork: s.finishedWork,
+    openLinksIn: s.openLinksIn,
     enterWhileRunning: s.enterWhileRunning,
     activityStripCollapsed: s.activityStripCollapsed,
     transcriptWidth: s.transcriptWidth,
@@ -178,11 +184,23 @@ function sanitizeHiddenSections(value: unknown): SessionPanelSectionKey[] {
   return Array.isArray(value) ? SESSION_PANEL_SECTION_KEYS.filter((key) => value.includes(key)) : [];
 }
 
+/**
+ * The retired cards-or-rows choice carries over until this one is made: Verbose
+ * kept everything in sight. Main wrote `verbose` for the default too, so a
+ * viewer who never chose it also starts on Keep open; nothing stored is Fold.
+ */
+function sanitizeFinishedWork({ finishedWork, transcriptMode }: Record<string, unknown>): FinishedWork {
+  if (finishedWork === 'open' || finishedWork === 'fold') return finishedWork;
+  return transcriptMode === 'verbose' ? 'open' : 'fold';
+}
+
 function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPrefs> {
-  const state = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
+  const stored = persisted !== null && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {};
+  const { transcriptMode: _retired, ...state } = stored;
   return {
     ...state,
-    transcriptMode: state.transcriptMode === 'compact' ? 'compact' : 'verbose',
+    finishedWork: sanitizeFinishedWork(stored),
+    openLinksIn: state.openLinksIn === 'browser' ? 'browser' : 'workspace',
     enterWhileRunning: state.enterWhileRunning === 'steer' ? 'steer' : 'queue',
     activityStripCollapsed: state.activityStripCollapsed === true,
     transcriptWidth:
@@ -232,8 +250,10 @@ function migrateToV9(next: Record<string, unknown>): void {
 export const useUiPrefs = create<UiPrefsState>()(
   persist(
     (set) => ({
-      transcriptMode: 'verbose',
-      setTranscriptMode: (transcriptMode) => set({ transcriptMode }),
+      finishedWork: 'fold',
+      setFinishedWork: (finishedWork) => set({ finishedWork }),
+      openLinksIn: 'workspace',
+      setOpenLinksIn: (openLinksIn) => set({ openLinksIn }),
       enterWhileRunning: 'queue',
       setEnterWhileRunning: (enterWhileRunning) => set({ enterWhileRunning }),
       activityStripCollapsed: false,

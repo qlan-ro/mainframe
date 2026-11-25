@@ -36,7 +36,7 @@ vi.mock('@assistant-ui/react', () => ({
     }),
 }));
 
-vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
+vi.mock('../../messages/turn/TurnTranscript', () => ({ TurnTranscript: () => <div data-testid="messages-stub" /> }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="composer-stub" /> }));
 vi.mock('../../composer/strips/DraftStrip', () => ({
   DraftStrip: ({ standalone }: { standalone?: boolean }) => (

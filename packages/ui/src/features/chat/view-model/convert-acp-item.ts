@@ -6,12 +6,8 @@
  * all carry the container's id in `_meta["_mainframe.dev"].containerId`
  * (`ItemMeta`). This module folds them back into one aui message per
  * container (`convert-acp-container.ts` builds each one) — parts in item
- * order, the daemon's tool-group membership echoed as
- * `partGroups`/`groupSummaries`, subagent transcripts rebuilt from the
- * `parentToolCallId` relation into a `Task` tool-call part carrying nested
- * `messages` — so the renderer (`AssistantMessage` GroupedParts, the tool
- * cards, `MessageTimestamp`) is byte-identical with what the legacy
- * projection produced.
+ * order, subagent transcripts rebuilt from the `parentToolCallId` relation
+ * into a `Task` tool-call part carrying nested `messages`.
  *
  * **Identity is load-bearing.** A streamed chunk touches one item, but the
  * session plane re-converts the whole accumulator on every frame, and

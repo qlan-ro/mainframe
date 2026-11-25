@@ -123,7 +123,9 @@ test.describe('windowed transcript history', () => {
     const earlier = page.getByTestId('chat-load-earlier');
     await earlier.scrollIntoViewIfNeeded();
     await expect(earlier).toBeInViewport({ ratio: 1 });
-    const anchor = page.getByTestId('chat-user-message').filter({ hasText: /^Needle turn 242$/ });
+    const anchor = page
+      .getByTestId('chat-user-message')
+      .filter({ has: page.getByText('Needle turn 242', { exact: true }) });
     await expect(anchor).toBeVisible();
     const before = await stableBox(anchor);
     wire.holdPage = true;

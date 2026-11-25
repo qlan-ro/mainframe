@@ -25,7 +25,7 @@ vi.mock('../../find/DaemonFind', () => ({ DaemonFind: () => null }));
 vi.mock('@/features/skills/use-chat-skills', () => ({
   SkillsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-vi.mock('../../messages/compact/transcript-scope', () => ({
+vi.mock('../../messages/turn/transcript-scope', () => ({
   RootTranscriptScope: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('../../tools/register-cards', () => ({}));

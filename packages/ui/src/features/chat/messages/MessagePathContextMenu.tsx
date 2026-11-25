@@ -2,9 +2,8 @@
  * MessagePathContextMenu — wraps a message's rendered parts so right-clicking
  * a `[data-file-path]` pill (tool-card file paths) offers copy actions.
  *
- * The wrapper re-declares `flex flex-col gap-2` because GroupedParts renders
- * as a Fragment — without it, ContextMenuTrigger's single child would
- * collapse N flex siblings into one.
+ * The wrapper is a flex column: ContextMenuTrigger takes a single child, and a
+ * message's entries are siblings.
  *
  * Right-clicking anywhere else in the message (prose, a code block, a
  * selection) must fall through to the webview's OWN menu — Copy / Look Up /
@@ -72,7 +71,7 @@ export function MessagePathContextMenu({ children }: { children: ReactNode }) {
   return (
     <ContextMenu onOpenChange={handleOpenChange}>
       <ContextMenuTrigger asChild onContextMenu={handleContextMenu}>
-        <div data-testid="chat-message-menu-trigger" className="flex flex-col gap-2">
+        <div data-testid="chat-message-menu-trigger" className="flex min-w-0 flex-col">
           {children}
         </div>
       </ContextMenuTrigger>

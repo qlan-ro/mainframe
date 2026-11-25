@@ -1,25 +1,27 @@
 # e2e — test-ids not referenced by any test
 
-_Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e references
-(634). Unused: 558._
+_Generated 2026-08-11. Source: packages/ui/src data-testids (1189) minus e2e references
+(626). Unused: 563._
 
 > "Unused" means the test-id string isn't referenced in a Playwright locator or passed as a bare
 > string to a helper. Some of these elements ARE exercised via role/text locators (e.g. permission
 > buttons via getByRole), so this lists selector gaps, not necessarily untested behavior. `${…}`
 > marks templated id families.
 
-## chat (85)
+## chat (99)
 
 - `chat-agent-message-card-${…}`
+- `chat-agent-model`
+- `chat-agent-steps`
 - `chat-ask-answer-notes`
 - `chat-ask-answer-preview`
-- `chat-ask-question-text`
-- `chat-ask-trigger`
+- `chat-ask-reply`
+- `chat-background-output-${…}`
+- `chat-background-output-error`
+- `chat-background-output-truncated`
+- `chat-bash-region`
+- `chat-call-tool`
 - `chat-capture-selector`
-- `chat-compact-activity-members`
-- `chat-compact-elapsed`
-- `chat-compact-row-${…}`
-- `chat-compact-transcript`
 - `chat-composer-agent-outbox-cancel-${…}`
 - `chat-composer-agent-outbox-chip`
 - `chat-composer-edit-cancel`
@@ -32,22 +34,29 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `chat-context-not-preserved-dismiss-${…}`
 - `chat-degraded-continue`
 - `chat-degraded-error`
-- `chat-edit-error-text`
-- `chat-edit-trigger`
+- `chat-edit-raw`
+- `chat-edit-unavailable`
 - `chat-error-block`
+- `chat-explore-${…}`
 - `chat-fileref-${…}`
 - `chat-fileref-open-${…}`
+- `chat-footnote-link`
 - `chat-header-title`
+- `chat-image-${…}`
 - `chat-image-zoom-dialog`
 - `chat-image-zoom-image`
 - `chat-image-zoom-trigger`
 - `chat-link-copy`
-- `chat-link-copy-url`
+- `chat-link-note`
+- `chat-link-tunnel-state-${…}`
+- `chat-link-tunnel-stop-${…}`
 - `chat-markdown-image-skeleton`
 - `chat-markdown-image-unavailable`
 - `chat-markdown-table-scroll`
+- `chat-marker-answer`
+- `chat-message-footer`
+- `chat-message-quote`
 - `chat-message-session-chip-${…}`
-- `chat-plan-exec-mode`
 - `chat-plan-revise-cancel`
 - `chat-provider-keeps-transcript-${…}`
 - `chat-provider-switch-logo-${…}`
@@ -56,9 +65,12 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `chat-queued-bubble`
 - `chat-queued-retry`
 - `chat-read-only-note`
-- `chat-reasoning-toggle`
-- `chat-slash-command-args`
-- `chat-system-message`
+- `chat-read-reminder`
+- `chat-reply-placeholder`
+- `chat-row-open-file-${…}`
+- `chat-step-text`
+- `chat-task-stop-${…}`
+- `chat-thought-${…}`
 - `chat-thread-area`
 - `chat-thread-load-error`
 - `chat-thread-load-retry`
@@ -66,11 +78,12 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `chat-thread-running-tasks`
 - `chat-thread-running-text`
 - `chat-thread-tasks-finished`
+- `chat-tool-delegate-task-body-${…}`
 - `chat-tool-delegate-task-empty-${…}`
 - `chat-tool-delegate-task-open-full-${…}`
 - `chat-tool-delegate-task-prompt`
-- `chat-tool-fallback-error`
-- `chat-tool-fallback-images`
+- `chat-tool-error`
+- `chat-tool-images`
 - `chat-turn-status`
 - `chat-user-attachment-${…}`
 - `chat-user-attachments`
@@ -79,12 +92,14 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `chat-user-snippet-expand-${…}`
 - `chat-user-snippet-scroll-${…}`
 - `chat-user-steered`
-- `chat-work-toggle-${…}`
+- `chat-work-agents-${…}`
+- `chat-work-header-${…}`
 - `chat-workflow-agent-${…}`
 - `chat-workflow-agent-note-${…}`
 - `chat-workflow-agent-toggle-${…}`
 - `chat-workflow-launcher-${…}`
-- `chat-workflow-launcher-dot`
+- `chat-workflow-launcher-open-${…}`
+- `chat-workflow-launcher-result-${…}`
 - `chat-workflow-phase-${…}`
 - `chat-workflow-phase-toggle-${…}`
 - `chat-workflow-phase-unassigned`
@@ -94,7 +109,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `chat-workflow-upnext`
 - `chat-workflow-upnext-${…}`
 - `chat-workflow-upnext-toggle`
-- `chat-write-error-text`
 
 ## automations (80)
 
@@ -225,7 +239,7 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `tasks-sidebar-row-project-${…}`
 - `tasks-sidebar-start-${…}`
 
-## composer (32)
+## composer (41)
 
 - `composer-activity-gate-toggle`
 - `composer-activity-open`
@@ -234,10 +248,12 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `composer-activity-toggle`
 - `composer-adapter-logo-${…}`
 - `composer-adapter-switch-blocked-${…}`
+- `composer-attachment-preview`
 - `composer-attachments`
 - `composer-branch-manage`
 - `composer-branch-menu`
 - `composer-branch-worktree-${…}`
+- `composer-capture-tile`
 - `composer-changes-popover`
 - `composer-command-item-${…}`
 - `composer-context-compact`
@@ -249,19 +265,26 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `composer-model-older-header`
 - `composer-model-permission-select`
 - `composer-model-provider-dot`
+- `composer-note-edit`
 - `composer-permission-announcement`
 - `composer-permission-planning-note`
 - `composer-provider-blocked`
+- `composer-quote-text`
 - `composer-segment`
 - `composer-segment-input`
 - `composer-temporary`
 - `composer-tuning-warning`
+- `composer-unsent`
+- `composer-unsent-copy`
+- `composer-unsent-discard`
+- `composer-unsent-reason`
+- `composer-unsent-restore`
 - `composer-where`
 - `composer-worktree-busy`
 - `composer-worktree-move`
 - `composer-worktree-open-folder`
 
-## sessions (28)
+## sessions (31)
 
 - `sessions-archive-cancel`
 - `sessions-ctx-fork`
@@ -290,6 +313,10 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `sessions-section`
 - `sessions-tag-filter-synthetic-${…}`
 - `sessions-tag-popover-error`
+- `sessions-welcome-recent-retry`
+- `sessions-welcome-tasks`
+- `sessions-welcome-tasks-retry`
+- `sessions-welcome-tile`
 
 ## settings (25)
 
@@ -501,25 +528,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `run-console-resize`
 - `run-terminal-${…}`
 
-## search (7)
-
-- `search-card-error-body`
-- `search-card-path`
-- `search-card-plain-body`
-- `search-card-trigger`
-- `search-palette-footer`
-- `search-palette-loading`
-- `search-palette-symbol-row-${…}`
-
-## artifact (6)
-
-- `artifact-card-error-body`
-- `artifact-card-open`
-- `artifact-card-open-browser`
-- `artifact-card-result`
-- `artifact-card-root`
-- `artifact-card-trigger`
-
 ## image (6)
 
 - `image-context-menu`
@@ -554,14 +562,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `git-rename-cancel`
 - `git-submenu-rebase`
 
-## push (5)
-
-- `push-notification-card-error-body`
-- `push-notification-card-message`
-- `push-notification-card-result`
-- `push-notification-card-root`
-- `push-notification-card-trigger`
-
 ## review (5)
 
 - `review-commit-error`
@@ -569,14 +569,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `review-file-toolbar-stat`
 - `review-load-error`
 - `review-session-diff-fallback`
-
-## smart (5)
-
-- `smart-action-instruction-append`
-- `smart-action-instruction-new-session`
-- `smart-action-url-copy`
-- `smart-action-url-open`
-- `smart-action-url-stop-tunnel`
 
 ## toast (5)
 
@@ -608,6 +600,19 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `html-open-in-browser`
 - `html-preview-frame`
 
+## search (4)
+
+- `search-card-plain-body`
+- `search-palette-footer`
+- `search-palette-loading`
+- `search-palette-symbol-row-${…}`
+
+## artifact (3)
+
+- `artifact-card-open`
+- `artifact-card-open-browser`
+- `artifact-card-result`
+
 ## gate (3)
 
 - `gate-head-eyebrow`
@@ -625,12 +630,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `shortcuts-cheat-sheet`
 - `shortcuts-cheat-sheet-group-${…}`
 - `shortcuts-cheat-sheet-row-${…}`
-
-## tool (3)
-
-- `tool-card-path-open`
-- `tool-card-status-dot`
-- `tool-result-image-${…}`
 
 ## tunnel (3)
 
@@ -652,11 +651,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 
 - `directory-picker-load-error-${…}`
 - `directory-picker-node-loading-${…}`
-
-## edit (2)
-
-- `edit-card-diff-raw`
-- `edit-card-diff-unavailable`
 
 ## file (2)
 
@@ -693,10 +687,15 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 - `sidebar-collapse`
 - `sidebar-search`
 
-## web (2)
+## smart (2)
 
-- `web-fetch-card-error-body`
-- `web-fetch-card-no-target`
+- `smart-action-instruction-append`
+- `smart-action-instruction-new-session`
+
+## tool (2)
+
+- `tool-card-path-open`
+- `tool-result-image-${…}`
 
 ## confirm (1)
 
@@ -718,10 +717,6 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 
 - `new-session-initialization-retry`
 
-## read (1)
-
-- `read-card-error-body`
-
 ## setup (1)
 
 - `setup-advisor-sidebar-section-${…}`
@@ -737,7 +732,3 @@ _Generated 2026-08-11. Source: packages/ui/src data-testids (1192) minus e2e ref
 ## trigger (1)
 
 - `trigger-field-popover`
-
-## welcome (1)
-
-- `welcome-project-picker-no-project`

@@ -27,6 +27,7 @@ import type { ControlRequest, PermissionOption, PromptSendMeta, QueuedMessageRef
 import { createEnvironmentSlice, type ChatEnvironmentSlice, type EnvironmentEvent } from './chat-environment-state';
 import type { LocalMessageEvent } from './chat-reconcile';
 import type { LocalAttachmentPreview } from './local-attachments';
+import type { RunInProgress, RunStart } from './run-start';
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -93,6 +94,8 @@ export interface ChatThreadState extends ChatEnvironmentSlice {
   readonly authoritativeItemStreaming: boolean;
   readonly loadState: LoadState;
   readonly runState: RunState;
+  /** Forgotten when the session goes idle: nothing is kept of how a run ended. */
+  readonly run: RunInProgress | null;
   /** The converted transcript, projected as-is into the message repository. */
   readonly messages: readonly ThreadMessageLike[];
   readonly interactions: {
@@ -132,7 +135,7 @@ export type ChatStateEvent =
   | { type: 'history.failed'; error: unknown }
   | { type: 'transcript.updated'; messages: readonly ThreadMessageLike[] }
   | { type: 'transcript.cleared' }
-  | { type: 'run.started'; startedAtMs?: number }
+  | ({ type: 'run.started' } & RunStart)
   | { type: 'run.cancelling' }
   | { type: 'run.stopped' }
   | { type: 'run.failed'; error: unknown }
@@ -165,6 +168,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     authoritativeItemStreaming: false,
     loadState: { type: 'idle' },
     runState: { type: 'idle' },
+    run: null,
     messages: [],
     interactions: {
       permissions: {} as Readonly<Record<string, ChatPermissionEntry>>,

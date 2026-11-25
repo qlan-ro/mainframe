@@ -1,23 +1,17 @@
 'use client';
 
 /**
- * The file-reference anchor (#355, design-walk variant A): an inline
- * `aui-md-a` link with a leading `FileCode2` glyph, same prose rhythm as
- * `LinkWithPreview` but opening through the workspace instead of the OS
- * shell. Its context menu offers Open file + the two copy-path actions —
- * never "Copy link"/"Open link", and no hover Copy-URL tooltip.
+ * The file-reference anchor (#355): a path in the link ink and mono, with no
+ * glyph (T1d). It opens in the workspace editor. Its context menu offers Open
+ * file and the two copy-path actions, never "Copy link"/"Open link".
  *
  * Renders outside the chat providers too (user message, plan bubble,
  * review-comment card, plan gate): only `useOpenFile` (bare `useCallback` +
  * `emitSurfaceIntent`) and `useFileBases` (a context with a default, over a
  * provider-less zustand store) are used, both safe there.
- *
- * Port of the design-walk prototype (`prototype/design-walk-2026-09-20`,
- * `packages/ui/src/prototype/FileRefLink.tsx`) with the stubs replaced: no
- * `openStub`, `PROJECT` constant or `splitTarget` survive here.
  */
 import type { AnchorHTMLAttributes, MouseEvent, ReactElement } from 'react';
-import { FileCode2, FolderOpen } from 'lucide-react';
+import { FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   ContextMenu,
@@ -36,8 +30,7 @@ import { useFileBases } from '../tools/chat-file-bases';
 import { useOpenFile } from '../tools/chat-tool-context';
 import { useLinkDragSelect } from './link-drag-select';
 
-const LINK_CLASS =
-  'aui-md-a inline-flex items-center gap-1 border-b border-primary/40 text-accent-ink no-underline hover:opacity-80 transition-opacity cursor-pointer';
+const LINK_CLASS = 'mf-link mf-link-mono rounded-sm font-mono focus-visible:focus-line';
 
 interface FileRefMenuProps {
   relative: string;
@@ -127,7 +120,6 @@ export function FileRefLink({ href, fileTarget, className, children, ...props }:
           onMouseDown={onMouseDown}
           className={cn(LINK_CLASS, className)}
         >
-          <FileCode2 className="size-3 shrink-0" />
           {children}
         </a>
       </ContextMenuTrigger>

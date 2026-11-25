@@ -18,6 +18,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
+import { openWork, toolRow } from '../helpers/tauri/transcript.js';
 
 const CHAT_TABS = '[data-testid^="workspace-tab-chat-"][role="tab"]';
 const BODIES = '[data-testid^="workspace-conversation-chat-"]';
@@ -229,13 +230,14 @@ test.describe('§workspace-chats — agent tab (W8)', () => {
     await sendMessage(page, 'Thanks — what did it find?');
     await waitForIdle(page, 60_000);
 
+    await openWork(page, 0);
     const open = page.locator('[data-testid^="chat-task-open-"]');
     await open.click();
     const agent = page.locator('[data-testid^="workspace-conversation-agent-"]');
     await expect(agent.locator('[data-testid^="workspace-agent-header-"]')).toContainText('Find the greeting export');
     await expect(agent.locator('[data-testid^="workspace-agent-header-"]')).toContainText('general-purpose');
     await expect(agent.locator('[data-testid^="workspace-agent-brief-"]')).toContainText('Search the project');
-    await expect(agent.getByTestId('chat-bash-card')).toHaveCount(1);
+    await expect(toolRow(agent, 'Bash')).toHaveCount(1);
     await expect(agent.locator('[data-testid^="workspace-agent-result-"]')).toContainText('index.ts');
     await expect(agent.locator('[data-testid^="workspace-agent-status-"]')).toHaveCount(0);
     // Read-only: the one composer on screen is the conversation's.

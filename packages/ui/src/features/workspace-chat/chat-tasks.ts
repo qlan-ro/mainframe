@@ -1,10 +1,11 @@
 /**
- * The daemon's task list of one chat, read while a tab in front shows one of its
- * agents: one request at a time, however many tabs ask. The last list stays
- * while it is asked for again, and stops counting as live with the connection,
- * or once it is too old while the daemon refuses another.
+ * The daemon's task list of one chat, read while its transcript or a tab in front
+ * shows one of its agents: one request at a time, however many ask. The last list
+ * stays while it is asked for again, and stops counting as live with the
+ * connection, or once it is too old while the daemon refuses another. Asked for
+ * once more, too, when it does not name an agent the chat says runs.
  */
-import type { BackgroundTask } from '@qlan-ro/mainframe-types';
+import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
 import { listBackgroundTasks } from '@/lib/api/background-tasks';
 
 const RETRY_MS = 1_000;
@@ -32,6 +33,11 @@ function keepSettled(before: readonly BackgroundTask[], now: readonly Background
   return [...kept, ...now.filter((task) => !kept.some((settled) => same(settled, task)))];
 }
 
+/** The chat's running background work by id, as its events have it. */
+export type TaskEvents = Readonly<Record<string, Pick<BackgroundActivityTask, 'kind'>>> | undefined;
+
+const waitAfter = (failures: number): number => Math.min(RETRY_MS * 2 ** failures, RETRY_MAX_MS);
+
 type Timer = ReturnType<typeof setTimeout> | undefined;
 
 class ChatTasks {
@@ -39,10 +45,12 @@ class ChatTasks {
   private readonly listeners = new Set<() => void>();
   private watchers = 0;
   private connected = true;
-  private events: { seen: unknown } | null = null;
+  private events: { seen: TaskEvents } | null = null;
   private request: AbortController | null = null;
   private again = false;
   private refusals = 0;
+  /** Asked once more since the last event, for an agent the list left out. */
+  private askedAgain = false;
   /** The request's limit, or the wait before the next. */
   private timer: Timer;
   private lost = false;
@@ -92,12 +100,15 @@ class ChatTasks {
   }
 
   /** The chat's background work, a new object per event. */
-  setEvents(events: unknown): void {
+  setEvents(events: TaskEvents): void {
     const before = this.events;
     this.events = { seen: events };
-    if (before === null || before.seen === events || !this.asking) return;
+    if (before === null || before.seen === events) return;
+    this.askedAgain = false;
+    if (!this.asking) return;
     if (this.request !== null) this.again = true;
-    else if (this.timer === undefined) this.run();
+    // A refusal's wait is kept; one for a complete list is over with this.
+    else if (this.timer === undefined || this.refusals === 0) this.run();
   }
 
   private get asking(): boolean {
@@ -107,6 +118,7 @@ class ChatTasks {
   private start(): void {
     if (!this.asking) return;
     this.refusals = 0;
+    this.askedAgain = false;
     clearTimeout(this.unseen);
     this.run();
   }
@@ -123,7 +135,7 @@ class ChatTasks {
   }
 
   private run(): void {
-    this.timer = undefined;
+    this.clearTimer();
     const request = new AbortController();
     this.request = request;
     this.again = false;
@@ -152,12 +164,21 @@ class ChatTasks {
     this.confirmedAt = Date.now();
     clearTimeout(this.expiry);
     this.publish(keepSettled(this.state.tasks ?? [], tasks));
-    if (this.again) this.run();
+    if (this.again) return this.run();
+    if (this.askedAgain || !this.leavesOutAgent(tasks)) return;
+    this.askedAgain = true;
+    this.timer = setTimeout(() => this.run(), RETRY_MS);
+  }
+
+  /** Only an agent’s call is waited for: no turn folds before the list names it. */
+  private leavesOutAgent(tasks: readonly BackgroundTask[]): boolean {
+    const named = new Set(tasks.map((task) => task.id));
+    return Object.entries(this.events?.seen ?? {}).some(([id, { kind }]) => kind === 'agent' && !named.has(id));
   }
 
   private refused(error: unknown): void {
     console.warn('[workspace-chat] could not list background tasks', error);
-    this.timer = setTimeout(() => this.run(), Math.min(RETRY_MS * 2 ** this.refusals, RETRY_MAX_MS));
+    this.timer = setTimeout(() => this.run(), waitAfter(this.refusals));
     this.refusals += 1;
     clearTimeout(this.expiry);
     const left = this.confirmedAt + CONFIRMED_MS - Date.now();

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { GeneralPane } from '../GeneralPane';
 import { useSettingsStore } from '../../../../../store/settings';
+import { useUiPrefs } from '../../../../../store/ui-prefs';
 import { useTheme } from '../../../../../store/theme';
 
 const updateGeneralSettings = vi.fn().mockResolvedValue(undefined);
@@ -35,6 +36,15 @@ describe('GeneralPane', () => {
     fireEvent.change(screen.getByTestId('settings-worktree-dir-input'), { target: { value: 'wt' } });
     fireEvent.click(screen.getByTestId('settings-worktree-dir-save'));
     expect(updateGeneralSettings).toHaveBeenCalledWith(31415, { worktreeDir: 'wt' });
+  });
+  it('opens links in the workspace by default, or the browser', () => {
+    useUiPrefs.setState({ openLinksIn: 'workspace' });
+    render(<GeneralPane port={31415} />);
+    const group = screen.getByRole('radiogroup', { name: 'Open links in' });
+    expect(within(group).getByRole('radio', { name: 'Workspace' })).toBeChecked();
+    fireEvent.click(within(group).getByRole('radio', { name: 'Browser' }));
+    expect(useUiPrefs.getState().openLinksIn).toBe('browser');
+    expect(updateGeneralSettings).not.toHaveBeenCalled();
   });
   it('mode toggle writes useTheme without any PUT', () => {
     useTheme.setState({ mode: 'light', resolvedMode: 'light' });

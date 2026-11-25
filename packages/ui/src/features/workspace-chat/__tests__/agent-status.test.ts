@@ -3,7 +3,7 @@ import type { ThreadMessage } from '@assistant-ui/react';
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import { describe, expect, it } from 'vitest';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
-import { describeAgent, type AgentTasks } from '../agent-status';
+import { describeAgent, stoppableTask, type AgentTasks } from '../agent-status';
 
 type Status = BackgroundTask['status'];
 
@@ -53,6 +53,7 @@ interface World {
   list?: AgentTasks;
   live?: boolean;
   session?: 'idle' | 'running' | 'cancelling';
+  partLive?: boolean;
   pending?: boolean;
   acpStatus?: string;
   children?: ThreadMessage[];
@@ -86,6 +87,7 @@ function describeWorld(w: World) {
         interactions: { permissions: w.pending ? { r: { request: { toolUseId: 't-1' } } } : {} },
       } as unknown as ChatThreadState,
       tasks: w.list ?? null,
+      partLive: w.partLive ?? true,
     },
     w.live ?? true,
   );
@@ -203,17 +205,12 @@ describe('every combination of the evidence', () => {
     expect(wrong.map(nameOf)).toEqual([]);
   });
 
-  it('can stop only a task a live list says runs', () => {
-    const wrong = ROWS.filter((row) => {
-      const id = describeWorld(worldOf(row)).runningTask?.id;
-      const expected = !row.live
-        ? undefined
-        : row.list === 'running'
-          ? 'bg-0'
-          : row.list === 'mixed'
-            ? 'bg-1'
-            : undefined;
-      return id !== expected;
+  it('can stop only a task a live list says runs, of the CLI that can', () => {
+    const first: Record<string, string> = { running: 'bg-0', mixed: 'bg-1' };
+    const wrong = ROWS.filter(({ list, live }) => {
+      const stopped = (adapterId?: string) => stoppableTask(LISTS[list]!, live, adapterId)?.id;
+      const expected = live ? first[list] : undefined;
+      return stopped('claude') !== expected || stopped('codex') !== undefined || stopped() !== undefined;
     });
     expect(wrong.map(nameOf)).toEqual([]);
   });
@@ -255,6 +252,20 @@ describe('status', () => {
     },
   );
 
+  it('is none for an open call of an earlier part, which the session’s run is not in', () => {
+    expect(label({ session: 'running', partLive: false })).toBeNull();
+    expect(label({ session: 'running', partLive: false, list: tasks('running') })).toBe('running');
+    expect(label({ session: 'running', partLive: false, error: true })).toBe('failed');
+  });
+
+  it('needs you when the call itself waits for permission', () => {
+    const part = { toolCallId: 'call-1', args: {}, messages: [] } as never;
+    const permissions = { r: { request: { toolUseId: 'call-1' } } };
+    const state = { runState: { type: 'running' }, interactions: { permissions } } as never;
+    const facts = { call: { messageId: 'm', part }, state, tasks: null, partLive: true };
+    expect(describeAgent(facts, true).status?.status).toBe('needs-you');
+  });
+
   it('takes the error flag of an envelope', () => {
     expect(label({ result: { content: 'It broke.', isError: true } })).toBe('failed');
     expect(label({ result: { content: 'It broke.', isError: false } })).toBeNull();
@@ -278,7 +289,7 @@ describe('status', () => {
     const other = { request: { toolUseId: 'elsewhere' } };
     const call = { messageId: 'm', part: { toolCallId: 'call-1', args: {}, messages: [step] } as never };
     const state = { runState: { type: 'idle' }, interactions: { permissions: { r: other } } };
-    expect(describeAgent({ call, state: state as never, tasks: null }, true).status).toBeNull();
+    expect(describeAgent({ call, state: state as never, tasks: null, partLive: true }, true).status).toBeNull();
   });
 });
 

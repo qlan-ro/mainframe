@@ -2,14 +2,10 @@
  * The turn status row: the transcript's last line while a turn runs, as in the
  * Claude and Codex desktop apps. It reports the phase, how long the turn has run,
  * and live background work, and it outlives the turn while background tasks run.
- * It never names a tool: activity group headers and tool cards own the step.
+ * It never names a tool: the step's own row does.
  *
- * One live indicator per turn: while a live activity group ends the transcript,
- * that group's header hosts the clock and task count (`TurnStatusTrailing`) and
- * this row steps aside (see `useTurnStatusHost`).
- *
- * `chat-thread-running` exists only while the turn runs, on whichever element
- * hosts the status (e2e waits read its removal as the turn's end).
+ * `chat-thread-running` exists only while the turn runs (e2e waits read its
+ * removal as the turn's end).
  */
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
@@ -19,11 +15,11 @@ import { PanelColumnContext, usePanelControl } from '@/features/session-panel/pa
 import { runningCount } from '@/features/session-panel/activity-view';
 import { useChatExtras } from '../runtime/chat-extras';
 import { formatElapsedSeconds } from '../format-duration';
-import { useStableActivityLabel } from '../messages/compact/use-stable-activity-label';
+import { Spinner } from '../messages/turn/RowGlyph';
 import { useRunElapsed } from './use-run-elapsed';
-import { useTurnStatusHost } from './turn-status-host';
-import { isReconnectText, retryStatusTestId, useHostedRetryLabel, useRetryLabel } from './retry-status';
+import { isReconnectText, retryStatusTestId, useRetryLabel } from './retry-status';
 import { runningTasksLabel, turnPhase } from './turn-phase';
+import { useStableLabel } from './use-stable-label';
 
 const FINISHED_FLASH_MS = 1500;
 /** Each segment and phase change fades in, rising 3px (the desktop apps' 180ms morph). */
@@ -50,10 +46,7 @@ function usePhase() {
   const phase = useAuiState((s) => turnPhase(inputs, s.thread.messages, pending));
   // A phase shows for at least a second, so tool gaps don't flicker Working/Thinking. The reconnect
   // phase carries its numbers as text: a new count under the same identity replaces the label at once.
-  return useStableActivityLabel(
-    { identity: phase, text: phase === 'Reconnecting' ? (retryLabel ?? phase) : phase },
-    true,
-  );
+  return useStableLabel({ identity: phase, text: phase === 'Reconnecting' ? (retryLabel ?? phase) : phase });
 }
 
 function useTurnClock() {
@@ -74,46 +67,13 @@ function Separator() {
   );
 }
 
-function Elapsed({ seconds, lead = true }: { seconds: number; lead?: boolean }) {
+function Elapsed({ seconds }: { seconds: number }) {
   return (
     <span className={cn('flex shrink-0 items-center gap-2', ENTER)}>
-      {lead && <Separator />}
+      <Separator />
       <span data-testid="chat-thread-running-elapsed" className="font-mono tabular-nums text-muted-foreground">
         {formatElapsedSeconds(seconds)}
       </span>
-    </span>
-  );
-}
-
-/** The reconnect status in a host's trailing slot: a warning dot and the label in the phase-word style, ahead of the clock. */
-function ReconnectingSegment({ label, testId }: { label: string; testId: string }) {
-  return (
-    <span
-      data-testid={testId}
-      className={cn('flex shrink-0 items-center gap-2 font-medium text-muted-foreground', ENTER)}
-    >
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-warning-dot" />
-      {label}
-    </span>
-  );
-}
-
-/** The clock and task count, hosted at the right edge of the live header that ends the transcript. */
-export function TurnStatusTrailing() {
-  const elapsed = useTurnClock();
-  const tasks = useRunningTasks();
-  const reconnecting = useHostedRetryLabel();
-  return (
-    // `min-w-px` keeps a box before the first second, so the running marker is visible from the start.
-    <span data-testid="chat-thread-running" className="inline-flex h-4 min-w-px shrink-0 items-center gap-2 text-xs">
-      {reconnecting && <ReconnectingSegment {...reconnecting} />}
-      {elapsed !== undefined && <Elapsed seconds={elapsed} lead={reconnecting !== null} />}
-      {tasks > 0 && (
-        <span className={cn('flex items-center gap-2 text-muted-foreground', ENTER)}>
-          {(elapsed !== undefined || reconnecting) && <Separator />}
-          <span data-testid="chat-thread-running-tasks">{runningTasksLabel(tasks)}</span>
-        </span>
-      )}
     </span>
   );
 }
@@ -127,13 +87,14 @@ function RunningStatus() {
   const elapsed = useTurnClock();
   return (
     <div data-testid="chat-thread-running" className="flex min-w-0 items-center gap-2">
-      <span
-        aria-hidden
-        className={cn(
-          'size-1.5 shrink-0 animate-pulse rounded-full motion-reduce:animate-none',
-          attention || reconnecting ? 'bg-warning-dot' : 'bg-live',
-        )}
-      />
+      {attention || reconnecting ? (
+        <span
+          aria-hidden
+          className="size-1.5 shrink-0 animate-pulse rounded-full bg-warning-dot motion-reduce:animate-none"
+        />
+      ) : (
+        <Spinner />
+      )}
       {/* Two spans: the enter morph and the idle pulse both own `animation`. */}
       <span
         key={reconnecting ? 'Reconnecting' : phase}
@@ -204,16 +165,12 @@ export function TurnStatusRow() {
   const isRunning = useAuiState((s) => s.thread.isRunning);
   const count = useRunningTasks();
   const finished = useFinishedFlash(count);
-  // A live group header carries the running status, its clock and task count included.
-  const hosted = useTurnStatusHost() !== null;
-  const running = isRunning && !hosted;
-  const tasks = hosted ? 0 : count;
-  if (!running && !tasks && !finished) return null;
+  if (!isRunning && !count && !finished) return null;
   return (
-    <div data-testid="chat-turn-status" className="flex h-7 min-w-0 items-center gap-2 text-xs">
-      {running && <RunningStatus />}
-      {running && (tasks > 0 || finished > 0) && <Separator />}
-      <BackgroundTasks count={tasks} finished={finished} />
+    <div data-testid="chat-turn-status" role="status" className="flex h-7 min-w-0 items-center gap-2 px-1 text-sm">
+      {isRunning && <RunningStatus />}
+      {isRunning && (count > 0 || finished > 0) && <Separator />}
+      <BackgroundTasks count={count} finished={finished} />
     </div>
   );
 }

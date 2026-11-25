@@ -23,7 +23,7 @@
  *     the surviving items are two numbered text segments around the Read call; a resume from
  *     `start` replays that same list and closes with `replay_complete` right
  *     after `queue_state` (D38).
- *   - UI half: one assistant message renders text, the Read card, then text.
+ *   - UI half: one assistant message renders text, the Read row, then text.
  */
 import { test, expect } from '@playwright/test';
 import { startDaemon, stopDaemon, type DaemonHandle } from '../fixtures/daemon.js';
@@ -48,6 +48,7 @@ import {
   expectReplayClosedAfterQueueState,
   type SessionUpdateFrame,
 } from '../helpers/tauri/facade-protocol-support.js';
+import { openWork, toolRow } from '../helpers/tauri/transcript.js';
 
 /** Wide enough that the recording's 300 / 800 / 1200 / 1600 / 2200ms marks stay distinct. */
 const MOCK_MAX_DELAY_MS = 3_000;
@@ -181,7 +182,7 @@ test.describe('§facade-streaming-segments (UI)', () => {
     cleanupTauriProject(project);
   });
 
-  test('one assistant message renders the text, the Read card, then the final text', async () => {
+  test('one assistant message renders the text, the Read row, then the final text', async () => {
     const { page } = app;
     const thread = chatThread(page);
     await sendMessage(page, PROMPT);
@@ -193,14 +194,15 @@ test.describe('§facade-streaming-segments (UI)', () => {
     await expect(thread.assistantMessages()).toHaveCount(1);
     const message = thread.assistantMessages();
     const firstText = message.getByText(SEGMENT_ONE, { exact: true });
-    const readCard = message.getByTestId('read-card-root');
+    await openWork(page);
+    const readCard = toolRow(message, 'Read');
     const lastText = message.getByText(SEGMENT_TWO, { exact: true });
     await expect(firstText).toHaveCount(1);
     await expect(readCard).toHaveCount(1);
     await expect(lastText).toHaveCount(1);
     await expect(readCard.getByText('Read', { exact: true })).toBeVisible();
 
-    // Source order, by geometry: text above the card, the card above the final text.
+    // Source order, by geometry: text above the row, the row above the final text.
     const [firstBox, cardBox, lastBox] = await Promise.all([
       firstText.boundingBox(),
       readCard.boundingBox(),

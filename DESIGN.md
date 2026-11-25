@@ -592,7 +592,10 @@ A `card` surface with 10 px radius, the float shadow and 4 px padding. Items hav
 ### Transcript
 - **User bubbles:** right-aligned and neutral (`bubble`), 14 px radius, at most 85 % wide.
 - **Agent prose:** sits on the sheet with no container.
-- **Folded turns:** 28 px rows ("✓ Worked for 2m 14s · edited 3 files…") that expand to 26 px tool rows with mono targets.
+- **Folded turns:** one 28 px row per turn ("✓ Worked for 2m 14s · edited 3 files…") that expands to 26 px tool rows with mono targets. The row carries the turn's agents and "N failed" (Muted Rose; grey once retried). This replaces the tool cards and their primitives.
+- **Markers:** events (skills, plans, schedules, monitors, worktrees, notifications) are 26 px pills centred on the spine, outside the fold. One with content opens a 12 px card under it, at most 600 px wide.
+- **Links:** one style, Blue Ink with an underline; a raw URL or a file path is in mono, with no glyph.
+- **Changed lines:** ink on the tint; colour only in the +/− column. The terminal follows the theme.
 - **Dividers:** hairlines with a centred 12 px `meta` label ("Context compacted").
 - **Code blocks:** 8 px radius on the `code` tint.
 

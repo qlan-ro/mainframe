@@ -156,6 +156,5 @@ describe('native tool call timing', () => {
       ['a', { startedAt: 1790899200123, completedAt: 1790899201456 }],
       ['b', { startedAt: 1790899200323 }],
     ]);
-    expect(liveMessages[0]!.metadata?.custom?.mainframe).toMatchObject({ partGroups: { a: 'group', b: 'group' } });
   });
 });

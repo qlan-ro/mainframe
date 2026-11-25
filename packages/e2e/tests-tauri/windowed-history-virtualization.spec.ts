@@ -5,6 +5,7 @@ import { WINDOWED_RECORDING_KEY, WINDOWED_PAGE_CONTAINERS } from '../fixtures/wi
 import { HistoryWire, seedWindowedHistory } from '../helpers/tauri/windowed-history.js';
 import { cleanupHeadlessProject } from '../helpers/tauri/headless-chat.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
+import { openRow, openWork, toolRow } from '../helpers/tauri/transcript.js';
 
 test.describe('virtual transcript rows', () => {
   let seed: Awaited<ReturnType<typeof seedWindowedHistory>>;
@@ -63,9 +64,10 @@ test.describe('virtual transcript rows', () => {
     const tail = page.getByText('Needle turn 249', { exact: true });
     await expect(tail).toBeVisible();
     await expect.poll(() => page.getByTestId('chat-user-message').count()).toBeLessThan(30);
+    await openWork(page);
     await tail.click({ clickCount: 3 });
-    await page.keyboard.press('Shift+ArrowDown');
-    await page.keyboard.press('Shift+ArrowDown');
+    // Past the turn's work row, to the first text under it.
+    for (let line = 0; line < 3; line++) await page.keyboard.press('Shift+ArrowDown');
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain('Needle turn 249');
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toContain('History response 249');
     await tail.click({ clickCount: 3 });
@@ -85,12 +87,13 @@ test.describe('virtual transcript rows', () => {
       fetches++;
       return route.fulfill({ json: { success: true, data: { content: 'Full virtual output landmark' } } });
     });
-    const initial = page.getByTestId('read-card-root').last();
+    await openWork(page);
+    const initial = toolRow(page, 'Read').last();
     const messageId = await initial.locator('xpath=ancestor::*[@data-message-id][1]').getAttribute('data-message-id');
     expect(messageId).toBeTruthy();
     const message = page.locator(`[data-message-id="${messageId}"]`);
-    const card = message.getByTestId('read-card-root').last();
-    await card.getByTestId('read-card-trigger').click();
+    const card = toolRow(message, 'Read').last();
+    await openRow(card);
     await expect(card).toHaveAttribute('data-state', 'open');
     await card.getByTestId('tool-result-expand-toggle').click();
     await expect(card.getByTestId('tool-result-expand-collapse')).toBeVisible();
@@ -104,7 +107,7 @@ test.describe('virtual transcript rows', () => {
     await page.getByTestId('thread-find-input').fill('Tool summary 249/3');
     await expect(page.getByTestId('find-bar')).toContainText('1/1');
     await page.getByTestId('thread-find-next').click();
-    const restored = message.getByTestId('read-card-root').last();
+    const restored = toolRow(message, 'Read').last();
     await expect(restored).toHaveAttribute('data-state', 'open');
     await expect(restored.getByTestId('tool-result-expand-collapse')).toBeVisible();
     await expect(restored.getByText('Full virtual output landmark', { exact: true })).toBeVisible();

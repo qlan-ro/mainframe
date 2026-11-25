@@ -111,6 +111,7 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
 import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
+import { openWork, workRows } from '../helpers/tauri/transcript.js';
 import { daemonFetch, fetchRoute } from '../fixtures/daemon.js';
 
 /** Chat-host width comfortably above / between / below `INLINE_MIN_WIDTH` (1044). */
@@ -895,14 +896,14 @@ test.describe('§session-panel — Activity section (background-command)', () =>
 
   const commandRow = (page: Page) => page.getByTestId('session-panel-activity-task:mock-toolu_bg_1');
 
-  test('a background command goes to its transcript row, opened on its result', async () => {
+  test('a background command goes to its transcript row, opened on its output', async () => {
     const { page } = app;
     const target = page.locator('[data-activity-id="toolu_bg_1"]');
     await expect(commandRow(page)).toHaveAttribute('data-activity-state', 'completed');
     await commandRow(page).click();
     await expect(target).toHaveAttribute('data-activity-flash', '');
     await expect(target).toBeInViewport();
-    await expect(target).toContainText('Command running in background with ID: bg_1');
+    await expect(target.getByTestId('chat-bash-output')).toContainText('12 tests passed');
     await expect(target.locator('[aria-expanded="true"]').first()).toBeFocused();
   });
 
@@ -1036,6 +1037,10 @@ test.describe('§session-panel — Activity section (Stop)', () => {
     await waitForIdle(page, 60_000);
 
     const stop = page.locator('[data-testid^="session-panel-activity-row-stop-delegated:"]');
+    // The same work has one Stop in the transcript too (T1c).
+    const rowStop = page.locator('[data-testid^="chat-tool-delegate-task-stop-"]');
+    await expect(rowStop).toHaveCount(1);
+    await expect(rowStop).toHaveAccessibleName(/^Stop /);
     await page.mouse.move(0, 0);
     const actions = stop.locator('..');
     await expect(actions).toHaveCSS('opacity', '0');
@@ -1055,13 +1060,68 @@ test.describe('§session-panel — Activity section (Stop)', () => {
     await page.keyboard.press('Enter');
     await page.keyboard.press('Enter');
     await expect(page.getByText(/Stopped “.+”/)).toBeVisible({ timeout: 15_000 });
-    // The mock child never ends its turn, so its row reads as a resumed chat
-    // rather than stopped; the task itself is what Stop cancels.
-    await expect(page.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'cancelled', {
-      timeout: 15_000,
-    });
-    await expect(stop).toHaveCount(0);
+    await expect(stop).toHaveCount(0, { timeout: 15_000 });
+    await expect(rowStop).toHaveCount(0, { timeout: 15_000 });
     expect(requests).toHaveLength(1);
     await expect(row).toBeFocused();
+    // The mock child never ends its turn, so its row in the panel reads as a
+    // resumed chat rather than stopped; the task itself is what Stop cancels.
+    // Nothing holds the turn that delegated it open any more, so it folds.
+    await expect(workRows(page).last()).toHaveAttribute('aria-expanded', 'false', { timeout: 15_000 });
+    await openWork(page);
+    await expect(page.getByTestId('chat-tool-delegate-task-card-receipt').locator('[data-status]')).toHaveAttribute(
+      'data-status',
+      'stopped',
+      { timeout: 15_000 },
+    );
+  });
+});
+
+// The same Stop on the task's row in the transcript (T1c), on its own chat.
+test.describe('§session-panel — Transcript row (Stop)', () => {
+  test.describe.configure({ retries: 0 });
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'mcp-delegate-stop' });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('is in reach of Tab, ends the work with one request and leaves focus on the row', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Delegate a long task, I will stop you after');
+    const receipt = page.getByTestId('chat-tool-delegate-task-card-receipt').locator('[data-status]');
+    await expect(receipt).toHaveAttribute('data-status', 'running', { timeout: 60_000 });
+    await waitForIdle(page, 60_000);
+
+    const stop = page.locator('[data-testid^="chat-tool-delegate-task-stop-"]');
+    await expect(stop).toHaveCount(1);
+    await expect(stop).toHaveAccessibleName(/^Stop /);
+    expect(await stop.boundingBox()).toMatchObject({ width: 24, height: 24 });
+
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      if (/\/delegated-tasks\/.*\/cancel$/.test(request.url()) && request.method() === 'POST')
+        requests.push(request.url());
+    });
+    const row = page.getByTestId('chat-tool-delegate-task-card-toggle');
+    await row.focus();
+    await page.keyboard.press('Tab');
+    await expect(stop).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByText(/Stopped “.+”/)).toBeVisible({ timeout: 15_000 });
+    await expect(stop).toHaveCount(0, { timeout: 15_000 });
+    expect(requests).toHaveLength(1);
+    // The focus in it keeps the turn open.
+    await expect(row).toBeFocused();
+    await expect(receipt).toHaveAttribute('data-status', 'stopped', { timeout: 15_000 });
   });
 });

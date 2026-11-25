@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Render gate for the in-chat smart-action chips (#278, #279).
+ * Render gate for the in-chat instruction chips (#278).
  *
  * `markdownComponents` is shared with `UserMessage`, `ReviewCommentCard` and
  * `PlanBubble` — and `PlanBubble` renders *inside* assistant messages, so a

@@ -28,13 +28,22 @@ export function waitForMessage(chatId: string, messageId: string): Promise<HTMLE
   });
 }
 
+function shownRow(absorbed: HTMLElement): HTMLElement | undefined {
+  const viewport = absorbed.closest('[data-mf-chat-thread]');
+  return [...(viewport?.querySelectorAll<HTMLElement>('[data-find-row]') ?? [])].find(
+    (row) => row.dataset.findRow === absorbed.dataset.messageId,
+  );
+}
+
 export function paintDaemonMatch(
   chatId: string,
   query: string,
   match: FindMatch | undefined,
   itemHits: number,
 ): () => void {
-  const message = match && messageElement(chatId, match.messageId);
+  const own = match && messageElement(chatId, match.messageId);
+  // A message another element stands for is marked where it is shown.
+  const message = own?.dataset.absorbedBy ? shownRow(own) : own;
   if (!message || !match?.itemId || match.occurrence === undefined) return () => undefined;
   const parts = [...message.querySelectorAll<HTMLElement>('[data-text-part]')].filter(
     (part) => part.closest<HTMLElement>('[data-search-item-id]')?.dataset.searchItemId === match.itemId,

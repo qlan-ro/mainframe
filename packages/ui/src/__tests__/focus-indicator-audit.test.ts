@@ -77,16 +77,12 @@ interface Exemption {
 }
 
 const PANEL = 'an overlay panel: focused by script when it opens, never a tab stop';
-const REGION = 'not focusable: a disclosure body';
 
 const EXEMPT: Record<string, Exemption> = {
   'components/ui/alert-dialog.tsx': { count: 1, shownBy: PANEL },
   'components/ui/dialog.tsx': { count: 1, shownBy: PANEL },
   'components/ui/popover.tsx': { count: 1, shownBy: PANEL },
   'components/ui/hover-card.tsx': { count: 1, shownBy: PANEL },
-  'components/ui/assistant-ui/reasoning.tsx': { count: 1, shownBy: REGION },
-  'components/ui/assistant-ui/tool-group.tsx': { count: 1, shownBy: REGION },
-  'components/ui/assistant-ui/tool-fallback.tsx': { count: 1, shownBy: REGION },
   'components/ui/attachment.tsx': { count: 1, shownBy: 'Attachment’s `focus-within` line' },
   'components/ui/command.tsx': {
     count: 2,

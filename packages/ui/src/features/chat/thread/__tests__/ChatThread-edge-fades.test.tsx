@@ -49,7 +49,7 @@ vi.mock('@assistant-ui/react', () => {
   };
 });
 
-vi.mock('../../messages/bounded-messages', () => ({ boundedMessageComponents: {} }));
+vi.mock('../../messages/turn/TurnTranscript', () => ({ TurnTranscript: () => <div data-testid="messages-stub" /> }));
 vi.mock('../../composer/Composer', () => ({ Composer: () => <div data-testid="chat-composer" /> }));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
 vi.mock('../../composer/strips/BottomStrip', () => ({ BottomStrip: () => null }));
