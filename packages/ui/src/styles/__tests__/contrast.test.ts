@@ -215,13 +215,13 @@ describe('v2 contrast guardrail', () => {
     const at = (c: RGBA, a: number): RGBA => ({ ...c, a: c.a * a });
     const rest = [ground];
     // Half strength is the row of the chat visible in the split's other zone.
-    const filled = [0.5, 0.6, 1].map((strength) => composite(at(accent, strength), ground));
-    for (const bg of rest) {
-      expect(inkOn(color(t, '--muted-foreground'), bg), `time at rest (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
-    }
+    const filled = [
+      ...[0.5, 0.6, 1].map((strength) => composite(at(accent, strength), ground)),
+      composite(color(t, '--chrome-selected'), ground),
+    ];
     for (const bg of [...rest, ...filled]) {
       expect(inkOn(at(ink, 0.85), bg), `title (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
-      expect(inkOn(at(ink, 0.8), bg), `time on a filled row (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
+      expect(inkOn(color(t, '--muted-foreground'), bg), `time (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
       expect(inkOn(color(t, '--warning'), bg), `needs you (${theme})`).toBeGreaterThanOrEqual(WCAG_MIN);
       expect(inkOn(color(t, '--primary'), bg), `spinner (${theme})`).toBeGreaterThanOrEqual(3);
       const tile = composite(at(ink, 0.08), bg);
@@ -229,10 +229,10 @@ describe('v2 contrast guardrail', () => {
     }
   });
 
-  it('the row’s time steps up on every fill, and the hover card’s links are body ink', () => {
+  it('the row’s time keeps its ink on every fill, and the hover card’s links are body ink', () => {
     const status = readSheet('features/sessions/SessionRowStatus.tsx');
-    for (const state of ['group-hover/menu-item', 'group-data-active/menu-item', 'group-data-in-workspace/menu-button'])
-      expect(status).toContain(`${state}:text-sidebar-foreground/80`);
+    expect(status).toContain('text-muted-foreground');
+    expect(status).not.toContain('text-sidebar-foreground/');
     // `primary` is 3.65:1 in light, and the card's text is 11px.
     expect(readSheet('features/sessions/SessionMetaCard.tsx')).not.toMatch(/text-primary\b/);
   });

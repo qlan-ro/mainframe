@@ -50,6 +50,8 @@
    ════════════════════════════════════════════════════════════════════════ */
 
 :root {
+  --crit: #c70016;
+  --red: #c0392b;
   /* In-chat Find highlights — amber (matches the --mf-cm-match editor-search
      convention), defined once; the dark block does not override them. */
   --mf-find-tint: rgba(251, 191, 36, 0.32);
@@ -62,7 +64,7 @@
   --mf-code-bg: var(--code-surface);
   --mf-code-fg: var(--foreground);
   --mf-code-kw: var(--accent-ink);
-  --mf-code-str: #c41a16;
+  --mf-code-str: var(--success);
   --mf-code-fn: #326d74;
   --mf-code-type: #5b269a;
   --mf-code-num: #1c00cf;
@@ -138,7 +140,7 @@
   --mf-diff-add-text: var(--success);
   --mf-diff-del-bg: color-mix(in srgb, var(--destructive) 9%, var(--background));
   --mf-diff-del-border: color-mix(in srgb, var(--destructive) 26%, var(--background));
-  --mf-diff-del-text: var(--destructive);
+  --mf-diff-del-text: var(--red);
 
   /* CM6 editor UI states — selection tracks the primary; match ambers align
      with the Find tints above. */
@@ -152,10 +154,12 @@
 }
 
 .dark {
+  --crit: #ff8080;
+  --red: #ff7b6e;
   /* Editor syntax accents — playful slate pastels (bg/fg/cmt derive above and
      track the mode on their own) */
   --mf-code-kw: var(--accent-ink);
-  --mf-code-str: #eef0a0;
+  --mf-code-str: var(--success);
   --mf-code-fn: #6df295;
   --mf-code-type: #bd9bf5;
   --mf-code-num: #86c9f5;
@@ -203,8 +207,15 @@
 }
 
 @theme inline {
+  /* Signal red and diff red (DESIGN.md, Tertiary): the red that must be loud, and the red of
+     deletions and refusals. `--destructive` stays the app's red everywhere else. */
+  --color-crit: var(--crit);
+  --color-red: var(--red);
   /* The panel's attachment tiles, cards in gates and dialogs (DESIGN.md, Shapes). */
   --radius-tile: 12px;
+  /* A gate's answers and options, the empty state's rows and the shortcuts sheet's. */
+  --text-row: 0.84375rem;
+  --text-row--line-height: 1.45;
   /* The session row's project letter, in its 16px tile. */
   --text-tile: 0.59375rem;
   --text-tile--line-height: 1;
@@ -246,6 +257,9 @@
   --color-mf-viewer-check-a: var(--mf-viewer-check-a);
   --color-mf-viewer-check-b: var(--mf-viewer-check-b);
   --color-mf-scrim: var(--mf-scrim);
+  /* The selected segment of a segmented control, and the rule between the two halves of Send. */
+  --shadow-segment: 0 1px 2px rgb(0 0 0 / 0.1);
+  --shadow-split: inset 1px 0 0 rgb(255 255 255 / 0.35);
   /* Shadow utility for floating chrome (hover cards, tour cards): `shadow-mf-pop`. */
   --shadow-mf-pop: var(--mf-shadow-pop);
   --color-mf-accent-amber: var(--mf-accent-amber);

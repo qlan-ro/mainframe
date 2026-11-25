@@ -92,6 +92,7 @@ const EXEMPT: Record<string, Exemption> = {
     count: 2,
     shownBy: 'the palette: focus never leaves its input, and the selected row is highlighted',
   },
+  'components/ui/menu-search.tsx': { count: 1, shownBy: 'the search well’s line while its field is focused' },
   'components/ui/input-group.tsx': { count: 2, shownBy: 'InputGroup’s line while its control is focused' },
   'features/chat/composer/Composer.tsx': { count: 1, shownBy: 'the composer card’s `focus-within` line' },
   'features/chat/composer/segments/ComposerSegments.tsx': {
@@ -221,6 +222,8 @@ describe('focus indicator audit', () => {
       .sort();
     expect(files).toEqual([
       'components/ui/command.tsx',
+      // The well around the field draws the line.
+      'components/ui/menu-search.tsx',
       'features/chat/composer/Composer.tsx',
       'features/chat/composer/edit/ComposerEditMode.tsx',
       // Inside an InputGroup, which draws the line.

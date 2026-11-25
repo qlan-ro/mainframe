@@ -6,6 +6,7 @@ import { extendTailwindMerge } from 'tailwind-merge';
 // drop the colour it stands beside (`cn('text-muted-foreground', 'text-meta')`).
 const TEXT_SIZES = [
   'tile',
+  'row',
   'meta',
   'title',
   'transcript',
@@ -18,7 +19,7 @@ const TEXT_SIZES = [
   'mono',
   'headline',
 ];
-const SHADOWS = ['card', 'tooltip', 'mf-pop'];
+const SHADOWS = ['card', 'tooltip', 'mf-pop', 'segment', 'split'];
 
 // `focus-line*` (globals.css) set the whole outline, so a later `outline-none`
 // on the same variant must drop them, and the other way round.

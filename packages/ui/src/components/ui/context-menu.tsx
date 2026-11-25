@@ -122,7 +122,7 @@ function ContextMenuCheckboxItem({
       checked={checked}
       {...props}
     >
-      <span className="pointer-events-none absolute right-2.5 text-ink-secondary">
+      <span className="pointer-events-none absolute top-[9px] right-2.5 text-ink-secondary">
         <ContextMenuPrimitive.ItemIndicator>
           <CheckIcon />
         </ContextMenuPrimitive.ItemIndicator>
@@ -149,7 +149,7 @@ function ContextMenuRadioItem({
       )}
       {...props}
     >
-      <span className="pointer-events-none absolute right-2.5 text-ink-secondary">
+      <span className="pointer-events-none absolute top-[9px] right-2.5 text-ink-secondary">
         <ContextMenuPrimitive.ItemIndicator>
           <CheckIcon />
         </ContextMenuPrimitive.ItemIndicator>
@@ -169,7 +169,10 @@ function ContextMenuLabel({
     <ContextMenuPrimitive.Label
       data-slot="context-menu-label"
       data-inset={inset}
-      className={cn('px-2.5 pt-2 pb-[3px] text-caption/[1.45] font-semibold text-muted-foreground data-inset:pl-8', className)}
+      className={cn(
+        'px-2.5 pt-2 pb-[3px] text-caption/[1.45] font-semibold text-muted-foreground data-inset:pl-8',
+        className,
+      )}
       {...props}
     />
   );

@@ -23,7 +23,7 @@ export const EFFORT_META: Record<EffortLevel, { label: string; description: stri
   medium: { label: 'Medium', description: 'Balanced speed and depth' },
   high: { label: 'High', description: 'Thorough reasoning' },
   xhigh: { label: 'Extra-high', description: 'Extra reasoning for hard tasks' },
-  max: { label: 'Maximum', description: 'Maximum reasoning depth' },
+  max: { label: 'Max', description: 'Maximum reasoning depth' },
   ultra: { label: 'Ultra', description: 'Maximum reasoning; delegates to sub-agents proactively.' },
 };
 

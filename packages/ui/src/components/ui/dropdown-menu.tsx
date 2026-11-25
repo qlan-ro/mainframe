@@ -78,7 +78,7 @@ function DropdownMenuCheckboxItem({
       {...props}
     >
       <span
-        className="pointer-events-none absolute right-2.5 flex items-center justify-center text-ink-secondary"
+        className="pointer-events-none absolute top-[9px] right-2.5 flex items-center justify-center text-ink-secondary"
         data-slot="dropdown-menu-checkbox-item-indicator"
       >
         <DropdownMenuPrimitive.ItemIndicator>
@@ -111,7 +111,7 @@ function DropdownMenuRadioItem({
       {...props}
     >
       <span
-        className="pointer-events-none absolute right-2.5 flex items-center justify-center text-ink-secondary"
+        className="pointer-events-none absolute top-[9px] right-2.5 flex items-center justify-center text-ink-secondary"
         data-slot="dropdown-menu-radio-item-indicator"
       >
         <DropdownMenuPrimitive.ItemIndicator>
@@ -133,7 +133,10 @@ function DropdownMenuLabel({
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn('px-2.5 pt-2 pb-[3px] text-caption/[1.45] font-semibold text-muted-foreground data-inset:pl-8', className)}
+      className={cn(
+        'px-2.5 pt-2 pb-[3px] text-caption/[1.45] font-semibold text-muted-foreground data-inset:pl-8',
+        className,
+      )}
       {...props}
     />
   );
