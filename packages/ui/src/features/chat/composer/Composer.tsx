@@ -2,7 +2,8 @@
 
 /**
  * Composer shell — one card over the native `ComposerPrimitive`, with a strip
- * tucked behind its top edge and a bare row of controls under it (K1, K2, K6).
+ * tucked behind its top edge (K1, K2). The bare row under it is the footer's
+ * (`BottomStrip`): a chat with no composer has it too.
  *
  * Native ~90%: Root/Input own the draft + submit. The card holds, top to
  * bottom, the queue (C10), the draft's attachments and quotes, the field, and
@@ -32,7 +33,6 @@ import { useComposerSegments } from './segments/segment-store';
 import { useSubmitComposition } from './segments/use-submit-composition';
 import { SendControls } from './send/SendControls';
 import { useEnterMode } from './send/use-enter-mode';
-import { BottomStrip } from './strips/BottomStrip';
 import { TopStrip } from './strips/TopStrip';
 
 /**
@@ -134,7 +134,6 @@ export function Composer({ variant = 'main' }: { variant?: 'main' | 'side' } = {
         ) : (
           <ComposerCard variant={variant} cardRef={setCard} />
         )}
-        {variant !== 'side' && <BottomStrip />}
       </div>
     </ComposerCardProvider>
   );

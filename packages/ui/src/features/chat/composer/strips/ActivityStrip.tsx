@@ -8,41 +8,29 @@
  */
 import { useState } from 'react';
 import { useAui } from '@assistant-ui/react';
-import { Activity, Binoculars, Bot, ChevronDown, Loader2, Route, SquareTerminal, type LucideIcon } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
-import { cancelDelegatedTask, stopBackgroundTask } from '@/lib/api/background-tasks';
-import { jumpToActivitySource } from '@/features/session-panel/activity-source';
+import { errorMessage } from '@/lib/error-message';
+import { ACTIVITY_ICON } from '@/features/session-panel/ActivityRow';
+import { ActivitySpinner } from '@/features/session-panel/ActivitySpinner';
+import { cancelActivityJump, jumpToActivitySource } from '@/features/session-panel/activity-source';
 import { formatElapsed } from '@/features/session-panel/background-activity-view';
-import type { ActivityEntry, ActivityKind } from '@/features/session-panel/activity-model';
+import type { ActivityEntry } from '@/features/session-panel/activity-model';
+import { stopRequest } from '@/features/session-panel/use-activity-actions';
 import { useActivityEntries } from '@/features/session-panel/use-activity-entries';
+import { useStop } from '@/features/session-panel/use-stop';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useGateQueue } from '../../gates/use-gate-queue';
 import { openInSplit } from '../../zones/open-in-split';
 import { ComposerHint } from '../composer-card-context';
-import { TASK_STOP_ADAPTER, isOpenTask } from '../send/use-stop';
 import { stripItems, stripSummary, type StripItem } from './activity-strip-model';
 import { TOP_STRIP } from './strip-chrome';
 
-/** The session panel's kind icons; a delegated task is the robot, filled. */
-const ICONS: Record<ActivityKind, LucideIcon> = {
-  workflow: Route,
-  subagent: Bot,
-  delegated: Bot,
-  monitor: Binoculars,
-  scheduled: Activity,
-  command: SquareTerminal,
-  background: Activity,
-};
-
 const ROW = 'flex min-h-7 min-w-0 items-center gap-2 rounded-lg pr-0.5 pl-2 text-[0.78125rem]';
 const TOGGLE = 'size-6 shrink-0 text-muted-foreground';
-
-function Spinner() {
-  return <Loader2 className="size-3 shrink-0 animate-spin text-focus motion-reduce:animate-none" aria-hidden />;
-}
 
 /** Open what an item is doing: a delegated task's chat, else its place in the transcript. */
 function useOpen(chatId: string) {
@@ -50,51 +38,39 @@ function useOpen(chatId: string) {
   const parentThreadId = useSideAwareThreadId();
   return (entry: ActivityEntry) => {
     const childId = entry.delegated?.itemId;
+    // A jump still on its way would move the transcript under what this opens.
+    cancelActivityJump();
     if (childId && parentThreadId) {
       openInSplit(parentThreadId, childId);
       aui.threads.switchToThread(childId);
       return;
     }
     if (!entry.source) return;
-    void jumpToActivitySource(chatId, entry.source).then((found) => {
-      if (!found) mfToast.warning(`“${entry.title}” is not in this transcript`);
-    });
-  };
-}
-
-/** Stop is immediate (K4), as the composer's own is. Null when this item can't be stopped on its own. */
-function stopAction(chatId: string, adapterId: string | undefined, entry: ActivityEntry): (() => Promise<void>) | null {
-  const { task, delegated } = entry;
-  if (delegated) return isOpenTask(delegated) ? () => cancelDelegatedTask(chatId, delegated.taskId) : null;
-  return task && adapterId === TASK_STOP_ADAPTER ? () => stopBackgroundTask(chatId, task.id) : null;
-}
-
-function StopAction({ title, stop }: { title: string; stop: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  const run = () => {
-    setBusy(true);
-    stop().then(
-      () => mfToast.success(`Stopped “${title}”`),
-      (error: unknown) => {
-        setBusy(false);
-        mfToast.error(`Could not stop “${title}”`, {
-          description: error instanceof Error ? error.message : String(error),
-        });
+    jumpToActivitySource(chatId, entry.source).then(
+      (outcome) => {
+        if (outcome === 'missing') mfToast.info(`“${entry.title}” started before the history shown here`);
       },
+      (error: unknown) => mfToast.error('Could not load the message', { description: errorMessage(error) }),
     );
   };
+}
+
+/** Stop is immediate (K4), as the composer's own is. Absent when this item can't be stopped on its own. */
+function StopAction({ title, request }: { title: string; request: () => Promise<void> }) {
+  const { onStop, stopping } = useStop(title, request);
   return (
     <Button
       type="button"
       variant="ghost"
       size="xs"
       data-testid="composer-activity-stop"
-      aria-label={`Stop ${title}`}
-      disabled={busy}
-      onClick={run}
-      className="h-6 shrink-0 text-foreground/80"
+      aria-label={stopping ? `Stopping ${title}` : `Stop ${title}`}
+      // Not `disabled`, which would drop the focus it has.
+      aria-disabled={stopping}
+      onClick={onStop}
+      className="h-6 shrink-0 text-foreground/80 aria-disabled:text-muted-foreground"
     >
-      Stop
+      {stopping ? 'Stopping' : 'Stop'}
     </Button>
   );
 }
@@ -111,8 +87,8 @@ interface ItemRowProps {
 function ItemRow({ item, chatId, adapterId, now, trailing }: ItemRowProps) {
   const { entry, needsYou, queued } = item;
   const open = useOpen(chatId);
-  const stop = stopAction(chatId, adapterId, entry);
-  const Icon = ICONS[entry.kind];
+  const stop = stopRequest(entry, chatId, adapterId);
+  const Icon = ACTIVITY_ICON[entry.kind];
   return (
     <div
       role="listitem"
@@ -120,14 +96,7 @@ function ItemRow({ item, chatId, adapterId, now, trailing }: ItemRowProps) {
       data-needs-you={needsYou || undefined}
       className={ROW}
     >
-      <Icon
-        aria-hidden
-        className={cn(
-          'size-3.5 shrink-0',
-          needsYou ? 'text-warning' : 'text-focus',
-          entry.kind === 'delegated' && 'fill-current/25',
-        )}
-      />
+      <Icon aria-hidden className={cn('size-3.5 shrink-0', needsYou ? 'text-warning' : 'text-focus')} />
       <span className="min-w-0 flex-1 truncate" title={entry.title}>
         {entry.title}
       </span>
@@ -135,7 +104,7 @@ function ItemRow({ item, chatId, adapterId, now, trailing }: ItemRowProps) {
         <span className="shrink-0 font-medium text-warning">needs you</span>
       ) : (
         <span className="flex shrink-0 items-center gap-1 text-muted-foreground tabular-nums">
-          {!queued && <Spinner />}
+          {!queued && <ActivitySpinner />}
           {queued ? 'queued' : formatElapsed(entry.startedAt, now)}
         </span>
       )}
@@ -152,7 +121,7 @@ function ItemRow({ item, chatId, adapterId, now, trailing }: ItemRowProps) {
           Open
         </Button>
       ) : (
-        stop && <StopAction title={entry.title} stop={stop} />
+        stop && <StopAction title={entry.title} request={stop} />
       )}
       {trailing}
     </div>
@@ -196,7 +165,7 @@ function SummaryRow({ items, onExpand }: { items: StripItem[]; onExpand: () => v
       <span className="min-w-0 flex-1 truncate text-muted-foreground">Also ongoing</span>
       {running && (
         <span className="flex shrink-0 items-center gap-1 text-muted-foreground tabular-nums">
-          <Spinner />
+          <ActivitySpinner />
           {running}
         </span>
       )}

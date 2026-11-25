@@ -5,7 +5,7 @@
  * ("Also ongoing") and leaves out the item being answered.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ActivityEntry } from '@/features/session-panel/activity-model';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -15,15 +15,17 @@ vi.mock('@assistant-ui/react', () => ({ useAui: () => ({ threads: { switchToThre
 vi.mock('@/features/side-chat/side-chat-scope', () => ({ useSideAwareThreadId: () => 'parent-thread' }));
 const openInSplit = vi.fn();
 vi.mock('../../../zones/open-in-split', () => ({ openInSplit: (...a: unknown[]) => openInSplit(...a) }));
-const jumpToActivitySource = vi.fn().mockResolvedValue(true);
+const jumpToActivitySource = vi.fn().mockResolvedValue('shown');
+const cancelActivityJump = vi.fn();
 vi.mock('@/features/session-panel/activity-source', () => ({
   jumpToActivitySource: (...a: unknown[]) => jumpToActivitySource(...a),
+  cancelActivityJump: () => cancelActivityJump(),
 }));
 vi.mock('@/lib/api/background-tasks', () => ({
   stopBackgroundTask: vi.fn().mockResolvedValue(undefined),
   cancelDelegatedTask: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('@/lib/toast', () => ({ mfToast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+vi.mock('@/lib/toast', () => ({ mfToast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 let mockActivity: { entries: ActivityEntry[]; chatId: string | null; adapterId: string | undefined; now: number };
 vi.mock('@/features/session-panel/use-activity-entries', () => ({ useActivityEntries: () => mockActivity }));
@@ -33,6 +35,7 @@ let mockGates: { front: Front | undefined; more: number; waitingCalls: ReadonlyS
 vi.mock('../../../gates/use-gate-queue', () => ({ useGateQueue: () => mockGates }));
 
 import { cancelDelegatedTask, stopBackgroundTask } from '@/lib/api/background-tasks';
+import { mfToast } from '@/lib/toast';
 import { ActivityStrip } from '../ActivityStrip';
 
 const NOW = 100_000;
@@ -75,7 +78,7 @@ describe('ActivityStrip — rows', () => {
   it('renders nothing when only finished work and wake-ups exist', () => {
     mockActivity.entries = [
       entry('done', { state: 'completed' }),
-      entry('wake', { kind: 'scheduled', state: 'waiting' }),
+      entry('wake', { kind: 'scheduled', state: 'scheduled' }),
     ];
 
     const { container } = renderStrip();
@@ -98,6 +101,7 @@ describe('ActivityStrip — rows', () => {
       entry('busy', { startedAt: NOW - 90_000 }),
       entry('asking', {
         startedAt: NOW - 1_000,
+        state: 'needs-you',
         delegated: { taskId: 't1', itemId: 'child-1', title: 'Asking', status: 'running', waiting: true, updatedAt: 0 },
       }),
     ];
@@ -114,7 +118,7 @@ describe('ActivityStrip — rows', () => {
   it('shows a queued delegated task as "queued", with no timer', () => {
     mockActivity.entries = [
       entry('line', {
-        state: 'waiting',
+        state: 'queued',
         delegated: { taskId: 't1', itemId: 'c', title: 'T', status: 'queued', waiting: false, updatedAt: 0 },
       }),
     ];
@@ -127,6 +131,7 @@ describe('ActivityStrip — rows', () => {
   it('Open on a delegated task opens its chat in a split and switches to it', () => {
     mockActivity.entries = [
       entry('asking', {
+        state: 'needs-you',
         delegated: { taskId: 't1', itemId: 'child-1', title: 'A', status: 'running', waiting: true, updatedAt: 0 },
       }),
     ];
@@ -146,6 +151,58 @@ describe('ActivityStrip — rows', () => {
     fireEvent.click(screen.getByTestId('composer-activity-open'));
 
     expect(jumpToActivitySource).toHaveBeenCalledExactlyOnceWith('chat-1', { messageId: 'm1', toolCallId: 'call-1' });
+  });
+
+  const openSubagentRow = async () => {
+    mockActivity.entries = [entry('sub', { state: 'needs-you', source: { toolCallId: 'call-1' }, title: 'Sub' })];
+    renderStrip();
+    fireEvent.click(screen.getByTestId('composer-activity-open'));
+    await act(async () => {});
+  };
+
+  it('Open says so when the history does not hold it', async () => {
+    jumpToActivitySource.mockResolvedValueOnce('missing');
+    await openSubagentRow();
+
+    expect(mfToast.info).toHaveBeenCalledExactlyOnceWith('“Sub” started before the history shown here');
+  });
+
+  it('Open says nothing for a jump something else replaced', async () => {
+    jumpToActivitySource.mockResolvedValueOnce('superseded');
+    await openSubagentRow();
+
+    expect(mfToast.info).not.toHaveBeenCalled();
+    expect(mfToast.error).not.toHaveBeenCalled();
+  });
+
+  it('Open says when the history could not be loaded', async () => {
+    jumpToActivitySource.mockRejectedValueOnce(new Error('offline'));
+    await openSubagentRow();
+
+    expect(mfToast.error).toHaveBeenCalledExactlyOnceWith('Could not load the message', { description: 'offline' });
+  });
+
+  it('a delegated task carries the panel’s filled robot', () => {
+    mockActivity.entries = [entry('d', { kind: 'delegated' })];
+    renderStrip();
+
+    expect(screen.getByTestId('composer-activity-d').querySelector('.lucide-bot-filled')).not.toBeNull();
+  });
+
+  it('sends one Stop until it takes effect, and keeps the button’s focus', async () => {
+    mockActivity.entries = [entry('a', { task: { id: 'bg-1', kind: 'agent' } as never })];
+    renderStrip();
+    const stop = screen.getByTestId('composer-activity-stop');
+    stop.focus();
+
+    fireEvent.click(stop);
+    await act(async () => {});
+    fireEvent.click(stop);
+
+    expect(stopBackgroundTask).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveAttribute('aria-disabled', 'true');
+    expect(stop).toHaveAccessibleName('Stopping Title a');
+    expect(stop).toHaveFocus();
   });
 
   it('Stop on a delegated task cancels it, with no confirmation', () => {
@@ -253,6 +310,7 @@ describe('ActivityStrip — while a request shows above the composer (K10)', () 
       entry('a'),
       entry('b'),
       entry('waiting', {
+        state: 'needs-you',
         delegated: { taskId: 't1', itemId: 'c', title: 'W', status: 'running', waiting: true, updatedAt: 0 },
       }),
     ];

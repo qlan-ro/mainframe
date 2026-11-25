@@ -12,8 +12,12 @@ vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtrasSelector: (select: (extras: unknown) => unknown) => select({ state: { chatConfig: mockChat } }),
 }));
 vi.mock('@/features/sessions/runtime/daemon-port-context', () => ({ useDaemonPort: () => 31415 }));
+let mockBranch: string | undefined;
 vi.mock('@/features/sessions/use-display-branch', () => ({
-  useDisplayBranch: () => ({ branch: 'feat/quota', refetch: vi.fn() }),
+  useDisplayBranch: () => ({ branch: mockBranch, refetch: vi.fn() }),
+}));
+vi.mock('@/features/sessions/use-active-identity', () => ({
+  useActiveIdentity: () => ({ projectPath: '/Users/me/repo' }),
 }));
 vi.mock('@/features/git/BranchPopover', () => ({
   BranchPopover: ({ children }: { children: React.ReactElement }) => children,
@@ -22,9 +26,13 @@ vi.mock('../../config-toolbar/WorktreePopover', () => ({
   WorktreePopover: ({ children }: { children: React.ReactElement }) => children,
 }));
 type Changes = { files: { path: string; additions?: number }[]; totalAdditions?: number; totalDeletions?: number };
+const changesOptions = vi.fn();
 let mockChanges: Changes & { loading: boolean; error: boolean };
 vi.mock('@/features/review/use-working-changes', () => ({
-  useWorkingChanges: () => mockChanges,
+  useWorkingChanges: (options: unknown) => {
+    changesOptions(options);
+    return mockChanges;
+  },
   toChangesSummary: (c: Changes) => ({
     fileCount: c.files.length,
     additions: c.totalAdditions,
@@ -37,16 +45,17 @@ vi.mock('@/store/surface-intents', () => ({ emitSurfaceIntent: (...a: unknown[])
 import { BottomStrip } from '../BottomStrip';
 
 const CHAT: Partial<Chat> = { id: 'chat-1', projectId: 'p1', temporary: false, noProject: false };
-const renderStrip = () =>
+const renderStrip = ({ fixed }: { fixed?: boolean } = {}) =>
   render(
     <TooltipProvider>
-      <BottomStrip />
+      <BottomStrip fixed={fixed} />
     </TooltipProvider>,
   );
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockChat = CHAT;
+  mockBranch = 'feat/quota';
   mockChanges = { files: [], loading: false, error: false };
 });
 
@@ -66,6 +75,9 @@ describe('BottomStrip', () => {
   it('names the local checkout, and keeps the branch manager beside it', () => {
     renderStrip();
     expect(screen.getByTestId('composer-worktree-trigger')).toHaveTextContent('Local');
+    expect(screen.getByTestId('composer-worktree-trigger')).toHaveAccessibleName(
+      'Runs in the local checkout, repo. Isolate in a worktree',
+    );
     expect(screen.getByTestId('composer-branch')).toHaveTextContent('feat/quota');
   });
 
@@ -73,6 +85,27 @@ describe('BottomStrip', () => {
     mockChat = { ...CHAT, worktreePath: '/repo/.worktrees/q' };
     renderStrip();
     expect(screen.getByTestId('composer-worktree-trigger')).toHaveTextContent('Worktree');
+    expect(screen.getByTestId('composer-worktree-trigger')).toHaveAccessibleName(
+      'Runs in a worktree, q. Worktree options',
+    );
+  });
+
+  it('leaves the branch out while none resolves', () => {
+    mockBranch = undefined;
+    renderStrip();
+    expect(screen.queryByTestId('composer-branch')).toBeNull();
+    expect(screen.getByTestId('composer-worktree-trigger')).toBeInTheDocument();
+  });
+
+  it('fixed, it names where the session runs, offers no move, and keeps the branch and the changes', () => {
+    mockChat = { ...CHAT, worktreePath: '/repo/.worktrees/q' };
+    mockChanges = { files: [{ path: 'a.ts' }], totalAdditions: 1, totalDeletions: 0, loading: false, error: false };
+    renderStrip({ fixed: true });
+    expect(screen.getByTestId('composer-where')).toHaveTextContent('Worktree');
+    expect(screen.getByTestId('composer-where')).toHaveAccessibleName('Runs in a worktree, q');
+    expect(screen.queryByTestId('composer-worktree-trigger')).toBeNull();
+    expect(screen.getByTestId('composer-branch')).toHaveTextContent('feat/quota');
+    expect(screen.getByTestId('composer-changes')).toBeInTheDocument();
   });
 
   it('a temporary session says so, offers no worktree and shows no changes', () => {
@@ -87,6 +120,13 @@ describe('BottomStrip', () => {
 
 describe('ChangesButton', () => {
   const some = { files: [{ path: 'src/a.ts' }, { path: 'src/b.ts' }], totalAdditions: 22, totalDeletions: 1 };
+
+  it('reads the branch once, not again with the changes', () => {
+    renderStrip();
+    expect(changesOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ projectId: 'p1', chatId: 'chat-1', withBranch: false }),
+    );
+  });
 
   it('is hidden with no changes', () => {
     renderStrip();

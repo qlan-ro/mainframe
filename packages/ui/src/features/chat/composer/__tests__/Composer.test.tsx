@@ -123,7 +123,6 @@ vi.mock('../config-toolbar/ComposerToolbar', async () => {
 vi.mock('../attachments/ComposerAttachmentStrip', () => ({ ComposerAttachments: () => null }));
 vi.mock('../attachments/ComposerAddMenu', () => ({ ComposerAddMenu: () => null }));
 vi.mock('../strips/TopStrip', () => ({ TopStrip: () => <div data-testid="top-strip-stub" /> }));
-vi.mock('../strips/BottomStrip', () => ({ BottomStrip: () => <div data-testid="bottom-strip-stub" /> }));
 vi.mock('../queue/QueuedRows', () => ({ QueuedRows: () => null }));
 vi.mock('../config-toolbar/ContextRing', () => ({ ContextRing: () => null }));
 vi.mock('../send/SendControls', () => ({ SendControls: () => <div data-testid="send-controls-stub" /> }));
@@ -207,15 +206,14 @@ describe('Composer — structure', () => {
     __messages = [];
   });
 
-  it('hosts the send controls inside the card and the strips around it', () => {
+  it('hosts the send controls inside the card and the strip above it', () => {
     renderComposer();
 
     expect(screen.getByTestId('chat-composer')).toContainElement(screen.getByTestId('send-controls-stub'));
     expect(screen.getByTestId('top-strip-stub')).toBeInTheDocument();
-    expect(screen.getByTestId('bottom-strip-stub')).toBeInTheDocument();
   });
 
-  it('the side variant has no strips', () => {
+  it('the side variant has no strip', () => {
     render(
       <TooltipProvider>
         <Composer variant="side" />
@@ -223,7 +221,6 @@ describe('Composer — structure', () => {
     );
 
     expect(screen.queryByTestId('top-strip-stub')).toBeNull();
-    expect(screen.queryByTestId('bottom-strip-stub')).toBeNull();
     expect(screen.getByTestId('chat-composer-input')).toBeInTheDocument();
   });
 });

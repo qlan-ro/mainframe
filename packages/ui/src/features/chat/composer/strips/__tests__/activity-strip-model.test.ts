@@ -32,15 +32,30 @@ describe('stripItems', () => {
     const items = stripItems(
       [
         entry('run-old', { startedAt: 1000 }),
-        entry('wait-new', { startedAt: 4000, delegated: delegated({ waiting: true }) }),
+        entry('wait-new', { startedAt: 4000, state: 'needs-you', delegated: delegated({ waiting: true }) }),
         entry('run-new', { startedAt: 3000 }),
-        entry('wait-old', { startedAt: 2000, delegated: delegated({ resumedState: 'waiting' }) }),
+        entry('wait-old', { startedAt: 2000, state: 'needs-you' }),
       ],
       NONE,
     );
 
     expect(items.map((i) => i.entry.id)).toEqual(['wait-old', 'wait-new', 'run-old', 'run-new']);
     expect(items.map((i) => i.needsYou)).toEqual([true, true, false, false]);
+  });
+
+  it('lists a sub-agent the panel already marks as needing you', () => {
+    const items = stripItems([entry('busy'), entry('asking', { state: 'needs-you' })], NONE);
+
+    expect(items.map((i) => [i.entry.id, i.needsYou])).toEqual([
+      ['asking', true],
+      ['busy', false],
+    ]);
+  });
+
+  it('leaves out a finished task whose request flag has not cleared yet', () => {
+    expect(stripItems([entry('over', { state: 'stopped', delegated: delegated({ waiting: true }) })], NONE)).toEqual(
+      [],
+    );
   });
 
   it('flags a running sub-agent whose Agent call has a pending request', () => {
@@ -60,10 +75,7 @@ describe('stripItems', () => {
 
   it('keeps a queued delegated task, after the running ones, marked queued', () => {
     const items = stripItems(
-      [
-        entry('waiting-in-line', { state: 'waiting', startedAt: 500, delegated: delegated({ status: 'queued' }) }),
-        entry('running', { startedAt: 2000 }),
-      ],
+      [entry('waiting-in-line', { state: 'queued', startedAt: 500 }), entry('running', { startedAt: 2000 })],
       NONE,
     );
 
@@ -76,11 +88,11 @@ describe('stripItems', () => {
   it('leaves out scheduled wake-ups and finished work', () => {
     const items = stripItems(
       [
-        entry('wake-up', { kind: 'scheduled', state: 'waiting' }),
+        entry('wake-up', { kind: 'scheduled', state: 'scheduled' }),
         entry('done', { state: 'completed' }),
         entry('failed', { state: 'failed' }),
         entry('stopped', { state: 'stopped' }),
-        entry('cancelled', { state: 'cancelled' }),
+        entry('removed', { state: 'removed' }),
         entry('live'),
       ],
       NONE,

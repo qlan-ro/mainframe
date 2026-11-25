@@ -100,9 +100,12 @@ const narrow = (width: number, caption: string, id = `width-${width}`): CaptureS
   wait: 600,
   setup: async ({ page }) => {
     await page.evaluate((px) => {
-      const frame = document.querySelector<HTMLElement>('[data-testid="chat-composer-frame"]')!;
-      frame.style.maxWidth = `${px}px`;
-      frame.style.minWidth = '0';
+      for (const part of ['chat-composer-frame', 'composer-bottom-strip']) {
+        const element = document.querySelector<HTMLElement>(`[data-testid="${part}"]`);
+        if (!element) continue;
+        element.style.maxWidth = `${px}px`;
+        element.style.minWidth = '0';
+      }
     }, width);
     await parkPointer(page);
   },

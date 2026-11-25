@@ -18,7 +18,7 @@ import { useChatExtras } from '../../runtime/chat-extras';
 import { focusVisibleComposer } from '../focus-composer';
 
 /** The adapter whose CLI can stop a single background task. */
-export const TASK_STOP_ADAPTER = 'claude';
+const TASK_STOP_ADAPTER = 'claude';
 
 export interface ComposerStop {
   /** Something is running that Stop would end. */
@@ -32,7 +32,7 @@ export interface ComposerStop {
 const FINISHED: readonly DelegatedTaskRow['status'][] = ['completed', 'failed', 'cancelled', 'interrupted'];
 
 /** Still going, or waiting on the user. A resumed child is a chat of its own again. */
-export function isOpenTask(row: DelegatedTaskRow): boolean {
+function isOpenTask(row: DelegatedTaskRow): boolean {
   return row.resumedState == null && !FINISHED.includes(row.status);
 }
 

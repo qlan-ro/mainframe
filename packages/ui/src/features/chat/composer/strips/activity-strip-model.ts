@@ -15,15 +15,11 @@ export interface StripItem {
 /** `waitingCalls`: the sub-agents (by their Agent tool call) with a pending request in this chat. */
 export function stripItems(entries: readonly ActivityEntry[], waitingCalls: ReadonlySet<string>): StripItem[] {
   const items = entries.flatMap((entry): StripItem[] => {
+    const { state } = entry;
+    if (state !== 'needs-you' && state !== 'running' && state !== 'queued') return [];
     const call = entry.source?.toolCallId;
-    const needsYou =
-      entry.delegated?.waiting === true ||
-      entry.delegated?.resumedState === 'waiting' ||
-      (entry.state === 'running' && call != null && waitingCalls.has(call));
-    if (needsYou) return [{ entry, needsYou, queued: false }];
-    if (entry.state === 'running') return [{ entry, needsYou, queued: false }];
-    if (entry.delegated?.status === 'queued') return [{ entry, needsYou, queued: true }];
-    return [];
+    const asking = state === 'running' && call != null && waitingCalls.has(call);
+    return [{ entry, needsYou: state === 'needs-you' || asking, queued: state === 'queued' }];
   });
   return items.sort((a, b) => Number(b.needsYou) - Number(a.needsYou) || a.entry.startedAt - b.entry.startedAt);
 }

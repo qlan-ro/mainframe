@@ -43,8 +43,10 @@ vi.mock('../../composer/strips/DraftStrip', () => ({
   ),
 }));
 vi.mock('../../composer/WorktreeSwitchBanner', () => ({ WorktreeSwitchBanner: () => null }));
-vi.mock('@/features/session-panel/SessionStrip', () => ({
-  SessionStrip: () => <div data-testid="session-strip" />,
+vi.mock('../../composer/strips/BottomStrip', () => ({
+  BottomStrip: ({ fixed }: { fixed?: boolean }) => (
+    <div data-testid="bottom-strip" data-fixed={String(fixed === true)} />
+  ),
 }));
 vi.mock('../../orchestration/AgentOutboxChip', () => ({ AgentOutboxChip: () => null }));
 vi.mock('../ChatSelectionToolbar', () => ({ ChatSelectionToolbar: () => null }));
@@ -95,6 +97,7 @@ describe('ChatThread — composer gate on a projectless draft', () => {
     render(<ChatThread />);
 
     expect(screen.getByTestId('composer-stub')).toBeInTheDocument();
+    expect(screen.getByTestId('bottom-strip')).toHaveAttribute('data-fixed', 'false');
   });
 
   it('ignores a draft seeded for a different local thread', () => {
@@ -114,6 +117,6 @@ describe('ChatThread — composer gate on a projectless draft', () => {
 
     expect(screen.getByTestId('chat-read-only-note')).toBeInTheDocument();
     expect(screen.queryByTestId('composer-stub')).toBeNull();
-    expect(screen.getByTestId('session-strip')).toBeInTheDocument();
+    expect(screen.getByTestId('bottom-strip')).toHaveAttribute('data-fixed', 'true');
   });
 });

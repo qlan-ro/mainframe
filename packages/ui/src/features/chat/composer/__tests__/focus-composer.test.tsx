@@ -134,7 +134,6 @@ vi.mock('../edit/composer-edit-context', () => ({ useComposerEdit: () => ({ edit
 vi.mock('../config-toolbar/ComposerToolbar', () => ({ ComposerToolbar: () => null }));
 vi.mock('../attachments/ComposerAttachmentStrip', () => ({ ComposerAttachments: () => null }));
 vi.mock('../strips/TopStrip', () => ({ TopStrip: () => null }));
-vi.mock('../strips/BottomStrip', () => ({ BottomStrip: () => null }));
 vi.mock('../queue/QueuedRows', () => ({ QueuedRows: () => null }));
 vi.mock('../config-toolbar/ContextRing', () => ({ ContextRing: () => null }));
 vi.mock('../send/SendControls', () => ({ SendControls: () => null }));

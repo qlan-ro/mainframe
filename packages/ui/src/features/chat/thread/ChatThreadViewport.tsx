@@ -13,9 +13,9 @@ import {
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
-import { SessionStrip } from '@/features/session-panel/SessionStrip';
 import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
 import { Composer } from '../composer/Composer';
+import { BottomStrip } from '../composer/strips/BottomStrip';
 import { DraftStrip } from '../composer/strips/DraftStrip';
 import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';
 import { AgentOutboxChip } from '../orchestration/AgentOutboxChip';
@@ -47,8 +47,9 @@ function TranscriptMessages() {
     <VirtualMessages components={boundedMessageComponents} />
   );
 }
+const useDirectoryMissing = (): boolean => useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
 function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
-  const directoryMissing = useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
+  const directoryMissing = useDirectoryMissing();
   const itemId = useSideAwareThreadId();
   const itemStatus = useAuiState((s) => s.threadListItem?.status);
   const hasDraftCfg = useDraftConfigStore((s) => (itemId ? s.drafts.has(itemId) : false));
@@ -69,6 +70,7 @@ function ThreadFooter({
   readOnly: boolean;
   footerRef: RefCallback<HTMLDivElement>;
 }) {
+  const directoryMissing = useDirectoryMissing();
   return (
     <ThreadPrimitive.ViewportFooter
       ref={footerRef}
@@ -92,7 +94,7 @@ function ThreadFooter({
               <ThreadFooterInput variant={variant} />
             </>
           )}
-          {variant === 'main' && <SessionStrip />}
+          {variant === 'main' && <BottomStrip fixed={readOnly || directoryMissing} />}
         </div>
       </div>
     </ThreadPrimitive.ViewportFooter>

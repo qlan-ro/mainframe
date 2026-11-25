@@ -2,7 +2,8 @@
 
 /**
  * The composer's card element, for what has to stay inside its edges: a
- * tooltip opened from the toolbar is clamped to the card (C11).
+ * tooltip opened from the toolbar is clamped to the card (C11). The bottom
+ * strip, as wide as the card, stands in for it where there is no card.
  */
 import { createContext, useContext, type ReactElement, type ReactNode } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';

@@ -3,7 +3,8 @@
 /**
  * Under the card, once the session exists (K6, K8): where it runs and its
  * branch, with the changes at the end of the row. No box, just quiet controls.
- * Nothing before the first message (K7).
+ * Nothing before the first message (K7). A chat with no composer, read-only or
+ * with its directory missing, keeps the strip; where it runs is then `fixed`.
  */
 import { useState } from 'react';
 import { useAuiState } from '@assistant-ui/react';
@@ -12,10 +13,11 @@ import type { Chat } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { BranchPopover } from '@/features/git/BranchPopover';
 import { useDisplayBranch } from '@/features/sessions/use-display-branch';
+import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { useChatExtrasSelector } from '../../runtime/chat-extras';
 import { WorktreePopover } from '../config-toolbar/WorktreePopover';
-import { ComposerHint } from '../composer-card-context';
+import { ComposerCardProvider, ComposerHint } from '../composer-card-context';
 import { ChangesButton } from './ChangesButton';
 
 export const BOTTOM_STRIP_BUTTON =
@@ -42,24 +44,48 @@ function TemporaryPart() {
   );
 }
 
-function WherePart({ chat, hasMessages, busy }: { chat: Chat; hasMessages: boolean; busy: boolean }) {
+const directoryName = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+
+function WherePart({ chat, fixed }: { chat: Chat; fixed: boolean }) {
   const [open, setOpen] = useState(false);
+  const hasMessages = useAuiState((s) => s.thread.messages.length > 0);
+  const busy = useAuiState((s) => s.thread.isRunning);
+  const { projectPath } = useActiveIdentity();
   const isolated = chat.worktreePath != null;
+  const path = chat.worktreePath ?? projectPath;
+  const directory = path && directoryName(path);
   const Icon = isolated ? FolderGit2 : Monitor;
+  const runsIn = [isolated ? 'Runs in a worktree' : 'Runs in the local checkout', directory].filter(Boolean).join(', ');
+  const content = (
+    <>
+      <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="font-medium @max-[400px]/composer:hidden">{isolated ? 'Worktree' : 'Local'}</span>
+    </>
+  );
+  if (fixed) {
+    return (
+      <span
+        role="note"
+        data-testid="composer-where"
+        aria-label={runsIn}
+        title={path}
+        className={cn(BOTTOM_STRIP_BUTTON, 'shrink-0 hover:bg-transparent')}
+      >
+        {content}
+      </span>
+    );
+  }
   return (
     <WorktreePopover chat={chat} hasMessages={hasMessages} busy={busy} open={open} onOpenChange={setOpen}>
       <button
         type="button"
         data-testid="composer-worktree-trigger"
         data-isolated={isolated || undefined}
-        aria-label={
-          isolated ? 'Runs in a worktree. Worktree options' : 'Runs in the local checkout. Isolate in a worktree'
-        }
-        title={isolated ? 'Worktree options' : 'Runs in the local checkout'}
+        aria-label={`${runsIn}. ${isolated ? 'Worktree options' : 'Isolate in a worktree'}`}
+        title={path ?? runsIn}
         className={cn(BOTTOM_STRIP_BUTTON, 'shrink-0', open && 'bg-accent')}
       >
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="font-medium @max-[400px]/composer:hidden">{isolated ? 'Worktree' : 'Local'}</span>
+        {content}
       </button>
     </WorktreePopover>
   );
@@ -99,22 +125,26 @@ function BranchPart({ chat, port }: { chat: Chat; port: number }) {
   );
 }
 
-export function BottomStrip() {
+export function BottomStrip({ fixed = false }: { fixed?: boolean }) {
   const port = useDaemonPort();
+  const [strip, setStrip] = useState<HTMLElement | null>(null);
   const chat = useChatExtrasSelector((extras) => extras?.state.chatConfig ?? null);
-  const hasMessages = useAuiState((s) => s.thread.messages.length > 0);
-  const busy = useAuiState((s) => s.thread.isRunning);
   if (chat == null || chat.id.startsWith('__LOCALID_')) return null;
   if (!chat.temporary && chat.noProject) return null;
 
   return (
-    <div
-      data-testid="composer-bottom-strip"
-      className="flex min-h-7.5 min-w-0 shrink-0 items-center gap-0.5 px-1.5 pt-1.5"
-    >
-      {chat.temporary ? <TemporaryPart /> : <WherePart chat={chat} hasMessages={hasMessages} busy={busy} />}
-      {!chat.noProject && <BranchPart chat={chat} port={port} />}
-      {!chat.noProject && !chat.temporary && <ChangesButton port={port} projectId={chat.projectId} chatId={chat.id} />}
-    </div>
+    <ComposerCardProvider value={strip}>
+      <div
+        ref={setStrip}
+        data-testid="composer-bottom-strip"
+        className="@container/composer flex min-h-7.5 min-w-0 shrink-0 items-center gap-0.5 px-1.5 pt-1.5"
+      >
+        {chat.temporary ? <TemporaryPart /> : <WherePart chat={chat} fixed={fixed} />}
+        {!chat.noProject && <BranchPart chat={chat} port={port} />}
+        {!chat.noProject && !chat.temporary && (
+          <ChangesButton port={port} projectId={chat.projectId} chatId={chat.id} />
+        )}
+      </div>
+    </ComposerCardProvider>
   );
 }

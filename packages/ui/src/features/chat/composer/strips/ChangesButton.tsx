@@ -23,7 +23,7 @@ function Count({ additions, deletions }: { additions?: number; deletions?: numbe
 
 export function ChangesButton({ port, projectId, chatId }: { port: number; projectId: string; chatId: string }) {
   const [open, setOpen] = useState(false);
-  const changes = useWorkingChanges({ port, projectId, chatId });
+  const changes = useWorkingChanges({ port, projectId, chatId, withBranch: false });
   const summary = toChangesSummary(changes);
   // Loading and error both mean "unknown": the part waits rather than guessing.
   if (changes.loading || changes.error || summary.fileCount === 0) return null;
