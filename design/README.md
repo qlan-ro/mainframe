@@ -44,7 +44,7 @@ The `overview` page holds the map board (`Main`). The `proposals` page holds des
 
 CI runs `node design/tools/check.mjs --base origin/main`:
 
-- **Canvas:** every board in `canvas.json` has a file, nothing is orphaned, `order` lists every board once, every board sits on its area's page, and every named brief exists. No file in `canvas/project/` or `redesign/` holds a local path (`/Users/…`, `/private/tmp/…`, `/var/folders/…`, URL-encoded too): this repository is public, so write `~/projects/…`. Private project names cannot be checked for; leave them out.
+- **Canvas:** every board in `canvas.json` has a file, nothing is orphaned, `order` lists every board once, every board sits on its area's page, and every named brief exists. No board, brief (`packages/ui/.impeccable`), spec or prototype, nor `DESIGN.md` or this file, holds a local path (a home or temp directory, encoded ones too; `canvas/lib/local-paths.json` lists the shapes): this repository is public, so write `~/projects/…`. Private project names cannot be checked for; leave them out.
 - **Coverage:** every area whose UI code changed (`.tsx` and `.css` files, tests and stories excluded; moves and deletions count) also adds or edits one of its own boards or its brief. A proposal board or a deleted board does not count.
 
 A PR with no visible change (a refactor, a performance fix) carries the `design: none` label, which skips the coverage check.
@@ -61,7 +61,7 @@ pnpm --filter @qlan-ro/mainframe-e2e exec playwright install chromium
 bash design/canvas/proposals/run.sh
 ```
 
-`run.sh` renders every state listed in `states.py` from the prototype, writes the boards, sets the spec board's height, lays out the Proposals page and runs the check. With an unchanged prototype and `states.py` it reproduces the boards of its last run byte for byte. The prototype numbers its tool cards (`tcN`, `mkN`) with one counter that keeps counting from state to state, so adding, removing or reordering a state renumbers every board after it. Such a diff holds nothing but ids: leave those boards as committed rather than publish the noise. `shot.cjs` previews a board locally; it needs the canvas runtime at `canvas/proposals/render/support.js` (the canvas type's `artifact-type/dc-runtime.js`, which is not committed).
+`run.sh` renders every state listed in `states.py` from the prototype, writes the boards, sets the spec board's height, lays out the Proposals page and runs the check. With an unchanged prototype and `states.py` it reproduces the boards of its last run byte for byte. The prototype numbers its tool cards (`tcN`, `mkN`) with one counter that keeps counting from state to state; `number-ids.cjs` numbers them per state and prefixes the state's name, so adding, removing or reordering a state changes only its own board. `shot.cjs` previews a board locally; it needs the canvas runtime at `canvas/proposals/render/support.js` (the canvas type's `artifact-type/dc-runtime.js`, which is not committed).
 
 ## Regenerating the other boards
 

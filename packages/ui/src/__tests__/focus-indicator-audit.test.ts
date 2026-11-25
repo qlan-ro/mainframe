@@ -24,9 +24,16 @@ const INDICATOR = /:(?:focus-line(?:-inset)?|bg-(?:accent|muted))$/;
 const FOCUS_STATE = /:focus(?:-visible|-within)?\b|\[data-selected\]|\[data-active="true"\]/;
 /** A frame's line, drawn while the field inside it is focused. */
 const FRAME_STATE = /:focus-within\b|:has\(.*:focus-visible/;
-/** Conditions a focused element may not meet. */
-const OTHER_STATE = /:not\(|:hover\b|:active\b|:disabled\b|@media/;
-const REMOVES_OUTLINE = /outline(?:-style)?: (?:none|0)|outline-width: 0|outline-color: transparent/;
+/**
+ * A whole selector that holds on focus alone, for the element itself: its tag may be named and nothing more. Another
+ * condition (checked, open, a focused parent or sibling) may not hold, and a pseudo-element's line is not the element's.
+ */
+const FOCUS_ONLY = new RegExp(
+  String.raw`^&?(?::is\([a-z, ]+\))?` +
+    String.raw`(?::focus(?:-visible|-within)?|:has\(:is\([^()]*:focus-visible\)\)|\[data-selected\]|\[data-active="true"\])+$`,
+);
+const REMOVES_OUTLINE =
+  /outline(?:-style)?: (?:[^;]*\bnone\b|0)|outline-width: 0|outline-color: transparent|\ball: (?:unset|initial|revert)/;
 
 const THEME = `
   @tailwind utilities;
@@ -35,24 +42,32 @@ const THEME = `
   @utility focus-line-inset { outline: 2px solid var(--focus); outline-offset: -2px; }
 `;
 
-/** What each class renders, without the class name itself. Empty when it renders nothing. */
+/** What each class renders, without comments or the class name itself. Empty when it renders nothing. */
 const rendered = new Map<string, string>();
 
 const classesIn = (text: string): string[] =>
-  text.split(/[\s"'`]+/).filter((name) => /outline|focus-line|bg-(?:accent|muted)$/.test(name));
+  text.split(/[\s"'`]+/).filter((name) => /outline|\[all:|focus-line|bg-(?:accent|muted)$/.test(name));
 
 async function render(text: string): Promise<void> {
   for (const name of new Set(classesIn(text))) {
     if (rendered.has(name)) continue;
     const { build } = await compile(THEME);
-    rendered.set(name, build([name]).replace(/\.(?:\\.|[\w-])+/g, ''));
+    rendered.set(
+      name,
+      build([name])
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\.(?:\\.|[\w-])+/g, '')
+        .replace(/\s+/g, ' '),
+    );
   }
 }
 
 const css = (name: string): string => rendered.get(name) ?? '';
 const removesOutline = (name: string): boolean => REMOVES_OUTLINE.test(css(name));
-const showsFocus = (name: string, state = FOCUS_STATE): boolean =>
-  INDICATOR.test(name) && state.test(css(name)) && !OTHER_STATE.test(css(name));
+const showsFocus = (name: string, state = FOCUS_STATE): boolean => {
+  const selector = css(name).split('{')[0]!.trim();
+  return INDICATOR.test(name) && state.test(selector) && FOCUS_ONLY.test(selector);
+};
 
 interface Exemption {
   count: number;
@@ -157,6 +172,21 @@ describe('what a class shows', () => {
     'outline-none not-focus:focus-line',
     'outline-none xyz:focus-line',
     'outline-none focus-visible:focus-lines',
+    '[outline:_none]',
+    '[outline:medium_none]',
+    '[all:unset]',
+    'focus:[all:initial]',
+    'outline-none group-focus:focus-line',
+    'outline-none group-focus-visible/row:focus-line',
+    'outline-none peer-focus:focus-line',
+    'outline-none in-focus:focus-line',
+    'outline-none checked:focus-visible:focus-line',
+    'outline-none data-[state=open]:focus-visible:focus-line',
+    'outline-none aria-expanded:focus:bg-accent',
+    'outline-none before:focus-visible:focus-line',
+    'outline-none focus-visible:before:focus-line',
+    'outline-none focus-visible:after:focus-line-inset',
+    'outline-none [&:focus-visible>svg]:focus-line',
   ])('refuses %s', async (list) => {
     expect(await unmarked(list)).toBe(true);
   });

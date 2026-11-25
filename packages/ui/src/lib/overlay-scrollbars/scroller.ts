@@ -68,6 +68,9 @@ function isEdgeHandle(el: Element): boolean {
   return el.closest('[data-edge-handle]') !== null;
 }
 
+/** Whether a point of the window is uncovered, for the points hit-tested so far. */
+export type HitCache = Map<string, boolean>;
+
 /** Close enough that nothing the pointer can aim at hides between two samples. */
 const SAMPLE_STEP = 8;
 
@@ -75,12 +78,20 @@ const SAMPLE_STEP = 8;
  * The parts of the thumb's box, in px along it, that nothing else (a dialog, a
  * popover, the sticky composer) is painted over. The thumb sits above every
  * portal, so it must not draw or take clicks where something covers its scroller.
+ * A hit test lays the page out, so what is in `hits` is not tested again.
  */
-export function uncoveredSpans(element: Element, axis: Axis, box: Box): Span[] {
+export function uncoveredSpans(element: Element, axis: Axis, box: Box, hits: HitCache): Span[] {
   const [start, end] = axis === 'y' ? [box.top, box.bottom] : [box.left, box.right];
   const isOpen = (along: number): boolean => {
-    const painted = paintedAt(pointAt(axis, box, along, THUMB_HIT_SIZE / 2)).filter((el) => !isEdgeHandle(el));
-    return painted.length === 0 || element.contains(painted[0]!);
+    const point = pointAt(axis, box, along, THUMB_HIT_SIZE / 2);
+    const key = point.join();
+    let open = hits.get(key);
+    if (open === undefined) {
+      const painted = paintedAt(point).filter((el) => !isEdgeHandle(el));
+      open = painted.length === 0 || element.contains(painted[0]!);
+      hits.set(key, open);
+    }
+    return open;
   };
   /** The whole pixel on the open side of where the answer changes between two points. */
   const boundary = (before: number, after: number): number => {
@@ -93,12 +104,14 @@ export function uncoveredSpans(element: Element, axis: Axis, box: Box): Span[] {
     return open ? Math.floor(before) : Math.ceil(after);
   };
 
+  // Samples sit on a grid of the window, not of the thumb, so a thumb that moves finds most of them in `hits`.
+  const first = Math.round(start + 1);
+  const last = Math.max(Math.round(end - 1), first);
   const spans: Span[] = [];
-  const steps = Math.max(1, Math.ceil((end - start - 2) / SAMPLE_STEP));
-  let previous = start + 1;
-  let from = isOpen(previous) ? start : null;
-  for (let i = 1; i <= steps; i++) {
-    const at = start + 1 + ((end - start - 2) * i) / steps;
+  let previous = first;
+  let from = isOpen(first) ? start : null;
+  while (previous < last) {
+    const at = Math.min(Math.floor(previous / SAMPLE_STEP + 1) * SAMPLE_STEP, last);
     const open = isOpen(at);
     if (open && from === null) from = boundary(previous, at);
     else if (!open && from !== null) {
