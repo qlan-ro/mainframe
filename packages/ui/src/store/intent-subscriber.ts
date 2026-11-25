@@ -28,7 +28,7 @@
  */
 import { pickViewerKind } from '@/features/viewers/viewer-router';
 import { toFileRef } from '@/lib/files/file-ref';
-import { getFileTree } from '@/lib/api/files';
+import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 import { onSurfaceIntent, type FileRevealScope } from './surface-intents';
 import { useLayoutStore } from './layout';
@@ -64,6 +64,7 @@ async function revealScopedFile(rawPath: string, scope: FileRevealScope, isLates
   if (ref.isExternal || segments.some((piece) => !piece || piece === '.' || piece === '..')) return;
 
   try {
+    const listings = new Map<string, FileTreeEntry[]>();
     let directory = '.';
     for (const [index, name] of segments.entries()) {
       if (!isCurrent()) return;
@@ -71,9 +72,13 @@ async function revealScopedFile(rawPath: string, scope: FileRevealScope, isLates
       const isFile = index === segments.length - 1;
       const entries = await getFileTree(tree.port, tree.projectId, directory, tree.chatId);
       if (!entries.some((entry) => entry.path === path && entry.type === (isFile ? 'file' : 'directory'))) return;
+      listings.set(directory, entries);
       directory = path;
     }
-    if (isCurrent()) showInFileTree(ref.relative);
+    if (isCurrent()) {
+      ensureWorkspaceActive();
+      useFilesStore.setState({ revealTarget: null, verifiedReveal: { path: ref.relative, tree, listings } });
+    }
   } catch {
     // A failed tree lookup cannot verify the target.
   }

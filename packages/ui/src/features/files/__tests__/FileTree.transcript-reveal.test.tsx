@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ToolRow } from '@/features/chat/messages/turn/ToolRow';
@@ -46,6 +46,7 @@ vi.mock('@/features/daemon/reset-daemon-scoped-stores', () => ({ resetDaemonScop
 const daemon = getActiveDaemon();
 const scopeKey = 'p1:/wt/current';
 const file = { type: 'file', name: 'a.ts', path: 'src/a.ts' } as const;
+const newFile = { type: 'file', name: 'new.ts', path: 'src/new.ts' } as const;
 const open = () => isWorkspaceFilesPanelOpen(useWorkspaceFilesPanel.getState().openByScope, scopeKey);
 let unsubscribe: () => void;
 
@@ -135,6 +136,33 @@ it.each([
   expect(screen.getByTestId('files-panel')).not.toBeVisible();
   expect(screen.queryByTestId('file-tree-row-src/a.ts')).toBeNull();
   expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+});
+
+it('reconciles an already expanded directory before reopening Files and scrolling to the new file', async () => {
+  show('parent', newFile.path);
+  act(() => useWorkspaceFilesPanel.getState().setOpen(true));
+  fireEvent.click(await screen.findByTestId('file-tree-row-src'));
+  expect(await screen.findByTestId('file-tree-row-src/a.ts')).toBeVisible();
+  act(() => useWorkspaceFilesPanel.getState().setOpen(false));
+  expect(screen.queryByTestId('file-tree-row-src/new.ts')).toBeNull();
+
+  vi.mocked(getFileTree).mockImplementation(async (_port, _project, directory) =>
+    directory === 'src' ? [file, newFile] : [{ name: 'src', path: 'src', type: 'directory' }],
+  );
+  const rowsOnOpen: (HTMLElement | null)[] = [];
+  const stopWatching = useWorkspaceFilesPanel.subscribe(() => {
+    if (open()) rowsOnOpen.push(screen.queryByTestId('file-tree-row-src/new.ts'));
+  });
+  try {
+    fireEvent.click(screen.getByTestId('chat-row-open-file-file'));
+    const row = await screen.findByTestId('file-tree-row-src/new.ts');
+    expect(row).toBeVisible();
+    expect(row).toHaveAttribute('data-highlighted', 'true');
+    expect(rowsOnOpen).toEqual([row]);
+    await waitFor(() => expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts).toContain(row));
+  } finally {
+    stopWatching();
+  }
 });
 
 it('discards a reveal pending when the daemon switches, even at identical paths', async () => {

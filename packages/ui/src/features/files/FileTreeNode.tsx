@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, File, Folder } from 'lucide-react';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
+import type { FileTreeListings } from '@/store/files';
 import { emitSurfaceIntent } from '@/store/surface-intents';
 import type { TabMode } from '@/store/run-pane';
 import { isMacPlatform } from '@/features/shortcuts/platform';
@@ -31,13 +32,27 @@ interface NodeProps {
   base: string | undefined;
   /** Normalized relative path to reveal, or null when no reveal is pending. */
   revealPath: string | null;
+  listings?: FileTreeListings;
+  onVerifiedRow?: (row: HTMLButtonElement) => (() => void) | undefined;
   /** Path of the file currently open in the active tab. */
   activeFilePath: string | null;
 }
 
-export function FileTreeNode({ entry, depth, port, projectId, chatId, base, revealPath, activeFilePath }: NodeProps) {
+export function FileTreeNode({
+  entry,
+  depth,
+  port,
+  projectId,
+  chatId,
+  base,
+  revealPath,
+  activeFilePath,
+  listings,
+  onVerifiedRow,
+}: NodeProps) {
   const [open, setOpen] = useState(false);
-  const [children, setChildren] = useState<FileTreeEntry[] | null>(null);
+  const [cachedChildren, setChildren] = useState<FileTreeEntry[] | null>(null);
+  const children = listings?.get(entry.path) ?? cachedChildren;
   const [loading, setLoading] = useState(false);
   const indent = 8 + depth * 12;
 
@@ -73,23 +88,25 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
   // the last-revealed file re-fires this effect (open flips to false while the
   // node is still a reveal-ancestor) and immediately re-opens it, making the
   // folder impossible to collapse. Keyed on revealPath so a NEW reveal re-arms it.
-  const autoExpandedRevealRef = useRef<string | null>(null);
+  const reveal = onVerifiedRow ?? revealPath;
+  const autoExpandedRevealRef = useRef<typeof reveal>(null);
   useEffect(() => {
     if (!isRevealAncestor || revealPath === null) return;
-    if (autoExpandedRevealRef.current === revealPath) return;
-    autoExpandedRevealRef.current = revealPath;
+    if (autoExpandedRevealRef.current === reveal) return;
+    autoExpandedRevealRef.current = reveal;
     if (open) return;
     setOpen(true);
     fetchChildren().catch((err: unknown) => {
       console.warn('[FileTree] reveal auto-expand failed', entry.path, err);
     });
-  }, [isRevealAncestor, revealPath, open, fetchChildren, entry.path]);
+  }, [isRevealAncestor, revealPath, reveal, open, fetchChildren, entry.path]);
 
   // Scroll and highlight the target row once it's mounted in the DOM.
   useEffect(() => {
     if (!isRevealTarget || rowRef.current === null) return;
+    if (onVerifiedRow) return onVerifiedRow(rowRef.current);
     rowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, [isRevealTarget]);
+  }, [isRevealTarget, onVerifiedRow]);
 
   const fullPath = toFullPath(base, entry.path);
 
@@ -171,6 +188,8 @@ export function FileTreeNode({ entry, depth, port, projectId, chatId, base, reve
             chatId={chatId}
             base={base}
             revealPath={revealPath}
+            listings={listings}
+            onVerifiedRow={onVerifiedRow}
             activeFilePath={activeFilePath}
           />
         ))}

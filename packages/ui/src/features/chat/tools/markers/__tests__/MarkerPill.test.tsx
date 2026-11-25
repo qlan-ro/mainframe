@@ -1,4 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { AssistantRuntimeProvider, useExternalStoreRuntime, type ThreadMessage } from '@assistant-ui/react';
+import type { ToolPart, TurnUnit } from '../../../view-model/turn/types';
+import { EventMarker } from '../EventMarker';
 import { Zap } from 'lucide-react';
 import { expect, it } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -46,4 +50,42 @@ it('spins while it runs and reads failed in rose', () => {
   expect(document.querySelector('.animate-spin')).not.toBeNull();
   show({ state: 'failed', testId: 'failed-pill' });
   expect(screen.getByTestId('failed-pill')).toHaveClass('text-fail');
+});
+
+const worktreePath = '/workspace/sample/.worktrees/format-cleanup';
+
+function EnterWorktree() {
+  const runtime = useExternalStoreRuntime<ThreadMessage>({ messages: [], onNew: async () => {} });
+  const part = {
+    type: 'tool-call',
+    toolName: 'EnterWorktree',
+    toolCallId: 'enter',
+    args: {},
+    argsText: '',
+    result: JSON.stringify({ worktreePath }),
+    status: { type: 'complete' },
+  } as ToolPart;
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <TooltipProvider>
+        <EventMarker unit={{ key: 'enter', part } as TurnUnit} part={part} />
+      </TooltipProvider>
+    </AssistantRuntimeProvider>
+  );
+}
+
+it.each(['hover', 'keyboard focus'])('shows the path-only EnterWorktree tooltip on %s', async (gesture) => {
+  const user = userEvent.setup();
+  render(<EnterWorktree />);
+  const pill = screen.getByTestId('chat-marker-enterworktree');
+  expect(pill).toHaveTextContent(worktreePath);
+  const trigger = pill.closest<HTMLElement>('[data-slot="tooltip-trigger"]')!;
+  expect(trigger).toBeInTheDocument();
+  if (gesture === 'hover') {
+    await user.hover(trigger);
+  } else {
+    await user.tab();
+    expect(trigger).toHaveFocus();
+  }
+  expect(await screen.findByRole('tooltip')).toHaveTextContent(worktreePath);
 });
