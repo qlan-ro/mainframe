@@ -40,13 +40,13 @@ function useOpen(chatId: string) {
     // A jump still on its way would move the transcript under what this opens.
     cancelActivityJump();
     if (childId) {
-      openTaskTab(aui.threads, childId);
+      openTaskTab(aui.threads, childId, { focus: true });
       return;
     }
     if (!entry.source) return;
     if (entry.kind === 'subagent' && entry.source.toolCallId) {
       const { toolCallId, messageId } = entry.source;
-      openSubagentTab({ chatId, toolCallId, messageId, title: entry.title });
+      openSubagentTab({ chatId, toolCallId, messageId, title: entry.title }, { focus: true });
       return;
     }
     jumpToActivitySource(chatId, entry.source).then(

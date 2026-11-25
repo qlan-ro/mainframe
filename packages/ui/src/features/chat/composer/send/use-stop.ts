@@ -16,7 +16,7 @@ import { delegatedTasksOf, type DelegatedTaskRow } from '@/features/sessions/vie
 import { useSessionItems } from '../../orchestration/use-session-items';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { useHeldQueue } from '../queue/held-queue-store';
-import { focusVisibleComposer } from '../focus-composer';
+import { focusComposerOf } from '../focus-composer';
 
 /** The adapter whose CLI can stop a single background task. */
 const TASK_STOP_ADAPTER = 'claude';
@@ -24,10 +24,13 @@ const TASK_STOP_ADAPTER = 'claude';
 export interface ComposerStop {
   /** Something is running that Stop would end. */
   available: boolean;
+  /** The turn runs, sub-agents aside. */
+  running: boolean;
   stopping: boolean;
   /** "the turn and 3 sub-agents". */
   target: string;
-  stop: () => void;
+  /** Leaves the keyboard in the composer `from` is in. */
+  stop: (from: Element | null) => void;
 }
 
 const FINISHED: readonly DelegatedTaskRow['status'][] = ['completed', 'failed', 'cancelled', 'interrupted'];
@@ -57,7 +60,7 @@ export function useComposerStop(): ComposerStop {
   const agents = agentTasks.length + delegated.length;
   const stopping = extras?.state.runState.type === 'cancelling';
 
-  const stop = () => {
+  const stop = (from: Element | null) => {
     if (!extras || chatId == null || stopping || (!running && agents === 0)) return;
     // What "Send now" has not sent yet, with only sub-agents running too.
     useHeldQueue.getState().releaseUnsent(chatId);
@@ -78,8 +81,8 @@ export function useComposerStop(): ComposerStop {
         description: reason instanceof Error ? reason.message : String(reason),
       });
     });
-    focusVisibleComposer();
+    focusComposerOf(from ?? undefined);
   };
 
-  return { available: running || agents > 0, stopping, target: stopTarget(running, agents), stop };
+  return { available: running || agents > 0, running, stopping, target: stopTarget(running, agents), stop };
 }

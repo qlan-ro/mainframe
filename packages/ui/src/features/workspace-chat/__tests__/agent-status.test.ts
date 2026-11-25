@@ -47,7 +47,7 @@ function said(...pieces: Text[]): ThreadMessage {
 }
 
 interface World {
-  result?: string;
+  result?: unknown;
   error?: boolean;
   background?: boolean;
   list?: AgentTasks;
@@ -118,6 +118,7 @@ const RESULTS: Record<string, Pick<World, 'result' | 'error'>> = {
   none: {},
   text: { result: 'Two races.' },
   error: { result: 'It broke.', error: true },
+  'error, no result yet': { error: true },
 };
 const BOTH = [true, false];
 
@@ -158,7 +159,7 @@ function expectedLabel(row: Row): string | null {
   if (row.pending) return 'needs-you';
   if (row.list in LIST_SAYS) return row.live ? LIST_SAYS[row.list]! : null;
   if (row.list in LIST_SETTLED) return LIST_SETTLED[row.list]!;
-  if (row.result === 'error') return 'failed';
+  if (row.result.startsWith('error')) return 'failed';
   if (row.cancelled) return 'stopped';
   const unlisted = row.list === 'null' || row.list === 'empty';
   return row.result === 'none' && row.sessionRuns && row.live && unlisted ? 'running' : null;
@@ -166,8 +167,8 @@ function expectedLabel(row: Row): string | null {
 
 describe('every combination of the evidence', () => {
   it('is covered', () => {
-    expect(ROWS).toHaveLength(2304);
-    expect(new Set(ROWS.map(nameOf)).size).toBe(2304);
+    expect(ROWS).toHaveLength(3072);
+    expect(new Set(ROWS.map(nameOf)).size).toBe(3072);
   });
 
   it('shows no label outside the list', () => {
@@ -181,7 +182,12 @@ describe('every combination of the evidence', () => {
   });
 
   it('shows the call’s own text whatever else is known', () => {
-    const own: Record<string, string> = { none: '', text: 'Two races.', error: 'It broke.' };
+    const own: Record<string, string> = {
+      none: '',
+      text: 'Two races.',
+      error: 'It broke.',
+      'error, no result yet': '',
+    };
     const wrong = ROWS.filter((row) => describeWorld(worldOf(row)).result !== own[row.result]);
     expect(wrong.map(nameOf)).toEqual([]);
   });
@@ -190,7 +196,8 @@ describe('every combination of the evidence', () => {
     const summaries: Record<string, number> = { null: 0, empty: 0, mixed: 4, 'mixed, settled': 4 };
     const answers = { none: 0, one: 1, many: 2 };
     const wrong = ROWS.filter((row) => {
-      const expected = row.result === 'none' || row.background ? (summaries[row.list] ?? 1) + answers[row.children] : 0;
+      const textless = row.result === 'none' || row.result === 'error, no result yet';
+      const expected = textless || row.background ? (summaries[row.list] ?? 1) + answers[row.children] : 0;
       return describeWorld(worldOf(row)).reports.length !== expected;
     });
     expect(wrong.map(nameOf)).toEqual([]);
@@ -237,8 +244,20 @@ describe('status', () => {
     expect(label({ session: 'cancelling' })).toBe('running');
   });
 
-  it('takes no error from a call that has no result', () => {
-    expect(label({ error: true })).toBeNull();
+  it.each(['idle', 'running', 'cancelling'] as const)(
+    'says an error flag or a cancelled call before any result, while the session is %s',
+    (session) => {
+      expect(label({ error: true, session })).toBe('failed');
+      expect(label({ acpStatus: 'cancelled', session })).toBe('stopped');
+      expect(label({ error: true, acpStatus: 'in_progress', session, list: [] })).toBe('failed');
+      expect(label({ error: true, session, live: false })).toBe('failed');
+      expect(label({ error: true, session, list: tasks('running') })).toBe('running');
+    },
+  );
+
+  it('takes the error flag of an envelope', () => {
+    expect(label({ result: { content: 'It broke.', isError: true } })).toBe('failed');
+    expect(label({ result: { content: 'It broke.', isError: false } })).toBeNull();
   });
 
   it('is none for a call whose result is empty', () => {
@@ -273,10 +292,48 @@ describe('text', () => {
       expect(describeWorld({ result, background, list: tasks('completed') }).result).toBe(result);
   });
 
-  it('loses the CLI’s own tags around an error', () => {
-    expect(describeWorld({ result: '<tool_use_error>No such agent</tool_use_error>', error: true }).result).toBe(
+  it.each<[unknown, string]>([
+    ['<tool_use_error>No such agent</tool_use_error>', 'No such agent'],
+    ['\n<tool_use_error>\n  No such agent\n</tool_use_error>\n', 'No such agent'],
+    ['<error>No such agent</error>', 'No such agent'],
+    ['The <error> tag is never closed', 'The <error> tag is never closed'],
+    ['<tool_use_error>One</tool_use_error> and more', '<tool_use_error>One</tool_use_error> and more'],
+    [{ content: '<tool_use_error>No such agent</tool_use_error>', isError: true }, 'No such agent'],
+    [{ content: 'No such agent', isError: true }, 'No such agent'],
+    [
+      { content: [{ type: 'text', text: 'No such ' }, { type: 'image' }, { type: 'text', text: 'agent' }] },
       'No such agent',
-    );
+    ],
+    [{ content: 'Cut short', truncated: true, fullBytes: 9 }, 'Cut short'],
+  ])('is unwrapped from the envelope of an error: %j', (result, text) => {
+    expect(describeWorld({ result, error: true }).result).toBe(text);
+  });
+
+  it.each<[unknown]>([
+    [''],
+    ['<tool_use_error></tool_use_error>'],
+    ['<tool_use_error>\n</tool_use_error>'],
+    [{ content: '', isError: true }],
+    [{ content: '<tool_use_error></tool_use_error>', isError: true }],
+    [{ content: null, isError: true }],
+    [{ content: [], isError: true }],
+    [{ isError: true }],
+    [{}],
+    [null],
+  ])('is none in an empty envelope: %j', (result) => {
+    const world = { result, error: true, list: tasks('failed') };
+    expect(describeWorld(world).result).toBe('');
+    expect(reports(world)).toEqual(['Task summary: Summary 0']);
+  });
+
+  it.each<[unknown, string]>([
+    [{ content: 'No errors', isError: false }, 'No errors'],
+    [{ content: '  kept\n' }, '  kept\n'],
+    [{ content: '', isError: false }, ''],
+    ['<tool_use_error>Quoted</tool_use_error>', '<tool_use_error>Quoted</tool_use_error>'],
+    [{ other: 1 }, '{\n  "other": 1\n}'],
+  ])('is what the envelope of an answer holds, untouched: %j', (result, text) => {
+    expect(describeWorld({ result }).result).toBe(text);
   });
 
   it('names the source of each task’s summary, the earliest first, and skips empty ones', () => {

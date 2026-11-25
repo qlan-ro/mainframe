@@ -5,7 +5,7 @@
  */
 import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
-import { extractResultContent, isErrorResult, resolveResultText } from '@/features/chat/tools/shared';
+import { isErrorResult } from '@/features/chat/tools/shared';
 import type { MainframeMessageMeta } from '@/features/chat/view-model/message-meta';
 import type { AgentStatus } from './ConversationHeader';
 import { toolCallIdsOf, type SubagentCall } from './find-subagent-call';
@@ -36,12 +36,27 @@ interface AgentPresentation {
 
 export const isCodexAgent = (call: SubagentCall): boolean => call.part.toolName === 'CollabAgent';
 
-const isFailed = ({ part }: SubagentCall) => part.result !== undefined && isErrorResult(part.result, part.isError);
+/** Also before the result arrives. */
+const isFailed = ({ part }: SubagentCall) => isErrorResult(part.result, part.isError);
 
-/** Untouched, but for the CLI's tags around an error. */
+/** The text an envelope holds; an empty one holds none. */
+function unwrap(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (Array.isArray(result)) return result.map(unwrap).join('');
+  if (typeof result !== 'object' || result === null) return '';
+  const { content, text, type, isError } = result as Record<string, unknown>;
+  if (content !== undefined) return unwrap(content);
+  if (type !== undefined) return unwrap(text);
+  return isError !== undefined || Object.keys(result).length === 0 ? '' : JSON.stringify(result, null, 2);
+}
+
+const ERROR_TAGS = /^\s*<(tool_use_error|error)>([^]*)<\/\1>\s*$/;
+
+/** Untouched, but for what an error or an answer is wrapped in. */
 function resultText(call: SubagentCall): string {
-  const text = isFailed(call) ? '' : extractResultContent(call.part.result);
-  return text || resolveResultText(call.part.result).text;
+  const text = unwrap(call.part.result);
+  const tagged = isFailed(call) ? ERROR_TAGS.exec(text) : null;
+  return tagged ? tagged[2]!.trim() : text;
 }
 
 const lifecycleOf = ({ part }: SubagentCall) =>
@@ -49,7 +64,7 @@ const lifecycleOf = ({ part }: SubagentCall) =>
 
 /** The call has no result and nothing says it ended, in a session that runs. */
 function isOpen(call: SubagentCall, { runState }: ChatThreadState): boolean {
-  const settled = ['completed', 'failed', 'cancelled'].includes(lifecycleOf(call) ?? '');
+  const settled = isFailed(call) || ['completed', 'failed', 'cancelled'].includes(lifecycleOf(call) ?? '');
   const sessionRuns = runState.type === 'running' || runState.type === 'cancelling';
   return call.part.result === undefined && !settled && sessionRuns;
 }

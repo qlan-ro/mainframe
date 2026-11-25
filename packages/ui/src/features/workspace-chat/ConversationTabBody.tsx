@@ -4,6 +4,7 @@
  * so an unsent message, the scroll position and open rows stay as they were.
  */
 import { useRef, useState } from 'react';
+import { conversationProps } from '@/lib/conversation-focus';
 import { cn } from '@/lib/utils';
 import type { RunTab } from '@/store/run-pane';
 import { ChatTabBody } from './ChatTabBody';
@@ -39,6 +40,7 @@ export function ConversationTabBody({ tab, active }: { tab: RunTab; active: bool
   return (
     <div
       ref={ref}
+      {...conversationProps(tab.kind === 'chat' ? tab.chatId : undefined)}
       tabIndex={-1}
       data-testid={`workspace-conversation-${tab.id}`}
       data-conversation-tab={active ? 'active' : 'hidden'}

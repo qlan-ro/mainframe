@@ -23,10 +23,11 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { SessionPanelState } from '@/features/session-panel/use-session-panel-state';
 
 let __mainThreadId: string | null = '__LOCALID_1';
+let __remoteId: string | undefined;
 let __itemStatus: string | undefined = 'new';
 let __messageCount = 0;
 let __projects: { id: string }[] = [{ id: 'proj-a' }];
@@ -44,7 +45,7 @@ vi.mock('@assistant-ui/react', () => ({
   useAuiState: (sel: (s: unknown) => unknown) =>
     sel({
       threads: { mainThreadId: __mainThreadId, threadItems: __mainThreadId ? [{ id: __mainThreadId }] : [] },
-      threadListItem: { id: __mainThreadId, status: __itemStatus },
+      threadListItem: { id: __mainThreadId, remoteId: __remoteId, status: __itemStatus },
       thread: { messages: { length: __messageCount } },
     }),
   // The workspace shortcuts need the client; no case here uses them.
@@ -106,12 +107,14 @@ class RecordingResizeObserver {
 }
 (globalThis as { ResizeObserver?: unknown }).ResizeObserver = RecordingResizeObserver;
 
+import { heldConversation } from '@/lib/conversation-focus';
 import { ChatSurface } from '../ChatSurface';
 import { useFindInChatStore } from '@/features/chat/find/find-in-chat-store';
 
 describe('ChatSurface', () => {
   beforeEach(() => {
     __chatId = null;
+    __remoteId = undefined;
     useSideChatTab.mockClear();
     observed = [];
     __mainThreadId = '__LOCALID_1';
@@ -123,6 +126,18 @@ describe('ChatSurface', () => {
     __pendingProjectId = null;
     __draftMap = new Map([['__LOCALID_1', { projectId: 'proj-a', adapterId: 'claude' }]]);
     __initialization = { status: 'ready' };
+  });
+
+  it('is its conversation to the focus, the chat’s id once a draft has one', () => {
+    const { container, rerender } = render(<ChatSurface />);
+    const shown = () => container.querySelector('[data-chat-column]')!.getAttribute('data-conversation');
+    expect(shown()).toBe('__LOCALID_1');
+
+    __remoteId = 'chat-1';
+    rerender(<ChatSurface key="sent" />);
+    expect(shown()).toBe('chat-1');
+    fireEvent.pointerDown(container.querySelector('[data-testid="session-panel-root"]')!);
+    expect(heldConversation()).toBe('chat-1');
   });
 
   it('renders the first-run hero (no ChatThread) when there are no projects', () => {

@@ -131,7 +131,7 @@ describe('ActivityStrip — rows', () => {
     expect(screen.getByTestId('composer-activity-line')).toHaveTextContent('queued');
   });
 
-  it('Open on a delegated task opens its chat in the workspace, and leaves the keyboard here', () => {
+  it('Open on a delegated task opens its chat in the workspace, and hands it the keyboard', () => {
     mockActivity.entries = [
       entry('asking', {
         state: 'needs-you',
@@ -142,24 +142,22 @@ describe('ActivityStrip — rows', () => {
 
     fireEvent.click(screen.getByTestId('composer-activity-open'));
 
-    expect(openTaskTab).toHaveBeenCalledExactlyOnceWith(threads, 'child-1');
+    expect(openTaskTab).toHaveBeenCalledExactlyOnceWith(threads, 'child-1', { focus: true });
     // A jump still on its way would move the transcript behind it.
     expect(cancelActivityJump).toHaveBeenCalledBefore(openTaskTab);
   });
 
-  it('Open on a sub-agent opens its tab, and leaves the keyboard here', () => {
+  it('Open on a sub-agent opens its tab, and hands it the keyboard', () => {
     mockActivity.entries = [entry('sub', { source: { messageId: 'm1', toolCallId: 'call-1' }, title: 'Sub' })];
     mockGates = { front: undefined, more: 0, waitingCalls: new Set(['call-1']) };
     renderStrip();
 
     fireEvent.click(screen.getByTestId('composer-activity-open'));
 
-    expect(openSubagentTab).toHaveBeenCalledExactlyOnceWith({
-      chatId: 'chat-1',
-      toolCallId: 'call-1',
-      messageId: 'm1',
-      title: 'Sub',
-    });
+    expect(openSubagentTab).toHaveBeenCalledExactlyOnceWith(
+      { chatId: 'chat-1', toolCallId: 'call-1', messageId: 'm1', title: 'Sub' },
+      { focus: true },
+    );
     expect(jumpToActivitySource).not.toHaveBeenCalled();
   });
 

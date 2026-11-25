@@ -20,7 +20,7 @@ let mockCanSubmit = false;
 vi.mock('../../segments/use-submit-composition', () => ({ useCanSubmit: () => mockCanSubmit }));
 
 const stop = vi.fn();
-let mockStop = { available: false, stopping: false, target: 'the turn', stop };
+let mockStop = { available: false, running: false, stopping: false, target: 'the turn', stop };
 vi.mock('../use-stop', () => ({ useComposerStop: () => mockStop }));
 
 const shortcut = vi.fn();
@@ -50,7 +50,7 @@ beforeEach(() => {
   useUiPrefs.setState({ enterWhileRunning: 'queue' });
   mockRunning = false;
   mockCanSubmit = false;
-  mockStop = { available: false, stopping: false, target: 'the turn', stop };
+  mockStop = { available: false, running: false, stopping: false, target: 'the turn', stop };
   mockAdapterId = 'claude';
   resetAdapters();
   seedAdapters([
@@ -95,7 +95,7 @@ describe('SendControls — idle', () => {
 describe('SendControls — Stop', () => {
   beforeEach(() => {
     mockRunning = true;
-    mockStop = { available: true, stopping: false, target: 'the turn and 2 sub-agents', stop };
+    mockStop = { available: true, running: true, stopping: false, target: 'the turn and 2 sub-agents', stop };
   });
 
   it('names what it will stop, and stops on click', () => {
@@ -104,7 +104,7 @@ describe('SendControls — Stop', () => {
     const button = screen.getByTestId('chat-composer-cancel');
     expect(button).toHaveAttribute('aria-label', 'Stop the turn and 2 sub-agents');
     fireEvent.click(button);
-    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledExactlyOnceWith(button);
   });
 
   it('shows no Send while the turn runs and nothing is typed', () => {
@@ -125,70 +125,38 @@ describe('SendControls — Stop', () => {
   });
 
   describe('⌘. (chat.stop)', () => {
-    const stops = { column: vi.fn(), beside: vi.fn(), hidden: vi.fn() };
-    const composer = (name: keyof typeof stops) => {
-      mockStop = { ...mockStop, stop: stops[name] };
-      return { name, controls: render(<StopControl />, { wrapper: TooltipProvider }).container };
-    };
-    /** The chat column, a chat tab in front, a chat tab behind it, an agent tab, and a file. */
-    function layout(...names: (keyof typeof stops)[]) {
-      for (const { name, controls } of names.map(composer)) {
-        const field = controls.appendChild(document.createElement('textarea'));
-        field.id = name;
-        if (name !== 'column') controls.dataset.conversationTab = name === 'hidden' ? 'hidden' : 'active';
-      }
-      const { container: agent } = render(<button>Agent steps</button>);
-      agent.dataset.conversationTab = 'active';
-      render(<button>File</button>);
-    }
     const press = () => (shortcut.mock.lastCall![1] as () => void)();
-    const stopped = () => Object.entries(stops).flatMap(([name, fn]) => (fn.mock.calls.length ? [name] : []));
-    const at = (id: string) => document.getElementById(id)!.focus();
 
-    it.each([['column'], ['beside'], ['hidden']] as const)('stops the conversation the keyboard is in: %s', (name) => {
-      layout('hidden', 'column', 'beside');
-      expect(shortcut).toHaveBeenLastCalledWith('chat.stop', expect.any(Function));
-      at(name);
-      press();
-      expect(stopped()).toEqual([name]);
-      expect(stops[name]).toHaveBeenCalledTimes(1);
-    });
-
-    it('stops the chat column’s from anywhere else', () => {
-      layout('beside', 'column');
-      screen.getByText('File').focus();
-      press();
-      expect(stopped()).toEqual(['column']);
-    });
-
-    it('stops nothing from an agent tab, which has no composer', () => {
-      layout('beside', 'column');
-      screen.getByText('Agent steps').focus();
-      press();
-      expect(stopped()).toEqual([]);
-    });
-
-    it('stops what runs now, not what ran when the composer opened', () => {
+    it('stops what runs now, not what ran when the composer opened, and leaves the keyboard here', () => {
       const view = render(<StopControl />, { wrapper: TooltipProvider });
-      mockStop = { ...mockStop, stop: stops.column };
+      const now = vi.fn();
+      mockStop = { ...mockStop, stop: now };
       view.rerender(<StopControl />);
       press();
-      expect(stopped()).toEqual(['column']);
+      expect(stop).not.toHaveBeenCalled();
+      expect(now).toHaveBeenCalledExactlyOnceWith(expect.any(HTMLSpanElement));
+      expect(view.container).toContainElement(now.mock.lastCall![0] as HTMLElement);
+    });
+
+    it('is not for sub-agents alone, unless the conversation has had the focus', () => {
+      mockStop = { ...mockStop, running: false };
+      renderControls();
+      press();
       expect(stop).not.toHaveBeenCalled();
     });
 
     it('stops nothing once its composer is gone', () => {
-      composer('column');
+      renderControls();
       cleanup();
       press();
-      expect(stopped()).toEqual([]);
+      expect(stop).not.toHaveBeenCalled();
     });
   });
 
   it('with sub-agents running but no turn, Stop sits beside plain Send', () => {
     mockRunning = false;
     mockCanSubmit = true;
-    mockStop = { available: true, stopping: false, target: '2 sub-agents', stop };
+    mockStop = { available: true, running: false, stopping: false, target: '2 sub-agents', stop };
     renderControls();
 
     expect(screen.getByTestId('chat-composer-cancel')).toHaveAttribute('aria-label', 'Stop 2 sub-agents');
@@ -198,7 +166,7 @@ describe('SendControls — Stop', () => {
 
   it('with sub-agents running, no turn and an empty draft, only Stop shows', () => {
     mockRunning = false;
-    mockStop = { available: true, stopping: false, target: '2 sub-agents', stop };
+    mockStop = { available: true, running: false, stopping: false, target: '2 sub-agents', stop };
     renderControls();
 
     expect(screen.getByTestId('chat-composer-cancel')).toBeInTheDocument();
@@ -210,7 +178,7 @@ describe('SendControls — the Queue / Steer split while a turn runs', () => {
   beforeEach(() => {
     mockRunning = true;
     mockCanSubmit = true;
-    mockStop = { available: true, stopping: false, target: 'the turn', stop };
+    mockStop = { available: true, running: true, stopping: false, target: 'the turn', stop };
   });
 
   it('appears beside Stop once there is text', () => {

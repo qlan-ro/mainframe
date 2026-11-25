@@ -315,6 +315,44 @@ describe('text', () => {
     expect(screen.getByTestId(REPORT)).toHaveTextContent('Half of it.');
   });
 
+  const MARKED = '# Not a heading\n\n**not bold** <b>not HTML</b>\n  [no link](src/a.ts)';
+
+  it.each([
+    ['of an answer', { args: ARGS, result: MARKED }],
+    ['of an error', { args: ARGS, result: MARKED, isError: true }],
+    ['of a launch', { args: { ...ARGS, run_in_background: true }, result: MARKED }],
+  ])('shows the call’s own result as text, not as Markdown or HTML: %s', async (_, call) => {
+    await show(call);
+    const text = screen.getByTestId(RESULT).querySelector('p')!;
+    expect(text.textContent).toBe(MARKED);
+    expect(text.childElementCount).toBe(0);
+    expect(text).toHaveClass('whitespace-pre-wrap');
+  });
+
+  it('shows a task’s summary as text too', async () => {
+    world.tasks = [bg({ status: 'completed', summary: MARKED })];
+    await show({ args: ARGS });
+    expect(screen.getByTestId(REPORT).querySelector('p')!.textContent).toBe(MARKED);
+  });
+
+  it('hides Running and Stop once no list has come for 30 s, and keeps the text', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    world.tasks = [bg()];
+    const view = await show(launched);
+    world.listing = 'refused';
+    await event(view);
+    await act(async () => vi.advanceTimersByTimeAsync(29_000));
+    expect(status()).toBe('running');
+    expect(screen.getByTestId(STOP)).toBeVisible();
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(status()).toBeNull();
+    expect(screen.queryByTestId(STOP)).toBeNull();
+    expect(screen.getByTestId(RESULT)).toHaveTextContent('agentId: a1');
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   it('shows no section with nothing to show', async () => {
     world.tasks = [bg({ status: 'completed', summary: '' })];
     await show({ args: ARGS, result: '\n' });
@@ -342,7 +380,7 @@ describe('text', () => {
     const steps = {
       id: 'steps',
       role: 'assistant',
-      content: ['Answer a.', 'Answer b.'].map((text) => ({ type: 'text', text })),
+      content: ['Answer **a**.', 'Answer b.'].map((text) => ({ type: 'text', text })),
       metadata: { custom: { mainframe: { partSources: { 0: [source('a')], 1: [source('b')] } } } },
     } as unknown as ThreadMessage;
     await show({ args: ARGS, toolName: 'CollabAgent', messages: [steps] });
@@ -350,6 +388,8 @@ describe('text', () => {
       'Final answerAnswer a.',
       'Final answerAnswer b.',
     ]);
+    // The agent's own prose, by its source.
+    expect(screen.getAllByTestId(REPORT)[0]!.querySelector('strong')).toHaveTextContent('a');
   });
 });
 

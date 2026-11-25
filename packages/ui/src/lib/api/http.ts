@@ -31,11 +31,12 @@ export function authHeaders(): Record<string, string> {
  * stays byte-for-byte identical to the loopback-trusted call (no empty headers
  * object). Remote adds Authorization; a JSON body adds Content-Type.
  */
-function fetchInit(method: string, body?: unknown): RequestInit {
+function fetchInit(method: string, body?: unknown, signal?: AbortSignal): RequestInit {
   const headers = { ...authHeaders(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) };
   const init: RequestInit = { method };
   if (Object.keys(headers).length > 0) init.headers = headers;
   if (body !== undefined) init.body = JSON.stringify(body);
+  if (signal !== undefined) init.signal = signal;
   return init;
 }
 
@@ -114,8 +115,8 @@ async function extractError(res: Response): Promise<ApiRequestError> {
 }
 
 /** Fetch, unwrap the `ApiResponse<T>` envelope, and return `data`. Throws on HTTP or API error. */
-export async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetchChecked(url, fetchInit(method, body));
+export async function request<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  const res = await fetchChecked(url, fetchInit(method, body, signal));
   if (!res.ok) throw await extractError(res);
   const json = (await res.json()) as ApiResponse<T>;
   if (!json.success) throw new Error(json.error);

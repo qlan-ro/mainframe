@@ -1,6 +1,6 @@
 /** A chat tab's body stays mounted behind another tab, so what it holds is not lost. */
 import { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import type { RunTab } from '@/store/run-pane';
 
@@ -19,6 +19,7 @@ vi.mock('../SubagentTabBody', () => ({
   ),
 }));
 
+import { conversationProps, heldConversation, trackConversationFocus } from '@/lib/conversation-focus';
 import { ConversationTabBody } from '../ConversationTabBody';
 
 const fork: RunTab = { id: 'chat-f', kind: 'chat', title: 'Fork', chatId: 'f', role: 'fork' };
@@ -72,4 +73,30 @@ it.each([
 ])('says so for a corrupt remembered tab', (tab, text) => {
   render(<ConversationTabBody tab={tab} active />);
   expect(screen.getByText(text)).toBeInTheDocument();
+});
+
+it.each([
+  ['a chat', fork, 'f'],
+  ['a side chat', { ...fork, role: 'side' } as RunTab, 'f'],
+  [
+    'no conversation, an agent',
+    { id: 'agent-c', kind: 'agent', title: 'A', chatId: 'p', toolCallId: 'c' } as RunTab,
+    null,
+  ],
+])('is, to the focus, %s', (_, tab, held) => {
+  const untrack = trackConversationFocus();
+  render(
+    <>
+      <div data-testid="other" tabIndex={-1} />
+      <div {...conversationProps('main')} tabIndex={-1} data-testid="main" />
+      <ConversationTabBody tab={tab} active />
+    </>,
+  );
+  act(() => screen.getByTestId('main').focus());
+  expect(heldConversation()).toBe('main');
+  act(() => screen.getByTestId(`workspace-conversation-${tab.id}`).focus());
+  expect(heldConversation()).toBe(held);
+  act(() => screen.getByTestId('other').focus());
+  expect(heldConversation()).toBeNull();
+  untrack();
 });

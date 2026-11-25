@@ -96,6 +96,16 @@ function ProseBlock({ label, testId, source }: { label: string; testId: string; 
   );
 }
 
+/** Verbatim: neither Markdown nor HTML. */
+function TextBlock({ label, testId, source }: { label: string; testId: string; source: string }) {
+  if (source.trim() === '') return null;
+  return (
+    <Block label={label} testId={testId}>
+      <p className="whitespace-pre-wrap">{source}</p>
+    </Block>
+  );
+}
+
 function Steps({ call }: { call: SubagentCall }) {
   const steps = call.part.messages ?? [];
   if (steps.length === 0) return null;
@@ -189,15 +199,20 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
           <ParentScope chatId={chatId} state={state}>
             <ProseBlock label="Brief" testId={`workspace-agent-brief-${toolCallId}`} source={text(args['prompt'])} />
             <Steps call={call} />
-            <ProseBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
-            {agent?.reports.map(({ source, text: report }, i) => (
-              <ProseBlock
-                key={`${source}-${i}`}
-                label={source}
-                testId={`workspace-agent-report-${toolCallId}`}
-                source={report}
-              />
-            ))}
+            {/* Not known to be the agent's own words: it can be a launch receipt, or an error. */}
+            <TextBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
+            {agent?.reports.map(({ source, text: report }, i) => {
+              // A final answer is the agent's prose by its source; a summary is the CLI's.
+              const ReportBlock = source === 'Final answer' ? ProseBlock : TextBlock;
+              return (
+                <ReportBlock
+                  key={`${source}-${i}`}
+                  label={source}
+                  testId={`workspace-agent-report-${toolCallId}`}
+                  source={report}
+                />
+              );
+            })}
           </ParentScope>
         )}
       </div>

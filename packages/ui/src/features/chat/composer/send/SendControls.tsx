@@ -39,7 +39,7 @@ function StopButton({ stop }: { stop: ComposerStop }) {
         data-stopping={stop.stopping || undefined}
         aria-label={label}
         disabled={stop.stopping}
-        onClick={stop.stop}
+        onClick={(event) => stop.stop(event.currentTarget)}
         className={cn(
           ROUND,
           stop.stopping
@@ -155,7 +155,7 @@ function QueueSplit({ submit }: { submit: SubmitComposition }) {
 export function StopControl() {
   const stop = useComposerStop();
   const anchor = useRef<HTMLSpanElement>(null);
-  useStopShortcut(anchor, stop.stop);
+  useStopShortcut(anchor, () => stop.stop(anchor.current), stop.running);
   return (
     <>
       <span ref={anchor} hidden />

@@ -38,6 +38,7 @@ import { PanelColumnContext } from '@/features/session-panel/panel-control-store
 import { SessionDropLayer } from '@/features/workspace-chat/SessionDropLayer';
 import { useConversationShortcuts } from '@/features/workspace-chat/use-conversation-shortcuts';
 import { useShortcutAction } from '@/features/shortcuts/action-store';
+import { conversationProps } from '@/lib/conversation-focus';
 import { focusVisibleComposer } from '@/features/chat/composer/focus-composer';
 import { useFindInChatStore } from '@/features/chat/find/find-in-chat-store';
 import { ChatThread } from '../../chat/thread/ChatThread';
@@ -64,6 +65,8 @@ export function ChatSurface() {
   const panelState = useSessionPanelState('main');
 
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
+  // The conversation's chat: a draft's own id until it has one.
+  const conversation = useAuiState((s) => s.threadListItem?.remoteId ?? s.threads.mainThreadId);
   // Find state is one global store, but its query and matches belong to the
   // chat it was opened in: switching chats (or starting a draft) closes it.
   useEffect(() => {
@@ -143,7 +146,12 @@ export function ChatSurface() {
           once and leave the panel hidden for good. The row is measured BEFORE
           the docked panel takes its width; `data-chat-column` is where the
           footer publishes its height for the overlay. */}
-      <div ref={panelState.hostRef} data-chat-column className="relative flex min-h-0 flex-1 overflow-hidden">
+      <div
+        ref={panelState.hostRef}
+        data-chat-column
+        {...conversationProps(conversation)}
+        className="relative flex min-h-0 flex-1 overflow-hidden"
+      >
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <ChatColumnHeader />
           {/* The thread is h-full: it needs a box that is "the rest", not the column. */}
