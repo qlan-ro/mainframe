@@ -77,7 +77,7 @@ side._
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
 | WS1 | Empty vs. populated surface | P0 | workspace surface lit | workspace-surface, workspace-empty-state, workspace-pane-${…} | with no tabs, shows a header (split/close controls stay reachable even with nothing open) plus the empty-state picker card; the `+`/add affordance lives only in the empty state, not repeated in the header |
-| WS2 | Empty-state picker rows | P1 | workspace empty | workspace-picker-open-file, workspace-picker-view-changes, workspace-picker-recent-${…}, workspace-picker-open-url, workspace-picker-new-terminal, workspace-picker-launch-${…} | recent-file rows and launch-config rows are data-driven, present only when there's something to list |
+| WS2 | Empty-state picker rows | P1 | workspace empty | workspace-picker-open-file, workspace-picker-open-url, workspace-picker-new-terminal, workspace-picker-launch-${…} | launch-config rows are data-driven, present only when there's something to list |
 | WS3 | Files panel toggle | P0 | workspace surface lit | workspace-files-open, workspace-files-panel | strip button toggles the floating panel; `aria-pressed` mirrors open state; Escape or a pointer outside (portal- and trigger-aware) light-dismisses; hidden, not unmounted, when closed — expanded folders and scroll position survive a dismiss |
 | WS4 | Files panel — no project | P1 | no active project/chat | workspace-files-panel | shows "Open a session to browse its files." instead of a tree |
 | WS5 | File tree browse | P0 | project active | files-tree-node (via `FileTree`) | expand/collapse lazily fetches children; clicking a file opens it as a workspace editor tab and closes the panel (`onCollapse`) |
@@ -158,7 +158,7 @@ preconditions that make a row's disabled/hidden state easy to get wrong in a new
 | # | Flow | Pri | Preconditions | Key test-ids | Notable edges |
 |---|------|-----|---------------|--------------|---------------|
 | M1 | Send | P0 | not running, worktree present | chat-composer-input, composer-prompt-highlight | send disabled when empty and no attachments/captures; Shift+Enter inserts a newline; a missing worktree disables the input |
-| M2 | Provider row lock | P0 | first message not yet sent | composer-provider-footer, composer-model-select | unlocked and reachable before the first send; locks (Locked copy, disabled pills) once the provider row's first message has gone out |
+| M2 | Provider row lock | P0 | first message not yet sent | composer-adapter-select-option-${…}, composer-model-select | unlocked and reachable before the first send; locks (Locked copy, disabled pills) once the provider row's first message has gone out |
 | M3 | Model / effort tuning | P1 | model selected | composer-model-select, composer-model-group-header-${…} | the effort flyout's option set is per-model (a haiku-tier model exposes no flyout at all; a sonnet-tier model offers `max` but not `xhigh`; an opus-tier model exposes all three); enabling "ultracode" pins the effort to `xhigh` and freezes the levels |
 | M4 | Permission-mode select | P1 | any | composer-permission-mode-select | switching to Unattended (yolo) is visually distinct (renders red) |
 | M5 | Worktree — new branch | P1 | git project, no active worktree | composer-worktree-branch-name, composer-worktree-enable | name validated client-side inline; invalid names disable Enable; mid-session (chat already has messages) shows a warning that the session pauses and resumes |

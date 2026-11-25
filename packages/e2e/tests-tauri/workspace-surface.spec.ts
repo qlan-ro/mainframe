@@ -206,12 +206,10 @@ test.describe('§21 workspace-surface — empty-state card + new-terminal (degra
     await closeTauriApp(app);
   });
 
-  test('the empty-state card lists the file rows, New terminal, and every launch config', async () => {
+  test('the empty state lists Open file, New terminal, and every launch config', async () => {
     const { page } = app;
     await expect(page.getByTestId('workspace-empty-state')).toBeVisible();
-    // The merged card carries BOTH halves of the old Files and Run pickers.
     await expect(page.getByTestId('workspace-picker-open-file')).toBeVisible();
-    await expect(page.getByTestId('workspace-picker-view-changes')).toBeVisible();
     await expect(page.getByTestId('workspace-picker-open-url')).toBeVisible();
     await expect(page.getByTestId('workspace-picker-new-terminal')).toBeVisible();
     await expect(page.getByTestId('workspace-picker-launch-sleep-long')).toBeVisible();

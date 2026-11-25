@@ -51,9 +51,6 @@ test.describe('§composer provider availability and session lock', () => {
       'aria-selected',
       'true',
     );
-    await expect(page.getByTestId('composer-provider-footer')).toContainText(
-      'Pick a provider before your first message.',
-    );
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('composer-provider-model-popover')).toHaveCount(0);
   });
@@ -100,15 +97,11 @@ test.describe('§composer provider availability and session lock', () => {
     await expect(active).toHaveAttribute('aria-selected', 'true');
     await expect(alternative).toBeEnabled();
     await expect(page.getByTestId('composer-adapter-locked-codex')).toHaveCount(0);
-    await expect(page.getByTestId('composer-provider-footer')).toContainText(
-      'Switching keeps this chat. The new provider gets its history with your next message.',
-    );
 
     // Browsing the alternative's catalog only changes which catalog the menu
     // shows (the tab's own selected state) — it does not touch the chat's
     // active provider.
     await alternative.click();
-    await expect(page.getByText('Codex models')).toBeVisible();
     await expect(alternative).toHaveAttribute('aria-selected', 'true');
 
     // Closing the menu without picking a model leaves the chat where it was
