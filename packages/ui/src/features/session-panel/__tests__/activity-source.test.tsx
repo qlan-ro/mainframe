@@ -265,6 +265,19 @@ describe('jumpToActivitySource — superseded', () => {
     expect(document.activeElement).toBe(field);
   });
 
+  it('stops watching for typing once it is over', async () => {
+    const added = vi.spyOn(document, 'addEventListener');
+    const removed = vi.spyOn(document, 'removeEventListener');
+    transcript('<div data-activity-id="call-1"></div>');
+    await jump('call-1');
+    expect(added.mock.calls.length).toBeGreaterThan(0);
+    for (const [type, listener] of added.mock.calls) {
+      expect(removed.mock.calls.some((call) => call[0] === type && call[1] === listener)).toBe(true);
+    }
+    added.mockRestore();
+    removed.mockRestore();
+  });
+
   it('still lands when a field only has focus, and after typing from before it was asked for', async () => {
     const root = transcript('');
     document.body.insertAdjacentHTML('beforeend', '<textarea id="field"></textarea>');

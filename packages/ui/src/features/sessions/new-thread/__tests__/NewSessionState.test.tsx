@@ -328,6 +328,17 @@ describe('project tasks', () => {
   });
 });
 
+it('are done loading for a project that has answered, when another’s answer comes late', async () => {
+  const answers: Record<string, (todos: Todo[]) => void> = {};
+  api.listTodos.mockImplementation((_port: number, id: string) => new Promise((resolve) => (answers[id] = resolve)));
+  draft();
+  await show();
+  setProject('p2');
+  await act(async () => answers['p2']!([]));
+  await act(async () => answers['p1']!([]));
+  expect(screen.queryByTestId('sessions-welcome-tasks')).toBeNull();
+});
+
 it('offers no generic prompts', async () => {
   draft();
   await show();

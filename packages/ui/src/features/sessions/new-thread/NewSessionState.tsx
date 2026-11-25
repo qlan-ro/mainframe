@@ -264,8 +264,7 @@ export function NewSessionState() {
     <div data-testid="sessions-welcome" className="flex min-h-full flex-col justify-end">
       <div className="flex flex-col gap-[22px] px-1 pb-3">
         {draft?.projectId != null ? (
-          // Keyed, so nothing of one project is left standing under another's name.
-          <ProjectState key={draft.projectId} projectId={draft.projectId} draft={draft} />
+          <ProjectState projectId={draft.projectId} draft={draft} />
         ) : (
           <NoProjectState draft={draft} />
         )}

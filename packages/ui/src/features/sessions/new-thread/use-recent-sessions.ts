@@ -14,7 +14,7 @@ const SHOWN = 3;
 
 export function recentSessions(items: readonly SessionItem[], projectId: string): SessionItem[] {
   return items
-    .filter((item) => item.custom.projectId === projectId && !item.custom.noProject)
+    .filter((item) => item.custom.projectId === projectId)
     .sort((a, b) => b.custom.updatedAt - a.custom.updatedAt)
     .slice(0, SHOWN);
 }
