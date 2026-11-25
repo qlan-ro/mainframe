@@ -33,8 +33,10 @@ vi.mock('../../messages/compact/transcript-scope', () => ({
   RootTranscriptScope: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('../../tools/cards/SubagentTranscript', () => ({
-  SubagentTranscript: ({ messages }: { messages: readonly ThreadMessage[] }) => (
-    <div data-testid="transcript-stub">{messages.map((message) => message.id).join(',')}</div>
+  SubagentTranscript: ({ messages, messageId }: { messages: readonly ThreadMessage[]; messageId: string }) => (
+    <div data-testid="transcript-stub" data-message={messageId}>
+      {messages.map((message) => message.id).join(',')}
+    </div>
   ),
 }));
 vi.mock('@/components/ui/hint', () => ({ Hint: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
@@ -78,4 +80,23 @@ it('loads the complete subagent transcript when its card was supplied as context
   childMessages.current = [{ id: 'later-child' } as ThreadMessage];
   render(<SubagentZone subagent={subagent} grow={0.5} onClose={vi.fn()} />);
   await waitFor(() => expect(controller.loadEarlier).toHaveBeenCalledWith('task-1'));
+});
+
+it('finds the message of a sub-agent opened before its call was loaded', () => {
+  childMessages.current = [{ id: 'first' } as ThreadMessage];
+  render(<SubagentZone subagent={{ ...subagent, messageId: undefined }} grow={0.5} onClose={vi.fn()} />);
+  expect(screen.getByTestId('transcript-stub')).toHaveAttribute('data-message', 'parent-message');
+});
+
+it('loads the history for a sub-agent whose call is not in it', async () => {
+  childMessages.current = [];
+  render(
+    <SubagentZone
+      subagent={{ ...subagent, toolCallId: 'task-gone', messageId: undefined }}
+      grow={0.5}
+      onClose={vi.fn()}
+    />,
+  );
+  await waitFor(() => expect(controller.loadEarlier).toHaveBeenCalledWith('task-gone'));
+  expect(screen.queryByText('Not in this transcript')).toBeNull();
 });

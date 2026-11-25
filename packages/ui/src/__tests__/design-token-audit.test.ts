@@ -76,9 +76,6 @@ describe('design token audit', () => {
     'components/ui/assistant-ui/tool-group.tsx',
     'features/chat/parts/CodeHeader.tsx',
     'features/settings/SettingsSidebar.tsx',
-    // Hash-pinned upstream transcription (assistant-ui agent-plan); its
-    // text-[13.5px]/text-[11px] rungs are the element's approved look.
-    'features/session-panel/AgentPlan.tsx',
     // Scanned since the 2026-08-09 v2 fold removed the tree-level skip:
     // tracking-widest is the STOCK radix-vega shortcut-kbd treatment shipped
     // by the registry primitives.

@@ -3,13 +3,11 @@ FULL=None
 COMP=(316,560,808,340)          # composer: strip, card, bottom row
 COMPM=(316,380,808,520)         # composer with a menu or gate above it
 COMPN=(316,470,808,430)         # new-session composer with its strip
-PANEL=(1124,48,316,852)
 SIDE=(0,40,316,860)
 def S(id,preset,cap,crop=COMP,theme='light',ww=1440,actions=(),wait=200,h=900):
     return dict(id=id,preset=preset,cap=cap,crop=crop,theme=theme,ww=ww,actions=list(actions),wait=wait,h=h)
 TRWT=(316,48,816,1902)          # the same, 1440x1950, for a whole thread
 TRW=(316,48,816,1452)           # transcript column of a 1440x1500 window, header to composer
-PANELX=(1124,48,316,1452)       # session panel of a 1440x1500 window
 def JS_SCROLL_MSG(k): return {'js':f"(()=>{{const m=document.querySelectorAll('#thread .inner > .msg')[{k}];thread.scrollTop+=m.getBoundingClientRect().top-thread.getBoundingClientRect().top-12}})()",'wait':200}
 def JS_PANEL_ROW(title): return {'js':f"(()=>{{const r=[...document.querySelectorAll('.pr')].find(x=>x.getBoundingClientRect().x>1100&&x.querySelector('.t')&&x.querySelector('.t').textContent.trim()==={title!r});r&&r.click()}})()",'wait':300}
 JS_STRIP_OPEN={'js':"(()=>{const b=[...document.querySelectorAll('#actstrip button')].find(x=>x.textContent.trim()==='Open');b&&b.click()})()",'wait':300}
@@ -109,18 +107,6 @@ BOARDS=[
    S('tr-md','every-tool','**Markdown and links (T1d).** One link style: blue, underlined; raw URLs and file paths in mono with no glyph. URLs open where Settings › “Open links in” says; localhost goes through the tunnel on a remote daemon. A time marker after a 30+ minute gap.',TRW,h=1500,actions=[JS_SCROLL_MSG(5)]),
    S('tr-real','idle','**A realistic thread at rest (T1, T1b).** One work row per turn, folded once the answer starts. A time marker at the start and after 30+ minutes; a retried failure reads “1 failed, retried” in grey. The last turn names its agents (“2 agents”, T1e).',TRWT,h=1950,actions=[JS_SCROLL_MSG(0)]),
    S('tr-real-d','idle','**Dark.**',TRWT,theme='dark',h=1950,actions=[JS_SCROLL_MSG(0)]),
- ]),
- dict(file='Proposal-Redesign-SessionPanel',title='Window redesign: session panel',cols=5,states=[
-   S('p-docked','idle','**Docked (R1–R5, R12).** “Session” title and Sections button (R3); no Session section (R2); fits its content, capped at the window (R5). Labels sit close to their rows; sections end with 10 px and an inset hairline.',PANEL),
-   S('p-sections','panel-sections-menu','**Sections menu (R4).** Each section on or off, remembered per viewer.',PANEL),
-   S('p-atts','attachments-overflow','**Attachments overflow (R7).** One row of tiles ending in “+N”.',PANEL),
-   S('p-new','new-session','**Before the first message (R9).** Project-level sections only.',PANEL),
-   S('p-docked-d','idle','**Dark.**',PANEL,theme='dark'),
-   S('p-float','panel-floating','**Floating at a narrow column (R11).** Below 1044 px the toggle floats the panel over the chat; it ends 8 px above the composer, which stays usable. Click outside or Esc parks it.',FULL,ww=1180),
-   S('p-float-d','panel-floating','**Floating, dark.**',FULL,theme='dark',ww=1180),
-   S('p-act','every-activity','**Activity, every kind and state (R13).** The kind icon always leads, live or finished; the status sits at the end: spinner and time while running, “needs you” in amber, “failed” in muted rose (S6), else plain words. Finished work under Earlier.',PANELX,h=1500),
-   S('p-act-wf','every-activity','**A workflow unfolds (R13).** Its phases with their state; the running phase lists its agents, each opens in the workspace (W8). Stop is its only action. No other row unfolds.',PANELX,h=1500,actions=[JS_PANEL_ROW('release-checks')]),
-   S('p-act-d','every-activity','**Dark.**',PANELX,theme='dark',h=1500),
  ]),
  dict(file='Proposal-Redesign-Workspace',title='Window redesign: workspace surface',cols=2,note='**This retires split chats (W9).** Every secondary chat opens as a workspace tab beside the main chat: forked chats, side chats, delegated task chats and sub-agents. The chat column always holds one conversation.',states=[
    S('w-preview','workspace-preview','**Preview tab (W2, W4).** Slides in from the right and pushes the chat; the session panel parks (W6).',FULL),

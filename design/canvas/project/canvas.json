@@ -93,79 +93,37 @@
       "x": 1520,
       "y": 0
     },
-    "Chat-SessionPanel-ActivityActions.dc.html": {
-      "h": 1875,
-      "page": "session-panel",
-      "title": "Chat — session panel: Activity row actions",
-      "w": 1424,
-      "x": 0,
-      "y": 15766
-    },
-    "Chat-SessionPanel-ActivityFlow.dc.html": {
-      "h": 1560,
-      "is_interactive": true,
-      "page": "session-panel",
-      "title": "Chat — session panel: Activity disclosure",
-      "w": 300,
-      "x": 0,
-      "y": 13500
-    },
-    "Chat-SessionPanel-ActivityRows.dc.html": {
-      "h": 2146,
-      "page": "session-panel",
-      "title": "Chat — session panel: Activity rows by kind and status",
-      "w": 3512,
-      "x": 380,
-      "y": 13500
-    },
     "Chat-SessionPanel-ActivitySection.dc.html": {
-      "h": 1788,
+      "h": 2036,
       "page": "session-panel",
-      "title": "Chat — session panel: Activity header, Earlier and loading",
-      "w": 2120,
-      "x": 3972,
-      "y": 13500
+      "title": "Session panel — Activity",
+      "w": 1240,
+      "x": 0,
+      "y": 2450
     },
     "Chat-SessionPanel-ActivityWindow.dc.html": {
-      "h": 1004,
+      "h": 1088,
       "page": "session-panel",
-      "title": "Chat — session panel: Activity actions in the window",
-      "w": 3008,
-      "x": 3356,
-      "y": 15766
-    },
-    "Chat-SessionPanel-Flow.dc.html": {
-      "h": 900,
-      "is_interactive": true,
-      "page": "session-panel",
-      "title": "Chat — session panel: dock, close and float",
-      "w": 1440,
+      "title": "Session panel — from a row to the transcript",
+      "w": 1536,
       "x": 0,
-      "y": 9205
+      "y": 4628
     },
     "Chat-SessionPanel-Modes.dc.html": {
-      "h": 1976,
+      "h": 1088,
       "page": "session-panel",
-      "title": "Chat — session panel in the window",
-      "w": 4496,
-      "x": 1520,
-      "y": 9205
-    },
-    "Chat-SessionPanel-MoreStates.dc.html": {
-      "h": 929,
-      "page": "session-panel",
-      "title": "Chat — session panel: more section states",
-      "w": 1772,
-      "x": 1504,
-      "y": 15766
+      "title": "Session panel — docked, floating, hidden",
+      "w": 4252,
+      "x": 0,
+      "y": 5876
     },
     "Chat-SessionPanel-States.dc.html": {
-      "h": 1738,
+      "h": 2030,
       "page": "session-panel",
-      "title": "Chat — session panel states",
-      "w": 3164,
+      "title": "Session panel — sections",
+      "w": 1516,
       "x": 0,
-      "y": 11301
+      "y": 260
     },
     "Chat-SideChat.dc.html": {
       "h": 900,
@@ -248,24 +206,16 @@
       "x": 1460,
       "y": 3286
     },
-    "Proposal-Redesign-SessionPanel.dc.html": {
-      "h": 2726,
-      "page": "proposals",
-      "title": "Window redesign: session panel",
-      "w": 3596,
-      "x": 1460,
-      "y": 25904
-    },
     "Proposal-Redesign-Shortcuts.dc.html": {
       "h": 1088,
       "page": "proposals",
       "title": "Window redesign: keyboard shortcuts sheet",
       "w": 1536,
       "x": 1460,
-      "y": 33982
+      "y": 31096
     },
     "Proposal-Redesign-Spec.dc.html": {
-      "h": 9952,
+      "h": 10085,
       "page": "proposals",
       "title": "Window redesign: the decisions (spec)",
       "w": 1360,
@@ -286,15 +236,7 @@
       "title": "Window redesign: workspace surface",
       "w": 3024,
       "x": 1460,
-      "y": 28790
-    },
-    "Proposal-SessionPanel-Sections.dc.html": {
-      "h": 1797,
-      "page": "proposals",
-      "title": "Session panel rows: other section states (first column, Session, is removed by R2)",
-      "w": 2120,
-      "x": 0,
-      "y": 35790
+      "y": 25904
     },
     "Proposal-Window-Baseline.dc.html": {
       "h": 900,
@@ -533,12 +475,12 @@
       "y": 4451
     },
     "Workspace-SessionPanel.dc.html": {
-      "h": 3231,
+      "h": 2060,
       "page": "session-panel",
-      "title": "Workspace — session panel, 11 Nov capture (superseded by the Chat page)",
-      "w": 1422,
-      "x": 1756,
-      "y": 0
+      "title": "Workspace — floating session panel",
+      "w": 1536,
+      "x": 0,
+      "y": 7124
     },
     "Workspace-Viewers.dc.html": {
       "h": 2948,
@@ -599,10 +541,10 @@
     "Chat-SessionPanel-ActivityError.dc.html": {
       "h": 766,
       "page": "session-panel",
-      "title": "Chat — session panel: Activity could not load",
+      "title": "Session panel — Activity could not load",
       "w": 900,
       "x": 0,
-      "y": 17801
+      "y": 9344
     },
     "Workspace-ReviewError.dc.html": {
       "h": 1088,
@@ -670,41 +612,13 @@
     "view": "canvas",
     "page": "overview"
   },
-  "noteOrder": [
-    "proposalsHowTo",
-    "sessionPanelTitle",
-    "sessionPanelGuide",
-    "sessionPanelActivityTitle",
-    "sessionPanelActivityGuide",
-    "revampTitle",
-    "revampGuide",
-    "adoptedTitle",
-    "adoptedGuide"
-  ],
+  "noteOrder": ["proposalsHowTo", "sessionPanelTitle", "sessionPanelGuide", "revampTitle", "revampGuide"],
   "notes": {
-    "adoptedGuide": {
-      "fill": "gray",
-      "page": "proposals",
-      "size": 24,
-      "text": "One earlier board still applies.\n\nSession-panel section states other than Activity (Launch, files, skills, attachments, tasks). Their rows and values are binding; the panel around them follows the redesign: “Session” title with the Sections button (R3), no Session section (R2: ignore the sheet's first column), rhythm per R12. Activity follows R13 and is drawn on Proposal-Redesign-SessionPanel.",
-      "w": 560,
-      "x": -640,
-      "y": 35790
-    },
-    "adoptedTitle": {
-      "kind": "title1",
-      "maxW": 7400,
-      "page": "proposals",
-      "text": "Adopted from an earlier proposal: the other session-panel sections",
-      "w": 240,
-      "x": 0,
-      "y": 35530
-    },
     "proposalsHowTo": {
       "fill": "blue",
       "page": "proposals",
       "size": 24,
-      "text": "This page has one purpose: the UI revamp. Everything here is approved design that the app does not have yet.\n\nRead it top to bottom: the decisions spec (left column), then the boards to its right, one per area, then the earlier proposals the revamp adopts.\n\nWhen part of it ships, update that area's baseline page and remove the boards it made obsolete here. Keep whatever is not built yet.",
+      "text": "This page has one purpose: the UI revamp. Everything here is approved design that the app does not have yet.\n\nRead it top to bottom: the decisions spec (left column), then the boards to its right, one per area.\n\nWhen part of it ships, update that area's baseline page and remove the boards it made obsolete here. Keep whatever is not built yet.",
       "w": 560,
       "x": 0,
       "y": 0
@@ -713,7 +627,7 @@
       "fill": "gray",
       "page": "proposals",
       "size": 24,
-      "text": "The window redesign, final (approved 24 Nov 2026).\n\nLeft: Proposal-Redesign-Spec, every decision with an id (S shell, W workspace, G gates, H shortcuts, L sidebar, T transcript, C composer, K composer strips, R session panel). Captions on the boards cite these ids.\n\nRight, top to bottom: today's window (v2.15.0) beside the proposed window; then title bar and window states, composer before the first message, toolbar / send / stop, files, captures and quotes in the composer, queue and activity strip, bottom strip, gates, transcript (every row and state), session panel, workspace, shortcuts sheet. Every board shows light and dark.\n\nClickable prototype with every state: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn (open Prototype controls, bottom left).\n\nThe sidebar is built; its boards are on the Sidebar page.\n\nBoards are rendered from that prototype. They are reference pictures, not components: build with the app's own primitives and tokens, and take exact values from the spec.",
+      "text": "The window redesign, final (approved 24 Nov 2026).\n\nLeft: Proposal-Redesign-Spec, every decision with an id (S shell, W workspace, G gates, H shortcuts, L sidebar, T transcript, C composer, K composer strips, R session panel). Captions on the boards cite these ids.\n\nRight, top to bottom: today's window (v2.15.0) beside the proposed window; then title bar and window states, composer before the first message, toolbar / send / stop, files, captures and quotes in the composer, queue and activity strip, bottom strip, gates, transcript (every row and state), workspace, shortcuts sheet. Every board shows light and dark.\n\nClickable prototype with every state: https://claude.ai/artifact/CvaibneH8Kp9fZ1Mw7VuXn (open Prototype controls, bottom left).\n\nThe sidebar is built; its boards are on the Sidebar page.\n\nBoards are rendered from that prototype. They are reference pictures, not components: build with the app's own primitives and tokens, and take exact values from the spec.",
       "w": 560,
       "x": -640,
       "y": 960
@@ -727,32 +641,14 @@
       "x": 0,
       "y": 700
     },
-    "sessionPanelActivityGuide": {
-      "fill": "gray",
-      "page": "session-panel",
-      "size": 24,
-      "text": "Activity, state by state, plus states the first sheet missed in other sections. Same build as above: v2.15.0 (9f504d34), the shipped components at the real 300 px panel width, pixel-checked in light and dark on 13 Nov 2026.\n\nThe narrow first board is interactive: press Play, then click Earlier, Show all, the running row or Load earlier messages. Hovering a row swaps its time for its actions.\n\nA caption that says \"fixture\" marks a state the mock runtime cannot reach by itself: monitors, usage counts, Stop, a running command, loaded output, failed requests, stopped or failed child chats. Those were set on the app's network boundary. No live provider ran.\n\nNot shown: resumed activity (PR 912, not merged), the brief \"Loading message...\" line after Transcript, and a queued child chat, which draws the same as waiting. COVERAGE.md in the handoff folder lists every state with its source and evidence.",
-      "w": 520,
-      "x": -600,
-      "y": 13500
-    },
-    "sessionPanelActivityTitle": {
-      "kind": "title1",
-      "maxW": 6364,
-      "page": "session-panel",
-      "text": "Session panel: Activity and missing states",
-      "w": 240,
-      "x": 0,
-      "y": 13240
-    },
     "sessionPanelGuide": {
       "fill": "gray",
       "page": "session-panel",
       "size": 24,
-      "text": "Session panel as shipped in v2.15.0 (9f504d34). Captured 13 Nov 2026 from the running app on the mock adapter and pixel-checked in light and dark.\n\nThe first board is interactive: press Play, then click the panel toggle above the transcript, the workspace button at the top right, or the dimmed area beside the floating panel.\n\nThe boards above this section are from the 11 Nov capture of an older build (76b2dab3). The session panel board on the Workspace page is that older capture too.",
+      "text": "Session panel as built by the window redesign (rows R1–R13 of design/redesign/DECISIONS.md). Captured from the running app on the mock adapter with design/canvas/capture (areas/session-panel.mts); every frame follows the Theme tweak.\n\nActivity kinds the mock runtime cannot reach by itself (workflow phases, delegated tasks in every state, monitors, finished work) are set on the app's network boundary. No live provider ran.",
       "w": 520,
       "x": -600,
-      "y": 9205
+      "y": 260
     },
     "sessionPanelTitle": {
       "kind": "title1",
@@ -761,7 +657,7 @@
       "text": "Session panel",
       "w": 240,
       "x": 0,
-      "y": 8945
+      "y": 0
     }
   },
   "order": [
@@ -786,14 +682,9 @@
     "Chat-States-Failures.dc.html",
     "Chat-Composer.dc.html",
     "Chat-ComposerFocus.dc.html",
-    "Chat-SessionPanel-Flow.dc.html",
     "Chat-SessionPanel-Modes.dc.html",
     "Chat-SessionPanel-States.dc.html",
-    "Chat-SessionPanel-ActivityFlow.dc.html",
-    "Chat-SessionPanel-ActivityRows.dc.html",
     "Chat-SessionPanel-ActivitySection.dc.html",
-    "Chat-SessionPanel-ActivityActions.dc.html",
-    "Chat-SessionPanel-MoreStates.dc.html",
     "Chat-SessionPanel-ActivityWindow.dc.html",
     "Workspace-Files.dc.html",
     "Workspace-Markdown.dc.html",
@@ -841,10 +732,8 @@
     "Proposal-Redesign-BottomStrip.dc.html",
     "Proposal-Redesign-Gates.dc.html",
     "Proposal-Redesign-Transcript.dc.html",
-    "Proposal-Redesign-SessionPanel.dc.html",
     "Proposal-Redesign-Workspace.dc.html",
-    "Proposal-Redesign-Shortcuts.dc.html",
-    "Proposal-SessionPanel-Sections.dc.html"
+    "Proposal-Redesign-Shortcuts.dc.html"
   ],
   "pages": [
     {

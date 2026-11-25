@@ -44,6 +44,8 @@ export function ChatGateMount() {
   return (
     <div
       data-testid="chat-thread-gate-slot"
+      // Where an Activity row that needs you moves focus (`session-panel/activity-source`).
+      data-chat-gate
       className="-mx-1 mb-2 min-h-24 max-h-[45cqh] shrink-[100] overflow-y-auto px-1 py-1"
     >
       <GateCard entry={front} reply={reply} adapterId={extras?.state.chatConfig?.adapterId} />

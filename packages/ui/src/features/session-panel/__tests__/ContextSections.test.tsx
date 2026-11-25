@@ -1,10 +1,10 @@
 /**
- * ContextSection — unit tests.
+ * ContextSections — unit tests.
  *
  * Behaviors covered:
- *  - memory files render per scope with a `global`/`project` badge and an
+ *  - memory files render per scope with their scope and an
  *    estimated token size, and open on click
- *  - in-session file mentions render as their own sub-group, badged (D14)
+ *  - in-session file mentions render as their own section, each with its reason (D14)
  *  - the Skills sub-group lists the skills THIS session invoked, never the
  *    available-skills catalog, and never re-lists them under Session
  *  - Manage renders even with no skills — the only route to the Setup Advisor's
@@ -42,7 +42,8 @@ const getAttachment = vi.fn().mockResolvedValue({
 });
 vi.mock('@/lib/api/attachments', () => ({ getAttachment: (...a: unknown[]) => getAttachment(...a) }));
 
-const { ContextSection } = await import('../ContextSection');
+const { AttachmentsSection, MemorySection, MentionsSection, SessionContextProvider, SkillsSection } =
+  await import('../ContextSections');
 
 function Wrapper({ children }: { children: ReactNode }) {
   return <TooltipProvider>{children}</TooltipProvider>;
@@ -58,7 +59,14 @@ const emptyContext: SessionContext = {
   skillFiles: [],
 };
 
-const section = () => <ContextSection port={31415} />;
+const section = () => (
+  <SessionContextProvider>
+    <MemorySection />
+    <MentionsSection />
+    <SkillsSection />
+    <AttachmentsSection port={31415} />
+  </SessionContextProvider>
+);
 
 beforeEach(() => {
   mockContext = emptyContext;
@@ -67,7 +75,7 @@ beforeEach(() => {
   getAttachment.mockClear();
 });
 
-describe('ContextSection — memory files', () => {
+describe('context sections — memory files', () => {
   beforeEach(() => {
     mockContext = {
       ...emptyContext,
@@ -95,8 +103,8 @@ describe('ContextSection — memory files', () => {
   });
 });
 
-describe('ContextSection — session items (D14)', () => {
-  it('renders in-session file mentions with their badges', () => {
+describe('context sections — session items (D14)', () => {
+  it('renders in-session files with the word saying why each is here', () => {
     mockContext = {
       ...emptyContext,
       mentions: [
@@ -114,10 +122,29 @@ describe('ContextSection — session items (D14)', () => {
     };
     render(section());
 
-    expect(screen.getByTestId('session-panel-session-item-src/app.ts')).toHaveTextContent('@');
-    expect(screen.getByTestId('session-panel-session-item-src/edited.ts')).toHaveTextContent('plan');
+    expect(screen.getByTestId('session-panel-session-item-src/app.ts')).toHaveTextContent('mentioned');
+    expect(screen.getByTestId('session-panel-session-item-src/edited.ts')).toHaveTextContent('edited');
     // The invoked skill belongs to the Skills sub-group and is not re-listed here.
     expect(screen.queryByTestId('session-panel-session-item-/skills/review/SKILL.md')).toBeNull();
+  });
+
+  it('shows the first six, then all of them, then six again', () => {
+    mockContext = { ...emptyContext, modifiedFiles: Array.from({ length: 8 }, (_, i) => `src/f${i}.ts`) };
+    render(section());
+    const rows = () => screen.getAllByTestId(/^session-panel-session-item-/);
+    expect(rows()).toHaveLength(6);
+    const all = screen.getByTestId('session-panel-mentions-all');
+    expect(all).toHaveTextContent('Show all 8');
+    fireEvent.click(all);
+    expect(rows()).toHaveLength(8);
+    fireEvent.click(screen.getByText('Show fewer'));
+    expect(rows()).toHaveLength(6);
+  });
+
+  it('offers no Show all for six files', () => {
+    mockContext = { ...emptyContext, modifiedFiles: Array.from({ length: 6 }, (_, i) => `src/f${i}.ts`) };
+    render(section());
+    expect(screen.queryByTestId('session-panel-mentions-all')).toBeNull();
   });
 
   it('renders no session sub-group when nothing was touched', () => {
@@ -126,7 +153,7 @@ describe('ContextSection — session items (D14)', () => {
   });
 });
 
-describe('ContextSection — skills', () => {
+describe('context sections — skills', () => {
   const withSkills: SessionContext = {
     ...emptyContext,
     skillFiles: [
@@ -173,7 +200,7 @@ describe('ContextSection — skills', () => {
   });
 });
 
-describe('ContextSection — attachments', () => {
+describe('context sections — attachments', () => {
   it('mounts the grid only when the session has attachments', () => {
     render(section());
     expect(screen.queryByTestId('session-panel-attachment-grid')).toBeNull();
@@ -188,7 +215,7 @@ describe('ContextSection — attachments', () => {
   });
 });
 
-describe('ContextSection — first-class sections', () => {
+describe('context sections — first-class sections', () => {
   it('renders each kind as its own section — no Context wrapper, no counts', () => {
     mockContext = {
       ...emptyContext,

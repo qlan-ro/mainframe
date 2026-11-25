@@ -102,6 +102,8 @@ export const usePanelControl = create<PanelControlState>((set, get) => ({
   },
 
   revealActivity: (columnId) => {
+    // The viewer may have turned the section off; a panel without it shows nothing they asked for.
+    useUiPrefs.getState().setSessionPanelSectionShown('activity', true);
     get().setPanelOpen(columnId, true);
     if (!(get().fits[columnId] ?? true)) get().setOverlayOpen(columnId, true);
     set((s) => ({ activityReveals: { ...s.activityReveals, [columnId]: (s.activityReveals[columnId] ?? 0) + 1 } }));

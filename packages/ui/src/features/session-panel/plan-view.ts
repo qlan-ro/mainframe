@@ -1,22 +1,29 @@
 /**
- * plan-view — session todos → the `AgentPlan` element's props.
- *
- * The element is positional: a step is done when its index is below
- * `activeIndex`, active at it, pending above. That maps 1:1 onto the CLI's
- * todo list, so this is a projection rather than a translation.
+ * plan-view — session todos → the Plan section's steps. Each step's state is
+ * its own: agents finish steps out of order.
  */
 import type { TodoItem } from '@qlan-ro/mainframe-types';
 
+/** `next` is the first unfinished step while nothing is in progress. */
+export type PlanStepState = 'done' | 'running' | 'next' | 'todo';
+
+export interface PlanStep {
+  text: string;
+  state: PlanStepState;
+}
+
 export interface PlanView {
-  steps: string[];
-  activeIndex: number;
+  steps: PlanStep[];
+  done: number;
 }
 
 export function todosToPlan(todos: readonly TodoItem[]): PlanView {
-  const steps = todos.map((todo) => (todo.status === 'in_progress' ? todo.activeForm || todo.content : todo.content));
-  const inProgress = todos.findIndex((todo) => todo.status === 'in_progress');
-  // Nothing in progress: the front of the plan is however much is already done,
-  // which lands on `steps.length` for a finished plan (the element's "all done").
-  const activeIndex = inProgress === -1 ? todos.filter((todo) => todo.status === 'completed').length : inProgress;
-  return { steps, activeIndex };
+  const running = todos.some((todo) => todo.status === 'in_progress');
+  const next = running ? -1 : todos.findIndex((todo) => todo.status !== 'completed');
+  const steps = todos.map((todo, index): PlanStep => {
+    if (todo.status === 'completed') return { text: todo.content, state: 'done' };
+    if (todo.status === 'in_progress') return { text: todo.activeForm || todo.content, state: 'running' };
+    return { text: todo.content, state: index === next ? 'next' : 'todo' };
+  });
+  return { steps, done: steps.filter((step) => step.state === 'done').length };
 }

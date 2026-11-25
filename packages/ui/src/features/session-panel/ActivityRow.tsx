@@ -1,292 +1,291 @@
-import { useState } from 'react';
+/**
+ * ActivityRow — one piece of the session's work: its kind icon leads, live or
+ * finished, and its status is the value at the end. A click runs the row's main
+ * action; only a workflow unfolds, because its phases show nowhere else.
+ */
+import { useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
   Binoculars,
   Bot,
-  ChevronDown,
   Clock3,
-  ExternalLink,
-  MessagesSquare,
+  LocateFixed,
   Route,
   Square,
   SquareTerminal,
-  X,
+  TextAlignStart,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ClaudeWorkflowRun } from '@qlan-ro/mainframe-types';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
-import { cancelDelegatedTask, readBackgroundTaskOutput, stopBackgroundTask } from '@/lib/api/background-tasks';
-import { formatElapsed } from './background-activity-view';
+import { BotFilled } from '@/lib/icons/bot-filled';
 import type { ActivityEntry, ActivityKind } from './activity-model';
-import { ActionFooter, DetailFields, type RowAction } from './ActivityRowDetails';
+import { ACTIVITY_KIND_LABEL, activityStatus, type ActivityStatus } from './activity-status';
+import { ActivitySpinner } from './ActivitySpinner';
+import { PanelRow } from './PanelSection';
+import { useFocusLoss, useFocusReturn } from './use-row-focus';
+import { WorkflowPhases } from './WorkflowPhases';
 
-const ICONS: Record<ActivityKind, LucideIcon> = {
+export const ACTIVITY_ICON: Record<ActivityKind, LucideIcon> = {
   workflow: Route,
   subagent: Bot,
-  delegated: MessagesSquare,
+  delegated: BotFilled,
   monitor: Binoculars,
   scheduled: Clock3,
   command: SquareTerminal,
   background: Activity,
 };
 
-function timeLabel(row: ActivityEntry, now: number): string {
-  if (row.delegated?.resumedState) return row.delegated.resumedState;
-  if (row.state === 'waiting' && row.nextAt) {
-    const remaining = row.nextAt - now;
-    return remaining > 0 ? `in ${formatElapsed(now - remaining, now)}` : 'due';
-  }
-  if (row.state === 'waiting') return 'waiting';
-  if (row.endedAt) return new Date(row.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return formatElapsed(row.startedAt, now);
-}
+const TONE: Record<ActivityStatus['tone'], string | undefined> = {
+  running: undefined,
+  'needs-you': 'font-medium text-warning',
+  failed: 'text-fail',
+  plain: undefined,
+};
 
-function currentWorkflowPhase(run: ClaudeWorkflowRun): number {
-  const active = run.agents.filter((agent) => agent.state === 'start' || agent.state === 'progress');
-  return (active.length ? active : run.agents).reduce((index, agent) => Math.max(index, agent.phaseIndex), 0);
-}
+/** The row's value makes way for its actions; both hide and show on the same hover or focus. */
+const VALUE_AWAY = 'group-hover/activity:opacity-0 group-has-focus-visible/activity:opacity-0';
+const VALUE_AWAY_FOCUSED = 'group-has-[[data-row-actions]_:focus-visible]/activity:opacity-0';
+const ACTIONS_AWAY = 'pointer-events-none opacity-0';
+const ACTIONS_SHOWN =
+  'group-hover/activity:pointer-events-auto group-hover/activity:opacity-100 group-has-focus-visible/activity:pointer-events-auto group-has-focus-visible/activity:opacity-100';
+const ACTIONS_FOCUSED = 'has-focus-visible:pointer-events-auto has-focus-visible:opacity-100';
 
-function detailLine(row: ActivityEntry, run: ClaudeWorkflowRun | undefined): string {
-  let detail = row.detail;
-  if (row.kind === 'workflow' && run) {
-    const active = run.agents.filter((agent) => agent.state === 'start' || agent.state === 'progress').length;
-    const phaseIndex = currentWorkflowPhase(run);
-    const phase = run.phases.find((candidate) => candidate.index === phaseIndex);
-    detail = run.phases.length
-      ? [
-          phase?.title || 'Running',
-          `phase ${phaseIndex + 1} of ${run.phases.length}`,
-          active ? `${active} agent${active === 1 ? '' : 's'} running` : '',
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : `${active} agent${active === 1 ? '' : 's'} running`;
-  }
-  const parts = [detail];
-  if (row.kind === 'delegated' || (row.state !== 'running' && row.state !== 'waiting')) parts.push(row.state);
-  if (row.usage?.totalTokens) parts.push(`${(row.usage.totalTokens / 1000).toFixed(1)}k tokens`);
-  if (row.usage?.toolUses) parts.push(`${row.usage.toolUses} tools`);
-  return parts.filter(Boolean).join(' · ');
-}
-
-function WorkflowRail({ run }: { run: ClaudeWorkflowRun }) {
-  if (!run.phases.length) return null;
-  const current = currentWorkflowPhase(run);
-  return (
-    <div className="mt-1 flex gap-0.5" aria-label={`Workflow phase ${current + 1} of ${run.phases.length}`}>
-      {run.phases.map((phase) => (
-        <span
-          key={phase.index}
-          className={cn('h-0.5 min-w-0 flex-1 rounded-full', phase.index <= current ? 'bg-primary' : 'bg-border')}
-        />
-      ))}
-    </div>
+function valueClass(actions: number, loading: boolean): string {
+  return cn(
+    actions > 0 && (loading ? VALUE_AWAY_FOCUSED : VALUE_AWAY),
+    // Room for both, so they never cover the title.
+    actions > 1 && 'min-w-12 justify-end',
   );
 }
 
-interface Props {
+function StatusValue({ status, className }: { status: ActivityStatus; className?: string }) {
+  return (
+    <span className={cn('flex items-center gap-1', className)}>
+      {status.tone === 'running' && <ActivitySpinner />}
+      <span className={TONE[status.tone]}>{status.text}</span>
+    </span>
+  );
+}
+
+interface RowActionProps {
+  id: string;
+  label: string;
+  hint: string;
+  icon: ReactNode;
+  disabled?: boolean;
+  destructive?: boolean;
+  onClick: () => void;
+  /** It is going away with the focus on it. */
+  onFocusLost: () => void;
+}
+
+function RowAction({ id, label, hint, icon, disabled, destructive, onClick, onFocusLost }: RowActionProps) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useFocusLoss(ref, onFocusLost);
+  return (
+    <Hint label={hint}>
+      <Button
+        ref={ref}
+        data-testid={`session-panel-activity-row-${id}`}
+        aria-label={label}
+        // Not `disabled`, which would drop the focus it has.
+        aria-disabled={disabled}
+        variant="ghost"
+        size="icon-xs"
+        onClick={onClick}
+        className={cn(
+          'aria-disabled:text-muted-foreground',
+          destructive && 'text-destructive hover:bg-destructive/10 hover:text-destructive',
+        )}
+      >
+        {icon}
+      </Button>
+    </Hint>
+  );
+}
+
+interface RowActionsProps {
   row: ActivityEntry;
-  now: number;
-  chatId: string;
-  adapterId?: string;
-  run?: ClaudeWorkflowRun;
-  onJump: () => void;
-  onOpenChild?: () => void;
+  stopping: boolean;
+  /** The row's value stays while it says that history is loading. */
+  loading: boolean;
+  onOutput?: () => void;
+  onStop?: () => void;
+  onFocusLost: () => void;
 }
 
-function useRowControls(row: ActivityEntry, chatId: string) {
-  const [open, setOpen] = useState(false);
-  const [output, setOutput] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const taskId = row.task?.id;
-  const delegatedTaskId = row.delegated?.taskId;
-  async function execute(action: () => Promise<unknown>) {
-    setBusy(true);
-    setError(null);
-    try {
-      await action();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-  const stop = () => taskId && execute(() => stopBackgroundTask(chatId, taskId));
-  const cancel = () => delegatedTaskId && execute(() => cancelDelegatedTask(chatId, delegatedTaskId));
-  const showOutput = () => {
-    if (!taskId) return;
-    setOpen(true);
-    return execute(async () => setOutput(await readBackgroundTaskOutput(chatId, taskId)));
-  };
-  return { open, setOpen, output, error, busy, stop, cancel, showOutput };
+/** Beside the row's button, not inside it: the row has a main action of its own. */
+function RowActions({ row, stopping, loading, onOutput, onStop, onFocusLost }: RowActionsProps) {
+  return (
+    <span
+      data-row-actions
+      className={cn('absolute top-0.5 right-2.5 flex', ACTIONS_AWAY, loading ? ACTIONS_FOCUSED : ACTIONS_SHOWN)}
+    >
+      {onOutput && (
+        <RowAction
+          id={`output-${row.id}`}
+          label={`Full output of ${row.title}`}
+          hint="Full output"
+          icon={<TextAlignStart className="size-3" />}
+          onClick={onOutput}
+          onFocusLost={onFocusLost}
+        />
+      )}
+      {onStop && (
+        <RowAction
+          id={`stop-${row.id}`}
+          label={stopping ? `Stopping ${row.title}` : `Stop ${row.title}`}
+          hint={stopping ? 'Stopping' : 'Stop'}
+          icon={<Square className="size-3 fill-current" />}
+          disabled={stopping}
+          destructive
+          onClick={onStop}
+          onFocusLost={onFocusLost}
+        />
+      )}
+    </span>
+  );
 }
 
-type Controls = ReturnType<typeof useRowControls>;
-
-function navigationActions(row: ActivityEntry, onJump: () => void, onOpenChild?: () => void): RowAction[] {
-  const actions: RowAction[] = [];
-  if (row.source)
-    actions.push({
-      key: 'source',
-      icon: ExternalLink,
-      label: `Go to ${row.title} in transcript`,
-      text: row.source.approximate ? 'Near start' : 'Transcript',
-      title: row.source.approximate ? 'Open transcript near task start' : 'Go to source in transcript',
-      onClick: onJump,
-    });
-  if (onOpenChild)
-    actions.push({
-      key: 'child',
-      icon: MessagesSquare,
-      label: `Open ${row.title} chat`,
-      text: 'Open chat',
-      title: 'Open child chat',
-      onClick: onOpenChild,
-    });
-  return actions;
-}
-
-function controlActions(row: ActivityEntry, adapterId: string | undefined, controls: Controls): RowAction[] {
-  const live = row.state === 'running' || row.state === 'waiting';
-  const actions: RowAction[] = [];
-  if (row.task && row.kind === 'command')
-    actions.push({
-      key: 'output',
-      icon: SquareTerminal,
-      label: `Output for ${row.title}`,
-      text: 'Full output',
-      title: 'Full output',
-      onClick: () => void controls.showOutput(),
-    });
-  if (live && row.task && adapterId === 'claude')
-    actions.push({
-      key: 'stop',
-      icon: Square,
-      label: `Stop ${row.title}`,
-      text: 'Stop',
-      title: 'Stop',
-      destructive: true,
-      disabled: controls.busy,
-      onClick: () => void controls.stop(),
-    });
-  if (live && row.delegated && !row.delegated.resumedState)
-    actions.push({
-      key: 'cancel',
-      icon: X,
-      label: `Cancel ${row.title}`,
-      text: 'Cancel',
-      title: 'Cancel task',
-      destructive: true,
-      disabled: controls.busy,
-      onClick: () => void controls.cancel(),
-    });
-  return actions;
-}
-
-function IconActions({
-  actions,
-  open,
-  onToggle,
-  title,
+/** Right-click (or the menu key): the row's other actions, which the row itself doesn't show. */
+function RowMenu({
+  row,
+  children,
+  onJump,
+  onOutput,
+  onStop,
+  stopping,
 }: {
-  actions: RowAction[];
-  open: boolean;
-  onToggle: () => void;
-  title: string;
+  row: ActivityEntry;
+  children: ReactNode;
+  onJump?: () => void;
+  onOutput?: () => void;
+  onStop?: () => void;
+  stopping: boolean;
 }) {
   return (
-    <div className={cn('shrink-0 items-center gap-0.5', open ? 'flex' : 'hidden group-hover:flex')}>
-      {actions.map(({ key, icon: Icon, label, title: actionTitle, onClick, disabled, destructive }) => (
-        <button
-          key={key}
-          type="button"
-          title={actionTitle}
-          aria-label={label}
-          disabled={disabled}
-          onClick={onClick}
-          className={cn(
-            'rounded p-0.5',
-            destructive ? 'text-destructive hover:bg-destructive/10' : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <Icon className={key === 'stop' ? 'size-3' : 'size-3.5'} />
-        </button>
-      ))}
-      <button
-        type="button"
-        title={open ? 'Collapse' : 'Details'}
-        aria-label={`${open ? 'Collapse' : 'Details for'} ${title}`}
-        onClick={onToggle}
-        className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-      >
-        <ChevronDown className={cn('size-3.5', open && 'rotate-180')} />
-      </button>
-    </div>
+    <ContextMenu>
+      {/* Without items it is off rather than gone: the row would remount and lose its focus. */}
+      <ContextMenuTrigger asChild disabled={!onJump && !onOutput && !onStop}>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        {onJump && (
+          <ContextMenuItem data-testid={`session-panel-activity-jump-${row.id}`} onSelect={onJump}>
+            <LocateFixed /> Show in transcript
+          </ContextMenuItem>
+        )}
+        {onOutput && (
+          <ContextMenuItem data-testid={`session-panel-activity-output-${row.id}`} onSelect={onOutput}>
+            <TextAlignStart /> Full output
+          </ContextMenuItem>
+        )}
+        {onStop && (
+          <ContextMenuItem
+            disabled={stopping}
+            data-testid={`session-panel-activity-stop-${row.id}`}
+            variant="destructive"
+            onSelect={onStop}
+          >
+            <Square /> Stop
+          </ContextMenuItem>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
-function RowHeader({
+export interface ActivityRowProps {
+  row: ActivityEntry;
+  now: number;
+  run?: ClaudeWorkflowRun;
+  /** The row's main action; a workflow unfolds instead. */
+  onActivate: () => void;
+  onJump?: () => void;
+  /** Present for a background command: its output, which the transcript row doesn't show yet. */
+  onOutput?: () => void;
+  /** Present only while the work can be stopped. */
+  onStop?: () => void;
+  /** A Stop was asked for; the work hasn't ended yet. */
+  stopping?: boolean;
+  /** Its jump waits for history to load. */
+  loading?: boolean;
+  /** The row is going away with the focus in it. */
+  onFocusLost?: (id: string) => void;
+}
+
+const STOPPING: ActivityStatus = { tone: 'plain', text: 'stopping' };
+const LOADING: ActivityStatus = { tone: 'running', text: 'loading' };
+
+function spokenStatus(status: ActivityStatus): string {
+  return status.tone === 'running' && status !== LOADING ? `running, ${status.text}` : status.text;
+}
+
+export function ActivityRow({
   row,
   now,
   run,
-  open,
-  onToggle,
-  actions,
-}: {
-  row: ActivityEntry;
-  now: number;
-  run?: ClaudeWorkflowRun;
-  open: boolean;
-  onToggle: () => void;
-  actions: RowAction[];
-}) {
-  const Icon = ICONS[row.kind];
-  const live = row.state === 'running' || row.state === 'waiting';
+  onActivate,
+  onJump,
+  onOutput,
+  onStop,
+  stopping = false,
+  loading = false,
+  onFocusLost,
+}: ActivityRowProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLButtonElement>(null);
+  useFocusLoss(rootRef, onFocusLost && (() => onFocusLost(row.id)));
+  const Icon = ACTIVITY_ICON[row.kind];
+  const kind = ACTIVITY_KIND_LABEL[row.kind];
+  const status = stopping ? STOPPING : loading ? LOADING : activityStatus(row, now, run);
+  const unfolds = row.kind === 'workflow' && run !== undefined;
+  const actions = [onOutput, onStop].filter(Boolean).length;
+  const onControlLost = useFocusReturn(rowRef);
   return (
-    <div className="flex min-w-0 items-start gap-2 px-2 py-1.5">
-      <Icon className={cn('mt-0.5 size-3.5 shrink-0', live ? 'text-primary' : 'text-muted-foreground')} aria-hidden />
-      <button type="button" onClick={onToggle} aria-expanded={open} className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-sm text-foreground">{row.title}</span>
-        <span className="block truncate text-xs text-muted-foreground">{detailLine(row, run)}</span>
-        {row.kind === 'workflow' && run && <WorkflowRail run={run} />}
-      </button>
-      <span
-        className={cn(
-          'shrink-0 pt-0.5 font-mono text-xs tabular-nums text-muted-foreground',
-          open ? 'hidden' : 'group-hover:hidden',
-        )}
-      >
-        {timeLabel(row, now)}
-      </span>
-      <IconActions actions={actions} open={open} onToggle={onToggle} title={row.title} />
-    </div>
-  );
-}
-
-export function ActivityRow({ row, now, chatId, adapterId, run, onJump, onOpenChild }: Props) {
-  const controls = useRowControls(row, chatId);
-  const actions = [...navigationActions(row, onJump, onOpenChild), ...controlActions(row, adapterId, controls)];
-  return (
-    <div data-testid={`session-panel-activity-${row.id}`} className="group rounded-md hover:bg-foreground/6">
-      <RowHeader
-        row={row}
-        now={now}
-        run={run}
-        open={controls.open}
-        onToggle={() => controls.setOpen(!controls.open)}
-        actions={actions}
-      />
-      {controls.open && (
-        <>
-          <DetailFields row={row} run={run} output={controls.output} />
-          {controls.error && (
-            <p role="alert" className="px-2.5 pb-2 text-xs text-fail">
-              {controls.error}
-            </p>
+    <div ref={rootRef}>
+      <RowMenu row={row} onJump={onJump} onOutput={onOutput} onStop={onStop} stopping={stopping}>
+        <div className="group/activity relative">
+          <Hint label={[row.title, kind, row.detail !== row.title && row.detail].filter(Boolean).join(' · ')}>
+            <PanelRow
+              ref={rowRef}
+              data-testid={`session-panel-activity-${row.id}`}
+              data-activity-row={row.id}
+              data-activity-state={row.state}
+              aria-label={`${kind}: ${row.title}, ${spokenStatus(status)}`}
+              aria-expanded={unfolds ? open : undefined}
+              onClick={unfolds ? () => setOpen(!open) : onActivate}
+              icon={<Icon />}
+              label={row.title}
+              value={<StatusValue status={status} className={valueClass(actions, loading)} />}
+            />
+          </Hint>
+          {actions > 0 && (
+            <RowActions
+              row={row}
+              stopping={stopping}
+              loading={loading}
+              onOutput={onOutput}
+              onStop={onStop}
+              onFocusLost={onControlLost}
+            />
           )}
-          <ActionFooter actions={actions} />
-        </>
+        </div>
+      </RowMenu>
+      {unfolds && open && (
+        <WorkflowPhases
+          title={row.title}
+          run={run}
+          now={now}
+          onStop={onStop}
+          stopping={stopping}
+          onFocusLost={onControlLost}
+        />
       )}
     </div>
   );

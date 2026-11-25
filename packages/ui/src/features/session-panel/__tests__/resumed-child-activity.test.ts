@@ -42,7 +42,7 @@ describe('resumed child activity', () => {
 
   it('shows a resumed child waiting at a permission gate', () => {
     const entries = delegatedEntries(delegatedTasksOf([child(false, true)], 'parent'), []);
-    expect(entries[0]?.state).toBe('waiting');
+    expect(entries[0]?.state).toBe('needs-you');
   });
 
   it('returns to the original outcome when the resumed turn ends', () => {

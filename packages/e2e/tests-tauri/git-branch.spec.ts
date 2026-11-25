@@ -8,24 +8,18 @@
  * ── The trigger moved out of the chrome (2026-08-11) ─────────────────────────
  * `main-toolbar-branch` is GONE — MainToolbar carries session tabs and workspace
  * controls only, and its docstring says branch management "lives on the welcome
- * screen and on the session panel's branch row". The popover itself is unchanged
+ * screen and on" the session (the strip under the composer since the window redesign). The popover itself is unchanged
  * (same component, same inner testids), so this file swaps the trigger and keeps
  * every scenario:
- *   • `session-panel-summary-branch` — the Session card's branch row
- *     (SummarySection.tsx `BranchRowView`), a BUTTON wrapping the same
+ *   • `session-strip-branch` — the strip under the composer, its branch control
+ *     (SessionStrip.tsx `BranchControl`), a BUTTON wrapping the same
  *     `BranchPopover` with the session's `chatId`, so its git writes still land in
  *     the chat's worktree. This is the trigger for every mutating scenario below.
- *     It renders as a STATIC div (no popover) for a worktree DRAFT, where there is
- *     no chatId and a write would hit the project ROOT — not a state this file
- *     reaches, but the reason the row is not always a button.
+ *     It is absent before the first message, when there is no chatId.
  *   • `welcome-branch` — the draft welcome screen's branch pill
  *     (WelcomeState.tsx), the same popover scoped to the PROJECT (no chatId).
  *     Covered by one read-only test at the end of this file; mutating from there
  *     would rewrite the project root's checkout, which every other test depends on.
- * The row lives inside the session panel's Session card, which only stacks inline
- * when the chat host clears `INLINE_MIN_WIDTH` (1468, panel-mode.ts) — hence the
- * explicit wide viewport in `beforeAll`. Narrower it would only float, and every
- * dialog interaction here would light-dismiss it.
  *
  * WHAT THE MENU PORT CHANGED (all read from packages/ui/src/features/git/*.tsx):
  *   • Selecting ANY menu item CLOSES THE WHOLE MENU. Radix closes the root on
@@ -55,15 +49,15 @@
  *     `clickSubmenuItem`, so a stuck interaction fails in seconds and names the
  *     element instead of riding the whole test timeout.
  *
- * BRANCH-ROW FINDINGS (features/session-panel/SummarySection.tsx — these carried
+ * BRANCH-ROW FINDINGS (features/session-panel/SessionStrip.tsx — these carried
  * over from the retired toolbar chip and still hold):
  *   • The row is not worktree-only: `useDisplayBranch` reads the live branch
  *     (`getGitBranch(port, projectId, chatId)`), so every session shows one. This
  *     spec still seeds a worktree via REST `enable-worktree`, because that is what
  *     makes the popover's git writes land in an isolated checkout (GitService
  *     resolves `getEffectivePath(ctx, projectId, chatId)` → chat.worktreePath)
- *     instead of the project root. The Session card's worktree row
- *     (`session-panel-summary-worktree`) then names that worktree's directory,
+ *     instead of the project root. The strip's worktree label
+ *     (`session-strip-worktree`) then names that worktree's directory,
  *     asserted in the first test.
  *   • `onBranchChanged` is wired to `useDisplayBranch`'s own `refetch` (a popover
  *     write broadcasts no `chat.updated`, so nothing else would invalidate it), so
@@ -83,10 +77,10 @@
  * branch back on `e2e-workspace` (see `checkoutBase()`).
  *
  * Testid reference (verified against packages/ui/src/features/git/*.tsx,
- * features/session-panel/SummarySection.tsx and
+ * features/session-panel/SessionStrip.tsx and
  * features/sessions/new-thread/WelcomeState.tsx):
- *   session-panel-summary-branch — the session panel's branch row / menu trigger
- *   session-panel-summary-worktree — the row above it naming the worktree
+ *   session-strip-branch — the strip's branch control / menu trigger
+ *   session-strip-worktree — "Worktree" or "Local", naming the directory to screen readers
  *   welcome-branch               — the draft welcome screen's branch pill / trigger
  *   sessions-welcome             — WelcomeState root (the draft empty state)
  *   git-branch-popover           — DropdownMenuContent root (name kept from the Popover era)
@@ -168,8 +162,8 @@ function seedBranchCommit(
 /** True while any Radix menu layer (root menu or a flyout) is still mounted. */
 const menuLayers = (page: Page) => page.locator('[role="menu"]');
 
-/** The menu's trigger since the toolbar chip retired: the session panel's branch row. */
-const branchRow = (page: Page) => page.getByTestId('session-panel-summary-branch');
+/** The menu's trigger since the toolbar chip retired: the branch control under the composer. */
+const branchRow = (page: Page) => page.getByTestId('session-strip-branch');
 
 /**
  * Open a BranchPopover trigger — by KEYBOARD, and that is not a style choice.
@@ -177,7 +171,7 @@ const branchRow = (page: Page) => page.getByTestId('session-panel-summary-branch
  * TODO(bug): a plain pointer click cannot open this menu from either of its new
  * triggers. `DropdownMenuTrigger` toggles on POINTERDOWN (Radix opens there so the
  * content can take focus before the button does), and both new triggers ALSO carry
- * their own `onClick={() => setOpen(o => !o)}` — SummarySection.tsx `BranchRowView`
+ * their own `onClick={() => setOpen(o => !o)}` — SessionStrip.tsx `BranchControl`
  * and WelcomeState.tsx. So one press runs the toggle twice: pointerdown opens the
  * menu, the click that follows on release closes it again. Measured live: holding
  * the button down keeps the menu up (rows load into it), and it dies on the exact
@@ -310,7 +304,7 @@ function expectItemEnabled(page: Page, testid: string) {
   return expect(page.getByTestId(testid)).not.toHaveAttribute('aria-disabled', 'true');
 }
 
-test.describe('§git-branch — session-panel branch popover', () => {
+test.describe('§git-branch — session branch popover', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
   let bareRepoPath: string;
@@ -327,9 +321,7 @@ test.describe('§git-branch — session-panel branch popover', () => {
   test.beforeAll(async () => {
     mkdirSync(HOME_BASE, { recursive: true });
     app = await launchTauriApp();
-    // The trigger lives in the session panel's Session card, which stacks inline
-    // only above INLINE_MIN_WIDTH (1468). At the harness default of 1280 the card
-    // would merely float, and the first dialog this file opens would dismiss it.
+    // Wide enough that nothing floats over the composer.
     await app.page.setViewportSize({ width: 2100, height: 900 });
     project = await createTauriProject(app.page);
 
@@ -435,7 +427,7 @@ test.describe('§git-branch — session-panel branch popover', () => {
     worktreePath = path.join(project.projectPath, '.worktrees', 'e2e-workspace');
 
     // chat.updated broadcasts live (config-manager applyWorktreeUpdate) — wait for
-    // the panel's branch row before any test touches the popover.
+    // the strip's branch control before any test touches the popover.
     await expect(branchRow(app.page)).toContainText('e2e-workspace', { timeout: 15_000 });
   });
 
@@ -445,10 +437,10 @@ test.describe('§git-branch — session-panel branch popover', () => {
     await closeTauriApp(app);
   });
 
-  test('the panel branch row opens the menu; branches lazy-load', async () => {
+  test('the strip branch control opens the menu; branches lazy-load', async () => {
     const { page } = app;
-    // A worktree session names its worktree directory above the branch row.
-    await expect(page.getByTestId('session-panel-summary-worktree')).toContainText('e2e-workspace');
+    // A worktree session says so beside its branch, naming the directory.
+    await expect(page.getByTestId('session-strip-worktree')).toContainText('e2e-workspace');
 
     await openBranchPopover(page);
     await expect(page.getByTestId('git-branch-list')).toBeVisible();
@@ -492,7 +484,7 @@ test.describe('§git-branch — session-panel branch popover', () => {
     await closeBranchPopover(page);
   });
 
-  test('new branch dialog creates a branch, checks it out, and refreshes the panel row', async () => {
+  test('new branch dialog creates a branch, checks it out, and refreshes the strip', async () => {
     const { page } = app;
     await openBranchPopover(page);
     // `git-new-branch` selects plainly, so the menu closes as the dialog opens.
@@ -522,7 +514,7 @@ test.describe('§git-branch — session-panel branch popover', () => {
     await expectItemEnabled(page, 'git-submenu-checkout');
     await clickSubmenuItem(page, 'git-submenu-checkout');
     // Selecting the item closes the whole menu (BranchSubmenu items don't
-    // preventDefault) — the outcome is read from git and from the panel row.
+    // preventDefault) — the outcome is read from git and from the strip.
     await expect(page.getByTestId('git-branch-popover')).toHaveCount(0, { timeout: 5_000 });
 
     await expect
@@ -760,7 +752,10 @@ test.describe('§git-branch — session-panel branch popover', () => {
     // Push-current sends the worktree's checked-out branch (e2e-workspace) — the
     // bare remote gains a matching ref once the push round-trips.
     await expect
-      .poll(() => git(bareRepoPath, ['rev-parse', 'e2e-workspace']).trim(), { timeout: 15_000 })
+      // `for-each-ref` is empty, not an error, until the ref lands.
+      .poll(() => git(bareRepoPath, ['for-each-ref', '--format=%(objectname)', 'refs/heads/e2e-workspace']).trim(), {
+        timeout: 15_000,
+      })
       .toBe(localHead);
   });
 

@@ -63,6 +63,8 @@ export interface UseWorkingChangesOptions {
    * (todo #346) — set from `useActiveIdentity().noProject`. Blocks every scope.
    */
   noProject?: boolean;
+  /** Defaults to true. A surface that names the branch from another source skips the extra git read. */
+  withBranch?: boolean;
 }
 
 export interface ChangesSummary {
@@ -84,11 +86,16 @@ export function toChangesSummary(
   };
 }
 
-async function fetchUncommitted(port: number, projectId: string, chatId?: string): Promise<ChangesPayload> {
+async function fetchUncommitted(
+  port: number,
+  projectId: string,
+  chatId: string | undefined,
+  withBranch: boolean,
+): Promise<ChangesPayload> {
   const [statusFiles, stat, branchRes] = await Promise.all([
     getGitStatus(port, projectId, chatId),
     getWorkingStat(port, projectId, chatId).catch(() => undefined),
-    getGitBranch(port, projectId, chatId).catch(() => ({ branch: null })),
+    withBranch ? getGitBranch(port, projectId, chatId).catch(() => ({ branch: null })) : { branch: null },
   ]);
   return {
     files: gitStatusToFiles(statusFiles, stat),
@@ -129,6 +136,7 @@ export function useWorkingChanges({
   scope = 'uncommitted',
   enabled = true,
   noProject = false,
+  withBranch = true,
 }: UseWorkingChangesOptions): WorkingChanges {
   // Tagged with the scope it was fetched for: right after a scope switch the
   // previous scope's files must not be read as the new scope's.
@@ -158,7 +166,7 @@ export function useWorkingChanges({
         ? fetchSession(port, projectId!, chatId!)
         : scope === 'branch'
           ? fetchBranch(port, projectId!, chatId)
-          : fetchUncommitted(port, projectId!, chatId);
+          : fetchUncommitted(port, projectId!, chatId, withBranch);
     request
       .then((next) => {
         if (cancelled) return;
@@ -175,21 +183,31 @@ export function useWorkingChanges({
     return () => {
       cancelled = true;
     };
-  }, [canFetch, port, projectId, chatId, scope, refreshKey]);
+  }, [canFetch, port, projectId, chatId, scope, withBranch, refreshKey]);
 
   // One invalidation policy for every consumer: the agent editing the tree, and
-  // the user coming back to the window after editing it themselves.
+  // the user coming back to the window after editing it themselves. An edit made
+  // while nobody can see the window waits until somebody can.
   useEffect(() => {
     if (!canFetch) return;
+    let missed = false;
     const off = daemonWs.onEvent((event) => {
       if (event.type !== 'context.updated') return;
       if (chatId && event.chatId !== chatId) return;
-      refetch();
+      if (document.hidden) missed = true;
+      else refetch();
     });
+    const onVisible = () => {
+      if (document.hidden || !missed) return;
+      missed = false;
+      refetch();
+    };
     window.addEventListener('focus', refetch);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       off();
       window.removeEventListener('focus', refetch);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [canFetch, chatId, refetch]);
 

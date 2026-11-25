@@ -12,8 +12,7 @@ import { useTranscriptScope } from './transcript-scope';
 import { TurnPresentationProvider, useTurnPresentationSelector } from './turn-presentation-context';
 import { useTurnDisclosureState } from './use-turn-disclosure-state';
 import { turnDisclosureStore } from './turn-disclosure-store';
-import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
-import type { ActivitySource } from '@/features/session-panel/activity-model';
+import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel/activity-source';
 import { DisclosureScope } from '@/components/ui/disclosure-state';
 
 function AssistantSlice() {
@@ -50,11 +49,16 @@ export function CompactTranscript() {
   );
   useEffect(() => {
     const onJump = (event: Event) => {
-      const { chatId: target, source } = (event as CustomEvent<{ chatId: string; source: ActivitySource }>).detail;
+      const { chatId: target, source } = (event as CustomEvent<ActivityJump>).detail;
       if (target !== chatId) return;
       const presentation = model.messagesById.get(source.messageId);
       for (const unit of presentation?.units ?? []) {
-        if (source.toolCallId && (unit.part.type !== 'tool-call' || unit.part.toolCallId !== source.toolCallId))
+        // A group's unit stands for its members, so the call may be any of them.
+        const parts = unit.activity ? unit.activity.members.map((member) => member.part) : [unit.part];
+        if (
+          source.toolCallId &&
+          !parts.some((part) => part.type === 'tool-call' && part.toolCallId === source.toolCallId)
+        )
           continue;
         if (unit.turnKey) turnDisclosureStore.set(unit.turnKey, 'open');
       }

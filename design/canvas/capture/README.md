@@ -73,7 +73,7 @@ This renders the board in the canvas runtime (`design/canvas/proposals/render/su
 ## Known limits
 
 - **Interactive boards are not captured.** A board whose states switch on click (`Shell-Flow` and the other `*-Flow` boards) needs its logic written into the board. `Shell-Flow` is still the 11 Nov capture.
-- **Only some boards have states yet.** Shell has `Shell-Window`, `Shell-States` and `Shell-TitleBar`. Workspace also has `Workspace-Tabs`, and Transcript `Chat-Window`. The other areas start with the one board their first capture added; their older boards come from the 11–13 Nov captures until the PR that changes that area adds their states here.
+- **Only some boards have states yet.** Shell has `Shell-Window`, `Shell-States` and `Shell-TitleBar`. Workspace also has `Workspace-Tabs`, and Transcript `Chat-Window`. Session panel has all of its boards. The other areas start with the one board their first capture added; their older boards come from the 11–13 Nov captures until the PR that changes that area adds their states here.
 - `Shell-TitleBar` no longer draws the preview-tab strip, which 2.16 shows only as an italic title; the rail's hover states are one state instead of five.
 - Mock sessions: provider marks and model names are the mock adapter's placeholders, and turns come from `packages/e2e/fixtures/recordings`.
 - **Not deterministic:** clock times, turn durations and the project colours (hashed from a random id) differ between runs, so a re-capture always changes some bytes.

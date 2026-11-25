@@ -131,7 +131,7 @@ test.describe('§overlay-scrollbars', () => {
     await page.setViewportSize({ width: 1150, height: 330 });
     await page.getByTestId('session-panel-toggle').click();
     const panel = page.getByTestId('session-panel-overlay');
-    const card = panel.getByTestId('session-panel-card-session');
+    const card = panel.getByTestId('session-panel-card-activity');
     await card.hover();
     await expect(thumb(page)).toHaveCount(1);
 

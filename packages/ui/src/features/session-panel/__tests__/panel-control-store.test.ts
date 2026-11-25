@@ -118,4 +118,10 @@ describe('revealActivity', () => {
     expect(selectOverlayOpen(zone)(usePanelControl.getState())).toBe(true);
     expect(usePanelControl.getState().activityReveals[zone]).toBe(2);
   });
+  it('turns the Activity section back on when the viewer had hidden it', () => {
+    useUiPrefs.setState({ sessionPanelOpen: false, sessionPanelHiddenSections: ['activity', 'launch'] });
+    usePanelControl.setState({ fits: { main: true }, activityReveals: {} });
+    usePanelControl.getState().revealActivity('main');
+    expect(useUiPrefs.getState().sessionPanelHiddenSections).toEqual(['launch']);
+  });
 });

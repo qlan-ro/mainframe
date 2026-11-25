@@ -10,6 +10,7 @@ const savedPreferences = {
   dontConfirmProviderSwitch: false,
   sessionPanelOpen: true,
   sessionPanelSections: { plan: true, context: false },
+  sessionPanelHiddenSections: ['launch' as const],
   dialogSizes: { settings: { width: 920, height: 720 } },
   sideChatFrac: 0.6,
   transcriptWidth: 900,

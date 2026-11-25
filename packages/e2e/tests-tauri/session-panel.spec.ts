@@ -1,23 +1,10 @@
 /**
- * §session-panel — the session panel: ONE scrolling column of sections
- * (Session · Pull requests · Context · Activity · Tasks · Launch · Plan),
- * docked beside the transcript or floated over it.
+ * §session-panel — the session panel: a "Session" card whose sections (Pull
+ * requests · Plan · Activity · Launch · Memory files · Mentioned files · Skills ·
+ * Attachments · Project tasks) each turn on or off in its Sections menu, docked
+ * beside the transcript or floated over it. Spec: `design/redesign/DECISIONS.md`, rows R1–R13.
  *
- * Rewritten whole for the shell redesign (docs/plans/2026-10-04-mainframe-redesign-adoption.md
- * D20/D21): the floating RAIL (`SessionPanelRail`/`SessionRailButton`) and its
- * per-card toggle/dot/close are ALL gone. There is no more stack of
- * independently-opened cards — every section renders together, in one column,
- * and the title bar's `title-bar-details` toggle is the panel's ONLY switch.
- * Scenarios are retargeted, not deleted, except where the capability itself
- * (a per-card open/close, a per-card live dot, the rail's own context meter)
- * no longer exists — those are called out and dropped at the point they used
- * to live, with a reason.
- *
- * Source read: packages/ui/src/features/session-panel/{SessionPanel,SessionPanelToggle,
- * panel-mode,panel-control-store,use-session-panel-state,SummarySection,PullRequestsSection,
- * ContextSection,ActivitySection,TasksSection,LaunchSection,PlanSection,AgentPlan,
- * PanelEyebrow,PanelSection,ContextFileItem,PanelAttachmentsGrid,summary-view,plan-view,
- * launch-view,context-groups,derive-session-items}.tsx,
+ * Source read: packages/ui/src/features/session-panel/*,
  * packages/ui/src/store/{ui-prefs,session-todos}.ts,
  * packages/ui/src/features/sessions/new-thread/ChatSurface.tsx,
  * packages/core-rs/crates/mainframe-adapter-mock/src/session_trait.rs.
@@ -52,8 +39,6 @@
  *     projectFiles are ALWAYS empty, seeded CLAUDE.md or not. The Context
  *     section's memory-file sub-group therefore never renders here; its absence
  *     is asserted (with this reason) rather than left unstated.
- *   - `extract_plan_files()` returns `[]` — the Session sub-group's 'plan' badge
- *     is unreachable.
  *   - `extract_skill_files()` returns `[]`, and the Skills sub-group lists the
  *     skills the SESSION INVOKED (`SessionContext.skillFiles`) rather than the
  *     adapter's available-skills catalog. So no skill row is reachable here;
@@ -63,21 +48,9 @@
  *   - The mock adapter derives `background_task.*` events from replayed tool_use /
  *     tool_result blocks (todo #327's `task_bridge.rs`) rather than emitting them
  *     itself, so most recordings still carry none and Activity reads empty for
- *     them. `task-subagent.0` is the one exception (below) — its Task tool_use
- *     resolves only on a second turn, giving Activity's running state a real,
- *     reachable fixture.
+ *     them. The Activity describes below use the recordings that do.
  * The two adapter-independent seeds survive: `POST /api/chats/:id/mentions` and
  * `POST /api/chats/:id/attachments` write straight to the daemon.
- *
- * AGENTS ARE GONE (D15 of the PRECEDING right-sidebar revamp, T5.4): the
- * predecessor spec's agent-row test has no successor — `AgentsList` was removed
- * and no surface lists `AgentConfig`. A deliberate, documented capability loss,
- * not an oversight.
- *
- * The context-window coverage below (Summary's `session-panel-summary-context`)
- * is the successor to the now-deleted `ChatCardHeader`'s context meter (T5.5,
- * then D7 of the shell redesign), which is why this file uses the `chat-status`
- * recording that meter's own spec used.
  *
  * Testid reference (verified against packages/ui/src):
  *   title-bar-details             — the panel's ONE switch (layout/TitleBar.tsx's right
@@ -87,43 +60,29 @@
  *   session-panel-overlay         — the FLOATING column's own root (role=dialog), with
  *                                    `session-panel-scrim` behind it
  *   session-panel-sections        — the one scrolling column, present in BOTH modes
- *   session-panel-card-session    — the Session section (SummarySection + the panel's own
- *                                    "Session" eyebrow); always rendered, never closable alone
+ *   session-panel-sections-menu / -sections-menu-<key> — the Sections button and its checkbox items
  *   session-panel-section-prs     — Pull requests section; absent when the session has none
- *   session-panel-section-summary — SummarySection root, inside the Session section
- *                                    (never collapsible → no toggle)
- *   session-panel-section-<plan|context> — the two sections that stayed collapsible
- *                                    (`PanelSection`)
- *   session-panel-section-toggle-<id>  — its header row (the whole width is the
- *                                    trigger); `data-state` reports open/closed
- *   session-panel-summary-worktree — worktree row: the worktree's directory, or
- *                                    "Main checkout" on a main-repo session
- *   session-panel-summary-branch  — branch row; a BUTTON opening BranchPopover now
- *                                    (see git-branch.spec.ts)
- *   session-panel-summary-context — context-fill row ("42%") — the ONLY context readout
- *                                    left in the panel; there is no separate rail meter any more
- *   session-panel-summary-changes — working-changes row; click emits open-review
  *   session-panel-summary-pr-<number> — a detected-PR row, now inside `session-panel-section-prs`
  *                                    (unseedable in browser mode; see title-bar.spec.ts's
  *                                    identical note)
- *   session-panel-summary-empty   — no rows at all
- *   session-panel-card-activity   — Activity section; ALWAYS rendered once the panel is open
- *                                    (no per-card toggle any more)
- *   session-panel-activity-live   — its eyebrow's live dot (present while anything is running)
+ *   session-panel-card-activity   — Activity section
+ *   session-panel-activity-earlier — the collapsed Earlier group's row
  *   session-panel-plan            — PlanSection root (absent when there are no todos)
- *   session-panel-plan-toggle     — AgentPlan header ("{done} of {total}") + collapse trigger
- *   session-panel-plan-progress   — the progress track; its fill carries style="width: N%"
+ *   session-panel-plan-toggle     — its header ("{done} of {total}") + disclosure
+ *   session-panel-plan-current    — the step in progress, while folded
  *   session-panel-plan-step-<i>   — one plan step, keyed by position
- *   session-panel-activity-empty  — "No background activity", only when there is no
- *                                    history either (finished rows move to Earlier)
- *   session-panel-activity-counts — the eyebrow summary ("1 running" / "No background activity")
+ *   session-panel-activity-empty  — "No background activity": nothing is ongoing
  *   session-panel-activity-<entryId> — one row, keyed by the activity entry id
  *                                    (`task:<taskId>`, `delegated:<taskId>`, …); a
- *                                    subagent row is covered by the task-subagent
- *                                    describe below, workflow rows stay unreachable
- *                                    (out of scope — see the ground-truth note)
+ *                                    the task-subagent, schedule-pills,
+ *                                    background-command, workflow and Stop describes
+ *                                    below cover each kind
+ *   session-panel-activity-row-stop-<entryId> / -row-output-<entryId> — its Stop, and a background
+ *                                    command's full output, shown on hover and focus
+ *   session-panel-activity-output-<entryId> / session-panel-output-dialog — a background
+ *                                    command's output, from its row menu
+ *   session-panel-workflow-phase-<index> / -agent-<id> / -stop — an unfolded workflow
  *   session-panel-card-launch     — Launch section; ALWAYS rendered once the panel is open
- *   session-panel-launch-live     — its eyebrow's live dot (present while any config runs)
  *   session-panel-launch-row-<name>   — a launch config row (whole row acts)
  *   session-panel-launch-start-<name> / -stop-<name> — the row's action glyph (a span
  *                                    INSIDE the row button; both are clickable)
@@ -138,14 +97,10 @@
  *   session-panel-skills-empty / session-panel-skills-manage — its empty state / Manage link
  *   session-panel-attachment-grid / session-panel-attachment-<id> — attachment tiles
  *   image-lightbox-dialog         — ImageLightbox content (opened by an image tile)
- *   review-modal                  — the Review panel the Changes row opens
+ *   session-strip-branch / -worktree / -changes — the strip under the composer that took over
+ *                                    the panel's Session section (git-branch.spec.ts drives it)
+ *   review-modal                  — the Review panel the strip's changes open
  *   WORKSPACE.strip                — a workspace pane's tab strip (opened files land here)
- *
- * RETIRED testids (do not re-assert — the floating rail is gone, D20):
- * `session-panel-rail*`, `session-panel-card-close-*` (no per-card close — the
- * whole panel opens/closes together via `title-bar-details`), and every
- * "rail mirrors the card" assertion that went with them (the Launch/Activity
- * live dots moved into their own section eyebrows instead).
  */
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { execFileSync } from 'child_process';
@@ -284,14 +239,14 @@ async function ensurePanelOpen(page: Page): Promise<Locator> {
  * design ("an open dialog owns Escape", use-session-panel-state.ts). A toggle
  * click leaves the pointer on a `Hint`-wrapped button and focus inside it, so
  * both doors have to be shut before Escape can reach the panel: one real click
- * on the floating column's Session section shuts both at once (closes any open
+ * on the floating panel's own title shuts both at once (closes any open
  * tooltip outright, and takes hover off the toggle without landing on
  * something that opens a layer of its own), which merely moving the pointer
  * does not.
  */
 async function dismissOverlayWithEscape(page: Page): Promise<void> {
   const overlay = page.getByTestId('session-panel-overlay');
-  await overlay.getByTestId('session-panel-section-summary').click({ position: { x: 4, y: 4 } });
+  await overlay.getByRole('heading', { name: 'Session' }).click();
   for (let attempt = 0; attempt < 3 && (await overlay.count()) > 0; attempt++) {
     await page.keyboard.press('Escape');
     await overlay.waitFor({ state: 'detached', timeout: 1_500 }).catch(() => {
@@ -325,7 +280,7 @@ test.describe('§session-panel — docking modes', () => {
     await expect(root).toHaveAttribute('data-mode', 'inline');
     await expect(page.getByTestId('session-panel')).toBeVisible();
     await expect(page.getByTestId('session-panel-overlay')).toHaveCount(0);
-    await expect(page.getByTestId('session-panel-card-session')).toBeVisible();
+    await expect(page.getByTestId('session-panel').getByRole('heading', { name: 'Session' })).toBeVisible();
     await expect(page.getByTestId('session-panel-toggle')).toHaveAttribute('aria-pressed', 'true');
 
     // Clicking the toggle while docked just closes it outright (no float — room was never the issue).
@@ -355,7 +310,7 @@ test.describe('§session-panel — docking modes', () => {
     await expect(overlay).toBeVisible();
     await expect(overlay).toHaveAttribute('role', 'dialog');
     await expect(page.getByTestId('session-panel-scrim')).toBeVisible();
-    await expect(overlay.getByTestId('session-panel-card-session')).toBeVisible();
+    await expect(overlay.getByRole('heading', { name: 'Session' })).toBeVisible();
     // Not the docked form: the inline wrapper never mounts alongside the float.
     await expect(page.getByTestId('session-panel')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-toggle')).toHaveAttribute('aria-pressed', 'true');
@@ -363,6 +318,32 @@ test.describe('§session-panel — docking modes', () => {
     await dismissOverlayWithEscape(page);
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
     await expect(root).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-toggle')).toBeFocused();
+  });
+
+  test('OVERLAY: the panel ends 8px above the composer, which stays usable', async () => {
+    const { page } = app;
+    await page.setViewportSize(OVERLAY);
+    const overlay = page.getByTestId('session-panel-overlay');
+    await page.getByTestId('session-panel-toggle').click();
+    await expect(overlay).toBeVisible({ timeout: 5_000 });
+
+    const footer = (await page.getByTestId('chat-thread-footer').boundingBox())!;
+    const scrim = (await page.getByTestId('session-panel-scrim').boundingBox())!;
+    expect(Math.abs(footer.y - 8 - (scrim.y + scrim.height))).toBeLessThanOrEqual(1);
+
+    await composer(page).input().click();
+    await page.keyboard.type('still typing');
+    await expect(composer(page).input()).toHaveValue('still typing');
+    await expect(overlay).toBeVisible();
+    await composer(page).input().fill('');
+
+    // The float starts under the header, so the toggle that opened it closes it.
+    await page.getByTestId('session-panel-toggle').click();
+    await expect(overlay).toHaveCount(0, { timeout: 5_000 });
+    await page.getByTestId('session-panel-toggle').click();
+    await expect(overlay).toBeVisible({ timeout: 5_000 });
+    await dismissOverlayWithEscape(page);
   });
 
   test('OVERLAY: a pointer outside the floated column dismisses it too', async () => {
@@ -389,11 +370,10 @@ test.describe('§session-panel — docking modes', () => {
     await toggle.click();
     await expect(overlay).toBeVisible({ timeout: 5_000 });
 
-    // The full-height float covers the column header (and its toggle), so the
-    // scrim beside it is the close target, alongside Escape.
-    await page.getByTestId('session-panel-scrim').click({ position: { x: 10, y: 200 } });
+    await page.getByTestId('session-panel-scrim').click({ position: { x: 10, y: 100 } });
     await expect(overlay).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('session-panel-root')).toHaveCount(0);
+    await expect(toggle).toBeFocused();
   });
 
   // Replaces the old rail's "survives a width that fits neither the stack nor
@@ -417,21 +397,20 @@ test.describe('§session-panel — docking modes', () => {
 
 // ─── §session-panel — the panel's sections, all open together ────────────────
 //
-// There is no more per-card toggle: Session, Pull requests, Context, Activity,
-// Tasks and Launch all render as soon as the panel is open. This describe
-// folds what used to be separate rail-button tests into straight content
-// assertions against the one scrolling column.
+// Every section the session has something for renders as soon as the panel is
+// open, unless the viewer turned it off in the Sections menu.
 
 test.describe('§session-panel — sections', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
+  let chatId: string;
 
   test.beforeAll(async () => {
     app = await launchTauriApp();
     await app.page.setViewportSize(DOCKED);
     project = await createTauriProject(app.page);
     seedLaunchConfigs(project.projectPath);
-    await createTauriChat(app.page, project.projectId, 'default');
+    chatId = await createTauriChat(app.page, project.projectId, 'default');
   });
 
   test.afterAll(async () => {
@@ -439,18 +418,37 @@ test.describe('§session-panel — sections', () => {
     await closeTauriApp(app);
   });
 
-  test('Summary is always expanded and carries no collapse trigger', async () => {
+  test('the Sections menu turns a section off and on, and remembers it', async () => {
     const { page } = app;
     await ensurePanelOpen(page);
-    await expect(page.getByTestId('session-panel-section-summary')).toBeVisible();
-    await expect(page.getByTestId('session-panel-section-toggle-summary')).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-card-launch')).toBeVisible();
+
+    await page.getByTestId('session-panel-sections-menu').click();
+    const item = page.getByTestId('session-panel-sections-menu-launch');
+    await expect(item).toHaveAttribute('aria-checked', 'true');
+    await item.click();
+    // The menu stays open: several sections get toggled in one visit.
+    await expect(item).toHaveAttribute('aria-checked', 'false');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('session-panel-card-launch')).toHaveCount(0);
+
+    await page.reload();
+    await waitConnected(page);
+    await selectChat(page, chatId);
+    await ensurePanelOpen(page);
+    await expect(page.getByTestId('session-panel-card-activity')).toBeVisible();
+    await expect(page.getByTestId('session-panel-card-launch')).toHaveCount(0);
+
+    await page.getByTestId('session-panel-sections-menu').click();
+    await page.getByTestId('session-panel-sections-menu-launch').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('session-panel-card-launch')).toBeVisible();
   });
 
-  test('the Activity section renders empty with no live dot when nothing is running', async () => {
+  test('the Activity section renders empty when nothing is running', async () => {
     const { page } = app;
     await ensurePanelOpen(page);
     await expect(page.getByTestId('session-panel-card-activity')).toBeVisible();
-    await expect(page.getByTestId('session-panel-activity-live')).toHaveCount(0);
     const empty = page.getByTestId('session-panel-activity-empty');
     await expect(empty).toBeVisible();
     await expect(empty).toHaveText('No background activity');
@@ -475,32 +473,26 @@ test.describe('§session-panel — sections', () => {
     const sleepRow = page.getByTestId('session-panel-launch-row-sleep-long');
     await expect(sleepRow).toBeVisible({ timeout: 10_000 });
     await expect(sleepRow).toContainText('sleep-long');
-    // Nothing started in this describe — every row offers Start, none offers Stop,
-    // and the eyebrow carries no running dot.
+    // Nothing started in this describe — every row offers Start, none offers Stop.
     await expect(page.getByTestId('session-panel-launch-start-sleep-long')).toBeVisible();
     await expect(page.getByTestId('session-panel-launch-stop-sleep-long')).toHaveCount(0);
     await expect(page.getByTestId('session-panel-launch-row-echo-once')).toBeVisible();
     await expect(page.getByTestId('session-panel-launch-start-echo-once')).toBeVisible();
     await expect(page.getByTestId('session-panel-launch-empty')).toHaveCount(0);
-    await expect(page.getByTestId('session-panel-launch-live')).toHaveCount(0);
     // Launch lifecycle (start/stop, status, console) belongs to workspace-surface.spec.ts.
   });
 });
 
-// ─── §session-panel — Summary rows ────────────────────────────────────────────
+// ─── §session-strip — where it runs, and its changes ─────────────────────────
 //
-// `chat-status` replays an onMessage + onResult carrying real usage numbers, so
-// the context row is reachable. The context percent this row reports is the
-// ONLY context readout the panel carries now — the old rail's own duplicate
-// meter is gone with the rail itself (D20); the composer's own
-// `composer-context-percent` chip (D19) is composer.spec.ts's territory.
+// The strip under the composer took over the panel's Session section (R2).
 
-test.describe('§session-panel — Summary rows', () => {
+test.describe('§session-strip — under the composer', () => {
   let app: TauriAppFixture;
   let project: TauriProject;
 
   test.beforeAll(async () => {
-    app = await launchTauriApp({ recordingKey: 'chat-status' });
+    app = await launchTauriApp();
     await app.page.setViewportSize(DOCKED);
     project = await createTauriProject(app.page);
     dirtyRepo(project.projectPath);
@@ -512,66 +504,78 @@ test.describe('§session-panel — Summary rows', () => {
     await closeTauriApp(app);
   });
 
-  test('the branch row names the live branch, under a "Main checkout" worktree row', async () => {
+  test('the branch control names the live branch of a local checkout', async () => {
     const { page } = app;
-    await ensurePanelOpen(page);
-    const row = page.getByTestId('session-panel-summary-branch');
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(row).toContainText('main');
-    // A main-repo session is not a worktree — the worktree row says so.
-    await expect(page.getByTestId('session-panel-summary-worktree')).toHaveText('Main checkout');
-    // The row IS the branch manager now (git-branch.spec.ts drives it): a plain
-    // div would mean the entry point regressed.
-    await expect(row).toHaveRole('button');
+    const branch = page.getByTestId('session-strip-branch');
+    await expect(branch).toBeVisible({ timeout: 15_000 });
+    await expect(branch).toContainText('main');
+    await expect(page.getByTestId('session-strip-worktree')).toContainText('Local');
+    // It IS the branch manager (git-branch.spec.ts drives it): a plain element
+    // would mean the entry point regressed.
+    await expect(branch).toHaveRole('button');
   });
 
-  test('the changes row shows the +/- totals, with the file count on the tooltip only', async () => {
+  test('the changes show the +/- totals and open the review', async () => {
     const { page } = app;
-    await ensurePanelOpen(page);
-    const row = page.getByTestId('session-panel-summary-changes');
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    // dirtyRepo(): two pure appends → +2, −0. A clean tree suppresses the +/− pair
-    // entirely, so asserting them proves the non-zero branch. The file count left
-    // the row (it widened it for nothing) and lives on the hover tooltip only.
-    await expect(row).not.toContainText('files');
-    await expect(row).toContainText('+2');
-    await expect(row).toContainText('−0'); // U+2212 minus sign
-  });
-
-  test('the context row is absent before a turn and reports a real percentage after one', async () => {
-    const { page } = app;
-    await ensurePanelOpen(page);
-    // No usage data yet — deriveSummaryRows drops the row rather than showing 0%.
-    await expect(page.getByTestId('session-panel-summary-context')).toHaveCount(0);
-
-    await sendMessage(page, 'Explain what TypeScript generics are in two sentences.');
-    await waitForIdle(page, 60_000);
-
-    const row = page.getByTestId('session-panel-summary-context');
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    const text = (await row.textContent()) ?? '';
-    const match = /(\d+)%/.exec(text);
-    expect(match, `expected a percentage in "${text}"`).not.toBeNull();
-    const percent = Number(match![1]);
-    expect(percent).toBeGreaterThan(0);
-    expect(percent).toBeLessThanOrEqual(100);
-  });
-
-  test('clicking the changes row opens the review modal', async () => {
-    const { page } = app;
-    await ensurePanelOpen(page);
-    await page.getByTestId('session-panel-summary-changes').click();
+    const changes = page.getByTestId('session-strip-changes');
+    await expect(changes).toBeVisible({ timeout: 15_000 });
+    // dirtyRepo(): two pure appends → +2, −0.
+    await expect(changes).toContainText('+2');
+    await expect(changes).toContainText('−0'); // U+2212 minus sign
+    await changes.click();
     await expect(page.getByTestId('review-modal')).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('review-close').click();
     await expect(page.getByTestId('review-modal')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  // DELETED (D20 — capability dropped, not moved): the old rail carried its own
-  // context METER, a plain indicator duplicating the Session card's row one
-  // click away, specifically so the number was reachable without opening the
-  // card. There is no rail any more — the Session section is always part of
-  // the one open column — so there is nothing left to be "an indicator, not a
-  // control" about. The underlying number is still covered by the test above.
+  test('before the first message: no strip, and only project-level sections', async () => {
+    const { page } = app;
+    await sessionsSidebar(page).newButton().click();
+    await expect(page.getByTestId('sessions-welcome')).toBeVisible({ timeout: 10_000 });
+    await ensurePanelOpen(page);
+    await expect(page.getByTestId('session-panel-section-skills')).toBeVisible();
+    await expect(page.getByTestId('session-panel-card-tasks')).toBeVisible();
+    await expect(page.getByTestId('session-panel-card-activity')).toHaveCount(0);
+    await expect(page.getByTestId('session-panel-card-launch')).toHaveCount(0);
+    await expect(page.getByTestId('session-strip')).toHaveCount(0);
+  });
+});
+
+// ─── §session-panel — the context percentage ─────────────────────────────────
+//
+// The panel's context row is gone with its Session section (R2); the composer
+// carries the only readout. `chat-status` replays real usage numbers.
+
+test.describe('§session-panel — context percentage (composer)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'chat-status' });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('it is absent before a turn and reports a real percentage after one', async () => {
+    const { page } = app;
+    const percentage = page.getByTestId('composer-context-percent');
+    await expect(composer(page).input()).toBeVisible();
+    await expect(percentage).toHaveCount(0);
+
+    await sendMessage(page, 'Explain what TypeScript generics are in two sentences.');
+    await waitForIdle(page, 60_000);
+
+    await expect(percentage).toHaveText(/^\d+%$/, { timeout: 15_000 });
+    const value = Number.parseInt((await percentage.textContent()) ?? '', 10);
+    expect(value).toBeGreaterThan(0);
+    expect(value).toBeLessThanOrEqual(100);
+  });
 });
 
 // ─── §session-panel — Plan section (todo-write) ───────────────────────────────
@@ -605,14 +609,9 @@ test.describe('§session-panel — Plan section', () => {
     const section = page.getByTestId('session-panel-plan');
     await expect(section).toBeVisible({ timeout: 15_000 });
 
-    // 1 completed + 1 in_progress → activeIndex 1 of 2 (todosToPlan).
     await expect(page.getByTestId('session-panel-plan-toggle')).toContainText('1 of 2');
-    // Percentage width lives in an inline style — not resolvable via getComputedStyle.
-    await expect(page.getByTestId('session-panel-plan-progress').locator('span')).toHaveAttribute(
-      'style',
-      /width:\s*50%/,
-    );
-    // ui-prefs default has plan collapsed: the header and bar show, the steps do not.
+    // ui-prefs default has plan folded: only the step in progress shows.
+    await expect(page.getByTestId('session-panel-plan-current')).toContainText('Running the test suite');
     await expect(page.getByTestId('session-panel-plan-step-0')).toHaveCount(0);
   });
 
@@ -620,17 +619,17 @@ test.describe('§session-panel — Plan section', () => {
     const { page } = app;
     await page.getByTestId('session-panel-plan-toggle').click();
 
-    await expect(page.getByTestId('session-panel-plan-step-0')).toHaveText('Write the README', { timeout: 5_000 });
+    await expect(page.getByTestId('session-panel-plan-step-0')).toContainText('Write the README', { timeout: 5_000 });
     // in_progress steps render `activeForm`, not `content`.
-    await expect(page.getByTestId('session-panel-plan-step-1')).toHaveText('Running the test suite');
+    await expect(page.getByTestId('session-panel-plan-step-1')).toContainText('Running the test suite');
   });
 
-  test('collapsing the plan hides the steps but keeps the header and progress bar', async () => {
+  test('folding the plan hides the steps but keeps the step in progress', async () => {
     const { page } = app;
     await page.getByTestId('session-panel-plan-toggle').click();
     await expect(page.getByTestId('session-panel-plan-step-0')).toHaveCount(0, { timeout: 5_000 });
     await expect(page.getByTestId('session-panel-plan-toggle')).toBeVisible();
-    await expect(page.getByTestId('session-panel-plan-progress')).toBeVisible();
+    await expect(page.getByTestId('session-panel-plan-current')).toBeVisible();
   });
 });
 
@@ -650,7 +649,7 @@ test.describe('§session-panel — Context section', () => {
     chatId = await createTauriChat(app.page, project.projectId, 'default');
 
     // Adapter-independent seeds (see the ground-truth note): one user file
-    // mention (Session badge '@') plus one image + one non-image attachment.
+    // mention ('mentioned') plus one image + one non-image attachment.
     await addFileMention(chatId, 'index.ts');
     const ids = await addAttachments(chatId, [
       { name: 'thumb.png', mediaType: 'image/png', data: TINY_PNG_BASE64, kind: 'image' },
@@ -684,13 +683,13 @@ test.describe('§session-panel — Context section', () => {
     await expect(page.getByTestId('session-panel-section-memory')).toHaveCount(0);
   });
 
-  test('the Mentioned files section lists the seeded mention with its @ badge', async () => {
+  test('the Mentioned files section lists the seeded mention with the reason it is here', async () => {
     const { page } = app;
     await ensurePanelOpen(page);
     const item = page.getByTestId('session-panel-session-item-index.ts');
     await expect(item).toBeVisible({ timeout: 15_000 });
     await expect(item).toContainText('index.ts');
-    await expect(item).toContainText('@');
+    await expect(item).toContainText('mentioned');
   });
 
   test('clicking a Mentioned files row opens the file as a workspace editor tab', async () => {
@@ -776,21 +775,294 @@ test.describe('§session-panel — Activity section (task-subagent)', () => {
 
     const row = card.getByTestId('session-panel-activity-task:mock-toolu_task_1');
     await expect(row).toBeVisible({ timeout: 10_000 });
-    // A subagent row's detail line is the Task call's `subagent_type`.
-    await expect(row).toContainText('general-purpose');
+    await expect(row).toHaveAttribute('data-activity-state', 'running');
+    await expect(row).toHaveAccessibleName(/^Agent: .+, running, /);
     await expect(card.locator('[data-testid^="session-panel-activity-task:"]')).toHaveCount(1);
-    await expect(card.getByTestId('session-panel-activity-counts')).toHaveText('1 running');
-    await expect(page.getByTestId('session-panel-activity-live')).toBeVisible();
 
     await sendMessage(page, 'Thanks — what did it find?');
     await waitForIdle(page, 60_000);
 
     // The finished row leaves the running list for the collapsed Earlier group.
     await expect(row).toHaveCount(0, { timeout: 10_000 });
-    await expect(card.getByTestId('session-panel-activity-counts')).toHaveText('No background activity');
-    await expect(page.getByTestId('session-panel-activity-live')).toHaveCount(0);
+    await expect(card.getByTestId('session-panel-activity-empty')).toBeVisible();
     await card.getByRole('button', { name: 'Earlier, 1 item' }).click();
     await expect(row).toBeVisible();
-    await expect(row).toContainText('completed');
+    await expect(row).toHaveAttribute('data-activity-state', 'completed');
+
+    // The row opens the sub-agent's transcript beside the chat.
+    await row.click();
+    await expect(page.locator('[data-testid^="chat-subagent-zone-"]')).toBeVisible({ timeout: 10_000 });
+  });
+});
+
+// ─── §session-panel — Activity section, the jump to the transcript ───────────
+//
+// Schedules, monitors and background commands have no detail of their own: a
+// click goes to the marker or row that started them (R13).
+
+test.describe('§session-panel — Activity section (schedule-pills)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'schedule-pills' });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('a schedule row goes to its marker and highlights it; a removed one waits under Earlier', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Schedule a wakeup, create a cron job, list schedules, delete one, and monitor the build');
+    await waitForIdle(page, 60_000);
+    await ensurePanelOpen(page);
+
+    const row = page.getByTestId('session-panel-activity-schedule:toolu_sched_1');
+    await expect(row).toContainText(/in 1h \d+m/, { timeout: 10_000 });
+    await row.click();
+    const marker = page.locator('[data-activity-id="toolu_sched_1"]');
+    await expect(marker).toBeInViewport();
+    await expect(marker).toHaveAttribute('data-activity-flash', '');
+    await expect(marker).not.toHaveAttribute('data-activity-flash', '', { timeout: 5_000 });
+
+    await page.getByRole('button', { name: 'Earlier, 1 item' }).click();
+    await expect(page.getByTestId('session-panel-activity-schedule:cron-1')).toContainText('removed');
+  });
+});
+
+// ─── §session-panel — Activity section, background commands and monitors ─────
+//
+// The mock adapter tracks the background command itself; the monitor is added
+// to the task list on the network boundary, with its recorded tool call.
+
+test.describe('§session-panel — Activity section (background-command)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({
+      recordingKey: 'background-command',
+      beforeNavigate: async (page) => {
+        await page.route(/\/api\/chats\/[^/]+\/background-tasks$/, async (route) => {
+          const response = await route.fetch();
+          const { data } = (await response.json()) as { data: { tasks: object[] } };
+          const monitor = {
+            id: 'monitor-1',
+            kind: 'other',
+            toolName: 'Monitor',
+            toolUseId: 'toolu_mon_1',
+            command: 'Watch the build',
+            description: 'Watch the build',
+            outputPath: null,
+            startedAt: Date.now(),
+            endedAt: null,
+            status: 'running',
+            lastOutputLine: null,
+            summary: null,
+            usage: null,
+          };
+          await route.fulfill({ response, json: { success: true, data: { tasks: [...data.tasks, monitor] } } });
+        });
+        await page.route(/\/background-tasks\/mock-toolu_bg_1\/output/, (route) =>
+          route.fulfill({
+            body: '12 tests passed',
+            headers: {
+              'access-control-allow-origin': '*',
+              'access-control-expose-headers': 'x-output-truncated',
+              'x-output-truncated': 'true',
+            },
+          }),
+        );
+      },
+    });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    await sendMessage(app.page, 'Run the tests in the background and watch the build');
+    await waitForIdle(app.page, 60_000);
+    await ensurePanelOpen(app.page);
+    await app.page.getByRole('button', { name: 'Earlier, 1 item' }).click();
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  const commandRow = (page: Page) => page.getByTestId('session-panel-activity-task:mock-toolu_bg_1');
+
+  test('a background command goes to its transcript row, opened on its result', async () => {
+    const { page } = app;
+    const target = page.locator('[data-activity-id="toolu_bg_1"]');
+    await expect(commandRow(page)).toHaveAttribute('data-activity-state', 'completed');
+    await commandRow(page).click();
+    await expect(target).toHaveAttribute('data-activity-flash', '');
+    await expect(target).toBeInViewport();
+    await expect(target).toContainText('Command running in background with ID: bg_1');
+    await expect(target.locator('[aria-expanded="true"]').first()).toBeFocused();
+  });
+
+  test('its full output is in the row menu, up to the daemon’s limit', async () => {
+    const { page } = app;
+    const request = page.waitForRequest(/\/background-tasks\/mock-toolu_bg_1\/output/);
+    await commandRow(page).click({ button: 'right' });
+    await page.getByTestId('session-panel-activity-output-task:mock-toolu_bg_1').click();
+    expect(new URL((await request).url()).searchParams.get('bytes')).toBe('1048576');
+    const dialog = page.getByTestId('session-panel-output-dialog');
+    await expect(dialog.getByTestId('session-panel-output-text')).toHaveText('12 tests passed');
+    await expect(dialog.getByTestId('session-panel-output-truncated')).toContainText('last 1 MB');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(commandRow(page)).toBeFocused();
+  });
+
+  test('its full output is a Tab away from the row', async () => {
+    const { page } = app;
+    const output = page.getByTestId('session-panel-activity-row-output-task:mock-toolu_bg_1');
+    await commandRow(page).focus();
+    await page.keyboard.press('Tab');
+    await expect(output).toBeFocused();
+    await expect(output.locator('..')).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Enter');
+    const dialog = page.getByTestId('session-panel-output-dialog');
+    await expect(dialog.getByTestId('session-panel-output-text')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(commandRow(page)).toBeFocused();
+  });
+
+  test('a monitor goes to its marker and opens it', async () => {
+    const { page } = app;
+    // Back to the end, so the jump has somewhere to go.
+    await page.getByTestId('chat-thread-viewport').press('End');
+    const target = page.locator('[data-activity-id="toolu_mon_1"]');
+    await expect(target).not.toBeInViewport();
+    await page.getByTestId('session-panel-activity-task:monitor-1').click();
+    await expect(target).toHaveAttribute('data-activity-flash', '');
+    await expect(target).toBeInViewport();
+    await expect(target).toContainText('Build succeeded in 42s');
+  });
+});
+
+// ─── §session-panel — Activity section, a workflow ───────────────────────────
+
+test.describe('§session-panel — Activity section (workflow)', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'workflow' });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+    await sendMessage(app.page, 'Run the release-readiness workflow');
+    await expect(app.page.getByText("I'll report when the last phase lands")).toBeVisible({ timeout: 60_000 });
+    await ensurePanelOpen(app.page);
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('a workflow unfolds its phases, and the running one lists its agents', async () => {
+    const { page } = app;
+    const row = page.getByTestId('session-panel-activity-task:mock-toolu_wf');
+    await expect(row).toContainText(/phase \d of 4/, { timeout: 10_000 });
+    await expect(row).toHaveAttribute('aria-expanded', 'false');
+    await row.click();
+    await expect(row).toHaveAttribute('aria-expanded', 'true');
+    const phases = page.locator('[data-testid^="session-panel-workflow-phase-"]');
+    await expect(phases).toHaveCount(4);
+    await expect(phases.first()).toContainText('1. Scan');
+    await expect(phases.last()).toHaveAttribute('data-status', 'pending');
+
+    // The mock adapter can't stop a task, so the run offers no Stop.
+    await expect(page.getByTestId('session-panel-workflow-stop')).toHaveCount(0);
+
+    const agent = page.locator('[data-testid^="session-panel-workflow-agent-"]').first();
+    await expect(agent).toHaveAccessibleName(/, running, /);
+    await agent.click();
+    await expect(page.getByTestId('chat-workflow-panel-wf_rel_readiness_01')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await row.click();
+    await expect(phases).toHaveCount(0);
+  });
+
+  test('“N running tasks” brings back a hidden Activity section', async () => {
+    const { page } = app;
+    await page.getByTestId('session-panel-sections-menu').click();
+    await page.getByTestId('session-panel-sections-menu-activity').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('session-panel-card-activity')).toHaveCount(0);
+    await page.getByRole('button', { name: '1 running task, show in Activity' }).click();
+    await expect(page.getByTestId('session-panel-card-activity')).toBeInViewport();
+  });
+});
+
+// ─── §session-panel — Activity section, Stop ─────────────────────────────────
+//
+// The mock adapter can't stop a background task, so Stop runs on a delegated
+// task. `retries: 0`: see mcp-delegate.spec.ts, whose recording this is.
+
+test.describe('§session-panel — Activity section (Stop)', () => {
+  test.describe.configure({ retries: 0 });
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'mcp-delegate-stop' });
+    await app.page.setViewportSize(DOCKED);
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'acceptEdits');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  test('the row’s Stop shows on hover, ends the work with one request and leaves focus on the row', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Delegate a long task, I will stop you after');
+    await ensurePanelOpen(page);
+    const row = page.locator('[data-testid^="session-panel-activity-delegated:"]');
+    await expect(row).toHaveAttribute('data-activity-state', 'running', { timeout: 60_000 });
+    await waitForIdle(page, 60_000);
+
+    const stop = page.locator('[data-testid^="session-panel-activity-row-stop-delegated:"]');
+    await page.mouse.move(0, 0);
+    const actions = stop.locator('..');
+    await expect(actions).toHaveCSS('opacity', '0');
+    await row.hover();
+    await expect(actions).toHaveCSS('opacity', '1');
+
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      if (/\/delegated-tasks\/.*\/cancel$/.test(request.url()) && request.method() === 'POST')
+        requests.push(request.url());
+    });
+    await page.mouse.move(0, 0);
+    await row.focus();
+    await page.keyboard.press('Tab');
+    await expect(stop).toBeFocused();
+    await expect(actions).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await expect(page.getByText(/Stopped “.+”/)).toBeVisible({ timeout: 15_000 });
+    // The mock child never ends its turn, so its row reads as a resumed chat
+    // rather than stopped; the task itself is what Stop cancels.
+    await expect(page.getByTestId('chat-tool-delegate-task-status')).toHaveAttribute('data-status', 'cancelled', {
+      timeout: 15_000,
+    });
+    await expect(stop).toHaveCount(0);
+    expect(requests).toHaveLength(1);
+    await expect(row).toBeFocused();
   });
 });

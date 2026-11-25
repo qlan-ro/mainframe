@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::extract::{Path, Query, State};
-use axum::http::{StatusCode, header};
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde::Deserialize;
@@ -22,6 +22,8 @@ use crate::respond::{fail, ok, ok_empty};
 
 const MAX_READ_BYTES: u64 = 1024 * 1024;
 const DEFAULT_READ_BYTES: u64 = 8 * 1024;
+/// Present on an output response that leaves out the start of the file.
+const OUTPUT_TRUNCATED: &str = "x-output-truncated";
 
 async fn list(State(ctx): State<Arc<AppCtx>>, Path(chat_id): Path<String>) -> Response {
     if chat_id.is_empty() {
@@ -35,7 +37,12 @@ struct OutputQuery {
     bytes: Option<u64>,
 }
 
-async fn read_tail(output_path: &str, max_bytes: u64) -> std::io::Result<String> {
+struct OutputTail {
+    text: String,
+    truncated: bool,
+}
+
+async fn read_tail(output_path: &str, max_bytes: u64) -> std::io::Result<OutputTail> {
     use tokio::io::{AsyncReadExt, AsyncSeekExt};
     let mut file = tokio::fs::File::open(output_path).await?;
     let size = file.metadata().await?.len();
@@ -43,7 +50,27 @@ async fn read_tail(output_path: &str, max_bytes: u64) -> std::io::Result<String>
     file.seek(std::io::SeekFrom::Start(start)).await?;
     let mut buf = Vec::with_capacity((size - start) as usize);
     file.take(size - start).read_to_end(&mut buf).await?;
-    Ok(String::from_utf8_lossy(&buf).into_owned())
+    Ok(OutputTail {
+        text: String::from_utf8_lossy(&buf).into_owned(),
+        truncated: start > 0,
+    })
+}
+
+fn tail_response(OutputTail { text, truncated }: OutputTail) -> Response {
+    let mut response = (
+        [
+            (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
+            (header::ACCESS_CONTROL_EXPOSE_HEADERS, OUTPUT_TRUNCATED),
+        ],
+        text,
+    )
+        .into_response();
+    if truncated {
+        response
+            .headers_mut()
+            .insert(OUTPUT_TRUNCATED, HeaderValue::from_static("true"));
+    }
+    response
 }
 
 async fn output(
@@ -71,12 +98,7 @@ async fn output(
     }
     let max_bytes = q.bytes.unwrap_or(DEFAULT_READ_BYTES).min(MAX_READ_BYTES);
     match read_tail(&output_path, max_bytes).await {
-        Ok(text) => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
-            text,
-        )
-            .into_response(),
+        Ok(tail) => tail_response(tail),
         Err(err) => crate::respond::fail_internal(
             format!("failed to read spool file output_path={}", output_path),
             &err,

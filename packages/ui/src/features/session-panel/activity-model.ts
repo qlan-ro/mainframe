@@ -5,10 +5,14 @@ import { isErrorResult, resolveResultText } from '@/features/chat/tools/shared';
 import type { DelegatedTaskRow } from '@/features/sessions/view-model/agent-provenance';
 
 export type ActivityKind = 'workflow' | 'subagent' | 'delegated' | 'monitor' | 'scheduled' | 'command' | 'background';
-export type ActivityState = 'running' | 'waiting' | 'completed' | 'failed' | 'stopped' | 'cancelled';
+/** `needs-you`, `running`, `queued` and `scheduled` are ongoing; the rest are finished. */
+export type ActivityState =
+  'needs-you' | 'running' | 'queued' | 'scheduled' | 'completed' | 'failed' | 'stopped' | 'removed';
 export interface ActivitySource {
-  messageId: string;
+  /** Absent while the call's message isn't loaded; the jump loads the history that holds it. */
+  messageId?: string;
   toolCallId?: string;
+  /** The message nearest the start, for work that names no call. */
   approximate?: boolean;
 }
 export interface ActivityEntry {
@@ -22,6 +26,8 @@ export interface ActivityEntry {
   nextAt?: number;
   prompt?: string;
   schedule?: string;
+  /** A schedule that runs more than once. */
+  recurring?: boolean;
   command?: string;
   summary?: string;
   usage?: { totalTokens: number; toolUses: number; durationMs: number };
@@ -111,7 +117,7 @@ export function taskEntries(tasks: readonly BackgroundTask[], tools: readonly To
     const tool = byCall.get(task.toolUseId);
     if (kind === 'command' && task.status !== 'running' && tool?.args.run_in_background !== true) return [];
     const args = tool?.args ?? {};
-    const source = tool && { messageId: tool.messageId, toolCallId: tool.toolCallId };
+    const source = task.toolUseId ? { messageId: tool?.messageId, toolCallId: task.toolUseId } : undefined;
     const command = kind === 'monitor' ? monitorTarget(args, task.command) : task.command;
     const title = kind === 'workflow' ? task.workflowName || task.description : task.description || command;
     const detail =
@@ -146,6 +152,24 @@ export function taskEntries(tasks: readonly BackgroundTask[], tools: readonly To
   });
 }
 
+const ONGOING: readonly ActivityState[] = ['needs-you', 'running', 'queued', 'scheduled'];
+export const isOngoing = (state: ActivityState): boolean => ONGOING.includes(state);
+
+function delegatedState(row: DelegatedTaskRow): ActivityState {
+  if (row.resumedState) return row.resumedState === 'waiting' ? 'needs-you' : 'running';
+  switch (row.status) {
+    case 'completed':
+    case 'failed':
+      return row.status;
+    case 'cancelled':
+    case 'interrupted':
+      return 'stopped';
+    default:
+      if (row.waiting) return 'needs-you';
+      return row.status === 'queued' ? 'queued' : 'running';
+  }
+}
+
 export function delegatedEntries(rows: readonly DelegatedTaskRow[], tools: readonly ToolRef[]): ActivityEntry[] {
   const sources = new Map<string, ToolRef>();
   for (const tool of tools) {
@@ -156,19 +180,7 @@ export function delegatedEntries(rows: readonly DelegatedTaskRow[], tools: reado
   return rows.map((row) => {
     const tool = sources.get(row.taskId);
     const source = tool && { messageId: tool.messageId, toolCallId: tool.toolCallId };
-    const state =
-      row.resumedState ??
-      (row.status === 'completed'
-        ? 'completed'
-        : row.status === 'failed'
-          ? 'failed'
-          : row.status === 'cancelled'
-            ? 'cancelled'
-            : row.status === 'interrupted'
-              ? 'stopped'
-              : row.status === 'queued' || row.waiting
-                ? 'waiting'
-                : 'running');
+    const state = delegatedState(row);
     return {
       id: `delegated:${row.taskId}`,
       kind: 'delegated',
@@ -178,7 +190,7 @@ export function delegatedEntries(rows: readonly DelegatedTaskRow[], tools: reado
         .join(' · '),
       state,
       startedAt: tool?.createdAt ?? row.updatedAt,
-      endedAt: state === 'running' || state === 'waiting' ? undefined : row.updatedAt,
+      endedAt: isOngoing(state) ? undefined : row.updatedAt,
       prompt: string(tool?.args.task) || undefined,
       source,
       delegated: row,
@@ -202,7 +214,8 @@ function scheduledEntry(tool: ToolRef): ActivityEntry | null {
       : undefined;
   const schedule = name === 'CronCreate' ? string(output.humanSchedule || tool.args.cron) : '';
   const id = string(output.id) || tool.toolCallId;
-  const cadence = output.recurring || tool.args.recurring ? 'Every' : 'Once';
+  const recurring = Boolean(output.recurring ?? tool.args.recurring);
+  const cadence = recurring ? 'Every' : 'Once';
   const detail =
     name === 'ScheduleWakeup'
       ? 'Once · wakeup'
@@ -214,7 +227,8 @@ function scheduledEntry(tool: ToolRef): ActivityEntry | null {
     kind: 'scheduled',
     title: prompt || string(tool.args.reason) || 'Scheduled work',
     detail,
-    state: 'waiting',
+    state: 'scheduled',
+    recurring,
     startedAt: tool.createdAt,
     nextAt,
     prompt: prompt || undefined,
@@ -233,21 +247,91 @@ export function scheduledEntries(tools: readonly ToolRef[]): ActivityEntry[] {
     }
     if (tool.toolName.split('__').pop() === 'CronDelete' && !tool.isError && tool.result !== undefined) {
       const previous = rows.get(`schedule:${string(tool.args.id)}`);
-      if (previous) rows.set(previous.id, { ...previous, state: 'cancelled', endedAt: tool.createdAt });
+      if (previous) rows.set(previous.id, { ...previous, state: 'removed', endedAt: tool.createdAt });
     }
   }
   return [...rows.values()];
 }
 
-export function anchorEntries(entries: ActivityEntry[], messages: readonly ThreadMessage[]): ActivityEntry[] {
+function containsToolCall(messages: readonly ThreadMessage[] | undefined, ids: ReadonlySet<string>): boolean {
+  return (messages ?? []).some((message) =>
+    message.content.some(
+      (part) => part.type === 'tool-call' && (ids.has(part.toolCallId) || containsToolCall(part.messages, ids)),
+    ),
+  );
+}
+
+/** The tool calls that started an agent now waiting on one of these requests. */
+export function agentsAwaiting(
+  messages: readonly ThreadMessage[],
+  pendingToolIds: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const awaiting = new Set<string>();
+  if (pendingToolIds.size === 0) return awaiting;
+  for (const message of messages)
+    for (const part of message.content)
+      if (part.type === 'tool-call' && containsToolCall(part.messages, pendingToolIds)) awaiting.add(part.toolCallId);
+  return awaiting;
+}
+
+/** A running agent with a request open above the composer needs you. */
+export function markNeedsYou(entries: ActivityEntry[], awaiting: ReadonlySet<string>): ActivityEntry[] {
+  if (awaiting.size === 0) return entries;
+  return entries.map((entry) =>
+    entry.kind === 'subagent' && entry.state === 'running' && entry.task && awaiting.has(entry.task.toolUseId)
+      ? { ...entry, state: 'needs-you' }
+      : entry,
+  );
+}
+
+/** A message as the thread or the controller holds it; only what the search reads. */
+interface MessageNode {
+  readonly id?: string;
+  readonly content:
+    | string
+    | readonly {
+        readonly type: string;
+        readonly toolCallId?: string;
+        readonly messages?: readonly MessageNode[];
+      }[];
+}
+
+function holdsCall(message: MessageNode, toolCallId: string): string | undefined {
+  if (typeof message.content === 'string') return undefined;
+  return message.content.find(
+    (part) =>
+      part.type === 'tool-call' &&
+      (part.toolCallId === toolCallId || part.messages?.some((child) => holdsCall(child, toolCallId) !== undefined)),
+  )?.toolCallId;
+}
+
+/** Where a loaded tool call shows: its message, and the call whose row stands for it (its sub-agent's, when nested). */
+export function findToolCall(
+  messages: readonly MessageNode[],
+  toolCallId: string,
+): { messageId: string; toolCallId: string } | undefined {
+  for (const message of messages) {
+    const row = holdsCall(message, toolCallId);
+    if (row && message.id) return { messageId: message.id, toolCallId: row };
+  }
+  return undefined;
+}
+
+/**
+ * Work that names no call goes to the message nearest its start, as long as
+ * that is in the loaded history (`hasMore`: there is an older part that isn't).
+ */
+export function anchorEntries(
+  entries: ActivityEntry[],
+  messages: readonly ThreadMessage[],
+  hasMore = false,
+): ActivityEntry[] {
   const assistants = messages.filter((message) => message.role === 'assistant');
   const candidates = assistants.length ? assistants : messages;
   return entries.map((entry) => {
-    if (entry.source || candidates.length === 0) return entry;
+    if (entry.source || !entry.task || candidates.length === 0) return entry;
     const prior = candidates.filter((message) => (message.createdAt?.getTime() ?? Infinity) <= entry.startedAt);
-    const nearest = prior.length
-      ? prior[prior.length - 1]!
-      : (candidates.find((message) => message.createdAt) ?? candidates[candidates.length - 1]!);
-    return { ...entry, source: { messageId: nearest.id, approximate: true } };
+    const nearest = prior[prior.length - 1] ?? (hasMore ? undefined : candidates[0]);
+    return nearest ? { ...entry, source: { messageId: nearest.id, approximate: true } } : entry;
   });
 }

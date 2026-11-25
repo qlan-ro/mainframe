@@ -15,7 +15,7 @@ function ctx(partial: Partial<SessionContext>): SessionContext {
 }
 
 describe('deriveSessionItems', () => {
-  it('badges a user file mention with @ and an auto mention with auto', () => {
+  it('says a user mention is mentioned and an automatic one is auto', () => {
     const result = deriveSessionItems(
       ctx({
         mentions: [
@@ -25,8 +25,8 @@ describe('deriveSessionItems', () => {
       }),
     );
     expect(result).toEqual([
-      { path: 'src/a.ts', badge: '@' },
-      { path: 'src/b.ts', badge: 'auto' },
+      { path: 'src/a.ts', reason: 'mentioned' },
+      { path: 'src/b.ts', reason: 'auto' },
     ]);
   });
 
@@ -43,7 +43,7 @@ describe('deriveSessionItems', () => {
     expect(result).toEqual([]);
   });
 
-  it('badges a modified-only file plan and keeps an existing mention badge', () => {
+  it('says a modified-only file is edited, and keeps a mention as mentioned', () => {
     const result = deriveSessionItems(
       ctx({
         mentions: [{ id: '1', kind: 'file', source: 'user', name: 'a', path: 'src/a.ts', timestamp: 't' }],
@@ -51,8 +51,8 @@ describe('deriveSessionItems', () => {
       }),
     );
     expect(result).toEqual([
-      { path: 'src/a.ts', badge: '@' },
-      { path: 'src/m.ts', badge: 'plan' },
+      { path: 'src/a.ts', reason: 'mentioned' },
+      { path: 'src/m.ts', reason: 'edited' },
     ]);
   });
 
@@ -66,6 +66,6 @@ describe('deriveSessionItems', () => {
         ],
       }),
     );
-    expect(result).toEqual([{ path: 'src/a.ts', badge: 'plan' }]);
+    expect(result).toEqual([{ path: 'src/a.ts', reason: 'edited' }]);
   });
 });
