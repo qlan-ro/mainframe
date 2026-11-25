@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
 import { useChatExtras } from '../../runtime/chat-extras';
+import { sendErrorMessage } from '../../controller/describe-send-error';
 import { visibleMessageText } from '../../markers/message-markers';
 import { ComposerHint } from '../composer-card-context';
 import { useComposerEdit } from '../edit/composer-edit-context';
@@ -43,7 +44,7 @@ const DELIVERY_FAILURE: Record<string, string> = {
 const report = (what: string) => (error: unknown) => {
   console.warn(`[queue] ${what} failed`, { error });
   mfToast.error(`Could not ${what} the queued message`, {
-    description: error instanceof Error ? error.message : String(error),
+    description: sendErrorMessage(error),
   });
 };
 
@@ -196,7 +197,7 @@ function useHeldRows(): QueueRow[] {
     if (row.claim) return { ...base, note: row.claim.started ? 'Sending…' : 'Waiting', sending: row.claim.started };
     return {
       ...base,
-      failure: row.unconfirmed ? UNCONFIRMED : index === 0 ? 'Not sent: the session stopped.' : undefined,
+      failure: heldFailure(row, index),
       note: 'Waiting',
       action:
         index === 0 && !busy
@@ -214,6 +215,12 @@ function useHeldRows(): QueueRow[] {
       onRemove: () => useHeldQueue.getState().remove(chatId, row.messageId),
     };
   });
+}
+
+function heldFailure(row: HeldMessage, index: number): string | undefined {
+  if (row.unconfirmed) return UNCONFIRMED;
+  if (row.refused) return `Not sent: ${row.refused}`;
+  return index === 0 ? 'Not sent: the session stopped.' : undefined;
 }
 
 const UNCONFIRMED = 'It may already have reached the agent. Check the conversation before sending it again.';

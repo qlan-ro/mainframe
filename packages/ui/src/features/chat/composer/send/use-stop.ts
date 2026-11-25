@@ -15,6 +15,7 @@ import { mfToast } from '@/lib/toast';
 import { delegatedTasksOf, type DelegatedTaskRow } from '@/features/sessions/view-model/agent-provenance';
 import { useSessionItems } from '../../orchestration/use-session-items';
 import { useChatExtras } from '../../runtime/chat-extras';
+import { useHeldQueue } from '../queue/held-queue-store';
 import { focusVisibleComposer } from '../focus-composer';
 
 /** The adapter whose CLI can stop a single background task. */
@@ -58,6 +59,8 @@ export function useComposerStop(): ComposerStop {
 
   const stop = () => {
     if (!extras || chatId == null || stopping || (!running && agents === 0)) return;
+    // What "Send now" has not sent yet, with only sub-agents running too.
+    useHeldQueue.getState().releaseUnsent(chatId);
     const work: Promise<unknown>[] = [
       ...agentTasks.map((task) => stopBackgroundTask(chatId, task.id)),
       ...delegated.map((row) => cancelDelegatedTask(chatId, row.taskId)),

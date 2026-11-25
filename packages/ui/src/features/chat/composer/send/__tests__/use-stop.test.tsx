@@ -27,6 +27,7 @@ vi.mock('../../../runtime/chat-extras', () => ({ useChatExtras: () => mockExtras
 
 import { mfToast } from '@/lib/toast';
 import { cancelDelegatedTask, stopBackgroundTask } from '@/lib/api/background-tasks';
+import { useHeldQueue } from '../../queue/held-queue-store';
 import { useComposerStop } from '../use-stop';
 
 const toast = vi.mocked(mfToast);
@@ -145,6 +146,22 @@ describe('useComposerStop — stopping', () => {
     expect(cancel).not.toHaveBeenCalled();
     expect(cancelDelegatedTask).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(toast.success).toHaveBeenCalledExactlyOnceWith('Stopped 1 sub-agent'));
+  });
+
+  it('cancels the held rows not yet sent, with only sub-agents running too', () => {
+    useHeldQueue.getState().hold('chat-1', {
+      messageId: 'm1',
+      chatId: 'chat-1',
+      uuid: 'u1',
+      content: 'held',
+      timestamp: '2026-11-24T10:00:01.000Z',
+    });
+    useHeldQueue.getState().claimFrom('chat-1', 'm1');
+    const { result } = setup({ running: false, delegated: [{ taskId: 't1', status: 'running' }] });
+
+    act(() => result.current.stop());
+
+    expect(useHeldQueue.getState().startSending('chat-1', 'm1')).toBe(false);
   });
 
   it('does nothing when nothing runs', () => {

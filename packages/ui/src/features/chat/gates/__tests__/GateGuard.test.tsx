@@ -235,6 +235,20 @@ describe('the keyboard', () => {
     expect(taskReply).toHaveBeenCalledTimes(1);
   });
 
+  it('⌘Enter whose ⌘ release is lost too still leaves Enter and Space working', () => {
+    answerOwnThenShowTask(() => press(allow()));
+    pass(500);
+    fireEvent.keyDown(document.body, { key: 'Enter', metaKey: true });
+    fireEvent.keyDown(document.body, { key: ' ', metaKey: true });
+
+    expect(fireEvent.keyDown(allow(), { key: ' ' })).toBe(true);
+    expect(fireEvent.keyUp(allow(), { key: ' ' })).toBe(true);
+    pass(1);
+    enter(allow());
+
+    expect(taskReply).toHaveBeenCalledTimes(1);
+  });
+
   it('a key held when ⌘ went down, whose release is lost too, is forgotten with ⌘', () => {
     answerOwnThenShowTask(() => press(allow()));
     pass(500);

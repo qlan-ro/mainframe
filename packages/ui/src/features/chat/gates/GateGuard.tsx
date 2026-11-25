@@ -60,15 +60,15 @@ function useArmed(): boolean {
 
 /**
  * The activation keys down anywhere since before they touched this gate. With
- * ⌘ down macOS never sends a key's keyup, so those presses are not tracked and
- * releasing ⌘ forgets the rest; the keys' repeats stay harmless, see below.
+ * ⌘ down macOS never sends a key's keyup, so releasing ⌘ forgets them all. One
+ * whose release was lost anyway blocks nothing: pressing it here starts afresh.
  */
 function useHeldKeys() {
   const heldKeys = useRef(new Set<string>());
   useEffect(() => {
     const held = heldKeys.current;
     const down = (event: globalThis.KeyboardEvent) => {
-      if (isActivation(event.key) && !event.metaKey) held.add(event.key);
+      if (isActivation(event.key)) held.add(event.key);
     };
     const up = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Meta') held.clear();

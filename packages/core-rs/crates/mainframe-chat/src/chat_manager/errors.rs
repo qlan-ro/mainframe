@@ -37,12 +37,15 @@ pub enum SendError {
 }
 
 impl SendError {
-    /// Whether a failed steer certainly never reached the agent, so sending the
-    /// message the ordinary way cannot deliver it twice. Any other failure leaves
-    /// that unknown.
+    /// Whether a message that failed to send certainly never reached the agent, so
+    /// sending it again cannot deliver it twice. Any other failure leaves that
+    /// unknown.
     pub fn never_delivered(&self) -> bool {
         match self {
-            Self::NotRunning(_) | Self::SteerUnsupported(_) | Self::NoActiveTurn(_) => true,
+            Self::NotRunning(_)
+            | Self::SteerUnsupported(_)
+            | Self::NoActiveTurn(_)
+            | Self::HandoffTooLarge(_) => true,
             Self::Adapter(error) => matches!(
                 error,
                 AdapterError::DeliveryRejected(_)
@@ -50,8 +53,10 @@ impl SendError {
                     | AdapterError::StdinFull(_)
                     | AdapterError::NoActiveTurn(_)
                     | AdapterError::Unsupported(_)
+                    | AdapterError::ProjectDirMissing(_)
+                    | AdapterError::NativeSessionArchived(_)
             ),
-            Self::HandoffTooLarge(_) | Self::Recovery(_) | Self::Store(_) => false,
+            Self::Recovery(_) | Self::Store(_) => false,
         }
     }
 

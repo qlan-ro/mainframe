@@ -10,6 +10,9 @@ pub struct PromptFailure {
     pub reason: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remedy: Option<PromptRemedy>,
+    /// The agent certainly did not get the prompt. Unset, it may have.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub never_delivered: bool,
 }
 
 /// An action that clears a prompt refusal.

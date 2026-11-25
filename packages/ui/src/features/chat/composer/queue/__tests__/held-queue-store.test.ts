@@ -24,7 +24,7 @@ describe('held queue store (C10)', () => {
     useHeldQueue.getState().hold('chat-1', ref());
 
     expect(useHeldQueue.getState().byChat['chat-1']).toEqual([
-      { messageId: 'm1', content: 'first', timestamp: '2026-11-24T10:00:01.000Z' },
+      { messageId: 'm1', content: 'first', timestamp: '2026-11-24T10:00:01.000Z', daemon: 'local' },
     ]);
   });
 
@@ -48,7 +48,7 @@ describe('held queue store (C10)', () => {
     hold('chat-1', ref({ content: 'edited elsewhere' }));
 
     expect(useHeldQueue.getState().byChat['chat-1']).toEqual([
-      { messageId: 'm1', content: 'edited elsewhere', timestamp: '2026-11-24T10:00:01.000Z' },
+      { messageId: 'm1', content: 'edited elsewhere', timestamp: '2026-11-24T10:00:01.000Z', daemon: 'local' },
     ]);
   });
 
@@ -89,7 +89,7 @@ describe('held queue store (C10)', () => {
     const stored = JSON.parse(localStorage.getItem('mf:held-queue')!);
 
     expect(stored.state.byChat['chat-1']).toEqual([
-      { messageId: 'm1', content: 'first', timestamp: '2026-11-24T10:00:01.000Z' },
+      { messageId: 'm1', content: 'first', timestamp: '2026-11-24T10:00:01.000Z', daemon: 'local' },
     ]);
   });
 });

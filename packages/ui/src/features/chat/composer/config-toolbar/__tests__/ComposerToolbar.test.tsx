@@ -12,7 +12,7 @@
  *  3. the side variant drops the provider footer
  *  4. ⇧⇥ cycling and the Unattended confirmation
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { createRef } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -230,13 +230,13 @@ describe('ComposerToolbar — variant="side" (todo #344)', () => {
 // ---------------------------------------------------------------------------
 
 describe('ComposerToolbar — cyclePermission handle (C12)', () => {
-  async function mountWithMode(permissionMode: string | undefined) {
+  async function mountWithMode(permissionMode: string | undefined, chatId = 'c1') {
     const composerTuningMod = await import('../use-composer-tuning');
     const base = vi.mocked(composerTuningMod.useComposerTuning).getMockImplementation()!([]);
     const setPermissionMode = vi.fn();
     vi.mocked(composerTuningMod.useComposerTuning).mockReturnValue({
       ...base,
-      chat: { ...base.chat!, permissionMode: permissionMode as never },
+      chat: { ...base.chat!, id: chatId, permissionMode: permissionMode as never },
       setPermissionMode,
     });
     const ref = createRef<ComposerToolbarHandle>();
@@ -293,5 +293,32 @@ describe('ComposerToolbar — cyclePermission handle (C12)', () => {
     fireEvent.click(screen.getByTestId('composer-unattended-confirm-confirm'));
 
     expect(setPermissionMode).toHaveBeenCalledExactlyOnceWith('yolo');
+  });
+
+  describe('after the question', () => {
+    /** jsdom lays nothing out: the container query's choice is made here. */
+    function showOnly(visible: 'control' | 'chip') {
+      vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) {
+        const isChip = this.dataset.testid === 'composer-model-permission-select';
+        return isChip === (visible === 'chip') ? document.body : null;
+      });
+    }
+    afterEach(() => vi.restoreAllMocks());
+
+    it.each([
+      ['the permissions control in a wide composer', 'control', 'composer-permission-mode-select'],
+      ['the chip that stands in for it in a narrow one', 'chip', 'composer-model-permission-select'],
+    ] as const)('focus goes back to %s', async (_what, visible, testId) => {
+      // The question is asked once per session: a session of its own.
+      await mountWithMode('default', `asked-${visible}`);
+      fireEvent.pointerDown(screen.getByTestId('composer-permission-mode-select'), { button: 0 });
+      fireEvent.click(await screen.findByTestId('composer-permission-mode-select-option-yolo'));
+      const cancel = await screen.findByTestId('composer-unattended-confirm-cancel');
+      showOnly(visible);
+
+      fireEvent.click(cancel);
+
+      await vi.waitFor(() => expect(screen.getByTestId(testId)).toHaveFocus());
+    });
   });
 });

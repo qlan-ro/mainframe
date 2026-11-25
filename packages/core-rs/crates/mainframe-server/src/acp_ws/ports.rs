@@ -207,12 +207,29 @@ fn prompt_error(err: SendError) -> PromptError {
     PromptError {
         message: err.to_string(),
         remedy,
+        never_delivered: err.never_delivered(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refusal_says_whether_the_agent_certainly_did_not_get_the_prompt() {
+        let refused = [
+            SendError::NotRunning("c1".into()),
+            SendError::HandoffTooLarge("Codex".into()),
+            SendError::Adapter(AdapterError::DeliveryRejected("no such thread".into())),
+            SendError::Adapter(AdapterError::ProjectDirMissing("gone".into())),
+            SendError::Adapter(AdapterError::NativeSessionArchived("archived".into())),
+        ];
+        for error in refused {
+            assert!(prompt_error(error).never_delivered);
+        }
+        let unanswered = SendError::Adapter(AdapterError::Message("timed out".into()));
+        assert!(!prompt_error(unanswered).never_delivered);
+    }
 
     #[test]
     fn a_steer_is_resent_only_when_it_never_reached_the_agent() {

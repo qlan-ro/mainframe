@@ -22,6 +22,7 @@ import {
   sendHeldMessages,
   type ChatActionHost,
 } from './chat-actions';
+import { useHeldQueue } from '../composer/queue/held-queue-store';
 import { ChatPlaneLoader } from './chat-plane-loader';
 import { ChatActivation } from './chat-activation';
 import { ChatLiveSubscription } from './chat-live-subscription';
@@ -235,6 +236,8 @@ export class AcpChatController {
   }
 
   public async cancel(): Promise<void> {
+    // Before the guard: "Send now" can be under way before its turn shows.
+    useHeldQueue.getState().releaseUnsent(this.daemonId);
     // Idle guard (#324 QA): cancelling an already-idle chat is a daemon no-op —
     // nothing would ever clear 'cancelling', stranding the "Working…" indicator.
     if (this.state.runState.type !== 'running') return;

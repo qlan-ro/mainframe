@@ -16,6 +16,7 @@ import {
 import { mfToast } from '@/lib/toast';
 import { matchCommandInvocation } from '../commands/command-registry';
 import { buildPendingMessage, parseSendInput } from './chat-reconcile';
+import { sendRefusal } from './describe-send-error';
 import { previewsById } from './local-attachments';
 import { wantsSteer } from './steer';
 import { useHeldQueue } from '../composer/queue/held-queue-store';
@@ -124,10 +125,11 @@ const HOLD_QUEUE_BUDGET_MS = 1000;
 
 /**
  * Take the queue back from the agent before a Stop, so nothing queued starts a
- * new turn behind it (C10). Each row is kept the moment its cancel wins; one the
+ * new turn behind it (C10), and cancel what "Send now" has not sent yet. Each row is kept the moment its cancel wins; one the
  * agent had already picked up is part of the conversation and is not held.
  */
 export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
+  useHeldQueue.getState().releaseUnsent(host.getDaemonId());
   const refs = Object.values(host.getState().interactions.queued).filter((ref) => ref.delivery == null);
   if (refs.length === 0) return;
   const chatId = host.getDaemonId();
@@ -148,7 +150,9 @@ export async function holdQueuedMessages(host: ChatActionHost): Promise<void> {
  * Send a held row, then line the rows behind it up again in their order. They
  * are claimed first, so a second press (or another window) finds nothing to
  * send, and each leaves the queue only once the daemon has it: a quit in between
- * loses none. What does not go out is given back, marked when it may have.
+ * loses none. What does not go out is given back: with the reason when it was
+ * refused, or marked when it may have reached the agent. A Stop meanwhile takes
+ * back the rows that have not gone out.
  */
 export async function sendHeldMessages(host: ChatActionHost, firstId: string): Promise<void> {
   const chatId = host.getDaemonId();
@@ -157,10 +161,18 @@ export async function sendHeldMessages(host: ChatActionHost, firstId: string): P
   // Another press holds the claims, and gives them back itself.
   if (rows.length === 0) return;
   try {
+    // The prompt needs the facade client; failing here, nothing has gone out.
+    await host.load();
     for (const { messageId, content, attachmentIds } of rows) {
-      // Removed meanwhile, with its chat say, or no longer this window's: not sent.
+      // Removed meanwhile, with its chat say, stopped, or no longer this window's: not sent.
       if (!held.startSending(chatId, messageId)) continue;
-      await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {});
+      try {
+        await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {});
+      } catch (error) {
+        const reason = sendRefusal(error);
+        if (reason !== undefined) held.refuse(chatId, messageId, reason);
+        throw error;
+      }
       held.remove(chatId, messageId);
     }
   } finally {

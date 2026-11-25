@@ -43,6 +43,8 @@ pub struct PromptAcceptance {
 pub struct PromptError {
     pub message: String,
     pub remedy: Option<PromptRemedy>,
+    /// The agent certainly did not get the prompt.
+    pub never_delivered: bool,
 }
 
 impl PromptError {
@@ -50,6 +52,7 @@ impl PromptError {
         Self {
             message: message.into(),
             remedy: None,
+            never_delivered: false,
         }
     }
 }
@@ -171,6 +174,7 @@ fn session_unavailable(err: PromptError) -> JsonRpcErrorObject {
     let failure = PromptFailure {
         reason: err.message,
         remedy: err.remedy,
+        never_delivered: err.never_delivered,
     };
     JsonRpcErrorObject {
         code: error_codes::RESOURCE_NOT_FOUND,

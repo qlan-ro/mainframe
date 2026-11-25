@@ -11,11 +11,13 @@
  * A row being sent stays, claimed by the window that sends it, until the daemon
  * has it: quitting in between loses nothing. A claim ends with its window, or
  * after `CLAIM_MS` when the window went without saying so. A row whose prompt had
- * gone out by then may have reached the agent, so it comes back `unconfirmed`.
+ * gone out by then may have reached the agent, so it comes back `unconfirmed`,
+ * unless it was refused (`refuse`): then it keeps the reason.
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
+import { getActiveDaemon } from '@/lib/daemon/active-daemon';
 
 const STORAGE_KEY = 'mf:held-queue';
 
@@ -24,10 +26,14 @@ export interface HeldMessage {
   content: string;
   attachmentIds?: string[];
   timestamp: string;
+  /** The daemon its chat lives on; the rows of every daemon are kept together. */
+  daemon?: string;
   /** From a temporary session: kept in memory only. */
   unsaved?: true;
   /** Being sent, by this window. `started` once its own prompt has gone out. */
   claim?: { by: string; at: number; started?: true };
+  /** Why its last send was refused: it certainly did not reach the agent. */
+  refused?: string;
   /** Its prompt went out and nothing came back: the agent may have it. */
   unconfirmed?: true;
 }
@@ -48,6 +54,10 @@ interface HeldQueueState {
   claimFrom: (chatId: string, messageId: string) => Rows;
   /** Right before a claimed row's prompt goes out. False when it is not this window's to send any more. */
   startSending: (chatId: string, messageId: string) => boolean;
+  /** A send that certainly did not reach the agent: the row comes back with the reason. */
+  refuse: (chatId: string, messageId: string, reason: string) => void;
+  /** Gives back the claimed rows this window has not sent: a Stop, while "Send now" is under way. */
+  releaseUnsent: (chatId: string) => void;
   /** Gives this window's claims back, in one chat or all of them. */
   releaseClaims: (chatId?: string) => void;
   clearChat: (chatId: string) => void;
@@ -70,6 +80,7 @@ function released({ claim, ...row }: HeldMessage): HeldMessage {
 }
 
 const mine = (row: HeldMessage): boolean => row.claim?.by === WINDOW_ID;
+const unsent = (row: HeldMessage): boolean => mine(row) && row.claim?.started !== true;
 
 /** What another window stored, plus this window's own unsaved rows. */
 function withUnsaved(stored: Readonly<Record<string, Rows>>, current: Readonly<Record<string, Rows>>) {
@@ -104,6 +115,7 @@ export const useHeldQueue = create<HeldQueueState>()(
                 content: ref.content,
                 ...(ref.attachmentIds && { attachmentIds: ref.attachmentIds }),
                 timestamp: ref.timestamp,
+                daemon: getActiveDaemon().id,
                 ...(temporary && { unsaved: true as const }),
               },
             ]),
@@ -140,10 +152,24 @@ export const useHeldQueue = create<HeldQueueState>()(
             // The rows still to come stay claimed for as long as this one takes.
             return rows.map((row) => {
               if (!mine(row)) return row;
-              return row.messageId === messageId ? { ...row, claim: { ...claim, started: true } } : { ...row, claim };
+              if (row.messageId !== messageId) return { ...row, claim };
+              const { refused: _, ...rest } = row;
+              return { ...rest, claim: { ...claim, started: true } };
             });
           });
           return started;
+        },
+        refuse: (chatId, messageId, reason) =>
+          update(chatId, (rows) =>
+            rows.map((row) => {
+              if (row.messageId !== messageId) return row;
+              const { claim: _, ...rest } = row;
+              return { ...rest, refused: reason };
+            }),
+          ),
+        releaseUnsent: (chatId) => {
+          if (!get().byChat[chatId]?.some(unsent)) return;
+          update(chatId, (rows) => rows.map((row) => (unsent(row) ? released(row) : row)));
         },
         releaseClaims: (only) => {
           for (const chatId of only === undefined ? Object.keys(get().byChat) : [only]) {

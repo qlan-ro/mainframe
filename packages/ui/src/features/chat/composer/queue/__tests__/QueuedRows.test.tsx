@@ -25,8 +25,10 @@ vi.mock('../../../runtime/chat-extras', () => ({
 
 const startEdit = vi.fn();
 vi.mock('../../edit/composer-edit-context', () => ({ useComposerEdit: () => ({ startEdit }) }));
+vi.mock('@/lib/toast', () => ({ mfToast: { error: vi.fn() } }));
 vi.mock('../../focus-composer', () => ({ focusVisibleComposer: vi.fn() }));
 
+import { mfToast } from '@/lib/toast';
 import { focusVisibleComposer } from '../../focus-composer';
 import { CLAIM_MS, useHeldQueue } from '../held-queue-store';
 import { QueuedRows } from '../QueuedRows';
@@ -232,6 +234,17 @@ describe('QueuedRows — held rows after a Stop', () => {
     expect(screen.queryAllByRole('button')).toEqual([]);
   });
 
+  it('offers no second send while a row behind is on its way', () => {
+    hold('h1', 1);
+    hold('h2', 2);
+    useHeldQueue.getState().claimFrom('chat-1', 'h2');
+
+    renderRows();
+
+    expect(rows()[0]).toHaveTextContent('Not sent: the session stopped.');
+    expect(screen.queryByTestId('chat-queued-send-now')).toBeNull();
+  });
+
   it('a row that may have gone out says so and offers to send it again', () => {
     hold('h1', 1);
     useHeldQueue.getState().claimFrom('chat-1', 'h1');
@@ -243,6 +256,37 @@ describe('QueuedRows — held rows after a Stop', () => {
     expect(rows()[0]).toHaveTextContent('It may already have reached the agent.');
     expect(screen.getByTestId('chat-queued-send-now')).toHaveTextContent('Send again');
     expect(screen.getByTestId('chat-queued-cancel')).toBeInTheDocument();
+  });
+
+  it('a row the daemon refused says why, offers Send now, and not that it may have arrived', () => {
+    hold('h1', 1);
+    useHeldQueue.getState().claimFrom('chat-1', 'h1');
+    useHeldQueue.getState().startSending('chat-1', 'h1');
+    useHeldQueue.getState().refuse('chat-1', 'h1', 'Chat chat-1 not running');
+
+    renderRows();
+
+    expect(rows()[0]).toHaveTextContent('Not sent: Chat chat-1 not running');
+    expect(rows()[0]).not.toHaveTextContent('may already have reached');
+    expect(screen.getByTestId('chat-queued-send-now')).toHaveTextContent('Send now');
+  });
+
+  it('a refused send says why in the toast too', async () => {
+    sendHeld.mockRejectedValueOnce({
+      code: -32002,
+      message: 'session unavailable: too large',
+      data: { '_mainframe.dev': { reason: 'too large', neverDelivered: true } },
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    hold('h1', 1);
+    renderRows();
+
+    fireEvent.click(screen.getByTestId('chat-queued-send-now'));
+    await act(async () => {});
+
+    expect(mfToast.error).toHaveBeenCalledExactlyOnceWith('Could not send the queued message', {
+      description: 'too large',
+    });
   });
 
   it('a claim left by a window that is gone runs out on its own', () => {

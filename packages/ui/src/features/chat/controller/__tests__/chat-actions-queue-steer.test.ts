@@ -16,6 +16,7 @@ vi.mock('@/lib/toast', () => ({ mfToast: { error: vi.fn(), success: vi.fn(), war
 
 import { cancelQueuedMessage } from '../../../../lib/api/chats';
 import { publishCommands } from '../../commands/command-registry';
+import { NotSentError } from '../../../../lib/daemon/not-sent-error';
 import { useHeldQueue } from '../../composer/queue/held-queue-store';
 import { holdQueuedMessages, sendChatMessage, sendHeldMessages, type ChatActionHost } from '../chat-actions';
 import { createChatThreadState, reduceChatThreadState, type ChatStateEvent } from '../chat-thread-state';
@@ -310,7 +311,7 @@ describe('sendHeldMessages (C10)', () => {
 
     // The failed one may have reached the agent; neither is claimed any more.
     expect(useHeldQueue.getState().byChat[CHAT]).toEqual([
-      { messageId: 'm2', content: 'text m2', timestamp: ref('m2', 2).timestamp, unconfirmed: true },
+      { messageId: 'm2', content: 'text m2', timestamp: ref('m2', 2).timestamp, daemon: 'local', unconfirmed: true },
     ]);
   });
 
@@ -342,6 +343,149 @@ describe('sendHeldMessages (C10)', () => {
     await sendHeldMessages(host, 'm1');
 
     expect(sendPrompt).toHaveBeenCalledTimes(1);
+  });
+
+  /** A prompt that stays out until told. */
+  function heldUp(sendPrompt: ReturnType<typeof makeHost>['sendPrompt']) {
+    let answer = { accept: () => {}, refuse: (_error: unknown) => {} };
+    sendPrompt.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          answer = { accept: () => resolve({ queued: false }), refuse: reject };
+        }),
+    );
+    return { accept: () => answer.accept(), refuse: (error: unknown) => answer.refuse(error) };
+  }
+  const row = (id: string) => useHeldQueue.getState().byChat[CHAT]!.find((held) => held.messageId === id)!;
+
+  it('a Stop meanwhile cancels the rows that have not gone out, and lets the one that has finish', async () => {
+    hold('m1', 1);
+    hold('m2', 2);
+    hold('m3', 3);
+    const { host, sendPrompt } = makeHost();
+    const first = heldUp(sendPrompt);
+    const sending = sendHeldMessages(host, 'm1');
+    await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalledTimes(1));
+
+    await holdQueuedMessages(host);
+    first.accept();
+    await sending;
+
+    expect(sendPrompt.mock.calls.map((call) => call[0])).toEqual(['text m1']);
+    expect(useHeldQueue.getState().byChat[CHAT]!.map((held) => [held.messageId, held.claim, held.unconfirmed])).toEqual(
+      [
+        ['m2', undefined, undefined],
+        ['m3', undefined, undefined],
+      ],
+    );
+  });
+
+  it('what a Stop cancelled can be sent again', async () => {
+    hold('m1', 1);
+    hold('m2', 2);
+    const { host, sendPrompt } = makeHost();
+    const first = heldUp(sendPrompt);
+    const sending = sendHeldMessages(host, 'm1');
+    await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalledTimes(1));
+    await holdQueuedMessages(host);
+    first.accept();
+    await sending;
+
+    await sendHeldMessages(host, 'm2');
+
+    expect(sendPrompt.mock.calls.map((call) => call[0])).toEqual(['text m1', 'text m2']);
+  });
+
+  it('a Stop leaves another window’s claims alone', async () => {
+    localStorage.setItem(
+      'mf:held-queue',
+      JSON.stringify({
+        state: {
+          byChat: {
+            [CHAT]: [{ messageId: 'm1', content: 'x', timestamp: 't', claim: { by: 'another', at: Date.now() } }],
+          },
+        },
+        version: 1,
+      }),
+    );
+    const { host } = makeHost();
+
+    await holdQueuedMessages(host);
+    hold('m2', 2);
+
+    expect(row('m1').claim).toBeDefined();
+  });
+
+  it('waits for the session to load: until then nothing has gone out', async () => {
+    hold('m1', 1);
+    const { host, sendPrompt } = makeHost();
+    host.load = () => Promise.reject(new Error('daemon gone'));
+
+    await expect(sendHeldMessages(host, 'm1')).rejects.toThrow('daemon gone');
+
+    expect(sendPrompt).not.toHaveBeenCalled();
+    expect(row('m1')).not.toHaveProperty('unconfirmed');
+    expect(row('m1')).not.toHaveProperty('claim');
+  });
+
+  const refusal = (extra: object) => ({
+    code: -32002,
+    message: 'session unavailable: Chat chat-1 not running',
+    data: { '_mainframe.dev': { reason: 'Chat chat-1 not running', ...extra } },
+  });
+
+  it.each([
+    ['the daemon refused', refusal({ neverDelivered: true }), 'Chat chat-1 not running'],
+    ['the daemon could not read', { code: -32602, message: 'invalid params: prompt' }, 'invalid params: prompt'],
+    ['never left', new NotSentError('connection closed'), 'connection closed'],
+  ])('a row %s keeps the reason, and is not said to have reached the agent', async (_what, error, reason) => {
+    hold('m1', 1);
+    const { host, sendPrompt } = makeHost();
+    sendPrompt.mockRejectedValueOnce(error);
+
+    await expect(sendHeldMessages(host, 'm1')).rejects.toBe(error);
+
+    expect(row('m1')).toEqual(expect.objectContaining({ refused: reason }));
+    expect(row('m1')).not.toHaveProperty('unconfirmed');
+    expect(row('m1')).not.toHaveProperty('claim');
+  });
+
+  it.each([
+    ['timed out', { code: -32000, message: 'request timed out' }],
+    ['lost its connection', { code: -32000, message: 'connection closed' }],
+    ['a daemon that does not say', refusal({})],
+  ])('a row whose prompt %s may have reached the agent', async (_what, error) => {
+    hold('m1', 1);
+    const { host, sendPrompt } = makeHost();
+    sendPrompt.mockRejectedValueOnce(error);
+
+    await expect(sendHeldMessages(host, 'm1')).rejects.toBe(error);
+
+    expect(row('m1')).toMatchObject({ unconfirmed: true });
+    expect(row('m1')).not.toHaveProperty('refused');
+  });
+
+  it('a refusal does not take back that an earlier send may have reached the agent', async () => {
+    hold('m1', 1);
+    const { host, sendPrompt } = makeHost();
+    sendPrompt.mockRejectedValueOnce({ code: -32000, message: 'request timed out' });
+    await sendHeldMessages(host, 'm1').catch(() => {});
+    sendPrompt.mockRejectedValueOnce(refusal({ neverDelivered: true }));
+    await sendHeldMessages(host, 'm1').catch(() => {});
+
+    expect(row('m1')).toMatchObject({ unconfirmed: true });
+  });
+
+  it('sending it again forgets the refusal', async () => {
+    hold('m1', 1);
+    const { host, sendPrompt } = makeHost();
+    sendPrompt.mockRejectedValueOnce(refusal({ neverDelivered: true }));
+    await sendHeldMessages(host, 'm1').catch(() => {});
+    sendPrompt.mockRejectedValueOnce({ code: -32000, message: 'request timed out' });
+    await sendHeldMessages(host, 'm1').catch(() => {});
+
+    expect(row('m1')).toMatchObject({ unconfirmed: true });
+    expect(row('m1')).not.toHaveProperty('refused');
   });
 
   it('does nothing for an unknown row', async () => {

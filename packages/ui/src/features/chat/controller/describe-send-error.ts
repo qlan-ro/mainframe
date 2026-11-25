@@ -12,6 +12,8 @@
  */
 import { MAINFRAME_META_NAMESPACE, PromptFailureSchema } from '@qlan-ro/mainframe-types';
 import type { PromptFailure, PromptRemedy } from '@qlan-ro/mainframe-types';
+import { NotSentError } from '@/lib/daemon/not-sent-error';
+import { errorMessage } from '@/lib/error-message';
 
 const AUTH_SENTENCE = 'Not authorized on this daemon. Re-pair it from the daemon menu, then send again.';
 const RESTORED_CLAUSE = 'Your attachments are back in the composer.';
@@ -28,6 +30,24 @@ function promptFailureOf(error: unknown): PromptFailure | undefined {
   const failure = (data as Record<string, unknown> | null | undefined)?.[MAINFRAME_META_NAMESPACE];
   const parsed = PromptFailureSchema.safeParse(failure);
   return parsed.success ? parsed.data : undefined;
+}
+
+/** JSON-RPC's own refusals, answered before anything acts on the request: unparsable, invalid, no such method, invalid params. */
+const PROTOCOL_REFUSALS: readonly unknown[] = [-32700, -32600, -32601, -32602];
+
+/** The failure in words, whatever it is: an error, or a JSON-RPC error object. */
+export function sendErrorMessage(error: unknown): string {
+  return promptFailureOf(error)?.reason ?? errorMessage(error);
+}
+
+/** Why a prompt was refused, when it certainly did not reach the agent; undefined when it may have. */
+export function sendRefusal(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  const refused =
+    error instanceof NotSentError ||
+    promptFailureOf(error)?.neverDelivered === true ||
+    PROTOCOL_REFUSALS.includes(code);
+  return refused ? sendErrorMessage(error) : undefined;
 }
 
 /** The action a refused prompt offers before retrying, if any. */

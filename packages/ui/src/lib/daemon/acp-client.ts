@@ -1,3 +1,4 @@
+import { NotSentError } from './not-sent-error';
 import { requestHistoryPage, requestHistorySearch } from './acp-history-client';
 import type { HistoryPageParams, HistoryPageResult, HistoryWindow } from '@qlan-ro/mainframe-types';
 import {
@@ -262,7 +263,7 @@ export class AcpFacadeClient {
   }
 
   private requireConnection(): RpcConnection {
-    if (!this.connection) throw new Error('[acp-client] not connected — call connect() first');
+    if (!this.connection) throw new NotSentError('[acp-client] not connected — call connect() first');
     return this.connection;
   }
 

@@ -65,6 +65,8 @@ export const PromptFailureSchema = z
   .object({
     reason: z.string(),
     remedy: PromptRemedySchema.optional().catch(undefined),
+    /** The agent certainly did not get the prompt. Absent, it may have. */
+    neverDelivered: z.boolean().optional().catch(undefined),
   })
   .loose();
 export type PromptFailure = z.infer<typeof PromptFailureSchema>;

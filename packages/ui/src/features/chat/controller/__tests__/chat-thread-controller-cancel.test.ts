@@ -101,6 +101,19 @@ describe('AcpChatController.cancel — holds the queue first (C10)', () => {
     expect(useHeldQueue.getState().byChat).toEqual({});
   });
 
+  it('a Stop gives back the held rows Send now has not sent, whether or not a turn shows yet', async () => {
+    useHeldQueue.getState().hold(CHAT_ID, queuedRef('m1', 1));
+    useHeldQueue.getState().hold(CHAT_ID, queuedRef('m2', 2));
+    useHeldQueue.getState().claimFrom(CHAT_ID, 'm1');
+    useHeldQueue.getState().startSending(CHAT_ID, 'm1');
+    const { ctrl } = makeController();
+
+    await ctrl.cancel();
+
+    expect(useHeldQueue.getState().byChat[CHAT_ID]!.map((row) => row.claim?.started)).toEqual([true, undefined]);
+    expect(useHeldQueue.getState().byChat[CHAT_ID]![1]).not.toHaveProperty('claim');
+  });
+
   it('sendHeld sends the held message through the session', async () => {
     useHeldQueue.getState().hold(CHAT_ID, queuedRef('m1', 1));
     const { ctrl, acpClient } = makeController();
