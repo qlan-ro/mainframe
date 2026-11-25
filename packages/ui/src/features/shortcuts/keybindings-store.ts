@@ -12,6 +12,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { migrateSplitBindings } from './migrate-split-bindings';
 import type { Chord } from './shortcut-types';
 
 /** A rebound chord, or `null` for an intentionally unassigned shortcut. */
@@ -21,25 +22,48 @@ export type Overrides = Record<string, Binding>;
 
 interface KeybindingsStore {
   overrides: Overrides;
-  setOverrides: (next: Overrides) => void;
+  setOverrides: (update: (current: Overrides) => Overrides) => void;
   /** Drop one id's override, returning it to the registry default. */
   reset: (id: string) => void;
   resetAll: () => void;
 }
 
+const storageKey = 'mf:keybindings';
+
 export const useKeybindingsStore = create<KeybindingsStore>()(
   persist(
     (set) => ({
       overrides: {},
-      setOverrides: (next) => set({ overrides: next }),
-      reset: (id) =>
+      setOverrides: (update) => {
+        void useKeybindingsStore.persist?.rehydrate();
+        set((s) => ({ overrides: update(s.overrides) }));
+      },
+      reset: (id) => {
+        void useKeybindingsStore.persist?.rehydrate();
         set((s) => {
           const next = { ...s.overrides };
           delete next[id];
           return { overrides: next };
-        }),
+        });
+      },
       resetAll: () => set({ overrides: {} }),
     }),
-    { name: 'mf:keybindings' },
+    {
+      name: storageKey,
+      migrate: (persisted, version) => {
+        if (version === 1) return persisted as Pick<KeybindingsStore, 'overrides'>;
+        throw new Error('Unsupported keybindings version');
+      },
+      merge: (persisted, current) => ({
+        ...current,
+        overrides: migrateSplitBindings((persisted as { overrides?: unknown } | undefined)?.overrides),
+      }),
+    },
   ),
 );
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === storageKey || event.key === null) void useKeybindingsStore.persist?.rehydrate();
+  });
+}

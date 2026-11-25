@@ -14,7 +14,7 @@ import { useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SHORTCUTS, visibleShortcuts } from '@/features/shortcuts/registry';
-import type { Chord, ShortcutGroup } from '@/features/shortcuts/shortcut-types';
+import type { Chord, ShortcutDescriptor, ShortcutGroup } from '@/features/shortcuts/shortcut-types';
 import { isMacPlatform } from '@/features/shortcuts/platform';
 import { useKeybindingsStore } from '@/features/shortcuts/keybindings-store';
 import { bindWithSteal, chordHolder, effectiveBindings } from '@/features/shortcuts/effective-bindings';
@@ -33,19 +33,20 @@ export function KeybindingsPane() {
   const bindings = useMemo(() => effectiveBindings(visible, overrides), [visible, overrides]);
   const anyOverridden = bindings.some((binding) => !binding.isDefault);
 
-  const holderFor = useCallback(
-    (selfId: string) => (chord: Chord) => chordHolder(bindings, chord, isMac, selfId),
-    [bindings, isMac],
-  );
-
   const bind = useCallback(
-    (id: string, chord: Chord, steal: boolean) => {
-      // Both paths go through bindWithSteal: without a holder it is a plain
-      // write, so there is one code path rather than two that can diverge.
-      if (!steal && chordHolder(bindings, chord, isMac, id) != null) return;
-      setOverrides(bindWithSteal(overrides, visible, id, chord, isMac));
+    (id: string, chord: Chord, confirmedHolderId: string | null): ShortcutDescriptor | null => {
+      let conflict: ShortcutDescriptor | null = null;
+      setOverrides((current) => {
+        const holder = chordHolder(effectiveBindings(visible, current), chord, isMac, id);
+        if (holder && holder.id !== confirmedHolderId) {
+          conflict = holder;
+          return current;
+        }
+        return bindWithSteal(current, visible, id, chord, isMac);
+      });
+      return conflict;
     },
-    [bindings, overrides, visible, isMac, setOverrides],
+    [visible, isMac, setOverrides],
   );
 
   const sections = GROUP_ORDER.map((group) => ({
@@ -79,8 +80,7 @@ export function KeybindingsPane() {
               key={binding.entry.id}
               binding={binding}
               isMac={isMac}
-              holderOf={holderFor(binding.entry.id)}
-              onBind={(chord, steal) => bind(binding.entry.id, chord, steal)}
+              onBind={(chord, holderId) => bind(binding.entry.id, chord, holderId)}
               onReset={() => reset(binding.entry.id)}
             />
           ))}
