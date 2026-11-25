@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { visibleLine } from '../visible-text';
 
 type GateAccent = 'primary' | 'warning';
 
@@ -47,6 +48,7 @@ export function GateCardShell({
   );
 }
 
+/** The eyebrow and the title may be the asking agent's words: nothing in them hides, or moves the rest. */
 export function GateHead({
   icon,
   eyebrow,
@@ -73,8 +75,20 @@ export function GateHead({
         {icon}
       </span>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className={cn('text-xs font-medium', eyebrowClassName)}>{eyebrow}</span>
-        <span className="text-sm leading-tight font-semibold text-foreground">{title}</span>
+        <span
+          data-testid="gate-head-eyebrow"
+          dir="ltr"
+          className={cn('stored-order text-xs font-medium', eyebrowClassName)}
+        >
+          {visibleLine(eyebrow)}
+        </span>
+        <span
+          data-testid="gate-head-title"
+          dir="ltr"
+          className="stored-order text-sm leading-tight font-semibold text-foreground"
+        >
+          {visibleLine(title)}
+        </span>
         {subtitle != null && <span className="text-xs text-muted-foreground">{subtitle}</span>}
       </div>
       {right}

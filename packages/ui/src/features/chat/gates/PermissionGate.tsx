@@ -18,20 +18,30 @@ export type { ReplyFn } from './gate-types';
 // Sub-components
 // ---------------------------------------------------------------------------
 
+/** The command is shown whole: the gate's slot scrolls it, with the answers in view, and the count says how far it goes. */
 function ToolNameRow({ toolName, command }: { toolName: string; command?: string }) {
+  const lines = command?.split('\n').length ?? 0;
   return (
     <div className={cn('px-4 pb-1', GATE_BODY_INSET)}>
       <div className="flex items-center gap-2">
         <TerminalIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 truncate font-mono text-sm font-semibold text-foreground" dir="ltr">
+        <span className="stored-order min-w-0 truncate font-mono text-sm font-semibold text-foreground" dir="ltr">
           {visibleLine(toolName)}
         </span>
+        {lines > 1 && (
+          <span
+            data-testid="chat-permission-command-lines"
+            className="shrink-0 text-xs text-muted-foreground tabular-nums"
+          >
+            {lines} lines
+          </span>
+        )}
       </div>
       {command && (
         <p
           data-testid="chat-permission-command"
           dir="ltr"
-          className="mt-1 max-h-24 overflow-y-auto font-mono text-xs leading-normal wrap-anywhere whitespace-pre-wrap text-foreground/80"
+          className="stored-order mt-1 font-mono text-xs leading-normal wrap-anywhere whitespace-pre-wrap text-foreground/80"
         >
           {visibleText(command)}
         </p>
@@ -61,7 +71,7 @@ function DetailsDisclosure({ input }: { input: Record<string, unknown> }) {
         <pre
           data-testid="chat-permission-details-pre"
           dir="ltr"
-          className="mt-2 max-h-60 animate-in overflow-auto rounded-md bg-muted p-3 font-mono text-xs text-foreground duration-150 fade-in-0 slide-in-from-top-1"
+          className="stored-order mt-2 max-h-60 animate-in overflow-auto rounded-md bg-muted p-3 font-mono text-xs text-foreground duration-150 fade-in-0 slide-in-from-top-1"
         >
           {visibleText(JSON.stringify(input, null, 2))}
         </pre>
@@ -93,7 +103,11 @@ function SavedBadge({ grants }: { grants: readonly GrantLine[] }) {
   const [only] = grants;
   if (!only) return null;
   return grants.length === 1 ? (
-    <code data-testid="chat-permission-rule" dir="ltr" className={cn(badge, 'max-w-60 font-mono whitespace-pre')}>
+    <code
+      data-testid="chat-permission-rule"
+      dir="ltr"
+      className={cn(badge, 'stored-order max-w-60 font-mono whitespace-pre')}
+    >
       {only.subject}
     </code>
   ) : (
@@ -181,7 +195,7 @@ function GrantList({ grants }: { grants: readonly GrantLine[] }) {
             {verb}{' '}
             <code
               dir="ltr"
-              className="rounded-sm bg-muted box-decoration-clone px-0.5 font-mono wrap-anywhere whitespace-pre-wrap text-foreground"
+              className="stored-order rounded-sm bg-muted box-decoration-clone px-0.5 font-mono wrap-anywhere whitespace-pre-wrap text-foreground"
             >
               {subject}
             </code>{' '}
@@ -208,7 +222,7 @@ function OmittedList({ omitted, offersAlways }: { omitted: readonly string[]; of
       </span>
       <ul className="mt-0.5 flex flex-col gap-0.5">
         {omitted.map((line, index) => (
-          <li key={index} dir="ltr" className="wrap-anywhere whitespace-pre-wrap">
+          <li key={index} dir="ltr" className="stored-order wrap-anywhere whitespace-pre-wrap">
             {line}
           </li>
         ))}

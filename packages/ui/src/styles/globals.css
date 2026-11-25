@@ -255,6 +255,16 @@
   outline-offset: -2px;
 }
 
+/**
+ * Text the user approves: every character stands where it is stored, left to
+ * right, whatever its script. A right-to-left word shows its letters in reverse
+ * of how it reads, which is the price of a path whose parts cannot trade places.
+ */
+@utility stored-order {
+  direction: ltr;
+  unicode-bidi: bidi-override;
+}
+
 /** Ramp depth for every `scroll-fade*` scroller — the app's existing ~20px reading, not stock's deeper percentage default. */
 @layer base {
   :root {

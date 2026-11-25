@@ -377,6 +377,19 @@ describe('AskUserQuestionGate', () => {
     expect(screen.getByTestId('chat-question-context').textContent).toBe('Format · code-reviewer');
   });
 
+  it('spells out what hides in the asker, and keeps its order', () => {
+    wrap(
+      <AskUserQuestionGate
+        entry={single()}
+        reply={reply}
+        context={{ asker: 'a\u202Eb', title: 'c\u200Bd', more: 0 }}
+      />,
+    );
+
+    expect(screen.getByTestId('chat-question-context').textContent).toBe('Format · a⟨U+202E⟩b · c⟨U+200B⟩d');
+    expect(screen.getByText(/a⟨U\+202E⟩b/)).toHaveClass('stored-order');
+  });
+
   it('tags an option ending in "(Recommended)" and drops the suffix from its label', () => {
     const entry = single();
     (entry.request.input.questions as { options: { label: string }[] }[])[0]!.options = [

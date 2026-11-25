@@ -7,7 +7,9 @@
  * Escaped: controls (but tab and line feed), formatting characters (bidirectional
  * controls, zero-width characters, tags), every space but U+0020, line and
  * paragraph separators, and letters drawn as nothing. Pair with
- * `whitespace-pre-wrap` and `dir="ltr"`, which keep what is left as written.
+ * `whitespace-pre-wrap` and `stored-order`, which keep what is left as written:
+ * ordinary right-to-left letters would otherwise reorder the punctuation and
+ * digits around them, with no control character to spell out.
  */
 const HIDDEN = /[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\p{Zl}\p{Zp}\p{Zs}\p{Default_Ignorable_Code_Point}⠀]/gu;
 const KEPT = new Set([' ', '\n', '\t']);

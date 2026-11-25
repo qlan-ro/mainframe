@@ -226,6 +226,76 @@ test.describe('§permission gate many suggestions', () => {
   });
 });
 
+// ─── Permission gate — a command taller than the gate, right-to-left text ────
+
+test.describe('§permission gate tall command', () => {
+  let app: TauriAppFixture;
+  let project: TauriProject;
+
+  test.beforeAll(async () => {
+    app = await launchTauriApp({ recordingKey: 'permissions-tall' });
+    project = await createTauriProject(app.page);
+    await createTauriChat(app.page, project.projectId, 'default');
+  });
+
+  test.afterAll(async () => {
+    cleanupTauriProject(project);
+    await closeTauriApp(app);
+  });
+
+  /** Scrolls the gate to its end; the command's last characters must then stand clear above the answers. */
+  async function expectEndReachable(page: Page): Promise<void> {
+    const allow = page.getByTestId('chat-permission-option-allow-once');
+    await expect(allow).toBeInViewport({ ratio: 1 });
+    await page.getByTestId('chat-thread-gate-slot').hover();
+    await page.mouse.wheel(0, 20_000);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const text = document.querySelector('[data-testid="chat-permission-command"]')!.firstChild as Text;
+          const end = document.createRange();
+          end.setStart(text, text.length - 4);
+          end.setEnd(text, text.length);
+          const slot = document.querySelector('[data-testid="chat-thread-gate-slot"]')!.getBoundingClientRect();
+          const answers = document.querySelector('[data-testid="chat-permission-options"]')!.getBoundingClientRect();
+          const box = end.getBoundingClientRect();
+          return end.toString() === 'LAST' && box.top >= slot.top && box.bottom <= answers.top;
+        }),
+      )
+      .toBe(true);
+    await expect(allow).toBeInViewport({ ratio: 1 });
+  }
+
+  test('a ten-line gap does not hide the last line, and 200 lines scroll to theirs with the answers in view', async () => {
+    const { page } = app;
+    await sendMessage(page, 'Run the two long scripts');
+    const guard = page.locator('[data-testid="chat-gate-guard"][data-armed]');
+    await guard.waitFor({ timeout: 45_000 });
+    await expect(page.getByTestId('chat-permission-command-lines')).toHaveText('12 lines');
+    await expectEndReachable(page);
+    await page.getByTestId('chat-permission-option-reject-once').click();
+
+    await expect(page.getByTestId('chat-permission-command-lines')).toHaveText('200 lines');
+    await guard.waitFor({ timeout: 5_000 });
+    await expectEndReachable(page);
+    // The path's Hebrew part stands in stored order, so nothing around it trades places.
+    const inStoredOrder = await page.evaluate(() => {
+      const text = document.querySelector('[data-testid="chat-permission-command"]')!.firstChild as Text;
+      const from = text.data.lastIndexOf('\n') + 1;
+      const lefts = Array.from({ length: text.length - from }, (_, i) => {
+        const char = document.createRange();
+        char.setStart(text, from + i);
+        char.setEnd(text, from + i + 1);
+        return char.getBoundingClientRect().left;
+      });
+      return lefts.every((left, i) => i === 0 || left > lefts[i - 1]!);
+    });
+    expect(inStoredOrder).toBe(true);
+    await page.getByTestId('chat-permission-option-reject-once').click();
+    await waitForIdle(page, 60_000);
+  });
+});
+
 // ─── Two requests, one burst of clicks ───────────────────────────────────────
 
 test.describe('§a burst of clicks', () => {

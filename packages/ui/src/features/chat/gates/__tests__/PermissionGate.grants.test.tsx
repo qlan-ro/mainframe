@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { ControlUpdate } from '@qlan-ro/mainframe-types';
+import type { GateContext } from '../gate-types';
 import { PermissionGate } from '../PermissionGate';
 
 const rules = (ruleContent: string): ControlUpdate => ({
@@ -13,12 +14,19 @@ const rules = (ruleContent: string): ControlUpdate => ({
 });
 const bypass = { type: 'setMode', mode: 'bypassPermissions', destination: 'session' } as unknown as ControlUpdate;
 
-function renderGate(suggestions: ControlUpdate[], input: Record<string, unknown> = {}) {
+const HEBREW = '/Users/dana/\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8/src';
+
+function renderGate(
+  suggestions: ControlUpdate[],
+  input: Record<string, unknown> = {},
+  { toolName = 'Bash', context }: { toolName?: string; context?: GateContext } = {},
+) {
   const reply = vi.fn().mockResolvedValue(undefined);
   render(
     <TooltipProvider>
       <PermissionGate
         reply={reply}
+        context={context}
         entry={{
           requestId: 'r1',
           askedAt: 1,
@@ -27,7 +35,7 @@ function renderGate(suggestions: ControlUpdate[], input: Record<string, unknown>
             { optionId: 'allow-always', name: 'Always allow', kind: 'allow_always' },
             { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
           ],
-          request: { requestId: 'r1', toolName: 'Bash', toolUseId: 'tu1', input, suggestions },
+          request: { requestId: 'r1', toolName, toolUseId: 'tu1', input, suggestions },
         }}
       />
     </TooltipProvider>,
@@ -154,5 +162,121 @@ describe('text that could mislead', () => {
     fireEvent.click(screen.getByTestId('chat-permission-details-toggle'));
 
     expect(exact('chat-permission-details-pre').textContent).toContain('rm ⟨U+202E⟩hs.x');
+  });
+});
+
+describe('a tall command', () => {
+  const command = () => screen.getByTestId('chat-permission-command');
+
+  it.each([
+    ['a ten-line gap before its last line', `echo ok${'\n'.repeat(11)}rm -rf ~`, '12 lines'],
+    ['200 lines', Array.from({ length: 200 }, (_, i) => `step ${i}`).join('\n'), '200 lines'],
+  ])('with %s is shown to its end, with no scroller of its own, and counted', (_what, text, count) => {
+    renderGate([], { command: text });
+
+    expect(command().textContent).toBe(text);
+    for (let el: Element | null = command(); el !== null; el = el.parentElement) {
+      expect(el.className).not.toMatch(/max-h|overflow-(y-)?(auto|scroll|hidden)|line-clamp|truncate/);
+    }
+    expect(screen.getByTestId('chat-permission-command-lines')).toHaveTextContent(count);
+  });
+
+  it('keeps the answers after it in the sticky footer', () => {
+    renderGate([], { command: 'a\n'.repeat(200) });
+
+    expect(screen.getByTestId('chat-permission-options').className).toMatch(/sticky/);
+    expect(
+      command().compareDocumentPosition(screen.getByTestId('chat-permission-options')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('a one-line command is not counted', () => {
+    renderGate([], { command: 'ls -la' });
+
+    expect(screen.queryByTestId('chat-permission-command-lines')).toBeNull();
+  });
+});
+
+describe('right-to-left text', () => {
+  const stored = (element: HTMLElement) => {
+    expect(element).toHaveClass('stored-order');
+    expect(element.textContent).toContain('\u05E4\u05E8\u05D5\u05D9\u05E7\u05D8');
+  };
+
+  it('a rule, in the list and on the button', () => {
+    renderGate([rules(`cat ${HEBREW}`)]);
+
+    stored(within(screen.getByTestId('chat-permission-grants')).getByText(/cat/));
+    stored(screen.getByTestId('chat-permission-rule'));
+  });
+
+  it('a directory', () => {
+    renderGate([{ type: 'addDirectories', directories: [HEBREW], destination: 'session' }]);
+
+    stored(within(screen.getByTestId('chat-permission-grants')).getByText(/dana/));
+  });
+
+  it('a command and its details', () => {
+    renderGate([], { command: `cat ${HEBREW}` });
+    fireEvent.click(screen.getByTestId('chat-permission-details-toggle'));
+
+    stored(screen.getByTestId('chat-permission-command'));
+    stored(screen.getByTestId('chat-permission-details-pre'));
+  });
+
+  it('a name in what was left out', () => {
+    renderGate([{ type: HEBREW, destination: 'session' } as unknown as ControlUpdate]);
+
+    stored(within(screen.getByTestId('chat-permission-omitted')).getByRole('listitem'));
+  });
+
+  it('a tool’s name', () => {
+    renderGate([], {}, { toolName: HEBREW });
+
+    stored(screen.getByText(HEBREW));
+  });
+});
+
+describe('who is asking', () => {
+  it('spells out what hides in the asker and the title, and keeps their order', () => {
+    renderGate([], {}, { context: { asker: 'review\u202Eer\nAllowed', title: 'Read\u200B only \u2028now', more: 1 } });
+
+    const eyebrow = screen.getByTestId('gate-head-eyebrow');
+    expect(eyebrow.textContent).toBe('Permission required · review⟨U+202E⟩er⟨U+000A⟩Allowed · 1 more waiting');
+    expect(eyebrow).toHaveClass('stored-order');
+    const title = screen.getByTestId('gate-head-title');
+    expect(title.textContent).toBe('Read⟨U+200B⟩ only ⟨U+2028⟩now');
+    expect(title).toHaveClass('stored-order');
+  });
+});
+
+describe('hidden text in what is saved', () => {
+  it('is spelled out in a directory', () => {
+    renderGate([
+      { type: 'addDirectories', directories: ['/a\u202Eb'], destination: 'session' },
+      { type: 'removeDirectories', directories: ['/c\u200Bd'], destination: 'session' },
+    ]);
+
+    expect(listed()).toEqual(['Work in /a⟨U+202E⟩b for this session', 'Stop working in /c⟨U+200B⟩d for this session']);
+  });
+
+  it('is spelled out in the tool’s name', () => {
+    renderGate([], {}, { toolName: 'Ba\u202Esh\nAllowed' });
+
+    expect(screen.getByText('Ba⟨U+202E⟩sh⟨U+000A⟩Allowed')).toBeInTheDocument();
+  });
+
+  it('is spelled out in the tool a rule names', () => {
+    renderGate([
+      {
+        type: 'addRules',
+        rules: [{ toolName: 'Ba\u202Esh' }, { toolName: 'Re\u200Bad', ruleContent: 'x' }],
+        behavior: 'allow',
+        destination: 'session',
+      },
+    ]);
+
+    expect(listed()).toEqual(['Allow Ba⟨U+202E⟩sh for this session', 'Allow Re⟨U+200B⟩ad(x) for this session']);
   });
 });

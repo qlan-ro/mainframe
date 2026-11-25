@@ -10,6 +10,7 @@ import { AskQuestionWizard } from './AskQuestionWizard';
 import { assembleAnswers, resolveChosen } from './answers';
 import type { AskQuestion } from './answers';
 import { askerParts, type GateContext, type ReplyFn } from './gate-types';
+import { visibleLine } from './visible-text';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -157,11 +158,8 @@ export function AskUserQuestionGate({ entry, reply, context }: AskUserQuestionGa
   }, [entry, questions, reply, selections, otherText]);
 
   const title = activeQuestion?.question ?? '';
-  const details = [
-    activeQuestion?.header,
-    isMulti ? 'select all that apply' : undefined,
-    ...askerParts(context, true),
-  ].filter(Boolean);
+  const details = [activeQuestion?.header, isMulti ? 'select all that apply' : undefined].filter(Boolean).join(' · ');
+  const asker = visibleLine(askerParts(context, true).join(' · '));
 
   return (
     <div data-testid="chat-question-gate" role="group" aria-label="Question from the agent">
@@ -178,9 +176,15 @@ export function AskUserQuestionGate({ entry, reply, context }: AskUserQuestionGa
             <h3 data-testid="chat-question-text" className="text-[0.875rem] leading-5 font-semibold text-foreground">
               {title}
             </h3>
-            {details.length > 0 && (
+            {(details || asker) && (
               <span data-testid="chat-question-context" className="text-xs text-muted-foreground">
-                {details.join(' · ')}
+                {details && <bdi>{details}</bdi>}
+                {details && asker && ' · '}
+                {asker && (
+                  <span dir="ltr" className="stored-order">
+                    {asker}
+                  </span>
+                )}
               </span>
             )}
           </div>
