@@ -289,14 +289,27 @@ describe('another surface with the focus since', () => {
     expectStopped('b');
   });
 
-  it('is where the focus is again once the user types there', () => {
+  it.each([
+    ['types', (field: HTMLElement) => fireEvent(field, new InputEvent('beforeinput', { bubbles: true, data: 'x' }))],
+    ['uses an input method', (field: HTMLElement) => fireEvent.compositionStart(field)],
+  ])('is where the focus is again once the user %s there', (_, enter) => {
     show(BESIDE);
     focus('message a');
-    fireEvent.pointerDown(screen.getByText('files'));
-    fireEvent.keyDown(screen.getByLabelText('message a'), { key: 'Shift' });
-    expectStopped();
-    fireEvent.keyDown(screen.getByLabelText('message a'), { key: 'x' });
+    fireEvent.pointerDown(screen.getByText('transcript b'));
+    for (const key of ['Shift', 'CapsLock', 'F5', 'Escape'])
+      fireEvent.keyDown(screen.getByLabelText('message a'), { key });
+    expectStopped('b');
+    enter(screen.getByLabelText('message a'));
     expectStopped('a');
+  });
+
+  it('is the chat that takes the place of a pressed one, where the focus stayed', () => {
+    const view = show({ column: 'a', tabs: [] });
+    focus('message a');
+    fireEvent.pointerDown(screen.getByText('transcript a'));
+    view.set({ column: 'c', tabs: [] });
+    expect(screen.getByLabelText('message c')).toHaveFocus();
+    expectStopped('c');
   });
 });
 

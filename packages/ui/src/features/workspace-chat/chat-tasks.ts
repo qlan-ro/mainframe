@@ -71,7 +71,11 @@ class ChatTasks {
     if (this.watchers === 1) this.start();
     return () => {
       this.watchers -= 1;
-      if (this.watchers === 0) this.halt();
+      if (this.watchers > 0) return;
+      this.halt();
+      // Nobody asks while none is in front: what runs now may be over by then.
+      clearTimeout(this.expiry);
+      this.expiry = setTimeout(() => this.expire(), CONFIRMED_MS);
     };
   }
 
@@ -100,8 +104,7 @@ class ChatTasks {
   private start(): void {
     if (!this.asking) return;
     this.refusals = 0;
-    // Nobody asked for a while: what ran then may be over.
-    if (this.state.tasks !== null && Date.now() - this.confirmedAt >= CONFIRMED_MS) this.expire();
+    clearTimeout(this.expiry);
     this.run();
   }
 

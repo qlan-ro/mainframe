@@ -24,21 +24,22 @@ function onFocusIn(): void {
 function onPress(): void {
   pressed = null;
 }
-/** Typing is working where the focus is. A shortcut isn't: it may be the one asking. */
-function onKeyDown(event: KeyboardEvent): void {
-  if (!event.metaKey && !event.ctrlKey && !event.altKey && !MODIFIERS.has(event.key)) pressed = undefined;
+/** Text, an input method's included, goes where the focus is. A key alone may be a shortcut. */
+function onText(): void {
+  pressed = undefined;
 }
-const MODIFIERS = new Set(['Meta', 'Control', 'Alt', 'Shift']);
 
 /** For as long as the app's shell is mounted. */
 export function trackConversationFocus(): () => void {
   window.addEventListener('focusin', onFocusIn, true);
   window.addEventListener('pointerdown', onPress, true);
-  window.addEventListener('keydown', onKeyDown, true);
+  window.addEventListener('compositionstart', onText, true);
+  window.addEventListener('beforeinput', onText, true);
   return () => {
     window.removeEventListener('focusin', onFocusIn, true);
     window.removeEventListener('pointerdown', onPress, true);
-    window.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('compositionstart', onText, true);
+    window.removeEventListener('beforeinput', onText, true);
     focused = pressed = undefined;
     anyYet = false;
   };
@@ -72,8 +73,9 @@ export function conversationOf(element: Element | null): string | undefined {
 export function heldConversation(): string | null | undefined {
   const at = document.activeElement;
   const inside = at === null || at === document.body ? undefined : conversationOf(at);
-  if (anyYet && pressed !== undefined) return pressed;
-  // The chat shown there now: the chat column's changes under the focus.
+  const left = pressed != null && document.querySelector(`[data-conversation="${CSS.escape(pressed)}"]`) === null;
+  if (anyYet && pressed !== undefined && !left) return pressed;
+  // The chat shown there now: the chat column's changes under the focus, and under a press.
   if (inside !== undefined) return inside;
   return anyYet ? (focused ?? null) : undefined;
 }
