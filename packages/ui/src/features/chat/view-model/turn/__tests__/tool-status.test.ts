@@ -1,6 +1,7 @@
-import { expect, it } from 'vitest';
-import { resolveToolStatus } from '../tool-status';
-import { tool } from './fixtures';
+import { describe, expect, it } from 'vitest';
+import { resolveToolStatus, settledStatus, wasCancelled } from '../tool-status';
+import type { ToolPart, TurnUnit } from '../types';
+import { presented, tool } from './fixtures';
 
 it('keeps a partial result active despite native completion', () => {
   expect(
@@ -60,4 +61,51 @@ it('gives explicit failure priority over completed lifecycle', () => {
 it.each([null, [], 'completed', {}, { acpStatus: 'not-real' }])('ignores malformed lifecycle metadata: %j', (value) => {
   const part = tool({ providerMetadata: { mainframe: value } as never });
   expect(resolveToolStatus(part, new Set())).toBe('unknown');
+});
+
+describe('a call with no outcome', () => {
+  const open = tool({ providerMetadata: { mainframe: { acpStatus: 'in_progress' } } });
+  const none = new Set<string>();
+
+  it('runs while its part can, and claims no end once nothing runs it', () => {
+    expect(settledStatus(open, none, true)).toBe('running');
+    expect(settledStatus(open, none, false)).toBe('unknown');
+    expect(settledStatus(tool({ approval: { id: 'a' } }), none, false)).toBe('unknown');
+  });
+
+  it('is stopped only when something says its turn was', () => {
+    expect(settledStatus(open, none, false, true)).toBe('stopped');
+    expect(settledStatus(tool({ result: 'x' }), none, false, true)).toBe('success');
+    expect(settledStatus(tool(), none, false, true)).toBe('unknown');
+  });
+
+  it('still waits on its own request', () => {
+    expect(settledStatus(open, new Set(['call']), false, true)).toBe('awaiting-approval');
+  });
+
+  type Said = Partial<Pick<TurnUnit, 'presentation'> & Pick<ToolPart, 'status'>>;
+  it.each<[string, string, Said, boolean]>([
+    ['its provider turn was cancelled', 'Bash', { presentation: presented({ state: 'cancelled' }) }, true],
+    ['its message was cancelled', 'Bash', { status: { type: 'incomplete', reason: 'cancelled' } }, true],
+    ['its provider turn failed', 'Bash', { presentation: presented({ state: 'failed' }) }, false],
+    ['its provider turn was cut', 'Bash', { presentation: presented({ state: 'invalid' }) }, false],
+    ['nothing says', 'Bash', {}, false],
+    // What it started may outlive the turn, and its own evidence says how that stands.
+    ['it started an agent', 'Task', { presentation: presented({ state: 'cancelled' }) }, false],
+    [
+      'it delegated a task',
+      'mcp__mainframe__delegate_task',
+      { presentation: presented({ state: 'cancelled' }) },
+      false,
+    ],
+    ['it started a workflow', 'Workflow', { presentation: presented({ state: 'cancelled' }) }, false],
+  ])('is cancelled with its turn: %s', (_when, toolName, { presentation, status }, cancelled) => {
+    const part = tool({ toolName, ...(status && { status }) });
+    expect(wasCancelled({ part, presentation }, false)).toBe(cancelled);
+  });
+
+  it('is cancelled with the agent whose step it is', () => {
+    expect(wasCancelled({ part: tool({ toolName: 'Bash' }) }, true)).toBe(true);
+    expect(wasCancelled({ part: tool({ toolName: 'Task' }) }, true)).toBe(false);
+  });
 });

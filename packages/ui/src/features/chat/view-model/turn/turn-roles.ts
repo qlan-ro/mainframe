@@ -4,7 +4,7 @@ import { parseDelegateResult } from '../../orchestration/delegate-result';
 import { resolveResultText } from '../../tools/shared/result';
 import { parseWorkflowLaunch } from '../../workflow/workflow-progress';
 import { isChildWork, isMarkerTool, toolKind } from './tool-kind';
-import { settledStatus } from './tool-status';
+import { settledStatus, wasCancelled } from './tool-status';
 import { launchedOnly, retryKey } from './tool-values';
 import { isMarkerUnit, isTextUnit } from './turn-units';
 import type { ToolPart, TurnChild, TurnUnit } from './types';
@@ -50,6 +50,19 @@ export function failedSteps(
     else if (status === 'failed') (recovered.has(retryKey(tool)) ? retried : failed).unshift(tool.toolCallId);
   }
   return { failed, retried };
+}
+
+/**
+ * Whether nothing says how a step ended. A sub-agent's call is left out: what the
+ * daemon lists of it says so too (`live-children`).
+ */
+export function hasUnknownStep(work: readonly TurnUnit[], pending: ReadonlySet<string>, live: boolean): boolean {
+  return work.some(
+    (unit) =>
+      isTool(unit.part) &&
+      toolKind(unit.part.toolName) !== 'subagent' &&
+      settledStatus(unit.part, pending, live, wasCancelled(unit, false)) === 'unknown',
+  );
 }
 
 /** A sub-agent waits on the viewer when any call in its own transcript does. */

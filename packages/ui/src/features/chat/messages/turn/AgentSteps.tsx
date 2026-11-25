@@ -49,7 +49,7 @@ export function Block({
   );
 }
 
-export interface AgentStepsProps extends Omit<NestedScope, 'live'> {
+export interface AgentStepsProps extends Omit<NestedScope, 'live' | 'cancelled'> {
   messages: readonly ThreadMessage[];
   outcome: AgentOutcome;
   prompt?: string;
@@ -256,6 +256,7 @@ export function AgentSteps(props: AgentStepsProps) {
       chatId={chatId}
       pendingToolIds={pendingToolIds}
       live={props.outcome === 'going'}
+      cancelled={props.outcome === 'stopped'}
     >
       <NestedTranscriptProvider>
         <Steps {...props} />

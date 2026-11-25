@@ -10,6 +10,8 @@ export interface TranscriptScope {
   pendingToolIds: ReadonlySet<string>;
   /** Whether these messages' work can still be going. Left out: yes. */
   live?: boolean;
+  /** The agent whose steps these are was stopped. */
+  cancelled?: boolean;
 }
 const empty: TranscriptScope = { rootThreadId: '', ancestors: [], pendingToolIds: new Set() };
 const Context = createContext<TranscriptScope>(empty);
@@ -46,6 +48,8 @@ export interface NestedScope {
   toolCallId: string;
   /** Whether the agent whose transcript this is still works. */
   live: boolean;
+  /** It is known to have been stopped. */
+  cancelled: boolean;
   /** A delegated task's own chat, and the requests pending in it. A sub-agent's are its parent's. */
   chatId?: string;
   pendingToolIds?: ReadonlySet<string>;
@@ -55,6 +59,7 @@ export function NestedTranscriptScope({
   messageId,
   toolCallId,
   live,
+  cancelled,
   chatId,
   pendingToolIds,
   children,
@@ -64,11 +69,12 @@ export function NestedTranscriptScope({
     () => ({
       ...parent,
       live,
+      cancelled,
       chatId: chatId ?? parent.chatId,
       pendingToolIds: pendingToolIds ?? parent.pendingToolIds,
       ancestors: [...parent.ancestors, JSON.stringify([messageId, toolCallId])],
     }),
-    [parent, messageId, toolCallId, live, chatId, pendingToolIds],
+    [parent, messageId, toolCallId, live, cancelled, chatId, pendingToolIds],
   );
   return <TranscriptScopeProvider value={value}>{children}</TranscriptScopeProvider>;
 }

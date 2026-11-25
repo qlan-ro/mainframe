@@ -187,7 +187,7 @@ const AGREES: Record<string, readonly string[]> = {
   'needs-you': ['needs-you', 'awaiting-approval'],
   failed: ['failed'],
   stopped: ['stopped'],
-  none: ['success', 'stopped', 'unknown', 'failed'],
+  none: ['success', 'unknown', 'failed'],
 };
 
 beforeEach(() => {
@@ -225,7 +225,9 @@ describe.each(Object.keys(RESULTS))('a call whose result is %s', (result) => {
         list: { tasks: LISTS[list]!, live },
         connected,
       });
-      expect(AGREES[tab ?? 'none']).toContain(row);
+      // Only a cancelled call says so on its own.
+      if (row === 'stopped') expect(tab === 'stopped' || cancelled).toBe(true);
+      else expect(AGREES[tab ?? 'none']).toContain(row);
       expect(row === 'running').toBe(tab === 'running');
       expect(spins).toBe(tab === 'running');
     });
@@ -238,7 +240,7 @@ describe('a call that is not the last thing the session does', () => {
 
   it('runs for neither in an earlier part the run is not in', async () => {
     const messages = [...inTurn(left), ...next];
-    expect(await draw({ messages, session: 'running' })).toEqual({ row: 'stopped', tab: null, spins: false });
+    expect(await draw({ messages, session: 'running' })).toEqual({ row: 'unknown', tab: null, spins: false });
     cleanup();
     const run = { after: 'm-1', confirmed: true } as never;
     expect((await draw({ messages, session: 'running', run })).tab).toBeNull();
@@ -250,13 +252,13 @@ describe('a call that is not the last thing the session does', () => {
     expect(both).toEqual({ row: 'running', tab: 'running', spins: true });
   });
 
-  it('runs for both once the list names a task of it, and stops for both with the session idle', async () => {
+  it('runs for both once the list names a task of it, and for neither with the session idle', async () => {
     const launched = agent({ result: 'Async agent launched successfully.' });
     const messages = [...inTurn(launched), ...next];
     const list = { tasks: tasks('running'), live: true };
     expect(await draw({ messages, list })).toEqual({ row: 'running', tab: 'running', spins: true });
     cleanup();
-    expect(await draw({ messages: inTurn(left) })).toEqual({ row: 'stopped', tab: null, spins: false });
+    expect(await draw({ messages: inTurn(left) })).toEqual({ row: 'unknown', tab: null, spins: false });
   });
 });
 
@@ -278,6 +280,6 @@ describe('an agent another agent started', () => {
 
   it('runs for neither once the one around it came back', async () => {
     const both = await open({ messages: around({ result: 'Done.' }), session: 'running' });
-    expect(both).toMatchObject({ row: 'stopped', tab: null });
+    expect(both).toMatchObject({ row: 'unknown', tab: null });
   });
 });

@@ -249,16 +249,40 @@ it('names the model an agent ran on in its row, when the call chose one', () => 
   expect(screen.getAllByTestId('chat-agent-model')).toHaveLength(1);
 });
 
-it('holds nothing open for an agent whose session was killed', () => {
+it('claims neither work nor an end for an agent whose session was killed', () => {
   render(
     <TurnFixture
       rootId={`cw-${roots}`}
       messages={[user('Hi'), assistant([text('On it'), agent(running), text('Hm')])]}
     />,
   );
-  expect(isOpen()).toBe(false);
-  expect(header()).not.toHaveAccessibleName(/running|Still going/);
-  fireEvent.click(header());
-  expect(screen.getByTestId('chat-row-agent-receipt')).toHaveTextContent('stopped');
+  // A step's outcome is unknown, so the neutral turn stays open.
+  expect(isOpen()).toBe(true);
+  expect(header()).toHaveAccessibleName('Worked, 1 agent');
+  expect(screen.getByTestId('chat-row-agent')).toHaveTextContent('No result recorded: code-reviewer');
   expect(screen.getByTestId('chat-row-agent').querySelector('.animate-spin')).toBeNull();
+});
+
+it.each(['stopped', 'failed'] as const)(
+  'folds over an open call once the list says it %s, and stays open while it says nothing',
+  async (status) => {
+    const messages = [user('Hi'), assistant([agent(running), text('Hm')])];
+    vi.mocked(listBackgroundTasks).mockResolvedValue([
+      { id: 'bg', kind: 'agent', toolUseId: 'agent', status, startedAt: 1 },
+    ] as never);
+    render(<TurnFixture rootId={`cw-${roots}`} messages={messages} extras={extrasWith({})} />);
+    expect(isOpen()).toBe(true);
+    await waitFor(() => expect(isOpen()).toBe(false));
+    fireEvent.click(header());
+    expect(screen.getByTestId('chat-row-agent-receipt')).toHaveTextContent(status);
+  },
+);
+
+it('claims no end for a delegated task whose call never came back', () => {
+  const call = tool({ toolCallId: 'task', toolName: 'mcp__mainframe__delegate_task', args: { task: 'x' }, ...running });
+  render(<TurnFixture rootId={`cw-${roots}`} messages={[user('Hi'), assistant([call, text('Hm')])]} />);
+  expect(isOpen()).toBe(true);
+  const row = screen.getByTestId('chat-tool-delegate-task-card');
+  expect(row).toHaveTextContent('No result recorded: Delegated');
+  expect(row).not.toHaveTextContent(/stopped/i);
 });

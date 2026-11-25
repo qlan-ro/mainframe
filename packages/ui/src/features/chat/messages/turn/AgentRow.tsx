@@ -41,7 +41,7 @@ function AgentModel({ model }: { model: string }) {
 }
 
 export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
-  const facts = useToolFacts(part);
+  const facts = useToolFacts({ unit, part });
   const { text, truncated } = resolveResultText(part.result);
   const launched = agentLaunched(text);
   const { status, outcome, standing } = useAgentWork(part);

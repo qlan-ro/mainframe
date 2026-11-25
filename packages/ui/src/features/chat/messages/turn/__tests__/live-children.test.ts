@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
 import type { SessionItem } from '@/features/sessions/view-model/chat-to-thread-custom';
 import type { TurnChild, TurnModel } from '../../../view-model/turn/types';
-import { childCounts, childState, liveChildren, type ChildSources, type LiveChildren } from '../live-children';
+import {
+  NO_CHILDREN,
+  childCounts,
+  childState,
+  liveChildren,
+  sameLive,
+  type ChildSources,
+  type LiveChildren,
+} from '../live-children';
 
 const child = (overrides: Partial<TurnChild> = {}): TurnChild => ({
   toolCallId: 'call',
@@ -123,6 +131,29 @@ describe('liveChildren', () => {
     expect(how('completed')).toBe(0);
   });
 
+  it('names the agents nothing says the end of: not their call, nor the list', () => {
+    const open = child({ status: 'unknown', call: call({ open: true }) });
+    const unknown = (kid: TurnChild, status?: string) =>
+      liveChildren(
+        model([kid]),
+        sources({ runs: false, listed: status ? [{ ...listed('a', 'call'), status } as BackgroundTask] : [] }),
+      ).unknown.size;
+    expect(unknown(open)).toBe(1);
+    expect(unknown(open, 'stopped')).toBe(0);
+    expect(unknown(open, 'failed')).toBe(0);
+    expect(unknown(open, 'running')).toBe(0);
+    expect(unknown({ ...open, call: call({ open: true, cancelled: true }) })).toBe(0);
+    expect(unknown(child({ status: 'success', call: call() }))).toBe(0);
+    expect(unknown(child({ status: 'unknown' }))).toBe(0);
+  });
+
+  it('is another object once what is known of an end moved', () => {
+    const a = { ...NO_CHILDREN, unknown: new Set(['a']) };
+    expect(sameLive(a, { ...NO_CHILDREN, unknown: new Set(['a']) })).toBe(true);
+    expect(sameLive(a, { ...NO_CHILDREN, unknown: new Set(['b']) })).toBe(false);
+    expect(sameLive(a, NO_CHILDREN)).toBe(false);
+  });
+
   it('holds every turn open while an agent’s call is not known yet', () => {
     expect(liveChildren(model([]), sources({ live: { a: task('a') } })).unplacedAgents).toBe(true);
     const placed = sources({ live: { a: task('a') }, listed: [listed('a', 'x')] });
@@ -146,6 +177,7 @@ it('counts child work, needs-you first', () => {
     ]),
     background: new Map(),
     failed: new Set(),
+    unknown: new Set(),
     unplacedAgents: false,
   };
   const children = ['a', 'b', 'c', 'd'].map((toolCallId) => child({ toolCallId }));

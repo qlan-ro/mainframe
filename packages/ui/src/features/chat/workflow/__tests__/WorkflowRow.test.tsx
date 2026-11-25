@@ -161,10 +161,10 @@ describe('WorkflowRow', () => {
     expect(row).toHaveTextContent('Permission to use Workflow was denied');
   });
 
-  it('is stopped when its record says running but its turn ended and no task is left', () => {
+  it('claims neither work nor an end when its record says running but its turn ended and no task is left', () => {
     __run = run({ status: 'running' });
     const { rerender } = render(<Row result={launchResult()} turnKey="t" live={false} />);
-    expect(glyphWord('chat-workflow-launcher-run_1')).toBe('Stopped: ');
+    expect(glyphWord('chat-workflow-launcher-run_1')).toBe('No result recorded: ');
     rerender(<Row result={launchResult()} turnKey="t" live />);
     expect(glyphWord('chat-workflow-launcher-run_1')).toBe('Running: ');
   });

@@ -52,6 +52,8 @@ export interface MarkerContext {
   readonly pending: ReadonlySet<string>;
   /** Whether the turn can still be going. Left out: yes. */
   readonly live?: boolean;
+  /** Something says the turn was cancelled, so a call with no outcome was stopped. */
+  readonly cancelled?: boolean;
   readonly skill?: LoadedSkill;
   /** "Auto-Edits": how an approved plan is being carried out. */
   readonly mode?: string;
@@ -231,7 +233,7 @@ const RUNNING: Partial<Record<string, string>> = {
 };
 
 export function markerFacts(part: ToolPart, context: MarkerContext): MarkerFacts {
-  const status = settledStatus(part, context.pending, context.live !== false);
+  const status = settledStatus(part, context.pending, context.live !== false, context.cancelled);
   const running = status === 'running' || status === 'awaiting-approval' || context.monitoring === true;
   const facts = draft(part, context, running);
   const text = resolveResultText(part.result).text;
@@ -243,6 +245,7 @@ export function markerFacts(part: ToolPart, context: MarkerContext): MarkerFacts
   if (running) return { ...facts, label: RUNNING[part.toolName] ?? facts.label, receipt: undefined, state: 'running' };
   if (status === 'stopped' || status === 'declined')
     return { ...tried, receipt: status, state: 'done', body: answered(false) };
+  if (status === 'unknown') return { ...tried, receipt: 'no result', state: 'done' };
   // A plan that isn't approved comes back with what to change.
   if (facts.icon === 'plan') return { ...facts, state: 'done', body: answered(false) };
   return { ...facts, state: 'done' };

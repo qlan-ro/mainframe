@@ -1,5 +1,5 @@
 /** How a run's parts stand once it is over, or once a reload has forgotten where it began: each by its own messages. */
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import type { TranscriptPresentation } from '@qlan-ro/mainframe-types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,6 +56,8 @@ describe.each(CUT)('a turn of %s', (_name, runs, over, stored, word) => {
     ['in the middle of a step', [settled, cut]],
     ['in a step the interrupt failed', [bash('b', 'sleep 60', failed)]],
   ];
+  // Neutral with a step whose outcome is unknown: it doesn't fold.
+  const stays = (content: Content) => word === 'Worked' && content.includes(cut);
   it.each(cuts)('reads the same when interrupted %s, live and after a reload', async (_at, content) => {
     const session = Session.open([]);
     await session.apply(START, transcript(turn(runs, ...content)));
@@ -63,7 +65,7 @@ describe.each(CUT)('a turn of %s', (_name, runs, over, stored, word) => {
     await session.apply({ type: 'run.cancelling' });
     expect(names()).toEqual(['Running']);
     await session.apply(transcript(turn(over, ...content)), IDLE);
-    expect([names(), opened()]).toEqual([[word], [false]]);
+    expect([names(), opened()]).toEqual([[word], [stays(content)]]);
     session.close();
     Session.open(turn(stored, ...content));
     expect(names()).toEqual([word]);
@@ -75,7 +77,7 @@ describe.each(CUT)('a turn of %s', (_name, runs, over, stored, word) => {
   ] as [string, Content][])('claims nothing when its process was killed with %s steps', async (_at, content) => {
     const session = Session.open([]);
     await session.apply(START, transcript(turn(runs, ...content)), IDLE);
-    expect([names(), opened()]).toEqual([['Worked'], [false]]);
+    expect([names(), opened()]).toEqual([['Worked'], [content.includes(cut)]]);
     session.close();
     Session.open(turn(runs, ...content));
     expect(names()).toEqual(['Worked']);
@@ -100,7 +102,9 @@ describe.each(PROVIDERS)('a reload while %s runs', (_name, presentation) => {
 
   it('uses the open step’s provider state when the run start is unknown', () => {
     Session.reload(steered(cut));
-    expect([names(), opened()]).toEqual([[openStepLabel], [stepIsLive]]);
+    // Going, or neutral with a step whose outcome is unknown: open either way.
+    expect([names(), opened()]).toEqual([[openStepLabel], [true]]);
+    expect(screen.getByTestId('chat-row-cut')).toHaveTextContent(stepIsLive ? 'Running' : 'No result recorded');
   });
 
   it('claims nothing for a settled part somebody wrote after', async () => {
@@ -126,11 +130,23 @@ describe.each(PROVIDERS)('a reload while %s runs', (_name, presentation) => {
   it('shows an open step as neutral at idle and reads provider evidence while running', async () => {
     const session = Session.reload(steered(cut));
     await session.apply(IDLE);
-    expect([names(), opened()]).toEqual([['Worked'], [false]]);
-    expect(screen.queryByTestId('chat-row-cut')).toBeNull();
+    expect([names(), opened()]).toEqual([['Worked'], [true]]);
+    expect(screen.getByTestId('chat-row-cut')).toHaveTextContent('No result recorded');
     await session.apply(...send());
     expect(names()).toEqual([openStepLabel]);
   });
+});
+
+it.each([
+  ['cancelled', codex('cancelled'), 'Stopped', 'stopped'],
+  ['cut without a word', claude('invalid'), 'No result recorded', 'no result'],
+  ['never placed', undefined, 'No result recorded', 'no result'],
+] as const)('reads an open step as its turn says: %s', (_what, said, word, receipt) => {
+  Session.open(turn(said, settled, cut));
+  const toggle = screen.getByTestId(/^chat-work-toggle-/);
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
+  expect(screen.getByTestId('chat-row-cut')).toHaveTextContent(`${word}: Ran`);
+  expect(screen.getByTestId('chat-row-cut-receipt')).toHaveTextContent(receipt);
 });
 
 describe('an error', () => {
@@ -188,7 +204,8 @@ describe('a sub-agent that outlives the turn', () => {
     await session.apply(START, transcript(left));
     expect(states()).toEqual(['going']);
     await session.apply(IDLE);
-    expect([states(), opened()]).toEqual([['neutral'], [false]]);
+    expect([states(), opened()]).toEqual([['neutral'], [true]]);
+    expect(screen.getByTestId('chat-row-agent')).toHaveTextContent('No result recorded');
   });
 });
 

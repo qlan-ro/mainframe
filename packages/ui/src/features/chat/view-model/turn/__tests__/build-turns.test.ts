@@ -304,13 +304,13 @@ describe('a call with no outcome', () => {
     expect(turn.children[0]!.status).toBe('running');
   });
 
-  it('is stopped once the session was killed', () => {
+  it('claims no end once the session was killed', () => {
     const turn = only(build([user('u1'), assistant('a1', [agent])]));
     expect(turn).toMatchObject({ running: false, live: false });
-    expect(turn.children[0]!.status).toBe('stopped');
+    expect(turn.children[0]!.status).toBe('unknown');
   });
 
-  it('is stopped in an earlier turn without live step evidence', () => {
+  it('can’t be going in an earlier turn without live step evidence', () => {
     const thread = (custom?: object) => [
       user('u1'),
       assistant('a1', [agent], custom),
@@ -403,8 +403,8 @@ describe('child work', () => {
         status: 'success',
         call: { pending: false, open: false, failed: false, cancelled: false },
       },
-      // In a turn that ended, a call with no outcome was cut short.
-      { toolCallId: 'task', kind: 'agent', status: 'stopped' },
+      // Nothing says how a call with no outcome ended.
+      { toolCallId: 'task', kind: 'agent', status: 'unknown' },
       { toolCallId: 'flow', kind: 'workflow', status: 'success' },
     ]);
     expect(turn.summary).toBe('ran 1 command');

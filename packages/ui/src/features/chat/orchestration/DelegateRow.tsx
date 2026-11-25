@@ -145,7 +145,7 @@ function TaskBody(props: TaskBodyProps) {
 }
 
 export function DelegateRow({ unit, part, turnKey }: ToolRowProps) {
-  const facts = useToolFacts(part);
+  const facts = useToolFacts({ unit, part });
   const parsed = part.isError ? null : parseDelegateResult(resolveResultText(part.result).text);
   const { child, needsYou, openChild } = useTaskChild(parsed?.childChatId);
   const result = useTaskResult(parsed?.taskId);

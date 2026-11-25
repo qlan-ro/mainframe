@@ -5,13 +5,12 @@
  */
 import type { ThreadMessage } from '@assistant-ui/react';
 import { verifiedTurnTiming, turnDuration } from './turn-timing';
-import { answerUnits, failedSteps, nestedPending, turnChildren, workTools } from './turn-roles';
+import { answerUnits, failedSteps, hasUnknownStep, nestedPending, turnChildren, workTools } from './turn-roles';
 import { turnSummary } from './turn-summary';
 import { TurnCache } from './turn-cache';
 import { draftTurns, type Draft, type Drafts } from './turn-drafts';
 import { endOf, isOpenStep } from './turn-end';
 import type { MainframeMessageMeta } from '../message-meta';
-import { resolveToolStatus } from './tool-status';
 import { isMarkerUnit, messageMeta } from './turn-units';
 import { absorbedTaskResults, taskResultStatuses } from './task-results';
 import type { MessageSlice, PartEvidence, PartState, Turn, TurnModel, TurnScope, TurnUnit } from './types';
@@ -106,7 +105,7 @@ function turnOf(draft: Draft, standing: Standing, scope: TurnScope, now: number)
     needsYou,
     live,
     ...(ended && { ended }),
-    unclear: tools.some((tool) => resolveToolStatus(tool, scope.pendingToolIds) === 'unknown'),
+    unclear: hasUnknownStep(work, scope.pendingToolIds, live),
     durationMs: running ? undefined : durationOf(draft, units, now),
     costUsd: costOf(draft),
     lastMessageId: draft.messages[draft.messages.length - 1]!.id,

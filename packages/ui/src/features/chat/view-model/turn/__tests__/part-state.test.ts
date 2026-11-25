@@ -4,7 +4,7 @@ import type { TranscriptPresentation } from '@qlan-ro/mainframe-types';
 import { buildTurns, partState } from '../build-turns';
 import { TurnCache } from '../turn-cache';
 import type { PartState, TurnScope } from '../types';
-import { assistant, bash, presented, scope, sources, system, text, thought, user } from './fixtures';
+import { assistant, bash, call as callOf, presented, scope, sources, system, text, thought, user } from './fixtures';
 
 /** Every combination. A column is what the part's own messages say of its end: nothing, finished, stopped, error. */
 const TABLE: readonly (readonly [string, readonly PartState[]])[] = [
@@ -251,11 +251,25 @@ describe('whether a neutral part may fold by itself', () => {
   it.each([
     ['settled', { result: 'ok' }, false],
     ['lost', { result: undefined }, true],
-    // Its row reads stopped.
-    ['open', open, false],
+    ['open', open, true],
+    ['asked for, with the request gone', { ...open, approval: { id: 'x' } } as never, true],
   ] as const)('a step that is %s', (_name, over, unclear) => {
     const [turn] = buildTurns([user('u1'), assistant('a1', [bash('ls', over)])], scope()).turns.values();
     expect(turn!.unclear).toBe(unclear);
+  });
+
+  it('not over an open step its cancelled turn stopped', () => {
+    const [turn] = buildTurns(
+      [user('u1'), assistant('a1', [bash('ls', open)], said('cancelled'))],
+      scope(),
+    ).turns.values();
+    expect(turn!.unclear).toBe(false);
+  });
+
+  it('a sub-agent’s call is judged with what the daemon lists of it', () => {
+    const [turn] = buildTurns([user('u1'), assistant('a1', [callOf('Task', {}, open)])], scope()).turns.values();
+    expect(turn!.unclear).toBe(false);
+    expect(turn!.children[0]!.status).toBe('unknown');
   });
 });
 

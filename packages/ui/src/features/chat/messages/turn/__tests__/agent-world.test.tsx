@@ -35,7 +35,7 @@ const runs: AgentWorld = { runs: true, tasks: null, live: true };
 
 it('runs while its chat and its part do', () => {
   expect(workIn(runs)).toMatchObject({ status: 'running', outcome: 'going' });
-  expect(workIn(runs, false)).toMatchObject({ status: 'stopped', outcome: 'stopped' });
+  expect(workIn(runs, false)).toMatchObject({ status: 'unknown', outcome: 'unknown' });
 });
 
 it.each([
@@ -43,11 +43,11 @@ it.each([
   ['its chat is idle', { ...runs, runs: false }],
   ['the connection is lost', { ...runs, live: false }],
 ])('is not said to run, nor to have ended, when %s', (_why, world) => {
-  expect(workIn(world)).toMatchObject({ standing: null, status: 'unknown', outcome: 'going' });
+  expect(workIn(world)).toMatchObject({ standing: null, status: 'unknown', outcome: 'unknown' });
 });
 
 it('is over with its part, where the chat says which parts are', () => {
-  expect(workIn({ ...runs, over: new Set(['call']) }).status).toBe('stopped');
+  expect(workIn({ ...runs, over: new Set(['call']) }).status).toBe('unknown');
   expect(workIn({ ...runs, over: new Set(['other']) }).status).toBe('running');
 });
 

@@ -6,7 +6,7 @@ import { ToolBody, hasToolBody } from '../../tools/bodies/ToolBody';
 import { useFileBases } from '../../tools/chat-file-bases';
 import { useOpenFile } from '../../tools/chat-tool-context';
 import { useOpenEdit } from '../../tools/use-open-edit';
-import { settledStatus } from '../../view-model/turn/tool-status';
+import { settledStatus, wasCancelled } from '../../view-model/turn/tool-status';
 import { argText } from '../../view-model/turn/tool-values';
 import { rowName, toolRowFacts, type ToolRowFacts } from '../../view-model/turn/tool-row';
 import { toolKind } from '../../view-model/turn/tool-kind';
@@ -30,11 +30,12 @@ export interface ToolRowProps {
   turnKey?: string;
 }
 
-export function useToolFacts(part: ToolPart): ToolRowFacts {
-  const { pendingToolIds, live } = useTranscriptScope();
+export function useToolFacts({ unit, part }: Pick<ToolRowProps, 'unit' | 'part'>): ToolRowFacts {
+  const { pendingToolIds, live, cancelled: around = false } = useTranscriptScope();
+  const cancelled = wasCancelled({ ...unit, part }, around);
   return useMemo(
-    () => toolRowFacts(part, settledStatus(part, pendingToolIds, live !== false)),
-    [part, pendingToolIds, live],
+    () => toolRowFacts(part, settledStatus(part, pendingToolIds, live !== false, cancelled)),
+    [part, pendingToolIds, live, cancelled],
   );
 }
 
@@ -93,7 +94,7 @@ function Receipt({ facts, duration }: { facts: ToolRowFacts; duration?: string }
 }
 
 function StandardRow({ unit, part, turnKey }: ToolRowProps) {
-  const call = useToolFacts(part);
+  const call = useToolFacts({ unit, part });
   const startedAt = useBackgroundStart(part.toolCallId);
   const facts: ToolRowFacts =
     startedAt === undefined ? call : { ...call, status: 'running', verb: 'Running', timing: { startedAt } };

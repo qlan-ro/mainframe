@@ -141,10 +141,16 @@ describe('how a pill stands', () => {
     });
   });
 
-  it('is stopped, not running, once nothing can finish its call', () => {
+  it('claims neither work nor an end once nothing can finish its call', () => {
     const cut = { result: undefined, providerMetadata: { mainframe: { acpStatus: 'in_progress' } } };
     expect(facts('EnterWorktree', { name: 'x' }, cut, { live: false })).toMatchObject({
       state: 'done',
+      label: 'Entering worktree',
+      receipt: 'no result',
+    });
+    expect(facts('EnterWorktree', { name: 'x' }, cut, { live: false, cancelled: true })).toMatchObject({
+      state: 'done',
+      label: 'Entering worktree',
       receipt: 'stopped',
     });
   });

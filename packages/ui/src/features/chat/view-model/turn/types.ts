@@ -70,7 +70,7 @@ export interface Turn extends PartEvidence {
   readonly key: string;
   /** The agent writes in it, or waits on the viewer in it. */
   readonly running: boolean;
-  /** A step's outcome is unknown. While its turn claims no end, it doesn't fold by itself. */
+  /** A step's outcome is unknown, sub-agents aside. While its turn claims no end, it doesn't fold by itself. */
   readonly unclear: boolean;
   readonly durationMs?: number;
   readonly costUsd?: number;

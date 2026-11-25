@@ -59,8 +59,8 @@ function ScopeFixture({
             <ThreadPrimitive.Root>
               <ThreadPrimitive.Viewport>
                 <TurnTranscript />
-                <NestedTranscriptScope live messageId="outer-message" toolCallId="outer-call">
-                  <NestedTranscriptScope live messageId="inner-message" toolCallId="inner-call">
+                <NestedTranscriptScope live cancelled={false} messageId="outer-message" toolCallId="outer-call">
+                  <NestedTranscriptScope live cancelled={false} messageId="inner-message" toolCallId="inner-call">
                     <NestedProbe />
                   </NestedTranscriptScope>
                 </NestedTranscriptScope>

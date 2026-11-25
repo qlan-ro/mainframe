@@ -75,11 +75,12 @@ it.each<[string, Partial<TranscriptScope>, string]>([
     { live: false, pendingToolIds: new Set(['q']) },
     'Reset order · waiting for your answer',
   ],
-  // A killed or interrupted session: nothing waits for an answer any more.
-  ['in a turn that ended', { live: false }, 'Reset order · stopped, not answered'],
+  // A killed or interrupted session: nothing waits for an answer any more, and nothing says it was stopped.
+  ['in a turn that ended', { live: false }, 'Reset order · not answered'],
+  ['in a turn that was cancelled', { live: false, cancelled: true }, 'Reset order · stopped, not answered'],
 ])('says how a question without an answer stands %s', (_when, scope, text) => {
   render(within(scope, <QuestionCard part={part(undefined, 'in_progress')} />));
-  expect(screen.getAllByTestId('chat-ask-header')[0]).toHaveTextContent(text);
+  expect(screen.getAllByTestId('chat-ask-header')[0]!.textContent).toBe(text);
 });
 
 it('keeps what came back when no answer was recorded', () => {

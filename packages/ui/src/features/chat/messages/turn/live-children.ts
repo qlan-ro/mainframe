@@ -6,6 +6,7 @@ import { agentStanding, type AgentCallFacts } from '@/features/workspace-chat/ag
 import { ownTasks } from '@/features/workspace-chat/use-chat-tasks';
 import { resumed, taskStatusOf } from '../../orchestration/task-standing';
 import { findSession } from '../../orchestration/use-session-items';
+import { agentWork } from './agent-world';
 import { partState } from '../../view-model/turn/build-turns';
 import type { PartState, Turn, TurnChild, TurnModel } from '../../view-model/turn/types';
 
@@ -17,6 +18,8 @@ export interface LiveChildren {
   readonly background: ReadonlyMap<string, number>;
   /** Agents and delegated tasks whose call went through and whose work then failed. */
   readonly failed: ReadonlySet<string>;
+  /** Sub-agents nothing says the end of: not their call, nor the daemon. */
+  readonly unknown: ReadonlySet<string>;
   /** An agent may be running that no call can be said to hold: not listed yet, or by a list that is out of date. */
   readonly unplacedAgents: boolean;
 }
@@ -81,11 +84,13 @@ export function liveChildren(model: TurnModel, given: Omit<ChildSources, 'result
   const sources: ChildSources = { ...given, results: model.taskResults };
   const byCall = new Map<string, ChildState>();
   const failed = new Set<string>();
+  const unknown = new Set<string>();
   for (const turn of model.turns.values())
     for (const child of turn.children) {
       const state = childState(child, sources, turn.live);
-      const agentFailed =
-        child.call && !child.call.failed && standingOf(child, child.call, sources, turn.live)?.status === 'failed';
+      const standing = child.call && standingOf(child, child.call, sources, turn.live);
+      const agentFailed = child.call && !child.call.failed && standing?.status === 'failed';
+      if (child.call && !standing && agentWork(child.status, null).status === 'unknown') unknown.add(child.toolCallId);
       if (state) byCall.set(child.toolCallId, state);
       else if (agentFailed || taskFailed(child, sources)) failed.add(child.toolCallId);
     }
@@ -98,19 +103,21 @@ export function liveChildren(model: TurnModel, given: Omit<ChildSources, 'result
   const unplaced = Object.values(sources.live).some((task) => task.kind === 'agent' && !placed.has(task.id));
   // A list that stopped counting hides what it says runs; no turn folds over that.
   const hidden = !sources.listLive && listed.some((task) => task.kind === 'agent' && task.status === 'running');
-  return { byCall, background, failed, unplacedAgents: unplaced || hidden };
+  return { byCall, background, failed, unknown, unplacedAgents: unplaced || hidden };
 }
 
 export const NO_CHILDREN: LiveChildren = {
   byCall: new Map(),
   background: new Map(),
   failed: new Set(),
+  unknown: new Set(),
   unplacedAgents: false,
 };
 
 export function sameLive(a: LiveChildren, b: LiveChildren): boolean {
   if (a.unplacedAgents !== b.unplacedAgents || a.byCall.size !== b.byCall.size) return false;
   if (a.background.size !== b.background.size || a.failed.size !== b.failed.size) return false;
+  if (a.unknown.size !== b.unknown.size || [...a.unknown].some((id) => !b.unknown.has(id))) return false;
   for (const id of a.failed) if (!b.failed.has(id)) return false;
   for (const [id, state] of a.byCall) if (b.byCall.get(id) !== state) return false;
   for (const [id, startedAt] of a.background) if (b.background.get(id) !== startedAt) return false;
@@ -119,6 +126,11 @@ export function sameLive(a: LiveChildren, b: LiveChildren): boolean {
 
 export function childGoing(child: TurnChild, live: LiveChildren): boolean {
   return live.byCall.has(child.toolCallId);
+}
+
+/** Nothing says how a step of the turn, or an agent in it, ended. */
+export function turnUnclear(turn: Turn, live: LiveChildren): boolean {
+  return turn.unclear || turn.children.some((child) => live.unknown.has(child.toolCallId));
 }
 
 /** How a turn stands, its child work included (T1b, T1e). */

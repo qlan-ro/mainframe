@@ -35,13 +35,16 @@ export interface AgentWork {
 
 const isUnsettled = (status: RowStatus) => status === 'running' || status === 'awaiting-approval';
 
-/** What the tab says, else how the call itself ended. Only the tab's evidence makes it run or wait. */
+/**
+ * What the tab says, else how the call itself ended, if it says. Only the tab's
+ * evidence makes it run, wait or stop.
+ */
 export function agentWork(own: ToolStatus, standing: AgentStanding | null): AgentWork {
   if (standing?.status === 'needs-you')
     return { standing, status: own === 'awaiting-approval' ? own : 'needs-you', outcome: 'going' };
   if (standing) return { standing, status: standing.status, outcome: agentOutcome(standing.status) };
   // Not known to run any more, nor to have ended: what it wrote is no answer yet.
-  if (isUnsettled(own)) return { standing, status: 'unknown', outcome: 'going' };
+  if (isUnsettled(own)) return { standing, status: 'unknown', outcome: 'unknown' };
   return { standing, status: own, outcome: agentOutcome(own) };
 }
 

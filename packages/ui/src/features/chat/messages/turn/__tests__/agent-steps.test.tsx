@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { ThreadMessage } from '@assistant-ui/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { TurnFixture, assistant, bash, failed, system, text, tool, user } from './fixtures';
+import { TurnFixture, assistant, bash, failed, running, system, text, tool, user } from './fixtures';
 import { AgentSteps, type AgentStepsProps } from '../AgentSteps';
 
 vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
@@ -247,6 +247,27 @@ it('keeps a picture it answered with', () => {
   show([user(PROMPT, 'p'), assistant([bash('b', 'plot'), text('Here it is.'), picture], 'a')], { prompt: PROMPT });
   fireEvent.click(agent().getAllByTestId(/^chat-image-a-\d+-toggle$/)[0]!);
   expect(screen.getByTestId('agent').querySelector('img[src="data:image/png;base64,CC"]')).not.toBeNull();
+});
+
+it.each([
+  ['stopped', 'stopped'],
+  ['done', 'no result'],
+  ['failed', 'no result'],
+  ['unknown', 'no result'],
+] as const)('reads a step with no outcome of an agent that is %s as “%s”', (outcome, word) => {
+  const messages = [user(PROMPT, 'p'), assistant([bash('b', 'sleep 60', running)], 'a')];
+  show(messages, { prompt: PROMPT, outcome });
+  expect(agent().getByTestId('chat-row-b-receipt')).toHaveTextContent(word);
+  expect(screen.getByTestId('agent').querySelector('.animate-spin')).toBeNull();
+});
+
+it('claims no answer for an agent nothing says ended', () => {
+  show([user(PROMPT, 'p'), assistant([bash('b', 'ls'), text('Halfway there.')], 'a')], {
+    prompt: PROMPT,
+    outcome: 'unknown',
+  });
+  expect(agent().getByText('Halfway there.')).toBeVisible();
+  expect(agent().queryByTestId('chat-agent-result')).toBeNull();
 });
 
 it('reads a step with no outcome as stopped once the agent is, and as running while it works', () => {

@@ -8,9 +8,9 @@ import type { AskUserQuestionAnswer } from '@qlan-ro/mainframe-types';
 import { cn } from '@/lib/utils';
 import { useTranscriptScope, type TranscriptScope } from '../../messages/turn/transcript-scope';
 import { resolveResultText } from '../shared';
-import { settledStatus } from '../../view-model/turn/tool-status';
+import { settledStatus, wasCancelled } from '../../view-model/turn/tool-status';
 import { record } from '../../view-model/turn/values';
-import type { ToolPart } from '../../view-model/turn/types';
+import type { ToolPart, TurnUnit } from '../../view-model/turn/types';
 import { MarkerCard } from './MarkerPill';
 
 interface QuestionArg {
@@ -96,10 +96,16 @@ function Unanswered({ question, state }: { question: QuestionArg; state: string 
 }
 
 /** What an unanswered question's state is: only a live turn or a pending request still waits for the viewer. */
-function unansweredState(part: ToolPart, scope: TranscriptScope): string {
+function unansweredState(part: ToolPart, scope: TranscriptScope, presentation: TurnUnit['presentation']): string {
   if (part.result !== undefined) return 'not answered';
-  const status = settledStatus(part, scope.pendingToolIds, scope.live !== false);
-  return status === 'running' || status === 'awaiting-approval' ? 'waiting for your answer' : 'stopped, not answered';
+  const status = settledStatus(
+    part,
+    scope.pendingToolIds,
+    scope.live !== false,
+    wasCancelled({ part, presentation }, scope.cancelled === true),
+  );
+  if (status === 'running' || status === 'awaiting-approval') return 'waiting for your answer';
+  return status === 'stopped' ? 'stopped, not answered' : 'not answered';
 }
 
 /** Each answer with the question it answers, and the questions left without one. */
@@ -115,8 +121,8 @@ function matchAnswers(answers: readonly AskUserQuestionAnswer[], questions: read
   return { answered, open: questions.filter((question) => !matched.has(question)) };
 }
 
-export function QuestionCard({ part }: { part: ToolPart }) {
-  const state = unansweredState(part, useTranscriptScope());
+export function QuestionCard({ unit, part }: { unit?: TurnUnit; part: ToolPart }) {
+  const state = unansweredState(part, useTranscriptScope(), unit?.presentation);
   const answers = answersOf(part);
   const { answered, open } = matchAnswers(answers, questionsOf(part));
   const reply = resolveResultText(part.result).text;

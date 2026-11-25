@@ -53,7 +53,7 @@ function useCutShort(toolCallId: string, turnKey: string | undefined): boolean {
 }
 
 export function WorkflowRow({ unit, part, turnKey }: ToolRowProps) {
-  const facts = useToolFacts(part);
+  const facts = useToolFacts({ unit, part });
   const cutShort = useCutShort(part.toolCallId, turnKey);
   const failedOpen = useFailedOpen(turnKey, part.toolCallId);
   const launch = parseWorkflowLaunch(resolveResultText(part.result).text);
@@ -62,9 +62,10 @@ export function WorkflowRow({ unit, part, turnKey }: ToolRowProps) {
   const name = launch.workflowName ?? run?.workflowName ?? (facts.target || 'Workflow');
   const started = launch.runId !== undefined && !launch.error;
   const effective = started ? (run ?? unavailableRun(launch)) : undefined;
-  const view = effective && neutralizedRun(effective, now);
-  const standing = view && (view.status === 'running' && cutShort ? 'stopped' : RUN_STATUS[view.status]);
-  const status: RowStatus = launch.error ? 'failed' : (standing ?? facts.status);
+  // Nothing holds it, and nothing says how it ended.
+  const lost = effective?.status === 'running' && cutShort;
+  const view = effective && neutralizedRun(lost ? { ...effective, status: 'unavailable' } : effective, now);
+  const status: RowStatus = launch.error ? 'failed' : view ? RUN_STATUS[view.status] : facts.status;
   const receipt = view ? runMetaString(view, now) : launch.error ? 'failed' : (facts.receipt ?? 'Starting…');
   // No run came of it: whatever the call answered is all there is.
   const said = effective ? '' : resolveResultText(part.result).text;

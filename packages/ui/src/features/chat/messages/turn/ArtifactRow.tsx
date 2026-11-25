@@ -35,7 +35,7 @@ function OpenActions({ url }: { url: string }) {
 }
 
 export function ArtifactRow({ unit, part, turnKey }: ToolRowProps) {
-  const facts = useToolFacts(part);
+  const facts = useToolFacts({ unit, part });
   const { status } = facts;
   const { text } = resolveResultText(part.result);
   const call = describeArtifactCall(record(part.args) ?? {}, text);
