@@ -57,11 +57,11 @@ function ActiveInfo({ chat }: { chat: Chat }) {
       <Separator />
       <div className="grid grid-cols-[auto_1fr] items-start gap-x-2 gap-y-0.5 text-meta/[1.45]">
         <span className="text-muted-foreground">Branch</span>
-        <span className="truncate font-mono text-[0.92em] text-foreground">{chat.branchName ?? '—'}</span>
+        <span className="truncate font-mono text-caption text-foreground">{chat.branchName ?? '—'}</span>
         <span className="text-muted-foreground">Path</span>
         <TruncatedWithTooltip
           text={chat.worktreePath ?? ''}
-          className="font-mono text-[0.92em] text-foreground"
+          className="font-mono text-caption text-foreground"
           contentClassName="break-all"
         />
       </div>
