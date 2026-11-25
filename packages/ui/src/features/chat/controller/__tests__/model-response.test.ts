@@ -143,6 +143,7 @@ it('an older pick’s re-read that outlasts the newer response is dropped', asyn
   );
   first.finish();
   await vi.waitFor(() => expect(getChat).toHaveBeenCalledOnce());
+  vi.mocked(getChat).mockResolvedValueOnce(makeChat({ model: 'haiku' }));
   second.finish();
   await second.done;
   answer();
