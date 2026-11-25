@@ -99,14 +99,14 @@ function useTurnRunning(): boolean {
 export function TurnTranscript() {
   const messages = useAuiState((s) => s.thread.messages);
   const isRunning = useTurnRunning();
-  const runs = useChatExtrasSelector((extras) => extras?.state.runs);
+  const runAfter = useChatExtrasSelector((extras) => extras?.state.run?.after);
   const scope = useTranscriptScope();
   const chatId = useChatExtrasSelector((extras) => extras?.state.chatId);
   const root = useRef<HTMLDivElement>(null);
   const cache = useMemo(() => new TurnCache(), []);
   const model = useMemo(
-    () => buildTurns(messages, { ...scope, isRunning, runs }, cache),
-    [messages, scope, isRunning, runs, cache],
+    () => buildTurns(messages, { ...scope, isRunning, runAfter }, cache),
+    [messages, scope, isRunning, runAfter, cache],
   );
   const children = useLiveChildren(model, chatId);
   useJumps(model, chatId);

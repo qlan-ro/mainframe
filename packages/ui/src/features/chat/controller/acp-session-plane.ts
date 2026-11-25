@@ -284,9 +284,9 @@ export class AcpSessionPlane {
       return;
     }
     if (update.state === 'idle') {
-      // At once: the settled cursor, and the run's end. `run.stopped` waits out the settle delay (D7, finding 10).
+      // The settled cursor is computed immediately — the `run.stopped`
+      // dispatch itself waits out the settle delay (D7, finding 10).
       if (items.length > 0) this.cursorTracker.recordSettledItem(items[items.length - 1]!.id);
-      this.host.dispatch({ type: 'run.ended', stopReason: update.stopReason });
       this.runStop.scheduleStop();
     }
   }

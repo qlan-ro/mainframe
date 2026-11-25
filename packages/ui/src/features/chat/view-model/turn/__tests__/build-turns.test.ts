@@ -310,12 +310,18 @@ describe('a call with no outcome', () => {
     expect(turn.children[0]!.status).toBe('stopped');
   });
 
-  it('is stopped in an earlier turn while a new one runs', () => {
-    const model = build([user('u1'), assistant('a1', [agent]), user('u2'), assistant('a2', [text('Hi')])], {
-      isRunning: true,
-      runs: [{ after: { id: 'a1', parts: 1 }, exact: true }],
-    });
-    expect([...model.turns.values()].map((turn) => turn.live)).toEqual([false, true]);
+  it('is stopped in an earlier turn its provider ended, while a new one runs', () => {
+    const thread = (custom?: object) => [
+      user('u1'),
+      assistant('a1', [agent], custom),
+      user('u2'),
+      assistant('a2', [text('Hi')]),
+    ];
+    const live = (custom?: object) =>
+      [...build(thread(custom), { isRunning: true }).turns.values()].map((turn) => turn.live);
+    expect(live({ partSources: sources(1, presented({ state: 'cancelled' })) })).toEqual([false, true]);
+    // Nothing says that one ended, so it may go on.
+    expect(live()).toEqual([true, true]);
   });
 
   it('still runs when the viewer wrote into the turn that goes on', () => {
@@ -340,7 +346,7 @@ describe('a turn that waits on the viewer', () => {
 
   it('has not ended, though the thread reports itself idle', () => {
     const turn = only(build(asked, { pendingToolIds: new Set(['w']) }));
-    expect(turn).toMatchObject({ running: true, evidence: { needsYou: true }, live: true });
+    expect(turn).toMatchObject({ running: true, needsYou: true, live: true });
   });
 
   it('keeps its words among the steps: there is no answer yet', () => {
@@ -357,7 +363,7 @@ describe('a turn that waits on the viewer', () => {
       pendingToolIds: new Set(['not-here']),
       isRunning,
     });
-    expect([...model.turns.values()].map((turn) => turn.evidence.needsYou)).toEqual(needsYou);
+    expect([...model.turns.values()].map((turn) => turn.needsYou)).toEqual(needsYou);
   });
 
   it('is not the newest turn when the request is a background agent’s of an earlier one', () => {
@@ -365,7 +371,7 @@ describe('a turn that waits on the viewer', () => {
     const model = build([user('u1'), assistant('a1', [agent]), user('u2'), assistant('a2', [text('B')])], {
       pendingToolIds: new Set(['w']),
     });
-    expect([...model.turns.values()].map(({ running, evidence }) => [running, evidence.needsYou])).toEqual([
+    expect([...model.turns.values()].map(({ running, needsYou }) => [running, needsYou])).toEqual([
       [false, false],
       [false, false],
     ]);
@@ -478,8 +484,9 @@ describe('a turn’s standing is part of what its rows read', () => {
       assistant('a1', [call('Monitor', {}, going), text('Watching')], { partSources: sources(2, codex) }),
       user('u2'),
     ];
-    expect(only(build(messages, { isRunning: true }, cache)).live).toBe(true);
-    expect(only(build(messages, { isRunning: false }, cache)).live).toBe(false);
+    const at = (isRunning: boolean) => only(build(messages, { isRunning, runAfter: null }, cache));
+    expect(at(true).live).toBe(true);
+    expect(at(false).live).toBe(false);
   });
 
   it('changes when the request turns out to be another turn’s', () => {
@@ -490,7 +497,7 @@ describe('a turn’s standing is part of what its rows read', () => {
     const thread = (nested: ThreadMessage[]) => [user('u1'), assistant('a1', [agent(nested)]), ...latest];
     const options = { isRunning: true, pendingToolIds: new Set(['write']) };
     const needsYou = (nested: ThreadMessage[]) =>
-      [...build(thread(nested), options, cache).turns.values()].map((turn) => turn.evidence.needsYou);
+      [...build(thread(nested), options, cache).turns.values()].map((turn) => turn.needsYou);
     expect(needsYou([])).toEqual([false, true]);
     // The request turns out to be the background agent's.
     expect(needsYou([assistant('n', [call('Write', {}, { ...going, toolCallId: 'write' })])])).toEqual([false, false]);

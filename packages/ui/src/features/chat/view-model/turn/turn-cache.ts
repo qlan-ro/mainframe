@@ -24,10 +24,8 @@ function sameTurn(a: Turn, b: Turn): boolean {
     a.running === b.running &&
     a.live === b.live &&
     a.unclear === b.unclear &&
-    a.evidence.needsYou === b.evidence.needsYou &&
-    a.evidence.run === b.evidence.run &&
-    a.evidence.unsettled === b.evidence.unsettled &&
-    a.evidence.ended === b.evidence.ended &&
+    a.needsYou === b.needsYou &&
+    a.ended === b.ended &&
     a.durationMs === b.durationMs &&
     a.costUsd === b.costUsd &&
     a.lastMessageId === b.lastMessageId &&

@@ -116,7 +116,7 @@ export function childGoing(child: TurnChild, live: LiveChildren): boolean {
 /** How a turn stands, its child work included (T1b, T1e). */
 export function turnState(turn: Turn, live: LiveChildren): PartState {
   return partState(
-    turn.evidence,
+    turn,
     turn.children.some((child) => childGoing(child, live)),
   );
 }

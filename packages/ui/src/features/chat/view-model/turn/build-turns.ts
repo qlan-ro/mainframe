@@ -1,17 +1,16 @@
 /**
- * Messages → turns, and the one rule for how a part of a turn stands.
- *
- * Where the viewer writes into a run splits the transcript, not the run, so a
- * part's state never follows from what comes after it: it is read from what the
- * session, the provider and its own steps say (`partState`).
+ * Messages → turns, and the one rule for how a part of a turn stands. Going is
+ * read from the session; how a part ended only from its own messages (`endOf`),
+ * so no part can be given another's end.
  */
 import type { ThreadMessage } from '@assistant-ui/react';
 import { verifiedTurnTiming, turnDuration } from './turn-timing';
 import { answerUnits, failedSteps, nestedPending, turnChildren, workTools } from './turn-roles';
 import { turnSummary } from './turn-summary';
 import { TurnCache } from './turn-cache';
-import { draftTurns, type Draft } from './turn-drafts';
-import { draftRuns, type DraftRun } from './turn-runs';
+import { draftTurns, type Draft, type Drafts } from './turn-drafts';
+import { endOf, isOpenStep } from './turn-end';
+import type { MainframeMessageMeta } from '../message-meta';
 import { resolveToolStatus } from './tool-status';
 import { isMarkerUnit, messageMeta } from './turn-units';
 import { absorbedTaskResults, taskResultStatuses } from './task-results';
@@ -22,18 +21,23 @@ import type { MessageSlice, PartEvidence, PartState, Turn, TurnModel, TurnScope,
  * an agent, task or workflow it started is known to go on, which the daemon and
  * the child's own chat say and the messages don't.
  */
-export function partState(evidence: PartEvidence, liveChild: boolean): PartState {
-  const { needsYou, run, unsettled, ended } = evidence;
+export function partState({ needsYou, live, ended }: PartEvidence, liveChild: boolean): PartState {
   if (needsYou) return 'needs-you';
-  if (liveChild || run === 'current' || (run === 'unknown' && unsettled)) return 'going';
-  if (ended === 'error') return 'error';
-  if (ended === 'cancelled' || unsettled) return 'stopped';
-  return ended === 'completed' ? 'finished' : 'neutral';
+  return live || liveChild ? 'going' : (ended ?? 'neutral');
 }
 
-interface Standing extends DraftRun {
+const TERMINAL: ReadonlySet<string | undefined> = new Set(['completed', 'cancelled', 'failed']);
+
+const isOnItsWay = (meta: MainframeMessageMeta | undefined) => meta?.pending === true && meta.error === undefined;
+
+interface Standing {
   readonly needsYou: boolean;
+  /** The agent writes in it, or waits on the viewer in it. */
   readonly running: boolean;
+  /** It belongs to the run in progress. */
+  readonly inRun: boolean;
+  /** Some run is in progress, so a step with no outcome may be its. */
+  readonly session: boolean;
 }
 
 /** The thread's pending requests a draft holds: on its own steps, and inside the agents it started. */
@@ -55,32 +59,25 @@ function pendingIn(draft: Draft, pending: ReadonlySet<string>): { own: boolean; 
  * earlier part, only holds that part open, as child work.
  */
 function standings(
-  drafts: readonly Draft[],
-  last: Draft | undefined,
-  runs: ReadonlyMap<Draft, DraftRun>,
-  scope: TurnScope,
+  { drafts, last }: Drafts,
+  messages: readonly ThreadMessage[],
+  { pendingToolIds, isRunning: session = false, runAfter }: TurnScope,
 ): Map<Draft, Standing> {
-  const held = new Map(drafts.map((draft) => [draft, pendingIn(draft, scope.pendingToolIds)]));
-  const unplaced = scope.pendingToolIds.size > 0 && ![...held.values()].some(({ own, nested }) => own || nested);
+  const held = new Map(drafts.map((draft) => [draft, pendingIn(draft, pendingToolIds)]));
+  const unplaced = pendingToolIds.size > 0 && ![...held.values()].some(({ own, nested }) => own || nested);
+  const start = typeof runAfter === 'string' ? messages.findIndex(({ id }) => id === runAfter) : -1;
+  const seen = start >= 0 || runAfter === null;
+  // The run a prompt on its way began holds nothing yet: the turn above it stays as it ended.
+  const begun = seen && messages.some((message) => isOnItsWay(messageMeta(message)));
   return new Map(
     drafts.map((draft) => {
       const { own, nested } = held.get(draft)!;
-      const run = runs.get(draft)!;
-      const needsYou = own || (draft === last && (nested || (unplaced && run.run === 'current')));
-      return [draft, { ...run, needsYou, running: needsYou || (draft === last && run.run === 'current') }];
+      const isLast = draft === last;
+      const needsYou = own || (isLast && (nested || (unplaced && session)));
+      const inRun = session && ((isLast && !begun) || (seen && draft.index > start));
+      return [draft, { needsYou, running: needsYou || (isLast && inRun), inRun, session }];
     }),
   );
-}
-
-/** How the turn itself ended: what was said of the whole turn, before what its last message shows. */
-function endedAs(draft: Draft, units: readonly TurnUnit[], { reason, errorLast }: Standing): PartEvidence['ended'] {
-  const states = new Set(units.map((unit) => unit.presentation?.state));
-  const status = (draft.lastVisible ?? draft.messages[draft.messages.length - 1]!).status;
-  const cut = status?.type === 'incomplete' ? status.reason : undefined;
-  if (states.has('failed') || reason === '_mainframe.dev/error') return 'error';
-  if (states.has('cancelled') || reason === 'cancelled' || cut === 'cancelled') return 'cancelled';
-  if (errorLast || cut === 'error') return 'error';
-  return states.has('completed') || reason === 'end_turn' ? 'completed' : undefined;
 }
 
 function durationOf(draft: Draft, units: readonly TurnUnit[], now: number): number | undefined {
@@ -97,21 +94,23 @@ function costOf(draft: Draft): number | undefined {
 }
 
 function turnOf(draft: Draft, standing: Standing, scope: TurnScope, now: number): Turn {
-  const { running, needsYou, run } = standing;
+  const { running, needsYou, inRun, session } = standing;
   const units = draft.units.flat();
   const answer = answerUnits(units, running);
   const work = units.filter((unit) => !isMarkerUnit(unit) && !answer.has(unit));
   const tools = workTools(work);
-  const live = needsYou || run !== 'over';
-  const statuses = tools.map((tool) => resolveToolStatus(tool, scope.pendingToolIds));
-  const unsettled = statuses.some((status) => status === 'running' || status === 'awaiting-approval');
-  const ended = endedAs(draft, units, standing);
+  const open = work.filter((unit) => isOpenStep(unit, scope.pendingToolIds));
+  // Nothing can settle a step of a turn its provider ended.
+  const unsettled = open.some((unit) => !TERMINAL.has(unit.presentation?.state));
+  const live = needsYou || inRun || (session && unsettled);
+  const ended = endOf(draft, scope);
   return {
     key: draft.key,
     running,
+    needsYou,
     live,
-    evidence: { needsYou, run, unsettled, ...(ended && { ended }) },
-    unclear: statuses.includes('unknown'),
+    ...(ended && { ended }),
+    unclear: tools.some((tool) => resolveToolStatus(tool, scope.pendingToolIds) === 'unknown'),
     durationMs: running ? undefined : durationOf(draft, units, now),
     costUsd: costOf(draft),
     lastMessageId: draft.messages[draft.messages.length - 1]!.id,
@@ -156,10 +155,11 @@ export function buildTurns(
   const { drafts, last, skills } = drafted;
   const turns = new Map<string, Turn>();
   const slices = new Map<string, MessageSlice>();
-  const standing = standings(drafts, last, draftRuns(drafted, messages, scope), scope);
+  const standing = standings(drafted, messages, scope);
   for (const draft of drafts) {
     const stand = standing.get(draft)!;
-    const built = cache.turn(draft.key, draft.messages, draft.units, JSON.stringify(stand), () => ({
+    const state = JSON.stringify([stand, draft.error > draft.said]);
+    const built = cache.turn(draft.key, draft.messages, draft.units, state, () => ({
       turn: turnOf(draft, stand, scope, now),
       slices: slicesOf(draft, stand.running),
     }));

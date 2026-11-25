@@ -6,10 +6,10 @@ import { useUiPrefs } from '@/store/ui-prefs';
 import { assistant, bash, failed, running, text, tool, user } from './fixtures';
 import {
   PROVIDERS,
+  IDLE,
   START,
   Session,
   echoed,
-  idle,
   names,
   opened,
   queued,
@@ -79,8 +79,9 @@ describe.each(PROVIDERS)('a message sent into a run of %s', (_name, presentation
       await session.says(...messages);
       going(parts);
     }
-    await session.apply(...idle('end_turn'));
-    expect(states()).toEqual(Array(parts).fill('finished'));
+    await session.apply(IDLE);
+    // Each reads its own messages: nothing says how these ended.
+    expect(states()).toEqual(Array(parts).fill('neutral'));
     expect(opened()).toEqual(Array(parts).fill(false));
   });
 
@@ -130,21 +131,21 @@ describe.each(PROVIDERS)('a message sent into a run of %s', (_name, presentation
     await session.says(...wrong, user('x', 'u2'), reply('a2', [bash('c', 'ls')]));
     expect(screen.getByTestId('chat-row-b-toggle')).toHaveAttribute('aria-expanded', 'false');
     useUiPrefs.setState({ finishedWork: 'open' });
-    await session.apply(...idle('end_turn'));
+    await session.apply(IDLE);
     expect(screen.getByTestId('chat-row-b-toggle')).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('never wakes a turn that had ended', async () => {
-    const ended = presentation && { ...presentation, state: 'completed' as const };
+    const ended = { ...presentation, state: 'completed' as const };
     const cut = bash('cut', 'sleep 60', running);
     const done = [asked, assistant([bash('b', 'ls'), cut, text('Done')], 'a1', { presentation: ended })];
     const session = Session.open(done);
     const steps = [send(), [transcript([...done, user('x', 'u2')]), echoed()], [START]];
     for (const step of [...steps, [transcript([...done, user('x', 'u2'), assistant([bash('n', 'ls')], 'a2')])]]) {
       await session.apply(...step);
-      expect([states()[0], opened()[0]]).toEqual(['stopped', false]);
+      expect([states()[0], opened()[0]]).toEqual(['finished', false]);
     }
-    expect(states()).toEqual(['stopped', 'going']);
+    expect(states()).toEqual(['finished', 'going']);
   });
 
   it('does not wake a turn that had ended when a send into it fails, or is sent again', async () => {
@@ -156,26 +157,17 @@ describe.each(PROVIDERS)('a message sent into a run of %s', (_name, presentation
   });
 });
 
-/** What a killed session left behind. */
-const shellCut = bash('cut', 'sleep 60', running);
-
-it('lets a turn go when its end and the prompt that starts the next one come without an idle between', async () => {
+it('tells a queued prompt’s run from the one before, though the thread never showed idle', async () => {
   const at = (state: 'running' | 'completed') => [
     user('Go', 'u1'),
-    assistant([shellCut], 'a1', { presentation: { provider: 'codex', turnId: 't1', state } }),
+    assistant([bash('b', 'ls')], 'a1', { presentation: { provider: 'codex', turnId: 't1', state } }),
   ];
   const session = Session.open([]);
-  await session.apply(START, transcript(at('running')));
-  await session.says(...at('completed'), user('also the tests', 'u2'));
-  expect([states(), opened()]).toEqual([['stopped'], [false]]);
-});
-
-it('tells the queued prompt’s run from the one before, though the thread never showed idle', async () => {
-  const first = [user('Go', 'u1'), assistant([bash('b', 'ls')], 'a1')];
-  const session = Session.open([]);
-  await session.apply(START, transcript(first), { type: 'run.ended', stopReason: 'end_turn' }, START);
-  expect(states()).toEqual(['finished']);
-  await session.says(...first, user('Then', 'u2'), assistant([bash('c', 'ls')], 'a2'));
+  await session.apply({ ...START, startedAtMs: 5 }, transcript(at('running')));
+  await session.apply(transcript(at('completed')), { ...START, startedAtMs: 9 });
+  await session.says(...at('completed'), user('Then', 'u2'));
+  expect([states(), opened()]).toEqual([['finished'], [false]]);
+  await session.says(...at('completed'), user('Then', 'u2'), assistant([bash('c', 'ls')], 'a2'));
   expect(states()).toEqual(['finished', 'going']);
 });
 

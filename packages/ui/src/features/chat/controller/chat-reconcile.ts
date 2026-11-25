@@ -13,7 +13,6 @@ import type { ChatThreadState, PendingUserMessage } from './chat-thread-state';
 import { toUploadItems } from '../composer/attachment-adapter';
 import type { UploadAttachmentItem } from '../../../lib/api/attachments';
 import type { LocalAttachmentPreview } from './local-attachments';
-import { runConfirmed, runEnded } from './run-records';
 
 let localIdCounter = 0;
 
@@ -165,7 +164,7 @@ export function reduceLocalMessageEvent(state: ChatThreadState, event: LocalMess
           [event.clientId]: { ...rest, status: 'failed', error: event.error, stage: event.stage },
         },
         // A send that failed ends no run: it reached nobody.
-        ...(!runConfirmed(state) && { runState: { type: 'error', error: event.error }, runs: runEnded(state) }),
+        ...(!state.run?.confirmed && { runState: { type: 'error', error: event.error }, run: null }),
       };
     }
 

@@ -1,4 +1,4 @@
-/** The runs the controller records from the frames the daemon sends (`run-records.ts`). */
+/** Where the run in progress began, from the frames the daemon sends (`run-start.ts`). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StopReason } from '@qlan-ro/mainframe-types';
 
@@ -53,28 +53,32 @@ const says = (client: FakeAcpClient, id: string) =>
     content: [{ type: 'text', text: id }],
     ...CREATED,
   });
-const at = (id: string) => ({ id, parts: 1 });
-
 async function attached() {
   const rig = makeController();
   await rig.ctrl.load();
   return rig;
 }
 
-describe('the runs of a followed session', () => {
-  it.each(['end_turn', 'cancelled', '_mainframe.dev/error'] as const)('end with the reason %s', async (reason) => {
-    const { ctrl, acpClient } = await attached();
-    says(acpClient, 'before');
-    running(acpClient, 7);
-    says(acpClient, 'a1');
-    idle(acpClient, reason);
-    await vi.advanceTimersByTimeAsync(SETTLE_MS);
-    expect(ctrl.getState().runs).toEqual([
-      { after: at('before'), exact: true, startedAtMs: 7, end: { until: at('a1'), reason, messageIds: ['a1'] } },
-    ]);
-  });
+const run = (ctrl: Awaited<ReturnType<typeof attached>>['ctrl']) => ctrl.getState().run;
 
-  it('are two when a queued prompt starts its turn at once', async () => {
+describe('the run of a followed session', () => {
+  it.each(['end_turn', 'cancelled', '_mainframe.dev/error', undefined] as const)(
+    'is forgotten once idle, however it ended (%s)',
+    async (reason) => {
+      const { ctrl, acpClient } = await attached();
+      says(acpClient, 'before');
+      running(acpClient, 7);
+      says(acpClient, 'a1');
+      expect(run(ctrl)).toEqual({ after: 'before', confirmed: true });
+      idle(acpClient, reason);
+      await vi.advanceTimersByTimeAsync(SETTLE_MS);
+      const { messages: _messages, ...kept } = ctrl.getState();
+      expect(kept.run).toBeNull();
+      expect(JSON.stringify(kept)).not.toContain('stopReason');
+    },
+  );
+
+  it('is another one when a queued prompt starts its turn at once', async () => {
     const { ctrl, acpClient } = await attached();
     running(acpClient, 7);
     says(acpClient, 'a1');
@@ -82,47 +86,44 @@ describe('the runs of a followed session', () => {
     running(acpClient, 9);
     await vi.advanceTimersByTimeAsync(SETTLE_MS);
     expect(ctrl.getState().runState.type).toBe('running');
-    expect(ctrl.getState().runs).toMatchObject([
-      { after: null, end: { until: at('a1'), reason: 'end_turn' } },
-      { after: at('a1'), exact: true, startedAtMs: 9 },
-    ]);
+    expect(run(ctrl)).toEqual({ after: 'a1', confirmed: true });
   });
 
-  it('begin at the send, and a steer begins none', async () => {
+  it('begins at the send, and a steer begins none', async () => {
     const { ctrl, acpClient } = await attached();
     says(acpClient, 'before');
     await ctrl.sendMessage(makeMsg('Go'));
+    expect(run(ctrl)).toEqual({ after: 'before', confirmed: false });
     running(acpClient, 7);
     acpClient.emitUpdate(CHAT_ID, userMessageUpdate('u1', 'Go'));
     says(acpClient, 'a1');
+    const begun = run(ctrl);
+    expect(begun).toEqual({ after: 'before', confirmed: true });
     await ctrl.sendMessage(makeMsg('More'));
     acpClient.emitUpdate(CHAT_ID, userMessageUpdate('u2', 'More'));
     running(acpClient, 7);
-    expect(ctrl.getState().runs).toMatchObject([{ after: at('before'), exact: true, startedAtMs: 7 }]);
-    expect(ctrl.getState().runs).toHaveLength(1);
-    expect(ctrl.getState().runs[0]!.end).toBeUndefined();
+    expect(run(ctrl)).toBe(begun);
   });
 
-  it('outlive a steer that could not be sent', async () => {
+  it('outlives a steer that could not be sent', async () => {
     const { ctrl, acpClient } = await attached();
     running(acpClient, 7);
     says(acpClient, 'a1');
     acpClient.prompt = vi.fn().mockRejectedValue(new Error('offline'));
     await expect(ctrl.sendMessage(makeMsg('More'))).rejects.toThrow('offline');
     expect(ctrl.getState().runState.type).toBe('running');
-    expect(ctrl.getState().runs).toMatchObject([{ after: null, exact: true }]);
-    expect(ctrl.getState().runs[0]!.end).toBeUndefined();
+    expect(run(ctrl)).toEqual({ after: null, confirmed: true });
     // The same send with nothing running did start a run, and failed it.
     idle(acpClient, 'end_turn');
     await vi.advanceTimersByTimeAsync(SETTLE_MS);
     await expect(ctrl.sendMessage(makeMsg('More'))).rejects.toThrow('offline');
     expect(ctrl.getState().runState.type).toBe('error');
-    expect(ctrl.getState().runs[1]).toMatchObject({ after: at('a1'), end: { until: at('a1') } });
+    expect(run(ctrl)).toBeNull();
   });
 });
 
 describe('a session loaded while it runs', () => {
-  it('is not known to have begun before its last message', async () => {
+  it('has no known start', async () => {
     const rig = makeController(CHAT_ID, { capabilities: STAGED });
     const { ctrl, acpClient } = rig;
     acpClient.nextResumeMeta = { itemCount: 3, fullReplay: true };
@@ -133,10 +134,10 @@ describe('a session loaded while it runs', () => {
     running(acpClient, 7);
     acpClient.emitReplayComplete(CHAT_ID);
     await loading;
-    expect(ctrl.getState().runs).toEqual([{ after: at('u1'), exact: false, startedAtMs: 7 }]);
+    expect(run(ctrl)).toEqual({ confirmed: true });
   });
 
-  it('is not known to have begun at the end of what a reconnect brought', async () => {
+  it('has none at the end of what a reconnect brought', async () => {
     const { ctrl, acpClient } = makeController(CHAT_ID, { capabilities: STAGED });
     acpClient.nextResumeMeta = { itemCount: 1, fullReplay: true };
     const loading = ctrl.load();
@@ -154,6 +155,6 @@ describe('a session loaded while it runs', () => {
     running(acpClient, 7);
     acpClient.emitReplayComplete(CHAT_ID);
     await flushMicrotasks();
-    expect(ctrl.getState().runs).toEqual([{ after: at('u1'), exact: false, startedAtMs: 7 }]);
+    expect(run(ctrl)).toEqual({ confirmed: true });
   });
 });

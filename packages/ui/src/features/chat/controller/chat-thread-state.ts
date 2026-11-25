@@ -23,17 +23,11 @@ import type { HistoryLoadState } from './acp-history';
  *    `chat-environment-state.ts`
  */
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type {
-  ControlRequest,
-  PermissionOption,
-  PromptSendMeta,
-  QueuedMessageRef,
-  StopReason,
-} from '@qlan-ro/mainframe-types';
+import type { ControlRequest, PermissionOption, PromptSendMeta, QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { createEnvironmentSlice, type ChatEnvironmentSlice, type EnvironmentEvent } from './chat-environment-state';
 import type { LocalMessageEvent } from './chat-reconcile';
 import type { LocalAttachmentPreview } from './local-attachments';
-import type { RunRecord, RunStart } from './run-records';
+import type { RunInProgress, RunStart } from './run-start';
 
 // ---------------------------------------------------------------------------
 // State shape
@@ -98,8 +92,8 @@ export interface ChatThreadState extends ChatEnvironmentSlice {
   readonly authoritativeItemStreaming: boolean;
   readonly loadState: LoadState;
   readonly runState: RunState;
-  /** The runs seen since the transcript was loaded, oldest first: what a turn's state is read from. */
-  readonly runs: readonly RunRecord[];
+  /** Forgotten when the session goes idle: nothing is kept of how a run ended. */
+  readonly run: RunInProgress | null;
   /** The converted transcript, projected as-is into the message repository. */
   readonly messages: readonly ThreadMessageLike[];
   readonly interactions: {
@@ -140,8 +134,6 @@ export type ChatStateEvent =
   | { type: 'transcript.updated'; messages: readonly ThreadMessageLike[] }
   | { type: 'transcript.cleared' }
   | ({ type: 'run.started' } & RunStart)
-  /** The daemon's own word that the run is over, ahead of the settled `run.stopped`. */
-  | { type: 'run.ended'; stopReason?: StopReason }
   | { type: 'run.cancelling' }
   | { type: 'run.stopped' }
   | { type: 'run.failed'; error: unknown }
@@ -174,7 +166,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     authoritativeItemStreaming: false,
     loadState: { type: 'idle' },
     runState: { type: 'idle' },
-    runs: [],
+    run: null,
     messages: [],
     interactions: {
       permissions: {} as Readonly<Record<string, ChatPermissionEntry>>,

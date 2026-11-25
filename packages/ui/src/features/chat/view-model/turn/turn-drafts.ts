@@ -5,7 +5,6 @@
  * Where a draft ends says nothing about whether the agent's work in it did.
  */
 import type { ThreadMessage } from '@assistant-ui/react';
-import { visibleParts } from '../../controller/run-records';
 import { isPlaceholder } from '../placeholder';
 import { SkillMatcher } from './skill-matcher';
 import type { TurnCache } from './turn-cache';
@@ -29,10 +28,6 @@ export interface Drafts {
   readonly drafts: readonly Draft[];
   /** The draft the transcript ends in; none under a message that was sent and has no answer yet. */
   readonly last: Draft | undefined;
-  /** Where the last message somebody sent is. */
-  readonly sent: number;
-  /** Where every error message is. */
-  readonly errors: readonly number[];
   readonly skills: SkillMatcher;
 }
 
@@ -49,15 +44,12 @@ function sent(message: ThreadMessage): boolean {
 
 export function draftTurns(messages: readonly ThreadMessage[], scope: TurnScope, cache: TurnCache): Drafts {
   const drafts: Draft[] = [];
-  const errors: number[] = [];
   const skills = new SkillMatcher();
   let open: Draft | undefined;
-  let lastSent = -1;
   for (const [index, message] of messages.entries()) {
     if (isPlaceholder(message)) continue;
     if (message.role === 'user') {
       if (!sent(message)) continue;
-      lastSent = index;
       open = undefined;
       continue;
     }
@@ -68,8 +60,7 @@ export function draftTurns(messages: readonly ThreadMessage[], scope: TurnScope,
       continue;
     }
     if (messageMeta(message)?.errorText !== undefined) {
-      errors.push(index); // drawn on its own, as the error it is
-      if (open) open.error = index;
+      if (open) open.error = index; // drawn on its own, as the error it is
       continue;
     }
     const units = cache.units(message, scope);
@@ -89,9 +80,5 @@ export function draftTurns(messages: readonly ThreadMessage[], scope: TurnScope,
       open.lastVisible = message;
     }
   }
-  return { drafts, last: open, sent: lastSent, errors, skills };
+  return { drafts, last: open, skills };
 }
-
-/** How many parts of the draft's last message show. */
-export const lastParts = (draft: Draft): number =>
-  visibleParts((draft.lastVisible ?? draft.messages[draft.messages.length - 1]!).content);

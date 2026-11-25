@@ -18,9 +18,15 @@ export function pendingToolIds({ interactions }: Pick<ChatThreadState, 'interact
 }
 
 /** The scope the chat's own transcript builds its turns in. */
-export function zoneScope(state: Pick<ChatThreadState, 'interactions' | 'runState' | 'runs'>): TurnScope {
+export function zoneScope(state: Pick<ChatThreadState, 'interactions' | 'runState' | 'run'>): TurnScope {
   const isRunning = ['running', 'cancelling'].includes(state.runState.type);
-  return { rootThreadId: '', ancestors: [], pendingToolIds: pendingToolIds(state), isRunning, runs: state.runs };
+  return {
+    rootThreadId: '',
+    ancestors: [],
+    pendingToolIds: pendingToolIds(state),
+    isRunning,
+    runAfter: state.run?.after,
+  };
 }
 
 /** Whether the turn part that started the call, or the agent around it, can still be going. */

@@ -45,7 +45,7 @@ const STATE_WORDS: Record<PartState, string> = {
 
 function title(turn: Turn): string {
   // The turn status row is the one live clock, so a running turn states no time.
-  if (turn.evidence.needsYou) return STATE_WORDS['needs-you'];
+  if (turn.needsYou) return STATE_WORDS['needs-you'];
   if (turn.running) return 'Working';
   return turn.durationMs === undefined ? 'Worked' : `Worked for ${formatTurnDuration(turn.durationMs)}`;
 }

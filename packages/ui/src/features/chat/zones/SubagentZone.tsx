@@ -54,9 +54,9 @@ function useOutcomeSources(
   state: ChatThreadState,
   launched: boolean,
 ): OutcomeSources {
-  const { interactions, runState, runs, backgroundTasks } = state;
+  const { interactions, runState, run, backgroundTasks } = state;
   const cache = useMemo(() => new TurnCache(), []);
-  const scope = useMemo(() => zoneScope({ interactions, runState, runs }), [interactions, runState, runs]);
+  const scope = useMemo(() => zoneScope({ interactions, runState, run }), [interactions, runState, run]);
   const live = useMemo(() => callLive(messages, toolCallId, scope, cache), [messages, toolCallId, scope, cache]);
   const listed = useListedTasks(parentChatId, backgroundTasks, launched);
   return { pending: scope.pendingToolIds, live, running: backgroundTasks, listed };

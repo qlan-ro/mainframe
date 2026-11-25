@@ -12,7 +12,7 @@ import {
   type ThreadMessage,
   type ThreadMessageLike,
 } from '@assistant-ui/react';
-import type { StopReason, TranscriptPresentation } from '@qlan-ro/mainframe-types';
+import type { TranscriptPresentation } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { AcpChatController } from '../../../controller/acp-chat-controller';
 import {
@@ -76,12 +76,9 @@ export const transcript = (messages: readonly ThreadMessage[]): ChatStateEvent =
   type: 'transcript.updated',
   messages: messages as unknown as ThreadMessageLike[],
 });
-export const START: ChatStateEvent = { type: 'run.started' };
-/** The daemon's idle frame, and the settled stop behind it. */
-export const idle = (stopReason?: StopReason): ChatStateEvent[] => [
-  { type: 'run.ended', stopReason },
-  { type: 'run.stopped' },
-];
+export const START = { type: 'run.started' } as const;
+/** The session went idle; how the run ended never reaches the state. */
+export const IDLE: ChatStateEvent = { type: 'run.stopped' };
 /** A send of this client's, not yet echoed. */
 export const send = (clientId = 'p'): ChatStateEvent[] => [
   {
@@ -121,7 +118,7 @@ export class Session {
     });
     return new Session(loaded);
   }
-  /** Reloaded while the session runs: the replay says so, and not since when. */
+  /** Reloaded while the session runs: the replay does not say since when. */
   static reload(messages: readonly ThreadMessage[]): Session {
     return Session.open(messages, { type: 'run.started', replayed: true });
   }

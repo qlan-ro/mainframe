@@ -1,227 +1,213 @@
 import { describe, expect, it } from 'vitest';
 import type { ThreadMessage } from '@assistant-ui/react';
-import type { RunRecord } from '../../../controller/run-records';
+import type { TranscriptPresentation } from '@qlan-ro/mainframe-types';
 import { buildTurns, partState } from '../build-turns';
 import { TurnCache } from '../turn-cache';
-import type { PartEvidence, PartState, TurnScope } from '../types';
-import { assistant, bash, presented, scope, sources, system, text, user } from './fixtures';
+import type { PartState, TurnScope } from '../types';
+import { assistant, bash, presented, scope, sources, system, text, thought, user } from './fixtures';
 
-/**
- * Every combination that can occur. A column is how the turn ended: nothing
- * said, completed, cancelled, error. A row is the rest of the evidence.
- */
-const TABLE: readonly (readonly [PartEvidence['run'], string, readonly PartState[]])[] = [
-  ['current', '', ['going', 'going', 'going', 'going']],
-  ['current', 'unsettled', ['going', 'going', 'going', 'going']],
-  ['current', 'child', ['going', 'going', 'going', 'going']],
-  ['current', 'unsettled child', ['going', 'going', 'going', 'going']],
-  ['unknown', '', ['neutral', 'finished', 'stopped', 'error']],
-  ['unknown', 'unsettled', ['going', 'going', 'going', 'going']],
-  ['unknown', 'child', ['going', 'going', 'going', 'going']],
-  ['unknown', 'unsettled child', ['going', 'going', 'going', 'going']],
-  ['over', '', ['neutral', 'finished', 'stopped', 'error']],
-  ['over', 'unsettled', ['stopped', 'stopped', 'stopped', 'error']],
-  ['over', 'child', ['going', 'going', 'going', 'going']],
-  ['over', 'unsettled child', ['going', 'going', 'going', 'going']],
+/** Every combination. A column is what the part's own messages say of its end: nothing, finished, stopped, error. */
+const TABLE: readonly (readonly [string, readonly PartState[]])[] = [
+  ['', ['neutral', 'finished', 'stopped', 'error']],
+  ['live', ['going', 'going', 'going', 'going']],
+  ['child', ['going', 'going', 'going', 'going']],
+  ['live child', ['going', 'going', 'going', 'going']],
+  ['waits', ['needs-you', 'needs-you', 'needs-you', 'needs-you']],
+  ['waits live', ['needs-you', 'needs-you', 'needs-you', 'needs-you']],
+  ['waits child', ['needs-you', 'needs-you', 'needs-you', 'needs-you']],
+  ['waits live child', ['needs-you', 'needs-you', 'needs-you', 'needs-you']],
 ];
-const ENDS = [undefined, 'completed', 'cancelled', 'error'] as const;
+const ENDS = [undefined, 'finished', 'stopped', 'error'] as const;
 
-describe('the rule', () => {
-  it.each(TABLE)('%s run, %s', (run, rest, expected) => {
-    const unsettled = rest.includes('unsettled');
-    const child = rest.includes('child');
-    const state = (needsYou: boolean) =>
-      ENDS.map((ended) => partState({ needsYou, run, unsettled, ...(ended && { ended }) }, child));
-    expect(state(false)).toEqual(expected);
-    // A request outranks everything else.
-    expect(state(true)).toEqual(['needs-you', 'needs-you', 'needs-you', 'needs-you']);
+it.each(TABLE)('the rule: %s', (rest, expected) => {
+  const is = (word: string) => rest.split(' ').includes(word);
+  const states = ENDS.map((ended) =>
+    partState({ needsYou: is('waits'), live: is('live'), ...(ended && { ended }) }, is('child')),
+  );
+  expect(states).toEqual(expected);
+});
+
+type Said = TranscriptPresentation['state'];
+const open = { result: undefined, providerMetadata: { mainframe: { acpStatus: 'in_progress' } } };
+const states = (messages: ThreadMessage[], options: Partial<TurnScope> = {}) =>
+  [...buildTurns(messages, scope(options)).turns.values()].map((turn) => partState(turn, false));
+const said = (state: Said, turnId = 'turn') => ({ partSources: sources(1, presented({ state, turnId })) });
+const one = [user('u1'), assistant('a1', [bash('ls')])];
+const steered = [...one, user('u2'), assistant('a2', [bash('pwd')])];
+const runs = { isRunning: true };
+const boom = assistant('e1', [text('Boom')], { errorText: 'Boom' });
+
+describe('a part is going while the session runs', () => {
+  it('when it is the last one, whatever its provider says of it', () => {
+    for (const state of ['running', 'completed', 'cancelled', 'failed', 'invalid'] as const)
+      expect(states([user('u1'), assistant('a1', [bash('ls')], said(state))], runs)).toEqual(['going']);
+    expect(states([...one, boom], runs)).toEqual(['going']);
+    expect(states(steered, runs)).toEqual(['neutral', 'going']);
+  });
+
+  it('when it lies after the start of the run, where that was seen', () => {
+    expect(states(steered, { ...runs, runAfter: null })).toEqual(['going', 'going']);
+    expect(states(steered, { ...runs, runAfter: 'u1' })).toEqual(['going', 'going']);
+    expect(states(steered, { ...runs, runAfter: 'a1' })).toEqual(['neutral', 'going']);
+    expect(states(steered, { ...runs, runAfter: 'not-loaded' })).toEqual(['neutral', 'going']);
+  });
+
+  it('when a step of it has no outcome, unless its provider ended that turn', () => {
+    const cut = (over?: object) => [
+      user('u1'),
+      assistant('a1', [bash('ls', open)], over),
+      user('u2'),
+      assistant('a2', [text('Hi')]),
+    ];
+    expect(states(cut(), runs)).toEqual(['going', 'going']);
+    expect(states(cut(), { ...runs, runAfter: 'u2' })).toEqual(['going', 'going']);
+    expect(states(cut(said('invalid')), runs)).toEqual(['going', 'going']);
+    expect(states(cut(said('completed')), runs)).toEqual(['finished', 'going']);
+    expect(states(cut(said('cancelled')), runs)).toEqual(['stopped', 'going']);
+    expect(states(cut(said('failed')), runs)).toEqual(['error', 'going']);
+  });
+
+  it.each([
+    ['a queued prompt', user('q', 'x', { queued: true })],
+    ['a send that failed', user('f', 'x', { pending: true, error: 'offline' })],
+    ['a compaction', system('s', { isCompacted: true })],
+  ])('and stays the last one above %s', (_name, message) => {
+    expect(states([...one, message], runs)).toEqual(['going']);
+  });
+
+  it('and not when the run began after it, with a prompt on its way: an ended turn does not wake', () => {
+    const done = [user('u1'), assistant('a1', [bash('ls')], said('completed')), user('p', 'x', { pending: true })];
+    expect(states(done, { ...runs, runAfter: 'a1' })).toEqual(['finished']);
+    // The run in progress is this one's: what is sent into it ends nothing.
+    expect(states(done, { ...runs, runAfter: 'u1' })).toEqual(['going']);
+    expect(states(done, runs)).toEqual(['going']);
+    // With nothing on its way the agent went on by itself.
+    expect(states(done.slice(0, 2), { ...runs, runAfter: 'a1' })).toEqual(['going']);
+  });
+
+  it('and only then: nothing in an idle session is going by itself', () => {
+    expect(states(steered, { runAfter: null })).toEqual(['neutral', 'neutral']);
+    expect(states([user('u1'), assistant('a1', [bash('ls', open)])], {})).toEqual(['neutral']);
   });
 });
 
-const open = { result: undefined, providerMetadata: { mainframe: { acpStatus: 'in_progress' } } };
-const mark = (id: string, parts = 1) => ({ id, parts });
-const states = (messages: ThreadMessage[], options: Partial<TurnScope> = {}) =>
-  [...buildTurns(messages, scope(options)).turns.values()].map((turn) => partState(turn.evidence, false));
-const said = (state: 'completed' | 'cancelled' | 'failed' | 'invalid' | 'running') => ({
-  partSources: sources(1, presented({ state })),
-});
-const one = [user('u1'), assistant('a1', [bash('ls')])];
-const steered = [...one, user('u2'), assistant('a2', [bash('pwd')])];
-const ran = (over: Partial<RunRecord> = {}): RunRecord => ({ after: null, exact: true, ...over });
-const ended = (id: string, reason?: NonNullable<RunRecord['end']>['reason'], parts = 1) => ({
-  end: { until: mark(id, parts), ...(reason && { reason }) },
-});
-
-describe('which evidence a part has', () => {
+describe('how a part ended is what its own messages say', () => {
   it.each([
     ['completed', 'finished'],
     ['cancelled', 'stopped'],
     ['failed', 'error'],
     ['invalid', 'neutral'],
     ['running', 'neutral'],
-  ] as const)('reads a turn the provider calls %s as %s, once idle', (state, expected) => {
+    ['unknown', 'neutral'],
+  ] as const)('a turn its provider calls %s is %s', (state, expected) => {
     expect(states([user('u1'), assistant('a1', [bash('ls')], said(state))])).toEqual([expected]);
   });
 
-  it.each([
-    ['end_turn', 'finished'],
-    ['cancelled', 'stopped'],
-    ['_mainframe.dev/error', 'error'],
-    ['max_tokens', 'neutral'],
-    ['refusal', 'neutral'],
-    [undefined, 'neutral'],
-  ] as const)('reads every part of a run the daemon ended with %s as %s', (reason, expected) => {
-    expect(states(steered, { runs: [ran(ended('a2', reason))] })).toEqual([expected, expected]);
+  it('is nothing without a provider’s word: no step, no answer and no later part says it', () => {
+    expect(states(one)).toEqual(['neutral']);
+    expect(states([user('u1'), assistant('a1', [bash('ls'), text('Done.')])])).toEqual(['neutral']);
+    const last = assistant('a2', [bash('pwd')], said('completed'));
+    expect(states([...one, user('u2'), last])).toEqual(['neutral', 'finished']);
   });
 
-  it('lets an interrupted provider be, and takes the daemon’s word for how the run ended', () => {
-    const invalid = [user('u1'), assistant('a1', [bash('ls')], said('invalid'))];
-    expect(states(invalid, { runs: [ran(ended('a1', 'cancelled'))] })).toEqual(['stopped']);
-  });
-
-  it('gives no run’s end to a part another run wrote', () => {
-    const runs = [ran(ended('a1', 'cancelled'))];
-    expect(states(steered, { runs })).toEqual(['stopped', 'neutral']);
-    expect(states(steered, { runs: [ran({ after: mark('a1') }), ...runs].reverse() })).toEqual(['stopped', 'neutral']);
-    expect(states(steered, { runs: [ran({ after: mark('a1'), ...ended('a2', 'end_turn') })] })).toEqual([
-      'neutral',
-      'finished',
-    ]);
-  });
-
-  it('gives no run’s end to parts a message gained after it', () => {
-    const grown = [user('u1'), assistant('a1', [bash('ls'), text('And on')])];
-    expect(states(grown, { runs: [ran(ended('a1', 'end_turn'))] })).toEqual(['neutral']);
-    expect(states(grown, { runs: [ran(ended('a1', 'end_turn', 2))] })).toEqual(['finished']);
-  });
-
-  it('knows a part that gained parts in the run in progress', () => {
-    const grown = [user('u1'), assistant('a1', [bash('ls'), text('And on')])];
-    const runs = [ran(ended('a1', 'end_turn')), ran({ after: mark('a1') })];
-    expect(states(one, { isRunning: true, runs })).toEqual(['finished']);
-    expect(states(grown, { isRunning: true, runs })).toEqual(['going']);
-  });
-
-  it('is told nothing by a run whose place is not loaded', () => {
-    expect(states(one, { runs: [ran({ after: mark('gone'), ...ended('a1', 'end_turn') })] })).toEqual(['neutral']);
-    expect(states(one, { runs: [ran(ended('gone', 'end_turn'))] })).toEqual(['neutral']);
-  });
-
-  it('counts a step with no outcome as stopped only once nothing can finish it', () => {
-    const cut = [user('u1'), assistant('a1', [bash('ls', open)])];
-    expect(states(cut)).toEqual(['stopped']);
-    expect(states(cut, { isRunning: true })).toEqual(['going']);
-    const later = [...cut, user('u2'), assistant('a2', [bash('pwd')])];
-    // Where the run began isn't known: it may still be this one's.
-    expect(states(later, { isRunning: true })).toEqual(['going', 'going']);
-    // It is known to have begun after it, or the thread was seen idle since.
-    expect(states(later, { isRunning: true, runs: [ran({ after: mark('a1') })] })).toEqual(['stopped', 'going']);
-    const idle = ran(ended('a1'));
-    const again = ran({ after: mark('u2'), exact: false });
-    expect(states(later, { isRunning: true, runs: [idle, again] })).toEqual(['stopped', 'going']);
-  });
-
-  it('claims nothing for a settled part of a run whose beginning is not known', () => {
-    expect(states(steered, { isRunning: true })).toEqual(['neutral', 'going']);
-    const runs = [ran({ after: mark('u2'), exact: false })];
-    expect(states(steered, { isRunning: true, runs })).toEqual(['neutral', 'going']);
-    expect(states(steered, { isRunning: true, runs: [ran()] })).toEqual(['going', 'going']);
-  });
-
-  it('lets a turn its provider ended go, though the next run has begun', () => {
-    const done = [user('u1'), assistant('a1', [bash('ls')], said('completed'))];
-    expect(states(done, { isRunning: true })).toEqual(['finished']);
-    expect(states([user('u1'), assistant('a1', [bash('ls', open)], said('completed'))], { isRunning: true })).toEqual([
-      'stopped',
-    ]);
-    // Parts the provider has said nothing of are not the turn it ended.
-    const on = [...done, assistant('a2', [text('It came back')])];
-    expect(states(on, { isRunning: true })).toEqual(['going']);
-  });
-
-  it('is an error only when nothing said after it', () => {
-    const boom = assistant('e1', [text('Boom')], { errorText: 'Boom' });
-    expect(states([...one, boom])).toEqual(['error']);
-    expect(states([...one, boom, assistant('a2', [text('Done')])])).toEqual(['neutral']);
-    expect(states([...one, boom, assistant('a2', [text(' ')])])).toEqual(['error']);
-    const on = [...one, boom, user('u2'), assistant('a2', [bash('pwd')])];
-    expect(states(on)).toEqual(['error', 'neutral']);
-    expect(states(on, { runs: [ran(ended('a2', 'end_turn'))] })).toEqual(['finished', 'finished']);
-    expect(states(on, { isRunning: true, runs: [ran()] })).toEqual(['going', 'going']);
-  });
-
-  it('is an error of the whole run, wherever in it the error came', () => {
-    const boom = assistant('e1', [text('Boom')], { errorText: 'Boom' });
-    expect(states([...one, user('u2'), boom], { runs: [ran(ended('e1', 'end_turn'))] })).toEqual(['error']);
-    // Just after its end; the next run's error is not this one's.
-    expect(states([...one, boom], { runs: [ran(ended('a1', 'end_turn'))] })).toEqual(['error']);
-    const next = [...one, user('u2'), boom];
-    const runs = [ran(ended('a1', 'end_turn')), ran({ after: mark('a1'), ...ended('e1') })];
-    expect(states(next, { runs })).toEqual(['finished']);
-  });
-
-  it('is not the run before’s, when its own run said nothing', () => {
-    const boom = assistant('e1', [text('Boom')], { errorText: 'Boom' });
-    const blank = [...one, boom, user('u2'), assistant('a2', [text(' ')])];
-    const runs = [ran(ended('e1', 'end_turn')), ran({ after: mark('e1'), ...ended('a2', 'end_turn', 0) })];
-    expect(states(blank, { runs })).toEqual(['error', 'finished']);
-  });
-
-  it('is stopped, not an error, when the viewer stopped what an error had interrupted', () => {
-    const boom = assistant('e1', [text('Boom')], { errorText: 'Boom' });
-    expect(states([...one, boom], { runs: [ran(ended('e1', 'cancelled'))] })).toEqual(['stopped']);
+  it('is nothing when the provider has not placed the last words', () => {
+    const done = assistant('a1', [bash('ls')], said('completed'));
+    expect(states([user('u1'), done, assistant('a2', [text('It came back')])])).toEqual(['neutral']);
+    expect(states([user('u1'), done, assistant('a2', [text(' ')])])).toEqual(['finished']);
+    // Parts of the last message itself need not all be placed.
+    expect(states([user('u1'), assistant('a1', [bash('ls'), thought()], said('completed'))])).toEqual(['finished']);
   });
 
   it.each([
     ['cancelled', 'stopped'],
     ['error', 'error'],
     ['other', 'neutral'],
-  ] as const)('reads a last message that is incomplete for %s as %s', (reason, expected) => {
+  ] as const)('a last message that is incomplete for %s is %s', (reason, expected) => {
     const status = { status: { type: 'incomplete', reason } };
-    expect(states([user('u1'), assistant('a1', [text('Half')], undefined, status)])).toEqual([expected]);
+    const half = assistant('a1', [text('Half')], undefined, status);
+    expect(states([user('u1'), half])).toEqual([expected]);
+    expect(states([user('u1'), half, assistant('a2', [text('More')])])).toEqual(['neutral']);
   });
 
+  it('is an error when nothing in the part follows the error message', () => {
+    expect(states([...one, boom])).toEqual(['error']);
+    expect(states([...one, boom, assistant('a2', [text(' ')])])).toEqual(['error']);
+    expect(states([...one, boom, assistant('a2', [text('Done')])])).toEqual(['neutral']);
+    expect(states([user('u1'), assistant('a1', [bash('ls')], said('completed')), boom])).toEqual(['error']);
+    expect(states([user('u1'), assistant('a1', [bash('ls')], said('cancelled')), boom])).toEqual(['stopped']);
+    // Not one of another part.
+    expect(states([...one, user('u2'), boom])).toEqual(['neutral']);
+    expect(states([...one, boom, ...steered.slice(2)])).toEqual(['error', 'neutral']);
+  });
+
+  const turn = (state: Said, turnId: string) => presented({ state, turnId });
+  const two = (first: TranscriptPresentation, second: TranscriptPresentation, over = {}) => [
+    user('u1'),
+    assistant('a1', [bash('ls', over), text('Done')], {
+      partSources: { 0: sources(1, first)[0], 1: sources(1, second)[0] },
+    }),
+  ];
   it.each([
-    ['a queued prompt', user('q', 'x', { queued: true })],
-    ['an unconfirmed send', user('p', 'x', { pending: true })],
-    ['a send that failed', user('f', 'x', { pending: true, error: 'offline' })],
-    ['a compaction', system('s', { isCompacted: true })],
-  ])('is not ended by %s', (_name, message) => {
-    expect(states([...one, message], { isRunning: true })).toEqual(['going']);
+    ['completed', 'finished'],
+    ['running', 'finished'],
+    ['unknown', 'finished'],
+    ['cancelled', 'neutral'],
+    ['invalid', 'neutral'],
+    ['failed', 'neutral'],
+  ] as const)('a completed turn after one that is %s in the same part is %s', (state, expected) => {
+    expect(states(two(turn(state, 't1'), turn('completed', 't2')))).toEqual([expected]);
   });
+  it('is the last turn’s, where several lie in one part', () => {
+    expect(states(two(turn('completed', 't1'), turn('cancelled', 't2')))).toEqual(['stopped']);
+    expect(states(two(turn('invalid', 't1'), turn('failed', 't2')))).toEqual(['error']);
+    expect(states(two(turn('completed', 't1'), turn('invalid', 't2')))).toEqual(['neutral']);
+    // A turn cut in a step, with another after it.
+    expect(states(two(turn('running', 't1'), turn('completed', 't2'), open))).toEqual(['neutral']);
+    // One turn whose last part has the newest word is one turn.
+    expect(states(two(turn('invalid', 't1'), turn('completed', 't1')))).toEqual(['finished']);
+  });
+});
 
-  it('is the only part that waits when an earlier one’s background agent asks nothing', () => {
-    const nested = [assistant('n', [bash('rm', { toolCallId: 'ask', ...open })])];
-    const agent = { ...bash('x'), toolName: 'Task', toolCallId: 'agent', messages: nested } as never;
-    const asked = (messages: ThreadMessage[]) => states(messages, { pendingToolIds: new Set(['ask']) });
-    expect(asked([user('u1'), assistant('a1', [agent])])).toEqual(['needs-you']);
-    expect(asked([user('u1'), assistant('a1', [agent]), user('u2'), assistant('a2', [text('B')])])).toEqual([
-      'neutral',
-      'neutral',
-    ]);
+it('is the only part that waits when an earlier one’s background agent asks nothing', () => {
+  const nested = [assistant('n', [bash('rm', { toolCallId: 'ask', ...open })])];
+  const agent = { ...bash('x'), toolName: 'Task', toolCallId: 'agent', messages: nested } as never;
+  const asked = (messages: ThreadMessage[]) => states(messages, { pendingToolIds: new Set(['ask']) });
+  expect(asked([user('u1'), assistant('a1', [agent])])).toEqual(['needs-you']);
+  expect(asked([user('u1'), assistant('a1', [agent]), user('u2'), assistant('a2', [text('B')])])).toEqual([
+    'neutral',
+    'neutral',
+  ]);
+});
+
+describe('whether a neutral part may fold by itself', () => {
+  it.each([
+    ['settled', { result: 'ok' }, false],
+    ['lost', { result: undefined }, true],
+    // Its row reads stopped.
+    ['open', open, false],
+  ] as const)('a step that is %s', (_name, over, unclear) => {
+    const [turn] = buildTurns([user('u1'), assistant('a1', [bash('ls', over)])], scope()).turns.values();
+    expect(turn!.unclear).toBe(unclear);
   });
 });
 
 describe('a turn’s object is another one when only its evidence moved', () => {
-  const lost = { result: undefined };
   const call = (over: object) => [user('u1'), assistant('a1', [bash('ls', { toolCallId: 'b', ...over })])];
+  const at = (state: Said) => [user('u1'), assistant('a1', [bash('ls', { toolCallId: 'b' })], said(state))];
   type Build = readonly [ThreadMessage[], Partial<TurnScope>];
   it.each<[string, Build, Build]>([
-    ['how it ended', [one, { runs: [ran(ended('a1'))] }], [one, { runs: [ran(ended('a1', 'end_turn'))] }]],
-    [
-      'whose run it is',
-      [steered, { isRunning: true, runs: [ran()] }],
-      [steered, { isRunning: true, runs: [ran({ after: mark('u2'), exact: false })] }],
-    ],
-    ['whether a step is open', [call(open), { isRunning: true }], [call({ result: 'ok' }), { isRunning: true }]],
-    ['whether an outcome is unknown', [call(lost), {}], [call({ result: 'ok' }), {}]],
-  ])('%s', (_what, [before, at], [after, then]) => {
+    ['how it ended', [at('running'), {}], [at('completed'), {}]],
+    ['whether it is of the run', [steered, { ...runs, runAfter: 'u1' }], [steered, { ...runs, runAfter: 'a1' }]],
+    ['whether the session runs', [steered, { runAfter: null }], [steered, { ...runs, runAfter: null }]],
+    ['whether an outcome is unknown', [call({ result: undefined }), {}], [call({ result: 'ok' }), {}]],
+  ])('%s', (_what, [before, options], [after, then]) => {
     const cache = new TurnCache();
-    const first = (messages: ThreadMessage[], options: Partial<TurnScope>) =>
-      [...buildTurns(messages, scope(options), cache).turns.values()][0]!;
-    const turn = first(before, at);
-    expect(first(before, { ...at })).toBe(turn);
+    const first = (messages: ThreadMessage[], given: Partial<TurnScope>) =>
+      [...buildTurns(messages, scope(given), cache).turns.values()][0]!;
+    const turn = first(before, options);
+    expect(first(before, { ...options })).toBe(turn);
     const next = first(after, then);
-    expect([next.evidence, next.unclear]).not.toEqual([turn.evidence, turn.unclear]);
+    const read = ({ needsYou, live, ended, unclear }: typeof turn) => [needsYou, live, ended, unclear];
+    expect(read(next)).not.toEqual(read(turn));
   });
 });
