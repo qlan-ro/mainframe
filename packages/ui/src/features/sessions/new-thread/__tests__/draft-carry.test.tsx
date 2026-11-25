@@ -60,7 +60,6 @@ import { getDraftConfig, setDraftConfig, type DraftCfg } from '../../runtime/dra
 import { useNewThreadReady } from '../../runtime/new-thread-ready-store';
 import { useSessionsThreadList } from '../../runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../../ws/use-session-list-router';
-import { useDraftCarry } from '../draft-carry';
 
 const LOCAL: DaemonTarget = {
   id: 'local',
@@ -83,7 +82,6 @@ let switchTo: (target: DaemonTarget) => Promise<void>;
 
 function Body() {
   client = useAui();
-  useDraftCarry();
   useSessionListRouter();
   return null;
 }

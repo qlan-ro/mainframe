@@ -74,6 +74,7 @@
  *   editor-context-menu-copy       — Copy (selection → clipboard)
  *   editor-context-menu-copy-ref   — Copy Reference ("path:line" → clipboard)
  *   editor-context-menu-add-context — Add Agent Context (→ composer code annotation)
+ *   editor-context-menu-quote-ref  — Quote Reference ("path:line" → composer quote)
  *   editor-context-menu-go-to-def  — Go to Definition (disabled unless LSP ready)
  *   editor-context-menu-find-refs  — Find All References (disabled unless LSP ready)
  *   composer-code-tile / composer-note-add / composer-note-input / composer-draft-item-remove

@@ -39,7 +39,7 @@ import { useLayoutStore } from '../../../store/layout';
 import { isDraftSessionId } from '../../../store/layout-persist';
 import { useLastSessionStore } from '../../../store/last-session';
 import { isCreateInFlight } from '../runtime/new-thread-coordinator';
-import { isCarriedDraft } from '../new-thread/draft-carry';
+import { isCarriedDraft, useDraftCarry } from '../new-thread/draft-carry';
 import { useIsNewThreadSwitchPending } from '../new-thread/new-thread-switch-pending';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
@@ -88,6 +88,8 @@ function clearFilterOnCrossProject(active: SessionItem | undefined): void {
 }
 
 export function useSessionListRouter(): void {
+  // First: the boot selection below yields to a draft brought from another daemon.
+  useDraftCarry();
   // The `threads` SCOPE, not the client: `useAui()` returns a fresh client on
   // every main-thread switch, and the WS wiring below must outlive those.
   const threads = useAui().threads;

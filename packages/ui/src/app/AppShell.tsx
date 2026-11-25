@@ -34,7 +34,6 @@ import { useFirstRunTour } from '../features/tour/use-first-run-tour';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
 import { useSessionListRouter } from '../features/sessions/ws/use-session-list-router';
 import { useOffloadRelease } from '../features/sessions/runtime/use-offload-release';
-import { useDraftCarry } from '../features/sessions/new-thread/draft-carry';
 import { useStartNewSession } from '../features/sessions/new-thread/use-start-new-session';
 import { useActiveIdentity } from '../features/sessions/use-active-identity';
 import { useActiveBasesStore } from '../store/active-bases-store';
@@ -93,7 +92,6 @@ function MainSurface({ port }: { port: number }) {
  * chrome's, as they did from RuntimeBody.
  */
 function ShellRuntime({ port }: { port: number }) {
-  useDraftCarry();
   useSessionListRouter();
   // Idle whole-chat offload (#178): releases a chat's controller/thread subtree
   // on chat.offloaded, deferring while it's on screen. Beside useSessionListRouter

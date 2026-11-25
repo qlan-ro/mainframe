@@ -8,7 +8,7 @@
  *
  * The two are split because only the enabled/disabled predicate needs the
  * live draft text: `useSubmitComposition` subscribes to nothing but the active
- * thread id, so typing a character no longer re-renders the whole composer —
+ * thread id and the chat's extras, so typing a character no longer re-renders the whole composer —
  * `useCanSubmit` is consumed inside the send button alone.
  *
  * `submit()`'s imperative read of text/attachments/runConfig goes through
