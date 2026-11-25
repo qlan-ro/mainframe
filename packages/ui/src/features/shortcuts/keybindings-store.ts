@@ -12,6 +12,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { migrateSplitBindings } from './migrate-split-bindings';
 import type { Chord } from './shortcut-types';
 
 /** A rebound chord, or `null` for an intentionally unassigned shortcut. */
@@ -40,6 +41,13 @@ export const useKeybindingsStore = create<KeybindingsStore>()(
         }),
       resetAll: () => set({ overrides: {} }),
     }),
-    { name: 'mf:keybindings' },
+    {
+      name: 'mf:keybindings',
+      version: 1,
+      migrate: (persisted) => {
+        const state = persisted as Pick<KeybindingsStore, 'overrides'>;
+        return { ...state, overrides: migrateSplitBindings(state.overrides ?? {}) };
+      },
+    },
   ),
 );
