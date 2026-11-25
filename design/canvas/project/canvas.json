@@ -92,7 +92,7 @@
       "y": 3880
     },
     "Chat-SessionPanel-ActivitySection.dc.html": {
-      "h": 2054,
+      "h": 2818,
       "page": "session-panel",
       "title": "Session panel — Activity",
       "w": 1240,
@@ -416,7 +416,7 @@
       "y": 3120
     },
     "Chat-ComposerFocus.dc.html": {
-      "h": 1776,
+      "h": 1831,
       "page": "composer",
       "title": "Chat — composer focus and gates",
       "w": 2772,
