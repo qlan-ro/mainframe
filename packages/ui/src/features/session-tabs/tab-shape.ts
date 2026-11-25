@@ -29,10 +29,11 @@ export const TAB_HOVER_STYLE = {
 
 /** A close control overlaying the end of the title: out of flow, so a hidden ✕ takes no room. */
 export const TAB_CLOSE_OVERLAY =
-  'absolute inset-y-0 right-1 flex items-center before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-4 before:bg-linear-to-r before:from-transparent';
+  'absolute top-1 right-1 flex rounded-sm bg-(--tab-hover) shadow-[-10px_0_8px_-2px_var(--tab-hover)]';
 
 /** A 24px close button: small enough for the pill, large enough to hit. */
-export const TAB_CLOSE_BUTTON = 'size-6 rounded-sm text-muted-foreground hover:bg-chrome-press hover:text-foreground dark:hover:bg-chrome-press';
+export const TAB_CLOSE_BUTTON =
+  'size-6 rounded-sm text-muted-foreground hover:bg-chrome-press hover:text-foreground dark:hover:bg-chrome-press';
 
 /** Marks the button `Delete` or `Backspace` presses on a focused tab. */
 export const TAB_CLOSE_ATTR = { 'data-tab-close': '' } as const;

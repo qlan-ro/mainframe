@@ -28,7 +28,7 @@ export const JUMP_HEADER_HEIGHT = 28;
  * never display, so every control stays in the tab order.
  */
 export const JUMP_ACTION =
-  'size-6 opacity-0 transition-opacity motion-reduce:transition-none group-hover/jump:opacity-100 group-has-focus-visible/jump:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100';
+  'size-6 rounded-sm opacity-0 [&_svg]:size-3! transition-opacity motion-reduce:transition-none group-hover/jump:opacity-100 group-has-focus-visible/jump:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100';
 
 interface SidebarJumpSectionProps {
   label: string;
@@ -57,7 +57,7 @@ export function SidebarJumpSection({ label, testId, sticky, actions, children }:
           padded to the same 16px as a SidebarGroup's label so the two align. */}
       <SidebarGroupLabel
         className={cn(
-          'group/jump sticky z-10 h-7 shrink-0 items-end rounded-none bg-sidebar pr-2 pl-4 text-meta/[1.45]',
+          'group/jump sticky z-10 h-7 shrink-0 items-end rounded-none bg-sidebar pr-[9px] pl-4 text-meta/[1.45]',
           sticky,
         )}
       >
@@ -71,7 +71,7 @@ export function SidebarJumpSection({ label, testId, sticky, actions, children }:
         >
           <FadeLabel className="flex-1">{label}</FadeLabel>
         </button>
-        {actions != null && <span className="flex shrink-0 items-center">{actions}</span>}
+        {actions != null && <span className="mb-[3px] flex shrink-0 items-center">{actions}</span>}
       </SidebarGroupLabel>
       {/* The scroll margin reserves the header's own height, so the jump lands
           with the label at the top edge rather than scrolled past it. */}

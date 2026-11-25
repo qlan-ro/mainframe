@@ -11,11 +11,14 @@ const SYMBOL_KEYS: Record<string, string> = {
   Backslash: '\\',
   Slash: '/',
   Comma: ',',
+  Period: '.',
+  Semicolon: ';',
 };
 
 function keyLabel(code: string, isMac: boolean): string {
   // macOS has a glyph for it; elsewhere the word is what the keycap says.
   if (code === 'Tab') return isMac ? '⇥' : 'Tab';
+  if (code === 'Enter') return isMac ? '↵' : 'Enter';
   if (code in SYMBOL_KEYS) return SYMBOL_KEYS[code] as string;
   if (code.startsWith('Digit')) return code.slice('Digit'.length);
   if (code.startsWith('Key')) return code.slice('Key'.length);

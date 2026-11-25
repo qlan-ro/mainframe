@@ -14,7 +14,8 @@ import { SECTION_LABEL } from './panel-sections';
 export const SECTION_HEADER =
   'mt-3 flex h-[22px] w-full shrink-0 items-end gap-1.5 pr-3.5 pb-1 pl-4 text-left text-label/[1.45] font-medium text-muted-foreground';
 
-const ROW = 'mx-1.5 flex h-7 w-[calc(100%-0.75rem)] min-w-0 items-center gap-2 rounded-[7px] px-2.5 text-left text-body text-ink-secondary';
+const ROW =
+  'mx-1.5 flex h-7 w-[calc(100%-0.75rem)] min-w-0 items-center gap-2 rounded-[7px] px-2.5 text-left text-body text-ink-secondary';
 
 interface PanelSectionProps extends Omit<ComponentPropsWithRef<'section'>, 'title'> {
   section: SessionPanelSectionKey;
@@ -77,7 +78,7 @@ export function PanelRow({ icon, smallIcon, label, labelClassName, value, classN
       type="button"
       className={cn(
         ROW,
-        'transition-colors hover:bg-sidebar-accent disabled:pointer-events-none disabled:opacity-50',
+        'transition-colors hover:bg-sidebar-accent focus-visible:focus-line-inset disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
       {...props}

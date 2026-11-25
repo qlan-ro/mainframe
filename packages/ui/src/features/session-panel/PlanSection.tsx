@@ -62,7 +62,7 @@ export function PlanSection({ open, onToggle }: { open: boolean; onToggle: () =>
           className={cn('size-3 transition-transform motion-reduce:transition-none', open && 'rotate-90')}
           aria-hidden
         />
-        <span className="ml-auto tabular-nums">
+        <span className="ml-auto text-muted-foreground tabular-nums">
           {done} of {steps.length}
         </span>
       </button>

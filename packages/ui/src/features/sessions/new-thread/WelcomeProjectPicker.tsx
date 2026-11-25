@@ -1,37 +1,25 @@
 /**
  * WelcomeProjectPicker — a new session's project-or-none trigger, in the strip
- * above the composer (K3)
- * (spec "variant D", todo #346): a dropdown showing the draft's current
- * choice — a colored dot + name, the dashed "No project" glyph, or "Choose a
- * project" before anything has resolved — and a "Start in…" list of every
- * real project plus a trailing "No project" entry at the same row weight.
+ * above the composer (K3): the draft's current choice, or "Choose a project"
+ * before anything has resolved, over a menu of the real projects and a trailing
+ * "No project" (todo #346). A check marks the choice.
  *
- * Entries are ordered most-recently-active first (see sortProjectsByRecentActivity). The
- * project matching the auto-resolved default (an active filter pill, else the
- * previously-active session — see resolveNewSessionProject) is tagged
- * "Resolved default". That default is frozen the first time this component
- * observes a resolved `projectId` for the CURRENT draft slot, so switching
- * away from it in the picker never moves the tag; a slot that never
- * auto-resolved (the "Choose a project" state) tags nothing.
+ * Entries are ordered most-recently-active first (see sortProjectsByRecentActivity).
  */
-import { useRef } from 'react';
-import { ChevronDown, FolderOpen } from 'lucide-react';
+import { ChevronDown, Folder, FolderOpen } from 'lucide-react';
 import { useThreadItems } from '@/features/sessions/runtime/use-thread-items';
-import { ProjectChip } from '@/components/ui/project-chip';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { NoProjectLabel } from '@/features/sessions/NoProjectLabel';
-import { projectColor } from '@/features/sessions/sidebar/project-color';
 import { listedThreadItemsToSessionItems } from '@/features/sessions/view-model/task-chats';
 import { sortProjectsByRecentActivity } from '@/features/sessions/view-model/project-activity';
-import { ProjectAvatar } from '../ProjectAvatar';
 import { useProjects } from '../use-projects';
 
 export interface WelcomeProjectPickerProps {
@@ -44,21 +32,8 @@ export interface WelcomeProjectPickerProps {
   className?: string;
 }
 
-/**
- * Freezes the first resolved value seen (across this component's mounted
- * lifetime, i.e. one draft slot) as "the default" — a slot that never
- * auto-resolved (started at `undefined`, the "Choose a project" state) never
- * gets one.
- */
-function useResolvedDefaultProjectId(projectId: string | null | undefined): string | null | undefined {
-  const resolvedRef = useRef<string | null | undefined>(undefined);
-  const capturedRef = useRef(false);
-  if (!capturedRef.current && projectId !== undefined) {
-    resolvedRef.current = projectId;
-    capturedRef.current = true;
-  }
-  return resolvedRef.current;
-}
+/** The radio group's value for no project; a project id is never this. */
+const NO_PROJECT = '';
 
 function WelcomeProjectTrigger({
   projectId,
@@ -69,14 +44,26 @@ function WelcomeProjectTrigger({
 }) {
   if (projectId === undefined) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-ink">
+      <span className="inline-flex items-center gap-1.5 font-medium text-accent-ink">
         <FolderOpen size={14} aria-hidden />
         Choose a project
       </span>
     );
   }
-  if (projectId === null) return <NoProjectLabel size={14} className="text-sm" />;
-  return <ProjectChip projectId={projectId} name={projectName ?? projectId} size={18} />;
+  if (projectId === null) {
+    return (
+      <>
+        <Folder className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="min-w-0 truncate">No project</span>
+      </>
+    );
+  }
+  return (
+    <>
+      <Folder className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="min-w-0 truncate">{projectName ?? projectId}</span>
+    </>
+  );
 }
 
 export function WelcomeProjectPicker({
@@ -90,8 +77,6 @@ export function WelcomeProjectPicker({
   const threadItems = useThreadItems();
   const sortedProjects = sortProjectsByRecentActivity(projects, listedThreadItemsToSessionItems(threadItems));
   const projectName = projectId == null ? null : (projects.find((p) => p.id === projectId)?.name ?? projectId);
-  const resolvedDefaultId = useResolvedDefaultProjectId(projectId);
-
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -100,7 +85,7 @@ export function WelcomeProjectPicker({
           data-testid="welcome-project"
           aria-label={`Project: ${projectId === null ? 'No project' : (projectName ?? 'not chosen')}`}
           className={cn(
-            'inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted focus-visible:focus-line',
+            'inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-body text-ink-secondary transition-colors hover:bg-sidebar-accent focus-visible:focus-line',
             className,
           )}
         >
@@ -108,25 +93,36 @@ export function WelcomeProjectPicker({
           <ChevronDown size={12} className="shrink-0 text-muted-foreground" aria-hidden />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent data-testid="welcome-project-picker" align="start" sideOffset={6} className="w-60">
-        <DropdownMenuLabel className="text-muted-foreground">Start in…</DropdownMenuLabel>
-        {sortedProjects.map((project) => (
-          <DropdownMenuItem
-            key={project.id}
-            data-testid={`welcome-project-${project.id}`}
-            onSelect={() => onSelect(project.id)}
+      <DropdownMenuContent
+        data-testid="welcome-project-picker"
+        align="start"
+        side="top"
+        sideOffset={6}
+        className="w-auto min-w-60"
+      >
+        <DropdownMenuLabel>Project</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={projectId === null ? NO_PROJECT : projectId}>
+          {sortedProjects.map((project) => (
+            <DropdownMenuRadioItem
+              key={project.id}
+              value={project.id}
+              data-testid={`welcome-project-${project.id}`}
+              onSelect={() => onSelect(project.id)}
+            >
+              <Folder aria-hidden />
+              <span className="min-w-0 flex-1 truncate">{project.name}</span>
+            </DropdownMenuRadioItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuRadioItem
+            value={NO_PROJECT}
+            data-testid="welcome-project-picker-no-project"
+            onSelect={() => onSelect(null)}
           >
-            <ProjectAvatar name={project.name} color={projectColor(project.id)} />
-            <span className="min-w-0 flex-1 truncate">{project.name}</span>
-            {project.id === resolvedDefaultId && (
-              <span className="shrink-0 text-xs text-muted-foreground">Resolved default</span>
-            )}
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem data-testid="welcome-project-picker-no-project" onSelect={() => onSelect(null)}>
-          <NoProjectLabel size={14} className="not-italic text-foreground" />
-        </DropdownMenuItem>
+            <Folder aria-hidden />
+            No project
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

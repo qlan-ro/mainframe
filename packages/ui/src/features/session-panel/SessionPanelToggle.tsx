@@ -55,7 +55,7 @@ export function SessionPanelToggle({ columnId, testId, tourAnchor = false, class
           togglePanel(columnId, fits);
         }}
         className={cn(
-          'text-muted-foreground hover:bg-sidebar-accent dark:hover:bg-sidebar-accent',
+          'text-muted-foreground hover:bg-sidebar-accent',
           showing && 'bg-chrome-chip text-foreground hover:bg-chrome-chip dark:hover:bg-chrome-chip',
           className,
         )}

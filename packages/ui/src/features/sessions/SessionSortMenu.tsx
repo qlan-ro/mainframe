@@ -42,7 +42,7 @@ export function SessionSortMenu({ mode, onChange }: SessionSortMenuProps) {
           </Button>
         </DropdownMenuTrigger>
       </Hint>
-      <DropdownMenuContent data-testid="sessions-sort-popover" align="end" sideOffset={6} className="w-44">
+      <DropdownMenuContent data-testid="sessions-sort-popover" align="start" className="w-50">
         <DropdownMenuLabel className="text-muted-foreground">Sort by</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onChange(value as SortMode)}>
           {SESSION_SORTS.map((sort) => (

@@ -1,5 +1,5 @@
 /** SectionsMenu — turns each panel section on or off, remembered for this viewer. */
-import { SlidersHorizontal } from 'lucide-react';
+import { SlidersIcon } from '@/components/ui/glyphs';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -24,9 +24,9 @@ export function SectionsMenu() {
             aria-label="Sections"
             variant="ghost"
             size="icon-xs"
-            className="rounded-sm text-muted-foreground hover:bg-sidebar-accent dark:hover:bg-sidebar-accent aria-expanded:bg-transparent aria-expanded:text-muted-foreground"
+            className="rounded-sm text-muted-foreground hover:bg-sidebar-accent aria-expanded:bg-transparent aria-expanded:text-muted-foreground"
           >
-            <SlidersHorizontal className="size-4" />
+            <SlidersIcon className="size-4" />
           </Button>
         </DropdownMenuTrigger>
       </Hint>

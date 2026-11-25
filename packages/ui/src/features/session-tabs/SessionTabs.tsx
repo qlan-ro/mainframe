@@ -100,7 +100,7 @@ export function SessionTabs() {
           aria-label="New session"
           size="icon-xs"
           onClick={newSession}
-          className="size-7 shrink-0 text-muted-foreground hover:bg-sidebar-accent dark:hover:bg-sidebar-accent"
+          className="size-7 shrink-0 text-muted-foreground hover:bg-sidebar-accent"
         >
           <Plus className="size-4" />
         </Button>

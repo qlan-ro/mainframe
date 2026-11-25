@@ -10,7 +10,8 @@
  * worktree path from it, and the scope key is itself chatId-dependent, so a
  * stop issued without one looks up a different manager and finds no process.
  */
-import { Eye, LoaderCircle, Play, Square, Terminal } from 'lucide-react';
+import { Eye, LoaderCircle, Terminal } from 'lucide-react';
+import { PlayIcon, StopIcon } from '@/components/ui/glyphs';
 import { Hint } from '@/components/ui/hint';
 import { useActiveIdentity } from '@/features/sessions/use-active-identity';
 import { useLaunchActions } from '@/features/run/use-launch-actions';
@@ -32,9 +33,9 @@ function LaunchValue({ row }: { row: LaunchRow }) {
       {/* The glyph is what the row does; the whole row acts. */}
       <span data-testid={`session-panel-launch-${live ? 'stop' : 'start'}-${name}`}>
         {live ? (
-          <Square className="size-3 text-destructive" fill="currentColor" aria-hidden />
+          <StopIcon className="size-3 text-crit" fill="currentColor" aria-hidden />
         ) : (
-          <Play
+          <PlayIcon
             className="size-3 transition-colors group-hover/launch:text-accent-ink group-focus-visible/launch:text-accent-ink"
             fill="currentColor"
             aria-hidden

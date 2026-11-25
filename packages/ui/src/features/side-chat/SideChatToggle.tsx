@@ -9,7 +9,7 @@
  * Renders nothing for a draft or a non-regular (archived) thread (AC 19) —
  * mirrors the session/tab context-menu guards.
  */
-import { MessagesSquare } from 'lucide-react';
+import { ChatsIcon } from '@/components/ui/glyphs';
 import { useAuiState } from '@assistant-ui/react';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
@@ -53,16 +53,16 @@ export function SideChatToggle() {
         aria-pressed={inFront}
         variant="ghost"
         size="icon-sm"
-        className="hover:bg-sidebar-accent dark:hover:bg-sidebar-accent"
+        className="hover:bg-sidebar-accent"
         onClick={() => {
           if (sideChatId == null) void openSideChat(parentChatId, false);
           else if (inFront) closeChatTab(sideChatId);
           else openSideChatTab(sideChatId);
         }}
       >
-        <MessagesSquare
+        <ChatsIcon
           className={cn(
-            status === 'none' ? 'text-muted-foreground' : 'text-accent-ink',
+            status === 'none' ? 'text-muted-foreground group-hover/button:text-foreground' : 'text-accent-ink',
             status !== 'idle' && status !== 'none' && 'animate-pulse motion-reduce:animate-none',
           )}
         />

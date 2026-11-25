@@ -52,7 +52,7 @@ function SwitcherTrigger({
       data-tut="daemon"
       className={cn(
         'relative flex size-9.5 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors',
-        'hover:bg-sidebar-accent hover:text-foreground data-[state=open]:bg-sidebar-accent',
+        'hover:bg-sidebar-accent hover:text-foreground focus-visible:focus-line data-[state=open]:bg-sidebar-accent',
         className,
       )}
       {...props}
