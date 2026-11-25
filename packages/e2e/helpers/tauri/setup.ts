@@ -3,11 +3,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, realpathSync, rmSync } from 'fs'
 import { homedir } from 'os';
 import path from 'path';
 import type { Page } from '@playwright/test';
-import { DAEMON_PORT } from '../../fixtures/daemon.js';
+import { daemonFetch } from '../../fixtures/daemon.js';
 import { sessionsSidebar, composer } from './page-objects.js';
 import { waitConnected } from './wait.js';
 
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 const DEFAULT_CLAUDE_MD =
   '# E2E Test Project\n\nAutomated test environment. Do not use plan mode. Execute tool calls directly.\n';
 const NOTIFY_DEFINITION = {
@@ -33,7 +32,7 @@ export async function createTauriProject(page: Page | undefined, opts?: { claude
   writeFileSync(path.join(projectPath, 'CLAUDE.md'), opts?.claudeMd ?? DEFAULT_CLAUDE_MD);
   writeFileSync(path.join(projectPath, 'index.ts'), 'export const greeting = "hello";\n');
 
-  const res = await fetch(`${DAEMON_BASE}/api/projects`, {
+  const res = await daemonFetch('/api/projects', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: projectPath, name: path.basename(projectPath) }),
@@ -61,7 +60,7 @@ export async function createTauriChat(
 ): Promise<string> {
   const wantsPlanMode = permissionMode === 'plan';
   const createMode = wantsPlanMode ? 'default' : permissionMode;
-  const res = await fetch(`${DAEMON_BASE}/api/chats`, {
+  const res = await daemonFetch('/api/chats', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ projectId, adapterId, permissionMode: createMode }),
@@ -100,7 +99,7 @@ export async function createTauriAutomation(opts: { name: string; projectId?: st
     ? { name: opts.name, scope: 'project', projectId: opts.projectId, definition: NOTIFY_DEFINITION }
     : { name: opts.name, scope: 'global', definition: NOTIFY_DEFINITION };
 
-  const res = await fetch(`${DAEMON_BASE}/api/automations`, {
+  const res = await daemonFetch('/api/automations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

@@ -2,11 +2,20 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, afterEach, before, beforeEach, test } from 'node:test';
-import { beginRun, ensurePortFree, isServing, recordStarted } from './port-guard.ts';
+import { assertRunServes, beginRun, ensurePortFree, isServing, recordStarted } from './port-guard.ts';
 import { assertGone, assertSurvives, freePort, identityOf, until } from './port-guard.helpers.mjs';
 
 const REMEDY = 'Use another port';
@@ -68,6 +77,9 @@ async function assertRefused(port, pid, own) {
   await assertSurvives(pid);
 }
 
+/** The first line of a run's ledger: the run. By default one that is over. */
+const runLine = (over = {}) =>
+  recordLine({ run: true, pid: process.pid, started: 'Mon Jan  1 00:00:00 2024', ...over });
 const recordLine = (entry) => `${JSON.stringify(entry)}\n`;
 
 test('a free port is free', async () => {
@@ -130,10 +142,10 @@ test('an orphan is stopped only when an earlier run of this worktree recorded it
   const port = await freePort();
   const own = { command: commandOn(port), cwd: dir };
   const endRun = beginRun(runs);
-  const record = (pid, over = {}) =>
+  const record = (pid, over = {}, run = runLine()) =>
     writeFileSync(
       path.join(runs, 'earlier.jsonl'),
-      recordLine({ pid, started: identityOf(pid).started, port, ...over }),
+      run + recordLine({ pid, started: identityOf(pid).started, port, ...over }),
     );
 
   const parented = await startListener(port);
@@ -156,6 +168,12 @@ test('an orphan is stopped only when an earlier run of this worktree recorded it
   await assertRefused(port, orphan, undefined);
   await assertRefused(port, orphan, { ...own, cwd: tmpdir() });
   await assertRefused(port, orphan, { ...own, command: `${own.command} --other` });
+  // A run that goes on, whose worker died: its retry stops the daemon. And a record that does not say whose it is.
+  record(orphan, {}, runLine({ started: identityOf(process.pid).started }));
+  await assertRefused(port, orphan, own);
+  record(orphan, {}, '');
+  await assertRefused(port, orphan, own);
+  record(orphan);
   await ensurePortFree(port, own, REMEDY);
   await assertGone(orphan);
   endRun();
@@ -176,17 +194,56 @@ test('the end of a run stops what the run recorded and nothing else', async () =
 
 test('a crashed run’s record is kept while its process lives', async () => {
   beginRun(runs);
+  // That run is over.
+  writeFileSync(process.env.MF_E2E_RUN_LEDGER, runLine());
   const port = await freePort();
   const child = await startListener(port);
   recordStarted(child, port);
   const ledger = process.env.MF_E2E_RUN_LEDGER;
   beginRun(runs);
-  assert.equal(JSON.parse(readFileSync(ledger, 'utf8')).pid, child.pid);
+  assert.match(readFileSync(ledger, 'utf8'), new RegExp(`^\\{"pid":${child.pid},`, 'm'));
   const exited = once(child, 'exit');
   child.kill('SIGKILL');
   await exited;
   beginRun(runs);
+  assert.ok(!existsSync(ledger));
+});
+
+test('a run that has not started anything yet keeps its record when another begins', async () => {
+  const endFirst = beginRun(runs);
+  const ledger = process.env.MF_E2E_RUN_LEDGER;
+  const endSecond = beginRun(runs);
+  assert.ok(existsSync(ledger));
+  endSecond();
+  endFirst();
   assert.deepEqual(readdirSync(runs), []);
+});
+
+test('a torn line in a record hides neither the lines after it nor the record of another run', async () => {
+  const torn = path.join(runs, 'torn.jsonl');
+  writeFileSync(torn, '{"pid":12');
+  const endRun = beginRun(runs);
+  assert.ok(!existsSync(torn));
+  const ledger = process.env.MF_E2E_RUN_LEDGER;
+  appendFileSync(ledger, '{"pid":12,"star');
+  writeFileSync(torn, 'null\n7\n"x"\n{"pid":"1","started":1,"port":2}\n');
+  const port = await freePort();
+  const own = await startListener(port);
+  recordStarted(own, port);
+  await ensurePortFree(port, undefined, REMEDY);
+  await assertGone(own.pid);
+  endRun();
+});
+
+test('what the run serves is told from what it does not, and from nothing', async () => {
+  const endRun = beginRun(runs);
+  const port = await freePort();
+  assert.throws(() => assertRunServes(port, REMEDY), /Nothing listens/);
+  const child = await startListener(port);
+  assert.throws(() => assertRunServes(port, REMEDY), new RegExp(`Port ${port} is taken[^]*pid ${child.pid}, `));
+  recordStarted(child, port);
+  assertRunServes(port, REMEDY);
+  endRun();
 });
 
 test('a server is ours only while the child we started is the one listening', async () => {

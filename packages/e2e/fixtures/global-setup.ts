@@ -1,11 +1,11 @@
 import { request } from '@playwright/test';
-import { spawn, execFileSync } from 'child_process';
+import { spawn, execFileSync, type ChildProcess } from 'child_process';
 import { createRequire } from 'module';
 import { readdirSync, readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { DAEMON_PORT, ensureDaemonPortFree } from './daemon.ts';
-import { beginRun, ensurePortFree, harnessPort, isServing, recordStarted } from './port-guard.ts';
+import { assertRunServes, beginRun, ensurePortFree, harnessPort, isServing, recordStarted } from './port-guard.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // The vite app is `packages/ui` (`@qlan-ro/mainframe-ui`). `packages/app-tauri` is the Rust/Tauri
@@ -100,11 +100,16 @@ function previewCommand(): string[] {
   return [process.execPath, bin, 'preview', '--strictPort', '--host', '127.0.0.1', '--port', String(PREVIEW_PORT)];
 }
 
+/** Throws unless the server on the preview port is the run's own. Call it before a page is loaded from there. */
+export function assertOwnPreview(): void {
+  assertRunServes(PREVIEW_PORT, REMEDY);
+}
+
 async function ensurePreviewPortFree(): Promise<void> {
   await ensurePortFree(PREVIEW_PORT, { command: previewCommand().join(' '), cwd: UI_DIR }, REMEDY);
 }
 
-async function startPreview(): Promise<void> {
+async function startPreview(): Promise<ChildProcess> {
   await ensurePreviewPortFree();
   const [node, ...args] = previewCommand();
   const preview = spawn(node!, args, {
@@ -116,7 +121,7 @@ async function startPreview(): Promise<void> {
   const deadline = Date.now() + 15_000;
   try {
     while (Date.now() < deadline) {
-      if (isServing(preview, PREVIEW_PORT, REMEDY) && (await isPreviewServing())) return;
+      if (isServing(preview, PREVIEW_PORT, REMEDY) && (await isPreviewServing())) return preview;
       await new Promise((r) => setTimeout(r, 200));
     }
     throw new Error(`vite preview did not become ready on ${PREVIEW_BASE}`);
@@ -139,14 +144,25 @@ async function startPreview(): Promise<void> {
  */
 export default async function globalSetup(): Promise<() => Promise<void>> {
   assertAdapterModeChosen();
-  const endRun = beginRun();
+  const stopAll = beginRun();
+  let ending = false;
+  const endRun = (): void => {
+    ending = true;
+    stopAll();
+  };
   try {
     // Before the build: a run that is refused must not replace the bundle another run serves.
     await ensurePreviewPortFree();
     await ensureDaemonPortFree();
     buildUi();
     assertBundleTargetsTestPort();
-    await startPreview();
+    const preview = await startPreview();
+    preview.once('exit', (code, signal) => {
+      if (ending) return;
+      // Pages still reload from its port, which is anybody's now. Interrupting the run closes them.
+      console.error(`[e2e] The preview exited (${signal ?? `code ${code}`}), so the run ends.`);
+      process.kill(process.pid, 'SIGINT');
+    });
   } catch (err) {
     endRun();
     throw err;

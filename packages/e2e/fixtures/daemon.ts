@@ -14,6 +14,7 @@ import {
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import type { APIResponse, Route } from '@playwright/test';
 import { ensurePortFree, harnessPort, isServing, recordStarted } from './port-guard.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -92,6 +93,42 @@ async function waitForMockAdapter(daemon: ChildProcess, maxMs = 10_000): Promise
   throw new Error(`Mock adapter did not become ready within ${maxMs}ms`);
 }
 
+/** This worker's daemon. One at a time, because they share the port. */
+let running: ChildProcess | undefined;
+/** The daemons told to stop. The exit of any other ends the worker. */
+const stopping = new WeakSet<ChildProcess>();
+
+/** Throws unless the server on the daemon's port is this worker's daemon. */
+export function assertOwnDaemon(): void {
+  if (!running) throw new Error('No daemon of this worker is running, so there is nothing to ask.');
+  if (!isServing(running, PORT, REMEDY)) throw new Error(`This worker’s daemon no longer listens on port ${PORT}.`);
+}
+
+/** The way to ask the daemon something: checks first that it is this worker's. */
+export async function daemonFetch(route: string, init?: RequestInit): Promise<Response> {
+  assertOwnDaemon();
+  return fetch(`${DAEMON_BASE}${route}`, init);
+}
+
+/** `route.fetch()` for a request to the daemon, with the same check. */
+export async function fetchRoute(route: Route): Promise<APIResponse> {
+  assertOwnDaemon();
+  return route.fetch();
+}
+
+/**
+ * A daemon that dies leaves its port to whoever binds it next, while the page and the helpers still talk to that port.
+ * The worker ends with it, and takes its browser along.
+ */
+function endWorkerWith(handle: DaemonHandle): void {
+  handle.daemon.once('exit', (code, signal) => {
+    if (stopping.has(handle.daemon)) return;
+    preserveDaemonLog(handle);
+    process.stderr.write(`[e2e] The daemon exited (${signal ?? `code ${code}`}), so this worker ends.\n`);
+    process.exit(1);
+  });
+}
+
 /** What a daemon on a HOME of its own may keep: enough to run programs, never a token or a config path. */
 const ISOLATED_ENV = new Set([
   'PATH',
@@ -130,7 +167,16 @@ export async function startDaemon(opts?: {
   /** The daemon's HOME. The suite keeps the developer's own; a board capture must not read it. */
   home?: string;
 }): Promise<DaemonHandle> {
-  await ensureDaemonPortFree();
+  // One this worker lost track of, which is stopped here.
+  const lost = running;
+  if (lost) stopping.add(lost);
+  try {
+    await ensureDaemonPortFree();
+  } catch (err) {
+    if (lost) stopping.delete(lost);
+    throw err;
+  }
+  running = undefined;
   const testDataDir = opts?.dataDir ?? mkdtempSync(path.join(tmpdir(), 'mf-e2e-data-'));
 
   const e2eEnv: Record<string, string> = {};
@@ -167,8 +213,14 @@ export async function startDaemon(opts?: {
       body: JSON.stringify({ defaultModel: 'claude-haiku-4-5-20251001' }),
     });
     if (!configured) throw new Error('The daemon stopped answering while it was configured');
-    return { daemon, testDataDir };
+    const handle = { daemon, testDataDir };
+    endWorkerWith(handle);
+    running = daemon;
+    assertOwnDaemon();
+    return handle;
   } catch (err) {
+    stopping.add(daemon);
+    running = undefined;
     daemon.kill('SIGKILL');
     throw err;
   }
@@ -199,7 +251,7 @@ function keepTail(source: string, destination: string): void {
   writeFileSync(destination, kept);
 }
 
-async function preserveDaemonLog(handle: DaemonHandle): Promise<void> {
+function preserveDaemonLog(handle: DaemonHandle): void {
   const name = path.basename(handle.testDataDir);
   const kept: string[] = [];
   try {
@@ -229,8 +281,10 @@ async function preserveDaemonLog(handle: DaemonHandle): Promise<void> {
 
 export async function stopDaemon(handle: DaemonHandle | undefined, preserveData = false): Promise<void> {
   if (!handle) return;
+  stopping.add(handle.daemon);
+  if (running === handle.daemon) running = undefined;
   await new Promise<void>((resolve) => {
-    if (handle.daemon.exitCode !== null) return resolve();
+    if (handle.daemon.exitCode !== null || handle.daemon.signalCode !== null) return resolve();
     handle.daemon.on('exit', () => resolve());
     handle.daemon.kill();
     // Safety timeout — don't block forever if SIGTERM is ignored
@@ -239,6 +293,6 @@ export async function stopDaemon(handle: DaemonHandle | undefined, preserveData 
       resolve();
     }, 3_000);
   });
-  await preserveDaemonLog(handle);
+  preserveDaemonLog(handle);
   if (!preserveData) rmSync(handle.testDataDir, { recursive: true, force: true });
 }

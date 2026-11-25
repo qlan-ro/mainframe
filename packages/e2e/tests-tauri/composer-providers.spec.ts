@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { DAEMON_PORT, daemonFetch, fetchRoute } from '../fixtures/daemon.js';
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
@@ -32,8 +32,8 @@ test.describe('§composer provider availability and session lock', () => {
 
   test('M4: installed providers are selectable before the first message; unavailable providers are disabled @real', async () => {
     const { page } = app;
-    const response = await page.request.get(ADAPTERS_URL);
-    expect(response.ok()).toBe(true);
+    const response = await daemonFetch('/api/adapters');
+    expect(response.ok).toBe(true);
     const { data: providers } = (await response.json()) as { data: ProviderAvailability[] };
     expect(providers).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: ACTIVE_PROVIDER, installed: true })]),
@@ -64,7 +64,7 @@ test.describe('§composer provider availability and session lock', () => {
     // Codex isn't actually installed in this sandbox (empty fallback catalog), so a fake model is
     // injected too — just enough for the browsing UI to render a pickable row.
     await page.route(ADAPTERS_URL, async (route) => {
-      const response = await route.fetch();
+      const response = await fetchRoute(route);
       const body = await response.json();
       body.data = (body.data as ProviderAvailability[]).map((provider) =>
         provider.id === 'codex'

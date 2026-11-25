@@ -118,9 +118,8 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { TOAST } from '../helpers/tauri/testids.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { closeMenus, waitForDialogScrimsGone } from '../helpers/tauri/menus.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
 const HOME_BASE = path.join(homedir(), 'tmp');
 
 // ── git helpers (test-process only; array-arg execFileSync, no shell) ─────────
@@ -426,7 +425,7 @@ test.describe('§git-branch — session-panel branch popover', () => {
 
     // ── chat + its own worktree (the popover's writes follow the chat) ──────
     const chatId = await createTauriChat(app.page, project.projectId, 'default');
-    const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/enable-worktree`, {
+    const res = await daemonFetch(`/api/chats/${chatId}/enable-worktree`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ baseBranch: 'main', branchName: 'e2e-workspace' }),

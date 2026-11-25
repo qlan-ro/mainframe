@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Port-scoped teardown of ONE test run (parallel-safe). A listener that does not run in this
-# checkout is named and left running (own-ports.sh).
+# Port-scoped teardown of ONE test run (parallel-safe). A listener this checkout did not
+# start is named and left running (own-ports.sh).
 # Usage: stop-test.sh [port ...]   — defaults to this checkout's .env ports + CDP 9222.
 # Tauri note: killing $DAEMON_PORT also takes the app connected to it — at
 # teardown that is exactly what we want; never use this mid-run for a "daemon-only" restart.
@@ -24,10 +24,7 @@ else
 fi
 
 for port in $PORTS; do
-  if [ "$port" = 31415 ]; then
-    echo "REFUSED: 31415 is the installed app's daemon" >&2
-    exit 2
-  fi
+  check_port "$port" || exit 2
 done
 
 failed=""

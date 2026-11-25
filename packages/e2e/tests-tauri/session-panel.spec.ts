@@ -156,9 +156,7 @@ import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriPro
 import { sendMessage, waitConnected, waitForIdle } from '../helpers/tauri/wait.js';
 import { sessionsSidebar, composer } from '../helpers/tauri/page-objects.js';
 import { WORKSPACE } from '../helpers/tauri/testids.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
-
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
+import { daemonFetch } from '../fixtures/daemon.js';
 
 /** Chat-host width comfortably above / between / below `INLINE_MIN_WIDTH` (1044). */
 const DOCKED = { width: 2100, height: 900 };
@@ -212,7 +210,7 @@ function seedLaunchConfigs(projectPath: string): void {
 }
 
 async function addFileMention(chatId: string, filePath: string): Promise<void> {
-  const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/mentions`, {
+  const res = await daemonFetch(`/api/chats/${chatId}/mentions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ kind: 'file', name: filePath.split('/').pop() ?? filePath, path: filePath }),
@@ -229,7 +227,7 @@ interface SeedAttachment {
 
 /** Seed attachments via the daemon's public upload route; returns their ids in order. */
 async function addAttachments(chatId: string, attachments: SeedAttachment[]): Promise<string[]> {
-  const res = await fetch(`${DAEMON_BASE}/api/chats/${chatId}/attachments`, {
+  const res = await daemonFetch(`/api/chats/${chatId}/attachments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ attachments }),

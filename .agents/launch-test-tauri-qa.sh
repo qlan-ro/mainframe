@@ -11,6 +11,7 @@
 set -euo pipefail
 
 PROJECT_ROOT="${MF_TARGET:-$(cd "$(dirname "$0")/.." && pwd -P)}"
+. "$(cd "$(dirname "$0")" && pwd -P)/own-ports.sh"
 MODE="${MF_MODE:-up}"
 cd "$PROJECT_ROOT"
 
@@ -138,15 +139,12 @@ PID_FILE="/tmp/mf-tauri-qa-${DAEMON_PORT}.pid"
 # in-use refusal below to catch it. This ordering — kill before the "already
 # listening" check — is load-bearing: checking first would make every relaunch
 # refuse against its own predecessor instead of replacing it.
-# The trailing slash is load-bearing: a bare `$PROJECT_ROOT*` prefix also
-# matches a sibling checkout whose path merely starts with ours
-# (`.worktrees/todo-318` vs `.worktrees/todo-318-other`).
+# A path prefix is not enough: a worktree nested in this checkout
+# (`.worktrees/todo-318`) is a checkout of its own.
+OWN_CHECKOUT="$(checkout_of_dir "$PROJECT_ROOT" || true)"
 pid_is_ours() {
   case "$1" in '' | *[!0-9]*) return 1 ;; esac
-  case "$(ps -p "$1" -o command= 2>/dev/null)" in
-    "$PROJECT_ROOT"/*) return 0 ;;
-    *) return 1 ;;
-  esac
+  runs_from "$1" "$OWN_CHECKOUT"
 }
 # The PID file is keyed by port, so a stale one (or a sibling checkout whose
 # derived QA port equals this one) can name a recycled, unrelated PID. Signal

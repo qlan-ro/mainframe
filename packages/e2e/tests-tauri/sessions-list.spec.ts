@@ -14,7 +14,7 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
-import { DAEMON_BASE } from '../fixtures/daemon.js';
+import { daemonFetch, fetchRoute } from '../fixtures/daemon.js';
 
 const CHATS = 40;
 /** The parked header's height; the stuck one below it ends at 52. */
@@ -22,7 +22,7 @@ const PARKED = 28;
 const STACK = 52;
 
 async function post(path: string, body: unknown, method = 'POST'): Promise<{ id: string }> {
-  const res = await fetch(`${DAEMON_BASE}${path}`, {
+  const res = await daemonFetch(path, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -170,7 +170,7 @@ test.describe('§sessions-list Long list', () => {
 
     await expect(row).toHaveCount(0);
     await expect(sessionsSidebar(page).row(added)).toHaveCount(1);
-    const { data } = (await (await fetch(`${DAEMON_BASE}/api/chats/${target}`)).json()) as { data: { status: string } };
+    const { data } = (await (await daemonFetch(`/api/chats/${target}`)).json()) as { data: { status: string } };
     expect(data.status).toBe('archived');
   });
 });
@@ -188,7 +188,7 @@ test.describe('§sessions-list Hover card', () => {
       beforeNavigate: async (page) => {
         await page.route(/\/api\/chats(\?.*)?$/, async (route) => {
           if (route.request().method() !== 'GET') return route.continue();
-          const response = await route.fetch();
+          const response = await fetchRoute(route);
           const body = (await response.json()) as { data: Record<string, unknown>[] };
           for (const chat of body.data) if (chat['id'] === child) Object.assign(chat, lineage);
           return route.fulfill({ response, json: body });

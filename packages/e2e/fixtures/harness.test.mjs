@@ -8,6 +8,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -42,8 +43,18 @@ if (daemon || /vite.js$/.test(process.argv[1] ?? '')) {
   const listen = () => {
     const server = require('http').createServer((req, res) => {
       log(req.method + ' ' + req.url);
-      res.end('{"data":[{"id":"mock-cli","installed":true}]}');
+      const body = '{"data":[{"id":"mock-cli","installed":true}]}';
+      // "leaves GET /path": answers that request only once somebody else listens on its port.
+      if (!act?.startsWith('leaves ' + req.method + ' ' + req.url)) return res.end(body);
+      server.close();
+      log('left');
+      const taken = setInterval(() => {
+        if (!fs.existsSync(process.env.FAKE_LOG + '.taken')) return;
+        clearInterval(taken);
+        res.end(body, () => act.endsWith('and exits') && process.exit(3));
+      }, 20);
     });
+    process.on('SIGUSR2', () => (server.close(), server.closeAllConnections(), log('left')));
     server.on('error', (error) => process.exit(error.code === 'EADDRINUSE' ? 98 : 1));
     server.listen(Number(port), '127.0.0.1');
   };
@@ -52,6 +63,20 @@ if (daemon || /vite.js$/.test(process.argv[1] ?? '')) {
   else if (act === 'slow') setTimeout(listen, 2500);
   else if (act !== 'silent') listen();
 }
+`;
+
+// The helpers import each other as Playwright does: `x.js` for x.ts.
+const RESOLVE_TS = `
+require('module').registerHooks({
+  resolve(specifier, context, next) {
+    try {
+      return next(specifier, context);
+    } catch (error) {
+      if (!specifier.startsWith('.') || !specifier.endsWith('.js')) throw error;
+      return next(specifier.slice(0, -3) + '.ts', context);
+    }
+  },
+});
 `;
 
 /** A worktree with the real fixtures and nothing else. */
@@ -63,17 +88,19 @@ function worktree(name) {
   for (const each of [e2e, path.join(vite, 'bin'), path.join(dir, 'packages/ui/dist/assets'), target]) {
     mkdirSync(each, { recursive: true });
   }
-  cpSync(path.join(E2E, 'fixtures'), path.join(e2e, 'fixtures'), {
-    recursive: true,
-    filter: (from) => !from.endsWith('recordings'),
-  });
+  for (const each of ['fixtures', 'helpers']) {
+    cpSync(path.join(E2E, each), path.join(e2e, each), {
+      recursive: true,
+      filter: (from) => !from.endsWith('recordings'),
+    });
+  }
   symlinkSync(path.join(E2E, 'node_modules'), path.join(e2e, 'node_modules'));
   writeFileSync(path.join(e2e, 'package.json'), '{"type":"module"}');
   writeFileSync(path.join(dir, 'packages/ui/package.json'), '{}');
   writeFileSync(path.join(vite, 'package.json'), '{"name":"vite"}');
   writeFileSync(path.join(vite, 'bin/vite.js'), '');
   symlinkSync(process.execPath, path.join(target, 'mainframe-daemon'));
-  writeFileSync(path.join(dir, 'stand-in.cjs'), STAND_IN);
+  writeFileSync(path.join(dir, 'stand-in.cjs'), STAND_IN + RESOLVE_TS);
   return dir;
 }
 
@@ -95,7 +122,9 @@ async function run(dir, code, env = {}) {
   let output = '';
   child.stdout.on('data', (data) => (output += data));
   child.stderr.on('data', (data) => (output += data));
+  const stuck = setTimeout(() => child.kill('SIGKILL'), 45_000); // a run that should have ended fails its test
   const [exitCode] = await once(child, 'close');
+  clearTimeout(stuck);
   return { output, exitCode };
 }
 
@@ -124,6 +153,14 @@ const START_DAEMON = `
   const { startDaemon } = await import('./fixtures/daemon.ts');
   const endRun = beginRun();
 `;
+/** Takes the port once the stand-in has left it, and tells the stand-in so. */
+async function takeOver(dir, name, port) {
+  await until(() => new RegExp(`^${name} \\d+ left`, 'm').test(logOf(dir)), `${name} never left its port`);
+  const foreign = await foreignServer(port);
+  writeFileSync(path.join(dir, 'log.taken'), '');
+  return foreign;
+}
+
 const SETUP = `const setup = (await import('./fixtures/global-setup.ts')).default;`;
 
 test('a run that names the installed app’s port, or no port, stops at load', async () => {
@@ -153,7 +190,8 @@ test('a retry stops the daemon its dead worker left', async () => {
     const gone = new Promise((done) => first.daemon.once('exit', (code, signal) => done(signal)));
     await startDaemon();
     console.log('first:', await gone);
-    endRun();`,
+    endRun();
+    process.exit();`,
     env,
   );
   assert.equal(exitCode, 0, output);
@@ -259,4 +297,200 @@ test('a run whose daemon or preview port is taken stops before it builds', async
     assert.equal(exitCode, 0, output);
     assert.ok(existsSync(path.join(dir, 'built')));
   }
+});
+
+test('every request of a starting daemon is checked, not only the first', async () => {
+  for (const request of ['GET /api/projects', 'GET /api/adapters']) {
+    for (const then of ['', ' and exits']) {
+      const dir = worktree(`leaves-${request.replace(/\W+/g, '-')}${then.replace(/ /g, '-')}`);
+      const { daemon, env } = await ports(dir);
+      const code = `${START_DAEMON} await startDaemon().then(() => console.log('started'), (e) => console.log(e.message)); endRun();`;
+      const running = run(dir, code, { ...env, FAKE: JSON.stringify({ daemon: `leaves ${request}${then}` }) });
+      const foreign = await takeOver(dir, 'daemon', daemon);
+      const { output } = await running;
+      await foreign.close();
+      assert.deepEqual(foreign.requests, [], `${request}${then}`);
+      assert.doesNotMatch(output, /started$/m);
+      assert.match(output, /is taken by a process this run did not start|exited \(code 3\)/);
+    }
+  }
+});
+
+test('a worker ends when its daemon dies, but not when it stops it', async () => {
+  const dir = worktree('dies');
+  const { env } = await ports(dir);
+  const idle = `await new Promise((r) => setTimeout(r, 20_000)); console.log('went on');`;
+  const started = `(await import('node:fs')).appendFileSync(process.env.FAKE_LOG, 'worker started\\n');`;
+  const running = run(dir, `${START_DAEMON} await startDaemon(); ${started} ${idle}`, env);
+  await until(() => /^worker started$/m.test(logOf(dir)), 'the daemon never started');
+  process.kill(pidOf(dir, 'daemon'), 'SIGKILL'); // ours: this test started it
+  const { output, exitCode } = await running;
+  assert.equal(exitCode, 1, output);
+  assert.match(output, /The daemon exited \(SIGKILL\), so this worker ends/);
+  assert.doesNotMatch(output, /went on/);
+
+  const stops = worktree('stops');
+  const stopped = await run(
+    stops,
+    `${START_DAEMON}
+    const { stopDaemon } = await import('./fixtures/daemon.ts');
+    for (let i = 0; i < 2; i++) await stopDaemon(await startDaemon());
+    await new Promise((r) => setTimeout(r, 500));
+    console.log('went on');
+    endRun();`,
+    (await ports(stops)).env,
+  );
+  assert.equal(stopped.exitCode, 0, stopped.output);
+  assert.match(stopped.output, /went on/);
+});
+
+/** Every way a helper reaches the daemon, against a port that somebody else has taken from a daemon still alive. */
+const HELPERS = {
+  createTauriProject: `(await import('./helpers/tauri/setup.ts')).createTauriProject()`,
+  createTauriChat: `(await import('./helpers/tauri/setup.ts')).createTauriChat({}, 'p')`,
+  createTauriAutomation: `(await import('./helpers/tauri/setup.ts')).createTauriAutomation({ name: 'a' })`,
+  createHeadlessProject: `(await import('./helpers/tauri/headless-chat.ts')).createHeadlessProject()`,
+  createHeadlessChat: `(await import('./helpers/tauri/headless-chat.ts')).createHeadlessChat('p')`,
+  openSocket: `(await import('./helpers/tauri/raw-ws-client.ts')).openSocket('/acp/mock-cli')`,
+  daemonFetch: `daemon.daemonFetch('/api/settings/providers', { method: 'PUT' })`,
+  fetchRoute: `daemon.fetchRoute({ fetch: () => fetch(daemon.DAEMON_BASE + '/api/chats') })`,
+  ws: `(async () => {
+    let handler;
+    const { installWsControl } = await import('./helpers/tauri/ws-control.ts');
+    await installWsControl({ routeWebSocket: async (_, each) => (handler = each) });
+    handler({ url: () => 'ws://x/acp/y', connectToServer: () => console.log('connected') });
+  })()`,
+  historyWire: `(async () => {
+    let handler;
+    const { HistoryWire } = await import('./helpers/tauri/windowed-history.ts');
+    await new HistoryWire().install({ routeWebSocket: async (_, each) => (handler = each) });
+    handler({ connectToServer: () => console.log('connected') });
+  })()`,
+};
+
+test('no helper asks a server that took the daemon’s port', async () => {
+  const dir = worktree('helpers-taken');
+  const { daemon, env } = await ports(dir);
+  const calls = Object.entries(HELPERS).map(
+    ([name, call]) =>
+      `await ${call}.then(() => console.log('${name}: asked'), (e) => console.log('${name}:', e.message));`,
+  );
+  const running = run(
+    dir,
+    `${START_DAEMON}
+    const daemon = await import('./fixtures/daemon.ts');
+    const { existsSync } = await import('node:fs');
+    const handle = await startDaemon();
+    handle.daemon.kill('SIGUSR2');
+    while (!existsSync(process.env.FAKE_LOG + '.taken')) await new Promise((r) => setTimeout(r, 20));
+    ${calls.join('\n')}
+    endRun();
+    process.exit();`,
+    { ...env, HOME: dir },
+  );
+  const foreign = await takeOver(dir, 'daemon', daemon);
+  const { output } = await running;
+  await foreign.close();
+  assert.deepEqual(foreign.requests, [], output);
+  assert.doesNotMatch(output, /connected/);
+  for (const name of Object.keys(HELPERS)) {
+    assert.match(output, new RegExp(`^${name}: Port ${daemon} is taken by a process this run did not start`, 'm'));
+  }
+});
+
+test('a page is never loaded from a server that took the preview’s port', async () => {
+  const dir = worktree('preview-taken');
+  const { preview, env } = await ports(dir);
+  const running = run(
+    dir,
+    `${SETUP}
+    const { existsSync } = await import('node:fs');
+    const { chromium } = await import('@playwright/test');
+    const { PREVIEW_BASE } = await import('./fixtures/global-setup.ts');
+    // Loads the page as a browser would, and nothing else.
+    const page = { on() {}, goto: async () => { await fetch(PREVIEW_BASE); throw new Error('loaded'); } };
+    const context = { addInitScript: async () => {}, newPage: async () => page, close: async () => {} };
+    chromium.launch = async () => ({ isConnected: () => true, newContext: async () => context, close: async () => {} });
+    const { launchTauriApp } = await import('./fixtures/app-tauri.ts');
+    const launch = () => launchTauriApp().catch((e) => console.log(e.message));
+    const teardown = await setup();
+    await launch();
+    while (!existsSync(process.env.FAKE_LOG + '.taken')) await new Promise((r) => setTimeout(r, 20));
+    await launch();
+    await teardown();
+    process.exit();`,
+    env,
+  );
+  await until(() => /^daemon \d+ PUT/m.test(logOf(dir)), 'no daemon was started');
+  await until(() => (logOf(dir).match(/^vite \d+ GET/gm) ?? []).length >= 2, 'the first page never loaded');
+  process.kill(pidOf(dir, 'vite'), 'SIGUSR2'); // ours: this test started it
+  const foreign = await takeOver(dir, 'vite', preview);
+  const { output } = await running;
+  await foreign.close();
+  assert.match(output, /^loaded$/m);
+  assert.match(output, new RegExp(`^Port ${preview} is taken by a process this run did not start`, 'm'));
+  assert.deepEqual(foreign.requests, []);
+});
+
+test('a run ends when its preview dies, but not when it stops it', async () => {
+  const dir = worktree('preview-dies');
+  const { env } = await ports(dir);
+  const running = run(
+    dir,
+    `${SETUP} await setup(); process.on('SIGINT', () => { console.log('interrupted'); process.exit(7); }); setInterval(() => {}, 1000);`,
+    env,
+  );
+  await until(() => /^vite \d+ GET/m.test(logOf(dir)), 'the preview never started');
+  await new Promise((r) => setTimeout(r, 500));
+  process.kill(pidOf(dir, 'vite'), 'SIGKILL'); // ours: this test started it
+  const { output, exitCode } = await running;
+  assert.equal(exitCode, 7, output);
+  assert.match(output, /The preview exited \(SIGKILL\), so the run ends/);
+
+  const stops = worktree('preview-stops');
+  const stopped = await run(
+    stops,
+    `${SETUP} await (await setup())(); await new Promise((r) => setTimeout(r, 500)); console.log('went on'); process.exit();`,
+    (await ports(stops)).env,
+  );
+  assert.equal(stopped.exitCode, 0, stopped.output);
+  assert.match(stopped.output, /went on/);
+});
+
+/** What reaches a server from the harness's own process, not from the page. */
+const REQUEST =
+  /(?<!\w)(?:fetch\(|\w+\.fetch\(|request\.(?:get|post|put|patch|delete|head|fetch)\(|new WebSocket\(|connectToServer\()/g;
+/** Where one may be, and after which check: a check right before it, or a server of the test's own. */
+const CHECKED = {
+  'packages/e2e/helpers/tauri/raw-ws-client.ts': ['assertOwnDaemon();'],
+  'packages/e2e/helpers/tauri/ws-control.ts': ['assertOwnDaemon();'],
+  'packages/e2e/helpers/tauri/windowed-history.ts': ['assertOwnDaemon();'],
+  'design/canvas/capture/areas/sidebar.mts': ['assertOwnDaemon();'],
+};
+/** Requests of the page itself, to a server of the test's own or to a URL of the page. */
+const OF_THE_PAGE = [
+  'packages/e2e/tests-tauri/windowed-history-measurement.spec.ts',
+  'design/canvas/capture/serialise.mts',
+];
+
+test('specs, helpers and the capture ask the daemon only through the checked functions', () => {
+  const repo = path.resolve(E2E, '../..');
+  const files = ['packages/e2e/tests-tauri', 'packages/e2e/helpers', 'design/canvas/capture'].flatMap((folder) =>
+    readdirSync(path.join(repo, folder), { recursive: true })
+      .filter((name) => /\.m?ts$/.test(name))
+      .map((name) => path.posix.join(folder, name.split(path.sep).join('/'))),
+  );
+  assert.ok(files.length > 50, String(files.length));
+  const found = [];
+  for (const file of files) {
+    if (OF_THE_PAGE.includes(file)) continue;
+    const text = readFileSync(path.join(repo, file), 'utf8');
+    const lines = text.split('\n').map((line) => line.replace(/(^|\s)\/\/.*|^\s*\*.*/, ''));
+    lines.forEach((line, i) => {
+      if (!line.match(REQUEST)) return;
+      if (CHECKED[file]?.includes(lines[i - 1].trim())) return;
+      found.push(`${file}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(found, []);
 });

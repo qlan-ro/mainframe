@@ -92,11 +92,37 @@ function accepts(port: number): Promise<boolean> {
 
 const isSame = (a: Identity, b: Identity | undefined): boolean => a.pid === b?.pid && a.started === b.started;
 
-function read(ledger: string | undefined): Started[] {
+/** The ledger's lines. A process killed while writing leaves a torn one, which says nothing. */
+function lines(ledger: string | undefined): Record<string, unknown>[] {
   if (!ledger || !existsSync(ledger)) return [];
-  const lines = readFileSync(ledger, 'utf8').split('\n').filter(Boolean);
-  return lines.map((line) => JSON.parse(line) as Started);
+  const parsed = readFileSync(ledger, 'utf8')
+    .split('\n')
+    .map((line): unknown => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return undefined; /* expected: a torn or an empty line */
+      }
+    });
+  return parsed.filter((line): line is Record<string, unknown> => typeof line === 'object' && line !== null);
 }
+
+const isIdentity = (value: Record<string, unknown>): boolean =>
+  Number.isInteger(value['pid']) && typeof value['started'] === 'string';
+
+function read(ledger: string | undefined): Started[] {
+  const found = lines(ledger).filter((line) => isIdentity(line) && Number.isInteger(line['port']));
+  return found as unknown as Started[];
+}
+
+/** Whether the run that keeps the ledger is over; undefined when the ledger does not say whose it is. */
+function isOver(ledger: string): boolean | undefined {
+  const run = lines(ledger).find((line) => line['run'] === true && isIdentity(line)) as Identity | undefined;
+  return run && !isSame(run, processOf(run.pid));
+}
+
+// A line of its own even after a torn one.
+const append = (ledger: string, line: object): void => appendFileSync(ledger, `\n${JSON.stringify(line)}\n`);
 
 function ledgersIn(dir: string): string[] {
   return existsSync(dir) ? readdirSync(dir).map((name) => path.join(dir, name)) : [];
@@ -110,7 +136,7 @@ function isOwnOrphan(port: number, found: Process, own: OwnProcess | undefined):
   const ledger = process.env[LEDGER_ENV];
   if (!own || !ledger || found.ppid !== 1 || found.command !== own.command) return false;
   if (cwdOf(found.pid) !== realpathSync(own.cwd)) return false;
-  return ledgersIn(path.dirname(ledger)).some((earlier) => earlier !== ledger && startedOn(port, found, earlier));
+  return ledgersIn(path.dirname(ledger)).some((earlier) => startedOn(port, found, earlier) && isOver(earlier) === true);
 }
 
 /** Looks the process up again right before the signal, so a pid reused meanwhile is left alone. */
@@ -125,13 +151,16 @@ function kill(own: Identity): void {
 
 /** Starts a run's record of its processes. The returned teardown kills the ones still alive. */
 export function beginRun(dir = RUNS_DIR): () => void {
-  // Records of processes that are gone say nothing any more.
+  // Records of processes that are gone say nothing any more. A run that is not over may still add to its own.
   for (const ledger of ledgersIn(dir)) {
-    if (!read(ledger).some((own) => isSame(own, processOf(own.pid)))) rmSync(ledger, { force: true });
+    const running = read(ledger).some((own) => isSame(own, processOf(own.pid)));
+    if (!running && isOver(ledger) !== false) rmSync(ledger, { force: true });
   }
   mkdirSync(dir, { recursive: true });
   const ledger = path.join(dir, `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2)}.jsonl`);
   process.env[LEDGER_ENV] = ledger;
+  const self = processOf(process.pid);
+  if (self) append(ledger, { run: true, pid: self.pid, started: self.started });
   return () => {
     read(ledger).forEach(kill);
     rmSync(ledger, { force: true });
@@ -143,7 +172,7 @@ export function recordStarted(child: ChildProcess, port: number): void {
   const ledger = process.env[LEDGER_ENV];
   const found = child.pid === undefined ? undefined : processOf(child.pid);
   if (!ledger || !found) return;
-  appendFileSync(ledger, `${JSON.stringify({ pid: found.pid, started: found.started, port } satisfies Started)}\n`);
+  append(ledger, { pid: found.pid, started: found.started, port } satisfies Started);
 }
 
 function describe({ pid, command, started }: Process): string {
@@ -190,4 +219,15 @@ export function isServing(child: ChildProcess, port: number, remedy: string): bo
     throw new Error(`The server started for port ${port} exited (${child.signalCode ?? `code ${child.exitCode}`}).`);
   }
   return holders.length > 0;
+}
+
+/**
+ * Throws unless every listener on `port` is one this run recorded. For a server another process of the run started:
+ * the workers', say, of the preview.
+ */
+export function assertRunServes(port: number, remedy: string): void {
+  const holders = listenersOn(port);
+  const foreign = holders.filter((found) => !startedOn(port, found, process.env[LEDGER_ENV]));
+  if (foreign.length > 0) throw taken(port, foreign, remedy);
+  if (holders.length === 0) throw new Error(`Nothing listens on port ${port} any more.`);
 }

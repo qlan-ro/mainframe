@@ -7,7 +7,7 @@
  */
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures/app-tauri.js';
-import { DAEMON_BASE } from '../fixtures/daemon.js';
+import { daemonFetch } from '../fixtures/daemon.js';
 import { createTauriChat, createTauriProject, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { waitConnected } from '../helpers/tauri/wait.js';
 
@@ -82,7 +82,7 @@ test.describe('§overlay-scrollbars', () => {
   test('the sidebar shows a thumb on its resize edge; the thumb scrolls and the edge still resizes', async () => {
     const { page } = app;
     for (let i = 0; i < 20; i++) {
-      const res = await fetch(`${DAEMON_BASE}/api/chats`, {
+      const res = await daemonFetch('/api/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: project.projectId, adapterId: 'mock-cli', permissionMode: 'default' }),

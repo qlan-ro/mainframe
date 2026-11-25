@@ -49,9 +49,7 @@ import { launchTauriApp, closeTauriApp, type TauriAppFixture } from '../fixtures
 import { createTauriProject, createTauriChat, cleanupTauriProject, type TauriProject } from '../helpers/tauri/setup.js';
 import { sessionsSidebar } from '../helpers/tauri/page-objects.js';
 import { sendMessage, waitForIdle, waitConnected } from '../helpers/tauri/wait.js';
-import { DAEMON_PORT } from '../fixtures/daemon.js';
-
-const DAEMON_BASE = `http://127.0.0.1:${DAEMON_PORT}`;
+import { daemonFetch } from '../fixtures/daemon.js';
 
 /**
  * The mock-cli replay caps every inter-event delay at 120ms (ReplaySession.MAX_DELAY_MS),
@@ -317,17 +315,19 @@ test.describe('§sessions-rows Worktree on the hover card + missing state', () =
     const { page } = app;
     const row = sessionsSidebar(page).row(chatId);
 
-    const enableRes = await page.request.post(`${DAEMON_BASE}/api/chats/${chatId}/enable-worktree`, {
-      data: { baseBranch: 'main', branchName: 'e2e-rows-worktree' },
+    const enableRes = await daemonFetch(`/api/chats/${chatId}/enable-worktree`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseBranch: 'main', branchName: 'e2e-rows-worktree' }),
     });
-    expect(enableRes.ok()).toBe(true);
+    expect(enableRes.ok).toBe(true);
 
     await row.hover();
     await expect(page.getByTestId('sessions-meta-card-worktree')).toContainText('Worktree', { timeout: 15_000 });
     await expect(page.getByTestId('sessions-meta-card-warning')).toHaveCount(0);
     await page.mouse.move(0, 0);
 
-    const chatRes = await page.request.get(`${DAEMON_BASE}/api/chats/${chatId}`);
+    const chatRes = await daemonFetch(`/api/chats/${chatId}`);
     const chatBody = (await chatRes.json()) as { data?: { worktreePath?: string } };
     const worktreePath = chatBody.data?.worktreePath;
     if (!worktreePath) throw new Error('enable-worktree did not set worktreePath on the chat');
@@ -460,7 +460,7 @@ test.describe('§sessions-rows Unread title + copy session id', () => {
     const { page } = app;
     const rowA = sessionsSidebar(page).row(chatIdA);
 
-    const chatRes = await page.request.get(`${DAEMON_BASE}/api/chats/${chatIdA}`);
+    const chatRes = await daemonFetch(`/api/chats/${chatIdA}`);
     const chatBody = (await chatRes.json()) as { data?: { claudeSessionId?: string } };
     const claudeSessionId = chatBody.data?.claudeSessionId;
     test.skip(!claudeSessionId, 'chat has no claudeSessionId yet (recording did not emit onInit) — nothing to copy');
