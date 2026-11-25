@@ -269,6 +269,16 @@ describe('ChangesButton', () => {
     expect(emit).toHaveBeenCalledExactlyOnceWith({ type: 'open-review' });
   });
 
+  it('shortens paths and shows full names when two suffixes collide', () => {
+    const files = ['first/src/a.ts', 'second/src/a.ts', 'first/src/b.ts'].map((path) => ({ path }));
+    mockChanges = { ...some, files, loading: false, error: false };
+    renderStrip();
+    fireEvent.click(screen.getByTestId('composer-changes'));
+    expect(screen.getByText('first/src/a.ts')).toBeVisible();
+    expect(screen.getByText('second/src/a.ts')).toBeVisible();
+    expect(screen.getByRole('img', { name: 'first/src/b.ts' })).toHaveTextContent('src/b.ts');
+  });
+
   it('counts files where the daemon reports no lines, instead of a false zero', () => {
     mockChanges = { files: [{ path: 'a.ts' }], loading: false, error: false };
     renderStrip();

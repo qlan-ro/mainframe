@@ -59,7 +59,7 @@ function ActiveInfo({ chat, branch, baseBranch }: { chat: Chat; branch?: string;
         <span className="text-muted-foreground">Branch</span>
         <TruncatedWithTooltip
           text={branch ?? chat.branchName ?? '—'}
-          className="font-mono text-caption text-foreground"
+          className="font-mono text-[11.04px] text-foreground"
           contentClassName="break-all"
         />
         {baseBranch && (
@@ -67,7 +67,7 @@ function ActiveInfo({ chat, branch, baseBranch }: { chat: Chat; branch?: string;
             <span className="text-muted-foreground">From</span>
             <TruncatedWithTooltip
               text={baseBranch}
-              className="font-mono text-caption text-foreground"
+              className="font-mono text-[11.04px] text-foreground"
               contentClassName="break-all"
             />
           </>
@@ -75,7 +75,7 @@ function ActiveInfo({ chat, branch, baseBranch }: { chat: Chat; branch?: string;
         <span className="text-muted-foreground">Path</span>
         <TruncatedWithTooltip
           text={chat.worktreePath ?? ''}
-          className="font-mono text-caption text-foreground"
+          className="font-mono text-[11.04px] text-foreground"
           contentClassName="break-all"
         />
       </div>

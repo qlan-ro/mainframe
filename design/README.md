@@ -11,8 +11,7 @@ Mainframe's design source lives here. The hosted [Mainframe App canvas](https://
 | `canvas/capture/` | The product-board capture tool: one command redraws an area's boards from the running app. See its README. |
 | `canvas/foundations/` | The generator for `Foundations-Tokens`, from the tokens in `../DESIGN.md`. |
 | `canvas/lib/` | What the board builders share: the page shape, and the one check every board passes before it is written. |
-| `canvas/proposals/` | The generator for the `Proposal-Redesign-*` boards, rendered from the redesign prototype. |
-| `redesign/` | The window redesign: `DECISIONS.md` (the spec, mirrored on the `Proposal-Redesign-Spec` board) and the clickable `prototype/index.html`. |
+| `redesign/` | The window redesign: `DECISIONS.md` and the clickable `prototype/index.html`. |
 | `tools/check.mjs` | The CI check. |
 | `../packages/ui/.impeccable/surfaces/` | Impeccable surface briefs (the six redesign areas): purpose, direction and constraints. Written with `impeccable surface-brief write <target> <body>`. |
 
@@ -33,7 +32,7 @@ One canvas page per area. A board belongs to the area whose board prefix matches
 | Automations | `automations` | `Automations-*` | none |
 | Tasks | `tasks` | `Tasks-*` | none |
 
-The `overview` page holds the map board (`Main`). The `proposals` page holds upcoming designs and the approved redesign decision record. Foundations is the visual system: shared primitives, theme and shared feature pieces (`components/ui`, `styles`, `features/shared`). Its brief is `DESIGN.md`, so a change there counts as that area's design file.
+The `overview` page holds the map board (`Main`). The `proposals` page holds upcoming designs. Foundations is the visual system: shared primitives, theme and shared feature pieces (`components/ui`, `styles`, `features/shared`). Its brief is `DESIGN.md`, so a change there counts as that area's design file.
 
 ## A PR that changes UI
 
@@ -53,15 +52,9 @@ A PR with no visible change (a refactor, a performance fix) carries the `design:
 
 The hosted canvas is published by hand from `main` after a merge. Read the hosted `project/canvas.json` first. If it differs from `main` (boards moved or edited in the editor), bring that change back in a PR before publishing over it.
 
-## Regenerating the proposal boards
+## Adding a proposal
 
-```bash
-pnpm install                                                  # once: Playwright comes from packages/e2e
-pnpm --filter @qlan-ro/mainframe-e2e exec playwright install chromium
-bash design/canvas/proposals/run.sh
-```
-
-`run.sh` renders any states listed in `states.py` from the prototype, writes the boards, measures the regenerated decisions board, lays out the Proposals page and runs the check. An empty list regenerates the decisions board without opening the prototype. With an unchanged prototype and `states.py` it reproduces the boards of its last run byte for byte. The prototype numbers its tool cards (`tcN`, `mkN`) with one counter that keeps counting from state to state; `number-ids.cjs` numbers them per state and prefixes the state's name, so adding, removing or reordering a state changes only its own board. `shot.cjs` previews a board locally; it needs the canvas runtime at `canvas/proposals/render/support.js` (the canvas type's `artifact-type/dc-runtime.js`, which is not committed).
+Add the proposal artboard under `canvas/project/` and register it on the Proposals page in `canvas.json`. Run the Design check before opening the PR. Keep approved decisions in `redesign/DECISIONS.md`.
 
 ## Regenerating the other boards
 
