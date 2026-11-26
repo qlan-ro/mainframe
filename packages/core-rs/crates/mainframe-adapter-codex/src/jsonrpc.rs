@@ -150,10 +150,9 @@ impl JsonRpcClient {
     }
 
     pub fn close(&self) {
-        if self.closed.swap(true, Ordering::SeqCst) {
-            return;
+        if !self.closed.swap(true, Ordering::SeqCst) {
+            reject_all_pending(&self.pending, JsonRpcError("Client closed".to_string()));
         }
-        reject_all_pending(&self.pending, JsonRpcError("Client closed".to_string()));
         self.kill_notify.notify_one();
     }
 

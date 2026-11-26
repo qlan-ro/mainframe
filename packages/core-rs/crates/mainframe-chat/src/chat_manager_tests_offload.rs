@@ -12,3 +12,5 @@ include!("chat_manager_tests_offload_part_1.rs");
 include!("chat_manager_tests_offload_part_2.rs");
 include!("chat_manager_tests_offload_part_3.rs");
 include!("chat_manager_tests_offload_part_4.rs");
+
+include!("chat_manager_tests_offload_shutdown.rs");

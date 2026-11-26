@@ -21,6 +21,11 @@ pub use pumps::{
 pub use signal::child_exited_unreaped;
 pub use signal::{Signal, Target, Terminated, is_alive, signal, terminate, terminate_with};
 
+#[cfg(unix)]
+pub fn parent_pid() -> Option<u32> {
+    rustix::process::getppid().and_then(|pid| u32::try_from(pid.as_raw_pid()).ok())
+}
+
 /// A CLI child the way every adapter spawns one: the resolved `PATH`, colour
 /// output off, all three stdio pipes, and `kill_on_drop` as the last resort.
 pub fn cli_command(exe: &str, path: &crate::ResolvedPath) -> tokio::process::Command {

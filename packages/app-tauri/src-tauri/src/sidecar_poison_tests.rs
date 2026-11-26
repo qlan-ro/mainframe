@@ -9,9 +9,7 @@ fn poisoned_child_lock_still_allows_stop_to_clear_the_slot() {
         .spawn()
         .unwrap();
     let expected_pid = child.id();
-    let handle = DaemonHandle {
-        child: Arc::new(Mutex::new(Some(child))),
-    };
+    let handle = DaemonHandle::new(Some(child));
     std::thread::scope(|scope| {
         assert!(scope
             .spawn(|| {

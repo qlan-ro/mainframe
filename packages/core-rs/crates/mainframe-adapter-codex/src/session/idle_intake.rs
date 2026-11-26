@@ -25,7 +25,7 @@ impl Intake {
 
     pub(super) fn reserve(&self, still_idle: impl FnOnce() -> bool) -> bool {
         let mut state = self.0.lock_recover();
-        if state.active != 0 || state.closing || !still_idle() {
+        if state.active != 0 || !still_idle() {
             return false;
         }
         state.closing = true;

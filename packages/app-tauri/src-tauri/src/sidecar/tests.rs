@@ -13,13 +13,14 @@ fn spawn_sh(script: &str) -> Child {
 #[test]
 fn stop_child_lets_a_daemon_exit_on_sigterm() {
     use std::os::unix::process::ExitStatusExt;
-    let mut child = spawn_sh("exec sleep 100");
+    let child = spawn_sh("exec sleep 100");
 
     let status = stop_child(
-        &mut child,
+        &DaemonHandle::new(Some(child)).child,
         Duration::from_secs(10),
         Duration::from_millis(10),
     )
+    .unwrap()
     .unwrap();
 
     assert_eq!(status.signal(), Some(15));
@@ -33,7 +34,7 @@ fn stop_child_kills_a_daemon_that_outlives_the_grace() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let marker = dir.join("trapped");
-    let mut child = spawn_sh(&format!(
+    let child = spawn_sh(&format!(
         "trap '' TERM; touch {}; exec sleep 100",
         marker.display()
     ));
@@ -47,10 +48,11 @@ fn stop_child_kills_a_daemon_that_outlives_the_grace() {
     }
 
     let status = stop_child(
-        &mut child,
+        &DaemonHandle::new(Some(child)).child,
         Duration::from_millis(200),
         Duration::from_millis(10),
     )
+    .unwrap()
     .unwrap();
 
     assert_eq!(status.signal(), Some(9));
@@ -109,5 +111,65 @@ fn daemon_env_overrides_keep_explicit_data_dir() {
         daemon_env_overrides(31500, Some(Path::new("/tmp/mainframe-data"))).contains(
             &EnvOverride::Set("MAINFRAME_DATA_DIR", "/tmp/mainframe-data".to_string())
         )
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn emergency_kill_reaches_the_child_during_grace() {
+    use std::io::{BufRead, BufReader};
+    use std::os::unix::process::ExitStatusExt;
+
+    let mut child = Command::new("/bin/sh")
+        .args(["-c", "trap '' TERM; echo ready; exec sleep 100"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut output = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    output.read_line(&mut line).unwrap();
+    assert_eq!(line, "ready\n");
+    let handle = DaemonHandle::new(Some(child));
+    std::thread::scope(|scope| {
+        let worker = scope.spawn(|| {
+            stop_child(
+                &handle.child,
+                Duration::from_secs(2),
+                Duration::from_millis(10),
+            )
+        });
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while !handle.child.lock().unwrap().stopping {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        assert!(handle.pid().is_some());
+        handle.kill_now();
+        let status = worker.join().unwrap().unwrap().unwrap();
+        assert_eq!(status.signal(), Some(libc::SIGKILL));
+    });
+    assert_eq!(handle.pid(), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn sidecar_parent_is_passed_only_as_a_launch_argument() {
+    let mut command = Command::new("unused");
+    command.env("MAINFRAME_SIDECAR_PARENT_PID", "42");
+    configure_parent_watch(&mut command);
+
+    let args = command
+        .get_args()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        args,
+        [format!("--sidecar-parent-pid={}", std::process::id())]
+    );
+    assert_eq!(
+        command
+            .get_envs()
+            .find(|(key, _)| *key == "MAINFRAME_SIDECAR_PARENT_PID"),
+        Some((std::ffi::OsStr::new("MAINFRAME_SIDECAR_PARENT_PID"), None)),
     );
 }

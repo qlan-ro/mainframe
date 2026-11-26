@@ -1,19 +1,20 @@
 use super::*;
 impl CodexSession {
     pub(super) async fn kill_inner(&self) -> Result<(), AdapterError> {
+        let client = self.client.lock_recover().clone();
+        if let Some(client) = client {
+            if let Some(approval) = self.approval_handler.lock_recover().as_ref() {
+                approval.reject_all();
+            }
+            client.close();
+            tokio::time::timeout(Duration::from_secs(3), client.closed())
+                .await
+                .map_err(|_| {
+                    AdapterError::Message("Codex app-server termination was not confirmed".into())
+                })?;
+        }
         let sink = self.sink.lock_recover().clone();
         clear_after_exit(&self.state, &*sink);
-        let client = self.client.lock_recover().clone();
-        let Some(client) = client else {
-            return Ok(());
-        };
-        if let Some(approval) = self.approval_handler.lock_recover().as_ref() {
-            approval.reject_all();
-        }
-        client.close();
-        /* expected */
-        let _ = tokio::time::timeout(Duration::from_millis(3000), client.closed()).await;
-        *self.client.lock_recover() = None;
         Ok(())
     }
     pub(super) async fn interrupt_inner(&self) -> Result<(), AdapterError> {

@@ -6,6 +6,7 @@ mod memory_logger;
 mod menu;
 mod presence;
 mod preview;
+mod quit;
 mod shell_env;
 mod sidecar;
 mod terminal;
@@ -29,9 +30,7 @@ use preview::{
     preview_set_bounds, preview_set_visible, PreviewManager,
 };
 
-/// The daemon handle lives for the entire app lifetime.
-/// OnceLock ensures single-init; Drop isn't guaranteed on all platforms,
-/// so we also stop it on the `app::exit` event.
+/// Retains ownership of the sidecar for shutdown and memory sampling.
 static DAEMON: OnceLock<sidecar::DaemonHandle> = OnceLock::new();
 
 /// Daemon HTTP/WS port for this session. Configurable via the `DAEMON_PORT` env
@@ -66,9 +65,6 @@ pub fn run() {
     // in run()'s top scope ensures it is dropped only after .run() returns.
     let _log_guard = log_sink::init_logging();
 
-    // Start the 5-min RSS memory sampler (Task 10). Runs in a background thread;
-    // logs via the tracing sink initialised above so output goes to the rotating
-    // JSON log file (same sink as all other host logs).
     memory_logger::start_memory_logger();
 
     // ── C1: Capture the login-shell environment before doing anything else ──
@@ -137,6 +133,8 @@ pub fn run() {
             daemon_token_set,
         ])
         .setup(move |app| {
+            #[cfg(target_os = "macos")]
+            quit::install_native_quit(app.handle());
             // Build the main window ourselves (config has `"create": false`) so we can
             // attach `on_web_resource_request`. Tauri's asset protocol sends no
             // Cache-Control/ETag/Last-Modified headers, and WKWebView's disk cache can
@@ -255,53 +253,9 @@ pub fn run() {
                 }
             }
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                // POST idle on quit — mirrors idle-reporter.ts "before-quit" handler.
-                // Routed through post_state_sync so the 500 ms connect/read timeout
-                // applies and a wedged daemon cannot block window teardown.
-                if let Err(e) = presence::post_state_sync(daemon_port(), presence::Presence::Idle) {
-                    tracing::warn!(err = %e, "quit-path idle presence report failed");
-                }
-
-                // Stop the daemon when the last window closes: SIGTERM so it can
-                // stop its tunnels, then SIGKILL after a short grace period.
-                if let Some(h) = DAEMON.get() {
-                    h.stop();
-                }
-                // Kill all PTY sessions — go through app_handle() because
-                // try_state lives on Manager/AppHandle, not on &Window (M5).
-                if let Some(mgr) = window.app_handle().try_state::<TerminalManager>() {
-                    mgr.kill_all();
-                }
-                // Close all preview child webviews.
-                // NOTE: pane/tab-level teardown is handled by the JS side
-                // calling preview_destroy on each removed 'preview' run tab.
-                if let Some(mgr) = window.app_handle().try_state::<PreviewManager>() {
-                    mgr.kill_all();
-                }
-            }
-        })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|app_handle, event| {
-            // Cmd+Q / updater relaunch can end the run loop WITHOUT destroying
-            // windows, skipping the Destroyed handler above — the daemon then
-            // outlives the app (the rc.2→rc.4 stale-daemon incident). RunEvent::Exit
-            // is the last event before process exit; stop() is idempotent, so a
-            // graceful window close having already run it is fine.
-            if let tauri::RunEvent::Exit = event {
-                if let Some(h) = DAEMON.get() {
-                    h.stop();
-                }
-                if let Some(mgr) = app_handle.try_state::<TerminalManager>() {
-                    mgr.kill_all();
-                }
-                if let Some(mgr) = app_handle.try_state::<PreviewManager>() {
-                    mgr.kill_all();
-                }
-            }
-        });
+        .run(quit::on_run_event);
 }
 
 fn boot_daemon(

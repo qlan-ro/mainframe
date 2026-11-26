@@ -59,6 +59,9 @@ mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]
 # turns on the loopback base port 9323 instead of dev's 9223. Not default.
 mcp-bridge-qa = ["mcp-bridge"]
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 # macOS-only deps for the preview child-webview native snapshot (Task 5).
 # Pin to the same major versions as tauri 2.12.7 itself to avoid duplicate
 # crate copies and type-incompatibility when casting the WKWebView pointer.
@@ -68,6 +71,7 @@ objc2-foundation = { version = "0.3", features = ["std", "NSError"] }
 objc2-app-kit = { version = "0.3", features = ["std", "NSImage", "NSBitmapImageRep", "NSGraphicsContext"] }
 objc2-web-kit = { version = "0.3", features = ["std", "WKWebView", "WKSnapshotConfiguration", "block2"] }
 block2 = "0.6"
+objc2-core-foundation = { version = "0.3", features = ["block2"] }
 objc2-core-graphics = { version = "0.3", features = ["std", "CGGeometry", "CGEventTypes"] }
 png = "0.17"
 
@@ -86,5 +90,6 @@ debug = false
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
+# The quit supervisor handles a cleanup-thread panic through its completion channel.
+panic = "unwind"
 strip = true

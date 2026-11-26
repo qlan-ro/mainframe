@@ -51,7 +51,7 @@ async fn leader_only_group_is_swept_before_the_leader_is_reaped() {
     let mut swept = false;
     let code = tokio::time::timeout(
         Duration::from_secs(5),
-        wait_for_group(&mut child, &close, |target| {
+        wait_for_group(&mut child, &close, child_exited_unreaped, |target| {
             assert_eq!(target, Target::Group(pid));
             assert!(
                 child_exited_unreaped(pid).unwrap(),
@@ -65,4 +65,61 @@ async fn leader_only_group_is_swept_before_the_leader_is_reaped() {
     .unwrap();
     assert!(swept);
     assert_eq!(code, Some(23));
+}
+
+#[tokio::test]
+async fn failed_exit_observer_still_honors_a_later_close() {
+    let mut child = sleeping_leader();
+    let close = Notify::new();
+    let failed = Notify::new();
+    let (code, ()) = tokio::time::timeout(Duration::from_secs(4), async {
+        tokio::join!(
+            wait_for_group(
+                &mut child,
+                &close,
+                |_| {
+                    failed.notify_one();
+                    Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+                },
+                |_| panic!("failed probe must never sweep a numeric group"),
+            ),
+            async {
+                failed.notified().await;
+                close.notify_one();
+            }
+        )
+    })
+    .await
+    .unwrap();
+    assert_eq!(code, None);
+    assert!(child.id().is_none());
+}
+
+#[tokio::test]
+async fn failed_close_probe_does_not_consume_the_shutdown_request() {
+    let mut child = sleeping_leader();
+    let close = Notify::new();
+    close.notify_one();
+    let code = tokio::time::timeout(
+        Duration::from_secs(4),
+        wait_for_group(
+            &mut child,
+            &close,
+            |_| Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied)),
+            |_| panic!("failed probe must never sweep a numeric group"),
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!(code, None);
+    assert!(child.id().is_none());
+}
+
+fn sleeping_leader() -> Child {
+    tokio::process::Command::new("/bin/sleep")
+        .arg("60")
+        .process_group(0)
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap()
 }
