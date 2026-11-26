@@ -21,8 +21,13 @@ export async function transcriptMarkdown(
     for (const part of message.content) {
       if (part.type === 'text') sections.push(part.text);
       if (part.type !== 'tool-call') continue;
-      if (subagentFact(part)) sections.push(await exportChild(part.toolCallId));
-      else if (part.messages?.length) sections.push(await transcriptMarkdown(part.messages, exportChild));
+      if (subagentFact(part)) {
+        try {
+          sections.push((await exportChild(part.toolCallId)) || 'Sub-agent transcript unavailable');
+        } catch {
+          sections.push('Sub-agent transcript unavailable');
+        }
+      } else if (part.messages?.length) sections.push(await transcriptMarkdown(part.messages, exportChild));
     }
   }
   return sections.filter(Boolean).join('\n\n');

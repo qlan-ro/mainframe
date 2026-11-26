@@ -25,4 +25,8 @@ it('includes full saved child Markdown in transcript order', async () => {
     'Parent prompt\n\nBefore\n\nOlder step\n\nChild answer\n\nAfter',
   );
   expect(exportChild).toHaveBeenCalledExactlyOnceWith('saved-child');
+  exportChild.mockRejectedValue(new Error('unavailable'));
+  await expect(transcriptMarkdown(messages, exportChild)).resolves.toBe(
+    'Parent prompt\n\nBefore\n\nSub-agent transcript unavailable\n\nAfter',
+  );
 });
