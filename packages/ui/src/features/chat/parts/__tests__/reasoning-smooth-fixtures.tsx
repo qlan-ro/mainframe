@@ -108,7 +108,9 @@ export const shown = (index = 0) =>
 export const tick = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 export const flush = () => act(async () => void (await new Promise((resolve) => setImmediate(resolve))));
 export function startClock() {
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+  vi.useFakeTimers({
+    toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+  });
 }
 export function stopClock() {
   vi.restoreAllMocks();

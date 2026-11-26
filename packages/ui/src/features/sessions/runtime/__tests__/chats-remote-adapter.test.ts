@@ -518,10 +518,10 @@ describe('chats-remote-adapter — local-only removal never calls the daemon', (
 // ---------------------------------------------------------------------------
 
 describe('chats-remote-adapter — generateTitle returns an empty ReadableStream', () => {
-  it('result is an instance of ReadableStream', async () => {
+  it('closes the stream without emitting a title', async () => {
     const adapter = makeChatsRemoteAdapter(31415);
     const result = await adapter.generateTitle('chat-1', []);
-    expect(result).toBeInstanceOf(ReadableStream);
+    await expect(result.getReader().read()).resolves.toEqual({ done: true, value: undefined });
   });
 
   it('does not call renameChat or archiveChat', async () => {

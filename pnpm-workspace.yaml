@@ -18,3 +18,4 @@ overrides:
   tar: '>=7.5.7'
   '@qlan-ro/mainframe-types': workspace:*
   '@radix-ui/react-dismissable-layer': 1.1.19
+  '@assistant-ui/tap': 0.9.27

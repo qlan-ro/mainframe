@@ -21,10 +21,11 @@ export function useDraftRow(allItems: SessionItem[], filterProjectIds: ReadonlyS
   const aui = useAui();
   const newThreadId = useAuiState((s) => s.threads.newThreadId);
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
-  const draftCfg = useDraftConfigStore((s) => (newThreadId ? s.drafts.get(newThreadId) : undefined));
+  const draftId = useDraftConfigStore((s) => (mainThreadId && s.drafts.has(mainThreadId) ? mainThreadId : newThreadId));
+  const draftCfg = useDraftConfigStore((s) => (draftId ? s.drafts.get(draftId) : undefined));
 
   const model: DraftRowModel | null =
-    draftCfg != null && newThreadId != null ? { newThreadId, projectId: draftCfg.projectId } : null;
+    draftCfg != null && draftId != null ? { newThreadId: draftId, projectId: draftCfg.projectId } : null;
   const visible = draftRowVisible(model, filterProjectIds);
   const selected = model != null && mainThreadId === model.newThreadId;
 
@@ -35,16 +36,16 @@ export function useDraftRow(allItems: SessionItem[], filterProjectIds: ReadonlyS
   }, [model, aui]);
 
   const onDiscard = useCallback(() => {
-    if (newThreadId == null) return;
-    resetNewThreadDraft(newThreadId);
+    if (draftId == null) return;
+    resetNewThreadDraft(draftId);
     // A New, or leaving the draft, keeps what did not go out.
-    dropUnsentOf(newThreadId);
-    markDraftDiscarded(newThreadId);
+    dropUnsentOf(draftId);
+    markDraftDiscarded(draftId);
     const { returnThreadId, clear } = useDraftReturnTarget.getState();
     const target = returnThreadId ?? allItems[0]?.id ?? null;
     if (target != null) aui.threads.switchToThread(target);
     clear();
-  }, [newThreadId, allItems, aui]);
+  }, [draftId, allItems, aui]);
 
   return { model, visible, selected, onSelect, onDiscard };
 }

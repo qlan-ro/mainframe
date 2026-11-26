@@ -113,7 +113,9 @@ function makeLoadChats(port: number): (isCurrent: () => boolean) => Promise<Chat
   };
 }
 
-export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
+export function makeChatsRemoteAdapter(
+  port: number,
+): RemoteThreadListAdapter & Required<Pick<RemoteThreadListAdapter, 'unarchive'>> {
   const { toMetadata, retain } = makeToMetadata();
   const daemonId = getActiveDaemon().id;
   const loadChats = makeLoadChats(port);
@@ -171,7 +173,7 @@ export function makeChatsRemoteAdapter(port: number): RemoteThreadListAdapter {
     },
     generateTitle(): Promise<ReadableStream<AssistantStreamChunk>> {
       // Never enqueue — the daemon auto-titles; an empty stream satisfies aui.
-      return Promise.resolve(new ReadableStream<AssistantStreamChunk>());
+      return Promise.resolve(new ReadableStream<AssistantStreamChunk>({ start: (stream) => stream.close() }));
     },
   };
 }

@@ -17,7 +17,8 @@ import { MarkdownText } from '../markdown-text';
 import { convertAcpItems } from '../../view-model/convert-acp-item';
 import type { AccumulatedItem } from '../../view-model/acp-item-accumulator';
 import { createChatThreadState, reduceChatThreadState, type ChatThreadState } from '../../controller/chat-thread-state';
-import { projectChatThreadMessages, projectChatThreadRepository } from '../../controller/project-messages';
+import { projectChatThreadRepository } from '../../controller/project-messages';
+import { useNativeThreadMessages } from '../../runtime/use-native-thread-messages';
 import { isRunningFromState } from '../../runtime/chat-extras';
 
 const Remount = createContext(0);
@@ -61,16 +62,17 @@ export function MainHarness({ state, epoch = 0 }: HarnessProps) {
 }
 function SplitThread({ state, epoch = 0 }: HarnessProps) {
   const aui = useAui();
+  const messages = useNativeThreadMessages(state);
   const config = useMemo(
     () =>
       AuiConfig({
         thread: ExternalThread({
-          messages: projectChatThreadMessages(state),
+          messages,
           isRunning: isRunningFromState(state),
           onNew: async () => {},
         }),
       }),
-    [state],
+    [messages, state],
   );
   return (
     <AuiProvider extends={aui} config={config}>
@@ -134,7 +136,9 @@ export const shown = (id: string) => textNode(id).textContent ?? '';
 export const tick = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 export const flush = () => act(async () => void (await new Promise((resolve) => setImmediate(resolve))));
 export function startClock() {
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'] });
+  vi.useFakeTimers({
+    toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+  });
 }
 export function stopClock() {
   window.getSelection()?.removeAllRanges();

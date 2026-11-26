@@ -124,6 +124,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
         <ThreadPrimitive.Viewport
           ref={viewportRef}
           autoScroll={false}
+          scrollToBottomOnThreadSwitch={false}
           data-testid="chat-thread-viewport"
           data-mf-chat-thread
           data-mf-chat-id={chatId}

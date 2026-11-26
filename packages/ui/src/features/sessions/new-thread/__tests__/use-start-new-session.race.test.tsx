@@ -67,6 +67,7 @@ vi.mock('../../use-active-identity', () => ({
 const abandonCreateForLocal = vi.fn();
 vi.mock('../../runtime/new-thread-coordinator', () => ({
   abandonCreateForLocal: (...args: unknown[]) => abandonCreateForLocal(...args),
+  isCreatePending: () => false,
 }));
 
 const getEffectiveModel = vi.fn();

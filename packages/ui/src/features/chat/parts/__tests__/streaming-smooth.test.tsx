@@ -119,7 +119,7 @@ const flush = () => act(async () => void (await new Promise((r) => setImmediate(
 describe('useSmooth contract fed by the real D6/D7 pipeline (long-chat-and-streaming plan task U3)', () => {
   beforeEach(() => {
     vi.useFakeTimers({
-      toFake: ['Date', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+      toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
     });
   });
   afterEach(() => {
