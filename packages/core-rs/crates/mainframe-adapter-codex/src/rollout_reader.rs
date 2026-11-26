@@ -263,6 +263,7 @@ fn handle_message(p: &RolloutPayload, counter: &mut usize, items: &mut Vec<Threa
         })),
         Some("user") => items.push(ThreadItem::UserMessage(UserMessageItem {
             id: next_id(counter),
+            client_id: None,
             content: None,
             text: Some(text),
         })),

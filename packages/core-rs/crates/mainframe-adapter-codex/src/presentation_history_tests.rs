@@ -151,7 +151,7 @@ fn only_later_user_items_in_the_same_turn_are_steered() {
             {"type":"userMessage","id":"steer","text":"also check this"},
             {"type":"agentMessage","id":"final","text":"done"}]},
         {"id":"two","status":"completed","items":[
-            {"type":"userMessage","id":"queued","text":"next"}]}
+            {"type":"userMessage","id":"queued","clientId":"queue-id","text":"next"}]}
     ]))
     .unwrap();
     let messages = convert_turns(&turns, "thread", &HashMap::new(), &HashMap::new());
@@ -161,4 +161,9 @@ fn only_later_user_items_in_the_same_turn_are_steered() {
         .map(|m| m.id.as_str())
         .collect();
     assert_eq!(steered, ["steer"]);
+    let queued = messages.iter().find(|m| m.id == "queued").unwrap();
+    assert_eq!(
+        queued.metadata.as_ref().unwrap()["providerInputUuid"],
+        "queue-id"
+    );
 }

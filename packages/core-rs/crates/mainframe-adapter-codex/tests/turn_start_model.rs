@@ -166,7 +166,6 @@ fn captured_requests(capture_path: &Path) -> Vec<Value> {
         .collect()
 }
 
-/// The `params` object of the captured `turn/start` request, if one was sent.
 fn turn_start_params(capture_path: &Path) -> Option<Value> {
     captured_requests(capture_path)
         .into_iter()
@@ -180,11 +179,12 @@ async fn configured_model_is_sent_verbatim_in_collaboration_mode_settings() {
         spawn_test_session(Some("gpt-5.5"), None, r#","model":"gpt-5.6-sol""#).await;
 
     session
-        .send_message("hello".to_string(), Vec::new(), None)
+        .send_message("hello".to_string(), Vec::new(), Some("queue-id".into()))
         .await
         .expect("send_message succeeds when the chat has a configured model");
 
     let params = turn_start_params(&capture_path).expect("turn/start was sent");
+    assert_eq!(params["clientUserMessageId"], "queue-id");
     assert_eq!(
         params["collaborationMode"]["settings"]["model"],
         Value::String("gpt-5.5".to_string())

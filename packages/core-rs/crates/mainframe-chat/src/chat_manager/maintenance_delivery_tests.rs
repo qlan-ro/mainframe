@@ -251,8 +251,11 @@ async fn reload_drops_interrupted_delivery_already_in_provider_history() {
     let input = deps.idle_queue_list("c").unwrap().remove(0);
     let reloaded = reload(&manager, deps.clone());
     let mut accepted = input.message;
-    accepted.id = input.uuid;
-    accepted.metadata = None;
+    accepted.id = "provider-assigned-item".into();
+    accepted.metadata = Some(HashMap::from([(
+        "providerInputUuid".into(),
+        serde_json::json!(input.uuid),
+    )]));
     let history = reloaded
         .shared
         .merge_idle_history("c", vec![accepted])

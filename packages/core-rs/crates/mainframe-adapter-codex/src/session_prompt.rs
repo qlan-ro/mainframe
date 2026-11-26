@@ -4,7 +4,7 @@ impl CodexSession {
         &self,
         message: String,
         images: Vec<ImageInput>,
-        _uuid: Option<String>,
+        uuid: Option<String>,
     ) -> Result<(), AdapterError> {
         let client = self.client.lock_recover().clone();
         let Some(client) = client else {
@@ -28,7 +28,11 @@ impl CodexSession {
         .await?;
 
         let (thread_id, resolved_model) = self.resolve_prompt_model(model.as_deref())?;
-        let p = self.prompt_params(input, model.as_deref(), &cfg, &thread_id, &resolved_model)?;
+        let mut p =
+            self.prompt_params(input, model.as_deref(), &cfg, &thread_id, &resolved_model)?;
+        if let Some(uuid) = uuid {
+            p.insert("clientUserMessageId".into(), Value::String(uuid));
+        }
         let _: TurnStartResult = de(client
             .request_with_disposition("turn/start", Some(Value::Object(p)))
             .await
