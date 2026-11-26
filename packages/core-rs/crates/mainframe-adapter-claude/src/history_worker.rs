@@ -34,11 +34,13 @@ async fn load_with_reader<R: std::io::BufRead>(
     let mut paths = PathCollector::default();
     let mut load = HistoryLoad::default();
     let primary = discovered.primary_path.clone();
+    let children = discovered.subagent_files.clone();
     let (session_id, base) = (session_id.to_owned(), base.to_owned());
     if messages && discovered.complete {
         paths.files.sources = source_stamps(std::slice::from_ref(&primary)).await;
     }
     run_history_worker(move || {
+        let mut facts = history_agent_facts::AgentFacts::default();
         let result = open(&primary).and_then(|reader| {
             reader::read_chunks(reader, |line| {
                 let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
@@ -47,6 +49,7 @@ async fn load_with_reader<R: std::io::BufRead>(
                 };
                 paths.observe(&entry, line, &base);
                 if messages {
+                    facts.observe(&entry);
                     load.entry(&entry, &session_id, false);
                 }
             })
@@ -54,7 +57,9 @@ async fn load_with_reader<R: std::io::BufRead>(
         if result.is_err() {
             paths.files.sources = None;
         }
-        let rows = load.finish();
+        let agent_ids = std::mem::take(&mut load.agent_id_to_parent_tool_use_id);
+        let mut rows = load.finish();
+        facts.apply(&mut rows, &agent_ids, &children);
         (rows, paths.files)
     })
     .await
