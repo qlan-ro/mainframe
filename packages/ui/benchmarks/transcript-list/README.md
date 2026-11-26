@@ -13,7 +13,7 @@ No app, daemon, or provider is involved, and nothing in `src/` changes. The page
 | `v1s` | Plain rows as `MessageScroller.Item`s | shadcn Message Scroller, `@shadcn/react` 0.3.1 | On (the library relies on it) |
 | `v2` | LegendList 3.7.2, one row per message (the fixture cuts a turn into messages of one or two parts) | LegendList | n/a (it positions rows itself) |
 
-Other parameters: `groups` (turns in the window, default 40), `total` (turns in the chat, default `groups + 120`), `hold=<turn>` (the server holds that turn's image until released), `live=1` (the newest turn is still running), `manual=1` (P7 by hand).
+Other parameters: `groups` (turns in the window, default 40), `total` (turns in the chat, default `groups + 120`), `hold=<turn>` (the server holds that turn's image until released), `live=1` (the newest turn is still running), `manual=1` (P7 by hand), `progressive=1` (v1 mounts the newest six rows, then prepends the rest of the window twelve rows per task), `cv=1` (`content-visibility: auto` on every row). The driver writes these as variants: `v1+progressive`, `v1+cv`.
 
 ## Fixture
 
@@ -43,7 +43,7 @@ Scroll input goes through the engine's own wheel path: Playwright's mouse in Chr
 | P3-{image,code,fold}-{up,down} | A held image (+160 px), a code block (+12 lines), or the newest turn folding at its end, 150–250 px above the viewport, reached by scrolling up or down | Drift ≤ 1 px for 2 s |
 | P4-follow | 10 s at 30 chunks/s with a row every 250 ms, then the run ends and its work folds | Bottom gap ≤ 1 px, measured from the first frame at the live edge after the send |
 | P4-wheel-up, P4-wheel-down | A 120 px wheel while following, then the jump button | Up: follow stops and stays stopped, the jump lands in ≤ 2 frames. Down: still following |
-| P5-open | Five opens at 40 groups | The first frame with rows shows the last row, with no hidden frames |
+| P5-open | Five opens at 40 groups | The first frame with rows is at the end: last row in view, gap ≤ 1 px, no hidden frames |
 | P6-open-N, P6-scroll-400, P6-stream-400 | Mount to the first frame showing the last row; 30 px per frame scripted scroll at 400 groups; chunk commit (store write to the first DOM mutation) | Mount within 15 ms of v0 at 40 groups; ≥ 50 fps; chunk p95 ≤ 8 ms |
 | P7-flicks (WKWebView only) | Momentum flicks up through page loads | Proxy only: anchoring held, main-thread stall, largest single-frame step |
 

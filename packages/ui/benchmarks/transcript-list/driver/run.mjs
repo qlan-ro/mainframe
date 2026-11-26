@@ -67,7 +67,7 @@ for (const engineName of engines) {
                   `return await window.__rig.run(${JSON.stringify(c.run)}, ${JSON.stringify(c.options)})`,
                 )
               : null;
-            record = { engine: engineName, variant, case: c.id, rep: r, boot, ...(run ?? { ok: true }) };
+            record = { ...(run ?? { ok: true }), engine: engineName, variant, case: c.id, rep: r, boot };
             break;
           } catch (error) {
             // The harness can report a bare "JavaScript exception" while a load is still settling; retry once.

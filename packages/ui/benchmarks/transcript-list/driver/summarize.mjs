@@ -14,6 +14,7 @@ const res = (rows) => rows.filter((r) => r.ok && r.result).map((r) => r.result);
 const median = (xs) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : NaN);
 const max = (xs) => (xs.length ? Math.max(...xs.map((x) => (x === null || x === undefined ? Infinity : x))) : NaN);
 const fmt = (n) => (Number.isFinite(n) ? String(Math.round(n * 10) / 10) : n === Infinity ? 'lost' : 'n/a');
+const px = (n) => (n === Infinity ? 'anchor lost' : `${fmt(n)} px`);
 const verdict = (pass, text) => (pass === null ? `– ${text}` : `${pass ? 'pass' : '**fail**'} ${text}`);
 
 const drift = (rows) => max(res(rows).map((r) => (r.anchorLost ? Infinity : r.maxDrift)));
@@ -25,11 +26,11 @@ const mounts = (e, v, prefix) =>
 const PROPS = {
   P1: (e, v) => {
     const d = drift(of(e, v, 'P1-middle'));
-    return verdict(Number.isFinite(d) ? d <= 1 : res(of(e, v, 'P1-middle')).length ? false : null, `${fmt(d)} px`);
+    return verdict(Number.isFinite(d) ? d <= 1 : res(of(e, v, 'P1-middle')).length ? false : null, px(d));
   },
   'P1 at offset 0': (e, v) => {
     const d = drift(of(e, v, 'P1-top'));
-    return verdict(res(of(e, v, 'P1-top')).length ? d <= 1 : null, `${fmt(d)} px`);
+    return verdict(res(of(e, v, 'P1-top')).length ? d <= 1 : null, px(d));
   },
   P2: (e, v) => {
     const ctrl = res(of(e, v, 'P2-control'));
@@ -74,8 +75,14 @@ const PROPS = {
       .filter((r) => r.boot)
       .map((r) => r.boot);
     if (!boots.length) return verdict(null, 'n/a');
-    const ok = boots.every((b) => b.lastRowOnFirstFrame && b.hiddenFrames === 0);
-    return verdict(ok, ok ? 'last row on first frame' : `hidden ${max(boots.map((b) => b.hiddenFrames))} fr`);
+    // At the end on the first frame with rows: the last row in view, no hidden frames, gap <= 1 px.
+    const ok = boots.every((b) => b.lastRowOnFirstFrame && b.hiddenFrames === 0 && b.firstFrameGap <= 1);
+    const gap = max(boots.map((b) => b.firstFrameGap));
+    const hidden = max(boots.map((b) => b.hiddenFrames));
+    return verdict(
+      ok,
+      ok ? 'at the end on the first frame' : `first frame ${fmt(gap)} px short of the end, ${fmt(hidden)} hidden fr`,
+    );
   },
   'P6 mount 40': (e, v) => {
     const m = median(mounts(e, v, 'P5-open'));
@@ -84,11 +91,8 @@ const PROPS = {
   },
   'P6 scroll 400': (e, v) => {
     const r = res(of(e, v, 'P6-scroll-400'));
-    const fps = median(r.map((x) => x.fps));
-    return verdict(
-      r.length ? fps >= 50 : null,
-      `${fmt(fps)} fps, p95 frame ${fmt(median(r.map((x) => x.frameP95)))} ms`,
-    );
+    const fps = r.length ? Math.min(...r.map((x) => x.fps)) : NaN;
+    return verdict(r.length ? fps >= 50 : null, `${fmt(fps)} fps, p95 frame ${fmt(max(r.map((x) => x.frameP95)))} ms`);
   },
   'P6 chunk p95': (e, v) => {
     // React render time per chunk (Profiler); older runs only have the write-to-DOM latency.
