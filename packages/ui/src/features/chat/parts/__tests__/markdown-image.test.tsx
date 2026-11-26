@@ -72,4 +72,40 @@ describe('MarkdownImage', () => {
     await waitFor(() => expect(screen.getAllByTestId('chat-image-zoom-trigger')).toHaveLength(2));
     expect(getExternalFile).toHaveBeenCalledTimes(1);
   });
+
+  describe('reserved box', () => {
+    const frameOf = (el: Element | null) => el?.closest('[data-image-frame]') ?? null;
+
+    it('keeps one fixed-height frame from the skeleton to the loaded local image', async () => {
+      let resolve: (value: string) => void = () => {};
+      getExternalFile.mockReturnValue(new Promise<string>((r) => (resolve = r)));
+      render(<MarkdownImage src="/tmp/a.png" alt="x" />);
+      const skeleton = screen.getByTestId('chat-markdown-image-skeleton');
+      expect(skeleton).toHaveClass('h-60');
+
+      resolve('AAAA');
+      const trigger = await screen.findByTestId('chat-image-zoom-trigger');
+      expect(frameOf(trigger)).toHaveClass('h-60');
+      expect(trigger.querySelector('img')).toHaveClass('max-h-60', 'max-w-full', 'object-contain');
+    });
+
+    it('reserves the frame for a remote image before it loads and keeps it after', () => {
+      const { container } = render(<MarkdownImage src="https://x.com/a.png" alt="a" />);
+      const img = container.querySelector('img')!;
+      const frame = frameOf(img)!;
+      expect(frame).toHaveClass('h-60', 'animate-pulse');
+
+      fireEvent.load(img);
+      expect(frame).toHaveClass('h-60');
+      expect(frame).not.toHaveClass('animate-pulse');
+      expect(img).toHaveClass('max-h-60', 'max-w-full', 'object-contain');
+    });
+
+    it('falls back to the alt text when a remote image fails', () => {
+      const { container } = render(<MarkdownImage src="https://x.com/a.png" alt="Diagram" />);
+      fireEvent.error(container.querySelector('img')!);
+      expect(screen.getByTestId('chat-markdown-image-unavailable')).toHaveTextContent('Diagram (image unavailable)');
+      expect(container.querySelector('img')).toBeNull();
+    });
+  });
 });

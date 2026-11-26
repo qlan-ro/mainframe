@@ -1,88 +1,20 @@
 // @vitest-environment jsdom
 import { act, render, renderHook } from '@testing-library/react';
 import { useLayoutEffect } from 'react';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
 
 import { useThreadBottomPin } from '../use-thread-bottom-pin';
 import type { TranscriptScrollController } from '../transcript-scroll-context';
+import {
+  RecordingResizeObserver,
+  createViewport,
+  flushFrame,
+  frames,
+  notifyResize,
+  installPinDoubles,
+} from './pin-viewport-fixture';
 
-type ResizeCallback = ResizeObserverCallback;
-
-class RecordingResizeObserver implements ResizeObserver {
-  static instances: RecordingResizeObserver[] = [];
-
-  readonly callback: ResizeCallback;
-  readonly observe = vi.fn();
-  readonly unobserve = vi.fn();
-  readonly disconnect = vi.fn();
-
-  constructor(callback: ResizeCallback) {
-    this.callback = callback;
-    RecordingResizeObserver.instances.push(this);
-  }
-}
-
-function createViewport() {
-  const element = document.createElement('div');
-  let clientHeight = 100;
-  let scrollHeight = 1_000;
-  let scrollTop = 900;
-
-  Object.defineProperties(element, {
-    clientHeight: { get: () => clientHeight },
-    scrollHeight: { get: () => (clientHeight === 0 ? 0 : scrollHeight) },
-    scrollTop: {
-      get: () => (clientHeight === 0 ? 0 : scrollTop),
-      set: (value: number) => {
-        scrollTop = Math.min(value, Math.max(0, scrollHeight - clientHeight));
-      },
-    },
-  });
-
-  return {
-    element,
-    setVisible(visible: boolean) {
-      clientHeight = visible ? 100 : 0;
-    },
-    resize(height: number) {
-      scrollHeight = height;
-      scrollTop = Math.min(scrollTop, Math.max(0, scrollHeight - clientHeight));
-    },
-    scrollTo(top: number) {
-      element.scrollTop = top;
-      element.dispatchEvent(new Event('scroll'));
-    },
-  };
-}
-
-let frames: FrameRequestCallback[];
-
-beforeEach(() => {
-  frames = [];
-  RecordingResizeObserver.instances = [];
-  vi.stubGlobal('ResizeObserver', RecordingResizeObserver);
-  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-    frames.push(callback);
-    return frames.length;
-  });
-  vi.stubGlobal('cancelAnimationFrame', vi.fn());
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-function flushFrame() {
-  const callbacks = frames.splice(0);
-  callbacks.forEach((callback) => callback(0));
-}
-
-function notifyResize() {
-  const observer = RecordingResizeObserver.instances[RecordingResizeObserver.instances.length - 1];
-  if (!observer) throw new Error('ResizeObserver was not created');
-  observer.callback([], observer);
-  flushFrame();
-}
+installPinDoubles();
 
 it('restores a pinned transcript to the bottom after its content shrinks and regrows', () => {
   const viewport = createViewport();

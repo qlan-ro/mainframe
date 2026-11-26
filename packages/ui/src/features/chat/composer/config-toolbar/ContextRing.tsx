@@ -20,6 +20,7 @@ import { useContextPercent } from '@/features/session-panel/use-context-percent'
 import { formatTokenCount } from '@/features/session-panel/context-tokens';
 import { matchCommandInvocation } from '../../commands/command-registry';
 import { useChatExtras } from '../../runtime/chat-extras';
+import { useTranscriptScroll } from '../../thread/transcript-scroll-context';
 import { ComposerHint } from '../composer-card-context';
 import { toolbarButton } from './toolbar-button';
 
@@ -55,6 +56,7 @@ export function ContextRing() {
   const percent = reportedPercent ?? (draft ? 0 : null);
   const usage = state?.contextUsage;
   const aui = useAui();
+  const scroll = useTranscriptScroll();
   if (percent == null) return null;
 
   const full = percent >= COMPACT_AT;
@@ -99,7 +101,10 @@ export function ContextRing() {
         <DropdownMenuItem
           data-testid="composer-context-compact"
           disabled={!canCompact}
-          onSelect={() => aui.thread.append({ role: 'user', content: [{ type: 'text', text: COMPACT_COMMAND }] })}
+          onSelect={() => {
+            aui.thread.append({ role: 'user', content: [{ type: 'text', text: COMPACT_COMMAND }] });
+            scroll?.pinToBottom?.();
+          }}
         >
           <Minimize2 />
           <span className="flex flex-col">

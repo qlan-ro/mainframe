@@ -4,6 +4,7 @@ import { CLAIM_MS, useHeldQueue } from '../held-queue-store';
 import {
   focusVisibleComposer,
   mockChat,
+  pinToBottom,
   queue,
   ref,
   renderRows,
@@ -31,7 +32,7 @@ describe('QueuedRows — held rows after a Stop', () => {
     expect(within(rows()[2]!).getByText('Queued')).toBeInTheDocument();
   });
 
-  it('Send now sends the held row through the session', () => {
+  it('Send now sends the held row through the session and re-pins the transcript', () => {
     hold('h1', 1);
     renderRows();
 
@@ -39,6 +40,7 @@ describe('QueuedRows — held rows after a Stop', () => {
 
     expect(sendHeld).toHaveBeenCalledExactlyOnceWith('h1');
     expect(focusVisibleComposer).toHaveBeenCalledOnce();
+    expect(pinToBottom).toHaveBeenCalledOnce();
   });
 
   it('removing a held row drops it from the store', () => {

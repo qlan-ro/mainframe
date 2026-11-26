@@ -40,6 +40,10 @@
  * carry our composed multi-segment text), so `toCompleteAttachment` performs
  * the same status-flip inline; see its docstring for why this is safe
  * without an adapter round-trip.
+ *
+ * Every submit re-pins the transcript to the bottom, even for a reader who
+ * scrolled up: the user's own send is the one run start that should move the
+ * view (assistant-ui's run-start scroll is off, see `ChatThreadViewport.tsx`).
  */
 import { useAui, useAuiState } from '@assistant-ui/react';
 import { isDraftSessionId } from '@/store/layout-persist';
@@ -48,6 +52,7 @@ import { withSteer } from '../../controller/steer';
 import { getDraftConfig } from '@/features/sessions/runtime/draft-config';
 import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
 import { useActiveThreadId } from '../../runtime/use-active-thread-id';
+import { useTranscriptScroll } from '../../thread/transcript-scroll-context';
 import { readLiveComposerState } from '../read-live-composer-state';
 import { toCompleteAttachment } from '../attachment-adapter';
 import { composeMessage } from '../draft-content/compose-message';
@@ -65,6 +70,7 @@ export type SubmitComposition = (mode?: EnterWhileRunning) => void;
 export function useSubmitComposition(): SubmitComposition {
   const aui = useAui();
   const threadId = useActiveThreadId();
+  const scroll = useTranscriptScroll();
 
   return (mode) => {
     if (threadId == null) return;
@@ -110,6 +116,7 @@ export function useSubmitComposition(): SubmitComposition {
       runConfig,
       ...(unsentId ? { metadata: unsentMetadata(unsentId) } : {}),
     });
+    scroll?.pinToBottom?.();
     composer.reset();
     useComposerSegments.getState().clear(threadId);
     useDraftContent.getState().clear(threadId);

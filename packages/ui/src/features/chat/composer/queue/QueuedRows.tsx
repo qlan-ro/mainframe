@@ -16,6 +16,7 @@ import { ComposerHint } from '../composer-card-context';
 import { useComposerEdit } from '../edit/composer-edit-context';
 import { appendQueuedDraft, copyQueuedToComposer } from './copy-queued-to-composer';
 import { focusVisibleComposer } from '../focus-composer';
+import { useTranscriptScroll } from '../../thread/transcript-scroll-context';
 import { CLAIM_MS, settled, useHeldQueue, type HeldMessage } from './held-queue-store';
 
 const NO_ROWS: readonly HeldMessage[] = [];
@@ -214,6 +215,7 @@ function useHeldRows(): QueueRow[] {
   const extras = useChatExtras();
   const chatId = extras?.state.chatId ?? '';
   const { startEdit } = useComposerEdit();
+  const scroll = useTranscriptScroll();
   const held = useHeldQueue((s) => s.byChat[chatId] ?? NO_ROWS);
   const sentIds = useAuiState((s) =>
     s.thread.messages
@@ -249,6 +251,7 @@ function useHeldRows(): QueueRow[] {
               testId: 'chat-queued-send-now',
               onClick: () => {
                 void extras?.sendHeld(row.messageId).catch(report('send'));
+                scroll?.pinToBottom?.();
                 focusVisibleComposer();
               },
             }
