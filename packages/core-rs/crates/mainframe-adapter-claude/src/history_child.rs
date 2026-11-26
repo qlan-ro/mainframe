@@ -2,81 +2,25 @@ use super::*;
 use std::collections::VecDeque;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::SystemTime;
 
 use mainframe_adapter_api::AdapterError;
 use mainframe_types::sync::LockExt as _;
 
-type Messages = Arc<Vec<ChatMessage>>;
+#[path = "history_child_cache.rs"]
+mod cache;
+use cache::{ChildEntry, Messages, Stamp};
+
 static PARSE_LOCKS: [Mutex<()>; 16] = [const { Mutex::new(()) }; 16];
-/// Parsed children kept by the size of their files, so the largest child of a
-/// long session stays cached across pages instead of being parsed again.
-const CACHE_BUDGET_BYTES: u64 = 64 * 1024 * 1024;
-static CACHE: LazyLock<Mutex<ChildCache>> =
-    LazyLock::new(|| Mutex::new(ChildCache::new(CACHE_BUDGET_BYTES)));
+static CALLS: LazyLock<Mutex<VecDeque<Arc<CallMemo>>>> = LazyLock::new(Default::default);
+const CALL_MEMOS: usize = 8;
 
-#[derive(PartialEq, Eq)]
-struct Stamp(u64, SystemTime);
-
-impl Stamp {
-    fn read(path: &Path) -> std::io::Result<Self> {
-        let metadata = std::fs::symlink_metadata(path)?;
-        if !metadata.is_file() {
-            return Err(std::io::ErrorKind::NotFound.into());
-        }
-        Ok(Self(metadata.len(), metadata.modified()?))
-    }
-}
-
-struct ChildEntry {
-    path: String,
-    stamp: Stamp,
-    messages: Messages,
-}
-
-/// Most recently used first; evicts from the back once the files' bytes pass
-/// the budget. A child larger than the whole budget is never kept.
-struct ChildCache {
-    entries: VecDeque<Arc<ChildEntry>>,
-    bytes: u64,
-    budget: u64,
-}
-
-impl ChildCache {
-    const fn new(budget: u64) -> Self {
-        Self {
-            entries: VecDeque::new(),
-            bytes: 0,
-            budget,
-        }
-    }
-
-    fn take(&mut self, path: &str) -> Option<Arc<ChildEntry>> {
-        let index = self.entries.iter().position(|entry| entry.path == path)?;
-        let entry = self.entries.remove(index)?;
-        self.bytes -= entry.stamp.0;
-        Some(entry)
-    }
-
-    fn get(&mut self, path: &str, stamp: &Stamp) -> Option<Arc<ChildEntry>> {
-        let entry = self.take(path).filter(|entry| &entry.stamp == stamp)?;
-        self.insert(Arc::clone(&entry));
-        Some(entry)
-    }
-
-    fn insert(&mut self, entry: Arc<ChildEntry>) {
-        self.take(&entry.path);
-        if entry.stamp.0 > self.budget {
-            return;
-        }
-        self.bytes += entry.stamp.0;
-        self.entries.push_front(entry);
-        while self.bytes > self.budget
-            && let Some(evicted) = self.entries.pop_back()
-        {
-            self.bytes -= evicted.stamp.0;
-        }
-    }
+/// Which agent each Agent call of a parent transcript started, keyed by the
+/// parent files' stamps, so a tool-call id resolves with one scan of the parent
+/// instead of one per page, lazy image and expand.
+struct CallMemo {
+    stamps: Vec<(String, Option<Stamp>)>,
+    /// Native agent id to the tool call that started it.
+    agents: HashMap<String, String>,
 }
 
 pub(crate) fn load(discovered: DiscoveredFiles, id: &str) -> Result<Messages, AdapterError> {
@@ -86,7 +30,8 @@ pub(crate) fn load(discovered: DiscoveredFiles, id: &str) -> Result<Messages, Ad
 
 /// `id` is the native agent id the parent's facts carry, which names the file
 /// directly. A tool-call id (from a history cached before the facts carried the
-/// agent id) still resolves by scanning the parent for its agent mapping.
+/// agent id) still resolves through the parent's agent mapping, scanned once per
+/// version of the parent files.
 fn resolve(discovered: &DiscoveredFiles, id: &str) -> Result<String, AdapterError> {
     let children = &discovered.subagent_files;
     if id.is_empty() {
@@ -95,28 +40,50 @@ fn resolve(discovered: &DiscoveredFiles, id: &str) -> Result<String, AdapterErro
     if let Some(path) = children.iter().find(|file| agent_id(file) == Some(id)) {
         return Ok(path.clone());
     }
+    let memo = parent_agents(discovered);
+    // An agent the parent names whose file is gone: no call id can match it.
+    if memo.agents.contains_key(id) {
+        return Err(unavailable());
+    }
+    memo.agents
+        .iter()
+        .filter(|(_, call)| call.as_str() == id)
+        .find_map(|(agent, _)| children.iter().find(|file| agent_id(file) == Some(agent)))
+        .cloned()
+        .ok_or_else(unavailable)
+}
+
+fn parent_agents(discovered: &DiscoveredFiles) -> Arc<CallMemo> {
+    let stamps: Vec<_> = discovered
+        .parent_files()
+        .map(|path| (path.clone(), Stamp::read(Path::new(path)).ok()))
+        .collect();
+    let mut memos = CALLS.lock_recover();
+    if let Some(index) = memos.iter().position(|memo| memo.stamps == stamps)
+        && let Some(memo) = memos.remove(index)
+    {
+        memos.push_front(Arc::clone(&memo));
+        return memo;
+    }
+    drop(memos);
     let mut agents = HashMap::new();
-    for source in discovered.parent_files() {
-        if visit_lines(source, |line| {
+    for (source, _) in &stamps {
+        // An unreadable parent file names no agents; the others still resolve.
+        /* expected */
+        let _ = visit_lines(source, |line| {
             if line.contains("\"agentId\"")
                 && let Ok(entry) = serde_json::from_str(line)
             {
                 capture_agent_id_mapping(&entry, &mut agents);
             }
-        })
-        .is_err()
-        {
-            continue;
-        }
-        if let Some(path) = children.iter().find(|file| {
-            agent_id(file)
-                .and_then(|agent| agents.get(agent))
-                .is_some_and(|tool| tool == id)
-        }) {
-            return Ok(path.clone());
-        }
+        });
     }
-    Err(unavailable())
+    let memo = Arc::new(CallMemo { stamps, agents });
+    let mut memos = CALLS.lock_recover();
+    memos.retain(|other| other.stamps.first() != memo.stamps.first());
+    memos.push_front(Arc::clone(&memo));
+    memos.truncate(CALL_MEMOS);
+    memo
 }
 
 fn unavailable() -> AdapterError {
@@ -135,14 +102,15 @@ fn read(path: String) -> Result<Messages, AdapterError> {
     path.hash(&mut hash);
     let _parse = PARSE_LOCKS[hash.finish() as usize % PARSE_LOCKS.len()].lock_recover();
     let stamp = Stamp::read(Path::new(&path))?;
-    if let Some(entry) = CACHE.lock_recover().get(&path, &stamp) {
-        return Ok(Arc::clone(&entry.messages));
+    if let Some(messages) = cache::cached(&path, &stamp) {
+        return Ok(messages);
     }
     let entry = Arc::new(parse(path, stamp)?);
+    let messages = Arc::clone(&entry.messages);
     if Stamp::read(Path::new(&entry.path)).is_ok_and(|after| after == entry.stamp) {
-        CACHE.lock_recover().insert(Arc::clone(&entry));
+        cache::keep(entry);
     }
-    Ok(Arc::clone(&entry.messages))
+    Ok(messages)
 }
 
 /// Reads the child once and attaches its own nested calls' facts, so a cached
@@ -261,47 +229,58 @@ mod tests {
         );
     }
 
-    fn entry(path: &str, bytes: u64) -> Arc<ChildEntry> {
-        Arc::new(ChildEntry {
-            path: path.into(),
-            stamp: Stamp(bytes, SystemTime::UNIX_EPOCH),
-            messages: Arc::default(),
-        })
-    }
-
-    fn paths(cache: &ChildCache) -> Vec<&str> {
-        cache
-            .entries
-            .iter()
-            .map(|entry| entry.path.as_str())
-            .collect()
-    }
-
-    #[test]
-    fn child_cache_keeps_children_within_its_byte_budget() {
-        let mut cache = ChildCache::new(30);
-        cache.insert(entry("a", 25));
-        cache.insert(entry("b", 4));
-        assert_eq!(paths(&cache), ["b", "a"]);
-        assert!(cache.get("a", &Stamp(25, SystemTime::UNIX_EPOCH)).is_some());
-        cache.insert(entry("c", 3));
-        assert_eq!(paths(&cache), ["c", "a"]);
-        assert_eq!(cache.bytes, 28);
-        cache.insert(entry("huge", 31));
-        assert_eq!(paths(&cache), ["c", "a"]);
-        assert!(cache.get("a", &Stamp(26, SystemTime::UNIX_EPOCH)).is_none());
-        assert_eq!(paths(&cache), ["c"]);
-        assert_eq!(cache.bytes, 3);
-    }
-
-    #[test]
-    fn child_cache_holds_a_child_larger_than_the_old_eight_mebibyte_cap() {
-        let mut cache = ChildCache::new(CACHE_BUDGET_BYTES);
-        cache.insert(entry("largest", 25 * 1024 * 1024));
-        cache.insert(entry("next", 12 * 1024 * 1024));
-        let stamp = Stamp(25 * 1024 * 1024, SystemTime::UNIX_EPOCH);
-        assert!(cache.get("largest", &stamp).is_some());
-        assert_eq!(paths(&cache), ["largest", "next"]);
+    #[tokio::test]
+    async fn a_tool_call_id_scans_the_parent_once_per_version() {
+        let root = tempfile::tempdir().unwrap();
+        let children = root.path().join("session/subagents");
+        std::fs::create_dir_all(&children).unwrap();
+        let parent = root.path().join("session.jsonl");
+        let receipt = |call: &str, agent: &str| {
+            serde_json::json!({"type":"user","uuid":format!("receipt-{call}"),
+                "toolUseResult":{"agentId":agent,"status":"completed"},
+                "message":{"content":[{"type":"tool_result","tool_use_id":call,"content":"done"}]}})
+            .to_string()
+        };
+        std::fs::write(
+            &parent,
+            format!(
+                "{}\n{}\n",
+                receipt("call-a", "worker"),
+                receipt("call-b", "gone")
+            ),
+        )
+        .unwrap();
+        std::fs::write(children.join("agent-worker.jsonl"),
+            r#"{"type":"assistant","uuid":"worker-step","message":{"content":[{"type":"text","text":"Child answer"}]}}"#,
+        ).unwrap();
+        let discover =
+            || discover_session_jsonl_files_in_dir("session", root.path().to_str().unwrap());
+        let parent_path = parent.to_str().unwrap().to_owned();
+        reader::take_opened_paths();
+        assert_eq!(
+            load(discover().await, "call-a").unwrap()[0].id,
+            "worker-step"
+        );
+        assert!(reader::take_opened_paths().contains(&parent_path));
+        // Later images and expands: the memo answers, the child comes from the cache.
+        load(discover().await, "call-a").unwrap();
+        // An agent the parent names but whose file is gone, and its call: no scan.
+        for id in ["gone", "call-b"] {
+            assert!(matches!(
+                load(discover().await, id),
+                Err(AdapterError::Unavailable(_))
+            ));
+        }
+        assert!(reader::take_opened_paths().is_empty());
+        // The parent grew: its mapping is read again, once.
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&parent)
+            .unwrap();
+        writeln!(file, "{}", receipt("call-c", "other")).unwrap();
+        load(discover().await, "call-a").unwrap();
+        load(discover().await, "call-a").unwrap();
+        assert_eq!(reader::take_opened_paths(), [parent_path]);
     }
 
     #[test]

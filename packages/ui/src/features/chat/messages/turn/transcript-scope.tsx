@@ -45,8 +45,11 @@ export function RootTranscriptScope({ children }: { children: ReactNode }) {
   return <TranscriptScopeProvider value={value}>{children}</TranscriptScopeProvider>;
 }
 
-/** Rows read from a saved sub-agent's own transcript. */
-export function SubagentTranscriptScope({ subagentId, children }: { subagentId: string; children: ReactNode }) {
+/**
+ * Rows read from a saved sub-agent's own transcript. Left out, the rows are the
+ * chat's own (or an enclosing sub-agent's, when that one is passed through).
+ */
+export function SubagentTranscriptScope({ subagentId, children }: { subagentId?: string; children: ReactNode }) {
   const parent = useTranscriptScope();
   const value = useMemo(() => ({ ...parent, subagentId }), [parent, subagentId]);
   return <TranscriptScopeProvider value={value}>{children}</TranscriptScopeProvider>;
