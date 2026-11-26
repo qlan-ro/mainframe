@@ -281,7 +281,6 @@ fn attaches_turn_duration_ms_to_preceding_assistant() {
         Some(&json!(1234))
     );
 }
-
 #[test]
 fn merged_assistant_records_keep_facts_for_nested_calls() {
     let mut counter = 0;

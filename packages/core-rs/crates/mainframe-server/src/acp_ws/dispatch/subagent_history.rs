@@ -54,17 +54,8 @@ pub(super) async fn handle(request: JsonRpcRequest, ctx: &AppCtx, connection: &F
         }
     };
     if matches!(op, Operation::Export) {
-        let mut ancestors = vec![target.agent_id];
-        let markdown = export(&messages, &mut ancestors, &|id| {
-            ctx.chat
-                .chat_manager
-                .get_subagent_history(&target.session_id, id)
-        })
-        .await;
-        connection.send_json(&rpc::success_response(
-            request.id,
-            serde_json::json!({"markdown": markdown}),
-        ));
+        let value = export_response(ctx, target, &messages).await;
+        connection.send_json(&rpc::success_response(request.id, value));
         return;
     }
     let options = mainframe_acp::history_page::PageOptions {
@@ -83,6 +74,21 @@ pub(super) async fn handle(request: JsonRpcRequest, ctx: &AppCtx, connection: &F
         }
     };
     connection.send_json(&reply);
+}
+
+async fn export_response(
+    ctx: &AppCtx,
+    target: SubagentHistoryParams,
+    messages: &[DisplayMessage],
+) -> serde_json::Value {
+    let mut ancestors = vec![target.agent_id];
+    let markdown = export(messages, &mut ancestors, &|id| {
+        ctx.chat
+            .chat_manager
+            .get_subagent_history(&target.session_id, id)
+    })
+    .await;
+    serde_json::json!({"markdown": markdown})
 }
 
 fn render(
