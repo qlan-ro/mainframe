@@ -4,8 +4,6 @@ use std::path::Path;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 use mainframe_types::context::SkillFileEntry;
 use serde_json::Value;
-use tokio::fs::File;
-use tokio::io::{AsyncBufReadExt, BufReader, Lines};
 
 use crate::history_converters::{
     convert_history_entry, synthesize_skill_loaded_from_user_entry,
@@ -23,12 +21,9 @@ fn is_strict_true(v: Option<&Value>) -> bool {
     matches!(v, Some(Value::Bool(true)))
 }
 
-async fn open_lines(file_path: &str) -> Option<Lines<BufReader<File>>> {
-    File::open(file_path)
-        .await
-        .ok()
-        .map(|f| BufReader::new(f).lines())
-}
+#[path = "history_reader.rs"]
+mod reader;
+use reader::visit_lines;
 
 pub struct DiscoveredFiles {
     pub primary_path: String,
@@ -52,7 +47,7 @@ pub async fn load_history(
     session_id: &str,
     project_path: &str,
     session_file_path: Option<&str>,
-) -> Vec<ChatMessage> {
+) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
     load_history_with_index(session_id, project_path, session_file_path, None).await
 }
 
@@ -61,7 +56,7 @@ pub(crate) async fn load_history_with_index(
     project_path: &str,
     session_file_path: Option<&str>,
     index: Option<&crate::history_source_index::HistorySourceIndex>,
-) -> Vec<ChatMessage> {
+) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
     let discovered = history_discovery::discover_indexed_session_files(
         session_id,
         project_path,
@@ -69,9 +64,19 @@ pub(crate) async fn load_history_with_index(
         index,
     )
     .await;
-    load_discovered_history(session_id, &discovered).await
+    load_discovered_history(
+        session_id,
+        &discovered,
+        &get_session_jsonl_path(session_id, project_path).project_dir,
+        true,
+    )
+    .await
+    .map(|(messages, _)| messages)
 }
-pub async fn load_history_in_dir(session_id: &str, project_dir: &str) -> Vec<ChatMessage> {
+pub async fn load_history_in_dir(
+    session_id: &str,
+    project_dir: &str,
+) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
     load_history_in_dir_with_index(session_id, project_dir, None).await
 }
 
@@ -79,42 +84,39 @@ pub(crate) async fn load_history_in_dir_with_index(
     session_id: &str,
     project_dir: &str,
     index: Option<&crate::history_source_index::HistorySourceIndex>,
-) -> Vec<ChatMessage> {
+) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
     let discovered =
         history_discovery::discover_indexed_files_in_dir(session_id, project_dir, index).await;
-    load_discovered_history(session_id, &discovered).await
+    load_discovered_history(session_id, &discovered, project_dir, true)
+        .await
+        .map(|(messages, _)| messages)
 }
 
-async fn load_discovered_history(
-    session_id: &str,
-    discovered: &DiscoveredFiles,
-) -> Vec<ChatMessage> {
-    if discovered.all_files.is_empty() {
-        return Vec::new();
+#[path = "history_worker.rs"]
+mod history_worker;
+pub(crate) use history_worker::load_discovered_history;
+
+pub(crate) async fn run_history_worker<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, mainframe_adapter_api::AdapterError> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(worker_error)
+}
+
+pub(crate) fn worker_error(_: tokio::task::JoinError) -> mainframe_adapter_api::AdapterError {
+    mainframe_adapter_api::AdapterError::Unavailable("Claude history worker failed")
+}
+
+pub(crate) async fn source_stamps(
+    files: &[String],
+) -> Option<Vec<mainframe_adapter_api::HistoryDependency>> {
+    let mut stamps = Vec::new();
+    for file in files {
+        stamps.push(mainframe_adapter_api::HistoryDependency::capture(file.into()).await?);
     }
-    let subagent_files = &discovered.subagent_files;
-
-    let mut load = HistoryLoad::default();
-    for file in &discovered.all_files {
-        let is_subagent_file = subagent_files.contains(file);
-        let Some(mut lines) = open_lines(file).await else {
-            continue;
-        };
-        while let Ok(Some(line)) = lines.next_line().await {
-            if line.trim().is_empty() {
-                continue;
-            }
-            tracing::trace!(session_id = %session_id, file = %file, line = %line, "jsonl line");
-
-            let entry: Value = match serde_json::from_str(&line) {
-                Ok(v) => v,
-                Err(_) => continue, // skip malformed lines
-            };
-            load.entry(&entry, session_id, is_subagent_file);
-        }
-    }
-
-    load.finish()
+    stamps.sort_by(|a, b| a.path.cmp(&b.path));
+    Some(stamps)
 }
 
 #[path = "history_discovery.rs"]

@@ -139,8 +139,12 @@ async fn indexed_loading_preserves_full_history_and_subagent_discovery() {
     file(root.path(), "unrelated.jsonl", "other").await;
     let index = HistorySourceIndex::new(cache.path().into());
     let path = root.path().to_str().unwrap();
-    let expected = crate::history::load_history_in_dir("wanted", path).await;
-    let actual = crate::history::load_history_in_dir_with_index("wanted", path, Some(&index)).await;
+    let expected = crate::history::load_history_in_dir("wanted", path)
+        .await
+        .unwrap();
+    let actual = crate::history::load_history_in_dir_with_index("wanted", path, Some(&index))
+        .await
+        .unwrap();
     assert_eq!(actual.len(), 2);
     assert_eq!(actual, expected);
     let subagents = root.path().join("wanted/subagents");

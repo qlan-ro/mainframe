@@ -50,6 +50,7 @@ pub struct ClaudeSession {
     stdin_tx: Mutex<Option<StdinTx>>,
     weak_self: OnceLock<Weak<ClaudeSession>>,
     resolved_path: ResolvedPath,
+    history_files: Mutex<Option<mainframe_adapter_api::CollectedHistoryFiles>>,
     history_index: Option<Arc<crate::history_source_index::HistorySourceIndex>>,
 }
 
@@ -111,6 +112,7 @@ impl ClaudeSession {
             stdin_tx: Mutex::new(None),
             weak_self: OnceLock::new(),
             resolved_path,
+            history_files: Mutex::default(),
             history_index: None,
         }
     }

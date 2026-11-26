@@ -33,8 +33,9 @@ pub mod title;
 pub mod version;
 
 pub use adapter::{
-    Adapter, AdapterSession, ContextFiles, FORK_CUT_NOT_FOUND_REASON, ForkCut, ForkPinError,
-    ForkPinRequest, ImageInput, LoadedSkill, SessionSink, StopBackgroundTaskResult,
+    Adapter, AdapterSession, CollectedHistoryFiles, ContextFiles, FORK_CUT_NOT_FOUND_REASON,
+    ForkCut, ForkPinError, ForkPinRequest, HistoryFiles, ImageInput, LoadedSkill, SessionSink,
+    StopBackgroundTaskResult,
 };
 pub use mainframe_types::adapter::{ControlRequest, ControlResponse};
 pub use plan_mode_actions::{
@@ -42,8 +43,7 @@ pub use plan_mode_actions::{
 };
 pub use title::finalize_title;
 
-/// A boxed, `Send` future — the manual async-fn-in-trait building block used by
-/// every `dyn`-compatible async trait method in this crate.
+/// Boxed future for async adapter trait methods.
 pub use mainframe_types::BoxFuture;
 
 /// Result of a spawned child process (`{ ok, stdout }`). Shared by `RefreshDeps`

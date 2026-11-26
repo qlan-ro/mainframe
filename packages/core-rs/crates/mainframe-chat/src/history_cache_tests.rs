@@ -199,3 +199,53 @@ async fn pruning_keeps_only_the_newest_snapshots_by_mtime() {
     assert_eq!(cache.read("middle", &fp).await, Some(vec![msg("middle")]));
     assert_eq!(cache.read("newest", &fp).await, Some(vec![msg("newest")]));
 }
+
+#[tokio::test]
+async fn claude_history_files_survive_cache_hits_and_appends() {
+    use mainframe_adapter_api::Adapter;
+    use mainframe_adapter_claude::adapter::ClaudeAdapter;
+    use mainframe_types::adapter::SessionOptions;
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("session.jsonl");
+    let plan = r#"{"type":"user","sessionId":"session","uuid":"u","message":{"role":"user","content":"hello"},"toolUseResult":{"plan":"text","filePath":"/p.md"}}"#;
+    let skill = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"example"}}]}}"#;
+    std::fs::write(&source, format!("{plan}\n{skill}\n")).unwrap();
+    let adapter = ClaudeAdapter::default();
+    let session = || {
+        adapter.create_session(SessionOptions {
+            project_path: dir.path().to_string_lossy().into_owned(),
+            chat_id: Some("session".into()),
+            session_file_path: Some(source.to_string_lossy().into_owned()),
+            mainframe_chat_id: "chat".into(),
+            fork_source: None,
+        })
+    };
+    let cache = Arc::new(HistorySnapshotCache::new(dir.path().join("cache")));
+    for pass in 0..3 {
+        if pass == 2 {
+            std::fs::write(
+                &source,
+                format!(
+                    "{plan}\n{skill}\n{plan}\n{}",
+                    skill.replace("example", "second")
+                ),
+            )
+            .unwrap();
+        }
+        let session = session();
+        assert!(
+            !cache
+                .load("chat", session.as_ref(), Some("project"))
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        cache.flush().await;
+        let files = session.take_history_files();
+        assert_eq!(files.is_none(), pass == 1);
+        let files = session.scan_history_files(files).await.unwrap();
+        assert_eq!(files.plans, vec!["/p.md"; if pass == 2 { 2 } else { 1 }]);
+        assert_eq!(files.skills, session.extract_skill_files().await.unwrap());
+        assert_eq!(files.skills.len(), if pass == 2 { 2 } else { 1 });
+    }
+}
