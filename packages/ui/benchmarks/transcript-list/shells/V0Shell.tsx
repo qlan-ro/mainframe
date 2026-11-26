@@ -1,4 +1,7 @@
-/** v0: today's stack, composed as `ChatThreadViewport` composes it (pin, prepend anchor, virtualizer, aui viewport). */
+/**
+ * v0: today's stack, composed as `ChatThreadViewport` composes it after #980 (pin,
+ * prepend anchor, virtualizer, aui viewport with its scroll controllers off).
+ */
 import { useEffect, useMemo, useState } from 'react';
 import { ThreadPrimitive } from '@assistant-ui/react';
 import { EarlierMessages } from '@/features/chat/thread/EarlierMessages';
@@ -31,6 +34,8 @@ export function V0Shell() {
         <ThreadPrimitive.Viewport
           ref={pin.viewportRef}
           autoScroll={false}
+          scrollToBottomOnRunStart={false}
+          scrollToBottomOnInitialize={false}
           scrollToBottomOnThreadSwitch={false}
           data-mf-chat-thread
           data-mf-chat-id={CHAT_ID}
@@ -54,7 +59,13 @@ export function V0Shell() {
           >
             <ComposerStub />
           </div>
-          <TranscriptScrollToBottom host={overlayHost} footerHeight={footerHeight} />
+          <TranscriptScrollToBottom
+            host={overlayHost}
+            footerHeight={footerHeight}
+            isPinned={pin.isPinned}
+            subscribePinned={pin.subscribePinned}
+            onPin={pin.pinToBottom}
+          />
         </ThreadPrimitive.Viewport>
         <div ref={setOverlayHost} className="pointer-events-none absolute inset-0" />
       </div>

@@ -34,9 +34,10 @@ export default defineConfig({
   base: './',
   plugins: [redirectList(), tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
   // The profiling build of react-dom, so `<Profiler>` reports each commit's render time (P6).
+  // `RIG_PROFILE=0` builds with plain react-dom, for mount times comparable with the app.
   resolve: {
     alias: [
-      { find: /^react-dom\/client$/, replacement: 'react-dom/profiling' },
+      ...(process.env.RIG_PROFILE === '0' ? [] : [{ find: /^react-dom\/client$/, replacement: 'react-dom/profiling' }]),
       { find: '@', replacement: src },
     ],
   },

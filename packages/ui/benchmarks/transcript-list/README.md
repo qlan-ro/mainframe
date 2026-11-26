@@ -28,7 +28,7 @@ node packages/ui/benchmarks/transcript-list/driver/run.mjs --engines chromium,wk
 node packages/ui/benchmarks/transcript-list/driver/summarize.mjs results.json
 ```
 
-`--variants v1,v1s` and `--cases P3,P4` narrow a run (prefix match). `--synthetic` replaces native wheel input with dispatched events. `--serve` builds, serves the page on `--port` (default 5199) and waits, for runs by hand. The `wk` engine compiles `driver/wkrig.swift` with `swiftc` and opens a 1280×720 web view in a borderless window at the bottom-left of the screen. It uses a non-persistent data store and never touches the app or its storage.
+`--variants v1,v1s` and `--cases P3,P4` narrow a run (prefix match). `--synthetic` replaces native wheel input with dispatched events. The bundle uses React's profiling build so `<Profiler>` can time each chunk; `RIG_PROFILE=0` builds with plain `react-dom` for mount times comparable with the app. `--serve` builds, serves the page on `--port` (default 5199) and waits, for runs by hand. The `wk` engine compiles `driver/wkrig.swift` with `swiftc` and opens a 1280×720 web view in a borderless window at the bottom-left of the screen. It uses a non-persistent data store and never touches the app or its storage.
 
 ## Measurement
 

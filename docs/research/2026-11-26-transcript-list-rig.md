@@ -2,6 +2,8 @@
 
 Todo #455. It decides which path #461 takes. The proof spec is section 4.5 of the architecture review's part 2, which is kept outside the repository. The rig is [`packages/ui/benchmarks/transcript-list/`](../../packages/ui/benchmarks/transcript-list/README.md). Everything here was measured at `origin/main` 54576053 (`@assistant-ui/react` 0.15.38, react-virtuoso 4.18.24, React 19.3.1) on a synthetic chat. No app, daemon, or real transcript was involved.
 
+#980 (todo #456) merged while the runs were in progress. It turns off assistant-ui's remaining scroll controllers, drives the scroll-to-bottom button from the pin, and gives every markdown image a fixed-height frame. The branch is rebased onto it, and the rig's v0 now mirrors the post-#980 viewport. Section 4.8 reruns v0 on that base. Since #980, images no longer change the transcript's height, so the P3 image case measures nothing on the new base; the code-block and fold cases still apply.
+
 ## 1. Short answer
 
 **#461 takes the primary path: `v1`, no virtualizer, with the hand-written owner. It also needs two changes the spec did not have: mount the tail first, and bound the window.**
@@ -15,6 +17,7 @@ Todo #455. It decides which path #461 takes. The proof spec is section 4.5 of th
   - P2 in WKWebView: the reader ends 200 px short of where the wheel put them.
   - A page landing at offset 0: a 42 px drift.
 - **`v2` (LegendList) is not needed.** It is the cheapest variant: it mounts faster than v0, and its chunk cost is under 8 ms at 400 groups in Chromium. But it drifts 42 px at offset 0 and 228 px on a code block above the reader in WebKit. It stays the fallback if a bounded `v1` window misses P6 in the real app.
+- **#980, merged during the runs, slowed v0's open in WKWebView** from 59–70 ms to 165–181 ms in the rig (section 4.8). That is a lead for the app, not part of #461's decision.
 - **P7 (trackpad momentum by hand) was not run; it needs the owner's hands.** A synthesized-momentum proxy in WKWebView showed anchoring held through every page load for `v1` and `v1s`. It also showed a 180–216 ms main-thread stall each time a 51-message page mounts unvirtualized, after which the main thread catches up with WebKit's threaded scroll in one 630–930 px step. Whether that step is visible is the open question for the manual run.
 
 ## 2. Verdict table
@@ -236,6 +239,25 @@ A lost anchor would show as a step the size of the page (15,000–17,000 px). Th
 The large step needs care. During the 200 ms stall, WebKit kept scrolling on its scrolling thread, and the main thread then caught up in one frame. On screen that may be smooth, with the step only in the main thread's view, or it may be a visible hitch. Only the manual run can tell.
 
 The stall itself is real, and #461 can remove it the same way as the mount: land a history page in slices instead of one 51-message commit.
+
+### 4.8 v0 after #980
+
+Rerun of v0 on the rebased branch (33a906d5) with plain `react-dom`, two repetitions, five opens per mount size:
+
+| v0 | Chromium, before #980 | Chromium, after | WKWebView, before | WKWebView, after |
+| --- | --- | --- | --- | --- |
+| P1 / P1 at offset 0 | pass / lost | pass / lost | pass / lost | pass / lost |
+| P2 | pass | **fail**: 1,191 px against the wheel | **fail**: 1,191 px against | **fail**: 1,191 px against, ends 383 px off |
+| P3 (code, fold) | **fail**: 228, 345–691 px | **fail**: 228, 621–691 px | **fail**: 228, 552–691 px | **fail**: 228, 345–552 px |
+| P4 | **fail**: gap 440 px | **fail**: gap 440 px | **fail**: gap 534 px | **fail**: gap 534–570 px |
+| P5, first frame with rows | 2,056 px short, 1 hidden frame | **45,476 px short** (the top of the list), 1 hidden frame | 883 px short | **45,348 px short**, 2 hidden frames |
+| Open to the end, 10 / 20 / 40 / 400 groups, median ms | 99 / 118 / 128 / 266 | 92 / 90 / 104 / 217 | 59 / 70 / 70 / 195 | **172 / 165 / 181 / 170** |
+
+#980 did not change the anchoring results; they come from the virtualizer.
+
+One change is worth a look in the app. With `scrollToBottomOnInitialize` off, the list now renders from the top and reaches the tail only when the pin scrolls it. In WKWebView that takes 165–181 ms from mount, against 59–70 ms before. That is about 100 ms more on every open in the app's engine, while Chromium got slightly faster. This was measured in the rig, not in the app.
+
+#461 removes this path: `v1` opens at the end on the first frame. If #461 slips, the interim fix the improvement plan mentions (position at the tail before the first paint) now matters more.
 
 ## 5. What #461 should take from this
 
