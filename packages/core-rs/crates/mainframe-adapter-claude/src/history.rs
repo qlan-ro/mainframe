@@ -23,7 +23,7 @@ fn is_strict_true(v: Option<&Value>) -> bool {
 
 #[path = "history_reader.rs"]
 mod reader;
-use reader::{open_lines, valid_lines};
+use reader::visit_lines;
 
 pub struct DiscoveredFiles {
     pub primary_path: String,
@@ -100,28 +100,30 @@ pub(crate) async fn load_discovered_history(
     if discovered.all_files.is_empty() {
         return Default::default();
     }
-    let subagent_files = &discovered.subagent_files;
-
     let mut paths = PathCollector::default();
     let mut load = HistoryLoad::default();
-    for file in &discovered.all_files {
-        let Some(data) = open_lines(file).await else {
-            continue;
-        };
-        let is_subagent = subagent_files.contains(file);
-        for line in valid_lines(&data) {
-            let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
-                paths.observe_plan(line, base);
-                continue;
-            };
-            paths.observe(&entry, line, base, project);
-            if messages {
-                load.entry(&entry, session_id, is_subagent);
-            }
+    let files = discovered.all_files.clone();
+    let subagent_files = discovered.subagent_files.clone();
+    let (session_id, base, project) = (session_id.to_owned(), base.to_owned(), project.to_owned());
+    tokio::task::spawn_blocking(move || {
+        for file in &files {
+            let is_subagent = subagent_files.contains(file);
+            visit_lines(file, |line| {
+                let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
+                    paths.observe_plan(line, &base);
+                    return;
+                };
+                paths.observe(&entry, line, &base, &project);
+                if messages {
+                    load.entry(&entry, &session_id, is_subagent);
+                }
+            });
         }
-    }
-    let rows = load.finish();
-    (rows, paths.files)
+        let rows = load.finish();
+        (rows, paths.files)
+    })
+    .await
+    .unwrap_or_default()
 }
 
 #[path = "history_discovery.rs"]

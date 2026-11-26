@@ -1,64 +1,87 @@
-pub(super) async fn open_lines(path: &str) -> Option<Vec<u8>> {
-    read_bytes(path, false).await
-}
+use std::io::{BufRead, BufReader};
+
+const CHUNK_SIZE: usize = 1024 * 1024;
 
 pub(super) async fn first_record(path: &str) -> Option<Vec<u8>> {
-    read_bytes(path, true).await
-}
-
-async fn read_bytes(path: &str, header_only: bool) -> Option<Vec<u8>> {
     let path = path.to_owned();
     tokio::task::spawn_blocking(move || {
-        use std::io::{BufRead, BufReader, Read};
-        let mut file = std::fs::File::open(path).ok()?;
-        if header_only {
-            let mut reader = BufReader::new(file);
-            let mut line = Vec::new();
-            loop {
-                line.clear();
-                if reader.read_until(b'\n', &mut line).ok()? == 0 {
-                    return None;
-                }
-                if !std::str::from_utf8(&line).ok()?.trim().is_empty() {
-                    return Some(line);
-                }
+        let file = std::fs::File::open(path).ok()?;
+        let mut reader = BufReader::new(file);
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            if reader.read_until(b'\n', &mut line).ok()? == 0 {
+                return None;
+            }
+            if !std::str::from_utf8(&line).ok()?.trim().is_empty() {
+                return Some(line);
             }
         }
-        let mut bytes = Vec::with_capacity(file.metadata().ok().map_or(0, |m| m.len() as usize));
-        if file.read_to_end(&mut bytes).is_err() {
-            bytes.truncate(bytes.iter().rposition(|&b| b == b'\n').map_or(0, |p| p + 1));
-        }
-        Some(bytes)
     })
     .await
     .ok()
     .flatten()
 }
 
-pub(super) fn valid_lines(bytes: &[u8]) -> impl Iterator<Item = &str> {
-    bytes
-        .split(|&byte| byte == b'\n')
-        .map_while(|line| std::str::from_utf8(line).ok())
+pub(super) fn visit_lines(path: &str, mut visit: impl FnMut(&str)) {
+    if let Ok(file) = std::fs::File::open(path) {
+        read_chunks(BufReader::with_capacity(CHUNK_SIZE, file), &mut visit);
+    }
+}
+
+fn read_chunks(mut reader: impl BufRead, mut visit: impl FnMut(&str)) {
+    let mut carry = Vec::new();
+    while let Ok(bytes) = reader.fill_buf() {
+        if bytes.is_empty() {
+            if !carry.is_empty()
+                && let Ok(line) = std::str::from_utf8(&carry)
+            {
+                visit(line);
+            }
+            break;
+        }
+        let mut lines = bytes.split(|&b| b == b'\n').peekable();
+        while let Some(part) = lines.next() {
+            if lines.peek().is_none() {
+                carry.extend_from_slice(part);
+                break;
+            }
+            let line = if carry.is_empty() {
+                part
+            } else {
+                carry.extend_from_slice(part);
+                &carry
+            };
+            let Ok(line) = std::str::from_utf8(line) else {
+                return;
+            };
+            visit(line.strip_suffix('\r').unwrap_or(line));
+            carry.clear();
+            if carry.capacity() > CHUNK_SIZE {
+                carry = Vec::new();
+            }
+        }
+        let consumed = bytes.len();
+        reader.consume(consumed);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::Value;
     use std::path::Path;
     use tokio::io::{AsyncBufReadExt, BufReader};
 
     async fn compare(path: &Path) {
-        let data = open_lines(path.to_str().unwrap()).await.unwrap();
-        let actual: Vec<Value> = valid_lines(&data)
-            .filter_map(|line| serde_json::from_slice(line.as_bytes()).ok())
-            .collect();
+        let mut actual = Vec::<String>::new();
+        read_chunks(
+            std::io::BufReader::with_capacity(8, std::fs::File::open(path).unwrap()),
+            |line| actual.push(line.to_owned()),
+        );
         let mut old = BufReader::new(tokio::fs::File::open(path).await.unwrap()).lines();
-        let mut expected = Vec::<Value>::new();
+        let mut expected = Vec::<String>::new();
         while let Ok(Some(line)) = old.next_line().await {
-            if let Ok(record) = serde_json::from_str(&line) {
-                expected.push(record);
-            }
+            expected.push(line);
         }
         assert_eq!(actual, expected);
     }
@@ -67,7 +90,11 @@ mod tests {
     async fn agrees_with_streaming_reader_at_boundaries() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("sample");
-        assert!(open_lines(path.to_str().unwrap()).await.is_none());
+        visit_lines(path.to_str().unwrap(), |_| {
+            panic!("missing file yielded a line")
+        });
+        std::fs::write(&path, "      \"é\"").unwrap();
+        compare(&path).await;
         for size in [8191, 8192, 8193, 100_000] {
             for tail in [b"42".as_slice(), b"{", b"\xff\n42", b"\xef\xbb\xbf{}\n42"] {
                 let mut bytes = vec![b' '; size];
