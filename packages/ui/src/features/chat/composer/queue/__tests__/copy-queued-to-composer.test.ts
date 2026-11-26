@@ -30,7 +30,10 @@ it('appends queued text and reports a failed file while adding the others', asyn
 
   expect(composer.setText).toHaveBeenCalledWith('Existing draft\n\nQueued text');
   expect(composer.addAttachment.mock.calls.map(([file]) => file.name)).toEqual(['bad.txt', 'good.txt']);
-  expect(mfToast.info).toHaveBeenCalledWith("Copied to the composer. Remove the queued message once you've sent it.", {
-    description: 'Could not copy: bad.txt',
-  });
+  expect(mfToast.info).toHaveBeenCalledWith(
+    'Copied to the composer. Mark the queued message as sent or remove it, then send the copy.',
+    {
+      description: 'Could not copy: bad.txt',
+    },
+  );
 });

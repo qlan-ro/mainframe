@@ -11,6 +11,19 @@ export async function copyQueuedToComposer(
   content: string,
   attachmentIds?: readonly string[],
 ) {
+  const names = await appendQueuedDraft(composer, port, chatId, content, attachmentIds);
+  mfToast.info('Copied to the composer. Mark the queued message as sent or remove it, then send the copy.', {
+    description: names.length ? `Could not copy: ${names.join(', ')}` : undefined,
+  });
+}
+
+export async function appendQueuedDraft(
+  composer: DraftComposer,
+  port: number,
+  chatId: string,
+  content: string,
+  attachmentIds?: readonly string[],
+) {
   const draft = readLiveComposerState(composer).text;
   composer.setText([draft, content].filter((part) => part !== '').join('\n\n'));
   focusVisibleComposer();
@@ -30,7 +43,5 @@ export async function copyQueuedToComposer(
     }),
   );
   const names = failures.filter((name) => name !== undefined);
-  mfToast.info("Copied to the composer. Remove the queued message once you've sent it.", {
-    description: names.length ? `Could not copy: ${names.join(', ')}` : undefined,
-  });
+  return names;
 }
