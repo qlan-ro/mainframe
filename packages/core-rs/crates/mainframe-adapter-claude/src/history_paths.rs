@@ -45,12 +45,12 @@ async fn plan_file_paths_from(
         return Ok(Vec::new());
     }
     let mut plan_files: Vec<String> = Vec::new();
-    let files = discovered.all_files.clone();
+    let files: Vec<_> = discovered.parent_files().cloned().collect();
     let project_dir = project_dir.to_owned();
     run_history_worker(move || {
-        for file in &files {
+        for file in files {
             /* expected */
-            let _ = visit_lines(file, |line| {
+            let _ = visit_lines(&file, |line| {
                 if line.trim().is_empty() {
                     return;
                 }
@@ -101,12 +101,12 @@ async fn skill_file_paths_from(
     let mut seen: HashSet<String> = HashSet::new();
     let mut cache: HashMap<String, String> = HashMap::new();
     let mut skill_files: Vec<SkillFileEntry> = Vec::new();
-    let files = discovered.all_files.clone();
+    let files: Vec<_> = discovered.parent_files().cloned().collect();
     let project_path = project_path.to_owned();
     run_history_worker(move || {
-        for file in &files {
+        for file in files {
             /* expected */
-            let _ = visit_lines(file, |line| {
+            let _ = visit_lines(&file, |line| {
                 for skill in skill_names(line) {
                     push_skill_file(
                         &skill,

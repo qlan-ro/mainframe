@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState, type FC } from 'react';
 import { ActionBarPrimitive, ActionBarMorePrimitive, useAuiState } from '@assistant-ui/react';
 import { CheckIcon, CopyIcon, DownloadIcon, MoreHorizontalIcon, QuoteIcon } from 'lucide-react';
+import { downloadMarkdown } from './transcript-markdown';
 import { cn } from '@/lib/utils';
 import { quoteSource } from '../thread/quote-source';
 import { useQuoteMessage } from './use-quote-message';
@@ -55,15 +56,6 @@ const CopyButton: FC = () => {
     </ActionIconButton>
   );
 };
-
-function download(content: string): void {
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `message-${Date.now()}.md`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 40_000);
-}
 
 // ── More overflow ────────────────────────────────────────────────────────────
 
@@ -122,7 +114,7 @@ const MoreMenu: FC<{ user: boolean }> = ({ user }) => {
       >
         <QuoteItem />
         {!user && (
-          <ActionBarPrimitive.ExportMarkdown asChild onExport={() => download(replyText())}>
+          <ActionBarPrimitive.ExportMarkdown asChild onExport={() => downloadMarkdown(replyText(), 'message')}>
             <ActionBarMorePrimitive.Item data-testid="chat-message-export" className={ITEM_CLASS}>
               <DownloadIcon className="shrink-0" />
               Export as Markdown

@@ -41,3 +41,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 Agents and delegated tasks open in the workspace's Agent tab (W8), and their rows say what the tab says (T1c) and have its Stop while the work is live. A delegated task's request shows above the composer (G5).
 
 After a turn ends, only its last failed step can open by itself. It opens if no later step in that turn succeeded and no successful retry recovered it. The same rule applies to child failures in their own turn. Live turns keep failed rows closed by default. The header still counts failures, and manual open or close choices take precedence.
+
+Saved Claude agent rows use the recorded outcome and usage. When the transcript cannot settle the outcome, the receipt reads “Open to see status” and the turn does not auto-open a failed row. After the steps load, the receipt says “Status unavailable” if the outcome is still unknown.
+
+Opening a saved Claude agent shows a loading status while its newest steps arrive. Earlier steps load on upward scroll or through Earlier messages. A failed load says “Could not load history” when the outcome is unknown. An open row offers Retry after a failed load or when its saved pages are cleared.

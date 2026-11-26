@@ -9,6 +9,9 @@ use tracing::error;
 use super::super::facade_conn::FacadeConnection;
 use crate::ctx::AppCtx;
 
+#[path = "subagent_history.rs"]
+mod subagent_history;
+
 pub(super) fn start(
     request: JsonRpcRequest,
     ctx: &Arc<AppCtx>,
@@ -39,7 +42,12 @@ pub(super) fn start(
             Some(wait) => Some(wait.guard().await),
             None => None,
         };
-        if request.method == "_mainframe.dev/history_search" {
+        if request
+            .method
+            .starts_with("_mainframe.dev/subagent_history_")
+        {
+            subagent_history::handle(request, &ctx, &connection).await;
+        } else if request.method == "_mainframe.dev/history_search" {
             search(request, &connection, port.as_ref()).await;
         } else {
             page(request, &ctx, &connection, port).await;

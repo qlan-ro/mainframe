@@ -1,5 +1,6 @@
 //! History, context, and degraded-recovery delegations off the `ChatManager` facade.
 use super::*;
+use mainframe_adapter_api::AdapterError;
 use mainframe_types::sync::LockExt as _;
 
 pub use mainframe_types::resume::ResumeSnapshot;
@@ -180,6 +181,22 @@ impl ChatManager {
     /// Re-add the deleted worktree at its stored path from the stored branch (409 when branch gone).
     pub async fn recreate_worktree(&self, chat_id: &str) -> Result<(), DegradedRecoveryError> {
         crate::degraded_recovery::recreate_chat_worktree(&self.shared, chat_id).await
+    }
+
+    pub async fn get_subagent_history(
+        &self,
+        chat_id: &str,
+        agent_id: String,
+    ) -> Result<Vec<mainframe_types::display::DisplayMessage>, AdapterError> {
+        let session = self
+            .history_session(chat_id)
+            .ok_or(AdapterError::Unavailable("Chat history is unavailable"))?;
+        let raw = session.load_subagent_history(agent_id).await?;
+        let categories = self.shared.deps.get_tool_categories(chat_id);
+        Ok(self
+            .shared
+            .deps
+            .prepare_messages_for_client(chat_id, &raw, categories.as_ref()))
     }
 
     /// Build a stateless history-load session using the chat's worktree,

@@ -56,7 +56,11 @@ pub async fn handle_inbound(
         InboundFrame::Request(request)
             if matches!(
                 request.method.as_str(),
-                "_mainframe.dev/history_page" | "_mainframe.dev/history_search"
+                "_mainframe.dev/history_page"
+                    | "_mainframe.dev/history_search"
+                    | "_mainframe.dev/subagent_history_page"
+                    | "_mainframe.dev/subagent_history_search"
+                    | "_mainframe.dev/subagent_history_export"
             ) =>
         {
             history::start(request, ctx, connection, Arc::new(ports));

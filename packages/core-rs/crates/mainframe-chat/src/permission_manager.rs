@@ -186,7 +186,11 @@ impl PermissionManager {
                         }
                     }
                     MessageContent::Node(MessageContentNode::ToolUse {
-                        id, name, input, ..
+                        id,
+                        name,
+                        input,
+                        parent_tool_use_id: None,
+                        ..
                     }) => {
                         if !answered_tool_use_ids.contains(id) {
                             self.pending_permissions.insert(

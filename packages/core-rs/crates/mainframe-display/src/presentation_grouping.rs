@@ -65,6 +65,7 @@ pub(super) fn append(previous: &mut ChatMessage, next: &ChatMessage) {
             .entry(turn_group.into())
             .or_insert_with(|| group.clone());
     }
+    merge_subagent_facts(previous, next);
     let Some(mut next_sources) = sources(next.metadata.as_ref()) else {
         return;
     };
@@ -83,6 +84,25 @@ pub(super) fn append(previous: &mut ChatMessage, next: &ChatMessage) {
                 .into_iter()
                 .filter_map(|s| serde_json::to_value(s).ok()),
         );
+    }
+}
+
+fn merge_subagent_facts(previous: &mut ChatMessage, next: &ChatMessage) {
+    let Some(facts) = next
+        .metadata
+        .as_ref()
+        .and_then(|meta| meta.get("subagentFacts"))
+        .and_then(Value::as_object)
+    else {
+        return;
+    };
+    let target = previous
+        .metadata
+        .get_or_insert_default()
+        .entry("subagentFacts".into())
+        .or_insert_with(|| serde_json::json!({}));
+    if let Some(target) = target.as_object_mut() {
+        target.extend(facts.clone());
     }
 }
 

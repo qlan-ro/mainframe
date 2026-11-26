@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use mainframe_types::acp::extensions::{
     HistoryPageParams, HistoryPageResult, HistoryState, ReplayBatchParams,
+    SubagentHistoryPageParams,
 };
 use mainframe_types::display::DisplayMessage;
 
@@ -65,6 +66,38 @@ pub fn prepare(
     page.containers = history_window::encode_range(messages, None, page.start, before);
     prepare_content(messages, params, options, &mut page);
     page
+}
+
+pub fn subagent_page(
+    messages: &[DisplayMessage],
+    request: SubagentHistoryPageParams,
+    options: PageOptions,
+) -> HistoryPageResult {
+    let initial = request.before.is_none();
+    let params = HistoryPageParams {
+        session_id: request.session_id,
+        before: request.before.unwrap_or_default(),
+        containers: request.containers,
+        items: None,
+        until_item_id: request.until_item_id,
+    };
+    if !initial {
+        return prepare(messages, &params, options).result;
+    }
+    let end = messages.len();
+    let start = history_window::snap(
+        messages,
+        end.saturating_sub(history_window::page_size(params.containers)),
+    );
+    let mut page = PreparedPage {
+        result: HistoryPageResult::default(),
+        containers: history_window::encode_range(messages, None, start, end),
+        start,
+        len: end,
+        previews: HashSet::new(),
+    };
+    prepare_content(messages, &params, options, &mut page);
+    page.result
 }
 
 fn page_start(

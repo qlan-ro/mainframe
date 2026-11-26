@@ -33,6 +33,18 @@ pub struct DiscoveredFiles {
 }
 
 impl DiscoveredFiles {
+    pub(crate) fn parent_files(&self) -> impl Iterator<Item = &String> {
+        self.all_files
+            .iter()
+            .take(1)
+            .map(|_| &self.primary_path)
+            .chain(
+                self.all_files.iter().filter(|path| {
+                    *path != &self.primary_path && !self.subagent_files.contains(*path)
+                }),
+            )
+    }
+
     fn missing(primary_path: String) -> Self {
         Self {
             primary_path,
@@ -92,6 +104,11 @@ pub(crate) async fn load_history_in_dir_with_index(
         .map(|(messages, _)| messages)
 }
 
+#[path = "history_child.rs"]
+mod history_child;
+pub(crate) use history_child::load as load_child;
+#[path = "history_agent_facts.rs"]
+mod history_agent_facts;
 #[path = "history_worker.rs"]
 mod history_worker;
 pub(crate) use history_worker::load_discovered_history;

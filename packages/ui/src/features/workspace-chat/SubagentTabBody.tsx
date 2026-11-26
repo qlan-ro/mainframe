@@ -1,26 +1,16 @@
-/**
- * SubagentTabBody — a sub-agent in a workspace tab (W8): its title, kind and
- * status, Stop while it is live, the brief it was given, its steps as
- * transcript rows, and its result. Read-only: a sub-agent has no composer, and
- * its requests are answered above the parent's (G5).
- *
- * Everything is read from the parent chat's transcript, where the call and its
- * nested messages live. A call outside the loaded window loads the history that
- * holds it.
- */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { ThreadMessage } from '@assistant-ui/react';
+import { SubagentFind } from './SubagentFind';
+import { ProseBlock, TextBlock } from './SubagentTextBlocks';
+import { ConversationExportButton } from './ConversationExportButton';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
 import { Bot } from 'lucide-react';
-import Markdown from 'react-markdown';
-import remarkBreaks from 'remark-breaks';
-import remarkGfm from 'remark-gfm';
 import { TranscriptScopeProvider } from '@/features/chat/messages/turn/transcript-scope';
-import { markdownComponents } from '@/features/chat/parts/markdown-text';
-import { remarkAppLinks, urlTransform } from '@/features/chat/parts/markdown-url-transform';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
 import { useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '@/features/chat/runtime/use-native-thread-messages';
+import { HistoricalAgentSteps } from '@/features/chat/messages/turn/HistoricalAgentSteps';
+import { subagentFact } from '@/features/chat/view-model/subagent-facts';
 import { AgentSteps } from '@/features/chat/messages/turn/AgentSteps';
 import {
   AgentWorldProvider,
@@ -50,30 +40,23 @@ import { useHoldConversation } from './mounted-conversations';
 import { OwnFiles } from './OwnFiles';
 import { ownTasks, useChatTasks } from './use-chat-tasks';
 import { useKeepAttached } from './use-conversation-thread';
-
-const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
-
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-
-/** Pages history back until the call is loaded. The text to show when it is not there, or null. */
 function useLoadCall(
   controller: AcpChatController,
   state: ChatThreadState,
   messages: readonly ThreadMessage[],
   call: SubagentCall | null,
-  target: { toolCallId: string; messageId?: string },
+  target: { toolCallId: string; messageId?: string; nested: boolean },
 ): string | null {
   const [error, setError] = useState<string | null>(null);
   const { toolCallId, messageId } = target;
   const partial = controller.isHistoryContext(toolCallId);
   const ready = state.loadState?.type === 'ready';
   const hasMore = state.historyWindow?.hasMore ?? false;
+  const needed = !target.nested && ready && (call == null || partial);
+  const exhausted = !hasMore || (!partial && messages.some((message) => message.id === messageId));
   useEffect(() => {
-    if (!ready || (call != null && !partial)) return undefined;
-    if (!hasMore || (!partial && messages.some((message) => message.id === messageId))) {
-      setError('Not in this transcript');
-      return undefined;
-    }
+    if (!needed || exhausted) return undefined;
     let cancelled = false;
     void controller.loadEarlier(toolCallId).then(
       (found) => {
@@ -86,41 +69,10 @@ function useLoadCall(
     return () => {
       cancelled = true;
     };
-  }, [controller, partial, ready, hasMore, call, messages, messageId, toolCallId]);
-  return error;
+  }, [controller, needed, exhausted, messages, toolCallId]);
+  return needed && exhausted ? 'Not in this transcript' : error;
 }
 
-function Block({ label, testId, children }: { label: string; testId: string; children: React.ReactNode }) {
-  return (
-    <section data-testid={testId} className="mt-0.5 mb-1.5 min-w-0">
-      <h3 className="text-control font-medium text-(--mf-tr-secondary)">{label}</h3>
-      <div className="aui-md text-control text-(--mf-tr-secondary) break-words">{children}</div>
-    </section>
-  );
-}
-
-function ProseBlock({ label, testId, source }: { label: string; testId: string; source: string }) {
-  if (source.trim() === '') return null;
-  return (
-    <Block label={label} testId={testId}>
-      <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
-        {source}
-      </Markdown>
-    </Block>
-  );
-}
-
-/** Verbatim: neither Markdown nor HTML. */
-function TextBlock({ label, testId, source }: { label: string; testId: string; source: string }) {
-  if (source.trim() === '') return null;
-  return (
-    <Block label={label} testId={testId}>
-      <p className="whitespace-pre-wrap">{source}</p>
-    </Block>
-  );
-}
-
-/** Where the call stands: what its own row says of it, from the same evidence (T1c). */
 interface Place {
   pending: ReadonlySet<string>;
   partLive: boolean;
@@ -143,15 +95,32 @@ function usePlace(
   }, [call, turns, pending, world]);
 }
 
-function Steps({ call, work, result }: { call: SubagentCall; work: AgentWork; result: string }) {
+function Steps({
+  call,
+  work,
+  result,
+  chatId,
+  nativeAgentId,
+}: {
+  call: SubagentCall;
+  work: AgentWork;
+  result: string;
+  chatId: string;
+  nativeAgentId?: string | null;
+}) {
   const steps = call.part.messages ?? [];
-  if (steps.length === 0) return null;
+  const fact = subagentFact(call.part);
+  const historical = fact && work.outcome !== 'going';
+  if (!historical && steps.length === 0) return null;
+  const Content = historical ? HistoricalAgentSteps : AgentSteps;
   return (
-    <AgentSteps
+    <Content
+      chatId={chatId}
       bare
       messages={steps}
       messageId={call.messageId}
       toolCallId={call.part.toolCallId}
+      {...(historical ? { nativeAgentId } : {})}
       outcome={work.outcome}
       prompt={text((call.part.args as Record<string, unknown>)['prompt'])}
       result={result}
@@ -167,7 +136,6 @@ interface ParentScopeProps {
   children: ReactNode;
 }
 
-/** Everything in the tab is the parent's: no thread is bound here, so without this it would read the chat column's. */
 function ParentScope({ chatId, state, world, pending, children }: ParentScopeProps) {
   const scope = useMemo(
     () => ({ rootThreadId: chatId, chatId, ancestors: [], pendingToolIds: pending }),
@@ -195,19 +163,35 @@ export interface SubagentTabBodyProps {
   chatId: string;
   toolCallId: string;
   messageId?: string;
+  savedNestedCall?: ToolCallMessagePart;
   title: string;
-  /** In front in its pane. */
   active: boolean;
 }
 
-export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }: SubagentTabBodyProps) {
+export function SubagentTabBody({
+  chatId,
+  toolCallId,
+  messageId,
+  title,
+  active,
+  savedNestedCall,
+}: SubagentTabBodyProps) {
+  const root = useRef<HTMLDivElement>(null);
   const controller = useChatController(chatId, useDaemonPort());
   useKeepAttached(controller);
   useHoldConversation(chatId);
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
-  const call = useMemo(() => findSubagentCall(messages, toolCallId), [messages, toolCallId]);
-  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId });
+  const call = useMemo(
+    () =>
+      savedNestedCall
+        ? { part: savedNestedCall, messageId: messageId ?? toolCallId }
+        : findSubagentCall(messages, toolCallId),
+    [messages, toolCallId, messageId, savedNestedCall],
+  );
+  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId, nested: !!savedNestedCall });
+  const historical = call ? subagentFact(call.part) : undefined;
+  const nativeAgentId = savedNestedCall ? (historical?.nativeAgentId ?? null) : historical?.nativeAgentId;
   const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
   const runs = sessionRuns(state);
   const adapterId = state.chatConfig?.adapterId;
@@ -216,19 +200,22 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const tasks = ownTasks(listed, toolCallId);
   const agent = call && place && describeAgent({ call, state, tasks, partLive: place.partLive }, live);
   const shown = agent?.status;
-  // An answer is prose. An error, and the receipt of a call launched in the background, are shown as they came.
-  const ResultBlock = call != null && (isFailed(call) || isBackgroundLaunch(call)) ? TextBlock : ProseBlock;
+  const ResultBlock =
+    call && (historical?.status === 'failed' || isFailed(call) || isBackgroundLaunch(call)) ? TextBlock : ProseBlock;
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
-  const shownTitle = text(args['description']) || title;
+  const shownTitle = historical?.title || text(args['description']) || title;
   const task = agent && stoppableTask(tasks, live, adapterId);
   const { onStop, stopping } = useStop(
     shownTitle,
     task ? () => stopBackgroundTask(chatId, task.id) : undefined,
     backgroundStopKey(chatId, task),
   );
-
   return (
-    <div data-testid={`workspace-agent-${toolCallId}`} className="flex h-full min-h-0 flex-col text-foreground">
+    <div
+      ref={root}
+      data-testid={`workspace-agent-${toolCallId}`}
+      className="flex h-full min-h-0 flex-col text-foreground"
+    >
       <ConversationHeader
         testId={`workspace-agent-header-${toolCallId}`}
         glyph={<Bot aria-hidden />}
@@ -236,6 +223,24 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
         kind={kindLine(call)}
       >
         {shown != null && <AgentStatusLabel {...shown} testId={`workspace-agent-status-${toolCallId}`} />}
+        {nativeAgentId !== null && historical && place?.work.outcome !== 'going' && (
+          <>
+            <SubagentFind
+              controller={controller}
+              agentId={nativeAgentId ?? toolCallId}
+              toolCallId={toolCallId}
+              chatId={chatId}
+              root={root}
+              active={active}
+            />
+            <ConversationExportButton
+              label="Export sub-agent as Markdown"
+              testId="workspace-agent-export"
+              load={() => controller.subagentHistory.export(nativeAgentId ?? toolCallId)}
+              name="sub-agent"
+            />
+          </>
+        )}
         {onStop && (
           <StopButton
             title={shownTitle}
@@ -259,10 +264,15 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
         ) : (
           <ParentScope chatId={chatId} state={state} world={world} pending={place.pending}>
             <ProseBlock label="Brief" testId={`workspace-agent-brief-${toolCallId}`} source={text(args['prompt'])} />
-            <Steps call={call} work={place.work} result={agent?.result ?? ''} />
+            <Steps
+              chatId={chatId}
+              call={call}
+              work={place.work}
+              result={agent?.result ?? ''}
+              nativeAgentId={nativeAgentId}
+            />
             <ResultBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
             {agent?.reports.map(({ source, text: report }, i) => {
-              // A final answer is the agent's prose by its source; a summary is the CLI's.
               const ReportBlock = source === 'Final answer' ? ProseBlock : TextBlock;
               return (
                 <ReportBlock

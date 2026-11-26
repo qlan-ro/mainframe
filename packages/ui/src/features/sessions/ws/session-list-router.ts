@@ -1,3 +1,4 @@
+import { releaseSubagentHistory } from '@/features/chat/messages/turn/subagent-history-store';
 /**
  * SessionListRouter — maps daemon WS chat events to sessions-list actions.
  *
@@ -79,6 +80,7 @@ export class SessionListRouter {
         useHeldQueue.getState().clearChat(event.chatId);
         dropUnsentOf(event.chatId);
         disclosureStore.clearAutomaticChat(event.chatId);
+        releaseSubagentHistory(event.chatId);
         this.deps.onReload();
         return;
 
@@ -91,7 +93,10 @@ export class SessionListRouter {
         return;
 
       case 'chat.updated':
-        if (event.chat.status === 'archived') disclosureStore.clearAutomaticChat(event.chat.id);
+        if (event.chat.status === 'archived') {
+          disclosureStore.clearAutomaticChat(event.chat.id);
+          releaseSubagentHistory(event.chat.id);
+        }
         if (this.deps.onChatUpdated) {
           this.deps.onChatUpdated(event.chat);
         } else {

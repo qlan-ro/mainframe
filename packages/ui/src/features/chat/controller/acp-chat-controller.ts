@@ -1,3 +1,4 @@
+import { SubagentHistoryClient } from './subagent-history-client';
 import type { AppendMessage } from '@assistant-ui/react';
 import type { Chat, ControlResponse, PromptRemedy } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
@@ -131,6 +132,14 @@ export class AcpChatController {
     if (this.disposed || !this.activation.isActive || this.loader.getClient() !== client) return;
     await this.plane.reactivate(client);
   }
+  readonly subagentHistory = new SubagentHistoryClient(
+    async () => {
+      await this.load();
+      return this.loader.getClient();
+    },
+    () => this.daemonId,
+  );
+
   searchHistory(query: string) {
     return this.plane.history.search(query);
   }

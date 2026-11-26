@@ -1,3 +1,5 @@
+import type { ToolCallMessagePart } from '@assistant-ui/react';
+
 /**
  * store/run-pane.ts — the workspace surface's multi-pane model.
  *
@@ -38,6 +40,7 @@ export interface RunTab {
   role?: ChatTabRole;
   /** `agent` tabs only: the sub-agent's tool call, and the message it is in once that is known. */
   toolCallId?: string;
+  savedNestedCall?: ToolCallMessagePart;
   messageId?: string;
   /** Preview/permanent slot for file-backed tabs; absent on every other kind. */
   mode?: TabMode;

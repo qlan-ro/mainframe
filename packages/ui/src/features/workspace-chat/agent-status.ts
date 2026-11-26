@@ -7,6 +7,7 @@ import type { BackgroundTask } from '@qlan-ro/mainframe-types';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
 import { isErrorResult } from '@/features/chat/tools/shared';
 import type { MainframeMessageMeta } from '@/features/chat/view-model/message-meta';
+import { subagentFact } from '@/features/chat/view-model/subagent-facts';
 import type { AgentStatus } from './ConversationHeader';
 import { toolCallIdsOf, type SubagentCall } from './find-subagent-call';
 
@@ -36,6 +37,7 @@ export interface AgentCallFacts {
   readonly open: boolean;
   readonly failed: boolean;
   readonly cancelled: boolean;
+  readonly historical?: ReturnType<typeof subagentFact>;
 }
 
 export interface AgentEvidence {
@@ -107,13 +109,15 @@ function isPending({ part }: SubagentCall, pending: ReadonlySet<string>): boolea
 
 export function callFacts(call: SubagentCall, pending: ReadonlySet<string>): AgentCallFacts {
   const lifecycle = lifecycleOf(call) ?? '';
-  const failed = isFailed(call);
+  const historical = subagentFact(call.part);
+  const failed = historical ? historical.status === 'failed' : isFailed(call);
   const settled = failed || ['completed', 'failed', 'cancelled'].includes(lifecycle);
   return {
     pending: isPending(call, pending),
-    open: call.part.result === undefined && !settled,
+    open: historical === undefined && call.part.result === undefined && !settled,
     failed,
-    cancelled: lifecycle === 'cancelled',
+    cancelled: historical ? historical.status === 'stopped' : lifecycle === 'cancelled',
+    ...(historical && { historical }),
   };
 }
 
@@ -181,7 +185,7 @@ function finalAnswers({ part }: SubagentCall): AgentReport[] {
 /** `live`: the list is the daemon's latest over a connection that still stands. */
 export function describeAgent(facts: Facts, live: boolean): AgentPresentation {
   const { call, state, tasks, partLive } = facts;
-  const result = resultText(call);
+  const result = subagentFact(call.part)?.summary ?? resultText(call);
   const background = isBackgroundLaunch(call);
   const reports = result.trim() === '' || background ? [...taskSummaries(tasks), ...finalAnswers(call)] : [];
   return {

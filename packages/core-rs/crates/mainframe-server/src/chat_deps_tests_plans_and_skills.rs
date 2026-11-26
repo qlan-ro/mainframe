@@ -175,7 +175,7 @@ fn claude_scan_session(dir: &std::path::Path) -> Arc<dyn AdapterSession> {
 }
 
 #[tokio::test]
-async fn scan_discovers_appended_records_and_new_child_transcripts() {
+async fn scan_discovers_appended_primary_records_and_ignores_new_child_transcripts() {
     use std::io::Write;
     let dir = tempfile::tempdir().unwrap();
     let source = dir.path().join("session.jsonl");
@@ -205,6 +205,6 @@ async fn scan_discovers_appended_records_and_new_child_transcripts() {
     .unwrap();
     assert_eq!(
         session.scan_history_files(files).await.unwrap().plans,
-        ["/late.md", "/child.md"]
+        ["/late.md"]
     );
 }
