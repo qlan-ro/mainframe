@@ -8,7 +8,12 @@ import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
-import { replayQueuedMessage, resumeQueuedMessages } from '@/lib/api/chats';
+import {
+  cancelScheduledResend,
+  confirmQueuedMessage,
+  replayQueuedMessage,
+  resumeQueuedMessages,
+} from '@/lib/api/chats';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-error';
 import { visibleMessageText } from '../../markers/message-markers';
@@ -149,7 +154,7 @@ function useQueuedRows(): QueueRow[] {
   const queued = Object.values(extras?.queued ?? {})
     .filter((ref): ref is QueuedMessageRef => ref != null && ref.steered !== true)
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const uncertainHead = queued[0]?.delivery === 'unconfirmed';
+  const blockedHead = ['unconfirmed', 'resend_scheduled'].includes(queued[0]?.delivery ?? '');
   const resumeIndex = queued.findIndex((row) => row.pauseReason != null);
   return queued.map(({ messageId, content, attachmentIds, delivery, pauseReason, chatId }, index) => ({
     messageId,
@@ -158,37 +163,48 @@ function useQueuedRows(): QueueRow[] {
     note:
       delivery === 'unconfirmed'
         ? 'Uncertain'
-        : uncertainHead
-          ? 'Waiting on the message above'
-          : pauseReason
-            ? `Paused · ${pauseReason}`
-            : undefined,
+        : delivery === 'resend_scheduled'
+          ? 'Resend scheduled'
+          : blockedHead
+            ? 'Waiting on the message above'
+            : pauseReason
+              ? `Paused · ${pauseReason}`
+              : undefined,
     failure: delivery ? DELIVERY_FAILURE[delivery] : undefined,
     onMarkSent:
-      delivery === 'unconfirmed' ? () => void extras?.cancelQueued(messageId).catch(report('mark as sent')) : undefined,
-    action:
       delivery === 'unconfirmed' && extras
+        ? () => void confirmQueuedMessage(extras.port, chatId, messageId).catch(report('mark as sent'))
+        : undefined,
+    action:
+      delivery === 'resend_scheduled' && extras
         ? {
-            label: 'Send again',
-            testId: 'chat-queued-replay',
-            onClick: () => void replayQueuedMessage(extras.port, chatId, messageId).catch(report('send')),
+            label: 'Cancel resend',
+            testId: 'chat-queued-cancel-resend',
+            onClick: () => void cancelScheduledResend(extras.port, chatId, messageId).catch(report('cancel resend')),
           }
-        : !uncertainHead && delivery !== 'rejected' && pauseReason && extras && index === resumeIndex
+        : delivery === 'unconfirmed' && extras
           ? {
-              label: 'Resume',
-              testId: 'chat-queue-resume',
-              onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
+              label: 'Send again (may duplicate)',
+              testId: 'chat-queued-replay',
+              onClick: () => void replayQueuedMessage(extras.port, chatId, messageId).catch(report('send')),
             }
-          : delivery === 'rejected'
+          : !blockedHead && delivery !== 'rejected' && pauseReason && extras && index === resumeIndex
             ? {
-                label: 'Retry',
-                testId: 'chat-queued-retry',
-                icon: <RotateCcwIcon data-icon="inline-start" />,
-                onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
+                label: 'Resume',
+                testId: 'chat-queue-resume',
+                onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
               }
-            : undefined,
+            : delivery === 'rejected'
+              ? {
+                  label: 'Retry',
+                  testId: 'chat-queued-retry',
+                  icon: <RotateCcwIcon data-icon="inline-start" />,
+                  onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
+                }
+              : undefined,
     onEdit: delivery ? undefined : () => startEdit({ messageId, content }),
-    onRemove: () => void extras?.cancelQueued(messageId).catch(report('remove')),
+    onRemove:
+      delivery === 'resend_scheduled' ? undefined : () => void extras?.cancelQueued(messageId).catch(report('remove')),
   }));
 }
 
@@ -231,7 +247,7 @@ function useHeldRows(): QueueRow[] {
       action:
         index === 0 && !busy
           ? {
-              label: row.unconfirmed ? 'Send again' : 'Send now',
+              label: row.unconfirmed ? 'Send again (may duplicate)' : 'Send now',
               testId: 'chat-queued-send-now',
               onClick: () => {
                 void extras?.sendHeld(row.messageId).catch(report('send'));

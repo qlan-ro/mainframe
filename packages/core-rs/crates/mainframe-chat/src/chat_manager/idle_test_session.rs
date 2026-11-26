@@ -8,6 +8,8 @@ use mainframe_types::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 
+type WriteGuard = Box<dyn FnOnce() -> bool + Send>;
+
 pub(super) struct IdleTestSession {
     pub inner: crate::test_support::FakeSession,
     pub supported: bool,
@@ -23,6 +25,9 @@ pub(super) struct IdleTestSession {
     pub legacy: bool,
     pub send_failure: Mutex<Option<AdapterError>>,
     pub acknowledge_by_echo: bool,
+    pub capture_guard: bool,
+    pub write_guard: Mutex<Option<WriteGuard>>,
+    pub history: Mutex<Option<Result<Vec<ChatMessage>, AdapterError>>>,
     pub hold_send: AtomicBool,
     pub send_started: tokio::sync::Notify,
 }
@@ -47,6 +52,9 @@ impl IdleTestSession {
             legacy: false,
             send_failure: Mutex::new(None),
             acknowledge_by_echo: false,
+            capture_guard: false,
+            write_guard: Default::default(),
+            history: Default::default(),
             hold_send: AtomicBool::new(false),
             send_started: tokio::sync::Notify::new(),
         }
@@ -138,6 +146,12 @@ impl AdapterSession for IdleTestSession {
             failure.map_or(Ok(()), Err)
         })
     }
+    fn guard_queued_write(&self, _uuid: String, guard: WriteGuard) -> bool {
+        if self.capture_guard {
+            *self.write_guard.lock_recover() = Some(guard);
+        }
+        self.capture_guard
+    }
     fn acknowledges_queued_input_by_echo(&self) -> bool {
         self.acknowledge_by_echo
     }
@@ -184,7 +198,13 @@ impl AdapterSession for IdleTestSession {
         self.inner.get_context_files()
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        self.inner.load_history()
+        let history = self.history.lock_recover().take();
+        Box::pin(async {
+            match history {
+                Some(history) => history,
+                None => self.inner.load_history().await,
+            }
+        })
     }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         self.inner.extract_plan_files()

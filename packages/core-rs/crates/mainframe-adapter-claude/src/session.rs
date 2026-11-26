@@ -31,6 +31,8 @@ use crate::session_control::{ControlRequestChannel, SendAwaitingOpts, StdinTx};
 use crate::task_events::ClaudeTaskEvents;
 use crate::tuning::tuning_to_flag_settings;
 
+type QueuedWriteGuards = Arc<Mutex<HashMap<String, Box<dyn FnOnce() -> bool + Send>>>>;
+
 pub struct ClaudeSession {
     pub(crate) maintenance_ids: Mutex<std::collections::HashSet<String>>,
     pub(crate) maintenance: mainframe_adapter_api::compaction_state::CompactionState,
@@ -48,6 +50,7 @@ pub struct ClaudeSession {
     shared: Arc<SharedSurface>,
     pub(crate) state: Arc<Mutex<ClaudeSessionState>>,
     stdin_tx: Mutex<Option<StdinTx>>,
+    queued_write_guards: QueuedWriteGuards,
     weak_self: OnceLock<Weak<ClaudeSession>>,
     resolved_path: ResolvedPath,
     history_files: Mutex<Option<mainframe_adapter_api::CollectedHistoryFiles>>,
@@ -110,6 +113,7 @@ impl ClaudeSession {
                 presentation: Default::default(),
             })),
             stdin_tx: Mutex::new(None),
+            queued_write_guards: Default::default(),
             weak_self: OnceLock::new(),
             resolved_path,
             history_files: Mutex::default(),

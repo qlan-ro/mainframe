@@ -23,18 +23,45 @@ pub enum DeliveryState {
     #[default]
     Pending,
     Unconfirmed,
+    ResendScheduled,
     Rejected,
 }
 impl DeliveryState {
+    pub fn ready_to_dispatch(self) -> bool {
+        matches!(self, Self::Pending | Self::ResendScheduled)
+    }
+
     pub fn recovery_label(self) -> Option<String> {
         match self {
             Self::Pending => None,
             Self::Unconfirmed => Some("unconfirmed".into()),
+            Self::ResendScheduled => Some("resend_scheduled".into()),
             Self::Rejected => Some("rejected".into()),
         }
     }
 }
 impl QueuedInput {
+    pub fn matches_provider_uuid(&self, uuid: &str) -> bool {
+        self.uuid == uuid
+            || self
+                .message
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("queuePreviousUuids"))
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(uuid)))
+    }
+
+    pub fn matches_provider_message(&self, message: &ChatMessage) -> bool {
+        self.matches_provider_uuid(&message.id)
+            || message
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("providerInputUuid"))
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|uuid| self.matches_provider_uuid(uuid))
+    }
+
     pub fn queued_ref(&self, chat_id: &str) -> mainframe_types::chat::QueuedMessageRef {
         mainframe_types::chat::QueuedMessageRef {
             delivery: self.delivery.recovery_label(),

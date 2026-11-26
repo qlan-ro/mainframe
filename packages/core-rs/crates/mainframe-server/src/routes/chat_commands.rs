@@ -250,8 +250,32 @@ async fn queue_replay(
     }
 }
 
+async fn queue_recovery(
+    State(ctx): State<Arc<AppCtx>>,
+    Path((id, message_id, action)): Path<(String, String, String)>,
+) -> Response {
+    let manager = &ctx.chat.chat_manager;
+    let result = match action.as_str() {
+        "confirm" => manager.confirm_uncertain_input(&id, &message_id).await,
+        "cancel-resend" => manager.cancel_scheduled_resend(&id, &message_id).await,
+        _ => return axum::http::StatusCode::NOT_FOUND.into_response(),
+    };
+    match result {
+        Ok(()) => ok_empty(),
+        Err(err) => crate::respond::fail_internal(
+            format!("queue recovery failed chat_id={id}"),
+            &err,
+            err.to_string(),
+        ),
+    }
+}
+
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
+        .route(
+            "/api/chats/{id}/queue/{message_id}/{action}",
+            post(queue_recovery),
+        )
         .route("/api/chats/{id}/config", patch(update_config))
         .route("/api/chats/{id}/interrupt", post(interrupt))
         .route("/api/chats/{id}/resume", post(resume))

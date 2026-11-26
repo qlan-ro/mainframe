@@ -18,7 +18,14 @@ impl ChatSurface for StartedTurns {
 }
 
 async fn dispatch_without_echo() -> (Arc<ChatManager>, Arc<IdleTestSession>, String, String) {
+    dispatch_with_write_guard(false).await
+}
+
+async fn dispatch_with_write_guard(
+    capture_guard: bool,
+) -> (Arc<ChatManager>, Arc<IdleTestSession>, String, String) {
     let mut fake = IdleTestSession::new();
+    fake.capture_guard = capture_guard;
     fake.acknowledge_by_echo = true;
     let (manager, _, session) = fixture(fake).await;
     assert!(manager.shared.manager.set(Arc::downgrade(&manager)).is_ok());
@@ -106,6 +113,25 @@ async fn exit_exposes_uncertainty_and_resume_keeps_pause_until_head_is_removed()
 }
 
 #[tokio::test(start_paused = true)]
+async fn confirming_uncertain_head_keeps_sent_message_and_advances_queue() {
+    let (manager, session, first, _) = dispatch_without_echo().await;
+    time_out(&manager).await;
+    manager.confirm_uncertain_input("c", &first).await.unwrap();
+    {
+        let messages = manager.shared.messages.lock_recover();
+        let message = messages
+            .get("c")
+            .unwrap()
+            .iter()
+            .find(|m| m.id == first)
+            .unwrap();
+        assert!(message.metadata.as_ref().unwrap().get("queued").is_none());
+    }
+    finish_turn(&session, false);
+    assert_next(&session, "second").await;
+}
+
+#[tokio::test(start_paused = true)]
 async fn dismissing_uncertain_head_wakes_unpaused_queue_without_replaying() {
     let (manager, session, first, _) = dispatch_without_echo().await;
     time_out(&manager).await;
@@ -124,9 +150,8 @@ async fn replay_keeps_fifo_and_uses_a_new_echo_identity() {
     assert_next(&session, "first").await;
     sink.on_queued_processed(&uuid);
     let refs = manager.get_queued_for_chat("c");
-    assert_eq!(refs[0].message_id, first);
-    assert_ne!(refs[0].uuid, uuid);
-    assert_eq!(refs[1].content, "second");
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].content, "second");
 }
 
 #[tokio::test]
@@ -150,6 +175,62 @@ async fn late_echo_cancels_replay_that_has_not_been_dispatched() {
     assert_eq!(session.sent.lock_recover().len(), 1);
     finish_turn(&session, false);
     assert_next(&session, "second").await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn original_echo_cancels_resend_waiting_in_the_writer() {
+    let (manager, session, first, uuid) = dispatch_with_write_guard(true).await;
+    time_out(&manager).await;
+    manager.replay_uncertain_input("c", &first).await.unwrap();
+    finish_turn(&session, false);
+    assert_next(&session, "first").await;
+    let guard = session.write_guard.lock_recover().take().unwrap();
+    let sink = session.sink.lock_recover().as_ref().unwrap().clone();
+    sink.on_queued_processed(&uuid);
+    assert!(!guard());
+    assert_eq!(manager.get_queued_for_chat("c")[0].content, "second");
+}
+
+#[tokio::test(start_paused = true)]
+async fn scheduled_replay_expires_while_the_original_turn_is_still_working() {
+    let (manager, session, first, _) = dispatch_without_echo().await;
+    time_out(&manager).await;
+    manager.replay_uncertain_input("c", &first).await.unwrap();
+    assert_eq!(
+        manager.get_queued_for_chat("c")[0].delivery.as_deref(),
+        Some("resend_scheduled")
+    );
+    tokio::time::advance(Duration::from_secs(30)).await;
+    tokio::task::yield_now().await;
+    assert_eq!(
+        manager.get_queued_for_chat("c")[0].delivery.as_deref(),
+        Some("unconfirmed")
+    );
+    assert_eq!(session.sent.lock_recover().len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn history_confirms_original_before_resend() {
+    let (manager, session, first, uuid) = dispatch_without_echo().await;
+    time_out(&manager).await;
+    let mut original = manager.shared.deps.idle_queue_list("c").unwrap()[0]
+        .message
+        .clone();
+    original.id = uuid;
+    *session.history.lock_recover() = Some(Ok(vec![original]));
+    manager.replay_uncertain_input("c", &first).await.unwrap();
+    finish_turn(&session, false);
+    assert_next(&session, "second").await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn unreadable_history_allows_only_the_explicit_resend() {
+    let (manager, session, first, _) = dispatch_without_echo().await;
+    time_out(&manager).await;
+    *session.history.lock_recover() = Some(Err(AdapterError::Unavailable("history unreadable")));
+    manager.replay_uncertain_input("c", &first).await.unwrap();
+    finish_turn(&session, false);
+    assert_next(&session, "first").await;
 }
 
 #[tokio::test]

@@ -110,7 +110,7 @@ impl ChatManager {
                 .deps
                 .idle_queue_list(chat_id)?
                 .first()
-                .is_some_and(|input| input.delivery == DeliveryState::Pending)
+                .is_some_and(|input| input.delivery.ready_to_dispatch())
         {
             self.shared.schedule_maintenance_drain(chat_id);
         }
@@ -153,7 +153,7 @@ impl ChatManager {
             else {
                 return Ok(());
             };
-            if input.delivery != DeliveryState::Pending
+            if !input.delivery.ready_to_dispatch()
                 || self.shared.queue_pauses.contains_key(chat_id)
                 || self.shared.maintenance.active(chat_id)
             {
@@ -173,7 +173,10 @@ impl ChatManager {
             {
                 return Ok(());
             }
-            if !self.prepare_queue_replay(chat_id, &mut input)? {
+            if !self
+                .prepare_scheduled_delivery(chat_id, &mut input, session.as_ref())
+                .await?
+            {
                 continue;
             }
             self.deliver_maintenance_input(chat_id, &post, &session, input)
@@ -207,10 +210,18 @@ impl ChatManager {
     ) -> Result<(), SendError> {
         self.mark_turn_accepted(post, chat_id)?;
         input.set_delivery(DeliveryState::Unconfirmed);
-        self.shared.deps.idle_queue_put(chat_id, &input)?;
+        if !self
+            .shared
+            .deps
+            .idle_queue_replace(chat_id, &input.uuid, &input)?
+        {
+            return Ok(());
+        }
         self.record_message_context(post, chat_id, &input.content);
         let prior = post.lock_recover().chat.process_state.flatten();
-        self.set_working(post, &now_iso8601());
+        if !self.guard_resend_write(chat_id, post, session.as_ref(), &input) {
+            self.set_working(post, &now_iso8601());
+        }
         let held_queue = holds_turn_queue(session.adapter_id());
         if held_queue {
             self.shared
@@ -226,6 +237,7 @@ impl ChatManager {
         }
         let result = super::maintenance_queue_payload::dispatch(session, &input).await;
         if let Err(error) = result {
+            session.clear_queued_write_guard(&input.uuid);
             self.shared
                 .active_queue_echoes
                 .remove_if(chat_id, |_, uuid| uuid == &input.uuid);
@@ -253,7 +265,7 @@ impl ChatManager {
             .notify_chat_surface(self.shared.turn_started_event(chat_id));
         Ok(())
     }
-    fn confirm_queued_message(&self, chat_id: &str, id: &str, held_queue: bool) {
+    pub(super) fn confirm_queued_message(&self, chat_id: &str, id: &str, held_queue: bool) {
         let mut messages = self.shared.messages.lock_recover();
         if !held_queue {
             messages.strip_queued_and_move_to_end(chat_id, id);
@@ -267,6 +279,8 @@ impl ChatManager {
                 return false;
             };
             meta.remove("uuid");
+            meta.remove("queueDelivery");
+            meta.remove("queueReplay");
             meta.remove("queued").is_some()
         });
     }

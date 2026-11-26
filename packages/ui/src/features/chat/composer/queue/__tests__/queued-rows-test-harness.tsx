@@ -13,8 +13,15 @@ export const cancelQueued = vi.fn().mockResolvedValue(undefined);
 export const editQueued = vi.fn().mockResolvedValue(undefined);
 export const sendHeld = vi.fn().mockResolvedValue(undefined);
 const resumeQueuedMessages = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const cancelScheduledResend = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const confirmQueuedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const replayQueuedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-vi.mock('@/lib/api/chats', () => ({ replayQueuedMessage, resumeQueuedMessages }));
+vi.mock('@/lib/api/chats', () => ({
+  cancelScheduledResend,
+  confirmQueuedMessage,
+  replayQueuedMessage,
+  resumeQueuedMessages,
+}));
 vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtras: () => ({
     queued: mockChat.queued,
@@ -62,4 +69,11 @@ beforeEach(() => {
   mockChat.transcriptIds = [];
 });
 
-export { focusVisibleComposer, replayQueuedMessage, resumeQueuedMessages, toastError };
+export {
+  cancelScheduledResend,
+  confirmQueuedMessage,
+  focusVisibleComposer,
+  replayQueuedMessage,
+  resumeQueuedMessages,
+  toastError,
+};

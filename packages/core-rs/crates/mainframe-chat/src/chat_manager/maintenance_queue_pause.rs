@@ -64,7 +64,7 @@ impl ChatManager {
             .into_iter()
             .next();
         if let Some(head) = &head {
-            if head.delivery != mainframe_db::idle_compaction_queue::DeliveryState::Pending {
+            if !head.delivery.ready_to_dispatch() {
                 return Ok(());
             }
             if !self.session_is_spawned(chat_id) {

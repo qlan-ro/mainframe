@@ -15,7 +15,7 @@ pub use capture::{
 pub use managed::{ExitLatch, ManagedProcess, TailBuffer};
 pub use pumps::{
     PUMP_DRAIN_GRACE, PumpTasks, STDIN_QUEUE_CAPACITY, StdinWriteError, StdinWriter, finish_pumps,
-    spawn_chunk_pump, spawn_line_pump, spawn_stdin_writer,
+    spawn_chunk_pump, spawn_filtered_stdin_writer, spawn_line_pump, spawn_stdin_writer,
 };
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 pub use signal::child_exited_unreaped;

@@ -80,6 +80,22 @@ impl ChatShared {
         changed
     }
 
+    fn schedule_resend_timeout(&self, chat_id: &str, request_id: String) {
+        let Some(manager) = self.manager.get().cloned() else {
+            return;
+        };
+        let chat_id = chat_id.to_owned();
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+        tokio::spawn(async move {
+            tokio::time::sleep_until(deadline).await;
+            if let Some(manager) = manager.upgrade()
+                && let Err(error) = manager.expire_scheduled_replay(&chat_id, &request_id).await
+            {
+                tracing::warn!(chat_id, %error, "resend timeout failed");
+            }
+        });
+    }
+
     pub(super) fn schedule_queue_echo_timeout(&self, chat_id: &str, uuid: String) {
         let Some(manager) = self.manager.get().and_then(|m| m.upgrade()) else {
             return;
@@ -166,12 +182,13 @@ impl ChatManager {
         {
             return Ok(());
         }
-        input.set_delivery(DeliveryState::Pending);
+        input.set_delivery(DeliveryState::ResendScheduled);
+        let request_id = nanoid::nanoid!();
         input
             .message
             .metadata
             .get_or_insert_default()
-            .insert("queueReplay".into(), serde_json::Value::Bool(true));
+            .insert("queueReplay".into(), serde_json::json!(request_id));
         if !self
             .shared
             .deps
@@ -180,6 +197,7 @@ impl ChatManager {
             return Ok(());
         }
         self.refresh_replay_row(chat_id, &input.uuid, &input);
+        self.shared.schedule_resend_timeout(chat_id, request_id);
         drop(lock);
         self.resume_maintenance_queue(chat_id).await?;
         self.shared.schedule_maintenance_drain(chat_id);
@@ -196,6 +214,15 @@ impl ChatManager {
             return Ok(true);
         }
         let previous = std::mem::replace(&mut input.uuid, nanoid::nanoid!());
+        let mut previous_uuids = match metadata.remove("queuePreviousUuids") {
+            Some(serde_json::Value::Array(ids)) => ids,
+            _ => Vec::new(),
+        };
+        previous_uuids.push(serde_json::json!(previous));
+        metadata.insert(
+            "queuePreviousUuids".into(),
+            serde_json::Value::Array(previous_uuids),
+        );
         metadata.insert("uuid".into(), serde_json::json!(input.uuid));
         if !self
             .shared
@@ -208,7 +235,7 @@ impl ChatManager {
         Ok(true)
     }
 
-    fn refresh_replay_row(&self, chat_id: &str, previous: &str, input: &QueuedInput) {
+    pub(super) fn refresh_replay_row(&self, chat_id: &str, previous: &str, input: &QueuedInput) {
         self.shared
             .messages
             .lock_recover()

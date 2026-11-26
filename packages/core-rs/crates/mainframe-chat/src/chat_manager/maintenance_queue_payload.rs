@@ -60,6 +60,47 @@ impl ChatManager {
     }
 }
 
+impl ChatManager {
+    pub(super) fn guard_resend_write(
+        &self,
+        chat_id: &str,
+        post: &Arc<Mutex<ActiveChat>>,
+        session: &dyn AdapterSession,
+        input: &QueuedInput,
+    ) -> bool {
+        if !input
+            .message
+            .metadata
+            .as_ref()
+            .is_some_and(|m| m.contains_key("queuePreviousUuids"))
+        {
+            return false;
+        }
+        let manager = self.shared.manager.get().cloned();
+        let chat_id = chat_id.to_owned();
+        let uuid = input.uuid.clone();
+        let post = Arc::clone(post);
+        session.guard_queued_write(
+            input.uuid.clone(),
+            Box::new(move || {
+                let Some(manager) = manager.and_then(|weak| weak.upgrade()) else {
+                    return false;
+                };
+                if !manager
+                    .shared
+                    .deps
+                    .idle_queue_list(&chat_id)
+                    .is_ok_and(|inputs| inputs.into_iter().any(|input| input.uuid == uuid))
+                {
+                    return false;
+                }
+                manager.set_working(&post, &now_iso8601());
+                true
+            }),
+        )
+    }
+}
+
 fn metadata(uuid: &str, previews: &[serde_json::Value]) -> HashMap<String, serde_json::Value> {
     let mut metadata = HashMap::from([
         ("queued".to_owned(), serde_json::json!(true)),
