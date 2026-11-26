@@ -9,8 +9,9 @@
  * bottom, the queue (C10), the draft's attachments and quotes, the field, and
  * the toolbar: `+`, model, permissions, context ring, Stop / Send (C4).
  *
- * Mounted inside `ThreadPrimitive.ViewportFooter` so its height registers as
- * scroll inset — the last message never hides behind it.
+ * Mounted in the thread's sticky footer, a plain div. It is deliberately not
+ * `ThreadPrimitive.ViewportFooter`, whose height aui would count as "at bottom"
+ * for the scroll-to-bottom button (see `ChatThreadViewport`).
  */
 import { useCallback, useRef, useState, type RefObject, type KeyboardEvent } from 'react';
 import { ComposerPrimitive, useAuiState } from '@assistant-ui/react';
@@ -100,6 +101,7 @@ function ComposerInputField({
       data-mf-composer-input
       data-noring
       cancelOnEscape={false}
+      unstable_focusOnThreadSwitched={false}
       onKeyDown={handleKeyDown}
       placeholder={placeholder}
       rows={1}

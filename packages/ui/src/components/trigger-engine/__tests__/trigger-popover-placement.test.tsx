@@ -2,8 +2,8 @@
  * Red-phase placement contract (todo #304): the suggestion list must not be a
  * DOM descendant of the field it serves. The automations field renders it
  * inside `ThreadPrimitive`-free layout, but the composer mounts it inside the
- * thread's sticky `ViewportFooter`, whose measured height is the thread's
- * scroll inset — an in-flow popover there grows the composer and shoves
+ * thread's sticky footer, whose measured height sets the transcript's bottom
+ * fade inset — an in-flow popover there grows the composer and shoves
  * thread content upward on every open/close and every change in result
  * count. Asserting DOM containment (rather than a class name or `position`
  * value) pins the fix at the level that actually causes the bug: an overlay

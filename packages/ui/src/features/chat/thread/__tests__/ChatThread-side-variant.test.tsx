@@ -21,7 +21,6 @@ vi.mock('@assistant-ui/react', () => ({
   ThreadPrimitive: {
     Root: ({ children }: { children?: ReactNode }) => <div data-testid="tp-root">{children}</div>,
     Viewport: ({ children }: { children?: ReactNode }) => <div data-testid="tp-viewport">{children}</div>,
-    ViewportFooter: ({ children }: { children?: ReactNode }) => <div data-testid="tp-viewport-footer">{children}</div>,
     ScrollToBottom: ({ children }: { children?: ReactNode }) => <>{children}</>,
     Messages: () => <div data-testid="tp-messages" />,
   },
