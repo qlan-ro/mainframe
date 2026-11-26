@@ -20,6 +20,7 @@ pub(crate) use mainframe_display::parse_unified_diff::parse_unified_diff;
 /// gets the same id `make_message(id, ..)` would give it on history reload.
 pub(crate) fn vendor_metadata(id: &str) -> Option<MessageMetadata> {
     Some(MessageMetadata {
+        hidden_prompt_event: None,
         model: None,
         usage: None,
         vendor_id: Some(id.to_string()),

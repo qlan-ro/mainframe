@@ -12,12 +12,14 @@ pub(crate) struct ClaudePresentation {
     epoch: Option<Epoch>,
     closed: HashSet<String>,
     blocked: bool,
+    pending_prompt_event: Option<String>,
 }
 struct Epoch {
     session: String,
     context: TranscriptPresentation,
     sources: HashMap<String, Vec<String>>,
     terminal: Option<String>,
+    prompt_event: Option<String>,
 }
 
 pub(crate) fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
@@ -42,7 +44,9 @@ impl ClaudePresentation {
             return None;
         }
         if self.epoch.is_none() {
-            self.epoch = Some(Epoch::new(session, id, self.blocked));
+            let mut epoch = Epoch::new(session, id, self.blocked);
+            epoch.prompt_event = self.pending_prompt_event.take();
+            self.epoch = Some(epoch);
         }
         if self.epoch.as_ref().is_some_and(|e| e.session != session) {
             self.invalidate(sink);
@@ -65,8 +69,13 @@ impl ClaudePresentation {
         Some(epoch.context.clone())
     }
 
+    pub(crate) fn prompt_event(&self) -> Option<String> {
+        self.epoch.as_ref()?.prompt_event.clone()
+    }
+
     pub(crate) fn invalidate(&mut self, sink: &dyn SessionSink) {
         self.blocked = true;
+        self.pending_prompt_event = None;
         if let Some(epoch) = &mut self.epoch {
             epoch.context.state = PresentationState::Invalid;
             sink.on_presentation_update(PresentationUpdate {
@@ -77,6 +86,7 @@ impl ClaudePresentation {
     }
 
     pub(crate) fn finish(&mut self, event: &Value, sink: &dyn SessionSink) {
+        self.pending_prompt_event = None;
         let Some(mut epoch) = self.epoch.take() else {
             self.blocked = false;
             return;
@@ -125,6 +135,7 @@ impl Epoch {
             session: session.to_string(),
             sources: HashMap::new(),
             terminal: None,
+            prompt_event: None,
             context: TranscriptPresentation {
                 version: 1,
                 provider: "claude".to_string(),
@@ -165,6 +176,13 @@ pub(crate) fn observe_user(
         .iter()
         .any(|key| event.get(key).and_then(Value::as_bool) == Some(true));
     let mut state = session.state.lock_recover();
+    if !tool_only && !replay {
+        state.presentation.pending_prompt_event = if state.presentation.epoch.is_none() {
+            crate::history::history_prompt_groups::notification_summary(event)
+        } else {
+            None
+        };
+    }
     if replay || (!tool_only && state.presentation.epoch.is_some()) {
         state.presentation.invalidate(sink);
     }

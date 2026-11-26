@@ -63,6 +63,8 @@ export interface MainframeMessageMeta {
   readonly compaction?: CompactionMetadata;
   readonly actionable?: boolean;
   /** The divider a provider switch (or a fresh session) opens a segment with. */
+  readonly turnGroup?: string;
+  readonly hiddenPromptEvent?: string;
   readonly providerSwitch?: ProviderSwitchMarker;
   readonly skillLoaded?: { readonly skillName: string; readonly path: string; readonly content: string };
 }

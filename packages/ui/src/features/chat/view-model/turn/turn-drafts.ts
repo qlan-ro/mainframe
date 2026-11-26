@@ -16,6 +16,7 @@ export interface Draft {
   readonly messages: ThreadMessage[];
   readonly units: (readonly TurnUnit[])[];
   providerTurn?: string;
+  turnGroup?: string;
   /** Where its last message is, and the last one that says anything. */
   index: number;
   said: number;
@@ -65,13 +66,20 @@ export function draftTurns(messages: readonly ThreadMessage[], scope: TurnScope,
     }
     const units = cache.units(message, scope);
     const providerTurn = providerTurnOf(units);
-    if (open?.providerTurn && providerTurn && open.providerTurn !== providerTurn) open = undefined;
+    const group = messageMeta(message)?.turnGroup;
+    if (
+      open?.turnGroup && group
+        ? open.turnGroup !== group
+        : open?.providerTurn && providerTurn && open.providerTurn !== providerTurn
+    )
+      open = undefined;
     if (!open) {
       const key = JSON.stringify([scope.rootThreadId, scope.ancestors, message.id]);
       open = { key, messages: [], units: [], index, said: -1, error: -1 };
       drafts.push(open);
     }
     open.providerTurn ??= providerTurn;
+    open.turnGroup ??= group;
     open.messages.push(message);
     open.units.push(units);
     open.index = index;
