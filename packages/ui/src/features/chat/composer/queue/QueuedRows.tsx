@@ -172,7 +172,7 @@ function useQueuedRows(): QueueRow[] {
             label: 'Move to composer',
             testId: 'chat-queued-move',
             onClick: () => {
-              void moveQueuedToComposer(composer, extras.port, chatId, messageId, content, attachmentIds).catch(
+              void moveQueuedToComposer(composer, extras.port, chatId, content, attachmentIds).catch(
                 report('move to composer'),
               );
             },

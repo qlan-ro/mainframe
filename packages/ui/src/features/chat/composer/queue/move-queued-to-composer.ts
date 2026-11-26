@@ -1,27 +1,34 @@
 import { getAttachment } from '@/lib/api/attachments';
+import { mfToast } from '@/lib/toast';
 import { readLiveComposerState } from '../read-live-composer-state';
 import type { DraftComposer } from '../unsent/restore-draft';
-import { cancelQueuedMessage } from '@/lib/api/chats';
 import { focusVisibleComposer } from '../focus-composer';
 
 export async function moveQueuedToComposer(
   composer: DraftComposer,
   port: number,
   chatId: string,
-  messageId: string,
   content: string,
   attachmentIds?: readonly string[],
 ) {
-  const files = await Promise.all(
-    (attachmentIds ?? []).map(async (id) => {
-      const attachment = await getAttachment(port, chatId, id);
-      const bytes = Uint8Array.from(atob(attachment.data), (byte) => byte.charCodeAt(0));
-      return new File([bytes], attachment.name, { type: attachment.mediaType });
-    }),
-  );
-  if (!(await cancelQueuedMessage(port, chatId, messageId))) return;
   const draft = readLiveComposerState(composer).text;
   composer.setText([draft, content].filter((part) => part !== '').join('\n\n'));
-  await Promise.all(files.map((file) => composer.addAttachment(file)));
   focusVisibleComposer();
+
+  const failures = await Promise.all(
+    (attachmentIds ?? []).map(async (id) => {
+      let name = id;
+      try {
+        const attachment = await getAttachment(port, chatId, id);
+        name = attachment.name;
+        const bytes = Uint8Array.from(atob(attachment.data), (byte) => byte.charCodeAt(0));
+        await composer.addAttachment(new File([bytes], name, { type: attachment.mediaType }));
+        return undefined;
+      } catch {
+        return name;
+      }
+    }),
+  );
+  const names = failures.filter((name) => name !== undefined);
+  if (names.length) mfToast.error('Could not copy some queued attachments', { description: names.join(', ') });
 }

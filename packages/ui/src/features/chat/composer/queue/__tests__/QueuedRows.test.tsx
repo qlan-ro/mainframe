@@ -124,7 +124,7 @@ describe('QueuedRows — queued rows', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Move to composer' }));
     await Promise.resolve();
     await Promise.resolve();
-    expect(cancelQueuedMessage).toHaveBeenCalledExactlyOnceWith(4200, 'chat-1', 'm1');
+    expect(cancelQueuedMessage).not.toHaveBeenCalled();
     expect(composer.setText).toHaveBeenCalledWith('draft\n\ntext m1');
 
     mockChat.queued = queue(ref('m2', 2, { pauseReason: 'Session ended' }));
