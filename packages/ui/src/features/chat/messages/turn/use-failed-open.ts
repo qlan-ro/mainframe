@@ -2,6 +2,7 @@ import { createContext, useContext, useLayoutEffect, useSyncExternalStore } from
 import type { Turn, TurnModel } from '../../view-model/turn/types';
 import { disclosureStore } from './disclosure-store';
 import { turnState, type LiveChildren } from './live-children';
+import { useTranscriptScope } from './transcript-scope';
 import { useTurnSelector } from './turn-context';
 
 export const NestedFailedOpen = createContext<{ model: TurnModel; children: LiveChildren } | null>(null);
@@ -16,10 +17,9 @@ function lastFailure(turn: Turn, children: LiveChildren): string | undefined {
     })
   )
     return undefined;
-  for (const { id, succeeded } of turn.settledSteps) {
-    if (turn.retried.includes(id)) continue;
+  for (const { id, succeeded, failed } of turn.settledSteps) {
     const outcome = children.outcomes.get(id);
-    if (outcome === 'failed' || children.failed.has(id) || turn.failed.includes(id)) return id;
+    if (outcome === 'failed' || children.failed.has(id) || failed) return id;
     if (outcome === 'completed' || (outcome === undefined && succeeded)) return undefined;
   }
   return undefined;
@@ -31,6 +31,7 @@ export function useFailedOpen(
   rowKey: string,
   messageId: string,
 ): boolean {
+  const { rootThreadId, chatId } = useTranscriptScope();
   const nested = useContext(NestedFailedOpen);
   const outer = useTurnSelector((value) => {
     const turn = !nested && turnKey ? value.model.turns.get(turnKey) : undefined;
@@ -39,9 +40,11 @@ export function useFailedOpen(
   const innerKey = nested?.model.slices.get(messageId)?.turnKey;
   const inner = innerKey ? nested?.model.turns.get(innerKey) : undefined;
   const candidate = nested && inner && lastFailure(inner, nested.children) === toolCallId ? inner : outer;
-  const opened = useSyncExternalStore(disclosureStore.subscribe, () => disclosureStore.autoOpened(rowKey));
+  const opened = useSyncExternalStore(disclosureStore.subscribe, () =>
+    candidate ? disclosureStore.automaticDefault(rowKey, candidate.workKeys) : disclosureStore.autoOpened(rowKey),
+  );
   useLayoutEffect(() => {
-    if (candidate) disclosureStore.rememberAutomatic(rowKey, candidate.workKeys);
-  }, [candidate, rowKey]);
+    if (candidate) disclosureStore.rememberAutomatic(rowKey, candidate.workKeys, { rootThreadId, chatId });
+  }, [candidate, rowKey, rootThreadId, chatId]);
   return opened;
 }

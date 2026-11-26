@@ -2,7 +2,7 @@ import { buildChatExtras } from '../../../runtime/chat-extras';
 import { createChatThreadState } from '../../../controller/chat-thread-state';
 import type { AcpChatController } from '../../../controller/acp-chat-controller';
 import { listBackgroundTasks } from '@/lib/api/background-tasks';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { TurnFixture, assistant, bash, failed, tool, user } from './fixtures';
@@ -99,26 +99,31 @@ it('keeps Bash closed after a later async sub-agent completes', async () => {
   expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'false');
 });
 
-it('keeps its automatic choice when a later child failure arrives and an older page changes the turn key', () => {
+it('keeps its automatic choice when a later child failure arrives and an older page changes the turn key', async () => {
   useUiPrefs.setState({ finishedWork: 'open' });
   const props = { rootId: 'late-child-result' };
-  const tail = assistant([bash('bash', 'ls', failed), delegatedLaunch()]);
+  const tail = assistant([bash('bash', 'ls', failed)]);
+  const launch = assistant([delegatedLaunch()], 'launch');
   const view = render(<TurnFixture {...props} messages={[tail]} />);
   expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'true');
 
-  view.rerender(<TurnFixture {...props} messages={[tail, taskResult('failed')]} />);
+  view.rerender(<TurnFixture {...props} messages={[tail, launch, taskResult('failed')]} />);
   expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'true');
-  expect(screen.getByTestId('chat-tool-delegate-task-card-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await waitFor(() =>
+    expect(screen.getByTestId('chat-tool-delegate-task-card-toggle')).toHaveAttribute('aria-expanded', 'false'),
+  );
 
   view.unmount();
   render(
     <TurnFixture
       {...props}
-      messages={[user('Hi'), assistant([bash('older', 'pwd')], 'older'), { ...tail }, taskResult('failed')]}
+      messages={[user('Hi'), assistant([bash('older', 'pwd')], 'older'), { ...tail }, launch, taskResult('failed')]}
     />,
   );
   expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'true');
-  expect(screen.getByTestId('chat-tool-delegate-task-card-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await waitFor(() =>
+    expect(screen.getByTestId('chat-tool-delegate-task-card-toggle')).toHaveAttribute('aria-expanded', 'false'),
+  );
 });
 
 it.each([
@@ -135,4 +140,29 @@ it.each([
   fireEvent.click(row('inner-agent'));
   expect(row('earlier')).toHaveAttribute('aria-expanded', 'false');
   expect(row('later')).toHaveAttribute('aria-expanded', open);
+});
+
+it.each([
+  ['completed', 'false'],
+  ['cancelled', 'true'],
+])('waits for the unlisted delegation to settle as %s', async (status, expanded) => {
+  const messages = [user('Hi'), assistant([bash('bash', 'ls', failed), delegatedLaunch()])];
+  const rootId = `unlisted-${status}`;
+  const view = render(<TurnFixture rootId={rootId} messages={messages} />);
+  expect(row('bash')).toHaveAttribute('aria-expanded', 'false');
+  view.rerender(<TurnFixture rootId={rootId} messages={[...messages, taskResult(status)]} />);
+  const receipt = status === 'completed' ? 'completed' : 'stopped';
+  await waitFor(() => expect(screen.getByTestId('chat-tool-delegate-task-card')).toHaveTextContent(receipt));
+  expect(row('bash')).toHaveAttribute('aria-expanded', expanded);
+});
+
+it('keeps a launch acknowledgment in the retry count and opens the earlier failure after cancellation', () => {
+  const failedLaunch = { ...delegatedLaunch(), ...failed, toolCallId: 'failed-task' };
+  const messages = [user('Hi'), assistant([failedLaunch, delegatedLaunch()]), taskResult('cancelled')];
+  render(<TurnFixture rootId="retry-launch" messages={messages} />);
+  expect(header()).toHaveAccessibleName(/1 failed, retried/);
+  expect(within(screen.getAllByTestId('chat-tool-delegate-task-card')[0]!).getByRole('button')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
 });

@@ -84,7 +84,7 @@ export interface Turn extends PartEvidence {
   /** Failed steps a later step of the same tool and target made good. */
   readonly retried: readonly string[];
   /** Step outcomes in reverse call order, including children whose status can change. */
-  readonly settledSteps: readonly { id: string; succeeded: boolean }[];
+  readonly settledSteps: readonly { id: string; succeeded: boolean; failed: boolean }[];
   readonly children: readonly TurnChild[];
   /** Keys of the work units, for the fold's interaction guard. */
   readonly workKeys: readonly string[];

@@ -85,7 +85,7 @@ export function childState(child: TurnChild, sources: ChildSources, turnLive: bo
 }
 
 function childOutcome(child: TurnChild, sources: ChildSources, standing: ReturnType<typeof standingOf> | undefined) {
-  if (child.taskChatId) return listedStatus(child, sources);
+  if (child.taskChatId) return listedStatus(child, sources) ?? 'checking';
   if (!child.call && !child.workflowTaskId) return undefined;
   if (standing?.status === 'failed' || standing?.status === 'stopped') return standing.status;
   const workflow = child.workflowTaskId && sources.workflowRuns?.[child.workflowTaskId];

@@ -49,6 +49,7 @@ export function failedSteps(tools: readonly ToolPart[], pending: ReadonlySet<str
     if (succeeded || status === 'failed' || isChildWork(tool.toolName)) {
       settledSteps.push({
         id: tool.toolCallId,
+        failed: status === 'failed',
         succeeded:
           succeeded &&
           !['delegate', 'workflow'].includes(toolKind(tool.toolName)) &&

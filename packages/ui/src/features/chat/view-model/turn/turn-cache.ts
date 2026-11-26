@@ -36,7 +36,10 @@ function sameTurn(a: Turn, b: Turn): boolean {
     same(a.workKeys, b.workKeys) &&
     a.settledSteps.length === b.settledSteps.length &&
     a.settledSteps.every(
-      ({ id, succeeded }, i) => id === b.settledSteps[i]?.id && succeeded === b.settledSteps[i]?.succeeded,
+      ({ id, succeeded, failed }, i) =>
+        id === b.settledSteps[i]?.id &&
+        succeeded === b.settledSteps[i]?.succeeded &&
+        failed === b.settledSteps[i]?.failed,
     ) &&
     a.children.length === b.children.length &&
     a.children.every((child, i) => {

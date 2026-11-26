@@ -1,3 +1,5 @@
+import { TurnFixture } from '../../messages/turn/__tests__/fixtures';
+import { assistant, bash, failed, user } from '../../messages/turn/__tests__/fixtures';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,15 +10,21 @@ import type { TaskChatView } from '../use-task-chat';
 
 const view = vi.fn<() => TaskChatView>();
 vi.mock('../use-task-chat', () => ({ useTaskChat: () => view() }));
-vi.mock('../../messages/turn/AgentSteps', () => ({
-  AgentSteps: (props: { messages: readonly ThreadMessage[]; before?: ReactNode; after?: ReactNode }) => (
-    <>
-      {props.before}
-      <div data-testid="stub-steps">{props.messages.map((m) => m.id).join(',')}</div>
-      {props.after}
-    </>
-  ),
-}));
+vi.mock('../../messages/turn/AgentSteps', async (original) => {
+  const { AgentSteps } = await original<typeof import('../../messages/turn/AgentSteps')>();
+  return {
+    AgentSteps: (props: { messages: readonly ThreadMessage[]; before?: ReactNode; after?: ReactNode }) =>
+      props.messages.some((m) => m.content) ? (
+        <AgentSteps {...(props as React.ComponentProps<typeof AgentSteps>)} />
+      ) : (
+        <>
+          {props.before}
+          <div data-testid="stub-steps">{props.messages.map((m) => m.id).join(',')}</div>
+          {props.after}
+        </>
+      ),
+  };
+});
 
 vi.mock('@/features/workspace-chat/OwnFiles', () => ({
   OwnFiles: ({ chatId, children }: { chatId: string; children: ReactNode }) => (
@@ -39,17 +47,22 @@ function show(overrides: Partial<TaskChatView>, onOpen?: () => void) {
     world: { runs: false, tasks: null, live: true },
     ...overrides,
   });
-  render(
+  const content = (
     <TooltipProvider>
       <TaskChatSteps
         chatId="kid"
         taskId="task_kid"
         messageId="m-parent"
         toolCallId="tu-1"
-        outcome="going"
+        outcome="done"
         onOpen={onOpen}
       />
-    </TooltipProvider>,
+    </TooltipProvider>
+  );
+  render(
+    <TurnFixture rootId="delegated-fixture" messages={[]}>
+      {content}
+    </TurnFixture>,
   );
 }
 const messages = (...ids: string[]) => ids.map((id) => ({ id })) as unknown as ThreadMessage[];
@@ -100,4 +113,10 @@ describe('TaskChatSteps', () => {
     expect(screen.queryByTestId('chat-permission-gate')).toBeNull();
     expect(screen.queryByTestId('chat-tool-delegate-task-gate-task_kid')).toBeNull();
   });
+});
+
+it('opens the final failure in the delegated transcript', () => {
+  show({ messages: [user('Run checks'), assistant([bash('first', 'ls', failed), bash('last', 'pwd', failed)])] });
+  expect(screen.getByTestId('chat-row-first-toggle')).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getByTestId('chat-row-last-toggle')).toHaveAttribute('aria-expanded', 'true');
 });
