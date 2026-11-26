@@ -24,7 +24,7 @@ interface Call {
   result?: unknown;
   isError?: boolean;
   messages?: Partial<ThreadMessage>[];
-  providerMetadata?: { mainframe: { acpStatus: string } };
+  providerMetadata?: { mainframe: { acpStatus?: string; subagentFact?: { status: string } } };
 }
 
 const { controller, world } = vi.hoisted(() => ({
@@ -285,6 +285,22 @@ describe('status', () => {
     world.permissions = { req: { request: { toolUseId: 't-2' } } };
     await show({ args: ARGS, messages: [step('s-1', 't-1'), step('s-2', 't-2')] });
     expect(status()).toBe('needs you');
+  });
+
+  it('keeps live steps when a restored background agent needs permission', async () => {
+    world.tasks = [bg()];
+    const call = {
+      args: { ...ARGS, run_in_background: true },
+      result: RECEIPT,
+      providerMetadata: { mainframe: { subagentFact: { status: 'unknown' } } },
+      messages: [step('live-step', 'permission-tool')],
+    };
+    const view = await show(call);
+    expect(status()).toBe('running');
+    world.permissions = { req: { request: { toolUseId: 'permission-tool' } } };
+    await event(view);
+    expect(status()).toBe('needs you');
+    expect(screen.getByTestId('steps')).toHaveTextContent('live-step');
   });
 
   it.each([

@@ -123,7 +123,7 @@ function Steps({
   chatId: string;
 }) {
   const steps = call.part.messages ?? [];
-  const historical = subagentFact(call.part) && work.status !== 'running';
+  const historical = subagentFact(call.part) && work.outcome !== 'going';
   if (!historical && steps.length === 0) return null;
   const Content = historical ? HistoricalAgentSteps : AgentSteps;
   return (
