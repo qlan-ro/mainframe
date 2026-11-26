@@ -226,30 +226,6 @@ async fn queue_resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) ->
     }
 }
 
-async fn queue_replay(
-    State(ctx): State<Arc<AppCtx>>,
-    Path((id, message_id)): Path<(String, String)>,
-) -> Response {
-    match chat_exists(&ctx, &id).await {
-        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
-        Ok(true) => {}
-        Err(resp) => return resp.into_response(),
-    }
-    match ctx
-        .chat
-        .chat_manager
-        .replay_uncertain_input(&id, &message_id)
-        .await
-    {
-        Ok(()) => ok_empty(),
-        Err(err) => crate::respond::fail_internal(
-            format!("queue.replay failed chat_id={id}"),
-            &err,
-            err.to_string(),
-        ),
-    }
-}
-
 async fn queue_recovery(
     State(ctx): State<Arc<AppCtx>>,
     Path((id, message_id, action)): Path<(String, String, String)>,
@@ -257,7 +233,6 @@ async fn queue_recovery(
     let manager = &ctx.chat.chat_manager;
     let result = match action.as_str() {
         "confirm" => manager.confirm_uncertain_input(&id, &message_id).await,
-        "cancel-resend" => manager.cancel_scheduled_resend(&id, &message_id).await,
         _ => return axum::http::StatusCode::NOT_FOUND.into_response(),
     };
     match result {
@@ -283,7 +258,7 @@ pub fn router() -> Router<Arc<AppCtx>> {
         .route("/api/chats/{id}/trust-workspace", post(trust_workspace))
         .route(
             "/api/chats/{id}/queue/{messageId}",
-            patch(queue_edit).delete(queue_cancel).post(queue_replay),
+            patch(queue_edit).delete(queue_cancel),
         )
 }
 

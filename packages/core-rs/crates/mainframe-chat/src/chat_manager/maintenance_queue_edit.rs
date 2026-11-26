@@ -1,5 +1,5 @@
 use super::*;
-use mainframe_db::idle_compaction_queue::{DeliveryState, QueuedInput};
+use mainframe_db::idle_compaction_queue::DeliveryState;
 use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
@@ -50,8 +50,8 @@ impl ChatManager {
                     true
                 });
             self.update_queued_ref_text(&input.uuid, content);
-        } else {
-            self.dismiss_maintenance_input(chat_id, message_id, &input.uuid)?;
+        } else if !self.dismiss_maintenance_input(chat_id, message_id, &input.uuid)? {
+            return Ok(false);
         }
         self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
@@ -97,123 +97,21 @@ impl ChatManager {
         Ok(())
     }
 
-    pub async fn cancel_scheduled_resend(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-    ) -> Result<(), SendError> {
-        self.reset_scheduled_replay(chat_id, |input| input.message.id == message_id)
-            .await
-    }
-
-    pub(super) async fn expire_scheduled_replay(
-        &self,
-        chat_id: &str,
-        request_id: &str,
-    ) -> Result<(), SendError> {
-        self.reset_scheduled_replay(chat_id, |input| {
-            input
-                .message
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.get("queueReplay"))
-                .and_then(serde_json::Value::as_str)
-                == Some(request_id)
-        })
-        .await
-    }
-
-    async fn reset_scheduled_replay(
-        &self,
-        chat_id: &str,
-        matches_message: impl Fn(&QueuedInput) -> bool,
-    ) -> Result<(), SendError> {
-        let _lock = self
-            .handoff_locks
-            .acquire(&format!("maintenance:{chat_id}"))
-            .await;
-        let Some(mut input) =
-            self.shared
-                .deps
-                .idle_queue_list(chat_id)?
-                .into_iter()
-                .find(|input| {
-                    input.delivery == DeliveryState::ResendScheduled && matches_message(input)
-                })
-        else {
-            return Ok(());
-        };
-        input.set_delivery(DeliveryState::Unconfirmed);
-        input
-            .message
-            .metadata
-            .get_or_insert_default()
-            .remove("queueReplay");
-        let uuid = &input.uuid;
-        if self.shared.deps.idle_queue_replace(chat_id, uuid, &input)? {
-            self.refresh_replay_row(chat_id, uuid, &input);
-        }
-        Ok(())
-    }
-
-    pub(super) async fn prepare_scheduled_delivery(
-        &self,
-        chat_id: &str,
-        input: &mut QueuedInput,
-        session: &dyn AdapterSession,
-    ) -> Result<bool, SendError> {
-        if self.reconcile_queue_replay(chat_id, input, session).await? {
-            return Ok(false);
-        }
-        self.prepare_queue_replay(chat_id, input)
-    }
-
-    async fn reconcile_queue_replay(
-        &self,
-        chat_id: &str,
-        input: &QueuedInput,
-        session: &dyn AdapterSession,
-    ) -> Result<bool, SendError> {
-        if !input
-            .message
-            .metadata
-            .as_ref()
-            .is_some_and(|m| m.contains_key("queueReplay"))
-        {
-            return Ok(false);
-        }
-        let Ok(history) = session.load_history().await else {
-            return Ok(false);
-        };
-        if !history
-            .iter()
-            .any(|message| input.matches_provider_message(message))
-        {
-            return Ok(false);
-        }
-        if self.shared.deps.idle_queue_remove(chat_id, &input.uuid)? {
-            self.remove_queued_ref(chat_id, &input.uuid);
-            self.confirm_queued_message(chat_id, &input.message.id, true);
-            self.notify_queue_changed(chat_id);
-            self.event_handler.emit_display(chat_id);
-        }
-        Ok(true)
-    }
-
     fn dismiss_maintenance_input(
         &self,
         chat_id: &str,
         message_id: &str,
         uuid: &str,
-    ) -> Result<(), SendError> {
-        if self.shared.deps.idle_queue_remove(chat_id, uuid)? {
-            self.shared
-                .messages
-                .lock_recover()
-                .remove_by_id(chat_id, message_id);
-            self.remove_queued_ref(chat_id, uuid);
+    ) -> Result<bool, SendError> {
+        if !self.shared.deps.idle_queue_remove(chat_id, uuid)? {
+            return Ok(false);
         }
-        Ok(())
+        self.shared
+            .messages
+            .lock_recover()
+            .remove_by_id(chat_id, message_id);
+        self.remove_queued_ref(chat_id, uuid);
+        Ok(true)
     }
 }
 
@@ -221,12 +119,9 @@ fn edit_input(
     input: &mut mainframe_db::idle_compaction_queue::QueuedInput,
     content: &str,
 ) -> Result<(), SendError> {
-    if matches!(
-        input.delivery,
-        DeliveryState::Unconfirmed | DeliveryState::ResendScheduled
-    ) {
+    if matches!(input.delivery, DeliveryState::Unconfirmed) {
         return Err(AdapterError::Unavailable(
-            "Delivery is uncertain. Check provider history before dismissing this queued prompt.",
+            "Delivery is uncertain. Resolve this queued prompt before editing it.",
         )
         .into());
     }

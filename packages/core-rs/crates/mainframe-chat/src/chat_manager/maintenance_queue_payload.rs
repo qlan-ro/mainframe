@@ -61,21 +61,13 @@ impl ChatManager {
 }
 
 impl ChatManager {
-    pub(super) fn guard_resend_write(
+    pub(super) fn guard_queue_write(
         &self,
         chat_id: &str,
         post: &Arc<Mutex<ActiveChat>>,
         session: &dyn AdapterSession,
         input: &QueuedInput,
     ) -> bool {
-        if !input
-            .message
-            .metadata
-            .as_ref()
-            .is_some_and(|m| m.contains_key("queuePreviousUuids"))
-        {
-            return false;
-        }
         let manager = self.shared.manager.get().cloned();
         let chat_id = chat_id.to_owned();
         let uuid = input.uuid.clone();
@@ -86,16 +78,16 @@ impl ChatManager {
                 let Some(manager) = manager.and_then(|weak| weak.upgrade()) else {
                     return false;
                 };
-                if !manager
-                    .shared
-                    .deps
-                    .idle_queue_list(&chat_id)
-                    .is_ok_and(|inputs| {
-                        inputs.into_iter().any(|input| {
-                            input.uuid == uuid && input.delivery == DeliveryState::Unconfirmed
-                        })
-                    })
-                {
+                let Ok(inputs) = manager.shared.deps.idle_queue_list(&chat_id) else {
+                    return false;
+                };
+                let Some(input) = inputs.into_iter().find(|input| {
+                    input.uuid == uuid && input.delivery == DeliveryState::Unconfirmed
+                }) else {
+                    return false;
+                };
+                if manager.shared.queue_pauses.contains_key(&chat_id) {
+                    manager.retain_paused_write(&chat_id, input);
                     return false;
                 }
                 let Some(post) = post.upgrade() else {
@@ -105,6 +97,30 @@ impl ChatManager {
                 true
             }),
         )
+    }
+    fn retain_paused_write(&self, chat_id: &str, mut input: QueuedInput) {
+        let uuid = input.uuid.clone();
+        self.shared
+            .active_queue_echoes
+            .remove_if(chat_id, |_, expected| expected == &uuid);
+        input.set_delivery(DeliveryState::Pending);
+        if !self
+            .shared
+            .deps
+            .idle_queue_replace(chat_id, &uuid, &input)
+            .is_ok_and(|updated| updated)
+        {
+            self.shared.expose_uncertain_delivery(chat_id, Some(&uuid));
+        } else if let Some(row) = self
+            .shared
+            .queued_refs
+            .lock_recover()
+            .iter_mut()
+            .find(|row| row.uuid == uuid)
+        {
+            row.delivery = None;
+        }
+        self.notify_queue_changed(chat_id);
     }
 }
 

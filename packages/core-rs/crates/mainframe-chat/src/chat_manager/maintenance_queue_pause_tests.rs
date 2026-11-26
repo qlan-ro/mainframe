@@ -55,6 +55,33 @@ async fn waiting_drain_observes_stop_before_dispatch() {
 }
 
 #[tokio::test]
+async fn stop_wins_when_dispatch_waits_for_queue_control() {
+    let (manager, deps, session) = fixture(IdleTestSession::new()).await;
+    manager
+        .enqueue_maintenance_input("c", "held", None, None)
+        .await
+        .unwrap();
+    let lock = manager.handoff_locks.acquire("queue-control:c").await;
+    let mut stop = std::pin::pin!(manager.interrupt_chat("c"));
+    let mut drain = std::pin::pin!(manager.drain_maintenance_queue("c"));
+    std::future::poll_fn(|cx| {
+        assert!(stop.as_mut().poll(cx).is_pending());
+        assert!(drain.as_mut().poll(cx).is_pending());
+        std::task::Poll::Ready(())
+    })
+    .await;
+    drop(lock);
+    let (_, result) = tokio::join!(stop, drain);
+    result.unwrap();
+    assert!(session.sent.lock_recover().is_empty());
+    assert!(
+        deps.idle_queue_list("c").unwrap()[0]
+            .delivery
+            .ready_to_dispatch()
+    );
+}
+
+#[tokio::test]
 async fn resume_keeps_pause_for_a_rejected_head() {
     let (manager, _, session) = fixture(IdleTestSession::new()).await;
     let first = manager

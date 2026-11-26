@@ -140,20 +140,6 @@ async fn dismissing_uncertain_head_wakes_unpaused_queue_without_replaying() {
     assert_next(&session, "second").await;
 }
 
-#[tokio::test(start_paused = true)]
-async fn replay_keeps_fifo_and_uses_a_new_echo_identity() {
-    let (manager, session, first, uuid) = dispatch_without_echo().await;
-    time_out(&manager).await;
-    finish_turn(&session, false);
-    manager.replay_uncertain_input("c", &first).await.unwrap();
-    let sink = session.sink.lock_recover().as_ref().unwrap().clone();
-    assert_next(&session, "first").await;
-    sink.on_queued_processed(&uuid);
-    let refs = manager.get_queued_for_chat("c");
-    assert_eq!(refs.len(), 1);
-    assert_eq!(refs[0].content, "second");
-}
-
 #[tokio::test]
 async fn acknowledgement_after_result_can_continue_before_the_timeout() {
     let (manager, session, _, uuid) = dispatch_without_echo().await;
@@ -165,72 +151,17 @@ async fn acknowledgement_after_result_can_continue_before_the_timeout() {
     assert_next(&session, "second").await;
 }
 
-#[tokio::test(start_paused = true)]
-async fn late_echo_cancels_replay_that_has_not_been_dispatched() {
-    let (manager, session, first, uuid) = dispatch_without_echo().await;
-    time_out(&manager).await;
-    manager.replay_uncertain_input("c", &first).await.unwrap();
-    let sink = session.sink.lock_recover().as_ref().unwrap().clone();
-    sink.on_queued_processed(&uuid);
-    assert_eq!(session.sent.lock_recover().len(), 1);
-    finish_turn(&session, false);
-    assert_next(&session, "second").await;
-}
-
-#[tokio::test(start_paused = true)]
-async fn original_echo_cancels_resend_waiting_in_the_writer() {
-    let (manager, session, first, uuid) = dispatch_with_write_guard(true).await;
-    time_out(&manager).await;
-    manager.replay_uncertain_input("c", &first).await.unwrap();
-    finish_turn(&session, false);
-    assert_next(&session, "first").await;
+#[tokio::test]
+async fn stop_prevents_a_queued_line_waiting_in_the_writer() {
+    let (manager, session, _, _) = dispatch_with_write_guard(true).await;
+    manager.interrupt_chat("c").await;
     let guard = session.write_guard.lock_recover().take().unwrap();
-    let sink = session.sink.lock_recover().as_ref().unwrap().clone();
-    sink.on_queued_processed(&uuid);
     assert!(!guard());
-    assert_eq!(manager.get_queued_for_chat("c")[0].content, "second");
-}
-
-#[tokio::test(start_paused = true)]
-async fn scheduled_replay_expires_while_the_original_turn_is_still_working() {
-    let (manager, session, first, _) = dispatch_without_echo().await;
-    time_out(&manager).await;
-    manager.replay_uncertain_input("c", &first).await.unwrap();
+    assert!(manager.get_queued_for_chat("c")[0].delivery.is_none());
     assert_eq!(
-        manager.get_queued_for_chat("c")[0].delivery.as_deref(),
-        Some("resend_scheduled")
+        manager.get_queued_for_chat("c")[0].pause_reason.as_deref(),
+        Some("Stopped")
     );
-    tokio::time::advance(Duration::from_secs(30)).await;
-    tokio::task::yield_now().await;
-    assert_eq!(
-        manager.get_queued_for_chat("c")[0].delivery.as_deref(),
-        Some("unconfirmed")
-    );
-    assert_eq!(session.sent.lock_recover().len(), 1);
-}
-
-#[tokio::test(start_paused = true)]
-async fn history_confirms_original_before_resend() {
-    let (manager, session, first, uuid) = dispatch_without_echo().await;
-    time_out(&manager).await;
-    let mut original = manager.shared.deps.idle_queue_list("c").unwrap()[0]
-        .message
-        .clone();
-    original.id = uuid;
-    *session.history.lock_recover() = Some(Ok(vec![original]));
-    manager.replay_uncertain_input("c", &first).await.unwrap();
-    finish_turn(&session, false);
-    assert_next(&session, "second").await;
-}
-
-#[tokio::test(start_paused = true)]
-async fn unreadable_history_allows_only_the_explicit_resend() {
-    let (manager, session, first, _) = dispatch_without_echo().await;
-    time_out(&manager).await;
-    *session.history.lock_recover() = Some(Err(AdapterError::Unavailable("history unreadable")));
-    manager.replay_uncertain_input("c", &first).await.unwrap();
-    finish_turn(&session, false);
-    assert_next(&session, "first").await;
 }
 
 #[tokio::test]

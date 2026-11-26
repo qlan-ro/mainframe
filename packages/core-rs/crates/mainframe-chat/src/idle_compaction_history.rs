@@ -44,7 +44,7 @@ impl ChatShared {
         history: &mut Vec<ChatMessage>,
     ) -> Result<(), mainframe_adapter_api::AdapterError> {
         let mut restored_head = self.queued_for_chat(chat_id).is_empty();
-        for mut input in self.deps.idle_queue_list(chat_id).map_err(|_| {
+        for input in self.deps.idle_queue_list(chat_id).map_err(|_| {
             mainframe_adapter_api::AdapterError::Message("Queued history unavailable".into())
         })? {
             if history
@@ -60,22 +60,6 @@ impl ChatShared {
                     })?;
                 self.handle_queued_processed(chat_id, &input.uuid);
                 continue;
-            }
-            if input.delivery == mainframe_db::idle_compaction_queue::DeliveryState::ResendScheduled
-            {
-                input.set_delivery(mainframe_db::idle_compaction_queue::DeliveryState::Unconfirmed);
-                input
-                    .message
-                    .metadata
-                    .get_or_insert_default()
-                    .remove("queueReplay");
-                self.deps
-                    .idle_queue_replace(chat_id, &input.uuid, &input)
-                    .map_err(|_| {
-                        mainframe_adapter_api::AdapterError::Message(
-                            "Queued history unavailable".into(),
-                        )
-                    })?;
             }
             if restored_head
                 && input.delivery == mainframe_db::idle_compaction_queue::DeliveryState::Pending

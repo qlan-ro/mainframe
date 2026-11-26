@@ -3,8 +3,10 @@ import { render, screen } from '@testing-library/react';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
+export const composer = { getState: () => ({ text: 'draft' }), setText: vi.fn() };
 export const mockChat = { transcriptIds: [] as string[], queued: {} as Record<string, QueuedMessageRef> };
 vi.mock('@assistant-ui/react', () => ({
+  useAui: () => ({ composer }),
   useAuiState: (select: (s: { thread: { messages: { id: string }[] } }) => unknown) =>
     select({ thread: { messages: mockChat.transcriptIds.map((id) => ({ id })) } }),
 }));
@@ -13,13 +15,11 @@ export const cancelQueued = vi.fn().mockResolvedValue(undefined);
 export const editQueued = vi.fn().mockResolvedValue(undefined);
 export const sendHeld = vi.fn().mockResolvedValue(undefined);
 const resumeQueuedMessages = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-const cancelScheduledResend = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const confirmQueuedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-const replayQueuedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const cancelQueuedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 vi.mock('@/lib/api/chats', () => ({
-  cancelScheduledResend,
+  cancelQueuedMessage,
   confirmQueuedMessage,
-  replayQueuedMessage,
   resumeQueuedMessages,
 }));
 vi.mock('../../../runtime/chat-extras', () => ({
@@ -69,11 +69,4 @@ beforeEach(() => {
   mockChat.transcriptIds = [];
 });
 
-export {
-  cancelScheduledResend,
-  confirmQueuedMessage,
-  focusVisibleComposer,
-  replayQueuedMessage,
-  resumeQueuedMessages,
-  toastError,
-};
+export { cancelQueuedMessage, confirmQueuedMessage, focusVisibleComposer, resumeQueuedMessages, toastError };

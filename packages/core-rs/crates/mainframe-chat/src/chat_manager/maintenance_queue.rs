@@ -144,7 +144,7 @@ impl ChatManager {
                 .handoff_locks
                 .acquire(&format!("maintenance:{chat_id}"))
                 .await;
-            let Some(mut input) = self
+            let Some(input) = self
                 .shared
                 .deps
                 .idle_queue_list(chat_id)?
@@ -168,19 +168,18 @@ impl ChatManager {
                 continue;
             }
             let _send = self.lifecycle.begin_send(chat_id).await;
+            let queue_control = self
+                .handoff_locks
+                .acquire(&format!("queue-control:{chat_id}"))
+                .await;
             if self.shared.maintenance.active(chat_id)
                 || self.shared.queue_pauses.contains_key(chat_id)
             {
                 return Ok(());
             }
-            if !self
-                .prepare_scheduled_delivery(chat_id, &mut input, session.as_ref())
-                .await?
-            {
-                continue;
-            }
             self.deliver_maintenance_input(chat_id, &post, &session, input)
                 .await?;
+            drop(queue_control);
             if holds_turn_queue(session.adapter_id()) {
                 return Ok(());
             }
@@ -219,7 +218,7 @@ impl ChatManager {
         }
         self.record_message_context(post, chat_id, &input.content);
         let prior = post.lock_recover().chat.process_state.flatten();
-        if !self.guard_resend_write(chat_id, post, session.as_ref(), &input) {
+        if !self.guard_queue_write(chat_id, post, session.as_ref(), &input) {
             self.set_working(post, &now_iso8601());
         }
         let held_queue = holds_turn_queue(session.adapter_id());
@@ -280,7 +279,6 @@ impl ChatManager {
             };
             meta.remove("uuid");
             meta.remove("queueDelivery");
-            meta.remove("queueReplay");
             meta.remove("queued").is_some()
         });
     }

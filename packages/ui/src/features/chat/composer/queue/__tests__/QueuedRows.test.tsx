@@ -3,14 +3,14 @@ import { fireEvent, screen, within } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   cancelQueued,
+  cancelQueuedMessage,
+  composer,
   editQueued,
   mockChat,
   queue,
   ref,
   renderRows,
-  cancelScheduledResend,
   confirmQueuedMessage,
-  replayQueuedMessage,
   resumeQueuedMessages,
   rows,
   startEdit,
@@ -106,7 +106,7 @@ describe('QueuedRows — queued rows', () => {
     expect(editQueued).toHaveBeenCalledExactlyOnceWith('m1', 'text m1');
   });
 
-  it('shows recovery actions in place of Resume while the head is uncertain', () => {
+  it('shows recovery actions in place of Resume while the head is uncertain', async () => {
     mockChat.queued = queue(
       ref('m1', 1, { delivery: 'unconfirmed', pauseReason: 'Session ended' }),
       ref('m2', 2, { pauseReason: 'Session ended' }),
@@ -119,12 +119,13 @@ describe('QueuedRows — queued rows', () => {
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();
     const head = within(screen.getAllByRole('listitem')[0]!);
     expect(head.queryByTestId('chat-queued-edit')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Send again (may duplicate)' }));
-    expect(replayQueuedMessage).toHaveBeenCalledExactlyOnceWith(4200, 'chat-1', 'm1');
     fireEvent.click(screen.getByRole('button', { name: 'Mark as sent' }));
-    fireEvent.click(head.getByRole('button', { name: 'Remove queued message' }));
     expect(confirmQueuedMessage).toHaveBeenCalledExactlyOnceWith(4200, 'chat-1', 'm1');
-    expect(cancelQueued).toHaveBeenCalledExactlyOnceWith('m1');
+    fireEvent.click(screen.getByRole('button', { name: 'Move to composer' }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(cancelQueuedMessage).toHaveBeenCalledExactlyOnceWith(4200, 'chat-1', 'm1');
+    expect(composer.setText).toHaveBeenCalledWith('draft\n\ntext m1');
 
     mockChat.queued = queue(ref('m2', 2, { pauseReason: 'Session ended' }));
     view.rerender(
@@ -133,14 +134,5 @@ describe('QueuedRows — queued rows', () => {
       </TooltipProvider>,
     );
     expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
-  });
-  it('cancels a scheduled resend without dismissing the original', () => {
-    mockChat.queued = queue(ref('m1', 1, { delivery: 'resend_scheduled' }), ref('m2', 2));
-    renderRows();
-    expect(rows()[0]).toHaveTextContent('Resend scheduled');
-    expect(rows()[1]).toHaveTextContent('Waiting on the message above');
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel resend' }));
-    expect(cancelScheduledResend).toHaveBeenCalledExactlyOnceWith(4200, 'chat-1', 'm1');
-    expect(cancelQueued).not.toHaveBeenCalled();
   });
 });

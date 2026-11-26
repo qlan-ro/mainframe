@@ -93,12 +93,6 @@ export const resumeQueuedMessages = (port: number, chatId: string): Promise<void
 export const confirmQueuedMessage = (port: number, chatId: string, messageId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/queue/${encodeURIComponent(messageId)}/confirm`);
 
-export const cancelScheduledResend = (port: number, chatId: string, messageId: string): Promise<void> =>
-  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/queue/${encodeURIComponent(messageId)}/cancel-resend`);
-
-export const replayQueuedMessage = (port: number, chatId: string, messageId: string): Promise<void> =>
-  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/queue/${encodeURIComponent(messageId)}`);
-
 export const interruptChat = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/interrupt`);
 

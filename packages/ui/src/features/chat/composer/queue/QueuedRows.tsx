@@ -1,24 +1,20 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { CircleAlert, Loader2, RotateCcwIcon, XIcon } from 'lucide-react';
 import { PencilIcon } from '@/components/ui/glyphs';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
-import {
-  cancelScheduledResend,
-  confirmQueuedMessage,
-  replayQueuedMessage,
-  resumeQueuedMessages,
-} from '@/lib/api/chats';
+import { confirmQueuedMessage, resumeQueuedMessages } from '@/lib/api/chats';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-error';
 import { visibleMessageText } from '../../markers/message-markers';
 import { ComposerHint } from '../composer-card-context';
 import { useComposerEdit } from '../edit/composer-edit-context';
+import { moveQueuedToComposer } from './move-queued-to-composer';
 import { focusVisibleComposer } from '../focus-composer';
 import { CLAIM_MS, settled, useHeldQueue, type HeldMessage } from './held-queue-store';
 
@@ -45,7 +41,6 @@ const DELIVERY_FAILURE: Record<string, string> = {
 
 const DELIVERY_NOTE: Partial<Record<string, string>> = {
   unconfirmed: 'Uncertain',
-  resend_scheduled: 'Resend scheduled',
 };
 
 const report = (what: string) => (error: unknown) => {
@@ -153,10 +148,11 @@ function Row({ row }: { row: QueueRow }) {
 function useQueuedRows(): QueueRow[] {
   const extras = useChatExtras();
   const { startEdit } = useComposerEdit();
+  const { composer } = useAui();
   const queued = Object.values(extras?.queued ?? {})
     .filter((ref): ref is QueuedMessageRef => ref != null && ref.steered !== true)
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const blockedHead = ['unconfirmed', 'resend_scheduled'].includes(queued[0]?.delivery ?? '');
+  const blockedHead = queued[0]?.delivery === 'unconfirmed';
   const resumeIndex = queued.findIndex((row) => row.pauseReason != null);
   return queued.map(({ messageId, content, attachmentIds, delivery, pauseReason, chatId }, index) => ({
     messageId,
@@ -171,35 +167,33 @@ function useQueuedRows(): QueueRow[] {
         ? () => void confirmQueuedMessage(extras.port, chatId, messageId).catch(report('mark as sent'))
         : undefined,
     action:
-      delivery === 'resend_scheduled' && extras
+      delivery === 'unconfirmed' && extras
         ? {
-            label: 'Cancel resend',
-            testId: 'chat-queued-cancel-resend',
-            onClick: () => void cancelScheduledResend(extras.port, chatId, messageId).catch(report('cancel resend')),
+            label: 'Move to composer',
+            testId: 'chat-queued-move',
+            onClick: () => {
+              void moveQueuedToComposer(composer, extras.port, chatId, messageId, content, attachmentIds).catch(
+                report('move to composer'),
+              );
+            },
           }
-        : delivery === 'unconfirmed' && extras
+        : !blockedHead && delivery !== 'rejected' && pauseReason && extras && index === resumeIndex
           ? {
-              label: 'Send again (may duplicate)',
-              testId: 'chat-queued-replay',
-              onClick: () => void replayQueuedMessage(extras.port, chatId, messageId).catch(report('send')),
+              label: 'Resume',
+              testId: 'chat-queue-resume',
+              onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
             }
-          : !blockedHead && delivery !== 'rejected' && pauseReason && extras && index === resumeIndex
+          : delivery === 'rejected'
             ? {
-                label: 'Resume',
-                testId: 'chat-queue-resume',
-                onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
+                label: 'Retry',
+                testId: 'chat-queued-retry',
+                icon: <RotateCcwIcon data-icon="inline-start" />,
+                onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
               }
-            : delivery === 'rejected'
-              ? {
-                  label: 'Retry',
-                  testId: 'chat-queued-retry',
-                  icon: <RotateCcwIcon data-icon="inline-start" />,
-                  onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
-                }
-              : undefined,
+            : undefined,
     onEdit: delivery ? undefined : () => startEdit({ messageId, content }),
     onRemove:
-      delivery === 'resend_scheduled' ? undefined : () => void extras?.cancelQueued(messageId).catch(report('remove')),
+      delivery === 'unconfirmed' ? undefined : () => void extras?.cancelQueued(messageId).catch(report('remove')),
   }));
 }
 
