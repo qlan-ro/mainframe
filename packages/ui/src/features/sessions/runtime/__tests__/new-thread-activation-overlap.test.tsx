@@ -16,7 +16,7 @@
  * `useSessionListRouter` and `openNewThreadDraft`. The one controlled seam is
  * the library's thread attachment —
  * `RemoteThreadListHookInstanceManager.prototype.startThreadRuntime`
- * (`@assistant-ui/core@0.3.12`) — held open for a chosen thread id so the
+ * — held open for a chosen thread id so the
  * test can interleave a competing automatic switch inside the exact window
  * `_switchToThread` awaits before it is allowed to commit
  * (`src/react/runtimes/RemoteThreadListThreadListRuntimeCore.tsx`, see the
@@ -71,20 +71,21 @@ function fixture(remoteId: string, updatedAt: number): ThreadFixture {
 function installAttachmentGate() {
   const original = RemoteThreadListHookInstanceManager.prototype.startThreadRuntime;
   let shouldHold: (threadId: string) => boolean = () => false;
-  const releases = new Map<string, () => void>();
+  const releases = new Set<() => void>();
   const spy = vi
     .spyOn(RemoteThreadListHookInstanceManager.prototype, 'startThreadRuntime')
     .mockImplementation(function (this: RemoteThreadListHookInstanceManager, threadId: string) {
       const attached = original.call(this, threadId);
       if (!shouldHold(threadId)) return attached;
-      return new Promise<void>((resolve) => releases.set(threadId, resolve)).then(() => attached);
+      return new Promise<void>((resolve) => releases.add(resolve)).then(() => attached);
     });
   return {
     hold: (pred: (threadId: string) => boolean) => {
       shouldHold = pred;
     },
     releaseAll: () => {
-      for (const release of releases.values()) release();
+      shouldHold = () => false;
+      for (const release of releases) release();
       releases.clear();
     },
     restore: () => spy.mockRestore(),
@@ -198,11 +199,8 @@ describe('new-thread activation overlap — todo #375', () => {
     await flush();
 
     // Let New's held attachment settle, then let the bounded wait play out.
-    await act(async () => {
-      gate.releaseAll();
-      await new Promise((resolve) => setTimeout(resolve, 1100));
-      await openPromise;
-    });
+    await act(async () => gate.releaseAll());
+    await openPromise;
 
     expect(mfToastError).not.toHaveBeenCalled();
     const newDraftId = aui().threads.getState().mainThreadId!;

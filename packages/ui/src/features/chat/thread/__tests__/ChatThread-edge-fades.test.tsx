@@ -26,11 +26,6 @@ vi.mock('@assistant-ui/react', () => {
     ThreadPrimitive: {
       Root: ({ children, ...props }: DivProps) => <div {...props}>{children}</div>,
       Viewport: ({ children, ...props }: DivProps) => <div {...props}>{children}</div>,
-      ViewportFooter: ({ children, ...props }: DivProps) => (
-        <div data-testid="tp-viewport-footer" {...props}>
-          {children}
-        </div>
-      ),
       ScrollToBottom: ({ children }: { children: React.ReactElement<{ onClick?: () => void }> }) =>
         cloneElement(children, { onClick: testState.scrollToBottom }),
       Messages: () => <div data-testid="tp-messages" />,
@@ -95,7 +90,8 @@ beforeEach(() => {
     },
   );
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-    const h = this.getAttribute('data-testid') === 'tp-viewport-footer' ? footerHeight : 0;
+    const isFooterBand = this.firstElementChild?.getAttribute('data-testid') === 'chat-thread-footer';
+    const h = isFooterBand ? footerHeight : 0;
     return { height: h, width: 0, top: 0, left: 0, right: 0, bottom: h, x: 0, y: 0, toJSON: () => ({}) };
   });
 });

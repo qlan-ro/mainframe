@@ -35,7 +35,7 @@ import {
 describe('a transcript selection survives streaming and re-renders elsewhere (product bug repro)', () => {
   beforeEach(() => {
     vi.useFakeTimers({
-      toFake: ['Date', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+      toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
     });
   });
   afterEach(() => {

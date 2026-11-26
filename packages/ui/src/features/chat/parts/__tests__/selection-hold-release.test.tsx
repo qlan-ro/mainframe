@@ -24,7 +24,7 @@ import * as selectionHold from '../selection-hold';
 describe('hold/release (independent review item 2: the general growing-text guarantee)', () => {
   beforeEach(() => {
     vi.useFakeTimers({
-      toFake: ['Date', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+      toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
     });
   });
   afterEach(() => {

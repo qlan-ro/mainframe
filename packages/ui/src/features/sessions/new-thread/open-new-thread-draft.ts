@@ -11,6 +11,7 @@
  * (todo #375) — so `useSessionListRouter`'s automatic selections yield to
  * this switch instead of racing it and cancelling it out from under us.
  */
+import { isCreatePending } from '../runtime/new-thread-coordinator';
 import { beginNewThreadSwitch } from './new-thread-switch-pending';
 export interface OpenNewThreadDraftDeps {
   filterProjectIds: ReadonlySet<string>;
@@ -83,11 +84,14 @@ export async function openNewThreadDraft(args: OpenNewThreadDraftArgs, deps: Ope
   // trigger on the draft being initialized, todo #365) — keep the return
   // target recorded when the draft was first opened rather than overwriting
   // it with the draft itself, which would strand a discard on the draft.
-  if (preSwitch.newThreadId == null || preSwitch.newThreadId !== preSwitch.mainThreadId) {
+  const draftId =
+    preSwitch.newThreadId ??
+    (preSwitch.mainThreadId && isCreatePending(preSwitch.mainThreadId) ? preSwitch.mainThreadId : null);
+  if (draftId == null || draftId !== preSwitch.mainThreadId) {
     setReturnTarget(preSwitch.mainThreadId ?? null);
   }
 
-  resetNewThreadDraft(runtimeThreads.getState().newThreadId);
+  resetNewThreadDraft(runtimeThreads.getState().newThreadId ?? draftId);
   const releaseSwitchPending = beginNewThreadSwitch();
   let newThreadId: string | null;
   try {

@@ -13,9 +13,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@assistant-ui/react": "0.15.13",
-    "@assistant-ui/react-markdown": "0.14.10",
-    "@assistant-ui/store": "0.3.8",
+    "@assistant-ui/react": "0.15.38",
+    "@assistant-ui/react-markdown": "0.14.26",
+    "@assistant-ui/store": "0.3.25",
     "@codemirror/commands": "6.11.1",
     "@codemirror/lang-css": "6.3.1",
     "@codemirror/lang-html": "6.4.12",
@@ -80,7 +80,7 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
-    "@assistant-ui/core": "0.3.12",
+    "@assistant-ui/core": "0.3.38",
     "@babel/core": "^8.1.2",
     "@rolldown/plugin-babel": "^0.3.1",
     "@testing-library/jest-dom": "^8.0.0",

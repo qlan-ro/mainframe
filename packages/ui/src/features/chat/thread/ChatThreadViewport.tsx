@@ -47,8 +47,11 @@ function ThreadFooter({
   footerRef: RefCallback<HTMLDivElement>;
 }) {
   const directoryMissing = useDirectoryMissing();
+  // A plain div, not `ThreadPrimitive.ViewportFooter`: from 0.15.38 aui counts a
+  // registered footer's height as "at bottom", which hid the scroll-to-bottom
+  // button until the reader was a whole composer-height up.
   return (
-    <ThreadPrimitive.ViewportFooter
+    <div
       ref={footerRef}
       className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background"
     >
@@ -73,7 +76,7 @@ function ThreadFooter({
           {variant === 'main' && <BottomStrip fixed={readOnly || directoryMissing} />}
         </div>
       </div>
-    </ThreadPrimitive.ViewportFooter>
+    </div>
   );
 }
 function useViewportScroll(threadId: string | null) {
@@ -124,6 +127,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
         <ThreadPrimitive.Viewport
           ref={viewportRef}
           autoScroll={false}
+          scrollToBottomOnThreadSwitch={false}
           data-testid="chat-thread-viewport"
           data-mf-chat-thread
           data-mf-chat-id={chatId}
