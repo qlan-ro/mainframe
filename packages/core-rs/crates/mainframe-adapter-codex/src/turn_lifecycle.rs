@@ -173,12 +173,11 @@ fn emit_parent_turn_result(
         // adapter reports this turn's raw input usage as the context size. None (no
         // usage yet) keeps the stored size.
         context_tokens: state.last_usage.as_ref().map(|lu| lu.input_tokens),
-        subtype: if is_error {
-            Some("error_during_execution".to_string())
-        } else if turn.status == "completed" {
-            Some("success".to_owned())
-        } else {
-            None
+        subtype: match turn.status.as_str() {
+            "interrupted" => Some("interrupted".to_owned()),
+            "failed" => Some("error_during_execution".to_owned()),
+            "completed" => Some("success".to_owned()),
+            _ => None,
         },
         is_error: Some(is_error),
         result: turn.error.as_ref().map(explain_turn_error),

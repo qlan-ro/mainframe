@@ -50,6 +50,13 @@ impl ChatManager {
         attachment_ids: Option<&[String]>,
         command: Option<&CommandMeta>,
     ) -> Result<Option<String>, SendError> {
+        self.shared.restore_queue_pause(chat_id)?;
+        if self.shared.queue_pauses.contains_key(chat_id)
+            && !self.shared.maintenance.active(chat_id)
+            && !self.held_queue_turn_running(chat_id)
+        {
+            return Ok(None);
+        }
         let running = self.held_queue_turn_running(chat_id);
         if !running && !self.input_reserved(chat_id)? {
             return Ok(None);
@@ -111,6 +118,7 @@ impl ChatManager {
         let result = self.drain_maintenance_queue_owned(chat_id, wait).await;
         drop(owner);
         if result.is_ok()
+            && !self.shared.queue_pauses.contains_key(chat_id)
             && !self.shared.maintenance.active(chat_id)
             && self
                 .get_session_for_chat(chat_id)
@@ -165,7 +173,10 @@ impl ChatManager {
             else {
                 return Ok(());
             };
-            if input.delivery != DeliveryState::Pending || self.shared.maintenance.active(chat_id) {
+            if input.delivery != DeliveryState::Pending
+                || self.shared.queue_pauses.contains_key(chat_id)
+                || self.shared.maintenance.active(chat_id)
+            {
                 return Ok(());
             }
             let (post, session) = self.require_live_session(chat_id)?;
@@ -181,7 +192,9 @@ impl ChatManager {
                 continue;
             }
             let _send = self.lifecycle.begin_send(chat_id).await;
-            if self.shared.maintenance.active(chat_id) {
+            if self.shared.maintenance.active(chat_id)
+                || self.shared.queue_pauses.contains_key(chat_id)
+            {
                 return Ok(());
             }
             self.deliver_maintenance_input(chat_id, &post, &session, input)

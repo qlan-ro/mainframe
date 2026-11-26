@@ -23,6 +23,7 @@ impl SessionSinkImpl {
         let session_id = session_id.unwrap_or_default();
         debug!(session_id, chat_id = self.chat_id, "session exited");
 
+        self.pause_held_queue("Session ended");
         self.clear_exit_queue();
 
         self.shared.deps.tracker_end_all_running(&self.chat_id);
@@ -35,6 +36,7 @@ impl SessionSinkImpl {
     }
 
     pub(super) fn handle_error(&self, error: mainframe_adapter_api::AdapterError) {
+        self.pause_held_queue("Error: Provider error");
         if self.shared.maintenance.active(&self.chat_id) {
             warn!(chat_id = self.chat_id, "idle compaction session error");
             return;

@@ -107,6 +107,7 @@ async fn a_queued_message_blocks_offload_of_an_unspawned_backdated_cell() {
         .unwrap()
         .push(QueuedMessageRef {
             delivery: None,
+            pause_reason: None,
             message_id: "m1".to_string(),
             chat_id: "c1".to_string(),
             uuid: "u1".to_string(),

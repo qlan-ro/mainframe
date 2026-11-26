@@ -50,7 +50,11 @@ async fn a_retry_with_no_following_upsert_still_reaches_the_client() {
     });
 
     let frames = drain(&mut rx);
-    assert_eq!(frames.len(), 1, "only the attached chat is told: {frames:?}");
+    assert_eq!(
+        frames.len(),
+        1,
+        "only the attached chat is told: {frames:?}"
+    );
     assert_eq!(frames[0]["method"], json!("_mainframe.dev/retry_status"));
     assert_eq!(
         frames[0]["params"],
@@ -70,6 +74,7 @@ async fn queue_changes_notify_attached_connections_with_the_full_snapshot() {
         chat_id: "chat-1".to_string(),
         refs: vec![mainframe_types::chat::QueuedMessageRef {
             delivery: None,
+            pause_reason: None,
             message_id: "m1".to_string(),
             chat_id: "chat-1".to_string(),
             uuid: "u1".to_string(),

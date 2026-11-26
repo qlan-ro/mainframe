@@ -151,13 +151,21 @@ impl SessionSinkImpl {
         let was_interrupted = self
             .permissions
             .lock_recover()
-            .clear_interrupted(&self.chat_id);
+            .clear_interrupted(&self.chat_id)
+            || data.subtype.as_deref() == Some("interrupted");
         self.permissions.lock_recover().clear(&self.chat_id);
 
         let is_error = data.subtype.as_deref() == Some("error_during_execution")
             && data.is_error != Some(false);
         if was_interrupted || is_error {
             self.finish_tool_timing();
+        }
+        if was_interrupted || is_error || data.is_error == Some(true) {
+            self.pause_held_queue(if was_interrupted {
+                "Interrupted"
+            } else {
+                "Error: Turn failed"
+            });
         }
         let reason = if was_interrupted {
             ChatUpdatedReason::Interrupted

@@ -1,10 +1,5 @@
 'use client';
 
-/**
- * The queue, as rows at the top of the card (C10). Rows the agent still holds
- * send when it finishes; rows a Stop took back wait for the user, the first
- * one saying so. Only a stop turns a row failed, never a normal drain.
- */
 import { useEffect, useState, type ReactNode } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { CircleAlert, Loader2, RotateCcwIcon, XIcon } from 'lucide-react';
@@ -13,6 +8,7 @@ import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
+import { resumeQueuedMessages } from '@/lib/api/chats';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-error';
 import { visibleMessageText } from '../../markers/message-markers';
@@ -100,7 +96,7 @@ function Row({ row }: { row: QueueRow }) {
       {row.failure && <CircleAlert className="size-4 shrink-0 text-fail" aria-hidden />}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 gap-2">
-          {!row.failure && (
+          {(!row.failure || row.note) && (
             <span
               role={row.sending ? 'status' : undefined}
               className="shrink-0 self-center text-caption/[1.45] font-semibold text-muted-foreground"
@@ -147,20 +143,28 @@ function useQueuedRows(): QueueRow[] {
   const queued = Object.values(extras?.queued ?? {})
     .filter((ref): ref is QueuedMessageRef => ref != null && ref.steered !== true)
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  return queued.map(({ messageId, content, attachmentIds, delivery }) => ({
+  const resumeIndex = queued.findIndex((row) => row.pauseReason != null);
+  return queued.map(({ messageId, content, attachmentIds, delivery, pauseReason, chatId }, index) => ({
     messageId,
     content,
     attachments: attachmentIds?.length ?? 0,
+    note: pauseReason ? `Paused · ${pauseReason}` : undefined,
     failure: delivery ? DELIVERY_FAILURE[delivery] : undefined,
     action:
-      delivery === 'rejected'
+      pauseReason && extras && index === resumeIndex
         ? {
-            label: 'Retry',
-            testId: 'chat-queued-retry',
-            icon: <RotateCcwIcon data-icon="inline-start" />,
-            onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
+            label: 'Resume',
+            testId: 'chat-queue-resume',
+            onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
           }
-        : undefined,
+        : delivery === 'rejected'
+          ? {
+              label: 'Retry',
+              testId: 'chat-queued-retry',
+              icon: <RotateCcwIcon data-icon="inline-start" />,
+              onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
+            }
+          : undefined,
     onEdit: delivery ? undefined : () => startEdit({ messageId, content }),
     onRemove: () => void extras?.cancelQueued(messageId).catch(report('remove')),
   }));

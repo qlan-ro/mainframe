@@ -18,9 +18,18 @@ vi.mock('@assistant-ui/react', () => ({
 const cancelQueued = vi.fn().mockResolvedValue(undefined);
 const editQueued = vi.fn().mockResolvedValue(undefined);
 const sendHeld = vi.fn().mockResolvedValue(undefined);
+const resumeQueuedMessages = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/lib/api/chats', () => ({ resumeQueuedMessages }));
 let mockQueued: Record<string, QueuedMessageRef> = {};
 vi.mock('../../../runtime/chat-extras', () => ({
-  useChatExtras: () => ({ queued: mockQueued, state: { chatId: 'chat-1' }, cancelQueued, editQueued, sendHeld }),
+  useChatExtras: () => ({
+    queued: mockQueued,
+    port: 4200,
+    state: { chatId: 'chat-1' },
+    cancelQueued,
+    editQueued,
+    sendHeld,
+  }),
 }));
 
 const startEdit = vi.fn();
@@ -74,6 +83,17 @@ describe('QueuedRows — queued rows', () => {
     expect(rows().map((row) => row.dataset.queuedId)).toEqual(['m1', 'm2']);
     expect(rows()[0]).toHaveTextContent('Queuedtext m1');
     expect(screen.getByRole('list', { name: 'Queued messages' })).toBeInTheDocument();
+  });
+
+  it('shows the pause reason and one Resume action alongside edit and remove', () => {
+    mockQueued = queue(ref('m1', 1, { pauseReason: 'Stopped' }), ref('m2', 2, { pauseReason: 'Stopped' }));
+    renderRows();
+
+    expect(screen.getAllByText('Paused · Stopped')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Edit queued message' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Remove queued message' })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    expect(resumeQueuedMessages).toHaveBeenCalledExactlyOnceWith(4200, 'chat-1');
   });
 
   it('shows the attachment count after the text', () => {

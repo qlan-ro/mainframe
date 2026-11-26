@@ -256,6 +256,8 @@ pub enum MessageContentNode {
 pub struct QueuedMessageRef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivery: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pause_reason: Option<String>,
     /// The display message ID (from `MessageCache`).
     pub message_id: String,
     pub chat_id: String,

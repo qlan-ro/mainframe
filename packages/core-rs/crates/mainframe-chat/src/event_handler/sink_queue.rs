@@ -1,6 +1,18 @@
 use super::*;
 
 impl SessionSinkImpl {
+    pub(super) fn pause_held_queue(&self, reason: &str) {
+        if self.holds_turn_queue()
+            && !self.shared.queued_for_chat(&self.chat_id).is_empty()
+            && self.shared.pause_maintenance_queue(&self.chat_id, reason)
+        {
+            self.notify_surface(ChatSurfaceEvent::QueueChanged {
+                chat_id: self.chat_id.clone(),
+                refs: self.shared.queued_for_chat(&self.chat_id),
+            });
+        }
+    }
+
     pub(super) fn handle_queued_processed(&self, uuid: &str) {
         let steered = self
             .shared

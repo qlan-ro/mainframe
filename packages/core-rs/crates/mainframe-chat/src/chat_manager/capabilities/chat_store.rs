@@ -13,6 +13,13 @@ pub trait ChatStore: Send + Sync {
         Ok(Vec::new())
     }
 
+    fn idle_queue_pause_reason(&self, _chat_id: &str) -> Result<Option<String>, SeamError> {
+        Ok(None)
+    }
+    fn idle_queue_set_pause(&self, _chat_id: &str, _reason: Option<&str>) -> Result<(), SeamError> {
+        Ok(())
+    }
+
     fn idle_queue_put(
         &self,
         _chat_id: &str,

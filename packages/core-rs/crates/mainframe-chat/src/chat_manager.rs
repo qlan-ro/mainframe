@@ -72,6 +72,7 @@ mod lifecycle_api;
 mod maintenance_delivery_tests;
 mod maintenance_queue;
 mod maintenance_queue_edit;
+mod maintenance_queue_pause;
 mod maintenance_queue_payload;
 mod maintenance_queue_recovery;
 pub(crate) mod notifications;

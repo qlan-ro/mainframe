@@ -30,6 +30,27 @@ impl ChatStore for DaemonChatDeps {
             .map_err(SeamError::new)
     }
 
+    fn idle_queue_pause_reason(&self, chat_id: &str) -> Result<Option<String>, SeamError> {
+        let chat_id = chat_id.to_owned();
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction_queue::pause_reason(d.connection(), &chat_id)
+            })
+            .map_err(SeamError::new)
+    }
+    fn idle_queue_set_pause(&self, chat_id: &str, reason: Option<&str>) -> Result<(), SeamError> {
+        let (chat_id, reason) = (chat_id.to_owned(), reason.map(str::to_owned));
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction_queue::set_pause(
+                    d.connection(),
+                    &chat_id,
+                    reason.as_deref(),
+                )
+            })
+            .map_err(SeamError::new)
+    }
+
     fn idle_queue_put(
         &self,
         chat_id: &str,

@@ -64,6 +64,7 @@ impl ChatManager {
     ) {
         let r = QueuedMessageRef {
             delivery: None,
+            pause_reason: None,
             message_id: message.id.clone(),
             chat_id: chat_id.to_string(),
             uuid: uuid.clone(),

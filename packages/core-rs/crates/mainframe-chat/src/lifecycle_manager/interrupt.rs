@@ -13,6 +13,8 @@ impl ChatLifecycleManager {
             guard.session.clone()
         };
 
+        self.pause_interrupted_queue(chat_id, session.as_deref());
+
         let maintenance = self.shared.maintenance.active(chat_id)
             || session.as_ref().is_some_and(|s| !s.ready_for_input())
                 && cell.lock_recover().chat.process_state != Some(Some(ProcessState::Working));
@@ -48,6 +50,21 @@ impl ChatLifecycleManager {
             && let Err(err) = session.interrupt().await
         {
             warn!(error = ?err, chat_id, "interrupt failed");
+        }
+    }
+    fn pause_interrupted_queue(
+        &self,
+        chat_id: &str,
+        session: Option<&dyn mainframe_adapter_api::AdapterSession>,
+    ) {
+        if session.is_some_and(|s| crate::chat_manager::shared::holds_turn_queue(s.adapter_id()))
+            && self.shared.pause_maintenance_queue(chat_id, "Interrupted")
+        {
+            self.event_handler
+                .notify_chat_surface(ChatSurfaceEvent::QueueChanged {
+                    chat_id: chat_id.to_owned(),
+                    refs: self.shared.queued_for_chat(chat_id),
+                });
         }
     }
 }

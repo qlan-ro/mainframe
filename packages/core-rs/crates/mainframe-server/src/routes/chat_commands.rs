@@ -210,11 +210,28 @@ async fn queue_cancel(
     }
 }
 
+async fn queue_resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
+    match chat_exists(&ctx, &id).await {
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
+        Ok(true) => {}
+        Err(resp) => return resp.into_response(),
+    }
+    match ctx.chat.chat_manager.resume_maintenance_queue(&id).await {
+        Ok(()) => ok_empty(),
+        Err(err) => crate::respond::fail_internal(
+            format!("queue.resume failed chat_id={id}"),
+            &err,
+            err.to_string(),
+        ),
+    }
+}
+
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
         .route("/api/chats/{id}/config", patch(update_config))
         .route("/api/chats/{id}/interrupt", post(interrupt))
         .route("/api/chats/{id}/resume", post(resume))
+        .route("/api/chats/{id}/queue/resume", post(queue_resume))
         .route("/api/chats/{id}/trust-workspace", post(trust_workspace))
         .route(
             "/api/chats/{id}/queue/{messageId}",

@@ -33,6 +33,7 @@ impl ChatShared {
                 history.insert(index, marker);
             }
         }
+        self.restore_queue_pause(chat_id)?;
         self.reconcile_idle_queue(chat_id, &mut history)?;
         Ok(history)
     }
