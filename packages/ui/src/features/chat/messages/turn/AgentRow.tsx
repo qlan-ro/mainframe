@@ -84,8 +84,16 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
       chatId: chatId!,
       toolCallId: part.toolCallId,
       messageId: unit.messageId,
-      nativeAgentId: historical?.nativeAgentId,
-      savedNestedAgent: Boolean(historical && ancestors.length),
+      savedNestedCall: historical && ancestors.length ? {
+        type: 'tool-call',
+        toolCallId: part.toolCallId,
+        toolName: part.toolName,
+        args: part.args,
+        argsText: part.argsText,
+        result: part.result,
+        isError: part.isError,
+        providerMetadata: { mainframe: { subagentFact: historical } },
+      } : undefined,
       title: historical?.title || argText(part, 'description') || facts.verb,
     });
   const Steps = historical && chatId && status !== 'running' ? HistoricalAgentSteps : AgentSteps;

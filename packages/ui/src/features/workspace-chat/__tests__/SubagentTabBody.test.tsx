@@ -663,13 +663,33 @@ it('offers Retry after eviction and chat-tab close while saved steps remain moun
   const props = { chatId: 'parent', messageId: 'm-1', toolCallId: 'nested', outcome: 'done' as const, messages: [] };
   const view = render(
     <TooltipProvider>
-      <HistoricalAgentSteps {...props} />
-      <SubagentTabBody {...props} title="Saved nested agent" active savedNestedAgent />
+      <HistoricalAgentSteps {...props} nativeAgentId="native-inner" />
+      <SubagentTabBody
+        {...props}
+        title="Saved nested agent"
+        active
+        savedNestedCall={{
+          type: 'tool-call',
+          toolCallId: 'nested',
+          toolName: 'Agent',
+          args: { prompt: 'Investigate the inner failure.' },
+          argsText: '{"prompt":"Investigate the inner failure."}',
+          providerMetadata: { mainframe: { subagentFact: {
+            status: 'failed',
+            summary: 'The inner task failed.',
+            nativeAgentId: 'native-inner',
+          } } },
+        }}
+      />
     </TooltipProvider>,
   );
   const key = historyKey('parent', 'nested');
   await waitFor(() => expect(useSubagentHistoryStore.getState().entries.get(key)?.loading).toBe(false));
-  expect(controller.subagentHistory.page).toHaveBeenCalledExactlyOnceWith('nested', undefined);
+  expect(controller.subagentHistory.page).toHaveBeenCalledExactlyOnceWith('native-inner', undefined);
+  expect(screen.getByTestId('workspace-agent-status-nested')).toHaveTextContent(/failed/i);
+  expect(screen.getByTestId('workspace-agent-brief-nested')).toHaveTextContent('Investigate the inner failure.');
+  expect(screen.getByTestId('workspace-agent-result-nested')).toHaveTextContent('The inner task failed.');
+  expect(controller.loadEarlier).not.toHaveBeenCalled();
   expect(screen.getAllByTestId('steps').map((steps) => steps.textContent)).toEqual(['nested-step', 'nested-step']);
   expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
 
