@@ -141,3 +141,37 @@ it('keeps the replacement text when the row disappeared before save', async () =
   expect(screen.getByTestId('chat-composer-edit-input')).toHaveValue('replacement');
   expect(onDone).not.toHaveBeenCalled();
 });
+
+it('keeps the latest input on conflict and locks the editor through recovery', async () => {
+  let rejectSave!: (reason: Error) => void;
+  let finishRecovery!: () => void;
+  const patch = new Promise<void>((_, reject) => {
+    rejectSave = reject;
+  });
+  const recovery = new Promise<void>((resolve) => {
+    finishRecovery = resolve;
+  });
+  const save = vi.fn(() => patch);
+  const recover = vi.fn(() => recovery);
+  const onDone = vi.fn();
+  render(<ComposerEditMode edit={{ ...EDIT, save, recover }} onDone={onDone} />);
+  const input = screen.getByTestId('chat-composer-edit-input');
+  const saveButton = screen.getByTestId('chat-composer-edit-save');
+  fireEvent.change(input, { target: { value: 'replacement' } });
+  fireEvent.click(saveButton);
+
+  expect(input).toHaveAttribute('readonly');
+  expect(saveButton).toHaveTextContent('Saving…');
+  expect(screen.getByTestId('chat-composer-edit-cancel')).toBeDisabled();
+  fireEvent.keyDown(input, { key: 'Escape' });
+
+  // Deliver an input event directly to model an update racing the read-only render.
+  fireEvent.change(input, { target: { value: 'replacement with more text' } });
+  rejectSave(new ApiRequestError('Conflict', [], 409, 'queued_message_gone'));
+  await waitFor(() => expect(recover).toHaveBeenCalledExactlyOnceWith('replacement with more text'));
+  expect(input).toHaveAttribute('readonly');
+  expect(onDone).not.toHaveBeenCalled();
+
+  finishRecovery();
+  await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+});

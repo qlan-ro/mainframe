@@ -13,7 +13,7 @@
  * On save failure the editor stays open and an inline error line is shown —
  * the edit is NOT silently discarded.
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { PencilIcon, CheckIcon } from 'lucide-react';
 import { ApiRequestError } from '@/lib/api/http';
 import { Button } from '@/components/ui/button';
@@ -27,11 +27,13 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
   const extras = useChatExtras();
   const { hidden, visible } = splitHiddenPrefix(edit.content);
   const [text, setText] = useState(visible);
+  const latestText = useRef(visible);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSave = useCallback(() => {
-    const trimmed = text.trim();
+    if (saving) return;
+    const trimmed = latestText.current.trim();
     const save = edit.save ?? ((content: string) => extras?.editQueued(edit.messageId, content) ?? Promise.resolve());
     if (!trimmed || trimmed === visible) {
       onDone();
@@ -46,7 +48,13 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
       .catch(async (err: unknown) => {
         if (err instanceof ApiRequestError && err.status === 409 && err.code === 'queued_message_gone') {
           if (edit.recover) {
-            await edit.recover(trimmed);
+            try {
+              await edit.recover(latestText.current);
+            } catch {
+              setSaveError('Could not restore your edit. Your text is still here.');
+              setSaving(false);
+              return;
+            }
             onDone();
             return;
           }
@@ -56,7 +64,7 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
         }
         setSaving(false);
       });
-  }, [text, extras, edit, onDone, hidden, visible]);
+  }, [saving, extras, edit, onDone, hidden, visible]);
 
   return (
     <div
@@ -75,16 +83,20 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
             {edit.save ? '· not sent until you send it' : '· stays queued until the run finishes'}
           </span>
         )}
-        <span className="ml-auto font-mono text-xs text-muted-foreground">esc to cancel</span>
+        {!saving && <span className="ml-auto font-mono text-xs text-muted-foreground">esc to cancel</span>}
       </div>
 
       <textarea
         data-testid="chat-composer-edit-input"
         data-noring
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        readOnly={saving}
+        onChange={(e) => {
+          latestText.current = e.target.value;
+          setText(e.target.value);
+        }}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') onDone();
+          if (!saving && e.key === 'Escape') onDone();
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSave();
         }}
         autoFocus
@@ -107,12 +119,18 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
         <div className="flex items-center gap-2">
           {/* The turn keeps running while a queued message is edited. */}
           <StopControl />
-          <Button variant="outline" size="sm" data-testid="chat-composer-edit-cancel" onClick={onDone}>
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="chat-composer-edit-cancel"
+            disabled={saving}
+            onClick={onDone}
+          >
             Cancel edit
           </Button>
           <Button size="sm" data-testid="chat-composer-edit-save" onClick={handleSave} disabled={saving}>
             <CheckIcon data-icon="inline-start" />
-            Save
+            <span role="status">{saving ? 'Saving…' : 'Save'}</span>
           </Button>
         </div>
       </div>
