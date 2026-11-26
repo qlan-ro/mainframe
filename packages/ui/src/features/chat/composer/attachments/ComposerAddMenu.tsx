@@ -33,9 +33,17 @@ function useOpenMention(textareaRef: RefObject<HTMLTextAreaElement | null>): () 
   };
 }
 
-export function ComposerAddMenu({ textareaRef }: { textareaRef: RefObject<HTMLTextAreaElement | null> }) {
+export function ComposerAddMenu({
+  textareaRef,
+  onOpenMention,
+}: {
+  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  /** Spike (#482): the Lexical field opens the menu through its editor instead. */
+  onOpenMention?: () => void;
+}) {
   const [open, setOpen] = useState(false);
-  const openMention = useOpenMention(textareaRef);
+  const openTextareaMention = useOpenMention(textareaRef);
+  const openMention = onOpenMention ?? openTextareaMention;
   // The menu returns focus to its trigger as it closes; a pick that needs the
   // field, or the file dialog, runs after that.
   const afterClose = useRef<(() => void) | null>(null);
