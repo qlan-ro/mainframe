@@ -1887,7 +1887,7 @@ pnpm --filter @qlan-ro/mainframe-ui exec vitest run use-quota</pre></div>
     {k:'user',t:'Walk me through every kind of tool card the transcript can show. Start with files, searches, edits, commands and the web.',time:'9:40 AM'},
     turn('Worked for 1m 12s','read 9 files, searched 4 times, edited 2 files, ran 3 commands',T1,'<p><b>Files, searches, edits, commands and the web.</b> Every row has the same shape: glyph, verb, target, receipt. Click any row with a chevron to open it.</p>','9:41 AM'),
     {k:'user',t:'Now tool calls, images and agents.',time:'9:41 AM'},
-    turn('Worked for 2m 05s','called 4 tools, generated 1 image',T2,'<p><b>Tool calls, images and agents.</b> MCP and tools with no card share one row. A failed call opens by itself. Sub-agents list their steps as rows.</p>','9:43 AM'),
+    turn('Worked for 2m 05s','called 4 tools, generated 1 image',T2,'<p><b>Tool calls, images and agents.</b> MCP and tools with no card share one row. Only the last failure can open by itself, if no later step succeeded. Sub-agents list their steps as rows.</p>','9:43 AM'),
     {k:'user',t:'Now delegate work to other agents and show every state a delegated task can be in.',time:'9:42 AM'},
     turn('Worked for 1m 20s','',TD,'<p><b>Delegated tasks.</b> Each runs in its own chat, which you can open beside this one. The row carries the task\'s live status: waiting on you, running, queued, completed, failed, stopped or interrupted. One waiting on you opens itself and its request appears above the composer.</p>','9:43 AM'),
     {k:'user',t:'Next: plans, questions, skills, schedules, worktrees and notifications.',time:'9:43 AM'},
@@ -1910,7 +1910,7 @@ function normRow(r){
 }
 function toolRow(r){
   if(r.html) return r.html;
-  r=normRow(r);if(r.st==='bad'&&!r.retried&&r.body!==undefined&&r.open===undefined) r.open=1;
+  r=normRow(r);
   const has=r.body!==undefined;const id='tc'+(++tcN);
   const g=r.st==='run'?spin():r.st&&TC_ST[r.st]?ic(TC_ST[r.st][0],TC_ST[r.st][1]):ic(r.i);
   const word=r.st==='run'?'Running':r.st&&TC_ST[r.st]?TC_ST[r.st][2]:'Done';
@@ -1954,6 +1954,10 @@ function toolTurnHtml(key,m,open){
   if(OUT.length===m.rows.length) return mks;
   m={...m,rows:m.rows.filter(r=>!r.mk&&!r.askd)};
   const R=withRetries(m.rows);const cw=childWork(R);const f={open:R.filter(r=>r.st==='bad'&&!r.retried).length,retried:R.filter(r=>r.retried).length};const st=m.status||(R.some(r=>r.st==='unk')?'unknown':'ok');
+  if(!cw.going){
+    const last=R.findLast(r=>!r.html&&(!r.st||r.st==='bad'));
+    if(last?.st==='bad'&&!last.retried&&last.body!==undefined&&last.open===undefined) last.open=1;
+  }
   const glyph=cw.going?spin():st==='stopped'?ic('stopc','stp'):st==='error'?ic('xc','bad'):st==='unknown'?'':ic('check');
   const word=cw.going?'Still going':st==='stopped'?'Stopped':st==='error'?'Ended on an error':st==='unknown'?'Ending unknown':'Finished';
   const pl=(k,w)=>`${k} ${w}${k===1?'':'s'}`;

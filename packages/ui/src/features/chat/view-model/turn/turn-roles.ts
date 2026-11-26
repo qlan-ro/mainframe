@@ -7,7 +7,7 @@ import { isChildWork, isMarkerTool, toolKind } from './tool-kind';
 import { settledStatus, wasCancelled } from './tool-status';
 import { launchedOnly, retryKey } from './tool-values';
 import { isMarkerUnit, isTextUnit } from './turn-units';
-import type { ToolPart, TurnChild, TurnUnit } from './types';
+import type { ToolPart, Turn, TurnChild, TurnUnit } from './types';
 
 const isTool = (part: TurnUnit['part']): part is ToolPart => part.type === 'tool-call';
 
@@ -35,21 +35,22 @@ export function answerUnits(units: readonly TurnUnit[], running: boolean): Reado
  * A failed step is retried when a later step made the same call and it succeeded
  * (T1b). One that only started in the background proves nothing.
  */
-export function failedSteps(
-  tools: readonly ToolPart[],
-  pending: ReadonlySet<string>,
-  live: boolean,
-): { failed: string[]; retried: string[] } {
+export function failedSteps(tools: readonly ToolPart[], pending: ReadonlySet<string>, live: boolean) {
   const recovered = new Set<string>();
   const failed: string[] = [];
   const retried: string[] = [];
+  const settledSteps: Turn['settledSteps'][number][] = [];
   for (let index = tools.length - 1; index >= 0; index--) {
     const tool = tools[index]!;
     const status = settledStatus(tool, pending, live);
-    if (status === 'success' && !launchedOnly(tool)) recovered.add(retryKey(tool));
+    const succeeded = status === 'success' && !launchedOnly(tool);
+    if (succeeded) recovered.add(retryKey(tool));
     else if (status === 'failed') (recovered.has(retryKey(tool)) ? retried : failed).unshift(tool.toolCallId);
+    if (succeeded || status === 'failed' || isChildWork(tool.toolName)) {
+      settledSteps.push({ id: tool.toolCallId, succeeded });
+    }
   }
-  return { failed, retried };
+  return { failed, retried, settledSteps };
 }
 
 /**

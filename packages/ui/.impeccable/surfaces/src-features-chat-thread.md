@@ -39,3 +39,5 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 ## Unresolved
 Agents and delegated tasks open in the workspace's Agent tab (W8), and their rows say what the tab says (T1c) and have its Stop while the work is live. A delegated task's request shows above the composer (G5).
+
+After a turn ends, only its last failed step can open by itself. It opens if no later step in that turn succeeded and no successful retry recovered it. The same rule applies to child failures in their own turn. Live turns keep failed rows closed by default. The header still counts failures, and manual open or close choices take precedence.
