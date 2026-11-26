@@ -95,7 +95,10 @@ it('a workflow is going while its run is', () => {
 
 describe('liveChildren', () => {
   const model = (children: TurnChild[]) =>
-    ({ turns: new Map([['t', { children, live: false }]]), taskResults: new Map() }) as unknown as TurnModel;
+    ({
+      turns: new Map([['t', { children, live: false, settledSteps: [] }]]),
+      taskResults: new Map(),
+    }) as unknown as TurnModel;
 
   it('maps running background commands to the call that started them', () => {
     const live = liveChildren(
@@ -170,15 +173,12 @@ describe('liveChildren', () => {
 
 it('counts child work, needs-you first', () => {
   const live: LiveChildren = {
+    ...NO_CHILDREN,
     byCall: new Map([
       ['a', 'running'],
       ['b', 'needs-you'],
       ['c', 'queued'],
     ]),
-    background: new Map(),
-    failed: new Set(),
-    unknown: new Set(),
-    unplacedAgents: false,
   };
   const children = ['a', 'b', 'c', 'd'].map((toolCallId) => child({ toolCallId }));
   expect(childCounts([...children, child({ toolCallId: 'w', kind: 'workflow' })], live)).toEqual({

@@ -29,6 +29,7 @@
  * wires it to the live runtime, unread store, and daemon WS — call it once under
  * <AssistantRuntimeProvider>.
  */
+import { disclosureStore } from '@/features/chat/messages/turn/disclosure-store';
 import { useHeldQueue } from '@/features/chat/composer/queue/held-queue-store';
 import { dropUnsentOf } from '@/features/chat/composer/unsent/unsent-store';
 import type { Chat, DaemonEvent } from '@qlan-ro/mainframe-types';
@@ -77,6 +78,7 @@ export class SessionListRouter {
         // Deleted or closed: nothing it held may outlive it.
         useHeldQueue.getState().clearChat(event.chatId);
         dropUnsentOf(event.chatId);
+        disclosureStore.clearAutomaticChat(event.chatId);
         this.deps.onReload();
         return;
 
@@ -89,6 +91,7 @@ export class SessionListRouter {
         return;
 
       case 'chat.updated':
+        if (event.chat.status === 'archived') disclosureStore.clearAutomaticChat(event.chat.id);
         if (this.deps.onChatUpdated) {
           this.deps.onChatUpdated(event.chat);
         } else {

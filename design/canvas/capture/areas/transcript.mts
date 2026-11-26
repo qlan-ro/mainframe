@@ -82,7 +82,7 @@ const area: CaptureArea = {
         },
         {
           id: 'rows',
-          caption: '**The work, open.** Glyph, verb, target, receipt; a failed call opens by itself.',
+          caption: '**The work, open.** Each row has a glyph, verb, target and receipt. Only the last failure can open by itself, if no later step succeeded.',
           crop: COLUMN,
           setup: async ({ page }) => openTurn(page, header(page, 1)),
         },
@@ -187,7 +187,7 @@ const area: CaptureArea = {
         { id: 'failed-tool', caption: '**A failed step.** The header counts it in rose.', crop: [317, 48, 824, 852] },
         {
           id: 'failed-tool-open',
-          caption: '**Opened on it.** An unresolved failure is open; the terminal keeps its own red.',
+          caption: '**Opened on it.** The last failure opens when the turn ends with no later success. The terminal keeps its own red.',
           crop: [317, 48, 824, 852],
           setup: async ({ page }) => {
             await page.locator('[data-testid^="chat-work-failed-"]').first().click();

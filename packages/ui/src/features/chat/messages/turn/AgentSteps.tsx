@@ -7,6 +7,9 @@
  */
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { ReadonlyThreadProvider, ThreadPrimitive, useAuiState, type ThreadMessage } from '@assistant-ui/react';
+import { buildTurns } from '../../view-model/turn/build-turns';
+import { NestedFailedOpen } from './use-failed-open';
+import { useNestedLiveChildren } from './use-live-children';
 import { SkillMatcher } from '../../view-model/turn/skill-matcher';
 import { absorbedTaskResults, taskResultsIn } from '../../view-model/turn/task-results';
 import { answerUnits } from '../../view-model/turn/turn-roles';
@@ -207,6 +210,10 @@ function bareView(answer: readonly string[], result: string): ResultView {
 
 function Steps({ messages, outcome, prompt, promptLabel = 'Prompt', result = '', bare, ...rest }: AgentStepsProps) {
   const scope = useTranscriptScope();
+  const isRunning = outcome === 'going';
+  const model = useMemo(() => buildTurns(messages, { ...scope, isRunning }), [messages, scope, isRunning]);
+  const children = useNestedLiveChildren(model);
+  const disclosure = useMemo(() => ({ model, children }), [model, children]);
   const nested = useMemo(() => nest(messages, scope), [messages, scope]);
   const first = useMemo(
     () => (bare && !prompt ? undefined : promptMessage(messages, prompt)),
@@ -233,7 +240,9 @@ function Steps({ messages, outcome, prompt, promptLabel = 'Prompt', result = '',
       <View.Provider value={view}>
         <NestedSkills.Provider value={nested.skills}>
           <ReadonlyThreadProvider messages={messages}>
-            <ThreadPrimitive.Messages components={components} />
+            <NestedFailedOpen.Provider value={disclosure}>
+              <ThreadPrimitive.Messages components={components} />
+            </NestedFailedOpen.Provider>
           </ReadonlyThreadProvider>
         </NestedSkills.Provider>
       </View.Provider>

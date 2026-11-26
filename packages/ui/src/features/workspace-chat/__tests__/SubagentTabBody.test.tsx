@@ -1,3 +1,10 @@
+import {
+  assistant as turnAssistant,
+  bash,
+  failed,
+  TurnFixture,
+  user,
+} from '@/features/chat/messages/turn/__tests__/fixtures';
 /**
  * SubagentTabBody — a sub-agent in a workspace tab (W8): title, kind, status,
  * Stop while live, brief, steps and result, read from the parent's transcript.
@@ -45,20 +52,25 @@ const { controller, world } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@assistant-ui/react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@assistant-ui/react')>()),
-  // The chat column's thread, which is another chat's.
-  useAuiState: (select: (s: unknown) => unknown) =>
-    select({
-      thread: {},
-      threads: {
-        threadItems: [
-          { id: 'column', custom: { projectId: 'p1', worktreePath: '/wt/column' } },
-          { id: 'parent', custom: { projectId: 'p1', worktreePath: '/wt/parent' } },
-        ],
-      },
-    }),
-}));
+vi.mock('@assistant-ui/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@assistant-ui/react')>();
+  return {
+    ...actual,
+    // The chat column's thread, which is another chat's.
+    useAuiState: (select: (s: unknown) => unknown) =>
+      world.call?.messages?.some((step) => step.role === 'user')
+        ? actual.useAuiState(select)
+        : select({
+            thread: {},
+            threads: {
+              threadItems: [
+                { id: 'column', custom: { projectId: 'p1', worktreePath: '/wt/column' } },
+                { id: 'parent', custom: { projectId: 'p1', worktreePath: '/wt/parent' } },
+              ],
+            },
+          }),
+  };
+});
 vi.mock('@/features/sessions/use-projects', () => ({
   useProjects: () => ({ projects: [{ id: 'p1', path: '/proj' }] }),
 }));
@@ -96,16 +108,26 @@ vi.mock('@/features/chat/runtime/use-chat-thread-runtime', () => ({
 vi.mock('@/features/chat/runtime/use-native-thread-messages', () => ({
   useNativeThreadMessages: () => messages(),
 }));
-vi.mock('@/features/chat/messages/turn/AgentSteps', () => ({
-  AgentSteps: ({ messages: steps }: { messages: readonly ThreadMessage[] }) => {
-    const { openFile } = useOpenFile();
-    return (
-      <button type="button" data-testid="steps" data-chat={useChatId()} onClick={() => openFile('src/step.ts')}>
-        {steps.map((step) => step.id).join(',')}
-      </button>
-    );
-  },
-}));
+vi.mock('@/features/chat/messages/turn/AgentSteps', async (original) => {
+  const { AgentSteps } = await original<typeof import('@/features/chat/messages/turn/AgentSteps')>();
+  return {
+    AgentSteps: (props: React.ComponentProps<typeof AgentSteps>) =>
+      props.messages.some((step) => step.role === 'user') ? (
+        <AgentSteps {...props} />
+      ) : (
+        <StubSteps messages={props.messages} />
+      ),
+  };
+});
+
+function StubSteps({ messages: steps }: { messages: readonly ThreadMessage[] }) {
+  const { openFile } = useOpenFile();
+  return (
+    <button type="button" data-testid="steps" data-chat={useChatId()} onClick={() => openFile('src/step.ts')}>
+      {steps.map((step) => step.id).join(',')}
+    </button>
+  );
+}
 
 const assistant = (id: string, content: ThreadMessage['content']) =>
   ({
@@ -589,4 +611,20 @@ describe('opened from a chat in another worktree than the conversation', () => {
     fireEvent.click(screen.getByTestId('steps'));
     expect(paths).toEqual(['/wt/parent/src/step.ts']);
   });
+});
+
+it('opens the final failure in the workspace sub-agent transcript', async () => {
+  world.call = {
+    args: ARGS,
+    result: 'Done',
+    messages: [user('Review'), turnAssistant([bash('first', 'ls', failed), bash('last', 'pwd', failed)])],
+  };
+  render(
+    <TurnFixture rootId="workspace-fixture" messages={[]}>
+      {body()}
+    </TurnFixture>,
+  );
+  await act(async () => undefined);
+  expect(screen.getByTestId('chat-row-first-toggle')).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.getByTestId('chat-row-last-toggle')).toHaveAttribute('aria-expanded', 'true');
 });
