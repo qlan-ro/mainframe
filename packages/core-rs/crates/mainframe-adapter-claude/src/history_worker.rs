@@ -90,6 +90,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn successful_cold_read_opens_only_primary_for_full_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let primary = dir
+            .path()
+            .join("primary.jsonl")
+            .to_string_lossy()
+            .into_owned();
+        let child = dir
+            .path()
+            .join("agent-child.jsonl")
+            .to_string_lossy()
+            .into_owned();
+        std::fs::write(&primary, message("primary")).unwrap();
+        std::fs::write(&child, message("child")).unwrap();
+        let discovered = DiscoveredFiles {
+            primary_path: primary.clone(),
+            all_files: vec![primary.clone(), child.clone()],
+            subagent_files: [child].into_iter().collect(),
+            complete: true,
+        };
+        let (rows, _) = load_with_reader("session", &discovered, "", true, move |path| {
+            assert_eq!(path, primary);
+            reader::open_reader(path)
+        })
+        .await
+        .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "primary");
+    }
+
+    #[tokio::test]
     async fn failed_open_rescans_primary() {
         check_recovery(false).await;
     }
