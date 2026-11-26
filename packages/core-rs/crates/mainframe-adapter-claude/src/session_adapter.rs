@@ -138,6 +138,19 @@ impl AdapterSession for ClaudeSession {
                 .instrument(self.span.clone()),
         )
     }
+    fn acknowledges_queued_input_by_echo(&self) -> bool {
+        true
+    }
+    fn send_queued_command(
+        &self,
+        command: String,
+        args: Option<String>,
+        uuid: String,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        Box::pin(async move {
+            self.write_command(&command, &args.unwrap_or_default(), Some(&uuid), false)
+        })
+    }
     fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
         Box::pin((ClaudeSession::cancel_queued_message(self, uuid)).instrument(self.span.clone()))
     }

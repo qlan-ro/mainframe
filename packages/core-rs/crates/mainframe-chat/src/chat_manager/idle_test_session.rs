@@ -22,6 +22,7 @@ pub(super) struct IdleTestSession {
     pub fail: bool,
     pub legacy: bool,
     pub send_failure: Mutex<Option<AdapterError>>,
+    pub acknowledge_by_echo: bool,
     pub hold_send: AtomicBool,
     pub send_started: tokio::sync::Notify,
 }
@@ -45,6 +46,7 @@ impl IdleTestSession {
             fail: false,
             legacy: false,
             send_failure: Mutex::new(None),
+            acknowledge_by_echo: false,
             hold_send: AtomicBool::new(false),
             send_started: tokio::sync::Notify::new(),
         }
@@ -135,6 +137,9 @@ impl AdapterSession for IdleTestSession {
             }
             failure.map_or(Ok(()), Err)
         })
+    }
+    fn acknowledges_queued_input_by_echo(&self) -> bool {
+        self.acknowledge_by_echo
     }
     fn supports_steer(&self) -> bool {
         self.adapter_id() == "codex"

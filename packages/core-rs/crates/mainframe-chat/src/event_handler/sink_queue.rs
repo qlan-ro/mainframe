@@ -8,12 +8,18 @@ impl SessionSinkImpl {
             .iter()
             .any(|r| r.uuid == uuid && r.steered == Some(true));
         if !steered && self.holds_turn_queue() {
-            return;
+            match self.shared.deps.idle_queue_remove(&self.chat_id, uuid) {
+                Ok(true) => {}
+                Ok(false) => return,
+                Err(_) => {
+                    warn!(
+                        chat_id = self.chat_id,
+                        "queue acknowledgement persistence failed"
+                    );
+                    return;
+                }
+            }
         }
-        debug!(
-            chat_id = self.chat_id,
-            uuid, "moving queued message to end + clearing flag"
-        );
         let found_id = self.find_queued_message_id(uuid);
         if let Some(id) = &found_id {
             self.messages

@@ -33,18 +33,44 @@ impl ChatShared {
                 history.insert(index, marker);
             }
         }
+        self.reconcile_idle_queue(chat_id, &mut history)?;
+        Ok(history)
+    }
+
+    fn reconcile_idle_queue(
+        &self,
+        chat_id: &str,
+        history: &mut Vec<ChatMessage>,
+    ) -> Result<(), mainframe_adapter_api::AdapterError> {
         for input in self.deps.idle_queue_list(chat_id).map_err(|_| {
             mainframe_adapter_api::AdapterError::Message("Queued history unavailable".into())
         })? {
+            if history.iter().any(|m| {
+                m.id == input.message.id
+                    || m.id == input.uuid
+                    || m.metadata
+                        .as_ref()
+                        .and_then(|meta| meta.get("providerInputUuid"))
+                        .and_then(serde_json::Value::as_str)
+                        == Some(input.uuid.as_str())
+            }) {
+                self.deps
+                    .idle_queue_remove(chat_id, &input.uuid)
+                    .map_err(|_| {
+                        mainframe_adapter_api::AdapterError::Message(
+                            "Queue acknowledgement persistence failed".into(),
+                        )
+                    })?;
+                self.handle_queued_processed(chat_id, &input.uuid);
+                continue;
+            }
             let mut refs = self.queued_refs.lock_recover();
             if !refs.iter().any(|r| r.uuid == input.uuid) {
                 refs.push(input.queued_ref(chat_id));
             }
-            if !history.iter().any(|m| m.id == input.message.id) {
-                history.push(input.message);
-            }
+            history.push(input.message);
         }
-        Ok(history)
+        Ok(())
     }
 }
 

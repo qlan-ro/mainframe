@@ -217,6 +217,9 @@ impl ChatManager {
             self.retain_failed_delivery(chat_id, post, &mut input, prior, &error)?;
             return Err(error.into());
         }
+        if session.acknowledges_queued_input_by_echo() {
+            return Ok(());
+        }
         self.shared.deps.idle_queue_remove(chat_id, &input.uuid)?;
         self.remove_queued_ref(chat_id, &input.uuid);
         self.confirm_queued_message(chat_id, &input.message.id, held_queue);

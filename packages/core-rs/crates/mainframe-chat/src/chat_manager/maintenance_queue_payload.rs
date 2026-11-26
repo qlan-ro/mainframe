@@ -88,7 +88,7 @@ pub(super) async fn dispatch(
     match &input.command {
         Some(cmd) if cmd.source != "mainframe" => {
             session
-                .send_command(cmd.name.clone(), cmd.args.clone())
+                .send_queued_command(cmd.name.clone(), cmd.args.clone(), input.uuid.clone())
                 .await
         }
         Some(cmd) => {
