@@ -8,6 +8,7 @@ import { resolveResultText } from '../../tools/shared';
 import type { ToolPart } from '../../view-model/turn/types';
 import { ResultText } from '../../tools/bodies/ResultText';
 import { BodyNote } from '../../tools/bodies/Surface';
+import { HistoricalAgentSteps } from './HistoricalAgentSteps';
 import { AgentSteps } from './AgentSteps';
 import { useAgentStop, useAgentWork } from './agent-world';
 import { RowAction, RowDisclosure } from './RowDisclosure';
@@ -77,6 +78,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
       messageId: unit.messageId,
       title: historical?.title || argText(part, 'description') || facts.verb,
     });
+  const Steps = historical && chatId && status !== 'running' ? HistoricalAgentSteps : AgentSteps;
   return (
     <RowDisclosure
       rowKey={unit.key}
@@ -122,7 +124,8 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
       tool={part.toolName}
       anchor={{ 'data-activity-id': part.toolCallId }}
     >
-      <AgentSteps
+      <Steps
+        chatId={chatId ?? ''}
         messages={part.messages ?? []}
         before={model && <AgentModel model={model} />}
         messageId={unit.messageId}

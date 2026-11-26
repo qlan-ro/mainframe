@@ -131,6 +131,16 @@ export class AcpChatController {
     if (this.disposed || !this.activation.isActive || this.loader.getClient() !== client) return;
     await this.plane.reactivate(client);
   }
+  async loadSubagentPage(agentId: string, before?: string) {
+    await this.load();
+    const client = this.loader.getClient();
+    if (!client?.subagentHistoryPage) throw new Error('Sub-agent history is unavailable');
+    await client.ensureConnected();
+    return new Promise<import('@qlan-ro/mainframe-types').HistoryPageResult>((resolve, reject) => {
+      void client.subagentHistoryPage!({ sessionId: this.daemonId, agentId, before }, resolve).catch(reject);
+    });
+  }
+
   searchHistory(query: string) {
     return this.plane.history.search(query);
   }

@@ -21,6 +21,8 @@ import type { AcpChatController } from '@/features/chat/controller/acp-chat-cont
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
 import { useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '@/features/chat/runtime/use-native-thread-messages';
+import { HistoricalAgentSteps } from '@/features/chat/messages/turn/HistoricalAgentSteps';
+import { subagentFact } from '@/features/chat/view-model/subagent-facts';
 import { AgentSteps } from '@/features/chat/messages/turn/AgentSteps';
 import {
   AgentWorldProvider,
@@ -143,11 +145,24 @@ function usePlace(
   }, [call, turns, pending, world]);
 }
 
-function Steps({ call, work, result }: { call: SubagentCall; work: AgentWork; result: string }) {
+function Steps({
+  call,
+  work,
+  result,
+  chatId,
+}: {
+  call: SubagentCall;
+  work: AgentWork;
+  result: string;
+  chatId: string;
+}) {
   const steps = call.part.messages ?? [];
-  if (steps.length === 0) return null;
+  const historical = subagentFact(call.part) && work.status !== 'running';
+  if (!historical && steps.length === 0) return null;
+  const Content = historical ? HistoricalAgentSteps : AgentSteps;
   return (
-    <AgentSteps
+    <Content
+      chatId={chatId}
       bare
       messages={steps}
       messageId={call.messageId}
@@ -219,7 +234,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   // An answer is prose. An error, and the receipt of a call launched in the background, are shown as they came.
   const ResultBlock = call != null && (isFailed(call) || isBackgroundLaunch(call)) ? TextBlock : ProseBlock;
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
-  const shownTitle = text(args['description']) || title;
+  const shownTitle = (call && subagentFact(call.part)?.title) || text(args['description']) || title;
   const task = agent && stoppableTask(tasks, live, adapterId);
   const { onStop, stopping } = useStop(
     shownTitle,
@@ -259,7 +274,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
         ) : (
           <ParentScope chatId={chatId} state={state} world={world} pending={place.pending}>
             <ProseBlock label="Brief" testId={`workspace-agent-brief-${toolCallId}`} source={text(args['prompt'])} />
-            <Steps call={call} work={place.work} result={agent?.result ?? ''} />
+            <Steps chatId={chatId} call={call} work={place.work} result={agent?.result ?? ''} />
             <ResultBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
             {agent?.reports.map(({ source, text: report }, i) => {
               // A final answer is the agent's prose by its source; a summary is the CLI's.

@@ -8,12 +8,18 @@ import {
 import type { RpcConnection } from './acp-rpc-connection';
 import { decodeReplayBatch } from './acp-replay-batch';
 
+export type SubagentPageParams = Pick<HistoryPageParams, 'sessionId' | 'containers' | 'untilItemId'> & {
+  agentId: string;
+  before?: string;
+};
+
 export function requestHistoryPage(
   connection: RpcConnection,
-  params: HistoryPageParams,
+  params: HistoryPageParams | SubagentPageParams,
   apply: (page: HistoryPageResult) => void,
 ): Promise<unknown> {
-  return connection.sendRequest('_mainframe.dev/history_page', params, (raw) => {
+  const method = 'agentId' in params ? '_mainframe.dev/subagent_history_page' : '_mainframe.dev/history_page';
+  return connection.sendRequest(method, params, (raw) => {
     const page = HistoryPageResultSchema.parse(raw);
     if (page.updates && page.batches) throw new Error('History page has two update encodings');
     if (page.batches) {

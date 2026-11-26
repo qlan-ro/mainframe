@@ -1,3 +1,4 @@
+import { releaseSubagentHistory } from '@/features/chat/messages/turn/subagent-history-store';
 /**
  * Global controller registry — one AcpChatController per thread id, shared
  * across the whole app. assistant-ui keeps every visited thread's subtree
@@ -52,6 +53,7 @@ class ChatControllerRegistry {
   }
 
   dispose(chatId: string): void {
+    releaseSubagentHistory(chatId);
     const controller = this.controllers.get(chatId);
     if (!controller) return;
     controller.dispose();

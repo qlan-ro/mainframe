@@ -33,3 +33,5 @@ An agent opened from the Activity panel arrives as a tab with its live steps. It
 
 ## Unresolved
 None.
+
+The Agent tab loads saved Claude steps when opened. It reuses pages loaded inline, shows a loading status while a request is pending, and offers Retry if the request fails.
