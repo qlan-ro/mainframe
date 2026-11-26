@@ -37,4 +37,4 @@ A sub-agent's request appearing above the composer on its own, saying how many m
 ## Unresolved
 None.
 
-Claude and Codex hold queued prompts until the current turn finishes successfully, then sends one prompt. Stop, interrupt, error, and exit leave the remaining prompts held.
+Claude and Codex release the oldest queued prompt after each successful turn. Stop, interrupt, error and exit pause the queue. Each held row shows “Paused” and the reason (“Stopped”, “Interrupted”, “Error: <short>” or “Session ended”). Edit and remove stay available. One keyboard-accessible Resume action sends the oldest held prompt as the next turn and restores the usual release order. Sending while paused starts a new turn and leaves the held rows visible and paused. Use the same behavior in light and dark.
