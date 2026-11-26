@@ -220,7 +220,7 @@ pub fn purge_old_logs(prefix: &str, retention_days: u64) {
 
 /// Map a renderer LogLevel string to the appropriate tracing level and emit.
 /// Degrades gracefully: unknown levels go to `info`.
-fn emit_event(level: &str, module: &str, message: &str, data: Option<&serde_json::Value>) {
+pub(crate) fn emit_event(level: &str, module: &str, message: &str, data: Option<&serde_json::Value>) {
     // Serialize data to a string only when present; pass empty string as the
     // sentinel that PinoFormat uses to suppress the field.
     let data_str = match data {
@@ -518,7 +518,12 @@ mod tests {
         let subscriber = tracing_subscriber::registry().with(layer);
         let _guard = tracing::subscriber::set_default(subscriber);
 
-        tracing::warn!(module = "net", data = %r#"{"key":"val"}"#, "something happened");
+        emit_event(
+            "info",
+            "host:perf",
+            "host memory snapshot",
+            Some(&json!({"host": {"rss_bytes": 123, "footprint_bytes": 100}})),
+        );
 
         let output = buf.lock().unwrap();
         let line = std::str::from_utf8(&output)
@@ -530,8 +535,12 @@ mod tests {
 
         let parsed: serde_json::Value = serde_json::from_str(&line).expect("valid JSON");
 
-        assert_eq!(parsed["level"], "WARN");
-        assert!(parsed.get("data").is_some(), "data must be present when supplied");
+        assert_eq!(parsed["level"], "INFO");
+        assert_eq!(parsed["module"], "host:perf");
+        assert_eq!(parsed["msg"], "host memory snapshot");
+        let data: serde_json::Value = serde_json::from_str(parsed["data"].as_str().unwrap()).unwrap();
+        assert_eq!(data["host"]["rss_bytes"], 123);
+        assert_eq!(data["host"]["footprint_bytes"], 100);
     }
 
     // ── Filename pattern: appender produces app-tauri.<date>.log ─────────────

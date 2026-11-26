@@ -154,7 +154,8 @@ pub async fn updater_install(app: AppHandle) -> Result<(), String> {
         .download_and_install(|_, _| {}, || {})
         .await
         .map_err(|e| e.to_string())?;
-    app.restart();
+    crate::quit::restart(&app);
+    Ok(())
 }
 
 /// Fire-and-forget manual check (called from a menu item or keyboard shortcut).

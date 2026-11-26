@@ -21,6 +21,7 @@ async fn main() {
 }
 
 async fn run_daemon() {
+    let parent_exit = watch_sidecar_parent();
     let (config, paths) = match mainframe_runtime::config::get_data_dir().and_then(|config_dir| {
         let config = mainframe_runtime::config::get_config()?;
         let paths = mainframe_runtime::config::boot_paths(&config, &config_dir);
@@ -63,7 +64,7 @@ async fn run_daemon() {
         Ok(daemon) => daemon,
         Err(error) => fatal("daemon assembly failed", &error),
     };
-    if let Err(error) = daemon.serve(shutdown_signal()).await {
+    if let Err(error) = daemon.serve(shutdown_signal(parent_exit)).await {
         fatal("daemon server failed", &error);
     }
 }
@@ -83,7 +84,34 @@ fn flush_and_exit(code: i32) -> ! {
     std::process::exit(code);
 }
 
-async fn shutdown_signal() {
+fn watch_sidecar_parent() -> Option<tokio::sync::oneshot::Receiver<()>> {
+    #[cfg(unix)]
+    {
+        let parent = std::env::var("MAINFRAME_SIDECAR_PARENT_PID")
+            .ok()?
+            .parse()
+            .ok()?;
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        match std::thread::Builder::new()
+            .name("sidecar-parent".into())
+            .spawn(move || {
+                while mainframe_runtime::process::parent_pid() == Some(parent) {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+                let _ = sender.send(()); /* expected */
+                std::thread::sleep(std::time::Duration::from_secs(10));
+                tracing::error!("daemon did not exit after losing its host");
+                flush_and_exit(1);
+            }) {
+            Ok(_) => Some(receiver),
+            Err(err) => fatal("failed to watch sidecar parent", &err),
+        }
+    }
+    #[cfg(not(unix))]
+    None
+}
+
+async fn shutdown_signal(parent_exit: Option<tokio::sync::oneshot::Receiver<()>>) {
     let ctrl_c = async {
         // Boot-time signal handler installation failure is unrecoverable — the
         // process has no path forward without it — so this is treated as a
@@ -112,7 +140,18 @@ async fn shutdown_signal() {
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
 
+    let parent_lost = async {
+        if let Some(exit) = parent_exit {
+            if exit.await.is_err() {
+                tracing::warn!("sidecar parent watcher stopped early");
+            }
+        } else {
+            std::future::pending::<()>().await;
+        }
+    };
+
     tokio::select! {
+        () = parent_lost => info!("desktop host exited"),
         () = ctrl_c => {}
         () = terminate => {}
     }

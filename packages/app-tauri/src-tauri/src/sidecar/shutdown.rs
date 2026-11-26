@@ -33,26 +33,17 @@ pub(super) fn stop_child(
     child.wait()
 }
 
-/// Ask a process to shut down. Shells out to `kill` like the daemon itself
-/// (no libc/nix bindings and no `unsafe` in this crate).
 #[cfg(unix)]
 fn request_terminate(pid: u32) -> bool {
-    match Command::new("kill")
-        .arg("-TERM")
-        .arg(pid.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-    {
-        Ok(status) if status.success() => true,
-        Ok(status) => {
-            tracing::warn!(pid, %status, "SIGTERM to daemon sidecar failed");
-            false
-        }
-        Err(e) => {
-            tracing::warn!(pid, err = %e, "SIGTERM to daemon sidecar failed");
-            false
-        }
+    let Ok(pid) = libc::pid_t::try_from(pid) else {
+        return false;
+    };
+    // SAFETY: a positive PID targets our own unreaped child.
+    if pid > 0 && unsafe { libc::kill(pid, libc::SIGTERM) } == 0 {
+        true
+    } else {
+        tracing::warn!(pid, error = %std::io::Error::last_os_error(), "SIGTERM to daemon sidecar failed");
+        false
     }
 }
 

@@ -44,19 +44,28 @@ impl DaemonHandle {
     /// if it is still running after `DAEMON_STOP_GRACE`. Blocks until the child
     /// is reaped. Idempotent.
     pub fn stop(&self) {
-        // take() empties the slot so the exit watcher knows this death was
-        // intentional; the lock is released before the (bounded) wait.
-        let child = self
-            .child
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
+        let child = self.take_child();
         if let Some(mut child) = child {
             match stop_child(&mut child, DAEMON_STOP_GRACE, DAEMON_STOP_POLL) {
                 Ok(status) => tracing::info!(%status, "daemon sidecar stopped"),
                 Err(e) => tracing::warn!(err = %e, "daemon sidecar stop failed"),
             }
         }
+    }
+
+    pub fn kill_now(&self) {
+        if let Some(mut child) = self.take_child() {
+            if let Err(error) = child.kill() {
+                tracing::warn!(%error, "emergency daemon sidecar kill failed");
+            }
+        }
+    }
+
+    fn take_child(&self) -> Option<Child> {
+        self.child
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
     }
 
     /// Watch for the child dying on its own (bind failure, crash). Polls
@@ -156,6 +165,9 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
             }
         }
     }
+
+    #[cfg(unix)]
+    cmd.env("MAINFRAME_SIDECAR_PARENT_PID", std::process::id().to_string());
 
     tracing::info!(
         program = %config.program.daemon_bin.display(),
