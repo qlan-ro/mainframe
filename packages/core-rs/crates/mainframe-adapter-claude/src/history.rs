@@ -134,7 +134,7 @@ pub(crate) use history_discovery::*;
 mod history_paths;
 pub(crate) use history_paths::*;
 #[path = "history_prompt_groups.rs"]
-mod history_prompt_groups;
+pub(crate) mod history_prompt_groups;
 use history_prompt_groups::PromptGroups;
 
 #[derive(Default)]

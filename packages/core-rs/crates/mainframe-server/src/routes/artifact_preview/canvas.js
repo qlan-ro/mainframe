@@ -139,16 +139,28 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);font:13px/1.
       label.appendChild(play);
     }
 
-    const iframe = document.createElement('iframe');
-    iframe.src = projectSrc(name);
-    iframe.title = text.textContent;
     const shield = document.createElement('div');
     shield.className = 'shield';
     shield.addEventListener('dblclick', () => startInteracting(frame));
 
-    frame.append(label, iframe, shield);
+    frame.append(label, shield);
     world.appendChild(frame);
-    items.push({ el: frame, page: pageOf(board), rect, name });
+    items.push({ el: frame, page: pageOf(board), rect, name, title: text.textContent });
+  }
+
+  // A board is a whole document with its own styles, tens of megabytes each, so only
+  // the page on show keeps its boards loaded. `display: none` alone would not free them.
+  function setLoaded(item, loaded) {
+    const iframe = item.el.querySelector('iframe');
+    if (loaded === Boolean(iframe)) return;
+    if (!loaded) {
+      iframe.remove();
+      return;
+    }
+    const next = document.createElement('iframe');
+    next.src = projectSrc(item.name);
+    next.title = item.title;
+    item.el.insertBefore(next, item.el.querySelector('.shield'));
   }
 
   function addNote(note) {
@@ -213,7 +225,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);font:13px/1.
   function showPage(id) {
     view.page = id;
     stopInteracting();
-    for (const item of items) item.el.style.display = onPage(item) ? '' : 'none';
+    for (const item of items) {
+      item.el.style.display = onPage(item) ? '' : 'none';
+      if (item.name) setLoaded(item, onPage(item));
+    }
     if (pageSelect) pageSelect.value = id;
     fitPage();
   }

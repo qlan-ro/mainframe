@@ -119,6 +119,7 @@ function turnOf(draft: Draft, standing: Standing, scope: TurnScope, now: number)
 
 function slicesOf(draft: Draft, running: boolean): MessageSlice[] {
   const answer = answerUnits(draft.units.flat(), running);
+  const hiddenPromptEvent = draft.messages.map((message) => messageMeta(message)?.hiddenPromptEvent).find(Boolean);
   const parts = draft.messages.map((message, index) => {
     const units = draft.units[index]!;
     return {
@@ -128,12 +129,14 @@ function slicesOf(draft: Draft, running: boolean): MessageSlice[] {
       answer: units.filter((unit) => answer.has(unit)),
     };
   });
-  const header = parts.findIndex((part) => part.work.length > 0);
+  const workHeader = parts.findIndex((part) => part.work.length > 0);
+  const header = workHeader < 0 && hiddenPromptEvent ? 0 : workHeader;
   let footer = parts.length - 1;
   while (footer >= 0 && !parts[footer]!.answer.length) footer--;
   return parts.map((part, index) => ({
     ...part,
     turnKey: draft.key,
+    ...(index === 0 && hiddenPromptEvent && { hiddenPromptEvent }),
     header: index === header,
     footer: index === (footer < 0 ? parts.length - 1 : footer),
   }));

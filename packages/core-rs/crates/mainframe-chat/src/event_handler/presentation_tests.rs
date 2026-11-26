@@ -41,6 +41,7 @@ fn text(value: &str) -> Vec<MessageContent> {
 }
 fn metadata(id: &str) -> Option<MessageMetadata> {
     Some(MessageMetadata {
+        hidden_prompt_event: None,
         model: None,
         usage: None,
         vendor_id: Some(id.into()),

@@ -165,6 +165,8 @@ function assistantContainer(
 
   const mf: MainframeMessageMeta = {
     ...mainframe,
+    ...(typeof messageMeta?.turnGroup === 'string' && { turnGroup: messageMeta.turnGroup }),
+    ...(typeof messageMeta?.hiddenPromptEvent === 'string' && { hiddenPromptEvent: messageMeta.hiddenPromptEvent }),
     ...(costUsd !== undefined && { cost: costUsd }),
   };
   const timing =

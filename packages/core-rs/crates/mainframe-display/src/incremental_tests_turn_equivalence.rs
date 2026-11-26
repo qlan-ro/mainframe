@@ -112,11 +112,21 @@ fn codex_turns_split_when_the_user_item_is_omitted() {
 }
 
 #[test]
-fn the_turn_group_key_never_reaches_display_metadata() {
-    let raw = vec![keyed(assistant("a1", vec![text("x")]), "p1")];
+fn prompt_group_keys_reach_display_metadata() {
+    let raw = vec![
+        keyed(assistant("a1", vec![text("first answer")]), "p1"),
+        keyed(assistant("a2", vec![text("notification reply")]), "p2"),
+    ];
     let display = prepare_messages_for_client(&raw, None);
-    assert_eq!(display.len(), 1);
-    assert!(display[0].metadata.is_none());
+    assert_eq!(display.len(), 2);
+    assert_eq!(
+        display[0].metadata.as_ref().unwrap()[TURN_GROUP_KEY],
+        json!("p1")
+    );
+    assert_eq!(
+        display[1].metadata.as_ref().unwrap()[TURN_GROUP_KEY],
+        json!("p2")
+    );
 }
 
 #[test]
