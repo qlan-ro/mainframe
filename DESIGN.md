@@ -606,6 +606,8 @@ One manager draws the thumb for every scroll container in the app, portals inclu
 
 A resize strip on a scroller's edge carries `data-edge-handle` (the sidebar's rail). The thumb shows over it and leaves it the outermost 2 px.
 
+Scroll fades (`scroll-fade-*`) keep percentages out of every `calc()`, in their masks and their `animation-range`. WebKit leaks memory each time it resolves a `calc()` that mixes a percentage and a length, and a scroll-driven fade resolves its style every frame, so the window grew by gigabytes a day. Each ramp is measured from its own edge instead (`globals.css`).
+
 Exception: the HTML file preview keeps the engine's own scrollbars. It is a sandboxed frame with an opaque origin, so no thumb can be drawn for it, and hiding its bars from the outside would mean rewriting the user's document.
 
 ### Tooltips and toasts
