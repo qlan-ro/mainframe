@@ -11,6 +11,7 @@ import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
 import type { SingleStep, Step } from '../../view-model/turn/group-steps';
 import type { MessageSlice } from '../../view-model/turn/types';
 import { cn } from '@/lib/utils';
+import { Marker, MarkerContent } from '@/components/ui/marker';
 import { EventMarker } from '../../tools/markers/EventMarker';
 import { MessageFooter } from '../MessageFooter';
 import { MessagePathContextMenu } from '../MessagePathContextMenu';
@@ -28,6 +29,12 @@ function useEntries(slice: MessageSlice): ReactNode[] {
   const open = useTurnSelector((state) => state.open(slice.turnKey), true);
   const steps = useSteps(slice.work, turn?.running);
   const entries: ReactNode[] = [];
+  if (slice.hiddenPromptEvent)
+    entries.push(
+      <Marker key="hidden-prompt" variant="separator" className="mf-tr-divider">
+        <MarkerContent>{slice.hiddenPromptEvent}</MarkerContent>
+      </Marker>,
+    );
   if (slice.header && turn) entries.push(<WorkHeader key="header" turn={turn} />);
   if (open)
     for (const [index, step] of steps.entries())

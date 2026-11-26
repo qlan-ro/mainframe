@@ -27,14 +27,14 @@ pub struct MessageUsage {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MessageMetadata {
+    #[serde(skip)]
+    pub hidden_prompt_event: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<MessageUsage>,
-    /// The adapter's own stable id for this message (Claude: transcript
-    /// `uuid`; Codex: thread-item id) — never serialized to the wire, only
-    /// consumed by `SessionSinkImpl::on_message` as the `ChatMessage.id`.
-    /// `None` falls back to a minted nanoid.
+    /// The adapter's stable message ID, used internally as the chat message ID.
+    /// When absent, the sink mints an ID.
     #[serde(skip)]
     pub vendor_id: Option<String>,
 }

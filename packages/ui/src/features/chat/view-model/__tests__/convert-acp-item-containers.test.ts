@@ -29,6 +29,22 @@ function mainframeMeta(container: ThreadMessageLike): MainframeMessageMeta | und
   return (container.metadata?.custom as { mainframe?: MainframeMessageMeta } | undefined)?.mainframe;
 }
 
+it('carries a durable prompt group and notification through ACP reaggregation', () => {
+  const items: AccumulatedItem[] = [
+    {
+      kind: 'message',
+      id: 'reply',
+      role: 'agent',
+      content: [textBlock('Follow-up')],
+      meta: itemMeta({ containerId: 'reply', messageMeta: { turnGroup: 'p2', hiddenPromptEvent: 'Checks finished' } }),
+    },
+  ];
+  expect(mainframeMeta(convertAcpItems(items, stampFor)[0]!)).toMatchObject({
+    turnGroup: 'p2',
+    hiddenPromptEvent: 'Checks finished',
+  });
+});
+
 describe('convertAcpItems — user container: sandbox captures', () => {
   it('routes capture images into native attachments, sets mainframe.captures, keeps the rest text', () => {
     const text =

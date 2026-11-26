@@ -216,19 +216,18 @@ fn partials_stream_growing_revisions_and_completion_converges_under_the_same_id(
 
     sink.on_message_partial("msg_1", vec![text("Riv")]);
     sink.on_message_partial("msg_1", vec![text("Rivers flow")]);
-    // The completed block arrives with the SAME vendor id the overlay used
-    // (assistant_event.rs's first-block rule).
+    // The committed block keeps the overlay's vendor ID.
     sink.on_message(
         vec![text("Rivers flow downhill.")],
         Some(MessageMetadata {
+            hidden_prompt_event: None,
             model: None,
             usage: None,
             vendor_id: Some("msg_1".to_string()),
         }),
     );
 
-    // Three revisions, one per emit; the id never changes, so the facade's
-    // diff engine sees tail growth (chunks), never an item reset.
+    // Stable IDs let ACP append chunks across these three revisions.
     let revisions = surface.revisions();
     assert_eq!(revisions.len(), 3, "one revision per emit: {revisions:?}");
     for (revision, expected) in
@@ -281,6 +280,7 @@ fn the_streaming_flag_rides_the_overlay_and_drops_on_commit() {
     sink.on_message(
         vec![text("Rivers flow downhill.")],
         Some(MessageMetadata {
+            hidden_prompt_event: None,
             model: None,
             usage: None,
             vendor_id: Some("msg_1".to_string()),

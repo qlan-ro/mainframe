@@ -135,3 +135,36 @@ fn a_duplicate_uuid_keeps_its_first_record() {
     groups.apply(&mut messages);
     assert_eq!(turn_group(&messages[0]), Some("[\"s\",\"first\"]"));
 }
+
+#[tokio::test]
+async fn task_event_follows_the_prompt_ancestry_without_labeling_meta_resumes() {
+    use mainframe_types::transcript_presentation::HIDDEN_PROMPT_EVENT_KEY;
+    let messages = load_fixture().await;
+    let event = |answer| {
+        messages
+            .iter()
+            .find(|m| first_text(m) == Some(answer))
+            .and_then(|message| {
+                message
+                    .metadata
+                    .as_ref()?
+                    .get(HIDDEN_PROMPT_EVENT_KEY)?
+                    .as_str()
+            })
+    };
+    assert_eq!(event(LIMIT), Some("Background task finished"));
+    assert_eq!(event("No response requested."), None);
+    assert_eq!(event("Both checks finished."), None);
+}
+
+#[test]
+fn notification_uses_native_summary() {
+    let event = serde_json::json!({
+        "origin": {"kind": "task-notification"},
+        "message": {"content": [{"type":"text", "text":"<task-notification><status>failed</status><summary>Checks failed</summary></task-notification>"}]}
+    });
+    assert_eq!(
+        super::notification_summary(&event).as_deref(),
+        Some("Checks failed")
+    );
+}

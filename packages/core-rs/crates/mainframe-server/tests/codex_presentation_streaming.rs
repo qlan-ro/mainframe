@@ -258,6 +258,7 @@ fn nonempty_legacy_message_metadata_survives_presentation_transport() {
         serde_json::from_value(json!([{"type":"text","text":"legacy"}])).unwrap(),
         Some(mainframe_types::adapter::MessageMetadata {
             vendor_id: Some("legacy".into()),
+            hidden_prompt_event: None,
             model: Some("keep-model".into()),
             usage: None,
         }),

@@ -63,6 +63,7 @@ fn bash_tool_result() -> MessageContent {
 
 fn assistant_metadata() -> mainframe_types::adapter::MessageMetadata {
     mainframe_types::adapter::MessageMetadata {
+        hidden_prompt_event: None,
         model: Some("claude-3-5-sonnet".to_string()),
         usage: None,
         vendor_id: None,

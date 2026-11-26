@@ -165,6 +165,12 @@ impl SessionSinkImpl {
         let mut vendor_id = None;
         if let Some(m) = metadata {
             vendor_id = m.vendor_id;
+            if let Some(event) = m.hidden_prompt_event {
+                meta.insert(
+                    mainframe_types::transcript_presentation::HIDDEN_PROMPT_EVENT_KEY.into(),
+                    serde_json::Value::String(event),
+                );
+            }
             if let Some(model) = m.model {
                 meta.insert("model".to_string(), serde_json::Value::String(model));
             }

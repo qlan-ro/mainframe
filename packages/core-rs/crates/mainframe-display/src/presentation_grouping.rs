@@ -57,6 +57,14 @@ pub(super) fn store(meta: &mut HashMap<String, Value>, sources: Vec<DisplayPrese
 }
 
 pub(super) fn append(previous: &mut ChatMessage, next: &ChatMessage) {
+    let turn_group = mainframe_types::transcript_presentation::TURN_GROUP_KEY;
+    if let Some(group) = next.metadata.as_ref().and_then(|m| m.get(turn_group)) {
+        previous
+            .metadata
+            .get_or_insert_default()
+            .entry(turn_group.into())
+            .or_insert_with(|| group.clone());
+    }
     let Some(mut next_sources) = sources(next.metadata.as_ref()) else {
         return;
     };
