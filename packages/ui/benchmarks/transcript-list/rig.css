@@ -1,0 +1,32 @@
+@import '../../src/styles/app.css';
+@source '../../src';
+@source '.';
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+[data-rig-v2] [data-testid='chat-transcript'] {
+  height: 100%;
+}
+.rig-hud {
+  position: fixed;
+  top: 6px;
+  right: 8px;
+  z-index: 50;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font:
+    12px/1.6 ui-monospace,
+    monospace;
+  background: rgb(0 0 0 / 0.75);
+  color: white;
+  pointer-events: none;
+}
+.rig-cv [data-testid='chat-message-list'] > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 400px;
+}
