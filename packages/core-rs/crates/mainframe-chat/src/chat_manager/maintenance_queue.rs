@@ -241,14 +241,7 @@ impl ChatManager {
             self.shared
                 .active_queue_echoes
                 .remove_if(chat_id, |_, uuid| uuid == &input.uuid);
-            if self.shared.queue_pauses.contains_key(chat_id)
-                && self
-                    .shared
-                    .deps
-                    .idle_queue_list(chat_id)?
-                    .iter()
-                    .any(|row| row.uuid == input.uuid && row.delivery == DeliveryState::Pending)
-            {
+            if self.queued_write_was_paused(chat_id, &input.uuid)? {
                 return Ok(());
             }
             self.retain_failed_delivery(chat_id, post, &mut input, prior, &error)?;

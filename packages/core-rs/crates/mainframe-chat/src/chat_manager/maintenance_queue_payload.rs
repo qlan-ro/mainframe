@@ -98,6 +98,20 @@ impl ChatManager {
             }),
         )
     }
+    pub(super) fn queued_write_was_paused(
+        &self,
+        chat_id: &str,
+        uuid: &str,
+    ) -> Result<bool, SendError> {
+        Ok(self.shared.queue_pauses.contains_key(chat_id)
+            && self
+                .shared
+                .deps
+                .idle_queue_list(chat_id)?
+                .iter()
+                .any(|row| row.uuid == uuid && row.delivery == DeliveryState::Pending))
+    }
+
     fn retain_paused_write(&self, chat_id: &str, mut input: QueuedInput) {
         let uuid = input.uuid.clone();
         self.shared

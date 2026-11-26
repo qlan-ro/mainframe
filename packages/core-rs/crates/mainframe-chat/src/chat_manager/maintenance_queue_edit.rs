@@ -70,7 +70,7 @@ impl ChatManager {
         chat_id: &str,
         message_id: &str,
     ) -> Result<(), SendError> {
-        let lock = self
+        let _lock = self
             .handoff_locks
             .acquire(&format!("maintenance:{chat_id}"))
             .await;
@@ -90,8 +90,6 @@ impl ChatManager {
             self.confirm_queued_message(chat_id, message_id, true);
             self.notify_queue_changed(chat_id);
             self.event_handler.emit_display(chat_id);
-            drop(lock);
-            self.resume_maintenance_queue(chat_id).await?;
             self.shared.schedule_maintenance_drain(chat_id);
         }
         Ok(())

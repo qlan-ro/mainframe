@@ -178,3 +178,19 @@ async fn cold_pending_queue_has_a_resume_control() {
         Some("Session ended")
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn confirming_uncertain_head_preserves_stop_until_resume() {
+    let (manager, session, first, _) = dispatch_without_echo().await;
+    time_out(&manager).await;
+    finish_turn(&session, false);
+    manager.interrupt_chat("c").await;
+    manager.confirm_uncertain_input("c", &first).await.unwrap();
+    tokio::task::yield_now().await;
+    let refs = manager.get_queued_for_chat("c");
+    assert_eq!(refs.len(), 1);
+    assert_eq!(refs[0].pause_reason.as_deref(), Some("Stopped"));
+    assert_eq!(session.sent.lock_recover().len(), 1);
+    manager.resume_maintenance_queue("c").await.unwrap();
+    assert_next(&session, "second").await;
+}
