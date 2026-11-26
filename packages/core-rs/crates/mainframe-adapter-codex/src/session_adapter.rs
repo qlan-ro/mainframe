@@ -37,7 +37,17 @@ impl AdapterSession for CodexSession {
         &self.project_path
     }
     fn is_spawned(&self) -> bool {
-        self.client.lock_recover().is_some()
+        self.client
+            .lock_recover()
+            .as_ref()
+            .is_some_and(|client| !client.is_closing())
+    }
+
+    fn is_closing(&self) -> bool {
+        self.client
+            .lock_recover()
+            .as_ref()
+            .is_some_and(|client| client.is_closing())
     }
 
     fn last_activity_at(&self) -> Option<i64> {
@@ -63,7 +73,7 @@ impl AdapterSession for CodexSession {
     }
 
     fn get_process_info(&self) -> Option<AdapterProcess> {
-        if self.client.lock_recover().is_none() {
+        if !self.is_spawned() {
             return None;
         }
         let chat_id = self
@@ -98,11 +108,8 @@ impl AdapterSession for CodexSession {
         _uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(
-            async move {
-                self.touch_activity();
-                self.send_message_inner(message, images, _uuid).await
-            }
-            .instrument(self.span.clone()),
+            self.send_message_inner(message, images, _uuid)
+                .instrument(self.span.clone()),
         )
     }
 
@@ -115,13 +122,7 @@ impl AdapterSession for CodexSession {
         message: String,
         _uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin(
-            async move {
-                self.touch_activity();
-                self.steer_inner(message).await
-            }
-            .instrument(self.span.clone()),
-        )
+        Box::pin(self.steer_inner(message).instrument(self.span.clone()))
     }
 
     fn cancel_queued_message(&self, _uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {

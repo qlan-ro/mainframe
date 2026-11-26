@@ -104,6 +104,7 @@ impl ProcessWatch {
         );
         finish_pumps(pumps).await;
         self.report_exit(code);
+        self.closed.store(true, Ordering::SeqCst);
         (self.handlers.on_exit)(code);
         self.exited.store(true, Ordering::SeqCst);
         self.close_notify.notify_waiters();

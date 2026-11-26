@@ -39,6 +39,11 @@ pub trait AdapterSession: Send + Sync {
     fn adapter_id(&self) -> &str;
     fn project_path(&self) -> &str;
     fn is_spawned(&self) -> bool;
+    /// A shutdown was requested, and the adapter still owns the departing session.
+    fn is_closing(&self) -> bool {
+        false
+    }
+
     /// `supportsReplayAck?` — default `false` (adapter consumes the message
     /// synchronously, so the chat-manager never enrolls it in `queuedRefs`).
     fn supports_replay_ack(&self) -> bool {

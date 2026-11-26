@@ -580,7 +580,7 @@ impl ChatLifecycleManager {
     }
 
     async fn do_start_chat(&self, chat_id: &str) -> Result<(), LifecycleError> {
-        self.load_chat(chat_id).await;
+        self.load_chat_for_start(chat_id).await?;
 
         let cell = self
             .get_active(chat_id)

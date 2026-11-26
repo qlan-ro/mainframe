@@ -40,6 +40,7 @@ impl CodexSession {
                 crate::jsonrpc::RpcFailure::Unconfirmed(error) => AdapterError::Message(error.0),
             })?)?;
 
+        self.touch_activity();
         self.report_undeliverable(&undeliverable);
         *self.status.lock_recover() = AdapterProcessStatus::Running;
         Ok(())

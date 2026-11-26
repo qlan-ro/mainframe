@@ -12,9 +12,10 @@ impl CodexSession {
                 .map_err(|_| {
                     AdapterError::Message("Codex app-server termination was not confirmed".into())
                 })?;
+        } else {
+            let sink = self.sink.lock_recover().clone();
+            clear_after_exit(&self.state, &*sink);
         }
-        let sink = self.sink.lock_recover().clone();
-        clear_after_exit(&self.state, &*sink);
         Ok(())
     }
     pub(super) async fn interrupt_inner(&self) -> Result<(), AdapterError> {
@@ -70,11 +71,11 @@ impl CodexSession {
                 let s = sink_x.lock_recover().clone();
                 clear_after_exit(&state_x, &*s);
                 *status_x.lock_recover() = AdapterProcessStatus::Stopped;
-                *client_slot_x.lock_recover() = None;
                 s.on_exit(code);
                 if let Some(cb) = on_exit_cb.lock_recover().take() {
                     cb();
                 }
+                *client_slot_x.lock_recover() = None;
             }),
         }
     }
