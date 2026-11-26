@@ -36,6 +36,10 @@ import { SendControls } from './send/SendControls';
 import { useEnterMode } from './send/use-enter-mode';
 import { UnsentNotices } from './unsent/UnsentNotices';
 import { TopStrip } from './strips/TopStrip';
+import { ComposerLexicalField } from './lexical/ComposerLexicalField';
+import { isLexicalComposerEnabled } from './lexical/lexical-composer-flag';
+import { createLexicalComposerBridge } from './lexical/lexical-bridge';
+import { openMentionInEditor } from './lexical/lexical-edits';
 
 /**
  * The textarea, split out so `useTriggerFieldAria()` resolves correctly:
@@ -159,6 +163,16 @@ function ComposerCard({
   const placeholder = usePlaceholder(hasLiveQuote);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toolbarRef = useRef<ComposerToolbarHandle>(null);
+  // Spike (#482): a Lexical field with atomic chips, behind a dev flag.
+  const [lexical] = useState(() => (isLexicalComposerEnabled() ? createLexicalComposerBridge() : null));
+  const handleLexicalEnter = useCallback(
+    (altKey: boolean) => {
+      if (!isRunning) return submit();
+      submit((enterWhileRunning === 'steer') !== altKey ? 'steer' : 'queue');
+    },
+    [isRunning, submit, enterWhileRunning],
+  );
+  const cyclePermission = useCallback(() => toolbarRef.current?.cyclePermission(), []);
 
   // Mid-run Enter. The native ComposerPrimitive.Input gates Enter off while
   // running unless `thread.capabilities.queue` is set — and that is false for
@@ -187,7 +201,7 @@ function ComposerCard({
   );
 
   return (
-    <ComposerTriggers textareaRef={textareaRef}>
+    <ComposerTriggers textareaRef={textareaRef} lexical={lexical}>
       <ComposerPrimitive.Root
         ref={cardRef}
         data-testid="chat-composer"
@@ -206,7 +220,7 @@ function ComposerCard({
         // that content rather than letting it paint past the card's border.
         // `z-1` keeps it over the strip tucked behind its top edge. The focus
         // line is the FIELD's: a focused toolbar control draws its own.
-        className="relative z-1 min-h-0 min-w-60 overflow-y-auto rounded-[16px] bg-card shadow-card transition-colors has-[textarea:focus-visible]:focus-line-inset"
+        className="relative z-1 min-h-0 min-w-60 overflow-y-auto rounded-[16px] bg-card shadow-card transition-colors has-[textarea:focus-visible]:focus-line-inset has-[[contenteditable]:focus]:focus-line-inset"
       >
         <ComposerPrimitive.AttachmentDropzone
           data-testid="composer-dropzone"
@@ -228,15 +242,33 @@ function ComposerCard({
 
           {/* Scroll-wrapper owns max-h + overflow so overlay and textarea wrap/scroll together. */}
           <div className="relative max-h-48 overflow-y-auto">
-            <ComposerHighlight />
-            <ComposerInputField textareaRef={textareaRef} onKeyDown={handleInputKeyDown} placeholder={placeholder} />
+            {lexical ? (
+              <ComposerLexicalField
+                bridge={lexical}
+                placeholder={placeholder}
+                onEnter={handleLexicalEnter}
+                onShiftTab={cyclePermission}
+              />
+            ) : (
+              <>
+                <ComposerHighlight />
+                <ComposerInputField
+                  textareaRef={textareaRef}
+                  onKeyDown={handleInputKeyDown}
+                  placeholder={placeholder}
+                />
+              </>
+            )}
           </div>
 
           <div
             data-testid="chat-composer-toolbar"
             className="flex min-w-0 items-center gap-0.5 @max-[320px]/composer:flex-wrap @max-[320px]/composer:gap-x-0 @max-[320px]/composer:gap-y-2"
           >
-            <ComposerAddMenu textareaRef={textareaRef} />
+            <ComposerAddMenu
+              textareaRef={textareaRef}
+              onOpenMention={lexical ? () => lexical.editor && openMentionInEditor(lexical.editor) : undefined}
+            />
             <ComposerToolbar ref={toolbarRef} variant={variant} />
             <span className="min-w-0 flex-1" aria-hidden />
             {/* Below 320px this group wraps onto its own row, so nothing truncates. */}
