@@ -127,3 +127,33 @@ it('reads a workflow of its parent’s from its parent’s state', () => {
   expect(renderHook(() => useWorkflowRun('w'), { wrapper }).result.current).toBe(run);
   expect(renderHook(() => useWorkflowRun('x'), { wrapper }).result.current).toBeUndefined();
 });
+
+it.each([
+  ['completed', 'result', 'completed'],
+  ['failed', 'result', 'failed'],
+  ['stopped', 'result', 'stopped'],
+  ['completed', 'notification', 'completed'],
+  ['unknown', undefined, 'Open to see status'],
+])('shows the historical %s row from %s', (status, source, receipt) => {
+  const part = agent({
+    providerMetadata: {
+      mainframe: {
+        subagentFact: {
+          status,
+          source,
+          summary: 'Files checked',
+          durationMs: 2000,
+          toolUseCount: 3,
+          tokens: 45,
+        },
+      },
+    },
+  });
+  render(<TurnFixture rootId={`historical-${status}-${source}`} messages={[user('Hi'), assistant([part], 'm')]} />);
+  const toggle = screen.getByTestId(/^chat-work-toggle-/);
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
+  const row = screen.getByTestId('chat-row-agent-receipt');
+  expect(row).toHaveTextContent(receipt);
+  expect(row).toHaveTextContent('3 tools');
+  expect(row).toHaveTextContent('45 tokens');
+});

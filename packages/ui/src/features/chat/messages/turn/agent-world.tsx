@@ -69,7 +69,10 @@ export function readAgentWork(
   const facts = callFacts({ part, messageId: '' }, pending);
   const own = ownTasks(tasks, part.toolCallId);
   const standing = agentStanding({ facts, tasks: own, goes: runs && partLive, live });
-  return agentWork(settledStatus(part, pending, partLive), standing);
+  const historical = facts.historical?.status;
+  if (standing || !historical) return agentWork(settledStatus(part, pending, partLive), standing);
+  const status = historical === 'completed' ? 'success' : historical;
+  return { standing, status, outcome: agentOutcome(status) };
 }
 
 /** How a sub-agent's call stands in the transcript around it. */

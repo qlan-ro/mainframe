@@ -166,3 +166,16 @@ it('keeps a launch acknowledgment in the retry count and opens the earlier failu
     'true',
   );
 });
+
+it('keeps failures closed while the historical child outcome is unknown', () => {
+  const child = tool({
+    toolCallId: 'unknown-child',
+    toolName: 'Task',
+    result: 'Launched',
+    providerMetadata: { mainframe: { subagentFact: { status: 'unknown' } } },
+  });
+  const messages = [user('Hi'), assistant([child, bash('bad', 'ls', failed)])];
+  render(<TurnFixture rootId="unresolved-historical-agent" messages={messages} />);
+  expect(row('bad')).toHaveAttribute('aria-expanded', 'false');
+  expect(row('unknown-child')).toHaveAttribute('aria-expanded', 'false');
+});

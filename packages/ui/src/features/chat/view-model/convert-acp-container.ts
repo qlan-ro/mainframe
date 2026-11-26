@@ -69,6 +69,8 @@ function textOf(content: readonly ContentBlock[]): string {
   return content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
 }
 
+import { parseSubagentFact } from './subagent-facts';
+
 function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
   const item = parsed.item as Extract<AccumulatedItem, { kind: 'tool-call' }>;
   // Never the id as a name (D3): a missing title means the daemon hasn't
@@ -77,17 +79,20 @@ function toolPart(parsed: ParsedItem, children: ChildrenMap): ContentPart {
   const codexAgent = item.title === 'CollabAgent';
   const toolName = parsed.meta.subagent && !codexAgent ? 'Task' : (item.title ?? 'Unknown tool');
   const lifecycle = projectToolLifecycle(item.status);
+  const toolCallId = parsed.meta.sourceToolCallId ?? item.id;
+  const historical = parsed.meta.messageMeta?.subagentFacts as Record<string, unknown> | undefined;
+  const subagentFact = parseSubagentFact(historical?.[toolCallId]);
   return {
     type: 'tool-call',
-    toolCallId: parsed.meta.sourceToolCallId ?? item.id,
+    toolCallId,
     toolName,
     args: toJsonArgs((item.rawInput ?? {}) as object),
     result: toolCallResult(item),
     ...(parsed.meta.toolCallTiming ? { timing: parsed.meta.toolCallTiming } : {}),
     isError: item.status === 'failed' ? true : undefined,
-    ...((lifecycle || parsed.meta.commandExecution) && {
+    ...((lifecycle || subagentFact || parsed.meta.commandExecution) && {
       providerMetadata: {
-        ...(lifecycle && { mainframe: lifecycle }),
+        ...((lifecycle || subagentFact) && { mainframe: { ...lifecycle, ...(subagentFact && { subagentFact }) } }),
         ...(parsed.meta.commandExecution && { codex: parsed.meta.commandExecution }),
       },
     }),
