@@ -34,7 +34,7 @@ pub mod version;
 
 pub use adapter::{
     Adapter, AdapterSession, ContextFiles, FORK_CUT_NOT_FOUND_REASON, ForkCut, ForkPinError,
-    ForkPinRequest, ImageInput, LoadedSkill, SessionSink, StopBackgroundTaskResult,
+    ForkPinRequest, HistoryFiles, ImageInput, LoadedSkill, SessionSink, StopBackgroundTaskResult,
 };
 pub use mainframe_types::adapter::{ControlRequest, ControlResponse};
 pub use plan_mode_actions::{

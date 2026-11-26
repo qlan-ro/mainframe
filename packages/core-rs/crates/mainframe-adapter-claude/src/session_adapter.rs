@@ -150,6 +150,14 @@ impl AdapterSession for ClaudeSession {
     fn history_sources(&self) -> BoxFuture<'_, Vec<std::path::PathBuf>> {
         Box::pin((ClaudeSession::history_sources(self)).instrument(self.span.clone()))
     }
+    fn take_history_files(&self) -> Option<mainframe_adapter_api::HistoryFiles> {
+        self.history_files.lock_recover().take()
+    }
+    fn extract_history_files(
+        &self,
+    ) -> BoxFuture<'_, Result<mainframe_adapter_api::HistoryFiles, AdapterError>> {
+        Box::pin(async move { Ok(self.read_history(false).await.1) })
+    }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         Box::pin((ClaudeSession::extract_plan_files(self)).instrument(self.span.clone()))
     }

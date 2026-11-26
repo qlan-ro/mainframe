@@ -43,14 +43,14 @@ async fn plan_file_paths_from(discovered: &DiscoveredFiles, project_dir: &str) -
     }
     let mut plan_files: Vec<String> = Vec::new();
     for file in &discovered.all_files {
-        let Some(mut lines) = open_lines(file).await else {
+        let Some(data) = open_lines(file).await else {
             continue;
         };
-        while let Ok(Some(line)) = lines.next_line().await {
+        for line in valid_lines(&data) {
             if line.trim().is_empty() {
                 continue;
             }
-            let entry: PlanEntry = match serde_json::from_str(&line) {
+            let entry: PlanEntry = match serde_json::from_slice(line.as_bytes()) {
                 Ok(v) => v,
                 Err(_) => continue,
             };
@@ -96,11 +96,11 @@ async fn skill_file_paths_from(
     let mut cache: HashMap<String, String> = HashMap::new();
     let mut skill_files: Vec<SkillFileEntry> = Vec::new();
     for file in &discovered.all_files {
-        let Some(mut lines) = open_lines(file).await else {
+        let Some(data) = open_lines(file).await else {
             continue;
         };
-        while let Ok(Some(line)) = lines.next_line().await {
-            for skill in skill_names(&line) {
+        for line in valid_lines(&data) {
+            for skill in skill_names(line) {
                 push_skill_file(
                     &skill,
                     project_path,
@@ -114,15 +114,18 @@ async fn skill_file_paths_from(
     skill_files
 }
 fn skill_names(line: &str) -> Vec<String> {
-    let Ok(header) = serde_json::from_str::<EntryKind>(line) else {
+    let Ok(header) = serde_json::from_slice::<EntryKind>(line.as_bytes()) else {
         return Vec::new();
     };
     if header.kind.as_deref() != Some("assistant") {
         return Vec::new();
     }
-    let Ok(entry) = serde_json::from_str::<Value>(line) else {
+    let Ok(entry) = serde_json::from_slice::<Value>(line.as_bytes()) else {
         return Vec::new();
     };
+    skill_names_from(&entry)
+}
+fn skill_names_from(entry: &Value) -> Vec<String> {
     entry
         .get("message")
         .and_then(|message| message.get("content"))
@@ -142,6 +145,52 @@ fn skill_names(line: &str) -> Vec<String> {
                 .map(str::to_string)
         })
         .collect()
+}
+
+#[derive(Default)]
+pub(super) struct PathCollector {
+    pub(super) files: mainframe_adapter_api::HistoryFiles,
+    seen: HashSet<String>,
+    cache: HashMap<String, String>,
+}
+
+impl PathCollector {
+    pub(super) fn observe_plan(&mut self, line: &str, base: &str) {
+        if let Ok(PlanEntry {
+            kind: Some(kind),
+            tool_use_result:
+                Some(PlanResult {
+                    plan: Some(_),
+                    file_path: Some(path),
+                }),
+        }) = serde_json::from_slice(line.as_bytes())
+            && kind == "user"
+        {
+            self.files.plans.push(path_resolve(base, &path));
+        }
+    }
+    pub(super) fn observe(&mut self, entry: &Value, line: &str, base: &str, project: &str) {
+        match entry["type"].as_str() {
+            Some("user") if entry["toolUseResult"]["plan"].is_string() => {
+                self.observe_plan(line, base);
+            }
+            Some("assistant") => {
+                for skill in skill_names_from(entry) {
+                    if serde_json::from_slice::<EntryKind>(line.as_bytes()).is_err() {
+                        break;
+                    }
+                    push_skill_file(
+                        &skill,
+                        project,
+                        &mut self.seen,
+                        &mut self.cache,
+                        &mut self.files.skills,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn push_skill_file(
@@ -181,43 +230,5 @@ pub(super) fn path_resolve(base: &str, p: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[tokio::test]
-    async fn metadata_scans_preserve_plans_and_skills_around_large_image_results() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("session.jsonl");
-        let entries = [
-            json!({"type":"user","message":{"content":[{"type":"tool_result",
-                "content":[{"type":"image","source":{"data":"A".repeat(2_000_000)}}]}]}}),
-            json!({"type":"user","toolUseResult":{"plan":"the plan","filePath":"plans/p.md"}}),
-            json!({"type":"assistant","message":{"content":[{"type":"tool_use",
-                "name":"Skill","input":{"skill":"tdd"}}]}}),
-            json!({"type":"user","toolUseResult":{"plan":false,"filePath":"ignored.md"}}),
-        ];
-        std::fs::write(
-            &path,
-            entries
-                .iter()
-                .map(Value::to_string)
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
-        .unwrap();
-        let discovered = DiscoveredFiles {
-            complete: true,
-            primary_path: path.to_string_lossy().into_owned(),
-            all_files: vec![path.to_string_lossy().into_owned()],
-            subagent_files: HashSet::new(),
-        };
-        assert_eq!(
-            plan_file_paths_from(&discovered, "/project").await,
-            vec!["/project/plans/p.md"]
-        );
-        let skills = skill_file_paths_from(&discovered, "/project").await;
-        assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].display_name, "tdd");
-    }
-}
+#[path = "history_paths_tests.rs"]
+mod tests;

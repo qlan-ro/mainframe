@@ -4,8 +4,6 @@ use std::path::Path;
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent};
 use mainframe_types::context::SkillFileEntry;
 use serde_json::Value;
-use tokio::fs::File;
-use tokio::io::{AsyncBufReadExt, BufReader, Lines};
 
 use crate::history_converters::{
     convert_history_entry, synthesize_skill_loaded_from_user_entry,
@@ -23,12 +21,9 @@ fn is_strict_true(v: Option<&Value>) -> bool {
     matches!(v, Some(Value::Bool(true)))
 }
 
-async fn open_lines(file_path: &str) -> Option<Lines<BufReader<File>>> {
-    File::open(file_path)
-        .await
-        .ok()
-        .map(|f| BufReader::new(f).lines())
-}
+#[path = "history_reader.rs"]
+mod reader;
+use reader::{open_lines, valid_lines};
 
 pub struct DiscoveredFiles {
     pub primary_path: String,
@@ -69,7 +64,15 @@ pub(crate) async fn load_history_with_index(
         index,
     )
     .await;
-    load_discovered_history(session_id, &discovered).await
+    load_discovered_history(
+        session_id,
+        &discovered,
+        &get_session_jsonl_path(session_id, project_path).project_dir,
+        project_path,
+        true,
+    )
+    .await
+    .0
 }
 pub async fn load_history_in_dir(session_id: &str, project_dir: &str) -> Vec<ChatMessage> {
     load_history_in_dir_with_index(session_id, project_dir, None).await
@@ -82,39 +85,43 @@ pub(crate) async fn load_history_in_dir_with_index(
 ) -> Vec<ChatMessage> {
     let discovered =
         history_discovery::discover_indexed_files_in_dir(session_id, project_dir, index).await;
-    load_discovered_history(session_id, &discovered).await
+    load_discovered_history(session_id, &discovered, project_dir, project_dir, true)
+        .await
+        .0
 }
 
-async fn load_discovered_history(
+pub(crate) async fn load_discovered_history(
     session_id: &str,
     discovered: &DiscoveredFiles,
-) -> Vec<ChatMessage> {
+    base: &str,
+    project: &str,
+    messages: bool,
+) -> (Vec<ChatMessage>, mainframe_adapter_api::HistoryFiles) {
     if discovered.all_files.is_empty() {
-        return Vec::new();
+        return Default::default();
     }
     let subagent_files = &discovered.subagent_files;
 
+    let mut paths = PathCollector::default();
     let mut load = HistoryLoad::default();
     for file in &discovered.all_files {
-        let is_subagent_file = subagent_files.contains(file);
-        let Some(mut lines) = open_lines(file).await else {
+        let Some(data) = open_lines(file).await else {
             continue;
         };
-        while let Ok(Some(line)) = lines.next_line().await {
-            if line.trim().is_empty() {
+        let is_subagent = subagent_files.contains(file);
+        for line in valid_lines(&data) {
+            let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
+                paths.observe_plan(line, base);
                 continue;
-            }
-            tracing::trace!(session_id = %session_id, file = %file, line = %line, "jsonl line");
-
-            let entry: Value = match serde_json::from_str(&line) {
-                Ok(v) => v,
-                Err(_) => continue, // skip malformed lines
             };
-            load.entry(&entry, session_id, is_subagent_file);
+            paths.observe(&entry, line, base, project);
+            if messages {
+                load.entry(&entry, session_id, is_subagent);
+            }
         }
     }
-
-    load.finish()
+    let rows = load.finish();
+    (rows, paths.files)
 }
 
 #[path = "history_discovery.rs"]

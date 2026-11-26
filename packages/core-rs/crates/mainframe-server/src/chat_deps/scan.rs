@@ -1,7 +1,12 @@
 use super::*;
 
 impl DaemonChatDeps {
-    pub(super) async fn scan_history(&self, chat_id: &str, canonical: Option<&[ChatMessage]>) {
+    pub(super) async fn scan_history(
+        &self,
+        chat_id: &str,
+        canonical: Option<&[ChatMessage]>,
+        files: Option<mainframe_adapter_api::HistoryFiles>,
+    ) {
         let Some(session) = self.session_for_scan(chat_id) else {
             return;
         };
@@ -26,8 +31,12 @@ impl DaemonChatDeps {
             Ok(history) => self.scan_and_persist_prs(chat_id, &history),
             Err(err) => tracing::warn!(error = %err, chat_id, "load_scan_records failed"),
         }
-        self.persist_plan_and_skill_files(chat_id, session.as_ref())
-            .await;
+        if let Some(files) = files.or_else(|| session.take_history_files()) {
+            self.persist_history_files(chat_id, files);
+        } else {
+            self.persist_plan_and_skill_files(chat_id, session.as_ref())
+                .await;
+        }
     }
 
     pub(super) fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
@@ -110,25 +119,23 @@ impl DaemonChatDeps {
         }
     }
 
-    /// `Promise.all([extractPlanFiles(), extractSkillFiles()])` — either failing
-    /// drops both (best-effort).
     pub(super) async fn persist_plan_and_skill_files(
         &self,
         chat_id: &str,
         session: &dyn AdapterSession,
     ) {
-        let Ok((plan_paths, skill_paths)) =
-            tokio::try_join!(session.extract_plan_files(), session.extract_skill_files())
-        else {
-            return;
-        };
-        for p in plan_paths {
+        if let Ok(files) = session.extract_history_files().await {
+            self.persist_history_files(chat_id, files);
+        }
+    }
+    fn persist_history_files(&self, chat_id: &str, files: mainframe_adapter_api::HistoryFiles) {
+        for p in files.plans {
             if let Err(error) = self.add_plan_file(chat_id, &p) {
                 self.emit_storage_error(chat_id, error);
                 return;
             }
         }
-        for entry in skill_paths {
+        for entry in files.skills {
             if let Err(error) = self.add_skill_file(chat_id, &entry) {
                 self.emit_storage_error(chat_id, error);
                 return;

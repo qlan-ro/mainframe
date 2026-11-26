@@ -117,25 +117,53 @@ impl ClaudeSession {
         )
     }
     pub async fn load_history(&self) -> Result<Vec<ChatMessage>, AdapterError> {
-        match self.resume_target().await {
-            crate::fork::ResumeTarget::Own(id) => Ok(crate::history::load_history_with_index(
-                &id,
-                &self.project_path,
-                self.session_file_path.as_deref(),
-                self.history_index.as_deref(),
-            )
-            .await),
+        let (messages, files) = self.read_history(true).await;
+        *self.history_files.lock_recover() = Some(files);
+        Ok(messages)
+    }
+    pub(super) async fn read_history(
+        &self,
+        messages: bool,
+    ) -> (Vec<ChatMessage>, mainframe_adapter_api::HistoryFiles) {
+        let Some((id, base, discovered)) = self.discover_history().await else {
+            return Default::default();
+        };
+        crate::history::load_discovered_history(
+            &id,
+            &discovered,
+            &base,
+            &self.project_path,
+            messages,
+        )
+        .await
+    }
+    async fn discover_history(&self) -> Option<(String, String, crate::history::DiscoveredFiles)> {
+        let (id, base, discovered) = match self.resume_target().await {
+            crate::fork::ResumeTarget::Own(id) => {
+                let base =
+                    crate::transcript::get_session_jsonl_path(&id, &self.project_path).project_dir;
+                let found = crate::history::history_discovery::discover_indexed_session_files(
+                    &id,
+                    &self.project_path,
+                    self.session_file_path.as_deref(),
+                    self.history_index.as_deref(),
+                )
+                .await;
+                (id, base, found)
+            }
             crate::fork::ResumeTarget::Fork(path) => {
                 let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
-                Ok(crate::history::load_history_in_dir_with_index(
+                let found = crate::history::history_discovery::discover_indexed_files_in_dir(
                     &session_id,
                     &dir,
                     self.history_index.as_deref(),
                 )
-                .await)
+                .await;
+                (session_id, dir, found)
             }
-            crate::fork::ResumeTarget::Fresh => Ok(vec![]),
-        }
+            crate::fork::ResumeTarget::Fresh => return None,
+        };
+        Some((id, base, discovered))
     }
     /// `load_history`'s own transcript files (main + subagent), resolved the
     /// same way — the history snapshot cache's freshness fingerprint
@@ -143,26 +171,8 @@ impl ClaudeSession {
     /// it must mirror every branch `load_history` takes, not just the common
     /// one.
     pub async fn history_sources(&self) -> Vec<std::path::PathBuf> {
-        let discovered = match self.resume_target().await {
-            crate::fork::ResumeTarget::Own(id) => {
-                crate::history::history_discovery::discover_indexed_session_files(
-                    &id,
-                    &self.project_path,
-                    self.session_file_path.as_deref(),
-                    self.history_index.as_deref(),
-                )
-                .await
-            }
-            crate::fork::ResumeTarget::Fork(path) => {
-                let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
-                crate::history::history_discovery::discover_indexed_files_in_dir(
-                    &session_id,
-                    &dir,
-                    self.history_index.as_deref(),
-                )
-                .await
-            }
-            crate::fork::ResumeTarget::Fresh => return Vec::new(),
+        let Some((_, _, discovered)) = self.discover_history().await else {
+            return Vec::new();
         };
         if !discovered.complete {
             return Vec::new();

@@ -1,6 +1,12 @@
 use super::*;
 use std::path::PathBuf;
 
+#[derive(Default, Debug)]
+pub struct HistoryFiles {
+    pub plans: Vec<String>,
+    pub skills: Vec<mainframe_types::context::SkillFileEntry>,
+}
+
 /// A live adapter session. Trait object stored
 /// as `Arc<dyn AdapterSession>`; read-only props are getters, everything async is
 /// a hand-rolled `BoxFuture`.
@@ -100,6 +106,16 @@ pub trait AdapterSession: Send + Sync {
                 Some(history) => Ok(std::borrow::Cow::Borrowed(history)),
                 None => self.load_history().await.map(std::borrow::Cow::Owned),
             }
+        })
+    }
+    fn take_history_files(&self) -> Option<crate::HistoryFiles> {
+        None
+    }
+    fn extract_history_files(&self) -> BoxFuture<'_, Result<crate::HistoryFiles, AdapterError>> {
+        Box::pin(async move {
+            let (plans, skills) =
+                tokio::try_join!(self.extract_plan_files(), self.extract_skill_files())?;
+            Ok(crate::HistoryFiles { plans, skills })
         })
     }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>>;
