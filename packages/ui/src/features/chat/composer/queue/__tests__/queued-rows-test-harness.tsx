@@ -36,7 +36,7 @@ vi.mock('../../../runtime/chat-extras', () => ({
 export const startEdit = vi.fn();
 vi.mock('../../edit/composer-edit-context', () => ({ useComposerEdit: () => ({ startEdit }) }));
 const toastError = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/toast', () => ({ mfToast: { error: toastError } }));
+vi.mock('@/lib/toast', () => ({ mfToast: { error: toastError, info: vi.fn() } }));
 const focusVisibleComposer = vi.hoisted(() => vi.fn());
 vi.mock('../../focus-composer', () => ({ focusVisibleComposer }));
 

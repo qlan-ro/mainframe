@@ -119,13 +119,19 @@ describe('QueuedRows — queued rows', () => {
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();
     const head = within(screen.getAllByRole('listitem')[0]!);
     expect(head.queryByTestId('chat-queued-edit')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as sent' }));
-    expect(confirmQueuedMessage).toHaveBeenCalledExactlyOnceWith(4200, 'chat-1', 'm1');
-    fireEvent.click(screen.getByRole('button', { name: 'Move to composer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy to composer' }));
     await Promise.resolve();
     await Promise.resolve();
     expect(cancelQueuedMessage).not.toHaveBeenCalled();
     expect(composer.setText).toHaveBeenCalledWith('draft\n\ntext m1');
+
+    expect(rows()[0]).toHaveTextContent('Uncertain');
+    expect(rows()[1]).toHaveTextContent('Waiting on the message above');
+    expect(confirmQueuedMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as sent' }));
+    expect(confirmQueuedMessage).toHaveBeenCalledExactlyOnceWith(4200, 'chat-1', 'm1');
+    fireEvent.click(head.getByRole('button', { name: 'Remove queued message' }));
+    expect(cancelQueued).toHaveBeenCalledExactlyOnceWith('m1');
 
     mockChat.queued = queue(ref('m2', 2, { pauseReason: 'Session ended' }));
     view.rerender(

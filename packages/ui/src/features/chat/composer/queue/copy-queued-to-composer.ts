@@ -4,7 +4,7 @@ import { readLiveComposerState } from '../read-live-composer-state';
 import type { DraftComposer } from '../unsent/restore-draft';
 import { focusVisibleComposer } from '../focus-composer';
 
-export async function moveQueuedToComposer(
+export async function copyQueuedToComposer(
   composer: DraftComposer,
   port: number,
   chatId: string,
@@ -30,5 +30,7 @@ export async function moveQueuedToComposer(
     }),
   );
   const names = failures.filter((name) => name !== undefined);
-  if (names.length) mfToast.error('Could not copy some queued attachments', { description: names.join(', ') });
+  mfToast.info("Copied to the composer. Remove the queued message once you've sent it.", {
+    description: names.length ? `Could not copy: ${names.join(', ')}` : undefined,
+  });
 }

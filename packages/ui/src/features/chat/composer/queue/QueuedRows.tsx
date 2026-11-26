@@ -14,7 +14,7 @@ import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-er
 import { visibleMessageText } from '../../markers/message-markers';
 import { ComposerHint } from '../composer-card-context';
 import { useComposerEdit } from '../edit/composer-edit-context';
-import { moveQueuedToComposer } from './move-queued-to-composer';
+import { copyQueuedToComposer } from './copy-queued-to-composer';
 import { focusVisibleComposer } from '../focus-composer';
 import { CLAIM_MS, settled, useHeldQueue, type HeldMessage } from './held-queue-store';
 
@@ -169,11 +169,11 @@ function useQueuedRows(): QueueRow[] {
     action:
       delivery === 'unconfirmed' && extras
         ? {
-            label: 'Move to composer',
-            testId: 'chat-queued-move',
+            label: 'Copy to composer',
+            testId: 'chat-queued-copy',
             onClick: () => {
-              void moveQueuedToComposer(composer, extras.port, chatId, content, attachmentIds).catch(
-                report('move to composer'),
+              void copyQueuedToComposer(composer, extras.port, chatId, content, attachmentIds).catch(
+                report('copy to composer'),
               );
             },
           }
@@ -192,8 +192,7 @@ function useQueuedRows(): QueueRow[] {
               }
             : undefined,
     onEdit: delivery ? undefined : () => startEdit({ messageId, content }),
-    onRemove:
-      delivery === 'unconfirmed' ? undefined : () => void extras?.cancelQueued(messageId).catch(report('remove')),
+    onRemove: () => void extras?.cancelQueued(messageId).catch(report('remove')),
   }));
 }
 
