@@ -59,8 +59,26 @@ impl AgentFacts {
         agents: &HashMap<String, String>,
         files: &std::collections::HashSet<String>,
     ) {
+        self.apply_with(messages, agents, Some(files));
+    }
+
+    pub(super) fn apply_child(
+        &self,
+        messages: &mut [ChatMessage],
+        agents: &HashMap<String, String>,
+    ) {
+        self.apply_with(messages, agents, None);
+    }
+
+    fn apply_with(
+        &self,
+        messages: &mut [ChatMessage],
+        agents: &HashMap<String, String>,
+        files: Option<&std::collections::HashSet<String>>,
+    ) {
         let paths: HashMap<_, _> = files
-            .iter()
+            .into_iter()
+            .flatten()
             .filter_map(|file| {
                 let agent = Path::new(file)
                     .file_stem()?
@@ -69,6 +87,7 @@ impl AgentFacts {
                 Some((agents.get(agent)?.as_str(), file))
             })
             .collect();
+        let native_ids: HashMap<_, _> = agents.iter().map(|(agent, call)| (call, agent)).collect();
         for message in messages {
             let facts: HashMap<_, _> = message
                 .content
@@ -86,13 +105,16 @@ impl AgentFacts {
                     if !matches!(name.as_str(), "Agent" | "Task") {
                         return None;
                     }
-                    let fact = self
+                    let mut fact = self
                         .results
                         .get(id)
                         .or_else(|| self.notifications.get(id))
                         .cloned()
                         .or_else(|| tail(paths.get(id.as_str())?))
                         .unwrap_or_else(|| json!({"status":"unknown"}));
+                    if files.is_none() {
+                        fact["nativeAgentId"] = json!(native_ids.get(id));
+                    }
                     Some((id, fact))
                 })
                 .collect();

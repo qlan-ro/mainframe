@@ -175,6 +175,7 @@ export interface SubagentTabBodyProps {
   toolCallId: string;
   messageId?: string;
   savedNestedAgent?: boolean;
+  nativeAgentId?: string | null;
   title: string;
   /** In front in its pane. */
   active: boolean;
@@ -187,6 +188,7 @@ export function SubagentTabBody({
   title,
   active,
   savedNestedAgent,
+  nativeAgentId,
 }: SubagentTabBodyProps) {
   const root = useRef<HTMLDivElement>(null);
   const controller = useChatController(chatId, useDaemonPort());
@@ -228,13 +230,13 @@ export function SubagentTabBody({
         kind={kindLine(call)}
       >
         {shown != null && <AgentStatusLabel {...shown} testId={`workspace-agent-status-${toolCallId}`} />}
-        {(savedNestedAgent || (call && subagentFact(call.part) && place?.work.outcome !== 'going')) && (
+        {(nativeAgentId !== null && (savedNestedAgent || (call && subagentFact(call.part) && place?.work.outcome !== 'going'))) && (
           <>
-            <SubagentFind controller={controller} agentId={toolCallId} chatId={chatId} root={root} active={active} />
+            <SubagentFind controller={controller} agentId={nativeAgentId ?? toolCallId} toolCallId={toolCallId} chatId={chatId} root={root} active={active} />
             <ConversationExportButton
               label="Export sub-agent as Markdown"
               testId="workspace-agent-export"
-              load={() => controller.subagentHistory.export(toolCallId)}
+              load={() => controller.subagentHistory.export(nativeAgentId ?? toolCallId)}
               name="sub-agent"
             />
           </>
@@ -262,6 +264,7 @@ export function SubagentTabBody({
               toolCallId={toolCallId}
               messageId={messageId ?? toolCallId}
               messages={[]}
+              nativeAgentId={nativeAgentId}
               outcome="done"
             />
           </ParentScope>

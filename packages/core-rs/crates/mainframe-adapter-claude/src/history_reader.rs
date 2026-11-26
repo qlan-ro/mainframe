@@ -24,6 +24,8 @@ pub(super) async fn first_record(path: &str) -> Option<Vec<u8>> {
 }
 
 pub(super) fn open_reader(path: &str) -> std::io::Result<BufReader<std::fs::File>> {
+    #[cfg(test)]
+    OPENED_PATHS.with(|paths| paths.borrow_mut().push(path.to_owned()));
     Ok(BufReader::with_capacity(
         CHUNK_SIZE,
         std::fs::File::open(path)?,
@@ -73,6 +75,16 @@ pub(super) fn read_chunks(
         let consumed = bytes.len();
         reader.consume(consumed);
     }
+}
+
+#[cfg(test)]
+thread_local! {
+    static OPENED_PATHS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+pub(super) fn take_opened_paths() -> Vec<String> {
+    OPENED_PATHS.with(|paths| std::mem::take(&mut *paths.borrow_mut()))
 }
 
 #[cfg(test)]

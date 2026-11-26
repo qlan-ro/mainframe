@@ -5,7 +5,7 @@ import { useKnownDaemonPort } from '@/features/sessions/runtime/daemon-port-cont
 import { AgentSteps, type AgentStepsProps } from './AgentSteps';
 import { historyKey, loadSubagentPage, useSubagentHistoryStore } from './subagent-history-store';
 
-export function HistoricalAgentSteps({ chatId, ...props }: AgentStepsProps & { chatId: string }) {
+export function HistoricalAgentSteps({ chatId, nativeAgentId, ...props }: AgentStepsProps & { chatId: string; nativeAgentId?: string | null }) {
   const port = useKnownDaemonPort();
   const { toolCallId } = props;
   const key = historyKey(chatId, toolCallId);
@@ -14,11 +14,11 @@ export function HistoricalAgentSteps({ chatId, ...props }: AgentStepsProps & { c
 
   const load = useCallback(
     (older = false) => {
-      if (port === null) return;
+      if (port === null || nativeAgentId === null) return;
       const controller = chatControllerRegistry.getOrCreate(chatId, port);
-      void loadSubagentPage(key, (before) => controller.subagentHistory.page(toolCallId, before), older);
+      void loadSubagentPage(key, (before) => controller.subagentHistory.page(nativeAgentId ?? toolCallId, before), older);
     },
-    [chatId, key, port, toolCallId],
+    [chatId, key, nativeAgentId, port, toolCallId],
   );
 
   useEffect(() => {
@@ -57,9 +57,11 @@ export function HistoricalAgentSteps({ chatId, ...props }: AgentStepsProps & { c
         {(!entry || entry.error) && (
           <div role="alert">
             Could not load sub-agent history.
-            <Button variant="ghost" size="sm" onClick={() => load(Boolean(entry?.before))}>
-              Retry
-            </Button>
+            {nativeAgentId !== null && (
+              <Button variant="ghost" size="sm" onClick={() => load(Boolean(entry?.before))}>
+                Retry
+              </Button>
+            )}
           </div>
         )}
         {entry?.before && !entry.loading && !entry.error && (

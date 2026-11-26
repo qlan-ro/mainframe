@@ -84,6 +84,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
       chatId: chatId!,
       toolCallId: part.toolCallId,
       messageId: unit.messageId,
+      nativeAgentId: historical?.nativeAgentId,
       savedNestedAgent: Boolean(historical && ancestors.length),
       title: historical?.title || argText(part, 'description') || facts.verb,
     });
@@ -140,6 +141,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
         messageId={unit.messageId}
         toolCallId={part.toolCallId}
         prompt={argText(part, 'prompt')}
+        {...(Steps === HistoricalAgentSteps ? { nativeAgentId: historical?.nativeAgentId } : {})}
         outcome={outcome}
         result={historical?.summary ?? (launched ? '' : text)}
         resultBody={truncated && <ResultText part={part} />}

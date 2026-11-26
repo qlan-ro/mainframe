@@ -87,6 +87,7 @@ export const SubagentRowFactsSchema = z
     status: z.enum(['completed', 'failed', 'stopped', 'unknown']),
     source: z.enum(['result', 'notification', 'tail']).optional(),
     summary: z.string().nullish(),
+    nativeAgentId: z.string().nullish(),
     durationMs: z.number().nonnegative().nullish(),
     tokens: z.number().nonnegative().nullish(),
     toolUseCount: z.number().nonnegative().nullish(),

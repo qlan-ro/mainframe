@@ -36,12 +36,14 @@ function useResults(controller: AcpChatController, agentId: string, query: strin
 export function SubagentFind({
   controller,
   agentId,
+  toolCallId = agentId,
   chatId,
   root,
   active,
 }: {
   controller: AcpChatController;
   agentId: string;
+  toolCallId?: string;
   chatId: string;
   root: RefObject<HTMLDivElement | null>;
   active: boolean;
@@ -63,7 +65,7 @@ export function SubagentFind({
   }, [open]);
 
   const match = current?.matches[index];
-  const key = historyKey(chatId, agentId);
+  const key = historyKey(chatId, toolCallId);
   const entry = useSubagentHistoryStore((state) => state.entries.get(key));
   useEffect(() => {
     if (!open || !match || !entry || entry.loading || entry.error) return;

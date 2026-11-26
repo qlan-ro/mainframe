@@ -25,6 +25,7 @@ export interface SubagentTarget {
   /** Absent while the call isn't loaded; the tab loads the history that holds it. */
   messageId?: string;
   savedNestedAgent?: boolean;
+  nativeAgentId?: string | null;
   title: string;
 }
 
@@ -32,7 +33,7 @@ export function chatTab({ chatId, role, title }: ChatTarget): RunTab {
   return { id: `chat-${chatId}`, kind: 'chat', title, chatId, role };
 }
 
-function subagentTab({ chatId, toolCallId, messageId, title, savedNestedAgent }: SubagentTarget): RunTab {
+function subagentTab({ chatId, toolCallId, messageId, title, savedNestedAgent, nativeAgentId }: SubagentTarget): RunTab {
   return {
     id: `agent-${toolCallId}`,
     kind: 'agent',
@@ -40,7 +41,7 @@ function subagentTab({ chatId, toolCallId, messageId, title, savedNestedAgent }:
     chatId,
     toolCallId,
     messageId,
-    ...(savedNestedAgent ? { savedNestedAgent } : {}),
+    ...(savedNestedAgent ? { savedNestedAgent, nativeAgentId } : {}),
   };
 }
 

@@ -114,7 +114,7 @@ enum Section<'a> {
 
 fn sections<'a>(
     blocks: &'a [mainframe_types::display::DisplayContent],
-    facts: Option<&serde_json::Value>,
+    facts: Option<&'a serde_json::Value>,
     output: &mut Vec<Section<'a>>,
 ) {
     use mainframe_types::content::LeafContent;
@@ -127,12 +127,12 @@ fn sections<'a>(
             DisplayContent::Node(DisplayNode::ToolCall { id, .. })
                 if facts.and_then(|facts| facts.get(id)).is_some() =>
             {
-                output.push(Section::Agent(id));
+                output.push(Section::Agent(export_agent_id(facts, id)));
             }
             DisplayContent::Node(DisplayNode::TaskGroup { agent_id, .. })
                 if facts.and_then(|facts| facts.get(agent_id)).is_some() =>
             {
-                output.push(Section::Agent(agent_id));
+                output.push(Section::Agent(export_agent_id(facts, agent_id)));
             }
             DisplayContent::Node(
                 DisplayNode::ToolGroup { calls } | DisplayNode::TaskGroup { calls, .. },
@@ -142,6 +142,12 @@ fn sections<'a>(
             _ => {}
         }
     }
+}
+
+fn export_agent_id<'a>(facts: Option<&'a serde_json::Value>, id: &'a str) -> &'a str {
+    facts
+        .and_then(|facts| facts[id].get("nativeAgentId"))
+        .map_or(id, |native| native.as_str().unwrap_or_default())
 }
 
 fn export<
@@ -169,7 +175,8 @@ fn export<
                 Section::Text(_) => {}
                 Section::Agent(id) => {
                     let mut text = String::new();
-                    if ancestors.len() < 64
+                    if !id.is_empty()
+                        && ancestors.len() < 64
                         && !ancestors.iter().any(|ancestor| ancestor == id)
                         && let Ok(child) = load(id.to_owned()).await
                     {
@@ -261,11 +268,11 @@ mod tests {
             })
         };
         let root = child("root", vec![text("Before"), agent("nested"), agent("missing"), text("After")],
-            Some([("subagentFacts".into(), serde_json::json!({"nested": {"status":"completed"}, "missing": {"status":"unknown"}}))].into()));
+            Some([("subagentFacts".into(), serde_json::json!({"nested": {"status":"completed", "nativeAgentId":"inner-native"}, "missing": {"status":"unknown", "nativeAgentId":null}}))].into()));
         let lookup = |id| {
             let nested = child("inner", vec![text("Nested answer")], None);
             async move {
-                if id == "nested" {
+                if id == "inner-native" {
                     Ok(vec![nested])
                 } else {
                     Err(())

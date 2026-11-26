@@ -34,20 +34,19 @@ struct ChildEntry {
 
 pub(crate) fn load(discovered: DiscoveredFiles, id: &str) -> Result<Messages, AdapterError> {
     let path = resolve(&discovered, id)?;
-    read(path, &discovered.subagent_files)
+    read(path)
 }
 
 fn resolve(discovered: &DiscoveredFiles, id: &str) -> Result<String, AdapterError> {
     let children = &discovered.subagent_files;
+    if id.is_empty() {
+        return Err(unavailable());
+    }
     if let Some(path) = children.iter().find(|file| agent_id(file) == Some(id)) {
         return Ok(path.clone());
     }
     let mut agents = HashMap::new();
-    for source in discovered.parent_files().chain(
-        children
-            .iter()
-            .filter(|path| Stamp::read(Path::new(path)).is_ok()),
-    ) {
+    for source in discovered.parent_files() {
         if visit_lines(source, |line| {
             if line.contains("\"agentId\"")
                 && let Ok(entry) = serde_json::from_str(line)
@@ -67,9 +66,11 @@ fn resolve(discovered: &DiscoveredFiles, id: &str) -> Result<String, AdapterErro
             return Ok(path.clone());
         }
     }
-    Err(AdapterError::Unavailable(
-        "Sub-agent transcript is unavailable",
-    ))
+    Err(unavailable())
+}
+
+fn unavailable() -> AdapterError {
+    AdapterError::Unavailable("Sub-agent transcript is unavailable")
 }
 
 fn agent_id(file: &str) -> Option<&str> {
@@ -79,7 +80,7 @@ fn agent_id(file: &str) -> Option<&str> {
         .strip_prefix("agent-")
 }
 
-fn read(path: String, children: &HashSet<String>) -> Result<Messages, AdapterError> {
+fn read(path: String) -> Result<Messages, AdapterError> {
     let parsed = read_cached(path)?;
     if parsed.agents.is_empty() && !parsed.messages.iter().any(|row| row.content.iter().any(|block| {
         matches!(block, mainframe_types::chat::MessageContent::Node(mainframe_types::chat::MessageContentNode::ToolUse { name, .. }) if matches!(name.as_str(), "Agent" | "Task"))
@@ -87,7 +88,7 @@ fn read(path: String, children: &HashSet<String>) -> Result<Messages, AdapterErr
         return Ok(Arc::clone(&parsed.messages));
     }
     let mut rows = parsed.messages.as_ref().clone();
-    parsed.facts.apply(&mut rows, &parsed.agents, children);
+    parsed.facts.apply_child(&mut rows, &parsed.agents);
     Ok(Arc::new(rows))
 }
 
@@ -173,12 +174,37 @@ mod tests {
         ).unwrap();
         let discover =
             || discover_session_jsonl_files_in_dir("session", root.path().to_str().unwrap());
+        std::fs::write(children.join("agent-unrelated.jsonl"), "{}").unwrap();
+        reader::take_opened_paths();
         let outer = load(discover().await, "outer").unwrap();
         assert_eq!(
             outer[0].metadata.as_ref().unwrap()["subagentFacts"]["nested-call"]["status"],
             "completed"
         );
-        let nested = load(discover().await, "nested-call").unwrap();
+        let discovered = discover().await;
+        let facts = &outer[0].metadata.as_ref().unwrap()["subagentFacts"]["nested-call"];
+        let nested = load(discovered, facts["nativeAgentId"].as_str().unwrap()).unwrap();
+        let opened = reader::take_opened_paths();
+        assert_eq!(
+            opened,
+            ["agent-outer.jsonl", "agent-inner.jsonl"].map(|name| children
+                .join(name)
+                .to_str()
+                .unwrap()
+                .to_owned())
+        );
+        assert!(matches!(
+            load(discover().await, ""),
+            Err(AdapterError::Unavailable(_))
+        ));
+        assert!(matches!(
+            load(discover().await, "nested-call"),
+            Err(AdapterError::Unavailable(_))
+        ));
+        assert_eq!(
+            reader::take_opened_paths(),
+            [root.path().join("session.jsonl").to_str().unwrap()]
+        );
         assert_eq!(nested[0].id, "inner-step");
     }
 
@@ -192,14 +218,11 @@ mod tests {
         let mut file = tempfile::NamedTempFile::new().unwrap();
         writeln!(file, "{}", line("one")).unwrap();
         let path = file.path().to_str().unwrap().to_owned();
-        let first = read(path.clone(), &HashSet::new()).unwrap();
+        let first = read(path.clone()).unwrap();
         assert_eq!(first.len(), 1);
-        assert!(Arc::ptr_eq(
-            &first,
-            &read(path.clone(), &HashSet::new()).unwrap()
-        ));
+        assert!(Arc::ptr_eq(&first, &read(path.clone()).unwrap()));
         writeln!(file, "{}", line("two")).unwrap();
-        let second = read(path, &HashSet::new()).unwrap();
+        let second = read(path).unwrap();
         assert_eq!(second.len(), 2);
         assert!(!Arc::ptr_eq(&first, &second));
     }
