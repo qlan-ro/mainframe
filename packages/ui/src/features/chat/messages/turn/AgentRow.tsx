@@ -56,7 +56,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
     ...(historical?.durationMs == null ? {} : { timing: undefined, reportedDurationMs: historical.durationMs }),
     running: status === 'running' && own,
   });
-  const { chatId, ancestors, parentNativeId } = useTranscriptScope();
+  const { chatId, ancestors } = useTranscriptScope();
   const historyStatus = useSubagentHistoryStore((store) => {
     if (!chatId || historical?.status !== 'unknown') return false;
     const entry = store.entries.get(historyKey(chatId, part.toolCallId));
@@ -84,13 +84,6 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
       chatId: chatId!,
       toolCallId: part.toolCallId,
       messageId: unit.messageId,
-      savedNestedLocator:
-        historical && ancestors.length
-          ? {
-              parentNativeId: parentNativeId ?? null,
-              nativeAgentId: historical.nativeAgentId ?? null,
-            }
-          : undefined,
       savedNestedCall:
         historical && ancestors.length
           ? {

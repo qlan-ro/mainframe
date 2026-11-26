@@ -1,3 +1,4 @@
+import { restoreConversations } from '@/store/conversation-tabs-persist';
 import {
   assistant as turnAssistant,
   bash,
@@ -724,66 +725,39 @@ it('offers Retry after eviction and chat-tab close while saved steps remain moun
   }
 });
 
-it('restores a nested call from an earlier page of its containing transcript', async () => {
-  controller.subagentHistory.page
-    .mockResolvedValueOnce({ hasMore: true, floorItemId: 'later', updates: [] })
-    .mockResolvedValueOnce({
-      hasMore: false,
-      updates: [
-        {
-          sessionUpdate: 'tool_call_update',
-          toolCallId: 'nested',
-          title: 'Agent',
-          status: 'failed',
-          rawInput: { prompt: 'Investigate the failure.' },
-          _meta: {
-            '_mainframe.dev': {
-              created: true,
-              messageMeta: {
-                subagentFacts: {
-                  nested: { status: 'failed', summary: 'The task failed.', nativeAgentId: 'native-inner' },
-                },
-              },
-            },
+it('does not request any history when loading a layout with a legacy nested agent tab', async () => {
+  const restored = restoreConversations(null, {
+    dir: 'h',
+    flex: [1],
+    panes: [
+      {
+        id: 'pane',
+        order: ['agent-nested'],
+        active: 'agent-nested',
+        tabs: [
+          {
+            id: 'agent-nested',
+            kind: 'agent',
+            chatId: 'parent',
+            toolCallId: 'nested',
+            title: 'Nested',
+            savedNestedLocator: { parentNativeId: 'native-outer', nativeAgentId: 'native-inner' },
           },
-        },
-      ],
-    });
+        ],
+      },
+    ],
+  });
   render(
     <TooltipProvider>
-      <SubagentTabBody
-        chatId="parent"
-        toolCallId="nested"
-        title="Nested"
-        active
-        savedNestedLocator={{ parentNativeId: 'native-outer', nativeAgentId: 'native-inner' }}
-      />
+      {restored?.panes.flatMap(({ tabs }) =>
+        tabs.map((tab) => (
+          <SubagentTabBody key={tab.id} chatId={tab.chatId!} toolCallId={tab.toolCallId!} title={tab.title} active />
+        )),
+      )}
     </TooltipProvider>,
   );
-  expect(await screen.findByTestId('workspace-agent-status-nested')).toHaveTextContent(/failed/i);
-  expect(screen.getByTestId('workspace-agent-brief-nested')).toHaveTextContent('Investigate the failure.');
-  expect(screen.getByTestId('workspace-agent-result-nested')).toHaveTextContent('The task failed.');
-  expect(controller.subagentHistory.page.mock.calls).toEqual([
-    ['native-outer', undefined],
-    ['native-outer', 'later'],
-    ['native-inner', undefined],
-  ]);
-});
-
-it('retries the containing transcript when the nested call is missing', async () => {
-  render(
-    <SubagentTabBody
-      chatId="parent"
-      toolCallId="nested"
-      title="Nested"
-      active
-      savedNestedLocator={{ parentNativeId: 'native-missing', nativeAgentId: 'native-inner' }}
-    />,
-  );
-  await waitFor(() => expect(controller.subagentHistory.page).toHaveBeenCalledTimes(1));
-  const retry = await screen.findByRole('button', { name: 'Retry' });
-  expect(screen.getByRole('alert')).toHaveTextContent('Sub-agent unavailable.');
-  fireEvent.click(retry);
-  await waitFor(() => expect(controller.subagentHistory.page).toHaveBeenCalledTimes(2));
-  expect(controller.subagentHistory.page).toHaveBeenLastCalledWith('native-missing', undefined);
+  await act(async () => undefined);
+  expect(screen.queryByTestId('workspace-agent-nested')).toBeNull();
+  expect(controller.subagentHistory.page).not.toHaveBeenCalled();
+  expect(controller.loadEarlier).not.toHaveBeenCalled();
 });

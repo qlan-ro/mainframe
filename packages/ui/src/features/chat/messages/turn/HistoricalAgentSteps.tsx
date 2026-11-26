@@ -78,7 +78,7 @@ export function HistoricalAgentSteps({
           </Button>
         )}
       </div>
-      <AgentSteps {...props} parentNativeId={nativeAgentId ?? null} messages={entry?.messages ?? props.messages} />
+      <AgentSteps {...props} messages={entry?.messages ?? props.messages} />
     </>
   );
 }

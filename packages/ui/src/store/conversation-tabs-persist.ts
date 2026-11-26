@@ -36,34 +36,15 @@ const isRole = (value: unknown): boolean => CHAT_TAB_ROLES.some((role) => role =
 
 /** A tab as stored, or null for anything else. A role this build does not know reads as any session's. */
 export function readTab(value: unknown): RunTab | null {
-  if (!isRecord(value)) return null;
+  if (!isRecord(value) || isSavedNestedTab(value)) return null;
   const { id, kind, title, role } = value;
   if (typeof id !== 'string' || typeof kind !== 'string' || typeof title !== 'string') return null;
   const known = role === undefined || isRole(role) ? value : { ...value, role: 'session' };
-  return storedTab(known as unknown as RunTab);
+  return known as unknown as RunTab;
 }
 
-function record(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
-function storedTab(tab: RunTab): RunTab {
-  const { savedNestedCall, savedNestedLocator } = tab;
-  if (!savedNestedCall && !savedNestedLocator) return tab;
-  const legacyFact = record(record(record(record(savedNestedCall).providerMetadata).mainframe).subagentFact);
-  const locator = record(savedNestedLocator);
-  const id = (value: unknown) => (typeof value === 'string' && value.length <= 256 ? value : null);
-  return {
-    id: tab.id,
-    kind: 'agent',
-    title: tab.title.slice(0, 120),
-    chatId: tab.chatId,
-    toolCallId: tab.toolCallId,
-    savedNestedLocator: {
-      parentNativeId: id(locator.parentNativeId),
-      nativeAgentId: id(locator.nativeAgentId ?? legacyFact.nativeAgentId),
-    },
-  };
+function isSavedNestedTab(tab: object): boolean {
+  return 'savedNestedCall' in tab || 'savedNestedLocator' in tab;
 }
 
 export function scrubLegacyConversationTabs(value: unknown): unknown {
@@ -74,12 +55,17 @@ export function scrubLegacyConversationTabs(value: unknown): unknown {
       if (!isRecord(session) || !Array.isArray(session.panes)) return [id, session];
       const panes = session.panes.map((pane: unknown) => {
         if (!isRecord(pane) || !Array.isArray(pane.tabs)) return pane;
-        const tabs = pane.tabs.flatMap((tab: unknown) => {
-          if (!isRecord(tab) || !('savedNestedCall' in tab)) return [tab];
+        const dropped = new Set<string>();
+        const tabs = pane.tabs.filter((tab: unknown) => {
+          if (!isRecord(tab) || !isSavedNestedTab(tab)) return true;
           changed = true;
-          return readTab(tab) ?? [];
+          if (typeof tab.id === 'string') dropped.add(tab.id);
+          return false;
         });
-        return { ...pane, tabs };
+        if (tabs.length === pane.tabs.length) return pane;
+        const order = strings(pane.order).filter((id) => !dropped.has(id));
+        const active = typeof pane.active === 'string' && dropped.has(pane.active) ? null : pane.active;
+        return { ...pane, tabs, order, active };
       });
       return [id, { ...session, panes }];
     }),
@@ -93,11 +79,16 @@ export function readTabs(value: unknown): RunTab[] {
 
 /** What to store for a session's panes; null when no chat or agent tab is open. */
 export function takeConversations(run: RunState | null): StoredConversations | null {
-  if (run == null || !run.panes.some((pane) => pane.tabs.some(isConversationTab))) return null;
+  if (
+    run == null ||
+    !run.panes.some((pane) => pane.tabs.some((tab) => isConversationTab(tab) && !isSavedNestedTab(tab)))
+  )
+    return null;
   const panes = run.panes.map((pane): StoredPane => {
-    const tabs = pane.tabs.filter(isConversationTab).map(storedTab);
+    const persistent = pane.tabs.filter((tab) => !isSavedNestedTab(tab));
+    const tabs = persistent.filter(isConversationTab);
     const active = tabs.some((tab) => tab.id === pane.active) ? pane.active : null;
-    return { id: pane.id, order: pane.tabs.map((tab) => tab.id), tabs, active };
+    return { id: pane.id, order: persistent.map((tab) => tab.id), tabs, active };
   });
   return { dir: run.dir, flex: run.flex, panes };
 }

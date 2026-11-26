@@ -6,7 +6,6 @@ export interface TranscriptScope {
   rootThreadId: string;
   chatId?: string;
   messageId?: string;
-  parentNativeId?: string | null;
   ancestors: readonly string[];
   pendingToolIds: ReadonlySet<string>;
   /** Whether these messages' work can still be going. Left out: yes. */
@@ -45,7 +44,6 @@ export function RootTranscriptScope({ children }: { children: ReactNode }) {
 }
 
 export interface NestedScope {
-  parentNativeId?: string | null;
   messageId: string;
   toolCallId: string;
   /** Whether the agent whose transcript this is still works. */
@@ -64,7 +62,6 @@ export function NestedTranscriptScope({
   cancelled,
   chatId,
   pendingToolIds,
-  parentNativeId,
   children,
 }: NestedScope & { children: ReactNode }) {
   const parent = useTranscriptScope();
@@ -72,13 +69,12 @@ export function NestedTranscriptScope({
     () => ({
       ...parent,
       live,
-      parentNativeId,
       cancelled,
       chatId: chatId ?? parent.chatId,
       pendingToolIds: pendingToolIds ?? parent.pendingToolIds,
       ancestors: [...parent.ancestors, JSON.stringify([messageId, toolCallId])],
     }),
-    [parent, messageId, toolCallId, live, cancelled, chatId, pendingToolIds, parentNativeId],
+    [parent, messageId, toolCallId, live, cancelled, chatId, pendingToolIds],
   );
   return <TranscriptScopeProvider value={value}>{children}</TranscriptScopeProvider>;
 }

@@ -1,5 +1,3 @@
-import { useSavedNestedCall, NestedCallUnavailable } from './use-saved-nested-call';
-import type { SavedNestedLocator } from '@/store/run-pane';
 import { SubagentFind } from './SubagentFind';
 import { ProseBlock, TextBlock } from './SubagentTextBlocks';
 import { ConversationExportButton } from './ConversationExportButton';
@@ -165,7 +163,6 @@ export interface SubagentTabBodyProps {
   chatId: string;
   toolCallId: string;
   messageId?: string;
-  savedNestedLocator?: SavedNestedLocator;
   savedNestedCall?: ToolCallMessagePart;
   title: string;
   active: boolean;
@@ -178,7 +175,6 @@ export function SubagentTabBody({
   title,
   active,
   savedNestedCall,
-  savedNestedLocator,
 }: SubagentTabBodyProps) {
   const root = useRef<HTMLDivElement>(null);
   const controller = useChatController(chatId, useDaemonPort());
@@ -186,19 +182,16 @@ export function SubagentTabBody({
   useHoldConversation(chatId);
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
-  const loaded = useMemo(
+  const call = useMemo(
     () =>
       savedNestedCall
         ? { part: savedNestedCall, messageId: messageId ?? toolCallId }
         : findSubagentCall(messages, toolCallId),
     [messages, toolCallId, messageId, savedNestedCall],
   );
-  const nested = useSavedNestedCall(controller, chatId, toolCallId, savedNestedLocator, loaded);
-  const call = loaded ?? nested.call;
-  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId, nested: !!savedNestedLocator });
+  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId, nested: !!savedNestedCall });
   const historical = call ? subagentFact(call.part) : undefined;
-  const nativeAgentId =
-    historical?.nativeAgentId === undefined ? savedNestedLocator?.nativeAgentId : historical.nativeAgentId;
+  const nativeAgentId = savedNestedCall ? (historical?.nativeAgentId ?? null) : historical?.nativeAgentId;
   const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
   const runs = sessionRuns(state);
   const adapterId = state.chatConfig?.adapterId;
@@ -264,9 +257,7 @@ export function SubagentTabBody({
         tabIndex={-1}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[22px] pt-3 pb-4 outline-none focus-visible:focus-line-inset [&_.mf-tr-mono]:translate-y-0"
       >
-        {call == null && savedNestedLocator ? (
-          <NestedCallUnavailable {...nested} />
-        ) : call == null || place == null ? (
+        {call == null || place == null ? (
           <p role="status" className="text-sm text-muted-foreground">
             {error ?? 'Loading the sub-agent…'}
           </p>
