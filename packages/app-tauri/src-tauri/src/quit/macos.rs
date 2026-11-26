@@ -48,11 +48,12 @@ extern "C-unwind" fn should_terminate(
     let Some(app) = APP.get() else {
         return NSApplicationTerminateReply::TerminateNow;
     };
-    match SHUTDOWN.request() {
+    match SHUTDOWN.request(true) {
         Request::Start => {
             start(app, Exit::Native);
             NSApplicationTerminateReply::TerminateLater
         }
+        Request::DeferNative => NSApplicationTerminateReply::TerminateLater,
         Request::Defer => NSApplicationTerminateReply::TerminateCancel,
         Request::Allow => NSApplicationTerminateReply::TerminateNow,
     }

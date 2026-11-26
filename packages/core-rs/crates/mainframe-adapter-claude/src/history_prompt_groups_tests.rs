@@ -17,7 +17,9 @@ async fn load_fixture() -> Vec<ChatMessage> {
         include_str!("__fixtures__/hidden-prompt-groups.jsonl"),
     )
     .unwrap();
-    load_history_in_dir(SESSION, &dir.path().to_string_lossy()).await
+    load_history_in_dir(SESSION, &dir.path().to_string_lossy())
+        .await
+        .unwrap()
 }
 
 fn turn_group(message: &ChatMessage) -> Option<&str> {

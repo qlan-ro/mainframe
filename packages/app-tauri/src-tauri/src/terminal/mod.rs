@@ -66,8 +66,6 @@ impl TerminalManager {
         }
     }
 
-    /// Lock the session map, recovering a poisoned guard instead of panicking —
-    /// release builds run `panic = "abort"`, so a poison panic would kill the app.
     fn lock_sessions(&self) -> std::sync::MutexGuard<'_, HashMap<String, Session>> {
         self.sessions.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -202,7 +200,6 @@ pub fn terminal_create(
         cols,
         rows,
         move |bytes| {
-            // Reader thread: never panic across the FFI boundary (panic="abort").
             if let Err(e) = data_ch.send(InvokeResponseBody::Raw(bytes)) {
                 tracing::warn!(%e, "terminal on_data channel send failed");
             }

@@ -133,17 +133,10 @@ async fn subagent_files(directory: &str, session: &str) -> (Vec<String>, bool) {
 }
 
 async fn belongs_to_session(path: &str, session: &str) -> bool {
-    if let Some(mut lines) = open_lines(path).await {
-        while let Ok(Some(line)) = lines.next_line().await {
-            if line.trim().is_empty() {
-                continue;
-            }
-            return serde_json::from_str::<Value>(&line)
-                .ok()
-                .is_some_and(|first| {
-                    first.get("sessionId").and_then(Value::as_str) == Some(session)
-                });
-        }
-    }
-    false
+    let Some(line) = reader::first_record(path).await else {
+        return false;
+    };
+    serde_json::from_slice::<Value>(&line)
+        .ok()
+        .is_some_and(|first| first.get("sessionId").and_then(Value::as_str) == Some(session))
 }

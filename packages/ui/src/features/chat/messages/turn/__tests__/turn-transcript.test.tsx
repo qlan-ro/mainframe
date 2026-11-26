@@ -284,7 +284,7 @@ describe('failures', () => {
     expect(count).toHaveAttribute('data-retried', 'false');
     fireEvent.click(count);
     await waitFor(() => expect(isOpen()).toBe(true));
-    // An unresolved failure is open already; its output is there without another press.
+    // The last step failed, so its output is already visible.
     expect(await screen.findByTestId('chat-bash-output')).toHaveTextContent('boom');
     await waitFor(() => expect(screen.getByTestId('chat-row-bad-toggle')).toHaveFocus());
   });

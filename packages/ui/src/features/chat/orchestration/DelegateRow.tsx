@@ -172,7 +172,7 @@ export function DelegateRow({ unit, part, turnKey }: ToolRowProps) {
   const provider = useAdaptersStore((state) => state.byId[adapterId]?.name ?? adapterId);
   const title = child?.title ?? parsed?.title ?? (facts.target || 'Task');
   useOpenOnNeed(unit.key, needsYou);
-  const failedOpen = useFailedOpen(turnKey, part.toolCallId);
+  const failedOpen = useFailedOpen(turnKey, part.toolCallId, unit.key, unit.messageId);
   const { onStop, stopping } = useTaskStop(title, task, parsed?.taskId, child?.custom);
   const archived = child?.status === 'archived';
   const row = { ...facts, verb: 'Delegated', target: title, where: provider ? `to ${provider}` : undefined };

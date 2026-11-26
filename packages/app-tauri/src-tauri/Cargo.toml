@@ -90,5 +90,6 @@ debug = false
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
+# The quit supervisor handles a cleanup-thread panic through its completion channel.
+panic = "unwind"
 strip = true

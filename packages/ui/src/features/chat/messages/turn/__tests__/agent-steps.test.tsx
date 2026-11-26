@@ -283,8 +283,9 @@ it('reads a step with no outcome as stopped once the agent is, and as running wh
 
 it('opens a failed step of its own on its error', () => {
   show([user(PROMPT, 'p'), assistant([bash('b', 'vitest', failed), text('Hm.')], 'a')], { prompt: PROMPT });
-  fireEvent.click(agent().getByTestId('chat-row-b-toggle'));
   expect(agent().getByTestId('chat-bash-output')).toHaveTextContent('boom');
+  fireEvent.click(agent().getByTestId('chat-row-b-toggle'));
+  expect(agent().queryByTestId('chat-bash-output')).toBeNull();
 });
 
 it('opens no path menu of its own: its row’s message has one', () => {

@@ -245,18 +245,44 @@
   }
 }
 
+/* Two ramps, intersected by shadcn's `mask-composite`. Each measures from its own edge, so no stop needs
+   `calc(100% - x)`: see the note on the scroll-fade overrides below. */
 @utility scroll-fade-sticky {
-  --scroll-fade-mask: linear-gradient(
-    to bottom,
-    #000 0,
-    #000 var(--scroll-fade-inset-t, 0px),
-    transparent var(--scroll-fade-inset-t, 0px),
-    #000 calc(var(--scroll-fade-inset-t, 0px) + var(--scroll-fade-t, 0px)),
-    #000 calc(100% - var(--scroll-fade-inset-b, 0px) - var(--scroll-fade-b, 0px)),
-    transparent calc(100% - var(--scroll-fade-inset-b, 0px)),
-    #000 calc(100% - var(--scroll-fade-inset-b, 0px)),
-    #000 100%
-  );
+  --scroll-fade-mask:
+    linear-gradient(
+      to bottom,
+      #000 0,
+      #000 var(--scroll-fade-inset-t, 0px),
+      transparent var(--scroll-fade-inset-t, 0px),
+      #000 calc(var(--scroll-fade-inset-t, 0px) + var(--scroll-fade-t, 0px))
+    ),
+    linear-gradient(
+      to top,
+      #000 0,
+      #000 var(--scroll-fade-inset-b, 0px),
+      transparent var(--scroll-fade-inset-b, 0px),
+      #000 calc(var(--scroll-fade-inset-b, 0px) + var(--scroll-fade-b, 0px))
+    );
+}
+
+/* WebKit leaks memory each time it resolves a `calc()` that mixes a percentage and a length in a mask, and these
+   scroll animations make it resolve the element's mask every frame: shadcn's own masks grew the window by gigabytes
+   a day. Keep percentages out of any `calc()` in these masks. shadcn's `animation-range` keeps its
+   `calc(100% - …)`: measured on WebKit, a scroll range does not leak. */
+.scroll-fade-y {
+  --scroll-fade-block:
+    linear-gradient(to bottom, transparent 0, #000 var(--scroll-fade-t, 0px)),
+    linear-gradient(to top, transparent 0, #000 var(--scroll-fade-b, 0px));
+}
+.scroll-fade-x {
+  --scroll-fade-inline:
+    linear-gradient(to right, transparent 0, #000 var(--scroll-fade-s, 0px)),
+    linear-gradient(to left, transparent 0, #000 var(--scroll-fade-e, 0px));
+}
+.scroll-fade-x:where([dir='rtl'], [dir='rtl'] *) {
+  --scroll-fade-inline:
+    linear-gradient(to left, transparent 0, #000 var(--scroll-fade-s, 0px)),
+    linear-gradient(to right, transparent 0, #000 var(--scroll-fade-e, 0px));
 }
 
 /* A link tooltip stays in DOM order and needs to paint beyond the transcript mask. */
@@ -277,12 +303,12 @@
   * {
     @apply border-border outline-focus;
   }
-    body {
+  body {
     @apply bg-background text-sm text-foreground;
   }
   html {
     @apply font-sans;
-        overscroll-behavior: none;
+    overscroll-behavior: none;
   }
 }
 

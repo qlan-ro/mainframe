@@ -27,7 +27,14 @@ enum EnvOverride {
 }
 
 pub struct DaemonHandle {
-    child: Arc<Mutex<Option<Child>>>,
+    child: Arc<Mutex<OwnedChild>>,
+}
+
+#[derive(Default)]
+struct OwnedChild {
+    process: Option<Child>,
+    stopping: bool,
+    kill_sent: bool,
 }
 
 impl DaemonHandle {
@@ -35,43 +42,35 @@ impl DaemonHandle {
     /// separate process, not spawned by us — `MAINFRAME_EXTERNAL_DAEMON`). Holds
     /// no child, so `stop()` is a no-op and `pid()` is `None`.
     pub fn external() -> Self {
-        DaemonHandle {
-            child: Arc::new(Mutex::new(None)),
+        Self::new(None)
+    }
+
+    fn new(process: Option<Child>) -> Self {
+        Self {
+            child: Arc::new(Mutex::new(OwnedChild {
+                process,
+                ..OwnedChild::default()
+            })),
         }
     }
 
-    /// Stop the daemon: SIGTERM so it runs its shutdown sequence, then SIGKILL
-    /// if it is still running after `DAEMON_STOP_GRACE`. Blocks until the child
-    /// is reaped. Idempotent.
     pub fn stop(&self) {
-        let child = self.take_child();
-        if let Some(mut child) = child {
-            match stop_child(&mut child, DAEMON_STOP_GRACE, DAEMON_STOP_POLL) {
-                Ok(status) => tracing::info!(%status, "daemon sidecar stopped"),
-                Err(e) => tracing::warn!(err = %e, "daemon sidecar stop failed"),
-            }
+        match stop_child(&self.child, DAEMON_STOP_GRACE, DAEMON_STOP_POLL) {
+            Ok(Some(status)) => tracing::info!(%status, "daemon sidecar stopped"),
+            Ok(None) => {}
+            Err(e) => tracing::warn!(err = %e, "daemon sidecar stop failed"),
         }
     }
 
     pub fn kill_now(&self) {
-        if let Some(mut child) = self.take_child() {
-            if let Err(error) = child.kill() {
-                tracing::warn!(%error, "emergency daemon sidecar kill failed");
-            }
+        if let Err(error) = shutdown::kill_child(&self.child) {
+            tracing::warn!(%error, "emergency daemon sidecar kill failed");
         }
-    }
-
-    fn take_child(&self) -> Option<Child> {
-        self.child
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
     }
 
     /// Watch for the child dying on its own (bind failure, crash). Polls
     /// `try_wait` so it never contends with `stop()` for more than an instant;
-    /// an empty slot means `stop()` already ran (or the daemon is external) and
-    /// the watcher just stops. On an unexpected exit the child is reaped, the
+    /// the watcher stops once shutdown takes over or there is no owned child. On an unexpected exit the child is reaped, the
     /// slot cleared (so `get_daemon_status` reports "exited", not a live pid),
     /// and `on_exit` is invoked with the exit code.
     pub fn watch_exit<F>(&self, on_exit: F)
@@ -84,12 +83,15 @@ impl DaemonHandle {
             loop {
                 {
                     let mut guard = child.lock().unwrap_or_else(|e| e.into_inner());
-                    match guard.as_mut() {
+                    if guard.stopping {
+                        return;
+                    }
+                    match guard.process.as_mut() {
                         None => return, /* expected — stopped on app exit or external daemon */
                         Some(c) => match c.try_wait() {
                             Ok(Some(status)) => {
                                 let code = status.code();
-                                *guard = None;
+                                guard.process = None;
                                 drop(guard);
                                 if let Some(f) = on_exit.take() {
                                     f(code);
@@ -113,6 +115,7 @@ impl DaemonHandle {
         self.child
             .lock()
             .unwrap_or_else(|e| e.into_inner())
+            .process
             .as_ref()
             .map(|c| c.id())
     }
@@ -167,7 +170,7 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
     }
 
     #[cfg(unix)]
-    cmd.env("MAINFRAME_SIDECAR_PARENT_PID", std::process::id().to_string());
+    cmd.arg(format!("--sidecar-parent-pid={}", std::process::id()));
 
     tracing::info!(
         program = %config.program.daemon_bin.display(),
@@ -182,9 +185,7 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
 
     tracing::info!(pid = child.id(), "daemon sidecar started");
 
-    Ok(DaemonHandle {
-        child: Arc::new(Mutex::new(Some(child))),
-    })
+    Ok(DaemonHandle::new(Some(child)))
 }
 
 fn daemon_env_overrides(daemon_port: u16, data_dir: Option<&Path>) -> Vec<EnvOverride> {

@@ -17,6 +17,7 @@
  * zustand. A fake DaemonWsClient injects the event handler; deps are vi.fn()
  * mocks so assertions are trivial.
  */
+import { disclosureStore } from '@/features/chat/messages/turn/disclosure-store';
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type { BackgroundTask, Chat, DaemonEvent, DetectedPr } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../../lib/daemon/ws-client';
@@ -137,6 +138,17 @@ describe('session-list-router — chat.created triggers reload', () => {
 // ---------------------------------------------------------------------------
 
 describe('session-list-router — chat.ended triggers reload', () => {
+  it.each([
+    { type: 'chat.ended', chatId: FULL_CHAT.id },
+    { type: 'chat.updated', chat: { ...FULL_CHAT, status: 'archived' } },
+  ] as const)('clears automatic openings on $type', (event) => {
+    const key = 'archived-row';
+    disclosureStore.rememberAutomatic(key, [], { rootThreadId: FULL_CHAT.id });
+    expect(disclosureStore.autoOpened(key)).toBe(true);
+    dispatch(event);
+    expect(disclosureStore.autoOpened(key)).toBe(false);
+  });
+
   it('calls onReload exactly once and does not call onMarkUnread', () => {
     dispatch({ type: 'chat.ended', chatId: 'c1' });
 

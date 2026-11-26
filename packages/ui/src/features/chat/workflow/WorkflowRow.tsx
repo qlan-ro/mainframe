@@ -55,7 +55,7 @@ function useCutShort(toolCallId: string, turnKey: string | undefined): boolean {
 export function WorkflowRow({ unit, part, turnKey }: ToolRowProps) {
   const facts = useToolFacts({ unit, part });
   const cutShort = useCutShort(part.toolCallId, turnKey);
-  const failedOpen = useFailedOpen(turnKey, part.toolCallId);
+  const failedOpen = useFailedOpen(turnKey, part.toolCallId, unit.key, unit.messageId);
   const launch = parseWorkflowLaunch(resolveResultText(part.result).text);
   const run = useWorkflowRun(launch.taskId);
   const now = useNow();

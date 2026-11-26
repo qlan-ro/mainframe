@@ -21,7 +21,7 @@ async fn main() {
 }
 
 async fn run_daemon() {
-    let parent_exit = watch_sidecar_parent();
+    let parent_exit = watch_sidecar_parent(std::env::args().nth(1).as_deref());
     let (config, paths) = match mainframe_runtime::config::get_data_dir().and_then(|config_dir| {
         let config = mainframe_runtime::config::get_config()?;
         let paths = mainframe_runtime::config::boot_paths(&config, &config_dir);
@@ -84,13 +84,18 @@ fn flush_and_exit(code: i32) -> ! {
     std::process::exit(code);
 }
 
-fn watch_sidecar_parent() -> Option<tokio::sync::oneshot::Receiver<()>> {
+#[cfg(any(unix, test))]
+fn sidecar_parent_arg(arg: Option<&str>) -> Option<u32> {
+    arg?.strip_prefix("--sidecar-parent-pid=")?
+        .parse::<u32>()
+        .ok()
+        .filter(|pid| *pid > 0)
+}
+
+fn watch_sidecar_parent(arg: Option<&str>) -> Option<tokio::sync::oneshot::Receiver<()>> {
     #[cfg(unix)]
     {
-        let parent = std::env::var("MAINFRAME_SIDECAR_PARENT_PID")
-            .ok()?
-            .parse()
-            .ok()?;
+        let parent = sidecar_parent_arg(arg)?;
         let (sender, receiver) = tokio::sync::oneshot::channel();
         match std::thread::Builder::new()
             .name("sidecar-parent".into())
@@ -108,7 +113,10 @@ fn watch_sidecar_parent() -> Option<tokio::sync::oneshot::Receiver<()>> {
         }
     }
     #[cfg(not(unix))]
-    None
+    {
+        let _arg = arg;
+        None
+    }
 }
 
 async fn shutdown_signal(parent_exit: Option<tokio::sync::oneshot::Receiver<()>>) {
@@ -156,4 +164,25 @@ async fn shutdown_signal(parent_exit: Option<tokio::sync::oneshot::Receiver<()>>
         () = terminate => {}
     }
     info!("shutdown signal received, draining in-flight requests");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ownership_requires_an_explicit_launch_argument() {
+        assert_eq!(
+            sidecar_parent_arg(Some("--sidecar-parent-pid=42")),
+            Some(42)
+        );
+        for arg in [
+            None,
+            Some("42"),
+            Some("MAINFRAME_SIDECAR_PARENT_PID=42"),
+            Some("--sidecar-parent-pid=0"),
+        ] {
+            assert_eq!(sidecar_parent_arg(arg), None);
+        }
+    }
 }
