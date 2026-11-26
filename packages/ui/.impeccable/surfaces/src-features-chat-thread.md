@@ -26,6 +26,10 @@ Compaction and provider-switch dividers use 12 px arrows-in and repeat glyphs. E
 
 A reply to a hidden prompt starts its own turn. A background task notification adds a marker naming the event. Resume prompts without an event open a turn without a marker.
 
+Only the bottom pin (`use-thread-bottom-pin.ts`) scrolls the transcript to follow new output; assistant-ui's viewport scroll controllers are off. A reader who scrolled up stays where they are when a run starts by itself, when history arrives, or when the daemon sends a queued prompt at turn end. The user's own send moves them to the bottom and follows the reply. The scroll-to-bottom button shows whenever the pin is off, more than 2 px from the bottom, and a click re-pins.
+
+Markdown images, local and remote, inline badges included, sit in a 240 px tall frame from the first render, so the text around them never shifts as they load. A larger image scales down into the frame; a smaller one keeps its size. An image that fails, or has not loaded after 15 seconds, shows its alt text with "(image unavailable)".
+
 ## Direction contract
 THESIS: one work row per turn, folded once the answer starts. Events are pills on the spine. This replaces a stack of tool cards.
 OWN-WORLD: rows of glyph, verb, target and receipt. Pills for skills, plans, schedules, monitors, worktrees and notifications. Failures in muted rose. Answered questions are small cards outside the fold.

@@ -4,11 +4,11 @@
  * The viewport fades at its top and bottom edges (scroll-driven, so jsdom can
  * only assert the wiring): the mask classes, the bottom inset tracking the
  * measured footer, and the scroll-to-bottom button living outside the masked
- * viewport yet still wired to the viewport primitive.
+ * viewport yet still driven by the bottom pin.
  */
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { cloneElement, type ReactNode, type HTMLAttributes } from 'react';
+import type { ReactNode, HTMLAttributes } from 'react';
 
 type LoadState = { type: 'idle' | 'loading' | 'ready' } | { type: 'error'; error: string };
 
@@ -16,7 +16,6 @@ const testState = vi.hoisted(() => ({
   extrasState: { compacting: false, loadState: { type: 'ready' } as LoadState, runState: { type: 'idle' } },
   threadListItemId: 'chat-9' as string | null,
   messages: [] as unknown[],
-  scrollToBottom: vi.fn(),
 }));
 
 vi.mock('../VirtualMessages', () => ({ VirtualMessages: () => <div data-testid="tp-messages" /> }));
@@ -26,8 +25,6 @@ vi.mock('@assistant-ui/react', () => {
     ThreadPrimitive: {
       Root: ({ children, ...props }: DivProps) => <div {...props}>{children}</div>,
       Viewport: ({ children, ...props }: DivProps) => <div {...props}>{children}</div>,
-      ScrollToBottom: ({ children }: { children: React.ReactElement<{ onClick?: () => void }> }) =>
-        cloneElement(children, { onClick: testState.scrollToBottom }),
       Messages: () => <div data-testid="tp-messages" />,
     },
     useAui: () => ({}),
@@ -75,7 +72,6 @@ beforeEach(() => {
   testState.extrasState = { compacting: false, loadState: { type: 'ready' }, runState: { type: 'idle' } };
   testState.threadListItemId = 'chat-9';
   testState.messages = [];
-  testState.scrollToBottom.mockClear();
   observers = [];
   footerHeight = 120;
   vi.stubGlobal(
@@ -112,12 +108,11 @@ describe('ChatThread — transcript edge fades', () => {
     expect(viewport.style.getPropertyValue('--scroll-fade-inset-b')).toBe('200px');
   });
 
-  it('renders the scroll-to-bottom button outside the masked viewport, still wired up', () => {
+  it('renders the scroll-to-bottom button outside the masked viewport, hidden while following', () => {
     render(<ChatThread />);
     const button = screen.getByTestId('chat-scroll-to-bottom');
     expect(screen.getByTestId('chat-thread-viewport').contains(button)).toBe(false);
     expect(button.style.bottom).toBe('calc(120px + 0.5rem)');
-    fireEvent.click(button);
-    expect(testState.scrollToBottom).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
   });
 });

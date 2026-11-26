@@ -11,7 +11,7 @@ import {
   ref,
   renderRows,
   confirmQueuedMessage,
-  resumeQueuedMessages,
+  resumeQueue,
   rows,
   startEdit,
 } from './queued-rows-test-harness';
@@ -42,7 +42,7 @@ describe('QueuedRows — queued rows', () => {
     expect(screen.getAllByRole('button', { name: 'Edit queued message' })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'Remove queued message' })).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
-    expect(resumeQueuedMessages).toHaveBeenCalledExactlyOnceWith(4200, 'chat-1');
+    expect(resumeQueue).toHaveBeenCalledOnce();
   });
 
   it('shows the attachment count after the text', () => {
