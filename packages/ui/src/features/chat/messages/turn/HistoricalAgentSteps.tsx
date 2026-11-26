@@ -53,11 +53,11 @@ export function HistoricalAgentSteps({ chatId, ...props }: AgentStepsProps & { c
   return (
     <>
       <div ref={boundary} className="text-xs text-muted-foreground">
-        {(!entry || entry.loading) && <span role="status">Loading sub-agent history…</span>}
-        {entry?.error && (
+        {entry?.loading && <span role="status">Loading sub-agent history…</span>}
+        {(!entry || entry.error) && (
           <div role="alert">
             Could not load sub-agent history.
-            <Button variant="ghost" size="sm" onClick={() => load(Boolean(entry.before))}>
+            <Button variant="ghost" size="sm" onClick={() => load(Boolean(entry?.before))}>
               Retry
             </Button>
           </div>

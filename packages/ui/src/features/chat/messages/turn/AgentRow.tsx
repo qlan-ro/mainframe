@@ -57,10 +57,10 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
     running: status === 'running' && own,
   });
   const { chatId, ancestors } = useTranscriptScope();
-  const inspected = useSubagentHistoryStore((store) => {
+  const historyStatus = useSubagentHistoryStore((store) => {
     if (!chatId || historical?.status !== 'unknown') return false;
     const entry = store.entries.get(historyKey(chatId, part.toolCallId));
-    return !!entry && !entry.loading && !entry.error;
+    return entry?.error ? 'Could not load history' : entry && !entry.loading ? 'Status unavailable' : false;
   });
   const failed = useFailedOpen(turnKey, part.toolCallId, unit.key, unit.messageId);
   const title = historical?.title || facts.target || facts.verb;
@@ -71,7 +71,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
       ? (
           {
             ...WORDS,
-            unknown: inspected ? 'Status unavailable' : 'Open to see status',
+            unknown: historyStatus || 'Open to see status',
             success: 'completed',
           } as Partial<Record<RowStatus, string>>
         )[status]

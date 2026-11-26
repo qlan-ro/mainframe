@@ -11,7 +11,7 @@ import {
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ThreadMessage } from '@assistant-ui/react';
-import type { BackgroundTask } from '@qlan-ro/mainframe-types';
+import type { BackgroundTask, HistoryPageResult } from '@qlan-ro/mainframe-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionStatusProvider } from '@/app/ConnectionStatusContext';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -31,6 +31,7 @@ const { controller, world } = vi.hoisted(() => ({
   controller: {
     load: vi.fn(async () => undefined),
     loadEarlier: vi.fn(async () => true),
+    subagentHistory: { page: vi.fn(async (): Promise<HistoryPageResult> => ({ hasMore: false, updates: [] })) },
     isHistoryContext: vi.fn(() => false),
     subscribeLive: vi.fn(() => vi.fn()),
     holdActive: vi.fn(() => vi.fn()),
@@ -155,6 +156,13 @@ import { registerSideChat, __resetSideChatRegistryForTests } from '@/features/si
 import { useChatId, useOpenFile } from '@/features/chat/tools/chat-tool-context';
 import { useMountedConversations } from '../mounted-conversations';
 import { SubagentTabBody } from '../SubagentTabBody';
+import { HistoricalAgentSteps } from '@/features/chat/messages/turn/HistoricalAgentSteps';
+import {
+  historyKey,
+  loadSubagentPage,
+  useSubagentHistoryStore,
+} from '@/features/chat/messages/turn/subagent-history-store';
+import { useLayoutStore } from '@/store/layout';
 import { resetStops } from '@/features/session-panel/use-stop';
 
 const body = (active = true, chatId = 'parent') => (
@@ -643,4 +651,51 @@ it('opens the final failure in the workspace sub-agent transcript', async () => 
   await act(async () => undefined);
   expect(screen.getByTestId('chat-row-first-toggle')).toHaveAttribute('aria-expanded', 'false');
   expect(screen.getByTestId('chat-row-last-toggle')).toHaveAttribute('aria-expanded', 'true');
+});
+
+it('offers Retry after eviction and chat-tab close while saved steps remain mounted', async () => {
+  controller.subagentHistory.page.mockResolvedValue({
+    hasMore: false,
+    updates: [
+      { sessionUpdate: 'agent_message', messageId: 'nested-step', content: [{ type: 'text', text: 'Saved step' }] },
+    ],
+  });
+  const props = { chatId: 'parent', messageId: 'm-1', toolCallId: 'nested', outcome: 'done' as const, messages: [] };
+  const view = render(
+    <TooltipProvider>
+      <HistoricalAgentSteps {...props} />
+      <SubagentTabBody {...props} title="Saved nested agent" active savedNestedAgent />
+    </TooltipProvider>,
+  );
+  const key = historyKey('parent', 'nested');
+  await waitFor(() => expect(useSubagentHistoryStore.getState().entries.get(key)?.loading).toBe(false));
+  expect(controller.subagentHistory.page).toHaveBeenCalledExactlyOnceWith('nested', undefined);
+  expect(screen.getAllByTestId('steps').map((steps) => steps.textContent)).toEqual(['nested-step', 'nested-step']);
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+
+  await act(async () => {
+    for (let index = 0; index < 64; index++) {
+      await loadSubagentPage(historyKey('other', String(index)), async () => ({ hasMore: false, updates: [] }));
+    }
+  });
+  expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(2);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Retry' })[0]!);
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull());
+
+  view.rerender(<HistoricalAgentSteps {...props} />);
+  const original = useLayoutStore.getState();
+  try {
+    act(() => {
+      original.addRunTab({ id: 'chat-parent', kind: 'chat', chatId: 'parent', title: 'Parent' });
+      const layout = useLayoutStore.getState();
+      const pane = layout.run!.panes.find(({ tabs }) => tabs.some(({ id }) => id === 'chat-parent'))!;
+      layout.closeRunTab(pane.id, 'chat-parent');
+    });
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull());
+  } finally {
+    useLayoutStore.setState(original);
+    useSubagentHistoryStore.setState({ entries: new Map() });
+  }
 });

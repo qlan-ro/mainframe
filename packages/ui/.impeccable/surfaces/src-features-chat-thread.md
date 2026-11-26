@@ -44,4 +44,4 @@ After a turn ends, only its last failed step can open by itself. It opens if no 
 
 Saved Claude agent rows use the recorded outcome and usage. When the transcript cannot settle the outcome, the receipt reads “Open to see status” and the turn does not auto-open a failed row. After the steps load, the receipt says “Status unavailable” if the outcome is still unknown.
 
-Opening a saved Claude agent shows a loading status while its newest steps arrive. Earlier steps load on upward scroll or through Earlier messages. A failed load offers Retry.
+Opening a saved Claude agent shows a loading status while its newest steps arrive. Earlier steps load on upward scroll or through Earlier messages. A failed load says “Could not load history” when the outcome is unknown. An open row offers Retry after a failed load or when its saved pages are cleared.
