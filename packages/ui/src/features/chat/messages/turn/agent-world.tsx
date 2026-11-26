@@ -35,6 +35,7 @@ export interface AgentWorld {
 
 const UNKNOWN: AgentWorld = { runs: false, tasks: null, live: false };
 const Context = createContext<AgentWorld>(UNKNOWN);
+export const useAgentWorldContext = () => useContext(Context);
 export const AgentWorldProvider = Context.Provider;
 
 export interface AgentWork {

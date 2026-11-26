@@ -103,7 +103,7 @@ function StandardRow({ unit, part, turnKey }: ToolRowProps) {
     startedAt === undefined ? call : { ...call, status: 'running', verb: 'Running', timing: { startedAt } };
   const { status, kind } = facts;
   const duration = useStepDuration({ ...facts, running: status === 'running' });
-  const failedOpen = useFailedOpen(turnKey, part.toolCallId);
+  const failedOpen = useFailedOpen(turnKey, part.toolCallId, unit.key, unit.messageId);
   const { target, filePath } = useRowTarget(part, facts);
   const hasReceipt = Boolean(facts.diff || facts.receipt || duration);
   return (

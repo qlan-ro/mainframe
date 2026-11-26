@@ -1,5 +1,5 @@
 /** Splits a turn's units into steps, markers and the answer, and reads how its steps went. Pure. */
-import { callFacts } from '@/features/workspace-chat/agent-status';
+import { callFacts, isBackgroundLaunch } from '@/features/workspace-chat/agent-status';
 import { parseDelegateResult } from '../../orchestration/delegate-result';
 import { resolveResultText } from '../../tools/shared/result';
 import { parseWorkflowLaunch } from '../../workflow/workflow-progress';
@@ -47,7 +47,13 @@ export function failedSteps(tools: readonly ToolPart[], pending: ReadonlySet<str
     if (succeeded) recovered.add(retryKey(tool));
     else if (status === 'failed') (recovered.has(retryKey(tool)) ? retried : failed).unshift(tool.toolCallId);
     if (succeeded || status === 'failed' || isChildWork(tool.toolName)) {
-      settledSteps.push({ id: tool.toolCallId, succeeded });
+      settledSteps.push({
+        id: tool.toolCallId,
+        succeeded:
+          succeeded &&
+          !['delegate', 'workflow'].includes(toolKind(tool.toolName)) &&
+          !(toolKind(tool.toolName) === 'subagent' && isBackgroundLaunch({ part: tool, messageId: '' })),
+      });
     }
   }
   return { failed, retried, settledSteps };

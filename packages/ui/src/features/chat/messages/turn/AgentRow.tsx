@@ -49,7 +49,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
   const own = status === facts.status;
   const duration = useStepDuration({ ...facts, running: status === 'running' && own });
   const { chatId } = useTranscriptScope();
-  const failed = useFailedOpen(turnKey, part.toolCallId);
+  const failed = useFailedOpen(turnKey, part.toolCallId, unit.key, unit.messageId);
   const title = facts.target || facts.verb;
   const model = argText(part, 'model');
   const word = standing?.label ?? (own && status !== 'running' ? facts.receipt : WORDS[status]);

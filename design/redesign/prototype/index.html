@@ -1202,11 +1202,11 @@ const TURNS={
    ans:`<p>The docs confirm it: <strong>no event is sent at reset time</strong>, so the daemon has to infer the reset from ${C('resets_in_seconds')}, which is what the fix does. Issue #847 is open and labelled ${C('area:quota')}; I'll reference it as ${C('Closes #847')}.</p>`},
  t4:{time:'11:27 PM',title:'Worked for 1m 14s',meta:'',rows:[
    {i:'spark',v:'Thought for 3s',body:`<p class="tsay" style="color:var(--meta)">One agent reviews the diff, another checks the mobile capsule.</p>`},
-   {i:'bot',v:'code-reviewer',b:1,t:'Review the quota reset diff',sans:1,m:'1 step · 38s',act:['panel','Open code-reviewer beside the chat'],kids:1,body:[
+   {i:'bot',outcome:'completed',v:'code-reviewer',b:1,t:'Review the quota reset diff',sans:1,m:'1 step · 38s',act:['panel','Open code-reviewer beside the chat'],kids:1,body:[
      {html:`<div class="tblk"><p class="tlbl">Prompt</p><p>Review the uncommitted changes to mainframe-quota and use-quota.ts.</p></div>`},
      {i:'term',v:'Ran',t:'git diff --stat',m:'exit 0 · 0.2s'},
      {html:`<div class="tblk"><p class="tlbl">Result</p><p>The diff is correct. One nit: <code>QuotaWindow::reset</code> drops <code>resets_at</code>.</p></div>`}]},
-   {i:'botf',v:'Delegated',t:'Check the mobile usage capsule',sans:1,w:'to Codex',m:'completed · 1m 12s',act:['panel',"Open the task's chat beside this one"],kids:1,body:[
+   {i:'botf',outcome:'completed',v:'Delegated',t:'Check the mobile usage capsule',sans:1,w:'to Codex',m:'completed · 1m 12s',act:['panel',"Open the task's chat beside this one"],kids:1,body:[
      {html:`<div class="tblk"><p class="tlbl">Task</p><p>Check whether the mobile capsule reads the same snapshot.</p></div>`},
      {i:'search',v:'Searched',t:'"useQuota"',w:'in mobile/src',m:'6 matches'},{i:'file',v:'Read',t:'mobile/src/quota/capsule.tsx',m:'48 lines'},
      {html:`<div class="tblk"><p class="tlbl">Result</p><p>Same snapshot endpoint; no change needed.</p></div>`}]}],
@@ -1803,11 +1803,11 @@ function toolMsgs(){
     {i:'file',v:'Read',t:'docs/screenshot-capsule.png',m:'image · 1280×800',body:thumbs([[200,125,'screenshot-capsule.png']])},
     {i:'plug',v:'Called',t:'browser_take_screenshot',w:'on Playwright',m:'1 image · 0.9s',body:thumbs([[240,150,'localhost:5173 · 1280×800']])},
     {i:'imgplus',v:'Generated image',t:'usage capsule icon, flat, 3 sizes',sans:1,m:'1 image',body:`<p class="tdesc">Prompt: a flat usage-capsule icon in three sizes on a transparent background</p>`+thumbs([[120,120,'1024×1024 PNG']])},
-    {i:'bot',v:'code-reviewer',b:1,t:'Review the quota reset diff',sans:1,m:'1 step · 38s',act:['panel','Open code-reviewer beside the chat'],kids:1,body:[
+    {i:'bot',outcome:'completed',v:'code-reviewer',b:1,t:'Review the quota reset diff',sans:1,m:'1 step · 38s',act:['panel','Open code-reviewer beside the chat'],kids:1,body:[
       {html:`<div class="tblk"><p class="tlbl">Prompt</p><p>Review the uncommitted changes to mainframe-quota and use-quota.ts for correctness and test coverage.</p></div>`},
       {i:'term',v:'Ran',t:'git diff --stat',m:'exit 0 · 0.2s',body:term([' crates/mainframe-quota/src/codex.rs       | 12 <span class="g">++++++++</span><span class="r">----</span>',' crates/mainframe-quota/src/codex_tests.rs | 24 <span class="g">++++++++++++</span>',' 2 files changed, 32 insertions(+), 4 deletions(-)'])},
       {html:`<div class="tblk"><p class="tlbl">Result</p><p>The diff is correct. One nit: <code>QuotaWindow::reset</code> drops <code>resets_at</code>, so the tooltip loses the next reset time until the following turn.</p></div>`}]},
-    {i:'bot',v:'Codex agent',b:1,t:'Explore the rate-limit sources',sans:1,m:'3 steps · 41s',act:['panel','Open the Codex agent beside the chat'],kids:1,body:[
+    {i:'bot',outcome:'completed',v:'Codex agent',b:1,t:'Explore the rate-limit sources',sans:1,m:'3 steps · 41s',act:['panel','Open the Codex agent beside the chat'],kids:1,body:[
       {html:`<div class="tblk"><p class="tlbl">Prompt</p><p>Find every place the Codex adapter reads rate-limit windows.</p></div>`},
       {i:'search',v:'Searched',t:'"rate_limits"',w:'in mainframe-adapter-codex',m:'5 matches'},{i:'file',v:'Read',t:'src/rate_limits.rs',m:'64 lines'},{i:'file',v:'Read',t:'src/app_server/events.rs',m:'40 lines'},
       {html:`<div class="tblk"><p class="tlbl">Result</p><p>Two sources: the per-turn <code>rate_limits</code> event and the account endpoint on startup.</p></div>`}]},
@@ -1824,7 +1824,7 @@ function toolMsgs(){
       {i:'file',v:'Read',t:'src/codex_tests.rs',m:'24 lines'},{i:'diff',v:'Edited',t:'src/codex_tests.rs',mh:pm(12,0)},
       {i:'term',v:'Running',t:'cargo test -p mainframe-quota weekly',m:'8s',st:'run'}]},
     {i:'botf',v:'Delegated',t:'Update the changelog for v2.15.1',sans:1,w:'to Codex',m:'queued',st:'queued',act:OPEN_TASK,body:`<div class="tblk"><p class="tlbl">Task</p><p>Add the quota fix to CHANGELOG.md under 2.15.1.</p></div><span class="tnote">Starts when a slot frees up.</span>`},
-    {i:'botf',v:'Delegated',t:'Review the quota reset diff',sans:1,w:'to Claude',m:'completed · 2m 10s',act:OPEN_TASK,kids:1,body:[
+    {i:'botf',outcome:'completed',v:'Delegated',t:'Review the quota reset diff',sans:1,w:'to Claude',m:'completed · 2m 10s',act:OPEN_TASK,kids:1,body:[
       {html:`<div class="tblk"><p class="tlbl">Task</p><p>Review the uncommitted quota changes for correctness and test coverage.</p></div>`},
       {i:'term',v:'Ran',t:'git diff --stat',m:'exit 0 · 0.2s'},{i:'file',v:'Read',t:'src/codex.rs',m:'64 lines'},
       {html:`<div class="tblk"><p class="tlbl">Result</p><p>Correct. One nit: <code>QuotaWindow::reset</code> drops <code>resets_at</code>.</p></div>`}]},
@@ -1923,19 +1923,29 @@ function toolRow(r){
   const head=`<div class="tcr">${has?`<button type="button" class="tct" aria-expanded="${!!r.open}" aria-controls="${id}" aria-label="${esc(name)}"></button>`:''}${g}<span class="sr">${word}:</span><span class="tv${r.b?' b':''}">${esc(r.v)}</span>${r.t?`<span class="tg${r.sans?' sans':''}">${esc(r.t)}</span>`:''}${r.w?`<span class="twhere">${esc(r.w)}</span>`:''}<span class="tsp"></span>${rcpt}${act}${has?ic('chevr','tch'):'<span class="tch"></span>'}</div>`;
   const da=CHILD_I[r.i]?` data-child="${['wait','warn','run','queued'].includes(r.st)?'going':'done'}"`:'';
   if(!has) return `<div class="tc"${r.st==='bad'?' data-fail="1"':''}${r.retried?' data-retried="1"':''}${da}>${head}</div>`;
-  const body=Array.isArray(r.body)?r.body.map(toolRow).join(''):r.body;
+  const body=Array.isArray(r.body)
+    ? (CHILD_I[r.i]?failureDisclosure(withRetries(r.body),isLiveStep(r)):r.body).map(toolRow).join('')
+    :r.body;
   return `<div class="tc${r.open?' open':''}"${r.st==='bad'?' data-fail="1"':''}${r.retried?' data-retried="1"':''}${da}>${head}<div class="${r.kids?'tck':'tcb'}" id="${id}">${body}</div></div>`;
 }
 /* Failed steps (T1b): an error result is "retried" when a later step in the same turn runs the same tool on the same
    target and succeeds (the app can tell this from tool name, input and isError); anything else stays a failure. */
 function withRetries(rows){
   const R=rows.map(r=>r.html?r:normRow(r));
-  R.forEach((r,i)=>{if(!r.html&&r.st==='bad'&&R.slice(i+1).some(x=>!x.html&&x.i===r.i&&x.t===r.t&&!x.st)) r.retried=1});
+  R.forEach((r,i)=>{if(!r.html&&r.st==='bad'&&R.slice(i+1).some(x=>!x.html&&x.i===r.i&&x.t===r.t&&stepSucceeded(x))) r.retried=1});
   return R;
 }
 /* Child work (T1c): agents, delegated tasks and workflows started in a turn. While any is still going the turn
    keeps no ✓ and does not fold; once all finish it folds like any other step and the header still names them. */
 const CHILD_I={bot:'agent',botf:'agent',flow:'workflow'};
+const isLiveStep=r=>['wait','warn','run','queued'].includes(r.st);
+const stepSucceeded=r=>CHILD_I[r.i]?r.outcome==='completed':!r.st&&!r.launch;
+function failureDisclosure(rows,live){
+  if(live||rows.some(isLiveStep)) return rows;
+  const last=rows.findLast(r=>!r.html&&!r.retried&&(r.st==='bad'||stepSucceeded(r)));
+  if(last?.st==='bad'&&last.body!==undefined&&last.open===undefined) last.open=1;
+  return rows;
+}
 function childWork(rows){
   const C=rows.filter(r=>!r.html&&CHILD_I[r.i]);
   const n=st=>C.filter(r=>st.includes(r.st)).length;
@@ -1954,10 +1964,7 @@ function toolTurnHtml(key,m,open){
   if(OUT.length===m.rows.length) return mks;
   m={...m,rows:m.rows.filter(r=>!r.mk&&!r.askd)};
   const R=withRetries(m.rows);const cw=childWork(R);const f={open:R.filter(r=>r.st==='bad'&&!r.retried).length,retried:R.filter(r=>r.retried).length};const st=m.status||(R.some(r=>r.st==='unk')?'unknown':'ok');
-  if(!cw.going){
-    const last=R.findLast(r=>!r.html&&(!r.st||r.st==='bad'));
-    if(last?.st==='bad'&&!last.retried&&last.body!==undefined&&last.open===undefined) last.open=1;
-  }
+  failureDisclosure(R,cw.going);
   const glyph=cw.going?spin():st==='stopped'?ic('stopc','stp'):st==='error'?ic('xc','bad'):st==='unknown'?'':ic('check');
   const word=cw.going?'Still going':st==='stopped'?'Stopped':st==='error'?'Ended on an error':st==='unknown'?'Ending unknown':'Finished';
   const pl=(k,w)=>`${k} ${w}${k===1?'':'s'}`;

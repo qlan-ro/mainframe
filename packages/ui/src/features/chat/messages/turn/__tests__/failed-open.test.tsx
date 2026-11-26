@@ -1,7 +1,27 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, expect, it } from 'vitest';
+import { buildChatExtras } from '../../../runtime/chat-extras';
+import { createChatThreadState } from '../../../controller/chat-thread-state';
+import type { AcpChatController } from '../../../controller/acp-chat-controller';
+import { listBackgroundTasks } from '@/lib/api/background-tasks';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { useUiPrefs } from '@/store/ui-prefs';
-import { TurnFixture, assistant, bash, failed, user } from './fixtures';
+import { TurnFixture, assistant, bash, failed, tool, user } from './fixtures';
+
+vi.mock('../../AssistantForkAction', () => ({ AssistantForkAction: () => null }));
+vi.mock('@/lib/api/background-tasks', () => ({
+  listBackgroundTasks: vi.fn(),
+  readBackgroundTaskOutput: vi.fn().mockResolvedValue({ text: 'output so far', truncated: false }),
+}));
+
+// The task's own chat has no daemon here; its row and its Result are the real ones.
+vi.mock('../../../orchestration/TaskChatSteps', () => ({ TaskChatSteps: () => <div data-testid="task-steps" /> }));
+
+function extrasWith(backgroundTasks: Record<string, object>) {
+  const state = createChatThreadState('chat-fixture');
+  return buildChatExtras({} as AcpChatController, 31415, { ...state, backgroundTasks } as typeof state);
+}
+const background = { bg: { id: 'bg', kind: 'agent', description: 'x', startedAt: 1 } };
+const header = () => screen.getByTestId(/^chat-work-toggle-/);
 
 const row = (id: string) => screen.getByTestId(`chat-row-${id}-toggle`);
 
@@ -38,4 +58,81 @@ it('preserves manual open and close choices when the live turn ends', () => {
   expect(row('manual')).toHaveAttribute('aria-expanded', 'true');
   expect(row('closed')).toHaveAttribute('aria-expanded', 'false');
   expect(row('last')).toHaveAttribute('aria-expanded', 'false');
+});
+
+const delegatedLaunch = () =>
+  tool({
+    toolCallId: 'task',
+    toolName: 'mcp__mainframe__delegate_task',
+    args: { task: 'Do the check' },
+    result: JSON.stringify({ taskId: 't', childChatId: 'kid', status: 'running' }),
+  });
+
+const taskResult = (status: string) =>
+  user(`<mainframe-task-result task="t" chat="kid" status="${status}">Done</mainframe-task-result>`, 'delivered');
+
+it('opens Bash when a later delegated launch ends cancelled', () => {
+  useUiPrefs.setState({ finishedWork: 'open' });
+  const messages = [user('Hi'), assistant([bash('bash', 'ls', failed), delegatedLaunch()]), taskResult('cancelled')];
+  render(<TurnFixture rootId={'stopped-delegation'} messages={messages} />);
+  expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'true');
+});
+
+it('keeps Bash closed after a later async sub-agent completes', async () => {
+  useUiPrefs.setState({ finishedWork: 'open' });
+  const task = { id: 'bg', kind: 'agent', toolUseId: 'agent', status: 'running', startedAt: 1 };
+  vi.mocked(listBackgroundTasks).mockResolvedValue([task] as never);
+  const messages = [
+    user('Hi'),
+    assistant([
+      bash('bash', 'ls', failed),
+      tool({ toolCallId: 'agent', toolName: 'Task', result: 'Async agent launched successfully.' }),
+    ]),
+  ];
+  const view = render(<TurnFixture rootId={'async-completion'} messages={messages} extras={extrasWith(background)} />);
+  await waitFor(() => expect(header()).toHaveAccessibleName(/Still going.*1 running/));
+  expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'false');
+
+  vi.mocked(listBackgroundTasks).mockResolvedValue([{ ...task, status: 'completed' }] as never);
+  view.rerender(<TurnFixture rootId={'async-completion'} messages={messages} extras={extrasWith({})} />);
+  await waitFor(() => expect(header()).not.toHaveAccessibleName(/Still going/));
+  expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'false');
+});
+
+it('keeps its automatic choice when a later child failure arrives and an older page changes the turn key', () => {
+  useUiPrefs.setState({ finishedWork: 'open' });
+  const props = { rootId: 'late-child-result' };
+  const tail = assistant([bash('bash', 'ls', failed), delegatedLaunch()]);
+  const view = render(<TurnFixture {...props} messages={[tail]} />);
+  expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'true');
+
+  view.rerender(<TurnFixture {...props} messages={[tail, taskResult('failed')]} />);
+  expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByTestId('chat-tool-delegate-task-card-toggle')).toHaveAttribute('aria-expanded', 'false');
+
+  view.unmount();
+  render(
+    <TurnFixture
+      {...props}
+      messages={[user('Hi'), assistant([bash('older', 'pwd')], 'older'), { ...tail }, taskResult('failed')]}
+    />,
+  );
+  expect(screen.getByTestId('chat-row-bash-toggle')).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByTestId('chat-tool-delegate-task-card-toggle')).toHaveAttribute('aria-expanded', 'false');
+});
+
+it.each([
+  [failed, 'true'],
+  [{}, 'false'],
+] as const)('uses a finished sub-agent’s final step to decide what opens (%o)', (ending, open) => {
+  const messages = [
+    user('Review the diff', 'prompt'),
+    assistant([bash('earlier', 'ls', failed)], 'first'),
+    assistant([bash('later', 'pwd', ending)], 'second'),
+  ];
+  const task = tool({ toolCallId: 'inner-agent', toolName: 'Task', result: 'Done', messages });
+  render(<TurnFixture rootId={`inner-agent-${open}`} messages={[user('Hi'), assistant([task])]} />);
+  fireEvent.click(row('inner-agent'));
+  expect(row('earlier')).toHaveAttribute('aria-expanded', 'false');
+  expect(row('later')).toHaveAttribute('aria-expanded', open);
 });
