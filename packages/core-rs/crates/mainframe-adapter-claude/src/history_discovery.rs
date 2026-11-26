@@ -69,9 +69,10 @@ async fn discover_alongside(
     };
     let self_name = format!("{session}.jsonl");
     all_files.extend(siblings.into_iter().filter(|path| {
-        Path::new(path)
-            .file_name()
-            .is_none_or(|name| name != self_name.as_str())
+        path != &primary
+            && Path::new(path)
+                .file_name()
+                .is_none_or(|name| name != self_name.as_str())
     }));
     let (subagents, children_complete) = subagent_files(directory, session).await;
     complete &= children_complete;

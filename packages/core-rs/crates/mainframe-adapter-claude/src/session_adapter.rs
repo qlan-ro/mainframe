@@ -177,10 +177,8 @@ impl AdapterSession for ClaudeSession {
                 Some(files) if files.sources.is_some() => {
                     let current = match self.discover_history().await {
                         Some((_, _, sources)) if sources.complete => {
-                            crate::history::source_stamps(std::slice::from_ref(
-                                &sources.primary_path,
-                            ))
-                            .await
+                            let parents: Vec<_> = sources.parent_files().cloned().collect();
+                            crate::history::source_stamps(&parents).await
                         }
                         _ => None,
                     };

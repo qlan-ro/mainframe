@@ -33,29 +33,31 @@ async fn load_with_reader<R: std::io::BufRead>(
     }
     let mut paths = PathCollector::default();
     let mut load = HistoryLoad::default();
-    let primary = discovered.primary_path.clone();
+    let parents: Vec<_> = discovered.parent_files().cloned().collect();
     let children = discovered.subagent_files.clone();
     let (session_id, base) = (session_id.to_owned(), base.to_owned());
     if messages && discovered.complete {
-        paths.files.sources = source_stamps(std::slice::from_ref(&primary)).await;
+        paths.files.sources = source_stamps(&parents).await;
     }
     run_history_worker(move || {
         let mut facts = history_agent_facts::AgentFacts::default();
-        let result = open(&primary).and_then(|reader| {
-            reader::read_chunks(reader, |line| {
-                let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
-                    paths.observe_plan(line, &base);
-                    return;
-                };
-                paths.observe(&entry, line, &base);
-                if messages {
-                    facts.observe(&entry);
-                    load.entry(&entry, &session_id, false);
-                }
-            })
-        });
-        if result.is_err() {
-            paths.files.sources = None;
+        for path in parents {
+            let result = open(&path).and_then(|reader| {
+                reader::read_chunks(reader, |line| {
+                    let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
+                        paths.observe_plan(line, &base);
+                        return;
+                    };
+                    paths.observe(&entry, line, &base);
+                    if messages {
+                        facts.observe(&entry);
+                        load.entry(&entry, &session_id, false);
+                    }
+                })
+            });
+            if result.is_err() {
+                paths.files.sources = None;
+            }
         }
         let agent_ids = std::mem::take(&mut load.agent_id_to_parent_tool_use_id);
         let mut rows = load.finish();
@@ -90,34 +92,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn successful_cold_read_opens_only_primary_for_full_parse() {
+    async fn cold_read_restores_parent_siblings_without_parsing_children() {
         let dir = tempfile::tempdir().unwrap();
-        let primary = dir
-            .path()
-            .join("primary.jsonl")
-            .to_string_lossy()
-            .into_owned();
-        let child = dir
-            .path()
-            .join("agent-child.jsonl")
-            .to_string_lossy()
-            .into_owned();
-        std::fs::write(&primary, message("primary")).unwrap();
-        std::fs::write(&child, message("child")).unwrap();
-        let discovered = DiscoveredFiles {
-            primary_path: primary.clone(),
-            all_files: vec![primary.clone(), child.clone()],
-            subagent_files: [child].into_iter().collect(),
-            complete: true,
-        };
+        let primary = dir.path().join("session.jsonl");
+        let sibling = dir.path().join("resume.jsonl");
+        let children = dir.path().join("session/subagents");
+        std::fs::create_dir_all(&children).unwrap();
+        std::fs::write(primary, message("primary")).unwrap();
+        std::fs::write(sibling, message("resume")).unwrap();
+        std::fs::write(children.join("agent-child.jsonl"), message("child")).unwrap();
+        let discovered =
+            discover_session_jsonl_files_in_dir("session", dir.path().to_str().unwrap()).await;
         let (rows, _) = load_with_reader("session", &discovered, "", true, move |path| {
-            assert_eq!(path, primary);
+            assert!(!Path::new(path).starts_with(&children));
             reader::open_reader(path)
         })
         .await
         .unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].id, "primary");
+        assert_eq!(
+            rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            ["primary", "resume"]
+        );
     }
 
     #[tokio::test]

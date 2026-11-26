@@ -33,6 +33,18 @@ pub struct DiscoveredFiles {
 }
 
 impl DiscoveredFiles {
+    pub(crate) fn parent_files(&self) -> impl Iterator<Item = &String> {
+        self.all_files
+            .iter()
+            .take(1)
+            .map(|_| &self.primary_path)
+            .chain(
+                self.all_files.iter().filter(|path| {
+                    *path != &self.primary_path && !self.subagent_files.contains(*path)
+                }),
+            )
+    }
+
     fn missing(primary_path: String) -> Self {
         Self {
             primary_path,
