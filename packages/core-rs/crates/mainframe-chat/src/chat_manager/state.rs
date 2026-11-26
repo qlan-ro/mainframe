@@ -71,10 +71,14 @@ impl ChatShared {
         }
     }
 
-    pub(crate) fn clear_all_queued_for_chat(&self, chat_id: &str) {
+    pub(crate) fn clear_exited_queue_refs(
+        &self,
+        chat_id: &str,
+        retained: &std::collections::HashSet<String>,
+    ) {
         let mut guard = self.queued_refs.lock_recover();
         let before = guard.len();
-        guard.retain(|r| r.chat_id != chat_id);
+        guard.retain(|r| r.chat_id != chat_id || retained.contains(&r.message_id));
         let removed = before - guard.len();
         drop(guard);
         if removed > 0 {

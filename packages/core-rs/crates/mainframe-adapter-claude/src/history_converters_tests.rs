@@ -43,10 +43,7 @@ fn converts_prompt_mode_queued_command_with_original_text() {
     );
     assert_eq!(msg.id, "e1");
     assert_eq!(msg.timestamp, "2026-07-04T00:00:01Z");
-    assert_eq!(
-        msg.metadata, None,
-        "a queued-command reconstruction with no model/usage attaches no meta, matching live's None"
-    );
+    assert_eq!(msg.metadata.unwrap().get("steered"), Some(&json!(true)));
 }
 
 #[test]

@@ -50,7 +50,7 @@ export function draftTurns(messages: readonly ThreadMessage[], scope: TurnScope,
   for (const [index, message] of messages.entries()) {
     if (isPlaceholder(message)) continue;
     if (message.role === 'user') {
-      if (!sent(message)) continue;
+      if (!sent(message) || messageMeta(message)?.steered) continue;
       open = undefined;
       continue;
     }

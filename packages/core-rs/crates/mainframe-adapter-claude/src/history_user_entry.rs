@@ -96,6 +96,6 @@ pub(super) fn convert_queued_command_entry(entry: &Value, chat_id: &str) -> Opti
         r#type: ChatMessageType::User,
         content: content_blocks,
         timestamp,
-        metadata: meta_or_none(history_meta()),
+        metadata: Some(HashMap::from([("steered".into(), Value::Bool(true))])),
     })
 }

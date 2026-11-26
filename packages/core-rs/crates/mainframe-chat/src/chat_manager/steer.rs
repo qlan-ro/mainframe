@@ -13,10 +13,15 @@ impl ChatManager {
         // a session that is being interrupted, or jump maintenance's queue.
         let _send_guard = self.lifecycle.begin_send(chat_id).await;
         self.lifecycle.wait_for_interrupt(chat_id).await;
-        if self.input_reserved(chat_id)? {
+        if self.shared.maintenance.active(chat_id)
+            || (!self.claude_turn_running(chat_id) && self.input_reserved(chat_id)?)
+        {
             return Err(SendError::NoActiveTurn(chat_id.to_string()));
         }
         let (post, session) = self.require_live_session(chat_id)?;
+        if !session.ready_for_input() {
+            return Err(SendError::NoActiveTurn(chat_id.to_string()));
+        }
         if !session.supports_steer() {
             return Err(SendError::SteerUnsupported(chat_id.to_string()));
         }

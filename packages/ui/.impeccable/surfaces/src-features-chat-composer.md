@@ -36,3 +36,5 @@ A sub-agent's request appearing above the composer on its own, saying how many m
 
 ## Unresolved
 None.
+
+Claude holds queued prompts until the current turn finishes successfully, then sends one prompt. Stop, interrupt, and error leave the remaining prompts held.

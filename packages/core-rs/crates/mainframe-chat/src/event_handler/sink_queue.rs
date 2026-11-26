@@ -2,30 +2,27 @@ use super::*;
 
 impl SessionSinkImpl {
     pub(super) fn handle_queued_processed(&self, uuid: &str) {
+        let steered = self
+            .shared
+            .queued_for_chat(&self.chat_id)
+            .iter()
+            .any(|r| r.uuid == uuid && r.steered == Some(true));
+        if !steered && self.is_claude_session() {
+            return;
+        }
         debug!(
             chat_id = self.chat_id,
             uuid, "moving queued message to end + clearing flag"
         );
-        let found_id = {
-            let msgs = self.messages.lock_recover();
-            msgs.get(&self.chat_id).and_then(|v| {
-                v.iter()
-                    .find(|m| {
-                        m.metadata
-                            .as_ref()
-                            .and_then(|md| md.get("uuid"))
-                            .and_then(|v| v.as_str())
-                            == Some(uuid)
-                    })
-                    .map(|m| m.id.clone())
-            })
-        };
+        let found_id = self.find_queued_message_id(uuid);
         if let Some(id) = &found_id {
             self.messages
                 .lock_recover()
                 .strip_queued_and_move_to_end(&self.chat_id, id);
         }
-        if found_id.is_some() {
+        if found_id.is_some() && steered {
+            self.emit_display();
+        } else if found_id.is_some() {
             if self.shared.deps.idle_run_begin(&self.chat_id, uuid).is_ok() {
                 if let Some(cell) = self.shared.active(&self.chat_id) {
                     cell.lock_recover().real_run_generation = Some(uuid.to_owned());
@@ -49,6 +46,20 @@ impl SessionSinkImpl {
             chat_id: self.chat_id.clone(),
             refs: self.shared.queued_for_chat(&self.chat_id),
         });
+    }
+    fn find_queued_message_id(&self, uuid: &str) -> Option<String> {
+        let msgs = self.messages.lock_recover();
+        msgs.get(&self.chat_id).and_then(|v| {
+            v.iter()
+                .find(|m| {
+                    m.metadata
+                        .as_ref()
+                        .and_then(|md| md.get("uuid"))
+                        .and_then(|v| v.as_str())
+                        == Some(uuid)
+                })
+                .map(|m| m.id.clone())
+        })
     }
     pub(super) fn reconcile_result_queue(&self) -> Vec<QueuedMessageRef> {
         let refs_before = self.shared.queued_for_chat(&self.chat_id);

@@ -9,7 +9,7 @@ impl ChatShared {
         };
         let chat_id = chat_id.to_owned();
         tokio::spawn(async move {
-            if let Err(error) = manager.drain_maintenance_queue(&chat_id).await {
+            if let Err(error) = manager.drain_scheduled_queue(&chat_id).await {
                 tracing::warn!(chat_id, "maintenance queue delivery failed");
                 manager.emit(DaemonEvent::Error {
                     chat_id: Some(chat_id),
@@ -21,6 +21,17 @@ impl ChatShared {
 }
 
 impl ChatManager {
+    pub(super) fn claude_turn_running(&self, chat_id: &str) -> bool {
+        self.get_active(chat_id).is_some_and(|cell| {
+            let active = cell.lock_recover();
+            active
+                .session
+                .as_ref()
+                .is_some_and(|session| session.adapter_id() == "claude")
+                && is_working(&active.chat)
+        })
+    }
+
     /// Whether maintenance owns the chat's input right now, so a message has to
     /// wait its turn behind it.
     pub(super) fn input_reserved(&self, chat_id: &str) -> Result<bool, SendError> {
@@ -39,7 +50,8 @@ impl ChatManager {
         attachment_ids: Option<&[String]>,
         command: Option<&CommandMeta>,
     ) -> Result<Option<String>, SendError> {
-        if !self.input_reserved(chat_id)? {
+        let running = self.claude_turn_running(chat_id);
+        if !running && !self.input_reserved(chat_id)? {
             return Ok(None);
         }
         let message_id = self
@@ -48,7 +60,9 @@ impl ChatManager {
         if !self.shared.maintenance.active(chat_id) && !self.session_is_spawned(chat_id) {
             self.lifecycle.start_chat(chat_id).await;
         }
-        self.shared.schedule_maintenance_drain(chat_id);
+        if !running {
+            self.shared.schedule_maintenance_drain(chat_id);
+        }
         Ok(Some(message_id))
     }
 
@@ -76,6 +90,7 @@ impl ChatManager {
         Ok(message.id)
     }
 
+    #[cfg(test)]
     pub(super) async fn drain_maintenance_queue(&self, chat_id: &str) -> Result<(), SendError> {
         self.drain_maintenance_queue_with_wait(chat_id, std::time::Duration::from_secs(120))
             .await
@@ -112,6 +127,21 @@ impl ChatManager {
         result
     }
 
+    async fn drain_scheduled_queue(&self, chat_id: &str) -> Result<(), SendError> {
+        let wait = std::time::Duration::from_secs(120);
+        if !self
+            .get_chat(chat_id)
+            .is_some_and(|chat| chat.adapter_id == "claude")
+        {
+            return self.drain_maintenance_queue_with_wait(chat_id, wait).await;
+        }
+        let _owner = self
+            .handoff_locks
+            .acquire(&format!("drain:{chat_id}"))
+            .await;
+        self.drain_maintenance_queue_owned(chat_id, wait).await
+    }
+
     async fn drain_maintenance_queue_owned(
         &self,
         chat_id: &str,
@@ -139,6 +169,9 @@ impl ChatManager {
                 return Ok(());
             }
             let (post, session) = self.require_live_session(chat_id)?;
+            if self.claude_turn_running(chat_id) {
+                return Ok(());
+            }
             if !session.ready_for_input() {
                 drop(lock);
                 if tokio::time::Instant::now() >= deadline {
@@ -153,6 +186,9 @@ impl ChatManager {
             }
             self.deliver_maintenance_input(chat_id, &post, &session, input)
                 .await?;
+            if session.adapter_id() == "claude" {
+                return Ok(());
+            }
         }
     }
 
@@ -169,6 +205,13 @@ impl ChatManager {
         self.record_message_context(post, chat_id, &input.content);
         let prior = post.lock_recover().chat.process_state.flatten();
         self.set_working(post, &now_iso8601());
+        let claude = session.adapter_id() == "claude";
+        if claude {
+            self.shared
+                .messages
+                .lock_recover()
+                .move_to_end(chat_id, &input.message.id);
+        }
         let result = super::maintenance_queue_payload::dispatch(session, &input).await;
         if let Err(error) = result {
             self.retain_failed_delivery(chat_id, post, &mut input, prior, &error)?;
@@ -176,14 +219,28 @@ impl ChatManager {
         }
         self.shared.deps.idle_queue_remove(chat_id, &input.uuid)?;
         self.remove_queued_ref(chat_id, &input.uuid);
-        self.shared
-            .messages
-            .lock_recover()
-            .strip_queued_and_move_to_end(chat_id, &input.message.id);
+        self.confirm_queued_message(chat_id, &input.message.id, claude);
         self.event_handler.emit_display(chat_id);
         self.event_handler
             .notify_chat_surface(self.shared.turn_started_event(chat_id));
         Ok(())
+    }
+    fn confirm_queued_message(&self, chat_id: &str, id: &str, claude: bool) {
+        let mut messages = self.shared.messages.lock_recover();
+        if !claude {
+            messages.strip_queued_and_move_to_end(chat_id, id);
+            return;
+        }
+        messages.update_in_place(chat_id, |msg| {
+            if msg.id != id {
+                return false;
+            }
+            let Some(meta) = msg.metadata.as_mut() else {
+                return false;
+            };
+            meta.remove("uuid");
+            meta.remove("queued").is_some()
+        });
     }
 }
 
@@ -196,4 +253,4 @@ fn queue_wait_expired() -> SendError {
 
 #[cfg(test)]
 #[path = "maintenance_queue_wait_tests.rs"]
-mod wait_tests;
+pub(super) mod wait_tests;

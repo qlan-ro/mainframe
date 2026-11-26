@@ -15,31 +15,38 @@ impl SessionSinkImpl {
         let cost = data.total_cost_usd.unwrap_or(0.0);
         let totals = self.result_totals(&cell, &data);
         let now = now_iso8601();
-        let refs_after = self.reconcile_result_queue();
-        let update = self.persist_result(&cell, &data, totals, refs_after.len(), now);
+        let claude = self.is_claude_session();
+        let remaining = if claude {
+            0
+        } else {
+            self.reconcile_result_queue().len()
+        };
+        let update = self.persist_result(&cell, &data, totals, remaining, now);
         self.record_segment_result(&data);
         let (reason, was_interrupted, is_error) = self.result_reason(&data);
-        if let Some(generation) = cell.lock_recover().real_run_generation.take() {
-            let completed = (!was_interrupted
-                && !is_error
-                && data.is_error != Some(true)
-                && data.subtype.as_deref() == Some("success"))
-            .then(now_ms);
-            if self
+        let completed = !was_interrupted
+            && !is_error
+            && data.is_error != Some(true)
+            && data.subtype.as_deref() == Some("success");
+        let generation = cell.lock_recover().real_run_generation.take();
+        if let Some(generation) = generation
+            && self
                 .shared
                 .deps
-                .idle_run_complete(&self.chat_id, &generation, completed)
+                .idle_run_complete(&self.chat_id, &generation, completed.then(now_ms))
                 .is_err()
-            {
-                warn!(
-                    chat_id = self.chat_id,
-                    "idle run completion persistence failed"
-                );
-            }
+        {
+            warn!(
+                chat_id = self.chat_id,
+                "idle run completion persistence failed"
+            );
         }
         self.emit_result_state(update, &cell, reason, was_interrupted, is_error);
         self.emit_turn_duration(&cell);
         self.result_notifications(&data, cost, was_interrupted, is_error);
+        if claude && completed {
+            self.shared.schedule_maintenance_drain(&self.chat_id);
+        }
         self.shared.schedule_idle_evaluation(&self.chat_id);
     }
 

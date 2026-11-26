@@ -1,6 +1,15 @@
 use super::*;
 
 impl SessionSinkImpl {
+    pub(super) fn is_claude_session(&self) -> bool {
+        self.shared.active(&self.chat_id).is_some_and(|cell| {
+            cell.lock_recover()
+                .session
+                .as_ref()
+                .is_some_and(|session| session.adapter_id() == "claude")
+        })
+    }
+
     pub(super) fn emit_display(&self) {
         let categories = self.shared.deps.get_tool_categories(&self.chat_id);
         emit_display_for(

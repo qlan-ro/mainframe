@@ -3,7 +3,7 @@ import type { ThreadMessage } from '@assistant-ui/react';
 import { buildTurns } from '../build-turns';
 import { TurnCache } from '../turn-cache';
 import type { TurnModel, TurnScope, TurnUnit } from '../types';
-import { assistant, bash, presented, scope, sources, text, user } from './fixtures';
+import { assistant, bash, presented, scope, sources, system, text, user } from './fixtures';
 
 function timed(message: ThreadMessage, totalStreamTime: number) {
   if (message.role !== 'assistant') throw new Error('Expected an assistant fixture');
@@ -83,4 +83,19 @@ it('keeps ordinary visible and unknown turns in their original structure', () =>
     ['a2', false, true],
     ['a3', false, true],
   ]);
+});
+
+it('keeps steer and compaction inside the turn until a queued prompt is delivered', () => {
+  const first = [
+    user('prompt'),
+    assistant('work', [bash('pwd')], { turnGroup: 'first' }),
+    user('steer', 'Use the other directory', { steered: true }),
+    system('compact', { compaction: {} }),
+    assistant('answer', [text('Done')], { turnGroup: 'first' }),
+  ];
+  const waiting = build([...first, user('next', 'Continue', { queued: true })]);
+  expect(waiting.turns.size).toBe(1);
+  expect(waiting.slices.get('answer')?.answer).toHaveLength(1);
+  const delivered = build([...first, user('next'), assistant('reply', [text('Continued')], { turnGroup: 'second' })]);
+  expect(delivered.turns.size).toBe(2);
 });

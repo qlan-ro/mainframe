@@ -200,6 +200,8 @@ async fn idle_compaction_fifo_edit_cancel_and_terminal_release() {
     session.finish.notify_one();
     worker.await.unwrap();
     manager.drain_maintenance_queue("c").await.unwrap();
+    super::maintenance_queue::wait_tests::finish_turn(&session, false);
+    manager.drain_maintenance_queue("c").await.unwrap();
     let sent = session.sent.lock_recover();
     assert_eq!(
         sent.iter().map(|s| s.0.as_str()).collect::<Vec<_>>(),

@@ -39,6 +39,8 @@ async fn rejection_survives_history_reload_and_retries_original_uuid() {
         .await
         .unwrap();
     manager.drain_maintenance_queue("c").await.unwrap();
+    super::maintenance_queue::wait_tests::finish_turn(&session, false);
+    manager.drain_maintenance_queue("c").await.unwrap();
     let sent = session.sent.lock_recover();
     assert_eq!(sent.len(), 3);
     assert_eq!(sent[1].1.as_deref(), Some(original.uuid.as_str()));

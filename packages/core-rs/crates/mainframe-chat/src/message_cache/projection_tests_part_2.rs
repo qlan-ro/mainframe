@@ -152,5 +152,5 @@ fn an_unknown_chat_leaves_no_journal_entry() {
     assert!(!cache.remove_by_id("ghost", "x"));
     assert!(!cache.move_to_end("ghost", "x"));
     assert!(!cache.strip_queued_and_move_to_end("ghost", "x"));
-    assert!(!cache.strip_all_queued("ghost"));
+    assert!(!cache.strip_queued_except("ghost", &Default::default()));
 }

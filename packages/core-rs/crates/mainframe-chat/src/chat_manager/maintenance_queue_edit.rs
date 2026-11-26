@@ -34,6 +34,7 @@ impl ChatManager {
         else {
             return Ok(false);
         };
+        let retry = input.delivery == mainframe_db::idle_compaction_queue::DeliveryState::Rejected;
         if let Some(content) = content {
             edit_input(&mut input, content)?;
             self.shared.deps.idle_queue_put(chat_id, &input)?;
@@ -60,7 +61,13 @@ impl ChatManager {
         }
         self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
-        self.shared.schedule_maintenance_drain(chat_id);
+        if retry
+            || !self
+                .get_chat(chat_id)
+                .is_some_and(|chat| chat.adapter_id == "claude")
+        {
+            self.shared.schedule_maintenance_drain(chat_id);
+        }
         Ok(true)
     }
 }

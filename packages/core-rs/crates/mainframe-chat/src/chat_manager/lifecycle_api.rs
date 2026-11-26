@@ -69,7 +69,12 @@ impl ChatManager {
 
     /// The user's Stop: delegated work is cancelled before the turn stops.
     pub async fn interrupt_chat(&self, chat_id: &str) {
-        storage_event!(self.shared, Some(chat_id); self.cancel_maintenance_queue(chat_id));
+        if !self
+            .get_chat(chat_id)
+            .is_some_and(|chat| chat.adapter_id == "claude")
+        {
+            storage_event!(self.shared, Some(chat_id); self.cancel_maintenance_queue(chat_id));
+        }
         self.lifecycle.orchestration().stopping(chat_id).await;
         self.lifecycle.interrupt_chat(chat_id).await;
     }
