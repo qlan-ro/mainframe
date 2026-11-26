@@ -1,16 +1,8 @@
+import { useSavedNestedCall, NestedCallUnavailable } from './use-saved-nested-call';
+import type { SavedNestedLocator } from '@/store/run-pane';
 import { SubagentFind } from './SubagentFind';
 import { ProseBlock, TextBlock } from './SubagentTextBlocks';
 import { ConversationExportButton } from './ConversationExportButton';
-/**
- * SubagentTabBody — a sub-agent in a workspace tab (W8): its title, kind and
- * status, Stop while it is live, the brief it was given, its steps as
- * transcript rows, and its result. Read-only: a sub-agent has no composer, and
- * its requests are answered above the parent's (G5).
- *
- * Everything is read from the parent chat's transcript, where the call and its
- * nested messages live. A call outside the loaded window loads the history that
- * holds it.
- */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
 import { Bot } from 'lucide-react';
@@ -50,23 +42,20 @@ import { useHoldConversation } from './mounted-conversations';
 import { OwnFiles } from './OwnFiles';
 import { ownTasks, useChatTasks } from './use-chat-tasks';
 import { useKeepAttached } from './use-conversation-thread';
-
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-
-/** Pages history back until the call is loaded. The text to show when it is not there, or null. */
 function useLoadCall(
   controller: AcpChatController,
   state: ChatThreadState,
   messages: readonly ThreadMessage[],
   call: SubagentCall | null,
-  target: { toolCallId: string; messageId?: string },
+  target: { toolCallId: string; messageId?: string; nested: boolean },
 ): string | null {
   const [error, setError] = useState<string | null>(null);
   const { toolCallId, messageId } = target;
   const partial = controller.isHistoryContext(toolCallId);
   const ready = state.loadState?.type === 'ready';
   const hasMore = state.historyWindow?.hasMore ?? false;
-  const needed = ready && (call == null || partial);
+  const needed = !target.nested && ready && (call == null || partial);
   const exhausted = !hasMore || (!partial && messages.some((message) => message.id === messageId));
   useEffect(() => {
     if (!needed || exhausted) return undefined;
@@ -86,7 +75,6 @@ function useLoadCall(
   return needed && exhausted ? 'Not in this transcript' : error;
 }
 
-/** Where the call stands: what its own row says of it, from the same evidence (T1c). */
 interface Place {
   pending: ReadonlySet<string>;
   partLive: boolean;
@@ -114,11 +102,13 @@ function Steps({
   work,
   result,
   chatId,
+  nativeAgentId,
 }: {
   call: SubagentCall;
   work: AgentWork;
   result: string;
   chatId: string;
+  nativeAgentId?: string | null;
 }) {
   const steps = call.part.messages ?? [];
   const fact = subagentFact(call.part);
@@ -132,7 +122,7 @@ function Steps({
       messages={steps}
       messageId={call.messageId}
       toolCallId={call.part.toolCallId}
-      {...(historical ? { nativeAgentId: fact.nativeAgentId } : {})}
+      {...(historical ? { nativeAgentId } : {})}
       outcome={work.outcome}
       prompt={text((call.part.args as Record<string, unknown>)['prompt'])}
       result={result}
@@ -148,7 +138,6 @@ interface ParentScopeProps {
   children: ReactNode;
 }
 
-/** Everything in the tab is the parent's: no thread is bound here, so without this it would read the chat column's. */
 function ParentScope({ chatId, state, world, pending, children }: ParentScopeProps) {
   const scope = useMemo(
     () => ({ rootThreadId: chatId, chatId, ancestors: [], pendingToolIds: pending }),
@@ -176,9 +165,9 @@ export interface SubagentTabBodyProps {
   chatId: string;
   toolCallId: string;
   messageId?: string;
+  savedNestedLocator?: SavedNestedLocator;
   savedNestedCall?: ToolCallMessagePart;
   title: string;
-  /** In front in its pane. */
   active: boolean;
 }
 
@@ -189,6 +178,7 @@ export function SubagentTabBody({
   title,
   active,
   savedNestedCall,
+  savedNestedLocator,
 }: SubagentTabBodyProps) {
   const root = useRef<HTMLDivElement>(null);
   const controller = useChatController(chatId, useDaemonPort());
@@ -196,16 +186,19 @@ export function SubagentTabBody({
   useHoldConversation(chatId);
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
-  const call = useMemo(
+  const loaded = useMemo(
     () =>
       savedNestedCall
         ? { part: savedNestedCall, messageId: messageId ?? toolCallId }
         : findSubagentCall(messages, toolCallId),
     [messages, toolCallId, messageId, savedNestedCall],
   );
-  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId });
+  const nested = useSavedNestedCall(controller, chatId, toolCallId, savedNestedLocator, loaded);
+  const call = loaded ?? nested.call;
+  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId, nested: !!savedNestedLocator });
   const historical = call ? subagentFact(call.part) : undefined;
-  const nativeAgentId = historical?.nativeAgentId;
+  const nativeAgentId =
+    historical?.nativeAgentId === undefined ? savedNestedLocator?.nativeAgentId : historical.nativeAgentId;
   const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
   const runs = sessionRuns(state);
   const adapterId = state.chatConfig?.adapterId;
@@ -214,11 +207,8 @@ export function SubagentTabBody({
   const tasks = ownTasks(listed, toolCallId);
   const agent = call && place && describeAgent({ call, state, tasks, partLive: place.partLive }, live);
   const shown = agent?.status;
-  // An answer is prose. An error, and the receipt of a call launched in the background, are shown as they came.
   const ResultBlock =
-    call && (historical?.status === 'failed' || isFailed(call) || isBackgroundLaunch(call))
-      ? TextBlock
-      : ProseBlock;
+    call && (historical?.status === 'failed' || isFailed(call) || isBackgroundLaunch(call)) ? TextBlock : ProseBlock;
   const args = (call?.part.args ?? {}) as Record<string, unknown>;
   const shownTitle = historical?.title || text(args['description']) || title;
   const task = agent && stoppableTask(tasks, live, adapterId);
@@ -227,7 +217,6 @@ export function SubagentTabBody({
     task ? () => stopBackgroundTask(chatId, task.id) : undefined,
     backgroundStopKey(chatId, task),
   );
-
   return (
     <div
       ref={root}
@@ -241,7 +230,7 @@ export function SubagentTabBody({
         kind={kindLine(call)}
       >
         {shown != null && <AgentStatusLabel {...shown} testId={`workspace-agent-status-${toolCallId}`} />}
-        {(nativeAgentId !== null && historical && place?.work.outcome !== 'going') && (
+        {nativeAgentId !== null && historical && place?.work.outcome !== 'going' && (
           <>
             <SubagentFind
               controller={controller}
@@ -275,17 +264,24 @@ export function SubagentTabBody({
         tabIndex={-1}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[22px] pt-3 pb-4 outline-none focus-visible:focus-line-inset [&_.mf-tr-mono]:translate-y-0"
       >
-        {call == null || place == null ? (
+        {call == null && savedNestedLocator ? (
+          <NestedCallUnavailable {...nested} />
+        ) : call == null || place == null ? (
           <p role="status" className="text-sm text-muted-foreground">
             {error ?? 'Loading the sub-agent…'}
           </p>
         ) : (
           <ParentScope chatId={chatId} state={state} world={world} pending={place.pending}>
             <ProseBlock label="Brief" testId={`workspace-agent-brief-${toolCallId}`} source={text(args['prompt'])} />
-            <Steps chatId={chatId} call={call} work={place.work} result={agent?.result ?? ''} />
+            <Steps
+              chatId={chatId}
+              call={call}
+              work={place.work}
+              result={agent?.result ?? ''}
+              nativeAgentId={nativeAgentId}
+            />
             <ResultBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
             {agent?.reports.map(({ source, text: report }, i) => {
-              // A final answer is the agent's prose by its source; a summary is the CLI's.
               const ReportBlock = source === 'Final answer' ? ProseBlock : TextBlock;
               return (
                 <ReportBlock

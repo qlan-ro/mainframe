@@ -22,6 +22,11 @@ export type ChatTabRole = (typeof CHAT_TAB_ROLES)[number];
 export type TabMode = 'preview' | 'permanent';
 
 /** A tab inside a workspace pane (a launched preview/console, a terminal, a file, or a URL tab). */
+export interface SavedNestedLocator {
+  parentNativeId: string | null;
+  nativeAgentId: string | null;
+}
+
 export interface RunTab {
   id: string;
   kind: RunTabKind;
@@ -40,6 +45,7 @@ export interface RunTab {
   role?: ChatTabRole;
   /** `agent` tabs only: the sub-agent's tool call, and the message it is in once that is known. */
   toolCallId?: string;
+  savedNestedLocator?: SavedNestedLocator;
   savedNestedCall?: ToolCallMessagePart;
   messageId?: string;
   /** Preview/permanent slot for file-backed tabs; absent on every other kind. */

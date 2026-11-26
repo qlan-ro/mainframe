@@ -23,6 +23,7 @@ function Body({ tab, active }: { tab: RunTab; active: boolean }) {
         chatId={tab.chatId}
         toolCallId={tab.toolCallId}
         messageId={tab.messageId}
+        savedNestedLocator={tab.savedNestedLocator}
         savedNestedCall={tab.savedNestedCall}
         title={tab.title}
         active={active}

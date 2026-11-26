@@ -260,6 +260,7 @@ export function AgentSteps(props: AgentStepsProps) {
   const { messageId, toolCallId, chatId, pendingToolIds } = props;
   return (
     <NestedTranscriptScope
+      parentNativeId={props.parentNativeId}
       messageId={messageId}
       toolCallId={toolCallId}
       chatId={chatId}

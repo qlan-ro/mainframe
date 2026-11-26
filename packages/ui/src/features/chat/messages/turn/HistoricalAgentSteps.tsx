@@ -5,7 +5,11 @@ import { useKnownDaemonPort } from '@/features/sessions/runtime/daemon-port-cont
 import { AgentSteps, type AgentStepsProps } from './AgentSteps';
 import { historyKey, loadSubagentPage, useSubagentHistoryStore } from './subagent-history-store';
 
-export function HistoricalAgentSteps({ chatId, nativeAgentId, ...props }: AgentStepsProps & { chatId: string; nativeAgentId?: string | null }) {
+export function HistoricalAgentSteps({
+  chatId,
+  nativeAgentId,
+  ...props
+}: AgentStepsProps & { chatId: string; nativeAgentId?: string | null }) {
   const port = useKnownDaemonPort();
   const { toolCallId } = props;
   const key = historyKey(chatId, toolCallId);
@@ -16,7 +20,11 @@ export function HistoricalAgentSteps({ chatId, nativeAgentId, ...props }: AgentS
     (older = false) => {
       if (port === null || nativeAgentId === null) return;
       const controller = chatControllerRegistry.getOrCreate(chatId, port);
-      void loadSubagentPage(key, (before) => controller.subagentHistory.page(nativeAgentId ?? toolCallId, before), older);
+      void loadSubagentPage(
+        key,
+        (before) => controller.subagentHistory.page(nativeAgentId ?? toolCallId, before),
+        older,
+      );
     },
     [chatId, key, nativeAgentId, port, toolCallId],
   );
@@ -70,7 +78,7 @@ export function HistoricalAgentSteps({ chatId, nativeAgentId, ...props }: AgentS
           </Button>
         )}
       </div>
-      <AgentSteps {...props} messages={entry?.messages ?? props.messages} />
+      <AgentSteps {...props} parentNativeId={nativeAgentId ?? null} messages={entry?.messages ?? props.messages} />
     </>
   );
 }

@@ -40,7 +40,51 @@ export function readTab(value: unknown): RunTab | null {
   const { id, kind, title, role } = value;
   if (typeof id !== 'string' || typeof kind !== 'string' || typeof title !== 'string') return null;
   const known = role === undefined || isRole(role) ? value : { ...value, role: 'session' };
-  return known as unknown as RunTab;
+  return storedTab(known as unknown as RunTab);
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function storedTab(tab: RunTab): RunTab {
+  const { savedNestedCall, savedNestedLocator } = tab;
+  if (!savedNestedCall && !savedNestedLocator) return tab;
+  const legacyFact = record(record(record(record(savedNestedCall).providerMetadata).mainframe).subagentFact);
+  const locator = record(savedNestedLocator);
+  const id = (value: unknown) => (typeof value === 'string' && value.length <= 256 ? value : null);
+  return {
+    id: tab.id,
+    kind: 'agent',
+    title: tab.title.slice(0, 120),
+    chatId: tab.chatId,
+    toolCallId: tab.toolCallId,
+    savedNestedLocator: {
+      parentNativeId: id(locator.parentNativeId),
+      nativeAgentId: id(locator.nativeAgentId ?? legacyFact.nativeAgentId),
+    },
+  };
+}
+
+export function scrubLegacyConversationTabs(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  let changed = false;
+  const sessions = Object.fromEntries(
+    Object.entries(value).map(([id, session]) => {
+      if (!isRecord(session) || !Array.isArray(session.panes)) return [id, session];
+      const panes = session.panes.map((pane: unknown) => {
+        if (!isRecord(pane) || !Array.isArray(pane.tabs)) return pane;
+        const tabs = pane.tabs.flatMap((tab: unknown) => {
+          if (!isRecord(tab) || !('savedNestedCall' in tab)) return [tab];
+          changed = true;
+          return readTab(tab) ?? [];
+        });
+        return { ...pane, tabs };
+      });
+      return [id, { ...session, panes }];
+    }),
+  );
+  return changed ? sessions : value;
 }
 
 export function readTabs(value: unknown): RunTab[] {
@@ -51,7 +95,7 @@ export function readTabs(value: unknown): RunTab[] {
 export function takeConversations(run: RunState | null): StoredConversations | null {
   if (run == null || !run.panes.some((pane) => pane.tabs.some(isConversationTab))) return null;
   const panes = run.panes.map((pane): StoredPane => {
-    const tabs = pane.tabs.filter(isConversationTab);
+    const tabs = pane.tabs.filter(isConversationTab).map(storedTab);
     const active = tabs.some((tab) => tab.id === pane.active) ? pane.active : null;
     return { id: pane.id, order: pane.tabs.map((tab) => tab.id), tabs, active };
   });

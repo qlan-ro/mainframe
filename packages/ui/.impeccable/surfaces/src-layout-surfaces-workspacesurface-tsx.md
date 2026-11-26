@@ -34,6 +34,6 @@ An agent opened from the Activity panel arrives as a tab with its live steps. It
 ## Unresolved
 None.
 
-The Agent tab loads saved Claude steps when opened, including when opened from another saved agent. The nested tab shows the brief, status and result recorded for that call. An agent waiting for permission keeps its live steps. The tab reuses pages loaded inline, shows a loading status while a request is pending, and offers Retry when a load fails or the saved pages are cleared.
+The Agent tab loads saved Claude steps when opened, including when opened from another saved agent. After a reload, the nested tab pages through the containing agent’s saved transcript to recover the brief, status and result. If the call is missing, the tab shows that it is unavailable and offers Retry. An agent waiting for permission keeps its live steps. The tab reuses pages loaded inline, shows a loading status while a request is pending, and offers Retry when a load fails or the saved pages are cleared.
 
 Find in the saved Claude Agent tab searches the entire child transcript, including steps outside the loaded window. The Agent and Chat headers offer Markdown export, which includes saved child text.

@@ -37,10 +37,10 @@ function emptyEntry(): Entry {
   return { accumulator: new AcpItemAccumulator(), converter: new TranscriptConverter(), messages: [], loading: true };
 }
 
-export async function loadSubagentPage(key: string, request: RequestPage, older = false) {
+export async function loadSubagentPage(key: string, request: RequestPage, older = false, refresh = false) {
   const existing = useSubagentHistoryStore.getState().entries.get(key);
-  if (existing?.loading || (older ? !existing?.before : existing && !existing.error)) return;
-  const loading = existing ? { ...existing, loading: true, error: false } : emptyEntry();
+  if (existing?.loading || (older ? !existing?.before : existing && !existing.error && !refresh)) return;
+  const loading = existing && !refresh ? { ...existing, loading: true, error: false } : emptyEntry();
   save(key, loading);
   try {
     let page = await request(older ? loading.before : undefined);
