@@ -21,6 +21,7 @@ async fn main() {
 }
 
 async fn run_daemon() {
+    let parent_exit = watch_sidecar_parent(std::env::args().nth(1).as_deref());
     let (config, paths) = match mainframe_runtime::config::get_data_dir().and_then(|config_dir| {
         let config = mainframe_runtime::config::get_config()?;
         let paths = mainframe_runtime::config::boot_paths(&config, &config_dir);
@@ -63,7 +64,7 @@ async fn run_daemon() {
         Ok(daemon) => daemon,
         Err(error) => fatal("daemon assembly failed", &error),
     };
-    if let Err(error) = daemon.serve(shutdown_signal()).await {
+    if let Err(error) = daemon.serve(shutdown_signal(parent_exit)).await {
         fatal("daemon server failed", &error);
     }
 }
@@ -83,7 +84,42 @@ fn flush_and_exit(code: i32) -> ! {
     std::process::exit(code);
 }
 
-async fn shutdown_signal() {
+#[cfg(any(unix, test))]
+fn sidecar_parent_arg(arg: Option<&str>) -> Option<u32> {
+    arg?.strip_prefix("--sidecar-parent-pid=")?
+        .parse::<u32>()
+        .ok()
+        .filter(|pid| *pid > 0)
+}
+
+fn watch_sidecar_parent(arg: Option<&str>) -> Option<tokio::sync::oneshot::Receiver<()>> {
+    #[cfg(unix)]
+    {
+        let parent = sidecar_parent_arg(arg)?;
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        match std::thread::Builder::new()
+            .name("sidecar-parent".into())
+            .spawn(move || {
+                while mainframe_runtime::process::parent_pid() == Some(parent) {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+                let _ = sender.send(()); /* expected */
+                std::thread::sleep(std::time::Duration::from_secs(10));
+                tracing::error!("daemon did not exit after losing its host");
+                flush_and_exit(1);
+            }) {
+            Ok(_) => Some(receiver),
+            Err(err) => fatal("failed to watch sidecar parent", &err),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _arg = arg;
+        None
+    }
+}
+
+async fn shutdown_signal(parent_exit: Option<tokio::sync::oneshot::Receiver<()>>) {
     let ctrl_c = async {
         // Boot-time signal handler installation failure is unrecoverable — the
         // process has no path forward without it — so this is treated as a
@@ -112,9 +148,41 @@ async fn shutdown_signal() {
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
 
+    let parent_lost = async {
+        if let Some(exit) = parent_exit {
+            if exit.await.is_err() {
+                tracing::warn!("sidecar parent watcher stopped early");
+            }
+        } else {
+            std::future::pending::<()>().await;
+        }
+    };
+
     tokio::select! {
+        () = parent_lost => info!("desktop host exited"),
         () = ctrl_c => {}
         () = terminate => {}
     }
     info!("shutdown signal received, draining in-flight requests");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ownership_requires_an_explicit_launch_argument() {
+        assert_eq!(
+            sidecar_parent_arg(Some("--sidecar-parent-pid=42")),
+            Some(42)
+        );
+        for arg in [
+            None,
+            Some("42"),
+            Some("MAINFRAME_SIDECAR_PARENT_PID=42"),
+            Some("--sidecar-parent-pid=0"),
+        ] {
+            assert_eq!(sidecar_parent_arg(arg), None);
+        }
+    }
 }
