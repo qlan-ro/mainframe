@@ -112,7 +112,7 @@ impl IdleSessionScanner {
 
 /// The single idle-eligibility rule, shared by
 /// `select_idle_candidates` and `ChatOffload::recheck`: a spawned session's
-/// idle clock is still `session.last_activity_at()` alone (unchanged —
+/// idle clock (also for a closing session) is `session.last_activity_at()` alone (unchanged —
 /// `None` means "always active", exactly as before). Everything else — no
 /// session at all, or a session handle that never spawned (a failed spawn, a
 /// REST `/resume` that never started, or one whose process already exited) —
@@ -122,7 +122,7 @@ impl IdleSessionScanner {
 /// spawned session with no activity tracking).
 pub fn idle_since(session: Option<&Arc<dyn AdapterSession>>, last_used_at: i64) -> Option<i64> {
     if let Some(session) = session
-        && session.is_spawned()
+        && (session.is_spawned() || session.is_closing())
     {
         return session.last_activity_at();
     }

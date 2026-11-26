@@ -59,6 +59,10 @@ impl ApprovalHandler {
         }
     }
 
+    pub(crate) fn has_pending(&self) -> bool {
+        !self.pending.lock_recover().is_empty()
+    }
+
     pub fn set_plan_context(&self, ctx: PlanContext) {
         *self.plan_context.lock_recover() = ctx;
     }

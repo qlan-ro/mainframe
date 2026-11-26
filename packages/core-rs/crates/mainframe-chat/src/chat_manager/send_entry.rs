@@ -76,6 +76,14 @@ impl ChatManager {
             return Ok(None);
         }
 
+        self.lifecycle
+            .finish_closing_session(chat_id)
+            .await
+            .map_err(|error| {
+                AdapterError::DeliveryRejected(format!(
+                    "The previous session is still shutting down ({error}). Try again."
+                ))
+            })?;
         self.reset_transcript_if_orphaned(chat_id, chat.as_ref())
             .await?;
 

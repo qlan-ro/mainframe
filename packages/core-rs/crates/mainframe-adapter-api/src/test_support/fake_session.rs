@@ -32,6 +32,7 @@ pub struct FakeSession {
     /// plain `Option<i64>` field can't do without interior mutability.
     pub activity_override: Mutex<Option<i64>>,
     pub kill_count: AtomicUsize,
+    pub fail_kill: AtomicBool,
     pub apply_tuning_calls: AtomicUsize,
     pub set_model_calls: Mutex<Vec<String>>,
     pub set_permission_mode_calls: Mutex<Vec<ExecutionMode>>,
@@ -157,7 +158,15 @@ impl AdapterSession for FakeSession {
     }
     fn kill(&self) -> BoxFuture<'_, Result<(), AdapterError>> {
         self.kill_count.fetch_add(1, Ordering::SeqCst);
-        ok()
+        let failed = self.fail_kill.load(Ordering::SeqCst);
+        Box::pin(async move {
+            if failed {
+                return Err(AdapterError::Message(
+                    "fixture did not confirm shutdown".into(),
+                ));
+            }
+            Ok(())
+        })
     }
     fn get_process_info(&self) -> Option<AdapterProcess> {
         None

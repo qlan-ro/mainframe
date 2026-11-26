@@ -48,6 +48,7 @@ impl CodexSession {
             .request_with_disposition("turn/steer", Some(params))
             .await
             .map_err(steer_error)?;
+        self.touch_activity();
         Ok(())
     }
 }

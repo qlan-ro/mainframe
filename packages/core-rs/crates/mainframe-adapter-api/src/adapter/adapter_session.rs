@@ -39,6 +39,11 @@ pub trait AdapterSession: Send + Sync {
     fn adapter_id(&self) -> &str;
     fn project_path(&self) -> &str;
     fn is_spawned(&self) -> bool;
+    /// A shutdown was requested, and the adapter still owns the departing session.
+    fn is_closing(&self) -> bool {
+        false
+    }
+
     /// `supportsReplayAck?` — default `false` (adapter consumes the message
     /// synchronously, so the chat-manager never enrolls it in `queuedRefs`).
     fn supports_replay_ack(&self) -> bool {
@@ -48,6 +53,14 @@ pub trait AdapterSession: Send + Sync {
     /// idle-eviction scanner treats the session as always-active.
     fn last_activity_at(&self) -> Option<i64> {
         None
+    }
+    /// Commit an idle close after the caller has reserved external work.
+    fn try_reserve_idle_close(&self, _idle_before: i64) -> bool {
+        true
+    }
+
+    fn blocks_idle_offload(&self) -> bool {
+        false
     }
     /// Whether [`AdapterSession::steer`] can fold a message into a running
     /// turn. Defaulted to `false`: an adapter without a steer mechanism keeps

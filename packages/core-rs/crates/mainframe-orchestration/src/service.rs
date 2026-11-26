@@ -105,6 +105,39 @@ impl OrchestrationService {
         self.credentials.revoke_chat(chat_id);
     }
 
+    pub async fn reserve_idle_close(&self, chat_id: &str) -> Option<Box<dyn Send>> {
+        match self.reserve_idle_tree(chat_id).await {
+            Ok(guard) => guard.map(|guard| Box::new(guard) as Box<dyn Send>),
+            Err(error) => {
+                tracing::warn!(chat_id, %error, "could not check delegated work before offload");
+                None
+            }
+        }
+    }
+
+    async fn reserve_idle_tree(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<tokio::sync::OwnedMutexGuard<()>>, PortError> {
+        let Some(chat) = self.port.chat(chat_id).await? else {
+            return Ok(None);
+        };
+        let Ok(guard) = self
+            .tree_locks
+            .get(&self.tree_key(&chat).await?)
+            .try_lock_owned()
+        else {
+            return Ok(None);
+        };
+        let busy = self
+            .tasks
+            .nonterminal()
+            .await?
+            .iter()
+            .any(|task| task.parent_chat_id == chat_id || task.child_chat_id == chat_id);
+        Ok((!busy).then_some(guard))
+    }
+
     // ── checks shared by the tools ────────────────────────────────────────
 
     pub(crate) async fn caller_chat(&self, ctx: &CallCtx) -> Result<ChatView, ToolError> {

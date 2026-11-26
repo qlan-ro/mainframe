@@ -97,19 +97,17 @@ impl ProcessWatch {
     }
 
     async fn run(self: Arc<Self>, mut child: Child, pumps: Vec<JoinHandle<()>>) {
-        let code = tokio::select! {
-            status = child.wait() => status.ok().and_then(|status| status.code()),
-            _ = self.kill_notify.notified() => shutdown(&mut child).await,
-        };
-        self.exited.store(true, Ordering::SeqCst);
+        let code = wait_for_process(&mut child, &self.kill_notify).await;
         reject_all_pending(
             &self.pending,
             JsonRpcError(format!("Process exited with code {code:?}")),
         );
         finish_pumps(pumps).await;
         self.report_exit(code);
-        self.close_notify.notify_waiters();
+        self.closed.store(true, Ordering::SeqCst);
         (self.handlers.on_exit)(code);
+        self.exited.store(true, Ordering::SeqCst);
+        self.close_notify.notify_waiters();
     }
 
     fn report_exit(&self, code: Option<i32>) {
@@ -131,18 +129,140 @@ impl ProcessWatch {
     }
 }
 
-async fn shutdown(child: &mut Child) -> Option<i32> {
-    use mainframe_runtime::process::{Target, terminate};
-    if let Some(pid) = child.id() {
-        let result = terminate(Target::Pid(pid), Duration::from_millis(800), async {
-            if let Err(error) = child.wait().await {
-                tracing::warn!(%error, "codex wait failed");
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+async fn wait_for_process(child: &mut Child, close: &Notify) -> Option<i32> {
+    wait_for_group(
+        child,
+        close,
+        mainframe_runtime::process::child_exited_unreaped,
+        sweep_group,
+    )
+    .await
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+async fn wait_for_group(
+    child: &mut Child,
+    close: &Notify,
+    probe: impl Fn(u32) -> std::io::Result<bool>,
+    sweep: impl FnOnce(mainframe_runtime::process::Target),
+) -> Option<i32> {
+    use mainframe_runtime::process::Target;
+    let pid = child.id()?;
+    let target = Target::Group(pid);
+    let exit = observe_child_exit(pid, &probe);
+    tokio::pin!(exit);
+    let (closing, owned) = tokio::select! {
+        biased;
+        () = close.notified() => (true, close_group(pid, &probe, exit.as_mut()).await),
+        result = exit.as_mut() => (false, result),
+    };
+    // waitid with WNOWAIT leaves the leader in place until after the sweep.
+    match owned {
+        Ok(()) => sweep(target),
+        Err(error) => {
+            tracing::warn!(%error, "could not observe unreaped codex leader; using child shutdown");
+            if closing {
+                close.notify_one();
             }
-        })
-        .await;
-        if let Err(error) = result {
-            tracing::warn!(%error, "codex shutdown failed");
         }
     }
-    child.wait().await.ok().and_then(|status| status.code())
+    wait_for_owned_child(child, close).await
 }
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+async fn close_group(
+    pid: u32,
+    probe: &impl Fn(u32) -> std::io::Result<bool>,
+    exit: impl std::future::Future<Output = std::io::Result<()>>,
+) -> std::io::Result<()> {
+    use mainframe_runtime::process::{Signal, Target, signal};
+    if probe(pid)? {
+        return Ok(());
+    }
+    if let Err(error) = signal(Target::Group(pid), Signal::Term) {
+        tracing::warn!(%error, "codex group TERM failed");
+    }
+    match tokio::time::timeout(Duration::from_millis(800), exit).await {
+        Ok(result) => result,
+        Err(_) => probe(pid).map(|_| ()),
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+fn sweep_group(target: mainframe_runtime::process::Target) {
+    use mainframe_runtime::process::{Signal, signal};
+    if let Err(error) = signal(target, Signal::Kill) {
+        tracing::warn!(%error, "codex process group cleanup failed");
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+async fn observe_child_exit(
+    pid: u32,
+    probe: &impl Fn(u32) -> std::io::Result<bool>,
+) -> std::io::Result<()> {
+    use tokio::signal::unix::{SignalKind, signal};
+    let mut changed = signal(SignalKind::child()).ok();
+    while !probe(pid)? {
+        tokio::select! {
+            () = tokio::time::sleep(Duration::from_secs(2)) => {},
+            Some(()) = async { changed.as_mut()?.recv().await } => {},
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+async fn wait_for_process(child: &mut Child, close: &Notify) -> Option<i32> {
+    wait_for_owned_child(child, close).await
+}
+
+async fn wait_for_owned_child(child: &mut Child, close: &Notify) -> Option<i32> {
+    loop {
+        let status = tokio::select! {
+            biased;
+            () = close.notified() => stop_owned_child(child).await,
+            status = child.wait() => status,
+        };
+        match status {
+            Ok(status) => return status.code(),
+            Err(error) => {
+                tracing::warn!(%error, "codex exit could not be confirmed");
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+        }
+    }
+}
+
+async fn stop_owned_child(child: &mut Child) -> std::io::Result<std::process::ExitStatus> {
+    if let Some(status) = child.try_wait()? {
+        return Ok(status);
+    }
+    #[cfg(unix)]
+    if let Some(pid) = child.id() {
+        use mainframe_runtime::process::{Signal, Target, signal};
+        // A successful try_wait pins this PID until this watcher reaps it.
+        match signal(Target::Pid(pid), Signal::Term) {
+            Ok(true) => {
+                if let Ok(Ok(status)) =
+                    tokio::time::timeout(Duration::from_millis(800), child.wait()).await
+                {
+                    return Ok(status);
+                }
+            }
+            Ok(false) => {}
+            Err(error) => tracing::warn!(%error, "codex child TERM failed"),
+        }
+    }
+    if let Some(status) = child.try_wait()? {
+        return Ok(status);
+    }
+    child.start_kill()?;
+    child.wait().await
+}
+
+#[cfg(test)]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "process_tests.rs"]
+mod tests;

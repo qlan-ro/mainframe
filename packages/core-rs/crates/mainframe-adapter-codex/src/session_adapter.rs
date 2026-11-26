@@ -20,7 +20,12 @@ impl AdapterSession for CodexSession {
         '_,
         Result<mainframe_adapter_api::idle_compaction::CompactionMetadata, AdapterError>,
     > {
-        Box::pin(self.compact_idle(request))
+        Box::pin(async move {
+            self.touch_activity();
+            let result = self.compact_idle(request).await;
+            self.touch_activity();
+            result
+        })
     }
     fn id(&self) -> &str {
         &self.id
@@ -32,11 +37,43 @@ impl AdapterSession for CodexSession {
         &self.project_path
     }
     fn is_spawned(&self) -> bool {
-        self.client.lock_recover().is_some()
+        self.client
+            .lock_recover()
+            .as_ref()
+            .is_some_and(|client| !client.is_closing())
+    }
+
+    fn is_closing(&self) -> bool {
+        self.client
+            .lock_recover()
+            .as_ref()
+            .is_some_and(|client| client.is_closing())
+    }
+
+    fn last_activity_at(&self) -> Option<i64> {
+        Some(self.last_activity_ms.load(Ordering::SeqCst))
+    }
+
+    fn try_reserve_idle_close(&self, idle_before: i64) -> bool {
+        let intake = self.idle_intake.lock_recover().clone();
+        intake.reserve(|| {
+            self.last_activity_ms.load(Ordering::SeqCst) < idle_before
+                && !self.blocks_idle_offload()
+        })
+    }
+
+    fn blocks_idle_offload(&self) -> bool {
+        self.config.lock_recover().no_persistence
+            || self
+                .approval_handler
+                .lock_recover()
+                .as_ref()
+                .is_some_and(|handler| handler.has_pending())
+            || self.state.lock_recover().blocks_idle_offload()
     }
 
     fn get_process_info(&self) -> Option<AdapterProcess> {
-        if self.client.lock_recover().is_none() {
+        if !self.is_spawned() {
             return None;
         }
         let chat_id = self
@@ -70,7 +107,10 @@ impl AdapterSession for CodexSession {
         images: Vec<ImageInput>,
         _uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin((self.send_message_inner(message, images, _uuid)).instrument(self.span.clone()))
+        Box::pin(
+            self.send_message_inner(message, images, _uuid)
+                .instrument(self.span.clone()),
+        )
     }
 
     fn supports_steer(&self) -> bool {
@@ -82,7 +122,7 @@ impl AdapterSession for CodexSession {
         message: String,
         _uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
-        Box::pin((self.steer_inner(message)).instrument(self.span.clone()))
+        Box::pin(self.steer_inner(message).instrument(self.span.clone()))
     }
 
     fn cancel_queued_message(&self, _uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>> {
@@ -103,6 +143,10 @@ impl AdapterSession for CodexSession {
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(
             (async move {
+                let intake = self.idle_intake.lock_recover().clone();
+                let Some(_intake) = intake.enter() else {
+                    return Ok(());
+                };
                 if let Some(approval) = self.approval_handler.lock_recover().as_ref() {
                     approval.resolve(&response).map_err(AdapterError::from)?;
                 }

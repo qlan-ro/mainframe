@@ -1,6 +1,24 @@
 use super::*;
 
 impl ChatLifecycleManager {
+    pub(crate) async fn finish_closing_session(&self, chat_id: &str) -> Result<(), AdapterError> {
+        let session = self
+            .get_active(chat_id)
+            .and_then(|cell| cell.lock_recover().session.clone());
+        if let Some(session) = session
+            && session.is_closing()
+        {
+            session.kill().await?;
+        }
+        Ok(())
+    }
+
+    pub(super) async fn load_chat_for_start(&self, chat_id: &str) -> Result<(), AdapterError> {
+        self.finish_closing_session(chat_id).await?;
+        self.load_chat(chat_id).await;
+        Ok(())
+    }
+
     pub(super) async fn session_spawn_options(
         &self,
         chat_id: &str,

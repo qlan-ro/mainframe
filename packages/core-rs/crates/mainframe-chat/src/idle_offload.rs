@@ -74,6 +74,9 @@ impl ChatOffload {
     }
 
     async fn try_offload(&self, chat_id: &str) {
+        let Some(delegation) = self.reserve_delegation(chat_id).await else {
+            return;
+        };
         // Step 1: claim the offload slot, or skip — a concurrent load/start/
         // send/interrupt/history-read (or a second scan pass, AC5) already
         // owns this chat.
@@ -96,9 +99,11 @@ impl ChatOffload {
         if let Some(session) = &session_handle
             && let Err(err) = session.kill().await
         {
-            warn!(error = ?err, chat_id, "failed to kill session");
+            warn!(error = ?err, chat_id, "keeping chat because shutdown failed");
+            return;
         }
         self.lifecycle.orchestration().revoke(chat_id);
+        drop(delegation);
 
         // Step 4: drop the registry cell, the cache entry, and per-chat
         // bookkeeping (see `TeardownMode::Offload` for what survives). Do NOT
@@ -116,6 +121,25 @@ impl ChatOffload {
         });
     }
 
+    async fn reserve_delegation(&self, chat_id: &str) -> Option<Box<dyn Send>> {
+        let codex = self
+            .active_chats
+            .get(chat_id)?
+            .value()
+            .lock_recover()
+            .chat
+            .adapter_id
+            == "codex";
+        if codex {
+            self.lifecycle
+                .orchestration()
+                .reserve_idle_close(chat_id)
+                .await
+        } else {
+            Some(Box::new(()))
+        }
+    }
+
     /// Step 2's re-check, covering session-less/unspawned cells too. The OUTER
     /// `Option` is the skip signal: `None` means some condition still blocks
     /// offload, and the caller has already claimed the offload slot and must
@@ -126,12 +150,17 @@ impl ChatOffload {
     /// skip.
     fn recheck(&self, chat_id: &str) -> Option<Option<Arc<dyn AdapterSession>>> {
         let cell = self.active_chats.get(chat_id)?.value().clone();
-        let (session, last_used_at, process_state) = {
+        let (session, last_used_at, process_state, codex_busy) = {
             let guard = cell.lock_recover();
             (
                 guard.session.clone(),
                 guard.last_used_at,
                 guard.chat.process_state,
+                guard.chat.adapter_id == "codex"
+                    && (guard.running_since_ms.is_some()
+                        || guard.turn_started_at.is_some()
+                        || !guard.chat.orchestration.active_child_ids.is_empty()
+                        || guard.chat.orchestration.has_running_delegated_task),
             )
         };
         // A turn whose tool runs silent past the idle threshold must not have
@@ -143,8 +172,16 @@ impl ChatOffload {
         if process_state == Some(Some(mainframe_types::chat::ProcessState::Working)) {
             return None;
         }
+        if codex_busy
+            || session
+                .as_ref()
+                .is_some_and(|session| session.is_spawned() && session.blocks_idle_offload())
+        {
+            return None;
+        }
         let last = idle_since(session.as_ref(), last_used_at)?;
-        if now_ms() - last <= self.threshold_ms {
+        let idle_before = now_ms() - self.threshold_ms;
+        if last >= idle_before {
             return None;
         }
         if self.permissions.lock_recover().has_pending(chat_id) {
@@ -156,6 +193,11 @@ impl ChatOffload {
             .iter()
             .any(|r| r.chat_id == chat_id);
         if has_queued {
+            return None;
+        }
+        if session.as_ref().is_some_and(|session| {
+            session.is_spawned() && !session.try_reserve_idle_close(idle_before)
+        }) {
             return None;
         }
         Some(session)

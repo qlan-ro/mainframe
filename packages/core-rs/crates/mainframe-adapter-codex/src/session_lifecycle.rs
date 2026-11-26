@@ -1,19 +1,21 @@
 use super::*;
 impl CodexSession {
     pub(super) async fn kill_inner(&self) -> Result<(), AdapterError> {
-        let sink = self.sink.lock_recover().clone();
-        clear_after_exit(&self.state, &*sink);
         let client = self.client.lock_recover().clone();
-        let Some(client) = client else {
-            return Ok(());
-        };
-        if let Some(approval) = self.approval_handler.lock_recover().as_ref() {
-            approval.reject_all();
+        if let Some(client) = client {
+            if let Some(approval) = self.approval_handler.lock_recover().as_ref() {
+                approval.reject_all();
+            }
+            client.close();
+            tokio::time::timeout(Duration::from_secs(3), client.closed())
+                .await
+                .map_err(|_| {
+                    AdapterError::Message("Codex app-server termination was not confirmed".into())
+                })?;
+        } else {
+            let sink = self.sink.lock_recover().clone();
+            clear_after_exit(&self.state, &*sink);
         }
-        client.close();
-        /* expected */
-        let _ = tokio::time::timeout(Duration::from_millis(3000), client.closed()).await;
-        *self.client.lock_recover() = None;
         Ok(())
     }
     pub(super) async fn interrupt_inner(&self) -> Result<(), AdapterError> {
@@ -41,8 +43,6 @@ impl CodexSession {
         Ok(())
     }
     pub(super) fn build_handlers(&self, approval: Arc<ApprovalHandler>) -> JsonRpcHandlers {
-        let sink_n = self.sink.clone();
-        let state_n = self.state.clone();
         let state_x = self.state.clone();
         let sink_e = self.sink.clone();
         let state_e = self.state.clone();
@@ -51,21 +51,13 @@ impl CodexSession {
         let sink_x = self.sink.clone();
         let on_exit_cb = self.on_exit_callback.clone();
 
-        let approval_n = approval.clone();
-        let notification_span = self.span.clone();
+        let intake = Arc::new(idle_intake::Intake::default());
+        *self.idle_intake.lock_recover() = intake.clone();
         let error_span = self.span.clone();
         let exit_span = self.span.clone();
         JsonRpcHandlers {
-            on_notification: Box::new(move |method, params| {
-                let _span = notification_span.enter();
-                if method == "serverRequest/resolved" {
-                    approval_n.handle_resolved(&params);
-                    return;
-                }
-                let s = sink_n.lock_recover().clone();
-                handle_notification(&method, &params, &s, &mut state_n.lock_recover());
-            }),
-            on_request: self.request_handler(approval),
+            on_notification: self.notification_handler(approval.clone(), intake.clone()),
+            on_request: self.request_handler(approval, intake),
             on_error: Box::new(move |error| {
                 let _span = error_span.enter();
                 if state_e.lock_recover().maintenance.suppressing() {
@@ -79,25 +71,57 @@ impl CodexSession {
                 let s = sink_x.lock_recover().clone();
                 clear_after_exit(&state_x, &*s);
                 *status_x.lock_recover() = AdapterProcessStatus::Stopped;
-                *client_slot_x.lock_recover() = None;
                 s.on_exit(code);
                 if let Some(cb) = on_exit_cb.lock_recover().take() {
                     cb();
                 }
+                *client_slot_x.lock_recover() = None;
             }),
         }
     }
+    fn notification_handler(
+        &self,
+        approval: Arc<ApprovalHandler>,
+        intake: Arc<idle_intake::Intake>,
+    ) -> Box<dyn Fn(String, Value) + Send + Sync> {
+        let sink = self.sink.clone();
+        let state = self.state.clone();
+        let activity = self.last_activity_ms.clone();
+        let span = self.span.clone();
+        Box::new(move |method, params| {
+            let Some(_intake) = intake.enter() else {
+                return;
+            };
+            let _span = span.enter();
+            if is_activity_notification(&method) {
+                activity.fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
+            }
+            if method == "serverRequest/resolved" {
+                approval.handle_resolved(&params);
+                return;
+            }
+            let sink = sink.lock_recover().clone();
+            handle_notification(&method, &params, &sink, &mut state.lock_recover());
+        })
+    }
+
     fn request_handler(
         &self,
         approval: Arc<ApprovalHandler>,
+        intake: Arc<idle_intake::Intake>,
     ) -> Box<dyn Fn(String, Value, crate::types::RequestId) + Send + Sync> {
         let state_r = self.state.clone();
         let config_r = self.config.clone();
         let client_slot_r = self.client.clone();
         let approval_r = approval;
         let span = self.span.clone();
+        let activity = self.last_activity_ms.clone();
         Box::new(move |method, params, id| {
+            let Some(_intake) = intake.enter() else {
+                return;
+            };
             let _span = span.enter();
+            activity.fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
             let plan_mode = config_r.lock_recover().plan_mode;
             let current_turn_plan = state_r.lock_recover().current_turn_plan.clone();
             approval_r.set_plan_context(PlanContext {
@@ -105,17 +129,30 @@ impl CodexSession {
                 current_turn_plan,
             });
             let cs = client_slot_r.clone();
+            let activity = activity.clone();
             approval_r.handle_request(
                 &method,
                 &params,
                 id,
-                Box::new(move |rpc_id, result| match cs.lock_recover().as_ref() {
-                    Some(c) => c.respond(rpc_id, result),
-                    None => Ok(()),
+                Box::new(move |rpc_id, result| {
+                    activity.fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
+                    match cs.lock_recover().as_ref() {
+                        Some(c) => c.respond(rpc_id, result),
+                        None => Ok(()),
+                    }
                 }),
             );
         })
     }
+}
+
+fn is_activity_notification(method: &str) -> bool {
+    method.starts_with("item/")
+        || method.starts_with("turn/")
+        || matches!(
+            method,
+            "thread/started" | "thread/compacted" | "serverRequest/resolved"
+        )
 }
 
 pub(super) fn clear_after_exit(state: &Mutex<CodexSessionState>, sink: &dyn SessionSink) {
