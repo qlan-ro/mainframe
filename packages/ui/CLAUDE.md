@@ -11,13 +11,13 @@ The new **Tauri 2 + React** desktop UI — a *parallel* rebuild of `packages/app
 This replaces the old "assistant-ui first, stop and ask" rule. Do not look for an assistant-ui answer to transcript code.
 
 - **assistant-ui owns** the composer field's behaviour (drafts, IME, paste, key handling), attachments, quoting and selection, the action bar, and the session list. It stays the runtime bridge through `useExternalStoreRuntime`.
-- **Mainframe owns the transcript:** the data path, turns, rows, the list, scrolling, paging, sub-agents, gates and the queue. The transcript's scroller is not assistant-ui's viewport. Do not adopt `createThreadRowsSelector`, `ThreadPrimitive.Row` or `onLoadEarlier`.
+- **Mainframe owns the transcript:** the data path, turns, rows, the list, scrolling, paging, sub-agents, gates and the queue. The transcript scrolls inside `ThreadPrimitive.Viewport`, but Mainframe owns its scroll behaviour; assistant-ui's auto-scroll stays off. Do not adopt `onLoadEarlier`, `createThreadRowsSelector` or `ThreadPrimitive.Row`: the last two don't fold turns, and they end a turn at every user message, queued ones included (#948).
 - **shadcn owns presentation** for rows (Trace), gates (Questionnaire, Item), code (Code Block), scroll (Message Scroller, if the scroll proof picks it) and the composer's card (Input Group), tiles (Attachment) and buttons. "shadcn" means its core components and its AI Elements at ui.shadcn.com, never the deprecated `vercel/ai-elements`. Adopt shadcn's component unless it lacks something we need, and say what that is.
 - **assistant-ui 0.15.38 specifics:**
   - No `ThreadPrimitive.ViewportFooter`: its height counts as "at bottom". The footer above the composer is a plain div.
   - Thread-switch scroll and focus are off (`scrollToBottomOnThreadSwitch`, `unstable_focusOnThreadSwitched`), and so is `autoScroll`. Run-start and initialize scroll stay on until #980 turns them off.
   - The viewport's prepend scroll correction (`messagesPrepended`) has no switch. Expect it when rows are prepended.
-  - Mainframe's bottom pin (`features/chat/thread/use-thread-bottom-pin.ts`) is the only code that follows new output. Do not add another follower or turn assistant-ui's back on.
+  - Mainframe's bottom pin (`features/chat/thread/use-thread-bottom-pin.ts`) is the only code that follows streaming output. Do not add another follower or turn assistant-ui's back on.
 - Bump assistant-ui only for a fix we need, and pin the set exactly (see Conventions). The `INTERNAL` imports break first on a bump.
 
 Research: [shadcn agent components](../../docs/research/2026-11-26-shadcn-agent-components.md), [composer study](../../docs/research/2026-11-26-composer-shadcn-study.md). How each chat area is built today: [chat area notes](docs/chat-area-notes.md).
