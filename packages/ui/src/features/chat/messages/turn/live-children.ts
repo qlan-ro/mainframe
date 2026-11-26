@@ -96,6 +96,9 @@ function childOutcome(child: TurnChild, sources: ChildSources, standing: ReturnT
   }
   const tasks = ownTasks(sources.listed, child.toolCallId);
   if (tasks?.length && tasks.every(({ status }) => status === 'completed')) return 'completed';
+  const historical = child.call?.historical?.status;
+  if (historical === 'unknown') return 'checking';
+  return historical;
   return undefined;
 }
 
@@ -110,7 +113,13 @@ export function liveChildren(model: TurnModel, given: Omit<ChildSources, 'result
       const state = childState(child, sources, turn.live);
       const standing = child.call && standingOf(child, child.call, sources, turn.live);
       const agentFailed = child.call && !child.call.failed && standing?.status === 'failed';
-      if (child.call && !standing && agentWork(child.status, null).status === 'unknown') unknown.add(child.toolCallId);
+      if (
+        child.call &&
+        !standing &&
+        (child.call.historical?.status === 'unknown' ||
+          (!child.call.historical && agentWork(child.status, null).status === 'unknown'))
+      )
+        unknown.add(child.toolCallId);
       const step = turn.settledSteps.find(({ id }) => id === child.toolCallId);
       const waitingForList =
         sources.listLive &&

@@ -1,3 +1,4 @@
+import { restoreConversations } from '@/store/conversation-tabs-persist';
 import {
   assistant as turnAssistant,
   bash,
@@ -11,7 +12,7 @@ import {
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ThreadMessage } from '@assistant-ui/react';
-import type { BackgroundTask } from '@qlan-ro/mainframe-types';
+import type { BackgroundTask, HistoryPageResult } from '@qlan-ro/mainframe-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionStatusProvider } from '@/app/ConnectionStatusContext';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -24,13 +25,14 @@ interface Call {
   result?: unknown;
   isError?: boolean;
   messages?: Partial<ThreadMessage>[];
-  providerMetadata?: { mainframe: { acpStatus: string } };
+  providerMetadata?: { mainframe: { acpStatus?: string; subagentFact?: { status: string } } };
 }
 
 const { controller, world } = vi.hoisted(() => ({
   controller: {
     load: vi.fn(async () => undefined),
     loadEarlier: vi.fn(async () => true),
+    subagentHistory: { page: vi.fn(async (): Promise<HistoryPageResult> => ({ hasMore: false, updates: [] })) },
     isHistoryContext: vi.fn(() => false),
     subscribeLive: vi.fn(() => vi.fn()),
     holdActive: vi.fn(() => vi.fn()),
@@ -155,6 +157,13 @@ import { registerSideChat, __resetSideChatRegistryForTests } from '@/features/si
 import { useChatId, useOpenFile } from '@/features/chat/tools/chat-tool-context';
 import { useMountedConversations } from '../mounted-conversations';
 import { SubagentTabBody } from '../SubagentTabBody';
+import { HistoricalAgentSteps } from '@/features/chat/messages/turn/HistoricalAgentSteps';
+import {
+  historyKey,
+  loadSubagentPage,
+  useSubagentHistoryStore,
+} from '@/features/chat/messages/turn/subagent-history-store';
+import { useLayoutStore } from '@/store/layout';
 import { resetStops } from '@/features/session-panel/use-stop';
 
 const body = (active = true, chatId = 'parent') => (
@@ -285,6 +294,22 @@ describe('status', () => {
     world.permissions = { req: { request: { toolUseId: 't-2' } } };
     await show({ args: ARGS, messages: [step('s-1', 't-1'), step('s-2', 't-2')] });
     expect(status()).toBe('needs you');
+  });
+
+  it('keeps live steps when a restored background agent needs permission', async () => {
+    world.tasks = [bg()];
+    const call = {
+      args: { ...ARGS, run_in_background: true },
+      result: RECEIPT,
+      providerMetadata: { mainframe: { subagentFact: { status: 'unknown' } } },
+      messages: [step('live-step', 'permission-tool')],
+    };
+    const view = await show(call);
+    expect(status()).toBe('running');
+    world.permissions = { req: { request: { toolUseId: 'permission-tool' } } };
+    await event(view);
+    expect(status()).toBe('needs you');
+    expect(screen.getByTestId('steps')).toHaveTextContent('live-step');
   });
 
   it.each([
@@ -627,4 +652,112 @@ it('opens the final failure in the workspace sub-agent transcript', async () => 
   await act(async () => undefined);
   expect(screen.getByTestId('chat-row-first-toggle')).toHaveAttribute('aria-expanded', 'false');
   expect(screen.getByTestId('chat-row-last-toggle')).toHaveAttribute('aria-expanded', 'true');
+});
+
+it('offers Retry after eviction and chat-tab close while saved steps remain mounted', async () => {
+  controller.subagentHistory.page.mockResolvedValue({
+    hasMore: false,
+    updates: [
+      { sessionUpdate: 'agent_message', messageId: 'nested-step', content: [{ type: 'text', text: 'Saved step' }] },
+    ],
+  });
+  const props = { chatId: 'parent', messageId: 'm-1', toolCallId: 'nested', outcome: 'done' as const, messages: [] };
+  const view = render(
+    <TooltipProvider>
+      <HistoricalAgentSteps {...props} nativeAgentId="native-inner" />
+      <SubagentTabBody
+        {...props}
+        title="Saved nested agent"
+        active
+        savedNestedCall={{
+          type: 'tool-call',
+          toolCallId: 'nested',
+          toolName: 'Agent',
+          args: { prompt: 'Investigate the inner failure.' },
+          argsText: '{"prompt":"Investigate the inner failure."}',
+          providerMetadata: {
+            mainframe: {
+              subagentFact: {
+                status: 'failed',
+                summary: 'The inner task failed.',
+                nativeAgentId: 'native-inner',
+              },
+            },
+          },
+        }}
+      />
+    </TooltipProvider>,
+  );
+  const key = historyKey('parent', 'nested');
+  await waitFor(() => expect(useSubagentHistoryStore.getState().entries.get(key)?.loading).toBe(false));
+  expect(controller.subagentHistory.page).toHaveBeenCalledExactlyOnceWith('native-inner', undefined);
+  expect(screen.getByTestId('workspace-agent-status-nested')).toHaveTextContent(/failed/i);
+  expect(screen.getByTestId('workspace-agent-brief-nested')).toHaveTextContent('Investigate the inner failure.');
+  expect(screen.getByTestId('workspace-agent-result-nested')).toHaveTextContent('The inner task failed.');
+  expect(controller.loadEarlier).not.toHaveBeenCalled();
+  expect(screen.getAllByTestId('steps').map((steps) => steps.textContent)).toEqual(['nested-step', 'nested-step']);
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+
+  await act(async () => {
+    for (let index = 0; index < 64; index++) {
+      await loadSubagentPage(historyKey('other', String(index)), async () => ({ hasMore: false, updates: [] }));
+    }
+  });
+  expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(2);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Retry' })[0]!);
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull());
+
+  view.rerender(<HistoricalAgentSteps {...props} />);
+  const original = useLayoutStore.getState();
+  try {
+    act(() => {
+      original.addRunTab({ id: 'chat-parent', kind: 'chat', chatId: 'parent', title: 'Parent' });
+      const layout = useLayoutStore.getState();
+      const pane = layout.run!.panes.find(({ tabs }) => tabs.some(({ id }) => id === 'chat-parent'))!;
+      layout.closeRunTab(pane.id, 'chat-parent');
+    });
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull());
+  } finally {
+    useLayoutStore.setState(original);
+    useSubagentHistoryStore.setState({ entries: new Map() });
+  }
+});
+
+it('does not request any history when loading a layout with a legacy nested agent tab', async () => {
+  const restored = restoreConversations(null, {
+    dir: 'h',
+    flex: [1],
+    panes: [
+      {
+        id: 'pane',
+        order: ['agent-nested'],
+        active: 'agent-nested',
+        tabs: [
+          {
+            id: 'agent-nested',
+            kind: 'agent',
+            chatId: 'parent',
+            toolCallId: 'nested',
+            title: 'Nested',
+            savedNestedLocator: { parentNativeId: 'native-outer', nativeAgentId: 'native-inner' },
+          },
+        ],
+      },
+    ],
+  });
+  render(
+    <TooltipProvider>
+      {restored?.panes.flatMap(({ tabs }) =>
+        tabs.map((tab) => (
+          <SubagentTabBody key={tab.id} chatId={tab.chatId!} toolCallId={tab.toolCallId!} title={tab.title} active />
+        )),
+      )}
+    </TooltipProvider>,
+  );
+  await act(async () => undefined);
+  expect(screen.queryByTestId('workspace-agent-nested')).toBeNull();
+  expect(controller.subagentHistory.page).not.toHaveBeenCalled();
+  expect(controller.loadEarlier).not.toHaveBeenCalled();
 });

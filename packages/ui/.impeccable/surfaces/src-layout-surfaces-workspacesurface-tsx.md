@@ -33,3 +33,7 @@ An agent opened from the Activity panel arrives as a tab with its live steps. It
 
 ## Unresolved
 None.
+
+The Agent tab loads saved Claude steps when opened, including when opened from another saved agent. After reload, top-level Agent tabs return. To reopen a nested saved Agent tab, open its row again from the containing agent’s transcript. An agent waiting for permission keeps its live steps. The tab reuses pages loaded inline, shows a loading status while a request is pending, and offers Retry when a load fails or the saved pages are cleared.
+
+Find in the saved Claude Agent tab searches the entire child transcript, including steps outside the loaded window. The Agent and Chat headers offer Markdown export, which includes saved child text.

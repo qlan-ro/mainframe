@@ -125,7 +125,7 @@ async fn corrupt_index_and_unwritable_cache_fall_back_to_actual_headers() {
 }
 
 #[tokio::test]
-async fn indexed_loading_preserves_full_history_and_subagent_discovery() {
+async fn indexed_loading_reads_parent_siblings_and_preserves_subagent_discovery() {
     let root = tempfile::tempdir().unwrap();
     let cache = tempfile::tempdir().unwrap();
     for (name, id) in [("wanted.jsonl", "one"), ("legacy.jsonl", "two")] {

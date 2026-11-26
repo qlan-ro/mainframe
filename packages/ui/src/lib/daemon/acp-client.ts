@@ -1,5 +1,10 @@
 import { NotSentError } from './not-sent-error';
-import { requestHistoryPage, requestHistorySearch } from './acp-history-client';
+import {
+  requestHistoryPage,
+  requestHistorySearch,
+  requestSubagentExport,
+  type SubagentPageParams,
+} from './acp-history-client';
 import type { HistoryPageParams, HistoryPageResult, HistoryWindow } from '@qlan-ro/mainframe-types';
 import {
   type CancelSessionNotification,
@@ -191,8 +196,16 @@ export class AcpFacadeClient {
     return requestHistoryPage(this.requireConnection(), params, apply);
   }
 
-  historySearch(sessionId: string, query: string) {
-    return requestHistorySearch(this.requireConnection(), sessionId, query);
+  subagentHistoryPage(params: SubagentPageParams, apply: (page: HistoryPageResult) => void) {
+    return requestHistoryPage(this.requireConnection(), params, apply);
+  }
+
+  historySearch(sessionId: string, query: string, agentId?: string) {
+    return requestHistorySearch(this.requireConnection(), sessionId, query, agentId);
+  }
+
+  subagentHistoryExport(sessionId: string, agentId: string) {
+    return requestSubagentExport(this.requireConnection(), { sessionId, agentId });
   }
 
   respondPermission(id: JsonRpcRequestId, response: RequestPermissionResponse): void {

@@ -80,10 +80,8 @@ fn shift_is_a_noop_when_the_front_no_longer_matches_the_answered_id() {
     assert_eq!(manager.get_pending("chat-1"), Some(&request("r2")));
 }
 
-#[test]
-fn an_empty_request_id_never_matches_a_restored_placeholder() {
-    let mut manager = PermissionManager::new();
-    let tool_use = mainframe_types::chat::ChatMessage {
+fn tool_message(parent: Option<&str>) -> mainframe_types::chat::ChatMessage {
+    mainframe_types::chat::ChatMessage {
         id: "m1".to_string(),
         chat_id: "chat-1".to_string(),
         r#type: ChatMessageType::Assistant,
@@ -93,11 +91,30 @@ fn an_empty_request_id_never_matches_a_restored_placeholder() {
             id: "tu-1".to_string(),
             name: "Bash".to_string(),
             input: std::collections::HashMap::new(),
-            parent_tool_use_id: None,
+            parent_tool_use_id: parent.map(str::to_owned),
         })],
         timestamp: String::new(),
         metadata: None,
-    };
+    }
+}
+
+#[test]
+fn nested_permission_comes_from_live_state() {
+    let mut manager = PermissionManager::new();
+    let messages = [tool_message(Some("agent"))];
+    manager.restore_pending_permission("chat-1", &messages);
+    assert!(!manager.has_pending("chat-1"));
+    let mut live = request("real-request");
+    live.tool_use_id = "tu-1".into();
+    manager.enqueue("chat-1", live.clone());
+    manager.restore_pending_permission("chat-1", &messages);
+    assert_eq!(manager.get_pending("chat-1"), Some(&live));
+}
+
+#[test]
+fn an_empty_request_id_never_matches_a_restored_placeholder() {
+    let mut manager = PermissionManager::new();
+    let tool_use = tool_message(None);
     manager.restore_pending_permission("chat-1", std::slice::from_ref(&tool_use));
     assert!(manager.has_pending("chat-1"));
 

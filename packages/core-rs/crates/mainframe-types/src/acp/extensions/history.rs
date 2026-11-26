@@ -77,3 +77,27 @@ pub struct HistorySearchResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub truncated: Option<bool>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentHistoryPageParams {
+    pub session_id: String,
+    pub agent_id: String,
+    pub before: Option<String>,
+    pub containers: Option<i64>,
+    pub until_item_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubagentHistoryParams {
+    pub session_id: String,
+    pub agent_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubagentHistorySearchParams {
+    #[serde(flatten)]
+    pub target: SubagentHistoryParams,
+    pub query: String,
+}

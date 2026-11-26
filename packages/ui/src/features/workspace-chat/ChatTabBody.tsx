@@ -1,3 +1,5 @@
+import { exportConversation } from '@/features/chat/messages/transcript-markdown';
+import { ConversationExportButton } from './ConversationExportButton';
 /**
  * ChatTabBody — a chat of the session list in a workspace tab (W9): a fork, a
  * delegated task, or another session shown beside the conversation. The whole
@@ -134,7 +136,17 @@ function useKindLine(role: ChatTabRole, custom: SessionCustom | undefined): Reac
   return provider ?? 'Session';
 }
 
-function ThreadHeader({ tab, chatId, itemId }: { tab: RunTab; chatId: string; itemId: string }) {
+function ThreadHeader({
+  tab,
+  chatId,
+  itemId,
+  controller,
+}: {
+  tab: RunTab;
+  chatId: string;
+  itemId: string;
+  controller: ReturnType<typeof useChatController>;
+}) {
   const aui = useAui();
   const title = useAuiState((s) => s.threadListItem?.title) || tab.title;
   const custom = useAuiState((s) => s.threadListItem?.custom as SessionCustom | undefined);
@@ -148,6 +160,12 @@ function ThreadHeader({ tab, chatId, itemId }: { tab: RunTab; chatId: string; it
     >
       {custom?.delegation != null && <TaskControls chatId={chatId} title={title} custom={custom} />}
       {custom?.delegation == null && <SideChatToggle />}
+      <ConversationExportButton
+        label="Export chat as Markdown"
+        testId="workspace-chat-export"
+        load={() => exportConversation(controller)}
+        name="chat"
+      />
       <Hint label="Open in the chat column">
         <Button
           data-testid={`workspace-chat-promote-${chatId}`}
@@ -180,7 +198,7 @@ function Conversation({ tab, chatId, itemId, active }: ChatTabBodyProps & { item
     <AuiProvider extends={aui} config={config}>
       <DraftKeeper chatId={itemId} />
       <SideChatFollower chatId={chatId} />
-      <ThreadHeader tab={tab} chatId={chatId} itemId={itemId} />
+      <ThreadHeader controller={controller} tab={tab} chatId={chatId} itemId={itemId} />
       <OwnFiles chatId={chatId}>
         <div className="min-h-0 flex-1">
           <ChatThread />

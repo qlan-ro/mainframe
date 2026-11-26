@@ -1,5 +1,8 @@
 import {
   HistoryPageResultSchema,
+  SubagentHistoryExportResultSchema,
+  type SubagentHistoryParams,
+  type SubagentHistoryPageParams,
   HistorySearchResultSchema,
   type HistoryPageParams,
   type HistoryPageResult,
@@ -8,12 +11,15 @@ import {
 import type { RpcConnection } from './acp-rpc-connection';
 import { decodeReplayBatch } from './acp-replay-batch';
 
+export type SubagentPageParams = SubagentHistoryPageParams;
+
 export function requestHistoryPage(
   connection: RpcConnection,
-  params: HistoryPageParams,
+  params: HistoryPageParams | SubagentPageParams,
   apply: (page: HistoryPageResult) => void,
 ): Promise<unknown> {
-  return connection.sendRequest('_mainframe.dev/history_page', params, (raw) => {
+  const method = 'agentId' in params ? '_mainframe.dev/subagent_history_page' : '_mainframe.dev/history_page';
+  return connection.sendRequest(method, params, (raw) => {
     const page = HistoryPageResultSchema.parse(raw);
     if (page.updates && page.batches) throw new Error('History page has two update encodings');
     if (page.batches) {
@@ -33,8 +39,16 @@ export async function requestHistorySearch(
   connection: RpcConnection,
   sessionId: string,
   query: string,
+  agentId?: string,
 ): Promise<HistorySearchResult> {
+  const method = agentId === undefined ? '_mainframe.dev/history_search' : '_mainframe.dev/subagent_history_search';
   return HistorySearchResultSchema.parse(
-    await connection.sendRequest('_mainframe.dev/history_search', { sessionId, query }),
+    await connection.sendRequest(method, { sessionId, query, ...(agentId !== undefined && { agentId }) }),
   );
+}
+
+export async function requestSubagentExport(connection: RpcConnection, params: SubagentHistoryParams) {
+  return SubagentHistoryExportResultSchema.parse(
+    await connection.sendRequest('_mainframe.dev/subagent_history_export', params),
+  ).markdown;
 }

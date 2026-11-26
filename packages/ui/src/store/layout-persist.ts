@@ -4,6 +4,7 @@ import {
   isRecord,
   readTabs,
   restoreConversations,
+  scrubLegacyConversationTabs,
   takeConversations,
   type StoredConversations,
 } from './conversation-tabs-persist';
@@ -214,9 +215,12 @@ const layoutStorage: PersistStorage<PersistedLayout> = {
     const layout = readKey(name);
     const { state, version } = isRecord(layout) ? layout : {};
     const sessions = isRecord(state) ? state.sessions : undefined;
+    const stored = readKey(CONVERSATIONS_BASE_KEY);
+    const conversations = scrubLegacyConversationTabs(stored);
+    if (stored !== conversations) writeKey(CONVERSATIONS_BASE_KEY, conversations);
     // `merge` reads both as unknown.
     return {
-      state: { sessions, conversations: readKey(CONVERSATIONS_BASE_KEY) },
+      state: { sessions, conversations },
       version,
     } as StorageValue<PersistedLayout>;
   },

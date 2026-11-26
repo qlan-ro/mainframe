@@ -135,6 +135,13 @@ pub trait AdapterSession: Send + Sync {
     fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>>;
     fn get_context_files(&self) -> ContextFiles;
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>>;
+    fn load_subagent_history(
+        &self,
+        _agent_id: String,
+    ) -> BoxFuture<'_, Result<std::sync::Arc<Vec<ChatMessage>>, AdapterError>> {
+        Box::pin(async { Err(AdapterError::Unsupported("read sub-agent history")) })
+    }
+
     // Codex overrides this because its PR scan reconstructs tool output from rollout files.
     fn load_scan_records<'a>(
         &'a self,

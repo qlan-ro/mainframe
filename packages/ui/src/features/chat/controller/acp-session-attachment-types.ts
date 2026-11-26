@@ -41,6 +41,7 @@ import type { ChatStateEvent } from './chat-thread-state';
 
 /** The `AcpFacadeClient` surface the plane needs — narrowed so a test double doesn't reimplement the whole client. */
 export interface AcpSessionClientPort {
+  subagentHistoryPage?: import('@/lib/daemon/acp-client').AcpFacadeClient['subagentHistoryPage'];
   onCapabilitiesChanged?(listener: CapabilitiesListener): () => void;
   onSessionUpdate(listener: SessionUpdateListener): () => void;
   onPermissionRequest(listener: PermissionRequestListener): () => void;
@@ -65,7 +66,8 @@ export interface AcpSessionClientPort {
     window?: HistoryWindow,
   ): Promise<ResumeSessionResponse>;
   historyPage?(params: HistoryPageParams, apply: (page: HistoryPageResult) => void): Promise<unknown>;
-  historySearch?(sessionId: string, query: string): Promise<HistorySearchResult>;
+  subagentHistoryExport?(sessionId: string, agentId: string): Promise<string>;
+  historySearch?(sessionId: string, query: string, agentId?: string): Promise<HistorySearchResult>;
   respondPermission(id: JsonRpcRequestId, response: RequestPermissionResponse): void;
   /** Drop this session's live stream on the daemon (D2 dormancy) — `_mainframe.dev/session_detach`. */
   detach(sessionId: string): void;

@@ -173,6 +173,21 @@ impl AdapterSession for ClaudeSession {
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin((ClaudeSession::load_history(self)).instrument(self.span.clone()))
     }
+    fn load_subagent_history(
+        &self,
+        agent_id: String,
+    ) -> BoxFuture<'_, Result<std::sync::Arc<Vec<ChatMessage>>, AdapterError>> {
+        Box::pin(async move {
+            let (_, _, discovery) = self
+                .discover_history()
+                .await
+                .ok_or(AdapterError::Unavailable("Claude history is unavailable"))?;
+            crate::history::run_history_worker(move || {
+                crate::history::load_child(discovery, &agent_id)
+            })
+            .await?
+        })
+    }
     fn history_sources(&self) -> BoxFuture<'_, Vec<std::path::PathBuf>> {
         Box::pin((ClaudeSession::history_sources(self)).instrument(self.span.clone()))
     }
@@ -188,7 +203,8 @@ impl AdapterSession for ClaudeSession {
                 Some(files) if files.sources.is_some() => {
                     let current = match self.discover_history().await {
                         Some((_, _, sources)) if sources.complete => {
-                            crate::history::source_stamps(&sources.all_files).await
+                            let parents: Vec<_> = sources.parent_files().cloned().collect();
+                            crate::history::source_stamps(&parents).await
                         }
                         _ => None,
                     };

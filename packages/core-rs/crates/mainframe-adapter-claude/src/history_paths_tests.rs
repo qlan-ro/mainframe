@@ -22,11 +22,24 @@ async fn metadata_scans_preserve_plans_and_skills_around_large_image_results() {
             .join("\n"),
     )
     .unwrap();
+    let child = dir.path().join("agent-child.jsonl");
+    std::fs::write(
+        &child,
+        [
+            json!({"type":"user","toolUseResult":{"plan":"child","filePath":"child.md"}}),
+            json!({"type":"assistant","message":{"content":[{"type":"tool_use",
+                "name":"Skill","input":{"skill":"child-skill"}}]}}),
+        ]
+        .map(|entry| entry.to_string())
+        .join("\n"),
+    )
+    .unwrap();
+    let child = child.to_string_lossy().into_owned();
     let discovered = DiscoveredFiles {
         complete: true,
         primary_path: path.to_string_lossy().into_owned(),
-        all_files: vec![path.to_string_lossy().into_owned()],
-        subagent_files: HashSet::new(),
+        all_files: vec![path.to_string_lossy().into_owned(), child.clone()],
+        subagent_files: HashSet::from([child]),
     };
     assert_eq!(
         plan_file_paths_from(&discovered, "/project").await.unwrap(),
@@ -74,13 +87,15 @@ async fn metadata_matches_both_scans_on_claude_fixtures() {
             .to_string_lossy()
             .into_owned(),
     );
-    assert_metadata_matches(&DiscoveredFiles {
-        complete: true,
-        primary_path: String::new(),
-        all_files: files,
-        subagent_files: HashSet::default(),
-    })
-    .await;
+    for path in &files {
+        assert_metadata_matches(&DiscoveredFiles {
+            complete: true,
+            primary_path: path.clone(),
+            all_files: vec![path.clone()],
+            subagent_files: HashSet::default(),
+        })
+        .await;
+    }
 }
 
 #[tokio::test]
