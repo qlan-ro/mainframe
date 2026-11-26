@@ -58,3 +58,38 @@ export const HistorySearchResultSchema = z
   })
   .loose();
 export type HistorySearchResult = z.infer<typeof HistorySearchResultSchema>;
+
+export const SubagentHistoryParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    agentId: z.string(),
+  })
+  .loose();
+export type SubagentHistoryParams = z.infer<typeof SubagentHistoryParamsSchema>;
+
+export const SubagentHistoryPageParamsSchema = SubagentHistoryParamsSchema.extend({
+  before: z.string().optional(),
+  containers: z.number().int().optional(),
+  untilItemId: z.string().optional(),
+});
+export type SubagentHistoryPageParams = z.infer<typeof SubagentHistoryPageParamsSchema>;
+
+export const SubagentHistorySearchParamsSchema = SubagentHistoryParamsSchema.extend({
+  query: z.string(),
+});
+export type SubagentHistorySearchParams = z.infer<typeof SubagentHistorySearchParamsSchema>;
+
+export const SubagentHistoryExportResultSchema = z.object({ markdown: z.string() }).loose();
+export type SubagentHistoryExportResult = z.infer<typeof SubagentHistoryExportResultSchema>;
+
+export const SubagentRowFactsSchema = z
+  .object({
+    status: z.enum(['completed', 'failed', 'stopped', 'unknown']),
+    source: z.enum(['result', 'notification', 'tail']).optional(),
+    summary: z.string().nullish(),
+    durationMs: z.number().nonnegative().nullish(),
+    tokens: z.number().nonnegative().nullish(),
+    toolUseCount: z.number().nonnegative().nullish(),
+  })
+  .loose();
+export type SubagentRowFacts = z.infer<typeof SubagentRowFactsSchema>;
