@@ -94,6 +94,7 @@ export interface MessageSlice {
   readonly turnKey: string;
   readonly work: readonly TurnUnit[];
   readonly markers: readonly TurnUnit[];
+  readonly hiddenPromptEvent?: string;
   readonly answer: readonly TurnUnit[];
   /** The message that carries the turn's work row. */
   readonly header: boolean;

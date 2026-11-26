@@ -14,18 +14,54 @@
 use std::collections::{HashMap, HashSet};
 
 use mainframe_types::chat::ChatMessage;
-use mainframe_types::transcript_presentation::TURN_GROUP_KEY;
+use mainframe_types::transcript_presentation::{HIDDEN_PROMPT_EVENT_KEY, TURN_GROUP_KEY};
 use serde_json::Value;
 
 struct Record {
     parent: Option<String>,
     /// Session-scoped prompt group, on user records with a `promptId`.
-    prompt: Option<String>,
+    prompt: Option<Prompt>,
+}
+
+#[derive(Clone)]
+struct Prompt {
+    group: String,
+    event: Option<String>,
+}
+
+pub(crate) fn notification_summary(entry: &Value) -> Option<String> {
+    let body = entry.pointer("/message/content")?;
+    let text = body.as_str().or_else(|| {
+        let blocks = body.as_array()?;
+        (blocks.len() == 1 && text_field(&blocks[0], "type") == Some("text"))
+            .then(|| text_field(&blocks[0], "text"))
+            .flatten()
+    })?;
+    let payload = text
+        .trim()
+        .strip_prefix("<task-notification>")?
+        .strip_suffix("</task-notification>")?;
+    let field = |open, close| {
+        let (_, contents) = payload.split_once(open)?;
+        let (value, _) = contents.split_once(close)?;
+        Some(value.trim()).filter(|s| !s.is_empty())
+    };
+    Some(
+        field("<summary>", "</summary>")
+            .unwrap_or(match field("<status>", "</status>") {
+                Some("failed") => "Background task failed",
+                Some("stopped" | "cancelled") => "Background task stopped",
+                Some("completed") => "Background task finished",
+                _ => "Background task update",
+            })
+            .to_string(),
+    )
 }
 
 #[derive(Default)]
 pub(crate) struct PromptGroups {
     records: HashMap<String, Record>,
+    prompt_events: HashMap<String, Option<String>>,
     /// Loaded-message index of each assistant message and its native uuid.
     tracked: Vec<(usize, String)>,
 }
@@ -51,7 +87,13 @@ impl PromptGroups {
             .flatten()
             .map(|prompt_id| {
                 let session = text_field(entry, "sessionId").unwrap_or(session_id);
-                serde_json::json!([session, prompt_id]).to_string()
+                let group = serde_json::json!([session, prompt_id]).to_string();
+                let event = self
+                    .prompt_events
+                    .entry(group.clone())
+                    .or_insert_with(|| notification_summary(entry))
+                    .clone();
+                Prompt { group, event }
             });
         let parent = text_field(entry, "parentUuid").map(str::to_string);
         self.records
@@ -67,21 +109,22 @@ impl PromptGroups {
 
     /// Stamp each tracked message whose prompt group resolves.
     pub(crate) fn apply(self, messages: &mut [ChatMessage]) {
-        let mut memo: HashMap<String, Option<String>> = HashMap::new();
+        let mut memo: HashMap<String, Option<Prompt>> = HashMap::new();
         for (index, uuid) in &self.tracked {
             let (Some(group), Some(message)) =
                 (self.resolve(uuid, &mut memo), messages.get_mut(*index))
             else {
                 continue;
             };
-            message
-                .metadata
-                .get_or_insert_default()
-                .insert(TURN_GROUP_KEY.to_string(), Value::String(group));
+            let meta = message.metadata.get_or_insert_default();
+            meta.insert(TURN_GROUP_KEY.into(), Value::String(group.group));
+            if let Some(event) = group.event {
+                meta.insert(HIDDEN_PROMPT_EVENT_KEY.into(), Value::String(event));
+            }
         }
     }
 
-    fn resolve(&self, uuid: &str, memo: &mut HashMap<String, Option<String>>) -> Option<String> {
+    fn resolve(&self, uuid: &str, memo: &mut HashMap<String, Option<Prompt>>) -> Option<Prompt> {
         let mut path: Vec<&str> = Vec::new();
         let mut visited: HashSet<&str> = HashSet::new();
         let mut cursor = Some(uuid);

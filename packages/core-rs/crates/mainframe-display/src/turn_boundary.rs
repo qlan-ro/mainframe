@@ -13,7 +13,6 @@ use mainframe_types::chat::ChatMessage;
 use mainframe_types::transcript_presentation::{
     PRESENTATION_CONTEXT_KEY, TURN_GROUP_KEY, TranscriptPresentation,
 };
-use serde_json::Value;
 
 use crate::message_grouping::is_assistant_or_tool_use;
 
@@ -30,12 +29,11 @@ fn turn_key(msg: &ChatMessage) -> Option<String> {
         meta.get(PRESENTATION_CONTEXT_KEY)?.clone(),
     )
     .ok()?;
-    // Claude live epochs are not prompt groups, and a child context belongs
-    // to its parent's tool call rather than to a turn of its own.
+    // A child context belongs to the parent tool call.
     (presentation.is_valid()
-        && presentation.provider == "codex"
+        && matches!(presentation.provider.as_str(), "claude" | "codex")
         && presentation.parent_tool_use_id.is_none())
-    .then(|| format!("codex:{}", presentation.turn_id))
+    .then(|| format!("{}:{}", presentation.provider, presentation.turn_id))
 }
 
 /// The last known turn key of the open assistant merge run.
@@ -70,15 +68,4 @@ impl OpenTurn {
         turn.observe(msg);
         turn
     }
-}
-
-/// Drop the grouping-only turn key from a display container's metadata.
-pub(crate) fn strip_turn_key(
-    metadata: Option<std::collections::HashMap<String, Value>>,
-) -> Option<std::collections::HashMap<String, Value>> {
-    let mut metadata = metadata?;
-    if metadata.remove(TURN_GROUP_KEY).is_some() && metadata.is_empty() {
-        return None;
-    }
-    Some(metadata)
 }

@@ -196,7 +196,7 @@ fn unknown_turn_groups_join_their_neighbours_but_not_a_new_known_group() {
 }
 
 #[test]
-fn codex_turn_ids_split_groups_but_child_and_claude_contexts_do_not() {
+fn provider_turn_ids_split_groups_but_child_contexts_do_not() {
     let a = |id: &str| msg(id, ChatMessageType::Assistant, vec![text(id)]);
     let out = group_messages(vec![
         codex_turn(a("t1"), "[\"th\",\"turn-1\"]", None),
@@ -222,7 +222,9 @@ fn codex_turn_ids_split_groups_but_child_and_claude_contexts_do_not() {
         .unwrap()
         .get_mut("transcriptPresentation")
         .unwrap()["provider"] = json!("claude");
-    assert_eq!(group_messages(vec![first, claude]).len(), 1);
+    let out = group_messages(vec![first, claude]);
+    assert_eq!(texts(&out[0]), ["c1"]);
+    assert_eq!(texts(&out[1]), ["c2"]);
 }
 
 #[test]

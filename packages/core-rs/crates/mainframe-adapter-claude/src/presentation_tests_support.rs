@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Default)]
 pub(super) struct RecordingSink {
     pub(super) messages: Mutex<Vec<(Vec<MessageContent>, String, TranscriptPresentation)>>,
+    pub(super) prompt_events: Mutex<Vec<Option<String>>>,
     pub(super) updates: Mutex<Vec<PresentationUpdate>>,
 }
 impl SessionSink for RecordingSink {
@@ -40,11 +41,15 @@ impl SessionSink for RecordingSink {
         metadata: Option<MessageMetadata>,
         context: TranscriptPresentation,
     ) {
-        self.messages.lock().unwrap().push((
-            content,
-            metadata.unwrap().vendor_id.unwrap(),
-            context,
-        ));
+        let metadata = metadata.unwrap();
+        self.prompt_events
+            .lock()
+            .unwrap()
+            .push(metadata.hidden_prompt_event);
+        self.messages
+            .lock()
+            .unwrap()
+            .push((content, metadata.vendor_id.unwrap(), context));
     }
     fn on_presentation_update(&self, update: PresentationUpdate) {
         self.updates.lock().unwrap().push(update);
