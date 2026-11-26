@@ -1,5 +1,7 @@
 //! URL / JSON PR parsers — GitHub, GitLab and Azure DevOps.
 
+use serde_json::Value;
+
 use super::DetectedPrCore;
 use super::text::{read_digits, read_segment, scan_prefix};
 
@@ -75,51 +77,77 @@ pub fn parse_azure_pr_url(text: &str) -> Option<DetectedPrCore> {
     scan_prefix(text, "https://dev.azure.com/", try_azure)
 }
 
-/// `"pullRequestId"\s*:\s*(\d+)` + `"name"\s*:\s*"([^"]+)"` + `dev\.azure\.com/([^/"]+)`.
+/// The JSON `az repos pr create` and `az repos pr show` print: `pullRequestId`
+/// plus the `repository` it belongs to. `az` prints `repository.webUrl` as
+/// `null`, so the browser URL is normally rebuilt from the organization in the
+/// API `url` and the repository's project and name.
 fn parse_azure_pr_json(text: &str) -> Option<DetectedPrCore> {
-    let number = json_number_after(text, "\"pullRequestId\"")?;
-    let repo = json_string_after(text, "\"name\"").unwrap_or_else(|| "unknown".to_string());
-    let owner = azure_org(text).unwrap_or_else(|| "azure".to_string());
+    // Cheap gate: most tool results are not PR JSON, and history scans run
+    // every result through here.
+    if !text.contains("\"pullRequestId\"") {
+        return None;
+    }
+    let pr = first_json_object(text)?;
+    let number = pr.get("pullRequestId")?.as_i64()?;
+    let repository = pr.get("repository")?;
+    let repo = repository.get("name")?.as_str()?;
+    let web_url = match repository.get("webUrl").and_then(Value::as_str) {
+        Some(web_url) => web_url.trim_end_matches('/').to_string(),
+        None => {
+            let org = azure_org(pr.get("url")?.as_str()?)?;
+            let project = repository.get("project")?.get("name")?.as_str()?;
+            format!(
+                "https://dev.azure.com/{org}/{}/_git/{}",
+                encode_path_segment(project),
+                encode_path_segment(repo)
+            )
+        }
+    };
     Some(DetectedPrCore {
-        url: text.trim().to_string(),
-        owner,
-        repo,
+        url: format!("{web_url}/pullrequest/{number}"),
+        owner: azure_org(&web_url)?.to_string(),
+        repo: repo.to_string(),
         number,
     })
 }
 
-fn json_number_after(text: &str, key: &str) -> Option<i64> {
-    let idx = text.find(key)?;
-    let rest = text[idx + key.len()..].trim_start();
-    let rest = rest.strip_prefix(':')?.trim_start();
-    let (digits, _) = read_digits(rest)?;
-    digits.parse().ok()
+/// The first JSON object in `text`, ignoring whatever the CLI printed before
+/// or after it. For a list (`az repos pr list`) that is the first item.
+fn first_json_object(text: &str) -> Option<Value> {
+    let start = text.find('{')?;
+    serde_json::Deserializer::from_str(&text[start..])
+        .into_iter::<Value>()
+        .next()?
+        .ok()
 }
 
-fn json_string_after(text: &str, key: &str) -> Option<String> {
-    let idx = text.find(key)?;
-    let rest = text[idx + key.len()..].trim_start();
-    let rest = rest.strip_prefix(':')?.trim_start();
-    let rest = rest.strip_prefix('"')?;
-    let end = rest.find('"')?;
-    if end == 0 {
-        return None;
+/// `segment` percent-encoded for a URL path, as a browser shows Azure DevOps
+/// project and repository names (`Contoso Web` → `Contoso%20Web`).
+fn encode_path_segment(segment: &str) -> String {
+    let mut encoded = String::with_capacity(segment.len());
+    for byte in segment.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
     }
-    Some(rest[..end].to_string())
+    encoded
 }
 
-fn azure_org(text: &str) -> Option<String> {
-    let marker = "dev.azure.com/";
-    let idx = text.find(marker)?;
-    let rest = &text[idx + marker.len()..];
-    let end = rest.find(['/', '"']).unwrap_or(rest.len());
-    if end == 0 {
-        return None;
-    }
-    Some(rest[..end].to_string())
+/// The organization in `https://dev.azure.com/{org}/…` or
+/// `https://{org}.visualstudio.com/…`.
+fn azure_org(url: &str) -> Option<&str> {
+    let rest = url.strip_prefix("https://")?;
+    let org = match rest.strip_prefix("dev.azure.com/") {
+        Some(path) => path.split('/').next()?,
+        None => rest.split_once(".visualstudio.com")?.0,
+    };
+    (!org.is_empty() && !org.contains(['/', '@'])).then_some(org)
 }
 
-/// `parsePrUrl ?? parseGitlabMrUrl ?? parseAzurePrUrl ?? parseAzurePrJson`.
+/// The first PR a tool result names: a GitHub, GitLab or Azure DevOps URL, then
+/// Azure CLI JSON.
 pub fn extract_pr_from_tool_result(text: &str) -> Option<DetectedPrCore> {
     parse_pr_url(text)
         .or_else(|| parse_gitlab_mr_url(text))

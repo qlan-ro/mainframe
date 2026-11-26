@@ -29,7 +29,7 @@ use crate::websocket::WsClients;
 /// The default process runner, as the `Runner` trait resolve-executable
 /// injects. `resolve_adapter_executable` (the settings `resolvedExecutable`
 /// enrichment and the daemon's refresh deps) takes `&dyn Runner`; this is the
-/// single production impl over `default_run` (spawn + 5s default timeout).
+/// single production impl over `default_run`.
 ///
 /// Carries the boot-resolved login-shell `PATH` so version probes find CLIs
 /// outside the packaged app's bare `PATH`.
@@ -45,19 +45,19 @@ impl DefaultRunner {
     }
 }
 
-impl mainframe_adapter_api::resolve_executable::Runner for DefaultRunner {
+impl mainframe_adapter_api::Runner for DefaultRunner {
     fn run(
         &self,
         cmd: String,
         args: Vec<String>,
-        timeout_ms: Option<u64>,
+        timeout: std::time::Duration,
     ) -> mainframe_adapter_api::BoxFuture<'_, mainframe_adapter_api::RunResult> {
         let path = self.path.clone();
         Box::pin(async move {
             mainframe_adapter_api::resolve_executable::default_run(
                 &cmd,
                 &args,
-                timeout_ms,
+                timeout,
                 path.as_deref(),
             )
             .await

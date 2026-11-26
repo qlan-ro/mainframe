@@ -198,7 +198,7 @@ fn version_at_least(version: &str, min: (u64, u64, u64)) -> bool {
         return false;
     }
     mainframe_adapter_api::version::CliVersion::parse_leading(version)
-        .and_then(|parsed| parsed.components_u64())
+        .and_then(|parsed| parsed.components::<u64>())
         .is_some_and(|parts| parts >= min)
 }
 

@@ -14,9 +14,8 @@ pub struct HistoryFiles {
     pub skills: Vec<mainframe_types::context::SkillFileEntry>,
 }
 
-/// A live adapter session. Trait object stored
-/// as `Arc<dyn AdapterSession>`; read-only props are getters, everything async is
-/// a hand-rolled `BoxFuture`.
+/// A live adapter session, stored as `Arc<dyn AdapterSession>`. Everything
+/// async returns a hand-rolled `BoxFuture`.
 pub trait AdapterSession: Send + Sync {
     fn supports_native_compaction(&self) -> bool {
         false
@@ -39,13 +38,14 @@ pub trait AdapterSession: Send + Sync {
     fn adapter_id(&self) -> &str;
     fn project_path(&self) -> &str;
     fn is_spawned(&self) -> bool;
-    /// `supportsReplayAck?` — default `false` (adapter consumes the message
-    /// synchronously, so the chat-manager never enrolls it in `queuedRefs`).
+    /// Whether the session acknowledges a queued message when the CLI
+    /// processes it (`SessionSink::on_queued_processed`). `false` means the
+    /// message is consumed on send, so the chat never tracks it as queued.
     fn supports_replay_ack(&self) -> bool {
         false
     }
-    /// `lastActivityAt?` — epoch ms of last protocol activity; `None` means the
-    /// idle-eviction scanner treats the session as always-active.
+    /// Epoch ms of the last protocol activity; `None` means the idle-eviction
+    /// scanner treats the session as always active.
     fn last_activity_at(&self) -> Option<i64> {
         None
     }

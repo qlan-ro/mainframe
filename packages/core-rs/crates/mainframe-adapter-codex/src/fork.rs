@@ -95,7 +95,7 @@ pub(crate) async fn resolve_target(
 /// counts as unsupported.
 pub(crate) fn fork_supported(version: &str) -> bool {
     mainframe_adapter_api::version::CliVersion::parse_leading(version)
-        .and_then(|parsed| parsed.components_u32())
+        .and_then(|parsed| parsed.components::<u32>())
         .is_some_and(|parts| parts >= FORK_MIN_CODEX_VERSION)
 }
 

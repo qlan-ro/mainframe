@@ -167,18 +167,12 @@ async fn create_chat(ctx: &AppCtx, project: &str) -> String {
 }
 
 struct Refresh;
-impl mainframe_adapter_api::RefreshDeps for Refresh {
-    fn resolve_executable_path(
-        &self,
-        _: String,
-    ) -> mainframe_adapter_api::BoxFuture<'_, Option<String>> {
-        Box::pin(async { None })
-    }
+impl mainframe_adapter_api::Runner for Refresh {
     fn run(
         &self,
         _: String,
         _: Vec<String>,
-        _: Option<u64>,
+        _: std::time::Duration,
     ) -> mainframe_adapter_api::BoxFuture<'_, mainframe_adapter_api::RunResult> {
         Box::pin(async {
             mainframe_adapter_api::RunResult {
@@ -186,6 +180,14 @@ impl mainframe_adapter_api::RefreshDeps for Refresh {
                 stdout: "1.0.0".into(),
             }
         })
+    }
+}
+impl mainframe_adapter_api::RefreshDeps for Refresh {
+    fn resolve_executable_path(
+        &self,
+        _: String,
+    ) -> mainframe_adapter_api::BoxFuture<'_, Option<String>> {
+        Box::pin(async { None })
     }
     fn emit_event(&self, _: mainframe_types::events::DaemonEvent) {}
 }

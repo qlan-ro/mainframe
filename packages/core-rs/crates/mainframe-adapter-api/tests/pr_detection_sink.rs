@@ -241,7 +241,7 @@ fn azure_pr_create_result_yields_the_right_owner_repo_number() {
 
 #[test]
 fn azure_pr_json_payload_result_yields_the_right_owner_repo_number() {
-    let payload = "{\"pullRequestId\": 55, \"name\": \"myrepo\", \"url\": \"https://dev.azure.com/myorg/myproject/_apis/git/repositories/x/pullRequests/55\"}";
+    let payload = r#"{"labels": [{"name": "urgent"}], "pullRequestId": 55, "repository": {"name": "myrepo", "webUrl": "https://dev.azure.com/myorg/myproject/_git/myrepo"}}"#;
     let prs = drive(
         bash_tool_use("tu-azure-json", "az repos pr create --title x"),
         tool_result("tu-azure-json", payload, false),
@@ -249,7 +249,7 @@ fn azure_pr_json_payload_result_yields_the_right_owner_repo_number() {
     assert_eq!(
         prs,
         vec![DetectedPr {
-            url: payload.to_string(),
+            url: "https://dev.azure.com/myorg/myproject/_git/myrepo/pullrequest/55".to_string(),
             owner: "myorg".to_string(),
             repo: "myrepo".to_string(),
             number: 55,

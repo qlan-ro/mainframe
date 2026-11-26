@@ -1,8 +1,10 @@
-//! Adapter-neutral live PR scanning. Mirrors the Claude
-//! adapter's Path-A/Path-B scan (`assistant_event.rs:143-172`,
-//! `user_event.rs:433-467`) in terms every adapter's canonical tool-use /
-//! tool-result stream already carries: tool name, command text, tool-result
+//! Adapter-neutral live PR scanning over what every adapter's canonical
+//! tool-use / tool-result stream carries: tool name, command text, tool-result
 //! text and its error flag.
+//!
+//! Path A reads a PR URL out of a trusted tool's result; path B confirms a
+//! stashed PR mutation command (`gh pr merge owner/repo#4`) by its non-error
+//! result.
 
 use std::collections::{HashMap, HashSet};
 
@@ -10,12 +12,12 @@ use serde_json::Value;
 
 use mainframe_types::adapter::{DetectedPr, DetectedPrSource};
 
-use super::DetectedPrCore;
 use super::command::{
     ToolUseMeta, is_pr_create_command, is_pr_mutation_command, parse_pr_identifier_from_args,
     should_scan_tool_result_for_pr,
 };
 use super::parse::extract_pr_from_tool_result;
+use super::{DetectedPrCore, is_shell_tool};
 
 /// Metadata recorded for a tool_use block: name plus (for `Bash`/`BashTool`)
 /// its command text — the only fields Path A/B need.
@@ -24,25 +26,17 @@ struct ToolMeta {
     command: Option<String>,
 }
 
-/// Live PR scan state for one session's tool traffic. Holds no adapter-
-/// specific types, so it applies unchanged to Claude, Codex, the mock, and
-/// any future adapter that reports shell commands through the canonical
-/// stream.
+/// Live PR scan state for one session's tool traffic.
 #[derive(Default)]
-pub struct LivePrScanner {
+pub(crate) struct LivePrScanner {
     tool_meta: HashMap<String, ToolMeta>,
     pending_creates: HashSet<String>,
     pending_mutations: HashMap<String, DetectedPrCore>,
 }
 
 impl LivePrScanner {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Records a tool_use block's metadata and, for a `Bash`/`BashTool` PR
-    /// command, registers it as a pending create and/or mutation. Mirrors
-    /// `assistant_event.rs:143-172`.
+    /// Records a tool_use block's metadata and, for a shell PR command,
+    /// registers it as a pending create and/or mutation.
     pub(crate) fn observe_tool_use(
         &mut self,
         id: &str,
@@ -57,7 +51,7 @@ impl LivePrScanner {
             .and_then(Value::as_str)
             .map(str::to_string);
 
-        if (name == "Bash" || name == "BashTool")
+        if is_shell_tool(name)
             && let Some(command) = &command
         {
             if is_pr_create_command(command) {
@@ -80,7 +74,7 @@ impl LivePrScanner {
     }
 
     /// Consumes a tool_result for `tool_use_id`, evicting its recorded meta
-    /// regardless of outcome. Mirrors `user_event.rs:433-467`.
+    /// regardless of outcome.
     pub(crate) fn observe_tool_result(
         &mut self,
         tool_use_id: &str,

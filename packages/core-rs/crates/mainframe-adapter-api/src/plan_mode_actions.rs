@@ -19,14 +19,14 @@ use crate::{AdapterError, BoxFuture};
 pub struct PlanChatUpdate {
     pub plan_mode: Option<bool>,
     pub permission_mode: Option<ExecutionMode>,
-    /// The clear-context path sets `claudeSessionId = undefined`.
+    /// Forget the provider's session id so the next spawn starts fresh (the
+    /// clear-context path).
     pub clear_vendor_session_id: bool,
 }
 
-/// The capability bag a plan-mode handler drives (relocated `PlanActionContext`).
-/// `mainframe-chat` implements this over its `ActiveChat` / `MessageCache` /
-/// `PermissionManager` / `DatabaseManager` state; the adapter side only sees
-/// these methods.
+/// The chat state a plan-mode handler drives. `mainframe-chat` implements it
+/// over its active chat, message cache, permission queue and database; the
+/// adapter side only sees these methods.
 pub trait PlanActionContext: Send + Sync {
     fn chat_id(&self) -> String;
 
@@ -34,7 +34,7 @@ pub trait PlanActionContext: Send + Sync {
     fn update_chat(&self, patch: PlanChatUpdate) -> Result<(), AdapterError>;
     fn emit_event(&self, event: DaemonEvent);
 
-    /// `ctx.active.session?.isSpawned`.
+    /// Whether the chat has a live, spawned session.
     fn session_is_spawned(&self) -> bool;
     fn session_set_permission_mode(
         &self,
@@ -45,16 +45,16 @@ pub trait PlanActionContext: Send + Sync {
         response: ControlResponse,
     ) -> BoxFuture<'_, Result<(), AdapterError>>;
     fn session_kill(&self) -> BoxFuture<'_, Result<(), AdapterError>>;
-    /// `ctx.active.session = null`.
+    /// Detach the chat's session.
     fn clear_active_session(&self);
 
-    /// `ctx.permissions.shift(ctx.chatId)`.
+    /// Drop the plan gate being answered from the front of the pending queue.
     fn permissions_shift(&self);
-    /// `extractLatestPlanFileFromMessages(ctx.messages.get(ctx.chatId) ?? [])`.
+    /// The most recent plan file named in the chat's cached messages.
     fn recover_latest_plan_file(&self) -> Option<String>;
-    /// `ctx.db.chats.addPlanFile(ctx.chatId, path)` — returns whether it was new.
+    /// Record `path` as one of the chat's plan files; `true` when it was new.
     fn add_plan_file(&self, path: String) -> bool;
-    /// `ctx.messages.set(ctx.chatId, [])`.
+    /// Empty the chat's cached messages.
     fn clear_messages(&self);
     fn clear_display_state(&self);
     /// Announce the wipe on the chat-surface seam — the facade pushes
@@ -100,9 +100,8 @@ fn approved_plan(response: &ControlResponse) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Per-adapter plan-mode action strategy (relocated `PlanModeActionHandler`).
-/// Claude/Codex implement this; the chat layer calls it with a
-/// `PlanActionContext`.
+/// Per-adapter plan-mode action strategy. Claude and Codex implement it; the
+/// chat layer calls it with a `PlanActionContext`.
 pub trait PlanModeActionHandler: Send + Sync {
     /// User approved the plan WITHOUT clearing context.
     fn on_approve<'a>(

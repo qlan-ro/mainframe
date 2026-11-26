@@ -1,9 +1,10 @@
 use crate::{Db, ctx::DefaultRunner};
 use mainframe_adapter_api::{
-    BoxFuture, RefreshDeps, RunResult,
+    BoxFuture, RefreshDeps, RunResult, Runner,
     resolve_executable::{ResolverDeps, resolve_adapter_executable},
 };
 use mainframe_types::events::DaemonEvent;
+use std::time::Duration;
 use tokio::sync::broadcast;
 pub(crate) struct DaemonRefreshDeps {
     pub(crate) db: Db,
@@ -11,29 +12,26 @@ pub(crate) struct DaemonRefreshDeps {
     pub(crate) resolved_path: mainframe_runtime::ResolvedPath,
 }
 
-impl RefreshDeps for DaemonRefreshDeps {
-    fn resolve_executable_path(&self, adapter_id: String) -> BoxFuture<'_, Option<String>> {
-        let db = self.db.clone();
-        let resolved_path = self.resolved_path.clone();
-        Box::pin(async move { resolve_adapter_path(&db, &resolved_path, &adapter_id).await })
-    }
-
-    fn run(
-        &self,
-        cmd: String,
-        args: Vec<String>,
-        timeout_ms: Option<u64>,
-    ) -> BoxFuture<'_, RunResult> {
+impl Runner for DaemonRefreshDeps {
+    fn run(&self, cmd: String, args: Vec<String>, timeout: Duration) -> BoxFuture<'_, RunResult> {
         let path = self.resolved_path.clone();
         Box::pin(async move {
             mainframe_adapter_api::resolve_executable::default_run(
                 &cmd,
                 &args,
-                timeout_ms,
+                timeout,
                 Some(path.as_str()),
             )
             .await
         })
+    }
+}
+
+impl RefreshDeps for DaemonRefreshDeps {
+    fn resolve_executable_path(&self, adapter_id: String) -> BoxFuture<'_, Option<String>> {
+        let db = self.db.clone();
+        let resolved_path = self.resolved_path.clone();
+        Box::pin(async move { resolve_adapter_path(&db, &resolved_path, &adapter_id).await })
     }
 
     fn emit_event(&self, event: DaemonEvent) {
