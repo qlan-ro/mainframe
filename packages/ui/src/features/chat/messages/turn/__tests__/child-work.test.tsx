@@ -209,7 +209,7 @@ it('asks how the last background agent ended, once nothing runs', async () => {
   await waitFor(() => expect(screen.getByTestId('chat-row-agent-receipt')).toHaveTextContent('stopped'));
 });
 
-it('opens a delegated task that failed by itself, and only that one', async () => {
+it.each([false, true])('opens a failed delegated task only when it follows the successful task (%s)', async (last) => {
   const task = (id: string, status: string) =>
     tool({
       toolCallId: id,
@@ -217,18 +217,16 @@ it('opens a delegated task that failed by itself, and only that one', async () =
       args: { task: id },
       result: JSON.stringify({ taskId: `t-${id}`, childChatId: `kid-${id}`, status }),
     });
-  render(
-    <TurnFixture
-      rootId={`cw-${roots}`}
-      messages={[user('Hi'), assistant([task('bad', 'failed'), task('good', 'completed'), text('Done')])]}
-    />,
-  );
+  const bad = task('bad', 'failed');
+  const good = task('good', 'completed');
+  const steps = last ? [good, bad] : [bad, good];
+  render(<TurnFixture rootId={`cw-${roots}`} messages={[user('Hi'), assistant([...steps, text('Done')])]} />);
   expect(header()).toHaveAccessibleName(/1 failed/);
   fireEvent.click(header());
-  const [bad, good] = screen.getAllByTestId('chat-tool-delegate-task-card-toggle');
-  expect(bad).toHaveAttribute('aria-expanded', 'true');
-  expect(good).toHaveAttribute('aria-expanded', 'false');
-  expect(await screen.findByTestId('task-steps')).toBeVisible();
+  const rows = screen.getAllByTestId('chat-tool-delegate-task-card-toggle');
+  expect(rows[0]).toHaveAttribute('aria-expanded', 'false');
+  expect(rows[1]).toHaveAttribute('aria-expanded', String(last));
+  if (last) expect(await screen.findByTestId('task-steps')).toBeVisible();
 });
 
 it('names the model an agent ran on in its row, when the call chose one', () => {

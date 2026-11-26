@@ -1,3 +1,4 @@
+import { disclosureStore } from '@/features/chat/messages/turn/disclosure-store';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
@@ -196,6 +197,7 @@ export const useLayoutStore = create<LayoutStore>()(
         const tab = run.panes.find((p) => p.id === paneId)?.tabs.find((t) => t.id === tabId);
         if (tab?.kind === 'terminal') killAndDisposeCachedTerminals([tabId]);
         if (tab?.kind === 'url') releaseUrlTunnels([tabId]);
+        if (tab?.kind === 'chat' && tab.chatId) disclosureStore.clearAutomaticChat(tab.chatId);
         // Preview destruction: PreviewInstance's own unmount cleanup, once removed.
         const nextRun = closeRunTabReducer(run, paneId, tabId);
         const collapse = nothingVisible(nextRun, tab);

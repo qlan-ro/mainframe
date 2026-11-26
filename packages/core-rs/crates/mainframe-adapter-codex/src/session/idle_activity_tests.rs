@@ -138,3 +138,41 @@ fn codex_ephemeral_threads_cannot_be_released_for_resume() {
     session.config.lock_recover().no_persistence = true;
     assert!(session.blocks_idle_offload());
 }
+
+#[test]
+fn idle_close_loses_to_reader_work_after_the_initial_check() {
+    let session = session();
+    let approval = Arc::new(ApprovalHandler::new(Arc::new(RecordingSink::default())));
+    *session.approval_handler.lock_recover() = Some(approval.clone());
+    let handlers = session.build_handlers(approval);
+    session.last_activity_ms.store(42, Ordering::SeqCst);
+
+    assert_eq!(session.last_activity_at(), Some(42));
+    assert!(!session.blocks_idle_offload());
+    let intake = session.idle_intake.lock_recover().clone();
+    let entered = intake.enter().unwrap();
+    assert!(
+        !session.try_reserve_idle_close(43),
+        "a reader that has not stamped activity still wins"
+    );
+    drop(entered);
+
+    (handlers.on_notification)("item/started".into(), Value::Null);
+    assert!(
+        !session.try_reserve_idle_close(43),
+        "reader work after the check wins"
+    );
+
+    session.last_activity_ms.store(42, Ordering::SeqCst);
+    assert!(session.try_reserve_idle_close(43));
+    (handlers.on_request)(
+        "item/fileChange/requestApproval".into(),
+        json!({"itemId":"file"}),
+        crate::types::RequestId::Number(7),
+    );
+    assert_eq!(session.last_activity_at(), Some(42));
+    assert!(
+        !session.blocks_idle_offload(),
+        "a reader arriving after reservation cannot register an approval"
+    );
+}

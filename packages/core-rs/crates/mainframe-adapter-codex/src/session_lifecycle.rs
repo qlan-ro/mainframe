@@ -41,8 +41,6 @@ impl CodexSession {
         Ok(())
     }
     pub(super) fn build_handlers(&self, approval: Arc<ApprovalHandler>) -> JsonRpcHandlers {
-        let sink_n = self.sink.clone();
-        let state_n = self.state.clone();
         let state_x = self.state.clone();
         let sink_e = self.sink.clone();
         let state_e = self.state.clone();
@@ -51,25 +49,13 @@ impl CodexSession {
         let sink_x = self.sink.clone();
         let on_exit_cb = self.on_exit_callback.clone();
 
-        let approval_n = approval.clone();
-        let activity = self.last_activity_ms.clone();
-        let notification_span = self.span.clone();
+        let intake = Arc::new(idle_intake::Intake::default());
+        *self.idle_intake.lock_recover() = intake.clone();
         let error_span = self.span.clone();
         let exit_span = self.span.clone();
         JsonRpcHandlers {
-            on_notification: Box::new(move |method, params| {
-                let _span = notification_span.enter();
-                if is_activity_notification(&method) {
-                    activity.fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
-                }
-                if method == "serverRequest/resolved" {
-                    approval_n.handle_resolved(&params);
-                    return;
-                }
-                let s = sink_n.lock_recover().clone();
-                handle_notification(&method, &params, &s, &mut state_n.lock_recover());
-            }),
-            on_request: self.request_handler(approval),
+            on_notification: self.notification_handler(approval.clone(), intake.clone()),
+            on_request: self.request_handler(approval, intake),
             on_error: Box::new(move |error| {
                 let _span = error_span.enter();
                 if state_e.lock_recover().maintenance.suppressing() {
@@ -91,9 +77,36 @@ impl CodexSession {
             }),
         }
     }
+    fn notification_handler(
+        &self,
+        approval: Arc<ApprovalHandler>,
+        intake: Arc<idle_intake::Intake>,
+    ) -> Box<dyn Fn(String, Value) + Send + Sync> {
+        let sink = self.sink.clone();
+        let state = self.state.clone();
+        let activity = self.last_activity_ms.clone();
+        let span = self.span.clone();
+        Box::new(move |method, params| {
+            let Some(_intake) = intake.enter() else {
+                return;
+            };
+            let _span = span.enter();
+            if is_activity_notification(&method) {
+                activity.fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
+            }
+            if method == "serverRequest/resolved" {
+                approval.handle_resolved(&params);
+                return;
+            }
+            let sink = sink.lock_recover().clone();
+            handle_notification(&method, &params, &sink, &mut state.lock_recover());
+        })
+    }
+
     fn request_handler(
         &self,
         approval: Arc<ApprovalHandler>,
+        intake: Arc<idle_intake::Intake>,
     ) -> Box<dyn Fn(String, Value, crate::types::RequestId) + Send + Sync> {
         let state_r = self.state.clone();
         let config_r = self.config.clone();
@@ -102,6 +115,9 @@ impl CodexSession {
         let span = self.span.clone();
         let activity = self.last_activity_ms.clone();
         Box::new(move |method, params, id| {
+            let Some(_intake) = intake.enter() else {
+                return;
+            };
             let _span = span.enter();
             activity.fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
             let plan_mode = config_r.lock_recover().plan_mode;

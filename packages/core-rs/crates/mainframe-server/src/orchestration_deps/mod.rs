@@ -80,6 +80,15 @@ impl OrchestrationHooks for ChatOrchestrationHooks {
         })
     }
 
+    fn reserve_idle_close<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<Box<dyn Send>>> {
+        Box::pin(async move {
+            match self.service.upgrade() {
+                Some(service) => service.reserve_idle_close(chat_id).await,
+                None => Some(Box::new(()) as Box<dyn Send>),
+            }
+        })
+    }
+
     fn agent_outbox(&self, chat_id: &str) -> Vec<AgentOutboxEntry> {
         self.service
             .upgrade()

@@ -24,16 +24,19 @@ async fn missing_session_returns_empty() {
     assert!(
         load_history("no-such-session-xyz", "/tmp/no-such-project-xyz", None)
             .await
+            .unwrap()
             .is_empty()
     );
     assert!(
         extract_plan_file_paths("no-such-session-xyz", "/tmp/no-such-project-xyz", None)
             .await
+            .unwrap()
             .is_empty()
     );
     assert!(
         extract_skill_file_paths("no-such-session-xyz", "/tmp/no-such-project-xyz", None)
             .await
+            .unwrap()
             .is_empty()
     );
 }
@@ -94,7 +97,8 @@ async fn stored_session_file_path_wins_over_the_derived_path_when_both_exist() {
         &project_path,
         Some(stored_path.to_str().unwrap()),
     )
-    .await;
+    .await
+    .unwrap();
 
     assert_eq!(history.len(), 1);
     assert_eq!(assistant_text(&history[0]), "from the stored path");
@@ -116,7 +120,9 @@ async fn falls_back_to_the_derived_path_when_the_stored_path_is_absent() {
     .unwrap();
     let _cleanup = RemoveDirOnDrop(derived.project_dir.clone());
 
-    let history = load_history(&session_id, &project_path, Some(gone.to_str().unwrap())).await;
+    let history = load_history(&session_id, &project_path, Some(gone.to_str().unwrap()))
+        .await
+        .unwrap();
 
     assert_eq!(history.len(), 1);
     assert_eq!(assistant_text(&history[0]), "from the derived path");
@@ -157,7 +163,8 @@ async fn discovers_sidechain_files_next_to_the_resolved_stored_path_not_the_deri
         &project_path,
         Some(stored_path.to_str().unwrap()),
     )
-    .await;
+    .await
+    .unwrap();
     let texts: HashSet<&str> = history.iter().map(assistant_text).collect();
     assert!(texts.contains("primary message"));
     assert!(texts.contains("sidechain message"));
@@ -188,9 +195,13 @@ async fn snapshot_dir_loads_the_same_messages_as_the_canonical_path() {
     .await
     .unwrap();
 
-    let canonical_messages = load_history("session-fork-1", &project_path, None).await;
+    let canonical_messages = load_history("session-fork-1", &project_path, None)
+        .await
+        .unwrap();
     let snapshot_messages =
-        load_history_in_dir("session-fork-1", &snapshot_dir.path().to_string_lossy()).await;
+        load_history_in_dir("session-fork-1", &snapshot_dir.path().to_string_lossy())
+            .await
+            .unwrap();
 
     assert!(!canonical_messages.is_empty());
     assert_eq!(canonical_messages, snapshot_messages);

@@ -43,6 +43,21 @@ pub fn signal(target: Target, signal: Signal) -> io::Result<bool> {
     }
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+pub fn child_exited_unreaped(pid: u32) -> io::Result<bool> {
+    use rustix::process::{WaitId, WaitIdOptions};
+    loop {
+        match process::waitid(
+            WaitId::Pid(checked_pid(pid)?),
+            WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT,
+        ) {
+            Ok(status) => return Ok(status.is_some()),
+            Err(rustix::io::Errno::INTR) => continue,
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
 pub fn is_alive(pid: u32) -> bool {
     checked_pid(pid).is_ok_and(|pid| {
         !matches!(

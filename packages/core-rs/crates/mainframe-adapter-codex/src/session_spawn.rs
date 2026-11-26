@@ -147,7 +147,7 @@ pub(super) fn build_app_server_command(
 ) -> tokio::process::Command {
     let path = mainframe_runtime::ResolvedPath::from_value(path);
     let mut cmd = mainframe_runtime::process::cli_command(executable, &path);
-    #[cfg(unix)]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     cmd.process_group(0);
     cmd.arg("app-server");
     if let Some(cwd) = cwd {

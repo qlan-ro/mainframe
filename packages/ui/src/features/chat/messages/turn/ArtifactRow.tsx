@@ -40,7 +40,7 @@ export function ArtifactRow({ unit, part, turnKey }: ToolRowProps) {
   const { text } = resolveResultText(part.result);
   const call = describeArtifactCall(record(part.args) ?? {}, text);
   const failed = status === 'failed';
-  const failedOpen = useFailedOpen(turnKey, part.toolCallId);
+  const failedOpen = useFailedOpen(turnKey, part.toolCallId, unit.key, unit.messageId);
   const duration = useStepDuration({ ...facts, running: status === 'running' });
   const showText = text && (failed || call.showResult);
   return (

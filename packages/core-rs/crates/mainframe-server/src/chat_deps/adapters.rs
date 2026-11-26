@@ -71,8 +71,9 @@ impl AdapterPort for DaemonChatDeps {
         &'a self,
         chat_id: &'a str,
         canonical: Option<&'a [ChatMessage]>,
+        files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
     ) -> BoxFuture<'a, ()> {
-        Box::pin(self.scan_history(chat_id, canonical))
+        Box::pin(self.scan_history(chat_id, canonical, files))
     }
     fn resolve_tuning<'a>(&'a self, chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {
         Box::pin(async move {

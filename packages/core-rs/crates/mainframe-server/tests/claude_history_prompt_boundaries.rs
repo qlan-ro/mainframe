@@ -32,7 +32,9 @@ const LIMIT: &str = "You've hit your session limit · resets 4:20pm (Europe/Buch
 async fn reload() -> Vec<ChatMessage> {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join(format!("{SESSION}.jsonl")), FIXTURE).unwrap();
-    load_history_in_dir(SESSION, &dir.path().to_string_lossy()).await
+    load_history_in_dir(SESSION, &dir.path().to_string_lossy())
+        .await
+        .unwrap()
 }
 
 /// The text of every agent message item with text, in order (system

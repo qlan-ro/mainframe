@@ -36,3 +36,33 @@ wait"#,
         .unwrap();
     assert_eq!(end.unwrap(), None, "helper stdout should close");
 }
+
+#[tokio::test]
+async fn leader_only_group_is_swept_before_the_leader_is_reaped() {
+    use mainframe_runtime::process::{Target, child_exited_unreaped};
+
+    let mut child = tokio::process::Command::new("/bin/sh")
+        .process_group(0)
+        .args(["-c", "exit 23"])
+        .spawn()
+        .unwrap();
+    let pid = child.id().unwrap();
+    let close = Notify::new();
+    let mut swept = false;
+    let code = tokio::time::timeout(
+        Duration::from_secs(5),
+        wait_for_group(&mut child, &close, |target| {
+            assert_eq!(target, Target::Group(pid));
+            assert!(
+                child_exited_unreaped(pid).unwrap(),
+                "sweep must see the unreaped leader"
+            );
+            sweep_group(target);
+            swept = true;
+        }),
+    )
+    .await
+    .unwrap();
+    assert!(swept);
+    assert_eq!(code, Some(23));
+}

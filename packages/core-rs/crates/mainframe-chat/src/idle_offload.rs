@@ -74,6 +74,9 @@ impl ChatOffload {
     }
 
     async fn try_offload(&self, chat_id: &str) {
+        let Some(delegation) = self.reserve_delegation(chat_id).await else {
+            return;
+        };
         // Step 1: claim the offload slot, or skip — a concurrent load/start/
         // send/interrupt/history-read (or a second scan pass, AC5) already
         // owns this chat.
@@ -99,6 +102,7 @@ impl ChatOffload {
             warn!(error = ?err, chat_id, "failed to kill session");
         }
         self.lifecycle.orchestration().revoke(chat_id);
+        drop(delegation);
 
         // Step 4: drop the registry cell, the cache entry, and per-chat
         // bookkeeping (see `TeardownMode::Offload` for what survives). Do NOT
@@ -114,6 +118,25 @@ impl ChatOffload {
         self.lifecycle.emit_event(DaemonEvent::ChatOffloaded {
             chat_id: chat_id.to_string(),
         });
+    }
+
+    async fn reserve_delegation(&self, chat_id: &str) -> Option<Box<dyn Send>> {
+        let codex = self
+            .active_chats
+            .get(chat_id)?
+            .value()
+            .lock_recover()
+            .chat
+            .adapter_id
+            == "codex";
+        if codex {
+            self.lifecycle
+                .orchestration()
+                .reserve_idle_close(chat_id)
+                .await
+        } else {
+            Some(Box::new(()))
+        }
     }
 
     /// Step 2's re-check, covering session-less/unspawned cells too. The OUTER
@@ -156,7 +179,8 @@ impl ChatOffload {
             return None;
         }
         let last = idle_since(session.as_ref(), last_used_at)?;
-        if now_ms() - last <= self.threshold_ms {
+        let idle_before = now_ms() - self.threshold_ms;
+        if last >= idle_before {
             return None;
         }
         if self.permissions.lock_recover().has_pending(chat_id) {
@@ -168,6 +192,11 @@ impl ChatOffload {
             .iter()
             .any(|r| r.chat_id == chat_id);
         if has_queued {
+            return None;
+        }
+        if session.as_ref().is_some_and(|session| {
+            session.is_spawned() && !session.try_reserve_idle_close(idle_before)
+        }) {
             return None;
         }
         Some(session)

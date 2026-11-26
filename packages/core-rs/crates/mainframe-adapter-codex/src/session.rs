@@ -1,3 +1,4 @@
+mod idle_intake;
 use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
 use std::path::Path;
@@ -94,6 +95,7 @@ pub struct CodexSession {
     config: Arc<Mutex<PendingConfig>>,
     pid: AtomicI64,
     last_activity_ms: Arc<AtomicI64>,
+    idle_intake: Mutex<Arc<idle_intake::Intake>>,
     status: Arc<Mutex<AdapterProcessStatus>>,
     resolved_path: ResolvedPath,
     scan_deps: Arc<Mutex<Option<CodexScanDeps>>>,
@@ -130,6 +132,7 @@ impl CodexSession {
             config: Arc::new(Mutex::new(PendingConfig::default())),
             pid: AtomicI64::new(0),
             last_activity_ms: Arc::new(AtomicI64::new(mainframe_types::time::now_ms())),
+            idle_intake: Mutex::new(Arc::default()),
             status: Arc::new(Mutex::new(AdapterProcessStatus::Starting)),
             resolved_path,
             scan_deps: Arc::new(Mutex::new(None)),

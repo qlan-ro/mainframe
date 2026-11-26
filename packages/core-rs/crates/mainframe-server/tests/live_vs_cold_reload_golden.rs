@@ -193,7 +193,9 @@ fn run_live_pipeline() -> Vec<mainframe_types::chat::ChatMessage> {
 /// `load_history`, then the same chat-id remap `chat_manager::shared`
 /// applies before caching (`remap_history`).
 async fn run_cold_reload(transcript_path: &str) -> Vec<mainframe_types::chat::ChatMessage> {
-    let raw = load_history(SESSION_ID, PROJECT_PATH, Some(transcript_path)).await;
+    let raw = load_history(SESSION_ID, PROJECT_PATH, Some(transcript_path))
+        .await
+        .unwrap();
     raw.into_iter()
         .map(|mut m| {
             m.chat_id = CHAT_ID.to_string();

@@ -49,3 +49,26 @@ async fn one_tree_shares_one_key_and_a_creator_cycle_ends() {
     port.update("top", |c| c.created_by_chat_id = Some("leaf".into()));
     assert_eq!(svc.depth_of(&leaf).await.unwrap(), MAX_DEPTH + 1);
 }
+
+#[tokio::test]
+async fn idle_close_reserves_the_same_tree_as_delegation_and_checks_persisted_tasks() {
+    use crate::test_fixture::{delegated, fixture};
+
+    let f = fixture();
+    let creating_task = f.svc.tree_locks.acquire("parent").await;
+    assert!(f.svc.reserve_idle_close("parent").await.is_none());
+    drop(creating_task);
+
+    let reservation = f.svc.reserve_idle_close("parent").await.unwrap();
+    assert!(f.svc.tree_locks.get("parent").try_lock_owned().is_err());
+    drop(reservation);
+
+    let task = delegated(&f).await;
+    assert!(f.svc.reserve_idle_close("parent").await.is_none());
+    assert!(
+        f.svc
+            .reserve_idle_close(&task.child_chat_id)
+            .await
+            .is_none()
+    );
+}

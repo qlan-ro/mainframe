@@ -44,6 +44,14 @@ impl AdapterSession for CodexSession {
         Some(self.last_activity_ms.load(Ordering::SeqCst))
     }
 
+    fn try_reserve_idle_close(&self, idle_before: i64) -> bool {
+        let intake = self.idle_intake.lock_recover().clone();
+        intake.reserve(|| {
+            self.last_activity_ms.load(Ordering::SeqCst) < idle_before
+                && !self.blocks_idle_offload()
+        })
+    }
+
     fn blocks_idle_offload(&self) -> bool {
         self.config.lock_recover().no_persistence
             || self
@@ -134,6 +142,10 @@ impl AdapterSession for CodexSession {
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(
             (async move {
+                let intake = self.idle_intake.lock_recover().clone();
+                let Some(_intake) = intake.enter() else {
+                    return Ok(());
+                };
                 if let Some(approval) = self.approval_handler.lock_recover().as_ref() {
                     approval.resolve(&response).map_err(AdapterError::from)?;
                 }

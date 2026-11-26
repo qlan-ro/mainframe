@@ -52,7 +52,7 @@ function markers(turn: Turn, call: Call) {
 function agent(turn: Turn, call: Call) {
   turn(
     'Now tool calls, images and agents.',
-    '**Tool calls, images and agents.** MCP and tools with no card share one row. A failed call opens by itself. Sub-agents list their steps as rows.',
+    '**Tool calls, images and agents.** MCP and tools with no card share one row. Only the last failure can open by itself, if no later step succeeded. Sub-agents list their steps as rows.',
     13,
     [
       call(
