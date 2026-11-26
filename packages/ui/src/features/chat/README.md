@@ -51,5 +51,5 @@ lib/api (REST)                                                                  
   identity, so a streamed chunk re-renders only what it touched; the transcript
   mounts the visible rows through `VirtualMessages`.
 - **Pure logic stays in `view-model/`**, not in components.
-- See `packages/ui/CLAUDE.md` for the assistant-ui-first golden rule + the
-  per-area native-vs-ours verdicts.
+- See `packages/ui/CLAUDE.md` for the assistant-ui boundary and
+  `packages/ui/docs/chat-area-notes.md` for how each chat area is built.
