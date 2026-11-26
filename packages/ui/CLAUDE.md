@@ -15,7 +15,7 @@ This replaces the old "assistant-ui first, stop and ask" rule. Do not look for a
 - **shadcn owns presentation** for rows (Trace), gates (Questionnaire, Item), code (Code Block), scroll (Message Scroller, if the scroll proof picks it) and the composer's card (Input Group), tiles (Attachment) and buttons. "shadcn" means its core components and its AI Elements at ui.shadcn.com, never the deprecated `vercel/ai-elements`. Adopt shadcn's component unless it lacks something we need, and say what that is.
 - **assistant-ui 0.15.38 specifics:**
   - No `ThreadPrimitive.ViewportFooter`: its height counts as "at bottom". The footer above the composer is a plain div.
-  - Thread-switch scroll and focus are off (`scrollToBottomOnThreadSwitch`, `unstable_focusOnThreadSwitched`), and so is `autoScroll`. Run-start and initialize scroll stay on until #980 turns them off.
+  - All of assistant-ui's viewport scrolling is off: `autoScroll`, `scrollToBottomOnThreadSwitch`, `scrollToBottomOnRunStart`, `scrollToBottomOnInitialize`, and composer focus on switch (`unstable_focusOnThreadSwitched`).
   - The viewport's prepend scroll correction (`messagesPrepended`) has no switch. Expect it when rows are prepended.
   - Mainframe's bottom pin (`features/chat/thread/use-thread-bottom-pin.ts`) is the only code that follows streaming output. Do not add another follower or turn assistant-ui's back on.
 - Bump assistant-ui only for a fix we need, and pin the set exactly (see Conventions). The `INTERNAL` imports break first on a bump.
