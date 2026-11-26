@@ -46,3 +46,38 @@ async fn force_refresh_re_probes_an_adapter_past_its_successful_refresh() {
     // Unknown ids are a no-op.
     reg.force_refresh("nope").await.unwrap();
 }
+
+#[tokio::test]
+async fn announces_an_install_found_even_when_no_live_catalog_arrives() {
+    let mut fa = FakeAdapter::new();
+    fa.probe_result = None;
+    let a = Arc::new(fa);
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let reg = AdapterRegistry::new();
+    reg.register(a.clone());
+    reg.seed_static_snapshots();
+    reg.configure_refresh(Arc::new(FakeDeps {
+        resolve_path: Some("/abs/claude".into()),
+        run_result: ok_run("claude 2.0.0"),
+        events: events.clone(),
+    }));
+    reg.allow_refresh();
+    reg.refresh_all().await;
+
+    let info = reg.get_snapshots()[0].clone();
+    assert!(info.installed);
+    assert_eq!(info.catalog_source, Some(CatalogSource::Fallback));
+    let recorded = events.lock().unwrap();
+    assert_eq!(recorded.len(), 1);
+    match &recorded[0] {
+        DaemonEvent::AdapterModelsUpdated {
+            installed,
+            models_revision,
+            ..
+        } => {
+            assert_eq!(*installed, Some(true));
+            assert_eq!(*models_revision, 1);
+        }
+        other => panic!("unexpected event: {other:?}"),
+    }
+}

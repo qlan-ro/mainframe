@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::fmt;
+use std::str::FromStr;
 use std::time::Duration;
 
 use mainframe_runtime::ResolvedPath;
@@ -34,38 +35,23 @@ pub struct CliVersion {
 impl CliVersion {
     /// Finds the first three-component numeric version in CLI output.
     pub fn parse(output: &str) -> Option<Self> {
-        let bytes = output.as_bytes();
-        for start in 0..bytes.len() {
-            if !bytes[start].is_ascii_digit() {
-                continue;
-            }
-            let mut end = start;
-            let mut parts = Vec::with_capacity(3);
-            for component in 0..3 {
-                let from = end;
-                while end < bytes.len() && bytes[end].is_ascii_digit() {
-                    end += 1;
-                }
-                if from == end {
-                    break;
-                }
-                parts.push(output[from..end].to_string());
-                if component < 2 {
-                    if bytes.get(end) != Some(&b'.') {
-                        break;
-                    }
-                    end += 1;
-                }
-            }
-            if parts.len() == 3 {
-                return Some(Self {
-                    major: parts.remove(0),
-                    minor: parts.remove(0),
-                    patch: parts.remove(0),
-                });
-            }
-        }
-        None
+        output
+            .bytes()
+            .enumerate()
+            .filter(|(_, byte)| byte.is_ascii_digit())
+            .find_map(|(start, _)| Self::parse_at(&output[start..]))
+    }
+
+    /// The `major.minor.patch` run at the start of `s`, if there is one.
+    fn parse_at(s: &str) -> Option<Self> {
+        let (major, rest) = leading_digits(s)?;
+        let (minor, rest) = leading_digits(rest.strip_prefix('.')?)?;
+        let (patch, _) = leading_digits(rest.strip_prefix('.')?)?;
+        Some(Self {
+            major: major.to_string(),
+            minor: minor.to_string(),
+            patch: patch.to_string(),
+        })
     }
 
     /// Parses a version that starts at the first byte, accepting a patch suffix.
@@ -73,15 +59,8 @@ impl CliVersion {
         Self::parse(output).filter(|version| output.starts_with(&version.to_string()))
     }
 
-    pub fn components_u32(&self) -> Option<(u32, u32, u32)> {
-        Some((
-            self.major.parse().ok()?,
-            self.minor.parse().ok()?,
-            self.patch.parse().ok()?,
-        ))
-    }
-
-    pub fn components_u64(&self) -> Option<(u64, u64, u64)> {
+    /// The three components as numbers, or `None` when one overflows `T`.
+    pub fn components<T: FromStr>(&self) -> Option<(T, T, T)> {
         Some((
             self.major.parse().ok()?,
             self.minor.parse().ok()?,
@@ -97,6 +76,12 @@ impl CliVersion {
         };
         self >= &required
     }
+}
+
+/// The non-empty run of ASCII digits at the start of `s`, and the rest.
+fn leading_digits(s: &str) -> Option<(&str, &str)> {
+    let end = s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len());
+    (end > 0).then(|| s.split_at(end))
 }
 
 fn cmp_component(left: &str, right: &str) -> Ordering {

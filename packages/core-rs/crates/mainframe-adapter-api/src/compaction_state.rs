@@ -23,8 +23,8 @@ impl CompactionState {
     ) -> Result<oneshot::Receiver<Outcome>, AdapterError> {
         let mut state = self.inner.lock_recover();
         if state.busy {
-            return Err(AdapterError::Message(
-                "provider is not ready for compaction".into(),
+            return Err(AdapterError::Unavailable(
+                "provider is not ready for compaction",
             ));
         }
         let (sender, receiver) = oneshot::channel();
@@ -69,6 +69,7 @@ impl CompactionState {
                 state.metadata.take().filter(|_| success).ok_or_else(|| {
                     AdapterError::Message("native compaction did not complete".into())
                 });
+            // The waiter may have timed out and dropped its receiver.
             let _ = sender.send(outcome);
         }
         *state = State::default();
@@ -84,8 +85,8 @@ impl CompactionState {
             Ok(Ok(outcome)) => outcome,
             _ => {
                 self.timeout();
-                Err(AdapterError::Message(
-                    "native compaction completion timed out".into(),
+                Err(AdapterError::Timeout(
+                    "native compaction completion timed out",
                 ))
             }
         }

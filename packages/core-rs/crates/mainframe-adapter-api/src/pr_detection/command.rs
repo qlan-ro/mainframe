@@ -1,9 +1,9 @@
 //! Command-text classification: PR-create / PR-mutation recognition and the
 //! live-scan tool gate.
 
-use super::DetectedPrCore;
 use super::parse::extract_pr_from_tool_result;
 use super::text::{boundary_at, has_word_sequence, has_word_sequence_trailing_ws};
+use super::{DetectedPrCore, is_shell_tool};
 
 /// `\bgh\s+pr\s+create\b` etc.
 pub fn is_pr_create_command(command: &str) -> bool {
@@ -37,7 +37,7 @@ fn pr_relevant_bash(command: &str) -> bool {
 }
 
 /// The originating tool_use metadata Path-A PR scanning consults.
-pub struct ToolUseMeta<'a> {
+pub(crate) struct ToolUseMeta<'a> {
     pub name: &'a str,
     pub command: Option<&'a str>,
 }
@@ -47,8 +47,8 @@ pub(crate) fn should_scan_tool_result_for_pr(meta: Option<&ToolUseMeta>) -> bool
     let Some(meta) = meta else {
         return false;
     };
-    if meta.name == "Bash" || meta.name == "BashTool" {
-        return meta.command.map(pr_relevant_bash).unwrap_or(false);
+    if is_shell_tool(meta.name) {
+        return meta.command.is_some_and(pr_relevant_bash);
     }
     meta.name == "Agent" || meta.name == "Task"
 }

@@ -8,6 +8,7 @@ use mainframe_types::adapter::{DetectedPr, DetectedPrSource};
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 
 use super::command::is_pr_create_command;
+use super::is_shell_tool;
 use super::parse::extract_pr_from_tool_result;
 
 /// Walk messages in order: assistant `tool_use` blocks identify PR-create
@@ -58,7 +59,7 @@ fn collect_pr_creates(msg: &ChatMessage, pending_creates: &mut HashSet<String>) 
             else {
                 continue;
             };
-            if name != "Bash" && name != "BashTool" {
+            if !is_shell_tool(name) {
                 continue;
             }
             let Some(command) = input.get("command").and_then(|v| v.as_str()) else {

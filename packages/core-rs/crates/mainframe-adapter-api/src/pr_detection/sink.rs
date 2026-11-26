@@ -30,7 +30,7 @@ impl PrDetectionSink {
     pub fn new(inner: Arc<dyn SessionSink>) -> Self {
         Self {
             inner,
-            state: Mutex::new(LivePrScanner::new()),
+            state: Mutex::new(LivePrScanner::default()),
         }
     }
 

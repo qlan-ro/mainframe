@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use super::*;
 use mainframe_types::settings_kv::{MemorySettings, SettingsError, SettingsResult};
 
@@ -22,12 +25,7 @@ impl<F> FnRunner<F> {
     }
 }
 impl<F: Fn(&str, &[String]) -> RunResult + Send + Sync> Runner for FnRunner<F> {
-    fn run(
-        &self,
-        cmd: String,
-        args: Vec<String>,
-        _timeout_ms: Option<u64>,
-    ) -> BoxFuture<'_, RunResult> {
+    fn run(&self, cmd: String, args: Vec<String>, _timeout: Duration) -> BoxFuture<'_, RunResult> {
         self.calls.lock().unwrap().push((cmd.clone(), args.clone()));
         let r = (self.f)(&cmd, &args);
         Box::pin(async move { r })
@@ -165,12 +163,6 @@ async fn falls_back_to_bare_name_when_nothing_is_found() {
     );
 }
 
-#[test]
-fn exposes_a_bare_name_map() {
-    assert_eq!(BARE_NAMES.get("claude").copied(), Some("claude"));
-    assert_eq!(BARE_NAMES.get("codex").copied(), Some("codex"));
-}
-
 /// A store whose reads fail, for the unreadable-setting path.
 struct UnreadableSettings;
 impl SettingsKv for UnreadableSettings {
@@ -216,7 +208,7 @@ async fn default_run_returns_ok_false_for_a_nonexistent_binary() {
     let r = default_run(
         "definitely-not-a-real-binary-xyz",
         &["--version".to_string()],
-        Some(2_000),
+        Duration::from_secs(2),
         None,
     )
     .await;

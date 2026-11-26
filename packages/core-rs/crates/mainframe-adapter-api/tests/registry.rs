@@ -1,6 +1,4 @@
-//! Integration test (exercises only the public `AdapterRegistry` surface + the
-//! `Adapter` / `AdapterSession` / `RefreshDeps` traits) so `lib.rs` stays
-//! focused on the registry.
+//! Exercises the public `AdapterRegistry` surface and the adapter traits.
 #![allow(clippy::too_many_lines, reason = "Test assertions and scenarios")]
 #![allow(
     clippy::unwrap_used,
@@ -15,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use mainframe_adapter_api::adapter::{ContextFiles, StopBackgroundTaskResult};
 use mainframe_adapter_api::{
     Adapter, AdapterError, AdapterRegistry, AdapterSession, BoxFuture, ControlResponse,
-    RefreshDeps, RunResult, SessionSink,
+    RefreshDeps, RunResult, Runner, SessionSink,
 };
 use mainframe_types::adapter::{
     AdapterCapabilities, AdapterModel, AdapterProcess, CatalogSource, SessionOptions,
@@ -274,19 +272,21 @@ struct FakeDeps {
     run_result: RunResult,
     events: Arc<Mutex<Vec<DaemonEvent>>>,
 }
-impl RefreshDeps for FakeDeps {
-    fn resolve_executable_path(&self, _adapter_id: String) -> BoxFuture<'_, Option<String>> {
-        let p = self.resolve_path.clone();
-        Box::pin(async move { p })
-    }
+impl Runner for FakeDeps {
     fn run(
         &self,
         _cmd: String,
         _args: Vec<String>,
-        _timeout_ms: Option<u64>,
+        _timeout: std::time::Duration,
     ) -> BoxFuture<'_, RunResult> {
         let r = self.run_result.clone();
         Box::pin(async move { r })
+    }
+}
+impl RefreshDeps for FakeDeps {
+    fn resolve_executable_path(&self, _adapter_id: String) -> BoxFuture<'_, Option<String>> {
+        let p = self.resolve_path.clone();
+        Box::pin(async move { p })
     }
     fn emit_event(&self, event: DaemonEvent) {
         self.events.lock().unwrap().push(event);

@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use crate::plan_mode_actions::PlanModeActionHandler;
 use crate::{AdapterError, BoxFuture};
 
-/// One inline image attachment for `sendMessage` (`{ mediaType, data }`).
+/// One inline image attachment for `AdapterSession::send_message`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageInput {
@@ -50,7 +50,7 @@ pub struct ContextFiles {
     pub project: Vec<ContextFile>,
 }
 
-/// Result of `AdapterSession::stop_background_task` (`{ ok, error? }`).
+/// Result of `AdapterSession::stop_background_task`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StopBackgroundTaskResult {
     pub ok: bool,
@@ -193,24 +193,19 @@ pub trait Adapter: Send + Sync {
         None
     }
 
-    /// `getToolCategories?` — default `None`.
     fn get_tool_categories(&self) -> Option<ToolCategories> {
         None
     }
-    /// `getContextFiles?(projectPath)` — default `None`.
     fn get_context_files(&self, project_path: &str) -> Option<ContextFiles> {
         let _ = project_path;
         None
     }
 
-    /// `generateTitle?(content, binary)` — a cheap one-shot title from the first
-    /// user message via the resolved `<adapterId>.titleBinary` CLI. Adapters
-    /// without a cheap, side-effect-free title model omit it (default `Ok(None)`);
-    /// callers then keep the deterministic truncated title. Owned `String` args to
-    /// match this trait's async-method convention (`send_message`/`set_model`).
-    /// The default fires a `debug` log once per attempt — expected today for Codex,
-    /// which has no title model — so it reads as "no title model" in the log
-    /// instead of being indistinguishable from an adapter that tried and failed.
+    /// A cheap one-shot title for the first user message, generated with the
+    /// resolved `<adapterId>.titleBinary` CLI. Adapters without a cheap,
+    /// side-effect-free title model keep the default `Ok(None)`, and callers
+    /// keep the deterministic truncated title. The default logs at `debug` so
+    /// "no title model" is distinguishable from a failed attempt.
     fn generate_title(
         &self,
         content: String,
@@ -228,7 +223,6 @@ pub trait Adapter: Send + Sync {
     /// Absolute on-disk location of the CLI transcript for `session_id`.
     /// `Ok(None)` = the adapter cannot determine the layout — callers MUST treat
     /// it as "unknown" (hide the session, don't flag it), never as "missing".
-    /// Owned args for the same async-trait-convention reason as `generate_title`.
     fn locate_transcript(
         &self,
         session_id: String,
@@ -239,9 +233,9 @@ pub trait Adapter: Send + Sync {
         Box::pin(async { Ok(None) })
     }
 
-    /// `createPlanModeHandler?()` — the adapter's plan-mode action strategy.
-    /// `None` = this adapter has no plan-mode strategy; the dispatcher warns and
-    /// no-ops rather than failing the permission response.
+    /// The adapter's plan-mode action strategy. `None` means this adapter has
+    /// no plan-mode strategy; the dispatcher warns and no-ops rather than
+    /// failing the permission response.
     fn create_plan_mode_handler(&self) -> Option<Arc<dyn PlanModeActionHandler>> {
         None
     }
@@ -277,11 +271,9 @@ pub trait Adapter: Send + Sync {
     /// capability that depends on the installed version (Codex's `fork`, gated
     /// on a minimum CLI release) can be computed synchronously from
     /// `capabilities()` without that method itself spawning a process.
-    /// `AdapterRegistry::run_refresh` calls this once per refresh, before
-    /// `apply_refresh`, on both the primary and the fallback version-detection
-    /// path; `None` means the version could not be determined (uninstalled, or
-    /// the CLI's `--version` output didn't parse). Default no-op: adapters whose
-    /// capabilities never depend on version need not override it.
+    /// The registry calls this once per refresh, before rebuilding the
+    /// snapshot; `None` means the version could not be determined (not
+    /// installed, or `--version` output that didn't parse).
     fn observe_cli_version(&self, version: Option<&str>) {
         let _ = version;
     }

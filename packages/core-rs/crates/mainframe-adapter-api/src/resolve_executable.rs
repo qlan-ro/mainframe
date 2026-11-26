@@ -1,38 +1,28 @@
 //! Resolves an adapter's CLI executable path (configured → detected → fallback).
 //! The configured path is read through the `SettingsKv` contract so this crate
-//! never depends on `mainframe-db` (avoids a db → adapter-api → db cycle). The
-//! resolve memo is an injectable `ResolveMemo` value, not a module global.
+//! never depends on `mainframe-db`.
 
-use std::collections::HashMap;
-use std::sync::LazyLock;
-#[cfg(test)]
-use std::sync::Mutex;
 use std::time::Duration;
 
 use mainframe_runtime::ResolvedPath;
 use mainframe_types::settings_kv::SettingsKv;
 use serde::{Deserialize, Serialize};
 
-use crate::{BoxFuture, RunResult};
+use crate::BoxFuture;
+use crate::version::{CliVersion, VERSION_PROBE_TIMEOUT};
 
-/// Runs a child process and reports `{ ok, stdout }` (mirrors the injected `run`).
-pub trait Runner: Send + Sync {
-    fn run(
-        &self,
-        cmd: String,
-        args: Vec<String>,
-        timeout_ms: Option<u64>,
-    ) -> BoxFuture<'_, RunResult>;
+/// Result of a spawned child process: whether it exited 0, and its stdout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunResult {
+    pub ok: bool,
+    pub stdout: String,
 }
 
-pub static BARE_NAMES: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
-    HashMap::from([
-        ("claude", "claude"),
-        ("codex", "codex"),
-        ("gemini", "gemini"),
-        ("opencode", "opencode"),
-    ])
-});
+/// Runs a child process to completion. Never fails: a spawn error or a
+/// timeout reports `ok: false`.
+pub trait Runner: Send + Sync {
+    fn run(&self, cmd: String, args: Vec<String>, timeout: Duration) -> BoxFuture<'_, RunResult>;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -61,25 +51,23 @@ pub struct ResolverDeps<'a> {
     pub path: &'a ResolvedPath,
 }
 
-/// Default `run` implementation — spawns the child and captures stdout, never
-/// failing (a spawn error or timeout maps to `{ ok: false }`).
+/// The production [`Runner`] body: spawn the child and capture its stdout.
 ///
 /// `path` is the boot-resolved login-shell `PATH` (see
-/// `mainframe_runtime::ResolvedPath`). It must be threaded here so version
-/// probes find CLIs installed outside the packaged app's bare `PATH`.
+/// `mainframe_runtime::ResolvedPath`), so version probes find CLIs installed
+/// outside the packaged app's bare `PATH`.
 pub async fn default_run(
     cmd: &str,
     args: &[String],
-    timeout_ms: Option<u64>,
+    timeout: Duration,
     path: Option<&str>,
 ) -> RunResult {
-    let dur = Duration::from_millis(timeout_ms.unwrap_or(5_000));
     let mut command = tokio::process::Command::new(cmd);
     command.args(args);
     if let Some(path) = path {
         command.env("PATH", path);
     }
-    match mainframe_runtime::process::run_captured(command, Some(dur)).await {
+    match mainframe_runtime::process::run_captured(command, Some(timeout)).await {
         Ok(out) => RunResult {
             ok: out.status.success(),
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -94,15 +82,16 @@ pub async fn default_run(
 /// `(valid, version)`: `(false, None)`, `(true, None)`, or `(true, Some(v))`.
 async fn validate(path: &str, run: &dyn Runner) -> (bool, Option<String>) {
     let r = run
-        .run(path.to_string(), vec!["--version".to_string()], Some(5_000))
+        .run(
+            path.to_string(),
+            vec!["--version".to_string()],
+            VERSION_PROBE_TIMEOUT,
+        )
         .await;
     if !r.ok {
         return (false, None);
     }
-    (
-        true,
-        crate::version::CliVersion::parse(&r.stdout).map(|v| v.to_string()),
-    )
+    (true, CliVersion::parse(&r.stdout).map(|v| v.to_string()))
 }
 
 /// First executable named `bare` on `path`, scanned off the executor thread.
@@ -120,7 +109,6 @@ pub async fn resolve_adapter_executable(
     adapter_id: &str,
     deps: &ResolverDeps<'_>,
 ) -> ResolvedExecutable {
-    let bare = BARE_NAMES.get(adapter_id).copied().unwrap_or(adapter_id);
     let key = format!("{adapter_id}.executablePath");
     let configured = match deps.settings.get("provider", &key).await {
         Ok(configured) => configured,
@@ -138,7 +126,7 @@ pub async fn resolve_adapter_executable(
             version,
         };
     }
-    if let Some(abs) = find_on_path(deps.path, bare).await {
+    if let Some(abs) = find_on_path(deps.path, adapter_id).await {
         let (valid, version) = validate(&abs, deps.run).await;
         return ResolvedExecutable {
             path: abs,
@@ -148,7 +136,7 @@ pub async fn resolve_adapter_executable(
         };
     }
     ResolvedExecutable {
-        path: bare.to_string(),
+        path: adapter_id.to_string(),
         source: ExecutableSource::Fallback,
         valid: false,
         version: None,

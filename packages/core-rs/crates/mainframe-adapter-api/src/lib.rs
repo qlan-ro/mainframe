@@ -10,314 +10,40 @@
     )
 )]
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
-
-use dashmap::{DashMap, DashSet};
-use mainframe_runtime::sync::SingleFlight;
-use mainframe_types::adapter::{AdapterInfo, AdapterModel, CatalogSource};
-use mainframe_types::events::DaemonEvent;
-
 pub mod adapter;
 pub mod compaction_state;
 mod error;
-pub mod idle_compaction;
-pub use error::AdapterError;
+mod external_sessions;
 pub mod history_dependency;
-pub use history_dependency::HistoryDependency;
+pub mod idle_compaction;
 pub mod plan_mode_actions;
 pub mod pr_detection;
+pub mod quota;
+mod registry;
 pub mod resolve_executable;
+pub mod skills;
 pub mod title;
 pub mod version;
+
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 
 pub use adapter::{
     Adapter, AdapterSession, CollectedHistoryFiles, ContextFiles, FORK_CUT_NOT_FOUND_REASON,
     ForkCut, ForkPinError, ForkPinRequest, HistoryFiles, ImageInput, LoadedSkill, SessionSink,
     StopBackgroundTaskResult,
 };
+pub use error::AdapterError;
+pub use external_sessions::ExternalSessions;
+pub use history_dependency::HistoryDependency;
+/// Boxed future for async adapter trait methods.
+pub use mainframe_types::BoxFuture;
 pub use mainframe_types::adapter::{ControlRequest, ControlResponse};
 pub use plan_mode_actions::{
     PlanActionContext, PlanChatUpdate, PlanModeActionHandler, clear_context_and_restart,
 };
-pub use title::finalize_title;
-
-/// Boxed future for async adapter trait methods.
-pub use mainframe_types::BoxFuture;
-
-/// Result of a spawned child process (`{ ok, stdout }`). Shared by `RefreshDeps`
-/// and the `resolve_executable` `Runner`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RunResult {
-    pub ok: bool,
-    pub stdout: String,
-}
-
-const REFRESH_LIST_CAP_MS: u64 = 2_000;
-
-/// Injected refresh dependencies, set once via `configure_refresh`.
-pub trait RefreshDeps: Send + Sync {
-    fn resolve_executable_path(&self, adapter_id: String) -> BoxFuture<'_, Option<String>>;
-    fn run(
-        &self,
-        cmd: String,
-        args: Vec<String>,
-        timeout_ms: Option<u64>,
-    ) -> BoxFuture<'_, RunResult>;
-    /// Emit a daemon event. The impl is a non-blocking channel send, so it
-    /// cannot fail, and the snapshot is already updated before this call.
-    fn emit_event(&self, event: DaemonEvent);
-}
-
-struct RefreshPatch {
-    installed: bool,
-    version: Option<String>,
-    models: Option<Vec<AdapterModel>>,
-}
-
-/// Registry of the daemon's adapters plus their materialized `AdapterInfo`
-/// snapshots. The registry itself is shared as `Arc<AdapterRegistry>`.
-#[derive(Default)]
-pub struct AdapterRegistry {
-    adapters: Arc<DashMap<String, Arc<dyn Adapter>>>,
-    snapshots: Arc<DashMap<String, AdapterInfo>>,
-    deps: OnceLock<Arc<dyn RefreshDeps>>,
-    refresh_allowed: AtomicBool,
-    refresh_ids: OnceLock<std::collections::HashSet<String>>,
-    /// Concurrent refreshes share a cancellation-safe completion claim.
-    in_flight: SingleFlight,
-    succeeded: Arc<DashSet<String>>,
-}
-
-impl AdapterRegistry {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn register(&self, adapter: Arc<dyn Adapter>) {
-        let id = adapter.id().to_string();
-        self.adapters.insert(id, adapter);
-    }
-
-    pub fn get(&self, id: &str) -> Option<Arc<dyn Adapter>> {
-        self.adapters.get(id).map(|e| e.value().clone())
-    }
-
-    pub fn get_all(&self) -> Vec<Arc<dyn Adapter>> {
-        self.adapters.iter().map(|e| e.value().clone()).collect()
-    }
-
-    pub fn kill_all(&self) {
-        for a in self.adapters.iter() {
-            a.value().kill_all();
-        }
-    }
-
-    pub fn configure_refresh(&self, deps: Arc<dyn RefreshDeps>) {
-        // `OnceLock` accepts the first setter (boot); later calls are ignored.
-        /* expected */
-        let _ = self.deps.set(deps); // First attachment wins.
-    }
-
-    pub fn allow_refresh(&self) {
-        self.refresh_allowed.store(true, Ordering::SeqCst);
-    }
-
-    pub fn allow_refresh_for(&self, ids: impl IntoIterator<Item = String>) {
-        /* expected */
-        let _ = self.refresh_ids.set(ids.into_iter().collect()); // First attachment wins.
-        self.allow_refresh();
-    }
-
-    /// STATIC-ONLY seed: no CLI spawn. Safe to call before server start.
-    pub fn seed_static_snapshots(&self) {
-        for entry in self.adapters.iter() {
-            let adapter = entry.value();
-            self.snapshots.insert(
-                adapter.id().to_string(),
-                AdapterInfo {
-                    id: adapter.id().to_string(),
-                    name: adapter.name().to_string(),
-                    description: format!("{} adapter", adapter.name()),
-                    installed: false,
-                    version: None,
-                    models: adapter.catalog(),
-                    models_revision: Some(1),
-                    catalog_source: Some(CatalogSource::Fallback),
-                    capabilities: adapter.capabilities(),
-                    fork_unavailable_reason: adapter.fork_unavailable_reason(),
-                },
-            );
-        }
-    }
-
-    pub fn get_snapshots(&self) -> Vec<AdapterInfo> {
-        self.snapshots.iter().map(|e| e.value().clone()).collect()
-    }
-
-    pub async fn list(&self) -> Vec<AdapterInfo> {
-        if self.refresh_allowed.load(Ordering::SeqCst) {
-            // Race refresh_all against a 2s cap: `tokio::time::timeout` cancels it
-            // if the cap wins — the boot path calls refresh_all uncapped, and later
-            // list() calls re-trigger via the idempotent single-flight, so the
-            // cancelled work is not lost.
-            /* expected */
-            let _ = tokio::time::timeout(
-                Duration::from_millis(REFRESH_LIST_CAP_MS),
-                self.refresh_all(),
-            )
-            .await;
-        }
-        self.get_snapshots()
-    }
-
-    /// Per-adapter, single-flight. Idempotent.
-    pub async fn refresh_all(&self) {
-        // Awaits each adapter in turn (no `futures::join_all`); `refresh_adapter`
-        // still dedups concurrent callers via `in_flight`, and each rejection is
-        // logged here.
-        for id in self.adapter_ids() {
-            if let Err(err) = self.refresh_adapter(&id).await {
-                tracing::warn!(error = ?err,
-                    "adapter refresh rejected"
-                );
-            }
-        }
-    }
-
-    fn adapter_ids(&self) -> Vec<String> {
-        self.adapters.iter().map(|e| e.key().clone()).collect()
-    }
-
-    async fn refresh_adapter(&self, adapter_id: &str) -> Result<(), AdapterError> {
-        if !self.refresh_allowed.load(Ordering::SeqCst) || self.succeeded.contains(adapter_id) {
-            return Ok(());
-        }
-        match self.in_flight.claim(adapter_id) {
-            Ok(_claim) => self.run_refresh(adapter_id).await,
-            Err(waiter) => {
-                waiter.wait().await;
-                Ok(())
-            }
-        }
-    }
-
-    async fn run_refresh(&self, adapter_id: &str) -> Result<(), AdapterError> {
-        let Some(adapter) = self.adapters.get(adapter_id).map(|e| e.value().clone()) else {
-            return Ok(());
-        };
-        let Some(deps) = self.deps.get().cloned() else {
-            return Ok(());
-        };
-        if self
-            .refresh_ids
-            .get()
-            .is_some_and(|ids| !ids.contains(adapter_id))
-        {
-            return Ok(());
-        }
-        let exe_path = deps.resolve_executable_path(adapter_id.to_string()).await;
-        let (installed, version) = probe_installation(&adapter, &deps, &exe_path).await?;
-        // Report the version once, however it was determined (primary `--version`
-        // spawn or the fallback path above), before either `apply_refresh` call
-        // site below recomputes `capabilities()` — a version-gated capability
-        // (Codex's `fork`) reads this synchronously from `capabilities()`
-        // and must see it before the snapshot is rebuilt.
-        adapter.observe_cli_version(version.as_deref());
-        // Skip live discovery for an uninstalled adapter — no point spawning a probe.
-        if !installed {
-            self.apply_refresh(
-                adapter_id,
-                RefreshPatch {
-                    installed,
-                    version,
-                    models: None,
-                },
-                &deps,
-            );
-            tracing::warn!(
-                adapter_id,
-                exe_path,
-                "adapter not installed — skipping live catalog discovery"
-            );
-            return Ok(());
-        }
-        let models = refresh_catalog(&adapter, adapter_id, exe_path.clone()).await;
-        let got_live = models.as_ref().map(|m| !m.is_empty()).unwrap_or(false);
-        self.apply_refresh(
-            adapter_id,
-            RefreshPatch {
-                installed,
-                version,
-                models: if got_live { models } else { None },
-            },
-            &deps,
-        );
-        self.mark_catalog_refresh(adapter_id, &exe_path, got_live);
-        Ok(())
-    }
-
-    fn mark_catalog_refresh(&self, adapter_id: &str, exe_path: &Option<String>, got_live: bool) {
-        if got_live {
-            self.succeeded.insert(adapter_id.to_string());
-        } else {
-            tracing::warn!(
-                adapter_id,
-                exe_path,
-                "no live catalog — will retry on next refresh"
-            );
-        }
-    }
-
-    fn apply_refresh(&self, adapter_id: &str, patch: RefreshPatch, deps: &Arc<dyn RefreshDeps>) {
-        let Some(prev) = self.snapshots.get(adapter_id).map(|e| e.value().clone()) else {
-            return;
-        };
-        let adapter = self.adapters.get(adapter_id).map(|e| e.value().clone());
-        let installed = patch.installed;
-        let models_changed = patch.models.is_some();
-        let next = refresh_snapshot(&prev, &patch, adapter.as_ref());
-        let models_revision = next.models_revision;
-        let capabilities_changed = next.capabilities != prev.capabilities;
-        let reason_changed = next.fork_unavailable_reason != prev.fork_unavailable_reason;
-        // Mutate the cache BEFORE emitting so a blocked subscriber cannot
-        // leave the snapshot un-updated.
-        self.snapshots.insert(adapter_id.to_string(), next.clone());
-        if let (Some(models), Some(rev)) = (&patch.models, models_revision) {
-            tracing::info!(
-                adapter_id,
-                models_revision = rev,
-                count = models.len(),
-                "adapter catalog updated"
-            );
-        }
-        // Emit whenever anything a client might act on changed — not just the
-        // catalog — so a capability/reason flip with no model change (Codex's
-        // fork gate) still reaches an open websocket.
-        if models_changed || capabilities_changed || reason_changed {
-            deps.emit_event(DaemonEvent::AdapterModelsUpdated {
-                adapter_id: adapter_id.to_string(),
-                models: next.models,
-                models_revision: next.models_revision.unwrap_or(1),
-                installed: Some(installed),
-                capabilities: Some(next.capabilities),
-                fork_unavailable_reason: next.fork_unavailable_reason,
-            });
-        }
-    }
-}
-
-pub mod skills;
-pub use skills::SkillsProvider;
-pub mod quota;
 pub use quota::QuotaSource;
-mod external_sessions;
-pub use external_sessions::ExternalSessions;
-
-#[cfg(any(test, feature = "test-support"))]
-pub mod test_support;
-
-mod force_refresh;
-mod refresh_helpers;
-use refresh_helpers::{probe_installation, refresh_catalog, refresh_snapshot};
+pub use registry::{AdapterRegistry, RefreshDeps};
+pub use resolve_executable::{RunResult, Runner};
+pub use skills::SkillsProvider;
+pub use title::finalize_title;

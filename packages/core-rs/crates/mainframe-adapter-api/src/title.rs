@@ -2,8 +2,9 @@
 //! overrides `Adapter::generate_title`, so the accepted shape can't drift
 //! between the CLIs.
 
-/// `stdout.trim().replace(/^["']|["']$/g, '').trim()`, accepting only a 2..=80
-/// char result (else `None` — the caller keeps the deterministic title).
+/// The title in a title model's `stdout`: trimmed, with one leading and one
+/// trailing quote removed. Returns `None`, so the caller keeps the
+/// deterministic title, unless the result is 2 to 80 characters long.
 pub fn finalize_title(stdout: &str) -> Option<String> {
     let mut t = stdout.trim().to_string();
     if t.starts_with('"') || t.starts_with('\'') {
@@ -13,12 +14,9 @@ pub fn finalize_title(stdout: &str) -> Option<String> {
         t.pop();
     }
     let title = t.trim();
-    let len = title.chars().count();
-    if !title.is_empty() && (2..=80).contains(&len) {
-        Some(title.to_string())
-    } else {
-        None
-    }
+    (2..=80)
+        .contains(&title.chars().count())
+        .then(|| title.to_string())
 }
 
 #[cfg(test)]
