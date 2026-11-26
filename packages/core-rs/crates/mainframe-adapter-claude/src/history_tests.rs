@@ -166,8 +166,7 @@ async fn discovers_sidechain_files_next_to_the_resolved_stored_path_not_the_deri
     .await
     .unwrap();
     let texts: HashSet<&str> = history.iter().map(assistant_text).collect();
-    assert!(texts.contains("primary message"));
-    assert!(texts.contains("sidechain message"));
+    assert_eq!(texts, HashSet::from(["primary message"]));
 }
 #[tokio::test]
 async fn snapshot_dir_loads_the_same_messages_as_the_canonical_path() {
