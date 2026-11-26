@@ -1,6 +1,6 @@
 use super::send_outgoing::Outgoing;
 use super::*;
-use mainframe_db::idle_compaction_queue::{QueuedCommand, QueuedImage, QueuedInput};
+use mainframe_db::idle_compaction_queue::{DeliveryState, QueuedCommand, QueuedImage, QueuedInput};
 use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
@@ -79,7 +79,7 @@ impl ChatManager {
         let manager = self.shared.manager.get().cloned();
         let chat_id = chat_id.to_owned();
         let uuid = input.uuid.clone();
-        let post = Arc::clone(post);
+        let post = Arc::downgrade(post);
         session.guard_queued_write(
             input.uuid.clone(),
             Box::new(move || {
@@ -90,10 +90,17 @@ impl ChatManager {
                     .shared
                     .deps
                     .idle_queue_list(&chat_id)
-                    .is_ok_and(|inputs| inputs.into_iter().any(|input| input.uuid == uuid))
+                    .is_ok_and(|inputs| {
+                        inputs.into_iter().any(|input| {
+                            input.uuid == uuid && input.delivery == DeliveryState::Unconfirmed
+                        })
+                    })
                 {
                     return false;
                 }
+                let Some(post) = post.upgrade() else {
+                    return false;
+                };
                 manager.set_working(&post, &now_iso8601());
                 true
             }),

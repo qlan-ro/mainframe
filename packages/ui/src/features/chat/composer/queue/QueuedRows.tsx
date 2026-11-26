@@ -28,14 +28,11 @@ interface QueueRow {
   messageId: string;
   content: string;
   attachments: number;
-  /** Why the row did not go out, or undefined while it is simply waiting. */
   failure?: string;
   action?: { label: string; testId: string; onClick: () => void; icon?: ReactNode };
   onMarkSent?: () => void;
   note?: string;
-  /** Claimed by a "Send now": it goes out behind what the agent already has. */
   leaving?: boolean;
-  /** On its way to the agent. */
   sending?: boolean;
   onEdit?: () => void;
   onRemove?: () => void;
@@ -44,6 +41,11 @@ interface QueueRow {
 const DELIVERY_FAILURE: Record<string, string> = {
   rejected: 'Not sent: the agent refused it. The queue is paused.',
   unconfirmed: 'Not confirmed by the agent. It may have been received.',
+};
+
+const DELIVERY_NOTE: Partial<Record<string, string>> = {
+  unconfirmed: 'Uncertain',
+  resend_scheduled: 'Resend scheduled',
 };
 
 const report = (what: string) => (error: unknown) => {
@@ -161,15 +163,8 @@ function useQueuedRows(): QueueRow[] {
     content,
     attachments: attachmentIds?.length ?? 0,
     note:
-      delivery === 'unconfirmed'
-        ? 'Uncertain'
-        : delivery === 'resend_scheduled'
-          ? 'Resend scheduled'
-          : blockedHead
-            ? 'Waiting on the message above'
-            : pauseReason
-              ? `Paused · ${pauseReason}`
-              : undefined,
+      DELIVERY_NOTE[delivery ?? ''] ??
+      (blockedHead ? 'Waiting on the message above' : pauseReason && `Paused · ${pauseReason}`),
     failure: delivery ? DELIVERY_FAILURE[delivery] : undefined,
     onMarkSent:
       delivery === 'unconfirmed' && extras
@@ -208,10 +203,6 @@ function useQueuedRows(): QueueRow[] {
   }));
 }
 
-/**
- * Rows a Stop took back. One the agent had already picked up is still in its
- * queue or in the transcript, so it is not held after all.
- */
 function useHeldRows(): QueueRow[] {
   const extras = useChatExtras();
   const chatId = extras?.state.chatId ?? '';
