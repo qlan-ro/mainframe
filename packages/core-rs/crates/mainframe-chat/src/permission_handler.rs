@@ -6,9 +6,8 @@ use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use mainframe_types::adapter::{ControlRequest, ControlResponse};
-use mainframe_types::chat::ChatMessage;
 
-use crate::chat_manager::{ChatShared, build_history_session, remap_history_for};
+use crate::chat_manager::ChatShared;
 use crate::chat_surface::{self, ChatSurface, ChatSurfaceEvent};
 use crate::event_handler::EventHandler;
 use crate::lifecycle_manager::ChatLifecycleManager;
@@ -59,23 +58,6 @@ impl ChatPermissionHandler {
         }
     }
 
-    /// `getPendingPermission` calls `getMessages` to restore permission state
-    /// from JSONL. Mirrors the facade's `getMessages` disk load (cache-agnostic
-    /// here — the caller only scans the returned messages for a pending
-    /// permission).
-    async fn load_messages(&self, chat_id: &str) -> Vec<ChatMessage> {
-        let Some(chat) = self.shared.chat_or_db(chat_id) else {
-            return Vec::new();
-        };
-        let Some(session) = build_history_session(&self.shared.deps, &chat, chat_id) else {
-            return Vec::new();
-        };
-        match session.load_history().await {
-            Ok(history) => remap_history_for(history, chat_id),
-            Err(_) => Vec::new(),
-        }
-    }
-
     /// Attach the chat-surface observer. Idempotent-once, matching
     /// `EventHandler::set_chat_surface`.
     pub fn set_chat_surface(&self, surface: Arc<dyn ChatSurface>) {
@@ -99,9 +81,6 @@ impl ChatPermissionHandler {
     }
 
     pub async fn get_pending_permission(&self, chat_id: &str) -> Option<ControlRequest> {
-        if !self.has_pending(chat_id) {
-            self.load_messages(chat_id).await;
-        }
         self.pending_permission_as_known(chat_id)
     }
 

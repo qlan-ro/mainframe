@@ -33,30 +33,26 @@ async fn load_with_reader<R: std::io::BufRead>(
     }
     let mut paths = PathCollector::default();
     let mut load = HistoryLoad::default();
-    let files = discovered.all_files.clone();
-    let subagent_files = discovered.subagent_files.clone();
+    let primary = discovered.primary_path.clone();
     let (session_id, base) = (session_id.to_owned(), base.to_owned());
     if messages && discovered.complete {
-        paths.files.sources = source_stamps(&files).await;
+        paths.files.sources = source_stamps(std::slice::from_ref(&primary)).await;
     }
     run_history_worker(move || {
-        for file in &files {
-            let is_subagent = subagent_files.contains(file);
-            let result = open(file).and_then(|reader| {
-                reader::read_chunks(reader, |line| {
-                    let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
-                        paths.observe_plan(line, &base);
-                        return;
-                    };
-                    paths.observe(&entry, line, &base);
-                    if messages {
-                        load.entry(&entry, &session_id, is_subagent);
-                    }
-                })
-            });
-            if result.is_err() {
-                paths.files.sources = None;
-            }
+        let result = open(&primary).and_then(|reader| {
+            reader::read_chunks(reader, |line| {
+                let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
+                    paths.observe_plan(line, &base);
+                    return;
+                };
+                paths.observe(&entry, line, &base);
+                if messages {
+                    load.entry(&entry, &session_id, false);
+                }
+            })
+        });
+        if result.is_err() {
+            paths.files.sources = None;
         }
         let rows = load.finish();
         (rows, paths.files)
@@ -89,7 +85,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn failed_open_keeps_other_messages_and_rescans() {
+    async fn failed_open_rescans_primary() {
         check_recovery(false).await;
     }
 
@@ -111,14 +107,12 @@ mod tests {
         let files = DiscoveredFiles {
             primary_path: path.clone(),
             all_files: vec![path.clone(), sibling.to_str().unwrap().into()],
-            subagent_files: Default::default(),
+            subagent_files: [sibling.to_str().unwrap().to_owned()].into_iter().collect(),
             complete: true,
         };
         let failed = path.clone();
         let open = move |file: &str| -> io::Result<Box<dyn BufRead>> {
-            if file != failed {
-                return Ok(Box::new(reader::open_reader(file)?));
-            }
+            assert_eq!(file, failed, "cold restore opened a child transcript");
             if mid_read {
                 return Ok(Box::new(BufReader::new(
                     io::Cursor::new(prefix.clone().into_bytes()).chain(ReadFailure),
@@ -129,7 +123,7 @@ mod tests {
         let (rows, carried) = load_with_reader("session", &files, base, true, open)
             .await
             .unwrap();
-        assert_eq!(rows.len(), if mid_read { 2 } else { 1 });
+        assert_eq!(rows.len(), usize::from(mid_read));
         assert!(carried.sources.is_none());
         assert!(carried.plans.is_empty());
         let session = crate::adapter::ClaudeAdapter::default().create_session(SessionOptions {

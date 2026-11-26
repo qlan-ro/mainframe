@@ -45,31 +45,29 @@ async fn plan_file_paths_from(
         return Ok(Vec::new());
     }
     let mut plan_files: Vec<String> = Vec::new();
-    let files = discovered.all_files.clone();
+    let file = discovered.primary_path.clone();
     let project_dir = project_dir.to_owned();
     run_history_worker(move || {
-        for file in &files {
-            /* expected */
-            let _ = visit_lines(file, |line| {
-                if line.trim().is_empty() {
-                    return;
-                }
-                let entry: PlanEntry = match serde_json::from_slice(line.as_bytes()) {
-                    Ok(v) => v,
-                    Err(_) => return,
-                };
-                if entry.kind.as_deref() != Some("user") {
-                    return;
-                }
-                if let Some(PlanResult {
-                    plan: Some(_),
-                    file_path: Some(path),
-                }) = entry.tool_use_result
-                {
-                    plan_files.push(path_resolve(&project_dir, &path));
-                }
-            });
-        }
+        /* expected */
+        let _ = visit_lines(&file, |line| {
+            if line.trim().is_empty() {
+                return;
+            }
+            let entry: PlanEntry = match serde_json::from_slice(line.as_bytes()) {
+                Ok(v) => v,
+                Err(_) => return,
+            };
+            if entry.kind.as_deref() != Some("user") {
+                return;
+            }
+            if let Some(PlanResult {
+                plan: Some(_),
+                file_path: Some(path),
+            }) = entry.tool_use_result
+            {
+                plan_files.push(path_resolve(&project_dir, &path));
+            }
+        });
         plan_files
     })
     .await
@@ -101,23 +99,21 @@ async fn skill_file_paths_from(
     let mut seen: HashSet<String> = HashSet::new();
     let mut cache: HashMap<String, String> = HashMap::new();
     let mut skill_files: Vec<SkillFileEntry> = Vec::new();
-    let files = discovered.all_files.clone();
+    let file = discovered.primary_path.clone();
     let project_path = project_path.to_owned();
     run_history_worker(move || {
-        for file in &files {
-            /* expected */
-            let _ = visit_lines(file, |line| {
-                for skill in skill_names(line) {
-                    push_skill_file(
-                        &skill,
-                        &project_path,
-                        &mut seen,
-                        &mut cache,
-                        &mut skill_files,
-                    );
-                }
-            });
-        }
+        /* expected */
+        let _ = visit_lines(&file, |line| {
+            for skill in skill_names(line) {
+                push_skill_file(
+                    &skill,
+                    &project_path,
+                    &mut seen,
+                    &mut cache,
+                    &mut skill_files,
+                );
+            }
+        });
         skill_files
     })
     .await
