@@ -44,24 +44,8 @@ mod codex_resume {
         old.send_message("initial turn".into(), vec![], None)
             .await
             .unwrap();
-        let (finish_exit, exit_blocked) = std::sync::mpsc::channel();
-        let reaped = Arc::new(tokio::sync::Notify::new());
-        let exited = reaped.clone();
-        old.set_on_exit(Box::new(move || {
-            exited.notify_one();
-            tokio::task::block_in_place(|| {
-                exit_blocked.recv_timeout(Duration::from_secs(15)).unwrap();
-            });
-        }));
-
         let (deps, manager, replacement) = seed_manager(dir.path(), old.clone());
-        assert!(
-            old.kill().await.is_err(),
-            "exit acknowledgement exceeded the shutdown deadline"
-        );
-        tokio::time::timeout(Duration::from_secs(2), reaped.notified())
-            .await
-            .unwrap();
+        let finish_exit = time_out_close(&old).await;
         assert_closing_send_rejected(&old).await;
 
         let send = manager.send_message("c1", "deliver after resume", None, None);
@@ -88,6 +72,56 @@ mod codex_resume {
         assert!(capture.contains(r#""text":"deliver after resume""#));
         assert!(!capture.contains("cannot write"));
         replacement.kill().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn send_waiting_for_a_second_shutdown_timeout_is_definitely_undelivered() {
+        let dir = tempfile::tempdir().unwrap();
+        let capture = write_app_server(dir.path());
+        let old = session(dir.path());
+        old.spawn(None, None).await.unwrap();
+        let (deps, manager, replacement) = seed_manager(dir.path(), old.clone());
+        let finish_exit = time_out_close(&old).await;
+
+        let error = manager
+            .send_message("c1", "retry this prompt", None, None)
+            .await
+            .unwrap_err();
+        finish_exit.send(()).unwrap();
+        old.kill().await.unwrap();
+
+        assert!(error.never_delivered());
+        assert_eq!(
+            error.to_string(),
+            "The previous session is still shutting down (Codex app-server termination was not confirmed). Try again."
+        );
+        assert!(deps.created_sessions().is_empty());
+        assert!(!replacement.is_spawned());
+        assert!(
+            !std::fs::read_to_string(capture)
+                .unwrap()
+                .contains("retry this prompt")
+        );
+    }
+
+    async fn time_out_close(old: &CodexSession) -> std::sync::mpsc::Sender<()> {
+        let (finish_exit, exit_blocked) = std::sync::mpsc::channel();
+        let reaped = Arc::new(tokio::sync::Notify::new());
+        let exited = reaped.clone();
+        old.set_on_exit(Box::new(move || {
+            exited.notify_one();
+            tokio::task::block_in_place(|| {
+                exit_blocked.recv_timeout(Duration::from_secs(15)).unwrap();
+            });
+        }));
+        assert_eq!(
+            old.kill().await.unwrap_err().to_string(),
+            "Codex app-server termination was not confirmed"
+        );
+        tokio::time::timeout(Duration::from_secs(2), reaped.notified())
+            .await
+            .unwrap();
+        finish_exit
     }
 
     async fn assert_closing_send_rejected(old: &Arc<CodexSession>) {
