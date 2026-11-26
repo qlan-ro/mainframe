@@ -18,7 +18,8 @@ impl ChatShared {
     }
 
     /// Reparses `chat_id`'s transcript, persists the snapshot, and returns
-    /// the history exactly as a cold load would hand it to the message cache.
+    /// the history a cold load would hand to the message cache, without the
+    /// queue side effects a real restore has.
     pub(crate) async fn refresh_cached_history(
         &self,
         chat_id: &str,
@@ -30,7 +31,7 @@ impl ChatShared {
             .refresh(chat_id, session, context.as_deref())
             .await?;
         let messages = remap_history_for(parsed.messages, chat_id);
-        let messages = self.merge_idle_history(chat_id, messages).ok()?;
+        let messages = self.preview_idle_history(chat_id, messages).ok()?;
         Some((messages, parsed.validation))
     }
 

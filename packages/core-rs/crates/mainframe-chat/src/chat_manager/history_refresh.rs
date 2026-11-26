@@ -17,7 +17,7 @@ impl ChatManager {
     /// the live view. `None` when the chat is busy, not cacheable, or its
     /// files changed during the read.
     pub async fn refresh_history_cache(&self, chat_id: &str) -> Option<RefreshedHistory> {
-        if !self.initial_history_eligible(chat_id) {
+        if !self.idle_history_eligible(chat_id) {
             return None;
         }
         let chat = self.get_chat(chat_id)?;

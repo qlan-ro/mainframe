@@ -125,8 +125,15 @@ impl HistoryRefresher {
         let Some(ticket) = self.stale.get(chat_id).map(|t| *t) else {
             return;
         };
-        if let Some(manager) = self.manager.get().and_then(Weak::upgrade)
-            && let Some(refreshed) = manager.refresh_history_cache(chat_id).await
+        let Some(manager) = self.manager.get().and_then(Weak::upgrade) else {
+            return;
+        };
+        let refreshed = manager.refresh_history_cache(chat_id).await;
+        if refreshed.is_none() && manager.is_chat_working(chat_id) {
+            // A new turn started; its own end schedules the next refresh.
+            return;
+        }
+        if let Some(refreshed) = refreshed
             && let Some(store) = store
         {
             let window = match self.windows.get(chat_id).map(|w| w.clone()) {
@@ -171,7 +178,10 @@ async fn write_tail(
     let Ok(Some(tail)) = prepared else {
         return;
     };
-    if !manager.validate_history(chat_id, &validation).await {
+    if !manager
+        .validate_refreshed_history(chat_id, &validation)
+        .await
+    {
         return;
     }
     let manifest = Manifest {

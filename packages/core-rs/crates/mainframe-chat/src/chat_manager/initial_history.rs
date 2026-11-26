@@ -39,7 +39,21 @@ impl ChatManager {
     }
 
     pub async fn validate_history(&self, chat_id: &str, validation: &HistoryValidation) -> bool {
-        if !validation.permission_free || !self.initial_history_eligible(chat_id) {
+        self.initial_history_eligible(chat_id) && self.validate_stamps(chat_id, validation).await
+    }
+
+    /// `validate_history` for a refresh: the chat may still have its CLI
+    /// process, but no turn may be running.
+    pub async fn validate_refreshed_history(
+        &self,
+        chat_id: &str,
+        validation: &HistoryValidation,
+    ) -> bool {
+        self.idle_history_eligible(chat_id) && self.validate_stamps(chat_id, validation).await
+    }
+
+    async fn validate_stamps(&self, chat_id: &str, validation: &HistoryValidation) -> bool {
+        if !validation.permission_free {
             return false;
         }
         if validation.generation.is_some()
@@ -59,11 +73,19 @@ impl ChatManager {
         HistorySnapshotCache::validate(session.as_ref(), context.as_deref(), validation).await
     }
 
-    pub(super) fn initial_history_eligible(&self, chat_id: &str) -> bool {
+    fn initial_history_eligible(&self, chat_id: &str) -> bool {
+        !self.is_chat_running(chat_id) && self.idle_history_eligible(chat_id)
+    }
+
+    /// A chat whose history may be cached from disk now: no turn in flight and
+    /// nothing a restart would restore differently. Unlike the initial-history
+    /// check it allows a live CLI process, which stays up between turns; the
+    /// source stamps catch any write that lands during the read.
+    pub(super) fn idle_history_eligible(&self, chat_id: &str) -> bool {
         let Some(chat) = self.get_chat(chat_id) else {
             return false;
         };
-        !self.is_chat_running(chat_id)
+        !self.is_chat_working(chat_id)
             && !self.shared.permissions.lock_recover().has_pending(chat_id)
             && chat.process_state != Some(Some(mainframe_types::chat::ProcessState::Working))
             && !chat.temporary
