@@ -177,9 +177,8 @@ impl ChatManager {
             {
                 return Ok(());
             }
-            self.deliver_maintenance_input(chat_id, &post, &session, input)
+            self.deliver_maintenance_input(chat_id, &post, &session, input, queue_control)
                 .await?;
-            drop(queue_control);
             if holds_turn_queue(session.adapter_id()) {
                 return Ok(());
             }
@@ -206,6 +205,7 @@ impl ChatManager {
         post: &Arc<Mutex<ActiveChat>>,
         session: &Arc<dyn AdapterSession>,
         mut input: QueuedInput,
+        queue_control: tokio::sync::OwnedMutexGuard<()>,
     ) -> Result<(), SendError> {
         self.mark_turn_accepted(post, chat_id)?;
         input.set_delivery(DeliveryState::Unconfirmed);
@@ -234,6 +234,7 @@ impl ChatManager {
                 .active_queue_echoes
                 .insert(chat_id.to_owned(), input.uuid.clone());
         }
+        drop(queue_control);
         let result = super::maintenance_queue_payload::dispatch(session, &input).await;
         if let Err(error) = result {
             session.clear_queued_write_guard(&input.uuid);

@@ -28,6 +28,7 @@ pub(super) struct IdleTestSession {
     pub capture_guard: bool,
     pub write_guard: Mutex<Option<WriteGuard>>,
     pub history: Mutex<Option<Result<Vec<ChatMessage>, AdapterError>>>,
+    pub send_timeout: Option<std::time::Duration>,
     pub hold_send: AtomicBool,
     pub send_started: tokio::sync::Notify,
 }
@@ -55,6 +56,7 @@ impl IdleTestSession {
             capture_guard: false,
             write_guard: Default::default(),
             history: Default::default(),
+            send_timeout: None,
             hold_send: AtomicBool::new(false),
             send_started: tokio::sync::Notify::new(),
         }
@@ -142,6 +144,11 @@ impl AdapterSession for IdleTestSession {
             self.send_started.notify_one();
             if self.hold_send.load(Ordering::SeqCst) {
                 std::future::pending::<()>().await;
+            }
+            if let Some(timeout) = self.send_timeout {
+                return tokio::time::timeout(timeout, std::future::pending())
+                    .await
+                    .map_err(|_| AdapterError::Message("turn/start timed out".into()));
             }
             failure.map_or(Ok(()), Err)
         })

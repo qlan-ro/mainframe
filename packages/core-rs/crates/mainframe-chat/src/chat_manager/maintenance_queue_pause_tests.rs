@@ -125,3 +125,44 @@ async fn resume_keeps_its_control_until_the_provider_is_ready() {
     manager.drain_maintenance_queue("c").await.unwrap();
     assert!(manager.get_queued_for_chat("c").is_empty());
 }
+
+#[tokio::test(start_paused = true)]
+async fn stop_returns_while_codex_turn_start_reply_is_pending() {
+    use std::time::Duration;
+
+    let mut fake = IdleTestSession::new();
+    fake.inner.adapter = Some("codex".into());
+    fake.send_timeout = Some(Duration::from_secs(30));
+    let (manager, deps, session) = fixture(fake).await;
+    for message in ["first", "second"] {
+        manager
+            .enqueue_maintenance_input("c", message, None, None)
+            .await
+            .unwrap();
+    }
+    let drain = {
+        let manager = manager.clone();
+        tokio::spawn(async move { manager.drain_maintenance_queue("c").await })
+    };
+    session.send_started.notified().await;
+    tokio::time::timeout(Duration::from_millis(100), manager.interrupt_chat("c"))
+        .await
+        .expect("Stop must return before the turn/start timeout");
+    assert!(!drain.is_finished());
+    assert_eq!(
+        manager.get_queued_for_chat("c")[1].pause_reason.as_deref(),
+        Some("Stopped")
+    );
+    assert!(drain.await.unwrap().is_err());
+    assert_eq!(
+        manager.get_queued_for_chat("c")[0].delivery.as_deref(),
+        Some("unconfirmed")
+    );
+    manager.drain_maintenance_queue("c").await.unwrap();
+    assert_eq!(session.sent.lock_recover().len(), 1);
+    assert!(
+        deps.idle_queue_list("c").unwrap()[1]
+            .delivery
+            .ready_to_dispatch()
+    );
+}
