@@ -102,6 +102,7 @@ async fn assert_history_sources(reuse_canonical: bool) {
         &deps,
         &chat.id,
         reuse_canonical.then_some(canonical.as_slice()),
+        None,
     )
     .await;
     assert_eq!(

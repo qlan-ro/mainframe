@@ -4,6 +4,7 @@ use super::*;
 struct RestoredHistory {
     canonical: Option<Vec<ChatMessage>>,
     changed: bool,
+    files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
 }
 
 impl ChatLifecycleManager {
@@ -16,7 +17,7 @@ impl ChatLifecycleManager {
         };
         self.shared
             .deps
-            .scan_loaded_history(chat_id, restored.canonical.as_deref())
+            .scan_loaded_history(chat_id, restored.canonical.as_deref(), restored.files)
             .await;
         restored.changed
     }
@@ -64,7 +65,9 @@ impl ChatLifecycleManager {
             Some(history) => Some(history),
             None => history::load_session_history(chat_id, session.as_ref(), &self.shared).await,
         };
-        Some(self.restore_snapshot(chat_id, history, canonical))
+        let mut restored = self.restore_snapshot(chat_id, history, canonical);
+        restored.files = session.take_history_files();
+        Some(restored)
     }
 
     fn create_restore_session(
@@ -116,6 +119,7 @@ impl ChatLifecycleManager {
         RestoredHistory {
             canonical: scan_history,
             changed: cache_reloaded,
+            files: None,
         }
     }
 

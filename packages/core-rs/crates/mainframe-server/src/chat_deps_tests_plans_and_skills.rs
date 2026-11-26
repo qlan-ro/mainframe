@@ -95,7 +95,8 @@ async fn persist_plan_and_skill_files_writes_both_extracted_lists() {
         ..mainframe_adapter_api::test_support::FakeSession::spawned()
     };
 
-    deps.persist_plan_and_skill_files(&chat.id, &session).await;
+    deps.persist_plan_and_skill_files(&chat.id, &session, None)
+        .await;
 
     let plan_files = deps
         .db
@@ -119,5 +120,91 @@ async fn persist_plan_and_skill_files_writes_both_extracted_lists() {
             path: "/repo/.claude/skills/tdd/SKILL.md".to_string(),
             display_name: "tdd".to_string(),
         }]
+    );
+}
+
+#[tokio::test]
+async fn scan_persists_the_current_skill_path_and_reuses_stable_metadata() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("session.jsonl");
+    let skill = r#"{"type":"assistant","sessionId":"session","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"round3-example"}}]}}"#;
+    std::fs::write(&source, skill).unwrap();
+    let session = claude_scan_session(dir.path());
+    session.load_history().await.unwrap();
+    let mut collected = session.take_history_files().unwrap();
+    collected.plans.push("/carried-only.md".into());
+    let old = dir.path().join("old-skill.md");
+    let current = dir.path().join(".claude/skills/round3-example/SKILL.md");
+    std::fs::write(&old, "").unwrap();
+    std::fs::create_dir_all(current.parent().unwrap()).unwrap();
+    std::fs::rename(old, &current).unwrap();
+    let deps = test_deps();
+    let id = deps
+        .db
+        .call_blocking(|d| {
+            let project = d.projects.create("/tmp/project", None)?;
+            d.chats
+                .create(&mainframe_types::chat::NewChat {
+                    project_id: project.id,
+                    adapter_id: "claude".into(),
+                    ..Default::default()
+                })
+                .map(|chat| chat.id)
+        })
+        .unwrap();
+    deps.persist_plan_and_skill_files(&id, session.as_ref(), Some(collected))
+        .await;
+    let (plans, skills) = deps
+        .db
+        .call_blocking(move |d| Ok((d.chats.get_plan_files(&id)?, d.chats.get_skill_files(&id)?)))
+        .unwrap();
+    assert_eq!(plans, ["/carried-only.md"]);
+    assert_eq!(skills.len(), 1);
+    assert_eq!(skills[0].path, current.to_str().unwrap());
+}
+
+fn claude_scan_session(dir: &std::path::Path) -> Arc<dyn AdapterSession> {
+    use mainframe_adapter_api::Adapter;
+    mainframe_adapter_claude::adapter::ClaudeAdapter::default().create_session(SessionOptions {
+        project_path: dir.to_str().unwrap().into(),
+        chat_id: Some("session".into()),
+        session_file_path: Some(dir.join("session.jsonl").to_str().unwrap().into()),
+        mainframe_chat_id: "chat".into(),
+        fork_source: None,
+    })
+}
+
+#[tokio::test]
+async fn scan_discovers_appended_records_and_new_child_transcripts() {
+    use std::io::Write;
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("session.jsonl");
+    let plan = r#"{"type":"user","toolUseResult":{"plan":"done","filePath":"/late.md"}}"#;
+    let skill = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"late"}}]}}"#;
+    std::fs::write(&source, "{\"sessionId\":\"session\"}\n").unwrap();
+    let session = claude_scan_session(dir.path());
+    session.load_history().await.unwrap();
+    let files = session.take_history_files().unwrap();
+    assert!(files.plans.is_empty() && files.skill_names.is_empty());
+    let mut writer = std::fs::OpenOptions::new()
+        .append(true)
+        .open(source)
+        .unwrap();
+    writeln!(writer, "{plan}\n{skill}").unwrap();
+    let scanned = session.scan_history_files(Some(files)).await.unwrap();
+    assert_eq!(scanned.plans, ["/late.md"]);
+    assert_eq!(scanned.skills[0].display_name, "late");
+    session.load_history().await.unwrap();
+    let files = session.take_history_files();
+    let children = dir.path().join("session/subagents");
+    std::fs::create_dir_all(&children).unwrap();
+    std::fs::write(
+        children.join("agent-child.jsonl"),
+        plan.replace("/late", "/child"),
+    )
+    .unwrap();
+    assert_eq!(
+        session.scan_history_files(files).await.unwrap().plans,
+        ["/late.md", "/child.md"]
     );
 }
