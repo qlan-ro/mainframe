@@ -150,3 +150,26 @@ fn emergency_kill_reaches_the_child_during_grace() {
     });
     assert_eq!(handle.pid(), None);
 }
+
+#[cfg(unix)]
+#[test]
+fn sidecar_parent_is_passed_only_as_a_launch_argument() {
+    let mut command = Command::new("unused");
+    command.env("MAINFRAME_SIDECAR_PARENT_PID", "42");
+    configure_parent_watch(&mut command);
+
+    let args = command
+        .get_args()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        args,
+        [format!("--sidecar-parent-pid={}", std::process::id())]
+    );
+    assert_eq!(
+        command
+            .get_envs()
+            .find(|(key, _)| *key == "MAINFRAME_SIDECAR_PARENT_PID"),
+        Some((std::ffi::OsStr::new("MAINFRAME_SIDECAR_PARENT_PID"), None)),
+    );
+}

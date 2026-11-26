@@ -170,7 +170,7 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
     }
 
     #[cfg(unix)]
-    cmd.arg(format!("--sidecar-parent-pid={}", std::process::id()));
+    configure_parent_watch(&mut cmd);
 
     tracing::info!(
         program = %config.program.daemon_bin.display(),
@@ -186,6 +186,12 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
     tracing::info!(pid = child.id(), "daemon sidecar started");
 
     Ok(DaemonHandle::new(Some(child)))
+}
+
+#[cfg(unix)]
+fn configure_parent_watch(cmd: &mut Command) {
+    cmd.env_remove("MAINFRAME_SIDECAR_PARENT_PID");
+    cmd.arg(format!("--sidecar-parent-pid={}", std::process::id()));
 }
 
 fn daemon_env_overrides(daemon_port: u16, data_dir: Option<&Path>) -> Vec<EnvOverride> {
