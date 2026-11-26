@@ -126,12 +126,17 @@ impl ChatOffload {
     /// skip.
     fn recheck(&self, chat_id: &str) -> Option<Option<Arc<dyn AdapterSession>>> {
         let cell = self.active_chats.get(chat_id)?.value().clone();
-        let (session, last_used_at, process_state) = {
+        let (session, last_used_at, process_state, codex_busy) = {
             let guard = cell.lock_recover();
             (
                 guard.session.clone(),
                 guard.last_used_at,
                 guard.chat.process_state,
+                guard.chat.adapter_id == "codex"
+                    && (guard.running_since_ms.is_some()
+                        || guard.turn_started_at.is_some()
+                        || !guard.chat.orchestration.active_child_ids.is_empty()
+                        || guard.chat.orchestration.has_running_delegated_task),
             )
         };
         // A turn whose tool runs silent past the idle threshold must not have
@@ -141,6 +146,13 @@ impl ChatOffload {
         // case its persisted `process_state` is Working (e.g. a REST resume
         // held by a pending gate) — the acceptance criteria require it.
         if process_state == Some(Some(mainframe_types::chat::ProcessState::Working)) {
+            return None;
+        }
+        if codex_busy
+            || session
+                .as_ref()
+                .is_some_and(|session| session.is_spawned() && session.blocks_idle_offload())
+        {
             return None;
         }
         let last = idle_since(session.as_ref(), last_used_at)?;

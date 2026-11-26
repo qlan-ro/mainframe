@@ -1,5 +1,8 @@
 use super::*;
-use mainframe_runtime::process::{TailBuffer, finish_pumps, spawn_line_pump, spawn_stdin_writer};
+use mainframe_runtime::process::{
+    Signal, TailBuffer, Target, finish_pumps, signal, spawn_line_pump, spawn_stdin_writer,
+    terminate,
+};
 use tokio::task::JoinHandle;
 
 struct ProcessWatch {
@@ -97,10 +100,16 @@ impl ProcessWatch {
     }
 
     async fn run(self: Arc<Self>, mut child: Child, pumps: Vec<JoinHandle<()>>) {
+        let target = child.id().map(process_target);
         let code = tokio::select! {
             status = child.wait() => status.ok().and_then(|status| status.code()),
-            _ = self.kill_notify.notified() => shutdown(&mut child).await,
+            _ = self.kill_notify.notified() => shutdown(&mut child, target).await,
         };
+        if let Some(target @ Target::Group(_)) = target
+            && let Err(error) = signal(target, Signal::Kill)
+        {
+            tracing::warn!(%error, "codex process group cleanup failed");
+        }
         self.exited.store(true, Ordering::SeqCst);
         reject_all_pending(
             &self.pending,
@@ -131,10 +140,16 @@ impl ProcessWatch {
     }
 }
 
-async fn shutdown(child: &mut Child) -> Option<i32> {
-    use mainframe_runtime::process::{Target, terminate};
-    if let Some(pid) = child.id() {
-        let result = terminate(Target::Pid(pid), Duration::from_millis(800), async {
+fn process_target(pid: u32) -> Target {
+    #[cfg(unix)]
+    return Target::Group(pid);
+    #[cfg(not(unix))]
+    return Target::Pid(pid);
+}
+
+async fn shutdown(child: &mut Child, target: Option<Target>) -> Option<i32> {
+    if let Some(target) = target {
+        let result = terminate(target, Duration::from_millis(800), async {
             if let Err(error) = child.wait().await {
                 tracing::warn!(%error, "codex wait failed");
             }
@@ -146,3 +161,8 @@ async fn shutdown(child: &mut Child) -> Option<i32> {
     }
     child.wait().await.ok().and_then(|status| status.code())
 }
+
+#[cfg(test)]
+#[cfg(unix)]
+#[path = "process_tests.rs"]
+mod tests;

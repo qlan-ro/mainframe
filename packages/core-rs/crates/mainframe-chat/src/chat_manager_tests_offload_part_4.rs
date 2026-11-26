@@ -244,3 +244,55 @@ async fn disable_worktree_rebuilds_an_offloaded_cell_and_clears_the_binding() {
         "the rebuilt active chat's binding is cleared too"
     );
 }
+
+#[tokio::test]
+async fn codex_offload_respects_orchestration_and_turn_guards() {
+    let manager = ChatManager::new(FakeDeps::arc());
+    let session = FakeSession::with_activity(true, Some(long_idle()));
+    let mut chat = test_chat("c1");
+    chat.adapter_id = "codex".into();
+    chat.orchestration.has_running_delegated_task = true;
+    seed_active(&manager, "c1", chat, session.clone());
+
+    manager.scan_idle_sessions().await;
+    assert_eq!(session.kills(), 0, "live delegated task");
+
+    let cell = manager
+        .shared
+        .active_chats
+        .get("c1")
+        .unwrap()
+        .value()
+        .clone();
+    cell.lock()
+        .unwrap()
+        .chat
+        .orchestration
+        .has_running_delegated_task = false;
+    cell.lock()
+        .unwrap()
+        .chat
+        .orchestration
+        .active_child_ids
+        .push("child".into());
+    manager.scan_idle_sessions().await;
+    assert_eq!(session.kills(), 0, "live child");
+
+    cell.lock()
+        .unwrap()
+        .chat
+        .orchestration
+        .active_child_ids
+        .clear();
+    cell.lock().unwrap().turn_started_at = Some(1);
+    manager.scan_idle_sessions().await;
+    assert_eq!(session.kills(), 0, "turn in progress");
+
+    cell.lock().unwrap().turn_started_at = None;
+    manager.scan_idle_sessions().await;
+    assert_eq!(
+        session.kills(),
+        1,
+        "past the idle threshold with no live work"
+    );
+}

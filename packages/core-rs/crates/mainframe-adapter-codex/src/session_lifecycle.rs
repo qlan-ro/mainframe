@@ -52,12 +52,16 @@ impl CodexSession {
         let on_exit_cb = self.on_exit_callback.clone();
 
         let approval_n = approval.clone();
+        let activity = self.last_activity_ms.clone();
         let notification_span = self.span.clone();
         let error_span = self.span.clone();
         let exit_span = self.span.clone();
         JsonRpcHandlers {
             on_notification: Box::new(move |method, params| {
                 let _span = notification_span.enter();
+                if is_activity_notification(&method) {
+                    activity.fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
+                }
                 if method == "serverRequest/resolved" {
                     approval_n.handle_resolved(&params);
                     return;
@@ -96,8 +100,10 @@ impl CodexSession {
         let client_slot_r = self.client.clone();
         let approval_r = approval;
         let span = self.span.clone();
+        let activity = self.last_activity_ms.clone();
         Box::new(move |method, params, id| {
             let _span = span.enter();
+            activity.fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
             let plan_mode = config_r.lock_recover().plan_mode;
             let current_turn_plan = state_r.lock_recover().current_turn_plan.clone();
             approval_r.set_plan_context(PlanContext {
@@ -105,17 +111,30 @@ impl CodexSession {
                 current_turn_plan,
             });
             let cs = client_slot_r.clone();
+            let activity = activity.clone();
             approval_r.handle_request(
                 &method,
                 &params,
                 id,
-                Box::new(move |rpc_id, result| match cs.lock_recover().as_ref() {
-                    Some(c) => c.respond(rpc_id, result),
-                    None => Ok(()),
+                Box::new(move |rpc_id, result| {
+                    activity.fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
+                    match cs.lock_recover().as_ref() {
+                        Some(c) => c.respond(rpc_id, result),
+                        None => Ok(()),
+                    }
                 }),
             );
         })
     }
+}
+
+fn is_activity_notification(method: &str) -> bool {
+    method.starts_with("item/")
+        || method.starts_with("turn/")
+        || matches!(
+            method,
+            "thread/started" | "thread/compacted" | "serverRequest/resolved"
+        )
 }
 
 pub(super) fn clear_after_exit(state: &Mutex<CodexSessionState>, sink: &dyn SessionSink) {

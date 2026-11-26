@@ -82,6 +82,20 @@ pub struct CodexSessionState {
 }
 
 impl CodexSessionState {
+    pub(crate) fn blocks_idle_offload(&self) -> bool {
+        self.current_turn_id.is_some()
+            || !self.maintenance.ready()
+            || !self.agent_task_ids.is_empty()
+            || self
+                .sub_agent_cards
+                .values()
+                .any(|card| card.open && !card.resolved)
+            || self
+                .background_tasks
+                .as_ref()
+                .is_some_and(|tracker| !tracker.list_live(&self.mainframe_chat_id).is_empty())
+    }
+
     pub fn card_for_thread(&self, tid: &str) -> Option<&SubAgentCard> {
         self.sub_agent_cards.get(tid)
     }

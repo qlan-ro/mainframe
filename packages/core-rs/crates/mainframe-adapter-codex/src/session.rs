@@ -93,6 +93,7 @@ pub struct CodexSession {
     state: Arc<Mutex<CodexSessionState>>,
     config: Arc<Mutex<PendingConfig>>,
     pid: AtomicI64,
+    last_activity_ms: Arc<AtomicI64>,
     status: Arc<Mutex<AdapterProcessStatus>>,
     resolved_path: ResolvedPath,
     scan_deps: Arc<Mutex<Option<CodexScanDeps>>>,
@@ -128,6 +129,7 @@ impl CodexSession {
             state: Arc::new(Mutex::new(state)),
             config: Arc::new(Mutex::new(PendingConfig::default())),
             pid: AtomicI64::new(0),
+            last_activity_ms: Arc::new(AtomicI64::new(mainframe_types::time::now_ms())),
             status: Arc::new(Mutex::new(AdapterProcessStatus::Starting)),
             resolved_path,
             scan_deps: Arc::new(Mutex::new(None)),
@@ -137,6 +139,11 @@ impl CodexSession {
             history_state: Mutex::new(serde_json::Value::Null),
         }
     }
+    fn touch_activity(&self) {
+        self.last_activity_ms
+            .fetch_max(mainframe_types::time::now_ms(), Ordering::SeqCst);
+    }
+
     pub fn set_scan_deps(&self, deps: CodexScanDeps) {
         *self.scan_deps.lock_recover() = Some(deps);
     }
@@ -221,3 +228,6 @@ use thread::permission_mode_policy;
 
 #[cfg(test)]
 mod request_resolved_tests;
+
+#[cfg(test)]
+mod idle_activity_tests;

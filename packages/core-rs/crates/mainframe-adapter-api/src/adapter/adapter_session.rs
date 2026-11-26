@@ -36,6 +36,9 @@ pub trait AdapterSession: Send + Sync {
     fn last_activity_at(&self) -> Option<i64> {
         None
     }
+    fn blocks_idle_offload(&self) -> bool {
+        false
+    }
     /// Whether [`AdapterSession::steer`] can fold a message into a running
     /// turn. Defaulted to `false`: an adapter without a steer mechanism keeps
     /// today's behavior, and agents queue instead (`not_steerable`).

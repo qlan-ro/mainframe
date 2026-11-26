@@ -15,6 +15,7 @@ impl CodexSession {
         *self.approval_handler.lock_recover() = Some(approval.clone());
 
         let handlers = self.build_handlers(approval);
+        self.touch_activity();
         let client = Arc::new(JsonRpcClient::new(child, handlers));
         *self.client.lock_recover() = Some(client.clone());
         self.initialize_client(&client, &*sink).await?;
@@ -146,6 +147,8 @@ pub(super) fn build_app_server_command(
 ) -> tokio::process::Command {
     let path = mainframe_runtime::ResolvedPath::from_value(path);
     let mut cmd = mainframe_runtime::process::cli_command(executable, &path);
+    #[cfg(unix)]
+    cmd.process_group(0);
     cmd.arg("app-server");
     if let Some(cwd) = cwd {
         cmd.current_dir(cwd);
