@@ -4,7 +4,7 @@ use super::*;
 struct RestoredHistory {
     canonical: Option<Vec<ChatMessage>>,
     changed: bool,
-    files: Option<mainframe_adapter_api::HistoryFiles>,
+    files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
 }
 
 impl ChatLifecycleManager {

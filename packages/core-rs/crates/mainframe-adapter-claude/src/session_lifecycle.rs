@@ -117,27 +117,28 @@ impl ClaudeSession {
         )
     }
     pub async fn load_history(&self) -> Result<Vec<ChatMessage>, AdapterError> {
-        let (messages, files) = self.read_history(true).await;
+        let (messages, files) = self.read_history(true).await?;
         *self.history_files.lock_recover() = Some(files);
         Ok(messages)
     }
     pub(super) async fn read_history(
         &self,
         messages: bool,
-    ) -> (Vec<ChatMessage>, mainframe_adapter_api::HistoryFiles) {
+    ) -> Result<
+        (
+            Vec<ChatMessage>,
+            mainframe_adapter_api::CollectedHistoryFiles,
+        ),
+        AdapterError,
+    > {
         let Some((id, base, discovered)) = self.discover_history().await else {
-            return Default::default();
+            return Ok(Default::default());
         };
-        crate::history::load_discovered_history(
-            &id,
-            &discovered,
-            &base,
-            &self.project_path,
-            messages,
-        )
-        .await
+        crate::history::load_discovered_history(&id, &discovered, &base, messages).await
     }
-    async fn discover_history(&self) -> Option<(String, String, crate::history::DiscoveredFiles)> {
+    pub(super) async fn discover_history(
+        &self,
+    ) -> Option<(String, String, crate::history::DiscoveredFiles)> {
         let (id, base, discovered) = match self.resume_target().await {
             crate::fork::ResumeTarget::Own(id) => {
                 let base =
@@ -185,35 +186,39 @@ impl ClaudeSession {
     }
     pub async fn extract_plan_files(&self) -> Result<Vec<String>, AdapterError> {
         match self.resume_target().await {
-            crate::fork::ResumeTarget::Own(id) => Ok(crate::history::extract_plan_file_paths(
-                &id,
-                &self.project_path,
-                self.session_file_path.as_deref(),
-            )
-            .await),
+            crate::fork::ResumeTarget::Own(id) => {
+                crate::history::extract_plan_file_paths(
+                    &id,
+                    &self.project_path,
+                    self.session_file_path.as_deref(),
+                )
+                .await
+            }
             crate::fork::ResumeTarget::Fork(path) => {
                 let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
-                Ok(crate::history::extract_plan_file_paths_in_dir(&session_id, &dir).await)
+                crate::history::extract_plan_file_paths_in_dir(&session_id, &dir).await
             }
             crate::fork::ResumeTarget::Fresh => Ok(vec![]),
         }
     }
     pub async fn extract_skill_files(&self) -> Result<Vec<SkillFileEntry>, AdapterError> {
         match self.resume_target().await {
-            crate::fork::ResumeTarget::Own(id) => Ok(crate::history::extract_skill_file_paths(
-                &id,
-                &self.project_path,
-                self.session_file_path.as_deref(),
-            )
-            .await),
+            crate::fork::ResumeTarget::Own(id) => {
+                crate::history::extract_skill_file_paths(
+                    &id,
+                    &self.project_path,
+                    self.session_file_path.as_deref(),
+                )
+                .await
+            }
             crate::fork::ResumeTarget::Fork(path) => {
                 let (session_id, dir) = fork_snapshot_lookup(&path, &self.fork_source);
-                Ok(crate::history::extract_skill_file_paths_in_dir(
+                crate::history::extract_skill_file_paths_in_dir(
                     &session_id,
                     &dir,
                     &self.project_path,
                 )
-                .await)
+                .await
             }
             crate::fork::ResumeTarget::Fresh => Ok(vec![]),
         }

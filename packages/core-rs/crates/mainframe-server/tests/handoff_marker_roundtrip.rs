@@ -113,7 +113,9 @@ async fn claude_load(content: serde_json::Value) -> Vec<ChatMessage> {
     let body: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
     std::fs::write(dir.path().join("sess-b.jsonl"), body.join("\n")).unwrap();
     let dir_str = dir.path().to_string_lossy().to_string();
-    mainframe_adapter_claude::history::load_history_in_dir("sess-b", &dir_str).await
+    mainframe_adapter_claude::history::load_history_in_dir("sess-b", &dir_str)
+        .await
+        .unwrap()
 }
 
 #[tokio::test]

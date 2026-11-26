@@ -5,7 +5,7 @@ impl DaemonChatDeps {
         &self,
         chat_id: &str,
         canonical: Option<&[ChatMessage]>,
-        files: Option<mainframe_adapter_api::HistoryFiles>,
+        files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
     ) {
         let Some(session) = self.session_for_scan(chat_id) else {
             return;
@@ -31,12 +31,9 @@ impl DaemonChatDeps {
             Ok(history) => self.scan_and_persist_prs(chat_id, &history),
             Err(err) => tracing::warn!(error = %err, chat_id, "load_scan_records failed"),
         }
-        if let Some(files) = files.or_else(|| session.take_history_files()) {
-            self.persist_history_files(chat_id, files);
-        } else {
-            self.persist_plan_and_skill_files(chat_id, session.as_ref())
-                .await;
-        }
+        let files = files.or_else(|| session.take_history_files());
+        self.persist_plan_and_skill_files(chat_id, session.as_ref(), files)
+            .await;
     }
 
     pub(super) fn session_for_scan(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
@@ -123,9 +120,11 @@ impl DaemonChatDeps {
         &self,
         chat_id: &str,
         session: &dyn AdapterSession,
+        files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
     ) {
-        if let Ok(files) = session.extract_history_files().await {
-            self.persist_history_files(chat_id, files);
+        match session.scan_history_files(files).await {
+            Ok(files) => self.persist_history_files(chat_id, files),
+            Err(error) => tracing::warn!(%error, chat_id, "history file scan failed"),
         }
     }
     fn persist_history_files(&self, chat_id: &str, files: mainframe_adapter_api::HistoryFiles) {

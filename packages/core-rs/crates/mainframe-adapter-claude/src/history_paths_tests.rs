@@ -29,25 +29,31 @@ async fn metadata_scans_preserve_plans_and_skills_around_large_image_results() {
         subagent_files: HashSet::new(),
     };
     assert_eq!(
-        plan_file_paths_from(&discovered, "/project").await,
+        plan_file_paths_from(&discovered, "/project").await.unwrap(),
         vec!["/project/plans/p.md"]
     );
-    let skills = skill_file_paths_from(&discovered, "/project").await;
+    let skills = skill_file_paths_from(&discovered, "/project")
+        .await
+        .unwrap();
     assert_eq!(skills.len(), 1);
     assert_eq!(skills[0].display_name, "tdd");
     assert_metadata_matches(&discovered).await;
 }
 
 async fn assert_metadata_matches(discovered: &DiscoveredFiles) {
-    let plans = plan_file_paths_from(discovered, "/plans").await;
-    let skills = skill_file_paths_from(discovered, "/project").await;
+    let plans = plan_file_paths_from(discovered, "/plans").await.unwrap();
+    let skills = skill_file_paths_from(discovered, "/project").await.unwrap();
     for messages in [true, false] {
-        let (_, files) =
-            load_discovered_history("session", discovered, "/plans", "/project", messages).await;
+        let (_, files) = load_discovered_history("session", discovered, "/plans", messages)
+            .await
+            .unwrap();
         assert_eq!(files.plans, plans);
         assert_eq!(
-            serde_json::to_value(files.skills).unwrap(),
-            serde_json::to_value(&skills).unwrap()
+            files.skill_names,
+            skills
+                .iter()
+                .map(|s| s.display_name.clone())
+                .collect::<Vec<_>>()
         );
     }
 }
@@ -75,4 +81,13 @@ async fn metadata_matches_both_scans_on_claude_fixtures() {
         subagent_files: HashSet::default(),
     })
     .await;
+}
+
+#[tokio::test]
+async fn failed_history_worker_returns_an_adapter_error() {
+    let result = crate::history::run_history_worker(|| panic!("synthetic worker failure")).await;
+    assert!(matches!(
+        result,
+        Err(mainframe_adapter_api::AdapterError::Unavailable(_))
+    ));
 }

@@ -47,7 +47,7 @@ pub async fn load_history(
     session_id: &str,
     project_path: &str,
     session_file_path: Option<&str>,
-) -> Vec<ChatMessage> {
+) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
     load_history_with_index(session_id, project_path, session_file_path, None).await
 }
 
@@ -56,7 +56,7 @@ pub(crate) async fn load_history_with_index(
     project_path: &str,
     session_file_path: Option<&str>,
     index: Option<&crate::history_source_index::HistorySourceIndex>,
-) -> Vec<ChatMessage> {
+) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
     let discovered = history_discovery::discover_indexed_session_files(
         session_id,
         project_path,
@@ -68,13 +68,15 @@ pub(crate) async fn load_history_with_index(
         session_id,
         &discovered,
         &get_session_jsonl_path(session_id, project_path).project_dir,
-        project_path,
         true,
     )
     .await
-    .0
+    .map(|(messages, _)| messages)
 }
-pub async fn load_history_in_dir(session_id: &str, project_dir: &str) -> Vec<ChatMessage> {
+pub async fn load_history_in_dir(
+    session_id: &str,
+    project_dir: &str,
+) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
     load_history_in_dir_with_index(session_id, project_dir, None).await
 }
 
@@ -82,30 +84,38 @@ pub(crate) async fn load_history_in_dir_with_index(
     session_id: &str,
     project_dir: &str,
     index: Option<&crate::history_source_index::HistorySourceIndex>,
-) -> Vec<ChatMessage> {
+) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
     let discovered =
         history_discovery::discover_indexed_files_in_dir(session_id, project_dir, index).await;
-    load_discovered_history(session_id, &discovered, project_dir, project_dir, true)
+    load_discovered_history(session_id, &discovered, project_dir, true)
         .await
-        .0
+        .map(|(messages, _)| messages)
 }
 
 pub(crate) async fn load_discovered_history(
     session_id: &str,
     discovered: &DiscoveredFiles,
     base: &str,
-    project: &str,
     messages: bool,
-) -> (Vec<ChatMessage>, mainframe_adapter_api::HistoryFiles) {
+) -> Result<
+    (
+        Vec<ChatMessage>,
+        mainframe_adapter_api::CollectedHistoryFiles,
+    ),
+    mainframe_adapter_api::AdapterError,
+> {
     if discovered.all_files.is_empty() {
-        return Default::default();
+        return Ok(Default::default());
     }
     let mut paths = PathCollector::default();
     let mut load = HistoryLoad::default();
     let files = discovered.all_files.clone();
     let subagent_files = discovered.subagent_files.clone();
-    let (session_id, base, project) = (session_id.to_owned(), base.to_owned(), project.to_owned());
-    tokio::task::spawn_blocking(move || {
+    let (session_id, base) = (session_id.to_owned(), base.to_owned());
+    if messages && discovered.complete {
+        paths.files.sources = source_stamps(&files).await;
+    }
+    run_history_worker(move || {
         for file in &files {
             let is_subagent = subagent_files.contains(file);
             visit_lines(file, |line| {
@@ -113,7 +123,7 @@ pub(crate) async fn load_discovered_history(
                     paths.observe_plan(line, &base);
                     return;
                 };
-                paths.observe(&entry, line, &base, &project);
+                paths.observe(&entry, line, &base);
                 if messages {
                     load.entry(&entry, &session_id, is_subagent);
                 }
@@ -123,7 +133,29 @@ pub(crate) async fn load_discovered_history(
         (rows, paths.files)
     })
     .await
-    .unwrap_or_default()
+}
+
+pub(crate) async fn run_history_worker<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, mainframe_adapter_api::AdapterError> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(worker_error)
+}
+
+pub(crate) fn worker_error(_: tokio::task::JoinError) -> mainframe_adapter_api::AdapterError {
+    mainframe_adapter_api::AdapterError::Unavailable("Claude history worker failed")
+}
+
+pub(crate) async fn source_stamps(
+    files: &[String],
+) -> Option<Vec<mainframe_adapter_api::HistoryDependency>> {
+    let mut stamps = Vec::new();
+    for file in files {
+        stamps.push(mainframe_adapter_api::HistoryDependency::capture(file.into()).await?);
+    }
+    stamps.sort_by(|a, b| a.path.cmp(&b.path));
+    Some(stamps)
 }
 
 #[path = "history_discovery.rs"]

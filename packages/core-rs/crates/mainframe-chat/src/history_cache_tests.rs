@@ -243,10 +243,7 @@ async fn claude_history_files_survive_cache_hits_and_appends() {
         cache.flush().await;
         let files = session.take_history_files();
         assert_eq!(files.is_none(), pass == 1);
-        let files = match files {
-            Some(files) => files,
-            None => session.extract_history_files().await.unwrap(),
-        };
+        let files = session.scan_history_files(files).await.unwrap();
         assert_eq!(files.plans, vec!["/p.md"; if pass == 2 { 2 } else { 1 }]);
         assert_eq!(files.skills, session.extract_skill_files().await.unwrap());
         assert_eq!(files.skills.len(), if pass == 2 { 2 } else { 1 });

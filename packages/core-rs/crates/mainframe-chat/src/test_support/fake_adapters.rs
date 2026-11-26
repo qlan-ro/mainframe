@@ -173,7 +173,7 @@ impl AdapterPort for FakeDeps {
         &'a self,
         _chat_id: &'a str,
         _canonical: Option<&'a [ChatMessage]>,
-        _files: Option<mainframe_adapter_api::HistoryFiles>,
+        _files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
     ) -> BoxFuture<'a, ()> {
         let gate = self.adapters.scan_gate.lock_recover().clone();
         Box::pin(async move {

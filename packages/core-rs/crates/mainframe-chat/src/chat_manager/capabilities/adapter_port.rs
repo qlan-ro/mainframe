@@ -33,7 +33,7 @@ pub trait AdapterPort: Send + Sync {
         &'a self,
         chat_id: &'a str,
         canonical: Option<&'a [ChatMessage]>,
-        files: Option<mainframe_adapter_api::HistoryFiles>,
+        files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
     ) -> BoxFuture<'a, ()>;
 
     fn resolve_tuning<'a>(

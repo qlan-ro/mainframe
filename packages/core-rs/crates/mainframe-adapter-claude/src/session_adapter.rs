@@ -150,13 +150,51 @@ impl AdapterSession for ClaudeSession {
     fn history_sources(&self) -> BoxFuture<'_, Vec<std::path::PathBuf>> {
         Box::pin((ClaudeSession::history_sources(self)).instrument(self.span.clone()))
     }
-    fn take_history_files(&self) -> Option<mainframe_adapter_api::HistoryFiles> {
+    fn take_history_files(&self) -> Option<mainframe_adapter_api::CollectedHistoryFiles> {
         self.history_files.lock_recover().take()
     }
-    fn extract_history_files(
+    fn scan_history_files(
         &self,
+        collected: Option<mainframe_adapter_api::CollectedHistoryFiles>,
     ) -> BoxFuture<'_, Result<mainframe_adapter_api::HistoryFiles, AdapterError>> {
-        Box::pin(async move { Ok(self.read_history(false).await.1) })
+        Box::pin(async move {
+            let collected = match collected {
+                Some(files) if files.sources.is_some() => {
+                    let current = match self.discover_history().await {
+                        Some((_, _, sources)) if sources.complete => {
+                            crate::history::source_stamps(&sources.all_files).await
+                        }
+                        _ => None,
+                    };
+                    (files.sources == current).then_some(files)
+                }
+                _ => None,
+            };
+            let files = match collected {
+                Some(files) => files,
+                None => self.read_history(false).await?.1,
+            };
+            let project = self.project_path.clone();
+            crate::history::run_history_worker(move || {
+                let skills = files
+                    .skill_names
+                    .into_iter()
+                    .map(|display_name| SkillFileEntry {
+                        path: crate::skill_path::resolve_skill_path(
+                            Some(&project),
+                            &display_name,
+                            None,
+                        ),
+                        display_name,
+                    })
+                    .collect();
+                mainframe_adapter_api::HistoryFiles {
+                    plans: files.plans,
+                    skills,
+                }
+            })
+            .await
+        })
     }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         Box::pin((ClaudeSession::extract_plan_files(self)).instrument(self.span.clone()))

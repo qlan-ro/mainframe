@@ -24,7 +24,7 @@ pub(crate) async fn extract_plan_file_paths(
     session_id: &str,
     project_path: &str,
     session_file_path: Option<&str>,
-) -> Vec<String> {
+) -> Result<Vec<String>, mainframe_adapter_api::AdapterError> {
     let discovered =
         discover_session_jsonl_files(session_id, project_path, session_file_path).await;
     let project_dir = get_session_jsonl_path(session_id, project_path).project_dir;
@@ -33,18 +33,21 @@ pub(crate) async fn extract_plan_file_paths(
 pub(crate) async fn extract_plan_file_paths_in_dir(
     session_id: &str,
     project_dir: &str,
-) -> Vec<String> {
+) -> Result<Vec<String>, mainframe_adapter_api::AdapterError> {
     let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
     plan_file_paths_from(&discovered, project_dir).await
 }
-async fn plan_file_paths_from(discovered: &DiscoveredFiles, project_dir: &str) -> Vec<String> {
+async fn plan_file_paths_from(
+    discovered: &DiscoveredFiles,
+    project_dir: &str,
+) -> Result<Vec<String>, mainframe_adapter_api::AdapterError> {
     if discovered.all_files.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let mut plan_files: Vec<String> = Vec::new();
     let files = discovered.all_files.clone();
     let project_dir = project_dir.to_owned();
-    tokio::task::spawn_blocking(move || {
+    run_history_worker(move || {
         for file in &files {
             visit_lines(file, |line| {
                 if line.trim().is_empty() {
@@ -69,13 +72,12 @@ async fn plan_file_paths_from(discovered: &DiscoveredFiles, project_dir: &str) -
         plan_files
     })
     .await
-    .unwrap_or_default()
 }
 pub(crate) async fn extract_skill_file_paths(
     session_id: &str,
     project_path: &str,
     session_file_path: Option<&str>,
-) -> Vec<SkillFileEntry> {
+) -> Result<Vec<SkillFileEntry>, mainframe_adapter_api::AdapterError> {
     let discovered =
         discover_session_jsonl_files(session_id, project_path, session_file_path).await;
     skill_file_paths_from(&discovered, project_path).await
@@ -84,23 +86,23 @@ pub(crate) async fn extract_skill_file_paths_in_dir(
     session_id: &str,
     project_dir: &str,
     project_path: &str,
-) -> Vec<SkillFileEntry> {
+) -> Result<Vec<SkillFileEntry>, mainframe_adapter_api::AdapterError> {
     let discovered = discover_session_jsonl_files_in_dir(session_id, project_dir).await;
     skill_file_paths_from(&discovered, project_path).await
 }
 async fn skill_file_paths_from(
     discovered: &DiscoveredFiles,
     project_path: &str,
-) -> Vec<SkillFileEntry> {
+) -> Result<Vec<SkillFileEntry>, mainframe_adapter_api::AdapterError> {
     if discovered.all_files.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let mut seen: HashSet<String> = HashSet::new();
     let mut cache: HashMap<String, String> = HashMap::new();
     let mut skill_files: Vec<SkillFileEntry> = Vec::new();
     let files = discovered.all_files.clone();
     let project_path = project_path.to_owned();
-    tokio::task::spawn_blocking(move || {
+    run_history_worker(move || {
         for file in &files {
             visit_lines(file, |line| {
                 for skill in skill_names(line) {
@@ -117,7 +119,6 @@ async fn skill_file_paths_from(
         skill_files
     })
     .await
-    .unwrap_or_default()
 }
 fn skill_names(line: &str) -> Vec<String> {
     let Ok(header) = serde_json::from_slice::<EntryKind>(line.as_bytes()) else {
@@ -155,9 +156,8 @@ fn skill_names_from(entry: &Value) -> Vec<String> {
 
 #[derive(Default)]
 pub(super) struct PathCollector {
-    pub(super) files: mainframe_adapter_api::HistoryFiles,
+    pub(super) files: mainframe_adapter_api::CollectedHistoryFiles,
     seen: HashSet<String>,
-    cache: HashMap<String, String>,
 }
 
 impl PathCollector {
@@ -175,7 +175,7 @@ impl PathCollector {
             self.files.plans.push(path_resolve(base, &path));
         }
     }
-    pub(super) fn observe(&mut self, entry: &Value, line: &str, base: &str, project: &str) {
+    pub(super) fn observe(&mut self, entry: &Value, line: &str, base: &str) {
         match entry["type"].as_str() {
             Some("user") if entry["toolUseResult"]["plan"].is_string() => {
                 self.observe_plan(line, base);
@@ -185,13 +185,10 @@ impl PathCollector {
                     if serde_json::from_slice::<EntryKind>(line.as_bytes()).is_err() {
                         break;
                     }
-                    push_skill_file(
-                        &skill,
-                        project,
-                        &mut self.seen,
-                        &mut self.cache,
-                        &mut self.files.skills,
-                    );
+                    let name = skill.trim();
+                    if !name.is_empty() && self.seen.insert(name.to_owned()) {
+                        self.files.skill_names.push(name.to_owned());
+                    }
                 }
             }
             _ => {}

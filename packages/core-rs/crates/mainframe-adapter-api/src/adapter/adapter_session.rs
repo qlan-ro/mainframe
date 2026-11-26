@@ -2,6 +2,13 @@ use super::*;
 use std::path::PathBuf;
 
 #[derive(Default, Debug)]
+pub struct CollectedHistoryFiles {
+    pub plans: Vec<String>,
+    pub skill_names: Vec<String>,
+    pub sources: Option<Vec<crate::HistoryDependency>>,
+}
+
+#[derive(Default, Debug)]
 pub struct HistoryFiles {
     pub plans: Vec<String>,
     pub skills: Vec<mainframe_types::context::SkillFileEntry>,
@@ -108,10 +115,13 @@ pub trait AdapterSession: Send + Sync {
             }
         })
     }
-    fn take_history_files(&self) -> Option<crate::HistoryFiles> {
+    fn take_history_files(&self) -> Option<crate::CollectedHistoryFiles> {
         None
     }
-    fn extract_history_files(&self) -> BoxFuture<'_, Result<crate::HistoryFiles, AdapterError>> {
+    fn scan_history_files(
+        &self,
+        _collected: Option<crate::CollectedHistoryFiles>,
+    ) -> BoxFuture<'_, Result<crate::HistoryFiles, AdapterError>> {
         Box::pin(async move {
             let (plans, skills) =
                 tokio::try_join!(self.extract_plan_files(), self.extract_skill_files())?;

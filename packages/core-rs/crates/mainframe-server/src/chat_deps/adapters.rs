@@ -71,7 +71,7 @@ impl AdapterPort for DaemonChatDeps {
         &'a self,
         chat_id: &'a str,
         canonical: Option<&'a [ChatMessage]>,
-        files: Option<mainframe_adapter_api::HistoryFiles>,
+        files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
     ) -> BoxFuture<'a, ()> {
         Box::pin(self.scan_history(chat_id, canonical, files))
     }
